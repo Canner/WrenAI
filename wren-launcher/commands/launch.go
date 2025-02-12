@@ -108,7 +108,7 @@ func askForGenerationModel() (string, error) {
 
 	prompt := promptui.Select{
 		Label: "Select an OpenAI's generation model",
-		Items: []string{"gpt-4o-mini", "gpt-4o"},
+		Items: []string{"gpt-4o-mini", "o3-mini", "gpt-4o"},
 	}
 
 	_, result, err := prompt.Run()
@@ -301,6 +301,7 @@ func getOpenaiGenerationModel() (string, bool) {
 		pterm.Info.Println("OpenAI generation model is provided")
 		validModels := map[string]bool{
 			"gpt-4o-mini": true,
+			"o3-mini":     true,
 			"gpt-4o":      true,
 		}
 		if !validModels[openaiGenerationModel] {

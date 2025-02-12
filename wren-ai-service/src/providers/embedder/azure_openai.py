@@ -20,7 +20,6 @@ from src.utils import remove_trailing_slash
 logger = logging.getLogger("wren-ai-service")
 
 EMBEDDING_MODEL = "text-embedding-3-small"
-EMBEDDING_MODEL_DIMENSION = 1536
 
 
 @component
@@ -199,12 +198,6 @@ class AzureOpenAIEmbedderProvider(EmbedderProvider):
         api_base: str = os.getenv("EMBEDDER_AZURE_OPENAI_API_BASE"),
         api_version: str = os.getenv("EMBEDDER_AZURE_OPENAI_VERSION"),
         model: str = os.getenv("EMBEDDING_MODEL") or EMBEDDING_MODEL,
-        dimension: int = (
-            int(os.getenv("EMBEDDING_MODEL_DIMENSION"))
-            if os.getenv("EMBEDDING_MODEL_DIMENSION")
-            else 0
-        )
-        or EMBEDDING_MODEL_DIMENSION,
         timeout: Optional[float] = (
             float(os.getenv("EMBEDDER_TIMEOUT"))
             if os.getenv("EMBEDDER_TIMEOUT")
@@ -216,7 +209,6 @@ class AzureOpenAIEmbedderProvider(EmbedderProvider):
         self._embedding_api_key = api_key
         self._embedding_api_version = api_version
         self._embedding_model = model
-        self._embedding_model_dim = dimension
         self._timeout = timeout
 
         logger.info(f"Using Azure OpenAI Embedding Model: {self._embedding_model}")

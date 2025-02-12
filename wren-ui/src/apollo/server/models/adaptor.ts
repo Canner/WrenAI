@@ -71,6 +71,7 @@ export interface AsyncQueryResponse {
 export enum AskResultStatus {
   UNDERSTANDING = 'UNDERSTANDING',
   SEARCHING = 'SEARCHING',
+  PLANNING = 'PLANNING',
   GENERATING = 'GENERATING',
   CORRECTING = 'CORRECTING',
   FINISHED = 'FINISHED',
@@ -119,7 +120,9 @@ export type AskResult = AskResponse<
     viewId?: number | null;
   }>,
   AskResultStatus
->;
+> & {
+  intentReasoning?: string;
+};
 
 export enum RecommendationQuestionStatus {
   GENERATING = 'GENERATING',
@@ -191,6 +194,7 @@ export enum ChartType {
   GROUPED_BAR = 'grouped_bar',
   STACKED_BAR = 'stacked_bar',
   LINE = 'line',
+  MULTI_LINE = 'multi_line',
   PIE = 'pie',
   AREA = 'area',
 }
@@ -222,6 +226,7 @@ export interface ChartAdjustmentInput {
 
 export interface ChartResponse {
   reasoning: string;
+  chartType: ChartType;
   chartSchema: Record<string, any>;
 }
 

@@ -68,4 +68,10 @@ run-sql mdl_path="" data_source="" sample_dataset="":
 	poetry run python demo/run_sql.py --mdl-path "{{mdl_path}}" --data-source "{{data_source}}" --sample-dataset "{{sample_dataset}}"
 
 report-gen:
-	poetry run python eval/llm_trace_analysis/report_gen.py
+	poetry run python -m eval.llm_trace_analysis.report_gen
+
+chart-eval:
+	poetry run streamlit run eval/llm_trace_analysis/chart_eval_app.py
+
+mdl-to-str mdl_path="":
+	poetry run python tools/mdl_to_str.py -p {{mdl_path}}

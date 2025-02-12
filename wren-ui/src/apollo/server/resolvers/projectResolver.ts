@@ -271,7 +271,13 @@ export class ProjectResolver {
       type,
       connectionInfo,
     } as ProjectData);
-    logger.debug(`Project created `);
+    logger.debug(`Project created.`);
+
+    // init dashboard
+    logger.debug('Dashboard init...');
+    await ctx.dashboardService.initDashboard();
+    logger.debug('Dashboard created.');
+
     const eventName = TelemetryEvent.CONNECTION_SAVE_DATA_SOURCE;
     const eventProperties = {
       dataSourceType: type,

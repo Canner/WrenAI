@@ -1,49 +1,49 @@
 import asyncio
 import logging
 import sys
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
-from pydantic import BaseModel
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.sql import (
+    SQL_GENERATION_MODEL_KWARGS,
     TEXT_TO_SQL_RULES,
     SQLGenPostProcessor,
-    sql_generation_system_prompt,
 )
 
 logger = logging.getLogger("wren-ai-service")
 
 
-sql_correction_user_prompt_template = """
+sql_correction_system_prompt = f"""
+### TASK ###
 You are an ANSI SQL expert with exceptional logical thinking skills and debugging skills.
 
-### TASK ###
-Now you are given syntactically incorrect ANSI SQL query and related error message.
-With given database schema, please think step by step to correct the wrong ANSI SQL query.
+Now you are given syntactically incorrect ANSI SQL query and related error message, please generate the syntactically correct ANSI SQL query without changing original semantics.
 
+{TEXT_TO_SQL_RULES}
+
+### FINAL ANSWER FORMAT ###
+The final answer must be a corrected SQL query in JSON format:
+
+{{
+    "sql": <CORRECTED_SQL_QUERY_STRING>
+}}
+"""
+
+sql_correction_user_prompt_template = """
+{% if documents %}
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
 {% endfor %}
-
-### FINAL ANSWER FORMAT ###
-The final answer must be a list of corrected SQL quries in JSON format:
-
-{
-    "results": [
-        {"sql": <CORRECTED_SQL_QUERY_STRING>},
-    ]
-}
-
-{{ alert }}
+{% endif %}
 
 ### QUESTION ###
 SQL: {{ invalid_generation_result.sql }}
@@ -58,14 +58,12 @@ Let's think step by step.
 def prompts(
     documents: List[Document],
     invalid_generation_results: List[Dict],
-    alert: str,
     prompt_builder: PromptBuilder,
 ) -> list[dict]:
     return [
         prompt_builder.run(
             documents=documents,
             invalid_generation_result=invalid_generation_result,
-            alert=alert,
         )
         for invalid_generation_result in invalid_generation_results
     ]
@@ -85,31 +83,17 @@ async def generate_sql_corrections(prompts: list[dict], generator: Any) -> list[
 async def post_process(
     generate_sql_corrections: list[dict],
     post_processor: SQLGenPostProcessor,
+    engine_timeout: float,
     project_id: str | None = None,
 ) -> list[dict]:
-    return await post_processor.run(generate_sql_corrections, project_id=project_id)
+    return await post_processor.run(
+        generate_sql_corrections,
+        timeout=engine_timeout,
+        project_id=project_id,
+    )
 
 
 ## End of Pipeline
-
-
-class CorrectedSQLResult(BaseModel):
-    sql: str
-
-
-class CorrectedResults(BaseModel):
-    results: list[CorrectedSQLResult]
-
-
-SQL_CORRECTION_MODEL_KWARGS = {
-    "response_format": {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "corrected_sql",
-            "schema": CorrectedResults.model_json_schema(),
-        },
-    }
-}
 
 
 class SQLCorrection(BasicPipeline):
@@ -117,12 +101,13 @@ class SQLCorrection(BasicPipeline):
         self,
         llm_provider: LLMProvider,
         engine: Engine,
+        engine_timeout: Optional[float] = 30.0,
         **kwargs,
     ):
         self._components = {
             "generator": llm_provider.get_generator(
-                system_prompt=sql_generation_system_prompt,
-                generation_kwargs=SQL_CORRECTION_MODEL_KWARGS,
+                system_prompt=sql_correction_system_prompt,
+                generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
             ),
             "prompt_builder": PromptBuilder(
                 template=sql_correction_user_prompt_template
@@ -131,7 +116,7 @@ class SQLCorrection(BasicPipeline):
         }
 
         self._configs = {
-            "alert": TEXT_TO_SQL_RULES,
+            "engine_timeout": engine_timeout,
         }
 
         super().__init__(

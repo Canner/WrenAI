@@ -1,6 +1,9 @@
-import { IIbisAdaptor } from '../adaptors/ibisAdaptor';
-import { IWrenEngineAdaptor } from '../adaptors/wrenEngineAdaptor';
-import { IConfig } from '../config';
+import { IConfig } from '@server/config';
+import {
+  IIbisAdaptor,
+  IWrenAIAdaptor,
+  IWrenEngineAdaptor,
+} from '@server/adaptors';
 import {
   IModelColumnRepository,
   IModelNestedColumnRepository,
@@ -9,9 +12,11 @@ import {
   IRelationRepository,
   IViewRepository,
   ILearningRepository,
-} from '../repositories';
-import { ISchemaChangeRepository } from '../repositories/schemaChangeRepository';
-import { IDeployLogRepository } from '../repositories/deployLogRepository';
+  ISchemaChangeRepository,
+  IDeployLogRepository,
+  IDashboardRepository,
+  IDashboardItemRepository,
+} from '@server/repositories';
 import {
   IQueryService,
   IAskingService,
@@ -19,13 +24,13 @@ import {
   IModelService,
   IMDLService,
   IProjectService,
-} from '../services';
-import { ITelemetry } from '../telemetry/telemetry';
+  IDashboardService,
+} from '@server/services';
+import { ITelemetry } from '@server/telemetry/telemetry';
 import {
   ProjectRecommendQuestionBackgroundTracker,
   ThreadRecommendQuestionBackgroundTracker,
-} from '../backgrounds';
-import { IWrenAIAdaptor } from '../adaptors';
+} from '@server/backgrounds';
 
 export interface IContext {
   config: IConfig;
@@ -44,6 +49,7 @@ export interface IContext {
   deployService: IDeployService;
   askingService: IAskingService;
   queryService: IQueryService;
+  dashboardService: IDashboardService;
 
   // repository
   projectRepository: IProjectRepository;
@@ -55,6 +61,8 @@ export interface IContext {
   deployRepository: IDeployLogRepository;
   schemaChangeRepository: ISchemaChangeRepository;
   learningRepository: ILearningRepository;
+  dashboardRepository: IDashboardRepository;
+  dashboardItemRepository: IDashboardItemRepository;
 
   // background trackers
   projectRecommendQuestionBackgroundTracker: ProjectRecommendQuestionBackgroundTracker;

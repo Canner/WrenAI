@@ -40,6 +40,7 @@ interface Props {
     candidates: AskingTask['candidates'];
     askingStreamTask: string;
     recommendedQuestions: RecommendedQuestionsTask;
+    intentReasoning: string;
   };
   error?: any;
   onSelectResult: (payload: { sql: string; viewId: number | null }) => void;
@@ -117,7 +118,9 @@ const makeProcessingError =
             Close
           </Button>
         </div>
-        <div className="gray-7">{config.description || message}</div>
+        <div className="gray-7">
+          {config.description || data.intentReasoning || message}
+        </div>
         {hasStacktrace && (
           <ErrorCollapse className="mt-2" message={stacktrace.join('\n')} />
         )}
@@ -147,6 +150,7 @@ const NoResult = makeProcessingError({
 
 const Understanding = makeProcessing('Understanding question');
 const Searching = makeProcessing('Searching data');
+const Planning = makeProcessing('Organizing thoughts');
 const Generating = makeProcessing('Generating answer');
 const Finished = (props: Props) => {
   const { data, onSelectResult } = props;
@@ -243,8 +247,6 @@ const GeneralAnswer = (props: Props) => {
 const MisleadingQuery = makeProcessingError({
   icon: <WarningOutlined className="mr-2 text-lg gold-6" />,
   title: 'Clarification needed',
-  description:
-    "Could you please provide more details or specify the information you're seeking?",
 });
 
 const getGeneralAnswerStateComponent = (state: PROCESS_STATE) => {
@@ -268,6 +270,7 @@ const getDefaultStateComponent = (state: PROCESS_STATE) => {
     {
       [PROCESS_STATE.UNDERSTANDING]: Understanding,
       [PROCESS_STATE.SEARCHING]: Searching,
+      [PROCESS_STATE.PLANNING]: Planning,
       [PROCESS_STATE.GENERATING]: Generating,
       [PROCESS_STATE.FINISHED]: Finished,
       [PROCESS_STATE.FAILED]: Failed,

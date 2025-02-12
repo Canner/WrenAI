@@ -1,18 +1,17 @@
 import logging
 import sys
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
-from pydantic import BaseModel
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.sql import (
-    TEXT_TO_SQL_RULES,
+    SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
     construct_instructions,
     sql_generation_system_prompt,
@@ -23,50 +22,35 @@ logger = logging.getLogger("wren-ai-service")
 
 
 sql_generation_user_prompt_template = """
-### TASK ###
-Given a user query, your task is to interpret the query based on the database schema and
-generate one SQL statement that best potentially answer user's query.
-
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
 {% endfor %}
 
-{% if exclude %}
-### EXCLUDED STATEMETS ###
-Ensure that the following excluded statements are not used in the generated queries to maintain variety and avoid repetition.
-{% for doc in exclude %}
-    {{ doc.statement }}
-{% endfor %}
-{% endif %}
-
-{{ text_to_sql_rules }}
 {% if instructions %}
+### INSTRUCTIONS ###
 {{ instructions }}
 {% endif %}
 
-### FINAL ANSWER FORMAT ###
-The final answer must be the JSON format like following:
-
-{
-    "results": [
-        {"sql": <SQL_QUERY_STRING>}
-    ]
-}
-
 {% if sql_samples %}
-### SAMPLES ###
+### SQL SAMPLES ###
 {% for sample in sql_samples %}
-Summary:
-{{sample.summary}}
+Question:
+{{sample.question}}
 SQL:
 {{sample.sql}}
+
 {% endfor %}
 {% endif %}
 
 ### QUESTION ###
 User's Question: {{ query }}
 Current Time: {{ current_time }}
+
+{% if sql_generation_reasoning %}
+### REASONING PLAN ###
+{{ sql_generation_reasoning }}
+{% endif %}
 
 Let's think step by step.
 """
@@ -77,18 +61,23 @@ Let's think step by step.
 def prompt(
     query: str,
     documents: List[str],
-    exclude: List[Dict],
-    text_to_sql_rules: str,
     prompt_builder: PromptBuilder,
+    sql_generation_reasoning: str | None = None,
     configuration: Configuration | None = None,
     sql_samples: List[Dict] | None = None,
+    has_calculated_field: bool = False,
+    has_metric: bool = False,
 ) -> dict:
     return prompt_builder.run(
         query=query,
         documents=documents,
-        exclude=exclude,
-        text_to_sql_rules=text_to_sql_rules,
-        instructions=construct_instructions(configuration),
+        sql_generation_reasoning=sql_generation_reasoning,
+        instructions=construct_instructions(
+            configuration,
+            has_calculated_field,
+            has_metric,
+            sql_samples,
+        ),
         sql_samples=sql_samples,
         current_time=configuration.show_current_time(),
     )
@@ -106,29 +95,17 @@ async def generate_sql(
 async def post_process(
     generate_sql: dict,
     post_processor: SQLGenPostProcessor,
+    engine_timeout: float,
     project_id: str | None = None,
 ) -> dict:
-    return await post_processor.run(generate_sql.get("replies"), project_id=project_id)
+    return await post_processor.run(
+        generate_sql.get("replies"),
+        timeout=engine_timeout,
+        project_id=project_id,
+    )
 
 
 ## End of Pipeline
-class SQLResult(BaseModel):
-    sql: str
-
-
-class GenerationResults(BaseModel):
-    results: list[SQLResult]
-
-
-SQL_GENERATION_MODEL_KWARGS = {
-    "response_format": {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "sql_results",
-            "schema": GenerationResults.model_json_schema(),
-        },
-    }
-}
 
 
 class SQLGeneration(BasicPipeline):
@@ -136,6 +113,7 @@ class SQLGeneration(BasicPipeline):
         self,
         llm_provider: LLMProvider,
         engine: Engine,
+        engine_timeout: Optional[float] = 30.0,
         **kwargs,
     ):
         self._components = {
@@ -150,7 +128,7 @@ class SQLGeneration(BasicPipeline):
         }
 
         self._configs = {
-            "text_to_sql_rules": TEXT_TO_SQL_RULES,
+            "engine_timeout": engine_timeout,
         }
 
         super().__init__(
@@ -162,10 +140,12 @@ class SQLGeneration(BasicPipeline):
         self,
         query: str,
         contexts: List[str],
-        exclude: List[Dict],
+        sql_generation_reasoning: str | None = None,
         configuration: Configuration = Configuration(),
         sql_samples: List[Dict] | None = None,
         project_id: str | None = None,
+        has_calculated_field: bool = False,
+        has_metric: bool = False,
     ):
         logger.info("SQL Generation pipeline is running...")
         return await self._pipe.execute(
@@ -173,10 +153,12 @@ class SQLGeneration(BasicPipeline):
             inputs={
                 "query": query,
                 "documents": contexts,
-                "exclude": exclude,
+                "sql_generation_reasoning": sql_generation_reasoning,
                 "sql_samples": sql_samples,
                 "project_id": project_id,
                 "configuration": configuration,
+                "has_calculated_field": has_calculated_field,
+                "has_metric": has_metric,
                 **self._components,
                 **self._configs,
             },
@@ -191,5 +173,4 @@ if __name__ == "__main__":
         "sql_generation",
         query="this is a test query",
         contexts=[],
-        exclude=[],
     )

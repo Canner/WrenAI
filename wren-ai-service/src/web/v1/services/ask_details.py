@@ -123,8 +123,8 @@ class AskDetailsService:
             ask_details_result = generation_result["post_process"]["results"]
 
             if not ask_details_result["steps"]:
-                quoted_sql, no_error = add_quotes(ask_details_request.sql)
-                sql = quoted_sql if no_error else ask_details_request.sql
+                quoted_sql, error_message = add_quotes(ask_details_request.sql)
+                sql = quoted_sql if not error_message else ask_details_request.sql
 
                 sql_summary_results = await self._pipelines["sql_summary"].run(
                     query=ask_details_request.query,

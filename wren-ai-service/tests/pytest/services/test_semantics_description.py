@@ -4,14 +4,14 @@ from unittest.mock import AsyncMock
 import orjson
 import pytest
 
-from src.web.v1.services.semantics_description import SemanticsDescription
+from src.web.v1.services import SemanticsDescription
 
 
 @pytest.fixture
 def service():
     mock_pipeline = AsyncMock()
     mock_pipeline.run.return_value = {
-        "normalize": {
+        "output": {
             "model1": {
                 "columns": [],
                 "properties": {"description": "Test description"},
@@ -28,7 +28,7 @@ async def test_generate_semantics_description(
     service: SemanticsDescription,
 ):
     service["test_id"] = SemanticsDescription.Resource(id="test_id")
-    request = SemanticsDescription.Input(
+    request = SemanticsDescription.GenerateRequest(
         id="test_id",
         user_prompt="Describe the model",
         selected_models=["model1"],
@@ -54,7 +54,7 @@ async def test_generate_semantics_description_with_invalid_mdl(
     service: SemanticsDescription,
 ):
     service["test_id"] = SemanticsDescription.Resource(id="test_id")
-    request = SemanticsDescription.Input(
+    request = SemanticsDescription.GenerateRequest(
         id="test_id",
         user_prompt="Describe the model",
         selected_models=["model1"],
@@ -76,7 +76,7 @@ async def test_generate_semantics_description_with_exception(
     service: SemanticsDescription,
 ):
     service["test_id"] = SemanticsDescription.Resource(id="test_id")
-    request = SemanticsDescription.Input(
+    request = SemanticsDescription.GenerateRequest(
         id="test_id",
         user_prompt="Describe the model",
         selected_models=["model1"],
@@ -132,7 +132,7 @@ async def test_batch_processing_with_multiple_models(
     service: SemanticsDescription,
 ):
     service["test_id"] = SemanticsDescription.Resource(id="test_id")
-    request = SemanticsDescription.Input(
+    request = SemanticsDescription.GenerateRequest(
         id="test_id",
         user_prompt="Describe the models",
         selected_models=["model1", "model2", "model3"],
@@ -141,9 +141,9 @@ async def test_batch_processing_with_multiple_models(
 
     # Mock pipeline responses for each chunk
     service._pipelines["semantics_description"].run.side_effect = [
-        {"normalize": {"model1": {"description": "Description 1"}}},
-        {"normalize": {"model2": {"description": "Description 2"}}},
-        {"normalize": {"model3": {"description": "Description 3"}}},
+        {"output": {"model1": {"description": "Description 1"}}},
+        {"output": {"model2": {"description": "Description 2"}}},
+        {"output": {"model3": {"description": "Description 3"}}},
     ]
 
     await service.generate(request)
@@ -168,7 +168,7 @@ def test_batch_processing_with_custom_chunk_size(
     service: SemanticsDescription,
 ):
     service["test_id"] = SemanticsDescription.Resource(id="test_id")
-    request = SemanticsDescription.Input(
+    request = SemanticsDescription.GenerateRequest(
         id="test_id",
         user_prompt="Describe the models",
         selected_models=["model1", "model2", "model3", "model4"],
@@ -191,7 +191,7 @@ async def test_batch_processing_partial_failure(
     service: SemanticsDescription,
 ):
     service["test_id"] = SemanticsDescription.Resource(id="test_id")
-    request = SemanticsDescription.Input(
+    request = SemanticsDescription.GenerateRequest(
         id="test_id",
         user_prompt="Describe the models",
         selected_models=["model1", "model2"],
@@ -200,7 +200,7 @@ async def test_batch_processing_partial_failure(
 
     # Mock first chunk succeeds, second chunk fails
     service._pipelines["semantics_description"].run.side_effect = [
-        {"normalize": {"model1": {"description": "Description 1"}}},
+        {"output": {"model1": {"description": "Description 1"}}},
         Exception("Failed processing model2"),
     ]
 
@@ -220,7 +220,7 @@ async def test_concurrent_updates_no_race_condition(
     test_id = "concurrent_test"
     service[test_id] = SemanticsDescription.Resource(id=test_id)
 
-    request = SemanticsDescription.Input(
+    request = SemanticsDescription.GenerateRequest(
         id=test_id,
         user_prompt="Test concurrent updates",
         selected_models=["model1", "model2", "model3", "model4", "model5"],
@@ -231,7 +231,7 @@ async def test_concurrent_updates_no_race_condition(
     async def delayed_response(model_num, delay=0.1):
         await asyncio.sleep(delay)  # Add delay to increase chance of race condition
         return {
-            "normalize": {
+            "output": {
                 f"model{model_num}": {"description": f"Description {model_num}"}
             }
         }

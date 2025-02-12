@@ -1,20 +1,18 @@
 import logging
 import sys
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import orjson
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
-from haystack import component
 from haystack.components.builders.prompt_builder import PromptBuilder
-from jsonschema import validate
-from jsonschema.exceptions import ValidationError
 from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.chart import (
     ChartDataPreprocessor,
+    ChartGenerationPostProcessor,
     ChartGenerationResults,
     chart_generation_instructions,
 )
@@ -24,19 +22,18 @@ logger = logging.getLogger("wren-ai-service")
 chart_generation_system_prompt = f"""
 ### TASK ###
 
-You are a data analyst great at visualizing data using vega-lite! Given the data using the 'columns' formatted JSON from pandas.DataFrame APIs, 
-you need to generate vega-lite schema in JSON and provide suitable chart type; we will also give you the question and sql to understand the data.
-Besides, you need to give a concise and easy-to-understand reasoning to describe why you provide such vega-lite schema and a within 20 words description of the chart.
+You are a data analyst great at visualizing data using vega-lite! Given the user's question, SQL, sample data and sample column values, you need to generate vega-lite schema in JSON and provide suitable chart type.
+Besides, you need to give a concise and easy-to-understand reasoning to describe why you provide such vega-lite schema based on the question, SQL, sample data and sample column values.
 
 {chart_generation_instructions}
 
 ### OUTPUT FORMAT ###
 
-Please provide your chain of thought reasoning, the vega-lite schema in JSON format and the chart type.
+Please provide your chain of thought reasoning, chart type and the vega-lite schema in JSON format.
 
 {{
     "reasoning": <REASON_TO_CHOOSE_THE_SCHEMA_IN_STRING_FORMATTED_IN_LANGUAGE_PROVIDED_BY_USER>,
-    "chart_type": "line" | "bar" | "pie" | "grouped_bar" | "stacked_bar" | "area" | "",
+    "chart_type": "line" | "multi_line" | "bar" | "pie" | "grouped_bar" | "stacked_bar" | "area" | "",
     "chart_schema": <VEGA_LITE_JSON_SCHEMA>
 }}
 """
@@ -46,68 +43,11 @@ chart_generation_user_prompt_template = """
 Question: {{ query }}
 SQL: {{ sql }}
 Sample Data: {{ sample_data }}
+Sample Column Values: {{ sample_column_values }}
 Language: {{ language }}
 
 Please think step by step
 """
-
-
-@component
-class ChartGenerationPostProcessor:
-    @component.output_types(
-        results=Dict[str, Any],
-    )
-    def run(
-        self,
-        replies: str,
-        vega_schema: Dict[str, Any],
-    ):
-        try:
-            generation_result = orjson.loads(replies[0])
-            reasoning = generation_result.get("reasoning", "")
-            chart_type = generation_result.get("chart_type", "")
-            if chart_schema := generation_result.get("chart_schema", {}):
-                # sometimes the chart_schema is still in string format
-                if isinstance(chart_schema, str):
-                    chart_schema = orjson.loads(chart_schema)
-
-                validate(chart_schema, schema=vega_schema)
-                chart_schema["data"]["values"] = []
-                return {
-                    "results": {
-                        "chart_schema": chart_schema,
-                        "reasoning": reasoning,
-                        "chart_type": chart_type,
-                    }
-                }
-
-            return {
-                "results": {
-                    "chart_schema": {},
-                    "reasoning": reasoning,
-                    "chart_type": chart_type,
-                }
-            }
-        except ValidationError as e:
-            logger.exception(f"Vega-lite schema is not valid: {e}")
-
-            return {
-                "results": {
-                    "chart_schema": {},
-                    "reasoning": "",
-                    "chart_type": "",
-                }
-            }
-        except Exception as e:
-            logger.exception(f"JSON deserialization failed: {e}")
-
-            return {
-                "results": {
-                    "chart_schema": {},
-                    "reasoning": "",
-                    "chart_type": "",
-                }
-            }
 
 
 ## Start of Pipeline
@@ -126,12 +66,14 @@ def prompt(
     language: str,
     prompt_builder: PromptBuilder,
 ) -> dict:
-    sample_data = preprocess_data["results"]["sample_data"]
+    sample_data = preprocess_data.get("sample_data")
+    sample_column_values = preprocess_data.get("sample_column_values")
 
     return prompt_builder.run(
         query=query,
         sql=sql,
         sample_data=sample_data,
+        sample_column_values=sample_column_values,
         language=language,
     )
 
@@ -145,9 +87,16 @@ async def generate_chart(prompt: dict, generator: Any) -> dict:
 def post_process(
     generate_chart: dict,
     vega_schema: Dict[str, Any],
+    remove_data_from_chart_schema: bool,
+    preprocess_data: dict,
     post_processor: ChartGenerationPostProcessor,
 ) -> dict:
-    return post_processor.run(generate_chart.get("replies"), vega_schema)
+    return post_processor.run(
+        generate_chart.get("replies"),
+        vega_schema,
+        preprocess_data["sample_data"],
+        remove_data_from_chart_schema,
+    )
 
 
 ## End of Pipeline
@@ -198,6 +147,7 @@ class ChartGeneration(BasicPipeline):
         sql: str,
         data: dict,
         language: str,
+        remove_data_from_chart_schema: Optional[bool] = True,
     ) -> dict:
         logger.info("Chart Generation pipeline is running...")
         return await self._pipe.execute(
@@ -207,6 +157,7 @@ class ChartGeneration(BasicPipeline):
                 "sql": sql,
                 "data": data,
                 "language": language,
+                "remove_data_from_chart_schema": remove_data_from_chart_schema,
                 **self._components,
                 **self._configs,
             },

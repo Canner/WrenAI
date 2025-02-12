@@ -46,6 +46,7 @@ const COMMON_CHART_DETAIL = gql`
     queryId
     status
     description
+    chartType
     chartSchema
     error {
       ...CommonError
@@ -127,6 +128,7 @@ export const ASKING_TASK = gql`
       error {
         ...CommonError
       }
+      intentReasoning
     }
   }
   ${COMMON_ERROR}

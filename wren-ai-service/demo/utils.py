@@ -3,6 +3,7 @@ import copy
 import json
 import os
 import time
+import uuid
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -174,6 +175,26 @@ def get_data_from_wren_engine(
 
 
 # ui related
+def on_change_sql_generation_reasoning():
+    st.session_state["sql_generation_reasoning"] = st.session_state[
+        "sql_generation_reasoning_input"
+    ]
+
+
+def on_click_regenerate_sql():
+    ask_feedback(
+        st.session_state["sql_generation_reasoning"],
+        st.session_state["asks_results"]["response"][0]["sql"],
+    )
+
+
+def on_click_save_sql_pair(edited_sql: str):
+    save_sql_pair(
+        st.session_state["query"],
+        edited_sql,
+    )
+
+
 def show_query_history():
     if st.session_state["query_history"]:
         with st.expander("Query History", expanded=False):
@@ -199,25 +220,38 @@ def show_query_history():
 def show_asks_results():
     show_query_history()
 
-    st.markdown("### Query")
+    st.markdown("### Question")
     st.markdown(f"{st.session_state['query']}")
 
-    st.markdown("### Query Result")
-    if st.session_state["asks_results_type"] == "TEXT_TO_SQL":
-        asks_result_count = len(st.session_state["asks_results"])
-        ask_result_cols = st.columns(asks_result_count)
-        for i, ask_result_col in enumerate(ask_result_cols):
-            with ask_result_col:
-                st.code(
-                    body=sqlparse.format(
-                        st.session_state["asks_results"][i]["sql"],
-                        reindent=True,
-                        keyword_case="upper",
-                    ),
-                    language="sql",
-                )
+    st.markdown("### SQL Generation Reasoning")
+    st.text_area(
+        "SQL Generation Reasoning",
+        st.session_state["sql_generation_reasoning"],
+        key="sql_generation_reasoning_input",
+        height=250,
+        on_change=on_change_sql_generation_reasoning,
+    )
 
-        sql = st.session_state["asks_results"][0]["sql"]
+    st.button("Regenerate SQL", on_click=on_click_regenerate_sql)
+
+    st.markdown("### SQL Query Result")
+    if st.session_state["asks_results_type"] == "TEXT_TO_SQL":
+        edited_sql = st.text_area(
+            label="",
+            value=sqlparse.format(
+                st.session_state["asks_results"]["response"][0]["sql"],
+                reindent=True,
+                keyword_case="upper",
+            ),
+            height=250,
+        )
+        st.button(
+            "Save Question-SQL pair",
+            on_click=on_click_save_sql_pair,
+            args=(edited_sql,),
+        )
+
+        sql = edited_sql
 
         st.session_state["chosen_query_result"] = {
             "index": 0,
@@ -261,77 +295,10 @@ def show_asks_details_results():
         )
         sqls_with_cte.append(f"{step['cte_name']} AS ( {step['sql']} )")
 
-        # st.button(
-        #     label="Preview Data",
-        #     key=f"preview_data_btn_{i}",
-        #     on_click=on_click_preview_data_button,
-        #     args=[i, sqls],
-        # )
-
-        # if (
-        #     st.session_state["preview_data_button_index"] is not None
-        #     and st.session_state["preview_sql"] is not None
-        #     and i == st.session_state["preview_data_button_index"]
-        # ):
-        #     st.markdown(
-        #         f'##### Preview Data of Step {st.session_state['preview_data_button_index'] + 1}'
-        #     )
-
-        #     st.dataframe(
-        #         get_data_from_wren_engine(
-        #             st.session_state["preview_sql"],
-        #             st.session_state["dataset_type"],
-        #             st.session_state["mdl_json"],
-        #         )
-        #     )
-
 
 def on_click_preview_data_button(index: int, full_sqls: List[str]):
     st.session_state["preview_data_button_index"] = index
     st.session_state["preview_sql"] = full_sqls[index]
-
-
-def get_sql_analysis_results(sqls: List[str], manifest: Dict):
-    results = []
-    for sql in sqls:
-        response = requests.get(
-            f"{WREN_ENGINE_API_URL}/v1/analysis/sql",
-            json={
-                "sql": sql,
-                "manifest": manifest,
-            },
-        )
-
-        assert response.status_code == 200, response.json()
-
-        results.append(response.json())
-
-    return results
-
-
-def on_click_sql_explanation_button(
-    question: str,
-    sqls: List[str],
-    summaries: List[str],
-    manifest: Dict,
-):
-    sql_analysis_results = get_sql_analysis_results(sqls, manifest)
-
-    st.session_state["sql_explanation_question"] = question
-    st.session_state["sql_analysis_results"] = sql_analysis_results
-    st.session_state["sql_explanation_steps_with_analysis"] = [
-        {"sql": sql, "summary": summary, "sql_analysis_results": sql_analysis_results}
-        for sql, summary, sql_analysis_results in zip(
-            sqls, summaries, sql_analysis_results
-        )
-    ]
-
-    sql_explanation_results = sql_explanation()
-    st.session_state["sql_explanation_results"] = sql_explanation_results
-    if sql_explanation_results:
-        st.session_state["sql_user_corrections_by_step"] = [
-            [] for _ in range(len(sql_explanation_results))
-        ]
 
 
 def on_change_user_correction(
@@ -405,25 +372,6 @@ def on_change_user_correction(
                 },
             }
         )
-
-
-def on_click_sql_regeneration_button(
-    ask_details_results: dict,
-    sql_user_corrections_by_step: List[List[dict]],
-):
-    sql_regeneration_data = copy.deepcopy(ask_details_results)
-    for i, (_, sql_user_corrections) in enumerate(
-        zip(sql_regeneration_data["steps"], sql_user_corrections_by_step)
-    ):
-        if sql_user_corrections:
-            sql_regeneration_data["steps"][i]["corrections"] = sql_user_corrections
-        else:
-            sql_regeneration_data["steps"][i]["corrections"] = []
-
-    st.session_state["sql_regeneration_results"] = sql_regeneration(
-        sql_regeneration_data
-    )
-    show_sql_regeneration_results_dialog(sql_user_corrections_by_step)
 
 
 def on_click_adjust_chart(
@@ -574,6 +522,7 @@ def prepare_semantics(mdl_json: dict):
     st.session_state["preview_data_button_index"] = None
     st.session_state["preview_sql"] = None
     st.session_state["query_history"] = None
+    st.session_state["sql_generation_reasoning"] = None
 
     if st.session_state["semantics_preparation_status"] == "failed":
         st.toast("An error occurred while preparing the semantics", icon="🚨")
@@ -622,12 +571,92 @@ def ask(query: str, timezone: str, query_history: Optional[dict] = None):
         if asks_type == "GENERAL":
             display_general_response(query_id)
         elif asks_type == "TEXT_TO_SQL":
-            st.session_state["asks_results"] = asks_status_response.json()["response"]
+            st.session_state["asks_results"] = asks_status_response.json()
+            st.session_state["sql_generation_reasoning"] = st.session_state[
+                "asks_results"
+            ]["sql_generation_reasoning"]
         else:
             st.session_state["asks_results"] = asks_type
     elif asks_status == "failed":
         st.error(
             f'An error occurred while processing the query: {asks_status_response.json()['error']}',
+            icon="🚨",
+        )
+
+
+def ask_feedback(sql_generation_reasoning: str, sql: str):
+    ask_feedback_response = requests.post(
+        f"{WREN_AI_SERVICE_BASE_URL}/v1/ask-feedbacks",
+        json={
+            "sql_generation_reasoning": sql_generation_reasoning,
+            "sql": sql,
+            "configurations": {
+                "language": st.session_state["language"],
+            },
+        },
+    )
+
+    assert ask_feedback_response.status_code == 200
+    query_id = ask_feedback_response.json()["query_id"]
+    ask_feedback_status = None
+
+    while not ask_feedback_status or (
+        ask_feedback_status != "finished"
+        and ask_feedback_status != "failed"
+        and ask_feedback_status != "stopped"
+    ):
+        ask_feedback_status_response = requests.get(
+            f"{WREN_AI_SERVICE_BASE_URL}/v1/ask-feedbacks/{query_id}"
+        )
+        assert ask_feedback_status_response.status_code == 200
+        ask_feedback_status = ask_feedback_status_response.json()["status"]
+        st.toast(f"The query processing status: {ask_feedback_status}")
+        time.sleep(POLLING_INTERVAL)
+
+    if ask_feedback_status_response == "finished":
+        st.session_state["asks_results_type"] = "TEXT_TO_SQL"
+        st.session_state["asks_results"] = ask_feedback_status_response.json()
+    elif ask_feedback_status == "failed":
+        st.error(
+            f'An error occurred while processing the query: {ask_feedback_status_response.json()['error']}',
+            icon="🚨",
+        )
+
+
+def save_sql_pair(question: str, sql: str):
+    save_sql_pair_response = requests.post(
+        f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-pairs",
+        json={
+            "sql_pairs": [
+                {
+                    "id": str(uuid.uuid4()),
+                    "question": question,
+                    "sql": sql,
+                }
+            ],
+        },
+    )
+
+    assert save_sql_pair_response.status_code == 200
+    query_id = save_sql_pair_response.json()["id"]
+    save_sql_pair_status = None
+
+    while not save_sql_pair_status or (
+        save_sql_pair_status != "finished" and save_sql_pair_status != "failed"
+    ):
+        save_sql_pair_status_response = requests.get(
+            f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-pairs/{query_id}"
+        )
+        assert save_sql_pair_status_response.status_code == 200
+        save_sql_pair_status = save_sql_pair_status_response.json()["status"]
+        st.toast(f"The sql pair processing status: {save_sql_pair_status}")
+        time.sleep(POLLING_INTERVAL)
+
+    if save_sql_pair_status == "finished":
+        st.toast("The sql pair is saved successfully", icon="🎉")
+    elif save_sql_pair_status == "failed":
+        st.error(
+            f'An error occurred while processing the sql pair: {save_sql_pair_status_response.json()['error']}',
             icon="🚨",
         )
 
@@ -735,73 +764,6 @@ def ask_details():
         time.sleep(POLLING_INTERVAL)
 
     return asks_details_status_response.json()
-
-
-def sql_explanation():
-    sql_explanation_response = requests.post(
-        f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-explanations",
-        json={
-            "question": st.session_state["sql_explanation_question"],
-            "steps_with_analysis_results": st.session_state[
-                "sql_explanation_steps_with_analysis"
-            ],
-        },
-    )
-
-    assert sql_explanation_response.status_code == 200
-    query_id = sql_explanation_response.json()["query_id"]
-    sql_explanation_status = None
-
-    while (
-        sql_explanation_status != "finished" and sql_explanation_status != "failed"
-    ) or not sql_explanation_status:
-        sql_explanation_status_response = requests.get(
-            f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-explanations/{query_id}/result"
-        )
-        assert sql_explanation_status_response.status_code == 200
-        sql_explanation_status = sql_explanation_status_response.json()["status"]
-        st.toast(f"The query processing status: {sql_explanation_status}")
-        time.sleep(POLLING_INTERVAL)
-
-    if sql_explanation_status == "finished":
-        return sql_explanation_status_response.json()["response"]
-    elif sql_explanation_status == "failed":
-        st.error(
-            f'An error occurred while processing the query: {sql_explanation_status_response.json()['error']}',
-            icon="🚨",
-        )
-        return None
-
-
-def sql_regeneration(sql_regeneration_data: dict):
-    sql_regeneration_response = requests.post(
-        f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-regenerations",
-        json=sql_regeneration_data,
-    )
-
-    assert sql_regeneration_response.status_code == 200
-    query_id = sql_regeneration_response.json()["query_id"]
-    sql_regeneration_status = None
-
-    while (
-        sql_regeneration_status != "finished" and sql_regeneration_status != "failed"
-    ) or not sql_regeneration_status:
-        sql_regeneration_status_response = requests.get(
-            f"{WREN_AI_SERVICE_BASE_URL}/v1/sql-regenerations/{query_id}/result"
-        )
-        assert sql_regeneration_status_response.status_code == 200
-        sql_regeneration_status = sql_regeneration_status_response.json()["status"]
-        st.toast(f"The query processing status: {sql_regeneration_status}")
-        time.sleep(POLLING_INTERVAL)
-
-    if sql_regeneration_status == "finished":
-        return sql_regeneration_status_response.json()["response"]
-    elif sql_regeneration_status == "failed":
-        st.error(
-            f'An error occurred while processing the query: {sql_regeneration_status_response.json()['error']}',
-            icon="🚨",
-        )
-        return None
 
 
 def fill_vega_lite_values(vega_lite_schema: dict, df: pd.DataFrame) -> dict:
@@ -943,83 +905,6 @@ def adjust_chart(
             chart_response["response"]["chart_schema"] = filled_vega_lite_schema
 
     return chart_response
-
-
-@st.dialog(
-    "Comparing SQL step-by-step breakdown before and after SQL Generation Feedback",
-    width="large",
-)
-def show_sql_regeneration_results_dialog(
-    sql_user_corrections_by_step: List[List[dict]],
-):
-    st.markdown("### Adjustments")
-    st.json(sql_user_corrections_by_step, expanded=True)
-
-    col1, col2 = st.columns(2)
-    original_sqls = []
-    with col1:
-        st.markdown("### Before SQL Generation Feedback")
-        st.markdown(
-            f'Description: {st.session_state['asks_details_result']["description"]}'
-        )
-
-        sqls_with_cte = []
-        for i, step in enumerate(st.session_state["asks_details_result"]["steps"]):
-            st.markdown(f"#### Step {i + 1}")
-            st.markdown(f'Summary: {step["summary"]}')
-
-            sql = ""
-            if sqls_with_cte:
-                sql += "WITH " + ",\n".join(sqls_with_cte) + "\n\n"
-            sql += step["sql"]
-            original_sqls.append(sql)
-
-            st.markdown("SQL")
-            st.code(
-                body=sqlparse.format(sql, reindent=True, keyword_case="upper"),
-                language="sql",
-            )
-            sqls_with_cte.append(f"{step['cte_name']} AS ( {step['sql']} )")
-    with col2:
-        st.markdown("### After SQL Generation Feedback")
-
-        if (
-            st.session_state["sql_regeneration_results"]["description"]
-            == st.session_state["asks_details_result"]["description"]
-        ):
-            st.markdown(
-                f'Description: {st.session_state['sql_regeneration_results']["description"]}'
-            )
-        else:
-            st.markdown(
-                f':red[Description:] {st.session_state['sql_regeneration_results']["description"]}'
-            )
-
-        sqls_with_cte = []
-        for i, step in enumerate(st.session_state["sql_regeneration_results"]["steps"]):
-            st.markdown(f"#### Step {i + 1}")
-            if (
-                step["summary"]
-                == st.session_state["asks_details_result"]["steps"][i]["summary"]
-            ):
-                st.markdown(f'Summary: {step["summary"]}')
-            else:
-                st.markdown(f':red[Summary:] {step["summary"]}')
-
-            sql = ""
-            if sqls_with_cte:
-                sql += "WITH " + ",\n".join(sqls_with_cte) + "\n\n"
-            sql += step["sql"]
-
-            if sql == original_sqls[i]:
-                st.markdown("SQL")
-            else:
-                st.markdown(":red[SQL:]")
-            st.code(
-                body=sqlparse.format(sql, reindent=True, keyword_case="upper"),
-                language="sql",
-            )
-            sqls_with_cte.append(f"{step['cte_name']} AS ( {step['sql']} )")
 
 
 def show_original_chart(chart_schema: dict, reasoning: str, chart_type: str):

@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 import orjson
 from haystack import component
+from pydantic import BaseModel
 
 from src.core.engine import (
     Engine,
@@ -28,6 +29,7 @@ class SQLBreakdownGenPostProcessor:
         self,
         replies: List[str],
         project_id: str | None = None,
+        timeout: Optional[float] = 30.0,
     ) -> Dict[str, Any]:
         cleaned_generation_result = orjson.loads(clean_generation_result(replies[0]))
 
@@ -44,8 +46,8 @@ class SQLBreakdownGenPostProcessor:
         steps[-1]["cte_name"] = ""
 
         for step in steps:
-            step["sql"], no_error = add_quotes(step["sql"])
-            if not no_error:
+            step["sql"], error_message = add_quotes(step["sql"])
+            if not error_message:
                 return {
                     "results": {
                         "description": cleaned_generation_result["description"],
@@ -55,7 +57,11 @@ class SQLBreakdownGenPostProcessor:
 
         sql = self._build_cte_query(steps)
 
-        if not await self._check_if_sql_executable(sql, project_id=project_id):
+        if not await self._check_if_sql_executable(
+            sql,
+            project_id=project_id,
+            timeout=timeout,
+        ):
             return {
                 "results": {
                     "description": cleaned_generation_result["description"],
@@ -83,12 +89,14 @@ class SQLBreakdownGenPostProcessor:
         self,
         sql: str,
         project_id: str | None = None,
+        timeout: Optional[float] = 30.0,
     ):
         async with aiohttp.ClientSession() as session:
             status, _, addition = await self._engine.execute_sql(
                 sql,
                 session,
                 project_id=project_id,
+                timeout=timeout,
             )
 
         if not status:
@@ -111,6 +119,7 @@ class SQLGenPostProcessor:
     async def run(
         self,
         replies: List[str] | List[List[str]],
+        timeout: Optional[float] = 30.0,
         project_id: str | None = None,
     ) -> dict:
         try:
@@ -120,24 +129,26 @@ class SQLGenPostProcessor:
                     try:
                         cleaned_generation_result.append(
                             orjson.loads(clean_generation_result(reply["replies"][0]))[
-                                "results"
-                            ][0]
+                                "sql"
+                            ]
                         )
                     except Exception as e:
                         logger.exception(f"Error in SQLGenPostProcessor: {e}")
             else:
                 cleaned_generation_result = orjson.loads(
                     clean_generation_result(replies[0])
-                )["results"]
+                )["sql"]
 
-            if isinstance(cleaned_generation_result, dict):
+            if isinstance(cleaned_generation_result, str):
                 cleaned_generation_result = [cleaned_generation_result]
 
             (
                 valid_generation_results,
                 invalid_generation_results,
             ) = await self._classify_invalid_generation_results(
-                cleaned_generation_result, project_id=project_id
+                cleaned_generation_result,
+                project_id=project_id,
+                timeout=timeout,
             )
 
             return {
@@ -153,17 +164,20 @@ class SQLGenPostProcessor:
             }
 
     async def _classify_invalid_generation_results(
-        self, generation_results: List[Dict[str, str]], project_id: str | None = None
+        self,
+        generation_results: list[str],
+        timeout: float,
+        project_id: str | None = None,
     ) -> List[Optional[Dict[str, str]]]:
         valid_generation_results = []
         invalid_generation_results = []
 
-        async def _task(result: Dict[str, str]):
-            quoted_sql, no_error = add_quotes(result["sql"])
+        async def _task(sql: str):
+            quoted_sql, error_message = add_quotes(sql)
 
-            if no_error:
+            if not error_message:
                 status, _, addition = await self._engine.execute_sql(
-                    quoted_sql, session, project_id=project_id
+                    quoted_sql, session, project_id=project_id, timeout=timeout
                 )
 
                 if status:
@@ -174,20 +188,23 @@ class SQLGenPostProcessor:
                         }
                     )
                 else:
+                    error_message = addition.get("error_message", "")
                     invalid_generation_results.append(
                         {
                             "sql": quoted_sql,
-                            "type": "DRY_RUN",
-                            "error": addition.get("error_message", ""),
+                            "type": "TIME_OUT"
+                            if error_message.startswith("Request timed out")
+                            else "DRY_RUN",
+                            "error": error_message,
                             "correlation_id": addition.get("correlation_id", ""),
                         }
                     )
             else:
                 invalid_generation_results.append(
                     {
-                        "sql": result["sql"],
+                        "sql": sql,
                         "type": "ADD_QUOTES",
-                        "error": "add_quotes failed",
+                        "error": error_message,
                     }
                 )
 
@@ -201,7 +218,7 @@ class SQLGenPostProcessor:
 
 
 TEXT_TO_SQL_RULES = """
-### ALERT ###
+#### SQL RULES ####
 - ONLY USE SELECT statements, NO DELETE, UPDATE OR INSERT etc. statements that might change the data in the database.
 - ONLY USE the tables and columns mentioned in the database schema.
 - ONLY USE "*" if the user query asks for all the columns of a table.
@@ -223,7 +240,6 @@ TEXT_TO_SQL_RULES = """
 - If the user asks for a specific date, please give the date range in SQL query
     - example: "What is the total revenue for the month of 2024-11-01?"
     - answer: "SELECT SUM(r.PriceSum) FROM Revenue r WHERE CAST(r.PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) >= CAST('2024-11-01 00:00:00' AS TIMESTAMP WITH TIME ZONE) AND CAST(r.PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) < CAST('2024-11-02 00:00:00' AS TIMESTAMP WITH TIME ZONE)"
-- ALWAYS ADD "timestamp" to the front of the timestamp literal, ex. "timestamp '2024-02-20 12:00:00'"
 - USE THE VIEW TO SIMPLIFY THE QUERY.
 - DON'T MISUSE THE VIEW NAME. THE ACTUAL NAME IS FOLLOWING THE CREATE VIEW STATEMENT.
 - MUST USE the value of alias from the comment section of the corresponding table or column in the DATABASE SCHEMA section for the column/table alias.
@@ -334,18 +350,30 @@ TEXT_TO_SQL_RULES = """
 - DON'T USE LAX_BOOL, LAX_FLOAT64, LAX_INT64, LAX_STRING when "json_type":"".
 """
 
+sql_generation_system_prompt = f"""
+You are a helpful assistant that converts natural language queries into ANSI SQL queries.
 
-sql_generation_system_prompt = """
-You are an ANSI SQL expert with exceptional logical thinking skills. Your main task is to generate SQL from given DB schema and user-input natrual language queries.
-Before the main task, you need to learn about some specific structures in the given DB schema.
+Given user's question, database schema, etc., you should think deeply and carefully and generate the SQL query based on the given reasoning plan step by step.
 
-## LESSON 1 ##
+{TEXT_TO_SQL_RULES}
+
+### FINAL ANSWER FORMAT ###
+The final answer must be a ANSI SQL query in JSON format:
+
+{{
+    "sql": <SQL_QUERY_STRING>
+}}
+"""
+
+calculated_field_instructions = """
+#### Instructions for Calculated Field ####
+
 The first structure is the special column marked as "Calculated Field". You need to interpret the purpose and calculation basis for these columns, then utilize them in the following text-to-sql generation tasks.
 First, provide a brief explanation of what each field represents in the context of the schema, including how each field is computed using the relationships between models.
 Then, during the following tasks, if the user queries pertain to any calculated fields defined in the database schema, ensure to utilize those calculated fields appropriately in the output SQL queries.
 The goal is to accurately reflect the intent of the question in the SQL syntax, leveraging the pre-computed logic embedded within the calculated fields.
 
-### EXAMPLES ###
+EXAMPLES:
 The given schema is created by the SQL command:
 
 CREATE TABLE orders (
@@ -382,8 +410,11 @@ Then, according to the above intepretation about the given schema, the term 'Rat
 So utilize those Calculated Fields in the SQL generation process to give an answer like this:
 
 SQL Query: SELECT AVG(Rating) FROM orders WHERE ReviewCount > 10
+"""
 
-## LESSON 2 ##
+metric_instructions = """
+#### Instructions for Metric ####
+
 Second, you will learn how to effectively utilize the special "metric" structure in text-to-SQL generation tasks.
 Metrics in a data model simplify complex data analysis by structuring data through predefined dimensions and measures.
 This structuring closely mirrors the concept of OLAP (Online Analytical Processing) cubes but is implemented in a more flexible and SQL-friendly manner.
@@ -409,7 +440,7 @@ If the given schema contains the structures marked as 'metric', you should first
 Then, during the following tasks, if the user queries pertain to any metrics defined in the database schema, ensure to utilize those metrics appropriately in the output SQL queries.
 The target is making complex data analysis more accessible and manageable by pre-aggregating data and structuring it using the metric structure, and supporting direct querying for business insights.
 
-### EXAMPLES ###
+EXAMPLES:
 The given schema is created by the SQL command:
 
 /* This table is a metric */
@@ -470,16 +501,67 @@ FROM
 WHERE
   PurchaseTimestamp >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month') AND
   PurchaseTimestamp < DATE_TRUNC('month', CURRENT_DATE)
+"""
+
+sql_samples_instructions = """
+#### Instructions for SQL Samples ####
+
+Finally, you will learn from the sample SQL queries provided in the input. These samples demonstrate best practices and common patterns for querying this specific database.
+
+For each sample, you should:
+1. Study the question that explains what the query aims to accomplish
+2. Analyze the SQL implementation to understand:
+   - Table structures and relationships used
+   - Specific functions and operators employed
+   - Query patterns and techniques demonstrated
+3. Use these samples as reference patterns when generating similar queries
+4. Adapt the techniques shown in the samples to match new query requirements while maintaining consistent style and approach
+
+The samples will help you understand:
+- Preferred table join patterns
+- Common aggregation methods
+- Specific function usage
+- Query structure and formatting conventions
+
+When generating new queries, try to follow similar patterns when applicable, while adapting them to the specific requirements of each new query.
 
 Learn about the usage of the schema structures and generate SQL based on them.
-
 """
 
 
-def construct_instructions(configuration: Configuration | None):
+def construct_instructions(
+    configuration: Configuration | None = Configuration(),
+    has_calculated_field: bool = False,
+    has_metric: bool = False,
+    sql_samples: list | None = None,
+):
+    if sql_samples is None:
+        sql_samples = []
+
     instructions = ""
     if configuration:
         if configuration.fiscal_year:
-            instructions += f"- For calendar year related computation, it should be started from {configuration.fiscal_year.start} to {configuration.fiscal_year.end}"
+            instructions += f"\n- For calendar year related computation, it should be started from {configuration.fiscal_year.start} to {configuration.fiscal_year.end}\n\n"
+    if has_calculated_field:
+        instructions += calculated_field_instructions
+    if has_metric:
+        instructions += metric_instructions
+    if sql_samples:
+        instructions += sql_samples_instructions
 
     return instructions
+
+
+class SqlGenerationResult(BaseModel):
+    sql: str
+
+
+SQL_GENERATION_MODEL_KWARGS = {
+    "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "sql_generation_result",
+            "schema": SqlGenerationResult.model_json_schema(),
+        },
+    }
+}

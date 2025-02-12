@@ -11,8 +11,7 @@ from src.globals import (
     get_service_container,
     get_service_metadata,
 )
-from src.web.v1.services import Configuration
-from src.web.v1.services.semantics_description import SemanticsDescription
+from src.web.v1.services import Configuration, SemanticsDescription
 
 router = APIRouter()
 
@@ -110,19 +109,16 @@ async def generate(
 ) -> PostResponse:
     id = str(uuid.uuid4())
     service = service_container.semantics_description
-
     service[id] = SemanticsDescription.Resource(id=id)
-    input = SemanticsDescription.Input(
-        id=id,
-        selected_models=request.selected_models,
-        user_prompt=request.user_prompt,
-        mdl=request.mdl,
-        configuration=request.configuration,
-        project_id=request.project_id,
+
+    generate_request = SemanticsDescription.GenerateRequest(
+        id=id, **request.model_dump()
     )
 
     background_tasks.add_task(
-        service.generate, input, service_metadata=asdict(service_metadata)
+        service.generate,
+        generate_request,
+        service_metadata=asdict(service_metadata),
     )
     return PostResponse(id=id)
 

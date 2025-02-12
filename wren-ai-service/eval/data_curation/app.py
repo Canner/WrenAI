@@ -1,8 +1,9 @@
 import asyncio
-import os
 import re
+import sys
 import uuid
 from datetime import datetime
+from pathlib import Path
 
 import orjson
 import pandas as pd
@@ -10,6 +11,16 @@ import streamlit as st
 import tomlkit
 from openai import AsyncClient
 from streamlit_tags import st_tags
+
+sys.path.append(f"{Path().parent.resolve()}")
+from eval import EvalSettings
+from eval.utils import (
+    get_documents_given_contexts,
+    get_eval_dataset_in_toml_string,
+    get_openai_client,
+    prepare_duckdb_init_sql,
+    prepare_duckdb_session_sql,
+)
 from utils import (
     DATA_SOURCES,
     WREN_ENGINE_ENDPOINT,
@@ -21,22 +32,14 @@ from utils import (
     prettify_sql,
 )
 
-from eval.utils import (
-    get_documents_given_contexts,
-    get_eval_dataset_in_toml_string,
-    get_openai_client,
-    prepare_duckdb_init_sql,
-    prepare_duckdb_session_sql,
-)
-
 st.set_page_config(layout="wide")
 st.title("WrenAI Data Curation App")
 
 
 LLM_OPTIONS = ["gpt-4o-mini", "gpt-4o"]
 
-llm_client = get_openai_client()
-
+settings = EvalSettings()
+llm_client = get_openai_client(api_key=settings.get_openai_api_key())
 
 # session states
 if "llm_model" not in st.session_state:
@@ -63,9 +66,9 @@ if "connection_info" not in st.session_state:
 def on_change_upload_eval_dataset():
     doc = tomlkit.parse(st.session_state.uploaded_eval_file.getvalue().decode("utf-8"))
 
-    assert (
-        doc["mdl"] == st.session_state["mdl_json"]
-    ), "The model in the uploaded dataset is different from the deployed model"
+    assert doc["mdl"] == st.session_state["mdl_json"], (
+        "The model in the uploaded dataset is different from the deployed model"
+    )
     st.session_state["candidate_dataset"] = doc["eval_dataset"]
 
 
@@ -93,7 +96,7 @@ def on_click_setup_uploaded_file():
     uploaded_file = st.session_state.get("uploaded_mdl_file")
     if uploaded_file:
         match = re.match(
-            r".+_(" + "|".join(DATA_SOURCES) + r")_mdl\.json$",
+            r".+_(" + "|".join(DATA_SOURCES) + r")(_.+)?_mdl\.json$",
             uploaded_file.name,
         )
         if not match:
@@ -109,11 +112,7 @@ def on_click_setup_uploaded_file():
         )
 
         if data_source == "bigquery":
-            st.session_state["connection_info"] = {
-                "project_id": os.getenv("bigquery.project-id"),
-                "dataset_id": os.getenv("bigquery.dataset-id"),
-                "credentials": os.getenv("bigquery.credentials-key"),
-            }
+            st.session_state["connection_info"] = settings.bigquery_info
         elif data_source == "duckdb":
             prepare_duckdb_session_sql(WREN_ENGINE_ENDPOINT)
             prepare_duckdb_init_sql(
@@ -126,7 +125,7 @@ def on_click_setup_uploaded_file():
 
 
 def on_change_llm_model():
-    st.toast(f"Switching LLM model to {st.session_state["select_llm_model"]}")
+    st.toast(f"Switching LLM model to {st.session_state['select_llm_model']}")
     st.session_state["llm_model"] = st.session_state["select_llm_model"]
 
 
@@ -338,7 +337,7 @@ if st.session_state["mdl_json"] is not None:
                         )
                     else:
                         st.error(
-                            f"SQL is invalid: {st.session_state["llm_question_sql_pairs"][i]["error"]}"
+                            f"SQL is invalid: {st.session_state['llm_question_sql_pairs'][i]['error']}"
                         )
 
                     st.button(
@@ -417,7 +416,7 @@ if st.session_state["mdl_json"] is not None:
                     )
                 else:
                     st.error(
-                        f"SQL is invalid: {st.session_state.get("user_question_sql_pair", {}).get('error', '')}"
+                        f"SQL is invalid: {st.session_state.get('user_question_sql_pair', {}).get('error', '')}"
                     )
 
                 st.button(
@@ -475,7 +474,7 @@ if st.session_state["mdl_json"] is not None:
         with st.popover("Save as Evaluation Dataset", use_container_width=True):
             file_name = st.text_input(
                 "File Name",
-                f'eval_dataset_{datetime.today().strftime("%Y_%m_%d")}.toml',
+                f"eval_dataset_{datetime.today().strftime('%Y_%m_%d')}.toml",
                 key="eval_dataset_file_name",
             )
             download_btn = st.download_button(

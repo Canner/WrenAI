@@ -3,11 +3,15 @@ import { Dropdown, Menu } from 'antd';
 import { ItemType } from 'antd/lib/menu/hooks/useItems';
 import { MORE_ACTION, NODE_TYPE } from '@/utils/enum';
 import EditOutlined from '@ant-design/icons/EditOutlined';
+import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
+import EyeInvisibleOutlined from '@ant-design/icons/EyeInvisibleOutlined';
+import EyeOutlined from '@ant-design/icons/EyeOutlined';
 import {
   DeleteCalculatedFieldModal,
   DeleteRelationshipModal,
   DeleteModelModal,
   DeleteViewModal,
+  DeleteDashboardItemModal,
 } from '@/components/modals/DeleteModal';
 
 interface Props {
@@ -113,5 +117,47 @@ export const ColumnDropdown = makeDropdown((props: Props) => {
     },
   ];
 
+  return items;
+});
+
+export const DashboardItemDropdown = makeDropdown((props: Props) => {
+  const { onMoreClick, isHideLegend } = props;
+  const items: ItemType[] = [
+    {
+      label: isHideLegend ? (
+        <>
+          <EyeOutlined className="gray-8 mr-2" />
+          Show categories
+        </>
+      ) : (
+        <>
+          {<EyeInvisibleOutlined className="gray-8 mr-2" />}
+          Hide categories
+        </>
+      ),
+      key: MORE_ACTION.HIDE_CATEGORY,
+      onClick: () => onMoreClick(MORE_ACTION.HIDE_CATEGORY),
+    },
+    {
+      label: (
+        <>
+          <ReloadOutlined className="gray-8 mr-2" />
+          Refresh
+        </>
+      ),
+      key: MORE_ACTION.REFRESH,
+      onClick: () => onMoreClick(MORE_ACTION.REFRESH),
+    },
+    {
+      label: (
+        <DeleteDashboardItemModal
+          onConfirm={() => onMoreClick(MORE_ACTION.DELETE)}
+        />
+      ),
+      className: 'red-5',
+      key: MORE_ACTION.DELETE,
+      onClick: ({ domEvent }) => domEvent.stopPropagation(),
+    },
+  ];
   return items;
 });

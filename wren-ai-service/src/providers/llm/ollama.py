@@ -9,7 +9,7 @@ from haystack.dataclasses import StreamingChunk
 from haystack_integrations.components.generators.ollama import OllamaGenerator
 
 from src.core.provider import LLMProvider
-from src.providers.loader import provider, pull_ollama_model
+from src.providers.loader import provider
 from src.utils import remove_trailing_slash
 
 logger = logging.getLogger("wren-ai-service")
@@ -147,8 +147,6 @@ class OllamaLLMProvider(LLMProvider):
         self._model = model
         self._model_kwargs = kwargs
         self._timeout = timeout
-
-        pull_ollama_model(self._url, self._model)
 
         logger.info(f"Using Ollama LLM: {self._model}")
         logger.info(f"Using Ollama URL: {self._url}")
