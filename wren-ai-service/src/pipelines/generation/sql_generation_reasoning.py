@@ -50,6 +50,7 @@ Question:
 {{sql_sample.question}}
 SQL:
 {{sql_sample.sql}}
+
 {% endfor %}
 {% endif %}
 

@@ -39,6 +39,7 @@ Question:
 {{sample.question}}
 SQL:
 {{sample.sql}}
+
 {% endfor %}
 {% endif %}
 
