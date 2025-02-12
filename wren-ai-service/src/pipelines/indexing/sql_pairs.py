@@ -129,7 +129,8 @@ async def clean(
     project_id: Optional[str] = "",
 ) -> Dict[str, Any]:
     sql_pair_ids = [sql_pair.id for sql_pair in sql_pairs]
-    await cleaner.run(sql_pair_ids=sql_pair_ids, project_id=project_id)
+    if sql_pair_ids:
+        await cleaner.run(sql_pair_ids=sql_pair_ids, project_id=project_id)
 
     return embedding
 
