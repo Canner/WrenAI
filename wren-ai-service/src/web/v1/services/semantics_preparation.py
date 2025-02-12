@@ -83,7 +83,6 @@ class SemanticsPreparationService:
                     "db_schema",
                     "historical_question",
                     "table_description",
-                    "sql_pairs",
                 ]
             ]
 
