@@ -5115,27 +5115,27 @@ cffi = {version = "*", markers = "implementation_name == \"pypy\""}
 
 [[package]]
 name = "qdrant-client"
-version = "1.13.2"
+version = "1.11.0"
 description = "Client library for the Qdrant vector search engine"
 optional = false
-python-versions = ">=3.9"
+python-versions = ">=3.8"
 files = [
-    {file = "qdrant_client-1.13.2-py3-none-any.whl", hash = "sha256:db97e759bd3f8d483a383984ba4c2a158eef56f2188d83df7771591d43de2201"},
-    {file = "qdrant_client-1.13.2.tar.gz", hash = "sha256:c8cce87ce67b006f49430a050a35c85b78e3b896c0c756dafc13bdeca543ec13"},
+    {file = "qdrant_client-1.11.0-py3-none-any.whl", hash = "sha256:1f574ccebb91c0bc8a620c9a41a5a010084fbc4d8c6f1cd0ab7b2eeb97336fc0"},
+    {file = "qdrant_client-1.11.0.tar.gz", hash = "sha256:7c1d4d7a96cfd1ee0cde2a21c607e9df86bcca795ad8d1fd274d295ab64b8458"},
 ]
 
 [package.dependencies]
 grpcio = ">=1.41.0"
 grpcio-tools = ">=1.41.0"
 httpx = {version = ">=0.20.0", extras = ["http2"]}
-numpy = {version = ">=1.26", markers = "python_version >= \"3.12\" and python_version < \"3.13\""}
+numpy = {version = ">=1.26", markers = "python_version >= \"3.12\""}
 portalocker = ">=2.7.0,<3.0.0"
 pydantic = ">=1.10.8"
 urllib3 = ">=1.26.14,<3"
 
 [package.extras]
-fastembed = ["fastembed (==0.5.1)"]
-fastembed-gpu = ["fastembed-gpu (==0.5.1)"]
+fastembed = ["fastembed (==0.3.4)"]
+fastembed-gpu = ["fastembed-gpu (==0.3.4)"]
 
 [[package]]
 name = "qdrant-haystack"
@@ -7110,4 +7110,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.12.*, <3.13"
-content-hash = "6029475d60f6588b5fbf8c07dd8ce3179115fcf7b018ea6d1e88adf561d49e73"
+content-hash = "4523687d231739fa1265a084bf32788e074219983517c42a2d0fe35441e30ced"

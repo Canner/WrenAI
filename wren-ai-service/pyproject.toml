@@ -35,6 +35,7 @@ tiktoken = "^0.8.0"
 jsonschema = "^4.23.0"
 litellm = "^1.60.5"
 boto3 = "^1.35.90"
+qdrant-client = "==1.11.0"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.7.1"
