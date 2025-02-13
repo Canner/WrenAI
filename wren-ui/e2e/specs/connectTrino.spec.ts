@@ -34,6 +34,34 @@ test.describe('Test Trino data source', () => {
     await expect(page).toHaveURL('/setup/models', { timeout: 60000 });
   });
 
+  test('Connect Trino data source with OAuth2 successfully', async ({ page }) => {
+    await page.goto('/setup/connection');
+
+    await page.locator('button').filter({ hasText: 'Trino' }).click();
+
+    await page.getByLabel('Display name').click();
+    await page.getByLabel('Display name').fill('test-trino-oauth2');
+    await page.getByLabel('Host').click();
+    await page.getByLabel('Host').fill(testConfig.trino.host);
+    await page.getByLabel('Port').click();
+    await page.getByLabel('Port').fill(testConfig.trino.port);
+    await page.getByLabel('Catalog').click();
+    await page.getByLabel('Catalog').fill(testConfig.trino.catalog);
+    await page.getByLabel('Schema').click();
+    await page.getByLabel('Schema').fill(testConfig.trino.schema);
+    await page.getByLabel('Username').click();
+    await page.getByLabel('Username').fill(testConfig.trino.username);
+    await page.getByLabel('OAuth2 Client ID').click();
+    await page.getByLabel('OAuth2 Client ID').fill(testConfig.trino.clientId);
+    await page.getByLabel('OAuth2 Client Secret').click();
+    await page.getByLabel('OAuth2 Client Secret').fill(testConfig.trino.clientSecret);
+    await page.getByLabel('OAuth2 Token URL').click();
+    await page.getByLabel('OAuth2 Token URL').fill(testConfig.trino.tokenUrl);
+
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page).toHaveURL('/setup/models', { timeout: 60000 });
+  });
+
   test('Setup all models', onboarding.setupModels);
 
   test(
