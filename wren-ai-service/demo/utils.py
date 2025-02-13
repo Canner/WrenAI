@@ -181,9 +181,9 @@ def on_change_sql_generation_reasoning():
     ]
 
 
-def on_click_regenerate_sql():
+def on_click_regenerate_sql(changed_sql_generation_reasoning: str):
     ask_feedback(
-        st.session_state["sql_generation_reasoning"],
+        changed_sql_generation_reasoning,
         st.session_state["asks_results"]["response"][0]["sql"],
     )
 
@@ -223,8 +223,11 @@ def show_asks_results():
     st.markdown("### Question")
     st.markdown(f"{st.session_state['query']}")
 
+    st.markdown("### Retrieved Tables")
+    st.markdown(st.session_state["retrieved_tables"])
+
     st.markdown("### SQL Generation Reasoning")
-    st.text_area(
+    changed_sql_generation_reasoning = st.text_area(
         "SQL Generation Reasoning",
         st.session_state["sql_generation_reasoning"],
         key="sql_generation_reasoning_input",
@@ -232,18 +235,23 @@ def show_asks_results():
         on_change=on_change_sql_generation_reasoning,
     )
 
-    st.button("Regenerate SQL", on_click=on_click_regenerate_sql)
+    st.button(
+        "Regenerate SQL",
+        on_click=on_click_regenerate_sql,
+        args=(changed_sql_generation_reasoning,),
+    )
 
     st.markdown("### SQL Query Result")
     if st.session_state["asks_results_type"] == "TEXT_TO_SQL":
         edited_sql = st.text_area(
-            label="",
+            label="SQL Query Result",
             value=sqlparse.format(
                 st.session_state["asks_results"]["response"][0]["sql"],
                 reindent=True,
                 keyword_case="upper",
             ),
             height=250,
+            label_visibility="hidden",
         )
         st.button(
             "Save Question-SQL pair",
@@ -523,6 +531,7 @@ def prepare_semantics(mdl_json: dict):
     st.session_state["preview_sql"] = None
     st.session_state["query_history"] = None
     st.session_state["sql_generation_reasoning"] = None
+    st.session_state["retrieved_tables"] = None
 
     if st.session_state["semantics_preparation_status"] == "failed":
         st.toast("An error occurred while preparing the semantics", icon="🚨")
@@ -575,6 +584,9 @@ def ask(query: str, timezone: str, query_history: Optional[dict] = None):
             st.session_state["sql_generation_reasoning"] = st.session_state[
                 "asks_results"
             ]["sql_generation_reasoning"]
+            st.session_state["retrieved_tables"] = ", ".join(
+                st.session_state["asks_results"]["retrieved_tables"]
+            )
         else:
             st.session_state["asks_results"] = asks_type
     elif asks_status == "failed":
@@ -613,7 +625,7 @@ def ask_feedback(sql_generation_reasoning: str, sql: str):
         st.toast(f"The query processing status: {ask_feedback_status}")
         time.sleep(POLLING_INTERVAL)
 
-    if ask_feedback_status_response == "finished":
+    if ask_feedback_status == "finished":
         st.session_state["asks_results_type"] = "TEXT_TO_SQL"
         st.session_state["asks_results"] = ask_feedback_status_response.json()
     elif ask_feedback_status == "failed":

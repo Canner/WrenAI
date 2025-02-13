@@ -40,6 +40,8 @@ if "query" not in st.session_state:
     st.session_state["query"] = None
 if "asks_results" not in st.session_state:
     st.session_state["asks_results"] = None
+if "retrieved_tables" not in st.session_state:
+    st.session_state["retrieved_tables"] = None
 if "asks_results_type" not in st.session_state:
     st.session_state["asks_results_type"] = None
 if "chosen_query_result" not in st.session_state:
