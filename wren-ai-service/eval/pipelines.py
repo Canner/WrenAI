@@ -324,6 +324,9 @@ class AskPipeline(Eval):
             table_column_retrieval_size=settings.table_column_retrieval_size,
             allow_using_db_schemas_without_pruning=settings.allow_using_db_schemas_without_pruning,
         )
+        self._sql_reasoner = generation.SQLGenerationReasoning(
+            **pipe_components["sql_generation_reasoning"],
+        )
         self._generation = generation.SQLGeneration(
             **pipe_components["sql_generation"],
         )
@@ -345,6 +348,16 @@ class AskPipeline(Eval):
         documents = _retrieval_result.get("retrieval_results", [])
         has_calculated_field = _retrieval_result.get("has_calculated_field", False)
         has_metric = _retrieval_result.get("has_metric", False)
+
+        _reasoning = await self._sql_reasoner.run(
+            query=prediction["input"],
+            contexts=documents,
+            sql_samples=prediction.get("samples", [])
+            if self._allow_sql_samples
+            else [],
+        )
+        reasoning = _reasoning.get("post_process", {})
+
         actual_output = await self._generation.run(
             query=prediction["input"],
             contexts=documents,
@@ -353,13 +366,14 @@ class AskPipeline(Eval):
             else [],
             has_calculated_field=has_calculated_field,
             has_metric=has_metric,
-            sql_generation_reasoning=prediction.get("reasoning", ""),
+            sql_generation_reasoning=reasoning,
         )
 
         prediction["actual_output"] = actual_output
         prediction["retrieval_context"] = extract_units(documents)
         prediction["has_calculated_field"] = has_calculated_field
         prediction["has_metric"] = has_metric
+        prediction["reasoning"] = reasoning
 
         return prediction
 
