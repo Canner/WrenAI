@@ -81,16 +81,12 @@ class QuestionRecommendation:
             has_metric = _retrieval_result.get("has_metric", False)
 
             sql_generation_reasoning = (
-                (
-                    await self._pipelines["sql_generation_reasoning"].run(
-                        query=candidate["question"],
-                        contexts=table_ddls,
-                        configuration=configuration,
-                    )
+                await self._pipelines["sql_generation_reasoning"].run(
+                    query=candidate["question"],
+                    contexts=table_ddls,
+                    configuration=configuration,
                 )
-                .get("post_process", {})
-                .get("reasoning_plan")
-            )
+            ).get("post_process", {})
 
             generated_sql = await self._pipelines["sql_generation"].run(
                 query=candidate["question"],
