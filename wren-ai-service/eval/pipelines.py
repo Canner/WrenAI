@@ -2,6 +2,7 @@ import asyncio
 import re
 import sys
 from abc import abstractmethod
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Literal
 
@@ -135,6 +136,7 @@ class Eval:
             "samples": query.get("samples", []),
             "type": "execution",
             "reasoning": "",
+            "elapsed_time": 0,
         }
 
         langfuse_context.update_current_trace(
@@ -143,7 +145,11 @@ class Eval:
             metadata=trace_metadata(self._meta, type=prediction["type"]),
         )
 
-        return await self._process(prediction, **query)
+        start_time = datetime.now()
+        returned = await self._process(prediction, **query)
+        returned["elapsed_time"] = (datetime.now() - start_time).total_seconds()
+
+        return returned
 
     @observe(capture_input=False)
     async def flat(self, prediction: dict, **kwargs) -> dict:
