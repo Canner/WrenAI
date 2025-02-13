@@ -352,17 +352,14 @@ class AskService:
                 )["formatted_output"].get("documents", [])
 
                 sql_generation_reasoning = (
-                    (
-                        await self._pipelines["sql_generation_reasoning"].run(
-                            query=user_query,
-                            contexts=table_ddls,
-                            sql_samples=sql_samples,
-                            configuration=ask_request.configurations,
-                        )
+                    await self._pipelines["sql_generation_reasoning"].run(
+                        query=user_query,
+                        contexts=table_ddls,
+                        sql_samples=sql_samples,
+                        configuration=ask_request.configurations,
+                        query_id=query_id,
                     )
-                    .get("post_process", {})
-                    .get("reasoning_plan")
-                )
+                ).get("post_process", {})
 
                 self._ask_results[query_id] = AskResultResponse(
                     status="planning",
@@ -548,17 +545,23 @@ class AskService:
         self,
         query_id: str,
     ):
-        if (
-            self._ask_results.get(query_id)
-            and self._ask_results.get(query_id).type == "GENERAL"
-        ):
-            async for chunk in self._pipelines["data_assistance"].get_streaming_results(
-                query_id
-            ):
-                event = SSEEvent(
-                    data=SSEEvent.SSEEventMessage(message=chunk),
-                )
-                yield event.serialize()
+        if self._ask_results.get(query_id):
+            if self._ask_results.get(query_id).type == "GENERAL":
+                async for chunk in self._pipelines[
+                    "data_assistance"
+                ].get_streaming_results(query_id):
+                    event = SSEEvent(
+                        data=SSEEvent.SSEEventMessage(message=chunk),
+                    )
+                    yield event.serialize()
+            elif self._ask_results.get(query_id).status == "planning":
+                async for chunk in self._pipelines[
+                    "sql_generation_reasoning"
+                ].get_streaming_results(query_id):
+                    event = SSEEvent(
+                        data=SSEEvent.SSEEventMessage(message=chunk),
+                    )
+                    yield event.serialize()
 
     @observe(name="Ask Feedback")
     @trace_metadata
