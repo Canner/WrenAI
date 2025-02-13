@@ -226,19 +226,37 @@ def check_using_db_schemas_without_pruning(
     for table_schema in construct_db_schemas:
         if table_schema["type"] == "TABLE":
             ddl, _has_calculated_field = build_table_ddl(table_schema)
-            retrieval_results.append(ddl)
+            retrieval_results.append(
+                {
+                    "table_name": table_schema["name"],
+                    "table_ddl": ddl,
+                }
+            )
             has_calculated_field = has_calculated_field or _has_calculated_field
 
     for document in dbschema_retrieval:
         content = ast.literal_eval(document.content)
 
         if content["type"] == "METRIC":
-            retrieval_results.append(_build_metric_ddl(content))
+            retrieval_results.append(
+                {
+                    "table_name": content["name"],
+                    "table_ddl": _build_metric_ddl(content),
+                }
+            )
             has_metric = True
         elif content["type"] == "VIEW":
-            retrieval_results.append(_build_view_ddl(content))
+            retrieval_results.append(
+                {
+                    "table_name": content["name"],
+                    "table_ddl": _build_view_ddl(content),
+                }
+            )
 
-    _token_count = len(encoding.encode(" ".join(retrieval_results)))
+    table_ddls = [
+        retrieval_result["table_ddl"] for retrieval_result in retrieval_results
+    ]
+    _token_count = len(encoding.encode(" ".join(table_ddls)))
     if _token_count > 100_000 or not allow_using_db_schemas_without_pruning:
         return {
             "db_schemas": [],
@@ -328,17 +346,32 @@ def construct_retrieval_results(
                     tables=tables,
                 )
                 has_calculated_field = has_calculated_field or _has_calculated_field
-                retrieval_results.append(ddl)
+                retrieval_results.append(
+                    {
+                        "table_name": table_schema["name"],
+                        "table_ddl": ddl,
+                    }
+                )
 
         for document in dbschema_retrieval:
             if document.meta["name"] in columns_and_tables_needed:
                 content = ast.literal_eval(document.content)
 
                 if content["type"] == "METRIC":
-                    retrieval_results.append(_build_metric_ddl(content))
+                    retrieval_results.append(
+                        {
+                            "table_name": content["name"],
+                            "table_ddl": _build_metric_ddl(content),
+                        }
+                    )
                     has_metric = True
                 elif content["type"] == "VIEW":
-                    retrieval_results.append(_build_view_ddl(content))
+                    retrieval_results.append(
+                        {
+                            "table_name": content["name"],
+                            "table_ddl": _build_view_ddl(content),
+                        }
+                    )
 
         return {
             "retrieval_results": retrieval_results,

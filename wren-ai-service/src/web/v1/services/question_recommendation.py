@@ -76,6 +76,7 @@ class QuestionRecommendation:
             )
             _retrieval_result = retrieval_result.get("construct_retrieval_results", {})
             documents = _retrieval_result.get("retrieval_results", [])
+            table_ddls = [document.get("table_ddl") for document in documents]
             has_calculated_field = _retrieval_result.get("has_calculated_field", False)
             has_metric = _retrieval_result.get("has_metric", False)
 
@@ -83,7 +84,7 @@ class QuestionRecommendation:
                 (
                     await self._pipelines["sql_generation_reasoning"].run(
                         query=candidate["question"],
-                        contexts=documents,
+                        contexts=table_ddls,
                         configuration=configuration,
                     )
                 )
@@ -93,7 +94,7 @@ class QuestionRecommendation:
 
             generated_sql = await self._pipelines["sql_generation"].run(
                 query=candidate["question"],
-                contexts=documents,
+                contexts=table_ddls,
                 sql_generation_reasoning=sql_generation_reasoning,
                 configuration=configuration,
                 project_id=project_id,

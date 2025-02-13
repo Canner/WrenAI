@@ -94,6 +94,7 @@ class AskResultResponse(BaseModel):
     intent_reasoning: Optional[str] = None
     sql_generation_reasoning: Optional[str] = None
     type: Optional[Literal["MISLEADING_QUERY", "GENERAL", "TEXT_TO_SQL"]] = None
+    retrieved_tables: Optional[List[str]] = None
     response: Optional[List[AskResult]] = None
     error: Optional[AskError] = None
 
@@ -310,6 +311,8 @@ class AskService:
                     "construct_retrieval_results", {}
                 )
                 documents = _retrieval_result.get("retrieval_results", [])
+                table_names = [document.get("table_name") for document in documents]
+                table_ddls = [document.get("table_ddl") for document in documents]
 
                 if not documents:
                     logger.exception(f"ask pipeline - NO_RELEVANT_DATA: {user_query}")
@@ -338,6 +341,7 @@ class AskService:
                     type="TEXT_TO_SQL",
                     rephrased_question=rephrased_question,
                     intent_reasoning=intent_reasoning,
+                    retrieved_tables=table_names,
                 )
 
                 sql_samples = (
@@ -351,7 +355,7 @@ class AskService:
                     (
                         await self._pipelines["sql_generation_reasoning"].run(
                             query=user_query,
-                            contexts=documents,
+                            contexts=table_ddls,
                             sql_samples=sql_samples,
                             configuration=ask_request.configurations,
                         )
@@ -365,6 +369,7 @@ class AskService:
                     type="TEXT_TO_SQL",
                     rephrased_question=rephrased_question,
                     intent_reasoning=intent_reasoning,
+                    retrieved_tables=table_names,
                     sql_generation_reasoning=sql_generation_reasoning,
                 )
 
@@ -374,6 +379,7 @@ class AskService:
                     type="TEXT_TO_SQL",
                     rephrased_question=rephrased_question,
                     intent_reasoning=intent_reasoning,
+                    retrieved_tables=table_names,
                     sql_generation_reasoning=sql_generation_reasoning,
                 )
 
@@ -387,7 +393,7 @@ class AskService:
                         "followup_sql_generation"
                     ].run(
                         query=user_query,
-                        contexts=documents,
+                        contexts=table_ddls,
                         sql_generation_reasoning=sql_generation_reasoning,
                         history=ask_request.history,
                         project_id=ask_request.project_id,
@@ -401,7 +407,7 @@ class AskService:
                         "sql_generation"
                     ].run(
                         query=user_query,
-                        contexts=documents,
+                        contexts=table_ddls,
                         sql_generation_reasoning=sql_generation_reasoning,
                         project_id=ask_request.project_id,
                         configuration=ask_request.configurations,
@@ -431,12 +437,13 @@ class AskService:
                             type="TEXT_TO_SQL",
                             rephrased_question=rephrased_question,
                             intent_reasoning=intent_reasoning,
+                            retrieved_tables=table_names,
                             sql_generation_reasoning=sql_generation_reasoning,
                         )
                         sql_correction_results = await self._pipelines[
                             "sql_correction"
                         ].run(
-                            contexts=documents,
+                            contexts=table_ddls,
                             invalid_generation_results=failed_dry_run_results,
                             project_id=ask_request.project_id,
                         )
@@ -468,6 +475,7 @@ class AskService:
                         response=api_results,
                         rephrased_question=rephrased_question,
                         intent_reasoning=intent_reasoning,
+                        retrieved_tables=table_names,
                         sql_generation_reasoning=sql_generation_reasoning,
                     )
                 results["ask_result"] = api_results
@@ -484,6 +492,7 @@ class AskService:
                         ),
                         rephrased_question=rephrased_question,
                         intent_reasoning=intent_reasoning,
+                        retrieved_tables=table_names,
                         sql_generation_reasoning=sql_generation_reasoning,
                     )
                 results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
