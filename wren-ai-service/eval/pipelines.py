@@ -118,7 +118,7 @@ class Eval:
 
     async def _flat(self, prediction: dict, **_) -> dict:
         """
-        No operation function to be overridden by subclasses,if needed.
+        No operation function to be overridden by subclasses if needed.
         """
         return prediction
 
@@ -134,6 +134,7 @@ class Eval:
             "context": query["context"],
             "samples": query.get("samples", []),
             "type": "execution",
+            "reasoning": "",
         }
 
         langfuse_context.update_current_trace(
@@ -146,6 +147,12 @@ class Eval:
 
     @observe(capture_input=False)
     async def flat(self, prediction: dict, **kwargs) -> dict:
+        """
+        This method changes the trace type to 'shallow' to handle cases where a trace has multiple actual outputs.
+        The flattening mechanism was historically used to get individual scores for evaluation when a single trace
+        produced multiple outputs. While currently maintained for backwards compatibility, this functionality may
+        be removed in the future if no longer needed.
+        """
         prediction["source_trace_id"] = prediction["trace_id"]
         prediction["source_trace_url"] = prediction["trace_url"]
         prediction["trace_id"] = langfuse_context.get_current_trace_id()
