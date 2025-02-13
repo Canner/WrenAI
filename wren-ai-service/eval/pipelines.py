@@ -15,7 +15,6 @@ sys.path.append(f"{Path().parent.resolve()}")
 from eval import EvalSettings
 from eval.metrics import (
     AccuracyMetric,
-    AccuracyMultiCandidateMetric,
     AnswerRelevancyMetric,
     ContextualPrecisionMetric,
     ContextualRecallMetric,
@@ -289,7 +288,7 @@ class GenerationPipeline(Eval):
                 ExactMatchAccuracy(),
                 ExecutionAccuracy(),
             ],
-            "post_metrics": [AccuracyMultiCandidateMetric()],
+            "post_metrics": [],
         }
 
 
@@ -388,7 +387,7 @@ class AskPipeline(Eval):
                 ExactMatchAccuracy(),
                 ExecutionAccuracy(),
             ],
-            "post_metrics": [AccuracyMultiCandidateMetric()],
+            "post_metrics": [],
         }
 
 
