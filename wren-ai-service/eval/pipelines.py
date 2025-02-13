@@ -39,7 +39,7 @@ def deploy_model(mdl: str, pipes: list) -> None:
     asyncio.run(wrapper())
 
 
-def extract_units(docs: list) -> list:
+def extract_units(docs: list[dict]) -> list:
     def parse_ddl(ddl: str) -> list:
         """
         Parses a DDL statement and returns a list of column definitions in the format table_name.column_name, excluding foreign keys.
@@ -81,7 +81,7 @@ def extract_units(docs: list) -> list:
 
     columns = []
     for doc in docs:
-        columns.extend(parse_ddl(doc))
+        columns.extend(parse_ddl(doc.get("table_ddl", "")))
     return columns
 
 
@@ -114,8 +114,7 @@ class Eval:
         return [prediction for batch in batches for prediction in batch]
 
     @abstractmethod
-    def _process(self, prediction: dict, **_) -> dict:
-        ...
+    def _process(self, prediction: dict, **_) -> dict: ...
 
     async def _flat(self, prediction: dict, **_) -> dict:
         """
