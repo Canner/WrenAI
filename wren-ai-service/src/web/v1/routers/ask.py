@@ -93,7 +93,7 @@ async def ask(
     service_container: ServiceContainer = Depends(get_service_container),
     service_metadata: ServiceMetadata = Depends(get_service_metadata),
 ) -> AskResponse:
-    query_id = str(uuid.uuid4())
+    query_id = "c1b011f4-1360-43e0-9c20-22c0c6025206"  # str(uuid.uuid4())
     ask_request.query_id = query_id
     service_container.ask_service._ask_results[query_id] = AskResultResponse(
         status="understanding",

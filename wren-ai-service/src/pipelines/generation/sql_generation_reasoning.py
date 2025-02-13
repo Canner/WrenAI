@@ -1,13 +1,12 @@
+import asyncio
 import logging
 import sys
 from typing import Any, List, Optional
 
-import orjson
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
-from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
@@ -28,13 +27,10 @@ You are a helpful data analyst who is great at thinking deeply and reasoning abo
 5. Don't include SQL in the reasoning plan.
 6. Each step in the reasoning plan must start with a number, and a reasoning for the step.
 7. If SQL SAMPLES are provided, make sure to consider them in the reasoning plan.
+8. Do not include ```markdown or ``` in the answer.
 
 ### FINAL ANSWER FORMAT ###
-The final answer must be a reasoning plan in JSON format:
-
-{
-    "reasoning_plan": <REASONING_PLAN_STRING>
-}
+The final answer must be a reasoning plan in plain Markdown string format
 """
 
 sql_generation_reasoning_user_prompt_template = """
@@ -82,36 +78,21 @@ def prompt(
 
 
 @observe(as_type="generation", capture_input=False)
-async def generate_sql_reasoning(
-    prompt: dict,
-    generator: Any,
-) -> dict:
-    return await generator(prompt=prompt.get("prompt"))
+async def generate_sql_reasoning(prompt: dict, generator: Any, query_id: str) -> dict:
+    return await generator(prompt=prompt.get("prompt"), query_id=query_id)
 
 
 @observe()
 def post_process(
     generate_sql_reasoning: dict,
 ) -> dict:
-    return orjson.loads(generate_sql_reasoning.get("replies")[0])
+    return generate_sql_reasoning.get("replies")[0]
 
 
 ## End of Pipeline
 
 
-class SqlGenerationReasoningResult(BaseModel):
-    reasoning_plan: str
-
-
-SQL_GENERATION_REASONING_MODEL_KWARGS = {
-    "response_format": {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "sql_generation_reasoning_results",
-            "schema": SqlGenerationReasoningResult.model_json_schema(),
-        },
-    }
-}
+SQL_GENERATION_REASONING_MODEL_KWARGS = {"response_format": {"type": "text"}}
 
 
 class SQLGenerationReasoning(BasicPipeline):
@@ -120,10 +101,12 @@ class SQLGenerationReasoning(BasicPipeline):
         llm_provider: LLMProvider,
         **kwargs,
     ):
+        self._user_queues = {}
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=sql_generation_reasoning_system_prompt,
                 generation_kwargs=SQL_GENERATION_REASONING_MODEL_KWARGS,
+                streaming_callback=self._streaming_callback,
             ),
             "prompt_builder": PromptBuilder(
                 template=sql_generation_reasoning_user_prompt_template
@@ -134,6 +117,41 @@ class SQLGenerationReasoning(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
+    def _streaming_callback(self, chunk, query_id):
+        if query_id not in self._user_queues:
+            self._user_queues[
+                query_id
+            ] = asyncio.Queue()  # Create a new queue for the user if it doesn't exist
+        # Put the chunk content into the user's queue
+        asyncio.create_task(self._user_queues[query_id].put(chunk.content))
+        if chunk.meta.get("finish_reason"):
+            asyncio.create_task(self._user_queues[query_id].put("<DONE>"))
+
+    async def get_streaming_results(self, query_id):
+        async def _get_streaming_results(query_id):
+            return await self._user_queues[query_id].get()
+
+        if query_id not in self._user_queues:
+            self._user_queues[
+                query_id
+            ] = asyncio.Queue()  # Ensure the user's queue exists
+        while True:
+            try:
+                # Wait for an item from the user's queue
+                self._streaming_results = await asyncio.wait_for(
+                    _get_streaming_results(query_id), timeout=120
+                )
+                if (
+                    self._streaming_results == "<DONE>"
+                ):  # Check for end-of-stream signal
+                    del self._user_queues[query_id]
+                    break
+                if self._streaming_results:  # Check if there are results to yield
+                    yield self._streaming_results
+                    self._streaming_results = ""  # Clear after yielding
+            except TimeoutError:
+                break
+
     @observe(name="SQL Generation Reasoning")
     async def run(
         self,
@@ -141,6 +159,7 @@ class SQLGenerationReasoning(BasicPipeline):
         contexts: List[str],
         sql_samples: Optional[List[str]] = None,
         configuration: Configuration = Configuration(),
+        query_id: Optional[str] = None,
     ):
         logger.info("SQL Generation Reasoning pipeline is running...")
         return await self._pipe.execute(
@@ -150,6 +169,7 @@ class SQLGenerationReasoning(BasicPipeline):
                 "documents": contexts,
                 "sql_samples": sql_samples or [],
                 "configuration": configuration,
+                "query_id": query_id,
                 **self._components,
             },
         )
