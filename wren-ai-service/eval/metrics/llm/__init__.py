@@ -36,7 +36,11 @@ class QuestionCoherenceJudge(BaseMetric):
     You are a helpful assistant that evaluates the coherence of a question.
     """
     _test_case_prompt = """
-    Question: {question}
+    Question: 
+    {question}
+
+    Reasoning:
+    {reasoning}
     """
 
     def __init__(self, llm_provider: LLMProvider, **_):
@@ -53,7 +57,10 @@ class QuestionCoherenceJudge(BaseMetric):
         return asyncio.run(self.a_measure(test_case))
 
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs):
-        prompt = self.prompt_builder.run(question=test_case.input)
+        prompt = self.prompt_builder.run(
+            question=test_case.input,
+            reasoning=test_case.reasoning,
+        )
         response = await self.llm(prompt.get("prompt"))
         result = format(response)
 
@@ -77,7 +84,11 @@ class ReasoningValidityJudge(BaseMetric):
     You are a helpful assistant that evaluates the coherence of a question.
     """
     _test_case_prompt = """
-    Question: {question}
+    Actual Output: 
+    {actual_output}
+
+    Reasoning:
+    {reasoning}
     """
 
     def __init__(self, llm_provider: LLMProvider, **_):
@@ -94,7 +105,10 @@ class ReasoningValidityJudge(BaseMetric):
         return asyncio.run(self.a_measure(test_case))
 
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs):
-        prompt = self.prompt_builder.run(question=test_case.input)
+        prompt = self.prompt_builder.run(
+            actual_output=test_case.actual_output,
+            reasoning=test_case.reasoning,
+        )
         response = await self.llm(prompt.get("prompt"))
         result = format(response)
 
@@ -118,7 +132,11 @@ class SqlSemanticsJudge(BaseMetric):
     You are a helpful assistant that evaluates the coherence of a question.
     """
     _test_case_prompt = """
-    Question: {question}
+    Actual SQL: 
+    {actual_sql}
+
+    Expected SQL: 
+    {expected_sql}
     """
 
     def __init__(self, llm_provider: LLMProvider, **_):
@@ -135,7 +153,10 @@ class SqlSemanticsJudge(BaseMetric):
         return asyncio.run(self.a_measure(test_case))
 
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs):
-        prompt = self.prompt_builder.run(question=test_case.input)
+        prompt = self.prompt_builder.run(
+            actual_sql=test_case.actual_output,
+            expected_sql=test_case.expected_output,
+        )
         response = await self.llm(prompt.get("prompt"))
         result = format(response)
 
