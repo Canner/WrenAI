@@ -25,7 +25,7 @@ from eval.metrics import (
     ExactMatchAccuracy,
     ExecutionAccuracy,
     FaithfulnessMetric,
-    LMasJudgeExample,
+    QuestionCoherenceJudge,
 )
 from eval.utils import (
     engine_config,
@@ -309,7 +309,7 @@ class GenerationPipeline(Eval):
                 # this is for spider dataset, rn we temporarily disable it
                 ExactMatchAccuracy(),
                 ExecutionAccuracy(),
-                LMasJudgeExample(**component),
+                QuestionCoherenceJudge(**component),
             ],
             "post_metrics": [],
         }
@@ -429,7 +429,7 @@ class AskPipeline(Eval):
                 # this is for spider dataset, rn we temporarily disable it
                 ExactMatchAccuracy(),
                 ExecutionAccuracy(),
-                LMasJudgeExample(**component),
+                QuestionCoherenceJudge(**component),
             ],
             "post_metrics": [],
         }
