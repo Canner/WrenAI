@@ -1,6 +1,5 @@
 import asyncio
 
-import orjson
 from deepeval.metrics import BaseMetric
 from deepeval.test_case import LLMTestCase
 from haystack.components.builders.prompt_builder import PromptBuilder
@@ -27,7 +26,7 @@ _MODEL_KWARGS = {
 
 def format(response: dict) -> EvalResult:
     reply = response.get("replies", [])[0]
-    return EvalResult.model_validate_json(orjson.loads(reply))
+    return EvalResult.model_validate_json(reply)
 
 
 class QuestionCoherenceJudge(BaseMetric):
