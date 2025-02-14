@@ -4,7 +4,11 @@ from .context_precision import ContextualPrecisionMetric
 from .context_recall import ContextualRecallMetric
 from .context_relevancy import ContextualRelevancyMetric
 from .faithfulness import FaithfulnessMetric
-from .llm import QuestionCoherenceJudge
+from .llm import (
+    QuestionCoherenceJudge,
+    ReasoningValidityJudge,
+    SqlSemanticsJudge,
+)
 from .spider.exact_match import ExactMatchAccuracy
 from .spider.exec_match import ExecutionAccuracy
 
@@ -19,4 +23,6 @@ __all__ = [
     "ExactMatchAccuracy",
     "ExecutionAccuracy",
     "QuestionCoherenceJudge",
+    "ReasoningValidityJudge",
+    "SqlSemanticsJudge",
 ]
