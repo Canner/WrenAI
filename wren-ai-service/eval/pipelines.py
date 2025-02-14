@@ -2,6 +2,7 @@ import asyncio
 import re
 import sys
 from abc import abstractmethod
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Literal
 
@@ -15,7 +16,6 @@ sys.path.append(f"{Path().parent.resolve()}")
 from eval import EvalSettings
 from eval.metrics import (
     AccuracyMetric,
-    AccuracyMultiCandidateMetric,
     AnswerRelevancyMetric,
     ContextualPrecisionMetric,
     ContextualRecallMetric,
@@ -40,7 +40,7 @@ def deploy_model(mdl: str, pipes: list) -> None:
     asyncio.run(wrapper())
 
 
-def extract_units(docs: list) -> list:
+def extract_units(docs: list[dict]) -> list:
     def parse_ddl(ddl: str) -> list:
         """
         Parses a DDL statement and returns a list of column definitions in the format table_name.column_name, excluding foreign keys.
@@ -82,7 +82,7 @@ def extract_units(docs: list) -> list:
 
     columns = []
     for doc in docs:
-        columns.extend(parse_ddl(doc))
+        columns.extend(parse_ddl(doc.get("table_ddl", "")))
     return columns
 
 
@@ -115,12 +115,11 @@ class Eval:
         return [prediction for batch in batches for prediction in batch]
 
     @abstractmethod
-    def _process(self, prediction: dict, **_) -> dict:
-        ...
+    def _process(self, prediction: dict, **_) -> dict: ...
 
     async def _flat(self, prediction: dict, **_) -> dict:
         """
-        No operation function to be overridden by subclasses,if needed.
+        No operation function to be overridden by subclasses if needed.
         """
         return prediction
 
@@ -136,6 +135,8 @@ class Eval:
             "context": query["context"],
             "samples": query.get("samples", []),
             "type": "execution",
+            "reasoning": "",
+            "elapsed_time": 0,
         }
 
         langfuse_context.update_current_trace(
@@ -144,10 +145,20 @@ class Eval:
             metadata=trace_metadata(self._meta, type=prediction["type"]),
         )
 
-        return await self._process(prediction, **query)
+        start_time = datetime.now()
+        returned = await self._process(prediction, **query)
+        returned["elapsed_time"] = (datetime.now() - start_time).total_seconds()
+
+        return returned
 
     @observe(capture_input=False)
     async def flat(self, prediction: dict, **kwargs) -> dict:
+        """
+        This method changes the trace type to 'shallow' to handle cases where a trace has multiple actual outputs.
+        The flattening mechanism was historically used to get individual scores for evaluation when a single trace
+        produced multiple outputs. While currently maintained for backwards compatibility, this functionality may
+        be removed in the future if no longer needed.
+        """
         prediction["source_trace_id"] = prediction["trace_id"]
         prediction["source_trace_url"] = prediction["trace_url"]
         prediction["trace_id"] = langfuse_context.get_current_trace_id()
@@ -289,7 +300,7 @@ class GenerationPipeline(Eval):
                 ExactMatchAccuracy(),
                 ExecutionAccuracy(),
             ],
-            "post_metrics": [AccuracyMultiCandidateMetric()],
+            "post_metrics": [],
         }
 
 
@@ -319,6 +330,9 @@ class AskPipeline(Eval):
             table_column_retrieval_size=settings.table_column_retrieval_size,
             allow_using_db_schemas_without_pruning=settings.allow_using_db_schemas_without_pruning,
         )
+        self._sql_reasoner = generation.SQLGenerationReasoning(
+            **pipe_components["sql_generation_reasoning"],
+        )
         self._generation = generation.SQLGeneration(
             **pipe_components["sql_generation"],
         )
@@ -340,6 +354,16 @@ class AskPipeline(Eval):
         documents = _retrieval_result.get("retrieval_results", [])
         has_calculated_field = _retrieval_result.get("has_calculated_field", False)
         has_metric = _retrieval_result.get("has_metric", False)
+
+        _reasoning = await self._sql_reasoner.run(
+            query=prediction["input"],
+            contexts=documents,
+            sql_samples=prediction.get("samples", [])
+            if self._allow_sql_samples
+            else [],
+        )
+        reasoning = _reasoning.get("post_process", {})
+
         actual_output = await self._generation.run(
             query=prediction["input"],
             contexts=documents,
@@ -348,13 +372,14 @@ class AskPipeline(Eval):
             else [],
             has_calculated_field=has_calculated_field,
             has_metric=has_metric,
-            sql_generation_reasoning=prediction.get("reasoning", ""),
+            sql_generation_reasoning=reasoning,
         )
 
         prediction["actual_output"] = actual_output
         prediction["retrieval_context"] = extract_units(documents)
         prediction["has_calculated_field"] = has_calculated_field
         prediction["has_metric"] = has_metric
+        prediction["reasoning"] = reasoning
 
         return prediction
 
@@ -388,7 +413,7 @@ class AskPipeline(Eval):
                 ExactMatchAccuracy(),
                 ExecutionAccuracy(),
             ],
-            "post_metrics": [AccuracyMultiCandidateMetric()],
+            "post_metrics": [],
         }
 
 

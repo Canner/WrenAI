@@ -105,6 +105,7 @@ if __name__ == "__main__":
     dataset = parse_toml(path)
 
     settings = EvalSettings()
+    # todo: refactor this
     _mdl = base64.b64encode(orjson.dumps(dataset["mdl"])).decode("utf-8")
     if "spider_" in path:
         settings.datasource = "duckdb"
