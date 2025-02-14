@@ -20,6 +20,21 @@ from src import utils
 
 
 def formatter(prediction: dict, meta: dict) -> dict:
+    """
+    Formats the prediction result to be used as evaluation input.
+
+    This function takes a prediction dictionary and a meta dictionary,
+    processes them to extract relevant information, and returns a formatted
+    dictionary that serves as input for evaluation. It includes details such
+    as input, actual and expected outputs, context, and additional metadata.
+
+    Args:
+        prediction (dict): A dictionary containing prediction details.
+        meta (dict): A dictionary containing metadata information.
+
+    Returns:
+        dict: A formatted dictionary containing evaluation input data.
+    """
     retrieval_context = [str(context) for context in prediction["retrieval_context"]]
     context = [str(context) for context in prediction["context"]]
     enable_spider_metrics = "spider" in meta.get("evaluation_dataset", "").lower()
@@ -33,6 +48,7 @@ def formatter(prediction: dict, meta: dict) -> dict:
         "expected_output": prediction["expected_output"],
         "retrieval_context": retrieval_context,
         "context": context,
+        "reasoning": prediction.get("reasoning", ""),
         "additional_metadata": {
             "trace_id": prediction["trace_id"],
             "trace_url": prediction["trace_url"],
@@ -82,7 +98,9 @@ class Evaluator:
 
             try:
                 test_case = LLMTestCase(**formatter(prediction, meta))
-                result = evaluate([test_case], self._metrics, ignore_errors=True).test_results[0]
+                result = evaluate(
+                    [test_case], self._metrics, ignore_errors=True
+                ).test_results[0]
                 self._score_metrics(test_case, result)
                 [metric.collect(test_case, result) for metric in self._post_metrics]
             except Exception:
