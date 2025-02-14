@@ -15,7 +15,7 @@ import traceback
 import eval.pipelines as pipelines
 import src.providers as provider
 from eval import EvalSettings
-from eval.utils import engine_config, parse_toml, trace_metadata
+from eval.utils import parse_toml, trace_metadata
 from src import utils
 
 
@@ -170,8 +170,9 @@ if __name__ == "__main__":
     predictions = predicted_file["predictions"]
 
     dataset = parse_toml(meta["evaluation_dataset"])
-    engine_info = engine_config(dataset["mdl"], pipe_components)
-    metrics = pipelines.metrics_initiator(meta["pipeline"], engine_info, args.semantics)
+    metrics = pipelines.metrics_initiator(
+        meta["pipeline"], dataset, pipe_components, args.semantics
+    )
 
     evaluator = Evaluator(**metrics)
     evaluator.eval(meta, predictions)
