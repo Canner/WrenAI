@@ -18,11 +18,16 @@ _MODEL_KWARGS = {
     "response_format": {
         "type": "json_schema",
         "json_schema": {
-            "name": "eval_score",
+            "name": "eval_result",
             "schema": EvalResult.model_json_schema(),
         },
     }
 }
+
+
+def format(response: dict) -> EvalResult:
+    reply = response.get("replies", [])[0]
+    return EvalResult.model_validate_json(orjson.loads(reply))
 
 
 class QuestionCoherenceJudge(BaseMetric):
@@ -53,8 +58,7 @@ class QuestionCoherenceJudge(BaseMetric):
         prompt = self.prompt_builder.run(question=test_case.input)
 
         response = await self.llm(prompt.get("prompt"))
-        reply = response.get("replies", [])[0]
-        result: EvalResult = EvalResult.model_validate_json(orjson.loads(reply))
+        result = format(response)
         self.score = result.score
         self.reason = result.reason
 
