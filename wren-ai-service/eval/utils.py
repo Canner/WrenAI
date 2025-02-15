@@ -211,7 +211,9 @@ def trace_metadata(
     }
 
 
-def engine_config(mdl: dict, pipe_components: dict[str, Any] = {}) -> dict:
+def engine_config(
+    mdl: dict, pipe_components: dict[str, Any] = {}, path: str = ""
+) -> dict:
     engine = pipe_components.get("sql_generation", {}).get("engine")
 
     if engine is None:
@@ -222,9 +224,7 @@ def engine_config(mdl: dict, pipe_components: dict[str, Any] = {}) -> dict:
     if isinstance(engine, WrenEngine):
         print("datasource is duckdb")
         prepare_duckdb_session_sql(engine._endpoint)
-        prepare_duckdb_init_sql(
-            engine._endpoint, mdl["catalog"], "etc/spider1.0/database"
-        )
+        prepare_duckdb_init_sql(engine._endpoint, mdl["catalog"], path)
         return {
             "mdl_json": mdl,
             "api_endpoint": engine._endpoint,

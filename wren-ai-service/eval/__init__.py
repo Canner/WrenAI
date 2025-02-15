@@ -11,6 +11,7 @@ class EvalSettings(Settings):
     config_path: str = "eval/config.yaml"
     openai_api_key: SecretStr = Field(alias="LLM_OPENAI_API_KEY")
     allow_sql_samples: bool = True
+    db_path_for_duckdb: str = "etc/spider1.0/database"  # default path for spider1.0
 
     # BigQuery
     bigquery_project_id: str = Field(default="")

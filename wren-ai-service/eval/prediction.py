@@ -112,6 +112,12 @@ if __name__ == "__main__":
         replace_wren_engine_env_variables(
             "wren_engine", {"manifest": _mdl}, settings.config_path
         )
+    elif "bird_" in path:
+        settings.datasource = "duckdb"
+        settings.db_path_for_duckdb = "etc/bird/minidev/MINIDEV/dev_databases"
+        replace_wren_engine_env_variables(
+            "wren_engine", {"manifest": _mdl}, settings.config_path
+        )
     else:
         _connection_info = base64.b64encode(
             orjson.dumps(settings.bigquery_info)
