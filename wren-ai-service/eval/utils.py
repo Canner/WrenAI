@@ -162,7 +162,9 @@ async def get_contexts_from_sql(
     ) -> List[dict]:
         sql = sql.rstrip(";") if sql.endswith(";") else sql
         quoted_sql, no_error = add_quotes(sql)
-        assert no_error, f"Error in quoting SQL: {sql}"
+        if not no_error:
+            print(f"Error in quoting SQL: {sql}")
+            quoted_sql = sql
 
         manifest_str = base64.b64encode(orjson.dumps(mdl_json)).decode()
 
@@ -220,7 +222,9 @@ def engine_config(mdl: dict, pipe_components: dict[str, Any] = {}) -> dict:
     if isinstance(engine, WrenEngine):
         print("datasource is duckdb")
         prepare_duckdb_session_sql(engine._endpoint)
-        prepare_duckdb_init_sql(engine._endpoint, mdl["catalog"])
+        prepare_duckdb_init_sql(
+            engine._endpoint, mdl["catalog"], "etc/spider1.0/database"
+        )
         return {
             "mdl_json": mdl,
             "api_endpoint": engine._endpoint,
@@ -538,10 +542,8 @@ def prepare_duckdb_session_sql(api_endpoint: str):
     assert response.status_code == 200, response.text
 
 
-def prepare_duckdb_init_sql(api_endpoint: str, db: str):
-    init_sql = (
-        f"ATTACH 'etc/spider1.0/database/{db}/{db}.sqlite' AS {db} (TYPE sqlite);"
-    )
+def prepare_duckdb_init_sql(api_endpoint: str, db: str, path: str):
+    init_sql = f"ATTACH '{path}/{db}/{db}.sqlite' AS {db} (TYPE sqlite);"
 
     response = requests.put(
         f"{api_endpoint}/v1/data-source/duckdb/settings/init-sql",

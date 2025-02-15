@@ -2,6 +2,7 @@
 This file aims to prepare spider 1.0 or bird eval dataset for text-to-sql eval purpose
 """
 import argparse
+import asyncio
 import os
 import zipfile
 from collections import defaultdict
@@ -12,6 +13,15 @@ from urllib.request import urlretrieve
 import gdown
 import orjson
 import pandas as pd
+
+from eval.utils import (
+    get_contexts_from_sql,
+    get_documents_given_contexts,
+    get_eval_dataset_in_toml_string,
+    get_next_few_items_circular,
+    prepare_duckdb_init_sql,
+    prepare_duckdb_session_sql,
+)
 
 SPIDER_DESTINATION_PATH = Path("./tools/dev/etc/spider1.0")
 BIRD_DESTINATION_PATH = Path("./tools/dev/etc/bird")
@@ -392,61 +402,72 @@ if __name__ == "__main__":
             build_question_sql_pairs_by_db_using_bird(destination_path),
         )
 
-    # print("Creating eval dataset...")
-    # # create duckdb connection in wren engine
-    # # https://duckdb.org/docs/guides/database_integration/sqlite.html
-    # prepare_duckdb_session_sql(WREN_ENGINE_API_URL)
-    # for db, values in sorted(mdl_and_ground_truths_by_db.items()):
-    #     candidate_eval_dataset = []
+    print("Creating eval dataset...")
+    # create duckdb connection in wren engine
+    # https://duckdb.org/docs/guides/database_integration/sqlite.html
+    prepare_duckdb_session_sql(WREN_ENGINE_API_URL)
+    questions_size = 0
+    if args.dataset == "spider1.0":
+        duckdb_init_path = "etc/spider1.0/database"
+    elif args.dataset == "bird":
+        duckdb_init_path = "etc/bird/minidev/MINIDEV/dev_databases"
+    for db, values in sorted(mdl_and_ground_truths_by_db.items()):
+        candidate_eval_dataset = []
 
-    #     print(f"Database: {db}")
-    #     prepare_duckdb_init_sql(WREN_ENGINE_API_URL, db)
+        print(f"Database: {db}")
+        prepare_duckdb_init_sql(WREN_ENGINE_API_URL, db, duckdb_init_path)
 
-    #     for i, ground_truth in enumerate(values["ground_truth"]):
-    #         context = asyncio.run(
-    #             get_contexts_from_sql(
-    #                 ground_truth["sql"],
-    #                 values["mdl"],
-    #                 WREN_ENGINE_API_URL,
-    #             )
-    #         )
+        for i, ground_truth in enumerate(values["ground_truth"]):
+            context = asyncio.run(
+                get_contexts_from_sql(
+                    ground_truth["sql"],
+                    values["mdl"],
+                    WREN_ENGINE_API_URL,
+                )
+            )
 
-    #         # ignore empty context
-    #         if context:
-    #             candidate_eval_dataset.append(
-    #                 {
-    #                     "categories": [],
-    #                     "question": ground_truth["question"],
-    #                     "sql": ground_truth["sql"],
-    #                     "context": context,
-    #                     "document": get_documents_given_contexts(
-    #                         [context], values["mdl"]
-    #                     ),
-    #                     "samples": get_next_few_items_circular(
-    #                         values["ground_truth"], i
-    #                     ),
-    #                 }
-    #             )
-    #         # else:
-    #         #     print(
-    #         #         "Warning: context is empty, ignore this question sql pair as of now..."
-    #         #     )
-    #         #     print(f"database: {db}")
-    #         #     print(f'question: {ground_truth["question"]}')
-    #         #     print(f'sql: {ground_truth["sql"]}')
-    #         #     print()
+            # ignore empty context
+            if context:
+                candidate_eval_dataset.append(
+                    {
+                        "categories": [],
+                        "question": ground_truth["question"],
+                        "sql": ground_truth["sql"],
+                        "context": context,
+                        "document": get_documents_given_contexts(
+                            [context], values["mdl"]
+                        ),
+                        "samples": get_next_few_items_circular(
+                            values["ground_truth"], i
+                        ),
+                    }
+                )
+            # else:
+            #     print(
+            #         "Warning: context is empty, ignore this question sql pair as of now..."
+            #     )
+            #     print(f"database: {db}")
+            #     print(f'question: {ground_truth["question"]}')
+            #     print(f'sql: {ground_truth["sql"]}')
+            #     print()
 
-    #     # save eval dataset
-    #     if candidate_eval_dataset:
-    #         with open(
-    #             f"{EVAL_DATASET_DESTINATION_PATH}/spider_{db}_eval_dataset.toml", "w"
-    #         ) as f:
-    #             f.write(
-    #                 get_eval_dataset_in_toml_string(
-    #                     values["mdl"], candidate_eval_dataset
-    #                 )
-    #             )
-    #         print(
-    #             f"Successfully creating eval dataset of database {db}, which has {len(candidate_eval_dataset)} questions"
-    #         )
-    #         print()
+        # save eval dataset
+        if candidate_eval_dataset:
+            if args.dataset == "spider1.0":
+                file_name = f"spider_{db}_eval_dataset.toml"
+            elif args.dataset == "bird":
+                file_name = f"bird_{db}_eval_dataset.toml"
+
+            with open(f"{EVAL_DATASET_DESTINATION_PATH}/{file_name}", "w") as f:
+                f.write(
+                    get_eval_dataset_in_toml_string(
+                        values["mdl"], candidate_eval_dataset
+                    )
+                )
+            print(
+                f"Successfully creating eval dataset of database {db}, which has {len(candidate_eval_dataset)} questions"
+            )
+            questions_size += len(candidate_eval_dataset)
+            print()
+
+    print(f"Total questions size: {questions_size}")
