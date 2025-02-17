@@ -31,14 +31,15 @@ def format(response: dict) -> EvalResult:
 
 class QuestionCoherenceJudge(BaseMetric):
     _system_prompt = """
-    You are an expert evaluator. Your task is to analyze the reasoning provided for a given question and determine if it makes sense. Provide a score and a detailed explanation for your evaluation.
+    You are an expert evaluator. Your task is to analyze the reasoning provided for a given question and determine if it makes sense. 
+    Provide a score in the range 0.0~1.0 and a detailed explanation for your evaluation.
     """
     _test_case_prompt = """
     Question: 
-    {question}
-
+    {{ question }}
+    
     Reasoning:
-    {reasoning}
+    {{ reasoning }}
     """
 
     def __init__(self, llm_provider: LLMProvider, **_):
@@ -78,14 +79,15 @@ class QuestionCoherenceJudge(BaseMetric):
 
 class ReasoningValidityJudge(BaseMetric):
     _system_prompt = """
-    You are an expert evaluator. Your task is to analyze the reasoning provided for a given SQL query and determine if it makes sense. Provide a score and a detailed explanation for your evaluation.
+    You are an expert evaluator. Your task is to analyze the reasoning provided for a given SQL query and determine if it makes sense. 
+    Provide a score in the range 0.0~1.0 and a detailed explanation for your evaluation.
     """
     _test_case_prompt = """
     Actual Output: 
-    {actual_output}
+    {{ actual_output }}
 
     Reasoning:
-    {reasoning}
+    {{ reasoning }}
     """
 
     def __init__(self, llm_provider: LLMProvider, **_):
@@ -125,14 +127,15 @@ class ReasoningValidityJudge(BaseMetric):
 
 class SqlSemanticsJudge(BaseMetric):
     _system_prompt = """
-    You are an expert evaluator. Your task is to analyze the actual SQL query and the expected SQL query and determine if they are semantically equivalent. Provide a score and a detailed explanation for your evaluation.
+    You are an expert evaluator. Your task is to analyze the actual SQL query and the expected SQL query and determine if they are semantically equivalent. 
+    Provide a score in the range 0.0~1.0 and a detailed explanation for your evaluation.
     """
     _test_case_prompt = """
     Actual SQL: 
-    {actual_sql}
+    {{ actual_sql }}
 
     Expected SQL: 
-    {expected_sql}
+    {{ expected_sql }}
     """
 
     def __init__(self, llm_provider: LLMProvider, **_):
