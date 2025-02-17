@@ -141,6 +141,12 @@ class SemanticsPreparationService:
         tasks = [
             self._pipelines[name].clean(project_id=project_id)
             for name in ["db_schema", "historical_question", "table_description"]
+        ] + [
+            self._pipelines["sql_pairs"].clean(
+                sql_pairs=[],
+                project_id=project_id,
+                delete_all=True,
+            )
         ]
 
         await asyncio.gather(*tasks)

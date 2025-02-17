@@ -127,9 +127,10 @@ async def clean(
     sql_pairs: List[SqlPair],
     embedding: Dict[str, Any],
     project_id: Optional[str] = "",
+    delete_all: bool = False,
 ) -> Dict[str, Any]:
     sql_pair_ids = [sql_pair.id for sql_pair in sql_pairs]
-    if sql_pair_ids:
+    if sql_pair_ids or delete_all:
         await cleaner.run(sql_pair_ids=sql_pair_ids, project_id=project_id)
 
     return embedding
@@ -216,12 +217,14 @@ class SqlPairs(BasicPipeline):
         self,
         sql_pairs: List[SqlPair],
         project_id: Optional[str] = None,
+        delete_all: bool = False,
     ) -> None:
         await clean(
             sql_pairs=sql_pairs,
             embedding={"documents": []},
             cleaner=self._components["cleaner"],
             project_id=project_id,
+            delete_all=delete_all,
         )
 
 
