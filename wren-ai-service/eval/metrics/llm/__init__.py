@@ -30,9 +30,8 @@ def format(response: dict) -> EvalResult:
 
 
 class QuestionCoherenceJudge(BaseMetric):
-    # todo: optimize the prompts
     _system_prompt = """
-    You are a helpful assistant that evaluates the coherence of a question.
+    You are an expert evaluator. Your task is to analyze the reasoning provided for a given question and determine if it makes sense. Provide a score and a detailed explanation for your evaluation.
     """
     _test_case_prompt = """
     Question: 
@@ -78,9 +77,8 @@ class QuestionCoherenceJudge(BaseMetric):
 
 
 class ReasoningValidityJudge(BaseMetric):
-    # todo: optimize the prompts
     _system_prompt = """
-    You are a helpful assistant that evaluates the coherence of a question.
+    You are an expert evaluator. Your task is to analyze the reasoning provided for a given SQL query and determine if it makes sense. Provide a score and a detailed explanation for your evaluation.
     """
     _test_case_prompt = """
     Actual Output: 
@@ -126,9 +124,8 @@ class ReasoningValidityJudge(BaseMetric):
 
 
 class SqlSemanticsJudge(BaseMetric):
-    # todo: optimize the prompts
     _system_prompt = """
-    You are a helpful assistant that evaluates the coherence of a question.
+    You are an expert evaluator. Your task is to analyze the actual SQL query and the expected SQL query and determine if they are semantically equivalent. Provide a score and a detailed explanation for your evaluation.
     """
     _test_case_prompt = """
     Actual SQL: 
