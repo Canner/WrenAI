@@ -205,6 +205,7 @@ class AskService:
         sql_generation_reasoning = None
         sql_samples = []
         api_results = []
+        table_names = []
         error_message = ""
 
         try:

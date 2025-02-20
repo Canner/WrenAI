@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import sys
 from typing import Any, Dict, List, Optional
@@ -26,9 +27,9 @@ class OutputFormatter:
         for doc in documents:
             formatted = {
                 "question": doc.content,
-                "summary": doc.meta.get("summary"),
-                "statement": doc.meta.get("statement"),
-                "viewId": doc.meta.get("viewId"),
+                "summary": doc.meta.get("summary", ""),
+                "statement": doc.meta.get("statement") or doc.meta.get("sql"),
+                "viewId": doc.meta.get("viewId", ""),
             }
             list.append(formatted)
 
@@ -37,7 +38,11 @@ class OutputFormatter:
 
 ## Start of Pipeline
 @observe(capture_input=False)
-async def count_documents(store: QdrantDocumentStore, id: Optional[str] = None) -> int:
+async def count_documents(
+    view_questions_store: QdrantDocumentStore,
+    sql_pair_store: QdrantDocumentStore,
+    id: Optional[str] = None,
+) -> int:
     filters = (
         {
             "operator": "AND",
@@ -48,8 +53,11 @@ async def count_documents(store: QdrantDocumentStore, id: Optional[str] = None) 
         if id
         else None
     )
-    document_count = await store.count_documents(filters=filters)
-    return document_count
+    view_question_count, sql_pair_count = await asyncio.gather(
+        view_questions_store.count_documents(filters=filters),
+        sql_pair_store.count_documents(filters=filters),
+    )
+    return view_question_count + sql_pair_count
 
 
 @observe(capture_input=False, capture_output=False)
@@ -61,7 +69,9 @@ async def embedding(count_documents: int, query: str, embedder: Any) -> dict:
 
 
 @observe(capture_input=False)
-async def retrieval(embedding: dict, id: str, retriever: Any) -> dict:
+async def retrieval(
+    embedding: dict, id: str, view_questions_retriever: Any, sql_pair_retriever: Any
+) -> dict:
     if embedding:
         filters = (
             {
@@ -74,11 +84,19 @@ async def retrieval(embedding: dict, id: str, retriever: Any) -> dict:
             else None
         )
 
-        res = await retriever.run(
-            query_embedding=embedding.get("embedding"),
-            filters=filters,
+        view_question_res, sql_pair_res = await asyncio.gather(
+            view_questions_retriever.run(
+                query_embedding=embedding.get("embedding"),
+                filters=filters,
+            ),
+            sql_pair_retriever.run(
+                query_embedding=embedding.get("embedding"),
+                filters=filters,
+            ),
         )
-        return dict(documents=res.get("documents"))
+        return dict(
+            documents=view_question_res.get("documents") + sql_pair_res.get("documents")
+        )
 
     return {}
 
@@ -111,12 +129,19 @@ class HistoricalQuestionRetrieval(BasicPipeline):
         document_store_provider: DocumentStoreProvider,
         **kwargs,
     ) -> None:
-        store = document_store_provider.get_store(dataset_name="view_questions")
+        view_questions_store = document_store_provider.get_store(
+            dataset_name="view_questions"
+        )
+        sql_pair_store = document_store_provider.get_store(dataset_name="sql_pairs")
         self._components = {
-            "store": store,
+            "view_questions_store": view_questions_store,
+            "sql_pair_store": sql_pair_store,
             "embedder": embedder_provider.get_text_embedder(),
-            "retriever": document_store_provider.get_retriever(
-                document_store=store,
+            "view_questions_retriever": document_store_provider.get_retriever(
+                document_store=view_questions_store,
+            ),
+            "sql_pair_retriever": document_store_provider.get_retriever(
+                document_store=sql_pair_store,
             ),
             "score_filter": ScoreFilter(),
             # TODO: add a llm filter to filter out low scoring document, in case ScoreFilter is not accurate enough
