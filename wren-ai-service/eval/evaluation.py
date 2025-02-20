@@ -82,8 +82,10 @@ class Evaluator:
 
             try:
                 test_case = LLMTestCase(**formatter(prediction, meta))
-                result = evaluate([test_case], self._metrics, ignore_errors=True).test_results[0]
-                self._score_metrics(test_case, result)
+                result = evaluate(
+                    [test_case], self._metrics, ignore_errors=True
+                ).test_results[0]
+                self._score_metrics(test_case, result, prediction)
                 [metric.collect(test_case, result) for metric in self._post_metrics]
             except Exception:
                 self._failed_count += 1
@@ -91,10 +93,14 @@ class Evaluator:
 
         self._average_score(meta)
 
-    def _score_metrics(self, test_case: LLMTestCase, result: TestResult) -> None:
+    def _score_metrics(
+        self, test_case: LLMTestCase, result: TestResult, prediction: dict
+    ) -> None:
         for metric in result.metrics_data:
             name = metric.name
             score = metric.score or 0
+
+            prediction["scores"][name] = score
 
             self._langfuse.score(
                 trace_id=test_case.additional_metadata["trace_id"],
@@ -108,6 +114,8 @@ class Evaluator:
                 self._score_collector[name] = []
 
             self._score_collector[name].append(score)
+
+        prediction["status"] = "success"
 
     @observe(name="Summary Trace", capture_input=False, capture_output=False)
     def _average_score(self, meta: dict) -> None:
