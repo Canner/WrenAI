@@ -13,14 +13,6 @@ from openai import AsyncClient
 from streamlit_tags import st_tags
 
 sys.path.append(f"{Path().parent.resolve()}")
-from eval import EvalSettings
-from eval.utils import (
-    get_documents_given_contexts,
-    get_eval_dataset_in_toml_string,
-    get_openai_client,
-    prepare_duckdb_init_sql,
-    prepare_duckdb_session_sql,
-)
 from utils import (
     DATA_SOURCES,
     WREN_ENGINE_ENDPOINT,
@@ -30,6 +22,15 @@ from utils import (
     get_question_sql_pairs,
     is_sql_valid,
     prettify_sql,
+)
+
+from eval import EvalSettings
+from eval.utils import (
+    get_documents_given_contexts,
+    get_eval_dataset_in_toml_string,
+    get_openai_client,
+    prepare_duckdb_init_sql,
+    prepare_duckdb_session_sql,
 )
 
 st.set_page_config(layout="wide")
@@ -66,9 +67,9 @@ if "connection_info" not in st.session_state:
 def on_change_upload_eval_dataset():
     doc = tomlkit.parse(st.session_state.uploaded_eval_file.getvalue().decode("utf-8"))
 
-    assert doc["mdl"] == st.session_state["mdl_json"], (
-        "The model in the uploaded dataset is different from the deployed model"
-    )
+    assert (
+        doc["mdl"] == st.session_state["mdl_json"]
+    ), "The model in the uploaded dataset is different from the deployed model"
     st.session_state["candidate_dataset"] = doc["eval_dataset"]
 
 
@@ -116,7 +117,9 @@ def on_click_setup_uploaded_file():
         elif data_source == "duckdb":
             prepare_duckdb_session_sql(WREN_ENGINE_ENDPOINT)
             prepare_duckdb_init_sql(
-                WREN_ENGINE_ENDPOINT, st.session_state["mdl_json"]["catalog"]
+                WREN_ENGINE_ENDPOINT,
+                st.session_state["mdl_json"]["catalog"],
+                "etc/spider1.0/database",
             )
     else:
         st.session_state["data_source"] = None

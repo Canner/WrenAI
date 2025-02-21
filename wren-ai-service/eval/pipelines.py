@@ -115,7 +115,8 @@ class Eval:
         return [prediction for batch in batches for prediction in batch]
 
     @abstractmethod
-    def _process(self, prediction: dict, **_) -> dict: ...
+    def _process(self, prediction: dict, **_) -> dict:
+        ...
 
     async def _flat(self, prediction: dict, **_) -> dict:
         """
@@ -247,7 +248,9 @@ class GenerationPipeline(Eval):
         )
 
         self._allow_sql_samples = settings.allow_sql_samples
-        self._engine_info = engine_config(mdl, pipe_components)
+        self._engine_info = engine_config(
+            mdl, pipe_components, settings.db_path_for_duckdb
+        )
 
     async def _flat(self, prediction: dict, actual: str) -> dict:
         prediction["actual_output"] = actual
@@ -338,7 +341,9 @@ class AskPipeline(Eval):
         )
         self._allow_sql_samples = settings.allow_sql_samples
 
-        self._engine_info = engine_config(mdl, pipe_components)
+        self._engine_info = engine_config(
+            mdl, pipe_components, settings.db_path_for_duckdb
+        )
 
     async def _flat(self, prediction: dict, actual: str) -> dict:
         prediction["actual_output"] = actual

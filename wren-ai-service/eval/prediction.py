@@ -109,6 +109,13 @@ if __name__ == "__main__":
     _mdl = base64.b64encode(orjson.dumps(dataset["mdl"])).decode("utf-8")
     if "spider_" in path:
         settings.datasource = "duckdb"
+        settings.db_path_for_duckdb = "etc/spider1.0/database"
+        replace_wren_engine_env_variables(
+            "wren_engine", {"manifest": _mdl}, settings.config_path
+        )
+    elif "bird_" in path:
+        settings.datasource = "duckdb"
+        settings.db_path_for_duckdb = "etc/bird/minidev/MINIDEV/dev_databases"
         replace_wren_engine_env_variables(
             "wren_engine", {"manifest": _mdl}, settings.config_path
         )
