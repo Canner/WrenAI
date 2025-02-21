@@ -29,7 +29,7 @@ def format(response: dict) -> EvalResult:
     return EvalResult.model_validate_json(reply)
 
 
-class QuestionCoherenceJudge(BaseMetric):
+class QuestionToReasoningJudge(BaseMetric):
     _system_prompt = """
     You are an expert evaluator. Your task is to analyze the reasoning provided for a given question and determine if it makes sense. 
     Provide a score in the range 0.0~1.0 and a detailed explanation for your evaluation.
@@ -74,10 +74,10 @@ class QuestionCoherenceJudge(BaseMetric):
 
     @property
     def __name__(self):
-        return "QuestionCoherenceJudge"
+        return "QuestionToReasoningJudge"
 
 
-class ReasoningValidityJudge(BaseMetric):
+class ReasoningToSqlJudge(BaseMetric):
     _system_prompt = """
     You are an expert evaluator. Your task is to analyze the reasoning provided for a given SQL query and determine if it makes sense. 
     Provide a score in the range 0.0~1.0 and a detailed explanation for your evaluation.
@@ -122,7 +122,7 @@ class ReasoningValidityJudge(BaseMetric):
 
     @property
     def __name__(self):
-        return "ReasoningValidityJudge"
+        return "ReasoningToSqlJudge"
 
 
 class SqlSemanticsJudge(BaseMetric):

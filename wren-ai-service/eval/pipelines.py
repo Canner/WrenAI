@@ -25,8 +25,8 @@ from eval.metrics import (
     ExactMatchAccuracy,
     ExecutionAccuracy,
     FaithfulnessMetric,
-    QuestionCoherenceJudge,
-    ReasoningValidityJudge,
+    QuestionToReasoningJudge,
+    ReasoningToSqlJudge,
     SqlSemanticsJudge,
 )
 from eval.utils import (
@@ -311,8 +311,8 @@ class GenerationPipeline(Eval):
                 # this is for spider dataset, rn we temporarily disable it
                 ExactMatchAccuracy(),
                 ExecutionAccuracy(),
-                QuestionCoherenceJudge(**component),
-                ReasoningValidityJudge(**component),
+                QuestionToReasoningJudge(**component),
+                ReasoningToSqlJudge(**component),
                 SqlSemanticsJudge(**component),
             ],
             "post_metrics": [],
@@ -433,8 +433,8 @@ class AskPipeline(Eval):
                 # this is for spider dataset, rn we temporarily disable it
                 ExactMatchAccuracy(),
                 ExecutionAccuracy(),
-                QuestionCoherenceJudge(**component),
-                ReasoningValidityJudge(**component),
+                QuestionToReasoningJudge(**component),
+                ReasoningToSqlJudge(**component),
                 SqlSemanticsJudge(**component),
             ],
             "post_metrics": [],
