@@ -159,7 +159,7 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
         # to improve the indexing performance
         # see https://qdrant.tech/documentation/guides/multiple-partitions/?q=mul#calibrate-performance
         self.client.create_payload_index(
-            collection_name=index, field_name="id", field_schema="keyword"
+            collection_name=index, field_name="project_id", field_schema="keyword"
         )
 
     async def _query_by_embedding(
