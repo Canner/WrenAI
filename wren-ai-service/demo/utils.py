@@ -5,7 +5,7 @@ import os
 import time
 import uuid
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import orjson
 import pandas as pd
@@ -183,8 +183,11 @@ def on_change_sql_generation_reasoning():
     ]
 
 
-def on_click_regenerate_sql(changed_sql_generation_reasoning: str):
+def on_click_regenerate_sql(
+    retrieved_tables: list[str], changed_sql_generation_reasoning: str
+):
     ask_feedback(
+        retrieved_tables,
         changed_sql_generation_reasoning,
         st.session_state["asks_results"]["response"][0]["sql"],
     )
@@ -226,7 +229,11 @@ def show_asks_results():
     st.markdown(f"{st.session_state['query']}")
 
     st.markdown("### Retrieved Tables")
-    st.markdown(st.session_state["retrieved_tables"])
+    retrieved_tables = st.text_input(
+        "Enter the retrieved tables separated by commas, ex: table1, table2, table3",
+        st.session_state["retrieved_tables"],
+        key="retrieved_tables_input",
+    )
 
     st.markdown("### SQL Generation Reasoning")
     changed_sql_generation_reasoning = st.text_area(
@@ -240,7 +247,10 @@ def show_asks_results():
     st.button(
         "Regenerate SQL",
         on_click=on_click_regenerate_sql,
-        args=(changed_sql_generation_reasoning,),
+        args=(
+            retrieved_tables.split(", "),
+            changed_sql_generation_reasoning,
+        ),
     )
 
     st.markdown("### SQL Query Result")
@@ -304,84 +314,6 @@ def show_asks_details_results():
             language="sql",
         )
         sqls_with_cte.append(f"{step['cte_name']} AS ( {step['sql']} )")
-
-
-def on_click_preview_data_button(index: int, full_sqls: List[str]):
-    st.session_state["preview_data_button_index"] = index
-    st.session_state["preview_sql"] = full_sqls[index]
-
-
-def on_change_user_correction(
-    step_idx: int, explanation_index: int, explanation_result: dict
-):
-    def _get_decision_point(explanation_result: dict):
-        if explanation_result["type"] == "relation":
-            if explanation_result["payload"]["type"] == "TABLE":
-                return {
-                    "type": explanation_result["type"],
-                    "value": explanation_result["payload"]["tableName"],
-                }
-            elif explanation_result["payload"]["type"].endswith("_JOIN"):
-                return {
-                    "type": explanation_result["type"],
-                    "value": explanation_result["payload"]["criteria"],
-                }
-        elif explanation_result["type"] == "filter":
-            return {
-                "type": explanation_result["type"],
-                "value": explanation_result["payload"]["expression"],
-            }
-        elif explanation_result["type"] == "groupByKeys":
-            return {
-                "type": explanation_result["type"],
-                "value": explanation_result["payload"]["keys"],
-            }
-        elif explanation_result["type"] == "sortings":
-            return {
-                "type": explanation_result["type"],
-                "value": explanation_result["payload"]["expression"],
-            }
-        elif explanation_result["type"] == "selectItems":
-            return {
-                "type": explanation_result["type"],
-                "value": explanation_result["payload"]["expression"],
-            }
-
-    decision_point = _get_decision_point(explanation_result)
-
-    should_add_new_correction = True
-    for i, sql_user_correction in enumerate(
-        st.session_state["sql_user_corrections_by_step"][step_idx]
-    ):
-        if sql_user_correction["before"] == decision_point:
-            if st.session_state[f"user_correction_{step_idx}_{explanation_index}"]:
-                st.session_state["sql_user_corrections_by_step"][step_idx][i][
-                    "after"
-                ] = {
-                    "type": "nl_expression",
-                    "value": st.session_state[
-                        f"user_correction_{step_idx}_{explanation_index}"
-                    ],
-                }
-                should_add_new_correction = False
-                break
-            else:
-                st.session_state["sql_user_corrections_by_step"][step_idx].pop(i)
-                should_add_new_correction = False
-                break
-
-    if should_add_new_correction:
-        st.session_state["sql_user_corrections_by_step"][step_idx].append(
-            {
-                "before": decision_point,
-                "after": {
-                    "type": "nl_expression",
-                    "value": st.session_state[
-                        f"user_correction_{step_idx}_{explanation_index}"
-                    ],
-                },
-            }
-        )
 
 
 def on_click_adjust_chart(
@@ -598,10 +530,11 @@ def ask(query: str, timezone: str, query_history: Optional[dict] = None):
         )
 
 
-def ask_feedback(sql_generation_reasoning: str, sql: str):
+def ask_feedback(tables: list[str], sql_generation_reasoning: str, sql: str):
     ask_feedback_response = requests.post(
         f"{WREN_AI_SERVICE_BASE_URL}/v1/ask-feedbacks",
         json={
+            "tables": tables,
             "sql_generation_reasoning": sql_generation_reasoning,
             "sql": sql,
             "configurations": {

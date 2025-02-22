@@ -23,9 +23,10 @@ logger = logging.getLogger("wren-ai-service")
 
 sql_regeneration_system_prompt = f"""
 ### TASK ###
-You are a great ANSI SQL expert. Now you are given a SQL generation reasoning and an original SQL query, 
+You are a great ANSI SQL expert. Now you are given database schema, SQL generation reasoning and an original SQL query, 
 please carefully review the reasoning, and then generate a new SQL query that matches the reasoning.
 While generating the new SQL query, you should use the original SQL query as a reference.
+While generating the new SQL query, make sure to use the database schema to generate the SQL query.
 
 {TEXT_TO_SQL_RULES}
 
@@ -38,6 +39,11 @@ The final answer must be a ANSI SQL query in JSON format:
 """
 
 sql_regeneration_user_prompt_template = """
+### DATABASE SCHEMA ###
+{% for document in documents %}
+    {{ document }}
+{% endfor %}
+
 {% if instructions %}
 ### INSTRUCTIONS ###
 {{ instructions }}
@@ -54,6 +60,7 @@ Let's think step by step.
 ## Start of Pipeline
 @observe(capture_input=False)
 def prompt(
+    documents: list[str],
     sql_generation_reasoning: str,
     sql: str,
     prompt_builder: PromptBuilder,
@@ -63,6 +70,7 @@ def prompt(
 ) -> dict:
     return prompt_builder.run(
         sql=sql,
+        documents=documents,
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             configuration,
@@ -129,6 +137,7 @@ class SQLRegeneration(BasicPipeline):
     @observe(name="SQL Regeneration")
     async def run(
         self,
+        contexts: list[str],
         sql_generation_reasoning: str,
         sql: str,
         configuration: Configuration = Configuration(),
@@ -140,6 +149,7 @@ class SQLRegeneration(BasicPipeline):
         return await self._pipe.execute(
             ["post_process"],
             inputs={
+                "documents": contexts,
                 "sql_generation_reasoning": sql_generation_reasoning,
                 "sql": sql,
                 "project_id": project_id,

@@ -102,6 +102,7 @@ class AskResultResponse(BaseModel):
 # POST /v1/ask-feedbacks
 class AskFeedbackRequest(BaseModel):
     _query_id: str | None = None
+    tables: List[str]
     sql_generation_reasoning: str
     sql: str
     project_id: Optional[str] = None
@@ -145,7 +146,7 @@ class AskFeedbackResultRequest(BaseModel):
 
 class AskFeedbackResultResponse(BaseModel):
     status: Literal[
-        "understanding",
+        "searching",
         "generating",
         "correcting",
         "finished",
@@ -586,8 +587,18 @@ class AskService:
         try:
             if not self._is_stopped(query_id, self._ask_feedback_results):
                 self._ask_feedback_results[query_id] = AskFeedbackResultResponse(
-                    status="understanding",
+                    status="searching",
                 )
+
+                retrieval_result = await self._pipelines["retrieval"].run(
+                    tables=ask_feedback_request.tables,
+                    id=ask_feedback_request.project_id,
+                )
+                _retrieval_result = retrieval_result.get(
+                    "construct_retrieval_results", {}
+                )
+                documents = _retrieval_result.get("retrieval_results", [])
+                table_ddls = [document.get("table_ddl") for document in documents]
 
             if not self._is_stopped(query_id, self._ask_feedback_results):
                 self._ask_feedback_results[query_id] = AskFeedbackResultResponse(
@@ -597,6 +608,7 @@ class AskService:
                 text_to_sql_generation_results = await self._pipelines[
                     "sql_regeneration"
                 ].run(
+                    contexts=table_ddls,
                     sql_generation_reasoning=ask_feedback_request.sql_generation_reasoning,
                     sql=ask_feedback_request.sql,
                     project_id=ask_feedback_request.project_id,
