@@ -2,7 +2,7 @@
 set -e
 
 INTERVAL=1
-TIMEOUT=60
+TIMEOUT=${LAUNCH_TIMEOUT:-60}
 
 # Wait for qdrant to be responsive
 echo "Waiting for qdrant to start..."
