@@ -1,4 +1,4 @@
-import { MDLBuilder } from '../mdl/mdlBuilder';
+import { MDLBuilderFactory } from '../mdl/mdlBuilderFactory';
 import {
   IModelNestedColumnRepository,
   IModelColumnRepository,
@@ -8,10 +8,11 @@ import {
   IViewRepository,
 } from '../repositories';
 import { Manifest } from '../mdl/type';
+import { IMDLBuilder } from '../mdl/mdlBuilder';
 
 export interface MakeCurrentModelMDLResult {
   manifest: Manifest;
-  mdlBuilder: MDLBuilder;
+  mdlBuilder: IMDLBuilder;
 }
 export interface IMDLService {
   makeCurrentModelMDL(): Promise<MakeCurrentModelMDLResult>;
@@ -66,7 +67,7 @@ export class MDLService implements IMDLService {
     const relatedModels = models;
     const relatedColumns = columns;
     const relatedRelations = relations;
-    const mdlBuilder = new MDLBuilder({
+    const mdlBuilder = MDLBuilderFactory.create({
       project,
       models,
       columns,
@@ -77,6 +78,7 @@ export class MDLService implements IMDLService {
       relatedColumns,
       relatedRelations,
     });
+
     return { manifest: mdlBuilder.build(), mdlBuilder };
   }
 }
