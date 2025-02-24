@@ -22,6 +22,7 @@ def preprocess(
     _token_count = len(encoding.encode(str(sql_data)))
     num_rows_used_in_llm = len(sql_data.get("data", []))
 
+    # todo: modify here to implement the strategy to handle the large data
     if _token_count > 100_000:
         sql_data = {
             "columns": sql_data.get("columns", []),
