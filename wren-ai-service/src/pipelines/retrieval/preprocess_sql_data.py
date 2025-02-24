@@ -19,24 +19,22 @@ def preprocess(
     sql_data: Dict,
     encoding: tiktoken.Encoding,
 ) -> Dict:
+    def reduce_data_size(data: list, reduction_step: int = 50) -> list:
+        returned_data = data[:-reduction_step] if len(data) > reduction_step else []
+
+        logger.info(f"Data size after reduction: {len(returned_data)}")
+
+        return returned_data
+
     _token_count = len(encoding.encode(str(sql_data)))
     num_rows_used_in_llm = len(sql_data.get("data", []))
 
-    # todo: modify here to implement the strategy to handle the large data
-    if _token_count > 100_000:
-        sql_data = {
-            "columns": sql_data.get("columns", []),
-            "data": sql_data.get("data", [])[:250],
-            "dtypes": sql_data.get("dtypes", {}),
-        }
-
+    while _token_count > 100_000:
+        data = sql_data.get("data", [])
+        sql_data["data"] = reduce_data_size(data)
         num_rows_used_in_llm = len(sql_data.get("data", []))
-
-        return {
-            "sql_data": sql_data,
-            "num_rows_used_in_llm": num_rows_used_in_llm,
-            "tokens": _token_count,
-        }
+        _token_count = len(encoding.encode(str(sql_data)))
+        logger.info(f"Token count: {_token_count}")
 
     return {
         "sql_data": sql_data,
