@@ -37,6 +37,8 @@ Also you should provide reasoning for the classification clearly and concisely w
 - MUST put the rephrased user's question in the rephrased_question output.
 - REASONING MUST be within 20 words.
 - If the rephrased user's question is vague and doesn't specify which table or property to analyze, classify it as MISLEADING_QUERY.
+- The reasoning of the intent classification MUST use the same language as the Output Language from the user input.
+- The rephrased user's question MUST use the same language as the Output Language from the user input.
 
 ### INTENT DEFINITIONS ###
 - TEXT_TO_SQL
@@ -105,6 +107,7 @@ User's previous SQLs: {{ query_history }}
 {% endif %}
 User's question: {{query}}
 Current Time: {{ current_time }}
+Output Language: {{ language }}
 
 Let's think step by step
 """
@@ -224,6 +227,7 @@ def prompt(
 ) -> dict:
     return prompt_builder.run(
         query=query,
+        language=configuration.language,
         db_schemas=construct_db_schemas,
         query_history=history.sql if history else [],
         current_time=configuration.show_current_time(),
