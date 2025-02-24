@@ -118,20 +118,25 @@ def _build_view_ddl(content: dict) -> str:
 async def embedding(
     query: str, embedder: Any, history: Optional[AskHistory] = None
 ) -> dict:
-    if history:
-        previous_query_summaries = [
-            step.summary for step in history.steps if step.summary
-        ]
+    if query:
+        if history:
+            previous_query_summaries = [
+                step.summary for step in history.steps if step.summary
+            ]
+        else:
+            previous_query_summaries = []
+
+        query = "\n".join(previous_query_summaries) + "\n" + query
+
+        return await embedder.run(query)
     else:
-        previous_query_summaries = []
-
-    query = "\n".join(previous_query_summaries) + "\n" + query
-
-    return await embedder.run(query)
+        return {}
 
 
 @observe(capture_input=False)
-async def table_retrieval(embedding: dict, id: str, table_retriever: Any) -> dict:
+async def table_retrieval(
+    embedding: dict, id: str, tables: list[str], table_retriever: Any
+) -> dict:
     filters = {
         "operator": "AND",
         "conditions": [
@@ -144,15 +149,25 @@ async def table_retrieval(embedding: dict, id: str, table_retriever: Any) -> dic
             {"field": "project_id", "operator": "==", "value": id}
         )
 
-    return await table_retriever.run(
-        query_embedding=embedding.get("embedding"),
-        filters=filters,
-    )
+    if embedding:
+        return await table_retriever.run(
+            query_embedding=embedding.get("embedding"),
+            filters=filters,
+        )
+    else:
+        filters["conditions"].append(
+            {"field": "name", "operator": "in", "value": tables}
+        )
+
+        return await table_retriever.run(
+            query_embedding=[],
+            filters=filters,
+        )
 
 
 @observe(capture_input=False)
 async def dbschema_retrieval(
-    table_retrieval: dict, embedding: dict, id: str, dbschema_retriever: Any
+    table_retrieval: dict, id: str, dbschema_retriever: Any
 ) -> list[Document]:
     tables = table_retrieval.get("documents", [])
     table_names = []
@@ -178,9 +193,7 @@ async def dbschema_retrieval(
             {"field": "project_id", "operator": "==", "value": id}
         )
 
-    results = await dbschema_retriever.run(
-        query_embedding=embedding.get("embedding"), filters=filters
-    )
+    results = await dbschema_retriever.run(query_embedding=[], filters=filters)
     return results["documents"]
 
 
@@ -466,7 +479,8 @@ class Retrieval(BasicPipeline):
     @observe(name="Ask Retrieval")
     async def run(
         self,
-        query: str,
+        query: str = "",
+        tables: Optional[list[str]] = None,
         id: Optional[str] = None,
         history: Optional[AskHistory] = None,
     ):
@@ -475,6 +489,7 @@ class Retrieval(BasicPipeline):
             ["construct_retrieval_results"],
             inputs={
                 "query": query,
+                "tables": tables,
                 "id": id or "",
                 "history": history,
                 **self._components,
