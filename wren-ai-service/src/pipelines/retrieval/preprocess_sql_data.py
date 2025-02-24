@@ -20,16 +20,45 @@ def preprocess(
     encoding: tiktoken.Encoding,
 ) -> Dict:
     def reduce_data_size(data: list, reduction_step: int = 50) -> list:
-        returned_data = data[:-reduction_step] if len(data) > reduction_step else []
+        """Reduce the size of data by removing elements from the end.
 
-        logger.info(f"Data size after reduction: {len(returned_data)}")
+        Args:
+            data: The input list to reduce
+            reduction_step: Number of elements to remove (must be positive)
+
+        Returns:
+            list: A list with reduced size
+
+        Raises:
+            ValueError: If reduction_step is not positive
+        """
+        if reduction_step <= 0:
+            raise ValueError("reduction_step must be positive")
+
+        elements_to_keep = max(0, len(data) - reduction_step)
+        returned_data = data[:elements_to_keep]
+
+        logger.info(
+            f"Reducing data size by {reduction_step} rows. "
+            f"Original size: {len(data)}, New size: {len(returned_data)}"
+        )
 
         return returned_data
 
     _token_count = len(encoding.encode(str(sql_data)))
     num_rows_used_in_llm = len(sql_data.get("data", []))
+    iteration = 0
 
     while _token_count > 100_000:
+        if iteration > 1000:
+            """
+            Avoid infinite loop
+            If the token count is still too high after 1000 iterations, break
+            """
+            break
+
+        iteration += 1
+
         data = sql_data.get("data", [])
         sql_data["data"] = reduce_data_size(data)
         num_rows_used_in_llm = len(sql_data.get("data", []))
