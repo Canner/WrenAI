@@ -45,7 +45,9 @@ services:
       - wren
 
   wren-ai-service:
-    image: ghcr.io/canner/wren-ai-service:${WREN_AI_SERVICE_VERSION}
+    build:
+      context: ../wren-ai-service
+      dockerfile: Dockerfile
     restart: on-failure
     platform: ${PLATFORM}
     expose:
@@ -78,7 +80,9 @@ services:
       - wren
 
   wren-ui:
-    image: ghcr.io/canner/wren-ui:${WREN_UI_VERSION}
+    build:
+      context: ../wren-ui
+      dockerfile: Dockerfile
     restart: on-failure
     platform: ${PLATFORM}
     environment:
