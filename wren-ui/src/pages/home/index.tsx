@@ -27,7 +27,7 @@ const Wrapper = ({ children }) => {
       className="d-flex align-center justify-center flex-column"
       style={{ height: '100%' }}
     >
-      <Logo size={48} color="var(--gray-8)" />
+      <Logo />
       <div className="text-md text-medium gray-8 mt-3">
         Know more about your data
       </div>

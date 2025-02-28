@@ -44,7 +44,7 @@ const EmptyDashboard = (props: {
         className="d-flex align-center justify-center flex-column -mt-8"
         style={{ height: '100%' }}
       >
-        <Logo size={48} color="var(--gray-8)" />
+        <Logo size={48} />
         <div className="text-lg text-medium text-center gray-8 mt-3">
           No charts have been added yet
         </div>
