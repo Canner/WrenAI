@@ -83,10 +83,16 @@ pipes:
     llm: litellm_llm.gpt-4o-mini-2024-07-18
   - name: sql_answer
     llm: litellm_llm.gpt-4o-mini-2024-07-18
+    engine: wren_ui
   - name: sql_breakdown
     llm: litellm_llm.gpt-4o-mini-2024-07-18
     engine: wren_ui
   - name: sql_expansion
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
+    engine: wren_ui
+  - name: sql_explanation
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
+  - name: sql_regeneration
     llm: litellm_llm.gpt-4o-mini-2024-07-18
     engine: wren_ui
   - name: semantics_description
@@ -112,6 +118,9 @@ pipes:
   - name: sql_pairs_indexing
     document_store: qdrant
     embedder: litellm_embedder.text-embedding-3-large
+  - name: sql_pairs_deletion
+    document_store: qdrant
+    embedder: litellm_embedder.text-embedding-3-large
   - name: sql_pairs_retrieval
     document_store: qdrant
     embedder: litellm_embedder.text-embedding-3-large
@@ -128,17 +137,13 @@ pipes:
     llm: litellm_llm.gpt-4o-mini-2024-07-18
   - name: sql_generation_reasoning
     llm: litellm_llm.gpt-4o-mini-2024-07-18
-  - name: sql_regeneration
-    llm: litellm_llm.gpt-4o-mini-2024-07-18
-    engine: wren_ui
 
 ---
 settings:
-  engine_timeout: 30
   column_indexing_batch_size: 50
   table_retrieval_size: 10
   table_column_retrieval_size: 100
-  allow_using_db_schemas_without_pruning: false
+  allow_using_db_schemas_without_pruning: true
   query_cache_maxsize: 1000
   query_cache_ttl: 3600
   langfuse_host: https://cloud.langfuse.com
