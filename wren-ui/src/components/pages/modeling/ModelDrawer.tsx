@@ -4,7 +4,7 @@ import { DrawerAction } from '@/hooks/useDrawerAction';
 import ModelForm from './form/ModelForm';
 
 type Props = DrawerAction & {
-  submitting: boolean;
+  submitting: boolean;onOpenSchemaChange
 };
 
 const getDrawerTitle = (formMode: FORM_MODE, name?: string) =>
@@ -63,3 +63,4 @@ export default function ModelDrawer(props: Props) {
     </Drawer>
   );
 }
+

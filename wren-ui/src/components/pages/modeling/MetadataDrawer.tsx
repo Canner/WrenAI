@@ -44,3 +44,4 @@ export default function MetadataDrawer(props: Props) {
     </Drawer>
   );
 }
+

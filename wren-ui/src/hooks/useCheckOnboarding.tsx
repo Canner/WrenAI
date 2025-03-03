@@ -59,14 +59,14 @@ export const useWithOnboarding = () => {
       }
 
       // redirect to home page when entering the connection page or select models page
-      if (
-        [Path.OnboardingConnection, Path.OnboardingModels].includes(
-          pathname as Path,
-        )
-      ) {
-        router.push(newPath);
-        return;
-      }
+      // if (
+      //   [Path.OnboardingConnection, Path.OnboardingModels].includes(
+      //     pathname as Path,
+      //   )
+      // ) {
+      //   router.push(newPath);
+      //   return;
+      // }
     }
   }, [onboardingStatus, router.pathname]);
 

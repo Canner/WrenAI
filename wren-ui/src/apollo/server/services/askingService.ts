@@ -872,7 +872,11 @@ export class AskingService implements IAskingService {
     input: InstantRecommendedQuestionsInput,
   ): Promise<Task> {
     const project = await this.projectService.getCurrentProject();
-    const { manifest } = await this.deployService.getLastDeployment(project.id);
+const checkingData= await this.deployService.getLastDeployment(project.id);
+console.log(checkingData,"checkingData")
+if(checkingData !== null)
+{
+  const { manifest } = await this.deployService.getLastDeployment(project.id);
 
     const response = await this.wrenAIAdaptor.generateRecommendationQuestions({
       manifest,
@@ -880,7 +884,10 @@ export class AskingService implements IAskingService {
       ...this.getThreadRecommendationQuestionsConfig(project),
     });
     return { id: response.queryId };
+}
+    return {"id":"Manifest Not Found"}
   }
+ 
 
   public async getInstantRecommendedQuestions(
     queryId: string,
@@ -928,7 +935,8 @@ export class AskingService implements IAskingService {
   private async getDeployId() {
     const { id } = await this.projectService.getCurrentProject();
     const lastDeploy = await this.deployService.getLastDeployment(id);
-    return lastDeploy.hash;
+    return lastDeploy ? lastDeploy.hash:null;
+
   }
 
   /**

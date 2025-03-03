@@ -94,9 +94,8 @@ export default function SQLServerProperties(props: Props) {
         label="Enable Trust Server Certificate"
         name="trustServerCertificate"
         valuePropName="checked"
-        initialValue={true}
       >
-        <Switch />
+        <Switch defaultChecked />
       </Form.Item>
     </>
   );

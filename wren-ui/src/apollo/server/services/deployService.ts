@@ -59,6 +59,7 @@ export class DeployService implements IDeployService {
   }
 
   public async getLastDeployment(projectId) {
+    console.log(projectId,"projectId")
     const lastDeploy =
       await this.deployLogRepository.findLastProjectDeployLog(projectId);
     if (!lastDeploy) {

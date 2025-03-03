@@ -357,9 +357,11 @@ errorHandlers.set('DeleteDashboardItem', new DeleteDashboardItemErrorHandler());
 const errorHandler = (error: ErrorResponse) => {
   // networkError
   if (error.networkError) {
-    message.error(
-      'No internet. Please check your network connection and try again.',
-    );
+    // message.error(
+    //   'No internet. Please check your network connection and try again.',
+    // );
+    console.log('No internet. Please check your network connection and try again.');
+    
   }
 
   const operationName = error?.operation?.operationName || '';

@@ -36,7 +36,7 @@ COPY .prettierrc ./
 COPY next.config.js ./
 COPY tsconfig.json ./
 
-RUN yarn build --no-lint
+RUN yarn build
 
 # Production image, copy all the files and run next
 FROM base AS runner
@@ -68,9 +68,9 @@ COPY --from=builder /app/node_modules/getopts ./node_modules/getopts
 COPY --from=builder /app/node_modules/escalade/sync ./node_modules/escalade/sync
 COPY --from=builder /app/node_modules/.yarn-state.yml ./node_modules/.yarn-state.yml
 
-EXPOSE 3001
+EXPOSE 3000
 
-ENV PORT 3001
+ENV PORT 3000
 
 # server.js is created by next build from the standalone output
 # https://nextjs.org/docs/pages/api-reference/next-config-js/output
