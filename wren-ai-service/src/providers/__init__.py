@@ -70,7 +70,7 @@ def llm_processor(entry: dict) -> dict:
     for model in entry.get("models", []):
         model_name = f"{entry.get('provider')}.{model.get('alias', model.get('model'))}"
         model_additional_params = {
-            k: v for k, v in model.items() if k not in ["model", "kwargs"]
+            k: v for k, v in model.items() if k not in ["model", "kwargs", "alias"]
         }
         returned[model_name] = {
             "provider": entry["provider"],
@@ -124,7 +124,7 @@ def embedder_processor(entry: dict) -> dict:
     for model in entry["models"]:
         identifier = f"{entry['provider']}.{model.get('alias', model.get('model'))}"
         model_additional_params = {
-            k: v for k, v in model.items() if k not in ["model", "kwargs"]
+            k: v for k, v in model.items() if k not in ["model", "kwargs", "alias"]
         }
         returned[identifier] = {
             "provider": entry["provider"],
