@@ -235,3 +235,14 @@ export interface ChartResult {
   response?: ChartResponse;
   error?: WrenAIError;
 }
+
+export enum SqlPairStatus {
+  INDEXING = 'INDEXING',
+  FINISHED = 'FINISHED',
+  FAILED = 'FAILED',
+}
+
+export interface SqlPairResult {
+  status: SqlPairStatus;
+  error?: WrenAIError;
+}
