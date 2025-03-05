@@ -10,13 +10,6 @@ class EvalSettings(Settings):
     datasource: str = "bigquery"
     config_path: str = "eval/config.yaml"
     openai_api_key: SecretStr = Field(alias="LLM_OPENAI_API_KEY")
-    allow_sql_samples: bool = True
-    db_path_for_duckdb: str = ""
-
-    # BigQuery
-    bigquery_project_id: str = Field(default="")
-    bigquery_dataset_id: str = Field(default="")
-    bigquery_credentials: SecretStr = Field(default="")
 
     @property
     def langfuse_url(self) -> str:
@@ -26,11 +19,3 @@ class EvalSettings(Settings):
 
     def get_openai_api_key(self) -> str:
         return self.openai_api_key.get_secret_value()
-
-    @property
-    def bigquery_info(self) -> dict:
-        return {
-            "project_id": self.bigquery_project_id,
-            "dataset_id": self.bigquery_dataset_id,
-            "credentials": self.bigquery_credentials.get_secret_value(),
-        }

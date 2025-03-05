@@ -1,19 +1,17 @@
 import logging
 import sys
-from typing import Any, List, Optional
+from typing import Any, List
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
+from pydantic import BaseModel
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.pipelines.generation.utils.sql import (
-    SQL_GENERATION_MODEL_KWARGS,
-    SQLGenPostProcessor,
-)
+from src.pipelines.generation.utils.sql import SQLGenPostProcessor
 from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
 
@@ -77,17 +75,29 @@ async def generate_sql_expansion(prompt: dict, generator: Any) -> dict:
 async def post_process(
     generate_sql_expansion: dict,
     post_processor: SQLGenPostProcessor,
-    engine_timeout: float,
     project_id: str | None = None,
 ) -> dict:
     return await post_processor.run(
-        generate_sql_expansion.get("replies"),
-        timeout=engine_timeout,
-        project_id=project_id,
+        generate_sql_expansion.get("replies"), project_id=project_id
     )
 
 
 ## End of Pipeline
+
+
+class ExpansionResult(BaseModel):
+    sql: str
+
+
+SQL_EXPANSION_MODEL_KWARGS = {
+    "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "sql_results",
+            "schema": ExpansionResult.model_json_schema(),
+        },
+    }
+}
 
 
 class SQLExpansion(BasicPipeline):
@@ -95,22 +105,17 @@ class SQLExpansion(BasicPipeline):
         self,
         llm_provider: LLMProvider,
         engine: Engine,
-        engine_timeout: Optional[float] = 30.0,
         **kwargs,
     ):
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=sql_expansion_system_prompt,
-                generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
+                generation_kwargs=SQL_EXPANSION_MODEL_KWARGS,
             ),
             "prompt_builder": PromptBuilder(
                 template=sql_expansion_user_prompt_template
             ),
             "post_processor": SQLGenPostProcessor(engine=engine),
-        }
-
-        self._configs = {
-            "engine_timeout": engine_timeout,
         }
 
         super().__init__(
@@ -136,7 +141,6 @@ class SQLExpansion(BasicPipeline):
                 "project_id": project_id,
                 "configuration": configuration,
                 **self._components,
-                **self._configs,
             },
         )
 

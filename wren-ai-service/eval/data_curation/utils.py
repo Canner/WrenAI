@@ -1,6 +1,5 @@
 import asyncio
 import base64
-import logging
 import os
 import re
 import sys
@@ -32,7 +31,6 @@ WREN_ENGINE_ENDPOINT = os.getenv("WREN_ENGINE_ENDPOINT", "http://localhost:8080"
 DATA_SOURCES = ["bigquery", "duckdb"]
 TIMEOUT_SECONDS = 60
 ddl_converter = DDLChunker()
-logger = logging.getLogger("wren-ai-service")
 
 
 async def is_sql_valid(
@@ -228,7 +226,6 @@ Think step by step
             )
         ]
     except Exception as e:
-        logger.error(e)
         st.error(f"Error generating question-sql-pairs: {e}")
         return []
 
@@ -256,12 +253,12 @@ async def get_data_from_wren_engine_with_sqls(
         for sql in sqls:
             task = asyncio.ensure_future(
                 get_data_from_wren_engine(
-                    sql=sql,
-                    mdl_json=mdl_json,
-                    api_endpoint=api_endpoint,
-                    data_source=data_source,
-                    connection_info=connection_info,
-                    timeout=timeout,
+                    sql,
+                    data_source,
+                    mdl_json,
+                    connection_info,
+                    api_endpoint,
+                    timeout,
                     limit=50,
                 )
             )

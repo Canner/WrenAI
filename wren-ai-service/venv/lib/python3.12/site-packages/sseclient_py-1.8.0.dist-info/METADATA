@@ -1,0 +1,68 @@
+Metadata-Version: 2.1
+Name: sseclient-py
+Version: 1.8.0
+Summary: SSE client for Python
+Home-page: https://github.com/mpetazzoni/sseclient
+Author: Maxime Petazzoni
+Author-email: maxime.petazzoni@bulix.org
+License: Apache Software License v2
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 2
+Classifier: Programming Language :: Python :: 3
+License-File: LICENSE
+
+Server Side Events (SSE) client for Python
+==========================================
+
+A Python client for SSE event sources that seamlessly integrates with
+``urllib3`` and ``requests``.
+
+Installation
+------------
+
+.. code::
+
+    $ pip install sseclient-py
+
+Usage
+-----
+
+.. code:: python
+
+    import json
+    import pprint
+    import sseclient
+
+    def with_urllib3(url, headers):
+        """Get a streaming response for the given event feed using urllib3."""
+        import urllib3
+        http = urllib3.PoolManager()
+        return http.request('GET', url, preload_content=False, headers=headers)
+
+    def with_requests(url, headers):
+        """Get a streaming response for the given event feed using requests."""
+        import requests
+        return requests.get(url, stream=True, headers=headers)
+
+    def with_httpx(url, headers):
+        """Get a streaming response for the given event feed using httpx."""
+        import httpx
+        with httpx.stream('GET', url, headers=headers) as s:
+            # Note: 'yield from' is Python >= 3.3. Use for/yield instead if you
+            # are using an earlier version.
+            yield from s.iter_bytes()
+
+
+    url = 'http://domain.com/events'
+    headers = {'Accept': 'text/event-stream'}
+    response = with_urllib3(url, headers)  # or with_requests(url, headers)
+    client = sseclient.SSEClient(response)
+    for event in client.events():
+        pprint.pprint(json.loads(event.data))
+
+Resources
+=========
+
+-  http://www.w3.org/TR/2009/WD-eventsource-20091029/
+-  https://pypi.python.org/pypi/sseclient-py/

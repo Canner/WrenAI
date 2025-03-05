@@ -1,0 +1,176 @@
+type: llm
+provider: litellm_llm
+timeout: 120
+models:
+  - model: gpt-4o-mini-2024-07-18
+    api_base: https://api.openai.com/v1
+    api_key_name: LLM_OPENAI_API_KEY
+    kwargs:
+      temperature: 0
+      n: 1
+      # for better consistency of llm response
+      seed: 0
+      max_tokens: 4096
+  - model: gpt-4o-2024-08-06
+    api_base: https://api.openai.com/v1
+    api_key_name: LLM_OPENAI_API_KEY
+    kwargs:
+      temperature: 0
+      n: 1
+      # for better consistency of llm response
+      seed: 0
+      max_tokens: 4096
+
+---
+type: embedder
+provider: openai_embedder
+models:
+  - model: text-embedding-3-large
+api_base: https://api.openai.com/v1
+timeout: 120
+
+---
+type: embedder
+provider: azure_openai_embedder
+models:
+  - model: text-embedding-3-small
+api_base: https://<your-endpoint>.openai.azure.com/
+api_version: "2024-05-13"
+timeout: 120
+
+---
+type: embedder
+provider: ollama_embedder
+models:
+  - model: nomic-embed-text
+url: http://localhost:11434
+timeout: 120
+
+---
+type: engine
+provider: wren_ui
+endpoint: http://localhost:3000
+
+---
+type: engine
+provider: wren_ibis
+endpoint: http://localhost:8000
+source: bigquery
+manifest: "" # base64 encoded string of the MDL
+connection_info: "" # base64 encoded string of the connection info
+
+---
+type: engine
+provider: wren_engine
+endpoint: http://localhost:8080
+manifest: ""
+
+---
+type: document_store
+provider: qdrant
+location: http://localhost:6333
+embedding_model_dim: 3072
+timeout: 120
+recreate_index: false
+
+---
+type: pipeline
+pipes:
+  - name: db_schema_indexing
+    embedder: openai_embedder.text-embedding-3-large
+    document_store: qdrant
+  - name: historical_question_indexing
+    embedder: openai_embedder.text-embedding-3-large
+    document_store: qdrant
+  - name: table_description_indexing
+    embedder: openai_embedder.text-embedding-3-large
+    document_store: qdrant
+  - name: db_schema_retrieval
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
+    embedder: openai_embedder.text-embedding-3-large
+    document_store: qdrant
+  - name: historical_question_retrieval
+    embedder: openai_embedder.text-embedding-3-large
+    document_store: qdrant
+  - name: sql_generation
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
+    engine: wren_ui
+  - name: sql_correction
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
+    engine: wren_ui
+  - name: followup_sql_generation
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
+    engine: wren_ui
+  - name: sql_summary
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
+  - name: sql_answer
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
+    engine: wren_ui
+  - name: sql_breakdown
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
+    engine: wren_ui
+  - name: sql_expansion
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
+    engine: wren_ui
+  - name: sql_explanation
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
+  - name: sql_regeneration
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
+    engine: wren_ui
+  - name: semantics_description
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
+  - name: relationship_recommendation
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
+    engine: wren_ui
+  - name: question_recommendation
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
+  - name: question_recommendation_db_schema_retrieval
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
+    embedder: openai_embedder.text-embedding-3-large
+    document_store: qdrant
+  - name: question_recommendation_sql_generation
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
+    engine: wren_ui
+  - name: chart_generation
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
+  - name: chart_adjustment
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
+  - name: intent_classification
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
+    embedder: openai_embedder.text-embedding-3-large
+    document_store: qdrant
+  - name: data_assistance
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
+  - name: sql_pairs_indexing
+    document_store: qdrant
+    embedder: openai_embedder.text-embedding-3-large
+  - name: sql_pairs_deletion
+    document_store: qdrant
+    embedder: openai_embedder.text-embedding-3-large
+  - name: sql_pairs_retrieval
+    document_store: qdrant
+    embedder: openai_embedder.text-embedding-3-large
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
+  - name: preprocess_sql_data
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
+  - name: sql_executor
+    engine: wren_ui
+  - name: sql_question_generation
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
+  - name: sql_generation_reasoning
+    llm: litellm_llm.gpt-4o-mini-2024-07-18
+
+---
+settings:
+  host: 127.0.0.1
+  port: 5556
+  column_indexing_batch_size: 50
+  table_retrieval_size: 10
+  table_column_retrieval_size: 100
+  query_cache_maxsize: 1000
+  allow_using_db_schemas_without_pruning: false
+  query_cache_ttl: 3600
+  langfuse_host: https://cloud.langfuse.com
+  langfuse_enable: true
+  logging_level: INFO
+  development: false

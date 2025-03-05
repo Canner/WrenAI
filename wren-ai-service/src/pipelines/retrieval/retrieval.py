@@ -118,25 +118,20 @@ def _build_view_ddl(content: dict) -> str:
 async def embedding(
     query: str, embedder: Any, history: Optional[AskHistory] = None
 ) -> dict:
-    if query:
-        if history:
-            previous_query_summaries = [
-                step.summary for step in history.steps if step.summary
-            ]
-        else:
-            previous_query_summaries = []
-
-        query = "\n".join(previous_query_summaries) + "\n" + query
-
-        return await embedder.run(query)
+    if history:
+        previous_query_summaries = [
+            step.summary for step in history.steps if step.summary
+        ]
     else:
-        return {}
+        previous_query_summaries = []
+
+    query = "\n".join(previous_query_summaries) + "\n" + query
+
+    return await embedder.run(query)
 
 
 @observe(capture_input=False)
-async def table_retrieval(
-    embedding: dict, id: str, tables: list[str], table_retriever: Any
-) -> dict:
+async def table_retrieval(embedding: dict, id: str, table_retriever: Any) -> dict:
     filters = {
         "operator": "AND",
         "conditions": [
@@ -149,25 +144,15 @@ async def table_retrieval(
             {"field": "project_id", "operator": "==", "value": id}
         )
 
-    if embedding:
-        return await table_retriever.run(
-            query_embedding=embedding.get("embedding"),
-            filters=filters,
-        )
-    else:
-        filters["conditions"].append(
-            {"field": "name", "operator": "in", "value": tables}
-        )
-
-        return await table_retriever.run(
-            query_embedding=[],
-            filters=filters,
-        )
+    return await table_retriever.run(
+        query_embedding=embedding.get("embedding"),
+        filters=filters,
+    )
 
 
 @observe(capture_input=False)
 async def dbschema_retrieval(
-    table_retrieval: dict, id: str, dbschema_retriever: Any
+    table_retrieval: dict, embedding: dict, id: str, dbschema_retriever: Any
 ) -> list[Document]:
     tables = table_retrieval.get("documents", [])
     table_names = []
@@ -193,7 +178,9 @@ async def dbschema_retrieval(
             {"field": "project_id", "operator": "==", "value": id}
         )
 
-    results = await dbschema_retriever.run(query_embedding=[], filters=filters)
+    results = await dbschema_retriever.run(
+        query_embedding=embedding.get("embedding"), filters=filters
+    )
     return results["documents"]
 
 
@@ -239,37 +226,19 @@ def check_using_db_schemas_without_pruning(
     for table_schema in construct_db_schemas:
         if table_schema["type"] == "TABLE":
             ddl, _has_calculated_field = build_table_ddl(table_schema)
-            retrieval_results.append(
-                {
-                    "table_name": table_schema["name"],
-                    "table_ddl": ddl,
-                }
-            )
+            retrieval_results.append(ddl)
             has_calculated_field = has_calculated_field or _has_calculated_field
 
     for document in dbschema_retrieval:
         content = ast.literal_eval(document.content)
 
         if content["type"] == "METRIC":
-            retrieval_results.append(
-                {
-                    "table_name": content["name"],
-                    "table_ddl": _build_metric_ddl(content),
-                }
-            )
+            retrieval_results.append(_build_metric_ddl(content))
             has_metric = True
         elif content["type"] == "VIEW":
-            retrieval_results.append(
-                {
-                    "table_name": content["name"],
-                    "table_ddl": _build_view_ddl(content),
-                }
-            )
+            retrieval_results.append(_build_view_ddl(content))
 
-    table_ddls = [
-        retrieval_result["table_ddl"] for retrieval_result in retrieval_results
-    ]
-    _token_count = len(encoding.encode(" ".join(table_ddls)))
+    _token_count = len(encoding.encode(" ".join(retrieval_results)))
     if _token_count > 100_000 or not allow_using_db_schemas_without_pruning:
         return {
             "db_schemas": [],
@@ -359,32 +328,17 @@ def construct_retrieval_results(
                     tables=tables,
                 )
                 has_calculated_field = has_calculated_field or _has_calculated_field
-                retrieval_results.append(
-                    {
-                        "table_name": table_schema["name"],
-                        "table_ddl": ddl,
-                    }
-                )
+                retrieval_results.append(ddl)
 
         for document in dbschema_retrieval:
             if document.meta["name"] in columns_and_tables_needed:
                 content = ast.literal_eval(document.content)
 
                 if content["type"] == "METRIC":
-                    retrieval_results.append(
-                        {
-                            "table_name": content["name"],
-                            "table_ddl": _build_metric_ddl(content),
-                        }
-                    )
+                    retrieval_results.append(_build_metric_ddl(content))
                     has_metric = True
                 elif content["type"] == "VIEW":
-                    retrieval_results.append(
-                        {
-                            "table_name": content["name"],
-                            "table_ddl": _build_view_ddl(content),
-                        }
-                    )
+                    retrieval_results.append(_build_view_ddl(content))
 
         return {
             "retrieval_results": retrieval_results,
@@ -479,8 +433,7 @@ class Retrieval(BasicPipeline):
     @observe(name="Ask Retrieval")
     async def run(
         self,
-        query: str = "",
-        tables: Optional[list[str]] = None,
+        query: str,
         id: Optional[str] = None,
         history: Optional[AskHistory] = None,
     ):
@@ -489,7 +442,6 @@ class Retrieval(BasicPipeline):
             ["construct_retrieval_results"],
             inputs={
                 "query": query,
-                "tables": tables,
                 "id": id or "",
                 "history": history,
                 **self._components,

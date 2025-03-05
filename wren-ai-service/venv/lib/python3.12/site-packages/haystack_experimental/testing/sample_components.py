@@ -1,0 +1,40 @@
+# SPDX-FileCopyrightText: 2022-present deepset GmbH <info@deepset.ai>
+#
+# SPDX-License-Identifier: Apache-2.0
+
+from typing import List, Optional
+
+from haystack.core.component import component
+
+
+@component
+class AddFixedValueBatch:
+    """
+    Adds two values together.
+    """
+
+    def __init__(self, add: int = 1):
+        self.add = add
+
+    @component.output_types(result=List[int])
+    def run(self, value: List[int], add: Optional[List[int]] = None):
+        """
+        Adds two values together.
+        """
+        if add is None:
+            add = [self.add] * len(value)
+        return {"result": [v + a for v, a in zip(value, add)]}
+
+
+@component
+class DoubleBatch:
+    """
+    Doubles the input value.
+    """
+
+    @component.output_types(value=List[int])
+    def run(self, value: List[int]):
+        """
+        Doubles the input value.
+        """
+        return {"value": [v * 2 for v in value]}

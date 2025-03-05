@@ -33,12 +33,7 @@ def build_table_ddl(
     ), has_calculated_field
 
 
-def dry_run_pipeline(
-    pipeline_cls: BasicPipeline,
-    pipeline_name: str,
-    method: str = "run",
-    **kwargs,
-):
+def dry_run_pipeline(pipeline_cls: BasicPipeline, pipeline_name: str, **kwargs):
     from langfuse.decorators import langfuse_context
 
     from src.config import settings
@@ -46,15 +41,13 @@ def dry_run_pipeline(
     from src.providers import generate_components
     from src.utils import init_langfuse, setup_custom_logger
 
-    setup_custom_logger(
-        "wren-ai-service", level_str=settings.logging_level, is_dev=True
-    )
+    setup_custom_logger("wren-ai-service", level_str=settings.logging_level)
 
     pipe_components = generate_components(settings.components)
     pipeline = pipeline_cls(**pipe_components[pipeline_name])
     init_langfuse(settings)
 
-    async_validate(lambda: getattr(pipeline, method)(**kwargs))
+    async_validate(lambda: pipeline.run(**kwargs))
 
     langfuse_context.flush()
 
@@ -64,16 +57,11 @@ class ScoreFilter:
     @component.output_types(
         documents=List[Document],
     )
-    def run(
-        self,
-        documents: List[Document],
-        score: float = 0.9,
-        max_size: int = 10,
-    ):
+    def run(self, documents: List[Document], score: float = 0.9):
         return {
             "documents": sorted(
                 filter(lambda document: document.score >= score, documents),
                 key=lambda document: document.score,
                 reverse=True,
-            )[:max_size]
+            )
         }

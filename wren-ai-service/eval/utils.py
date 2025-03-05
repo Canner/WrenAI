@@ -10,12 +10,9 @@ import orjson
 import requests
 import sqlglot
 import tomlkit
-import yaml
 from dotenv import load_dotenv
 from openai import AsyncClient
 from tomlkit import parse
-
-from src.providers.engine.wren import WrenEngine
 
 load_dotenv(".env", override=True)
 
@@ -24,18 +21,16 @@ def add_quotes(sql: str) -> Tuple[str, bool]:
     try:
         quoted_sql = sqlglot.transpile(sql, read="trino", identify=True)[0]
         return quoted_sql, True
-    except Exception as e:
-        print(f"Error in adding quotes to SQL: {sql}")
-        print(f"Error: {e}")
+    except Exception:
         return sql, False
 
 
 async def get_data_from_wren_engine(
     sql: str,
+    data_source: str,
     mdl_json: dict,
+    connection_info: dict,
     api_endpoint: str,
-    data_source: Optional[str] = None,
-    connection_info: Optional[dict] = None,
     timeout: float = 300,
     limit: Optional[int] = None,
 ):
@@ -164,9 +159,7 @@ async def get_contexts_from_sql(
     ) -> List[dict]:
         sql = sql.rstrip(";") if sql.endswith(";") else sql
         quoted_sql, no_error = add_quotes(sql)
-        if not no_error:
-            print(f"Error in quoting SQL: {sql}")
-            quoted_sql = sql
+        assert no_error, f"Error in quoting SQL: {sql}"
 
         manifest_str = base64.b64encode(orjson.dumps(mdl_json)).decode()
 
@@ -213,25 +206,13 @@ def trace_metadata(
     }
 
 
-def engine_config(
-    mdl: dict, pipe_components: dict[str, Any] = {}, path: str = ""
-) -> dict:
+def engine_config(mdl: dict, pipe_components: dict[str, Any] = {}) -> dict:
     engine = pipe_components.get("sql_generation", {}).get("engine")
 
     if engine is None:
         raise ValueError(
             "SQL Generation engine not found in pipe_components. Ensure 'sql_generation' key exists and contains 'engine' configuration."
         )
-
-    if isinstance(engine, WrenEngine):
-        print("datasource is duckdb")
-        prepare_duckdb_session_sql(engine._endpoint)
-        prepare_duckdb_init_sql(engine._endpoint, mdl["catalog"], path)
-        return {
-            "mdl_json": mdl,
-            "api_endpoint": engine._endpoint,
-            "timeout": 10,
-        }
 
     return {
         "mdl_json": mdl,
@@ -544,8 +525,10 @@ def prepare_duckdb_session_sql(api_endpoint: str):
     assert response.status_code == 200, response.text
 
 
-def prepare_duckdb_init_sql(api_endpoint: str, db: str, path: str):
-    init_sql = f"ATTACH '{path}/{db}/{db}.sqlite' AS {db} (TYPE sqlite);"
+def prepare_duckdb_init_sql(api_endpoint: str, db: str):
+    init_sql = (
+        f"ATTACH 'etc/spider1.0/database/{db}/{db}.sqlite' AS {db} (TYPE sqlite);"
+    )
 
     response = requests.put(
         f"{api_endpoint}/v1/data-source/duckdb/settings/init-sql",
@@ -569,22 +552,3 @@ def get_openai_client(
         api_key=api_key,
         timeout=timeout,
     )
-
-
-def replace_wren_engine_env_variables(engine_type: str, data: dict, config_path: str):
-    assert engine_type in ("wren_engine", "wren_ibis")
-
-    with open(config_path, "r") as f:
-        configs = list(yaml.safe_load_all(f))
-
-        for config in configs:
-            if config.get("type") == "engine" and config.get("provider") == engine_type:
-                for key, value in data.items():
-                    config[key] = value
-            if "pipes" in config:
-                for i, pipe in enumerate(config["pipes"]):
-                    if "engine" in pipe:
-                        config["pipes"][i]["engine"] = engine_type
-
-    with open(config_path, "w") as f:
-        yaml.safe_dump_all(configs, f, default_flow_style=False)

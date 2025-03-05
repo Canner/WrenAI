@@ -29,7 +29,6 @@ class SQLBreakdownGenPostProcessor:
         self,
         replies: List[str],
         project_id: str | None = None,
-        timeout: Optional[float] = 30.0,
     ) -> Dict[str, Any]:
         cleaned_generation_result = orjson.loads(clean_generation_result(replies[0]))
 
@@ -46,8 +45,8 @@ class SQLBreakdownGenPostProcessor:
         steps[-1]["cte_name"] = ""
 
         for step in steps:
-            step["sql"], error_message = add_quotes(step["sql"])
-            if not error_message:
+            step["sql"], no_error = add_quotes(step["sql"])
+            if not no_error:
                 return {
                     "results": {
                         "description": cleaned_generation_result["description"],
@@ -57,11 +56,7 @@ class SQLBreakdownGenPostProcessor:
 
         sql = self._build_cte_query(steps)
 
-        if not await self._check_if_sql_executable(
-            sql,
-            project_id=project_id,
-            timeout=timeout,
-        ):
+        if not await self._check_if_sql_executable(sql, project_id=project_id):
             return {
                 "results": {
                     "description": cleaned_generation_result["description"],
@@ -89,14 +84,12 @@ class SQLBreakdownGenPostProcessor:
         self,
         sql: str,
         project_id: str | None = None,
-        timeout: Optional[float] = 30.0,
     ):
         async with aiohttp.ClientSession() as session:
             status, _, addition = await self._engine.execute_sql(
                 sql,
                 session,
                 project_id=project_id,
-                timeout=timeout,
             )
 
         if not status:
@@ -119,7 +112,6 @@ class SQLGenPostProcessor:
     async def run(
         self,
         replies: List[str] | List[List[str]],
-        timeout: Optional[float] = 30.0,
         project_id: str | None = None,
     ) -> dict:
         try:
@@ -146,9 +138,7 @@ class SQLGenPostProcessor:
                 valid_generation_results,
                 invalid_generation_results,
             ) = await self._classify_invalid_generation_results(
-                cleaned_generation_result,
-                project_id=project_id,
-                timeout=timeout,
+                cleaned_generation_result, project_id=project_id
             )
 
             return {
@@ -164,20 +154,17 @@ class SQLGenPostProcessor:
             }
 
     async def _classify_invalid_generation_results(
-        self,
-        generation_results: list[str],
-        timeout: float,
-        project_id: str | None = None,
+        self, generation_results: list[str], project_id: str | None = None
     ) -> List[Optional[Dict[str, str]]]:
         valid_generation_results = []
         invalid_generation_results = []
 
         async def _task(sql: str):
-            quoted_sql, error_message = add_quotes(sql)
+            quoted_sql, no_error = add_quotes(sql)
 
-            if not error_message:
+            if no_error:
                 status, _, addition = await self._engine.execute_sql(
-                    quoted_sql, session, project_id=project_id, timeout=timeout
+                    quoted_sql, session, project_id=project_id
                 )
 
                 if status:
@@ -188,14 +175,11 @@ class SQLGenPostProcessor:
                         }
                     )
                 else:
-                    error_message = addition.get("error_message", "")
                     invalid_generation_results.append(
                         {
                             "sql": quoted_sql,
-                            "type": "TIME_OUT"
-                            if error_message.startswith("Request timed out")
-                            else "DRY_RUN",
-                            "error": error_message,
+                            "type": "DRY_RUN",
+                            "error": addition.get("error_message", ""),
                             "correlation_id": addition.get("correlation_id", ""),
                         }
                     )
@@ -204,7 +188,7 @@ class SQLGenPostProcessor:
                     {
                         "sql": sql,
                         "type": "ADD_QUOTES",
-                        "error": error_message,
+                        "error": "add_quotes failed",
                     }
                 )
 
@@ -240,6 +224,7 @@ TEXT_TO_SQL_RULES = """
 - If the user asks for a specific date, please give the date range in SQL query
     - example: "What is the total revenue for the month of 2024-11-01?"
     - answer: "SELECT SUM(r.PriceSum) FROM Revenue r WHERE CAST(r.PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) >= CAST('2024-11-01 00:00:00' AS TIMESTAMP WITH TIME ZONE) AND CAST(r.PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) < CAST('2024-11-02 00:00:00' AS TIMESTAMP WITH TIME ZONE)"
+- ALWAYS ADD "timestamp" to the front of the timestamp literal, ex. "timestamp '2024-02-20 12:00:00'"
 - USE THE VIEW TO SIMPLIFY THE QUERY.
 - DON'T MISUSE THE VIEW NAME. THE ACTUAL NAME IS FOLLOWING THE CREATE VIEW STATEMENT.
 - MUST USE the value of alias from the comment section of the corresponding table or column in the DATABASE SCHEMA section for the column/table alias.
@@ -351,14 +336,14 @@ TEXT_TO_SQL_RULES = """
 """
 
 sql_generation_system_prompt = f"""
-You are a helpful assistant that converts natural language queries into ANSI SQL queries.
+You are a helpful assistant that converts natural language queries into SQL queries.
 
 Given user's question, database schema, etc., you should think deeply and carefully and generate the SQL query based on the given reasoning plan step by step.
 
 {TEXT_TO_SQL_RULES}
 
 ### FINAL ANSWER FORMAT ###
-The final answer must be a ANSI SQL query in JSON format:
+The final answer must be a SQL query in JSON format:
 
 {{
     "sql": <SQL_QUERY_STRING>
@@ -530,14 +515,11 @@ Learn about the usage of the schema structures and generate SQL based on them.
 
 
 def construct_instructions(
-    configuration: Configuration | None = Configuration(),
-    has_calculated_field: bool = False,
-    has_metric: bool = False,
-    sql_samples: list | None = None,
+    configuration: Configuration | None,
+    has_calculated_field: bool,
+    has_metric: bool,
+    sql_samples: list,
 ):
-    if sql_samples is None:
-        sql_samples = []
-
     instructions = ""
     if configuration:
         if configuration.fiscal_year:
@@ -554,14 +536,3 @@ def construct_instructions(
 
 class SqlGenerationResult(BaseModel):
     sql: str
-
-
-SQL_GENERATION_MODEL_KWARGS = {
-    "response_format": {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "sql_generation_result",
-            "schema": SqlGenerationResult.model_json_schema(),
-        },
-    }
-}

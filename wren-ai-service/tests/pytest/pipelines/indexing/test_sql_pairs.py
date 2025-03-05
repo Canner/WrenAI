@@ -68,29 +68,3 @@ async def test_sql_pairs_indexing_saving_to_document_store_with_multiple_project
         }
     )
     assert len(documents) == 2
-
-
-@pytest.mark.asyncio
-async def test_sql_pairs_deletion():
-    pipe_components = generate_components(settings.components)
-    document_store_provider: DocumentStoreProvider = pipe_components[
-        "sql_pairs_indexing"
-    ]["document_store_provider"]
-    store = document_store_provider.get_store(
-        dataset_name="sql_pairs",
-        recreate_index=True,
-    )
-
-    pipe = SqlPairs(
-        **pipe_components["sql_pairs_indexing"], sql_pairs_path="tests/data/pairs.json"
-    )
-    await pipe.run(
-        mdl_str='{"models": [{"properties": {"boilerplate": "test"}}]}',
-        project_id="fake-id",
-    )
-
-    await pipe.clean(sql_pairs=[], project_id="fake-id-2")
-    assert await store.count_documents() == 2
-
-    await pipe.clean(sql_pairs=[], project_id="fake-id")
-    assert await store.count_documents() == 2

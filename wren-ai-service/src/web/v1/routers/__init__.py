@@ -11,8 +11,10 @@ from src.web.v1.routers import (
     semantics_preparation,
     sql_answers,
     sql_expansions,
-    sql_pairs,
+    sql_explanations,
+    sql_pairs_preparation,
     sql_question,
+    sql_regenerations,
 )
 
 router = APIRouter()
@@ -24,8 +26,10 @@ router.include_router(semantics_description.router)
 router.include_router(semantics_preparation.router)
 router.include_router(sql_answers.router)
 router.include_router(sql_expansions.router)
+router.include_router(sql_explanations.router)
 router.include_router(chart.router)
 router.include_router(chart_adjustment.router)
-router.include_router(sql_pairs.router)
+router.include_router(sql_regenerations.router)
+router.include_router(sql_pairs_preparation.router)
 router.include_router(sql_question.router)
 # connected subrouter

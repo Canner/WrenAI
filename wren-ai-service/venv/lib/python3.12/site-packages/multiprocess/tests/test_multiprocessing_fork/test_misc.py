@@ -1,0 +1,7 @@
+import unittest
+from multiprocess.tests import install_tests_in_module_dict
+
+install_tests_in_module_dict(globals(), 'fork', exclude_types=True)
+
+if __name__ == '__main__':
+    unittest.main()

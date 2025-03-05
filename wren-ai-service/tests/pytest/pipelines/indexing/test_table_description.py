@@ -37,12 +37,12 @@ def test_single_table_description():
     assert len(actual["documents"]) == 1
 
     document: Document = actual["documents"][0]
-    assert document.meta == {"type": "TABLE_DESCRIPTION", "name": "user"}
+    assert document.meta == {"type": "TABLE_DESCRIPTION"}
     assert document.content == str(
         {
             "name": "user",
+            "mdl_type": "MODEL",
             "description": "A table containing user information.",
-            "columns": "",
         }
     )
 
@@ -71,23 +71,22 @@ def test_multiple_table_descriptions():
     document_1: Document = actual["documents"][0]
     assert document_1.meta == {
         "type": "TABLE_DESCRIPTION",
-        "name": "user",
     }
     assert document_1.content == str(
         {
             "name": "user",
+            "mdl_type": "MODEL",
             "description": "A table containing user information.",
-            "columns": "",
         }
     )
 
     document_2: Document = actual["documents"][1]
-    assert document_2.meta == {"type": "TABLE_DESCRIPTION", "name": "order"}
+    assert document_2.meta == {"type": "TABLE_DESCRIPTION"}
     assert document_2.content == str(
         {
             "name": "order",
+            "mdl_type": "MODEL",
             "description": "A table containing order details.",
-            "columns": "",
         }
     )
 
@@ -122,8 +121,10 @@ def test_table_description_missing_description():
     assert len(actual["documents"]) == 1
 
     document: Document = actual["documents"][0]
-    assert document.meta == {"type": "TABLE_DESCRIPTION", "name": "user"}
-    assert document.content == str({"name": "user", "description": "", "columns": ""})
+    assert document.meta == {"type": "TABLE_DESCRIPTION"}
+    assert document.content == str(
+        {"name": "user", "mdl_type": "MODEL", "description": ""}
+    )
 
 
 @pytest.mark.asyncio

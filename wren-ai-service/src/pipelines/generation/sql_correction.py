@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
@@ -13,8 +13,8 @@ from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.sql import (
-    SQL_GENERATION_MODEL_KWARGS,
     TEXT_TO_SQL_RULES,
+    SqlGenerationResult,
     SQLGenPostProcessor,
 )
 
@@ -25,7 +25,8 @@ sql_correction_system_prompt = f"""
 ### TASK ###
 You are an ANSI SQL expert with exceptional logical thinking skills and debugging skills.
 
-Now you are given syntactically incorrect ANSI SQL query and related error message, please generate the syntactically correct ANSI SQL query without changing original semantics.
+Now you are given syntactically incorrect ANSI SQL query and related error message.
+With given database schema, please generate the syntactically correct ANSI SQL query without changing original semantics.
 
 {TEXT_TO_SQL_RULES}
 
@@ -38,12 +39,10 @@ The final answer must be a corrected SQL query in JSON format:
 """
 
 sql_correction_user_prompt_template = """
-{% if documents %}
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
 {% endfor %}
-{% endif %}
 
 ### QUESTION ###
 SQL: {{ invalid_generation_result.sql }}
@@ -83,17 +82,23 @@ async def generate_sql_corrections(prompts: list[dict], generator: Any) -> list[
 async def post_process(
     generate_sql_corrections: list[dict],
     post_processor: SQLGenPostProcessor,
-    engine_timeout: float,
     project_id: str | None = None,
 ) -> list[dict]:
-    return await post_processor.run(
-        generate_sql_corrections,
-        timeout=engine_timeout,
-        project_id=project_id,
-    )
+    return await post_processor.run(generate_sql_corrections, project_id=project_id)
 
 
 ## End of Pipeline
+
+
+SQL_CORRECTION_MODEL_KWARGS = {
+    "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "sql_correction_results",
+            "schema": SqlGenerationResult.model_json_schema(),
+        },
+    }
+}
 
 
 class SQLCorrection(BasicPipeline):
@@ -101,22 +106,17 @@ class SQLCorrection(BasicPipeline):
         self,
         llm_provider: LLMProvider,
         engine: Engine,
-        engine_timeout: Optional[float] = 30.0,
         **kwargs,
     ):
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=sql_correction_system_prompt,
-                generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
+                generation_kwargs=SQL_CORRECTION_MODEL_KWARGS,
             ),
             "prompt_builder": PromptBuilder(
                 template=sql_correction_user_prompt_template
             ),
             "post_processor": SQLGenPostProcessor(engine=engine),
-        }
-
-        self._configs = {
-            "engine_timeout": engine_timeout,
         }
 
         super().__init__(
@@ -138,7 +138,6 @@ class SQLCorrection(BasicPipeline):
                 "documents": contexts,
                 "project_id": project_id,
                 **self._components,
-                **self._configs,
             },
         )
 

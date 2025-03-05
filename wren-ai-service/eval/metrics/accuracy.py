@@ -7,7 +7,6 @@ import pandas as pd
 from deepeval.evaluate import TestResult
 from deepeval.metrics import BaseMetric
 from deepeval.test_case import LLMTestCase
-from deprecated import deprecated
 
 from eval.utils import get_data_from_wren_engine, get_openai_client
 
@@ -171,9 +170,6 @@ class AccuracyMetric(BaseMetric):
         return "Accuracy(column-based)"
 
 
-@deprecated(
-    reason="We don't generate multiple candidates for Text to SQL task, so don't need this metric"
-)
 class AccuracyMultiCandidateMetric(BaseMetric):
     def __init__(self):
         self.threshold = 0

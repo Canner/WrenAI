@@ -158,13 +158,9 @@ if __name__ == "__main__":
         "hubspot": "bigquery",
         "ga4": "bigquery",
         "woocommerce": "bigquery",
-        "stripe": "bigquery",
         "ecommerce": "duckdb",
         "hr": "duckdb",
-        "facebook_marketing": "bigquery",
-        "google_ads": "bigquery",
     }
-    usecases = list(usecase_to_dataset_type.keys())
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -172,11 +168,13 @@ if __name__ == "__main__":
         type=str,
         nargs="+",
         default=["all"],
-        choices=["all"] + usecases,
+        choices=["all", "hubspot", "ga4", "ecommerce", "hr", "woocommerce"],
     )
     args = parser.parse_args()
 
-    if "all" not in args.usecases:
+    if "all" in args.usecases:
+        usecases = ["hubspot", "ga4", "ecommerce", "hr", "woocommerce"]
+    else:
         usecases = args.usecases
 
     url = "http://localhost:5556"

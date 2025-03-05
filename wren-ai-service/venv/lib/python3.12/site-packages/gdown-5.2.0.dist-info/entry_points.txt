@@ -1,0 +1,2 @@
+[console_scripts]
+gdown = gdown.__main__:main

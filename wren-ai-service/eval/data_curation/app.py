@@ -1,4 +1,5 @@
 import asyncio
+import os
 import re
 import sys
 import uuid
@@ -113,13 +114,15 @@ def on_click_setup_uploaded_file():
         )
 
         if data_source == "bigquery":
-            st.session_state["connection_info"] = settings.bigquery_info
+            st.session_state["connection_info"] = {
+                "project_id": os.getenv("bigquery.project-id"),
+                "dataset_id": os.getenv("bigquery.dataset-id"),
+                "credentials": os.getenv("bigquery.credentials-key"),
+            }
         elif data_source == "duckdb":
             prepare_duckdb_session_sql(WREN_ENGINE_ENDPOINT)
             prepare_duckdb_init_sql(
-                WREN_ENGINE_ENDPOINT,
-                st.session_state["mdl_json"]["catalog"],
-                "etc/spider1.0/database",
+                WREN_ENGINE_ENDPOINT, st.session_state["mdl_json"]["catalog"]
             )
     else:
         st.session_state["data_source"] = None

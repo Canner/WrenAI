@@ -93,6 +93,11 @@ class SqlExpansionService:
 
         return False
 
+    def _get_failed_dry_run_results(self, invalid_generation_results: list[dict]):
+        return list(
+            filter(lambda x: x["type"] == "DRY_RUN", invalid_generation_results)
+        )
+
     @observe(name="SQL Expansion")
     @trace_metadata
     async def sql_expansion(
@@ -107,7 +112,6 @@ class SqlExpansionService:
                 "error_message": "",
             },
         }
-        error_message = ""
 
         try:
             query_id = sql_expansion_request.query_id
@@ -167,27 +171,21 @@ class SqlExpansionService:
                 ]["valid_generation_results"]:
                     valid_generation_results += sql_valid_results
 
-                if failed_dry_run_results := sql_expansion_generation_results[
-                    "post_process"
-                ]["invalid_generation_results"]:
-                    if failed_dry_run_results[0]["type"] != "TIME_OUT":
-                        sql_correction_results = await self._pipelines[
-                            "sql_correction"
-                        ].run(
-                            contexts=documents,
-                            invalid_generation_results=failed_dry_run_results,
-                            project_id=sql_expansion_request.project_id,
-                        )
-                        if sql_correction_valid_results := sql_correction_results[
-                            "post_process"
-                        ]["valid_generation_results"]:
-                            valid_generation_results += sql_correction_valid_results
-                        elif failed_dry_run_results := sql_correction_results[
-                            "post_process"
-                        ]["invalid_generation_results"]:
-                            error_message = failed_dry_run_results[0]["error"]
-                    else:
-                        error_message = failed_dry_run_results[0]["error"]
+                if failed_dry_run_results := self._get_failed_dry_run_results(
+                    sql_expansion_generation_results["post_process"][
+                        "invalid_generation_results"
+                    ]
+                ):
+                    sql_correction_results = await self._pipelines[
+                        "sql_correction"
+                    ].run(
+                        contexts=documents,
+                        invalid_generation_results=failed_dry_run_results,
+                        project_id=sql_expansion_request.project_id,
+                    )
+                    valid_generation_results += sql_correction_results["post_process"][
+                        "valid_generation_results"
+                    ]
 
                 valid_sql_summary_results = []
                 if valid_generation_results:
@@ -208,11 +206,10 @@ class SqlExpansionService:
                         status="failed",
                         error=AskError(
                             code="NO_RELEVANT_SQL",
-                            message=error_message or "No relevant SQL",
+                            message="No relevant SQL",
                         ),
                     )
                     results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
-                    results["metadata"]["error_message"] = error_message
                     return results
 
                 api_results = SqlExpansionResultResponse.SqlExpansionResult(

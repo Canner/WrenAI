@@ -31,14 +31,11 @@ Also you should provide reasoning for the classification clearly and concisely w
 - Steps to rephrase the user's question:
     - First, try to recognize adjectives in the user's question that are important to the user's intent.
     - Second, change the adjectives to more specific and clear ones that can be matched to columns in the database schema.
-    - Third, only if the user's question contains time/date related information, take the current time into consideration and add time/date format(such as YYYY-MM-DD) in the rephrased_question output.
-    - Fourth, if the user's input contains previous SQLs, consider them to make the rephrased question.
+    - Third, if the user's question is related to time/date, take the current time into consideration and add time/date format(such as YYYY-MM-DD) in the rephrased_question output.
 - MUST use the rephrased user's question to make the intent classification.
 - MUST put the rephrased user's question in the rephrased_question output.
 - REASONING MUST be within 20 words.
 - If the rephrased user's question is vague and doesn't specify which table or property to analyze, classify it as MISLEADING_QUERY.
-- The reasoning of the intent classification MUST use the same language as the Output Language from the user input.
-- The rephrased user's question MUST use the same language as the Output Language from the user input.
 
 ### INTENT DEFINITIONS ###
 - TEXT_TO_SQL
@@ -103,11 +100,10 @@ intent_classification_user_prompt_template = """
 
 ### INPUT ###
 {% if query_history %}
-User's previous SQLs: {{ query_history }}
+User's previous questions: {{ query_history }}
 {% endif %}
 User's question: {{query}}
 Current Time: {{ current_time }}
-Output Language: {{ language }}
 
 Let's think step by step
 """
@@ -225,11 +221,14 @@ def prompt(
     history: Optional[AskHistory] = None,
     configuration: Configuration | None = None,
 ) -> dict:
+    previous_query_summaries = (
+        [step.summary for step in history.steps if step.summary] if history else []
+    )
+
     return prompt_builder.run(
         query=query,
-        language=configuration.language,
         db_schemas=construct_db_schemas,
-        query_history=history.sql if history else [],
+        query_history=previous_query_summaries,
         current_time=configuration.show_current_time(),
     )
 

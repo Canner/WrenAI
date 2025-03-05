@@ -1,6 +1,6 @@
-GREEN := "\u{001b}[32m"
-YELLOW := "\u{001b}[33m"
-RESET := "\u{001b}[0m"
+GREEN := '\u{001b}[32m'
+YELLOW := '\u{001b}[33m'
+RESET := '\u{001b}[0m'
 
 ## todo: consider to support --override flag to override existing files
 init dev='--dev':
@@ -21,10 +21,10 @@ init dev='--dev':
 	fi
 
 up: prepare-wren-engine
-	docker compose -f ./tools/dev/docker-compose-dev.yaml --env-file ./tools/dev/.env up -d
+	docker-compose -f ./tools/dev/docker-compose-dev.yaml --env-file ./tools/dev/.env up -d
 
 down:
-	docker compose -f ./tools/dev/docker-compose-dev.yaml --env-file ./tools/dev/.env down
+	docker-compose -f ./tools/dev/docker-compose-dev.yaml --env-file ./tools/dev/.env down
 
 start: use-wren-ui-as-engine
 	poetry run python -m src.__main__
@@ -32,8 +32,8 @@ start: use-wren-ui-as-engine
 curate_eval_data:
 	poetry run streamlit run eval/data_curation/app.py
 
-prep dataset='spider1.0':
-	poetry run python -m eval.preparation --dataset {{dataset}}
+prep:
+	poetry run python -m eval.preparation
 
 predict dataset pipeline='ask':
     @poetry run python -u eval/prediction.py --file {{dataset}} --pipeline {{pipeline}}

@@ -1,0 +1,20 @@
+<table id="table_id"><thead><tr><th>A</th></tr></thead></table>
+<link href="https://www.unpkg.com/dt_for_itables/dt_bundle.css" rel="stylesheet">
+<script type="module">
+    import {DataTable, jQuery as $} from 'https://www.unpkg.com/dt_for_itables/dt_bundle.js';
+
+    document.querySelectorAll("#table_id:not(.dataTable)").forEach(table => {
+        if (!(table instanceof HTMLTableElement))
+            return;
+
+        // Define the table data
+        const data = [];
+
+        // Define the dt_args
+        let dt_args = {};
+        dt_args["data"] = data;
+
+        // [pre-dt-code]
+        new DataTable(table, dt_args);
+    });
+</script>

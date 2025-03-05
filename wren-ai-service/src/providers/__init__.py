@@ -68,7 +68,7 @@ def llm_processor(entry: dict) -> dict:
     others = {k: v for k, v in entry.items() if k not in ["type", "provider", "models"]}
     returned = {}
     for model in entry.get("models", []):
-        model_name = f"{entry.get('provider')}.{model.get('alias', model.get('model'))}"
+        model_name = f"{entry.get('provider')}.{model.get('model')}"
         model_additional_params = {
             k: v for k, v in model.items() if k not in ["model", "kwargs"]
         }
@@ -122,14 +122,10 @@ def embedder_processor(entry: dict) -> dict:
     others = {k: v for k, v in entry.items() if k not in ["type", "provider", "models"]}
     returned = {}
     for model in entry["models"]:
-        identifier = f"{entry['provider']}.{model.get('alias', model.get('model'))}"
-        model_additional_params = {
-            k: v for k, v in model.items() if k not in ["model", "kwargs"]
-        }
+        identifier = f"{entry['provider']}.{model['model']}"
         returned[identifier] = {
             "provider": entry["provider"],
             "model": model["model"],
-            **model_additional_params,
             **others,
         }
 

@@ -1,0 +1,3 @@
+[console_scripts]
+locust=locust.main:main
+

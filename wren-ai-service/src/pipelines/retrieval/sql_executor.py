@@ -27,7 +27,6 @@ class DataFetcher:
         sql: str,
         project_id: str | None = None,
         limit: int = 500,
-        timeout: float = 30.0,
     ):
         async with aiohttp.ClientSession() as session:
             _, data, _ = await self._engine.execute_sql(
@@ -36,7 +35,6 @@ class DataFetcher:
                 project_id=project_id,
                 dry_run=False,
                 limit=limit,
-                timeout=timeout,
             )
 
             return {"results": data}
@@ -47,16 +45,10 @@ class DataFetcher:
 async def execute_sql(
     sql: str,
     data_fetcher: DataFetcher,
-    engine_timeout: float,
     project_id: str | None = None,
     limit: int = 500,
 ) -> dict:
-    return await data_fetcher.run(
-        sql=sql,
-        project_id=project_id,
-        limit=limit,
-        timeout=engine_timeout,
-    )
+    return await data_fetcher.run(sql=sql, project_id=project_id, limit=limit)
 
 
 ## End of Pipeline
@@ -66,15 +58,10 @@ class SQLExecutor(BasicPipeline):
     def __init__(
         self,
         engine: Engine,
-        engine_timeout: Optional[float] = 30.0,
         **kwargs,
     ):
         self._components = {
             "data_fetcher": DataFetcher(engine=engine),
-        }
-
-        self._configs = {
-            "engine_timeout": engine_timeout,
         }
 
         super().__init__(
@@ -93,7 +80,6 @@ class SQLExecutor(BasicPipeline):
                 "project_id": project_id,
                 "limit": limit,
                 **self._components,
-                **self._configs,
             },
         )
 

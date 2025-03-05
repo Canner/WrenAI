@@ -66,7 +66,7 @@ def main():
                     sql=command,
                     dataset_type=data_source,
                     manifest=mdl_json,
-                    limit=50,
+                    limit=10,
                 )
                 print(f"\nExecution result:\n{df.to_string()}\n")
             except Exception as e:

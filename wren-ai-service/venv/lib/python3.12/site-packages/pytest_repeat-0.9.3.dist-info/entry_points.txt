@@ -1,0 +1,2 @@
+[pytest11]
+repeat = pytest_repeat

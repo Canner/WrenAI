@@ -1,105 +1,135 @@
 import logging
 import sys
-from typing import Any, Optional
+from typing import Any, Dict, List
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
+from haystack import component
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
+from pydantic import BaseModel
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.pipelines.generation.utils.sql import (
-    SQL_GENERATION_MODEL_KWARGS,
-    TEXT_TO_SQL_RULES,
-    SQLGenPostProcessor,
-    construct_instructions,
+from src.pipelines.generation.utils.sql import SQLBreakdownGenPostProcessor
+from src.web.v1.services.sql_regeneration import (
+    SQLExplanationWithUserCorrections,
 )
-from src.web.v1.services import Configuration
 
 logger = logging.getLogger("wren-ai-service")
 
+sql_regeneration_system_prompt = """
+### Instructions ###
 
-sql_regeneration_system_prompt = f"""
-### TASK ###
-You are a great ANSI SQL expert. Now you are given database schema, SQL generation reasoning and an original SQL query, 
-please carefully review the reasoning, and then generate a new SQL query that matches the reasoning.
-While generating the new SQL query, you should use the original SQL query as a reference.
-While generating the new SQL query, make sure to use the database schema to generate the SQL query.
+- Given a list of user corrections, regenerate the corresponding SQL query.
+- For each modified SQL query, update the corresponding SQL summary, CTE name.
+- If subsequent steps are dependent on the corrected step, make sure to update the SQL query, SQL summary and CTE name in subsequent steps if needed.
+- Regenerate the description after correcting all of the steps.
 
-{TEXT_TO_SQL_RULES}
+### INPUT STRUCTURE ###
 
-### FINAL ANSWER FORMAT ###
-The final answer must be a ANSI SQL query in JSON format:
+{
+    "description": "<original_description_string>",
+    "steps": [
+        {
+            "summary": "<original_sql_summary_string>",
+            "sql": "<original_sql_string>",
+            "cte_name": "<original_cte_name_string>",
+            "corrections": [
+                {
+                    "before": {
+                        "type": "<filter/selectItems/relation/groupByKeys/sortings>",
+                        "value": "<original_value_string>"
+                    },
+                    "after": {
+                        "type": "<sql_expression/nl_expression>",
+                        "value": "<new_value_string>"
+                    }
+                },...
+            ]
+        },...
+    ]
+}
 
-{{
-    "sql": <SQL_QUERY_STRING>
-}}
+### OUTPUT STRUCTURE ###
+
+Generate modified results according to the following in JSON format:
+
+{
+    "description": "<modified_description_string>",
+    "steps": [
+        {
+            "summary": "<modified_sql_summary_string>",
+            "sql": "<modified_sql_string>",
+            "cte_name": "<modified_cte_name_string>",
+        },...
+    ]
+}
 """
 
 sql_regeneration_user_prompt_template = """
-### DATABASE SCHEMA ###
-{% for document in documents %}
-    {{ document }}
-{% endfor %}
-
-{% if instructions %}
-### INSTRUCTIONS ###
-{{ instructions }}
-{% endif %}
-
-### QUESTION ###
-SQL generation reasoning: {{ sql_generation_reasoning }}
-Original SQL query: {{ sql }}
+inputs: {{ results }}
 
 Let's think step by step.
 """
 
 
+@component
+class SQLRegenerationPreprocesser:
+    @component.output_types(
+        results=Dict[str, Any],
+    )
+    def run(
+        self,
+        description: str,
+        steps: List[SQLExplanationWithUserCorrections],
+    ) -> Dict[str, Any]:
+        return {
+            "results": {
+                "description": description,
+                "steps": steps,
+            }
+        }
+
+
 ## Start of Pipeline
 @observe(capture_input=False)
-def prompt(
-    documents: list[str],
-    sql_generation_reasoning: str,
-    sql: str,
-    prompt_builder: PromptBuilder,
-    configuration: Configuration | None = Configuration(),
-    has_calculated_field: bool = False,
-    has_metric: bool = False,
-) -> dict:
-    return prompt_builder.run(
-        sql=sql,
-        documents=documents,
-        sql_generation_reasoning=sql_generation_reasoning,
-        instructions=construct_instructions(
-            configuration,
-            has_calculated_field,
-            has_metric,
-            sql_samples=[],
-        ),
-        current_time=configuration.show_current_time(),
+def preprocess(
+    description: str,
+    steps: List[SQLExplanationWithUserCorrections],
+    preprocesser: SQLRegenerationPreprocesser,
+) -> dict[str, Any]:
+    return preprocesser.run(
+        description=description,
+        steps=steps,
     )
 
 
+@observe(capture_input=False)
+def sql_regeneration_prompt(
+    preprocess: Dict[str, Any],
+    prompt_builder: PromptBuilder,
+) -> dict:
+    return prompt_builder.run(results=preprocess["results"])
+
+
 @observe(as_type="generation", capture_input=False)
-async def regenerate_sql(
-    prompt: dict,
+async def generate_sql_regeneration(
+    sql_regeneration_prompt: dict,
     generator: Any,
 ) -> dict:
-    return await generator(prompt=prompt.get("prompt"))
+    return await generator(prompt=sql_regeneration_prompt.get("prompt"))
 
 
 @observe(capture_input=False)
-async def post_process(
-    regenerate_sql: dict,
-    post_processor: SQLGenPostProcessor,
-    engine_timeout: float,
+async def sql_regeneration_post_process(
+    generate_sql_regeneration: dict,
+    post_processor: SQLBreakdownGenPostProcessor,
     project_id: str | None = None,
 ) -> dict:
     return await post_processor.run(
-        regenerate_sql.get("replies"),
-        timeout=engine_timeout,
+        replies=generate_sql_regeneration.get("replies"),
         project_id=project_id,
     )
 
@@ -107,57 +137,66 @@ async def post_process(
 ## End of Pipeline
 
 
+class StepResult(BaseModel):
+    sql: str
+    summary: str
+    cte_name: str
+
+
+class RegenerationResults(BaseModel):
+    description: str
+    steps: list[StepResult]
+
+
+SQL_REGENERATION_MODEL_KWARGS = {
+    "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "regeneration_results",
+            "schema": RegenerationResults.model_json_schema(),
+        },
+    }
+}
+
+
 class SQLRegeneration(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
         engine: Engine,
-        engine_timeout: Optional[float] = 30.0,
         **kwargs,
     ):
         self._components = {
-            "generator": llm_provider.get_generator(
-                system_prompt=sql_regeneration_system_prompt,
-                generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
-            ),
+            "preprocesser": SQLRegenerationPreprocesser(),
             "prompt_builder": PromptBuilder(
                 template=sql_regeneration_user_prompt_template
             ),
-            "post_processor": SQLGenPostProcessor(engine=engine),
-        }
-
-        self._configs = {
-            "engine_timeout": engine_timeout,
+            "generator": llm_provider.get_generator(
+                system_prompt=sql_regeneration_system_prompt,
+                generation_kwargs=SQL_REGENERATION_MODEL_KWARGS,
+            ),
+            "post_processor": SQLBreakdownGenPostProcessor(engine=engine),
         }
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    @observe(name="SQL Regeneration")
+    @observe(name="SQL-Regeneration Generation")
     async def run(
         self,
-        contexts: list[str],
-        sql_generation_reasoning: str,
-        sql: str,
-        configuration: Configuration = Configuration(),
+        description: str,
+        steps: List[SQLExplanationWithUserCorrections],
         project_id: str | None = None,
-        has_calculated_field: bool = False,
-        has_metric: bool = False,
     ):
-        logger.info("SQL Regeneration pipeline is running...")
+        logger.info("SQL Regeneration Generation pipeline is running...")
         return await self._pipe.execute(
-            ["post_process"],
+            ["sql_regeneration_post_process"],
             inputs={
-                "documents": contexts,
-                "sql_generation_reasoning": sql_generation_reasoning,
-                "sql": sql,
+                "description": description,
+                "steps": steps,
                 "project_id": project_id,
-                "configuration": configuration,
-                "has_calculated_field": has_calculated_field,
-                "has_metric": has_metric,
                 **self._components,
-                **self._configs,
             },
         )
 
@@ -168,6 +207,6 @@ if __name__ == "__main__":
     dry_run_pipeline(
         SQLRegeneration,
         "sql_regeneration",
-        sql_generation_reasoning="this is a test query",
-        sql="select * from users",
+        description="This is a description",
+        steps=[],
     )

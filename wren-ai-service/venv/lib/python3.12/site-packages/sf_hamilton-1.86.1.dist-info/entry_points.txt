@@ -1,0 +1,7 @@
+[console_scripts]
+h_experiments = hamilton.plugins.h_experiments.__main__:main
+hamilton = hamilton.cli.__main__:cli
+hamilton-admin-build-and-publish = hamilton.admin:build_and_publish
+hamilton-admin-build-ui = hamilton.admin:build_ui
+hamilton-disable-autoload-extensions = hamilton.registry:config_disable_autoload
+hamilton-enable-autoload-extensions = hamilton.registry:config_enable_autoload

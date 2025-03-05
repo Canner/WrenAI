@@ -1,0 +1,13 @@
+<svg class="main-svg" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+    viewBox="0 0 933 380" style="font-family: 'Droid Sans', sans-serif; background-color:transparent">
+    <g style="fill:#1a1366;stroke:#1a1366;">
+        <text style="font-size: 240px; font-weight:bold;">
+            <tspan x="-10" y="190">ITables</tspan>
+        </text>
+
+        <text style="font-size: 75px;">
+            <tspan x="40" y="280">Python DataFrames as</tspan>
+            <tspan x="40" y="375">Interactive DataTables</tspan>
+        </text>
+    </g>
+</svg>

@@ -1,0 +1,34 @@
+Metadata-Version: 2.1
+Name: deepeval
+Version: 1.6.2
+Summary: The open-source evaluation framework for LLMs.
+Home-page: https://github.com/confident-ai/deepeval
+Author: Confident AI
+Author-email: jeffreyip@confident-ai.com
+License-File: LICENSE.md
+Requires-Dist: requests
+Requires-Dist: tqdm
+Requires-Dist: pytest
+Requires-Dist: tabulate
+Requires-Dist: typer
+Requires-Dist: rich
+Requires-Dist: protobuf
+Requires-Dist: pydantic
+Requires-Dist: sentry-sdk
+Requires-Dist: pytest-repeat
+Requires-Dist: pytest-xdist
+Requires-Dist: portalocker
+Requires-Dist: langchain
+Requires-Dist: langchain-core
+Requires-Dist: langchain-openai
+Requires-Dist: ragas
+Requires-Dist: docx2txt~=0.8
+Requires-Dist: importlib-metadata>=6.0.2
+Requires-Dist: tenacity~=8.4.1
+Requires-Dist: opentelemetry-api~=1.24.0
+Requires-Dist: opentelemetry-sdk~=1.24.0
+Requires-Dist: opentelemetry-exporter-otlp-proto-grpc~=1.24.0
+Requires-Dist: grpcio~=1.63.0
+Provides-Extra: dev
+Requires-Dist: black; extra == "dev"
+

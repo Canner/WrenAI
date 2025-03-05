@@ -88,22 +88,6 @@ def normalize(generate: dict) -> dict:
     return {model["name"]: model for model in normalized["models"]}
 
 
-@observe(capture_input=False)
-def output(normalize: dict, picked_models: list[dict]) -> dict:
-    def _filter(enriched: list[dict], columns: list[dict]) -> list[dict]:
-        valid_columns = [col["name"] for col in columns]
-
-        return [col for col in enriched if col["name"] in valid_columns]
-
-    models = {model["name"]: model for model in picked_models}
-
-    return {
-        name: {**data, "columns": _filter(data["columns"], models[name]["columns"])}
-        for name, data in normalize.items()
-        if name in models
-    }
-
-
 ## End of Pipeline
 class ModelProperties(BaseModel):
     description: str
@@ -215,7 +199,7 @@ class SemanticsDescription(BasicPipeline):
                 generation_kwargs=SEMANTICS_DESCRIPTION_MODEL_KWARGS,
             ),
         }
-        self._final = "output"
+        self._final = "normalize"
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())

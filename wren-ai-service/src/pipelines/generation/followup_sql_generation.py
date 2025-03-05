@@ -1,6 +1,6 @@
 import logging
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
@@ -11,7 +11,7 @@ from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.sql import (
-    SQL_GENERATION_MODEL_KWARGS,
+    SqlGenerationResult,
     SQLGenPostProcessor,
     construct_instructions,
     sql_generation_system_prompt,
@@ -106,17 +106,25 @@ async def generate_sql_in_followup(prompt: dict, generator: Any) -> dict:
 async def post_process(
     generate_sql_in_followup: dict,
     post_processor: SQLGenPostProcessor,
-    engine_timeout: float,
     project_id: str | None = None,
 ) -> dict:
     return await post_processor.run(
-        generate_sql_in_followup.get("replies"),
-        timeout=engine_timeout,
-        project_id=project_id,
+        generate_sql_in_followup.get("replies"), project_id=project_id
     )
 
 
 ## End of Pipeline
+
+
+FOLLOWUP_SQL_GENERATION_MODEL_KWARGS = {
+    "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "sql_generation_results",
+            "schema": SqlGenerationResult.model_json_schema(),
+        },
+    }
+}
 
 
 class FollowUpSQLGeneration(BasicPipeline):
@@ -124,22 +132,17 @@ class FollowUpSQLGeneration(BasicPipeline):
         self,
         llm_provider: LLMProvider,
         engine: Engine,
-        engine_timeout: Optional[float] = 30.0,
         **kwargs,
     ):
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=sql_generation_system_prompt,
-                generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
+                generation_kwargs=FOLLOWUP_SQL_GENERATION_MODEL_KWARGS,
             ),
             "prompt_builder": PromptBuilder(
                 template=text_to_sql_with_followup_user_prompt_template
             ),
             "post_processor": SQLGenPostProcessor(engine=engine),
-        }
-
-        self._configs = {
-            "engine_timeout": engine_timeout,
         }
 
         super().__init__(
@@ -173,7 +176,6 @@ class FollowUpSQLGeneration(BasicPipeline):
                 "has_calculated_field": has_calculated_field,
                 "has_metric": has_metric,
                 **self._components,
-                **self._configs,
             },
         )
 

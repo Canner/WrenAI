@@ -1,0 +1,52 @@
+Metadata-Version: 2.3
+Name: qdrant-haystack
+Version: 7.0.0
+Summary: An integration of Qdrant ANN vector database backend with Haystack
+Project-URL: Source, https://github.com/deepset-ai/haystack-core-integrations
+Project-URL: Documentation, https://github.com/deepset-ai/haystack-core-integrations/blob/main/integrations/qdrant/README.md
+Project-URL: Issues, https://github.com/deepset-ai/haystack-core-integrations/issues
+Author-email: Kacper Łukawski <kacper.lukawski@qdrant.com>, Anush Shetty <anush.shetty@qdrant.com>
+License-Expression: Apache-2.0
+License-File: LICENSE.txt
+Classifier: Development Status :: 4 - Beta
+Classifier: License :: OSI Approved :: Apache Software License
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: Implementation :: CPython
+Classifier: Programming Language :: Python :: Implementation :: PyPy
+Requires-Python: >=3.8
+Requires-Dist: haystack-ai
+Requires-Dist: qdrant-client>=1.10.0
+Description-Content-Type: text/markdown
+
+# qdrant-haystack
+
+[![PyPI - Version](https://img.shields.io/pypi/v/qdrant-haystack.svg)](https://pypi.org/project/qdrant-haystack)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/qdrant-haystack.svg)](https://pypi.org/project/qdrant-haystack)
+
+-----
+
+**Table of Contents**
+
+- [Installation](#installation)
+- [License](#license)
+
+## Installation
+
+```console
+pip install qdrant-haystack
+```
+
+## Testing
+The test suites use Qdrant's in-memory instance. No additional steps required.
+
+```console
+hatch run test
+```
+
+## License
+
+`qdrant-haystack` is distributed under the terms of the [Apache-2.0](https://spdx.org/licenses/Apache-2.0.html) license.

@@ -15,26 +15,11 @@ import traceback
 import eval.pipelines as pipelines
 import src.providers as provider
 from eval import EvalSettings
-from eval.utils import parse_toml, trace_metadata
+from eval.utils import engine_config, parse_toml, trace_metadata
 from src import utils
 
 
 def formatter(prediction: dict, meta: dict) -> dict:
-    """
-    Formats the prediction result to be used as evaluation input.
-
-    This function takes a prediction dictionary and a meta dictionary,
-    processes them to extract relevant information, and returns a formatted
-    dictionary that serves as input for evaluation. It includes details such
-    as input, actual and expected outputs, context, and additional metadata.
-
-    Args:
-        prediction (dict): A dictionary containing prediction details.
-        meta (dict): A dictionary containing metadata information.
-
-    Returns:
-        dict: A formatted dictionary containing evaluation input data.
-    """
     retrieval_context = [str(context) for context in prediction["retrieval_context"]]
     context = [str(context) for context in prediction["context"]]
     enable_spider_metrics = "spider" in meta.get("evaluation_dataset", "").lower()
@@ -48,7 +33,6 @@ def formatter(prediction: dict, meta: dict) -> dict:
         "expected_output": prediction["expected_output"],
         "retrieval_context": retrieval_context,
         "context": context,
-        "reasoning": prediction.get("reasoning", ""),
         "additional_metadata": {
             "trace_id": prediction["trace_id"],
             "trace_url": prediction["trace_url"],
@@ -170,9 +154,8 @@ if __name__ == "__main__":
     predictions = predicted_file["predictions"]
 
     dataset = parse_toml(meta["evaluation_dataset"])
-    metrics = pipelines.metrics_initiator(
-        meta["pipeline"], dataset, pipe_components, args.semantics
-    )
+    engine_info = engine_config(dataset["mdl"], pipe_components)
+    metrics = pipelines.metrics_initiator(meta["pipeline"], engine_info, args.semantics)
 
     evaluator = Evaluator(**metrics)
     evaluator.eval(meta, predictions)

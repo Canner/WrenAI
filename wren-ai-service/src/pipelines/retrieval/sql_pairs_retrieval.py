@@ -82,18 +82,9 @@ async def retrieval(embedding: dict, id: str, retriever: Any) -> dict:
 
 
 @observe(capture_input=False)
-def filtered_documents(
-    retrieval: dict,
-    score_filter: ScoreFilter,
-    sql_pairs_similarity_threshold: float,
-    sql_pairs_retrieval_max_size: int,
-) -> dict:
+def filtered_documents(retrieval: dict, score_filter: ScoreFilter) -> dict:
     if retrieval:
-        return score_filter.run(
-            documents=retrieval.get("documents"),
-            score=sql_pairs_similarity_threshold,
-            max_size=sql_pairs_retrieval_max_size,
-        )
+        return score_filter.run(documents=retrieval.get("documents"), score=0.7)
 
     return {}
 
@@ -116,8 +107,6 @@ class SqlPairsRetrieval(BasicPipeline):
         self,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
-        sql_pairs_similarity_threshold: Optional[float] = 0.7,
-        sql_pairs_retrieval_max_size: Optional[int] = 10,
         **kwargs,
     ) -> None:
         store = document_store_provider.get_store(dataset_name="sql_pairs")
@@ -130,10 +119,6 @@ class SqlPairsRetrieval(BasicPipeline):
             "score_filter": ScoreFilter(),
             # TODO: add a llm filter to filter out low scoring document, in case ScoreFilter is not accurate enough
             "output_formatter": OutputFormatter(),
-        }
-        self._configs = {
-            "sql_pairs_similarity_threshold": sql_pairs_similarity_threshold,
-            "sql_pairs_retrieval_max_size": sql_pairs_retrieval_max_size,
         }
 
         super().__init__(
@@ -149,7 +134,6 @@ class SqlPairsRetrieval(BasicPipeline):
                 "query": query,
                 "id": id or "",
                 **self._components,
-                **self._configs,
             },
         )
 

@@ -8,21 +8,21 @@ import orjson
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack import Document, component
-from haystack.document_stores.types import DocumentStore, DuplicatePolicy
+from haystack.document_stores.types import DuplicatePolicy
 from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
-from src.pipelines.indexing import AsyncDocumentWriter
+from src.pipelines.indexing import AsyncDocumentWriter, SqlPairsCleaner
 
 logger = logging.getLogger("wren-ai-service")
 
 
 class SqlPair(BaseModel):
     id: str
-    sql: str = ""
-    question: str = ""
+    sql: str
+    question: str
 
 
 @component
@@ -47,30 +47,6 @@ class SqlPairsConverter:
                 for sql_pair in sql_pairs
             ]
         }
-
-
-@component
-class SqlPairsCleaner:
-    def __init__(self, sql_pairs_store: DocumentStore) -> None:
-        self.store = sql_pairs_store
-
-    @component.output_types()
-    async def run(
-        self, sql_pair_ids: List[str], project_id: Optional[str] = None
-    ) -> None:
-        filter = {
-            "operator": "AND",
-            "conditions": [
-                {"field": "sql_pair_id", "operator": "in", "value": sql_pair_ids},
-            ],
-        }
-
-        if project_id:
-            filter["conditions"].append(
-                {"field": "project_id", "operator": "==", "value": project_id}
-            )
-
-        return await self.store.delete_documents(filter)
 
 
 ## Start of Pipeline
@@ -127,11 +103,9 @@ async def clean(
     sql_pairs: List[SqlPair],
     embedding: Dict[str, Any],
     project_id: Optional[str] = "",
-    delete_all: bool = False,
 ) -> Dict[str, Any]:
     sql_pair_ids = [sql_pair.id for sql_pair in sql_pairs]
-    if sql_pair_ids or delete_all:
-        await cleaner.run(sql_pair_ids=sql_pair_ids, project_id=project_id)
+    await cleaner.run(sql_pair_ids=sql_pair_ids, project_id=project_id)
 
     return embedding
 
@@ -181,9 +155,8 @@ class SqlPairs(BasicPipeline):
                 document_store=store,
                 policy=DuplicatePolicy.OVERWRITE,
             ),
+            "external_pairs": _load_sql_pairs(sql_pairs_path),
         }
-
-        self._external_pairs = _load_sql_pairs(sql_pairs_path)
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
@@ -194,37 +167,18 @@ class SqlPairs(BasicPipeline):
         self,
         mdl_str: str,
         project_id: Optional[str] = "",
-        external_pairs: Optional[Dict[str, Any]] = {},
     ) -> Dict[str, Any]:
         logger.info(
             f"Project ID: {project_id} SQL Pairs Indexing pipeline is running..."
         )
 
-        input = {
-            "mdl_str": mdl_str,
-            "project_id": project_id,
-            "external_pairs": {
-                **self._external_pairs,
-                **external_pairs,
+        return await self._pipe.execute(
+            ["write"],
+            inputs={
+                "mdl_str": mdl_str,
+                "project_id": project_id,
+                **self._components,
             },
-            **self._components,
-        }
-
-        return await self._pipe.execute(["write"], inputs=input)
-
-    @observe(name="Clean Documents for SQL Pairs")
-    async def clean(
-        self,
-        sql_pairs: List[SqlPair],
-        project_id: Optional[str] = None,
-        delete_all: bool = False,
-    ) -> None:
-        await clean(
-            sql_pairs=sql_pairs,
-            embedding={"documents": []},
-            cleaner=self._components["cleaner"],
-            project_id=project_id,
-            delete_all=delete_all,
         )
 
 

@@ -1,6 +1,6 @@
 import logging
 import sys
-from typing import Any, Optional
+from typing import Any
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
@@ -135,13 +135,10 @@ async def generate_sql_details(prompt: dict, generator: Any) -> dict:
 async def post_process(
     generate_sql_details: dict,
     post_processor: SQLBreakdownGenPostProcessor,
-    engine_timeout: float,
     project_id: str | None = None,
 ) -> dict:
     return await post_processor.run(
-        generate_sql_details.get("replies"),
-        timeout=engine_timeout,
-        project_id=project_id,
+        generate_sql_details.get("replies"), project_id=project_id
     )
 
 
@@ -173,7 +170,6 @@ class SQLBreakdown(BasicPipeline):
         self,
         llm_provider: LLMProvider,
         engine: Engine,
-        engine_timeout: Optional[float] = 30.0,
         **kwargs,
     ):
         self._components = {
@@ -189,7 +185,6 @@ class SQLBreakdown(BasicPipeline):
 
         self._configs = {
             "text_to_sql_rules": TEXT_TO_SQL_RULES,
-            "engine_timeout": engine_timeout,
         }
 
         super().__init__(

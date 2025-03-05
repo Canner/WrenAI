@@ -1,0 +1,105 @@
+/*
+object-assign
+(c) Sindre Sorhus
+@license MIT
+*/
+
+/*!
+
+JSZip v3.10.1 - A JavaScript class for generating and reading zip files
+<http://stuartk.com/jszip>
+
+(c) 2009-2016 Stuart Knightley <stuart [at] stuartk.com>
+Dual licenced under the MIT license or GPLv3. See https://raw.github.com/Stuk/jszip/main/LICENSE.markdown.
+
+JSZip uses the library pako released under the MIT license :
+https://github.com/nodeca/pako/blob/main/LICENSE
+*/
+
+/*!
+ * HTML5 export buttons for Buttons and DataTables.
+ * © SpryMedia Ltd - datatables.net/license
+ *
+ * FileSaver.js (1.3.3) - MIT license
+ * Copyright © 2016 Eli Grey - http://eligrey.com
+ */
+
+/*!
+ * Print button for Buttons and DataTables.
+ * © SpryMedia Ltd - datatables.net/license
+ */
+
+/*!
+ * jQuery JavaScript Library v3.7.1
+ * https://jquery.com/
+ *
+ * Copyright OpenJS Foundation and other contributors
+ * Released under the MIT license
+ * https://jquery.org/license
+ *
+ * Date: 2023-08-28T13:37Z
+ */
+
+/*! Buttons for DataTables 3.1.2
+ * © SpryMedia Ltd - datatables.net/license
+ */
+
+/*! DateTime picker for DataTables.net v1.5.3
+ *
+ * © SpryMedia Ltd, all rights reserved.
+ * License: MIT datatables.net/license/mit
+ */
+
+/*! FixedColumns 5.0.0
+   * © SpryMedia Ltd - datatables.net/license
+   */
+
+/*! FixedColumns 5.0.0
+ * © SpryMedia Ltd - datatables.net/license
+ */
+
+/*! KeyTable 2.12.1
+ * © SpryMedia Ltd - datatables.net/license
+ */
+
+/*! RowGroup 1.5.0
+ * © SpryMedia Ltd - datatables.net/license
+ */
+
+/*! SearchBuilder 1.8.0
+   * ©SpryMedia Ltd - datatables.net/license/mit
+   */
+
+/*! SearchBuilder 1.8.0
+ * ©SpryMedia Ltd - datatables.net/license/mit
+ */
+
+/*! SearchPanes 2.3.2
+   * © SpryMedia Ltd - datatables.net/license
+   */
+
+/*! SearchPanes 2.3.2
+ * © SpryMedia Ltd - datatables.net/license
+ */
+
+/*! Select for DataTables 2.0.5
+ * © SpryMedia Ltd - datatables.net/license/mit
+ */
+
+/** @license React v16.13.1
+ * react-is.production.min.js
+ *
+ * Copyright (c) Facebook, Inc. and its affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+/** @license React v16.14.0
+ * react.production.min.js
+ *
+ * Copyright (c) Facebook, Inc. and its affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */

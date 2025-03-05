@@ -1,6 +1,6 @@
 import logging
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
@@ -11,7 +11,7 @@ from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.sql import (
-    SQL_GENERATION_MODEL_KWARGS,
+    SqlGenerationResult,
     SQLGenPostProcessor,
     construct_instructions,
     sql_generation_system_prompt,
@@ -39,7 +39,6 @@ Question:
 {{sample.question}}
 SQL:
 {{sample.sql}}
-
 {% endfor %}
 {% endif %}
 
@@ -47,10 +46,8 @@ SQL:
 User's Question: {{ query }}
 Current Time: {{ current_time }}
 
-{% if sql_generation_reasoning %}
 ### REASONING PLAN ###
 {{ sql_generation_reasoning }}
-{% endif %}
 
 Let's think step by step.
 """
@@ -61,8 +58,8 @@ Let's think step by step.
 def prompt(
     query: str,
     documents: List[str],
+    sql_generation_reasoning: str,
     prompt_builder: PromptBuilder,
-    sql_generation_reasoning: str | None = None,
     configuration: Configuration | None = None,
     sql_samples: List[Dict] | None = None,
     has_calculated_field: bool = False,
@@ -95,17 +92,23 @@ async def generate_sql(
 async def post_process(
     generate_sql: dict,
     post_processor: SQLGenPostProcessor,
-    engine_timeout: float,
     project_id: str | None = None,
 ) -> dict:
-    return await post_processor.run(
-        generate_sql.get("replies"),
-        timeout=engine_timeout,
-        project_id=project_id,
-    )
+    return await post_processor.run(generate_sql.get("replies"), project_id=project_id)
 
 
 ## End of Pipeline
+
+
+SQL_GENERATION_MODEL_KWARGS = {
+    "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "sql_generation_result",
+            "schema": SqlGenerationResult.model_json_schema(),
+        },
+    }
+}
 
 
 class SQLGeneration(BasicPipeline):
@@ -113,7 +116,6 @@ class SQLGeneration(BasicPipeline):
         self,
         llm_provider: LLMProvider,
         engine: Engine,
-        engine_timeout: Optional[float] = 30.0,
         **kwargs,
     ):
         self._components = {
@@ -127,10 +129,6 @@ class SQLGeneration(BasicPipeline):
             "post_processor": SQLGenPostProcessor(engine=engine),
         }
 
-        self._configs = {
-            "engine_timeout": engine_timeout,
-        }
-
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
@@ -140,7 +138,7 @@ class SQLGeneration(BasicPipeline):
         self,
         query: str,
         contexts: List[str],
-        sql_generation_reasoning: str | None = None,
+        sql_generation_reasoning: str,
         configuration: Configuration = Configuration(),
         sql_samples: List[Dict] | None = None,
         project_id: str | None = None,
@@ -160,7 +158,6 @@ class SQLGeneration(BasicPipeline):
                 "has_calculated_field": has_calculated_field,
                 "has_metric": has_metric,
                 **self._components,
-                **self._configs,
             },
         )
 

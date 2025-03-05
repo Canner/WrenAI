@@ -1,0 +1,49 @@
+<svg class="main-svg" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+    viewBox="0 0 600 400" style="font-family: 'Droid Sans', sans-serif;">
+    <g style="fill:#d9d7fc">
+        <path d="M100,400H600V357H100Z" />
+        <path d="M100,300H500V257H100Z" />
+        <path d="M0,200H500V107H0Z" />
+        <path d="M100,100H600V57H100Z" />
+    </g>
+    <g style="fill:#1a1366;stroke:#1a1366;">
+        <path d="M100,250H500V207H100Z" />
+        <path d="M100,350H600V307H100Z" />
+        <path d="M100,50H600V7H100Z" />
+        <g style="fill:transparent;stroke-width:8; stroke-linejoin:round" rx="5">
+            <g transform="translate(45 50) rotate(-45)">
+                <circle r="33" cx="0" cy="0" />
+                <rect x="-8" y="32" width="16" height="30" />
+            </g>
+
+            <g transform="translate(550 152)">
+                <polyline points="-15,-20 -35,-20 -35,40 25,40 25,20" />
+                <rect x="-15" y="-40" width="60" height="60" />
+            </g>
+
+            <g transform="translate(50 352)">
+                <polygon points="-35,-5 0,-40 35,-5" />
+                <polygon points="-35,10 0,45 35,10" />
+            </g>
+
+            <g transform="translate(75 250)">
+                <polyline points="-30,30 -60,0 -30,-30" />
+                <polyline points="0,30 -30,0 0,-30" />
+            </g>
+
+            <g transform="translate(525 250) rotate(180)">
+                <polyline points="-30,30 -60,0 -30,-30" />
+                <polyline points="0,30 -30,0 0,-30" />
+            </g>
+        </g>
+
+        <text x="70" y="190" style="font-size: 100px; fill-opacity: 1.0;">
+            <tspan style="font-weight:bold">ITables</tspan>
+        </text>
+
+        <text style="font-size: 35px;">
+            <tspan x="120" y="290">Python DataFrames</tspan>
+            <tspan x="120" y="390">as Interactive DataTables</tspan>
+        </text>
+    </g>
+</svg>

@@ -1,4 +1,4 @@
-# Introduction to the codebase of wren-ai-service
+ # Introduction to the codebase of wren-ai-service
 
 ## Table of Contents
 

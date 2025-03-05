@@ -1,0 +1,175 @@
+Metadata-Version: 2.3
+Name: itables
+Version: 2.2.4
+Summary: Pandas and Polar DataFrames as interactive DataTables
+Project-URL: Homepage, https://mwouts.github.io/itables/
+Project-URL: Documentation, https://mwouts.github.io/itables
+Project-URL: Repository, https://github.com/mwouts/itables.git
+Project-URL: Issues, https://github.com/mwouts/itables/issues
+Project-URL: Changelog, https://github.com/mwouts/itables/blob/main/docs/changelog.md
+Author-email: Marc Wouts <marc.wouts@gmail.com>
+Maintainer-email: Marc Wouts <marc.wouts@gmail.com>
+License: MIT License
+        
+        Copyright (c) 2019-2024 Marc Wouts
+        
+        Permission is hereby granted, free of charge, to any person obtaining a copy
+        of this software and associated documentation files (the "Software"), to deal
+        in the Software without restriction, including without limitation the rights
+        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+        copies of the Software, and to permit persons to whom the Software is
+        furnished to do so, subject to the following conditions:
+        
+        The above copyright notice and this permission notice shall be included in all
+        copies or substantial portions of the Software.
+        
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+        FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+        AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+        LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+        OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+        SOFTWARE.
+Keywords: DataTables,Interactive,Javascript,Pandas,Polars
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Framework :: Jupyter
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Requires-Python: >=3.7
+Requires-Dist: ipython
+Requires-Dist: numpy
+Requires-Dist: pandas
+Provides-Extra: all
+Requires-Dist: anywidget; extra == 'all'
+Requires-Dist: matplotlib; extra == 'all'
+Requires-Dist: polars; extra == 'all'
+Requires-Dist: pyarrow; extra == 'all'
+Requires-Dist: pytz; extra == 'all'
+Requires-Dist: traitlets; extra == 'all'
+Requires-Dist: world-bank-data; extra == 'all'
+Provides-Extra: dev
+Requires-Dist: anywidget; extra == 'dev'
+Requires-Dist: ipykernel; extra == 'dev'
+Requires-Dist: jupyterlab; extra == 'dev'
+Requires-Dist: jupytext; extra == 'dev'
+Requires-Dist: matplotlib; extra == 'dev'
+Requires-Dist: nbconvert; extra == 'dev'
+Requires-Dist: polars; extra == 'dev'
+Requires-Dist: pyarrow; extra == 'dev'
+Requires-Dist: pytest; extra == 'dev'
+Requires-Dist: pytest-cov; extra == 'dev'
+Requires-Dist: pytz; extra == 'dev'
+Requires-Dist: requests; extra == 'dev'
+Requires-Dist: shiny; extra == 'dev'
+Requires-Dist: traitlets; extra == 'dev'
+Requires-Dist: watchfiles; extra == 'dev'
+Requires-Dist: world-bank-data; extra == 'dev'
+Provides-Extra: polars
+Requires-Dist: polars; extra == 'polars'
+Requires-Dist: pyarrow; extra == 'polars'
+Provides-Extra: samples
+Requires-Dist: pytz; extra == 'samples'
+Requires-Dist: world-bank-data; extra == 'samples'
+Provides-Extra: style
+Requires-Dist: matplotlib; extra == 'style'
+Provides-Extra: test
+Requires-Dist: anywidget; extra == 'test'
+Requires-Dist: ipykernel; extra == 'test'
+Requires-Dist: jupytext; extra == 'test'
+Requires-Dist: matplotlib; extra == 'test'
+Requires-Dist: nbconvert; extra == 'test'
+Requires-Dist: polars; extra == 'test'
+Requires-Dist: pyarrow; extra == 'test'
+Requires-Dist: pytest; extra == 'test'
+Requires-Dist: pytest-cov; extra == 'test'
+Requires-Dist: pytz; extra == 'test'
+Requires-Dist: requests; extra == 'test'
+Requires-Dist: shiny; extra == 'test'
+Requires-Dist: traitlets; extra == 'test'
+Requires-Dist: world-bank-data; extra == 'test'
+Provides-Extra: widget
+Requires-Dist: anywidget; extra == 'widget'
+Requires-Dist: traitlets; extra == 'widget'
+Description-Content-Type: text/markdown
+
+![ITables logo](https://raw.githubusercontent.com/mwouts/itables/3f8e8bd75af7ad38a500518fcb4fbbc370ea6c4c/itables/logo/wide.svg)
+
+[![CI](https://github.com/mwouts/itables/actions/workflows/continuous-integration.yml/badge.svg?branch=main)](https://github.com/mwouts/itables/actions)
+[![codecov.io](https://codecov.io/github/mwouts/itables/coverage.svg?branch=main)](https://codecov.io/github/mwouts/itables?branch=main)
+[![MIT License](https://img.shields.io/github/license/mwouts/itables)](LICENSE)
+[![Pypi](https://img.shields.io/pypi/v/itables.svg)](https://pypi.python.org/pypi/itables)
+[![Conda Version](https://img.shields.io/conda/vn/conda-forge/itables.svg)](https://anaconda.org/conda-forge/itables)
+[![pyversions](https://img.shields.io/pypi/pyversions/itables.svg)](https://pypi.python.org/pypi/itables)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Jupyter Widget](https://img.shields.io/badge/Jupyter-Widget-F37626.svg?style=flat&logo=Jupyter)](https://mwouts.github.io/itables/widget.html)
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_red.svg)](https://itables.streamlit.app)
+
+This packages changes how Pandas and Polars DataFrames are rendered in Jupyter Notebooks.
+With `itables` you can display your tables as interactive [DataTables](https://datatables.net/)
+that you can sort, paginate, scroll or filter.
+
+ITables is just about how tables are displayed. You can turn it on and off in just two lines,
+with no other impact on your data workflow.
+
+The `itables` package only depends on `numpy`, `pandas` and `IPython`
+which you must already have if you work with Pandas in Jupyter (add `polars`, `pyarrow` if you
+work with Polars DataFrames).
+
+## Documentation
+
+Browse the [documentation](https://mwouts.github.io/itables/) to see
+examples of Pandas or Polars DataFrames rendered as interactive DataTables.
+
+## Quick start
+
+Install the `itables` package with either
+```shell
+pip install itables
+```
+
+or
+```shell
+conda install itables -c conda-forge
+```
+
+Activate the interactive mode for all series and dataframes with
+```python
+from itables import init_notebook_mode
+
+init_notebook_mode(all_interactive=True)
+```
+and then render any DataFrame as an interactive table that you can sort, search and explore:
+![df](docs/df_example.png)
+
+If you prefer to render only selected DataFrames as interactive tables, use `itables.show` to show just one Series or DataFrame as an interactive table:
+![show](docs/show_df.png)
+
+Since ITables v1.0, the [jQuery](https://jquery.com/) and [DataTables](https://datatables.net/) libraries and CSS
+are injected in the notebook when you execute `init_notebook_mode` with its default argument `connected=False`.
+Thanks to this the interactive tables will work even without a connection to the internet.
+
+If you prefer to load the libraries dynamically (and keep the notebook lighter), use `connected=True` when you
+execute `init_notebook_mode`.
+
+## Supported environments
+
+ITables works in all the usual Jupyter Notebook environments, including Jupyter Notebook, Jupyter Lab, Jupyter nbconvert (i.e. the tables are still interactive in the HTML export of a notebook), Jupyter Book, Google Colab and Kaggle.
+
+You can also use ITables in [Quarto](https://mwouts.github.io/itables/quarto.html) HTML documents, and in RISE presentations.
+
+ITables works well in VS Code, both in Jupyter Notebooks and in interactive Python sessions.
+
+Last but not least, ITables is also available as
+- a [Jupyter Widget](https://mwouts.github.io/itables/widget.html)
+- a [Streamlit](https://mwouts.github.io/itables/streamlit.html) component,
+- and it also works in [Shiny](https://mwouts.github.io/itables/shiny.html) applications.
