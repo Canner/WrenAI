@@ -45,7 +45,7 @@ class SqlQuestionResultResponse(BaseModel):
     status: Literal["generating", "succeeded", "failed"]
     error: Optional[SqlQuestionError] = None
     questions: Optional[list[str]] = None
-
+    trace_id: Optional[str] = None
 
 class SqlQuestionService:
     def __init__(
@@ -66,6 +66,7 @@ class SqlQuestionService:
         sql_question_request: SqlQuestionRequest,
         **kwargs,
     ):
+        trace_id = kwargs.get("trace_id")
         results = {
             "sql_question_result": {},
             "metadata": {
@@ -79,6 +80,7 @@ class SqlQuestionService:
 
             self._sql_question_results[query_id] = SqlQuestionResultResponse(
                 status="generating",
+                trace_id=trace_id,
             )
 
             sql_questions_result = (
@@ -91,6 +93,7 @@ class SqlQuestionService:
             self._sql_question_results[query_id] = SqlQuestionResultResponse(
                 status="succeeded",
                 questions=sql_questions_result,
+                trace_id=trace_id,
             )
 
             results["sql_question_result"] = sql_questions_result
@@ -106,6 +109,7 @@ class SqlQuestionService:
                     code="OTHERS",
                     message=str(e),
                 ),
+                trace_id=trace_id,
             )
 
             results["metadata"]["error_type"] = "OTHERS"
