@@ -71,7 +71,7 @@ class SqlExpansionResultResponse(BaseModel):
     ]
     response: Optional[SqlExpansionResult] = None
     error: Optional[AskError] = None
-
+    trace_id: Optional[str] = None
 
 class SqlExpansionService:
     def __init__(
@@ -100,6 +100,7 @@ class SqlExpansionService:
         sql_expansion_request: SqlExpansionRequest,
         **kwargs,
     ):
+        trace_id = kwargs.get("trace_id")
         results = {
             "sql_expansion_result": {},
             "metadata": {
@@ -115,11 +116,13 @@ class SqlExpansionService:
             if not self._is_stopped(query_id):
                 self._sql_expansion_results[query_id] = SqlExpansionResultResponse(
                     status="understanding",
+                    trace_id=trace_id,
                 )
 
             if not self._is_stopped(query_id):
                 self._sql_expansion_results[query_id] = SqlExpansionResultResponse(
                     status="searching",
+                    trace_id=trace_id,
                 )
 
                 query_for_retrieval = sql_expansion_request.query
@@ -142,6 +145,7 @@ class SqlExpansionService:
                             code="NO_RELEVANT_DATA",
                             message="No relevant data",
                         ),
+                        trace_id=trace_id,
                     )
                     results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
                     return results
@@ -149,6 +153,7 @@ class SqlExpansionService:
             if not self._is_stopped(query_id):
                 self._sql_expansion_results[query_id] = SqlExpansionResultResponse(
                     status="generating",
+                    trace_id=trace_id,
                 )
 
                 sql_expansion_generation_results = await self._pipelines[
@@ -210,6 +215,7 @@ class SqlExpansionService:
                             code="NO_RELEVANT_SQL",
                             message=error_message or "No relevant SQL",
                         ),
+                        trace_id=trace_id,
                     )
                     results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
                     results["metadata"]["error_message"] = error_message
@@ -230,6 +236,7 @@ class SqlExpansionService:
                 self._sql_expansion_results[query_id] = SqlExpansionResultResponse(
                     status="finished",
                     response=api_results,
+                    trace_id=trace_id,
                 )
 
                 results["sql_expansion_result"] = api_results
@@ -245,6 +252,7 @@ class SqlExpansionService:
                     code="OTHERS",
                     message=str(e),
                 ),
+                trace_id=trace_id,
             )
 
             results["metadata"]["error_type"] = "OTHERS"
