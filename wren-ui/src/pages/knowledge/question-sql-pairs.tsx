@@ -2,12 +2,15 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import styled from 'styled-components';
 import { Button, Table, TableColumnsType, Typography } from 'antd';
+import { format } from 'sql-formatter';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import FunctionOutlined from '@ant-design/icons/FunctionOutlined';
 import { MORE_ACTION } from '@/utils/enum';
+import useDrawerAction from '@/hooks/useDrawerAction';
 import useModalAction from '@/hooks/useModalAction';
 import { MoreButton } from '@/components/ActionButton';
 import { SQLPairDropdown } from '@/components/diagram/CustomDropdown';
+import SQLPairDrawer from '@/components/pages/knowledge/SQLPairDrawer';
 
 const CodeBlock = dynamic(() => import('@/components/editor/CodeBlock'), {
   ssr: false,
@@ -25,6 +28,7 @@ const StyledQuestionBlock = styled.div`
 
 export default function ManageQuestionSQLPairs() {
   const questionSqlPairModal = useModalAction();
+  const sqlPairDrawer = useDrawerAction();
 
   const data = [
     {
@@ -57,7 +61,7 @@ export default function ManageQuestionSQLPairs() {
     } else if (type === MORE_ACTION.EDIT) {
       questionSqlPairModal.openModal(data);
     } else if (type === MORE_ACTION.VIEW_SQL_PAIR) {
-      // TODO: view sql pair
+      sqlPairDrawer.openDrawer({ ...data, sql: format(data.sql) });
     }
   };
 
@@ -133,6 +137,10 @@ export default function ManageQuestionSQLPairs() {
             pageSize: 10,
             size: 'small',
           }}
+        />
+        <SQLPairDrawer
+          {...sqlPairDrawer.state}
+          onClose={sqlPairDrawer.closeDrawer}
         />
       </div>
     </SiderLayout>
