@@ -143,6 +143,7 @@ class GetResponse(BaseModel):
     event_id: str
     status: Literal["indexing", "deleting", "finished", "failed"]
     error: Optional[dict]
+    trace_id: Optional[str]
 
 
 @router.get("/sql-pairs/{event_id}")
@@ -152,7 +153,8 @@ async def get(
 ) -> GetResponse:
     event: SqlPairsService.Event = container.sql_pairs_service[event_id]
     return GetResponse(
-        event_id=event.id,
+        id=event.id,
         status=event.status,
         error=event.error and event.error.model_dump(),
+        trace_id=event.trace_id,
     )

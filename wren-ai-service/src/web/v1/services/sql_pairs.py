@@ -22,6 +22,7 @@ class SqlPairsService:
         id: str
         status: Literal["indexing", "deleting", "finished", "failed"] = "indexing"
         error: Optional[Error] = None
+        trace_id: Optional[str] = None
 
     def __init__(
         self,
@@ -37,11 +38,13 @@ class SqlPairsService:
         id: str,
         error_message: str,
         code: str = "OTHERS",
+        trace_id: Optional[str] = None,
     ):
         self._cache[id] = self.Event(
             id=id,
             status="failed",
-            error=self.Event.Error(code=code, message=error_message),
+            error=self.Resource.Error(code=code, message=error_message),
+            trace_id=trace_id,
         )
         logger.error(error_message)
 
@@ -58,6 +61,7 @@ class SqlPairsService:
         **kwargs,
     ):
         logger.info(f"Request {request.id}: SQL Pairs Indexing process is running...")
+        trace_id = kwargs.get("trace_id")
 
         try:
             input = {
@@ -71,12 +75,17 @@ class SqlPairsService:
             }
             await self._pipelines["sql_pairs"].run(**input)
 
-            self._cache[request.id] = self.Event(id=request.id, status="finished")
+            self._cache[request.id] = self.Event(
+                id=request.id,
+                status="finished",
+                trace_id=trace_id,
+            )
 
         except Exception as e:
             self._handle_exception(
                 request.id,
                 f"An error occurred during SQL pairs indexing: {str(e)}",
+                trace_id=trace_id,
             )
 
         return self._cache[request.id].with_metadata()
