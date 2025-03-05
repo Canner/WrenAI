@@ -14,7 +14,7 @@ logger = logging.getLogger("wren-ai-service")
 
 
 class SqlPairsService:
-    class Resource(BaseModel, MetadataTraceable):
+    class Event(BaseModel, MetadataTraceable):
         class Error(BaseModel):
             code: Literal["OTHERS"]
             message: str
@@ -30,7 +30,7 @@ class SqlPairsService:
         ttl: int = 120,
     ):
         self._pipelines = pipelines
-        self._cache: Dict[str, self.Resource] = TTLCache(maxsize=maxsize, ttl=ttl)
+        self._cache: Dict[str, self.Event] = TTLCache(maxsize=maxsize, ttl=ttl)
 
     def _handle_exception(
         self,
@@ -38,10 +38,10 @@ class SqlPairsService:
         error_message: str,
         code: str = "OTHERS",
     ):
-        self._cache[id] = self.Resource(
+        self._cache[id] = self.Event(
             id=id,
             status="failed",
-            error=self.Resource.Error(code=code, message=error_message),
+            error=self.Event.Error(code=code, message=error_message),
         )
         logger.error(error_message)
 
@@ -71,7 +71,7 @@ class SqlPairsService:
             }
             await self._pipelines["sql_pairs"].run(**input)
 
-            self._cache[request.id] = self.Resource(id=request.id, status="finished")
+            self._cache[request.id] = self.Event(id=request.id, status="finished")
 
         except Exception as e:
             self._handle_exception(
@@ -101,7 +101,7 @@ class SqlPairsService:
                 sql_pairs=sql_pairs, project_id=request.project_id
             )
 
-            self._cache[request.id] = self.Resource(id=request.id, status="finished")
+            self._cache[request.id] = self.Event(id=request.id, status="finished")
         except Exception as e:
             self._handle_exception(
                 request.id,
@@ -110,19 +110,19 @@ class SqlPairsService:
 
         return self._cache[request.id].with_metadata()
 
-    def __getitem__(self, id: str) -> Resource:
+    def __getitem__(self, id: str) -> Event:
         response = self._cache.get(id)
 
         if response is None:
-            message = f"SQL Pairs Resource with ID '{id}' not found."
+            message = f"SQL Pairs Event with ID '{id}' not found."
             logger.exception(message)
-            return self.Resource(
+            return self.Event(
                 id=id,
                 status="failed",
-                error=self.Resource.Error(code="OTHERS", message=message),
+                error=self.Event.Error(code="OTHERS", message=message),
             )
 
         return response
 
-    def __setitem__(self, id: str, value: Resource):
+    def __setitem__(self, id: str, value: Event):
         self._cache[id] = value
