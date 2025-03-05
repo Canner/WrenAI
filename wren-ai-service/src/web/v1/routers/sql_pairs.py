@@ -153,7 +153,7 @@ async def get(
 ) -> GetResponse:
     event: SqlPairsService.Event = container.sql_pairs_service[event_id]
     return GetResponse(
-        id=event.id,
+        event_id=event.id,
         status=event.status,
         error=event.error and event.error.model_dump(),
         trace_id=event.trace_id,

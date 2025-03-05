@@ -43,7 +43,7 @@ class SqlPairsService:
         self._cache[id] = self.Event(
             id=id,
             status="failed",
-            error=self.Resource.Error(code=code, message=error_message),
+            error=self.Event.Error(code=code, message=error_message),
             trace_id=trace_id,
         )
         logger.error(error_message)
