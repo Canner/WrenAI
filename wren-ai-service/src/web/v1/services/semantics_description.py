@@ -24,6 +24,7 @@ class SemanticsDescription:
         status: Literal["generating", "finished", "failed"] = "generating"
         response: Optional[dict] = None
         error: Optional[Error] = None
+        trace_id: Optional[str] = None
 
     def __init__(
         self,
@@ -39,11 +40,13 @@ class SemanticsDescription:
         id: str,
         error_message: str,
         code: str = "OTHERS",
+        trace_id: Optional[str] = None,
     ):
         self[id] = self.Resource(
             id=id,
             status="failed",
             error=self.Resource.Error(code=code, message=error_message),
+            trace_id=trace_id,
         )
         logger.error(error_message)
 
@@ -100,6 +103,7 @@ class SemanticsDescription:
     @trace_metadata
     async def generate(self, request: GenerateRequest, **kwargs) -> Resource:
         logger.info("Generate Semantics Description pipeline is running...")
+        trace_id = kwargs.get("trace_id")
 
         try:
             mdl_dict = orjson.loads(request.mdl)
@@ -110,16 +114,19 @@ class SemanticsDescription:
             await asyncio.gather(*tasks)
 
             self[request.id].status = "finished"
+            self[request.id].trace_id = trace_id
         except orjson.JSONDecodeError as e:
             self._handle_exception(
                 request.id,
                 f"Failed to parse MDL: {str(e)}",
                 code="MDL_PARSE_ERROR",
+                trace_id=trace_id,
             )
         except Exception as e:
             self._handle_exception(
                 request.id,
                 f"An error occurred during semantics description generation: {str(e)}",
+                trace_id=trace_id,
             )
 
         return self[request.id].with_metadata()
