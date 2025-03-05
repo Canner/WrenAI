@@ -76,6 +76,7 @@ class ChartResultResponse(BaseModel):
     status: Literal["fetching", "generating", "finished", "failed", "stopped"]
     response: Optional[ChartResult] = None
     error: Optional[ChartError] = None
+    trace_id: Optional[str] = None
 
 
 class ChartService:
@@ -105,6 +106,7 @@ class ChartService:
         chart_request: ChartRequest,
         **kwargs,
     ):
+        trace_id = kwargs.get("trace_id")
         results = {
             "chart_result": {},
             "metadata": {
@@ -117,7 +119,10 @@ class ChartService:
             query_id = chart_request.query_id
 
             if not chart_request.data:
-                self._chart_results[query_id] = ChartResultResponse(status="fetching")
+                self._chart_results[query_id] = ChartResultResponse(
+                    status="fetching",
+                    trace_id=trace_id,
+                )
 
                 sql_data = (
                     await self._pipelines["sql_executor"].run(
@@ -128,7 +133,10 @@ class ChartService:
             else:
                 sql_data = chart_request.data
 
-            self._chart_results[query_id] = ChartResultResponse(status="generating")
+            self._chart_results[query_id] = ChartResultResponse(
+                status="generating",
+                trace_id=trace_id,
+            )
 
             chart_generation_result = await self._pipelines["chart_generation"].run(
                 query=chart_request.query,
@@ -147,6 +155,7 @@ class ChartService:
                     error=ChartError(
                         code="NO_CHART", message="chart generation failed"
                     ),
+                    trace_id=trace_id,
                 )
                 results["metadata"]["error_type"] = "NO_CHART"
                 results["metadata"]["error_message"] = "chart generation failed"
@@ -154,6 +163,7 @@ class ChartService:
                 self._chart_results[query_id] = ChartResultResponse(
                     status="finished",
                     response=ChartResult(**chart_result),
+                    trace_id=trace_id,
                 )
                 results["chart_result"] = chart_result
 
@@ -167,6 +177,7 @@ class ChartService:
                     code="OTHERS",
                     message=str(e),
                 ),
+                trace_id=trace_id,
             )
 
             results["metadata"]["error_type"] = "OTHERS"
