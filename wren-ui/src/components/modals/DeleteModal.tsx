@@ -100,3 +100,10 @@ export const DeleteDashboardItemModal = makeDeleteModal(DefaultDeleteButton, {
   content:
     'This will be permanently deleted, please confirm you want to delete it.',
 });
+
+export const DeleteQuestionSQLPairModal = makeDeleteModal(DefaultDeleteButton, {
+  icon: <DeleteOutlined className="mr-2" />,
+  itemName: 'question-SQL pair',
+  content:
+    'This will be permanently deleted, please confirm you want to delete it.',
+});
