@@ -155,7 +155,7 @@ async def ask_feedback(
     service_container.ask_service._ask_feedback_results[
         query_id
     ] = AskFeedbackResultResponse(
-        status="understanding",
+        status="searching",
     )
 
     background_tasks.add_task(

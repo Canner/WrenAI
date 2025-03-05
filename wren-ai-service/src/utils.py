@@ -123,7 +123,9 @@ def trace_metadata(func):
 
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
-        results = await func(*args, **kwargs)
+        trace_id = langfuse_context.get_current_trace_id()
+
+        results = await func(*args, **kwargs, trace_id=trace_id)
 
         addition = {}
         if isinstance(results, dict):

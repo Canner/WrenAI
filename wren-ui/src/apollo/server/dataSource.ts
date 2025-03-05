@@ -98,7 +98,10 @@ const dataSource = {
       );
       const { host, port, database, user, password, ssl } =
         decryptedConnectionInfo as POSTGRES_CONNECTION_INFO;
-      let connectionUrl = `postgresql://${user}:${password}@${host}:${port}/${database}?`;
+
+      // url encode password
+      const encodedPassword = encodeURIComponent(password);
+      let connectionUrl = `postgresql://${user}:${encodedPassword}@${host}:${port}/${database}?`;
       if (ssl) {
         connectionUrl += 'sslmode=require';
       }
@@ -165,7 +168,8 @@ const dataSource = {
       );
       const { host, port, database, user, password, ssl } =
         decryptedConnectionInfo as CLICK_HOUSE_CONNECTION_INFO;
-      let connectionUrl = `clickhouse://${user}:${password}@${host}:${port}/${database}?`;
+      const encodedPassword = encodeURIComponent(password);
+      let connectionUrl = `clickhouse://${user}:${encodedPassword}@${host}:${port}/${database}?`;
       if (ssl) {
         connectionUrl += 'secure=1';
       }

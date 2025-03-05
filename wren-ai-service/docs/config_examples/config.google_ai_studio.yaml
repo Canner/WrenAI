@@ -1,6 +1,9 @@
 # please upgrade the version of wren-ai-service to at least 0.15.10 first
 # you should rename this file to config.yaml and put it in ~/.wrenai
-# please pay attention to the comments starting with # and adjust the config accordingly
+# please pay attention to the comments starting with # and adjust the config accordingly, 3 steps basically:
+# 1. you need to use your own llm and embedding models
+# 2. you need to use the correct pipe definitions based on https://raw.githubusercontent.com/canner/WrenAI/<WRENAI_VERSION_NUMBER>/docker/config.example.yaml
+# 3. you need to fill in correct llm and embedding models in the pipe definitions
 
 type: llm
 provider: litellm_llm

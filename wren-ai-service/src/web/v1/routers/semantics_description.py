@@ -128,6 +128,7 @@ class GetResponse(BaseModel):
     status: Literal["generating", "finished", "failed"]
     response: Optional[list[dict]]
     error: Optional[dict]
+    trace_id: Optional[str] = None
 
 
 @router.get(
@@ -164,4 +165,5 @@ async def get(
         status=resource.status,
         response=resource.response and _formatter(resource.response),
         error=resource.error and resource.error.model_dump(),
+        trace_id=resource.trace_id,
     )

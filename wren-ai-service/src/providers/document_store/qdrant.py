@@ -209,6 +209,36 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
                 document.score = score
         return results
 
+    async def _query_by_filters(
+        self,
+        filters: Optional[Dict[str, Any]] = None,
+        top_k: Optional[int] = None,
+    ) -> List[Document]:
+        qdrant_filters = convert_filters_to_qdrant(filters)
+        points_list = []
+        offset = None
+        while True:
+            points = await self.async_client.scroll(
+                collection_name=self.index,
+                offset=offset,
+                scroll_filter=qdrant_filters,
+                limit=top_k,
+            )
+            points_list.extend(points[0])
+            if points[1] is None:
+                break
+            offset = points[1]
+
+        if points_list:
+            return [
+                convert_qdrant_point_to_haystack_document(
+                    point, use_sparse_embeddings=self.use_sparse_embeddings
+                )
+                for point in points_list
+            ]
+        else:
+            return []
+
     async def delete_documents(self, filters: Optional[Dict[str, Any]] = None):
         if not filters:
             qdrant_filters = rest.Filter()
@@ -306,6 +336,7 @@ class AsyncQdrantEmbeddingRetriever(QdrantEmbeddingRetriever):
             scale_score=scale_score,
             return_embedding=return_embedding,
         )
+        self._document_store = document_store
 
     @component.output_types(documents=List[Document])
     async def run(
@@ -316,13 +347,19 @@ class AsyncQdrantEmbeddingRetriever(QdrantEmbeddingRetriever):
         scale_score: Optional[bool] = None,
         return_embedding: Optional[bool] = None,
     ):
-        docs = await self._document_store._query_by_embedding(
-            query_embedding=query_embedding,
-            filters=filters or self._filters,
-            top_k=top_k or self._top_k,
-            scale_score=scale_score or self._scale_score,
-            return_embedding=return_embedding or self._return_embedding,
-        )
+        if query_embedding:
+            docs = await self._document_store._query_by_embedding(
+                query_embedding=query_embedding,
+                filters=filters or self._filters,
+                top_k=top_k or self._top_k,
+                scale_score=scale_score or self._scale_score,
+                return_embedding=return_embedding or self._return_embedding,
+            )
+        else:
+            docs = await self._document_store._query_by_filters(
+                filters=filters,
+                top_k=top_k,
+            )
 
         return {"documents": docs}
 

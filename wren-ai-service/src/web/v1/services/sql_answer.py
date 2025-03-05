@@ -49,7 +49,7 @@ class SqlAnswerResultResponse(BaseModel):
     status: Literal["preprocessing", "succeeded", "failed"]
     num_rows_used_in_llm: Optional[int] = None
     error: Optional[SqlAnswerError] = None
-
+    trace_id: Optional[str] = None
 
 class SqlAnswerService:
     def __init__(
@@ -70,6 +70,7 @@ class SqlAnswerService:
         sql_answer_request: SqlAnswerRequest,
         **kwargs,
     ):
+        trace_id = kwargs.get("trace_id")
         results = {
             "sql_answer_result": {},
             "metadata": {
@@ -85,6 +86,7 @@ class SqlAnswerService:
 
             self._sql_answer_results[query_id] = SqlAnswerResultResponse(
                 status="preprocessing",
+                trace_id=trace_id,
             )
 
             preprocessed_sql_data = self._pipelines["preprocess_sql_data"].run(
@@ -94,6 +96,7 @@ class SqlAnswerService:
             self._sql_answer_results[query_id] = SqlAnswerResultResponse(
                 status="succeeded",
                 num_rows_used_in_llm=preprocessed_sql_data.get("num_rows_used_in_llm"),
+                trace_id=trace_id,
             )
 
             asyncio.create_task(
@@ -118,6 +121,7 @@ class SqlAnswerService:
                     code="OTHERS",
                     message=str(e),
                 ),
+                trace_id=trace_id,
             )
 
             results["metadata"]["error_type"] = "OTHERS"

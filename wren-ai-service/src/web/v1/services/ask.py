@@ -96,12 +96,15 @@ class AskResultResponse(BaseModel):
     type: Optional[Literal["MISLEADING_QUERY", "GENERAL", "TEXT_TO_SQL"]] = None
     retrieved_tables: Optional[List[str]] = None
     response: Optional[List[AskResult]] = None
+    invalid_sql: Optional[str] = None
     error: Optional[AskError] = None
+    trace_id: Optional[str] = None
 
 
 # POST /v1/ask-feedbacks
 class AskFeedbackRequest(BaseModel):
     _query_id: str | None = None
+    tables: List[str]
     sql_generation_reasoning: str
     sql: str
     project_id: Optional[str] = None
@@ -145,7 +148,7 @@ class AskFeedbackResultRequest(BaseModel):
 
 class AskFeedbackResultResponse(BaseModel):
     status: Literal[
-        "understanding",
+        "searching",
         "generating",
         "correcting",
         "finished",
@@ -154,6 +157,7 @@ class AskFeedbackResultResponse(BaseModel):
     ]
     error: Optional[AskError] = None
     response: Optional[List[AskResult]] = None
+    trace_id: Optional[str] = None
 
 
 class AskService:
@@ -190,6 +194,7 @@ class AskService:
         ask_request: AskRequest,
         **kwargs,
     ):
+        trace_id = kwargs.get("trace_id")
         results = {
             "ask_result": {},
             "metadata": {
@@ -216,6 +221,7 @@ class AskService:
             if not self._is_stopped(query_id, self._ask_results):
                 self._ask_results[query_id] = AskResultResponse(
                     status="understanding",
+                    trace_id=trace_id,
                 )
 
                 historical_question = await self._pipelines["historical_question"].run(
@@ -264,6 +270,7 @@ class AskService:
                             type="MISLEADING_QUERY",
                             rephrased_question=rephrased_question,
                             intent_reasoning=intent_reasoning,
+                            trace_id=trace_id,
                         )
                         results["metadata"]["type"] = "MISLEADING_QUERY"
                         return results
@@ -285,6 +292,7 @@ class AskService:
                             type="GENERAL",
                             rephrased_question=rephrased_question,
                             intent_reasoning=intent_reasoning,
+                            trace_id=trace_id,
                         )
                         results["metadata"]["type"] = "GENERAL"
                         return results
@@ -294,6 +302,7 @@ class AskService:
                             type="TEXT_TO_SQL",
                             rephrased_question=rephrased_question,
                             intent_reasoning=intent_reasoning,
+                            trace_id=trace_id,
                         )
             if not self._is_stopped(query_id, self._ask_results) and not api_results:
                 self._ask_results[query_id] = AskResultResponse(
@@ -301,6 +310,7 @@ class AskService:
                     type="TEXT_TO_SQL",
                     rephrased_question=rephrased_question,
                     intent_reasoning=intent_reasoning,
+                    trace_id=trace_id,
                 )
 
                 retrieval_result = await self._pipelines["retrieval"].run(
@@ -327,6 +337,7 @@ class AskService:
                             ),
                             rephrased_question=rephrased_question,
                             intent_reasoning=intent_reasoning,
+                            trace_id=trace_id,
                         )
                     results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
                     results["metadata"]["type"] = "TEXT_TO_SQL"
@@ -343,6 +354,7 @@ class AskService:
                     rephrased_question=rephrased_question,
                     intent_reasoning=intent_reasoning,
                     retrieved_tables=table_names,
+                    trace_id=trace_id,
                 )
 
                 sql_samples = (
@@ -369,7 +381,11 @@ class AskService:
                     intent_reasoning=intent_reasoning,
                     retrieved_tables=table_names,
                     sql_generation_reasoning=sql_generation_reasoning,
+                    trace_id=trace_id,
                 )
+
+            invalid_sql = None
+            error_message = None
 
             if not self._is_stopped(query_id, self._ask_results) and not api_results:
                 self._ask_results[query_id] = AskResultResponse(
@@ -379,6 +395,7 @@ class AskService:
                     intent_reasoning=intent_reasoning,
                     retrieved_tables=table_names,
                     sql_generation_reasoning=sql_generation_reasoning,
+                    trace_id=trace_id,
                 )
 
                 has_calculated_field = (
@@ -437,6 +454,7 @@ class AskService:
                             intent_reasoning=intent_reasoning,
                             retrieved_tables=table_names,
                             sql_generation_reasoning=sql_generation_reasoning,
+                            trace_id=trace_id,
                         )
                         sql_correction_results = await self._pipelines[
                             "sql_correction"
@@ -461,9 +479,13 @@ class AskService:
                         elif failed_dry_run_results := sql_correction_results[
                             "post_process"
                         ]["invalid_generation_results"]:
-                            error_message = failed_dry_run_results[0]["error"]
+                            invalid = failed_dry_run_results[0]
+                            invalid_sql = invalid["sql"]
+                            error_message = invalid["error"]
                     else:
-                        error_message = failed_dry_run_results[0]["error"]
+                        invalid = failed_dry_run_results[0]
+                        invalid_sql = invalid["sql"]
+                        error_message = invalid["error"]
 
             if api_results:
                 if not self._is_stopped(query_id, self._ask_results):
@@ -475,6 +497,7 @@ class AskService:
                         intent_reasoning=intent_reasoning,
                         retrieved_tables=table_names,
                         sql_generation_reasoning=sql_generation_reasoning,
+                        trace_id=trace_id,
                     )
                 results["ask_result"] = api_results
                 results["metadata"]["type"] = "TEXT_TO_SQL"
@@ -492,6 +515,8 @@ class AskService:
                         intent_reasoning=intent_reasoning,
                         retrieved_tables=table_names,
                         sql_generation_reasoning=sql_generation_reasoning,
+                        invalid_sql=invalid_sql,
+                        trace_id=trace_id,
                     )
                 results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
                 results["metadata"]["error_message"] = error_message
@@ -508,6 +533,7 @@ class AskService:
                     code="OTHERS",
                     message=str(e),
                 ),
+                trace_id=trace_id,
             )
 
             results["metadata"]["error_type"] = "OTHERS"
@@ -571,6 +597,7 @@ class AskService:
         ask_feedback_request: AskFeedbackRequest,
         **kwargs,
     ):
+        trace_id = kwargs.get("trace_id")
         results = {
             "ask_feedback_result": {},
             "metadata": {
@@ -586,17 +613,30 @@ class AskService:
         try:
             if not self._is_stopped(query_id, self._ask_feedback_results):
                 self._ask_feedback_results[query_id] = AskFeedbackResultResponse(
-                    status="understanding",
+                    status="searching",
+                    trace_id=trace_id,
                 )
+
+                retrieval_result = await self._pipelines["retrieval"].run(
+                    tables=ask_feedback_request.tables,
+                    id=ask_feedback_request.project_id,
+                )
+                _retrieval_result = retrieval_result.get(
+                    "construct_retrieval_results", {}
+                )
+                documents = _retrieval_result.get("retrieval_results", [])
+                table_ddls = [document.get("table_ddl") for document in documents]
 
             if not self._is_stopped(query_id, self._ask_feedback_results):
                 self._ask_feedback_results[query_id] = AskFeedbackResultResponse(
                     status="generating",
+                    trace_id=trace_id,
                 )
 
                 text_to_sql_generation_results = await self._pipelines[
                     "sql_regeneration"
                 ].run(
+                    contexts=table_ddls,
                     sql_generation_reasoning=ask_feedback_request.sql_generation_reasoning,
                     sql=ask_feedback_request.sql,
                     project_id=ask_feedback_request.project_id,
@@ -619,10 +659,11 @@ class AskService:
                     "post_process"
                 ]["invalid_generation_results"]:
                     if failed_dry_run_results[0]["type"] != "TIME_OUT":
-                        self._ask_feedback_results[
-                            query_id
-                        ] = AskFeedbackResultResponse(
-                            status="correcting",
+                        self._ask_feedback_results[query_id] = (
+                            AskFeedbackResultResponse(
+                                status="correcting",
+                                trace_id=trace_id,
+                            )
                         )
                         sql_correction_results = await self._pipelines[
                             "sql_correction"
@@ -656,6 +697,7 @@ class AskService:
                     self._ask_feedback_results[query_id] = AskFeedbackResultResponse(
                         status="finished",
                         response=api_results,
+                        trace_id=trace_id,
                     )
                 results["ask_feedback_result"] = api_results
             else:
@@ -667,6 +709,7 @@ class AskService:
                             code="NO_RELEVANT_SQL",
                             message=error_message or "No relevant SQL",
                         ),
+                        trace_id=trace_id,
                     )
                 results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
                 results["metadata"]["error_message"] = error_message
@@ -682,6 +725,7 @@ class AskService:
                     code="OTHERS",
                     message=str(e),
                 ),
+                trace_id=trace_id,
             )
 
             results["metadata"]["error_type"] = "OTHERS"
@@ -692,10 +736,10 @@ class AskService:
         self,
         stop_ask_feedback_request: StopAskFeedbackRequest,
     ):
-        self._ask_feedback_results[
-            stop_ask_feedback_request.query_id
-        ] = AskFeedbackResultResponse(
-            status="stopped",
+        self._ask_feedback_results[stop_ask_feedback_request.query_id] = (
+            AskFeedbackResultResponse(
+                status="stopped",
+            )
         )
 
     def get_ask_feedback_result(

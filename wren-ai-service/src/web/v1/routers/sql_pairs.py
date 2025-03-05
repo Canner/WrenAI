@@ -2,7 +2,7 @@ import uuid
 from dataclasses import asdict
 from typing import List, Literal, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends, Response
 from pydantic import BaseModel
 
 from src.globals import (
@@ -85,7 +85,7 @@ class PostRequest(BaseModel):
 
 
 class PostResponse(BaseModel):
-    id: str
+    event_id: str
 
 
 @router.post("/sql-pairs")
@@ -95,18 +95,18 @@ async def prepare(
     service_container: ServiceContainer = Depends(get_service_container),
     service_metadata: ServiceMetadata = Depends(get_service_metadata),
 ) -> PostResponse:
-    id = str(uuid.uuid4())
+    event_id = str(uuid.uuid4())
     service = service_container.sql_pairs_service
-    service[id] = SqlPairsService.Resource(id=id, status="indexing")
+    service[event_id] = SqlPairsService.Event(id=event_id, status="indexing")
 
-    index_request = SqlPairsService.IndexRequest(id=id, **request.model_dump())
+    index_request = SqlPairsService.IndexRequest(id=event_id, **request.model_dump())
 
     background_tasks.add_task(
         service.index,
         index_request,
         service_metadata=asdict(service_metadata),
     )
-    return PostResponse(id=id)
+    return PostResponse(event_id=event_id)
 
 
 class DeleteRequest(BaseModel):
@@ -114,48 +114,47 @@ class DeleteRequest(BaseModel):
     project_id: Optional[str] = None
 
 
-class DeleteResponse(BaseModel):
-    id: str
-
-
 @router.delete("/sql-pairs")
 async def delete(
     request: DeleteRequest,
-    background_tasks: BackgroundTasks,
+    response: Response,
     service_container: ServiceContainer = Depends(get_service_container),
     service_metadata: ServiceMetadata = Depends(get_service_metadata),
-) -> DeleteResponse:
-    id = str(uuid.uuid4())
+) -> None | SqlPairsService.Event.Error:
+    event_id = str(uuid.uuid4())
     service = service_container.sql_pairs_service
-    service[id] = SqlPairsService.Resource(id=id, status="deleting")
+    service[event_id] = SqlPairsService.Event(id=event_id, status="deleting")
 
     delete_request = SqlPairsService.DeleteRequest(
-        id=id,
+        id=event_id,
         **request.model_dump(),
     )
 
-    background_tasks.add_task(
-        service.delete,
-        delete_request,
-        service_metadata=asdict(service_metadata),
-    )
-    return DeleteResponse(id=id)
+    await service.delete(delete_request, service_metadata=asdict(service_metadata))
+
+    event: SqlPairsService.Event = service[event_id]
+
+    if event.status == "failed":
+        response.status_code = 500
+        return event.error
 
 
 class GetResponse(BaseModel):
-    id: str
+    event_id: str
     status: Literal["indexing", "deleting", "finished", "failed"]
     error: Optional[dict]
+    trace_id: Optional[str]
 
 
-@router.get("/sql-pairs/{id}")
+@router.get("/sql-pairs/{event_id}")
 async def get(
-    id: str,
+    event_id: str,
     container: ServiceContainer = Depends(get_service_container),
 ) -> GetResponse:
-    resource = container.sql_pairs_service[id]
+    event: SqlPairsService.Event = container.sql_pairs_service[event_id]
     return GetResponse(
-        id=resource.id,
-        status=resource.status,
-        error=resource.error and resource.error.model_dump(),
+        event_id=event.id,
+        status=event.status,
+        error=event.error and event.error.model_dump(),
+        trace_id=event.trace_id,
     )
