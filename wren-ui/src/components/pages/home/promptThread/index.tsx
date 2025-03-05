@@ -34,6 +34,7 @@ interface Props {
     responseId: number,
     data: AdjustThreadResponseChartInput,
   ) => Promise<void>;
+  onOpenSaveToKnowledgeModal: (data) => void;
 }
 
 const StyledPromptThread = styled.div`
@@ -69,6 +70,7 @@ const AnswerResultTemplate: React.FC<
       | 'onGenerateBreakdownAnswer'
       | 'onGenerateChartAnswer'
       | 'onAdjustChartAnswer'
+      | 'onOpenSaveToKnowledgeModal'
     > & {
       motion: boolean;
       onInitPreviewDone: () => void;
@@ -85,6 +87,7 @@ const AnswerResultTemplate: React.FC<
   onRegenerateTextBasedAnswer,
   onGenerateChartAnswer,
   onAdjustChartAnswer,
+  onOpenSaveToKnowledgeModal,
   ...threadResponse
 }) => {
   const { id } = threadResponse;
@@ -105,6 +108,7 @@ const AnswerResultTemplate: React.FC<
         onRegenerateTextBasedAnswer={onRegenerateTextBasedAnswer}
         onGenerateChartAnswer={onGenerateChartAnswer}
         onAdjustChartAnswer={onAdjustChartAnswer}
+        onOpenSaveToKnowledgeModal={onOpenSaveToKnowledgeModal}
       />
     </div>
   );

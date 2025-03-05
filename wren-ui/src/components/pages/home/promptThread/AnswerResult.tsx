@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { isEmpty } from 'lodash';
 import clsx from 'clsx';
-import { Typography, Tabs, Tag } from 'antd';
+import { Button, Typography, Tabs, Tag, Tooltip } from 'antd';
 import styled from 'styled-components';
 import CheckCircleFilled from '@ant-design/icons/CheckCircleFilled';
 import CodeFilled from '@ant-design/icons/CodeFilled';
@@ -20,8 +20,24 @@ import {
   ThreadResponse,
 } from '@/apollo/client/graphql/__types__';
 import { ANSWER_TAB_KEYS } from '@/utils/enum';
+import { RobotSVG } from '@/utils/svgs';
 
 const { Title, Text } = Typography;
+
+const knowledgeTooltip = (
+  <>
+    Store this answer as a Question-SQL pair to help Wren AI improve SQL
+    generation.{` `}
+    <Typography.Link
+      className="gray-1 underline"
+      href="https://docs.getwren.ai/oss/guide/knowledge/question-sql-pairs#save-to-knowledge"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      Learn more
+    </Typography.Link>
+  </>
+);
 
 const StyledTabs = styled(Tabs)`
   .ant-tabs-nav {
@@ -103,6 +119,7 @@ export interface Props {
     responseId: number,
     data: AdjustThreadResponseChartInput,
   ) => Promise<void>;
+  onOpenSaveToKnowledgeModal: (data) => void;
 }
 
 const QuestionTitle = (props) => {
@@ -146,6 +163,7 @@ export default function AnswerResult(props: Props) {
     onRegenerateTextBasedAnswer,
     onGenerateChartAnswer,
     onAdjustChartAnswer,
+    onOpenSaveToKnowledgeModal,
   } = props;
 
   const { answerDetail, breakdownDetail, id, question, sql, view } =
@@ -235,10 +253,31 @@ export default function AnswerResult(props: Props) {
           />
         </Tabs.TabPane>
       </StyledTabs>
-      <ViewBlock
-        view={view}
-        onClick={() => onOpenSaveAsViewModal({ sql, responseId: id })}
-      />
+      <div className="mt-2">
+        <Tooltip
+          overlayInnerStyle={{ width: 'max-content' }}
+          placement="topLeft"
+          title={knowledgeTooltip}
+        >
+          <Button
+            type="link"
+            size="small"
+            className="mr-2"
+            onClick={() =>
+              onOpenSaveToKnowledgeModal({ question, sql, responseId: id })
+            }
+          >
+            <div className="d-flex align-center">
+              <RobotSVG className="mr-2" />
+              Save to Knowledge
+            </div>
+          </Button>
+        </Tooltip>
+        <ViewBlock
+          view={view}
+          onClick={() => onOpenSaveAsViewModal({ sql, responseId: id })}
+        />
+      </div>
       {renderRecommendedQuestions(
         isLastThreadResponse,
         recommendedQuestionProps,

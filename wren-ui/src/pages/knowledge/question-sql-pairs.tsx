@@ -10,6 +10,7 @@ import useDrawerAction from '@/hooks/useDrawerAction';
 import useModalAction from '@/hooks/useModalAction';
 import { MoreButton } from '@/components/ActionButton';
 import { SQLPairDropdown } from '@/components/diagram/CustomDropdown';
+import QuestionSQLPairModal from '@/components/modals/QuestionSQLPairModal';
 import SQLPairDrawer from '@/components/pages/knowledge/SQLPairDrawer';
 
 const CodeBlock = dynamic(() => import('@/components/editor/CodeBlock'), {
@@ -141,6 +142,18 @@ export default function ManageQuestionSQLPairs() {
         <SQLPairDrawer
           {...sqlPairDrawer.state}
           onClose={sqlPairDrawer.closeDrawer}
+        />
+        <QuestionSQLPairModal
+          {...questionSqlPairModal.state}
+          onClose={questionSqlPairModal.closeModal}
+          onSubmit={async ({ id, data }) => {
+            console.log('onSubmit values:', { id, data });
+            if (id) {
+              // update
+            } else {
+              // create
+            }
+          }}
         />
       </div>
     </SiderLayout>

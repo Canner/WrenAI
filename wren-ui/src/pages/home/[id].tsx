@@ -16,6 +16,7 @@ import PromptThread from '@/components/pages/home/promptThread';
 import SaveAsViewModal from '@/components/modals/SaveAsViewModal';
 import { getAnswerIsFinished } from '@/components/pages/home/promptThread/TextBasedAnswer';
 import { getIsChartFinished } from '@/components/pages/home/promptThread/ChartAnswer';
+import QuestionSQLPairModal from '@/components/modals/QuestionSQLPairModal';
 import {
   useCreateThreadResponseMutation,
   useThreadQuery,
@@ -69,6 +70,7 @@ export default function HomeThread() {
   const threadId = useMemo(() => Number(params?.id) || null, [params]);
   const askPrompt = useAskPrompt(threadId);
   const saveAsViewModal = useModalAction();
+  const questionSqlPairModal = useModalAction();
 
   const [showRecommendedQuestions, setShowRecommendedQuestions] =
     useState<boolean>(false);
@@ -269,6 +271,7 @@ export default function HomeThread() {
         onGenerateBreakdownAnswer={onGenerateThreadResponseBreakdown}
         onGenerateChartAnswer={onGenerateThreadResponseChart}
         onAdjustChartAnswer={onAdjustThreadResponseChart}
+        onOpenSaveToKnowledgeModal={questionSqlPairModal.openModal}
       />
       <div className="py-12" />
       <Prompt ref={$prompt} {...askPrompt} onSelect={onSelect} />
@@ -280,6 +283,14 @@ export default function HomeThread() {
           await createViewMutation({
             variables: { data: values },
           });
+        }}
+      />
+      <QuestionSQLPairModal
+        {...questionSqlPairModal.state}
+        onClose={questionSqlPairModal.closeModal}
+        onSubmit={async (data) => {
+          console.log('onSubmit values:', data);
+          // TODO: save to knowledge
         }}
       />
     </SiderLayout>
