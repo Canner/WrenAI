@@ -89,7 +89,7 @@ class ChartAdjustmentResultResponse(BaseModel):
     ]
     response: Optional[ChartAdjustmentResult] = None
     error: Optional[ChartAdjustmentError] = None
-
+    trace_id: Optional[str] = None
 
 class ChartAdjustmentService:
     def __init__(
@@ -118,6 +118,7 @@ class ChartAdjustmentService:
         chart_adjustment_request: ChartAdjustmentRequest,
         **kwargs,
     ):
+        trace_id = kwargs.get("trace_id")
         results = {
             "chart_adjustment_result": {},
             "metadata": {
@@ -130,7 +131,8 @@ class ChartAdjustmentService:
             query_id = chart_adjustment_request.query_id
 
             self._chart_adjustment_results[query_id] = ChartAdjustmentResultResponse(
-                status="fetching"
+                status="fetching",
+                trace_id=trace_id,
             )
 
             sql_data = (
@@ -141,7 +143,8 @@ class ChartAdjustmentService:
             )["execute_sql"]["results"]
 
             self._chart_adjustment_results[query_id] = ChartAdjustmentResultResponse(
-                status="generating"
+                status="generating",
+                trace_id=trace_id,
             )
 
             chart_adjustment_result = await self._pipelines["chart_adjustment"].run(
@@ -164,6 +167,7 @@ class ChartAdjustmentService:
                     error=ChartAdjustmentError(
                         code="NO_CHART", message="chart generation failed"
                     ),
+                    trace_id=trace_id,
                 )
                 results["metadata"]["error_type"] = "NO_CHART"
                 results["metadata"]["error_message"] = "chart generation failed"
@@ -173,6 +177,7 @@ class ChartAdjustmentService:
                 ] = ChartAdjustmentResultResponse(
                     status="finished",
                     response=ChartAdjustmentResult(**chart_result),
+                    trace_id=trace_id,
                 )
                 results["chart_adjustment_result"] = chart_result
 
@@ -188,6 +193,7 @@ class ChartAdjustmentService:
                     code="OTHERS",
                     message=str(e),
                 ),
+                trace_id=trace_id,
             )
 
             results["metadata"]["error_type"] = "OTHERS"

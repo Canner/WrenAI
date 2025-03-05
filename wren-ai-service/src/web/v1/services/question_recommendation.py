@@ -34,6 +34,7 @@ class QuestionRecommendation:
         status: Literal["generating", "finished", "failed"] = "generating"
         response: Optional[dict] = {"questions": {}}
         error: Optional[Error] = None
+        trace_id: Optional[str] = None
 
     def __init__(
         self,
@@ -51,11 +52,13 @@ class QuestionRecommendation:
         input: Input,
         error_message: str,
         code: str = "OTHERS",
+        trace_id: Optional[str] = None,
     ):
         self._cache[input.id] = self.Resource(
             id=input.id,
             status="failed",
             error=self.Resource.Error(code=code, message=error_message),
+            trace_id=trace_id,
         )
         logger.error(error_message)
 
@@ -151,6 +154,7 @@ class QuestionRecommendation:
         logger.info(
             f"Request {input.id}: Generate Question Recommendation pipeline is running..."
         )
+        trace_id = kwargs.get("trace_id")
 
         try:
             request = {
@@ -165,6 +169,7 @@ class QuestionRecommendation:
             await self._recommend(request, input)
 
             resource = self._cache[input.id]
+            resource.trace_id = trace_id
             response = resource.response
 
             categories_count = {
@@ -196,11 +201,13 @@ class QuestionRecommendation:
                 input,
                 f"Failed to parse MDL: {str(e)}",
                 code="MDL_PARSE_ERROR",
+                trace_id=trace_id,
             )
         except Exception as e:
             self._handle_exception(
                 input,
                 f"An error occurred during question recommendation generation: {str(e)}",
+                trace_id=trace_id,
             )
 
         return self._cache[input.id].with_metadata()

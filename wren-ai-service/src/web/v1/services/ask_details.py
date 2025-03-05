@@ -59,6 +59,7 @@ class AskDetailsResultResponse(BaseModel):
     status: Literal["understanding", "searching", "generating", "finished", "failed"]
     response: Optional[AskDetailsResponseDetails] = None
     error: Optional[AskDetailsError] = None
+    trace_id: Optional[str] = None
 
 
 class AskDetailsService:
@@ -88,6 +89,7 @@ class AskDetailsService:
         ask_details_request: AskDetailsRequest,
         **kwargs,
     ):
+        trace_id = kwargs.get("trace_id")
         results = {
             "ask_details_result": {},
             "metadata": {
@@ -103,14 +105,17 @@ class AskDetailsService:
 
             self._ask_details_results[query_id] = AskDetailsResultResponse(
                 status="understanding",
+                trace_id=trace_id,
             )
 
             self._ask_details_results[query_id] = AskDetailsResultResponse(
                 status="searching",
+                trace_id=trace_id,
             )
 
             self._ask_details_results[query_id] = AskDetailsResultResponse(
                 status="generating",
+                trace_id=trace_id,
             )
 
             generation_result = await self._pipelines["sql_breakdown"].run(
@@ -149,6 +154,7 @@ class AskDetailsService:
                 response=AskDetailsResultResponse.AskDetailsResponseDetails(
                     **ask_details_result
                 ),
+                trace_id=trace_id,
             )
 
             results["ask_details_result"] = ask_details_result
@@ -157,14 +163,15 @@ class AskDetailsService:
         except Exception as e:
             logger.exception(f"ask-details pipeline - OTHERS: {e}")
 
-            self._ask_details_results[
-                ask_details_request.query_id
-            ] = AskDetailsResultResponse(
-                status="failed",
-                error=AskDetailsResultResponse.AskDetailsError(
-                    code="OTHERS",
-                    message=str(e),
-                ),
+            self._ask_details_results[ask_details_request.query_id] = (
+                AskDetailsResultResponse(
+                    status="failed",
+                    error=AskDetailsResultResponse.AskDetailsError(
+                        code="OTHERS",
+                        message=str(e),
+                    ),
+                    trace_id=trace_id,
+                )
             )
 
             results["metadata"]["error_type"] = "OTHERS"
