@@ -77,11 +77,8 @@ export default function ManageQuestionSQLPairs() {
       dataIndex: 'sql',
       width: '60%',
       render: (sql) => (
-        <div
-          className="text-truncate border border-gray-4 rounded"
-          style={{ width: '100%' }}
-        >
-          <CodeBlock code={sql} maxHeight="50" inline />
+        <div style={{ width: '100%' }}>
+          <CodeBlock code={sql} multipleLine={3} />
         </div>
       ),
     },
