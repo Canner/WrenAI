@@ -145,6 +145,9 @@ pipes:
     engine: wren_ui
   - name: evaluation
     llm: litellm_llm.default
+  - name: instructions_indexing
+    embedder: litellm_embedder.default
+    document_store: qdrant
 
 ---
 settings:
