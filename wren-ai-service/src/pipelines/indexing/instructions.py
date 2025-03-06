@@ -21,6 +21,7 @@ class Instruction(BaseModel):
     id: str
     instruction: str = ""
     question: str = ""
+    is_default: bool = False
 
 
 @component
@@ -39,6 +40,7 @@ class InstructionsConverter:
                     meta={
                         "instruction_id": instruction.id,
                         "question": instruction.question,
+                        "is_default": instruction.is_default,
                         **addition,
                     },
                     content=instruction.instruction,
