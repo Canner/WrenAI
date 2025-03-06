@@ -1,9 +1,15 @@
 import { IWrenAIAdaptor } from '../adaptors';
-import { SqlPairResult, SqlPairStatus } from '../models/adaptor';
+import {
+  QuestionsResult,
+  QuestionsStatus,
+  SqlPairResult,
+  SqlPairStatus,
+} from '../models/adaptor';
 import { ISqlPairRepository, SqlPair } from '../repositories/sqlPairRepository';
 import { getLogger } from '@server/utils';
 import { chunk } from 'lodash';
 import * as Errors from '@server/utils/error';
+import { Project } from '../repositories';
 
 const logger = getLogger('SqlPairService');
 
@@ -29,6 +35,7 @@ export interface ISqlPairService {
     sqlPair: EditSqlPair,
   ): Promise<SqlPair>;
   deleteSqlPair(projectId: number, sqlPairId: number): Promise<boolean>;
+  generateQuestions(project: Project, sqls: string[]): Promise<string[]>;
 }
 
 export class SqlPairService implements ISqlPairService {
@@ -44,6 +51,33 @@ export class SqlPairService implements ISqlPairService {
   }) {
     this.sqlPairRepository = sqlPairRepository;
     this.wrenAIAdaptor = wrenAIAdaptor;
+  }
+  public async generateQuestions(
+    project: Project,
+    sqls: string[],
+  ): Promise<string[]> {
+    try {
+      const configurations = {
+        language: project.language,
+      };
+
+      const { queryId } = await this.wrenAIAdaptor.generateQuestions({
+        projectId: project.id,
+        configurations,
+        sqls,
+      });
+      const result = await this.waitQuestionGenerateResult(queryId);
+      if (result.error) {
+        throw Errors.create(Errors.GeneralErrorCodes.GENERATE_QUESTIONS_ERROR, {
+          customMessage: result.error.message,
+        });
+      }
+      return result.questions;
+    } catch (err) {
+      throw Errors.create(Errors.GeneralErrorCodes.GENERATE_QUESTIONS_ERROR, {
+        customMessage: err.message,
+      });
+    }
   }
   public async getProjectSqlPairs(projectId: number): Promise<SqlPair[]> {
     return this.sqlPairRepository.findAllBy({ projectId });
@@ -189,6 +223,19 @@ export class SqlPairService implements ISqlPairService {
     while (!this.isFinishedState(result.status)) {
       await new Promise((resolve) => setTimeout(resolve, 500));
       result = await this.wrenAIAdaptor.getSqlPairResult(queryId);
+    }
+    return result;
+  }
+
+  private async waitQuestionGenerateResult(
+    queryId: string,
+  ): Promise<Partial<QuestionsResult>> {
+    let result = await this.wrenAIAdaptor.getQuestionsResult(queryId);
+    while (
+      ![QuestionsStatus.SUCCEEDED, SqlPairStatus.FAILED].includes(result.status)
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      result = await this.wrenAIAdaptor.getQuestionsResult(queryId);
     }
     return result;
   }

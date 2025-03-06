@@ -59,7 +59,7 @@ const resolvers = {
     dashboardItems: dashboardResolver.getDashboardItems,
 
     // SQL Pairs
-    projectSqlPairs: sqlPairResolver.getProjectSqlPairs,
+    sqlPairs: sqlPairResolver.getProjectSqlPairs,
   },
   Mutation: {
     deploy: modelResolver.deploy,
@@ -144,9 +144,10 @@ const resolvers = {
     previewItemSQL: dashboardResolver.previewItemSQL,
 
     // SQL Pairs
-    createSqlPairs: sqlPairResolver.createSqlPairs,
+    createSqlPair: sqlPairResolver.createSqlPair,
     editSqlPair: sqlPairResolver.editSqlPair,
     deleteSqlPair: sqlPairResolver.deleteSqlPair,
+    generateQuestion: sqlPairResolver.generateQuestion,
   },
   ThreadResponse: askingResolver.getThreadResponseNestedResolver(),
   DetailStep: askingResolver.getDetailStepNestedResolver(),

@@ -38,6 +38,7 @@ export enum GeneralErrorCodes {
 
   // deploy sql pair error
   DEPLOY_SQL_PAIR_ERROR = 'DEPLOY_SQL_PAIR_ERROR',
+  GENERATE_QUESTIONS_ERROR = 'GENERATE_QUESTIONS_ERROR',
 }
 
 export const errorMessages = {
@@ -82,6 +83,7 @@ export const errorMessages = {
 
   // deploy sql pair error
   [GeneralErrorCodes.DEPLOY_SQL_PAIR_ERROR]: 'Deploy sql pair error',
+  [GeneralErrorCodes.GENERATE_QUESTIONS_ERROR]: 'Generate questions error',
 };
 
 export const shortMessages = {
@@ -101,6 +103,7 @@ export const shortMessages = {
   [GeneralErrorCodes.DRY_RUN_ERROR]: 'Dry run sql statement error',
   [GeneralErrorCodes.DRY_PLAN_ERROR]: 'Dry plan error',
   [GeneralErrorCodes.DEPLOY_SQL_PAIR_ERROR]: 'Deploy sql pair error',
+  [GeneralErrorCodes.GENERATE_QUESTIONS_ERROR]: 'Generate questions error',
 };
 
 export const create = (

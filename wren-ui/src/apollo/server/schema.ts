@@ -880,6 +880,10 @@ export const typeDefs = gql`
     id: Int!
   }
 
+  input GenerateQuestionInput {
+    sql: String!
+  }
+
   # Query and Mutation
   type Query {
     # On Boarding Steps
@@ -1043,5 +1047,6 @@ export const typeDefs = gql`
       data: UpdateSqlPairInput!
     ): SqlPair!
     deleteSqlPair(where: SqlPairWhereUniqueInput!): Boolean!
+    generateQuestion(data: GenerateQuestionInput!): String!
   }
 `;
