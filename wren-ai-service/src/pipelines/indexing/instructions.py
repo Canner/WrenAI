@@ -162,7 +162,7 @@ class Instructions(BasicPipeline):
     @observe(name="Clean Documents for Instructions")
     async def clean(
         self,
-        instructions: List[Instruction],
+        instructions: List[Instruction] = [],
         project_id: Optional[str] = None,
         delete_all: bool = False,
     ) -> None:

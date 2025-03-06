@@ -68,6 +68,9 @@ def create_service_container(
                     **pipe_components["sql_pairs_indexing"],
                     sql_pairs_path=settings.sql_pairs_path,
                 ),
+                "instructions": indexing.Instructions(
+                    **pipe_components["instructions_indexing"],
+                ),
             },
             **query_cache,
         ),
