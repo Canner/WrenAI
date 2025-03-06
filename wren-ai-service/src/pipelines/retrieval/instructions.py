@@ -66,16 +66,17 @@ async def retrieval(embedding: dict, project_id: str, retriever: Any) -> dict:
     if not embedding:
         return {}
 
-    filters = (
-        {
-            "operator": "AND",
-            "conditions": [
-                {"field": "project_id", "operator": "==", "value": project_id},
-            ],
-        }
-        if project_id
-        else None
-    )
+    filters = {
+        "operator": "AND",
+        "conditions": [
+            {"field": "is_default", "operator": "==", "value": False},
+        ],
+    }
+
+    if project_id:
+        filters["conditions"].append(
+            {"field": "project_id", "operator": "==", "value": project_id}
+        )
 
     res = await retriever.run(
         query_embedding=embedding.get("embedding"),
@@ -102,14 +103,35 @@ def filtered_documents(
 
 
 @observe(capture_input=False)
+def default_instructions(store: QdrantDocumentStore, project_id: str) -> list[Document]:
+    filters = {
+        "operator": "AND",
+        "conditions": [
+            {"field": "is_default", "operator": "==", "value": True},
+        ],
+    }
+
+    if project_id:
+        filters["conditions"].append(
+            {"field": "project_id", "operator": "==", "value": project_id}
+        )
+
+    return store.filter_documents(filters=filters)
+
+
+@observe(capture_input=False)
 def formatted_output(
-    filtered_documents: dict, output_formatter: OutputFormatter
+    default_instructions: list[Document],
+    filtered_documents: dict,
+    output_formatter: OutputFormatter,
 ) -> dict:
-    if not filtered_documents:
+    if not filtered_documents and not default_instructions:
         return {"documents": []}
 
-    documents = filtered_documents.get("documents")
-    return output_formatter.run(documents=documents)
+    # todo: default instruction also need to be formatted
+    documents = output_formatter.run(documents=filtered_documents.get("documents"))
+    documents["documents"].extend(default_instructions)
+    return documents
 
 
 ## End of Pipeline
@@ -163,6 +185,6 @@ if __name__ == "__main__":
     dry_run_pipeline(
         Instructions,
         "instructions_retrieval",
-        query="how many customers live in EU?",
-        project_id="1",
+        query="hello",
+        project_id="string",
     )
