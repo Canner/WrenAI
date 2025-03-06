@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     allow_using_db_schemas_without_pruning: bool = Field(default=False)
     sql_pairs_similarity_threshold: float = Field(default=0.7)
     sql_pairs_retrieval_max_size: int = Field(default=10)
+    instructions_similarity_threshold: float = Field(default=0.7)
+    instructions_top_k: int = Field(default=10)
 
     # generation config
     allow_intent_classification: bool = Field(default=True)
