@@ -134,6 +134,9 @@ pipes:
   - name: instructions_indexing
     embedder: litellm_embedder.default
     document_store: qdrant
+  - name: instructions_retrieval
+    embedder: litellm_embedder.gemini/text-embedding-004
+    document_store: qdrant
 
 ---
 settings:
