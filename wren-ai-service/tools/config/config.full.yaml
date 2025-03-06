@@ -148,6 +148,9 @@ pipes:
   - name: instructions_indexing
     embedder: litellm_embedder.default
     document_store: qdrant
+  - name: instructions_retrieval
+    embedder: litellm_embedder.text-embedding-3-large
+    document_store: qdrant
 
 ---
 settings:

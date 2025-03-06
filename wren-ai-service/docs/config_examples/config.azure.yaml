@@ -135,6 +135,9 @@ pipes:
   - name: instructions_indexing
     embedder: litellm_embedder.default
     document_store: qdrant
+  - name: instructions_retrieval
+    embedder: litellm_embedder.azure/text-embedding-ada-002
+    document_store: qdrant
 
 ---
 settings:
