@@ -96,7 +96,7 @@ async def embedding(
 async def clean(
     cleaner: InstructionsCleaner,
     instructions: List[Instruction],
-    embedding: Dict[str, Any],
+    embedding: Dict[str, Any] = {},
     project_id: Optional[str] = "",
     delete_all: bool = False,
 ) -> Dict[str, Any]:
@@ -168,7 +168,6 @@ class Instructions(BasicPipeline):
     ) -> None:
         await clean(
             instructions=instructions,
-            embedding={"documents": []},
             cleaner=self._components["cleaner"],
             project_id=project_id,
             delete_all=delete_all,

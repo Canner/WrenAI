@@ -125,7 +125,7 @@ async def embedding(
 async def clean(
     cleaner: SqlPairsCleaner,
     sql_pairs: List[SqlPair],
-    embedding: Dict[str, Any],
+    embedding: Dict[str, Any] = {},
     project_id: Optional[str] = "",
     delete_all: bool = False,
 ) -> Dict[str, Any]:
@@ -215,13 +215,12 @@ class SqlPairs(BasicPipeline):
     @observe(name="Clean Documents for SQL Pairs")
     async def clean(
         self,
-        sql_pairs: List[SqlPair],
+        sql_pairs: List[SqlPair] = [],
         project_id: Optional[str] = None,
         delete_all: bool = False,
     ) -> None:
         await clean(
             sql_pairs=sql_pairs,
-            embedding={"documents": []},
             cleaner=self._components["cleaner"],
             project_id=project_id,
             delete_all=delete_all,
