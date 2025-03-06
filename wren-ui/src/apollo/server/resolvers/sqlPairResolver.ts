@@ -70,22 +70,23 @@ export class SqlPairResolver {
     const project = await ctx.projectService.getCurrentProject();
 
     // dry run the sql to check if it's valid
-    const lastDeployment = await ctx.deployService.getLastDeployment(
-      project.id,
-    );
-    const manifest = lastDeployment.manifest;
-    try {
-      await ctx.queryService.preview(arg.data.sql, {
-        manifest,
-        project,
-        dryRun: true,
-      });
-    } catch (err) {
-      throw Errors.create(Errors.GeneralErrorCodes.INVALID_SQL_ERROR, {
-        customMessage: err.message,
-      });
+    if (arg.data.sql) {
+      const lastDeployment = await ctx.deployService.getLastDeployment(
+        project.id,
+      );
+      const manifest = lastDeployment.manifest;
+      try {
+        await ctx.queryService.preview(arg.data.sql, {
+          manifest,
+          project,
+          dryRun: true,
+        });
+      } catch (err) {
+        throw Errors.create(Errors.GeneralErrorCodes.INVALID_SQL_ERROR, {
+          customMessage: err.message,
+        });
+      }
     }
-
     return ctx.sqlPairService.editSqlPair(project.id, arg.where.id, arg.data);
   }
 
