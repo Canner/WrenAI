@@ -135,7 +135,7 @@ class SemanticsPreparationService:
 
     @observe(name="Delete Semantics Documents")
     @trace_metadata
-    async def delete_semantics(self, project_id: str):
+    async def delete_semantics(self, project_id: str, **kwargs):
         logger.info(f"Project ID: {project_id}, Deleting semantics documents...")
 
         tasks = [
@@ -144,6 +144,11 @@ class SemanticsPreparationService:
         ] + [
             self._pipelines["sql_pairs"].clean(
                 sql_pairs=[],
+                project_id=project_id,
+                delete_all=True,
+            )
+        ] + [
+            self._pipelines["instructions"].clean(
                 project_id=project_id,
                 delete_all=True,
             )
