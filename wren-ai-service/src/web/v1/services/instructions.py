@@ -19,7 +19,7 @@ class InstructionsService:
         message: str
 
     class Event(BaseModel, MetadataTraceable):
-        id: str
+        event_id: str
         status: Literal["indexing", "deleting", "finished", "failed"] = "indexing"
         error: Optional["InstructionsService.Error"] = None
         trace_id: Optional[str] = None
@@ -42,7 +42,7 @@ class InstructionsService:
         trace_id: Optional[str] = None,
     ):
         self._cache[id] = self.Event(
-            id=id,
+            event_id=id,
             status="failed",
             error=self.Event.Error(code=code, message=error_message),
             trace_id=trace_id,
@@ -50,7 +50,7 @@ class InstructionsService:
         logger.error(error_message)
 
     class IndexRequest(BaseModel):
-        id: str
+        event_id: str
         instructions: List[Instruction]
         project_id: Optional[str] = None
 
@@ -62,7 +62,7 @@ class InstructionsService:
         **kwargs,
     ):
         logger.info(
-            f"Request {request.id}: Instructions Indexing process is running..."
+            f"Request {request.event_id}: Instructions Indexing process is running..."
         )
         trace_id = kwargs.get("trace_id")
 
@@ -72,23 +72,23 @@ class InstructionsService:
                 instructions=request.instructions,
             )
 
-            self._cache[request.id] = self.Event(
-                id=request.id,
+            self._cache[request.event_id] = self.Event(
+                event_id=request.event_id,
                 status="finished",
                 trace_id=trace_id,
             )
 
         except Exception as e:
             self._handle_exception(
-                request.id,
+                request.event_id,
                 f"An error occurred during instructions indexing: {str(e)}",
                 trace_id=trace_id,
             )
 
-        return self._cache[request.id].with_metadata()
+        return self._cache[request.event_id].with_metadata()
 
     class DeleteRequest(BaseModel):
-        id: str
+        event_id: str
         instruction_ids: List[str]
         project_id: Optional[str] = None
 
@@ -100,7 +100,7 @@ class InstructionsService:
         **kwargs,
     ):
         logger.info(
-            f"Request {request.id}: Instructions Deletion process is running..."
+            f"Request {request.event_id}: Instructions Deletion process is running..."
         )
         trace_id = kwargs.get("trace_id")
 
@@ -110,33 +110,33 @@ class InstructionsService:
                 instructions=instructions, project_id=request.project_id
             )
 
-            self._cache[request.id] = self.Event(
-                id=request.id,
+            self._cache[request.event_id] = self.Event(
+                event_id=request.event_id,
                 status="finished",
                 trace_id=trace_id,
             )
         except Exception as e:
             self._handle_exception(
-                request.id,
+                request.event_id,
                 f"Failed to delete instructions: {e}",
                 trace_id=trace_id,
             )
 
-        return self._cache[request.id].with_metadata()
+        return self._cache[request.event_id].with_metadata()
 
-    def __getitem__(self, id: str) -> Event:
-        response = self._cache.get(id)
+    def __getitem__(self, event_id: str) -> Event:
+        response = self._cache.get(event_id)
 
         if response is None:
-            message = f"Instructions Event with ID '{id}' not found."
+            message = f"Instructions Event with ID '{event_id}' not found."
             logger.exception(message)
             return self.Event(
-                id=id,
+                event_id=event_id,
                 status="failed",
                 error=self.Event.Error(code="OTHERS", message=message),
             )
 
         return response
 
-    def __setitem__(self, id: str, value: Event):
-        self._cache[id] = value
+    def __setitem__(self, event_id: str, value: Event):
+        self._cache[event_id] = value
