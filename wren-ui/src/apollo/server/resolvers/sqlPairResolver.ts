@@ -1,6 +1,6 @@
 import { IContext } from '@server/types/context';
 import { SqlPair } from '../repositories';
-
+import * as Errors from '@server/utils/error';
 export class SqlPairResolver {
   constructor() {
     this.getProjectSqlPairs = this.getProjectSqlPairs.bind(this);
@@ -30,10 +30,27 @@ export class SqlPairResolver {
     ctx: IContext,
   ) {
     const project = await ctx.projectService.getCurrentProject();
+
+    // dry run the sql to check if it's valid
+    const lastDeployment = await ctx.deployService.getLastDeployment(
+      project.id,
+    );
+    const manifest = lastDeployment.manifest;
+    try {
+      await ctx.queryService.preview(arg.data.sql, {
+        manifest,
+        project,
+        dryRun: true,
+      });
+    } catch (err) {
+      throw Errors.create(Errors.GeneralErrorCodes.INVALID_SQL_ERROR, {
+        customMessage: err.message,
+      });
+    }
+
     const sqlPairs = await ctx.sqlPairService.createSqlPairs(project.id, [
       arg.data,
     ]);
-    console.log(sqlPairs);
     return sqlPairs[0];
   }
 
@@ -51,6 +68,24 @@ export class SqlPairResolver {
     ctx: IContext,
   ) {
     const project = await ctx.projectService.getCurrentProject();
+
+    // dry run the sql to check if it's valid
+    const lastDeployment = await ctx.deployService.getLastDeployment(
+      project.id,
+    );
+    const manifest = lastDeployment.manifest;
+    try {
+      await ctx.queryService.preview(arg.data.sql, {
+        manifest,
+        project,
+        dryRun: true,
+      });
+    } catch (err) {
+      throw Errors.create(Errors.GeneralErrorCodes.INVALID_SQL_ERROR, {
+        customMessage: err.message,
+      });
+    }
+
     return ctx.sqlPairService.editSqlPair(project.id, arg.where.id, arg.data);
   }
 

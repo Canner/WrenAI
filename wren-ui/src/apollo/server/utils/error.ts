@@ -39,6 +39,7 @@ export enum GeneralErrorCodes {
   // deploy sql pair error
   DEPLOY_SQL_PAIR_ERROR = 'DEPLOY_SQL_PAIR_ERROR',
   GENERATE_QUESTIONS_ERROR = 'GENERATE_QUESTIONS_ERROR',
+  INVALID_SQL_ERROR = 'INVALID_SQL_ERROR',
 }
 
 export const errorMessages = {
