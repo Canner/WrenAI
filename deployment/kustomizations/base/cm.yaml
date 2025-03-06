@@ -177,6 +177,12 @@ data:
       - name: sql_regeneration
         llm: litellm_llm.default
         engine: wren_ui
+      - name: instructions_indexing
+        embedder: litellm_embedder.default
+        document_store: qdrant
+      - name: instructions_retrieval
+        embedder: litellm_embedder.default
+        document_store: qdrant
 
     ---
     settings:
