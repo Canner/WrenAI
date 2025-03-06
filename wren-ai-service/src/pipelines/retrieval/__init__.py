@@ -1,4 +1,5 @@
 from .historical_question_retrieval import HistoricalQuestionRetrieval
+from .instructions import Instructions
 from .preprocess_sql_data import PreprocessSqlData
 from .retrieval import Retrieval
 from .sql_executor import SQLExecutor
@@ -10,4 +11,5 @@ __all__ = [
     "Retrieval",
     "SQLExecutor",
     "SqlPairsRetrieval",
+    "Instructions",
 ]
