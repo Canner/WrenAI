@@ -85,6 +85,8 @@ export const errorMessages = {
   // deploy sql pair error
   [GeneralErrorCodes.DEPLOY_SQL_PAIR_ERROR]: 'Deploy sql pair error',
   [GeneralErrorCodes.GENERATE_QUESTIONS_ERROR]: 'Generate questions error',
+  [GeneralErrorCodes.INVALID_SQL_ERROR]:
+    'Invalid SQL, please check your SQL syntax',
 };
 
 export const shortMessages = {
@@ -105,6 +107,8 @@ export const shortMessages = {
   [GeneralErrorCodes.DRY_PLAN_ERROR]: 'Dry plan error',
   [GeneralErrorCodes.DEPLOY_SQL_PAIR_ERROR]: 'Deploy sql pair error',
   [GeneralErrorCodes.GENERATE_QUESTIONS_ERROR]: 'Generate questions error',
+  [GeneralErrorCodes.INVALID_SQL_ERROR]:
+    'Invalid SQL, please check your SQL syntax',
 };
 
 export const create = (
