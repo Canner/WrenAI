@@ -117,6 +117,7 @@ def create_service_container(
             },
             allow_intent_classification=settings.allow_intent_classification,
             allow_sql_generation_reasoning=settings.allow_sql_generation_reasoning,
+            max_histories=settings.max_histories,
             **query_cache,
         ),
         chart_service=services.ChartService(
