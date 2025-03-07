@@ -128,7 +128,6 @@ def formatted_output(
     if not filtered_documents and not default_instructions:
         return {"documents": []}
 
-    # todo: default instruction also need to be formatted
     documents = output_formatter.run(documents=filtered_documents.get("documents"))
     documents["documents"].extend(default_instructions)
     return documents
