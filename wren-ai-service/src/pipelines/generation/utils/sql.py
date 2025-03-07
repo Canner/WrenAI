@@ -551,8 +551,9 @@ def construct_instructions(
         _instructions += sql_samples_instructions
     if instructions:
         # todo: refactor the format of the instructions
+        _instructions += "\n\n#### Instructions for SQL Generation ####\n\n"
         _instructions += "\n\n".join(
-            [f"# {instruction.get('instruction')}\n\n" for instruction in instructions]
+            [f"{instruction.get('instruction')}\n\n" for instruction in instructions]
         )
 
     return _instructions
