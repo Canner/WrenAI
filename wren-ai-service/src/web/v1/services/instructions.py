@@ -14,6 +14,13 @@ logger = logging.getLogger("wren-ai-service")
 
 
 class InstructionsService:
+    class Instruction(BaseModel):
+        id: str
+        instruction: str
+        questions: List[str]
+        # This is used to identify the default instruction needed to be retrieved for the project
+        is_default: bool = False
+
     class Error(BaseModel):
         code: Literal["OTHERS"]
         message: str
@@ -51,7 +58,7 @@ class InstructionsService:
 
     class IndexRequest(BaseModel):
         event_id: str
-        instructions: List[Instruction]
+        instructions: List["InstructionsService.Instruction"]
         project_id: Optional[str] = None
 
     @observe(name="Index Instructions")
@@ -67,9 +74,20 @@ class InstructionsService:
         trace_id = kwargs.get("trace_id")
 
         try:
+            instructions = [
+                Instruction(
+                    id=instruction.id,
+                    instruction=instruction.instruction,
+                    question=question,
+                    is_default=instruction.is_default,
+                )
+                for instruction in request.instructions
+                for question in instruction.questions
+            ]
+
             await self._pipelines["instructions_indexing"].run(
                 project_id=request.project_id,
-                instructions=request.instructions,
+                instructions=instructions,
             )
 
             self._cache[request.event_id] = self.Event(
