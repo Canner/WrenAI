@@ -125,7 +125,7 @@ pipes:
     embedder: litellm_embedder.default
     document_store: qdrant
   - name: instructions_retrieval
-    embedder: litellm_embedder.openai/nomic-embed-text
+    embedder: litellm_embedder.default
     document_store: qdrant
 
 ---
