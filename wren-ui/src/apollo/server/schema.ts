@@ -585,6 +585,7 @@ export const typeDefs = gql`
     error: Error
     candidates: [ResultCandidate!]!
     intentReasoning: String
+    invalidSql: String
   }
 
   input InstantRecommendedQuestionsInput {
