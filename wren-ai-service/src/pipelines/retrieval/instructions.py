@@ -103,7 +103,12 @@ def filtered_documents(
 
 
 @observe(capture_input=False)
-def default_instructions(store: QdrantDocumentStore, project_id: str) -> list[Document]:
+def default_instructions(
+    count_documents: int, store: QdrantDocumentStore, project_id: str
+) -> list[Document]:
+    if not count_documents:
+        return []
+
     filters = {
         "operator": "AND",
         "conditions": [
