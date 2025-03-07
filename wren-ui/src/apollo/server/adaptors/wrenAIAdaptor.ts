@@ -22,9 +22,15 @@ import {
   ChartResult,
   ChartStatus,
   TextBasedAnswerStatus,
+  SqlPairResult,
+  SqlPairStatus,
+  QuestionInput,
+  QuestionsResult,
+  QuestionsStatus,
 } from '@server/models/adaptor';
 import { getLogger } from '@server/utils';
 import * as Errors from '@server/utils/error';
+import { SqlPair } from '../repositories';
 
 const logger = getLogger('WrenAIAdaptor');
 logger.level = 'debug';
@@ -87,6 +93,18 @@ export interface IWrenAIAdaptor {
   adjustChart(input: ChartAdjustmentInput): Promise<AsyncQueryResponse>;
   getChartAdjustmentResult(queryId: string): Promise<ChartResult>;
   cancelChartAdjustment(queryId: string): Promise<void>;
+
+  /**
+   * Sql Pair APIs
+   */
+  deploySqlPair(
+    projectId: number,
+    sqlPair: { question: string; sql: string },
+  ): Promise<AsyncQueryResponse>;
+  getSqlPairResult(queryId: string): Promise<SqlPairResult>;
+  deleteSqlPairs(projectId: number, sqlPairIds: number[]): Promise<void>;
+  generateQuestions(input: QuestionInput): Promise<AsyncQueryResponse>;
+  getQuestionsResult(queryId: string): Promise<Partial<QuestionsResult>>;
 }
 
 export class WrenAIAdaptor implements IWrenAIAdaptor {
@@ -94,6 +112,70 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
 
   constructor({ wrenAIBaseEndpoint }: { wrenAIBaseEndpoint: string }) {
     this.wrenAIBaseEndpoint = wrenAIBaseEndpoint;
+  }
+  public async deploySqlPair(
+    projectId: number,
+    sqlPair: Partial<SqlPair>,
+  ): Promise<AsyncQueryResponse> {
+    try {
+      const body = {
+        sql_pairs: [
+          {
+            id: `${sqlPair.id}`,
+            sql: sqlPair.sql,
+            question: sqlPair.question,
+          },
+        ],
+        project_id: projectId.toString(),
+      };
+
+      return axios
+        .post(`${this.wrenAIBaseEndpoint}/v1/sql-pairs`, body)
+        .then((res) => {
+          return { queryId: res.data.event_id };
+        });
+    } catch (err: any) {
+      logger.debug(
+        `Got error when deploying SQL pair: ${getAIServiceError(err)}`,
+      );
+      throw err;
+    }
+  }
+  public async getSqlPairResult(queryId: string): Promise<SqlPairResult> {
+    try {
+      const res = await axios.get(
+        `${this.wrenAIBaseEndpoint}/v1/sql-pairs/${queryId}`,
+      );
+      const { status, error } = this.transformStatusAndError(res.data);
+      return {
+        status: status as SqlPairStatus,
+        error,
+      };
+    } catch (err: any) {
+      logger.debug(
+        `Got error when getting SQL pair result: ${getAIServiceError(err)}`,
+      );
+      throw err;
+    }
+  }
+  public async deleteSqlPairs(
+    projectId: number,
+    sqlPairIds: number[],
+  ): Promise<void> {
+    try {
+      await axios.delete(`${this.wrenAIBaseEndpoint}/v1/sql-pairs`, {
+        data: {
+          sql_pair_ids: sqlPairIds.map((id) => id.toString()),
+          project_id: projectId.toString(),
+        },
+      });
+      return;
+    } catch (err: any) {
+      logger.debug(
+        `Got error when deleting SQL pair: ${getAIServiceError(err)}`,
+      );
+      throw err;
+    }
   }
 
   /**
@@ -421,7 +503,49 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       throw err;
     }
   }
+  public async generateQuestions(
+    input: QuestionInput,
+  ): Promise<AsyncQueryResponse> {
+    try {
+      const body = {
+        sqls: input.sqls,
+        project_id: input.projectId.toString(),
+        configuration: input.configurations,
+      };
 
+      const res = await axios.post(
+        `${this.wrenAIBaseEndpoint}/v1/sql-questions`,
+        body,
+      );
+      return { queryId: res.data.query_id };
+    } catch (err: any) {
+      logger.debug(
+        `Got error when generating questions: ${getAIServiceError(err)}`,
+      );
+      throw err;
+    }
+  }
+
+  public async getQuestionsResult(
+    queryId: string,
+  ): Promise<Partial<QuestionsResult>> {
+    try {
+      const res = await axios.get(
+        `${this.wrenAIBaseEndpoint}/v1/sql-questions/${queryId}`,
+      );
+      const { status, error } = this.transformStatusAndError(res.data);
+      return {
+        status: status as QuestionsStatus,
+        error,
+        questions: res.data.questions || [],
+      };
+    } catch (err: any) {
+      logger.debug(
+        `Got error when getting questions result: ${getAIServiceError(err)}`,
+      );
+      throw err;
+    }
+  }
   private transformChartAdjustmentInput(input: ChartAdjustmentInput) {
     const { query, sql, adjustmentOption, chartSchema, configurations } = input;
     return {
@@ -558,7 +682,12 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   }
 
   private transformStatusAndError(body: any): {
-    status: AskResultStatus | TextBasedAnswerStatus | ChartStatus;
+    status:
+      | AskResultStatus
+      | TextBasedAnswerStatus
+      | ChartStatus
+      | SqlPairStatus
+      | QuestionsStatus;
     error?: {
       code: Errors.GeneralErrorCodes;
       message: string;
