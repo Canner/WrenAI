@@ -366,6 +366,15 @@ class AskService:
                     )
                 )["formatted_output"].get("documents", [])
 
+                # todo: consider to retireve at the same time with sql_samples
+                # todo: should we also put the instructioons into reasoning pipeline?
+                instructions = (
+                    await self._pipelines["instructions_retrieval"].run(
+                        query=user_query,
+                        project_id=ask_request.project_id,
+                    )
+                )["formatted_output"].get("documents", [])
+
                 sql_generation_reasoning = (
                     await self._pipelines["sql_generation_reasoning"].run(
                         query=user_query,
@@ -416,6 +425,7 @@ class AskService:
                         project_id=ask_request.project_id,
                         configuration=ask_request.configurations,
                         sql_samples=sql_samples,
+                        instructions=instructions,
                         has_calculated_field=has_calculated_field,
                         has_metric=has_metric,
                     )
@@ -429,6 +439,7 @@ class AskService:
                         project_id=ask_request.project_id,
                         configuration=ask_request.configurations,
                         sql_samples=sql_samples,
+                        instructions=instructions,
                         has_calculated_field=has_calculated_field,
                         has_metric=has_metric,
                     )

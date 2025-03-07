@@ -534,22 +534,28 @@ def construct_instructions(
     has_calculated_field: bool = False,
     has_metric: bool = False,
     sql_samples: list | None = None,
+    instructions: list | None = None,
 ):
     if sql_samples is None:
         sql_samples = []
 
-    instructions = ""
+    _instructions = ""
     if configuration:
         if configuration.fiscal_year:
-            instructions += f"\n- For calendar year related computation, it should be started from {configuration.fiscal_year.start} to {configuration.fiscal_year.end}\n\n"
+            _instructions += f"\n- For calendar year related computation, it should be started from {configuration.fiscal_year.start} to {configuration.fiscal_year.end}\n\n"
     if has_calculated_field:
-        instructions += calculated_field_instructions
+        _instructions += calculated_field_instructions
     if has_metric:
-        instructions += metric_instructions
+        _instructions += metric_instructions
     if sql_samples:
-        instructions += sql_samples_instructions
+        _instructions += sql_samples_instructions
+    if instructions:
+        # todo: refactor the format of the instructions
+        _instructions += "\n\n".join(
+            [f"# {instruction.get('instruction')}\n\n" for instruction in instructions]
+        )
 
-    return instructions
+    return _instructions
 
 
 class SqlGenerationResult(BaseModel):
