@@ -21,6 +21,7 @@ class Instruction(BaseModel):
     id: str
     instruction: str = ""
     question: str = ""
+    # This is used to identify the default instruction needed to be retrieved for the project
     is_default: bool = False
 
 
@@ -32,18 +33,17 @@ class InstructionsConverter:
 
         addition = {"project_id": project_id} if project_id else {}
 
-        # todo: for the prototype, the content using instruction directly
         return {
             "documents": [
                 Document(
                     id=str(uuid.uuid4()),
                     meta={
                         "instruction_id": instruction.id,
-                        "question": instruction.question,
+                        "instruction": instruction.instruction,
                         "is_default": instruction.is_default,
                         **addition,
                     },
-                    content=instruction.instruction,
+                    content=instruction.question,
                 )
                 for instruction in instructions
             ]
