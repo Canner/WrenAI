@@ -11,7 +11,6 @@ from src.globals import (
     get_service_container,
     get_service_metadata,
 )
-from src.pipelines.indexing.instructions import Instruction
 from src.web.v1.services import InstructionsService
 
 router = APIRouter()
@@ -78,7 +77,7 @@ Results are cached with a TTL defined in the service configuration.
 
 
 class PostRequest(BaseModel):
-    instructions: List[Instruction]
+    instructions: List[InstructionsService.Instruction]
     project_id: Optional[str] = None
 
 
