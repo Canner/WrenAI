@@ -25,8 +25,8 @@ class OutputFormatter:
 
         for doc in documents:
             formatted = {
-                "instruction": doc.content,
-                "question": doc.meta.get("question", ""),
+                "instruction": doc.meta.get("instruction", ""),
+                "question": doc.content,
                 "instruction_id": doc.meta.get("instruction_id", ""),
             }
             list.append(formatted)
