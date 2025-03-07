@@ -165,6 +165,7 @@ class AskService:
         pipelines: Dict[str, BasicPipeline],
         allow_intent_classification: bool = True,
         allow_sql_generation_reasoning: bool = True,
+        max_histories: int = 10,
         maxsize: int = 1_000_000,
         ttl: int = 120,
     ):
@@ -177,6 +178,7 @@ class AskService:
         )
         self._allow_sql_generation_reasoning = allow_sql_generation_reasoning
         self._allow_intent_classification = allow_intent_classification
+        self._max_histories = max_histories
 
     def _is_stopped(self, query_id: str, container: dict):
         if (
@@ -204,7 +206,7 @@ class AskService:
         }
 
         query_id = ask_request.query_id
-        histories = ask_request.histories[:10]
+        histories = ask_request.histories[: self._max_histories]
         rephrased_question = None
         intent_reasoning = None
         sql_generation_reasoning = None
