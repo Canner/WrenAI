@@ -45,6 +45,7 @@ export interface AskingTask {
   }>;
   error: WrenAIError | null;
   intentReasoning?: string;
+  invalidSql?: string;
 }
 
 // DetailedThread is a type that represents a detailed thread, which is a thread with responses.
@@ -205,7 +206,6 @@ export class AskingResolver {
         false,
       );
     }
-
     // construct candidates from response
     const candidates = await Promise.all(
       (askResult.response || []).map(async (response) => {
@@ -219,14 +219,15 @@ export class AskingResolver {
         };
       }),
     );
-
-    return {
+    const res = {
       type: askResult.type,
       status: askResult.status,
       error: askResult.error,
       candidates,
       intentReasoning: askResult.intentReasoning,
+      invalidSql: askResult.invalid_sql,
     };
+    return res;
   }
 
   public async createThread(

@@ -97,6 +97,7 @@ export interface AskResponse<R, S> {
   status: S;
   response: R | null;
   error: WrenAIError | null;
+  invalid_sql?: string;
 }
 
 export interface AskDetailInput {
@@ -122,6 +123,7 @@ export type AskResult = AskResponse<
   AskResultStatus
 > & {
   intentReasoning?: string;
+  invalidSql?: string;
 };
 
 export enum RecommendationQuestionStatus {
