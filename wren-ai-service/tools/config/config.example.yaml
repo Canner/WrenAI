@@ -5,7 +5,6 @@ models:
 - model: gpt-4o-mini-2024-07-18
   alias: default
   api_base: https://api.openai.com/v1
-  api_key_name: LLM_OPENAI_API_KEY
   kwargs:
     temperature: 0
     n: 1
@@ -14,7 +13,6 @@ models:
     max_tokens: 4096
 - model: gpt-4o-2024-08-06
   api_base: https://api.openai.com/v1
-  api_key_name: LLM_OPENAI_API_KEY
   kwargs:
     temperature: 0
     n: 1
@@ -23,7 +21,6 @@ models:
     max_tokens: 4096
 - model: o3-mini-2025-01-31
   api_base: https://api.openai.com/v1
-  api_key_name: LLM_OPENAI_API_KEY
   kwargs:
     n: 1
     seed: 0
@@ -37,7 +34,6 @@ models:
   - model: text-embedding-3-large
     alias: default
     api_base: https://api.openai.com/v1
-    api_key_name: EMBEDDER_OPENAI_API_KEY
     timeout: 120
 
 ---
