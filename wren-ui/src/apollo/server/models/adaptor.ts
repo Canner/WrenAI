@@ -1,5 +1,6 @@
 import * as Errors from '@server/utils/error';
 import { Manifest } from '@server/mdl/type';
+import { ThreadResponse } from '../repositories';
 
 export interface WrenAIError {
   code: Errors.GeneralErrorCodes;
@@ -49,7 +50,7 @@ export interface AskStep {
 
 export interface AskHistory {
   sql: string;
-  steps: Array<AskStep>;
+  question: string;
 }
 
 export interface ProjectConfigurations {
@@ -60,7 +61,7 @@ export interface ProjectConfigurations {
 export interface AskInput {
   query: string;
   deployId: string;
-  history?: AskHistory;
+  histories?: ThreadResponse[];
   configurations?: ProjectConfigurations;
 }
 
