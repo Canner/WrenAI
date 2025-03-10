@@ -1,5 +1,5 @@
 import { IContext } from '@server/types/context';
-import { SqlPair } from '../repositories';
+import { SqlPair } from '@server/repositories';
 import * as Errors from '@server/utils/error';
 export class SqlPairResolver {
   constructor() {
@@ -11,7 +11,7 @@ export class SqlPairResolver {
   }
 
   public async getProjectSqlPairs(
-    _root: any,
+    _root: unknown,
     _arg: any,
     ctx: IContext,
   ): Promise<SqlPair[]> {
@@ -20,7 +20,7 @@ export class SqlPairResolver {
   }
 
   public async createSqlPair(
-    _root: any,
+    _root: unknown,
     arg: {
       data: {
         sql: string;
@@ -28,26 +28,9 @@ export class SqlPairResolver {
       };
     },
     ctx: IContext,
-  ) {
+  ): Promise<SqlPair> {
     const project = await ctx.projectService.getCurrentProject();
-
-    // dry run the sql to check if it's valid
-    const lastDeployment = await ctx.deployService.getLastDeployment(
-      project.id,
-    );
-    const manifest = lastDeployment.manifest;
-    try {
-      await ctx.queryService.preview(arg.data.sql, {
-        manifest,
-        project,
-        dryRun: true,
-      });
-    } catch (err) {
-      throw Errors.create(Errors.GeneralErrorCodes.INVALID_SQL_ERROR, {
-        customMessage: err.message,
-      });
-    }
-
+    await this.validateSql(arg.data.sql, ctx);
     const sqlPairs = await ctx.sqlPairService.createSqlPairs(project.id, [
       arg.data,
     ]);
@@ -55,7 +38,7 @@ export class SqlPairResolver {
   }
 
   public async editSqlPair(
-    _root: any,
+    _root: unknown,
     arg: {
       data: {
         sql?: string;
@@ -66,45 +49,27 @@ export class SqlPairResolver {
       };
     },
     ctx: IContext,
-  ) {
+  ): Promise<SqlPair> {
     const project = await ctx.projectService.getCurrentProject();
-
-    // dry run the sql to check if it's valid
-    if (arg.data.sql) {
-      const lastDeployment = await ctx.deployService.getLastDeployment(
-        project.id,
-      );
-      const manifest = lastDeployment.manifest;
-      try {
-        await ctx.queryService.preview(arg.data.sql, {
-          manifest,
-          project,
-          dryRun: true,
-        });
-      } catch (err) {
-        throw Errors.create(Errors.GeneralErrorCodes.INVALID_SQL_ERROR, {
-          customMessage: err.message,
-        });
-      }
-    }
+    await this.validateSql(arg.data.sql, ctx);
     return ctx.sqlPairService.editSqlPair(project.id, arg.where.id, arg.data);
   }
 
   public async deleteSqlPair(
-    _root: any,
+    _root: unknown,
     arg: {
       where: {
         id: number;
       };
     },
     ctx: IContext,
-  ) {
+  ): Promise<boolean> {
     const project = await ctx.projectService.getCurrentProject();
     return ctx.sqlPairService.deleteSqlPair(project.id, arg.where.id);
   }
 
   public async generateQuestion(
-    _root: any,
+    _root: unknown,
     arg: {
       data: {
         sql: string;
@@ -117,5 +82,24 @@ export class SqlPairResolver {
       arg.data.sql,
     ]);
     return questions[0];
+  }
+
+  private async validateSql(sql: string, ctx: IContext) {
+    const project = await ctx.projectService.getCurrentProject();
+    const lastDeployment = await ctx.deployService.getLastDeployment(
+      project.id,
+    );
+    const manifest = lastDeployment.manifest;
+    try {
+      await ctx.queryService.preview(sql, {
+        manifest,
+        project,
+        dryRun: true,
+      });
+    } catch (err) {
+      throw Errors.create(Errors.GeneralErrorCodes.INVALID_SQL_ERROR, {
+        customMessage: err.message,
+      });
+    }
   }
 }
