@@ -30,7 +30,7 @@ kubectl create namespace wren
 
 # !!!!!!!!!!!!
 # MODIFY secret-wren_example.yaml manifest file FIRST
-# LLM_OPENAI_API_KEY and EMBEDDER_OPENAI_API_KEY are REQUIRED: without a valid key the wren-ai-service-deployment pod will not start
+# OPENAI_API_KEY is REQUIRED: without a valid key the wren-ai-service-deployment pod will not start
 # You must update PG_URL, otherwise wren-ui will not work
 #vi deployment/kustomizations/examples/secret-wren_example.yaml
 kubectl apply -f deployment/kustomizations/examples/secret-wren_example.yaml -n wren

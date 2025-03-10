@@ -183,7 +183,7 @@ if __name__ == "__main__":
     #     optimizer_parameters["meta"] = meta
     #     optimizer_parameters["predictions"] = predictions
     #     configure_llm_provider(
-    #         os.getenv("GENERATION_MODEL"), os.getenv("LLM_OPENAI_API_KEY")
+    #         os.getenv("GENERATION_MODEL"), os.getenv("OPENAI_API_KEY")
     #     )
     #     trainset, devset = prepare_dataset(args.training_dataset)
     #     build_optimizing_module(trainset)

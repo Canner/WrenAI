@@ -82,7 +82,7 @@ cd ../docker
 cp .env.example .env.local
 ```
 Step 2. Modify your .env.local file
-You need to fill the `LLM_OPENAI_API_KEY`, `EMBEDDER_OPENAI_API_KEY` with your OPENAI api key before starting.
+You need to fill the `OPENAI_API_KEY` with your OPENAI api key before starting.
 
 You can also change the `WREN_ENGINE_VERSION`, `WREN_AI_SERVICE_VERSION`, `IBIS_SERVER_VERSION` to the version you want to use.
 
