@@ -283,6 +283,7 @@ export default function QuestionSQLPairModal(props: Props) {
             <PreviewData
               loading={previewing}
               previewData={previewSqlResult?.data?.previewSql}
+              copyable={false}
             />
           </div>
         )}
