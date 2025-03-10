@@ -132,18 +132,19 @@ wren-ai-service:
     ports:
       - ${AI_SERVICE_FORWARD_PORT}:${WREN_AI_SERVICE_PORT}
     environment:
-      WREN_AI_SERVICE_PORT: ${WREN_AI_SERVICE_PORT}
-      WREN_UI_ENDPOINT: ${WREN_UI_ENDPOINT}
-      LLM_OPENAI_API_KEY: ${LLM_OPENAI_API_KEY}
-      EMBEDDER_OPENAI_API_KEY: ${EMBEDDER_OPENAI_API_KEY}
-      LLM_AZURE_OPENAI_API_KEY: ${LLM_AZURE_OPENAI_API_KEY}
-      EMBEDDER_AZURE_OPENAI_API_KEY: ${EMBEDDER_AZURE_OPENAI_API_KEY}
-      LOGGING_LEVEL: ${AI_SERVICE_LOGGING_LEVEL}
+      WREN_UI_ENDPOINT: http://docker.for.mac.localhost:${WREN_UI_PORT}
+      # sometimes the console won't show print messages,
+      # using PYTHONUNBUFFERED: 1 can fix this
+      PYTHONUNBUFFERED: 1
+      CONFIG_PATH: /app/data/config.yaml
+    env_file:
+      - ${PROJECT_DIR}/.env
+    volumes:
+      - ${PROJECT_DIR}/config.yaml:/app/data/config.yaml
     networks:
       - wren
     depends_on:
       - qdrant
-      - wren-engine
 
 ibis-server:
     image: ghcr.io/canner/wren-engine-ibis:${IBIS_SERVER_VERSION}
