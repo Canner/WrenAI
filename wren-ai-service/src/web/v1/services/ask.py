@@ -28,7 +28,7 @@ class AskRequest(BaseModel):
     # so we need to support as a choice, and will remove it in the future
     mdl_hash: Optional[str] = Field(validation_alias=AliasChoices("mdl_hash", "id"))
     thread_id: Optional[str] = None
-    histories: Optional[list[AskHistory]] = None
+    histories: Optional[list[AskHistory]] = []
     configurations: Optional[Configuration] = Configuration()
 
     @property
