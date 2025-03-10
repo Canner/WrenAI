@@ -34,7 +34,10 @@ interface Props {
     responseId: number,
     data: AdjustThreadResponseChartInput,
   ) => Promise<void>;
-  onOpenSaveToKnowledgeModal: (data) => void;
+  onOpenSaveToKnowledgeModal: (
+    data: { sql: string; question: string },
+    payload: { isCreateMode: boolean },
+  ) => void;
 }
 
 const StyledPromptThread = styled.div`

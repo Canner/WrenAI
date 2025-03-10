@@ -119,7 +119,10 @@ export interface Props {
     responseId: number,
     data: AdjustThreadResponseChartInput,
   ) => Promise<void>;
-  onOpenSaveToKnowledgeModal: (data) => void;
+  onOpenSaveToKnowledgeModal: (
+    data: { sql: string; question: string },
+    payload: { isCreateMode: boolean },
+  ) => void;
 }
 
 const QuestionTitle = (props) => {
@@ -264,7 +267,10 @@ export default function AnswerResult(props: Props) {
             size="small"
             className="mr-2"
             onClick={() =>
-              onOpenSaveToKnowledgeModal({ question, sql, responseId: id })
+              onOpenSaveToKnowledgeModal(
+                { question, sql },
+                { isCreateMode: true },
+              )
             }
           >
             <div className="d-flex align-center">

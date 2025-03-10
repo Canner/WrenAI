@@ -6,11 +6,11 @@ import { ERROR_TEXTS } from '@/utils/error';
 import { FORM_MODE } from '@/utils/enum';
 import { ModalAction } from '@/hooks/useModalAction';
 import SQLEditor from '@/components/editor/SQLEditor';
-import { nextTick } from '@/utils/time';
 import { parseGraphQLError } from '@/utils/errorHandler';
 import ErrorCollapse from '@/components/ErrorCollapse';
 import PreviewData from '@/components/dataPreview/PreviewData';
 import { usePreviewSqlMutation } from '@/apollo/client/graphql/sql.generated';
+import { useGenerateQuestionMutation } from '@/apollo/client/graphql/sql.generated';
 
 type Props = ModalAction<any> & {
   loading?: boolean;
@@ -40,7 +40,15 @@ const createQuestionValidator =
   };
 
 export default function QuestionSQLPairModal(props: Props) {
-  const { defaultValue, formMode, loading, onClose, onSubmit, visible } = props;
+  const {
+    defaultValue,
+    formMode,
+    loading,
+    onClose,
+    onSubmit,
+    visible,
+    payload,
+  } = props;
 
   const isCreateMode = formMode === FORM_MODE.CREATE;
 
@@ -50,8 +58,11 @@ export default function QuestionSQLPairModal(props: Props) {
   const [previewing, setPreviewing] = useState<boolean>(false);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [generatingQuestion, setGeneratingQuestion] = useState<boolean>(false);
+  const [showPreview, setShowPreview] = useState<boolean>(false);
 
   const [previewSqlMutation, previewSqlResult] = usePreviewSqlMutation();
+
+  const [generateQuestionMutation] = useGenerateQuestionMutation();
 
   const sqlValue = Form.useWatch('sql', form);
 
@@ -71,7 +82,6 @@ export default function QuestionSQLPairModal(props: Props) {
   };
 
   const onValidateSQL = async () => {
-    previewSqlResult.reset();
     await previewSqlMutation({
       variables: {
         data: {
@@ -94,6 +104,7 @@ export default function QuestionSQLPairModal(props: Props) {
     setPreviewing(true);
     try {
       await onValidateSQL();
+      setShowPreview(true);
       await previewSqlMutation({
         variables: {
           data: {
@@ -112,12 +123,13 @@ export default function QuestionSQLPairModal(props: Props) {
   const onSubmitButton = () => {
     setError(null);
     setSubmitting(true);
+    setShowPreview(false);
     form
       .validateFields()
       .then(async (values) => {
         try {
           await onValidateSQL();
-          await onSubmit({ ...values, id: defaultValue?.id });
+          await onSubmit({ data: values, id: defaultValue?.id });
           onClose();
         } catch (error) {
           handleError(error);
@@ -125,16 +137,23 @@ export default function QuestionSQLPairModal(props: Props) {
           setSubmitting(false);
         }
       })
-      .catch(console.error);
+      .catch((err) => {
+        setSubmitting(false);
+        console.error(err);
+      });
   };
 
   const onGenerateQuestion = async () => {
     setGeneratingQuestion(true);
-    // TODO: use real API
-    await nextTick(5000);
-    form.setFieldsValue({
-      question: `${Math.floor(Math.random() * 100) + 1}__${form.getFieldValue('question')}`,
+    const { data } = await generateQuestionMutation({
+      variables: {
+        data: {
+          sql: sqlValue,
+        },
+      },
     });
+
+    form.setFieldsValue({ question: data?.generateQuestion || '' });
     setGeneratingQuestion(false);
   };
 
@@ -145,7 +164,7 @@ export default function QuestionSQLPairModal(props: Props) {
     if (isCreateMode) {
       return true;
     }
-    if (defaultValue?.responseId) {
+    if (payload?.isCreateMode) {
       return true;
     }
     return false;
@@ -161,7 +180,7 @@ export default function QuestionSQLPairModal(props: Props) {
       maskClosable={false}
       onCancel={onClose}
       visible={visible}
-      width={600}
+      width={640}
       cancelButtonProps={{ disabled: confirmLoading }}
       okButtonProps={{ disabled: previewSqlResult.loading }}
       afterClose={() => handleReset()}
@@ -211,7 +230,7 @@ export default function QuestionSQLPairModal(props: Props) {
             >
               <span>Question</span>
               <div className="gray-8 text-sm">
-                How would AI describe this?
+                Let AI create a matching question for this SQL statement.
                 <Button
                   className="ml-2"
                   size="small"
@@ -259,7 +278,7 @@ export default function QuestionSQLPairModal(props: Props) {
         >
           Preview data
         </Button>
-        {previewSqlResult?.data && (
+        {showPreview && (
           <div className="my-3">
             <PreviewData
               loading={previewing}

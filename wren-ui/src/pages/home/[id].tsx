@@ -33,7 +33,9 @@ import {
   AdjustThreadResponseChartInput,
   CreateThreadResponseInput,
   ThreadResponse,
+  CreateSqlPairInput,
 } from '@/apollo/client/graphql/__types__';
+import { useCreateSqlPairMutation } from '@/apollo/client/graphql/sqlPairs.generated';
 
 const getThreadResponseIsFinished = (threadResponse: ThreadResponse) => {
   const { answerDetail, breakdownDetail, chartDetail } = threadResponse || {};
@@ -136,6 +138,16 @@ export default function HomeThread() {
   const [generateThreadResponseChart] =
     useGenerateThreadResponseChartMutation();
   const [adjustThreadResponseChart] = useAdjustThreadResponseChartMutation();
+
+  const [createSqlPairMutation, { loading: createSqlPairLoading }] =
+    useCreateSqlPairMutation({
+      refetchQueries: ['SqlPairs'],
+      awaitRefetchQueries: true,
+      onError: (error) => console.error(error),
+      onCompleted: () => {
+        message.success('Successfully created question-sql pair.');
+      },
+    });
 
   const thread = useMemo(() => data?.thread || null, [data]);
   const threadResponse = useMemo(
@@ -288,9 +300,9 @@ export default function HomeThread() {
       <QuestionSQLPairModal
         {...questionSqlPairModal.state}
         onClose={questionSqlPairModal.closeModal}
-        onSubmit={async (data) => {
-          console.log('onSubmit values:', data);
-          // TODO: save to knowledge
+        loading={createSqlPairLoading}
+        onSubmit={async ({ data }: { data: CreateSqlPairInput }) => {
+          await createSqlPairMutation({ variables: { data } });
         }}
       />
     </SiderLayout>

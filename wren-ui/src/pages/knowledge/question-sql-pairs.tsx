@@ -1,7 +1,7 @@
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import styled from 'styled-components';
-import { Button, Table, TableColumnsType, Typography } from 'antd';
+import { Button, message, Table, TableColumnsType, Typography } from 'antd';
 import { format } from 'sql-formatter';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import FunctionOutlined from '@ant-design/icons/FunctionOutlined';
@@ -12,6 +12,13 @@ import { MoreButton } from '@/components/ActionButton';
 import { SQLPairDropdown } from '@/components/diagram/CustomDropdown';
 import QuestionSQLPairModal from '@/components/modals/QuestionSQLPairModal';
 import SQLPairDrawer from '@/components/pages/knowledge/SQLPairDrawer';
+import { SqlPair } from '@/apollo/client/graphql/__types__';
+import {
+  useSqlPairsQuery,
+  useCreateSqlPairMutation,
+  useUpdateSqlPairMutation,
+  useDeleteSqlPairMutation,
+} from '@/apollo/client/graphql/sqlPairs.generated';
 
 const CodeBlock = dynamic(() => import('@/components/editor/CodeBlock'), {
   ssr: false,
@@ -31,34 +38,52 @@ export default function ManageQuestionSQLPairs() {
   const questionSqlPairModal = useModalAction();
   const sqlPairDrawer = useDrawerAction();
 
-  const data = [
-    {
-      id: 1,
-      question: 'Show me the total sales for last month.',
-      sql: "SELECT SUM(amount) FROM sales WHERE DATE_TRUNC('month', order_date) = DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month');",
-    },
-    {
-      id: 2,
-      question: 'List all active customers.',
-      sql: "SELECT id, name, email FROM customers WHERE status = 'active';",
-    },
-    {
-      id: 3,
-      question: 'What was the highest revenue product last year?',
-      sql: 'SELECT product_name, SUM(revenue) AS total_revenue FROM sales WHERE YEAR(order_date) = YEAR(CURRENT_DATE) - 1 GROUP BY product_name ORDER BY total_revenue DESC LIMIT 1;',
-    },
-    {
-      id: 4,
-      question:
-        'What are the top 3 value for orders placed by customers in each city?',
-      sql: `SELECT\n  \"olist_customers_dataset\".\"customer_city\" AS \"customer_city\",\n  \"olist_orders_dataset\".\"order_id\" AS \"order_id\",\n  SUM(\"olist_order_items_dataset\".\"price\") AS \"total_value\"\nFROM\n  \"olist_customers_dataset\"\n  JOIN \"olist_orders_dataset\" ON \"olist_customers_dataset\".\"customer_id\" = \"olist_orders_dataset\".\"customer_id\"\n  JOIN \"olist_order_items_dataset\" ON \"olist_orders_dataset\".\"order_id\" = \"olist_order_items_dataset\".\"order_id\"\nGROUP BY\n  \"olist_customers_dataset\".\"customer_city\",\n  \"olist_orders_dataset\".\"order_id\"\nORDER BY\n  \"total_value\" DESC\nLIMIT\n  3`,
-    },
-  ];
+  const { data, loading } = useSqlPairsQuery({
+    fetchPolicy: 'cache-and-network',
+  });
+  const sqlPairs = data?.sqlPairs || [];
+
+  const getBaseOptions = (options) => {
+    return {
+      onError: (error) => console.error(error),
+      refetchQueries: ['SqlPairs'],
+      awaitRefetchQueries: true,
+      ...options,
+    };
+  };
+
+  const [createSqlPairMutation, { loading: createSqlPairLoading }] =
+    useCreateSqlPairMutation(
+      getBaseOptions({
+        onCompleted: () => {
+          message.success('Successfully created question-sql pair.');
+        },
+      }),
+    );
+
+  const [deleteSqlPairMutation] = useDeleteSqlPairMutation(
+    getBaseOptions({
+      onCompleted: () => {
+        message.success('Successfully deleted question-sql pair.');
+      },
+    }),
+  );
+
+  const [editSqlPairMutation, { loading: editSqlPairLoading }] =
+    useUpdateSqlPairMutation(
+      getBaseOptions({
+        onCompleted: () => {
+          message.success('Successfully updated question-sql pair.');
+        },
+      }),
+    );
 
   const onMoreClick = async (payload) => {
     const { type, data } = payload;
     if (type === MORE_ACTION.DELETE) {
-      // TODO: delete
+      await deleteSqlPairMutation({
+        variables: { where: { id: data.id } },
+      });
     } else if (type === MORE_ACTION.EDIT) {
       questionSqlPairModal.openModal(data);
     } else if (type === MORE_ACTION.VIEW_SQL_PAIR) {
@@ -66,7 +91,7 @@ export default function ManageQuestionSQLPairs() {
     }
   };
 
-  const columns: TableColumnsType<any> = [
+  const columns: TableColumnsType<SqlPair> = [
     {
       title: 'Question',
       dataIndex: 'question',
@@ -129,7 +154,8 @@ export default function ManageQuestionSQLPairs() {
           </Link>
         </Text>
         <Table
-          dataSource={data}
+          dataSource={sqlPairs}
+          loading={loading}
           columns={columns}
           className="mt-3"
           rowKey="id"
@@ -146,12 +172,14 @@ export default function ManageQuestionSQLPairs() {
         <QuestionSQLPairModal
           {...questionSqlPairModal.state}
           onClose={questionSqlPairModal.closeModal}
+          loading={createSqlPairLoading || editSqlPairLoading}
           onSubmit={async ({ id, data }) => {
-            console.log('onSubmit values:', { id, data });
             if (id) {
-              // update
+              await editSqlPairMutation({
+                variables: { where: { id }, data },
+              });
             } else {
-              // create
+              await createSqlPairMutation({ variables: { data } });
             }
           }}
         />
