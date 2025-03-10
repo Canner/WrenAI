@@ -45,11 +45,12 @@ def parse_args() -> Tuple[str]:
 
     return parser.parse_args()
 
+
 optimizer_parameters = {
     "evaluator": None,
     "metrics": None,
     "meta": None,
-    "predictions": None
+    "predictions": None,
 }
 
 
@@ -89,18 +90,21 @@ def validate_context_and_answer(example, pred, trace=None):
         answer_PM = dspy.evaluate.answer_passage_match(example, pred)
         return answer_EM and answer_PM
     else:
-      prediction = optimizer_parameters["predictions"][0]
-      prediction.input = example.question
-      prediction.expected_output = example.answer
-      prediction.context = example.context
-      prediction["type"] = "shallow"
-      prediction.actual_output = pred.answer
-      # reuse the first predict result to optimize the dspy module
-      optimizer_parameters["evaluator"].eval(optimizer_parameters["meta"], [prediction])
-      sum_score = 0
-      for metric in optimizer_parameters["metrics"].get("metrics"):
-        sum_score += metric.score
-      return sum_score
+        prediction = optimizer_parameters["predictions"][0]
+        prediction.input = example.question
+        prediction.expected_output = example.answer
+        prediction.context = example.context
+        prediction["type"] = "shallow"
+        prediction.actual_output = pred.answer
+        # reuse the first predict result to optimize the dspy module
+        optimizer_parameters["evaluator"].eval(
+            optimizer_parameters["meta"], [prediction]
+        )
+        sum_score = 0
+        for metric in optimizer_parameters["metrics"].get("metrics"):
+            sum_score += metric.score
+        return sum_score
+
 
 def optimize(
     module: dspy.Module,
@@ -114,11 +118,11 @@ def optimize(
 
 def build_optimizing_module(trainset):
     module = optimize(
-            AskGenerationV1,
-            dspy.teleprompt.BootstrapFewShot,
-            trainset=trainset,
-            metric=validate_context_and_answer,
-        )
+        AskGenerationV1,
+        dspy.teleprompt.BootstrapFewShot,
+        trainset=trainset,
+        metric=validate_context_and_answer,
+    )
     path = f"eval/optimized/{AskGenerationV1.__name__}_optimized_{datetime.now().strftime("%Y_%m_%d_%H%M%S")}.json"
     directory = os.path.dirname(path)
     if directory and not os.path.exists(directory):
@@ -137,9 +141,7 @@ if __name__ == "__main__":
     dotenv.load_dotenv()
     utils.load_env_vars()
 
-    configure_llm_provider(
-        os.getenv("GENERATION_MODEL"), os.getenv("LLM_OPENAI_API_KEY")
-    )
+    configure_llm_provider(os.getenv("GENERATION_MODEL"), os.getenv("OPENAI_API_KEY"))
 
     trainset, devset = prepare_dataset(path)
 
@@ -160,16 +162,22 @@ if __name__ == "__main__":
             return_outputs=True,
         )
 
-        results = evaluator(module, metric=validate_context_and_answer,display_progress=True, display_table=True, return_all_scores=True, return_outputs=True)
+        results = evaluator(
+            module,
+            metric=validate_context_and_answer,
+            display_progress=True,
+            display_table=True,
+            return_all_scores=True,
+            return_outputs=True,
+        )
         for result in results:
-          if isinstance(result, list):
-            for item in result:
-              if isinstance(item, tuple):
-                if len(item) == 3:
-                  print(item[0])
-                  print(f"Question: {item[0].get('question')}")
-                  print(f"Context: {item[0].get('context')}")
-                  print(item[1])
-                  print(f"Answer: {item[1].get('answer')}")
-                  print(f"Context: {item[1].get('context')}")
-
+            if isinstance(result, list):
+                for item in result:
+                    if isinstance(item, tuple):
+                        if len(item) == 3:
+                            print(item[0])
+                            print(f"Question: {item[0].get('question')}")
+                            print(f"Context: {item[0].get('context')}")
+                            print(item[1])
+                            print(f"Answer: {item[1].get('answer')}")
+                            print(f"Context: {item[1].get('context')}")

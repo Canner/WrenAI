@@ -47,7 +47,7 @@ class SQLBreakdownGenPostProcessor:
 
         for step in steps:
             step["sql"], error_message = add_quotes(step["sql"])
-            if not error_message:
+            if error_message:
                 return {
                     "results": {
                         "description": cleaned_generation_result["description"],
