@@ -388,6 +388,19 @@ class AskPipeline(Eval):
         )
         return prediction
 
+    def _get_instructions(self, params: dict) -> list:
+        if self._allow_instructions:
+            return [
+                {"instruction": instruction}
+                for instruction in params.get("instructions", [])
+            ]
+        return []
+
+    def _get_samples(self, params: dict) -> list:
+        if self._allow_sql_samples:
+            return params.get("samples", [])
+        return []
+
     async def _process(self, params: dict, **_) -> dict:
         result = await self._retrieval.run(query=params["input"])
         _retrieval_result = result.get("construct_retrieval_results", {})
@@ -396,20 +409,24 @@ class AskPipeline(Eval):
         has_calculated_field = _retrieval_result.get("has_calculated_field", False)
         has_metric = _retrieval_result.get("has_metric", False)
 
+        instructions = self._get_instructions(params)
+        samples = self._get_samples(params)
+
         _reasoning = await self._sql_reasoner.run(
             query=params["input"],
             contexts=documents,
-            sql_samples=params.get("samples", []) if self._allow_sql_samples else [],
+            sql_samples=samples,
         )
         reasoning = _reasoning.get("post_process", {})
 
         actual_output = await self._generation.run(
             query=params["input"],
             contexts=documents,
-            sql_samples=params.get("samples", []) if self._allow_sql_samples else [],
+            sql_samples=samples,
             has_calculated_field=has_calculated_field,
             has_metric=has_metric,
             sql_generation_reasoning=reasoning,
+            instructions=instructions,
         )
 
         params["actual_output"] = actual_output
