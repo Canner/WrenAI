@@ -258,6 +258,7 @@ class GenerationPipeline(Eval):
         )
 
         self._allow_sql_samples = settings.allow_sql_samples
+        self._allow_instructions = settings.allow_instructions
         self._engine_info = engine_config(
             mdl, pipe_components, settings.db_path_for_duckdb
         )
@@ -270,14 +271,24 @@ class GenerationPipeline(Eval):
 
         return prediction
 
+    def _get_instructions(self, params: dict) -> list:
+        if self._allow_instructions:
+            return [
+                {"instruction": instruction}
+                for instruction in params.get("instructions", [])
+            ]
+        return []
+
+    def _get_samples(self, params: dict) -> list:
+        if self._allow_sql_samples:
+            return params.get("samples", [])
+        return []
+
     async def _process(self, params: dict, document: list, **_) -> dict:
         documents = [Document.from_dict(doc).content for doc in document]
-        # todo: flag to use sql_samples or instructions
-        instructions = [
-            {"instruction": instruction}
-            for instruction in params.get("instructions", [])
-        ]
-        samples = params.get("samples", []) if self._allow_sql_samples else []
+
+        instructions = self._get_instructions(params)
+        samples = self._get_samples(params)
 
         actual_output = await self._generation.run(
             query=params["input"],
