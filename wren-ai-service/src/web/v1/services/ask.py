@@ -28,7 +28,7 @@ class AskRequest(BaseModel):
     # so we need to support as a choice, and will remove it in the future
     mdl_hash: Optional[str] = Field(validation_alias=AliasChoices("mdl_hash", "id"))
     thread_id: Optional[str] = None
-    histories: Optional[list[AskHistory]] = []
+    histories: Optional[list[AskHistory]] = Field(default_factory=list)
     configurations: Optional[Configuration] = Configuration()
 
     @property
@@ -405,7 +405,7 @@ class AskService:
                 )
                 has_metric = (_retrieval_result.get("has_metric", False),)
 
-                if ask_request.histories:
+                if histories:
                     text_to_sql_generation_results = await self._pipelines[
                         "followup_sql_generation"
                     ].run(
