@@ -1,6 +1,7 @@
 """
 This file aims to prepare spider 1.0 or bird eval dataset for text-to-sql eval purpose
 """
+
 import argparse
 import asyncio
 import os
@@ -428,6 +429,19 @@ if __name__ == "__main__":
 
             # ignore empty context
             if context:
+                previous_ground_truths = get_next_few_items_circular(
+                    values["ground_truth"], i
+                )
+                sql_pairs = [
+                    {
+                        "question": ground_truth["question"],
+                        "sql": ground_truth["sql"],
+                    }
+                    for ground_truth in previous_ground_truths
+                ]
+
+                instructions = [ground_truth.get("evidence", "")]
+
                 candidate_eval_dataset.append(
                     {
                         "categories": [],
@@ -437,9 +451,8 @@ if __name__ == "__main__":
                         "document": get_documents_given_contexts(
                             [context], values["mdl"]
                         ),
-                        "samples": get_next_few_items_circular(
-                            values["ground_truth"], i
-                        ),
+                        "samples": sql_pairs,
+                        "instructions": instructions,
                     }
                 )
             # else:
