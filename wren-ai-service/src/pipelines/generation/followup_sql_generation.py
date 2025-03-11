@@ -48,7 +48,7 @@ SQL:
 {% endif %}
 
 ### CONTEXT ###
-Previous Queries:
+User's query history:
 {% for history in histories %}
     {{ history.question }}
     {{ history.sql }}

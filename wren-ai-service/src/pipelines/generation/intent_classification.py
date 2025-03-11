@@ -103,7 +103,7 @@ intent_classification_user_prompt_template = """
 
 ### INPUT ###
 {% if query_history %}
-User's previous SQLs:
+User's query history:
 {% for history in query_history %}
 {{ history.question }}
 {{ history.sql }}
