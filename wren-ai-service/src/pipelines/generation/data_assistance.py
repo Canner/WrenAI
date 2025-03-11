@@ -53,9 +53,11 @@ def prompt(
     db_schemas: list[str],
     language: str,
     prompt_builder: PromptBuilder,
-    histories: Optional[list[AskHistory]] = [],
+    histories: Optional[list[AskHistory]] = None,
 ) -> dict:
-    previous_query_summaries = [history.question for history in histories]
+    previous_query_summaries = (
+        [history.question for history in histories] if histories else []
+    )
     query = "\n".join(previous_query_summaries) + "\n" + query
 
     return prompt_builder.run(
