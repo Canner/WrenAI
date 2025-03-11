@@ -262,37 +262,40 @@ export default function SidebarSection(_props: Props) {
         stories.some((item) => !learningRecord.paths.includes(item.id)),
       );
 
-      // play the data modeling guide if it's not finished
-      if (
-        router.pathname === Path.Modeling &&
-        !learningRecord.paths.includes(LEARNING.DATA_MODELING_GUIDE)
-      ) {
-        nextTick(1000).then(() => {
+      const routerAction = {
+        [Path.Modeling]: async () => {
+          const isGuideDone = learningRecord.paths.includes(
+            LEARNING.DATA_MODELING_GUIDE,
+          );
           const isSkipBefore = !!window.sessionStorage.getItem(
             'skipDataModelingGuide',
           );
-          if (isSkipBefore) return;
-          $guide.current?.play(LEARNING.DATA_MODELING_GUIDE, {
-            onDone: () => saveRecord(LEARNING.DATA_MODELING_GUIDE),
-          });
-        });
-      }
-
-      if (
-        router.pathname === Path.Home &&
-        !learningRecord.paths.includes(LEARNING.SWITCH_PROJECT_LANGUAGE)
-      ) {
-        nextTick(1000).then(() => {
+          if (!(isGuideDone || isSkipBefore)) {
+            await nextTick(1000);
+            $guide.current?.play(LEARNING.DATA_MODELING_GUIDE, {
+              onDone: () => saveRecord(LEARNING.DATA_MODELING_GUIDE),
+            });
+          }
+        },
+        [Path.Home]: async () => {
+          const isGuideDone = learningRecord.paths.includes(
+            LEARNING.SWITCH_PROJECT_LANGUAGE,
+          );
           const isSkipBefore = !!window.sessionStorage.getItem(
             'skipSwitchProjectLanguageGuide',
           );
-          if (isSkipBefore) return;
-          $guide.current?.play(LEARNING.SWITCH_PROJECT_LANGUAGE, {
-            onDone: () => saveRecord(LEARNING.SWITCH_PROJECT_LANGUAGE),
-            onSaveLanguage: saveLanguage,
-          });
-        });
-      }
+          if (!(isGuideDone || isSkipBefore)) {
+            await nextTick(1000);
+            $guide.current?.play(LEARNING.SWITCH_PROJECT_LANGUAGE, {
+              onDone: () => saveRecord(LEARNING.SWITCH_PROJECT_LANGUAGE),
+              onSaveLanguage: saveLanguage,
+            });
+          }
+        },
+      };
+
+      // play the data modeling guide if it's not finished
+      routerAction[router.pathname] && routerAction[router.pathname]();
     }
   }, [learningRecordResult?.learningRecord]);
 
