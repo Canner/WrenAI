@@ -7,6 +7,7 @@ import { FORM_MODE } from '@/utils/enum';
 import { ModalAction } from '@/hooks/useModalAction';
 import SQLEditor from '@/components/editor/SQLEditor';
 import { parseGraphQLError } from '@/utils/errorHandler';
+import { createSQLPairQuestionValidator } from '@/utils/validator';
 import ErrorCollapse from '@/components/ErrorCollapse';
 import PreviewData from '@/components/dataPreview/PreviewData';
 import { usePreviewSqlMutation } from '@/apollo/client/graphql/sql.generated';
@@ -21,23 +22,6 @@ const StyledForm = styled(Form)`
     width: 100%;
   }
 `;
-
-const createQuestionValidator =
-  (errorObj: any) => async (_rule: any, value: string) => {
-    if (!value) {
-      return Promise.reject(errorObj.REQUIRED);
-    }
-
-    if (value.trim() === '') {
-      return Promise.reject(errorObj.REQUIRED);
-    }
-
-    if (value.length > 300) {
-      return Promise.reject(errorObj.MAX_LENGTH);
-    }
-
-    return Promise.resolve();
-  };
 
 export default function QuestionSQLPairModal(props: Props) {
   const {
@@ -247,7 +231,9 @@ export default function QuestionSQLPairModal(props: Props) {
           required
           rules={[
             {
-              validator: createQuestionValidator(ERROR_TEXTS.SQL_PAIR.QUESTION),
+              validator: createSQLPairQuestionValidator(
+                ERROR_TEXTS.SQL_PAIR.QUESTION,
+              ),
             },
           ]}
         >
