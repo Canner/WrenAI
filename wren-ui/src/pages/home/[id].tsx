@@ -44,7 +44,8 @@ const getThreadResponseIsFinished = (threadResponse: ThreadResponse) => {
   let isBreakdownFinished = null;
   let isChartFinished = null;
 
-  if (answerDetail?.queryId) {
+  // answerDetail status can be FAILED before getting queryId from Wren AI adapter
+  if (answerDetail?.queryId || answerDetail?.status) {
     isAnswerFinished = getAnswerIsFinished(answerDetail?.status);
   }
   if (breakdownDetail?.queryId) {
