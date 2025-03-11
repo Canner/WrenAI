@@ -29,7 +29,7 @@ class IntentClassificationMock(generation.IntentClassification):
         self,
         query: str,
         id: Optional[str] = None,
-        histories: Optional[list[AskHistory]] = [],
+        histories: Optional[list[AskHistory]] = None,
         configuration: Configuration | None = None,
     ):
         return {"post_process": {"intent": self._intent, "db_schemas": []}}
