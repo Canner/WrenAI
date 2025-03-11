@@ -112,6 +112,7 @@ export const initComponents = () => {
     wrenAIAdaptor,
     askingTaskRepository,
     threadResponseRepository,
+    viewRepository,
   });
   const askingService = new AskingService({
     telemetry,

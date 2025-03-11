@@ -9,6 +9,7 @@ import {
   AskingTask,
   IAskingTaskRepository,
   IThreadResponseRepository,
+  IViewRepository,
 } from '@server/repositories';
 import { IWrenAIAdaptor } from '../adaptors';
 
@@ -59,23 +60,27 @@ export class AskingTaskTracker implements IAskingTaskTracker {
   private pollingIntervalId: NodeJS.Timeout;
   private runningJobs = new Set<string>();
   private threadResponseRepository: IThreadResponseRepository;
+  private viewRepository: IViewRepository;
 
   constructor({
     wrenAIAdaptor,
     askingTaskRepository,
     threadResponseRepository,
+    viewRepository,
     pollingInterval = 1000, // 1 second
     memoryRetentionTime = 5 * 60 * 1000, // 5 minutes
   }: {
     wrenAIAdaptor: IWrenAIAdaptor;
     askingTaskRepository: IAskingTaskRepository;
     threadResponseRepository: IThreadResponseRepository;
+    viewRepository: IViewRepository;
     pollingInterval?: number;
     memoryRetentionTime?: number;
   }) {
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.askingTaskRepository = askingTaskRepository;
     this.threadResponseRepository = threadResponseRepository;
+    this.viewRepository = viewRepository;
     this.pollingInterval = pollingInterval;
     this.memoryRetentionTime = memoryRetentionTime;
     this.startPolling();
@@ -122,7 +127,6 @@ export class AskingTaskTracker implements IAskingTaskTracker {
 
   public async getAskingResultById(id: number): Promise<TrackedAskingResult> {
     const task = this.trackedTasksById.get(id);
-    console.log('getAskingResultById', { id, task });
     if (task) {
       return this.getAskingResult(task.queryId);
     }
@@ -199,12 +203,10 @@ export class AskingTaskTracker implements IAskingTaskTracker {
             // Poll for updates
             logger.info(`Polling for updates for task ${queryId}`);
             const result = await this.wrenAIAdaptor.getAskResult(queryId);
-            console.log('result', result);
             task.lastPolled = now;
 
             // if result is not changed, we don't need to update the database
             if (!this.isResultChanged(task.result, result)) {
-              logger.info(`Task ${queryId} result is not changed`);
               this.runningJobs.delete(queryId);
               return;
             }
@@ -214,7 +216,6 @@ export class AskingTaskTracker implements IAskingTaskTracker {
 
             // if result is still understanding, we don't need to update the database
             if (result.status === AskResultStatus.UNDERSTANDING) {
-              logger.info(`Task ${queryId} result is still understanding`);
               this.runningJobs.delete(queryId);
               return;
             }
@@ -222,9 +223,6 @@ export class AskingTaskTracker implements IAskingTaskTracker {
             // if type is not TEXT_TO_SQL, we don't need to update the database
             // finalizing the task
             if (result.type !== AskResultType.TEXT_TO_SQL) {
-              logger.info(
-                `Task ${queryId} result is not TEXT_TO_SQL, finalizing the task`,
-              );
               task.isFinalized = true;
               this.runningJobs.delete(queryId);
               return;
@@ -243,13 +241,26 @@ export class AskingTaskTracker implements IAskingTaskTracker {
 
                 // if the generated response of asking task is not null, update the thread response
                 if (response) {
-                  await this.threadResponseRepository.updateOne(
-                    task.threadResponseId,
-                    {
-                      sql: response?.sql,
-                      viewId: response?.viewId,
-                    },
-                  );
+                  if (response.viewId) {
+                    // get sql from the view
+                    const view = await this.viewRepository.findOneBy({
+                      id: response.viewId,
+                    });
+                    await this.threadResponseRepository.updateOne(
+                      task.threadResponseId,
+                      {
+                        sql: view.statement,
+                        viewId: response.viewId,
+                      },
+                    );
+                  } else {
+                    await this.threadResponseRepository.updateOne(
+                      task.threadResponseId,
+                      {
+                        sql: response?.sql,
+                      },
+                    );
+                  }
                 }
               }
 
@@ -278,6 +289,13 @@ export class AskingTaskTracker implements IAskingTaskTracker {
       });
 
       // Clean up tasks that have been in memory too long
+      if (tasksToRemove.length > 0) {
+        logger.info(
+          `Cleaning up tasks that have been in memory too long. Tasks: ${tasksToRemove.join(
+            ', ',
+          )}`,
+        );
+      }
       for (const queryId of tasksToRemove) {
         this.trackedTasks.delete(queryId);
       }
@@ -291,7 +309,6 @@ export class AskingTaskTracker implements IAskingTaskTracker {
     queryId?: string;
     taskId?: number;
   }): Promise<TrackedAskingResult> {
-    console.log('getAskingResultFromDB', { queryId, taskId });
     let taskRecord: AskingTask | null = null;
     if (queryId) {
       taskRecord = await this.askingTaskRepository.findByQueryId(queryId);
@@ -348,9 +365,6 @@ export class AskingTaskTracker implements IAskingTaskTracker {
     newResult: AskResult,
   ): boolean {
     // check status change
-    logger.info(
-      `Checking if result is changed from ${previousResult?.status} to ${newResult?.status}`,
-    );
     if (previousResult?.status !== newResult.status) {
       return true;
     }

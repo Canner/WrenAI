@@ -619,14 +619,12 @@ export const typeDefs = gql`
   input CreateThreadInput {
     question: String
     sql: String
-    viewId: Int
     taskId: String
   }
 
   input CreateThreadResponseInput {
     question: String
     sql: String
-    viewId: Int
     taskId: String
   }
 

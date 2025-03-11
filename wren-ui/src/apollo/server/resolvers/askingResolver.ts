@@ -226,9 +226,9 @@ export class AskingResolver {
     args: {
       data: {
         question?: string;
-        sql?: string;
-        viewId?: number;
         taskId?: string;
+        // if we use recommendation questions, sql will be provided
+        sql?: string;
       };
     },
     ctx: IContext,
@@ -368,9 +368,9 @@ export class AskingResolver {
       threadId: number;
       data: {
         question?: string;
-        sql?: string;
-        viewId?: number;
         taskId?: string;
+        // if we use recommendation questions, sql will be provided
+        sql?: string;
       };
     },
     ctx: IContext,

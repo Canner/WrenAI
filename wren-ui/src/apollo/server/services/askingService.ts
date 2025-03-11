@@ -25,7 +25,7 @@ import {
   TelemetryEvent,
   WrenService,
 } from '../telemetry/telemetry';
-import { IViewRepository, Project, View } from '../repositories';
+import { IViewRepository, Project } from '../repositories';
 import { IQueryService, PreviewDataResponse } from './queryService';
 import { IMDLService } from './mdlService';
 import {
@@ -60,7 +60,6 @@ export interface AskingTaskInput {
 export interface AskingDetailTaskInput {
   question?: string;
   sql?: string;
-  viewId?: number;
   trackedAskingResult?: TrackedAskingResult;
 }
 
@@ -567,17 +566,11 @@ export class AskingService implements IAskingService {
   /**
    * Asking detail task.
    * The process of creating a thread is as follows:
-   * If input contains a viewId, simply create a thread from saved properties of the view.
-   * Otherwise, create a task on AI service to generate the detail.
-   * 1. create a task on AI service to generate the detail
-   * 2. create a thread and the first thread response with question and sql
+   * 1. create a thread and the first thread response
+   * 2. create a task on AI service to generate the detail
+   * 3. update the thread response with the task id
    */
   public async createThread(input: AskingDetailTaskInput): Promise<Thread> {
-    // if input contains a viewId, simply create a thread from saved properties of the view
-    if (input.viewId) {
-      return this.createThreadFromView(input);
-    }
-
     // 1. create a thread and the first thread response
     const { id } = await this.projectService.getCurrentProject();
     const thread = await this.threadRepository.createOne({
@@ -639,24 +632,6 @@ export class AskingService implements IAskingService {
 
     if (!thread) {
       throw new Error(`Thread ${threadId} not found`);
-    }
-
-    // if input contains a viewId, simply create a thread from saved properties of the view
-    if (input.viewId) {
-      const view = await this.viewRepository.findOneBy({ id: input.viewId });
-
-      if (!view) {
-        throw new Error(`View ${input.viewId} not found`);
-      }
-
-      const res = await this.createThreadResponseFromView(
-        input.question,
-        view.statement,
-        view,
-        thread,
-        input.trackedAskingResult,
-      );
-      return res;
     }
 
     const threadResponse = await this.threadResponseRepository.createOne({
@@ -974,56 +949,6 @@ export class AskingService implements IAskingService {
       threadId,
       10,
     );
-  }
-
-  private async createThreadFromView(input: AskingDetailTaskInput) {
-    const view = await this.viewRepository.findOneBy({ id: input.viewId });
-    if (!view) {
-      throw new Error(`View ${input.viewId} not found`);
-    }
-
-    const { id } = await this.projectService.getCurrentProject();
-    const thread = await this.threadRepository.createOne({
-      projectId: id,
-      summary: input.question,
-    });
-
-    await this.createThreadResponseFromView(
-      input.question,
-      view.statement,
-      view,
-      thread,
-      input.trackedAskingResult,
-    );
-    return thread;
-  }
-
-  private async createThreadResponseFromView(
-    question: string,
-    sql: string,
-    view: View,
-    thread: Thread,
-    trackedAskingResult?: TrackedAskingResult,
-  ) {
-    const threadResponse = await this.threadResponseRepository.createOne({
-      threadId: thread.id,
-      viewId: view.id,
-      question,
-      sql,
-      askingTaskId: trackedAskingResult?.taskId,
-    });
-
-    // if trackedAskingResult is provided, update the asking task
-    if (trackedAskingResult) {
-      await this.askingTaskTracker.bindThreadResponse(
-        trackedAskingResult.taskId,
-        trackedAskingResult.queryId,
-        thread.id,
-        threadResponse.id,
-      );
-    }
-
-    return threadResponse;
   }
 
   private getThreadRecommendationQuestionsConfig(project: Project) {
