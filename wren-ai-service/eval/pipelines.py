@@ -86,8 +86,13 @@ def extract_units(docs: list[dict]) -> list:
         return columns
 
     columns = []
+
     for doc in docs:
+        if isinstance(doc, str):
+            columns.extend(parse_ddl(doc))
+            continue
         columns.extend(parse_ddl(doc.get("table_ddl", "")))
+
     return columns
 
 
@@ -120,8 +125,7 @@ class Eval:
         return [prediction for batch in batches for prediction in batch]
 
     @abstractmethod
-    def _process(self, prediction: dict, **_) -> dict:
-        ...
+    def _process(self, prediction: dict, **_) -> dict: ...
 
     async def _flat(self, prediction: dict, **_) -> dict:
         """
@@ -130,16 +134,17 @@ class Eval:
         return prediction
 
     @observe(name="Prediction Process", capture_input=False)
-    async def process(self, query: dict) -> dict:
+    async def process(self, params: dict) -> dict:
         prediction = {
             "trace_id": langfuse_context.get_current_trace_id(),
             "trace_url": langfuse_context.get_current_trace_url(),
-            "input": query["question"],
+            "input": params["question"],
             "actual_output": {},
-            "expected_output": query["sql"],
+            "expected_output": params["sql"],
             "retrieval_context": [],
-            "context": query["context"],
-            "samples": query.get("samples", []),
+            "context": params["context"],
+            "samples": params.get("samples", []),
+            "instructions": params.get("instructions", []),
             "type": "execution",
             "reasoning": "",
             "elapsed_time": 0,
@@ -152,7 +157,7 @@ class Eval:
         )
 
         start_time = datetime.now()
-        returned = await self._process(prediction, **query)
+        returned = await self._process(prediction, **params)
         returned["elapsed_time"] = (datetime.now() - start_time).total_seconds()
 
         return returned
@@ -212,17 +217,17 @@ class RetrievalPipeline(Eval):
             allow_using_db_schemas_without_pruning=settings.allow_using_db_schemas_without_pruning,
         )
 
-    async def _process(self, prediction: dict, **_) -> dict:
-        result = await self._retrieval.run(query=prediction["input"])
+    async def _process(self, params: dict, **_) -> dict:
+        result = await self._retrieval.run(query=params["input"])
         documents = result.get("construct_retrieval_results", {}).get(
             "retrieval_results", []
         )
-        prediction["retrieval_context"] = extract_units(documents)
+        params["retrieval_context"] = extract_units(documents)
 
-        return prediction
+        return params
 
-    async def __call__(self, query: str, **_):
-        prediction = await self.process(query)
+    async def __call__(self, params: dict, **_):
+        prediction = await self.process(params)
 
         return [prediction, await self.flat(prediction.copy())]
 
@@ -265,24 +270,32 @@ class GenerationPipeline(Eval):
 
         return prediction
 
-    async def _process(self, prediction: dict, document: list, **_) -> dict:
+    async def _process(self, params: dict, document: list, **_) -> dict:
         documents = [Document.from_dict(doc).content for doc in document]
+        # todo: flag to use sql_samples or instructions
+        instructions = [
+            {"instruction": instruction}
+            for instruction in params.get("instructions", [])
+        ]
+        samples = params.get("samples", []) if self._allow_sql_samples else []
+
         actual_output = await self._generation.run(
-            query=prediction["input"],
+            query=params["input"],
             contexts=documents,
-            samples=prediction.get("samples", []) if self._allow_sql_samples else [],
-            has_calculated_field=prediction.get("has_calculated_field", False),
-            has_metric=prediction.get("has_metric", False),
-            sql_generation_reasoning=prediction.get("reasoning", ""),
+            sql_samples=samples,
+            has_calculated_field=params.get("has_calculated_field", False),
+            has_metric=params.get("has_metric", False),
+            sql_generation_reasoning=params.get("reasoning", ""),
+            instructions=instructions,
         )
 
-        prediction["actual_output"] = actual_output
-        prediction["retrieval_context"] = extract_units(documents)
+        params["actual_output"] = actual_output
+        params["retrieval_context"] = extract_units(documents)
 
-        return prediction
+        return params
 
-    async def __call__(self, query: str, **_):
-        prediction = await self.process(query)
+    async def __call__(self, params: dict, **_):
+        prediction = await self.process(params)
         valid_outputs = (
             prediction["actual_output"]
             .get("post_process", {})
@@ -364,8 +377,8 @@ class AskPipeline(Eval):
         )
         return prediction
 
-    async def _process(self, prediction: dict, **_) -> dict:
-        result = await self._retrieval.run(query=prediction["input"])
+    async def _process(self, params: dict, **_) -> dict:
+        result = await self._retrieval.run(query=params["input"])
         _retrieval_result = result.get("construct_retrieval_results", {})
 
         documents = _retrieval_result.get("retrieval_results", [])
@@ -373,35 +386,31 @@ class AskPipeline(Eval):
         has_metric = _retrieval_result.get("has_metric", False)
 
         _reasoning = await self._sql_reasoner.run(
-            query=prediction["input"],
+            query=params["input"],
             contexts=documents,
-            sql_samples=prediction.get("samples", [])
-            if self._allow_sql_samples
-            else [],
+            sql_samples=params.get("samples", []) if self._allow_sql_samples else [],
         )
         reasoning = _reasoning.get("post_process", {})
 
         actual_output = await self._generation.run(
-            query=prediction["input"],
+            query=params["input"],
             contexts=documents,
-            sql_samples=prediction.get("samples", [])
-            if self._allow_sql_samples
-            else [],
+            sql_samples=params.get("samples", []) if self._allow_sql_samples else [],
             has_calculated_field=has_calculated_field,
             has_metric=has_metric,
             sql_generation_reasoning=reasoning,
         )
 
-        prediction["actual_output"] = actual_output
-        prediction["retrieval_context"] = extract_units(documents)
-        prediction["has_calculated_field"] = has_calculated_field
-        prediction["has_metric"] = has_metric
-        prediction["reasoning"] = reasoning
+        params["actual_output"] = actual_output
+        params["retrieval_context"] = extract_units(documents)
+        params["has_calculated_field"] = has_calculated_field
+        params["has_metric"] = has_metric
+        params["reasoning"] = reasoning
 
-        return prediction
+        return params
 
-    async def __call__(self, query: str, **_):
-        prediction = await self.process(query)
+    async def __call__(self, params: dict, **_):
+        prediction = await self.process(params)
         valid_outputs = (
             prediction["actual_output"]
             .get("post_process", {})
