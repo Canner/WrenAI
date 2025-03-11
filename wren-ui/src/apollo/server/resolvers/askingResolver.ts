@@ -52,6 +52,7 @@ export interface AskingTask {
   retrievedTables?: string[];
   invalidSql?: string;
   traceId?: string;
+  queryId?: string;
 }
 
 // DetailedThread is a type that represents a detailed thread, which is a thread with responses.
@@ -629,6 +630,7 @@ export class AskingResolver {
       status: askingTask.status,
       error: askingTask.error,
       candidates,
+      queryId: askingTask.queryId,
       rephrasedQuestion: askingTask.rephrasedQuestion,
       intentReasoning: askingTask.intentReasoning,
       sqlGenerationReasoning: askingTask.sqlGenerationReasoning,

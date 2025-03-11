@@ -590,6 +590,7 @@ export const typeDefs = gql`
     retrievedTables: [String!]
     invalidSql: String
     traceId: String
+    queryId: String
   }
 
   input InstantRecommendedQuestionsInput {

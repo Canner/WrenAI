@@ -322,7 +322,7 @@ export class AskingTaskTracker implements IAskingTaskTracker {
 
     return {
       ...taskRecord?.detail,
-      queryId,
+      queryId: queryId || taskRecord?.queryId,
       question: taskRecord?.question,
       taskId: taskRecord?.id,
     };
