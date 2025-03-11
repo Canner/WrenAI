@@ -7,7 +7,7 @@
 type: llm
 provider: litellm_llm
 models:
-  - api_base: http://host.docker.internal:11434 # change this to your ollama host, api_base should be <ollama_url>
+  - api_base: http://host.docker.internal:11434 # if you are using mac/windows, don't change this; if you are using linux, please search "Run Ollama in docker container" in this page: https://docs.getwren.ai/oss/installation/custom_llm#running-wren-ai-with-your-custom-llm-embedder
     model: ollama_chat/phi4:14b # ollama_chat/<ollama_model_name>
     alias: default
     timeout: 600
@@ -21,7 +21,7 @@ provider: litellm_embedder
 models:
   - model: ollama/nomic-embed-text # put your ollama embedder model name here, ollama/<ollama_model_name>
     alias: default
-    api_base: http://host.docker.internal:11434 # change this to your ollama host, api_base should be <ollama_url>
+    api_base: http://host.docker.internal:11434 # if you are using mac/windows, don't change this; if you are using linux, please search "Run Ollama in docker container" in this page: https://docs.getwren.ai/oss/installation/custom_llm#running-wren-ai-with-your-custom-llm-embedder
     timeout: 600
 
 ---
