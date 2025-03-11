@@ -116,12 +116,12 @@ def _build_view_ddl(content: dict) -> str:
 ## Start of Pipeline
 @observe(capture_input=False, capture_output=False)
 async def embedding(
-    query: str, embedder: Any, history: Optional[AskHistory] = None
+    query: str, embedder: Any, histories: Optional[list[AskHistory]] = None
 ) -> dict:
     if query:
-        if history:
+        if histories:
             previous_query_summaries = [
-                step.summary for step in history.steps if step.summary
+                history.question for history in histories
             ]
         else:
             previous_query_summaries = []
@@ -303,7 +303,9 @@ def prompt(
             for construct_db_schema in construct_db_schemas
         ]
 
-        previous_query_summaries = [history.question for history in histories]
+        previous_query_summaries = (
+            [history.question for history in histories] if histories else []
+        )
 
         query = "\n".join(previous_query_summaries) + "\n" + query
         return prompt_builder.run(question=query, db_schemas=db_schemas)
