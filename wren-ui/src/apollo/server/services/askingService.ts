@@ -2,7 +2,6 @@ import { IWrenAIAdaptor } from '@server/adaptors/wrenAIAdaptor';
 import {
   AskResult,
   AskResultStatus,
-  AskHistory,
   RecommendationQuestionsResult,
   RecommendationQuestionsInput,
   RecommendationQuestion,
@@ -930,12 +929,14 @@ export class AskingService implements IAskingService {
   }
 
   /**
-   * Get the thread with threadId & latest thread response of a thread
-   * transform the response into AskHistory
+   * Get the thread response of a thread for asking
    * @param threadId
-   * @returns Promise<AskHistory>
+   * @returns Promise<ThreadResponse[]>
    */
   private async getAskingHistory(threadId: number): Promise<ThreadResponse[]> {
+    if (!threadId) {
+      return [];
+    }
     return await this.threadResponseRepository.getResponsesWithThread(
       threadId,
       10,
