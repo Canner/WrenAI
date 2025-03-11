@@ -292,12 +292,33 @@ export default function SidebarSection(_props: Props) {
             });
           }
         },
+        [Path.Thread]: async () => {
+          const isGuideDone = learningRecord.paths.includes(
+            LEARNING.SAVE_TO_KNOWLEDGE,
+          );
+          if (!isGuideDone) {
+            await nextTick(1500);
+            $guide.current?.play(LEARNING.SAVE_TO_KNOWLEDGE, {
+              onDone: () => saveRecord(LEARNING.SAVE_TO_KNOWLEDGE),
+            });
+          }
+        },
+        [Path.KnowledgeQuestionSQLPairs]: async () => {
+          const isGuideDone = learningRecord.paths.includes(
+            LEARNING.QUESTION_SQL_PAIRS_GUIDE,
+          );
+          if (!isGuideDone) {
+            await nextTick(1000);
+            $guide.current?.play(LEARNING.QUESTION_SQL_PAIRS_GUIDE, {
+              onDone: () => saveRecord(LEARNING.QUESTION_SQL_PAIRS_GUIDE),
+            });
+          }
+        },
       };
 
-      // play the data modeling guide if it's not finished
       routerAction[router.pathname] && routerAction[router.pathname]();
     }
-  }, [learningRecordResult?.learningRecord]);
+  }, [learningRecordResult?.learningRecord, router.pathname]);
 
   useEffect(() => {
     collapseBlock(active);
@@ -308,35 +329,35 @@ export default function SidebarSection(_props: Props) {
   };
 
   // Hide learning section if the page not in whitelist
-  if (!isLearningAccessible(router.pathname)) return null;
-
   return (
     <>
       <LearningGuide ref={$guide} />
-      <div className="border-t border-gray-4">
-        <div
-          className="px-4 py-1 d-flex align-center cursor-pointer select-none"
-          onClick={onCollapseBarClick}
-        >
-          <div className="flex-grow-1">
-            <ReadOutlined className="mr-1" />
-            Learning
+      {isLearningAccessible(router.pathname) && (
+        <div className="border-t border-gray-4">
+          <div
+            className="px-4 py-1 d-flex align-center cursor-pointer select-none"
+            onClick={onCollapseBarClick}
+          >
+            <div className="flex-grow-1">
+              <ReadOutlined className="mr-1" />
+              Learning
+            </div>
+            <RightOutlined
+              className="text-sm"
+              style={{ transform: `rotate(${active ? '90deg' : '0deg'})` }}
+            />
           </div>
-          <RightOutlined
-            className="text-sm"
-            style={{ transform: `rotate(${active ? '90deg' : '0deg'})` }}
-          />
+          <CollapseBlock ref={$collapseBlock}>
+            <ListIterator data={stories} />
+            <div className="px-4 py-2 d-flex align-center">
+              <Progress total={total} current={current} />
+              <span className="text-xs gray-6 text-nowrap pl-2">
+                {current}/{total} Finished
+              </span>
+            </div>
+          </CollapseBlock>
         </div>
-        <CollapseBlock ref={$collapseBlock}>
-          <ListIterator data={stories} />
-          <div className="px-4 py-2 d-flex align-center">
-            <Progress total={total} current={current} />
-            <span className="text-xs gray-6 text-nowrap pl-2">
-              {current}/{total} Finished
-            </span>
-          </div>
-        </CollapseBlock>
-      </div>
+      )}
     </>
   );
 }

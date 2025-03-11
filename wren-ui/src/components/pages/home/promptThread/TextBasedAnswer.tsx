@@ -177,7 +177,10 @@ export default function TextBasedAnswer(
             </Button>
 
             {previewDataResult?.data?.previewData && (
-              <div className="mt-2 mb-3">
+              <div
+                className="mt-2 mb-3"
+                data-guideid="text-answer-preview-data"
+              >
                 <Text type="secondary" className="text-sm">
                   Considering the limit of the context window, we retrieve up to
                   500 rows of results to generate the answer.
