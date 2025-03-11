@@ -105,5 +105,5 @@ export const DeleteQuestionSQLPairModal = makeDeleteModal(DefaultDeleteButton, {
   icon: <DeleteOutlined className="mr-2" />,
   itemName: 'question-SQL pair',
   content:
-    'This will be permanently deleted, please confirm you want to delete it.',
+    'This action is permanent and cannot be undone. Are you sure you want to proceed?',
 });
