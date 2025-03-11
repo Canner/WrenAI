@@ -152,10 +152,10 @@ async def ask_feedback(
 ) -> AskFeedbackResponse:
     query_id = str(uuid.uuid4())
     ask_feedback_request.query_id = query_id
-    service_container.ask_service._ask_feedback_results[
-        query_id
-    ] = AskFeedbackResultResponse(
-        status="searching",
+    service_container.ask_service._ask_feedback_results[query_id] = (
+        AskFeedbackResultResponse(
+            status="searching",
+        )
     )
 
     background_tasks.add_task(
