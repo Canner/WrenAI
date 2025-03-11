@@ -6,3 +6,4 @@ export * from './projectService';
 export * from './queryService';
 export * from './metadataService';
 export * from './dashboardService';
+export * from './askingTaskTracker';

@@ -122,7 +122,12 @@ export type AskResult = AskResponse<
   }>,
   AskResultStatus
 > & {
+  rephrasedQuestion?: string;
   intentReasoning?: string;
+  sqlGenerationReasoning?: string;
+  retrievedTables?: string[];
+  invalidSql?: string;
+  traceId?: string;
 };
 
 export enum RecommendationQuestionStatus {

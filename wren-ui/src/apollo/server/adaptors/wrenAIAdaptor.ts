@@ -632,7 +632,6 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   }
 
   private transformAskResult(body: any): AskResult {
-    const { type, intent_reasoning } = body;
     const { status, error } = this.transformStatusAndError(body);
     const candidates = (body?.response || []).map((candidate: any) => ({
       type: candidate?.type?.toUpperCase() as AskCandidateType,
@@ -641,11 +640,16 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     }));
 
     return {
-      type,
+      type: body?.type,
       status: status as AskResultStatus,
       error,
       response: candidates,
-      intentReasoning: intent_reasoning,
+      rephrasedQuestion: body?.rephrased_question,
+      intentReasoning: body?.intent_reasoning,
+      sqlGenerationReasoning: body?.sql_generation_reasoning,
+      retrievedTables: body?.retrieved_tables,
+      invalidSql: body?.invalid_sql,
+      traceId: body?.trace_id,
     };
   }
 

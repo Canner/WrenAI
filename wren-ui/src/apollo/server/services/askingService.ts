@@ -1,6 +1,5 @@
 import { IWrenAIAdaptor } from '@server/adaptors/wrenAIAdaptor';
 import {
-  AskResult,
   AskResultStatus,
   RecommendationQuestionsResult,
   RecommendationQuestionsInput,
@@ -36,6 +35,7 @@ import {
 } from '../backgrounds';
 import { getConfig } from '@server/config';
 import { TextBasedAnswerBackgroundTracker } from '../backgrounds/textBasedAnswerBackgroundTracker';
+import { IAskingTaskTracker, TrackedAskingResult } from './askingTaskTracker';
 
 const config = getConfig();
 
@@ -61,6 +61,7 @@ export interface AskingDetailTaskInput {
   question?: string;
   sql?: string;
   viewId?: number;
+  trackedAskingResult?: TrackedAskingResult;
 }
 
 export interface AskingDetailTaskUpdateInput {
@@ -103,7 +104,8 @@ export interface IAskingService {
     payload: AskingPayload,
   ): Promise<Task>;
   cancelAskingTask(taskId: string): Promise<void>;
-  getAskingTask(taskId: string): Promise<AskResult>;
+  getAskingTask(taskId: string): Promise<TrackedAskingResult>;
+  getAskingTaskById(id: number): Promise<TrackedAskingResult>;
 
   /**
    * Asking detail task.
@@ -361,6 +363,7 @@ export class AskingService implements IAskingService {
   private queryService: IQueryService;
   private telemetry: PostHogTelemetry;
   private mdlService: IMDLService;
+  private askingTaskTracker: IAskingTaskTracker;
 
   constructor({
     telemetry,
@@ -372,6 +375,7 @@ export class AskingService implements IAskingService {
     threadResponseRepository,
     queryService,
     mdlService,
+    askingTaskTracker,
   }: {
     telemetry: PostHogTelemetry;
     wrenAIAdaptor: IWrenAIAdaptor;
@@ -382,6 +386,7 @@ export class AskingService implements IAskingService {
     threadResponseRepository: IThreadResponseRepository;
     queryService: IQueryService;
     mdlService: IMDLService;
+    askingTaskTracker: IAskingTaskTracker;
   }) {
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.deployService = deployService;
@@ -423,6 +428,7 @@ export class AskingService implements IAskingService {
       });
 
     this.mdlService = mdlService;
+    this.askingTaskTracker = askingTaskTracker;
   }
 
   public async getThreadRecommendationQuestions(
@@ -528,7 +534,7 @@ export class AskingService implements IAskingService {
     // then use the threadId to get the sql and get the steps of last thread response
     // construct it into AskHistory and pass to ask
     const histories = threadId ? await this.getAskingHistory(threadId) : null;
-    const response = await this.wrenAIAdaptor.ask({
+    const response = await this.askingTaskTracker.createAskingTask({
       query: input.question,
       histories,
       deployId,
@@ -542,7 +548,7 @@ export class AskingService implements IAskingService {
   public async cancelAskingTask(taskId: string): Promise<void> {
     const eventName = TelemetryEvent.HOME_CANCEL_ASK;
     try {
-      await this.wrenAIAdaptor.cancelAsk(taskId);
+      await this.askingTaskTracker.cancelAskingTask(taskId);
       this.telemetry.sendEvent(eventName, {});
     } catch (err: any) {
       this.telemetry.sendEvent(eventName, {}, err.extensions?.service, false);
@@ -550,8 +556,12 @@ export class AskingService implements IAskingService {
     }
   }
 
-  public async getAskingTask(taskId: string): Promise<AskResult> {
-    return this.wrenAIAdaptor.getAskResult(taskId);
+  public async getAskingTask(taskId: string): Promise<TrackedAskingResult> {
+    return this.askingTaskTracker.getAskingResult(taskId);
+  }
+
+  public async getAskingTaskById(id: number): Promise<TrackedAskingResult> {
+    return this.askingTaskTracker.getAskingResultById(id);
   }
 
   /**
@@ -575,11 +585,22 @@ export class AskingService implements IAskingService {
       summary: input.question,
     });
 
-    await this.threadResponseRepository.createOne({
+    const threadResponse = await this.threadResponseRepository.createOne({
       threadId: thread.id,
       question: input.question,
       sql: input.sql,
+      askingTaskId: input.trackedAskingResult?.taskId,
     });
+
+    // if queryId is provided, update asking task
+    if (input.trackedAskingResult?.taskId) {
+      await this.askingTaskTracker.bindThreadResponse(
+        input.trackedAskingResult.taskId,
+        input.trackedAskingResult.queryId,
+        thread.id,
+        threadResponse.id,
+      );
+    }
 
     // return the task id
     return thread;
@@ -633,6 +654,7 @@ export class AskingService implements IAskingService {
         view.statement,
         view,
         thread,
+        input.trackedAskingResult,
       );
       return res;
     }
@@ -641,7 +663,18 @@ export class AskingService implements IAskingService {
       threadId: thread.id,
       question: input.question,
       sql: input.sql,
+      askingTaskId: input.trackedAskingResult?.taskId,
     });
+
+    // if queryId is provided, update asking task
+    if (input.trackedAskingResult?.taskId) {
+      await this.askingTaskTracker.bindThreadResponse(
+        input.trackedAskingResult.taskId,
+        input.trackedAskingResult.queryId,
+        thread.id,
+        threadResponse.id,
+      );
+    }
 
     return threadResponse;
   }
@@ -960,6 +993,7 @@ export class AskingService implements IAskingService {
       view.statement,
       view,
       thread,
+      input.trackedAskingResult,
     );
     return thread;
   }
@@ -969,13 +1003,27 @@ export class AskingService implements IAskingService {
     sql: string,
     view: View,
     thread: Thread,
+    trackedAskingResult?: TrackedAskingResult,
   ) {
-    return this.threadResponseRepository.createOne({
+    const threadResponse = await this.threadResponseRepository.createOne({
       threadId: thread.id,
       viewId: view.id,
       question,
       sql,
+      askingTaskId: trackedAskingResult?.taskId,
     });
+
+    // if trackedAskingResult is provided, update the asking task
+    if (trackedAskingResult) {
+      await this.askingTaskTracker.bindThreadResponse(
+        trackedAskingResult.taskId,
+        trackedAskingResult.queryId,
+        thread.id,
+        threadResponse.id,
+      );
+    }
+
+    return threadResponse;
   }
 
   private getThreadRecommendationQuestionsConfig(project: Project) {
