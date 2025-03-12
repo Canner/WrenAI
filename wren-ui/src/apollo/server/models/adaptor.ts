@@ -247,7 +247,6 @@ export enum SqlPairStatus {
   FINISHED = 'FINISHED',
   FAILED = 'FAILED',
 }
-
 export interface SqlPairResult {
   status: SqlPairStatus;
   error?: WrenAIError;
@@ -270,4 +269,22 @@ export interface QuestionsResult {
   error?: WrenAIError;
   questions?: string[];
   trace_id?: string;
+}
+
+export interface InstructionInput {
+  id: number;
+  projectId?: number;
+  instruction: string;
+  questions: string[];
+  isDefault: boolean;
+}
+
+export enum InstructionStatus {
+  INDEXING = 'INDEXING',
+  FINISHED = 'FINISHED',
+  FAILED = 'FAILED',
+}
+export interface InstructionResult {
+  status: InstructionStatus;
+  error?: WrenAIError;
 }

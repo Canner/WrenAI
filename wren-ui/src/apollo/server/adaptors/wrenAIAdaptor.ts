@@ -27,6 +27,9 @@ import {
   QuestionInput,
   QuestionsResult,
   QuestionsStatus,
+  InstructionInput,
+  InstructionStatus,
+  InstructionResult,
 } from '@server/models/adaptor';
 import { getLogger } from '@server/utils';
 import * as Errors from '@server/utils/error';
@@ -106,6 +109,13 @@ export interface IWrenAIAdaptor {
   deleteSqlPairs(projectId: number, sqlPairIds: number[]): Promise<void>;
   generateQuestions(input: QuestionInput): Promise<AsyncQueryResponse>;
   getQuestionsResult(queryId: string): Promise<Partial<QuestionsResult>>;
+
+  /**
+   * instruction related APIs
+   */
+  generateInstruction(input: InstructionInput[]): Promise<AsyncQueryResponse>;
+  getInstructionResult(queryId: string): Promise<InstructionResult>;
+  deleteInstructions(ids: number[], projectId: number): Promise<void>;
 }
 
 export class WrenAIAdaptor implements IWrenAIAdaptor {
@@ -527,6 +537,32 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     }
   }
 
+  public async generateInstruction(
+    input: InstructionInput[],
+  ): Promise<AsyncQueryResponse> {
+    const body = input.map((item) => ({
+      id: item.id.toString(),
+      instruction: item.instruction,
+      questions: item.questions,
+      is_default: item.isDefault,
+      project_id: item.projectId?.toString(),
+    }));
+    try {
+      const res = await axios.post(
+        `${this.wrenAIBaseEndpoint}/v1/instructions`,
+        {
+          instructions: body,
+        },
+      );
+      return { queryId: res.data.event_id };
+    } catch (err: any) {
+      logger.debug(
+        `Got error when generating instruction: ${getAIServiceError(err)}`,
+      );
+      throw err;
+    }
+  }
+
   public async getQuestionsResult(
     queryId: string,
   ): Promise<Partial<QuestionsResult>> {
@@ -547,6 +583,42 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       throw err;
     }
   }
+
+  public async getInstructionResult(
+    queryId: string,
+  ): Promise<InstructionResult> {
+    try {
+      const res = await axios.get(
+        `${this.wrenAIBaseEndpoint}/v1/instructions/${queryId}`,
+      );
+      return this.transformStatusAndError(res.data) as InstructionResult;
+    } catch (err: any) {
+      logger.debug(
+        `Got error when getting instruction result: ${getAIServiceError(err)}`,
+      );
+      throw err;
+    }
+  }
+
+  public async deleteInstructions(
+    ids: number[],
+    projectId: number,
+  ): Promise<void> {
+    try {
+      await axios.delete(`${this.wrenAIBaseEndpoint}/v1/instructions`, {
+        data: {
+          instruction_ids: ids.map((id) => id.toString()),
+          project_id: projectId.toString(),
+        },
+      });
+    } catch (err: any) {
+      logger.debug(
+        `Got error when deleting instruction: ${getAIServiceError(err)}`,
+      );
+      throw err;
+    }
+  }
+
   private transformChartAdjustmentInput(input: ChartAdjustmentInput) {
     const { query, sql, adjustmentOption, chartSchema, configurations } = input;
     return {
@@ -692,7 +764,8 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       | TextBasedAnswerStatus
       | ChartStatus
       | SqlPairStatus
-      | QuestionsStatus;
+      | QuestionsStatus
+      | InstructionStatus;
     error?: {
       code: Errors.GeneralErrorCodes;
       message: string;
