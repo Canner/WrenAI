@@ -15,6 +15,7 @@ import ViewBlock from '@/components/pages/home/promptThread/ViewBlock';
 import BreakdownAnswer from '@/components/pages/home/promptThread/BreakdownAnswer';
 import TextBasedAnswer from '@/components/pages/home/promptThread/TextBasedAnswer';
 import ChartAnswer from '@/components/pages/home/promptThread/ChartAnswer';
+import Preparation from '@/components/pages/home/preparation';
 import {
   AdjustThreadResponseChartInput,
   ThreadResponse,
@@ -203,8 +204,14 @@ export default function AnswerResult(props: Props) {
 
   return (
     <div style={resultStyle} className="adm-answer-result">
-      <QuestionTitle className="mb-6" question={question} />
-      <StyledTabs type="card" size="small" onTabClick={onTabClick}>
+      <QuestionTitle className="mb-4" question={question} />
+      <Preparation className="mb-3" data={threadResponse?.askingTask} />
+      <StyledTabs
+        className="select-none"
+        type="card"
+        size="small"
+        onTabClick={onTabClick}
+      >
         {!isBreakdownOnly && (
           <Tabs.TabPane
             key={ANSWER_TAB_KEYS.ANSWER}

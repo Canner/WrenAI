@@ -124,7 +124,7 @@ export default function Home() {
     $prompt.current.submit();
   };
 
-  const onSelect = async (payload: CreateThreadInput) => {
+  const onCreateResponse = async (payload: CreateThreadInput) => {
     try {
       askPrompt.onStopPolling();
       const response = await createThread({ variables: { data: payload } });
@@ -148,11 +148,15 @@ export default function Home() {
 
       {!isSampleDataset && (
         <RecommendedQuestionsInstruction
-          onSelect={onSelect}
+          onSelect={onCreateResponse}
           loading={threadCreating || threadRecommendationQuestionsGenerating}
         />
       )}
-      <Prompt ref={$prompt} {...askPrompt} onSelect={onSelect} />
+      <Prompt
+        ref={$prompt}
+        {...askPrompt}
+        onCreateResponse={onCreateResponse}
+      />
     </SiderLayout>
   );
 }

@@ -1,5 +1,10 @@
 import { useState } from 'react';
 import { PROCESS_STATE } from '@/utils/enum';
+import {
+  AskingTask,
+  AskingTaskStatus,
+  AskingTaskType,
+} from '@/apollo/client/graphql/__types__';
 
 export const getIsProcessing = (status: PROCESS_STATE) =>
   [
@@ -8,6 +13,26 @@ export const getIsProcessing = (status: PROCESS_STATE) =>
     PROCESS_STATE.GENERATING,
     PROCESS_STATE.SEARCHING,
   ].includes(status);
+
+export const convertAskingTaskToProcessState = (data: AskingTask) => {
+  const processState = {
+    [AskingTaskStatus.UNDERSTANDING]: PROCESS_STATE.UNDERSTANDING,
+    [AskingTaskStatus.SEARCHING]: PROCESS_STATE.SEARCHING,
+    [AskingTaskStatus.PLANNING]: PROCESS_STATE.PLANNING,
+    [AskingTaskStatus.GENERATING]: PROCESS_STATE.GENERATING,
+    [AskingTaskStatus.CORRECTING]: PROCESS_STATE.CORRECTING,
+    [AskingTaskStatus.FINISHED]: PROCESS_STATE.FINISHED,
+  }[data.status];
+
+  if (
+    data?.type === AskingTaskType.TEXT_TO_SQL &&
+    processState === PROCESS_STATE.FINISHED &&
+    data.candidates.length === 0
+  ) {
+    return PROCESS_STATE.NO_RESULT;
+  }
+  return processState;
+};
 
 export default function useAskProcessState() {
   const [currentState, setCurrentState] = useState<PROCESS_STATE>(
@@ -18,19 +43,42 @@ export default function useAskProcessState() {
     setCurrentState(PROCESS_STATE.IDLE);
   };
 
-  const nextState = () => {
-    setCurrentState(currentState + 1);
+  const canTransitionTo = (targetState: PROCESS_STATE) => {
+    return ProcessStateMachine.canTransition(currentState, targetState);
+  };
+
+  const transitionTo = (targetState: PROCESS_STATE) => {
+    if (canTransitionTo(targetState)) {
+      setCurrentState(targetState);
+    } else {
+      throw new Error(
+        `Cannot transition from ${currentState} to ${targetState}, please check the state machine`,
+      );
+    }
   };
 
   const setState = (state: PROCESS_STATE) => {
     setCurrentState(state);
   };
 
+  const isFinished = () => {
+    return currentState === PROCESS_STATE.FINISHED;
+  };
+
+  const isFailed = () => {
+    return currentState === PROCESS_STATE.FAILED;
+  };
+
   return {
     currentState,
     resetState,
-    nextState,
+    canTransitionTo,
+    transitionTo,
     setState,
+    isFinished,
+    isFailed,
+  };
+}
 
 export class ProcessStateMachine {
   private static transitions = {

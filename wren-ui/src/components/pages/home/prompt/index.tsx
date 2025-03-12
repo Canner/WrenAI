@@ -12,18 +12,16 @@ import { PROCESS_STATE } from '@/utils/enum';
 import PromptResult from '@/components/pages/home/prompt/Result';
 import useAskProcessState, {
   getIsProcessing,
+  convertAskingTaskToProcessState,
 } from '@/hooks/useAskProcessState';
 import { AskPromptData } from '@/hooks/useAskPrompt';
 import {
-  AskingTask,
-  AskingTaskStatus,
-  AskingTaskType,
   CreateThreadInput,
   CreateThreadResponseInput,
 } from '@/apollo/client/graphql/__types__';
 
 interface Props {
-  onSelect: (
+  onCreateResponse: (
     payload: CreateThreadInput | CreateThreadResponseInput,
   ) => Promise<void>;
   onStop: () => void;
@@ -57,27 +55,6 @@ const PromptButton = styled(Button)`
   min-width: 72px;
 `;
 
-const convertAskingTaskToProcessState = (data: AskingTask) => {
-  const processState = {
-    [AskingTaskStatus.UNDERSTANDING]: PROCESS_STATE.UNDERSTANDING,
-    [AskingTaskStatus.SEARCHING]: PROCESS_STATE.SEARCHING,
-    [AskingTaskStatus.PLANNING]: PROCESS_STATE.PLANNING,
-    [AskingTaskStatus.GENERATING]: PROCESS_STATE.GENERATING,
-    // Show generating state component when AI correcting
-    [AskingTaskStatus.CORRECTING]: PROCESS_STATE.GENERATING,
-    [AskingTaskStatus.FINISHED]: PROCESS_STATE.FINISHED,
-  }[data.status];
-
-  if (
-    data?.type === AskingTaskType.TEXT_TO_SQL &&
-    processState === PROCESS_STATE.FINISHED &&
-    data.candidates.length === 0
-  ) {
-    return PROCESS_STATE.NO_RESULT;
-  }
-  return processState;
-};
-
 export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
   const $promptInput = useRef<HTMLTextAreaElement>(null);
   const {
@@ -85,7 +62,7 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
     loading,
     onSubmit,
     onStop,
-    onSelect,
+    onCreateResponse,
     onStopStreaming,
     onStopRecommend,
   } = props;
@@ -124,38 +101,31 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
   useEffect(() => {
     if (askingTask) {
       const processState = convertAskingTaskToProcessState(askingTask);
-      askProcessState.setState(processState);
+      askProcessState.canTransitionTo(processState) &&
+        askProcessState.transitionTo(processState);
     }
   }, [askingTask]);
 
   useEffect(() => {
     if (error) {
-      askProcessState.setState(PROCESS_STATE.FAILED);
+      !askProcessState.isFailed() &&
+        askProcessState.transitionTo(PROCESS_STATE.FAILED);
     }
   }, [error]);
 
-  const selectQuestion = async (payload) => {
-    onSelect && (await onSelect(payload));
+  // create thread response for recommended question
+  const selectRecommendedQuestion = async (payload: {
+    question: string;
+    sql: string;
+  }) => {
+    onCreateResponse && (await onCreateResponse(payload));
     closeResult();
     askProcessState.resetState();
   };
 
-  const selectResult = async (payload) => {
-    const isSavedViewCandidate = !!payload.viewId;
-
-    let data = null;
-    if (isSavedViewCandidate) {
-      data = { viewId: payload.viewId, question };
-    } else if (question) {
-      data = {
-        sql: payload.sql,
-        question,
-      };
-    }
-    if (!data) return;
-    // keep the state as generating after the result is selected
-    askProcessState.setState(PROCESS_STATE.GENERATING);
-    onSelect && (await onSelect(data));
+  // create thread response for text to sql
+  const intentSQLAnswer = async () => {
+    onCreateResponse && (await onCreateResponse({ question }));
     closeResult();
     askProcessState.resetState();
   };
@@ -185,7 +155,7 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
   const submitAsk = async () => {
     if (isProcessing || !question) return;
     // start the state as understanding when user submit question
-    askProcessState.setState(PROCESS_STATE.UNDERSTANDING);
+    askProcessState.transitionTo(PROCESS_STATE.UNDERSTANDING);
     onSubmit && (await onSubmit(question));
   };
 
@@ -228,8 +198,8 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
         error={error}
         loading={loading}
         processState={askProcessState}
-        onSelectQuestion={selectQuestion}
-        onSelectResult={selectResult}
+        onSelectRecommendedQuestion={selectRecommendedQuestion}
+        onIntentSQLAnswer={intentSQLAnswer}
         onClose={closeResult}
         onStop={stopProcess}
       />

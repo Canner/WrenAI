@@ -43,8 +43,8 @@ interface Props {
     intentReasoning: string;
   };
   error?: any;
-  onSelectResult: (payload: { sql: string; viewId: number | null }) => void;
-  onSelectQuestion: ({
+  onIntentSQLAnswer: () => void;
+  onSelectRecommendedQuestion: ({
     question,
     sql,
   }: {
@@ -93,7 +93,7 @@ const makeProcessing = (text: string) => (props: Props) => {
 const makeProcessingError =
   (config: { icon: ReactNode; title?: string; description?: string }) =>
   (props: Props) => {
-    const { onClose, onSelectQuestion, data, error } = props;
+    const { onClose, onSelectRecommendedQuestion, data, error } = props;
     const { message, shortMessage, stacktrace } = error || {};
     const hasStacktrace = !!stacktrace;
 
@@ -129,7 +129,7 @@ const makeProcessingError =
           <RecommendedQuestions
             className="mt-2"
             {...recommendedQuestionProps.state}
-            onSelect={onSelectQuestion}
+            onSelect={onSelectRecommendedQuestion}
           />
         )}
       </Wrapper>
@@ -142,41 +142,24 @@ const Failed = makeProcessingError({
   icon: <ErrorIcon />,
 });
 
-const NoResult = makeProcessingError({
-  icon: <WarningOutlined className="mr-2 text-lg gold-6" />,
-  title: 'Please try again',
-  description: 'No results found. Try providing more details in your question.',
-});
-
 const Understanding = makeProcessing('Understanding question');
-const Searching = makeProcessing('Searching data');
-const Planning = makeProcessing('Organizing thoughts');
-const Generating = makeProcessing('Generating answer');
-const Finished = (props: Props) => {
-  const { data, onSelectResult } = props;
-  // only one candidate
-  const { candidates } = data;
+
+const IntentionFinished = (props: Props) => {
+  const { data, onIntentSQLAnswer } = props;
+  const { type } = data;
 
   useEffect(() => {
-    if (candidates.length) {
-      const [result] = candidates;
-      onSelectResult &&
-        onSelectResult({ sql: result.sql, viewId: result.view?.id });
+    // create an empty response first if this is a text to sql task
+    if (type === AskingTaskType.TEXT_TO_SQL) {
+      onIntentSQLAnswer && onIntentSQLAnswer();
     }
   }, [data]);
 
-  if (candidates.length === 0)
-    return (
-      <Wrapper>
-        <NoResult {...props} />
-      </Wrapper>
-    );
-
-  return null;
+  return <Understanding {...props} />;
 };
 
 const GeneralAnswer = (props: Props) => {
-  const { onClose, onSelectQuestion, data, loading } = props;
+  const { onClose, onSelectRecommendedQuestion, data, loading } = props;
   const $wrapper = useRef<HTMLDivElement>(null);
 
   const { originalQuestion, askingStreamTask, recommendedQuestions } = data;
@@ -237,7 +220,7 @@ const GeneralAnswer = (props: Props) => {
       {recommendedQuestionProps.show && (
         <RecommendedQuestions
           {...recommendedQuestionProps.state}
-          onSelect={onSelectQuestion}
+          onSelect={onSelectRecommendedQuestion}
         />
       )}
     </Wrapper>
@@ -269,10 +252,7 @@ const getDefaultStateComponent = (state: PROCESS_STATE) => {
   return (
     {
       [PROCESS_STATE.UNDERSTANDING]: Understanding,
-      [PROCESS_STATE.SEARCHING]: Searching,
-      [PROCESS_STATE.PLANNING]: Planning,
-      [PROCESS_STATE.GENERATING]: Generating,
-      [PROCESS_STATE.FINISHED]: Finished,
+      [PROCESS_STATE.SEARCHING]: IntentionFinished,
       [PROCESS_STATE.FAILED]: Failed,
     }[state] || null
   );

@@ -251,7 +251,7 @@ export default function HomeThread() {
     [thread, recommendedQuestions, showRecommendedQuestions],
   );
 
-  const onSelect = async (payload: CreateThreadResponseInput) => {
+  const onCreateResponse = async (payload: CreateThreadResponseInput) => {
     try {
       askPrompt.onStopPolling();
 
@@ -279,15 +279,20 @@ export default function HomeThread() {
       <PromptThread
         data={result}
         onOpenSaveAsViewModal={saveAsViewModal.openModal}
-        onSelect={onSelect}
+        onSelectRecommendedQuestion={onCreateResponse}
         onRegenerateTextBasedAnswer={onRegenerateTextBasedAnswer}
         onGenerateBreakdownAnswer={onGenerateThreadResponseBreakdown}
         onGenerateChartAnswer={onGenerateThreadResponseChart}
         onAdjustChartAnswer={onAdjustThreadResponseChart}
         onOpenSaveToKnowledgeModal={questionSqlPairModal.openModal}
       />
+
       <div className="py-12" />
-      <Prompt ref={$prompt} {...askPrompt} onSelect={onSelect} />
+      <Prompt
+        ref={$prompt}
+        {...askPrompt}
+        onCreateResponse={onCreateResponse}
+      />
       <SaveAsViewModal
         {...saveAsViewModal.state}
         loading={creating}

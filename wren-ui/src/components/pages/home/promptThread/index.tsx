@@ -26,7 +26,7 @@ interface Props {
     showRecommendedQuestions: boolean;
   };
   onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
-  onSelect: ({ question, sql }: SelectQuestionProps) => void;
+  onSelectRecommendedQuestion: ({ question, sql }: SelectQuestionProps) => void;
   onRegenerateTextBasedAnswer: (responseId: number) => void;
   onGenerateBreakdownAnswer: (responseId: number) => void;
   onGenerateChartAnswer: (responseId: number) => Promise<void>;
@@ -126,7 +126,7 @@ export default function PromptThread(props: Props) {
   const router = useRouter();
   const divRef = useRef<HTMLDivElement>(null);
   const motionResponsesRef = useRef<Record<number, boolean>>({});
-  const { data, onSelect, ...restProps } = props;
+  const { data, onSelectRecommendedQuestion, ...restProps } = props;
 
   const responses = useMemo(
     () =>
@@ -193,7 +193,7 @@ export default function PromptThread(props: Props) {
         recommendedQuestionsProps={{
           data: data.recommendedQuestions,
           show: data.showRecommendedQuestions,
-          onSelect,
+          onSelect: onSelectRecommendedQuestion,
         }}
       />
     </StyledPromptThread>
