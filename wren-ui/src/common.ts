@@ -15,6 +15,7 @@ import {
   DashboardItemRepository,
   DashboardRepository,
   SqlPairRepository,
+  InstructionRepository,
 } from '@server/repositories';
 import {
   WrenEngineAdaptor,
@@ -29,6 +30,7 @@ import {
   AskingService,
   MDLService,
   DashboardService,
+  InstructionService,
 } from '@server/services';
 import { PostHogTelemetry } from './apollo/server/telemetry/telemetry';
 import {
@@ -63,6 +65,7 @@ export const initComponents = () => {
   const dashboardRepository = new DashboardRepository(knex);
   const dashboardItemRepository = new DashboardItemRepository(knex);
   const sqlPairRepository = new SqlPairRepository(knex);
+  const instructionRepository = new InstructionRepository(knex);
 
   // adaptors
   const wrenEngineAdaptor = new WrenEngineAdaptor({
@@ -125,6 +128,11 @@ export const initComponents = () => {
     sqlPairRepository,
     wrenAIAdaptor,
   });
+  const instructionService = new InstructionService({
+    instructionRepository,
+    wrenAIAdaptor,
+  });
+
   // background trackers
   const projectRecommendQuestionBackgroundTracker =
     new ProjectRecommendQuestionBackgroundTracker({
@@ -158,6 +166,7 @@ export const initComponents = () => {
     dashboardRepository,
     dashboardItemRepository,
     sqlPairRepository,
+    instructionRepository,
     // adaptors
     wrenEngineAdaptor,
     wrenAIAdaptor,
@@ -172,6 +181,7 @@ export const initComponents = () => {
     mdlService,
     dashboardService,
     sqlPairService,
+    instructionService,
 
     // background trackers
     projectRecommendQuestionBackgroundTracker,

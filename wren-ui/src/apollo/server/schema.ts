@@ -884,6 +884,30 @@ export const typeDefs = gql`
     sql: String!
   }
 
+  type Instruction {
+    id: Int!
+    projectId: Int!
+    instruction: String!
+    questions: [String!]!
+    isDefault: Boolean!
+  }
+
+  input CreateInstructionInput {
+    instruction: String!
+    questions: [String!]!
+    isDefault: Boolean!
+  }
+
+  input UpdateInstructionInput {
+    instruction: String
+    questions: [String!]
+    isDefault: Boolean
+  }
+
+  input InstructionWhereInput {
+    id: Int!
+  }
+
   # Query and Mutation
   type Query {
     # On Boarding Steps
@@ -929,6 +953,8 @@ export const typeDefs = gql`
 
     # SQL Pairs
     sqlPairs: [SqlPair]!
+    # Instructions
+    instructions: [Instruction]!
   }
 
   type Mutation {
@@ -1048,5 +1074,12 @@ export const typeDefs = gql`
     ): SqlPair!
     deleteSqlPair(where: SqlPairWhereUniqueInput!): Boolean!
     generateQuestion(data: GenerateQuestionInput!): String!
+    # Instructions
+    createInstruction(data: CreateInstructionInput!): Instruction!
+    updateInstruction(
+      where: InstructionWhereInput!
+      data: UpdateInstructionInput!
+    ): Instruction!
+    deleteInstruction(where: InstructionWhereInput!): Boolean!
   }
 `;
