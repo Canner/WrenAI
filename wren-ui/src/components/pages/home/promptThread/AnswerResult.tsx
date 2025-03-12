@@ -27,7 +27,8 @@ const { Title, Text } = Typography;
 const knowledgeTooltip = (
   <>
     Store this answer as a Question-SQL pair to help Wren AI improve SQL
-    generation.{` `}
+    generation.
+    <br />
     <Typography.Link
       className="gray-1 underline"
       href="https://docs.getwren.ai/oss/guide/knowledge/question-sql-pairs#save-to-knowledge"
