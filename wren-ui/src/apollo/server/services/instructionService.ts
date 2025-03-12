@@ -100,7 +100,7 @@ export class InstructionService implements IInstructionService {
     try {
       this.validateInstructionInput(input);
       const instruction = await this.instructionRepository.findOneBy(
-        { id: input.id },
+        { id: input.id, projectId: input.projectId },
         {
           tx,
         },
