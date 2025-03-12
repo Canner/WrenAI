@@ -508,8 +508,13 @@ def metrics_initiator(
     dataset: dict,
     pipe_components: dict[str, PipelineComponent],
     enable_semantics_comparison: bool = True,
+    settings: EvalSettings = EvalSettings(),
 ) -> dict:
-    engine_info = engine_config(dataset["mdl"], pipe_components)
+    engine_info = engine_config(
+        dataset["mdl"],
+        pipe_components,
+        settings.db_path_for_duckdb,
+    )
     component = pipe_components["evaluation"]
     match pipeline:
         case "retrieval":
