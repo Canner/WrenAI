@@ -86,6 +86,7 @@ def create_service_container(
                 ),
                 "historical_question": retrieval.HistoricalQuestionRetrieval(
                     **pipe_components["historical_question_retrieval"],
+                    historical_question_retrieval_similarity_threshold=settings.historical_question_retrieval_similarity_threshold,
                 ),
                 "sql_pairs_retrieval": retrieval.SqlPairsRetrieval(
                     **pipe_components["sql_pairs_retrieval"],

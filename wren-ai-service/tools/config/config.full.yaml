@@ -155,6 +155,8 @@ settings:
   table_retrieval_size: 10
   table_column_retrieval_size: 100
   query_cache_maxsize: 1000
+  allow_intent_classification: true
+  allow_sql_generation_reasoning: true
   allow_using_db_schemas_without_pruning: false
   query_cache_ttl: 3600
   langfuse_host: https://cloud.langfuse.com
