@@ -34,7 +34,8 @@ export default function QuestionSQLPairModal(props: Props) {
     payload,
   } = props;
 
-  const isCreateMode = formMode === FORM_MODE.CREATE;
+  // pass payload?.isCreateMode to prevent formMode from being set to Update when passing defaultValue, for the 'Add a SQL pair from an existing answer' scenario use.
+  const isCreateMode = formMode === FORM_MODE.CREATE || payload?.isCreateMode;
 
   const [form] = Form.useForm();
   const [error, setError] =
@@ -144,19 +145,9 @@ export default function QuestionSQLPairModal(props: Props) {
   const confirmLoading = loading || submitting;
   const disabled = !sqlValue;
 
-  const getIsCreateMode = () => {
-    if (isCreateMode) {
-      return true;
-    }
-    if (payload?.isCreateMode) {
-      return true;
-    }
-    return false;
-  };
-
   return (
     <Modal
-      title={`${getIsCreateMode() ? 'Add' : 'Update'} Question-SQL Pair`}
+      title={`${isCreateMode ? 'Add' : 'Update'} Question-SQL Pair`}
       centered
       closable
       confirmLoading={confirmLoading}
