@@ -271,9 +271,9 @@ export interface QuestionsResult {
   trace_id?: string;
 }
 
-export interface InstructionInput {
+export interface GenerateInstructionInput {
   id: number;
-  projectId?: number;
+  projectId: number;
   instruction: string;
   questions: string[];
   isDefault: boolean;

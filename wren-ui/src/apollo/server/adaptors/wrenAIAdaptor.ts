@@ -27,7 +27,7 @@ import {
   QuestionInput,
   QuestionsResult,
   QuestionsStatus,
-  InstructionInput,
+  GenerateInstructionInput,
   InstructionStatus,
   InstructionResult,
 } from '@server/models/adaptor';
@@ -113,7 +113,9 @@ export interface IWrenAIAdaptor {
   /**
    * instruction related APIs
    */
-  generateInstruction(input: InstructionInput[]): Promise<AsyncQueryResponse>;
+  generateInstruction(
+    input: GenerateInstructionInput[],
+  ): Promise<AsyncQueryResponse>;
   getInstructionResult(queryId: string): Promise<InstructionResult>;
   deleteInstructions(ids: number[], projectId: number): Promise<void>;
 }
@@ -538,7 +540,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   }
 
   public async generateInstruction(
-    input: InstructionInput[],
+    input: GenerateInstructionInput[],
   ): Promise<AsyncQueryResponse> {
     const body = input.map((item) => ({
       id: item.id.toString(),

@@ -4,7 +4,7 @@ import { InstructionInput, UpdateInstructionInput } from '../models';
 import {
   InstructionResult,
   InstructionStatus,
-  InstructionInput as AdaptorInstructionInput,
+  GenerateInstructionInput,
 } from '../models/adaptor';
 import {
   IInstructionRepository,
@@ -166,7 +166,7 @@ export class InstructionService implements IInstructionService {
 
   private pickGenerateInstructionInput(
     instruction: Instruction,
-  ): AdaptorInstructionInput {
+  ): GenerateInstructionInput {
     return pick(instruction, [
       'id',
       'projectId',
