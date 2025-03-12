@@ -102,9 +102,16 @@ async def retrieval(
 
 
 @observe(capture_input=False)
-def filtered_documents(retrieval: dict, score_filter: ScoreFilter) -> dict:
+def filtered_documents(
+    retrieval: dict,
+    score_filter: ScoreFilter,
+    historical_question_retrieval_similarity_threshold: float,
+) -> dict:
     if retrieval:
-        return score_filter.run(documents=retrieval.get("documents"), score=0.9)
+        return score_filter.run(
+            documents=retrieval.get("documents"),
+            score=historical_question_retrieval_similarity_threshold,
+        )
 
     return {}
 
@@ -127,6 +134,7 @@ class HistoricalQuestionRetrieval(BasicPipeline):
         self,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
+        historical_question_retrieval_similarity_threshold: Optional[float] = 0.9,
         **kwargs,
     ) -> None:
         view_questions_store = document_store_provider.get_store(
@@ -148,6 +156,10 @@ class HistoricalQuestionRetrieval(BasicPipeline):
             "output_formatter": OutputFormatter(),
         }
 
+        self._configs = {
+            "historical_question_retrieval_similarity_threshold": historical_question_retrieval_similarity_threshold,
+        }
+
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
@@ -161,6 +173,7 @@ class HistoricalQuestionRetrieval(BasicPipeline):
                 "query": query,
                 "id": id or "",
                 **self._components,
+                **self._configs,
             },
         )
 
