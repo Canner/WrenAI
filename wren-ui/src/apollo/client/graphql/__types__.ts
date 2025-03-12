@@ -28,7 +28,13 @@ export type AskingTask = {
   candidates: Array<ResultCandidate>;
   error?: Maybe<Error>;
   intentReasoning?: Maybe<Scalars['String']>;
+  invalidSql?: Maybe<Scalars['String']>;
+  queryId?: Maybe<Scalars['String']>;
+  rephrasedQuestion?: Maybe<Scalars['String']>;
+  retrievedTables?: Maybe<Array<Scalars['String']>>;
+  sqlGenerationReasoning?: Maybe<Scalars['String']>;
   status: AskingTaskStatus;
+  traceId?: Maybe<Scalars['String']>;
   type?: Maybe<AskingTaskType>;
 };
 
@@ -138,13 +144,13 @@ export type CreateSqlPairInput = {
 export type CreateThreadInput = {
   question?: InputMaybe<Scalars['String']>;
   sql?: InputMaybe<Scalars['String']>;
-  viewId?: InputMaybe<Scalars['Int']>;
+  taskId?: InputMaybe<Scalars['String']>;
 };
 
 export type CreateThreadResponseInput = {
   question?: InputMaybe<Scalars['String']>;
   sql?: InputMaybe<Scalars['String']>;
-  viewId?: InputMaybe<Scalars['Int']>;
+  taskId?: InputMaybe<Scalars['String']>;
 };
 
 export type CreateViewInput = {
@@ -898,7 +904,7 @@ export enum ProjectLanguage {
 
 export type Query = {
   __typename?: 'Query';
-  askingTask: AskingTask;
+  askingTask?: Maybe<AskingTask>;
   autoGenerateRelation: Array<RecommendRelations>;
   dashboardItems: Array<DashboardItem>;
   diagram: Diagram;
@@ -1137,11 +1143,12 @@ export type Thread = {
 export type ThreadResponse = {
   __typename?: 'ThreadResponse';
   answerDetail?: Maybe<ThreadResponseAnswerDetail>;
+  askingTask?: Maybe<AskingTask>;
   breakdownDetail?: Maybe<ThreadResponseBreakdownDetail>;
   chartDetail?: Maybe<ThreadResponseChartDetail>;
   id: Scalars['Int'];
   question: Scalars['String'];
-  sql: Scalars['String'];
+  sql?: Maybe<Scalars['String']>;
   threadId: Scalars['Int'];
   view?: Maybe<ViewInfo>;
 };
