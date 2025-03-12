@@ -1,6 +1,5 @@
 import { Knex } from 'knex';
 import { BaseRepository, IBasicRepository } from './baseRepository';
-import { camelCase, isPlainObject, mapKeys, snakeCase } from 'lodash';
 
 export interface SqlPair {
   id: number; // ID
