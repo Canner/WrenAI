@@ -17,6 +17,18 @@ const Wrapper = styled.div`
   }
 `;
 
+const StyledLoading = styled.div`
+  .adm-loading {
+    width: 100%;
+    height: 100%;
+    > div > .ant-spin .ant-spin-dot {
+      left: 0;
+      top: 0;
+      margin: 0;
+    }
+  }
+`;
+
 interface Props {
   visible?: boolean;
 }
@@ -26,6 +38,8 @@ interface LoadingProps {
   spinning?: boolean;
   loading?: boolean;
   tip?: string;
+  size?: number;
+  className?: string;
 }
 
 export const defaultIndicator = (
@@ -60,14 +74,24 @@ export const FlexLoading = (props) => {
 };
 
 export const Loading = ({
+  className = '',
+  size = 36,
   children = null,
   spinning = false,
   loading = false,
   tip,
 }: LoadingProps) => (
-  <Spin indicator={defaultIndicator} spinning={spinning || loading} tip={tip}>
-    {children}
-  </Spin>
+  <StyledLoading style={{ width: size, height: size }}>
+    <Spin
+      className={className}
+      wrapperClassName="adm-loading"
+      indicator={<LoadingOutlined style={{ fontSize: size }} spin />}
+      spinning={spinning || loading}
+      tip={tip}
+    >
+      {children}
+    </Spin>
+  </StyledLoading>
 );
 
 interface LoadingWrapperProps {
