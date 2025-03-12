@@ -117,7 +117,7 @@ export class InstructionService implements IInstructionService {
       const { queryId } = await this.wrenAIAdaptor.generateInstruction([
         this.pickGenerateInstructionInput(updatedInstruction),
       ]);
-      const res = await this.waitDeployInstruction(`${queryId}1`);
+      const res = await this.waitDeployInstruction(queryId);
       if (res.error) {
         await tx.rollback();
         throw Errors.create(res.error.code, {
