@@ -145,7 +145,7 @@ const resolvers = {
 
     // SQL Pairs
     createSqlPair: sqlPairResolver.createSqlPair,
-    editSqlPair: sqlPairResolver.editSqlPair,
+    updateSqlPair: sqlPairResolver.updateSqlPair,
     deleteSqlPair: sqlPairResolver.deleteSqlPair,
     generateQuestion: sqlPairResolver.generateQuestion,
   },

@@ -25,6 +25,7 @@ export interface EditSqlPair {
 
 export interface ISqlPairService {
   getProjectSqlPairs(projectId: number): Promise<SqlPair[]>;
+  createSqlPair(projectId: number, sqlPair: CreateSqlPair): Promise<SqlPair>;
   createSqlPairs(
     projectId: number,
     sqlPairs: CreateSqlPair[],
@@ -52,6 +53,7 @@ export class SqlPairService implements ISqlPairService {
     this.sqlPairRepository = sqlPairRepository;
     this.wrenAIAdaptor = wrenAIAdaptor;
   }
+
   public async generateQuestions(
     project: Project,
     sqls: string[],
@@ -79,8 +81,40 @@ export class SqlPairService implements ISqlPairService {
       });
     }
   }
+
   public async getProjectSqlPairs(projectId: number): Promise<SqlPair[]> {
     return this.sqlPairRepository.findAllBy({ projectId });
+  }
+
+  public async createSqlPair(
+    projectId: number,
+    sqlPair: CreateSqlPair,
+  ): Promise<SqlPair> {
+    const tx = await this.sqlPairRepository.transaction();
+    try {
+      const newPair = await this.sqlPairRepository.createOne(
+        {
+          ...sqlPair,
+          projectId,
+        },
+        { tx },
+      );
+      const { queryId } = await this.wrenAIAdaptor.deploySqlPair(
+        projectId,
+        newPair,
+      );
+      const deployResult = await this.waitUntilSqlPairResult(queryId);
+      if (deployResult.error) {
+        throw Errors.create(deployResult.error.code, {
+          customMessage: deployResult.error.message,
+        });
+      }
+      await tx.commit();
+      return newPair;
+    } catch (error) {
+      await tx.rollback();
+      throw error;
+    }
   }
 
   public async createSqlPairs(
@@ -232,7 +266,9 @@ export class SqlPairService implements ISqlPairService {
   ): Promise<Partial<QuestionsResult>> {
     let result = await this.wrenAIAdaptor.getQuestionsResult(queryId);
     while (
-      ![QuestionsStatus.SUCCEEDED, SqlPairStatus.FAILED].includes(result.status)
+      ![QuestionsStatus.SUCCEEDED, QuestionsStatus.FAILED].includes(
+        result.status,
+      )
     ) {
       await new Promise((resolve) => setTimeout(resolve, 500));
       result = await this.wrenAIAdaptor.getQuestionsResult(queryId);

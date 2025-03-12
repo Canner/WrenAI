@@ -1042,7 +1042,7 @@ export const typeDefs = gql`
 
     # SQL Pairs
     createSqlPair(data: CreateSqlPairInput!): SqlPair!
-    editSqlPair(
+    updateSqlPair(
       where: SqlPairWhereUniqueInput!
       data: UpdateSqlPairInput!
     ): SqlPair!

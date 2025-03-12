@@ -5,7 +5,7 @@ export class SqlPairResolver {
   constructor() {
     this.getProjectSqlPairs = this.getProjectSqlPairs.bind(this);
     this.createSqlPair = this.createSqlPair.bind(this);
-    this.editSqlPair = this.editSqlPair.bind(this);
+    this.updateSqlPair = this.updateSqlPair.bind(this);
     this.deleteSqlPair = this.deleteSqlPair.bind(this);
     this.generateQuestion = this.generateQuestion.bind(this);
   }
@@ -31,13 +31,10 @@ export class SqlPairResolver {
   ): Promise<SqlPair> {
     const project = await ctx.projectService.getCurrentProject();
     await this.validateSql(arg.data.sql, ctx);
-    const sqlPairs = await ctx.sqlPairService.createSqlPairs(project.id, [
-      arg.data,
-    ]);
-    return sqlPairs[0];
+    return await ctx.sqlPairService.createSqlPair(project.id, arg.data);
   }
 
-  public async editSqlPair(
+  public async updateSqlPair(
     _root: unknown,
     arg: {
       data: {

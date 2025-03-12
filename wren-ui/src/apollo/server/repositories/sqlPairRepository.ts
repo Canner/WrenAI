@@ -18,18 +18,4 @@ export class SqlPairRepository
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'sql_pair' });
   }
-
-  protected override transformToDBData = (data: any) => {
-    if (!isPlainObject(data)) {
-      throw new Error('Unexpected dbdata');
-    }
-    return mapKeys(data, (_value, key) => snakeCase(key));
-  };
-
-  protected override transformFromDBData = (data: any): SqlPair => {
-    if (!isPlainObject(data)) {
-      throw new Error('Unexpected dbdata');
-    }
-    return mapKeys(data, (_value, key) => camelCase(key)) as SqlPair;
-  };
 }

@@ -9,10 +9,11 @@ exports.up = function (knex) {
       .integer('project_id')
       .notNullable()
       .comment('Reference to project.id');
-    table.string('sql', 10000).notNullable();
+    table.text('sql').notNullable();
     table.string('question', 1000).notNullable();
-    table.index(['project_id']);
     table.timestamps(true, true);
+
+    table.foreign('project_id').references('id').inTable('project');
   });
 };
 
