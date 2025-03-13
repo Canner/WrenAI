@@ -35,6 +35,11 @@ export enum GeneralErrorCodes {
   // dry run error
   DRY_RUN_ERROR = 'DRY_RUN_ERROR',
   DRY_PLAN_ERROR = 'DRY_PLAN_ERROR',
+
+  // deploy sql pair error
+  DEPLOY_SQL_PAIR_ERROR = 'DEPLOY_SQL_PAIR_ERROR',
+  GENERATE_QUESTIONS_ERROR = 'GENERATE_QUESTIONS_ERROR',
+  INVALID_SQL_ERROR = 'INVALID_SQL_ERROR',
 }
 
 export const errorMessages = {
@@ -76,6 +81,12 @@ export const errorMessages = {
   // dry run error
   [GeneralErrorCodes.DRY_RUN_ERROR]: 'Dry run sql statement error',
   [GeneralErrorCodes.DRY_PLAN_ERROR]: 'Dry plan error',
+
+  // deploy sql pair error
+  [GeneralErrorCodes.DEPLOY_SQL_PAIR_ERROR]: 'Deploy sql pair error',
+  [GeneralErrorCodes.GENERATE_QUESTIONS_ERROR]: 'Generate questions error',
+  [GeneralErrorCodes.INVALID_SQL_ERROR]:
+    'Invalid SQL, please check your SQL syntax',
 };
 
 export const shortMessages = {
@@ -94,6 +105,10 @@ export const shortMessages = {
   [GeneralErrorCodes.INVALID_VIEW_CREATION]: 'Invalid view creation',
   [GeneralErrorCodes.DRY_RUN_ERROR]: 'Dry run sql statement error',
   [GeneralErrorCodes.DRY_PLAN_ERROR]: 'Dry plan error',
+  [GeneralErrorCodes.DEPLOY_SQL_PAIR_ERROR]: 'Deploy sql pair error',
+  [GeneralErrorCodes.GENERATE_QUESTIONS_ERROR]: 'Generate questions error',
+  [GeneralErrorCodes.INVALID_SQL_ERROR]:
+    'Invalid SQL, please check your SQL syntax',
 };
 
 export const create = (
