@@ -367,7 +367,6 @@ class AskService:
                 )["formatted_output"].get("documents", [])
 
                 # todo: consider to retireve at the same time with sql_samples
-                # todo: should we also put the instructioons into reasoning pipeline?
                 instructions = (
                     await self._pipelines["instructions_retrieval"].run(
                         query=user_query,
@@ -380,6 +379,7 @@ class AskService:
                         query=user_query,
                         contexts=table_ddls,
                         sql_samples=sql_samples,
+                        instructions=instructions,
                         configuration=ask_request.configurations,
                         query_id=query_id,
                     )
