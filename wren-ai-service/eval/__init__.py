@@ -11,6 +11,7 @@ class EvalSettings(Settings):
     config_path: str = "eval/config.yaml"
     openai_api_key: SecretStr = Field(alias="OPENAI_API_KEY")
     allow_sql_samples: bool = True
+    allow_instructions: bool = True
     db_path_for_duckdb: str = ""
 
     # BigQuery
