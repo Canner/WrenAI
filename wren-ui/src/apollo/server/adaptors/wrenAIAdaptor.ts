@@ -31,6 +31,7 @@ import {
 import { getLogger } from '@server/utils';
 import * as Errors from '@server/utils/error';
 import { SqlPair } from '../repositories';
+import { ThreadResponse } from '@server/repositories';
 
 const logger = getLogger('WrenAIAdaptor');
 logger.level = 'debug';
@@ -188,7 +189,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       const res = await axios.post(`${this.wrenAIBaseEndpoint}/v1/asks`, {
         query: input.query,
         id: input.deployId,
-        history: this.transfromHistoryInput(input.history),
+        histories: this.transformHistoryInput(input.histories),
         configurations: input.configurations,
       });
       return { queryId: res.data.query_id };
@@ -729,19 +730,15 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     };
   }
 
-  private transfromHistoryInput(history: AskHistory) {
-    if (!history) {
-      return null;
+  private transformHistoryInput(histories: ThreadResponse[]): AskHistory[] {
+    if (!histories) {
+      return [];
     }
 
     // make it snake_case
-    return {
-      ...history,
-      steps: history.steps.map((step) => ({
-        sql: step.sql,
-        summary: step.summary,
-        cte_name: step.cteName,
-      })),
-    };
+    return histories.map((history) => ({
+      sql: history.sql,
+      question: history.question,
+    }));
   }
 }
