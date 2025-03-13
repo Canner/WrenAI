@@ -134,6 +134,7 @@ async def test_instructions_deletion():
     assert await store.count_documents() == 1
 
     await instructions.clean(
+        instructions=[],
         delete_all=True,
         project_id="fake-id",
     )
