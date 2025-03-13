@@ -12,12 +12,7 @@ const StyledSkeleton = styled(Skeleton)`
   }
 `;
 
-export default function BreakdownAnswer(
-  props: Pick<
-    AnswerResultProps,
-    'motion' | 'threadResponse' | 'isLastThreadResponse' | 'onInitPreviewDone'
-  >,
-) {
+export default function BreakdownAnswer(props: AnswerResultProps) {
   const { isLastThreadResponse, motion, onInitPreviewDone, threadResponse } =
     props;
 

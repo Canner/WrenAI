@@ -125,7 +125,8 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
 
   // create thread response for text to sql
   const intentSQLAnswer = async () => {
-    onCreateResponse && (await onCreateResponse({ question }));
+    onCreateResponse &&
+      (await onCreateResponse({ question, taskId: askingTask?.queryId }));
     closeResult();
     askProcessState.resetState();
   };

@@ -27,6 +27,10 @@ type IPromptThreadStore = {
     responseId: number,
     data: AdjustThreadResponseChartInput,
   ) => Promise<void>;
+  onOpenSaveToKnowledgeModal: (
+    data: { sql: string; question: string },
+    payload: { isCreateMode: boolean },
+  ) => void;
 };
 
 // Register store provider

@@ -14,9 +14,10 @@ import useAskPrompt, {
 import useModalAction from '@/hooks/useModalAction';
 import PromptThread from '@/components/pages/home/promptThread';
 import SaveAsViewModal from '@/components/modals/SaveAsViewModal';
+import QuestionSQLPairModal from '@/components/modals/QuestionSQLPairModal';
 import { getAnswerIsFinished } from '@/components/pages/home/promptThread/TextBasedAnswer';
 import { getIsChartFinished } from '@/components/pages/home/promptThread/ChartAnswer';
-import QuestionSQLPairModal from '@/components/modals/QuestionSQLPairModal';
+import { PromptThreadProvider } from '@/components/pages/home/promptThread/store';
 import {
   useCreateThreadResponseMutation,
   useThreadQuery,
@@ -130,7 +131,7 @@ export default function HomeThread() {
     pollInterval: 1000,
   });
 
-  const [generateThreadResponseAnswer] =
+  const [generateThreadResponseAnswer, threadResponseAnswerResult] =
     useGenerateThreadResponseAnswerMutation();
 
   const [generateThreadResponseBreakdown] =
@@ -162,10 +163,6 @@ export default function HomeThread() {
 
   const onGenerateThreadResponseAnswer = async (responseId: number) => {
     await generateThreadResponseAnswer({ variables: { responseId } });
-  };
-
-  const onRegenerateTextBasedAnswer = async (responseId: number) => {
-    await onGenerateThreadResponseAnswer(responseId);
     fetchThreadResponse({ variables: { responseId } });
   };
 
@@ -191,6 +188,11 @@ export default function HomeThread() {
     fetchThreadResponse({ variables: { responseId } });
   };
 
+  const onGenerateThreadRecommendedQuestions = async () => {
+    await generateThreadRecommendationQuestions({ variables: { threadId } });
+    fetchThreadRecommendationQuestions({ variables: { threadId } });
+  };
+
   // stop all requests when change thread
   useEffect(() => {
     askPrompt.onStopPolling();
@@ -204,10 +206,26 @@ export default function HomeThread() {
     }
   }, [threadId]);
 
+  // initialize asking task
   useEffect(() => {
+    const unfinishedAskingResponse = (thread?.responses || []).find(
+      (response) =>
+        response?.askingTask && !getIsFinished(response?.askingTask?.status),
+    );
+
+    console.log('unfinishedAskingResponse', unfinishedAskingResponse);
+
+    // if there is unfinished asking task, fetch it
+    if (unfinishedAskingResponse) {
+      askPrompt.onFetching(unfinishedAskingResponse?.askingTask?.queryId);
+      return;
+    }
+
     const unfinishedRespose = (thread?.responses || []).find(
       (response) => !getThreadResponseIsFinished(response),
     );
+
+    console.log('unfinishedRespose', unfinishedRespose);
 
     if (unfinishedRespose) {
       if (unfinishedRespose.answerDetail?.status === null) {
@@ -242,50 +260,42 @@ export default function HomeThread() {
     }
   }, [recommendedQuestions]);
 
-  const result = useMemo(
-    () => ({
-      thread,
-      recommendedQuestions,
-      showRecommendedQuestions,
-    }),
-    [thread, recommendedQuestions, showRecommendedQuestions],
-  );
-
   const onCreateResponse = async (payload: CreateThreadResponseInput) => {
     try {
       askPrompt.onStopPolling();
 
       const threadId = thread.id;
-      const response = await createThreadResponse({
+      await createThreadResponse({
         variables: { threadId, data: payload },
       });
       setShowRecommendedQuestions(false);
-
-      const responseId = response.data.createThreadResponse.id;
-      await Promise.all([
-        generateThreadResponseAnswer({ variables: { responseId } }),
-        generateThreadRecommendationQuestions({ variables: { threadId } }),
-        fetchThreadResponse({ variables: { responseId } }),
-      ]);
-
-      fetchThreadRecommendationQuestions({ variables: { threadId } });
     } catch (error) {
       console.error(error);
     }
   };
 
+  const providerValue = {
+    data: thread,
+    recommendedQuestions,
+    showRecommendedQuestions,
+    preparation: {
+      generateAnswerLoading: threadResponseAnswerResult.loading,
+    },
+    onOpenSaveAsViewModal: saveAsViewModal.openModal,
+    onSelectRecommendedQuestion: onCreateResponse,
+    onGenerateThreadRecommendedQuestions: onGenerateThreadRecommendedQuestions,
+    onGenerateTextBasedAnswer: onGenerateThreadResponseAnswer,
+    onGenerateBreakdownAnswer: onGenerateThreadResponseBreakdown,
+    onGenerateChartAnswer: onGenerateThreadResponseChart,
+    onAdjustChartAnswer: onAdjustThreadResponseChart,
+    onOpenSaveToKnowledgeModal: questionSqlPairModal.openModal,
+  };
+
   return (
     <SiderLayout loading={false} sidebar={homeSidebar}>
-      <PromptThread
-        data={result}
-        onOpenSaveAsViewModal={saveAsViewModal.openModal}
-        onSelectRecommendedQuestion={onCreateResponse}
-        onRegenerateTextBasedAnswer={onRegenerateTextBasedAnswer}
-        onGenerateBreakdownAnswer={onGenerateThreadResponseBreakdown}
-        onGenerateChartAnswer={onGenerateThreadResponseChart}
-        onAdjustChartAnswer={onAdjustThreadResponseChart}
-        onOpenSaveToKnowledgeModal={questionSqlPairModal.openModal}
-      />
+      <PromptThreadProvider value={providerValue}>
+        <PromptThread />
+      </PromptThreadProvider>
 
       <div className="py-12" />
       <Prompt

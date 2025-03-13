@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { uniq } from 'lodash';
+import { cloneDeep, uniq } from 'lodash';
 import {
   AskingTask,
   AskingTaskStatus,
   AskingTaskType,
+  DetailedThread,
   RecommendedQuestionsTask,
   RecommendedQuestionsTaskStatus,
 } from '@/apollo/client/graphql/__types__';
@@ -15,6 +16,8 @@ import {
   useInstantRecommendedQuestionsLazyQuery,
 } from '@/apollo/client/graphql/home.generated';
 import useAskingStreamTask from './useAskingStreamTask';
+import { THREAD } from '@/apollo/client/graphql/home';
+import { ApolloClient, NormalizedCacheObject } from '@apollo/client';
 
 export interface AskPromptData {
   originalQuestion: string;
@@ -29,6 +32,10 @@ export const getIsFinished = (status: AskingTaskStatus) =>
     AskingTaskStatus.FAILED,
     AskingTaskStatus.STOPPED,
   ].includes(status);
+
+export const isReadyToThreadResponse = (askingTask: AskingTask) =>
+  askingTask?.status === AskingTaskStatus.SEARCHING &&
+  askingTask?.type === AskingTaskType.TEXT_TO_SQL;
 
 export const isRecommendedFinished = (status: RecommendedQuestionsTaskStatus) =>
   [
@@ -45,6 +52,40 @@ const isNeedRecommendedQuestions = (askingTask: AskingTask) => {
       askingTask?.type,
     ) || askingTask?.status === AskingTaskStatus.FAILED
   );
+};
+
+const handleUpdateThreadCache = (
+  threadId: number,
+  askingTask: AskingTask,
+  client: ApolloClient<NormalizedCacheObject>,
+) => {
+  if (!askingTask) return;
+
+  const result = client.cache.readQuery<{ thread: DetailedThread }>({
+    query: THREAD,
+    variables: { threadId },
+  });
+
+  if (result?.thread) {
+    client.cache.writeQuery({
+      query: THREAD,
+      variables: { threadId },
+      data: {
+        thread: {
+          ...result.thread,
+          responses: result.thread.responses.map((response) => {
+            if (response.askingTask?.queryId === askingTask?.queryId) {
+              return {
+                ...response,
+                askingTask: cloneDeep(askingTask),
+              };
+            }
+            return response;
+          }),
+        },
+      },
+    });
+  }
 };
 
 export default function useAskPrompt(threadId?: number) {
@@ -107,10 +148,14 @@ export default function useAskPrompt(threadId?: number) {
     const isFinished = getIsFinished(askingTask?.status);
     if (isFinished) askingTaskResult.stopPolling();
 
+    if (threadId) {
+      handleUpdateThreadCache(threadId, askingTask, askingTaskResult.client);
+    }
+
     if (isNeedRecommendedQuestions(askingTask)) {
       startRecommendedQuestions();
     }
-  }, [askingTask]);
+  }, [askingTask, threadId]);
 
   useEffect(() => {
     if (isRecommendedFinished(recommendedQuestions?.status))
@@ -147,6 +192,12 @@ export default function useAskPrompt(threadId?: number) {
     }
   };
 
+  const onFetching = async (queryId: string) => {
+    await fetchAskingTask({
+      variables: { taskId: queryId },
+    });
+  };
+
   const onStopPolling = () => askingTaskResult.stopPolling();
 
   const onStopStreaming = () => askingStreamTaskResult.reset();
@@ -161,6 +212,7 @@ export default function useAskPrompt(threadId?: number) {
     loading,
     onStop,
     onSubmit,
+    onFetching,
     onStopPolling,
     onStopStreaming,
     onStopRecommend,
