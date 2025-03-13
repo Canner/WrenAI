@@ -405,9 +405,6 @@ class AskService:
                 )
                 has_metric = _retrieval_result.get("has_metric", False)
 
-                print(f"has_calculated_field: {has_calculated_field}")
-                print(f"has_metric: {has_metric}")
-
                 if histories:
                     text_to_sql_generation_results = await self._pipelines[
                         "followup_sql_generation"
