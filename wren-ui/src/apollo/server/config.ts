@@ -71,7 +71,7 @@ const defaultConfig = {
   wrenAIEndpoint: 'http://localhost:5555',
 
   // ibis server
-  experimentalEngineRustVersion: false,
+  experimentalEngineRustVersion: true,
   ibisServerEndpoint: 'http://127.0.0.1:8000',
 
   // encryption
