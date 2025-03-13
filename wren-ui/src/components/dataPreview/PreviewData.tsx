@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { Alert, Typography, Button } from 'antd';
 import { ApolloError } from '@apollo/client';
 import styled from 'styled-components';
@@ -29,7 +29,7 @@ const StyledCell = styled.div`
   }
 `;
 
-const ColumnTitle = (props: { name: string; type: any }) => {
+const ColumnTitle = memo((props: { name: string; type: any }) => {
   const { name, type } = props;
   const columnTypeIcon = getColumnTypeIcon({ type }, { title: type });
 
@@ -41,20 +41,25 @@ const ColumnTitle = (props: { name: string; type: any }) => {
       </Text>
     </>
   );
-};
+});
 
-const ColumnContext = (text: string) => (
-  <StyledCell className="text-truncate">
-    <span title={text} className="text text-container">
-      {text}
-    </span>
-    <Button size="small" className="copy-icon">
-      <Text copyable={{ text, tooltips: false }} className="gray-8" />
-    </Button>
-  </StyledCell>
-);
+const ColumnContext = memo((props: { text: string; copyable: boolean }) => {
+  const { text, copyable } = props;
+  return (
+    <StyledCell className="text-truncate">
+      <span title={text} className="text text-container">
+        {text}
+      </span>
+      {copyable && (
+        <Button size="small" className="copy-icon">
+          <Text copyable={{ text, tooltips: false }} className="gray-8" />
+        </Button>
+      )}
+    </StyledCell>
+  );
+});
 
-const getPreviewColumns = (cols) =>
+const getPreviewColumns = (cols, { copyable }) =>
   cols.map(({ name, type }: Record<string, any>) => {
     return {
       dataIndex: name,
@@ -62,7 +67,7 @@ const getPreviewColumns = (cols) =>
       key: name,
       ellipsis: true,
       title: <ColumnTitle name={name} type={type} />,
-      render: ColumnContext,
+      render: (text) => <ColumnContext text={text} copyable={copyable} />,
       onCell: () => ({ style: { lineHeight: '24px' } }),
     };
   });
@@ -78,14 +83,17 @@ interface Props {
   loading: boolean;
   error?: ApolloError;
   locale?: { emptyText: React.ReactNode };
+  copyable?: boolean;
 }
 
 export default function PreviewData(props: Props) {
-  const { previewData, loading, error, locale } = props;
+  const { previewData, loading, error, locale, copyable = true } = props;
 
   const columns = useMemo(
-    () => previewData?.columns && getPreviewColumns(previewData.columns),
-    [previewData?.columns],
+    () =>
+      previewData?.columns &&
+      getPreviewColumns(previewData.columns, { copyable }),
+    [previewData?.columns, copyable],
   );
 
   const hasErrorMessage = error && error.message;

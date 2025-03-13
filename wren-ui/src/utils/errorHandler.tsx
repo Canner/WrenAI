@@ -294,6 +294,33 @@ class DeleteDashboardItemErrorHandler extends ErrorHandler {
   }
 }
 
+class CreateSqlPairErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to create question-sql pair.';
+    }
+  }
+}
+
+class UpdateSqlPairErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to update question-sql pair.';
+    }
+  }
+}
+
+class DeleteSqlPairErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to delete question-sql pair.';
+    }
+  }
+}
+
 errorHandlers.set('SaveTables', new SaveTablesErrorHandler());
 errorHandlers.set('SaveRelations', new SaveRelationsErrorHandler());
 errorHandlers.set('CreateAskingTask', new CreateAskingTaskErrorHandler());
@@ -353,6 +380,11 @@ errorHandlers.set(
   new UpdateDashboardItemLayoutsErrorHandler(),
 );
 errorHandlers.set('DeleteDashboardItem', new DeleteDashboardItemErrorHandler());
+
+// SQL Pair
+errorHandlers.set('CreateSqlPair', new CreateSqlPairErrorHandler());
+errorHandlers.set('UpdateSqlPair', new UpdateSqlPairErrorHandler());
+errorHandlers.set('DeleteSqlPair', new DeleteSqlPairErrorHandler());
 
 const errorHandler = (error: ErrorResponse) => {
   // networkError

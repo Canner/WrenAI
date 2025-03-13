@@ -12,6 +12,7 @@ import {
   DeleteModelModal,
   DeleteViewModal,
   DeleteDashboardItemModal,
+  DeleteQuestionSQLPairModal,
 } from '@/components/modals/DeleteModal';
 
 interface Props {
@@ -161,3 +162,62 @@ export const DashboardItemDropdown = makeDropdown((props: Props) => {
   ];
   return items;
 });
+
+export const SQLPairDropdown = makeDropdown(
+  (
+    props: Props & {
+      onMoreClick: (payload: { type: MORE_ACTION; data: any }) => void;
+    },
+  ) => {
+    const { onMoreClick, data } = props;
+    const items: ItemType[] = [
+      {
+        label: (
+          <>
+            <EyeOutlined className="gray-8 mr-2" />
+            View
+          </>
+        ),
+        key: MORE_ACTION.VIEW_SQL_PAIR,
+        onClick: () =>
+          onMoreClick({
+            type: MORE_ACTION.VIEW_SQL_PAIR,
+            data,
+          }),
+      },
+      {
+        label: (
+          <>
+            <EditOutlined className="gray-8 mr-2" />
+            Edit
+          </>
+        ),
+        key: MORE_ACTION.EDIT,
+        onClick: () =>
+          onMoreClick({
+            type: MORE_ACTION.EDIT,
+            data,
+          }),
+      },
+      {
+        label: (
+          <DeleteQuestionSQLPairModal
+            onConfirm={() =>
+              onMoreClick({
+                type: MORE_ACTION.DELETE,
+                data,
+              })
+            }
+            modalProps={{
+              cancelButtonProps: { autoFocus: true },
+            }}
+          />
+        ),
+        className: 'red-5',
+        key: MORE_ACTION.DELETE,
+        onClick: ({ domEvent }) => domEvent.stopPropagation(),
+      },
+    ];
+    return items;
+  },
+);
