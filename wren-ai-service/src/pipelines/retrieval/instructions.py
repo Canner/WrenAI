@@ -103,8 +103,8 @@ def filtered_documents(
 
 
 @observe(capture_input=False)
-def default_instructions(
-    count_documents: int, store: QdrantDocumentStore, project_id: str
+async def default_instructions(
+    count_documents: int, retriever: Any, project_id: str
 ) -> list[Document]:
     if not count_documents:
         return []
@@ -121,7 +121,12 @@ def default_instructions(
             {"field": "project_id", "operator": "==", "value": project_id}
         )
 
-    return store.filter_documents(filters=filters)
+    res = await retriever.run(
+        query_embedding=None,
+        filters=filters,
+    )
+    # todo: settings to config.yaml
+    return dict(documents=res.get("documents"))
 
 
 @observe(capture_input=False)
@@ -133,8 +138,8 @@ def formatted_output(
     if not filtered_documents and not default_instructions:
         return {"documents": []}
 
-    documents = output_formatter.run(documents=filtered_documents.get("documents"))
-    documents["documents"].extend(default_instructions)
+    merged = default_instructions.get("documents") + filtered_documents.get("documents")
+    documents = output_formatter.run(documents=merged)
     return documents
 
 
