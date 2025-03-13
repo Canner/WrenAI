@@ -1,0 +1,57 @@
+name: PR Tagger
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "wren-ui/src/**"
+      - "deployment/**"
+      - "wren-launcher/**"
+
+jobs:
+  tag-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v35
+
+      - name: Tag PR based on changed files
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const changedFiles = '${{ steps.changed-files.outputs.all_changed_files }}'.split(' ');
+            const labels = new Set();
+
+            // Check for files in specific directories
+            for (const file of changedFiles) {
+              if (file.startsWith('wren-ui/src/')) {
+                labels.add('wren-ui');
+              } else if (file.startsWith('deployment/')) {
+                labels.add('deployment');
+              } else if (file.startsWith('wren-launcher/')) {
+                labels.add('launcher');
+              }
+            }
+
+            if (labels.size > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: Array.from(labels)
+              });
+              
+              console.log(`Added labels: ${Array.from(labels).join(', ')}`);
+            } else {
+              console.log('No matching directories found in changed files');
+            }
