@@ -146,8 +146,8 @@ class Instructions(BasicPipeline):
     @observe(name="Instructions Indexing")
     async def run(
         self,
+        instructions: list[Instruction],
         project_id: Optional[str] = "",
-        instructions: list[Instruction] = [],
     ) -> Dict[str, Any]:
         logger.info(
             f"Project ID: {project_id} Instructions Indexing pipeline is running..."
@@ -164,7 +164,7 @@ class Instructions(BasicPipeline):
     @observe(name="Clean Documents for Instructions")
     async def clean(
         self,
-        instructions: List[Instruction] = [],
+        instructions: List[Instruction],
         project_id: Optional[str] = None,
         delete_all: bool = False,
     ) -> None:
