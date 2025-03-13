@@ -48,11 +48,11 @@ SQL:
 {% endif %}
 
 ### CONTEXT ###
-Previous SQL Summary:
-{% for summary in previous_query_summaries %}
-    {{ summary }}
+User's query history:
+{% for history in histories %}
+    {{ history.question }}
+    {{ history.sql }}
 {% endfor %}
-Previous SQL Query: {{ history.sql }}
 
 ### QUESTION ###
 User's Follow-up Question: {{ query }}
@@ -71,20 +71,20 @@ def prompt(
     query: str,
     documents: List[str],
     sql_generation_reasoning: str,
-    history: AskHistory,
+    histories: list[AskHistory],
     configuration: Configuration,
     prompt_builder: PromptBuilder,
     sql_samples: List[Dict] | None = None,
     has_calculated_field: bool = False,
     has_metric: bool = False,
 ) -> dict:
-    previous_query_summaries = [step.summary for step in history.steps if step.summary]
+    previous_query_summaries = [history.question for history in histories]
 
     return prompt_builder.run(
         query=query,
         documents=documents,
         sql_generation_reasoning=sql_generation_reasoning,
-        history=history,
+        histories=histories,
         previous_query_summaries=previous_query_summaries,
         instructions=construct_instructions(
             configuration,
@@ -152,7 +152,7 @@ class FollowUpSQLGeneration(BasicPipeline):
         query: str,
         contexts: List[str],
         sql_generation_reasoning: str,
-        history: AskHistory,
+        histories: list[AskHistory],
         configuration: Configuration = Configuration(),
         sql_samples: List[Dict] | None = None,
         project_id: str | None = None,
@@ -166,7 +166,7 @@ class FollowUpSQLGeneration(BasicPipeline):
                 "query": query,
                 "documents": contexts,
                 "sql_generation_reasoning": sql_generation_reasoning,
-                "history": history,
+                "histories": histories,
                 "project_id": project_id,
                 "configuration": configuration,
                 "sql_samples": sql_samples,

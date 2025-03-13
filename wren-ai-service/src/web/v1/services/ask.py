@@ -9,14 +9,13 @@ from pydantic import AliasChoices, BaseModel, Field
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
 from src.web.v1.services import Configuration, SSEEvent
-from src.web.v1.services.ask_details import SQLBreakdown
 
 logger = logging.getLogger("wren-ai-service")
 
 
 class AskHistory(BaseModel):
     sql: str
-    steps: List[SQLBreakdown]
+    question: str
 
 
 # POST /v1/asks
@@ -29,7 +28,7 @@ class AskRequest(BaseModel):
     # so we need to support as a choice, and will remove it in the future
     mdl_hash: Optional[str] = Field(validation_alias=AliasChoices("mdl_hash", "id"))
     thread_id: Optional[str] = None
-    history: Optional[AskHistory] = None
+    histories: Optional[list[AskHistory]] = Field(default_factory=list)
     configurations: Optional[Configuration] = Configuration()
 
     @property
@@ -166,6 +165,7 @@ class AskService:
         pipelines: Dict[str, BasicPipeline],
         allow_intent_classification: bool = True,
         allow_sql_generation_reasoning: bool = True,
+        max_histories: int = 10,
         maxsize: int = 1_000_000,
         ttl: int = 120,
     ):
@@ -178,6 +178,7 @@ class AskService:
         )
         self._allow_sql_generation_reasoning = allow_sql_generation_reasoning
         self._allow_intent_classification = allow_intent_classification
+        self._max_histories = max_histories
 
     def _is_stopped(self, query_id: str, container: dict):
         if (
@@ -205,6 +206,7 @@ class AskService:
         }
 
         query_id = ask_request.query_id
+        histories = ask_request.histories[: self._max_histories]
         rephrased_question = None
         intent_reasoning = None
         sql_generation_reasoning = None
@@ -250,7 +252,7 @@ class AskService:
                     intent_classification_result = (
                         await self._pipelines["intent_classification"].run(
                             query=user_query,
-                            history=ask_request.history,
+                            histories=histories,
                             id=ask_request.project_id,
                             configuration=ask_request.configurations,
                         )
@@ -278,7 +280,7 @@ class AskService:
                         asyncio.create_task(
                             self._pipelines["data_assistance"].run(
                                 query=user_query,
-                                history=ask_request.history,
+                                histories=histories,
                                 db_schemas=intent_classification_result.get(
                                     "db_schemas"
                                 ),
@@ -315,7 +317,7 @@ class AskService:
 
                 retrieval_result = await self._pipelines["retrieval"].run(
                     query=user_query,
-                    history=ask_request.history,
+                    histories=histories,
                     id=ask_request.project_id,
                 )
                 _retrieval_result = retrieval_result.get(
@@ -403,14 +405,14 @@ class AskService:
                 )
                 has_metric = (_retrieval_result.get("has_metric", False),)
 
-                if ask_request.history:
+                if histories:
                     text_to_sql_generation_results = await self._pipelines[
                         "followup_sql_generation"
                     ].run(
                         query=user_query,
                         contexts=table_ddls,
                         sql_generation_reasoning=sql_generation_reasoning,
-                        history=ask_request.history,
+                        histories=histories,
                         project_id=ask_request.project_id,
                         configuration=ask_request.configurations,
                         sql_samples=sql_samples,

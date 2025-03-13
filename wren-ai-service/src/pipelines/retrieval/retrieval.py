@@ -116,12 +116,12 @@ def _build_view_ddl(content: dict) -> str:
 ## Start of Pipeline
 @observe(capture_input=False, capture_output=False)
 async def embedding(
-    query: str, embedder: Any, history: Optional[AskHistory] = None
+    query: str, embedder: Any, histories: Optional[list[AskHistory]] = None
 ) -> dict:
     if query:
-        if history:
+        if histories:
             previous_query_summaries = [
-                step.summary for step in history.steps if step.summary
+                history.question for history in histories
             ]
         else:
             previous_query_summaries = []
@@ -292,7 +292,7 @@ def prompt(
     construct_db_schemas: list[dict],
     prompt_builder: PromptBuilder,
     check_using_db_schemas_without_pruning: dict,
-    history: Optional[AskHistory] = None,
+    histories: Optional[list[AskHistory]] = None,
 ) -> dict:
     if not check_using_db_schemas_without_pruning["db_schemas"]:
         logger.info(
@@ -303,12 +303,9 @@ def prompt(
             for construct_db_schema in construct_db_schemas
         ]
 
-        if history:
-            previous_query_summaries = [
-                step.summary for step in history.steps if step.summary
-            ]
-        else:
-            previous_query_summaries = []
+        previous_query_summaries = (
+            [history.question for history in histories] if histories else []
+        )
 
         query = "\n".join(previous_query_summaries) + "\n" + query
         return prompt_builder.run(question=query, db_schemas=db_schemas)
@@ -482,7 +479,7 @@ class Retrieval(BasicPipeline):
         query: str = "",
         tables: Optional[list[str]] = None,
         id: Optional[str] = None,
-        history: Optional[AskHistory] = None,
+        histories: Optional[list[AskHistory]] = None,
     ):
         logger.info("Ask Retrieval pipeline is running...")
         return await self._pipe.execute(
@@ -491,7 +488,7 @@ class Retrieval(BasicPipeline):
                 "query": query,
                 "tables": tables,
                 "id": id or "",
-                "history": history,
+                "histories": histories,
                 **self._components,
                 **self._configs,
             },

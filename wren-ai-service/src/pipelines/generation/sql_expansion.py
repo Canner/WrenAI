@@ -149,6 +149,6 @@ if __name__ == "__main__":
         "sql_expansion",
         query="query",
         contexts=[],
-        history=AskHistory(sql="SELECT * FROM table", summary="Summary", steps=[]),
+        history=AskHistory(sql="SELECT * FROM table", question="user question"),
         configuration=Configuration(),
     )
