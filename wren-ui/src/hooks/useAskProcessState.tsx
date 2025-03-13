@@ -15,6 +15,8 @@ export const getIsProcessing = (status: PROCESS_STATE) =>
   ].includes(status);
 
 export const convertAskingTaskToProcessState = (data: AskingTask) => {
+  if (!data) return null;
+
   const processState = {
     [AskingTaskStatus.UNDERSTANDING]: PROCESS_STATE.UNDERSTANDING,
     [AskingTaskStatus.SEARCHING]: PROCESS_STATE.SEARCHING,
@@ -83,7 +85,7 @@ export default function useAskProcessState() {
 export class ProcessStateMachine {
   private static transitions = {
     [PROCESS_STATE.IDLE]: {
-      next: [PROCESS_STATE.UNDERSTANDING],
+      next: [PROCESS_STATE.UNDERSTANDING, PROCESS_STATE.FAILED],
       prev: [],
     },
     [PROCESS_STATE.UNDERSTANDING]: {
