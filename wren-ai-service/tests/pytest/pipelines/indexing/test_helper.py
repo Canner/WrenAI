@@ -2,7 +2,7 @@ from pytest_mock import MockerFixture
 
 from src.pipelines.indexing.utils.helper import (
     COLUMN_COMMENT_HELPERS,
-    COLUMN_PROPRECESSORS,
+    COLUMN_PREPROCESSORS,
     MODEL_PREPROCESSORS,
     Helper,
     load_helpers,
@@ -23,7 +23,7 @@ def test_helper():
 
 
 def test_column_properties_preprocessor():
-    helper = COLUMN_PROPRECESSORS["properties"]
+    helper = COLUMN_PREPROCESSORS["properties"]
 
     test_column = {
         "name": "test_column",
@@ -38,7 +38,7 @@ def test_column_properties_preprocessor():
 
 
 def test_column_relationship_preprocessor():
-    helper = COLUMN_PROPRECESSORS["relationship"]
+    helper = COLUMN_PREPROCESSORS["relationship"]
 
     test_column = {
         "name": "test_column",
@@ -50,7 +50,7 @@ def test_column_relationship_preprocessor():
 
 
 def test_column_expression_preprocessor():
-    helper = COLUMN_PROPRECESSORS["expression"]
+    helper = COLUMN_PREPROCESSORS["expression"]
 
     test_column = {
         "name": "test_column",
@@ -62,7 +62,7 @@ def test_column_expression_preprocessor():
 
 
 def test_column_is_calculated_preprocessor():
-    helper = COLUMN_PROPRECESSORS["isCalculated"]
+    helper = COLUMN_PREPROCESSORS["isCalculated"]
 
     test_column = {
         "name": "test_column",
@@ -116,7 +116,7 @@ def test_load_helpers(mocker: MockerFixture):
 
     mock_test_module = mocker.Mock()
     mock_test_module.MODEL_PREPROCESSORS = {"test": "test_preprocessor"}
-    mock_test_module.COLUMN_PROPRECESSORS = {"test": "test_column_preprocessor"}
+    mock_test_module.COLUMN_PREPROCESSORS = {"test": "test_column_preprocessor"}
     mock_test_module.COLUMN_COMMENT_HELPERS = {"test": "test_comment_helper"}
 
     mocker.patch("importlib.import_module", side_effect=[mock_module, mock_test_module])
@@ -127,9 +127,9 @@ def test_load_helpers(mocker: MockerFixture):
     assert MODEL_PREPROCESSORS.get("test") == "test_preprocessor"
     del MODEL_PREPROCESSORS["test"]
 
-    assert len(COLUMN_PROPRECESSORS) == 5
-    assert COLUMN_PROPRECESSORS.get("test") == "test_column_preprocessor"
-    del COLUMN_PROPRECESSORS["test"]
+    assert len(COLUMN_PREPROCESSORS) == 5
+    assert COLUMN_PREPROCESSORS.get("test") == "test_column_preprocessor"
+    del COLUMN_PREPROCESSORS["test"]
 
     assert len(COLUMN_COMMENT_HELPERS) == 3
     assert COLUMN_COMMENT_HELPERS.get("test") == "test_comment_helper"

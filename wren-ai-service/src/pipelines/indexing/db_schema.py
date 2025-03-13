@@ -66,7 +66,7 @@ class DDLChunker:
         ) -> Dict[str, Any]:
             addition = {
                 key: helper(column, **addition)
-                for key, helper in helper.COLUMN_PROPRECESSORS.items()
+                for key, helper in helper.COLUMN_PREPROCESSORS.items()
                 if helper.condition(column, **addition)
             }
 
