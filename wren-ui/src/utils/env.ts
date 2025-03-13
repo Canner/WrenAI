@@ -5,7 +5,7 @@ const env = {
 
 export default env;
 
-type UserConfig = {
+export type UserConfig = {
   isTelemetryEnabled: boolean;
   telemetryKey: string;
   telemetryHost: string;
