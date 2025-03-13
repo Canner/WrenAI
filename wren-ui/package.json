@@ -1,6 +1,6 @@
 {
   "name": "wren-ui",
-  "version": "0.20.2",
+  "version": "0.21.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -18,7 +18,7 @@
     "@google-cloud/bigquery": "^6.0.3",
     "@google-cloud/storage": "^6.10.1",
     "apollo-server-micro": "^3.10.2",
-    "axios": "^1.7.4",
+    "axios": "^1.8.2",
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^9.4.3",
     "graphql": "^16.6.0",

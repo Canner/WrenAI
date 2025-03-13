@@ -23,7 +23,7 @@ const StyledSider = styled(Sider)`
 `;
 
 type Props = React.ComponentProps<typeof SimpleLayout> & {
-  sidebar: React.ComponentProps<typeof Sidebar>;
+  sidebar?: React.ComponentProps<typeof Sidebar>;
   color?: string;
 };
 

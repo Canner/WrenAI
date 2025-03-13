@@ -34,6 +34,10 @@ interface Props {
     responseId: number,
     data: AdjustThreadResponseChartInput,
   ) => Promise<void>;
+  onOpenSaveToKnowledgeModal: (
+    data: { sql: string; question: string },
+    payload: { isCreateMode: boolean },
+  ) => void;
 }
 
 const StyledPromptThread = styled.div`
@@ -69,6 +73,7 @@ const AnswerResultTemplate: React.FC<
       | 'onGenerateBreakdownAnswer'
       | 'onGenerateChartAnswer'
       | 'onAdjustChartAnswer'
+      | 'onOpenSaveToKnowledgeModal'
     > & {
       motion: boolean;
       onInitPreviewDone: () => void;
@@ -85,6 +90,7 @@ const AnswerResultTemplate: React.FC<
   onRegenerateTextBasedAnswer,
   onGenerateChartAnswer,
   onAdjustChartAnswer,
+  onOpenSaveToKnowledgeModal,
   ...threadResponse
 }) => {
   const { id } = threadResponse;
@@ -92,7 +98,10 @@ const AnswerResultTemplate: React.FC<
   const isLastThreadResponse = id === lastResponseId;
 
   return (
-    <div key={`${id}-${index}`}>
+    <div
+      key={`${id}-${index}`}
+      data-guideid={isLastThreadResponse ? `last-answer-result` : undefined}
+    >
       {index > 0 && <Divider />}
       <AnswerResult
         motion={motion}
@@ -105,6 +114,7 @@ const AnswerResultTemplate: React.FC<
         onRegenerateTextBasedAnswer={onRegenerateTextBasedAnswer}
         onGenerateChartAnswer={onGenerateChartAnswer}
         onAdjustChartAnswer={onAdjustChartAnswer}
+        onOpenSaveToKnowledgeModal={onOpenSaveToKnowledgeModal}
       />
     </div>
   );

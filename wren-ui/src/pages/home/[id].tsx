@@ -16,6 +16,7 @@ import PromptThread from '@/components/pages/home/promptThread';
 import SaveAsViewModal from '@/components/modals/SaveAsViewModal';
 import { getAnswerIsFinished } from '@/components/pages/home/promptThread/TextBasedAnswer';
 import { getIsChartFinished } from '@/components/pages/home/promptThread/ChartAnswer';
+import QuestionSQLPairModal from '@/components/modals/QuestionSQLPairModal';
 import {
   useCreateThreadResponseMutation,
   useThreadQuery,
@@ -32,7 +33,9 @@ import {
   AdjustThreadResponseChartInput,
   CreateThreadResponseInput,
   ThreadResponse,
+  CreateSqlPairInput,
 } from '@/apollo/client/graphql/__types__';
+import { useCreateSqlPairMutation } from '@/apollo/client/graphql/sqlPairs.generated';
 
 const getThreadResponseIsFinished = (threadResponse: ThreadResponse) => {
   const { answerDetail, breakdownDetail, chartDetail } = threadResponse || {};
@@ -44,7 +47,8 @@ const getThreadResponseIsFinished = (threadResponse: ThreadResponse) => {
   let isBreakdownFinished = null;
   let isChartFinished = null;
 
-  if (answerDetail?.queryId) {
+  // answerDetail status can be FAILED before getting queryId from Wren AI adapter
+  if (answerDetail?.queryId || answerDetail?.status) {
     isAnswerFinished = getAnswerIsFinished(answerDetail?.status);
   }
   if (breakdownDetail?.queryId) {
@@ -69,6 +73,7 @@ export default function HomeThread() {
   const threadId = useMemo(() => Number(params?.id) || null, [params]);
   const askPrompt = useAskPrompt(threadId);
   const saveAsViewModal = useModalAction();
+  const questionSqlPairModal = useModalAction();
 
   const [showRecommendedQuestions, setShowRecommendedQuestions] =
     useState<boolean>(false);
@@ -134,6 +139,16 @@ export default function HomeThread() {
   const [generateThreadResponseChart] =
     useGenerateThreadResponseChartMutation();
   const [adjustThreadResponseChart] = useAdjustThreadResponseChartMutation();
+
+  const [createSqlPairMutation, { loading: createSqlPairLoading }] =
+    useCreateSqlPairMutation({
+      refetchQueries: ['SqlPairs'],
+      awaitRefetchQueries: true,
+      onError: (error) => console.error(error),
+      onCompleted: () => {
+        message.success('Successfully created question-sql pair.');
+      },
+    });
 
   const thread = useMemo(() => data?.thread || null, [data]);
   const threadResponse = useMemo(
@@ -269,6 +284,7 @@ export default function HomeThread() {
         onGenerateBreakdownAnswer={onGenerateThreadResponseBreakdown}
         onGenerateChartAnswer={onGenerateThreadResponseChart}
         onAdjustChartAnswer={onAdjustThreadResponseChart}
+        onOpenSaveToKnowledgeModal={questionSqlPairModal.openModal}
       />
       <div className="py-12" />
       <Prompt ref={$prompt} {...askPrompt} onSelect={onSelect} />
@@ -280,6 +296,14 @@ export default function HomeThread() {
           await createViewMutation({
             variables: { data: values },
           });
+        }}
+      />
+      <QuestionSQLPairModal
+        {...questionSqlPairModal.state}
+        onClose={questionSqlPairModal.closeModal}
+        loading={createSqlPairLoading}
+        onSubmit={async ({ data }: { data: CreateSqlPairInput }) => {
+          await createSqlPairMutation({ variables: { data } });
         }}
       />
     </SiderLayout>

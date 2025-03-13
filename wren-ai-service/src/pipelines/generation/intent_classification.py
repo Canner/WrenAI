@@ -103,7 +103,11 @@ intent_classification_user_prompt_template = """
 
 ### INPUT ###
 {% if query_history %}
-User's previous SQLs: {{ query_history }}
+User's query history:
+{% for history in query_history %}
+{{ history.question }}
+{{ history.sql }}
+{% endfor %}
 {% endif %}
 User's question: {{query}}
 Current Time: {{ current_time }}
@@ -116,10 +120,10 @@ Let's think step by step
 ## Start of Pipeline
 @observe(capture_input=False, capture_output=False)
 async def embedding(
-    query: str, embedder: Any, history: Optional[AskHistory] = None
+    query: str, embedder: Any, histories: Optional[list[AskHistory]] = None
 ) -> dict:
     previous_query_summaries = (
-        [step.summary for step in history.steps if step.summary] if history else []
+        [history.question for history in histories] if histories else []
     )
 
     query = "\n".join(previous_query_summaries) + "\n" + query
@@ -222,14 +226,14 @@ def prompt(
     query: str,
     construct_db_schemas: list[str],
     prompt_builder: PromptBuilder,
-    history: Optional[AskHistory] = None,
+    histories: Optional[list[AskHistory]] = None,
     configuration: Configuration | None = None,
 ) -> dict:
     return prompt_builder.run(
         query=query,
         language=configuration.language,
         db_schemas=construct_db_schemas,
-        query_history=history.sql if history else [],
+        query_history=histories,
         current_time=configuration.show_current_time(),
     )
 
@@ -316,7 +320,7 @@ class IntentClassification(BasicPipeline):
         self,
         query: str,
         id: Optional[str] = None,
-        history: Optional[AskHistory] = None,
+        histories: Optional[list[AskHistory]] = None,
         configuration: Configuration = Configuration(),
     ):
         logger.info("Intent Classification pipeline is running...")
@@ -325,7 +329,7 @@ class IntentClassification(BasicPipeline):
             inputs={
                 "query": query,
                 "id": id or "",
-                "history": history,
+                "histories": histories,
                 "configuration": configuration,
                 **self._components,
             },

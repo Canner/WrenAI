@@ -54,7 +54,7 @@ func askForLLMProvider() (string, error) {
 	pterm.Warning.Println("Therefore, using alternative models is at your own risk and may result in unexpected behavior or suboptimal performance.")
 	fmt.Println("")
 	fmt.Println("Please provide the LLM provider you want to use")
-	fmt.Println("You can learn more about how to set up custom LLMs at https://docs.getwren.ai/oss/installation/custom_llm#running-wren-ai-with-your-custom-llm-or-document-store")
+	fmt.Println("You can learn more about how to set up custom LLMs at https://docs.getwren.ai/oss/ai_service/guide/custom_llm#running-wren-ai-with-your-custom-llm-or-document-store")
 
 	prompt := promptui.Select{
 		Label: "Select an LLM provider",

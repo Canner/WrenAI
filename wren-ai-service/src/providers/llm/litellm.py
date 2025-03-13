@@ -26,7 +26,7 @@ class LitellmLLMProvider(LLMProvider):
         model: str,
         api_key_name: Optional[
             str
-        ] = None,  # e.g. LLM_OPENAI_API_KEY, LLM_ANTHROPIC_API_KEY, etc.
+        ] = None,  # e.g. OPENAI_API_KEY, LLM_ANTHROPIC_API_KEY, etc.
         api_base: Optional[str] = None,
         api_version: Optional[str] = None,
         kwargs: Optional[Dict[str, Any]] = None,

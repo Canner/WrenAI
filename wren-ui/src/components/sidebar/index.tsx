@@ -7,6 +7,7 @@ import { DiscordIcon, GithubIcon } from '@/utils/icons';
 import SettingOutlined from '@ant-design/icons/SettingOutlined';
 import Home, { Props as HomeSidebarProps } from './Home';
 import Modeling, { Props as ModelingSidebarProps } from './Modeling';
+import Knowledge from './Knowledge';
 import LearningSection from '@/components/learning';
 
 const Layout = styled.div`
@@ -56,6 +57,10 @@ const DynamicSidebar = (
 
     if (pathname.startsWith(Path.Modeling)) {
       return <Modeling {...(restProps as ModelingSidebarProps)} />;
+    }
+
+    if (pathname.startsWith(Path.Knowledge)) {
+      return <Knowledge />;
     }
 
     return null;

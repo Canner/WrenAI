@@ -24,16 +24,11 @@ spec:
                 configMapKeyRef:
                   name: wren-config
                   key: WREN_AI_SERVICE_PORT
-            - name: LLM_OPENAI_API_KEY
+            - name: OPENAI_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: wrenai-secrets
-                  key: LLM_OPENAI_API_KEY
-            - name: EMBEDDER_OPENAI_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: wrenai-secrets
-                  key: EMBEDDER_OPENAI_API_KEY
+                  key: OPENAI_API_KEY
             - name: QDRANT_HOST
               valueFrom:
                 configMapKeyRef:

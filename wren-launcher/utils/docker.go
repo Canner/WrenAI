@@ -24,7 +24,7 @@ import (
 
 const (
 	// please change the version when the version is updated
-	WREN_PRODUCT_VERSION    string = "0.15.4"
+	WREN_PRODUCT_VERSION    string = "0.16.0"
 	DOCKER_COMPOSE_YAML_URL string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/docker-compose.yaml"
 	DOCKER_COMPOSE_ENV_URL  string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/.env.example"
 	AI_SERVICE_CONFIG_URL   string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/config.example.yaml"
@@ -45,13 +45,9 @@ func replaceEnvFileContent(content string, projectDir string, openaiApiKey strin
 	reg = regexp.MustCompile(`SHOULD_FORCE_DEPLOY=(.*)`)
 	str = reg.ReplaceAllString(str, "SHOULD_FORCE_DEPLOY=1")
 
-	// replace LLM_OPENAI_API_KEY
-	reg = regexp.MustCompile(`LLM_OPENAI_API_KEY=(.*)`)
-	str = reg.ReplaceAllString(str, "LLM_OPENAI_API_KEY="+openaiApiKey)
-
-	// replace EMBEDDER_OPENAI_API_KEY
-	reg = regexp.MustCompile(`EMBEDDER_OPENAI_API_KEY=(.*)`)
-	str = reg.ReplaceAllString(str, "EMBEDDER_OPENAI_API_KEY="+openaiApiKey)
+	// replace OPENAI_API_KEY
+	reg = regexp.MustCompile(`OPENAI_API_KEY=(.*)`)
+	str = reg.ReplaceAllString(str, "OPENAI_API_KEY="+openaiApiKey)
 
 	// replace GENERATION_MODEL
 	// it seems like using for telemetry to know the model, might be we can remove this in the future and provide a endpoint to get the information

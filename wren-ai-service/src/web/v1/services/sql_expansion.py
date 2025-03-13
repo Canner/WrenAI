@@ -97,7 +97,7 @@ class SqlExpansionService:
     @trace_metadata
     async def sql_expansion(
         self,
-        sql_expansion_request: SqlExpansionRequest,
+        request: SqlExpansionRequest,
         **kwargs,
     ):
         trace_id = kwargs.get("trace_id")
@@ -111,7 +111,7 @@ class SqlExpansionService:
         error_message = ""
 
         try:
-            query_id = sql_expansion_request.query_id
+            query_id = request.query_id
 
             if not self._is_stopped(query_id):
                 self._sql_expansion_results[query_id] = SqlExpansionResultResponse(
@@ -125,10 +125,10 @@ class SqlExpansionService:
                     trace_id=trace_id,
                 )
 
-                query_for_retrieval = sql_expansion_request.query
+                query_for_retrieval = request.query
                 retrieval_result = await self._pipelines["retrieval"].run(
                     query=query_for_retrieval,
-                    id=sql_expansion_request.project_id,
+                    id=request.project_id,
                 )
                 _retrieval_result = retrieval_result.get(
                     "construct_retrieval_results", {}
@@ -137,7 +137,7 @@ class SqlExpansionService:
 
                 if not documents:
                     logger.exception(
-                        f"sql expansion pipeline - NO_RELEVANT_DATA: {sql_expansion_request.query}"
+                        f"sql expansion pipeline - NO_RELEVANT_DATA: {request.query}"
                     )
                     self._sql_expansion_results[query_id] = SqlExpansionResultResponse(
                         status="failed",
@@ -159,11 +159,11 @@ class SqlExpansionService:
                 sql_expansion_generation_results = await self._pipelines[
                     "sql_expansion"
                 ].run(
-                    query=sql_expansion_request.query,
+                    query=request.query,
                     contexts=documents,
-                    history=sql_expansion_request.history,
-                    project_id=sql_expansion_request.project_id,
-                    configuration=sql_expansion_request.configurations,
+                    history=request.history,
+                    project_id=request.project_id,
+                    configuration=request.configurations,
                 )
 
                 valid_generation_results = []
@@ -181,7 +181,7 @@ class SqlExpansionService:
                         ].run(
                             contexts=documents,
                             invalid_generation_results=failed_dry_run_results,
-                            project_id=sql_expansion_request.project_id,
+                            project_id=request.project_id,
                         )
                         if sql_correction_valid_results := sql_correction_results[
                             "post_process"
@@ -197,9 +197,9 @@ class SqlExpansionService:
                 valid_sql_summary_results = []
                 if valid_generation_results:
                     sql_summary_results = await self._pipelines["sql_summary"].run(
-                        query=sql_expansion_request.query,
+                        query=request.query,
                         sqls=[result.get("sql") for result in valid_generation_results],
-                        language=sql_expansion_request.configurations.language,
+                        language=request.configurations.language,
                     )
                     valid_sql_summary_results = sql_summary_results["post_process"][
                         "sql_summary_results"
@@ -207,7 +207,7 @@ class SqlExpansionService:
 
                 if not valid_sql_summary_results:
                     logger.exception(
-                        f"sql expansion pipeline - NO_RELEVANT_SQL: {sql_expansion_request.query}"
+                        f"sql expansion pipeline - NO_RELEVANT_SQL: {request.query}"
                     )
                     self._sql_expansion_results[query_id] = SqlExpansionResultResponse(
                         status="failed",
@@ -245,7 +245,7 @@ class SqlExpansionService:
             logger.exception(f"sql expansion pipeline - OTHERS: {e}")
 
             self._sql_expansion_results[
-                sql_expansion_request.query_id
+                request.query_id
             ] = SqlExpansionResultResponse(
                 status="failed",
                 error=AskError(

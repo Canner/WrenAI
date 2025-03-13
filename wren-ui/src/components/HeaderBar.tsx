@@ -63,6 +63,14 @@ export default function HeaderBar() {
               >
                 Modeling
               </StyledButton>
+              <StyledButton
+                shape="round"
+                size="small"
+                $isHighlight={pathname.startsWith(Path.Knowledge)}
+                onClick={() => router.push(Path.KnowledgeQuestionSQLPairs)}
+              >
+                Knowledge
+              </StyledButton>
             </Space>
           )}
         </Space>

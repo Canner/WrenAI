@@ -56,7 +56,6 @@ data:
     - model: gpt-4o-mini-2024-07-18
       alias: default
       api_base: https://api.openai.com/v1
-      api_key_name: LLM_OPENAI_API_KEY
       kwargs:
         temperature: 0
         n: 1
@@ -64,7 +63,6 @@ data:
         max_tokens: 4096
     - model: gpt-4o-2024-08-06
       api_base: https://api.openai.com/v1
-      api_key_name: LLM_OPENAI_API_KEY
       kwargs:
         temperature: 0
         n: 1
@@ -72,7 +70,6 @@ data:
         max_tokens: 4096
     - model: o3-mini-2025-01-31
       api_base: https://api.openai.com/v1
-      api_key_name: LLM_OPENAI_API_KEY
       kwargs:
         n: 1
         seed: 0
@@ -86,7 +83,6 @@ data:
     - model: text-embedding-3-large
       alias: default
       api_base: https://api.openai.com/v1
-      api_key_name: EMBEDDER_OPENAI_API_KEY
       timeout: 120
 
     ---
@@ -188,6 +184,8 @@ data:
       column_indexing_batch_size: 50
       table_retrieval_size: 10
       table_column_retrieval_size: 100
+      allow_intent_classification: true
+      allow_sql_generation_reasoning: true
       allow_using_db_schemas_without_pruning: false
       query_cache_maxsize: 1000
       query_cache_ttl: 3600

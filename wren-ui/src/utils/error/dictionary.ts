@@ -99,4 +99,13 @@ export const ERROR_TEXTS = {
       INVALID_NUMBER_TYPE: 'Please select a number type field.',
     },
   },
+  SQL_PAIR: {
+    SQL: {
+      REQUIRED: 'Please input SQL statement.',
+    },
+    QUESTION: {
+      REQUIRED: 'Please input a matching question.',
+      MAX_LENGTH: 'Question must be 300 characters or fewer.',
+    },
+  },
 };

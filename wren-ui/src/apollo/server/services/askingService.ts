@@ -2,7 +2,6 @@ import { IWrenAIAdaptor } from '@server/adaptors/wrenAIAdaptor';
 import {
   AskResult,
   AskResultStatus,
-  AskHistory,
   RecommendationQuestionsResult,
   RecommendationQuestionsInput,
   RecommendationQuestion,
@@ -528,12 +527,10 @@ export class AskingService implements IAskingService {
     // if it's a follow-up question, then the input will have a threadId
     // then use the threadId to get the sql and get the steps of last thread response
     // construct it into AskHistory and pass to ask
-    const history: AskHistory = threadId
-      ? await this.getHistory(threadId)
-      : null;
+    const histories = threadId ? await this.getAskingHistory(threadId) : null;
     const response = await this.wrenAIAdaptor.ask({
       query: input.question,
-      history,
+      histories,
       deployId,
       configurations: { language },
     });
@@ -932,32 +929,18 @@ export class AskingService implements IAskingService {
   }
 
   /**
-   * Get the thread with threadId & latest thread response of a thread
-   * transform the response into AskHistory
+   * Get the thread response of a thread for asking
    * @param threadId
-   * @returns Promise<AskHistory>
+   * @returns Promise<ThreadResponse[]>
    */
-  private async getHistory(threadId: number): Promise<AskHistory> {
-    const responses =
-      await this.threadResponseRepository.getResponsesWithThread(threadId, 1);
-    if (!responses.length) {
-      return null;
+  private async getAskingHistory(threadId: number): Promise<ThreadResponse[]> {
+    if (!threadId) {
+      return [];
     }
-
-    const latestResponse = responses[0];
-    // steps is only available in breakdown detail
-    // if we haven't generated the breakdown detail, fallback to use the question & sql
-    const steps = latestResponse.breakdownDetail?.steps || [
-      {
-        summary: latestResponse.question,
-        cteName: '',
-        sql: latestResponse.sql,
-      },
-    ];
-    return {
-      sql: latestResponse.sql,
-      steps,
-    };
+    return await this.threadResponseRepository.getResponsesWithThread(
+      threadId,
+      10,
+    );
   }
 
   private async createThreadFromView(input: AskingDetailTaskInput) {
