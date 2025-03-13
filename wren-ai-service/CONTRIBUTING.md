@@ -46,4 +46,4 @@ Now that you are part of the Canner community.
 
 ## How to add your preferred LLM, Embedder or Document Store
 
-- Please read [this documentation for further details](https://docs.getwren.ai/oss/installation/custom_llm#adding-a-custom-llm-embedder-or-document-store-to-wren-ai).
+- Please read [this documentation for further details](https://docs.getwren.ai/oss/ai_service/guide/custom_llm#adding-a-custom-llm-embedder-or-document-store-to-wren-ai).
