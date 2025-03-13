@@ -86,6 +86,7 @@ class DDLChunker:
             columns = [
                 _column_preprocessor(column, addition)
                 for column in model.get("columns", [])
+                if column.get("isHidden") is not True
             ]
             return {
                 "name": model.get("name", ""),
