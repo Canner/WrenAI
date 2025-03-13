@@ -7,6 +7,8 @@ on:
       - "wren-ui/src/**"
       - "deployment/**"
       - "wren-launcher/**"
+      - "wren-ai-service/**"
+      - "docker/**"
 
 jobs:
   tag-pr:
@@ -24,7 +26,7 @@ jobs:
         id: changed-files
         uses: tj-actions/changed-files@v35
 
-      - name: Tag PR based on changed files
+      - name: Tag PR based on changed files and title
         uses: actions/github-script@v6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -40,6 +42,53 @@ jobs:
                 labels.add('deployment');
               } else if (file.startsWith('wren-launcher/')) {
                 labels.add('launcher');
+              } else if (file.startsWith('wren-ai-service/')) {
+                labels.add('wren-ai-service');
+              } 
+              if (file.startsWith('docker/') && file.includes('.example')) {
+                labels.add('ai-env-changed'); 
+              }
+              if (file.startsWith('wren-ui/src/apollo/server/config.ts')) {
+                labels.add('ui-env-changed');
+              }
+            }
+
+            // Extract milestone from PR title
+            const prTitle = context.payload.pull_request.title;
+            const milestoneMatch = prTitle.match(/\(milestone:\s*([^)]+)\)/i);
+
+            if (milestoneMatch && milestoneMatch[1]) {
+              const milestone = milestoneMatch[1].trim();
+              if (milestone) {
+                labels.add(milestone);
+                console.log(`Found milestone in PR title: ${milestone}`);
+              }
+            }
+
+            // Append env changed label to PR title
+            if (labels.has('ai-env-changed')) {
+              // check if pr title contains "ai-env-changed"
+              if (!prTitle.includes('ai-env-changed')) {
+                const newTitle = `${prTitle} (ai-env-changed)`;
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  title: newTitle
+                });
+              }
+            }
+
+            if (labels.has('ui-env-changed')) {
+              // check if pr title contains "ui-env-changed"
+              if (!prTitle.includes('ui-env-changed')) {
+                const newTitle = `${prTitle} (ui-env-changed)`;
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  title: newTitle
+                });
               }
             }
 
@@ -53,5 +102,5 @@ jobs:
               
               console.log(`Added labels: ${Array.from(labels).join(', ')}`);
             } else {
-              console.log('No matching directories found in changed files');
+              console.log('No matching directories or milestone found');
             }
