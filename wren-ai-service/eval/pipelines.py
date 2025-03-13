@@ -376,6 +376,7 @@ class AskPipeline(Eval):
             **pipe_components["sql_generation"],
         )
         self._allow_sql_samples = settings.allow_sql_samples
+        self._allow_instructions = settings.allow_instructions
 
         self._engine_info = engine_config(
             mdl, pipe_components, settings.db_path_for_duckdb
