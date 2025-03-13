@@ -34,6 +34,17 @@ jobs:
             const changedFiles = '${{ steps.changed-files.outputs.all_changed_files }}'.split(' ');
             const labels = new Set();
 
+            // Define label colors
+            const labelColors = {
+              'wren-ui': 'f29513',        // Orange
+              'launcher': 'f29513',       // Orange (same as wren-ui)
+              'wren-ai-service': 'f29513', // Orange (same as wren-ui)
+              'deployment': '0075ca',     // Blue
+              'ai-env-changed': 'd73a4a',  // Red
+              'ui-env-changed': 'd73a4a'   // Red
+            };
+
+
             // Check for files in specific directories
             for (const file of changedFiles) {
               if (file.startsWith('wren-ui/src/')) {
@@ -93,6 +104,36 @@ jobs:
             }
 
             if (labels.size > 0) {
+              // Create or update labels with colors
+              for (const label of labels) {
+                try {
+                  // Try to create the label with color
+                  if (labelColors[label]) {
+                    await github.rest.issues.createLabel({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      name: label,
+                      color: labelColors[label]
+                    });
+                  }
+                } catch (error) {
+                  // Label already exists, update its color if needed
+                  if (labelColors[label]) {
+                    try {
+                      await github.rest.issues.updateLabel({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        name: label,
+                        color: labelColors[label]
+                      });
+                    } catch (updateError) {
+                      console.log(`Could not update color for label ${label}: ${updateError.message}`);
+                    }
+                  }
+                }
+              }
+              
+              // Add labels to PR
               await github.rest.issues.addLabels({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
