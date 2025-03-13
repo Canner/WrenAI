@@ -125,7 +125,6 @@ async def default_instructions(
         query_embedding=None,
         filters=filters,
     )
-    # todo: settings to config.yaml
     return dict(documents=res.get("documents"))
 
 

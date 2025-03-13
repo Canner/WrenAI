@@ -169,3 +169,8 @@ settings:
   langfuse_enable: true
   logging_level: INFO
   development: false
+  historical_question_retrieval_similarity_threshold: 0.9
+  sql_pairs_similarity_threshold: 0.7
+  sql_pairs_retrieval_max_size: 10
+  instructions_similarity_threshold: 0.7
+  instructions_top_k: 10
