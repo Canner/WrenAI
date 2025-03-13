@@ -1,13 +1,13 @@
 import clsx from 'clsx';
-import { useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
+import { useEffect, useMemo, useState } from 'react';
 import { Timeline, Typography, Collapse } from 'antd';
 import DownOutlined from '@ant-design/icons/DownOutlined';
 import Retrieving from './step/Retrieving';
 import Organizing from './step/Organizing';
 import Generating from './step/Generating';
 import { PROCESS_STATE } from '@/utils/enum';
-import useAskProcessState, {
+import {
   ProcessStateMachine,
   convertAskingTaskToProcessState,
 } from '@/hooks/useAskProcessState';
@@ -16,6 +16,8 @@ import { AskingTask } from '@/apollo/client/graphql/__types__';
 interface Props {
   className?: string;
   data: AskingTask;
+  generateAnswerLoading?: boolean;
+  isAnswerPrepared?: boolean;
 }
 
 const retrievingNextStates = ProcessStateMachine.getAllNextStates(
@@ -32,24 +34,25 @@ const generatingNextStates = ProcessStateMachine.getAllNextStates(
 );
 
 export default function Preparation(props: Props) {
-  const { className, data } = props;
-  const askProcessState = useAskProcessState();
-  const [isActive, setIsActive] = useState(false);
-
+  const { className, data, generateAnswerLoading, isAnswerPrepared } = props;
   const processState = useMemo(
-    () => (data ? convertAskingTaskToProcessState(data) : PROCESS_STATE.PLANNING),
+    () => convertAskingTaskToProcessState(data),
     [data],
   );
+  const [isActive, setIsActive] = useState(
+    processState !== PROCESS_STATE.FINISHED,
+  );
 
+  // wrapping up after answer is prepared
   useEffect(() => {
-    setIsActive(!askProcessState.isFinished());
-  }, [processState])
+    setIsActive(!isAnswerPrepared);
+  }, [isAnswerPrepared]);
 
   const showRetrieving = retrievingNextStates.includes(processState);
   const showOrganizing = organizingNextStates.includes(processState);
   const showGenerating = generatingNextStates.includes(processState);
 
-  if (processState === null) return null;
+  if (data === null) return null;
   return (
     <div className={clsx('border border-gray-4 rounded', className)}>
       <Collapse
@@ -107,7 +110,7 @@ export default function Preparation(props: Props) {
                 <Generating
                   generating={processState === PROCESS_STATE.GENERATING}
                   correcting={processState === PROCESS_STATE.CORRECTING}
-                  loading={true}
+                  loading={generateAnswerLoading}
                 />
               </Timeline.Item>
             )}
