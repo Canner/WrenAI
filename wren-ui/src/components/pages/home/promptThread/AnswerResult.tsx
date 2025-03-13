@@ -273,6 +273,7 @@ export default function AnswerResult(props: Props) {
                 { isCreateMode: true },
               )
             }
+            data-guideid="save-to-knowledge"
           >
             <div className="d-flex align-center">
               <RobotSVG className="mr-2" />

@@ -262,39 +262,63 @@ export default function SidebarSection(_props: Props) {
         stories.some((item) => !learningRecord.paths.includes(item.id)),
       );
 
-      // play the data modeling guide if it's not finished
-      if (
-        router.pathname === Path.Modeling &&
-        !learningRecord.paths.includes(LEARNING.DATA_MODELING_GUIDE)
-      ) {
-        nextTick(1000).then(() => {
+      const routerAction = {
+        [Path.Modeling]: async () => {
+          const isGuideDone = learningRecord.paths.includes(
+            LEARNING.DATA_MODELING_GUIDE,
+          );
           const isSkipBefore = !!window.sessionStorage.getItem(
             'skipDataModelingGuide',
           );
-          if (isSkipBefore) return;
-          $guide.current?.play(LEARNING.DATA_MODELING_GUIDE, {
-            onDone: () => saveRecord(LEARNING.DATA_MODELING_GUIDE),
-          });
-        });
-      }
-
-      if (
-        router.pathname === Path.Home &&
-        !learningRecord.paths.includes(LEARNING.SWITCH_PROJECT_LANGUAGE)
-      ) {
-        nextTick(1000).then(() => {
+          if (!(isGuideDone || isSkipBefore)) {
+            await nextTick(1000);
+            $guide.current?.play(LEARNING.DATA_MODELING_GUIDE, {
+              onDone: () => saveRecord(LEARNING.DATA_MODELING_GUIDE),
+            });
+          }
+        },
+        [Path.Home]: async () => {
+          const isGuideDone = learningRecord.paths.includes(
+            LEARNING.SWITCH_PROJECT_LANGUAGE,
+          );
           const isSkipBefore = !!window.sessionStorage.getItem(
             'skipSwitchProjectLanguageGuide',
           );
-          if (isSkipBefore) return;
-          $guide.current?.play(LEARNING.SWITCH_PROJECT_LANGUAGE, {
-            onDone: () => saveRecord(LEARNING.SWITCH_PROJECT_LANGUAGE),
-            onSaveLanguage: saveLanguage,
-          });
-        });
-      }
+          if (!(isGuideDone || isSkipBefore)) {
+            await nextTick(1000);
+            $guide.current?.play(LEARNING.SWITCH_PROJECT_LANGUAGE, {
+              onDone: () => saveRecord(LEARNING.SWITCH_PROJECT_LANGUAGE),
+              onSaveLanguage: saveLanguage,
+            });
+          }
+        },
+        [Path.Thread]: async () => {
+          const isGuideDone = learningRecord.paths.includes(
+            LEARNING.SAVE_TO_KNOWLEDGE,
+          );
+          if (!isGuideDone) {
+            await nextTick(1500);
+            $guide.current?.play(LEARNING.SAVE_TO_KNOWLEDGE, {
+              onDone: () => saveRecord(LEARNING.SAVE_TO_KNOWLEDGE),
+            });
+          }
+        },
+        [Path.KnowledgeQuestionSQLPairs]: async () => {
+          const isGuideDone = learningRecord.paths.includes(
+            LEARNING.QUESTION_SQL_PAIRS_GUIDE,
+          );
+          if (!isGuideDone) {
+            await nextTick(1000);
+            $guide.current?.play(LEARNING.QUESTION_SQL_PAIRS_GUIDE, {
+              onDone: () => saveRecord(LEARNING.QUESTION_SQL_PAIRS_GUIDE),
+            });
+          }
+        },
+      };
+
+      routerAction[router.pathname] && routerAction[router.pathname]();
     }
-  }, [learningRecordResult?.learningRecord]);
+  }, [learningRecordResult?.learningRecord, router.pathname]);
 
   useEffect(() => {
     collapseBlock(active);
@@ -305,35 +329,35 @@ export default function SidebarSection(_props: Props) {
   };
 
   // Hide learning section if the page not in whitelist
-  if (!isLearningAccessible(router.pathname)) return null;
-
   return (
     <>
       <LearningGuide ref={$guide} />
-      <div className="border-t border-gray-4">
-        <div
-          className="px-4 py-1 d-flex align-center cursor-pointer select-none"
-          onClick={onCollapseBarClick}
-        >
-          <div className="flex-grow-1">
-            <ReadOutlined className="mr-1" />
-            Learning
+      {isLearningAccessible(router.pathname) && (
+        <div className="border-t border-gray-4">
+          <div
+            className="px-4 py-1 d-flex align-center cursor-pointer select-none"
+            onClick={onCollapseBarClick}
+          >
+            <div className="flex-grow-1">
+              <ReadOutlined className="mr-1" />
+              Learning
+            </div>
+            <RightOutlined
+              className="text-sm"
+              style={{ transform: `rotate(${active ? '90deg' : '0deg'})` }}
+            />
           </div>
-          <RightOutlined
-            className="text-sm"
-            style={{ transform: `rotate(${active ? '90deg' : '0deg'})` }}
-          />
+          <CollapseBlock ref={$collapseBlock}>
+            <ListIterator data={stories} />
+            <div className="px-4 py-2 d-flex align-center">
+              <Progress total={total} current={current} />
+              <span className="text-xs gray-6 text-nowrap pl-2">
+                {current}/{total} Finished
+              </span>
+            </div>
+          </CollapseBlock>
         </div>
-        <CollapseBlock ref={$collapseBlock}>
-          <ListIterator data={stories} />
-          <div className="px-4 py-2 d-flex align-center">
-            <Progress total={total} current={current} />
-            <span className="text-xs gray-6 text-nowrap pl-2">
-              {current}/{total} Finished
-            </span>
-          </div>
-        </CollapseBlock>
-      </div>
+      )}
     </>
   );
 }

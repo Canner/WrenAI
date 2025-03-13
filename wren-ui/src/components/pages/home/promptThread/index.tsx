@@ -98,7 +98,10 @@ const AnswerResultTemplate: React.FC<
   const isLastThreadResponse = id === lastResponseId;
 
   return (
-    <div key={`${id}-${index}`}>
+    <div
+      key={`${id}-${index}`}
+      data-guideid={isLastThreadResponse ? `last-answer-result` : undefined}
+    >
       {index > 0 && <Divider />}
       <AnswerResult
         motion={motion}
