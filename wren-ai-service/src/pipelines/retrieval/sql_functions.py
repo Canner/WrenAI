@@ -128,7 +128,8 @@ class SqlFunctions(BasicPipeline):
             **self._components,
             **self._configs,
         }
-        return await self._pipe.execute(["cache"], inputs=input)
+        result = await self._pipe.execute(["cache"], inputs=input)
+        return result["cache"]
 
 
 if __name__ == "__main__":
