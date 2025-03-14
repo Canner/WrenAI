@@ -213,7 +213,8 @@ class AskService:
         sql_samples = []
         api_results = []
         table_names = []
-        error_message = ""
+        error_message = None
+        invalid_sql = None
 
         try:
             user_query = ask_request.query
@@ -395,9 +396,6 @@ class AskService:
                     sql_generation_reasoning=sql_generation_reasoning,
                     trace_id=trace_id,
                 )
-
-            invalid_sql = None
-            error_message = None
 
             if not self._is_stopped(query_id, self._ask_results) and not api_results:
                 self._ask_results[query_id] = AskResultResponse(
