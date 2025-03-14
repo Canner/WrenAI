@@ -3,6 +3,7 @@ import sys
 from typing import Any, Dict, List, Optional
 
 import aiohttp
+from cachetools import TTLCache
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from hamilton.function_modifiers import extract_fields
@@ -48,22 +49,19 @@ class SqlFunction(BaseModel):
 
 
 ## Start of Pipeline
-@observe(capture_input=False, capture_output=False)
-@extract_fields(dict(mdl=Dict[str, Any]))
-def validate_mdl(mdl_str: str, validator: MDLValidator) -> Dict[str, Any]:
-    res = validator.run(mdl=mdl_str)
-    return dict(mdl=res["mdl"])
-
-
 @observe(capture_input=False)
 @extract_fields(dict(func_list=List[str], data_source=str))
 async def get_functions(
     engine: WrenIbis,
-    mdl: Dict[str, Any],
+    data_source: str,
+    engine_timeout: float = 30.0,
 ) -> Dict[str, Any]:
     async with aiohttp.ClientSession() as session:
-        data_source = mdl.get("dataSource").lower()
-        func_list = await engine.get_func_list(session=session, data_source=data_source)
+        func_list = await engine.get_func_list(
+            session=session,
+            data_source=data_source,
+            timeout=engine_timeout,
+        )
         return {
             "data_source": data_source,
             "func_list": func_list,
@@ -79,10 +77,11 @@ def sql_functions(
 
 @observe(capture_input=False)
 def cache(
-    sql_functions: List[SqlFunction],
     data_source: str,
-) -> List[SqlFunction]:
-    # todo: implement cache for sql functions
+    sql_functions: List[SqlFunction],
+    ttl_cache: TTLCache,
+) -> Dict[str, Any]:
+    ttl_cache[data_source] = sql_functions
     return sql_functions
 
 
@@ -93,34 +92,48 @@ class SqlFunctions(BasicPipeline):
     def __init__(
         self,
         engine: Engine,
+        engine_timeout: Optional[float] = 30.0,
         **kwargs,
     ) -> None:
+        self._cache = TTLCache(maxsize=100, ttl=60 * 60 * 24)
         self._components = {
-            "validator": MDLValidator(),
             "engine": engine,
+            "engine_timeout": engine_timeout,
+            "ttl_cache": self._cache,
+        }
+
+        self._configs = {
+            "engine_timeout": engine_timeout,
         }
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    @observe(name="SQL Functions Indexing")
+    @observe(name="SQL Functions Retrieval")
     async def run(
         self,
-        mdl_str: str,
+        data_source: str,
         project_id: Optional[str] = None,
     ) -> dict[str, Any]:
         logger.info(
-            f"Project ID: {project_id} SQL Functions Indexing pipeline is running..."
+            f"Project ID: {project_id} SQL Functions Retrieval pipeline is running..."
         )
 
+        _data_source = data_source.lower()
+
+        if _data_source in self._cache:
+            logger.info(f"Hit cache for {_data_source}")
+            return self._cache[_data_source]
+
         input = {
-            "mdl_str": mdl_str,
+            "data_source": _data_source,
             "project_id": project_id,
             **self._components,
+            **self._configs,
         }
-
-        return await self._pipe.execute(["cache"], inputs=input)
+        res = await self._pipe.execute(["cache"], inputs=input)
+        return res
 
 
 if __name__ == "__main__":
@@ -128,6 +141,6 @@ if __name__ == "__main__":
 
     dry_run_pipeline(
         SqlFunctions,
-        "sql_functions_indexing",
-        mdl_str='{"dataSource": "postgres"}',
+        "sql_functions_retrieval",
+        data_source="postgres",
     )

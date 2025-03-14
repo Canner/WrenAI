@@ -151,10 +151,12 @@ class WrenIbis(Engine):
             return False, None, f"Request timed out: {timeout} seconds"
 
     async def get_func_list(
-        self, session: aiohttp.ClientSession, data_source: str
+        self,
+        session: aiohttp.ClientSession,
+        data_source: str,
+        timeout: float = 30.0,
     ) -> list[str]:
         api_endpoint = f"{self._endpoint}/v3/connector/{data_source}/functions"
-        timeout = aiohttp.ClientTimeout(total=30.0)
         try:
             async with session.get(api_endpoint, timeout=timeout) as response:
                 res = await response.json()

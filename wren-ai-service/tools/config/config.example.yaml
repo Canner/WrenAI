@@ -153,7 +153,7 @@ pipes:
   - name: instructions_retrieval
     embedder: litellm_embedder.default
     document_store: qdrant
-  - name: sql_functions_indexing
+  - name: sql_functions_retrieval
     engine: wren_ibis
 
 ---
@@ -178,4 +178,3 @@ settings:
   sql_pairs_retrieval_max_size: 10
   instructions_similarity_threshold: 0.7
   instructions_top_k: 10
-
