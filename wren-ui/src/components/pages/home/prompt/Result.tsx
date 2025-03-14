@@ -35,7 +35,6 @@ interface Props {
   data: {
     type: AskingTaskType;
     originalQuestion: string;
-    candidates: AskingTask['candidates'];
     askingStreamTask: string;
     recommendedQuestions: RecommendedQuestionsTask;
     intentReasoning: string;
