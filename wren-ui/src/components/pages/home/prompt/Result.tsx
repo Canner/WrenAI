@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useRef } from 'react';
+import { ReactNode, useEffect, useRef, memo } from 'react';
 import { Button } from 'antd';
 import styled from 'styled-components';
 import { PROCESS_STATE } from '@/utils/enum';
@@ -10,13 +10,11 @@ import WarningOutlined from '@ant-design/icons/WarningOutlined';
 import MessageOutlined from '@ant-design/icons/MessageOutlined';
 import ErrorCollapse from '@/components/ErrorCollapse';
 import InfoCircleOutlined from '@ant-design/icons/InfoCircleOutlined';
-import useAskProcessState from '@/hooks/useAskProcessState';
 import RecommendedQuestions, {
   getRecommendedQuestionProps,
 } from '@/components/pages/home/RecommendedQuestions';
 import MarkdownBlock from '@/components/editor/MarkdownBlock';
 import {
-  AskingTask,
   AskingTaskType,
   RecommendedQuestionsTask,
 } from '@/apollo/client/graphql/__types__';
@@ -33,7 +31,7 @@ const StyledResult = styled.div`
 `;
 
 interface Props {
-  processState: ReturnType<typeof useAskProcessState>;
+  processState: PROCESS_STATE;
   data: {
     type: AskingTaskType;
     originalQuestion: string;
@@ -155,7 +153,7 @@ const IntentionFinished = (props: Props) => {
     }
   }, [data]);
 
-  return <Understanding {...props} />;
+  return null;
 };
 
 const GeneralAnswer = (props: Props) => {
@@ -267,13 +265,13 @@ const makeProcessStateStrategy = (type: AskingTaskType) => {
   return getDefaultStateComponent;
 };
 
-export default function PromptResult(props: Props) {
+export default memo(function PromptResult(props: Props) {
   const { processState, data } = props;
 
   const getProcessStateComponent = makeProcessStateStrategy(data?.type);
-  const StateComponent = getProcessStateComponent(processState.currentState);
+  const StateComponent = getProcessStateComponent(processState);
 
   if (StateComponent === null) return null;
 
   return <StateComponent {...props} />;
-}
+});

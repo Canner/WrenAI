@@ -9,9 +9,10 @@ import {
 export const getIsProcessing = (status: PROCESS_STATE) =>
   [
     PROCESS_STATE.UNDERSTANDING,
+    PROCESS_STATE.SEARCHING,
     PROCESS_STATE.PLANNING,
     PROCESS_STATE.GENERATING,
-    PROCESS_STATE.SEARCHING,
+    PROCESS_STATE.CORRECTING,
   ].includes(status);
 
 export const convertAskingTaskToProcessState = (data: AskingTask) => {
@@ -45,18 +46,21 @@ export default function useAskProcessState() {
     setCurrentState(PROCESS_STATE.IDLE);
   };
 
-  const canTransitionTo = (targetState: PROCESS_STATE) => {
-    return ProcessStateMachine.canTransition(currentState, targetState);
+  const matchedState = (askingTask: AskingTask) => {
+    const targetState = convertAskingTaskToProcessState(askingTask);
+    // Prevent unknown status, if not found we keep the current state
+    if (ProcessStateMachine.canTransition(currentState, targetState)) {
+      return targetState;
+    } else {
+      console.warn(
+        `Invalid transition from ${currentState} to ${targetState}.`,
+      );
+      return currentState;
+    }
   };
 
   const transitionTo = (targetState: PROCESS_STATE) => {
-    if (canTransitionTo(targetState)) {
-      setCurrentState(targetState);
-    } else {
-      throw new Error(
-        `Cannot transition from ${currentState} to ${targetState}, please check the state machine`,
-      );
-    }
+    setCurrentState(targetState);
   };
 
   const setState = (state: PROCESS_STATE) => {
@@ -74,7 +78,7 @@ export default function useAskProcessState() {
   return {
     currentState,
     resetState,
-    canTransitionTo,
+    matchedState,
     transitionTo,
     setState,
     isFinished,
@@ -85,19 +89,19 @@ export default function useAskProcessState() {
 export class ProcessStateMachine {
   private static transitions = {
     [PROCESS_STATE.IDLE]: {
-      next: [PROCESS_STATE.UNDERSTANDING, PROCESS_STATE.FAILED],
+      next: [PROCESS_STATE.UNDERSTANDING],
       prev: [],
     },
     [PROCESS_STATE.UNDERSTANDING]: {
-      next: [PROCESS_STATE.SEARCHING, PROCESS_STATE.FAILED],
+      next: [PROCESS_STATE.SEARCHING],
       prev: [PROCESS_STATE.IDLE],
     },
     [PROCESS_STATE.SEARCHING]: {
-      next: [PROCESS_STATE.PLANNING, PROCESS_STATE.FAILED],
+      next: [PROCESS_STATE.PLANNING],
       prev: [PROCESS_STATE.UNDERSTANDING],
     },
     [PROCESS_STATE.PLANNING]: {
-      next: [PROCESS_STATE.GENERATING, PROCESS_STATE.FAILED],
+      next: [PROCESS_STATE.GENERATING],
       prev: [PROCESS_STATE.SEARCHING],
     },
     [PROCESS_STATE.GENERATING]: {
@@ -119,11 +123,12 @@ export class ProcessStateMachine {
   };
 
   static canTransition(from: PROCESS_STATE, to: PROCESS_STATE) {
-    return this.transitions[from]?.next.includes(to);
-  }
-
-  static getNextStates(state: PROCESS_STATE) {
-    return this.transitions[state]?.next || [];
+    // Allow transition to FINISHED & FAILED state from any state
+    return (
+      to === PROCESS_STATE.FINISHED ||
+      to === PROCESS_STATE.FAILED ||
+      this.transitions[from]?.next.includes(to)
+    );
   }
 
   static getAllNextStates(state: PROCESS_STATE, includeSelf = false) {

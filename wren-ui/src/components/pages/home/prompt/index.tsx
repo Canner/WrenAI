@@ -1,18 +1,16 @@
 import {
   useEffect,
   useMemo,
-  useRef,
   useState,
   forwardRef,
   useImperativeHandle,
 } from 'react';
-import { Input, Button } from 'antd';
 import styled from 'styled-components';
 import { PROCESS_STATE } from '@/utils/enum';
+import PromptInput from '@/components/pages/home/prompt/Input';
 import PromptResult from '@/components/pages/home/prompt/Result';
 import useAskProcessState, {
   getIsProcessing,
-  convertAskingTaskToProcessState,
 } from '@/hooks/useAskProcessState';
 import { AskPromptData } from '@/hooks/useAskPrompt';
 import {
@@ -34,8 +32,7 @@ interface Props {
 }
 
 interface Attributes {
-  setValue: (value: string) => void;
-  submit: () => void;
+  submit: (value: string) => void;
   close: () => void;
 }
 
@@ -51,12 +48,7 @@ const PromptStyle = styled.div`
     rgba(0, 0, 0, 0.05) 0px 4px 6px -2px;
 `;
 
-const PromptButton = styled(Button)`
-  min-width: 72px;
-`;
-
 export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
-  const $promptInput = useRef<HTMLTextAreaElement>(null);
   const {
     data,
     loading,
@@ -66,7 +58,6 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
     onStopStreaming,
     onStopRecommend,
   } = props;
-  const [inputValue, setInputValue] = useState('');
   const askProcessState = useAskProcessState();
 
   const {
@@ -88,21 +79,20 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
     [data],
   );
   const error = useMemo(() => askingTask?.error || null, [askingTask?.error]);
-  const question = useMemo(() => inputValue.trim(), [inputValue]);
-  const isProcessing = useMemo(
-    () => getIsProcessing(askProcessState.currentState),
+  const [question, setQuestion] = useState('');
+  const currentProcessState = useMemo(
+    () => askProcessState.currentState,
     [askProcessState.currentState],
+  );
+  const isProcessing = useMemo(
+    () => getIsProcessing(currentProcessState),
+    [currentProcessState],
   );
 
   useEffect(() => {
-    if (!isProcessing) $promptInput.current?.focus();
-  }, [isProcessing]);
-
-  useEffect(() => {
     if (askingTask) {
-      const processState = convertAskingTaskToProcessState(askingTask);
-      askProcessState.canTransitionTo(processState) &&
-        askProcessState.transitionTo(processState);
+      const processState = askProcessState.matchedState(askingTask);
+      askProcessState.transitionTo(processState);
     }
   }, [askingTask]);
 
@@ -120,20 +110,17 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
   }) => {
     onCreateResponse && (await onCreateResponse(payload));
     closeResult();
-    askProcessState.resetState();
   };
 
   // create thread response for text to sql
   const intentSQLAnswer = async () => {
     onCreateResponse &&
       (await onCreateResponse({ question, taskId: askingTask?.queryId }));
-    closeResult();
-    askProcessState.resetState();
   };
 
   const closeResult = () => {
     askProcessState.resetState();
-    setInputValue('');
+    setQuestion('');
     onStopStreaming && onStopStreaming();
     onStopRecommend && onStopRecommend();
   };
@@ -143,62 +130,36 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
     onStop && onStop();
   };
 
-  const syncInputValue = (event) => {
-    setInputValue(event.target.value);
-  };
-
-  const inputEnter = (event) => {
-    if (event.shiftKey) return;
-    event.preventDefault();
-    submitAsk();
-  };
-
-  const submitAsk = async () => {
-    if (isProcessing || !question) return;
+  const submitAsk = async (value: string) => {
+    setQuestion(value);
+    if (isProcessing || !value) return;
     // start the state as understanding when user submit question
     askProcessState.transitionTo(PROCESS_STATE.UNDERSTANDING);
-    onSubmit && (await onSubmit(question));
+    onSubmit && (await onSubmit(value));
   };
 
   useImperativeHandle(
     ref,
     () => ({
-      setValue: (value: string) => setInputValue(value),
       submit: submitAsk,
       close: closeResult,
     }),
-    [question, isProcessing, setInputValue],
+    [question, isProcessing, setQuestion],
   );
 
   return (
     <PromptStyle className="d-flex align-end bg-gray-2 p-3 border border-gray-3 rounded">
-      <Input.TextArea
-        ref={$promptInput}
-        // disable grammarly
-        data-gramm="false"
-        size="large"
-        autoSize
-        placeholder="Ask to explore your data"
-        value={inputValue}
-        onInput={syncInputValue}
-        onPressEnter={inputEnter}
-        disabled={isProcessing}
+      <PromptInput
+        question={question}
+        isProcessing={isProcessing}
+        onAsk={submitAsk}
       />
-      <PromptButton
-        type="primary"
-        size="large"
-        className="ml-3"
-        onClick={submitAsk}
-        disabled={isProcessing}
-      >
-        Ask
-      </PromptButton>
 
       <PromptResult
         data={result}
         error={error}
         loading={loading}
-        processState={askProcessState}
+        processState={currentProcessState}
         onSelectRecommendedQuestion={selectRecommendedQuestion}
         onIntentSQLAnswer={intentSQLAnswer}
         onClose={closeResult}

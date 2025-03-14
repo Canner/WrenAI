@@ -119,9 +119,7 @@ export default function Home() {
   );
 
   const onSelectQuestion = async ({ question }) => {
-    $prompt.current.setValue(question);
-    await nextTick();
-    $prompt.current.submit();
+    $prompt.current.submit(question);
   };
 
   const onCreateResponse = async (payload: CreateThreadInput) => {
