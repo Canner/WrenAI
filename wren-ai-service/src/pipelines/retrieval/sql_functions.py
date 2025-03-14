@@ -12,7 +12,6 @@ from pydantic import BaseModel
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
-from src.pipelines.indexing import MDLValidator
 from src.providers.engine.wren import WrenIbis
 
 logger = logging.getLogger("wren-ai-service")
@@ -50,7 +49,7 @@ class SqlFunction(BaseModel):
 
 ## Start of Pipeline
 @observe(capture_input=False)
-@extract_fields(dict(func_list=List[str], data_source=str))
+@extract_fields(dict(func_list=List[str]))
 async def get_functions(
     engine: WrenIbis,
     data_source: str,
@@ -62,10 +61,7 @@ async def get_functions(
             data_source=data_source,
             timeout=engine_timeout,
         )
-        return {
-            "data_source": data_source,
-            "func_list": func_list,
-        }
+        return {"func_list": func_list}
 
 
 @observe(capture_input=False)
@@ -80,7 +76,7 @@ def cache(
     data_source: str,
     sql_functions: List[SqlFunction],
     ttl_cache: TTLCache,
-) -> Dict[str, Any]:
+) -> List[SqlFunction]:
     ttl_cache[data_source] = sql_functions
     return sql_functions
 
@@ -93,12 +89,12 @@ class SqlFunctions(BasicPipeline):
         self,
         engine: Engine,
         engine_timeout: Optional[float] = 30.0,
+        ttl: Optional[int] = 60 * 60 * 24,
         **kwargs,
     ) -> None:
-        self._cache = TTLCache(maxsize=100, ttl=60 * 60 * 24)
+        self._cache = TTLCache(maxsize=100, ttl=ttl)
         self._components = {
             "engine": engine,
-            "engine_timeout": engine_timeout,
             "ttl_cache": self._cache,
         }
 
@@ -115,7 +111,7 @@ class SqlFunctions(BasicPipeline):
         self,
         data_source: str,
         project_id: Optional[str] = None,
-    ) -> dict[str, Any]:
+    ) -> List[SqlFunction]:
         logger.info(
             f"Project ID: {project_id} SQL Functions Retrieval pipeline is running..."
         )
@@ -132,8 +128,7 @@ class SqlFunctions(BasicPipeline):
             **self._components,
             **self._configs,
         }
-        res = await self._pipe.execute(["cache"], inputs=input)
-        return res
+        return await self._pipe.execute(["cache"], inputs=input)
 
 
 if __name__ == "__main__":
