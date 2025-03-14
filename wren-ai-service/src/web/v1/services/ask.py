@@ -376,16 +376,27 @@ class AskService:
                     trace_id=trace_id,
                 )
 
-                sql_generation_reasoning = (
-                    await self._pipelines["sql_generation_reasoning"].run(
-                        query=user_query,
-                        contexts=table_ddls,
-                        sql_samples=sql_samples,
-                        instructions=instructions,
-                        configuration=ask_request.configurations,
-                        query_id=query_id,
-                    )
-                ).get("post_process", {})
+                if histories:
+                    sql_generation_reasoning = (
+                        await self._pipelines["followup_sql_generation_reasoning"].run(
+                            query=user_query,
+                            contexts=table_ddls,
+                            histories=histories,
+                            sql_samples=sql_samples,
+                            configuration=ask_request.configurations,
+                            query_id=query_id,
+                        )
+                    ).get("post_process", {})
+                else:
+                    sql_generation_reasoning = (
+                        await self._pipelines["sql_generation_reasoning"].run(
+                            query=user_query,
+                            contexts=table_ddls,
+                            sql_samples=sql_samples,
+                            configuration=ask_request.configurations,
+                            query_id=query_id,
+                        )
+                    ).get("post_process", {})
 
                 self._ask_results[query_id] = AskResultResponse(
                     status="planning",

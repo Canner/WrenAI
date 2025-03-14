@@ -109,6 +109,9 @@ def create_service_container(
                 "sql_generation_reasoning": generation.SQLGenerationReasoning(
                     **pipe_components["sql_generation_reasoning"],
                 ),
+                "followup_sql_generation_reasoning": generation.FollowUpSQLGenerationReasoning(
+                    **pipe_components["followup_sql_generation_reasoning"],
+                ),
                 "sql_correction": generation.SQLCorrection(
                     **pipe_components["sql_correction"],
                     engine_timeout=settings.engine_timeout,
