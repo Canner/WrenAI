@@ -23,13 +23,6 @@ logger = logging.getLogger("wren-ai-service")
 
 
 sql_generation_user_prompt_template = """
-{% if sql_functions %}
-### SQL FUNCTIONS ###
-{% for function in sql_functions %}
-{{ function }}
-{% endfor %}
-{% endif %}
-
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
@@ -38,6 +31,13 @@ sql_generation_user_prompt_template = """
 {% if instructions %}
 ### INSTRUCTIONS ###
 {{ instructions }}
+{% endif %}
+
+{% if sql_functions %}
+### SQL FUNCTIONS ###
+{% for function in sql_functions %}
+{{ function }}
+{% endfor %}
 {% endif %}
 
 {% if sql_samples %}
