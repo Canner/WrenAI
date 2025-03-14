@@ -120,6 +120,8 @@ pipes:
     embedder: litellm_embedder.default
   - name: sql_generation_reasoning
     llm: litellm_llm.default
+  - name: followup_sql_generation_reasoning
+    llm: litellm_llm.default
   - name: question_recommendation_db_schema_retrieval
     llm: litellm_llm.default
     embedder: litellm_embedder.default
