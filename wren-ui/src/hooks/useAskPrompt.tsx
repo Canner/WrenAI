@@ -18,6 +18,7 @@ import {
 import useAskingStreamTask from './useAskingStreamTask';
 import { THREAD } from '@/apollo/client/graphql/home';
 import { ApolloClient, NormalizedCacheObject } from '@apollo/client';
+import { nextTick } from '@/utils/time';
 
 export interface AskPromptData {
   originalQuestion: string;
@@ -172,6 +173,12 @@ export default function useAskPrompt(threadId?: number) {
     const isFinished = getIsFinished(askingTask?.status);
     if (isFinished) askingTaskResult.stopPolling();
 
+    // because askingTask stopped will cause the type updated from TEXT_TO_SQL to null
+    // so we need to update the cache manually
+    if (askingTask?.status === AskingTaskStatus.STOPPED) {
+      handleUpdateThreadCache(threadId, askingTask, askingTaskResult.client);
+    }
+
     // handle update cache for preparing component
     if (isNeedPreparing(askingTask)) {
       if (threadId) {
@@ -204,6 +211,8 @@ export default function useAskPrompt(threadId?: number) {
       await cancelAskingTask({ variables: { taskId } }).catch((error) =>
         console.error(error),
       );
+      // waiting for polling fetching stop
+      await nextTick(1000);
     }
   };
 

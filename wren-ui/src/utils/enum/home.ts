@@ -13,6 +13,7 @@ export enum PROCESS_STATE {
   CORRECTING,
   FINISHED,
   FAILED,
+  STOPPED,
   NO_RESULT,
 }
 

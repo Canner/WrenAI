@@ -126,9 +126,10 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
     onStopRecommend && onStopRecommend();
   };
 
-  const stopProcess = () => {
+  const stopProcess = async () => {
+    onStop && (await onStop());
+    setShowResult(false);
     askProcessState.resetState();
-    onStop && onStop();
   };
 
   const submitAsk = async (value: string) => {

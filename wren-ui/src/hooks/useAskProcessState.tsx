@@ -25,6 +25,8 @@ export const convertAskingTaskToProcessState = (data: AskingTask) => {
     [AskingTaskStatus.GENERATING]: PROCESS_STATE.GENERATING,
     [AskingTaskStatus.CORRECTING]: PROCESS_STATE.CORRECTING,
     [AskingTaskStatus.FINISHED]: PROCESS_STATE.FINISHED,
+    [AskingTaskStatus.STOPPED]: PROCESS_STATE.STOPPED,
+    [AskingTaskStatus.FAILED]: PROCESS_STATE.FAILED,
   }[data.status];
 
   if (
@@ -48,7 +50,7 @@ export default function useAskProcessState() {
 
   const matchedState = (askingTask: AskingTask) => {
     const targetState = convertAskingTaskToProcessState(askingTask);
-    if (targetState === currentState) return currentState;
+    if (!targetState || targetState === currentState) return currentState;
     // Prevent unknown status, if not found we keep the current state
     if (ProcessStateMachine.canTransition(currentState, targetState)) {
       return targetState;
@@ -124,6 +126,7 @@ export class ProcessStateMachine {
       from === PROCESS_STATE.IDLE ||
       to === PROCESS_STATE.FINISHED ||
       to === PROCESS_STATE.FAILED ||
+      to === PROCESS_STATE.STOPPED ||
       this.transitions[from]?.next.includes(to)
     );
   }

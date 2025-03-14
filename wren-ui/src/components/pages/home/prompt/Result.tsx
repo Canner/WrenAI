@@ -1,7 +1,9 @@
-import { ReactNode, useEffect, useRef, memo } from 'react';
+import clsx from 'clsx';
+import { ReactNode, useEffect, useRef, memo, useState } from 'react';
 import { Button } from 'antd';
 import styled from 'styled-components';
 import { PROCESS_STATE } from '@/utils/enum';
+import { attachLoading } from '@/utils/helper';
 import CloseOutlined from '@ant-design/icons/CloseOutlined';
 import StopOutlined from '@ant-design/icons/StopFilled';
 import LoadingOutlined from '@ant-design/icons/LoadingOutlined';
@@ -49,7 +51,7 @@ interface Props {
     sql: string;
   }) => void;
   onClose: () => void;
-  onStop: () => void;
+  onStop: () => Promise<void>;
   loading?: boolean;
 }
 
@@ -66,6 +68,7 @@ const Wrapper = ({ children }) => {
 
 const makeProcessing = (text: string) => (props: Props) => {
   const { onStop } = props;
+  const [loading, setLoading] = useState(false);
   return (
     <Wrapper>
       <div className="d-flex justify-space-between">
@@ -74,10 +77,14 @@ const makeProcessing = (text: string) => (props: Props) => {
           {text}
         </span>
         <Button
-          className="adm-btn-no-style gray-7 bg-gray-3 text-sm px-2"
+          className={clsx(
+            'adm-btn-no-style bg-gray-3 text-sm px-2',
+            loading ? 'gray-6' : 'gray-7',
+          )}
           type="text"
           size="small"
-          onClick={onStop}
+          onClick={attachLoading(onStop, setLoading)}
+          disabled={loading}
         >
           <StopOutlined className="-mr-1" />
           Stop
