@@ -370,6 +370,11 @@ class AskService:
                     results["metadata"]["type"] = "TEXT_TO_SQL"
                     return results
 
+            sql_functions = await self._pipelines["sql_functions_retrieval"].run(
+                data_source="postgres",
+                project_id=ask_request.project_id,
+            )
+
             if (
                 not self._is_stopped(query_id, self._ask_results)
                 and not api_results
@@ -448,6 +453,7 @@ class AskService:
                         instructions=instructions,
                         has_calculated_field=has_calculated_field,
                         has_metric=has_metric,
+                        sql_functions=sql_functions,
                     )
                 else:
                     text_to_sql_generation_results = await self._pipelines[
@@ -462,6 +468,7 @@ class AskService:
                         instructions=instructions,
                         has_calculated_field=has_calculated_field,
                         has_metric=has_metric,
+                        sql_functions=sql_functions,
                     )
 
                 if sql_valid_results := text_to_sql_generation_results["post_process"][
@@ -692,11 +699,11 @@ class AskService:
                     "post_process"
                 ]["invalid_generation_results"]:
                     if failed_dry_run_results[0]["type"] != "TIME_OUT":
-                        self._ask_feedback_results[
-                            query_id
-                        ] = AskFeedbackResultResponse(
-                            status="correcting",
-                            trace_id=trace_id,
+                        self._ask_feedback_results[query_id] = (
+                            AskFeedbackResultResponse(
+                                status="correcting",
+                                trace_id=trace_id,
+                            )
                         )
                         sql_correction_results = await self._pipelines[
                             "sql_correction"
@@ -769,10 +776,10 @@ class AskService:
         self,
         stop_ask_feedback_request: StopAskFeedbackRequest,
     ):
-        self._ask_feedback_results[
-            stop_ask_feedback_request.query_id
-        ] = AskFeedbackResultResponse(
-            status="stopped",
+        self._ask_feedback_results[stop_ask_feedback_request.query_id] = (
+            AskFeedbackResultResponse(
+                status="stopped",
+            )
         )
 
     def get_ask_feedback_result(

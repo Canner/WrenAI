@@ -127,8 +127,8 @@ def create_service_container(
                     **pipe_components["sql_regeneration"],
                     engine_timeout=settings.engine_timeout,
                 ),
-                "sql_functions": retrieval.SqlFunctions(
-                    **pipe_components["sql_functions"],
+                "sql_functions_retrieval": retrieval.SqlFunctions(
+                    **pipe_components["sql_functions_retrieval"],
                     engine_timeout=settings.engine_timeout,
                 ),
             },
