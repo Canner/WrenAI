@@ -153,6 +153,8 @@ pipes:
   - name: instructions_retrieval
     embedder: litellm_embedder.default
     document_store: qdrant
+  - name: sql_functions_indexing
+    engine: wren_ibis
 
 ---
 settings:
