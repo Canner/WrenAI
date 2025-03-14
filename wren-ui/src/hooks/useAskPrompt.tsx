@@ -33,6 +33,14 @@ export const getIsFinished = (status: AskingTaskStatus) =>
     AskingTaskStatus.STOPPED,
   ].includes(status);
 
+export const canGenerateAnswer = (askingTask: AskingTask) =>
+  askingTask === null || askingTask?.status === AskingTaskStatus.FINISHED;
+
+export const canFetchThreadResponse = (askingTask: AskingTask) =>
+  askingTask !== null &&
+  askingTask?.status !== AskingTaskStatus.FAILED &&
+  askingTask?.status !== AskingTaskStatus.STOPPED;
+
 export const isReadyToThreadResponse = (askingTask: AskingTask) =>
   askingTask?.status === AskingTaskStatus.SEARCHING &&
   askingTask?.type === AskingTaskType.TEXT_TO_SQL;
@@ -190,10 +198,10 @@ export default function useAskPrompt(threadId?: number) {
     }
   }, [askingTaskType, createAskingTaskResult.data]);
 
-  const onStop = () => {
-    const taskId = createAskingTaskResult.data?.createAskingTask.id;
+  const onStop = async (queryId?: string) => {
+    const taskId = queryId || createAskingTaskResult.data?.createAskingTask.id;
     if (taskId) {
-      cancelAskingTask({ variables: { taskId } }).catch((error) =>
+      await cancelAskingTask({ variables: { taskId } }).catch((error) =>
         console.error(error),
       );
     }

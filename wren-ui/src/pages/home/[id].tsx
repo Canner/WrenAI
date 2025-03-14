@@ -16,6 +16,7 @@ import SiderLayout from '@/components/layouts/SiderLayout';
 import Prompt from '@/components/pages/home/prompt';
 import useAskPrompt, {
   getIsFinished,
+  canFetchThreadResponse,
   isRecommendedFinished,
 } from '@/hooks/useAskPrompt';
 import useModalAction from '@/hooks/useModalAction';
@@ -138,7 +139,7 @@ export default function HomeThread() {
     pollInterval: 1000,
   });
 
-  const [generateThreadResponseAnswer, threadResponseAnswerResult] =
+  const [generateThreadResponseAnswer] =
     useGenerateThreadResponseAnswerMutation();
 
   const [generateThreadResponseBreakdown] =
@@ -217,7 +218,11 @@ export default function HomeThread() {
       const unfinishedThreadResponse = (responses || []).find(
         (response) => !getThreadResponseIsFinished(response),
       );
-      if (unfinishedThreadResponse) {
+
+      if (
+        canFetchThreadResponse(unfinishedThreadResponse?.askingTask) &&
+        unfinishedThreadResponse
+      ) {
         fetchThreadResponse({
           variables: { responseId: unfinishedThreadResponse.id },
         });
@@ -237,15 +242,16 @@ export default function HomeThread() {
 
   // stop all requests when change thread
   useEffect(() => {
-    askPrompt.onStopPolling();
-    threadResponseResult.stopPolling();
-    threadRecommendationQuestionsResult.stopPolling();
-    $prompt.current?.close();
-
     if (threadId !== null) {
       fetchThreadRecommendationQuestions({ variables: { threadId } });
       setShowRecommendedQuestions(true);
     }
+    return () => {
+      askPrompt.onStopPolling();
+      threadResponseResult.stopPolling();
+      threadRecommendationQuestionsResult.stopPolling();
+      $prompt.current?.close();
+    };
   }, [threadId]);
 
   // initialize asking task
@@ -295,6 +301,7 @@ export default function HomeThread() {
     showRecommendedQuestions,
     preparation: {
       askingStreamTask: askPrompt.data?.askingStreamTask,
+      onStopAskingTask: askPrompt.onStop,
     },
     onOpenSaveAsViewModal: saveAsViewModal.openModal,
     onSelectRecommendedQuestion: onCreateResponse,

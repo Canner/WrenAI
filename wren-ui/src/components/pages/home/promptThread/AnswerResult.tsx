@@ -7,6 +7,9 @@ import CheckCircleFilled from '@ant-design/icons/CheckCircleFilled';
 import CodeFilled from '@ant-design/icons/CodeFilled';
 import PieChartFilled from '@ant-design/icons/PieChartFilled';
 import MessageOutlined from '@ant-design/icons/MessageOutlined';
+import { RobotSVG } from '@/utils/svgs';
+import { ANSWER_TAB_KEYS } from '@/utils/enum';
+import { canGenerateAnswer } from '@/hooks/useAskPrompt';
 import usePromptThreadStore from './store';
 import { RecommendedQuestionsProps } from '@/components/pages/home/promptThread';
 import RecommendedQuestions, {
@@ -25,8 +28,6 @@ import {
   ThreadResponseAnswerDetail,
   ThreadResponseAnswerStatus,
 } from '@/apollo/client/graphql/__types__';
-import { ANSWER_TAB_KEYS } from '@/utils/enum';
-import { RobotSVG } from '@/utils/svgs';
 
 const { Title, Text } = Typography;
 
@@ -195,10 +196,8 @@ export default function AnswerResult(props: Props) {
 
   // initialize generate answer
   useEffect(() => {
-    if (isBreakdownOnly || askingTask?.status !== AskingTaskStatus.FINISHED) {
-      return;
-    }
-    if (isNeedGenerateAnswer(answerDetail)) {
+    if (isBreakdownOnly) return;
+    if (canGenerateAnswer(askingTask) && isNeedGenerateAnswer(answerDetail)) {
       const debouncedGenerateAnswer = debounce(
         () => {
           onGenerateTextBasedAnswer(id);

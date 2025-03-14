@@ -116,11 +116,11 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
   const intentSQLAnswer = async () => {
     onCreateResponse &&
       (await onCreateResponse({ question, taskId: askingTask?.queryId }));
-    closeResult();
+    setShowResult(false);
   };
 
   const closeResult = () => {
-    setShowResult(false);
+    askProcessState.resetState();
     setQuestion('');
     onStopStreaming && onStopStreaming();
     onStopRecommend && onStopRecommend();
@@ -128,7 +128,6 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
 
   const stopProcess = () => {
     askProcessState.resetState();
-    setShowResult(false);
     onStop && onStop();
   };
 

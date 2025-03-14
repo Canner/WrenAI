@@ -7,12 +7,13 @@ import {
 } from '@/apollo/client/graphql/__types__';
 import { SelectQuestionProps } from '@/components/pages/home/RecommendedQuestions';
 
-type IPromptThreadStore = {
+export type IPromptThreadStore = {
   data: DetailedThread;
   recommendedQuestions: RecommendedQuestionsTask;
   showRecommendedQuestions: boolean;
   preparation: {
     askingStreamTask?: string;
+    onStopAskingTask?: (queryId?: string) => Promise<void>;
   };
   onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
   onSelectRecommendedQuestion: ({
