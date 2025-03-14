@@ -54,6 +54,9 @@ const isNeedRecommendedQuestions = (askingTask: AskingTask) => {
   );
 };
 
+const isNeedPreparing = (askingTask: AskingTask) =>
+  askingTask?.type === AskingTaskType.TEXT_TO_SQL;
+
 const handleUpdateThreadCache = (
   threadId: number,
   askingTask: AskingTask,
@@ -144,18 +147,32 @@ export default function useAskPrompt(threadId?: number) {
     });
   }, [originalQuestion]);
 
+  const checkFetchAskingStreamTask = useCallback(
+    (task: AskingTask) => {
+      if (!askingStreamTask && task.status === AskingTaskStatus.PLANNING) {
+        fetchAskingStreamTask(task.queryId);
+      }
+    },
+    [askingStreamTask],
+  );
+
   useEffect(() => {
     const isFinished = getIsFinished(askingTask?.status);
     if (isFinished) askingTaskResult.stopPolling();
 
-    if (threadId) {
-      handleUpdateThreadCache(threadId, askingTask, askingTaskResult.client);
+    // handle update cache for preparing component
+    if (isNeedPreparing(askingTask)) {
+      if (threadId) {
+        handleUpdateThreadCache(threadId, askingTask, askingTaskResult.client);
+        checkFetchAskingStreamTask(askingTask);
+      }
     }
 
+    // handle instant recommended questions
     if (isNeedRecommendedQuestions(askingTask)) {
       startRecommendedQuestions();
     }
-  }, [askingTask, threadId]);
+  }, [askingTask, threadId, checkFetchAskingStreamTask]);
 
   useEffect(() => {
     if (isRecommendedFinished(recommendedQuestions?.status))
@@ -179,6 +196,7 @@ export default function useAskPrompt(threadId?: number) {
   };
 
   const onSubmit = async (value) => {
+    askingStreamTaskResult.reset();
     setOriginalQuestion(value);
     try {
       const response = await createAskingTask({

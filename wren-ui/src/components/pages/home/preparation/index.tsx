@@ -16,6 +16,7 @@ import { AskingTask } from '@/apollo/client/graphql/__types__';
 interface Props {
   className?: string;
   data: AskingTask;
+  askingStreamTask?: string;
   generateAnswerLoading?: boolean;
   isAnswerPrepared?: boolean;
 }
@@ -34,7 +35,13 @@ const generatingNextStates = ProcessStateMachine.getAllNextStates(
 );
 
 export default function Preparation(props: Props) {
-  const { className, data, generateAnswerLoading, isAnswerPrepared } = props;
+  const {
+    className,
+    data,
+    askingStreamTask,
+    generateAnswerLoading,
+    isAnswerPrepared,
+  } = props;
   const processState = useMemo(
     () => convertAskingTaskToProcessState(data),
     [data],
@@ -91,17 +98,17 @@ export default function Preparation(props: Props) {
               <Timeline.Item>
                 <Retrieving
                   loading={processState === PROCESS_STATE.SEARCHING}
-                  tables={['Customer', 'Orders', 'Reviews']}
+                  tables={data.retrievedTables || []}
                 />
               </Timeline.Item>
             )}
             {showOrganizing && (
               <Timeline.Item>
                 <Organizing
-                  loading={processState === PROCESS_STATE.PLANNING}
-                  stream={
-                    'SQL generation steps created\n1. Join Customer, orders by id \n2. Join aggregated results with reviews \n3. Filter results with createdAt between 2025-01-23 ~ 2025-01 \n4. Sort results by id'
+                  loading={
+                    !askingStreamTask && processState === PROCESS_STATE.PLANNING
                   }
+                  stream={data.sqlGenerationReasoning || askingStreamTask || ''}
                 />
               </Timeline.Item>
             )}

@@ -1,6 +1,13 @@
 import { useRouter } from 'next/router';
 import { useParams } from 'next/navigation';
-import { ComponentRef, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ComponentRef,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { isEmpty } from 'lodash';
 import { message } from 'antd';
 import { Path } from '@/utils/enum';
@@ -152,13 +159,14 @@ export default function HomeThread() {
     });
 
   const thread = useMemo(() => data?.thread || null, [data]);
-  const threadResponse = useMemo(
+  const responses = useMemo(() => thread?.responses || [], [thread]);
+  const pollingResponse = useMemo(
     () => threadResponseResult.data?.threadResponse || null,
     [threadResponseResult.data],
   );
-  const isFinished = useMemo(
-    () => getThreadResponseIsFinished(threadResponse),
-    [threadResponse],
+  const isPollingResponseFinished = useMemo(
+    () => getThreadResponseIsFinished(pollingResponse),
+    [pollingResponse],
   );
 
   const onGenerateThreadResponseAnswer = async (responseId: number) => {
@@ -193,6 +201,40 @@ export default function HomeThread() {
     fetchThreadRecommendationQuestions({ variables: { threadId } });
   };
 
+  const handleUnfinishedTasks = useCallback(
+    (responses: ThreadResponse[]) => {
+      // unfinished asking task
+      const unfinishedAskingResponse = (responses || []).find(
+        (response) =>
+          response?.askingTask && !getIsFinished(response?.askingTask?.status),
+      );
+      if (unfinishedAskingResponse) {
+        askPrompt.onFetching(unfinishedAskingResponse?.askingTask?.queryId);
+        return;
+      }
+
+      // unfinished thread response
+      const unfinishedThreadResponse = (responses || []).find(
+        (response) => !getThreadResponseIsFinished(response),
+      );
+      if (unfinishedThreadResponse) {
+        fetchThreadResponse({
+          variables: { responseId: unfinishedThreadResponse.id },
+        });
+      }
+    },
+    [askPrompt, fetchThreadResponse],
+  );
+
+  // store thread questions for instant recommended questions
+  const storeQuestionsToAskPrompt = useCallback(
+    (responses: ThreadResponse[]) => {
+      const questions = responses.flatMap((res) => res.question || []);
+      if (questions) askPrompt.onStoreThreadQuestions(questions);
+    },
+    [askPrompt],
+  );
+
   // stop all requests when change thread
   useEffect(() => {
     askPrompt.onStopPolling();
@@ -208,44 +250,17 @@ export default function HomeThread() {
 
   // initialize asking task
   useEffect(() => {
-    const unfinishedAskingResponse = (thread?.responses || []).find(
-      (response) =>
-        response?.askingTask && !getIsFinished(response?.askingTask?.status),
-    );
-
-    console.log('unfinishedAskingResponse', unfinishedAskingResponse);
-
-    // if there is unfinished asking task, fetch it
-    if (unfinishedAskingResponse) {
-      askPrompt.onFetching(unfinishedAskingResponse?.askingTask?.queryId);
-      return;
-    }
-
-    const unfinishedRespose = (thread?.responses || []).find(
-      (response) => !getThreadResponseIsFinished(response),
-    );
-
-    console.log('unfinishedRespose', unfinishedRespose);
-
-    if (unfinishedRespose) {
-      if (unfinishedRespose.answerDetail?.status === null) {
-        onGenerateThreadResponseAnswer(unfinishedRespose.id);
-      }
-
-      fetchThreadResponse({ variables: { responseId: unfinishedRespose.id } });
-    }
-
-    // store thread questions for instant recommended questions
-    const questions = thread?.responses.flatMap((res) => res.question || []);
-    if (questions) askPrompt.onStoreThreadQuestions(questions);
-  }, [thread]);
+    if (!responses) return;
+    handleUnfinishedTasks(responses);
+    storeQuestionsToAskPrompt(responses);
+  }, [responses]);
 
   useEffect(() => {
-    if (isFinished) {
+    if (isPollingResponseFinished) {
       threadResponseResult.stopPolling();
       setShowRecommendedQuestions(true);
     }
-  }, [isFinished]);
+  }, [isPollingResponseFinished]);
 
   const recommendedQuestions = useMemo(
     () =>
@@ -279,6 +294,7 @@ export default function HomeThread() {
     recommendedQuestions,
     showRecommendedQuestions,
     preparation: {
+      askingStreamTask: askPrompt.data?.askingStreamTask,
       generateAnswerLoading: threadResponseAnswerResult.loading,
     },
     onOpenSaveAsViewModal: saveAsViewModal.openModal,

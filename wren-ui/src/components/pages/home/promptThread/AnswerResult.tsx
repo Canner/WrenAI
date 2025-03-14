@@ -187,7 +187,7 @@ export default function AnswerResult(props: Props) {
         onGenerateThreadRecommendedQuestions();
       });
     }
-  }, [askingTask, isBreakdownOnly, isAnswerPrepared]);
+  }, [askingTask?.status, isBreakdownOnly, isAnswerPrepared]);
 
   const onTabClick = (activeKey: string) => {
     if (

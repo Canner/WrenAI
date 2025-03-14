@@ -150,7 +150,7 @@ const IntentionFinished = (props: Props) => {
     if (type === AskingTaskType.TEXT_TO_SQL) {
       onIntentSQLAnswer && onIntentSQLAnswer();
     }
-  }, [data]);
+  }, [type]);
 
   return null;
 };
