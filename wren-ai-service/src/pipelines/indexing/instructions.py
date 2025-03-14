@@ -1,10 +1,8 @@
 import logging
-import os
 import sys
 import uuid
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 
-import orjson
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack import Document, component
@@ -19,17 +17,19 @@ from src.pipelines.indexing import AsyncDocumentWriter
 logger = logging.getLogger("wren-ai-service")
 
 
-class SqlPair(BaseModel):
+class Instruction(BaseModel):
     id: str
-    sql: str = ""
+    instruction: str = ""
     question: str = ""
+    # This is used to identify the default instruction needed to be retrieved for the project
+    is_default: bool = False
 
 
 @component
-class SqlPairsConverter:
+class InstructionsConverter:
     @component.output_types(documents=List[Document])
-    def run(self, sql_pairs: List[SqlPair], project_id: Optional[str] = ""):
-        logger.info(f"Project ID: {project_id} Converting SQL pairs to documents...")
+    def run(self, instructions: list[Instruction], project_id: Optional[str] = ""):
+        logger.info(f"Project ID: {project_id} Converting instructions to documents...")
 
         addition = {"project_id": project_id} if project_id else {}
 
@@ -38,30 +38,31 @@ class SqlPairsConverter:
                 Document(
                     id=str(uuid.uuid4()),
                     meta={
-                        "sql_pair_id": sql_pair.id,
-                        "sql": sql_pair.sql,
+                        "instruction_id": instruction.id,
+                        "instruction": instruction.instruction,
+                        "is_default": instruction.is_default,
                         **addition,
                     },
-                    content=sql_pair.question,
+                    content=instruction.question,
                 )
-                for sql_pair in sql_pairs
+                for instruction in instructions
             ]
         }
 
 
 @component
-class SqlPairsCleaner:
-    def __init__(self, sql_pairs_store: DocumentStore) -> None:
-        self.store = sql_pairs_store
+class InstructionsCleaner:
+    def __init__(self, instructions_store: DocumentStore) -> None:
+        self.store = instructions_store
 
     @component.output_types()
     async def run(
-        self, sql_pair_ids: List[str], project_id: Optional[str] = None
+        self, instruction_ids: List[str], project_id: Optional[str] = None
     ) -> None:
         filter = {
             "operator": "AND",
             "conditions": [
-                {"field": "sql_pair_id", "operator": "in", "value": sql_pair_ids},
+                {"field": "instruction_id", "operator": "in", "value": instruction_ids},
             ],
         }
 
@@ -74,43 +75,15 @@ class SqlPairsCleaner:
 
 
 ## Start of Pipeline
-@observe(capture_input=False)
-def boilerplates(
-    mdl_str: str,
-) -> Set[str]:
-    mdl = orjson.loads(mdl_str)
-
-    return {
-        boilerplate.lower()
-        for model in mdl.get("models", [])
-        if (boilerplate := model.get("properties", {}).get("boilerplate"))
-    }
-
-
-@observe(capture_input=False)
-def sql_pairs(
-    boilerplates: Set[str],
-    external_pairs: Dict[str, Any],
-) -> List[SqlPair]:
-    return [
-        SqlPair(
-            id=pair.get("id"),
-            question=pair.get("question"),
-            sql=pair.get("sql"),
-        )
-        for boilerplate in boilerplates
-        if boilerplate in external_pairs
-        for pair in external_pairs[boilerplate]
-    ]
 
 
 @observe(capture_input=False)
 def to_documents(
-    sql_pairs: List[SqlPair],
-    document_converter: SqlPairsConverter,
+    instructions: List[Instruction],
+    document_converter: InstructionsConverter,
     project_id: Optional[str] = "",
 ) -> Dict[str, Any]:
-    return document_converter.run(sql_pairs=sql_pairs, project_id=project_id)
+    return document_converter.run(instructions=instructions, project_id=project_id)
 
 
 @observe(capture_input=False, capture_output=False)
@@ -123,15 +96,15 @@ async def embedding(
 
 @observe(capture_input=False, capture_output=False)
 async def clean(
-    cleaner: SqlPairsCleaner,
-    sql_pairs: List[SqlPair],
+    cleaner: InstructionsCleaner,
+    instructions: List[Instruction],
     embedding: Dict[str, Any] = {},
     project_id: Optional[str] = "",
     delete_all: bool = False,
 ) -> Dict[str, Any]:
-    sql_pair_ids = [sql_pair.id for sql_pair in sql_pairs]
-    if sql_pair_ids or delete_all:
-        await cleaner.run(sql_pair_ids=sql_pair_ids, project_id=project_id)
+    instruction_ids = [instruction.id for instruction in instructions]
+    if instruction_ids or delete_all:
+        await cleaner.run(instruction_ids=instruction_ids, project_id=project_id)
 
     return embedding
 
@@ -147,80 +120,56 @@ async def write(
 ## End of Pipeline
 
 
-def _load_sql_pairs(sql_pairs_path: str) -> Dict[str, Any]:
-    if not sql_pairs_path:
-        return {}
-
-    if not os.path.exists(sql_pairs_path):
-        logger.warning(f"SQL pairs file not found: {sql_pairs_path}")
-        return {}
-
-    try:
-        with open(sql_pairs_path, "r") as file:
-            return orjson.loads(file.read())
-    except Exception as e:
-        logger.error(f"Error loading SQL pairs file: {e}")
-        return {}
-
-
-class SqlPairs(BasicPipeline):
+class Instructions(BasicPipeline):
     def __init__(
         self,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
-        sql_pairs_path: Optional[str] = "sql_pairs.json",
         **kwargs,
     ) -> None:
-        store = document_store_provider.get_store(dataset_name="sql_pairs")
+        store = document_store_provider.get_store(dataset_name="instructions")
 
         self._components = {
-            "cleaner": SqlPairsCleaner(store),
+            "cleaner": InstructionsCleaner(store),
             "embedder": embedder_provider.get_document_embedder(),
-            "document_converter": SqlPairsConverter(),
+            "document_converter": InstructionsConverter(),
             "writer": AsyncDocumentWriter(
                 document_store=store,
                 policy=DuplicatePolicy.OVERWRITE,
             ),
         }
 
-        self._external_pairs = _load_sql_pairs(sql_pairs_path)
-
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    @observe(name="SQL Pairs Indexing")
+    @observe(name="Instructions Indexing")
     async def run(
         self,
-        mdl_str: str,
+        instructions: list[Instruction],
         project_id: Optional[str] = "",
-        external_pairs: Optional[Dict[str, Any]] = {},
     ) -> Dict[str, Any]:
         logger.info(
-            f"Project ID: {project_id} SQL Pairs Indexing pipeline is running..."
+            f"Project ID: {project_id} Instructions Indexing pipeline is running..."
         )
 
         input = {
-            "mdl_str": mdl_str,
             "project_id": project_id,
-            "external_pairs": {
-                **self._external_pairs,
-                **external_pairs,
-            },
+            "instructions": instructions,
             **self._components,
         }
 
         return await self._pipe.execute(["write"], inputs=input)
 
-    @observe(name="Clean Documents for SQL Pairs")
+    @observe(name="Clean Documents for Instructions")
     async def clean(
         self,
-        sql_pairs: List[SqlPair] = [],
+        instructions: List[Instruction],
         project_id: Optional[str] = None,
         delete_all: bool = False,
     ) -> None:
         await clean(
-            sql_pairs=sql_pairs,
+            instructions=instructions,
             cleaner=self._components["cleaner"],
             project_id=project_id,
             delete_all=delete_all,
@@ -231,7 +180,13 @@ if __name__ == "__main__":
     from src.pipelines.common import dry_run_pipeline
 
     dry_run_pipeline(
-        SqlPairs,
-        "sql_pairs_indexing",
-        mdl_str='{"models": [{"properties": {"boilerplate": "hubspot"}}]}',
+        Instructions,
+        "instructions_indexing",
+        instructions=[
+            Instruction(
+                id="1",
+                instruction="France is in the table of customers and the column is country",
+                question="What is the capital of France?",
+            )
+        ],
     )

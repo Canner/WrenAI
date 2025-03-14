@@ -90,6 +90,7 @@ class AsyncDocumentWriter(DocumentWriter):
 # Put the pipelines imports here to avoid circular imports and make them accessible directly to the rest of packages
 from .db_schema import DBSchema  # noqa: E402
 from .historical_question import HistoricalQuestion  # noqa: E402
+from .instructions import Instructions  # noqa: E402
 from .sql_pairs import SqlPairs  # noqa: E402
 from .table_description import TableDescription  # noqa: E402
 
@@ -98,4 +99,5 @@ __all__ = [
     "TableDescription",
     "HistoricalQuestion",
     "SqlPairs",
+    "Instructions",
 ]

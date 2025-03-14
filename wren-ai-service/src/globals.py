@@ -26,6 +26,7 @@ class ServiceContainer:
     sql_expansion_service: services.SqlExpansionService
     sql_pairs_service: services.SqlPairsService
     sql_question_service: services.SqlQuestionService
+    instructions_service: services.InstructionsService
 
 
 @dataclass
@@ -67,6 +68,9 @@ def create_service_container(
                     **pipe_components["sql_pairs_indexing"],
                     sql_pairs_path=settings.sql_pairs_path,
                 ),
+                "instructions": indexing.Instructions(
+                    **pipe_components["instructions_indexing"],
+                ),
             },
             **query_cache,
         ),
@@ -92,6 +96,11 @@ def create_service_container(
                     **pipe_components["sql_pairs_retrieval"],
                     sql_pairs_similarity_threshold=settings.sql_pairs_similarity_threshold,
                     sql_pairs_retrieval_max_size=settings.sql_pairs_retrieval_max_size,
+                ),
+                "instructions_retrieval": retrieval.Instructions(
+                    **pipe_components["instructions_retrieval"],
+                    similarity_threshold=settings.instructions_similarity_threshold,
+                    top_k=settings.instructions_top_k,
                 ),
                 "sql_generation": generation.SQLGeneration(
                     **pipe_components["sql_generation"],
@@ -233,6 +242,14 @@ def create_service_container(
             pipelines={
                 "sql_question_generation": generation.SQLQuestion(
                     **pipe_components["sql_question_generation"],
+                )
+            },
+            **query_cache,
+        ),
+        instructions_service=services.InstructionsService(
+            pipelines={
+                "instructions_indexing": indexing.Instructions(
+                    **pipe_components["instructions_indexing"],
                 )
             },
             **query_cache,

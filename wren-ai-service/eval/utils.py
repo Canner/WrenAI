@@ -231,6 +231,7 @@ def engine_config(
             "mdl_json": mdl,
             "api_endpoint": engine._endpoint,
             "timeout": 10,
+            "data_source": "duckdb",
         }
 
     return {

@@ -50,6 +50,13 @@ SQL:
 {% endfor %}
 {% endif %}
 
+{% if instructions %}
+### INSTRUCTIONS ###
+{% for instruction in instructions %}
+{{ instruction }}
+{% endfor %}
+{% endif %}
+
 ### QUESTION ###
 User's Question: {{ query }}
 Current Time: {{ current_time }}
@@ -65,6 +72,7 @@ def prompt(
     query: str,
     documents: List[str],
     sql_samples: List[str],
+    instructions: List[str],
     prompt_builder: PromptBuilder,
     configuration: Configuration | None = Configuration(),
 ) -> dict:
@@ -72,6 +80,7 @@ def prompt(
         query=query,
         documents=documents,
         sql_samples=sql_samples,
+        instructions=instructions,
         current_time=configuration.show_current_time(),
         language=configuration.language,
     )
@@ -119,9 +128,9 @@ class SQLGenerationReasoning(BasicPipeline):
 
     def _streaming_callback(self, chunk, query_id):
         if query_id not in self._user_queues:
-            self._user_queues[
-                query_id
-            ] = asyncio.Queue()  # Create a new queue for the user if it doesn't exist
+            self._user_queues[query_id] = (
+                asyncio.Queue()
+            )  # Create a new queue for the user if it doesn't exist
         # Put the chunk content into the user's queue
         asyncio.create_task(self._user_queues[query_id].put(chunk.content))
         if chunk.meta.get("finish_reason"):
@@ -132,9 +141,9 @@ class SQLGenerationReasoning(BasicPipeline):
             return await self._user_queues[query_id].get()
 
         if query_id not in self._user_queues:
-            self._user_queues[
-                query_id
-            ] = asyncio.Queue()  # Ensure the user's queue exists
+            self._user_queues[query_id] = (
+                asyncio.Queue()
+            )  # Ensure the user's queue exists
         while True:
             try:
                 # Wait for an item from the user's queue
@@ -158,6 +167,7 @@ class SQLGenerationReasoning(BasicPipeline):
         query: str,
         contexts: List[str],
         sql_samples: Optional[List[str]] = None,
+        instructions: Optional[List[str]] = None,
         configuration: Configuration = Configuration(),
         query_id: Optional[str] = None,
     ):
@@ -168,6 +178,7 @@ class SQLGenerationReasoning(BasicPipeline):
                 "query": query,
                 "documents": contexts,
                 "sql_samples": sql_samples or [],
+                "instructions": instructions or [],
                 "configuration": configuration,
                 "query_id": query_id,
                 **self._components,

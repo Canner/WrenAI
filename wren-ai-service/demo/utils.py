@@ -228,33 +228,37 @@ def show_asks_results():
     st.markdown("### Question")
     st.markdown(f"{st.session_state['query']}")
 
-    st.markdown("### Retrieved Tables")
-    retrieved_tables = st.text_input(
-        "Enter the retrieved tables separated by commas, ex: table1, table2, table3",
-        st.session_state["retrieved_tables"],
-        key="retrieved_tables_input",
-    )
+    if st.session_state["asks_results_type"] == "MISLEADING_QUERY":
+        st.markdown(
+            "Misleading query detected. Please try again with a different query."
+        )
+    elif st.session_state["asks_results_type"] == "TEXT_TO_SQL":
+        st.markdown("### Retrieved Tables")
+        retrieved_tables = st.text_input(
+            "Enter the retrieved tables separated by commas, ex: table1, table2, table3",
+            st.session_state["retrieved_tables"],
+            key="retrieved_tables_input",
+        )
 
-    st.markdown("### SQL Generation Reasoning")
-    changed_sql_generation_reasoning = st.text_area(
-        "SQL Generation Reasoning",
-        st.session_state["sql_generation_reasoning"],
-        key="sql_generation_reasoning_input",
-        height=250,
-        on_change=on_change_sql_generation_reasoning,
-    )
+        st.markdown("### SQL Generation Reasoning")
+        changed_sql_generation_reasoning = st.text_area(
+            "SQL Generation Reasoning",
+            st.session_state["sql_generation_reasoning"],
+            key="sql_generation_reasoning_input",
+            height=250,
+            on_change=on_change_sql_generation_reasoning,
+        )
 
-    st.button(
-        "Regenerate SQL",
-        on_click=on_click_regenerate_sql,
-        args=(
-            retrieved_tables.split(", "),
-            changed_sql_generation_reasoning,
-        ),
-    )
+        st.button(
+            "Regenerate SQL",
+            on_click=on_click_regenerate_sql,
+            args=(
+                retrieved_tables.split(", "),
+                changed_sql_generation_reasoning,
+            ),
+        )
 
-    st.markdown("### SQL Query Result")
-    if st.session_state["asks_results_type"] == "TEXT_TO_SQL":
+        st.markdown("### SQL Query Result")
         edited_sql = st.text_area(
             label="SQL Query Result",
             value=sqlparse.format(
@@ -283,10 +287,6 @@ def show_asks_results():
         st.session_state["asks_details_result"] = None
         st.session_state["preview_data_button_index"] = None
         st.session_state["preview_sql"] = None
-    elif st.session_state["asks_results_type"] == "MISLEADING_QUERY":
-        st.markdown(
-            "Misleading query detected. Please try again with a different query."
-        )
 
 
 def show_asks_details_results():

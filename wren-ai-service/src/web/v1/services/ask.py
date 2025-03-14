@@ -213,7 +213,8 @@ class AskService:
         sql_samples = []
         api_results = []
         table_names = []
-        error_message = ""
+        error_message = None
+        invalid_sql = None
 
         try:
             user_query = ask_request.query
@@ -345,6 +346,22 @@ class AskService:
                     results["metadata"]["type"] = "TEXT_TO_SQL"
                     return results
 
+            # Run both pipeline operations concurrently
+            sql_samples_task, instructions_task = await asyncio.gather(
+                self._pipelines["sql_pairs_retrieval"].run(
+                    query=user_query,
+                    id=ask_request.project_id,
+                ),
+                self._pipelines["instructions_retrieval"].run(
+                    query=user_query,
+                    project_id=ask_request.project_id,
+                ),
+            )
+
+            # Extract results from completed tasks
+            sql_samples = sql_samples_task["formatted_output"].get("documents", [])
+            instructions = instructions_task["formatted_output"].get("documents", [])
+
             if (
                 not self._is_stopped(query_id, self._ask_results)
                 and not api_results
@@ -359,18 +376,12 @@ class AskService:
                     trace_id=trace_id,
                 )
 
-                sql_samples = (
-                    await self._pipelines["sql_pairs_retrieval"].run(
-                        query=ask_request.query,
-                        id=ask_request.project_id,
-                    )
-                )["formatted_output"].get("documents", [])
-
                 sql_generation_reasoning = (
                     await self._pipelines["sql_generation_reasoning"].run(
                         query=user_query,
                         contexts=table_ddls,
                         sql_samples=sql_samples,
+                        instructions=instructions,
                         configuration=ask_request.configurations,
                         query_id=query_id,
                     )
@@ -385,9 +396,6 @@ class AskService:
                     sql_generation_reasoning=sql_generation_reasoning,
                     trace_id=trace_id,
                 )
-
-            invalid_sql = None
-            error_message = None
 
             if not self._is_stopped(query_id, self._ask_results) and not api_results:
                 self._ask_results[query_id] = AskResultResponse(
@@ -416,6 +424,7 @@ class AskService:
                         project_id=ask_request.project_id,
                         configuration=ask_request.configurations,
                         sql_samples=sql_samples,
+                        instructions=instructions,
                         has_calculated_field=has_calculated_field,
                         has_metric=has_metric,
                     )
@@ -429,6 +438,7 @@ class AskService:
                         project_id=ask_request.project_id,
                         configuration=ask_request.configurations,
                         sql_samples=sql_samples,
+                        instructions=instructions,
                         has_calculated_field=has_calculated_field,
                         has_metric=has_metric,
                     )

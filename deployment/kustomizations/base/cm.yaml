@@ -177,6 +177,12 @@ data:
       - name: sql_regeneration
         llm: litellm_llm.default
         engine: wren_ui
+      - name: instructions_indexing
+        embedder: litellm_embedder.default
+        document_store: qdrant
+      - name: instructions_retrieval
+        embedder: litellm_embedder.default
+        document_store: qdrant
 
     ---
     settings:
@@ -193,3 +199,8 @@ data:
       langfuse_enable: true
       logging_level: DEBUG
       development: false
+      historical_question_retrieval_similarity_threshold: 0.9
+      sql_pairs_similarity_threshold: 0.7
+      sql_pairs_retrieval_max_size: 10
+      instructions_similarity_threshold: 0.7
+      instructions_top_k: 10

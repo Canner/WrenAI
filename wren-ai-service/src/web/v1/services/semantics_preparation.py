@@ -89,22 +89,22 @@ class SemanticsPreparationService:
 
             await asyncio.gather(*tasks)
 
-            self._prepare_semantics_statuses[
-                prepare_semantics_request.mdl_hash
-            ] = SemanticsPreparationStatusResponse(
-                status="finished",
+            self._prepare_semantics_statuses[prepare_semantics_request.mdl_hash] = (
+                SemanticsPreparationStatusResponse(
+                    status="finished",
+                )
             )
         except Exception as e:
             logger.exception(f"Failed to prepare semantics: {e}")
 
-            self._prepare_semantics_statuses[
-                prepare_semantics_request.mdl_hash
-            ] = SemanticsPreparationStatusResponse(
-                status="failed",
-                error=SemanticsPreparationStatusResponse.SemanticsPreparationError(
-                    code="OTHERS",
-                    message=f"Failed to prepare semantics: {e}",
-                ),
+            self._prepare_semantics_statuses[prepare_semantics_request.mdl_hash] = (
+                SemanticsPreparationStatusResponse(
+                    status="failed",
+                    error=SemanticsPreparationStatusResponse.SemanticsPreparationError(
+                        code="OTHERS",
+                        message=f"Failed to prepare semantics: {e}",
+                    ),
+                )
             )
 
             results["metadata"]["error_type"] = "INDEXING_FAILED"
@@ -135,18 +135,18 @@ class SemanticsPreparationService:
 
     @observe(name="Delete Semantics Documents")
     @trace_metadata
-    async def delete_semantics(self, project_id: str):
+    async def delete_semantics(self, project_id: str, **kwargs):
         logger.info(f"Project ID: {project_id}, Deleting semantics documents...")
 
         tasks = [
             self._pipelines[name].clean(project_id=project_id)
             for name in ["db_schema", "historical_question", "table_description"]
         ] + [
-            self._pipelines["sql_pairs"].clean(
-                sql_pairs=[],
+            self._pipelines[name].clean(
                 project_id=project_id,
                 delete_all=True,
             )
+            for name in ["sql_pairs", "instructions"]
         ]
 
         await asyncio.gather(*tasks)

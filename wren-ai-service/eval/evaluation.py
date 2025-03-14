@@ -171,7 +171,7 @@ if __name__ == "__main__":
 
     dataset = parse_toml(meta["evaluation_dataset"])
     metrics = pipelines.metrics_initiator(
-        meta["pipeline"], dataset, pipe_components, args.semantics
+        meta["pipeline"], dataset, pipe_components, args.semantics, settings
     )
 
     evaluator = Evaluator(**metrics)
