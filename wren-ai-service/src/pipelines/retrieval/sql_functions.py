@@ -17,17 +17,17 @@ from src.providers.engine.wren import WrenIbis
 logger = logging.getLogger("wren-ai-service")
 
 
-class SqlFunction(BaseModel):
-    definition: dict = None
+class SqlFunction:
+    _expr: str = None
 
-    def __str__(self):
+    def __init__(self, definition: dict):
         def _extract() -> tuple[str, list, str]:
-            name = self.definition["name"]
+            name = definition["name"]
 
-            _param_types = self.definition.get("param_types", "")
+            _param_types = definition.get("param_types", "")
             param_types = _param_types.split(",") if _param_types else []
 
-            return_type = self.definition.get("return_type", "")
+            return_type = definition.get("return_type", "")
 
             return name, param_types, return_type
 
@@ -41,10 +41,13 @@ class SqlFunction(BaseModel):
         params = [_param_expr(type, index) for index, type in enumerate(param_types)]
         param_str = ", ".join(params)
 
-        return f"{name}({param_str}) -> {return_type}"
+        self._expr = f"{name}({param_str}) -> {return_type}"
+
+    def __str__(self):
+        return self._expr
 
     def __repr__(self):
-        return str(self)
+        return self._expr
 
 
 ## Start of Pipeline
