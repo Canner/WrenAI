@@ -126,6 +126,8 @@ pipes:
     llm: litellm_llm.default
   - name: sql_generation_reasoning
     llm: litellm_llm.default
+  - name: followup_sql_generation_reasoning
+    llm: litellm_llm.default
   - name: sql_regeneration
     llm: litellm_llm.default
     engine: wren_ui
