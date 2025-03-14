@@ -233,7 +233,7 @@ export default function AnswerResult(props: Props) {
     isBreakdownOnly;
 
   return (
-    <div style={resultStyle} className="adm-answer-result">
+    <div style={resultStyle} data-jsid="answerResult">
       <QuestionTitle className="mb-4" question={question} />
       <Preparation
         className="mb-3"

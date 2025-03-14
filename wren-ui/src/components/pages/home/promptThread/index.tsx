@@ -5,6 +5,7 @@ import styled from 'styled-components';
 import usePromptThreadStore from './store';
 import AnswerResult from './AnswerResult';
 import { makeIterable, IterableComponent } from '@/utils/iteration';
+import { getIsFinished } from '@/hooks/useAskPrompt';
 import { getAnswerIsFinished } from '@/components/pages/home/promptThread/TextBasedAnswer';
 import {
   RecommendedQuestionsTask,
@@ -34,11 +35,6 @@ const StyledPromptThread = styled.div`
 
   button {
     vertical-align: middle;
-  }
-
-  .promptThread-answer {
-    opacity: 0;
-    animation: fade-in 0.6s ease-out forwards;
   }
 `;
 
@@ -73,24 +69,16 @@ const AnswerResultIterator = makeIterable(AnswerResultTemplate);
 export default function PromptThread() {
   const router = useRouter();
   const divRef = useRef<HTMLDivElement>(null);
-  const motionResponsesRef = useRef<Record<number, boolean>>({});
   const store = usePromptThreadStore();
   const { data } = store;
 
-  const responses = useMemo(
-    () =>
-      (data?.responses || []).map((response) => ({
-        ...response,
-        motion: motionResponsesRef.current[response.id],
-      })),
-    [data?.responses],
-  );
+  const responses = useMemo(() => data?.responses || [], [data?.responses]);
 
   const triggerScrollToBottom = (behavior?: ScrollBehavior) => {
     if ((data?.responses || []).length <= 1) return;
     const contentLayout = divRef.current?.parentElement;
     const allElements = (divRef.current?.querySelectorAll(
-      '.adm-answer-result',
+      '[data-jsid="answerResult"]',
     ) || []) as HTMLElement[];
     const lastAnswerResult = allElements[allElements.length - 1];
 
@@ -110,22 +98,11 @@ export default function PromptThread() {
   }, [router.query]);
 
   useEffect(() => {
-    motionResponsesRef.current = (data?.responses || []).reduce(
-      (result, item) => {
-        result[item.id] = !getAnswerIsFinished(item?.answerDetail?.status);
-        return result;
-      },
-      {},
-    );
-
-    if (
-      data?.responses?.length > Object.keys(motionResponsesRef.current).length
-    ) {
-      const lastResponseMotion = Object.values(
-        motionResponsesRef.current,
-      ).pop();
-      triggerScrollToBottom(lastResponseMotion ? 'smooth' : 'auto');
-    }
+    const lastResponse = data?.responses[data?.responses.length - 1];
+    const isLastResponseFinished =
+      getIsFinished(lastResponse?.askingTask?.status) ||
+      getAnswerIsFinished(lastResponse?.answerDetail?.status);
+    triggerScrollToBottom(isLastResponseFinished ? 'auto' : 'smooth');
   }, [data?.responses]);
 
   const onInitPreviewDone = () => {
