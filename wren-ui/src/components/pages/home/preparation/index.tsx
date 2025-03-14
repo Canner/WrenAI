@@ -17,7 +17,6 @@ interface Props {
   className?: string;
   data: AskingTask;
   askingStreamTask?: string;
-  generateAnswerLoading?: boolean;
   isAnswerPrepared?: boolean;
 }
 
@@ -35,13 +34,7 @@ const generatingNextStates = ProcessStateMachine.getAllNextStates(
 );
 
 export default function Preparation(props: Props) {
-  const {
-    className,
-    data,
-    askingStreamTask,
-    generateAnswerLoading,
-    isAnswerPrepared,
-  } = props;
+  const { className, data, askingStreamTask, isAnswerPrepared } = props;
   const processState = useMemo(
     () => convertAskingTaskToProcessState(data),
     [data],
@@ -49,6 +42,10 @@ export default function Preparation(props: Props) {
   const [isActive, setIsActive] = useState(
     processState !== PROCESS_STATE.FINISHED,
   );
+
+  const retrievedTables = data.retrievedTables || [];
+  const sqlGenerationReasoning =
+    data.sqlGenerationReasoning || askingStreamTask || '';
 
   // wrapping up after answer is prepared
   useEffect(() => {
@@ -97,8 +94,11 @@ export default function Preparation(props: Props) {
             {showRetrieving && (
               <Timeline.Item>
                 <Retrieving
-                  loading={processState === PROCESS_STATE.SEARCHING}
-                  tables={data.retrievedTables || []}
+                  loading={
+                    retrievedTables.length === 0 ||
+                    processState === PROCESS_STATE.SEARCHING
+                  }
+                  tables={retrievedTables}
                 />
               </Timeline.Item>
             )}
@@ -106,9 +106,10 @@ export default function Preparation(props: Props) {
               <Timeline.Item>
                 <Organizing
                   loading={
-                    !askingStreamTask && processState === PROCESS_STATE.PLANNING
+                    !sqlGenerationReasoning &&
+                    processState === PROCESS_STATE.PLANNING
                   }
-                  stream={data.sqlGenerationReasoning || askingStreamTask || ''}
+                  stream={sqlGenerationReasoning}
                 />
               </Timeline.Item>
             )}
@@ -117,7 +118,7 @@ export default function Preparation(props: Props) {
                 <Generating
                   generating={processState === PROCESS_STATE.GENERATING}
                   correcting={processState === PROCESS_STATE.CORRECTING}
-                  loading={generateAnswerLoading}
+                  loading={!isAnswerPrepared}
                 />
               </Timeline.Item>
             )}

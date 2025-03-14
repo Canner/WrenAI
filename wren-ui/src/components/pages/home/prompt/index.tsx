@@ -78,6 +78,7 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
     [data],
   );
   const error = useMemo(() => askingTask?.error || null, [askingTask?.error]);
+  const [showResult, setShowResult] = useState(false);
   const [question, setQuestion] = useState('');
   const currentProcessState = useMemo(
     () => askProcessState.currentState,
@@ -115,10 +116,11 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
   const intentSQLAnswer = async () => {
     onCreateResponse &&
       (await onCreateResponse({ question, taskId: askingTask?.queryId }));
+    closeResult();
   };
 
   const closeResult = () => {
-    askProcessState.resetState();
+    setShowResult(false);
     setQuestion('');
     onStopStreaming && onStopStreaming();
     onStopRecommend && onStopRecommend();
@@ -126,6 +128,7 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
 
   const stopProcess = () => {
     askProcessState.resetState();
+    setShowResult(false);
     onStop && onStop();
   };
 
@@ -134,6 +137,7 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
     if (isProcessing || !value) return;
     // start the state as understanding when user submit question
     askProcessState.transitionTo(PROCESS_STATE.UNDERSTANDING);
+    setShowResult(true);
     onSubmit && (await onSubmit(value));
   };
 
@@ -154,16 +158,18 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
         onAsk={submitAsk}
       />
 
-      <PromptResult
-        data={result}
-        error={error}
-        loading={loading}
-        processState={currentProcessState}
-        onSelectRecommendedQuestion={selectRecommendedQuestion}
-        onIntentSQLAnswer={intentSQLAnswer}
-        onClose={closeResult}
-        onStop={stopProcess}
-      />
+      {showResult && (
+        <PromptResult
+          data={result}
+          error={error}
+          loading={loading}
+          processState={currentProcessState}
+          onSelectRecommendedQuestion={selectRecommendedQuestion}
+          onIntentSQLAnswer={intentSQLAnswer}
+          onClose={closeResult}
+          onStop={stopProcess}
+        />
+      )}
     </PromptStyle>
   );
 });

@@ -12,7 +12,7 @@ type IPromptThreadStore = {
   recommendedQuestions: RecommendedQuestionsTask;
   showRecommendedQuestions: boolean;
   preparation: {
-    generateAnswerLoading?: boolean;
+    askingStreamTask?: string;
   };
   onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
   onSelectRecommendedQuestion: ({

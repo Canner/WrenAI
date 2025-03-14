@@ -295,7 +295,6 @@ export default function HomeThread() {
     showRecommendedQuestions,
     preparation: {
       askingStreamTask: askPrompt.data?.askingStreamTask,
-      generateAnswerLoading: threadResponseAnswerResult.loading,
     },
     onOpenSaveAsViewModal: saveAsViewModal.openModal,
     onSelectRecommendedQuestion: onCreateResponse,

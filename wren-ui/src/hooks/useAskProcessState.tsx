@@ -48,6 +48,7 @@ export default function useAskProcessState() {
 
   const matchedState = (askingTask: AskingTask) => {
     const targetState = convertAskingTaskToProcessState(askingTask);
+    if (targetState === currentState) return currentState;
     // Prevent unknown status, if not found we keep the current state
     if (ProcessStateMachine.canTransition(currentState, targetState)) {
       return targetState;
@@ -63,10 +64,6 @@ export default function useAskProcessState() {
     setCurrentState(targetState);
   };
 
-  const setState = (state: PROCESS_STATE) => {
-    setCurrentState(state);
-  };
-
   const isFinished = () => {
     return currentState === PROCESS_STATE.FINISHED;
   };
@@ -80,7 +77,6 @@ export default function useAskProcessState() {
     resetState,
     matchedState,
     transitionTo,
-    setState,
     isFinished,
     isFailed,
   };
@@ -125,6 +121,7 @@ export class ProcessStateMachine {
   static canTransition(from: PROCESS_STATE, to: PROCESS_STATE) {
     // Allow transition to FINISHED & FAILED state from any state
     return (
+      from === PROCESS_STATE.IDLE ||
       to === PROCESS_STATE.FINISHED ||
       to === PROCESS_STATE.FAILED ||
       this.transitions[from]?.next.includes(to)

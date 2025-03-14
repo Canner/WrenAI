@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { isEmpty } from 'lodash';
+import { isEmpty, debounce } from 'lodash';
 import clsx from 'clsx';
 import { Button, Typography, Tabs, Tag, Tooltip } from 'antd';
 import styled from 'styled-components';
@@ -14,12 +14,16 @@ import RecommendedQuestions, {
 } from '@/components/pages/home/RecommendedQuestions';
 import ViewBlock from '@/components/pages/home/promptThread/ViewBlock';
 import BreakdownAnswer from '@/components/pages/home/promptThread/BreakdownAnswer';
-import TextBasedAnswer from '@/components/pages/home/promptThread/TextBasedAnswer';
+import TextBasedAnswer, {
+  getAnswerIsFinished,
+} from '@/components/pages/home/promptThread/TextBasedAnswer';
 import ChartAnswer from '@/components/pages/home/promptThread/ChartAnswer';
 import Preparation from '@/components/pages/home/preparation';
 import {
   AskingTaskStatus,
   ThreadResponse,
+  ThreadResponseAnswerDetail,
+  ThreadResponseAnswerStatus,
 } from '@/apollo/client/graphql/__types__';
 import { ANSWER_TAB_KEYS } from '@/utils/enum';
 import { RobotSVG } from '@/utils/svgs';
@@ -141,6 +145,17 @@ const renderRecommendedQuestions = (
   );
 };
 
+const isNeedGenerateAnswer = (answerDetail: ThreadResponseAnswerDetail) => {
+  const isFinished = getAnswerIsFinished(answerDetail?.status);
+  // it means the background task has not started yet, but answer is pending for generating
+  const isProcessing = [
+    ThreadResponseAnswerStatus.NOT_STARTED,
+    ThreadResponseAnswerStatus.PREPROCESSING,
+    ThreadResponseAnswerStatus.FETCHING_DATA,
+  ].includes(answerDetail?.status);
+  return answerDetail?.queryId === null && !isFinished && !isProcessing;
+};
+
 export default function AnswerResult(props: Props) {
   const { threadResponse, isLastThreadResponse } = props;
 
@@ -170,24 +185,35 @@ export default function AnswerResult(props: Props) {
     showRecommendedQuestions,
   );
 
-  const isAnswerPrepared = !!answerDetail?.queryId;
+  const isAnswerPrepared =
+    !!answerDetail?.queryId || getAnswerIsFinished(answerDetail?.status);
   const isBreakdownOnly = useMemo(() => {
     // we support rendering different types of answers now, so we need to check if it's old data.
     // existing thread response's answerDetail is null.
     return answerDetail === null && !isEmpty(breakdownDetail);
   }, [answerDetail, breakdownDetail]);
 
-  // if the asking task finished without answerDetail & breakdownDetail, generate text based answer
+  // initialize generate answer
   useEffect(() => {
-    if (
-      askingTask?.status === AskingTaskStatus.FINISHED &&
-      !(isBreakdownOnly || isAnswerPrepared)
-    ) {
-      onGenerateTextBasedAnswer(id).then(() => {
-        onGenerateThreadRecommendedQuestions();
-      });
+    if (isBreakdownOnly || askingTask?.status !== AskingTaskStatus.FINISHED) {
+      return;
     }
-  }, [askingTask?.status, isBreakdownOnly, isAnswerPrepared]);
+    if (isNeedGenerateAnswer(answerDetail)) {
+      const debouncedGenerateAnswer = debounce(
+        () => {
+          onGenerateTextBasedAnswer(id);
+          onGenerateThreadRecommendedQuestions();
+        },
+        250,
+        { leading: false, trailing: true },
+      );
+      debouncedGenerateAnswer();
+
+      return () => {
+        debouncedGenerateAnswer.cancel();
+      };
+    }
+  }, [isBreakdownOnly, askingTask?.status, answerDetail?.status]);
 
   const onTabClick = (activeKey: string) => {
     if (

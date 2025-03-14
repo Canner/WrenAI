@@ -101,11 +101,6 @@ export default function Home() {
     onCompleted: () => homeSidebar.refetch(),
   });
 
-  const [
-    generateThreadRecommendationQuestions,
-    { loading: threadRecommendationQuestionsGenerating },
-  ] = useGenerateThreadRecommendationQuestionsMutation();
-
   const { data: settingsResult } = useGetSettingsQuery();
   const settings = settingsResult?.settings;
   const isSampleDataset = useMemo(
@@ -126,9 +121,6 @@ export default function Home() {
     try {
       askPrompt.onStopPolling();
       const response = await createThread({ variables: { data: payload } });
-      await generateThreadRecommendationQuestions({
-        variables: { threadId: response.data.createThread.id },
-      });
       router.push(Path.Home + `/${response.data.createThread.id}`);
     } catch (error) {
       console.error(error);
@@ -147,7 +139,7 @@ export default function Home() {
       {!isSampleDataset && (
         <RecommendedQuestionsInstruction
           onSelect={onCreateResponse}
-          loading={threadCreating || threadRecommendationQuestionsGenerating}
+          loading={threadCreating}
         />
       )}
       <Prompt

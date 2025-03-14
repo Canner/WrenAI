@@ -70,24 +70,28 @@ const handleUpdateThreadCache = (
   });
 
   if (result?.thread) {
-    client.cache.writeQuery({
-      query: THREAD,
-      variables: { threadId },
-      data: {
-        thread: {
-          ...result.thread,
-          responses: result.thread.responses.map((response) => {
-            if (response.askingTask?.queryId === askingTask?.queryId) {
-              return {
-                ...response,
-                askingTask: cloneDeep(askingTask),
-              };
-            }
-            return response;
-          }),
-        },
+    client.cache.updateQuery(
+      {
+        query: THREAD,
+        variables: { threadId },
       },
-    });
+      (existingData) => {
+        return {
+          thread: {
+            ...existingData.thread,
+            responses: existingData.thread.responses.map((response) => {
+              if (response.askingTask?.queryId === askingTask?.queryId) {
+                return {
+                  ...response,
+                  askingTask: cloneDeep(askingTask),
+                };
+              }
+              return response;
+            }),
+          },
+        };
+      },
+    );
   }
 };
 

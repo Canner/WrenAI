@@ -21,12 +21,15 @@ export default function Generating(props: Props) {
             {correcting ? 'Correcting SQL statement' : 'Generating'}
             <Loading className="gray-6" size={12} loading />
           </div>
-        ) : loading ? (
-          <div className="d-flex align-center gx-2">
-            Wrapping up <Loading size={16} loading />
-          </div>
         ) : (
-          <div>Successfully generated SQL statement</div>
+          <>
+            <div>Successfully generated SQL statement</div>
+            {loading && (
+              <div className="d-flex align-center gx-2 mt-1">
+                Wrapping up <Loading size={16} loading />
+              </div>
+            )}
+          </>
         )}
       </div>
     </>
