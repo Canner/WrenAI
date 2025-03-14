@@ -220,15 +220,21 @@ export class AskingTaskTracker implements IAskingTaskTracker {
               return;
             }
 
-            // if type is not TEXT_TO_SQL, we don't need to update the database
-            // finalizing the task
-            if (result.type !== AskResultType.TEXT_TO_SQL) {
+            // if it's identified as GENERAL or MISLEADING_QUER
+            // we don't need to update the database and finalize the task
+            if (
+              result.type === AskResultType.GENERAL ||
+              result.type === AskResultType.MISLEADING_QUERY
+            ) {
               task.isFinalized = true;
               this.runningJobs.delete(queryId);
               return;
             }
 
             // update the database
+            // note: type could be null if it's still being understood or it's stopped
+            // we already filtered out the understanding status above
+            // so we update to database if it's stopped as well here.
             logger.info(`Updating task ${queryId} in database`);
             await this.updateTaskInDatabase(queryId, task);
 
