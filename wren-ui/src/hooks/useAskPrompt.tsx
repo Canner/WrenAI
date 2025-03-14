@@ -216,6 +216,22 @@ export default function useAskPrompt(threadId?: number) {
     }
   };
 
+  const onReRun = async (question: string) => {
+    askingStreamTaskResult.reset();
+    setOriginalQuestion(question);
+    try {
+      const response = await createAskingTask({
+        variables: { data: { question, threadId } },
+      });
+      // TODO: pass queryId to new API for update asking task
+      await fetchAskingTask({
+        variables: { taskId: response.data.createAskingTask.id },
+      });
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   const onSubmit = async (value) => {
     askingStreamTaskResult.reset();
     setOriginalQuestion(value);
@@ -250,6 +266,7 @@ export default function useAskPrompt(threadId?: number) {
     data,
     loading,
     onStop,
+    onReRun,
     onSubmit,
     onFetching,
     onStopPolling,

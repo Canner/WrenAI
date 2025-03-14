@@ -23,6 +23,7 @@ import {
 
 type Props = IPromptThreadStore['preparation'] & {
   className?: string;
+  question: string;
   data: AskingTask;
   isAnswerPrepared?: boolean;
 };
@@ -41,14 +42,21 @@ const generatingNextStates = ProcessStateMachine.getAllNextStates(
 );
 
 const PreparationStatus = (props: Props) => {
-  const { data, onStopAskingTask } = props;
+  const { question, data, onStopAskingTask, onReRunAskingTask } = props;
   const [stopLoading, setStopLoading] = useState(false);
+  const [reRunLoading, setReRunLoading] = useState(false);
   const isProcessing = !getIsFinished(data.status);
 
   const onCancel = (e) => {
     e.stopPropagation();
     const stopAskingTask = attachLoading(onStopAskingTask, setStopLoading);
     stopAskingTask(data.queryId);
+  };
+
+  const onReRun = (e) => {
+    e.stopPropagation();
+    const reRunAskingTask = attachLoading(onReRunAskingTask, setReRunLoading);
+    reRunAskingTask(question);
   };
 
   if (isProcessing) {
@@ -72,6 +80,8 @@ const PreparationStatus = (props: Props) => {
           className="gray-7"
           size="small"
           type="text"
+          onClick={onReRun}
+          loading={reRunLoading}
         >
           Re-run
         </Button>

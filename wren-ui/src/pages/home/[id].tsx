@@ -302,6 +302,7 @@ export default function HomeThread() {
     preparation: {
       askingStreamTask: askPrompt.data?.askingStreamTask,
       onStopAskingTask: askPrompt.onStop,
+      onReRunAskingTask: askPrompt.onReRun,
     },
     onOpenSaveAsViewModal: saveAsViewModal.openModal,
     onSelectRecommendedQuestion: onCreateResponse,
