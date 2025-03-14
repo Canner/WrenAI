@@ -26,7 +26,7 @@ up: prepare-wren-engine
 down:
 	docker compose -f ./tools/dev/docker-compose-dev.yaml --env-file ./tools/dev/.env down
 
-start: use-wren-ui-as-engine
+start: 
 	poetry run python -m src.__main__
 
 curate_eval_data:
