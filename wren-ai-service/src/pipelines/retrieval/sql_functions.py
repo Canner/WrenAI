@@ -8,7 +8,6 @@ from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from hamilton.function_modifiers import extract_fields
 from langfuse.decorators import observe
-from pydantic import BaseModel
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
@@ -24,14 +23,20 @@ class SqlFunction:
         def _extract() -> tuple[str, list, str]:
             name = definition["name"]
 
-            _param_types = definition.get("param_types", "")
+            _param_types = definition.get("param_types") or "any"
             param_types = _param_types.split(",") if _param_types else []
 
-            return_type = definition.get("return_type", "")
+            return_type = definition.get("return_type") or "any"
+
+            if return_type == "same as arg types":
+                return_type = param_types
 
             return name, param_types, return_type
 
         def _param_expr(param_type: str, index: int) -> str:
+            if param_type == "any":
+                return "any"
+
             param_type = param_type.strip()
             param_name = f"${index}"
             return f"{param_name}: {param_type}"
@@ -122,7 +127,7 @@ class SqlFunctions(BasicPipeline):
         _data_source = data_source.lower()
 
         if _data_source in self._cache:
-            logger.info(f"Hit cache for {_data_source}")
+            logger.info(f"Hit cache of SQL Functions for {_data_source}")
             return self._cache[_data_source]
 
         input = {
