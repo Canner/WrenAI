@@ -27,6 +27,7 @@ class ServiceContainer:
     sql_pairs_service: services.SqlPairsService
     sql_question_service: services.SqlQuestionService
     instructions_service: services.InstructionsService
+    sql_correction_service: services.SqlCorrectionService
 
 
 @dataclass
@@ -254,6 +255,15 @@ def create_service_container(
                 "instructions_indexing": indexing.Instructions(
                     **pipe_components["instructions_indexing"],
                 )
+            },
+            **query_cache,
+        ),
+        sql_correction_service=services.SqlCorrectionService(
+            pipelines={
+                "sql_correction": generation.SQLCorrection(
+                    **pipe_components["sql_correction"],
+                    engine_timeout=settings.engine_timeout,
+                ),
             },
             **query_cache,
         ),
