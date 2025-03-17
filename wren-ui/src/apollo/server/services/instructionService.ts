@@ -16,7 +16,7 @@ export interface IInstructionService {
   createInstruction(instruction: InstructionInput): Promise<Instruction>;
   createInstructions(instructions: InstructionInput[]): Promise<Instruction[]>;
   updateInstruction(instruction: UpdateInstructionInput): Promise<Instruction>;
-  deleteInstruction(id: number): Promise<void>;
+  deleteInstruction(id: number, projectId: number): Promise<void>;
 }
 
 export class InstructionService implements IInstructionService {
@@ -145,11 +145,11 @@ export class InstructionService implements IInstructionService {
       throw new Error(`Failed to update instruction: ${e}`);
     }
   }
-  async deleteInstruction(id: number): Promise<void> {
+  async deleteInstruction(id: number, projectId: number): Promise<void> {
     const tx = await this.instructionRepository.transaction();
     try {
       const instruction = await this.instructionRepository.findOneBy(
-        { id },
+        { id, projectId },
         { tx },
       );
       if (!instruction) {

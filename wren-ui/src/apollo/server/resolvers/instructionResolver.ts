@@ -81,7 +81,8 @@ export class InstructionResolver {
     ctx: IContext,
   ): Promise<boolean> {
     const { id } = args.where;
-    await ctx.instructionService.deleteInstruction(id);
+    const project = await ctx.projectService.getCurrentProject();
+    await ctx.instructionService.deleteInstruction(id, project.id);
     return true;
   }
 }
