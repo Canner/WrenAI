@@ -37,7 +37,7 @@ def test_sql_function_init():
 
 def test_sql_function_empty_params():
     func = SqlFunction({"name": "test_func", "return_type": "text"})
-    assert str(func) == "test_func() -> text"
+    assert str(func) == "test_func(any) -> text"
 
 
 @pytest.mark.asyncio
@@ -69,3 +69,28 @@ async def test_sql_functions_pipeline_case_insensitive(sql_functions_pipeline):
 
     assert sql_functions_pipeline._components["engine"].get_func_list.call_count == 1
     assert result1 == result2
+
+
+def test_sql_function_param_type_none():
+    func = SqlFunction(
+        {"name": "test_func", "param_types": None, "return_type": "text"}
+    )
+    assert str(func) == "test_func(any) -> text"
+
+
+def test_sql_function_return_type_none():
+    func = SqlFunction(
+        {"name": "test_func", "param_types": "int,text", "return_type": None}
+    )
+    assert str(func) == "test_func($0: int, $1: text) -> any"
+
+
+def test_sql_function_return_type_same_as_args():
+    func = SqlFunction(
+        {
+            "name": "test_func",
+            "param_types": "int,text",
+            "return_type": "same as arg types",
+        }
+    )
+    assert str(func) == "test_func($0: int, $1: text) -> ['int', 'text']"
