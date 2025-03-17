@@ -75,7 +75,7 @@ export const FlexLoading = (props) => {
 
 export const Loading = ({
   className = '',
-  size = 36,
+  size = undefined,
   children = null,
   spinning = false,
   loading = false,
@@ -85,7 +85,7 @@ export const Loading = ({
     <Spin
       className={className}
       wrapperClassName="adm-loading"
-      indicator={<LoadingOutlined style={{ fontSize: size }} spin />}
+      indicator={<LoadingOutlined style={{ fontSize: size || 36 }} spin />}
       spinning={spinning || loading}
       tip={tip}
     >
