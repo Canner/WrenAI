@@ -1,17 +1,21 @@
 import { Typography } from 'antd';
 import { Spinner } from '@/components/PageLoading';
+import ErrorBoundary, {
+  Props as ErrorBoundaryProps,
+} from '@/components/pages/home/preparation/ErrorBoundary';
 
 interface Props {
   generating?: boolean;
   correcting?: boolean;
   loading?: boolean;
+  error?: ErrorBoundaryProps['error'];
 }
 
 export default function Generating(props: Props) {
-  const { loading, generating, correcting } = props;
+  const { loading, generating, correcting, error } = props;
 
   return (
-    <>
+    <ErrorBoundary error={error}>
       <Typography.Text className="gray-8">
         Generating SQL statement
       </Typography.Text>
@@ -32,6 +36,6 @@ export default function Generating(props: Props) {
           </>
         )}
       </div>
-    </>
+    </ErrorBoundary>
   );
 }

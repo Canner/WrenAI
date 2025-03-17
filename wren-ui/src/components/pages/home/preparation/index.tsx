@@ -1,10 +1,20 @@
 import clsx from 'clsx';
 import Image from 'next/image';
+import styled from 'styled-components';
 import { useEffect, useMemo, useState } from 'react';
-import { Timeline, Typography, Collapse, Button, Tag, Space } from 'antd';
+import {
+  Timeline,
+  Typography,
+  Collapse,
+  Button,
+  Tag,
+  Space,
+  Badge,
+} from 'antd';
 import StopOutlined from '@ant-design/icons/StopOutlined';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import DownOutlined from '@ant-design/icons/DownOutlined';
+import CloseCircleFilled from '@ant-design/icons/CloseCircleFilled';
 import Retrieving from './step/Retrieving';
 import Organizing from './step/Organizing';
 import Generating from './step/Generating';
@@ -20,6 +30,19 @@ import {
   ThreadResponse,
   AskingTaskStatus,
 } from '@/apollo/client/graphql/__types__';
+
+const StyledBadge = styled(Badge)`
+  position: absolute;
+  top: -5px;
+  left: -3px;
+  .ant-badge-status-dot {
+    width: 7px;
+    height: 7px;
+  }
+  .ant-badge-status-text {
+    display: none;
+  }
+`;
 
 type Props = IPromptThreadStore['preparation'] & {
   className?: string;
@@ -95,6 +118,15 @@ const PreparationStatus = (props: Props) => {
   return null;
 };
 
+const getDot = (showLoading: boolean, showError: boolean) => {
+  if (showLoading) {
+    return <StyledBadge color="geekblue" status="processing" />;
+  } else if (showError) {
+    return <CloseCircleFilled className="red-5" />;
+  }
+  return null;
+};
+
 export default function Preparation(props: Props) {
   const { className, data, askingStreamTask, isAnswerPrepared } = props;
   const { askingTask, view } = data;
@@ -111,19 +143,40 @@ export default function Preparation(props: Props) {
   useEffect(() => {
     setIsActive(!isAnswerPrepared);
   }, [isAnswerPrepared]);
+  const error = useMemo(() => {
+    return askingTask?.error
+      ? { ...askingTask.error, invalidSql: askingTask.invalidSql }
+      : null;
+  }, [askingTask?.error, askingTask?.invalidSql]);
 
   if (askingTask === null) return null;
 
+  // displays
   const showView = view !== null;
   // General steps
   const showRetrieving = retrievingNextStates.includes(processState) && !view;
   const showOrganizing = organizingNextStates.includes(processState) && !view;
   const showGenerating = generatingNextStates.includes(processState) && !view;
 
+  // data
   const isStopped = askingTask.status === AskingTaskStatus.STOPPED;
   const retrievedTables = askingTask.retrievedTables || [];
   const sqlGenerationReasoning =
     askingTask.sqlGenerationReasoning || askingStreamTask || '';
+
+  // errors
+  const retrievingError =
+    !!error && retrievedTables.length === 0 ? error : null;
+  const organizingError = !!error && !sqlGenerationReasoning ? error : null;
+  const generatingError =
+    !!error && !(organizingError || retrievingError) ? error : null;
+
+  // loadings
+  const retrieving = processState === PROCESS_STATE.SEARCHING;
+  const organizing = processState === PROCESS_STATE.PLANNING;
+  const generating = processState === PROCESS_STATE.GENERATING;
+  const correcting = processState === PROCESS_STATE.CORRECTING;
+  const wrapping = !isAnswerPrepared;
 
   return (
     <div className={clsx('border border-gray-4 rounded', className)}>
@@ -176,33 +229,33 @@ export default function Preparation(props: Props) {
 
             {/* General steps */}
             {showRetrieving && (
-              <Timeline.Item>
+              <Timeline.Item dot={getDot(retrieving, !!retrievingError)}>
                 <Retrieving
-                  loading={
-                    retrievedTables.length === 0 ||
-                    processState === PROCESS_STATE.SEARCHING
-                  }
+                  loading={!!retrievedTables.length && retrieving}
                   tables={retrievedTables}
+                  error={retrievingError}
                 />
               </Timeline.Item>
             )}
             {showOrganizing && (
-              <Timeline.Item>
+              <Timeline.Item dot={getDot(organizing, !!organizingError)}>
                 <Organizing
-                  loading={
-                    !sqlGenerationReasoning &&
-                    processState === PROCESS_STATE.PLANNING
-                  }
+                  loading={!sqlGenerationReasoning && organizing}
                   stream={sqlGenerationReasoning}
+                  error={organizingError}
                 />
               </Timeline.Item>
             )}
             {showGenerating && (
-              <Timeline.Item>
+              <Timeline.Item
+                dot={getDot(generating || correcting, !!generatingError)}
+                className="-mb-4"
+              >
                 <Generating
-                  generating={processState === PROCESS_STATE.GENERATING}
-                  correcting={processState === PROCESS_STATE.CORRECTING}
-                  loading={!isAnswerPrepared}
+                  generating={generating}
+                  correcting={correcting}
+                  loading={wrapping}
+                  error={generatingError}
                 />
               </Timeline.Item>
             )}
