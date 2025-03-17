@@ -42,9 +42,16 @@ export class InstructionService implements IInstructionService {
     const tx = await this.instructionRepository.transaction();
     try {
       this.validateInstructionInput(input);
-      const newInstruction = await this.instructionRepository.createOne(input, {
-        tx,
-      });
+      const newInstruction = await this.instructionRepository.createOne(
+        {
+          ...input,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          tx,
+        },
+      );
       const { queryId } = await this.wrenAIAdaptor.generateInstruction([
         this.pickGenerateInstructionInput(newInstruction),
       ]);
@@ -70,7 +77,11 @@ export class InstructionService implements IInstructionService {
     try {
       inputs.forEach((input) => this.validateInstructionInput(input));
       const newInstructions = await this.instructionRepository.createMany(
-        inputs,
+        inputs.map((input) => ({
+          ...input,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })),
         {
           tx,
         },
@@ -108,7 +119,10 @@ export class InstructionService implements IInstructionService {
       if (!instruction) {
         throw new Error('Instruction not found');
       }
-      const instructionData = merge(instruction, input);
+      const instructionData = merge(instruction, {
+        ...input,
+        updatedAt: new Date().toISOString(),
+      });
       const updatedInstruction = await this.instructionRepository.updateOne(
         input.id,
         instructionData,

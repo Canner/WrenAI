@@ -14,6 +14,8 @@ export interface Instruction {
   instruction: string;
   questions: string[];
   isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface IInstructionRepository extends IBasicRepository<Instruction> {}
