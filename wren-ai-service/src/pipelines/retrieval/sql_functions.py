@@ -28,7 +28,7 @@ class SqlFunction:
 
             return_type = definition.get("return_type") or "any"
 
-            if return_type == "same as arg types":
+            if return_type in ["same as input", "same as arg types"]:
                 return_type = param_types
 
             return name, param_types, return_type
