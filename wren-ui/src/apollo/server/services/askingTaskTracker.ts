@@ -12,6 +12,7 @@ import {
   IViewRepository,
 } from '@server/repositories';
 import { IWrenAIAdaptor } from '../adaptors';
+import * as Errors from '@server/utils/error';
 
 const logger = getLogger('AskingTaskTracker');
 logger.level = 'debug';
@@ -24,6 +25,7 @@ interface TrackedTask {
   result?: AskResult;
   isFinalized: boolean;
   threadResponseId?: number;
+  rerunFromCancelled?: boolean;
 }
 
 export type TrackedAskingResult = AskResult & {
@@ -32,13 +34,13 @@ export type TrackedAskingResult = AskResult & {
   question: string;
 };
 
+export type CreateAskingTaskInput = AskInput & {
+  rerunFromCancelled?: boolean;
+  previousTaskId?: number;
+};
+
 export interface IAskingTaskTracker {
-  createAskingTask(
-    input: AskInput,
-    question?: string,
-    threadId?: number,
-    threadResponseId?: number,
-  ): Promise<{ queryId: string }>;
+  createAskingTask(input: CreateAskingTaskInput): Promise<{ queryId: string }>;
   getAskingResult(queryId: string): Promise<TrackedAskingResult>;
   getAskingResultById(id: number): Promise<TrackedAskingResult>;
   cancelAskingTask(queryId: string): Promise<void>;
@@ -86,19 +88,38 @@ export class AskingTaskTracker implements IAskingTaskTracker {
     this.startPolling();
   }
 
-  public async createAskingTask(input: AskInput): Promise<{ queryId: string }> {
+  public async createAskingTask(
+    input: CreateAskingTaskInput,
+  ): Promise<{ queryId: string }> {
     try {
       // Call the AI service to create a task
       const response = await this.wrenAIAdaptor.ask(input);
       const queryId = response.queryId;
 
+      // validate the input
+      if (input.rerunFromCancelled && !input.previousTaskId) {
+        throw new Error('Previous task id is required if rerun from cancelled');
+      }
+
       // Start tracking this task
-      this.trackedTasks.set(queryId, {
+      const task = {
         queryId,
         lastPolled: Date.now(),
         question: input.query,
         isFinalized: false,
-      });
+        rerunFromCancelled: input.rerunFromCancelled,
+      };
+      this.trackedTasks.set(queryId, task);
+
+      // if rerun from cancelled, we update the query id to the previous task
+      if (input.rerunFromCancelled && input.previousTaskId) {
+        // update the task id in memory
+        this.trackedTasksById.set(input.previousTaskId, task);
+        // update the query id in database
+        await this.askingTaskRepository.updateOne(input.previousTaskId, {
+          queryId,
+        });
+      }
 
       logger.info(`Created asking task with queryId: ${queryId}`);
       return { queryId };
@@ -227,6 +248,31 @@ export class AskingTaskTracker implements IAskingTaskTracker {
               result.type === AskResultType.MISLEADING_QUERY
             ) {
               task.isFinalized = true;
+              // if it's rerun from cancelled, we need to update the task result to failed in db
+              if (task.rerunFromCancelled) {
+                const errorCode =
+                  result.type === AskResultType.GENERAL
+                    ? Errors.GeneralErrorCodes.IDENTIED_AS_GENERAL
+                    : Errors.GeneralErrorCodes.IDENTIED_AS_MISLEADING_QUERY;
+                const error = {
+                  code: errorCode,
+                  message: Errors.errorMessages[errorCode],
+                  shortMessage: Errors.shortMessages[errorCode],
+                };
+                await this.updateTaskInDatabase(
+                  { queryId },
+                  {
+                    ...task,
+                    // update the status to failed
+                    // and the error message should be "IDENTIED_AS_GENERAL" or "IDENTIED_AS_MISLEADING_QUERY"
+                    result: {
+                      ...task.result,
+                      status: AskResultStatus.FAILED,
+                      error,
+                    },
+                  },
+                );
+              }
               this.runningJobs.delete(queryId);
               return;
             }
@@ -236,7 +282,7 @@ export class AskingTaskTracker implements IAskingTaskTracker {
             // we already filtered out the understanding status above
             // so we update to database if it's stopped as well here.
             logger.info(`Updating task ${queryId} in database`);
-            await this.updateTaskInDatabase(queryId, task);
+            await this.updateTaskInDatabase({ queryId }, task);
 
             // Check if task is now finalized
             if (this.isTaskFinalized(result.status)) {
@@ -335,10 +381,16 @@ export class AskingTaskTracker implements IAskingTaskTracker {
   }
 
   private async updateTaskInDatabase(
-    queryId: string,
+    filter: { queryId?: string; taskId?: number },
     trackedTask: TrackedTask,
   ): Promise<void> {
-    const taskRecord = await this.askingTaskRepository.findByQueryId(queryId);
+    const { queryId, taskId } = filter;
+    let taskRecord: AskingTask | null = null;
+    if (queryId) {
+      taskRecord = await this.askingTaskRepository.findByQueryId(queryId);
+    } else if (taskId) {
+      taskRecord = await this.askingTaskRepository.findOneBy({ id: taskId });
+    }
 
     if (!taskRecord) {
       // if record not found, create one

@@ -91,6 +91,7 @@ const resolvers = {
     cancelAskingTask: askingResolver.cancelAskingTask,
     createInstantRecommendedQuestions:
       askingResolver.createInstantRecommendedQuestions,
+    rerunAskingTask: askingResolver.rerunAskingTask,
 
     // Thread
     createThread: askingResolver.createThread,

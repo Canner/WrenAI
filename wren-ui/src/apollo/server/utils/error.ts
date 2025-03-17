@@ -40,6 +40,11 @@ export enum GeneralErrorCodes {
   DEPLOY_SQL_PAIR_ERROR = 'DEPLOY_SQL_PAIR_ERROR',
   GENERATE_QUESTIONS_ERROR = 'GENERATE_QUESTIONS_ERROR',
   INVALID_SQL_ERROR = 'INVALID_SQL_ERROR',
+
+  // asking task error
+  // when rerun from cancelled, the task is identified as general or misleading query
+  IDENTIED_AS_GENERAL = 'IDENTIED_AS_GENERAL',
+  IDENTIED_AS_MISLEADING_QUERY = 'IDENTIED_AS_MISLEADING_QUERY',
 }
 
 export const errorMessages = {
@@ -87,6 +92,12 @@ export const errorMessages = {
   [GeneralErrorCodes.GENERATE_QUESTIONS_ERROR]: 'Generate questions error',
   [GeneralErrorCodes.INVALID_SQL_ERROR]:
     'Invalid SQL, please check your SQL syntax',
+
+  // asking task error
+  [GeneralErrorCodes.IDENTIED_AS_GENERAL]:
+    'The question is identified as a general question, please follow-up ask with more specific questions.',
+  [GeneralErrorCodes.IDENTIED_AS_MISLEADING_QUERY]:
+    'The question is identified as a misleading query, please follow-up ask with more specific questions.',
 };
 
 export const shortMessages = {
@@ -109,6 +120,9 @@ export const shortMessages = {
   [GeneralErrorCodes.GENERATE_QUESTIONS_ERROR]: 'Generate questions error',
   [GeneralErrorCodes.INVALID_SQL_ERROR]:
     'Invalid SQL, please check your SQL syntax',
+  [GeneralErrorCodes.IDENTIED_AS_GENERAL]: 'Identified as general question',
+  [GeneralErrorCodes.IDENTIED_AS_MISLEADING_QUERY]:
+    'Identified as misleading query',
 };
 
 export const create = (

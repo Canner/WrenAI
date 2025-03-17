@@ -989,6 +989,7 @@ export const typeDefs = gql`
     # Ask
     createAskingTask(data: AskingTaskInput!): Task!
     cancelAskingTask(taskId: String!): Boolean!
+    rerunAskingTask(responseId: Int!): Boolean!
 
     # Thread
     createThread(data: CreateThreadInput!): Thread!

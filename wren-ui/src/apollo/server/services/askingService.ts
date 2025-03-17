@@ -102,6 +102,10 @@ export interface IAskingService {
     input: AskingTaskInput,
     payload: AskingPayload,
   ): Promise<Task>;
+  rerunAskingTask(
+    threadResponseId: number,
+    payload: AskingPayload,
+  ): Promise<void>;
   cancelAskingTask(taskId: string): Promise<void>;
   getAskingTask(taskId: string): Promise<TrackedAskingResult>;
   getAskingTaskById(id: number): Promise<TrackedAskingResult>;
@@ -525,6 +529,8 @@ export class AskingService implements IAskingService {
   public async createAskingTask(
     input: AskingTaskInput,
     payload: AskingPayload,
+    rerunFromCancelled?: boolean,
+    previousTaskId?: number,
   ): Promise<Task> {
     const { threadId, language } = payload;
     const deployId = await this.getDeployId();
@@ -538,10 +544,43 @@ export class AskingService implements IAskingService {
       histories,
       deployId,
       configurations: { language },
+      rerunFromCancelled,
+      previousTaskId,
     });
     return {
       id: response.queryId,
     };
+  }
+
+  public async rerunAskingTask(
+    threadResponseId: number,
+    payload: AskingPayload,
+  ): Promise<void> {
+    const threadResponse = await this.threadResponseRepository.findOneBy({
+      id: threadResponseId,
+    });
+
+    if (!threadResponse) {
+      throw new Error(`Thread response ${threadResponseId} not found`);
+    }
+
+    // get the original question and ask again
+    const question = threadResponse.question;
+    const input = {
+      question,
+    };
+    const askingPayload = {
+      ...payload,
+      // it's possible that the threadId is not provided in the payload
+      // so we'll just use the threadId from the thread response
+      threadId: threadResponse.threadId,
+    };
+    await this.createAskingTask(
+      input,
+      askingPayload,
+      true,
+      threadResponse.askingTaskId,
+    );
   }
 
   public async cancelAskingTask(taskId: string): Promise<void> {
