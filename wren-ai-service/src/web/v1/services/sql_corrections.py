@@ -50,8 +50,8 @@ class SqlCorrectionService:
 
     class CorrectionRequest(BaseModel):
         event_id: str
-        contexts: list[dict]
-        invalid_generation_results: list[dict[str, str]]
+        sql: str
+        error: str
         project_id: Optional[str] = None
 
     @observe(name="SQL Correction")
@@ -65,11 +65,14 @@ class SqlCorrectionService:
         trace_id = kwargs.get("trace_id")
 
         try:
-            # todo: modify the contexts
-            # todo: check the result format
+            _invalid = {
+                "sql": request.sql,
+                "error": request.error,
+            }
+
             result = await self._pipelines["sql_correction"].run(
-                contexts=request.contexts,
-                invalid_generation_results=request.invalid_generation_results,
+                contexts=[],
+                invalid_generation_results=[_invalid],
                 project_id=request.project_id,
             )
 

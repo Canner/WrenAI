@@ -26,13 +26,8 @@ Endpoints:
    - Initiates SQL correction process for invalid SQL queries
    - Request body: PostRequest
      {
-       "contexts": [Document],                  # List of context documents
-       "invalid_generation_results": [          # List of invalid SQL generation results
-         {
-           "sql": "SELECT * FROM table",        # Invalid SQL statement
-           "error": "Error message"             # Error message
-         }
-       ],
+       "sql": "SELECT * FROM table",        # Invalid SQL statement
+       "error": "Error message"             # Error message
        "project_id": "project-id"              # Optional project ID
      }
    - Response: PostResponse
@@ -69,9 +64,8 @@ Results are cached with a TTL defined in the service configuration.
 
 
 class PostRequest(BaseModel):
-    # todo: check the contexts
-    contexts: list[dict]
-    invalid_generation_results: list[dict[str, str]]
+    sql: str
+    error: str
     project_id: Optional[str] = None
 
 
