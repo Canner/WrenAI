@@ -42,7 +42,7 @@ Endpoints:
      {
        "event_id": "unique-uuid",              # Unique identifier
        "status": "correcting" | "finished" | "failed",
-       "response": {},                         # Correction results (when status is "finished")
+       "response": "corrected-sql",            # Correction results (when status is "finished")
        "error": {                              # Present only if status is "failed"
          "code": "OTHERS",
          "message": "Error description"
@@ -99,7 +99,7 @@ async def correct(
 class GetResponse(BaseModel):
     event_id: str
     status: Literal["correcting", "finished", "failed"]
-    response: Optional[dict] = None
+    response: Optional[str] = None
     error: Optional[dict] = None
     trace_id: Optional[str] = None
 

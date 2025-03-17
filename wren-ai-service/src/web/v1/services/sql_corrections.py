@@ -20,7 +20,7 @@ class SqlCorrectionService:
     class Event(BaseModel, MetadataTraceable):
         event_id: str
         status: Literal["correcting", "finished", "failed"] = "correcting"
-        response: Optional[dict] = None
+        response: Optional[str] = None
         error: Optional["SqlCorrectionService.Error"] = None
         trace_id: Optional[str] = None
 
@@ -70,17 +70,29 @@ class SqlCorrectionService:
                 "error": request.error,
             }
 
-            result = await self._pipelines["sql_correction"].run(
+            res = await self._pipelines["sql_correction"].run(
                 contexts=[],
                 invalid_generation_results=[_invalid],
                 project_id=request.project_id,
             )
 
+            post_process = res["post_process"]
+            valid = post_process["valid_generation_results"]
+            invalid = post_process["invalid_generation_results"]
+
+            if not valid:
+                error = invalid[0]["error"]
+                raise Exception(
+                    f"Unable to correct the SQL query. Error: {error}. Please try with a different SQL query or simplify your request."
+                )
+
+            corrected = valid[0]["sql"]
+
             self._cache[request.event_id] = self.Event(
                 event_id=request.event_id,
                 status="finished",
                 trace_id=trace_id,
-                response=result,
+                response=corrected,
             )
 
         except Exception as e:
@@ -96,7 +108,7 @@ class SqlCorrectionService:
         response = self._cache.get(event_id)
 
         if response is None:
-            message = f"SQL Correction Event with ID '{id}' not found."
+            message = f"SQL Correction Event with ID '{event_id}' not found."
             logger.exception(message)
             return self.Event(
                 event_id=event_id,
