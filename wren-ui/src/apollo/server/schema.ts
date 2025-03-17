@@ -890,6 +890,8 @@ export const typeDefs = gql`
     instruction: String!
     questions: [String!]!
     isDefault: Boolean!
+    createdAt: String!
+    updatedAt: String!
   }
 
   input CreateInstructionInput {
