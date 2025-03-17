@@ -16,8 +16,12 @@ interface Props {
 export default function PromptInput(props: Props) {
   const { onAsk, isProcessing, question } = props;
   const $promptInput = useRef<HTMLTextAreaElement>(null);
-  const [inputValue, setInputValue] = useState(question);
+  const [inputValue, setInputValue] = useState('');
   const [innerLoading, setInnerLoading] = useState(false);
+
+  useEffect(() => {
+    if (question) setInputValue(question);
+  }, [question]);
 
   useEffect(() => {
     if (!isProcessing) {
