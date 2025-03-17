@@ -360,7 +360,7 @@ export class AskingTaskTracker implements IAskingTaskTracker {
   }: {
     queryId?: string;
     taskId?: number;
-  }): Promise<TrackedAskingResult> {
+  }): Promise<TrackedAskingResult | null> {
     let taskRecord: AskingTask | null = null;
     if (queryId) {
       taskRecord = await this.askingTaskRepository.findByQueryId(queryId);
