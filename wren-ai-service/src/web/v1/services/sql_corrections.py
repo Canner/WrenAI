@@ -1,8 +1,7 @@
 import logging
-from typing import Dict, List, Literal, Optional
+from typing import Literal, Optional
 
 from cachetools import TTLCache
-from haystack import Document
 from langfuse.decorators import observe
 from pydantic import BaseModel
 
@@ -21,18 +20,18 @@ class SqlCorrectionService:
     class Event(BaseModel, MetadataTraceable):
         event_id: str
         status: Literal["correcting", "finished", "failed"] = "correcting"
-        response: Optional[Dict] = None
+        response: Optional[dict] = None
         error: Optional["SqlCorrectionService.Error"] = None
         trace_id: Optional[str] = None
 
     def __init__(
         self,
-        pipelines: Dict[str, BasicPipeline],
+        pipelines: dict[str, BasicPipeline],
         maxsize: int = 1_000_000,
         ttl: int = 120,
     ):
         self._pipelines = pipelines
-        self._cache: Dict[str, self.Event] = TTLCache(maxsize=maxsize, ttl=ttl)
+        self._cache: dict[str, self.Event] = TTLCache(maxsize=maxsize, ttl=ttl)
 
     def _handle_exception(
         self,
@@ -51,8 +50,8 @@ class SqlCorrectionService:
 
     class CorrectionRequest(BaseModel):
         event_id: str
-        contexts: List[Document]
-        invalid_generation_results: List[Dict[str, str]]
+        contexts: list[dict]
+        invalid_generation_results: list[dict[str, str]]
         project_id: Optional[str] = None
 
     @observe(name="SQL Correction")

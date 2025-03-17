@@ -3,7 +3,6 @@ from dataclasses import asdict
 from typing import Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends
-from haystack import Document
 from pydantic import BaseModel
 
 from src.globals import (
@@ -71,7 +70,7 @@ Results are cached with a TTL defined in the service configuration.
 
 class PostRequest(BaseModel):
     # todo: check the contexts
-    contexts: list[Document]
+    contexts: list[dict]
     invalid_generation_results: list[dict[str, str]]
     project_id: Optional[str] = None
 
@@ -89,17 +88,15 @@ async def correct(
 ) -> PostResponse:
     event_id = str(uuid.uuid4())
     service = service_container.sql_correction_service
-    service[event_id] = SqlCorrectionService.Event(
-        event_id=event_id, status="correcting"
-    )
+    service[event_id] = SqlCorrectionService.Event(event_id=event_id)
 
-    correction_request = SqlCorrectionService.CorrectionRequest(
+    _request = SqlCorrectionService.CorrectionRequest(
         event_id=event_id, **request.model_dump()
     )
 
     background_tasks.add_task(
         service.correct,
-        correction_request,
+        _request,
         service_metadata=asdict(service_metadata),
     )
     return PostResponse(event_id=event_id)
