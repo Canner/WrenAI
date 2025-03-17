@@ -45,7 +45,7 @@ def deploy_model(mdl: str, pipes: list) -> None:
     asyncio.run(wrapper())
 
 
-def extract_units(table_ddls: list[dict]) -> list:
+def extract_units(ddls: list[str]) -> list:
     def parse_ddl(ddl: str) -> list:
         """
         Parses a DDL statement and returns a list of column definitions in the format table_name.column_name, excluding foreign keys.
@@ -87,8 +87,8 @@ def extract_units(table_ddls: list[dict]) -> list:
 
     columns = []
 
-    for table_ddl in table_ddls:
-        columns.extend(parse_ddl(table_ddl))
+    for ddl in ddls:
+        columns.extend(parse_ddl(ddl))
 
     return columns
 
@@ -432,7 +432,7 @@ class AskPipeline(Eval):
         )
 
         params["actual_output"] = actual_output
-        params["retrieval_context"] = extract_units(documents)
+        params["retrieval_context"] = extract_units(table_ddls)
         params["has_calculated_field"] = has_calculated_field
         params["has_metric"] = has_metric
         params["reasoning"] = reasoning
