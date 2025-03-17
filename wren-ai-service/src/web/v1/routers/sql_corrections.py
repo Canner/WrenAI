@@ -1,6 +1,6 @@
 import uuid
 from dataclasses import asdict
-from typing import Dict, List, Literal, Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends
 from haystack import Document
@@ -23,7 +23,7 @@ SQL Correction Router
 This router handles endpoints related to correcting invalid SQL queries.
 
 Endpoints:
-1. POST /sql-correction
+1. POST /sql-corrections
    - Initiates SQL correction process for invalid SQL queries
    - Request body: PostRequest
      {
@@ -41,7 +41,7 @@ Endpoints:
        "event_id": "unique-uuid"               # Unique identifier for tracking correction
      }
 
-2. GET /sql-correction/{event_id}
+2. GET /sql-corrections/{event_id}
    - Retrieves status and results of SQL correction process
    - Path parameter: event_id (str)
    - Response: GetResponse
@@ -71,8 +71,8 @@ Results are cached with a TTL defined in the service configuration.
 
 class PostRequest(BaseModel):
     # todo: check the contexts
-    contexts: List[Document]
-    invalid_generation_results: List[Dict[str, str]]
+    contexts: list[Document]
+    invalid_generation_results: list[dict[str, str]]
     project_id: Optional[str] = None
 
 
@@ -80,7 +80,7 @@ class PostResponse(BaseModel):
     event_id: str
 
 
-@router.post("/sql-correction")
+@router.post("/sql-corrections")
 async def correct(
     request: PostRequest,
     background_tasks: BackgroundTasks,
@@ -89,10 +89,12 @@ async def correct(
 ) -> PostResponse:
     event_id = str(uuid.uuid4())
     service = service_container.sql_correction_service
-    service[event_id] = SqlCorrectionService.Event(id=event_id, status="correcting")
+    service[event_id] = SqlCorrectionService.Event(
+        event_id=event_id, status="correcting"
+    )
 
     correction_request = SqlCorrectionService.CorrectionRequest(
-        id=event_id, **request.model_dump()
+        event_id=event_id, **request.model_dump()
     )
 
     background_tasks.add_task(
@@ -106,21 +108,15 @@ async def correct(
 class GetResponse(BaseModel):
     event_id: str
     status: Literal["correcting", "finished", "failed"]
-    response: Optional[Dict] = None
+    response: Optional[dict] = None
     error: Optional[dict] = None
     trace_id: Optional[str] = None
 
 
-@router.get("/sql-correction/{event_id}")
+@router.get("/sql-corrections/{event_id}")
 async def get(
     event_id: str,
     container: ServiceContainer = Depends(get_service_container),
 ) -> GetResponse:
     event: SqlCorrectionService.Event = container.sql_correction_service[event_id]
-    return GetResponse(
-        event_id=event.id,
-        status=event.status,
-        response=event.response,
-        error=event.error and event.error.model_dump(),
-        trace_id=event.trace_id,
-    )
+    return GetResponse(**event.model_dump())
