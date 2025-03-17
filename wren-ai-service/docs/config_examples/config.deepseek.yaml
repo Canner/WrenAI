@@ -51,6 +51,11 @@ provider: wren_ui
 endpoint: http://wren-ui:3000
 
 ---
+type: engine
+provider: wren_ibis
+endpoint: http://wren-ibis:8000
+
+---
 type: document_store
 provider: qdrant
 location: http://qdrant:6333

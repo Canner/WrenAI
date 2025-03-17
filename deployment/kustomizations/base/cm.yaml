@@ -91,6 +91,11 @@ data:
     endpoint: http://wren-ui-svc:3000
 
     ---
+    type: engine
+    provider: wren_ibis
+    endpoint: http://wren-ibis-server-svc:8000
+
+    ---
     type: document_store
     provider: qdrant
     location: http://wren-qdrant:6333
