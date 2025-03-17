@@ -11,6 +11,7 @@ from src.web.v1.routers import (
     semantics_description,
     semantics_preparation,
     sql_answers,
+    sql_corrections,
     sql_expansions,
     sql_pairs,
     sql_question,
@@ -30,3 +31,4 @@ router.include_router(chart_adjustment.router)
 router.include_router(sql_pairs.router)
 router.include_router(sql_question.router)
 router.include_router(instructions.router)
+router.include_router(sql_corrections.router)
