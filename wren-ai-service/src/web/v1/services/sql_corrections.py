@@ -14,15 +14,15 @@ logger = logging.getLogger("wren-ai-service")
 
 
 class SqlCorrectionService:
-    class Event(BaseModel, MetadataTraceable):
-        class Error(BaseModel):
-            code: Literal["OTHERS"]
-            message: str
+    class Error(BaseModel):
+        code: Literal["OTHERS"]
+        message: str
 
-        id: str
+    class Event(BaseModel, MetadataTraceable):
+        event_id: str
         status: Literal["correcting", "finished", "failed"] = "correcting"
         response: Optional[Dict] = None
-        error: Optional[Error] = None
+        error: Optional["SqlCorrectionService.Error"] = None
         trace_id: Optional[str] = None
 
     def __init__(
@@ -36,21 +36,21 @@ class SqlCorrectionService:
 
     def _handle_exception(
         self,
-        id: str,
+        event_id: str,
         error_message: str,
         code: str = "OTHERS",
         trace_id: Optional[str] = None,
     ):
-        self._cache[id] = self.Event(
-            id=id,
+        self._cache[event_id] = self.Event(
+            event_id=event_id,
             status="failed",
-            error=self.Event.Error(code=code, message=error_message),
+            error=self.Error(code=code, message=error_message),
             trace_id=trace_id,
         )
         logger.error(error_message)
 
     class CorrectionRequest(BaseModel):
-        id: str
+        event_id: str
         contexts: List[Document]
         invalid_generation_results: List[Dict[str, str]]
         project_id: Optional[str] = None
@@ -62,7 +62,7 @@ class SqlCorrectionService:
         request: CorrectionRequest,
         **kwargs,
     ):
-        logger.info(f"Request {request.id}: SQL Correction process is running...")
+        logger.info(f"Request {request.event_id}: SQL Correction process is running...")
         trace_id = kwargs.get("trace_id")
 
         try:
@@ -74,8 +74,8 @@ class SqlCorrectionService:
                 project_id=request.project_id,
             )
 
-            self._cache[request.id] = self.Event(
-                id=request.id,
+            self._cache[request.event_id] = self.Event(
+                event_id=request.event_id,
                 status="finished",
                 trace_id=trace_id,
                 response=result,
@@ -83,26 +83,26 @@ class SqlCorrectionService:
 
         except Exception as e:
             self._handle_exception(
-                request.id,
+                request.event_id,
                 f"An error occurred during SQL correction: {str(e)}",
                 trace_id=trace_id,
             )
 
-        return self._cache[request.id].with_metadata()
+        return self._cache[request.event_id].with_metadata()
 
-    def __getitem__(self, id: str) -> Event:
-        response = self._cache.get(id)
+    def __getitem__(self, event_id: str) -> Event:
+        response = self._cache.get(event_id)
 
         if response is None:
             message = f"SQL Correction Event with ID '{id}' not found."
             logger.exception(message)
             return self.Event(
-                id=id,
+                event_id=event_id,
                 status="failed",
-                error=self.Event.Error(code="OTHERS", message=message),
+                error=self.Error(code="OTHERS", message=message),
             )
 
         return response
 
-    def __setitem__(self, id: str, value: Event):
-        self._cache[id] = value
+    def __setitem__(self, event_id: str, value: Event):
+        self._cache[event_id] = value
