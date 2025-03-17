@@ -11,6 +11,7 @@ import {
   Instruction,
 } from '../repositories/instructionRepository';
 import * as Errors from '@server/utils/error';
+import { GeneralErrorCodes } from '@server/utils/error';
 export interface IInstructionService {
   getInstructions(projectId: number): Promise<Instruction[]>;
   createInstruction(instruction: InstructionInput): Promise<Instruction>;
@@ -166,15 +167,27 @@ export class InstructionService implements IInstructionService {
 
   private async waitDeployInstruction(
     queryId: string,
+    maxRetries = 30, // Default 30 retries (30 seconds)
   ): Promise<InstructionResult> {
     const isFinalStatus = (status: InstructionStatus) =>
       status === InstructionStatus.FINISHED ||
       status === InstructionStatus.FAILED;
+
     let res = await this.wrenAIAdaptor.getInstructionResult(queryId);
-    while (!isFinalStatus(res.status)) {
+    let retryCount = 0;
+
+    while (!isFinalStatus(res.status) && retryCount < maxRetries) {
       await new Promise((resolve) => setTimeout(resolve, 1000));
       res = await this.wrenAIAdaptor.getInstructionResult(queryId);
+      retryCount++;
     }
+
+    if (!isFinalStatus(res.status)) {
+      throw Errors.create(GeneralErrorCodes.DEPLOY_TIMEOUT_ERROR, {
+        customMessage: `Instruction deployment timed out after ${maxRetries} seconds`,
+      });
+    }
+
     return res;
   }
 
