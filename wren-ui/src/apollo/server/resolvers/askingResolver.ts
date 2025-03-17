@@ -644,7 +644,9 @@ export class AskingResolver {
     );
 
     return {
-      type: askingTask.type,
+      // When the task got cancelled, the type is not set
+      // we set it to TEXT_TO_SQL as default
+      type: askingTask.type || AskResultType.TEXT_TO_SQL,
       status: askingTask.status,
       error: askingTask.error,
       candidates,
