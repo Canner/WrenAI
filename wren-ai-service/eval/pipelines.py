@@ -45,7 +45,7 @@ def deploy_model(mdl: str, pipes: list) -> None:
     asyncio.run(wrapper())
 
 
-def extract_units(docs: list[dict]) -> list:
+def extract_units(ddls: list[str]) -> list:
     def parse_ddl(ddl: str) -> list:
         """
         Parses a DDL statement and returns a list of column definitions in the format table_name.column_name, excluding foreign keys.
@@ -87,11 +87,8 @@ def extract_units(docs: list[dict]) -> list:
 
     columns = []
 
-    for doc in docs:
-        if isinstance(doc, str):
-            columns.extend(parse_ddl(doc))
-            continue
-        columns.extend(parse_ddl(doc.get("table_ddl", "")))
+    for ddl in ddls:
+        columns.extend(parse_ddl(ddl))
 
     return columns
 
@@ -125,7 +122,8 @@ class Eval:
         return [prediction for batch in batches for prediction in batch]
 
     @abstractmethod
-    def _process(self, prediction: dict, **_) -> dict: ...
+    def _process(self, prediction: dict, **_) -> dict:
+        ...
 
     async def _flat(self, prediction: dict, **_) -> dict:
         """
@@ -222,7 +220,8 @@ class RetrievalPipeline(Eval):
         documents = result.get("construct_retrieval_results", {}).get(
             "retrieval_results", []
         )
-        params["retrieval_context"] = extract_units(documents)
+        table_ddls = [document.get("table_ddl") for document in documents]
+        params["retrieval_context"] = extract_units(table_ddls)
 
         return params
 
@@ -286,13 +285,14 @@ class GenerationPipeline(Eval):
 
     async def _process(self, params: dict, document: list, **_) -> dict:
         documents = [Document.from_dict(doc).content for doc in document]
+        table_ddls = [document.get("table_ddl") for document in documents]
 
         instructions = self._get_instructions(params)
         samples = self._get_samples(params)
 
         actual_output = await self._generation.run(
             query=params["input"],
-            contexts=documents,
+            contexts=table_ddls,
             sql_samples=samples,
             has_calculated_field=params.get("has_calculated_field", False),
             has_metric=params.get("has_metric", False),
@@ -301,7 +301,7 @@ class GenerationPipeline(Eval):
         )
 
         params["actual_output"] = actual_output
-        params["retrieval_context"] = extract_units(documents)
+        params["retrieval_context"] = extract_units(table_ddls)
 
         return params
 
@@ -407,6 +407,7 @@ class AskPipeline(Eval):
         _retrieval_result = result.get("construct_retrieval_results", {})
 
         documents = _retrieval_result.get("retrieval_results", [])
+        table_ddls = [document.get("table_ddl") for document in documents]
         has_calculated_field = _retrieval_result.get("has_calculated_field", False)
         has_metric = _retrieval_result.get("has_metric", False)
 
@@ -422,7 +423,7 @@ class AskPipeline(Eval):
 
         actual_output = await self._generation.run(
             query=params["input"],
-            contexts=documents,
+            contexts=table_ddls,
             sql_samples=samples,
             has_calculated_field=has_calculated_field,
             has_metric=has_metric,
@@ -431,7 +432,7 @@ class AskPipeline(Eval):
         )
 
         params["actual_output"] = actual_output
-        params["retrieval_context"] = extract_units(documents)
+        params["retrieval_context"] = extract_units(table_ddls)
         params["has_calculated_field"] = has_calculated_field
         params["has_metric"] = has_metric
         params["reasoning"] = reasoning
