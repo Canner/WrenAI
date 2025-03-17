@@ -14,7 +14,7 @@ export default function Organizing(props: Props) {
       <Typography.Text className="gray-8">Organizing thoughts</Typography.Text>
       <div
         className="gray-7 text-sm mt-2"
-        style={{ maxHeight: 'calc(100vh - 420px)', overflowY: 'auto' }}
+        style={{ maxHeight: 'calc(100vh - 550px)', overflowY: 'auto' }}
       >
         {loading ? (
           <div className="d-flex align-center gx-2">
