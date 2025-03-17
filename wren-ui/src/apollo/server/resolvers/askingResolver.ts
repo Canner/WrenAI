@@ -76,6 +76,7 @@ export class AskingResolver {
   constructor() {
     this.createAskingTask = this.createAskingTask.bind(this);
     this.cancelAskingTask = this.cancelAskingTask.bind(this);
+    this.rerunAskingTask = this.rerunAskingTask.bind(this);
     this.getAskingTask = this.getAskingTask.bind(this);
     this.createThread = this.createThread.bind(this);
     this.getThread = this.getThread.bind(this);
