@@ -533,8 +533,8 @@ def construct_instructions(
     configuration: Configuration | None = Configuration(),
     has_calculated_field: bool = False,
     has_metric: bool = False,
-    sql_samples: list | None = None,
-    instructions: list | None = None,
+    sql_samples: list[dict] | None = None,
+    instructions: list[str] | None = None,
 ):
     if sql_samples is None:
         sql_samples = []

@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import sys
-from typing import Any, List, Optional
+from typing import Any, Optional
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
@@ -78,10 +78,10 @@ Let's think step by step.
 @observe(capture_input=False)
 def prompt(
     query: str,
-    documents: List[str],
-    histories: List[AskHistory],
-    sql_samples: List[str],
-    instructions: List[str],
+    documents: list[str],
+    histories: list[AskHistory],
+    sql_samples: list[dict],
+    instructions: list[str],
     prompt_builder: PromptBuilder,
     configuration: Configuration | None = Configuration(),
 ) -> dict:
@@ -175,10 +175,10 @@ class FollowUpSQLGenerationReasoning(BasicPipeline):
     async def run(
         self,
         query: str,
-        contexts: List[str],
-        histories: List[AskHistory],
-        sql_samples: Optional[List[str]] = None,
-        instructions: Optional[List[str]] = None,
+        contexts: list[str],
+        histories: list[AskHistory],
+        sql_samples: Optional[list[dict]] = None,
+        instructions: Optional[list[str]] = None,
         configuration: Configuration = Configuration(),
         query_id: Optional[str] = None,
     ):

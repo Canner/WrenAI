@@ -1,6 +1,6 @@
 import logging
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
@@ -60,12 +60,12 @@ Let's think step by step.
 @observe(capture_input=False)
 def prompt(
     query: str,
-    documents: List[str],
+    documents: list[str],
     prompt_builder: PromptBuilder,
     sql_generation_reasoning: str | None = None,
     configuration: Configuration | None = None,
-    sql_samples: List[Dict] | None = None,
-    instructions: List[Dict] | None = None,
+    sql_samples: list[dict] | None = None,
+    instructions: list[str] | None = None,
     has_calculated_field: bool = False,
     has_metric: bool = False,
 ) -> dict:
@@ -141,11 +141,11 @@ class SQLGeneration(BasicPipeline):
     async def run(
         self,
         query: str,
-        contexts: List[str],
+        contexts: list[str],
         sql_generation_reasoning: str | None = None,
         configuration: Configuration = Configuration(),
-        sql_samples: List[Dict] | None = None,
-        instructions: List[Dict] | None = None,
+        sql_samples: list[dict] | None = None,
+        instructions: list[str] | None = None,
         project_id: str | None = None,
         has_calculated_field: bool = False,
         has_metric: bool = False,

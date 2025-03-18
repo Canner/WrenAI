@@ -247,7 +247,7 @@ def prompt(
     construct_db_schemas: list[str],
     prompt_builder: PromptBuilder,
     histories: Optional[list[AskHistory]] = None,
-    sql_samples: Optional[list[str]] = None,
+    sql_samples: Optional[list[dict]] = None,
     instructions: Optional[list[str]] = None,
     configuration: Configuration | None = None,
 ) -> dict:
