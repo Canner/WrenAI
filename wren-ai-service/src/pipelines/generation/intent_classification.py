@@ -101,14 +101,34 @@ intent_classification_user_prompt_template = """
     {{ db_schema }}
 {% endfor %}
 
-### INPUT ###
+{% if sql_samples %}
+### SQL SAMPLES ###
+{% for sql_sample in sql_samples %}
+Question:
+{{sql_sample.question}}
+SQL:
+{{sql_sample.sql}}
+{% endfor %}
+{% endif %}
+
+{% if instructions %}
+### INSTRUCTIONS ###
+{% for instruction in instructions %}
+{{ instruction }}
+{% endfor %}
+{% endif %}
+
 {% if query_history %}
-User's query history:
+### User's QUERY HISTORY ###
 {% for history in query_history %}
+Question:
 {{ history.question }}
+SQL:
 {{ history.sql }}
 {% endfor %}
 {% endif %}
+
+### QUESTION ###
 User's question: {{query}}
 Current Time: {{ current_time }}
 Output Language: {{ language }}
@@ -227,6 +247,8 @@ def prompt(
     construct_db_schemas: list[str],
     prompt_builder: PromptBuilder,
     histories: Optional[list[AskHistory]] = None,
+    sql_samples: Optional[list[str]] = None,
+    instructions: Optional[list[str]] = None,
     configuration: Configuration | None = None,
 ) -> dict:
     return prompt_builder.run(
@@ -234,6 +256,8 @@ def prompt(
         language=configuration.language,
         db_schemas=construct_db_schemas,
         query_history=histories,
+        sql_samples=sql_samples,
+        instructions=instructions,
         current_time=configuration.show_current_time(),
     )
 
@@ -321,6 +345,8 @@ class IntentClassification(BasicPipeline):
         query: str,
         id: Optional[str] = None,
         histories: Optional[list[AskHistory]] = None,
+        sql_samples: Optional[list[str]] = None,
+        instructions: Optional[list[str]] = None,
         configuration: Configuration = Configuration(),
     ):
         logger.info("Intent Classification pipeline is running...")
@@ -330,6 +356,8 @@ class IntentClassification(BasicPipeline):
                 "query": query,
                 "id": id or "",
                 "histories": histories,
+                "sql_samples": sql_samples or [],
+                "instructions": instructions or [],
                 "configuration": configuration,
                 **self._components,
             },

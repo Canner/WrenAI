@@ -211,6 +211,7 @@ class AskService:
         intent_reasoning = None
         sql_generation_reasoning = None
         sql_samples = []
+        instructions = []
         api_results = []
         table_names = []
         error_message = None
@@ -249,64 +250,87 @@ class AskService:
                         for result in historical_question_result
                     ]
                     sql_generation_reasoning = ""
-                elif self._allow_intent_classification:
-                    intent_classification_result = (
-                        await self._pipelines["intent_classification"].run(
+                else:
+                    # Run both pipeline operations concurrently
+                    sql_samples_task, instructions_task = await asyncio.gather(
+                        self._pipelines["sql_pairs_retrieval"].run(
                             query=user_query,
-                            histories=histories,
                             id=ask_request.project_id,
-                            configuration=ask_request.configurations,
-                        )
-                    ).get("post_process", {})
-                    intent = intent_classification_result.get("intent")
-                    rephrased_question = intent_classification_result.get(
-                        "rephrased_question"
+                        ),
+                        self._pipelines["instructions_retrieval"].run(
+                            query=user_query,
+                            project_id=ask_request.project_id,
+                        ),
                     )
-                    intent_reasoning = intent_classification_result.get("reasoning")
 
-                    if rephrased_question:
-                        user_query = rephrased_question
+                    # Extract results from completed tasks
+                    sql_samples = sql_samples_task["formatted_output"].get(
+                        "documents", []
+                    )
+                    instructions = instructions_task["formatted_output"].get(
+                        "documents", []
+                    )
 
-                    if intent == "MISLEADING_QUERY":
-                        self._ask_results[query_id] = AskResultResponse(
-                            status="finished",
-                            type="MISLEADING_QUERY",
-                            rephrased_question=rephrased_question,
-                            intent_reasoning=intent_reasoning,
-                            trace_id=trace_id,
-                        )
-                        results["metadata"]["type"] = "MISLEADING_QUERY"
-                        return results
-                    elif intent == "GENERAL":
-                        asyncio.create_task(
-                            self._pipelines["data_assistance"].run(
+                    if self._allow_intent_classification:
+                        intent_classification_result = (
+                            await self._pipelines["intent_classification"].run(
                                 query=user_query,
                                 histories=histories,
-                                db_schemas=intent_classification_result.get(
-                                    "db_schemas"
-                                ),
-                                language=ask_request.configurations.language,
-                                query_id=ask_request.query_id,
+                                sql_samples=sql_samples,
+                                instructions=instructions,
+                                id=ask_request.project_id,
+                                configuration=ask_request.configurations,
                             )
+                        ).get("post_process", {})
+                        intent = intent_classification_result.get("intent")
+                        rephrased_question = intent_classification_result.get(
+                            "rephrased_question"
                         )
+                        intent_reasoning = intent_classification_result.get("reasoning")
 
-                        self._ask_results[query_id] = AskResultResponse(
-                            status="finished",
-                            type="GENERAL",
-                            rephrased_question=rephrased_question,
-                            intent_reasoning=intent_reasoning,
-                            trace_id=trace_id,
-                        )
-                        results["metadata"]["type"] = "GENERAL"
-                        return results
-                    else:
-                        self._ask_results[query_id] = AskResultResponse(
-                            status="understanding",
-                            type="TEXT_TO_SQL",
-                            rephrased_question=rephrased_question,
-                            intent_reasoning=intent_reasoning,
-                            trace_id=trace_id,
-                        )
+                        if rephrased_question:
+                            user_query = rephrased_question
+
+                        if intent == "MISLEADING_QUERY":
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="finished",
+                                type="MISLEADING_QUERY",
+                                rephrased_question=rephrased_question,
+                                intent_reasoning=intent_reasoning,
+                                trace_id=trace_id,
+                            )
+                            results["metadata"]["type"] = "MISLEADING_QUERY"
+                            return results
+                        elif intent == "GENERAL":
+                            asyncio.create_task(
+                                self._pipelines["data_assistance"].run(
+                                    query=user_query,
+                                    histories=histories,
+                                    db_schemas=intent_classification_result.get(
+                                        "db_schemas"
+                                    ),
+                                    language=ask_request.configurations.language,
+                                    query_id=ask_request.query_id,
+                                )
+                            )
+
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="finished",
+                                type="GENERAL",
+                                rephrased_question=rephrased_question,
+                                intent_reasoning=intent_reasoning,
+                                trace_id=trace_id,
+                            )
+                            results["metadata"]["type"] = "GENERAL"
+                            return results
+                        else:
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="understanding",
+                                type="TEXT_TO_SQL",
+                                rephrased_question=rephrased_question,
+                                intent_reasoning=intent_reasoning,
+                                trace_id=trace_id,
+                            )
             if not self._is_stopped(query_id, self._ask_results) and not api_results:
                 self._ask_results[query_id] = AskResultResponse(
                     status="searching",
@@ -346,22 +370,6 @@ class AskService:
                     results["metadata"]["type"] = "TEXT_TO_SQL"
                     return results
 
-            # Run both pipeline operations concurrently
-            sql_samples_task, instructions_task = await asyncio.gather(
-                self._pipelines["sql_pairs_retrieval"].run(
-                    query=user_query,
-                    id=ask_request.project_id,
-                ),
-                self._pipelines["instructions_retrieval"].run(
-                    query=user_query,
-                    project_id=ask_request.project_id,
-                ),
-            )
-
-            # Extract results from completed tasks
-            sql_samples = sql_samples_task["formatted_output"].get("documents", [])
-            instructions = instructions_task["formatted_output"].get("documents", [])
-
             if (
                 not self._is_stopped(query_id, self._ask_results)
                 and not api_results
@@ -383,6 +391,7 @@ class AskService:
                             contexts=table_ddls,
                             histories=histories,
                             sql_samples=sql_samples,
+                            instructions=instructions,
                             configuration=ask_request.configurations,
                             query_id=query_id,
                         )
@@ -393,6 +402,7 @@ class AskService:
                             query=user_query,
                             contexts=table_ddls,
                             sql_samples=sql_samples,
+                            instructions=instructions,
                             configuration=ask_request.configurations,
                             query_id=query_id,
                         )

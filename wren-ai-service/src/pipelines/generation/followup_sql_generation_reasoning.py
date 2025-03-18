@@ -47,15 +47,22 @@ Question:
 {{sql_sample.question}}
 SQL:
 {{sql_sample.sql}}
-
 {% endfor %}
 {% endif %}
 
-### CONTEXT ###
-User's query history:
+{% if instructions %}
+### INSTRUCTIONS ###
+{% for instruction in instructions %}
+{{ instruction }}
+{% endfor %}
+{% endif %}
+
+### User's QUERY HISTORY ###
 {% for history in histories %}
-    {{ history.question }}
-    {{ history.sql }}
+Question:
+{{ history.question }}
+SQL:
+{{ history.sql }}
 {% endfor %}
 
 ### QUESTION ###
@@ -74,6 +81,7 @@ def prompt(
     documents: List[str],
     histories: List[AskHistory],
     sql_samples: List[str],
+    instructions: List[str],
     prompt_builder: PromptBuilder,
     configuration: Configuration | None = Configuration(),
 ) -> dict:
@@ -82,6 +90,7 @@ def prompt(
         documents=documents,
         histories=histories,
         sql_samples=sql_samples,
+        instructions=instructions,
         current_time=configuration.show_current_time(),
         language=configuration.language,
     )
@@ -169,6 +178,7 @@ class FollowUpSQLGenerationReasoning(BasicPipeline):
         contexts: List[str],
         histories: List[AskHistory],
         sql_samples: Optional[List[str]] = None,
+        instructions: Optional[List[str]] = None,
         configuration: Configuration = Configuration(),
         query_id: Optional[str] = None,
     ):
@@ -180,6 +190,7 @@ class FollowUpSQLGenerationReasoning(BasicPipeline):
                 "documents": contexts,
                 "histories": histories,
                 "sql_samples": sql_samples or [],
+                "instructions": instructions or [],
                 "configuration": configuration,
                 "query_id": query_id,
                 **self._components,
