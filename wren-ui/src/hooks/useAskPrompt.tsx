@@ -58,11 +58,14 @@ export const isRecommendedFinished = (status: RecommendedQuestionsTaskStatus) =>
   ].includes(status);
 
 const isNeedRecommendedQuestions = (askingTask: AskingTask) => {
-  return (
-    [AskingTaskType.GENERAL, AskingTaskType.MISLEADING_QUERY].includes(
-      askingTask?.type,
-    ) || askingTask?.status === AskingTaskStatus.FAILED
-  );
+  const isGeneralOrMisleadingQuery = [
+    AskingTaskType.GENERAL,
+    AskingTaskType.MISLEADING_QUERY,
+  ].includes(askingTask?.type);
+  const isFailed =
+    askingTask?.type !== AskingTaskType.TEXT_TO_SQL &&
+    askingTask?.status === AskingTaskStatus.FAILED;
+  return isGeneralOrMisleadingQuery || isFailed;
 };
 
 const isNeedPreparing = (askingTask: AskingTask) =>

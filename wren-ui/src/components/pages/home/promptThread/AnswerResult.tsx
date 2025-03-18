@@ -287,7 +287,7 @@ export default function AnswerResult(props: Props) {
               <ChartAnswer {...props} />
             </Tabs.TabPane>
           </StyledTabs>
-          <div className="mt-2">
+          <div className="mt-2 d-flex align-center">
             <Tooltip
               overlayInnerStyle={{ width: 'max-content' }}
               placement="topLeft"
