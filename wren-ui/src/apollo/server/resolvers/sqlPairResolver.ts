@@ -1,6 +1,7 @@
 import { IContext } from '@server/types/context';
 import { SqlPair } from '@server/repositories';
 import * as Errors from '@server/utils/error';
+import { TelemetryEvent, TrackTelemetry } from '@server/telemetry/telemetry';
 export class SqlPairResolver {
   constructor() {
     this.getProjectSqlPairs = this.getProjectSqlPairs.bind(this);
@@ -19,6 +20,7 @@ export class SqlPairResolver {
     return ctx.sqlPairService.getProjectSqlPairs(project.id);
   }
 
+  @TrackTelemetry(TelemetryEvent.KNOWLEDGE_CREATE_SQL_PAIR)
   public async createSqlPair(
     _root: unknown,
     arg: {
@@ -34,6 +36,7 @@ export class SqlPairResolver {
     return await ctx.sqlPairService.createSqlPair(project.id, arg.data);
   }
 
+  @TrackTelemetry(TelemetryEvent.KNOWLEDGE_UPDATE_SQL_PAIR)
   public async updateSqlPair(
     _root: unknown,
     arg: {
@@ -52,6 +55,7 @@ export class SqlPairResolver {
     return ctx.sqlPairService.editSqlPair(project.id, arg.where.id, arg.data);
   }
 
+  @TrackTelemetry(TelemetryEvent.KNOWLEDGE_DELETE_SQL_PAIR)
   public async deleteSqlPair(
     _root: unknown,
     arg: {
