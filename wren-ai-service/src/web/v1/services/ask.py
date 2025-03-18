@@ -370,10 +370,6 @@ class AskService:
                     results["metadata"]["type"] = "TEXT_TO_SQL"
                     return results
 
-            sql_functions = await self._pipelines["sql_functions_retrieval"].run(
-                project_id=ask_request.project_id,
-            )
-
             if (
                 not self._is_stopped(query_id, self._ask_results)
                 and not api_results
@@ -431,6 +427,10 @@ class AskService:
                     retrieved_tables=table_names,
                     sql_generation_reasoning=sql_generation_reasoning,
                     trace_id=trace_id,
+                )
+
+                sql_functions = await self._pipelines["sql_functions_retrieval"].run(
+                    project_id=ask_request.project_id,
                 )
 
                 has_calculated_field = _retrieval_result.get(
@@ -698,11 +698,11 @@ class AskService:
                     "post_process"
                 ]["invalid_generation_results"]:
                     if failed_dry_run_results[0]["type"] != "TIME_OUT":
-                        self._ask_feedback_results[query_id] = (
-                            AskFeedbackResultResponse(
-                                status="correcting",
-                                trace_id=trace_id,
-                            )
+                        self._ask_feedback_results[
+                            query_id
+                        ] = AskFeedbackResultResponse(
+                            status="correcting",
+                            trace_id=trace_id,
                         )
                         sql_correction_results = await self._pipelines[
                             "sql_correction"
@@ -775,10 +775,10 @@ class AskService:
         self,
         stop_ask_feedback_request: StopAskFeedbackRequest,
     ):
-        self._ask_feedback_results[stop_ask_feedback_request.query_id] = (
-            AskFeedbackResultResponse(
-                status="stopped",
-            )
+        self._ask_feedback_results[
+            stop_ask_feedback_request.query_id
+        ] = AskFeedbackResultResponse(
+            status="stopped",
         )
 
     def get_ask_feedback_result(
