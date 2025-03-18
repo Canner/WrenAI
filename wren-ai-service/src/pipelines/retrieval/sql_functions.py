@@ -103,7 +103,9 @@ class SqlFunctions(BasicPipeline):
         ttl: Optional[int] = 60 * 60 * 24,
         **kwargs,
     ) -> None:
-        self._store: DocumentStore = document_store_provider.get_store("project_meta")
+        self._retriever = document_store_provider.get_retriever(
+            document_store_provider.get_store("project_meta")
+        )
         self._cache = TTLCache(maxsize=100, ttl=ttl)
         self._components = {
             "engine": engine,
@@ -119,18 +121,21 @@ class SqlFunctions(BasicPipeline):
         )
 
     async def _retrieve_metadata(self, project_id: str) -> dict[str, Any]:
-        filters = {
-            "operator": "AND",
-            "conditions": [
-                {"field": "project_id", "operator": "==", "value": project_id},
-            ],
-        }
+        filters = None
+        if project_id is not None:
+            filters = {
+                "operator": "AND",
+                "conditions": [
+                    {"field": "project_id", "operator": "==", "value": project_id},
+                ],
+            }
 
-        documents = await self._store.filter_documents(filters=filters)
+        result = await self._retriever.run(query_embedding=[], filters=filters)
+        documents = result["documents"]
 
         # only one document for a project, thus we can return the first one
         doc = documents[0]
-        return doc
+        return doc.meta
 
     @observe(name="SQL Functions Retrieval")
     async def run(
@@ -164,5 +169,5 @@ if __name__ == "__main__":
     dry_run_pipeline(
         SqlFunctions,
         "sql_functions_retrieval",
-        data_source="postgres",
+        project_id="test",
     )
