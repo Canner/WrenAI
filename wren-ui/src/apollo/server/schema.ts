@@ -584,7 +584,13 @@ export const typeDefs = gql`
     type: AskingTaskType
     error: Error
     candidates: [ResultCandidate!]!
+    rephrasedQuestion: String
     intentReasoning: String
+    sqlGenerationReasoning: String
+    retrievedTables: [String!]
+    invalidSql: String
+    traceId: String
+    queryId: String
   }
 
   input InstantRecommendedQuestionsInput {
@@ -614,13 +620,13 @@ export const typeDefs = gql`
   input CreateThreadInput {
     question: String
     sql: String
-    viewId: Int
+    taskId: String
   }
 
   input CreateThreadResponseInput {
     question: String
     sql: String
-    viewId: Int
+    taskId: String
   }
 
   input ThreadUniqueWhereInput {
@@ -695,11 +701,12 @@ export const typeDefs = gql`
     id: Int!
     threadId: Int!
     question: String!
-    sql: String!
+    sql: String
     view: ViewInfo
     breakdownDetail: ThreadResponseBreakdownDetail
     answerDetail: ThreadResponseAnswerDetail
     chartDetail: ThreadResponseChartDetail
+    askingTask: AskingTask
   }
 
   # Thread only consists of basic information of a thread
@@ -903,7 +910,7 @@ export const typeDefs = gql`
     view(where: ViewWhereUniqueInput!): ViewInfo!
 
     # Ask
-    askingTask(taskId: String!): AskingTask!
+    askingTask(taskId: String!): AskingTask
     suggestedQuestions: SuggestedQuestionResponse!
     threads: [Thread!]!
     thread(threadId: Int!): DetailedThread!
@@ -982,6 +989,7 @@ export const typeDefs = gql`
     # Ask
     createAskingTask(data: AskingTaskInput!): Task!
     cancelAskingTask(taskId: String!): Boolean!
+    rerunAskingTask(responseId: Int!): Task!
 
     # Thread
     createThread(data: CreateThreadInput!): Thread!

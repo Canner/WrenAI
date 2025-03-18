@@ -51,6 +51,7 @@ export enum TelemetryEvent {
   HOME_ANSWER_ADJUST_CHART = 'home_answer_adjust_chart',
   HOME_ASK_FOLLOWUP_QUESTION = 'home_ask_followup_question',
   HOME_CANCEL_ASK = 'home_cancel_ask',
+  HOME_RERUN_ASKING_TASK = 'home_rerun_asking_task',
   HOME_GENERATE_PROJECT_RECOMMENDATION_QUESTIONS = 'home_generate_project_recommendation_questions',
   HOME_GENERATE_THREAD_RECOMMENDATION_QUESTIONS = 'home_generate_thread_recommendation_questions',
 
