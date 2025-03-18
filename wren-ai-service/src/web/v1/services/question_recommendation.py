@@ -82,9 +82,19 @@ class QuestionRecommendation:
             sql_samples = sql_pairs_result["formatted_output"].get("documents", [])
             return sql_samples
 
+        async def _instructions_retrieval() -> list[dict]:
+            result = await self._pipelines["instructions_retrieval"].run(
+                query=candidate["question"],
+                project_id=project_id,
+            )
+            instructions = result["formatted_output"].get("instructions", [])
+            return instructions
+
         try:
-            _document, sql_samples = await asyncio.gather(
-                _document_retrieval(), _sql_pairs_retrieval()
+            _document, sql_samples, instructions = await asyncio.gather(
+                _document_retrieval(),
+                _sql_pairs_retrieval(),
+                _instructions_retrieval(),
             )
             table_ddls, has_calculated_field, has_metric = _document
 
@@ -93,6 +103,7 @@ class QuestionRecommendation:
                     query=candidate["question"],
                     contexts=table_ddls,
                     sql_samples=sql_samples,
+                    instructions=instructions,
                     configuration=configuration,
                 )
             ).get("post_process", {})
@@ -104,6 +115,7 @@ class QuestionRecommendation:
                 project_id=project_id,
                 configuration=configuration,
                 sql_samples=sql_samples,
+                instructions=instructions,
                 has_calculated_field=has_calculated_field,
                 has_metric=has_metric,
             )
