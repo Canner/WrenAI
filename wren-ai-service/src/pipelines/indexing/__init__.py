@@ -91,6 +91,7 @@ class AsyncDocumentWriter(DocumentWriter):
 from .db_schema import DBSchema  # noqa: E402
 from .historical_question import HistoricalQuestion  # noqa: E402
 from .instructions import Instructions  # noqa: E402
+from .project_meta import ProjectMeta  # noqa: E402
 from .sql_pairs import SqlPairs  # noqa: E402
 from .table_description import TableDescription  # noqa: E402
 
@@ -100,4 +101,5 @@ __all__ = [
     "HistoricalQuestion",
     "SqlPairs",
     "Instructions",
+    "ProjectMeta",
 ]

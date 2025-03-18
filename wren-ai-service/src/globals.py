@@ -71,6 +71,9 @@ def create_service_container(
                 "instructions": indexing.Instructions(
                     **pipe_components["instructions_indexing"],
                 ),
+                "project_meta": indexing.ProjectMeta(
+                    **pipe_components["project_meta_indexing"],
+                ),
             },
             **query_cache,
         ),
