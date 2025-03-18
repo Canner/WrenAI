@@ -16,6 +16,7 @@
     "incremental": true,
     "forceConsistentCasingInFileNames": true,
     "allowSyntheticDefaultImports": true,
+    "experimentalDecorators": true,
     "plugins": [
       {
         "name": "next"

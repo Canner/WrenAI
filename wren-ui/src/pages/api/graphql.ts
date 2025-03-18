@@ -44,6 +44,7 @@ const bootstrapServer = async () => {
     dashboardRepository,
     dashboardItemRepository,
     sqlPairRepository,
+    instructionRepository,
     // adaptors
     wrenEngineAdaptor,
     ibisAdaptor,
@@ -58,6 +59,7 @@ const bootstrapServer = async () => {
     dashboardService,
     sqlPairService,
 
+    instructionService,
     // background trackers
     projectRecommendQuestionBackgroundTracker,
     threadRecommendQuestionBackgroundTracker,
@@ -136,6 +138,7 @@ const bootstrapServer = async () => {
       queryService,
       dashboardService,
       sqlPairService,
+      instructionService,
       // repository
       projectRepository,
       modelRepository,
@@ -149,6 +152,7 @@ const bootstrapServer = async () => {
       dashboardRepository,
       dashboardItemRepository,
       sqlPairRepository,
+      instructionRepository,
       // background trackers
       projectRecommendQuestionBackgroundTracker,
       threadRecommendQuestionBackgroundTracker,

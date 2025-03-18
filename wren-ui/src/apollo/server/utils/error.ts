@@ -40,6 +40,8 @@ export enum GeneralErrorCodes {
   DEPLOY_SQL_PAIR_ERROR = 'DEPLOY_SQL_PAIR_ERROR',
   GENERATE_QUESTIONS_ERROR = 'GENERATE_QUESTIONS_ERROR',
   INVALID_SQL_ERROR = 'INVALID_SQL_ERROR',
+
+  DEPLOY_TIMEOUT_ERROR = 'DEPLOY_TIMEOUT_ERROR',
 }
 
 export const errorMessages = {
@@ -87,6 +89,8 @@ export const errorMessages = {
   [GeneralErrorCodes.GENERATE_QUESTIONS_ERROR]: 'Generate questions error',
   [GeneralErrorCodes.INVALID_SQL_ERROR]:
     'Invalid SQL, please check your SQL syntax',
+  [GeneralErrorCodes.DEPLOY_TIMEOUT_ERROR]:
+    'LLM deployment timed out after 30 seconds',
 };
 
 export const shortMessages = {
@@ -109,6 +113,7 @@ export const shortMessages = {
   [GeneralErrorCodes.GENERATE_QUESTIONS_ERROR]: 'Generate questions error',
   [GeneralErrorCodes.INVALID_SQL_ERROR]:
     'Invalid SQL, please check your SQL syntax',
+  [GeneralErrorCodes.DEPLOY_TIMEOUT_ERROR]: 'LLM deployment timed out',
 };
 
 export const create = (
