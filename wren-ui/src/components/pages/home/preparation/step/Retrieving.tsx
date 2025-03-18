@@ -21,7 +21,7 @@ export default function Retrieving(props: Props) {
   return (
     <>
       <Typography.Text className="gray-8">
-        Retrieving related tables
+        Retrieving related models
       </Typography.Text>
       <div className="gray-7 text-sm mt-1">
         {loading ? (
@@ -31,7 +31,7 @@ export default function Retrieving(props: Props) {
           </div>
         ) : (
           <>
-            <div className="mb-1">3 tables found</div>
+            <div className="mb-1">{tables.length} models found</div>
             <TagIterator data={data} />
           </>
         )}
