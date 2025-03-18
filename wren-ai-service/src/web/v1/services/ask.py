@@ -230,7 +230,7 @@ class AskService:
 
                 historical_question = await self._pipelines["historical_question"].run(
                     query=user_query,
-                    id=ask_request.project_id,
+                    project_id=ask_request.project_id,
                 )
 
                 # we only return top 1 result
@@ -255,7 +255,7 @@ class AskService:
                     sql_samples_task, instructions_task = await asyncio.gather(
                         self._pipelines["sql_pairs_retrieval"].run(
                             query=user_query,
-                            id=ask_request.project_id,
+                            project_id=ask_request.project_id,
                         ),
                         self._pipelines["instructions_retrieval"].run(
                             query=user_query,
@@ -278,7 +278,7 @@ class AskService:
                                 histories=histories,
                                 sql_samples=sql_samples,
                                 instructions=instructions,
-                                id=ask_request.project_id,
+                                project_id=ask_request.project_id,
                                 configuration=ask_request.configurations,
                             )
                         ).get("post_process", {})
@@ -343,7 +343,7 @@ class AskService:
                 retrieval_result = await self._pipelines["retrieval"].run(
                     query=user_query,
                     histories=histories,
-                    id=ask_request.project_id,
+                    project_id=ask_request.project_id,
                 )
                 _retrieval_result = retrieval_result.get(
                     "construct_retrieval_results", {}
@@ -652,7 +652,7 @@ class AskService:
 
                 retrieval_result = await self._pipelines["retrieval"].run(
                     tables=ask_feedback_request.tables,
-                    id=ask_feedback_request.project_id,
+                    project_id=ask_feedback_request.project_id,
                 )
                 _retrieval_result = retrieval_result.get(
                     "construct_retrieval_results", {}

@@ -151,7 +151,9 @@ async def embedding(
 
 
 @observe(capture_input=False)
-async def table_retrieval(embedding: dict, id: str, table_retriever: Any) -> dict:
+async def table_retrieval(
+    embedding: dict, project_id: str, table_retriever: Any
+) -> dict:
     filters = {
         "operator": "AND",
         "conditions": [
@@ -159,9 +161,9 @@ async def table_retrieval(embedding: dict, id: str, table_retriever: Any) -> dic
         ],
     }
 
-    if id:
+    if project_id:
         filters["conditions"].append(
-            {"field": "project_id", "operator": "==", "value": id}
+            {"field": "project_id", "operator": "==", "value": project_id}
         )
 
     return await table_retriever.run(
@@ -172,7 +174,7 @@ async def table_retrieval(embedding: dict, id: str, table_retriever: Any) -> dic
 
 @observe(capture_input=False)
 async def dbschema_retrieval(
-    table_retrieval: dict, embedding: dict, id: str, dbschema_retriever: Any
+    table_retrieval: dict, embedding: dict, project_id: str, dbschema_retriever: Any
 ) -> list[Document]:
     tables = table_retrieval.get("documents", [])
     table_names = []
@@ -195,9 +197,9 @@ async def dbschema_retrieval(
         ],
     }
 
-    if id:
+    if project_id:
         filters["conditions"].append(
-            {"field": "project_id", "operator": "==", "value": id}
+            {"field": "project_id", "operator": "==", "value": project_id}
         )
 
     results = await dbschema_retriever.run(
@@ -345,7 +347,7 @@ class IntentClassification(BasicPipeline):
     async def run(
         self,
         query: str,
-        id: Optional[str] = None,
+        project_id: Optional[str] = None,
         histories: Optional[list[AskHistory]] = None,
         sql_samples: Optional[list[dict]] = None,
         instructions: Optional[list[dict]] = None,
@@ -356,7 +358,7 @@ class IntentClassification(BasicPipeline):
             ["post_process"],
             inputs={
                 "query": query,
-                "id": id or "",
+                "project_id": project_id or "",
                 "histories": histories,
                 "sql_samples": sql_samples or [],
                 "instructions": instructions or [],
