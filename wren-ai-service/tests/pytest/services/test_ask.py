@@ -52,6 +52,12 @@ def ask_service():
             "sql_correction": generation.SQLCorrection(
                 **pipe_components["sql_correction"],
             ),
+            "sql_pairs_retrieval": retrieval.SqlPairsRetrieval(
+                **pipe_components["sql_pairs_retrieval"],
+            ),
+            "instructions_retrieval": retrieval.Instructions(
+                **pipe_components["instructions_retrieval"],
+            ),
         }
     )
 
