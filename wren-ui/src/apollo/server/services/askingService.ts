@@ -113,7 +113,7 @@ export interface IAskingService {
   rerunAskingTask(
     threadResponseId: number,
     payload: AskingPayload,
-  ): Promise<void>;
+  ): Promise<Task>;
   cancelAskingTask(taskId: string): Promise<void>;
   getAskingTask(taskId: string): Promise<TrackedAskingResult>;
   getAskingTaskById(id: number): Promise<TrackedAskingResult>;
@@ -566,7 +566,7 @@ export class AskingService implements IAskingService {
   public async rerunAskingTask(
     threadResponseId: number,
     payload: AskingPayload,
-  ): Promise<void> {
+  ): Promise<Task> {
     const threadResponse = await this.threadResponseRepository.findOneBy({
       id: threadResponseId,
     });
@@ -586,12 +586,14 @@ export class AskingService implements IAskingService {
       // so we'll just use the threadId from the thread response
       threadId: threadResponse.threadId,
     };
-    await this.createAskingTask(
+    const task = await this.createAskingTask(
       input,
       askingPayload,
       true,
       threadResponse.askingTaskId,
+      threadResponseId,
     );
+    return task;
   }
 
   public async cancelAskingTask(taskId: string): Promise<void> {

@@ -422,18 +422,18 @@ export class AskingResolver {
     _root: any,
     args: { responseId: number },
     ctx: IContext,
-  ): Promise<boolean> {
+  ): Promise<Task> {
     const { responseId } = args;
     const askingService = ctx.askingService;
     const project = await ctx.projectService.getCurrentProject();
 
-    await askingService.rerunAskingTask(responseId, {
+    const task = await askingService.rerunAskingTask(responseId, {
       language: WrenAILanguage[project.language] || WrenAILanguage.EN,
     });
     ctx.telemetry.sendEvent(TelemetryEvent.HOME_RERUN_ASKING_TASK, {
       responseId,
     });
-    return true;
+    return task;
   }
 
   public async generateThreadResponseBreakdown(
