@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import sys
-from typing import Any, List, Optional
+from typing import Any, Optional
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
@@ -10,6 +10,7 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
+from src.pipelines.generation.utils.sql import construct_instructions
 from src.web.v1.services import Configuration
 
 logger = logging.getLogger("wren-ai-service")
@@ -46,15 +47,12 @@ Question:
 {{sql_sample.question}}
 SQL:
 {{sql_sample.sql}}
-
 {% endfor %}
 {% endif %}
 
 {% if instructions %}
 ### INSTRUCTIONS ###
-{% for instruction in instructions %}
-{{ instruction }}
-{% endfor %}
+{{ instructions }}
 {% endif %}
 
 ### QUESTION ###
@@ -70,9 +68,9 @@ Let's think step by step.
 @observe(capture_input=False)
 def prompt(
     query: str,
-    documents: List[str],
-    sql_samples: List[str],
-    instructions: List[str],
+    documents: list[str],
+    sql_samples: list[dict],
+    instructions: list[dict],
     prompt_builder: PromptBuilder,
     configuration: Configuration | None = Configuration(),
 ) -> dict:
@@ -80,7 +78,10 @@ def prompt(
         query=query,
         documents=documents,
         sql_samples=sql_samples,
-        instructions=instructions,
+        instructions=construct_instructions(
+            instructions=instructions,
+            configuration=configuration,
+        ),
         current_time=configuration.show_current_time(),
         language=configuration.language,
     )
@@ -128,9 +129,9 @@ class SQLGenerationReasoning(BasicPipeline):
 
     def _streaming_callback(self, chunk, query_id):
         if query_id not in self._user_queues:
-            self._user_queues[query_id] = (
-                asyncio.Queue()
-            )  # Create a new queue for the user if it doesn't exist
+            self._user_queues[
+                query_id
+            ] = asyncio.Queue()  # Create a new queue for the user if it doesn't exist
         # Put the chunk content into the user's queue
         asyncio.create_task(self._user_queues[query_id].put(chunk.content))
         if chunk.meta.get("finish_reason"):
@@ -141,9 +142,9 @@ class SQLGenerationReasoning(BasicPipeline):
             return await self._user_queues[query_id].get()
 
         if query_id not in self._user_queues:
-            self._user_queues[query_id] = (
-                asyncio.Queue()
-            )  # Ensure the user's queue exists
+            self._user_queues[
+                query_id
+            ] = asyncio.Queue()  # Ensure the user's queue exists
         while True:
             try:
                 # Wait for an item from the user's queue
@@ -165,9 +166,9 @@ class SQLGenerationReasoning(BasicPipeline):
     async def run(
         self,
         query: str,
-        contexts: List[str],
-        sql_samples: Optional[List[str]] = None,
-        instructions: Optional[List[str]] = None,
+        contexts: list[str],
+        sql_samples: Optional[list[dict]] = None,
+        instructions: Optional[list[str]] = None,
         configuration: Configuration = Configuration(),
         query_id: Optional[str] = None,
     ):

@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import sys
-from typing import Any, List, Optional
+from typing import Any, Optional
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
@@ -10,6 +10,7 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
+from src.pipelines.generation.utils.sql import construct_instructions
 from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
 
@@ -47,15 +48,20 @@ Question:
 {{sql_sample.question}}
 SQL:
 {{sql_sample.sql}}
-
 {% endfor %}
 {% endif %}
 
-### CONTEXT ###
-User's query history:
+{% if instructions %}
+### INSTRUCTIONS ###
+{{ instructions }}
+{% endif %}
+
+### User's QUERY HISTORY ###
 {% for history in histories %}
-    {{ history.question }}
-    {{ history.sql }}
+Question:
+{{ history.question }}
+SQL:
+{{ history.sql }}
 {% endfor %}
 
 ### QUESTION ###
@@ -71,9 +77,10 @@ Let's think step by step.
 @observe(capture_input=False)
 def prompt(
     query: str,
-    documents: List[str],
-    histories: List[AskHistory],
-    sql_samples: List[str],
+    documents: list[str],
+    histories: list[AskHistory],
+    sql_samples: list[dict],
+    instructions: list[dict],
     prompt_builder: PromptBuilder,
     configuration: Configuration | None = Configuration(),
 ) -> dict:
@@ -82,6 +89,10 @@ def prompt(
         documents=documents,
         histories=histories,
         sql_samples=sql_samples,
+        instructions=construct_instructions(
+            configuration=configuration,
+            instructions=instructions,
+        ),
         current_time=configuration.show_current_time(),
         language=configuration.language,
     )
@@ -166,9 +177,10 @@ class FollowUpSQLGenerationReasoning(BasicPipeline):
     async def run(
         self,
         query: str,
-        contexts: List[str],
-        histories: List[AskHistory],
-        sql_samples: Optional[List[str]] = None,
+        contexts: list[str],
+        histories: list[AskHistory],
+        sql_samples: Optional[list[dict]] = None,
+        instructions: Optional[list[dict]] = None,
         configuration: Configuration = Configuration(),
         query_id: Optional[str] = None,
     ):
@@ -180,6 +192,7 @@ class FollowUpSQLGenerationReasoning(BasicPipeline):
                 "documents": contexts,
                 "histories": histories,
                 "sql_samples": sql_samples or [],
+                "instructions": instructions or [],
                 "configuration": configuration,
                 "query_id": query_id,
                 **self._components,

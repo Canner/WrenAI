@@ -120,9 +120,7 @@ async def embedding(
 ) -> dict:
     if query:
         if histories:
-            previous_query_summaries = [
-                history.question for history in histories
-            ]
+            previous_query_summaries = [history.question for history in histories]
         else:
             previous_query_summaries = []
 
@@ -135,7 +133,7 @@ async def embedding(
 
 @observe(capture_input=False)
 async def table_retrieval(
-    embedding: dict, id: str, tables: list[str], table_retriever: Any
+    embedding: dict, project_id: str, tables: list[str], table_retriever: Any
 ) -> dict:
     filters = {
         "operator": "AND",
@@ -144,9 +142,9 @@ async def table_retrieval(
         ],
     }
 
-    if id:
+    if project_id:
         filters["conditions"].append(
-            {"field": "project_id", "operator": "==", "value": id}
+            {"field": "project_id", "operator": "==", "value": project_id}
         )
 
     if embedding:
@@ -167,7 +165,7 @@ async def table_retrieval(
 
 @observe(capture_input=False)
 async def dbschema_retrieval(
-    table_retrieval: dict, id: str, dbschema_retriever: Any
+    table_retrieval: dict, project_id: str, dbschema_retriever: Any
 ) -> list[Document]:
     tables = table_retrieval.get("documents", [])
     table_names = []
@@ -188,9 +186,9 @@ async def dbschema_retrieval(
         ],
     }
 
-    if id:
+    if project_id:
         filters["conditions"].append(
-            {"field": "project_id", "operator": "==", "value": id}
+            {"field": "project_id", "operator": "==", "value": project_id}
         )
 
     results = await dbschema_retriever.run(query_embedding=[], filters=filters)
@@ -478,7 +476,7 @@ class Retrieval(BasicPipeline):
         self,
         query: str = "",
         tables: Optional[list[str]] = None,
-        id: Optional[str] = None,
+        project_id: Optional[str] = None,
         histories: Optional[list[AskHistory]] = None,
     ):
         logger.info("Ask Retrieval pipeline is running...")
@@ -487,7 +485,7 @@ class Retrieval(BasicPipeline):
             inputs={
                 "query": query,
                 "tables": tables,
-                "id": id or "",
+                "project_id": project_id or "",
                 "histories": histories,
                 **self._components,
                 **self._configs,

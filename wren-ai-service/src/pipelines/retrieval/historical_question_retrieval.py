@@ -41,16 +41,16 @@ class OutputFormatter:
 async def count_documents(
     view_questions_store: QdrantDocumentStore,
     sql_pair_store: QdrantDocumentStore,
-    id: Optional[str] = None,
+    project_id: Optional[str] = None,
 ) -> int:
     filters = (
         {
             "operator": "AND",
             "conditions": [
-                {"field": "project_id", "operator": "==", "value": id},
+                {"field": "project_id", "operator": "==", "value": project_id},
             ],
         }
-        if id
+        if project_id
         else None
     )
     view_question_count, sql_pair_count = await asyncio.gather(
@@ -70,17 +70,20 @@ async def embedding(count_documents: int, query: str, embedder: Any) -> dict:
 
 @observe(capture_input=False)
 async def retrieval(
-    embedding: dict, id: str, view_questions_retriever: Any, sql_pair_retriever: Any
+    embedding: dict,
+    project_id: str,
+    view_questions_retriever: Any,
+    sql_pair_retriever: Any,
 ) -> dict:
     if embedding:
         filters = (
             {
                 "operator": "AND",
                 "conditions": [
-                    {"field": "project_id", "operator": "==", "value": id},
+                    {"field": "project_id", "operator": "==", "value": project_id},
                 ],
             }
-            if id
+            if project_id
             else None
         )
 
@@ -165,13 +168,13 @@ class HistoricalQuestionRetrieval(BasicPipeline):
         )
 
     @observe(name="Historical Question")
-    async def run(self, query: str, id: Optional[str] = None):
+    async def run(self, query: str, project_id: Optional[str] = None):
         logger.info("HistoricalQuestion Retrieval pipeline is running...")
         return await self._pipe.execute(
             ["formatted_output"],
             inputs={
                 "query": query,
-                "id": id or "",
+                "project_id": project_id or "",
                 **self._components,
                 **self._configs,
             },

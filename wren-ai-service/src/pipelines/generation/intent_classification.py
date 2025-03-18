@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.pipelines.common import build_table_ddl
+from src.pipelines.generation.utils.sql import construct_instructions
 from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
 
@@ -101,14 +102,32 @@ intent_classification_user_prompt_template = """
     {{ db_schema }}
 {% endfor %}
 
-### INPUT ###
+{% if sql_samples %}
+### SQL SAMPLES ###
+{% for sql_sample in sql_samples %}
+Question:
+{{sql_sample.question}}
+SQL:
+{{sql_sample.sql}}
+{% endfor %}
+{% endif %}
+
+{% if instructions %}
+### INSTRUCTIONS ###
+{{ instructions }}
+{% endif %}
+
 {% if query_history %}
-User's query history:
+### User's QUERY HISTORY ###
 {% for history in query_history %}
+Question:
 {{ history.question }}
+SQL:
 {{ history.sql }}
 {% endfor %}
 {% endif %}
+
+### QUESTION ###
 User's question: {{query}}
 Current Time: {{ current_time }}
 Output Language: {{ language }}
@@ -132,7 +151,9 @@ async def embedding(
 
 
 @observe(capture_input=False)
-async def table_retrieval(embedding: dict, id: str, table_retriever: Any) -> dict:
+async def table_retrieval(
+    embedding: dict, project_id: str, table_retriever: Any
+) -> dict:
     filters = {
         "operator": "AND",
         "conditions": [
@@ -140,9 +161,9 @@ async def table_retrieval(embedding: dict, id: str, table_retriever: Any) -> dic
         ],
     }
 
-    if id:
+    if project_id:
         filters["conditions"].append(
-            {"field": "project_id", "operator": "==", "value": id}
+            {"field": "project_id", "operator": "==", "value": project_id}
         )
 
     return await table_retriever.run(
@@ -153,7 +174,7 @@ async def table_retrieval(embedding: dict, id: str, table_retriever: Any) -> dic
 
 @observe(capture_input=False)
 async def dbschema_retrieval(
-    table_retrieval: dict, embedding: dict, id: str, dbschema_retriever: Any
+    table_retrieval: dict, embedding: dict, project_id: str, dbschema_retriever: Any
 ) -> list[Document]:
     tables = table_retrieval.get("documents", [])
     table_names = []
@@ -176,9 +197,9 @@ async def dbschema_retrieval(
         ],
     }
 
-    if id:
+    if project_id:
         filters["conditions"].append(
-            {"field": "project_id", "operator": "==", "value": id}
+            {"field": "project_id", "operator": "==", "value": project_id}
         )
 
     results = await dbschema_retriever.run(
@@ -227,6 +248,8 @@ def prompt(
     construct_db_schemas: list[str],
     prompt_builder: PromptBuilder,
     histories: Optional[list[AskHistory]] = None,
+    sql_samples: Optional[list[dict]] = None,
+    instructions: Optional[list[dict]] = None,
     configuration: Configuration | None = None,
 ) -> dict:
     return prompt_builder.run(
@@ -234,6 +257,11 @@ def prompt(
         language=configuration.language,
         db_schemas=construct_db_schemas,
         query_history=histories,
+        sql_samples=sql_samples,
+        instructions=construct_instructions(
+            instructions=instructions,
+            configuration=configuration,
+        ),
         current_time=configuration.show_current_time(),
     )
 
@@ -319,8 +347,10 @@ class IntentClassification(BasicPipeline):
     async def run(
         self,
         query: str,
-        id: Optional[str] = None,
+        project_id: Optional[str] = None,
         histories: Optional[list[AskHistory]] = None,
+        sql_samples: Optional[list[dict]] = None,
+        instructions: Optional[list[dict]] = None,
         configuration: Configuration = Configuration(),
     ):
         logger.info("Intent Classification pipeline is running...")
@@ -328,8 +358,10 @@ class IntentClassification(BasicPipeline):
             ["post_process"],
             inputs={
                 "query": query,
-                "id": id or "",
+                "project_id": project_id or "",
                 "histories": histories,
+                "sql_samples": sql_samples or [],
+                "instructions": instructions or [],
                 "configuration": configuration,
                 **self._components,
             },
