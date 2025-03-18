@@ -32,7 +32,7 @@ def chunk(
     project_id: Optional[str] = None,
 ) -> dict[str, Any]:
     addition = {"project_id": project_id} if project_id else {}
-    data_source = mdl.get("data_source", "local_file")
+    data_source = mdl.get("dataSource", "local_file").lower()
 
     document = Document(
         id=str(uuid.uuid4()),
