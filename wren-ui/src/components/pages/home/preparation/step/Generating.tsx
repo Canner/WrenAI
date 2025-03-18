@@ -1,5 +1,5 @@
 import { Typography } from 'antd';
-import { Loading } from '@/components/PageLoading';
+import { Spinner } from '@/components/PageLoading';
 
 interface Props {
   generating?: boolean;
@@ -19,14 +19,14 @@ export default function Generating(props: Props) {
         {generating || correcting ? (
           <div className="d-flex align-center gx-2">
             {correcting ? 'Correcting SQL statement' : 'Generating'}
-            <Loading className="gray-6" size={12} loading />
+            <Spinner className="gray-6" size={12} />
           </div>
         ) : (
           <>
             <div>Successfully generated SQL statement</div>
             {loading && (
               <div className="d-flex align-center gx-2 mt-1">
-                Wrapping up <Loading size={16} loading />
+                Wrapping up <Spinner className="gray-6" size={16} />
               </div>
             )}
           </>

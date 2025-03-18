@@ -3,7 +3,6 @@ import { useRouter } from 'next/router';
 import { Button, Typography } from 'antd';
 import { Logo } from '@/components/Logo';
 import { Path } from '@/utils/enum';
-import { nextTick } from '@/utils/time';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import Prompt from '@/components/pages/home/prompt';
 import DemoPrompt from '@/components/pages/home/prompt/DemoPrompt';
@@ -14,7 +13,6 @@ import RecommendedQuestionsPrompt from '@/components/pages/home/prompt/Recommend
 import {
   useSuggestedQuestionsQuery,
   useCreateThreadMutation,
-  useGenerateThreadRecommendationQuestionsMutation,
 } from '@/apollo/client/graphql/home.generated';
 import { useGetSettingsQuery } from '@/apollo/client/graphql/settings.generated';
 import { CreateThreadInput } from '@/apollo/client/graphql/__types__';

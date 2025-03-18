@@ -1,6 +1,6 @@
 import { Typography, Tag } from 'antd';
 import { makeIterable } from '@/utils/iteration';
-import { Loading } from '@/components/PageLoading';
+import { Spinner } from '@/components/PageLoading';
 
 interface Props {
   tables: string[];
@@ -27,7 +27,7 @@ export default function Retrieving(props: Props) {
         {loading ? (
           <div className="d-flex align-center gx-2">
             Searching
-            <Loading className="gray-6" size={12} loading />
+            <Spinner className="gray-6" size={12} />
           </div>
         ) : (
           <>

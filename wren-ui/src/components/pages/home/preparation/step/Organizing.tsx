@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Typography } from 'antd';
 import MarkdownBlock from '@/components/editor/MarkdownBlock';
-import { Loading } from '@/components/PageLoading';
+import { Spinner } from '@/components/PageLoading';
 
 interface Props {
   stream: string;
@@ -41,7 +41,7 @@ export default function Organizing(props: Props) {
         {loading ? (
           <div className="d-flex align-center gx-2">
             Thinking
-            <Loading className="gray-6" size={12} loading />
+            <Spinner className="gray-6" size={12} />
           </div>
         ) : (
           <MarkdownBlock content={stream} />
