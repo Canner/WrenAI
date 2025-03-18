@@ -1,15 +1,12 @@
 import { merge, pick } from 'lodash';
-import { IWrenAIAdaptor } from '../adaptors';
-import { InstructionInput, UpdateInstructionInput } from '../models';
+import { IWrenAIAdaptor } from '@server/adaptors';
+import { InstructionInput, UpdateInstructionInput } from '@server/models';
 import {
   InstructionResult,
   InstructionStatus,
   GenerateInstructionInput,
-} from '../models/adaptor';
-import {
-  IInstructionRepository,
-  Instruction,
-} from '../repositories/instructionRepository';
+} from '@server/models/adaptor';
+import { IInstructionRepository, Instruction } from '@server/repositories';
 import * as Errors from '@server/utils/error';
 import { GeneralErrorCodes } from '@server/utils/error';
 export interface IInstructionService {
