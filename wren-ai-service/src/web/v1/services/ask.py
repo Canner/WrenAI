@@ -30,7 +30,6 @@ class AskRequest(BaseModel):
     thread_id: Optional[str] = None
     histories: Optional[list[AskHistory]] = Field(default_factory=list)
     configurations: Optional[Configuration] = Configuration()
-    data_source: Optional[str] = "canner"
 
     @property
     def query_id(self) -> str:
@@ -372,7 +371,6 @@ class AskService:
                     return results
 
             sql_functions = await self._pipelines["sql_functions_retrieval"].run(
-                data_source=ask_request.data_source,
                 project_id=ask_request.project_id,
             )
 
