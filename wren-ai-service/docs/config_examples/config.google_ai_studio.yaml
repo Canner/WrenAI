@@ -147,6 +147,8 @@ pipes:
   - name: sql_functions_retrieval
     engine: wren_ibis
     document_store: qdrant
+  - name: project_meta_indexing
+    document_store: qdrant
 
 ---
 settings:
