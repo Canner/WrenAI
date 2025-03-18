@@ -557,6 +557,7 @@ export class AskingService implements IAskingService {
       configurations: { language },
       rerunFromCancelled,
       previousTaskId,
+      threadResponseId,
     });
     return {
       id: response.queryId,

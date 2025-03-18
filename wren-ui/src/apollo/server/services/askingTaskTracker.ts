@@ -37,6 +37,7 @@ export type TrackedAskingResult = AskResult & {
 export type CreateAskingTaskInput = AskInput & {
   rerunFromCancelled?: boolean;
   previousTaskId?: number;
+  threadResponseId?: number;
 };
 
 export interface IAskingTaskTracker {
@@ -97,8 +98,13 @@ export class AskingTaskTracker implements IAskingTaskTracker {
       const queryId = response.queryId;
 
       // validate the input
-      if (input.rerunFromCancelled && !input.previousTaskId) {
-        throw new Error('Previous task id is required if rerun from cancelled');
+      if (
+        input.rerunFromCancelled &&
+        (!input.previousTaskId || !input.threadResponseId)
+      ) {
+        throw new Error(
+          'Previous task id and thread response id are required if rerun from cancelled',
+        );
       }
 
       // Start tracking this task
@@ -112,7 +118,15 @@ export class AskingTaskTracker implements IAskingTaskTracker {
       this.trackedTasks.set(queryId, task);
 
       // if rerun from cancelled, we update the query id to the previous task
-      if (input.rerunFromCancelled && input.previousTaskId) {
+      if (
+        input.rerunFromCancelled &&
+        input.previousTaskId &&
+        input.threadResponseId
+      ) {
+        // set the thread response id in memory to bind the task to the thread response
+        // we don't have to update to database here because the thread response id is already set in database
+        task.threadResponseId = input.threadResponseId;
+
         // update the task id in memory
         this.trackedTasksById.set(input.previousTaskId, task);
 
