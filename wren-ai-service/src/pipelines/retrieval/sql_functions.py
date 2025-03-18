@@ -8,7 +8,6 @@ from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from hamilton.function_modifiers import extract_fields
 from langfuse.decorators import observe
-from haystack.document_stores.types import DocumentStore
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
@@ -120,6 +119,7 @@ class SqlFunctions(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
+    @observe(capture_input=False)
     async def _retrieve_metadata(self, project_id: str) -> dict[str, Any]:
         filters = None
         if project_id is not None:
