@@ -204,6 +204,11 @@ export class AskingTaskTracker implements IAskingTaskTracker {
       threadId,
       threadResponseId,
     });
+
+    // check if the task is finalized and has a sql
+    if (task.isFinalized) {
+      await this.updateThreadResponseWhenTaskFinalized(task);
+    }
   }
 
   private startPolling(): void {
@@ -311,31 +316,7 @@ export class AskingTaskTracker implements IAskingTaskTracker {
               task.isFinalized = true;
               // update thread response if threadResponseId is provided
               if (task.threadResponseId) {
-                const response = result?.response?.[0];
-
-                // if the generated response of asking task is not null, update the thread response
-                if (response) {
-                  if (response.viewId) {
-                    // get sql from the view
-                    const view = await this.viewRepository.findOneBy({
-                      id: response.viewId,
-                    });
-                    await this.threadResponseRepository.updateOne(
-                      task.threadResponseId,
-                      {
-                        sql: view.statement,
-                        viewId: response.viewId,
-                      },
-                    );
-                  } else {
-                    await this.threadResponseRepository.updateOne(
-                      task.threadResponseId,
-                      {
-                        sql: response?.sql,
-                      },
-                    );
-                  }
-                }
+                await this.updateThreadResponseWhenTaskFinalized(task);
               }
 
               logger.info(
@@ -374,6 +355,30 @@ export class AskingTaskTracker implements IAskingTaskTracker {
         this.trackedTasks.delete(queryId);
       }
     });
+  }
+
+  private async updateThreadResponseWhenTaskFinalized(
+    task: TrackedTask,
+  ): Promise<void> {
+    const response = task?.result?.response?.[0];
+    if (!response) {
+      return;
+    }
+    // if the generated response of asking task is not null, update the thread response
+    if (response.viewId) {
+      // get sql from the view
+      const view = await this.viewRepository.findOneBy({
+        id: response.viewId,
+      });
+      await this.threadResponseRepository.updateOne(task.threadResponseId, {
+        sql: view.statement,
+        viewId: response.viewId,
+      });
+    } else {
+      await this.threadResponseRepository.updateOne(task.threadResponseId, {
+        sql: response?.sql,
+      });
+    }
   }
 
   private async getAskingResultFromDB({
