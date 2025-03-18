@@ -13,6 +13,22 @@ class RetrievalMock(retrieval.Retrieval):
         return {"construct_retrieval_results": self._documents}
 
 
+class SqlPairsRetrievalMock(retrieval.SqlPairsRetrieval):
+    def __init__(self, documents: list = []):
+        self._documents = documents
+
+    async def run(self, query: str, id: Optional[str] = None):
+        return {"formatted_output": {"documents": self._documents}}
+
+
+class InstructionsRetrievalMock(retrieval.Instructions):
+    def __init__(self, documents: list = []):
+        self._documents = documents
+
+    async def run(self, query: str, id: Optional[str] = None):
+        return {"formatted_output": {"documents": self._documents}}
+
+
 class HistoricalQuestionMock(retrieval.HistoricalQuestionRetrieval):
     def __init__(self, documents: list = []):
         self._documents = documents
