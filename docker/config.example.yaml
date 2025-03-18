@@ -144,6 +144,7 @@ pipes:
     document_store: qdrant
   - name: sql_functions_retrieval
     engine: wren_ibis
+    document_store: qdrant
 
 ---
 settings:

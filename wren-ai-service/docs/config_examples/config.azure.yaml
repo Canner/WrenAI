@@ -147,6 +147,7 @@ pipes:
     document_store: qdrant
   - name: sql_functions_retrieval
     engine: wren_ibis
+    document_store: qdrant
 
 ---
 settings:
@@ -155,7 +156,7 @@ settings:
   table_column_retrieval_size: 100
   allow_using_db_schemas_without_pruning: false
   allow_intent_classification: true
-  allow_sql_generation_reasoning: true  
+  allow_sql_generation_reasoning: true
   query_cache_maxsize: 1000
   query_cache_ttl: 3600
   langfuse_host: https://cloud.langfuse.com
