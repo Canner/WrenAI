@@ -1,4 +1,5 @@
 import { Drawer, Typography } from 'antd';
+import { getCompactTime } from '@/utils/time';
 import { DrawerAction } from '@/hooks/useDrawerAction';
 import CodeBlock from '@/components/editor/CodeBlock';
 
@@ -27,6 +28,14 @@ export default function SQLPairDrawer(props: Props) {
           showLineNumbers
           maxHeight="500"
         />
+      </div>
+      <div className="mb-6">
+        <Typography.Text className="gray-7 mb-2">Created Time</Typography.Text>
+        <div>
+          {defaultValue?.createdAt
+            ? getCompactTime(defaultValue.createdAt)
+            : '-'}
+        </div>
       </div>
     </Drawer>
   );

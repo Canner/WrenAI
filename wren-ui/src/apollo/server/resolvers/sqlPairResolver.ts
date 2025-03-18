@@ -99,4 +99,13 @@ export class SqlPairResolver {
       });
     }
   }
+
+  public getSqlPairNestedResolver = () => ({
+    createdAt: (sqlPair: SqlPair, _args: any, _ctx: IContext) => {
+      return new Date(sqlPair.createdAt).toISOString();
+    },
+    updatedAt: (sqlPair: SqlPair, _args: any, _ctx: IContext) => {
+      return new Date(sqlPair.updatedAt).toISOString();
+    },
+  });
 }

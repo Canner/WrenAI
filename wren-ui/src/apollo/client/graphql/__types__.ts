@@ -1096,10 +1096,12 @@ export type SimpleMeasureInput = {
 
 export type SqlPair = {
   __typename?: 'SqlPair';
+  createdAt?: Maybe<Scalars['String']>;
   id: Scalars['Int'];
   projectId: Scalars['Int'];
   question: Scalars['String'];
   sql: Scalars['String'];
+  updatedAt?: Maybe<Scalars['String']>;
 };
 
 export type SqlPairWhereUniqueInput = {

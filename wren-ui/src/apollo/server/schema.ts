@@ -864,6 +864,8 @@ export const typeDefs = gql`
     projectId: Int!
     sql: String!
     question: String!
+    createdAt: String
+    updatedAt: String
   }
 
   input CreateSqlPairInput {

@@ -6,6 +6,7 @@ import { format } from 'sql-formatter';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import FunctionOutlined from '@ant-design/icons/FunctionOutlined';
 import { MORE_ACTION } from '@/utils/enum';
+import { getCompactTime } from '@/utils/time';
 import useDrawerAction from '@/hooks/useDrawerAction';
 import useModalAction from '@/hooks/useModalAction';
 import { MoreButton } from '@/components/ActionButton';
@@ -96,6 +97,7 @@ export default function ManageQuestionSQLPairs() {
       title: 'Question',
       dataIndex: 'question',
       ellipsis: true,
+      width: 300,
       render: (question) => (
         <StyledQuestionBlock className="text-truncate">
           {question}
@@ -113,9 +115,16 @@ export default function ManageQuestionSQLPairs() {
       ),
     },
     {
+      title: 'Created Time',
+      dataIndex: 'createdAt',
+      width: 130,
+      render: (time) => <Text className="gray-7">{getCompactTime(time)}</Text>,
+    },
+    {
       key: 'action',
       width: 64,
       align: 'center',
+      fixed: 'right',
       render: (_, record) => (
         <SQLPairDropdown onMoreClick={onMoreClick} data={record}>
           <MoreButton className="gray-8" />
@@ -164,6 +173,7 @@ export default function ManageQuestionSQLPairs() {
             pageSize: 10,
             size: 'small',
           }}
+          scroll={{ x: 1080 }}
         />
         <SQLPairDrawer
           {...sqlPairDrawer.state}

@@ -6,6 +6,8 @@ export interface SqlPair {
   projectId: number; // Reference to project.id
   sql: string; // SQL query
   question: string; // Natural language question
+  createdAt?: string; // Date and time when the SQL pair was created
+  updatedAt?: string; // Date and time when the SQL pair was last updated
 }
 
 export interface ISqlPairRepository extends IBasicRepository<SqlPair> {}
