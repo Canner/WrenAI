@@ -108,7 +108,7 @@ export default function ManageQuestionSQLPairs() {
       width: '60%',
       render: (sql) => (
         <div style={{ width: '100%' }}>
-          <CodeBlock code={sql} multipleLine={3} />
+          <CodeBlock code={sql} maxHeight="130" />
         </div>
       ),
     },
