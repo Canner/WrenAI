@@ -39,7 +39,6 @@ Question:
 {{sample.question}}
 SQL:
 {{sample.sql}}
-
 {% endfor %}
 {% endif %}
 
@@ -65,7 +64,7 @@ def prompt(
     sql_generation_reasoning: str | None = None,
     configuration: Configuration | None = None,
     sql_samples: list[dict] | None = None,
-    instructions: list[str] | None = None,
+    instructions: list[dict] | None = None,
     has_calculated_field: bool = False,
     has_metric: bool = False,
 ) -> dict:
@@ -77,7 +76,6 @@ def prompt(
             configuration,
             has_calculated_field,
             has_metric,
-            sql_samples,
             instructions,
         ),
         sql_samples=sql_samples,
@@ -145,7 +143,7 @@ class SQLGeneration(BasicPipeline):
         sql_generation_reasoning: str | None = None,
         configuration: Configuration = Configuration(),
         sql_samples: list[dict] | None = None,
-        instructions: list[str] | None = None,
+        instructions: list[dict] | None = None,
         project_id: str | None = None,
         has_calculated_field: bool = False,
         has_metric: bool = False,

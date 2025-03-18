@@ -10,6 +10,7 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
+from src.pipelines.generation.utils.sql import construct_instructions
 from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
 
@@ -52,9 +53,7 @@ SQL:
 
 {% if instructions %}
 ### INSTRUCTIONS ###
-{% for instruction in instructions %}
-{{ instruction }}
-{% endfor %}
+{{ instructions }}
 {% endif %}
 
 ### User's QUERY HISTORY ###
@@ -81,7 +80,7 @@ def prompt(
     documents: list[str],
     histories: list[AskHistory],
     sql_samples: list[dict],
-    instructions: list[str],
+    instructions: list[dict],
     prompt_builder: PromptBuilder,
     configuration: Configuration | None = Configuration(),
 ) -> dict:
@@ -90,7 +89,10 @@ def prompt(
         documents=documents,
         histories=histories,
         sql_samples=sql_samples,
-        instructions=instructions,
+        instructions=construct_instructions(
+            configuration=configuration,
+            instructions=instructions,
+        ),
         current_time=configuration.show_current_time(),
         language=configuration.language,
     )
@@ -178,7 +180,7 @@ class FollowUpSQLGenerationReasoning(BasicPipeline):
         contexts: list[str],
         histories: list[AskHistory],
         sql_samples: Optional[list[dict]] = None,
-        instructions: Optional[list[str]] = None,
+        instructions: Optional[list[dict]] = None,
         configuration: Configuration = Configuration(),
         query_id: Optional[str] = None,
     ):

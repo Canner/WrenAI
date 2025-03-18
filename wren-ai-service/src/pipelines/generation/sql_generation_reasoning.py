@@ -10,6 +10,7 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
+from src.pipelines.generation.utils.sql import construct_instructions
 from src.web.v1.services import Configuration
 
 logger = logging.getLogger("wren-ai-service")
@@ -51,9 +52,7 @@ SQL:
 
 {% if instructions %}
 ### INSTRUCTIONS ###
-{% for instruction in instructions %}
-{{ instruction }}
-{% endfor %}
+{{ instructions }}
 {% endif %}
 
 ### QUESTION ###
@@ -71,7 +70,7 @@ def prompt(
     query: str,
     documents: list[str],
     sql_samples: list[dict],
-    instructions: list[str],
+    instructions: list[dict],
     prompt_builder: PromptBuilder,
     configuration: Configuration | None = Configuration(),
 ) -> dict:
@@ -79,7 +78,10 @@ def prompt(
         query=query,
         documents=documents,
         sql_samples=sql_samples,
-        instructions=instructions,
+        instructions=construct_instructions(
+            instructions=instructions,
+            configuration=configuration,
+        ),
         current_time=configuration.show_current_time(),
         language=configuration.language,
     )

@@ -76,7 +76,6 @@ def prompt(
             configuration,
             has_calculated_field,
             has_metric,
-            sql_samples=[],
         ),
         current_time=configuration.show_current_time(),
     )

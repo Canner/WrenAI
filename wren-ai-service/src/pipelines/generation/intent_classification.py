@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.pipelines.common import build_table_ddl
+from src.pipelines.generation.utils.sql import construct_instructions
 from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
 
@@ -113,9 +114,7 @@ SQL:
 
 {% if instructions %}
 ### INSTRUCTIONS ###
-{% for instruction in instructions %}
-{{ instruction }}
-{% endfor %}
+{{ instructions }}
 {% endif %}
 
 {% if query_history %}
@@ -248,7 +247,7 @@ def prompt(
     prompt_builder: PromptBuilder,
     histories: Optional[list[AskHistory]] = None,
     sql_samples: Optional[list[dict]] = None,
-    instructions: Optional[list[str]] = None,
+    instructions: Optional[list[dict]] = None,
     configuration: Configuration | None = None,
 ) -> dict:
     return prompt_builder.run(
@@ -257,7 +256,10 @@ def prompt(
         db_schemas=construct_db_schemas,
         query_history=histories,
         sql_samples=sql_samples,
-        instructions=instructions,
+        instructions=construct_instructions(
+            instructions=instructions,
+            configuration=configuration,
+        ),
         current_time=configuration.show_current_time(),
     )
 
@@ -345,8 +347,8 @@ class IntentClassification(BasicPipeline):
         query: str,
         id: Optional[str] = None,
         histories: Optional[list[AskHistory]] = None,
-        sql_samples: Optional[list[str]] = None,
-        instructions: Optional[list[str]] = None,
+        sql_samples: Optional[list[dict]] = None,
+        instructions: Optional[list[dict]] = None,
         configuration: Configuration = Configuration(),
     ):
         logger.info("Intent Classification pipeline is running...")
