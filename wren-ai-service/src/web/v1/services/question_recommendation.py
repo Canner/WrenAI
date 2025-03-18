@@ -75,7 +75,7 @@ class QuestionRecommendation:
         try:
             retrieval_result = await self._pipelines["retrieval"].run(
                 query=candidate["question"],
-                id=project_id,
+                project_id=project_id,
             )
             _retrieval_result = retrieval_result.get("construct_retrieval_results", {})
             documents = _retrieval_result.get("retrieval_results", [])
