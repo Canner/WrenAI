@@ -72,7 +72,7 @@ class QuestionRecommendation:
         project_id: Optional[str] = None,
         configuration: Optional[Configuration] = Configuration(),
     ):
-        try:
+        async def _document_retrieval():
             retrieval_result = await self._pipelines["retrieval"].run(
                 query=candidate["question"],
                 project_id=project_id,
@@ -82,11 +82,25 @@ class QuestionRecommendation:
             table_ddls = [document.get("table_ddl") for document in documents]
             has_calculated_field = _retrieval_result.get("has_calculated_field", False)
             has_metric = _retrieval_result.get("has_metric", False)
+            return table_ddls, has_calculated_field, has_metric
+
+        async def _sql_pairs_retrieval():
+            sql_pairs_result = await self._pipelines["sql_pairs_retrieval"].run(
+                query=candidate["question"],
+                project_id=project_id,
+            )
+            sql_samples = sql_pairs_result["formatted_output"].get("documents", [])
+            return sql_samples
+
+        try:
+            table_ddls, has_calculated_field, has_metric = await _document_retrieval()
+            sql_samples = await _sql_pairs_retrieval()
 
             sql_generation_reasoning = (
                 await self._pipelines["sql_generation_reasoning"].run(
                     query=candidate["question"],
                     contexts=table_ddls,
+                    sql_samples=sql_samples,
                     configuration=configuration,
                 )
             ).get("post_process", {})
@@ -95,8 +109,9 @@ class QuestionRecommendation:
                 query=candidate["question"],
                 contexts=table_ddls,
                 sql_generation_reasoning=sql_generation_reasoning,
-                configuration=configuration,
                 project_id=project_id,
+                configuration=configuration,
+                sql_samples=sql_samples,
                 has_calculated_field=has_calculated_field,
                 has_metric=has_metric,
             )
