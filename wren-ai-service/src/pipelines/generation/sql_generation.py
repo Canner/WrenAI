@@ -75,7 +75,7 @@ def prompt(
     instructions: list[dict] | None = None,
     has_calculated_field: bool = False,
     has_metric: bool = False,
-    sql_functions: List[SqlFunction] | None = None,
+    sql_functions: list[SqlFunction] | None = None,
 ) -> dict:
     return prompt_builder.run(
         query=query,
@@ -157,7 +157,7 @@ class SQLGeneration(BasicPipeline):
         project_id: str | None = None,
         has_calculated_field: bool = False,
         has_metric: bool = False,
-        sql_functions: List[SqlFunction] | None = None,
+        sql_functions: list[SqlFunction] | None = None,
     ):
         logger.info("SQL Generation pipeline is running...")
         return await self._pipe.execute(

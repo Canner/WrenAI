@@ -86,7 +86,7 @@ def prompt(
     instructions: list[dict] | None = None,
     has_calculated_field: bool = False,
     has_metric: bool = False,
-    sql_functions: List[SqlFunction] | None = None,
+    sql_functions: list[SqlFunction] | None = None,
 ) -> dict:
     previous_query_summaries = [history.question for history in histories]
 
@@ -170,7 +170,7 @@ class FollowUpSQLGeneration(BasicPipeline):
         project_id: str | None = None,
         has_calculated_field: bool = False,
         has_metric: bool = False,
-        sql_functions: List[SqlFunction] | None = None,
+        sql_functions: list[SqlFunction] | None = None,
     ):
         logger.info("Follow-Up SQL Generation pipeline is running...")
         return await self._pipe.execute(
