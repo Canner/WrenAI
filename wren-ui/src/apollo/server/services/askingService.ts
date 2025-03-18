@@ -101,6 +101,14 @@ export interface IAskingService {
   createAskingTask(
     input: AskingTaskInput,
     payload: AskingPayload,
+    // if the asking task is rerun from a cancelled thread response
+    rerunFromCancelled?: boolean,
+    // if the asking task is rerun from a cancelled thread response,
+    // the previous task id is the task id of the cancelled thread response
+    previousTaskId?: number,
+    // if the asking task is rerun from a thread response
+    // the thread response id is the id of the cancelled thread response
+    threadResponseId?: number,
   ): Promise<Task>;
   rerunAskingTask(
     threadResponseId: number,
@@ -531,6 +539,7 @@ export class AskingService implements IAskingService {
     payload: AskingPayload,
     rerunFromCancelled?: boolean,
     previousTaskId?: number,
+    threadResponseId?: number,
   ): Promise<Task> {
     const { threadId, language } = payload;
     const deployId = await this.getDeployId();
@@ -538,7 +547,9 @@ export class AskingService implements IAskingService {
     // if it's a follow-up question, then the input will have a threadId
     // then use the threadId to get the sql and get the steps of last thread response
     // construct it into AskHistory and pass to ask
-    const histories = threadId ? await this.getAskingHistory(threadId) : null;
+    const histories = threadId
+      ? await this.getAskingHistory(threadId, threadResponseId)
+      : null;
     const response = await this.askingTaskTracker.createAskingTask({
       query: input.question,
       histories,
@@ -980,14 +991,28 @@ export class AskingService implements IAskingService {
    * @param threadId
    * @returns Promise<ThreadResponse[]>
    */
-  private async getAskingHistory(threadId: number): Promise<ThreadResponse[]> {
+  private async getAskingHistory(
+    threadId: number,
+    excludeThreadResponseId?: number,
+  ): Promise<ThreadResponse[]> {
     if (!threadId) {
       return [];
     }
-    return await this.threadResponseRepository.getResponsesWithThread(
+    let responses = await this.threadResponseRepository.getResponsesWithThread(
       threadId,
       10,
     );
+
+    // exclude the thread response if the excludeThreadResponseId is provided
+    // it's used when rerun the asking task, we don't want include the cancelled thread response
+    if (excludeThreadResponseId) {
+      responses = responses.filter(
+        (response) => response.id !== excludeThreadResponseId,
+      );
+    }
+
+    // filter out the thread response with empty sql
+    return responses.filter((response) => response.sql);
   }
 
   private getThreadRecommendationQuestionsConfig(project: Project) {
