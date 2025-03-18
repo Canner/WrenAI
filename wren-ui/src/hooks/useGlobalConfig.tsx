@@ -14,12 +14,17 @@ export const GlobalConfigProvider = ({ children }) => {
   const [config, setConfig] = useState<UserConfig | null>(null);
 
   useEffect(() => {
-    getUserConfig().then((config) => {
-      setConfig(config);
-      // telemetry setup
-      trackUserTelemetry(router, config);
-    });
-  }, []);
+    getUserConfig()
+      .then((config) => {
+        setConfig(config);
+        // telemetry setup
+        const cleanup = trackUserTelemetry(router, config);
+        return cleanup;
+      })
+      .catch((error) => {
+        console.error('Failed to get user config', error);
+      });
+  }, [router]);
 
   const value = {
     config,

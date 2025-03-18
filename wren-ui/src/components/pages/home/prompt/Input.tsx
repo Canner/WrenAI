@@ -35,11 +35,13 @@ export default function PromptInput(props: Props) {
   };
 
   const handleAsk = () => {
+    const trimmedValue = inputValue.trim();
+    if (!trimmedValue) return;
     const startAsking = attachLoading(onAsk, setInnerLoading);
-    startAsking(inputValue.trim());
+    startAsking(trimmedValue);
   };
 
-  const inputEnter = (event) => {
+  const inputEnter = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.shiftKey) return;
     event.preventDefault();
     handleAsk();
