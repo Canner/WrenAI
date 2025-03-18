@@ -46,7 +46,7 @@ export const PromptThreadProvider = (props: {
   // clear store when unmount
   useEffect(() => {
     return () => storeContext.clearStore(STORE.PROMPT_THREAD);
-  }, [storeContext]);
+  }, []);
   return (
     <PromptThreadContext.Provider value={props.value}>
       {props.children}
