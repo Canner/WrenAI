@@ -88,7 +88,8 @@ const PreparationStatus = (props: Props) => {
       </Space>
     );
   } else if (askingTask.status === AskingTaskStatus.FINISHED) {
-    return <div className="gray-6">3 steps</div>;
+    const showView = data.view !== null;
+    return <div className="gray-6">{showView ? '1 step' : '3 steps'}</div>;
   }
 
   return null;
@@ -96,7 +97,7 @@ const PreparationStatus = (props: Props) => {
 
 export default function Preparation(props: Props) {
   const { className, data, askingStreamTask, isAnswerPrepared } = props;
-  const { askingTask } = data;
+  const { askingTask, view } = data;
 
   const processState = useMemo(
     () => convertAskingTaskToProcessState(askingTask),
@@ -113,9 +114,11 @@ export default function Preparation(props: Props) {
 
   if (askingTask === null) return null;
 
-  const showRetrieving = retrievingNextStates.includes(processState);
-  const showOrganizing = organizingNextStates.includes(processState);
-  const showGenerating = generatingNextStates.includes(processState);
+  const showView = view !== null;
+  // General steps
+  const showRetrieving = retrievingNextStates.includes(processState) && !view;
+  const showOrganizing = organizingNextStates.includes(processState) && !view;
+  const showGenerating = generatingNextStates.includes(processState) && !view;
 
   const isStopped = askingTask.status === AskingTaskStatus.STOPPED;
   const retrievedTables = askingTask.retrievedTables || [];
@@ -157,7 +160,21 @@ export default function Preparation(props: Props) {
             </div>
           }
         >
-          <Timeline className="px-1">
+          <Timeline className="px-1 -mb-4">
+            {showView && (
+              <Timeline.Item>
+                <Typography.Text className="gray-8">
+                  Using pre-saved view
+                </Typography.Text>
+                <div className="gray-7 text-sm mt-1">
+                  <div>
+                    Matching saved view found. Returning results instantly.
+                  </div>
+                </div>
+              </Timeline.Item>
+            )}
+
+            {/* General steps */}
             {showRetrieving && (
               <Timeline.Item>
                 <Retrieving
