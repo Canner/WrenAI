@@ -9,4 +9,5 @@ export enum Path {
   OnboardingRelationships = '/setup/relationships',
   Knowledge = '/knowledge',
   KnowledgeQuestionSQLPairs = '/knowledge/question-sql-pairs',
+  KnowledgeInstructions = '/knowledge/instructions',
 }
