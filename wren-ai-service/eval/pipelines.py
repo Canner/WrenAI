@@ -377,6 +377,7 @@ class AskPipeline(Eval):
         )
         self._allow_sql_samples = settings.allow_sql_samples
         self._allow_instructions = settings.allow_instructions
+        self._allow_sql_generation_reasoning = settings.allow_sql_generation_reasoning
 
         self._engine_info = engine_config(
             mdl, pipe_components, settings.db_path_for_duckdb
@@ -414,12 +415,15 @@ class AskPipeline(Eval):
         instructions = self._get_instructions(params)
         samples = self._get_samples(params)
 
-        _reasoning = await self._sql_reasoner.run(
-            query=params["input"],
-            contexts=documents,
-            sql_samples=samples,
-        )
-        reasoning = _reasoning.get("post_process", {})
+        if self._allow_sql_generation_reasoning:
+            _reasoning = await self._sql_reasoner.run(
+                query=params["input"],
+                contexts=documents,
+                sql_samples=samples,
+            )
+            reasoning = _reasoning.get("post_process", {})
+        else:
+            reasoning = ""
 
         actual_output = await self._generation.run(
             query=params["input"],
