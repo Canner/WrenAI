@@ -44,7 +44,7 @@ const PreparationStatus = (props: Props) => {
   const { data, onStopAskingTask, onReRunAskingTask } = props;
   const [stopLoading, setStopLoading] = useState(false);
   const [reRunLoading, setReRunLoading] = useState(false);
-  const { askingTask, id, question } = data;
+  const { askingTask } = data;
   const isProcessing = !getIsFinished(askingTask.status);
 
   const onCancel = (e) => {
@@ -56,7 +56,7 @@ const PreparationStatus = (props: Props) => {
   const onReRun = (e) => {
     e.stopPropagation();
     const reRunAskingTask = attachLoading(onReRunAskingTask, setReRunLoading);
-    reRunAskingTask(id, question);
+    reRunAskingTask(data);
   };
 
   if (isProcessing) {

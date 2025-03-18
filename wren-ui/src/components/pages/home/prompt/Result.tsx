@@ -257,6 +257,8 @@ const getDefaultStateComponent = (state: PROCESS_STATE) => {
     {
       [PROCESS_STATE.UNDERSTANDING]: Understanding,
       [PROCESS_STATE.SEARCHING]: IntentionFinished,
+      // The finished status will respond by AI directly if viewId found, so we need to handle with intention finished.
+      [PROCESS_STATE.FINISHED]: IntentionFinished,
       [PROCESS_STATE.FAILED]: Failed,
     }[state] || null
   );

@@ -4,6 +4,7 @@ import {
   AdjustThreadResponseChartInput,
   DetailedThread,
   RecommendedQuestionsTask,
+  ThreadResponse,
 } from '@/apollo/client/graphql/__types__';
 import { SelectQuestionProps } from '@/components/pages/home/RecommendedQuestions';
 
@@ -14,7 +15,7 @@ export type IPromptThreadStore = {
   preparation: {
     askingStreamTask?: string;
     onStopAskingTask?: (queryId?: string) => Promise<void>;
-    onReRunAskingTask?: (question: string) => Promise<void>;
+    onReRunAskingTask?: (threadResponse: ThreadResponse) => Promise<void>;
   };
   onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
   onSelectRecommendedQuestion: ({

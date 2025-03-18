@@ -7,6 +7,7 @@ import {
   DetailedThread,
   RecommendedQuestionsTask,
   RecommendedQuestionsTaskStatus,
+  ThreadResponse,
 } from '@/apollo/client/graphql/__types__';
 import {
   useAskingTaskLazyQuery,
@@ -105,6 +106,48 @@ const handleUpdateThreadCache = (
   }
 };
 
+const handleUpdateRerunAskingTaskCache = (
+  threadId: number,
+  threadResponseId: number,
+  askingTask: AskingTask,
+  client: ApolloClient<NormalizedCacheObject>,
+) => {
+  if (!askingTask) return;
+
+  const result = client.cache.readQuery<{ thread: DetailedThread }>({
+    query: THREAD,
+    variables: { threadId },
+  });
+
+  if (result?.thread) {
+    const task = cloneDeep(askingTask);
+    // bypass understanding status to thread response
+    if (task.status === AskingTaskStatus.UNDERSTANDING) {
+      task.status = AskingTaskStatus.SEARCHING;
+      task.type = AskingTaskType.TEXT_TO_SQL;
+    }
+    client.cache.updateQuery(
+      {
+        query: THREAD,
+        variables: { threadId },
+      },
+      (existingData) => {
+        return {
+          thread: {
+            ...existingData.thread,
+            responses: existingData.thread.responses.map((response) => {
+              if (response.id === threadResponseId) {
+                return { ...response, askingTask: task };
+              }
+              return response;
+            }),
+          },
+        };
+      },
+    );
+  }
+};
+
 export default function useAskPrompt(threadId?: number) {
   const [originalQuestion, setOriginalQuestion] = useState<string>('');
   const [threadQuestions, setThreadQuestions] = useState<string[]>([]);
@@ -175,12 +218,6 @@ export default function useAskPrompt(threadId?: number) {
     const isFinished = getIsFinished(askingTask?.status);
     if (isFinished) askingTaskResult.stopPolling();
 
-    // because askingTask stopped will cause the type updated from TEXT_TO_SQL to null
-    // so we need to update the cache manually
-    if (askingTask?.status === AskingTaskStatus.STOPPED) {
-      handleUpdateThreadCache(threadId, askingTask, askingTaskResult.client);
-    }
-
     // handle update cache for preparing component
     if (isNeedPreparing(askingTask)) {
       if (threadId) {
@@ -218,16 +255,23 @@ export default function useAskPrompt(threadId?: number) {
     }
   };
 
-  const onReRun = async (responseId: number, question: string) => {
+  const onReRun = async (threadResponse: ThreadResponse) => {
     askingStreamTaskResult.reset();
-    setOriginalQuestion(question);
+    setOriginalQuestion(threadResponse.question);
     try {
       const response = await rerunAskingTask({
-        variables: { responseId },
+        variables: { responseId: threadResponse.id },
       });
-      await fetchAskingTask({
-        variables: { taskId: response.data?.rerunAskingTask.id },
+      const { data } = await fetchAskingTask({
+        variables: { taskId: response.data.rerunAskingTask.id },
       });
+      // update the asking task in cache manually
+      handleUpdateRerunAskingTaskCache(
+        threadId,
+        threadResponse.id,
+        data.askingTask,
+        askingTaskResult.client,
+      );
     } catch (error) {
       console.error(error);
     }

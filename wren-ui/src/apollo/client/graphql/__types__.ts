@@ -558,7 +558,7 @@ export type Mutation = {
   previewModelData: Scalars['JSON'];
   previewSql: Scalars['JSON'];
   previewViewData: Scalars['JSON'];
-  rerunAskingTask: Scalars['Boolean'];
+  rerunAskingTask: Task;
   resetCurrentProject: Scalars['Boolean'];
   resolveSchemaChange: Scalars['Boolean'];
   saveDataSource: DataSource;

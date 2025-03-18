@@ -197,7 +197,9 @@ export const CANCEL_ASKING_TASK = gql`
 
 export const RERUN_ASKING_TASK = gql`
   mutation RerunAskingTask($responseId: Int!) {
-    rerunAskingTask(responseId: $responseId)
+    rerunAskingTask(responseId: $responseId) {
+      id
+    }
   }
 `;
 

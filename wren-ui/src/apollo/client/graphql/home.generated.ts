@@ -67,7 +67,7 @@ export type RerunAskingTaskMutationVariables = Types.Exact<{
 }>;
 
 
-export type RerunAskingTaskMutation = { __typename?: 'Mutation', rerunAskingTask: boolean };
+export type RerunAskingTaskMutation = { __typename?: 'Mutation', rerunAskingTask: { __typename?: 'Task', id: string } };
 
 export type CreateThreadMutationVariables = Types.Exact<{
   data: Types.CreateThreadInput;
@@ -548,7 +548,9 @@ export type CancelAskingTaskMutationResult = Apollo.MutationResult<CancelAskingT
 export type CancelAskingTaskMutationOptions = Apollo.BaseMutationOptions<CancelAskingTaskMutation, CancelAskingTaskMutationVariables>;
 export const RerunAskingTaskDocument = gql`
     mutation RerunAskingTask($responseId: Int!) {
-  rerunAskingTask(responseId: $responseId)
+  rerunAskingTask(responseId: $responseId) {
+    id
+  }
 }
     `;
 export type RerunAskingTaskMutationFn = Apollo.MutationFunction<RerunAskingTaskMutation, RerunAskingTaskMutationVariables>;
