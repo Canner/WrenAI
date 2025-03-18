@@ -195,6 +195,12 @@ export const CANCEL_ASKING_TASK = gql`
   }
 `;
 
+export const RERUN_ASKING_TASK = gql`
+  mutation RerunAskingTask($responseId: Int!) {
+    rerunAskingTask(responseId: $responseId)
+  }
+`;
+
 export const CREATE_THREAD = gql`
   mutation CreateThread($data: CreateThreadInput!) {
     createThread(data: $data) {

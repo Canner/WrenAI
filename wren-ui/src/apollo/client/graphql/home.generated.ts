@@ -62,6 +62,13 @@ export type CancelAskingTaskMutationVariables = Types.Exact<{
 
 export type CancelAskingTaskMutation = { __typename?: 'Mutation', cancelAskingTask: boolean };
 
+export type RerunAskingTaskMutationVariables = Types.Exact<{
+  responseId: Types.Scalars['Int'];
+}>;
+
+
+export type RerunAskingTaskMutation = { __typename?: 'Mutation', rerunAskingTask: boolean };
+
 export type CreateThreadMutationVariables = Types.Exact<{
   data: Types.CreateThreadInput;
 }>;
@@ -539,6 +546,37 @@ export function useCancelAskingTaskMutation(baseOptions?: Apollo.MutationHookOpt
 export type CancelAskingTaskMutationHookResult = ReturnType<typeof useCancelAskingTaskMutation>;
 export type CancelAskingTaskMutationResult = Apollo.MutationResult<CancelAskingTaskMutation>;
 export type CancelAskingTaskMutationOptions = Apollo.BaseMutationOptions<CancelAskingTaskMutation, CancelAskingTaskMutationVariables>;
+export const RerunAskingTaskDocument = gql`
+    mutation RerunAskingTask($responseId: Int!) {
+  rerunAskingTask(responseId: $responseId)
+}
+    `;
+export type RerunAskingTaskMutationFn = Apollo.MutationFunction<RerunAskingTaskMutation, RerunAskingTaskMutationVariables>;
+
+/**
+ * __useRerunAskingTaskMutation__
+ *
+ * To run a mutation, you first call `useRerunAskingTaskMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useRerunAskingTaskMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [rerunAskingTaskMutation, { data, loading, error }] = useRerunAskingTaskMutation({
+ *   variables: {
+ *      responseId: // value for 'responseId'
+ *   },
+ * });
+ */
+export function useRerunAskingTaskMutation(baseOptions?: Apollo.MutationHookOptions<RerunAskingTaskMutation, RerunAskingTaskMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<RerunAskingTaskMutation, RerunAskingTaskMutationVariables>(RerunAskingTaskDocument, options);
+      }
+export type RerunAskingTaskMutationHookResult = ReturnType<typeof useRerunAskingTaskMutation>;
+export type RerunAskingTaskMutationResult = Apollo.MutationResult<RerunAskingTaskMutation>;
+export type RerunAskingTaskMutationOptions = Apollo.BaseMutationOptions<RerunAskingTaskMutation, RerunAskingTaskMutationVariables>;
 export const CreateThreadDocument = gql`
     mutation CreateThread($data: CreateThreadInput!) {
   createThread(data: $data) {

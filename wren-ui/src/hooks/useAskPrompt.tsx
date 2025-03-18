@@ -12,6 +12,7 @@ import {
   useAskingTaskLazyQuery,
   useCancelAskingTaskMutation,
   useCreateAskingTaskMutation,
+  useRerunAskingTaskMutation,
   useCreateInstantRecommendedQuestionsMutation,
   useInstantRecommendedQuestionsLazyQuery,
 } from '@/apollo/client/graphql/home.generated';
@@ -110,6 +111,7 @@ export default function useAskPrompt(threadId?: number) {
   const [createAskingTask, createAskingTaskResult] =
     useCreateAskingTaskMutation();
   const [cancelAskingTask] = useCancelAskingTaskMutation();
+  const [rerunAskingTask] = useRerunAskingTaskMutation();
   const [fetchAskingTask, askingTaskResult] = useAskingTaskLazyQuery({
     pollInterval: 1000,
   });
@@ -216,16 +218,15 @@ export default function useAskPrompt(threadId?: number) {
     }
   };
 
-  const onReRun = async (question: string) => {
+  const onReRun = async (responseId: number, question: string) => {
     askingStreamTaskResult.reset();
     setOriginalQuestion(question);
     try {
-      const response = await createAskingTask({
-        variables: { data: { question, threadId } },
+      const response = await rerunAskingTask({
+        variables: { responseId },
       });
-      // TODO: pass queryId to new API for update asking task
       await fetchAskingTask({
-        variables: { taskId: response.data.createAskingTask.id },
+        variables: { taskId: response.data?.rerunAskingTask.id },
       });
     } catch (error) {
       console.error(error);

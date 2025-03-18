@@ -17,14 +17,13 @@ import {
 } from '@/hooks/useAskProcessState';
 import { IPromptThreadStore } from '@/components/pages/home/promptThread/store';
 import {
-  AskingTask,
+  ThreadResponse,
   AskingTaskStatus,
 } from '@/apollo/client/graphql/__types__';
 
 type Props = IPromptThreadStore['preparation'] & {
   className?: string;
-  question: string;
-  data: AskingTask;
+  data: ThreadResponse;
   isAnswerPrepared?: boolean;
 };
 
@@ -42,21 +41,22 @@ const generatingNextStates = ProcessStateMachine.getAllNextStates(
 );
 
 const PreparationStatus = (props: Props) => {
-  const { question, data, onStopAskingTask, onReRunAskingTask } = props;
+  const { data, onStopAskingTask, onReRunAskingTask } = props;
   const [stopLoading, setStopLoading] = useState(false);
   const [reRunLoading, setReRunLoading] = useState(false);
-  const isProcessing = !getIsFinished(data.status);
+  const { askingTask, id, question } = data;
+  const isProcessing = !getIsFinished(askingTask.status);
 
   const onCancel = (e) => {
     e.stopPropagation();
     const stopAskingTask = attachLoading(onStopAskingTask, setStopLoading);
-    stopAskingTask(data.queryId);
+    stopAskingTask(askingTask.queryId);
   };
 
   const onReRun = (e) => {
     e.stopPropagation();
     const reRunAskingTask = attachLoading(onReRunAskingTask, setReRunLoading);
-    reRunAskingTask(question);
+    reRunAskingTask(id, question);
   };
 
   if (isProcessing) {
@@ -71,7 +71,7 @@ const PreparationStatus = (props: Props) => {
         Cancel
       </Button>
     );
-  } else if (data.status === AskingTaskStatus.STOPPED) {
+  } else if (askingTask.status === AskingTaskStatus.STOPPED) {
     return (
       <Space className="-mr-4">
         <Tag color="red">Cancelled by user</Tag>
@@ -87,7 +87,7 @@ const PreparationStatus = (props: Props) => {
         </Button>
       </Space>
     );
-  } else if (data.status === AskingTaskStatus.FINISHED) {
+  } else if (askingTask.status === AskingTaskStatus.FINISHED) {
     return <div className="gray-6">3 steps</div>;
   }
 
@@ -96,9 +96,11 @@ const PreparationStatus = (props: Props) => {
 
 export default function Preparation(props: Props) {
   const { className, data, askingStreamTask, isAnswerPrepared } = props;
+  const { askingTask } = data;
+
   const processState = useMemo(
-    () => convertAskingTaskToProcessState(data),
-    [data],
+    () => convertAskingTaskToProcessState(askingTask),
+    [askingTask],
   );
   const [isActive, setIsActive] = useState(
     processState !== PROCESS_STATE.FINISHED,
@@ -109,16 +111,16 @@ export default function Preparation(props: Props) {
     setIsActive(!isAnswerPrepared);
   }, [isAnswerPrepared]);
 
-  if (data === null) return null;
+  if (askingTask === null) return null;
 
   const showRetrieving = retrievingNextStates.includes(processState);
   const showOrganizing = organizingNextStates.includes(processState);
   const showGenerating = generatingNextStates.includes(processState);
 
-  const isStopped = data.status === AskingTaskStatus.STOPPED;
-  const retrievedTables = data.retrievedTables || [];
+  const isStopped = askingTask.status === AskingTaskStatus.STOPPED;
+  const retrievedTables = askingTask.retrievedTables || [];
   const sqlGenerationReasoning =
-    data.sqlGenerationReasoning || askingStreamTask || '';
+    askingTask.sqlGenerationReasoning || askingStreamTask || '';
 
   return (
     <div className={clsx('border border-gray-4 rounded', className)}>

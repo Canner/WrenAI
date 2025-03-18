@@ -558,6 +558,7 @@ export type Mutation = {
   previewModelData: Scalars['JSON'];
   previewSql: Scalars['JSON'];
   previewViewData: Scalars['JSON'];
+  rerunAskingTask: Scalars['Boolean'];
   resetCurrentProject: Scalars['Boolean'];
   resolveSchemaChange: Scalars['Boolean'];
   saveDataSource: DataSource;
@@ -735,6 +736,11 @@ export type MutationPreviewSqlArgs = {
 
 export type MutationPreviewViewDataArgs = {
   where: PreviewViewDataInput;
+};
+
+
+export type MutationRerunAskingTaskArgs = {
+  responseId: Scalars['Int'];
 };
 
 

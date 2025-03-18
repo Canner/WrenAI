@@ -238,8 +238,7 @@ export default function AnswerResult(props: Props) {
       <Preparation
         className="mb-3"
         {...preparation}
-        question={threadResponse?.question}
-        data={threadResponse?.askingTask}
+        data={threadResponse}
         isAnswerPrepared={isAnswerPrepared}
       />
       {showAnswerTabs && (
