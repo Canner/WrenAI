@@ -72,7 +72,7 @@ class QuestionRecommendation:
         project_id: Optional[str] = None,
         configuration: Optional[Configuration] = Configuration(),
     ):
-        async def _document_retrieval():
+        async def _document_retrieval() -> tuple[list[str], bool, bool]:
             retrieval_result = await self._pipelines["retrieval"].run(
                 query=candidate["question"],
                 project_id=project_id,
@@ -84,7 +84,7 @@ class QuestionRecommendation:
             has_metric = _retrieval_result.get("has_metric", False)
             return table_ddls, has_calculated_field, has_metric
 
-        async def _sql_pairs_retrieval():
+        async def _sql_pairs_retrieval() -> list[dict]:
             sql_pairs_result = await self._pipelines["sql_pairs_retrieval"].run(
                 query=candidate["question"],
                 project_id=project_id,
@@ -93,8 +93,10 @@ class QuestionRecommendation:
             return sql_samples
 
         try:
-            table_ddls, has_calculated_field, has_metric = await _document_retrieval()
-            sql_samples = await _sql_pairs_retrieval()
+            _document, sql_samples = await asyncio.gather(
+                _document_retrieval(), _sql_pairs_retrieval()
+            )
+            table_ddls, has_calculated_field, has_metric = _document
 
             sql_generation_reasoning = (
                 await self._pipelines["sql_generation_reasoning"].run(
