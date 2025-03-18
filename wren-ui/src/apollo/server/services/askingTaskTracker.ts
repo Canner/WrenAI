@@ -42,8 +42,8 @@ export type CreateAskingTaskInput = AskInput & {
 
 export interface IAskingTaskTracker {
   createAskingTask(input: CreateAskingTaskInput): Promise<{ queryId: string }>;
-  getAskingResult(queryId: string): Promise<TrackedAskingResult>;
-  getAskingResultById(id: number): Promise<TrackedAskingResult>;
+  getAskingResult(queryId: string): Promise<TrackedAskingResult | null>;
+  getAskingResultById(id: number): Promise<TrackedAskingResult | null>;
   cancelAskingTask(queryId: string): Promise<void>;
   bindThreadResponse(
     id: number,
@@ -151,7 +151,9 @@ export class AskingTaskTracker implements IAskingTaskTracker {
     }
   }
 
-  public async getAskingResult(queryId: string): Promise<TrackedAskingResult> {
+  public async getAskingResult(
+    queryId: string,
+  ): Promise<TrackedAskingResult | null> {
     // Check if we're tracking this task in memory
     const trackedTask = this.trackedTasks.get(queryId);
 
@@ -168,7 +170,9 @@ export class AskingTaskTracker implements IAskingTaskTracker {
     return this.getAskingResultFromDB({ queryId });
   }
 
-  public async getAskingResultById(id: number): Promise<TrackedAskingResult> {
+  public async getAskingResultById(
+    id: number,
+  ): Promise<TrackedAskingResult | null> {
     const task = this.trackedTasksById.get(id);
     if (task) {
       return this.getAskingResult(task.queryId);
@@ -427,7 +431,15 @@ export class AskingTaskTracker implements IAskingTaskTracker {
         detail: trackedTask.result,
       });
       // update the task id in memory
-      this.trackedTasks.get(queryId).taskId = task.id;
+      let existingTask: TrackedTask;
+      if (queryId) {
+        existingTask = this.trackedTasks.get(queryId);
+      } else if (taskId) {
+        existingTask = this.trackedTasksById.get(taskId);
+      }
+      if (existingTask) {
+        existingTask.taskId = task.id;
+      }
       return;
     }
 

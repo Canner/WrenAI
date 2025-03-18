@@ -608,11 +608,15 @@ export class AskingService implements IAskingService {
     }
   }
 
-  public async getAskingTask(taskId: string): Promise<TrackedAskingResult> {
+  public async getAskingTask(
+    taskId: string,
+  ): Promise<TrackedAskingResult | null> {
     return this.askingTaskTracker.getAskingResult(taskId);
   }
 
-  public async getAskingTaskById(id: number): Promise<TrackedAskingResult> {
+  public async getAskingTaskById(
+    id: number,
+  ): Promise<TrackedAskingResult | null> {
     return this.askingTaskTracker.getAskingResultById(id);
   }
 
