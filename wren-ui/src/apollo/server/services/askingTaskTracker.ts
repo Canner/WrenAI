@@ -108,13 +108,21 @@ export class AskingTaskTracker implements IAskingTaskTracker {
         question: input.query,
         isFinalized: false,
         rerunFromCancelled: input.rerunFromCancelled,
-      };
+      } as TrackedTask;
       this.trackedTasks.set(queryId, task);
 
       // if rerun from cancelled, we update the query id to the previous task
       if (input.rerunFromCancelled && input.previousTaskId) {
         // update the task id in memory
         this.trackedTasksById.set(input.previousTaskId, task);
+
+        // get the latest result from the AI service
+        // we get the latest result first to make it more responsive to client-side
+        const result = await this.wrenAIAdaptor.getAskResult(queryId);
+
+        // update the result in memory
+        task.result = result;
+
         // update the query id in database
         await this.askingTaskRepository.updateOne(input.previousTaskId, {
           queryId,
