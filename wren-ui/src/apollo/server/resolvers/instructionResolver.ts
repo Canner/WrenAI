@@ -2,6 +2,7 @@ import { IContext } from '@server/types';
 import { UpdateInstructionInput } from '@server/models';
 import { Instruction } from '@server/repositories/instructionRepository';
 import { getLogger } from '@server/utils';
+import { TelemetryEvent, TrackTelemetry } from '@server/telemetry/telemetry';
 
 const logger = getLogger('InstructionResolver');
 logger.level = 'debug';
@@ -28,6 +29,7 @@ export class InstructionResolver {
     }
   }
 
+  @TrackTelemetry(TelemetryEvent.KNOWLEDGE_CREATE_INSTRUCTION)
   public async createInstruction(
     _root: any,
     args: {
@@ -49,6 +51,7 @@ export class InstructionResolver {
     });
   }
 
+  @TrackTelemetry(TelemetryEvent.KNOWLEDGE_UPDATE_INSTRUCTION)
   public async updateInstruction(
     _root: any,
     args: {
@@ -75,6 +78,7 @@ export class InstructionResolver {
     });
   }
 
+  @TrackTelemetry(TelemetryEvent.KNOWLEDGE_DELETE_INSTRUCTION)
   public async deleteInstruction(
     _root: any,
     args: { where: { id: number } },
