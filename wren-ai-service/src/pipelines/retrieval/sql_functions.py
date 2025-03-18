@@ -8,9 +8,11 @@ from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from hamilton.function_modifiers import extract_fields
 from langfuse.decorators import observe
+from haystack.document_stores.types import DocumentStore
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
+from src.core.provider import DocumentStoreProvider
 from src.providers.engine.wren import WrenIbis
 
 logger = logging.getLogger("wren-ai-service")
@@ -96,10 +98,12 @@ class SqlFunctions(BasicPipeline):
     def __init__(
         self,
         engine: Engine,
+        document_store_provider: DocumentStoreProvider,
         engine_timeout: Optional[float] = 30.0,
         ttl: Optional[int] = 60 * 60 * 24,
         **kwargs,
     ) -> None:
+        self._store: DocumentStore = document_store_provider.get_store("project_meta")
         self._cache = TTLCache(maxsize=100, ttl=ttl)
         self._components = {
             "engine": engine,
@@ -114,17 +118,31 @@ class SqlFunctions(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
+    async def _retrieve_metadata(self, project_id: str) -> dict[str, Any]:
+        filters = {
+            "operator": "AND",
+            "conditions": [
+                {"field": "project_id", "operator": "==", "value": project_id},
+            ],
+        }
+
+        documents = await self._store.filter_documents(filters=filters)
+
+        # only one document for a project, thus we can return the first one
+        doc = documents[0]
+        return doc
+
     @observe(name="SQL Functions Retrieval")
     async def run(
         self,
-        data_source: str,
         project_id: Optional[str] = None,
     ) -> List[SqlFunction]:
         logger.info(
             f"Project ID: {project_id} SQL Functions Retrieval pipeline is running..."
         )
 
-        _data_source = data_source.lower()
+        metadata = await self._retrieve_metadata(project_id)
+        _data_source = metadata.get("data_source", "local_file")
 
         if _data_source in self._cache:
             logger.info(f"Hit cache of SQL Functions for {_data_source}")
