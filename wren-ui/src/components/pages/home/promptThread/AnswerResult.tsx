@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { isEmpty } from 'lodash';
+import { useEffect, useMemo } from 'react';
+import { isEmpty, debounce } from 'lodash';
 import clsx from 'clsx';
 import { Button, Typography, Tabs, Tag, Tooltip } from 'antd';
 import styled from 'styled-components';
@@ -7,20 +7,27 @@ import CheckCircleFilled from '@ant-design/icons/CheckCircleFilled';
 import CodeFilled from '@ant-design/icons/CodeFilled';
 import PieChartFilled from '@ant-design/icons/PieChartFilled';
 import MessageOutlined from '@ant-design/icons/MessageOutlined';
+import { RobotSVG } from '@/utils/svgs';
+import { ANSWER_TAB_KEYS } from '@/utils/enum';
+import { canGenerateAnswer } from '@/hooks/useAskPrompt';
+import usePromptThreadStore from './store';
 import { RecommendedQuestionsProps } from '@/components/pages/home/promptThread';
 import RecommendedQuestions, {
   getRecommendedQuestionProps,
 } from '@/components/pages/home/RecommendedQuestions';
 import ViewBlock from '@/components/pages/home/promptThread/ViewBlock';
 import BreakdownAnswer from '@/components/pages/home/promptThread/BreakdownAnswer';
-import TextBasedAnswer from '@/components/pages/home/promptThread/TextBasedAnswer';
+import TextBasedAnswer, {
+  getAnswerIsFinished,
+} from '@/components/pages/home/promptThread/TextBasedAnswer';
 import ChartAnswer from '@/components/pages/home/promptThread/ChartAnswer';
+import Preparation from '@/components/pages/home/preparation';
 import {
-  AdjustThreadResponseChartInput,
+  AskingTaskStatus,
   ThreadResponse,
+  ThreadResponseAnswerDetail,
+  ThreadResponseAnswerStatus,
 } from '@/apollo/client/graphql/__types__';
-import { ANSWER_TAB_KEYS } from '@/utils/enum';
-import { RobotSVG } from '@/utils/svgs';
 
 const { Title, Text } = Typography;
 
@@ -107,23 +114,7 @@ export interface Props {
   motion: boolean;
   threadResponse: ThreadResponse;
   isLastThreadResponse: boolean;
-  onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
   onInitPreviewDone: () => void;
-
-  // recommended questions
-  recommendedQuestionsProps: RecommendedQuestionsProps;
-
-  onRegenerateTextBasedAnswer: (responseId: number) => void;
-  onGenerateBreakdownAnswer: (responseId: number) => void;
-  onGenerateChartAnswer: (responseId: number) => Promise<void>;
-  onAdjustChartAnswer: (
-    responseId: number,
-    data: AdjustThreadResponseChartInput,
-  ) => Promise<void>;
-  onOpenSaveToKnowledgeModal: (
-    data: { sql: string; question: string },
-    payload: { isCreateMode: boolean },
-  ) => void;
 }
 
 const QuestionTitle = (props) => {
@@ -155,22 +146,35 @@ const renderRecommendedQuestions = (
   );
 };
 
-export default function AnswerResult(props: Props) {
-  const {
-    motion,
-    threadResponse,
-    isLastThreadResponse,
-    onOpenSaveAsViewModal,
-    onInitPreviewDone,
-    recommendedQuestionsProps,
-    onGenerateBreakdownAnswer,
-    onRegenerateTextBasedAnswer,
-    onGenerateChartAnswer,
-    onAdjustChartAnswer,
-    onOpenSaveToKnowledgeModal,
-  } = props;
+const isNeedGenerateAnswer = (answerDetail: ThreadResponseAnswerDetail) => {
+  const isFinished = getAnswerIsFinished(answerDetail?.status);
+  // it means the background task has not started yet, but answer is pending for generating
+  const isProcessing = [
+    ThreadResponseAnswerStatus.NOT_STARTED,
+    ThreadResponseAnswerStatus.PREPROCESSING,
+    ThreadResponseAnswerStatus.FETCHING_DATA,
+  ].includes(answerDetail?.status);
+  return answerDetail?.queryId === null && !isFinished && !isProcessing;
+};
 
-  const { answerDetail, breakdownDetail, id, question, sql, view } =
+export default function AnswerResult(props: Props) {
+  const { threadResponse, isLastThreadResponse } = props;
+
+  const {
+    onOpenSaveAsViewModal,
+    onGenerateThreadRecommendedQuestions,
+    onGenerateTextBasedAnswer,
+    onGenerateBreakdownAnswer,
+    onGenerateChartAnswer,
+    onOpenSaveToKnowledgeModal,
+    // recommend questions
+    recommendedQuestions,
+    showRecommendedQuestions,
+    onSelectRecommendedQuestion,
+    preparation,
+  } = usePromptThreadStore();
+
+  const { askingTask, answerDetail, breakdownDetail, id, question, sql, view } =
     threadResponse;
 
   const resultStyle = isLastThreadResponse
@@ -178,15 +182,37 @@ export default function AnswerResult(props: Props) {
     : null;
 
   const recommendedQuestionProps = getRecommendedQuestionProps(
-    recommendedQuestionsProps.data,
-    recommendedQuestionsProps.show,
+    recommendedQuestions,
+    showRecommendedQuestions,
   );
 
+  const isAnswerPrepared =
+    !!answerDetail?.queryId || getAnswerIsFinished(answerDetail?.status);
   const isBreakdownOnly = useMemo(() => {
     // we support rendering different types of answers now, so we need to check if it's old data.
     // existing thread response's answerDetail is null.
     return answerDetail === null && !isEmpty(breakdownDetail);
   }, [answerDetail, breakdownDetail]);
+
+  // initialize generate answer
+  useEffect(() => {
+    if (isBreakdownOnly) return;
+    if (canGenerateAnswer(askingTask) && isNeedGenerateAnswer(answerDetail)) {
+      const debouncedGenerateAnswer = debounce(
+        () => {
+          onGenerateTextBasedAnswer(id);
+          onGenerateThreadRecommendedQuestions();
+        },
+        250,
+        { leading: false, trailing: true },
+      );
+      debouncedGenerateAnswer();
+
+      return () => {
+        debouncedGenerateAnswer.cancel();
+      };
+    }
+  }, [isBreakdownOnly, askingTask?.status, answerDetail?.status]);
 
   const onTabClick = (activeKey: string) => {
     if (
@@ -201,95 +227,101 @@ export default function AnswerResult(props: Props) {
     }
   };
 
+  const showAnswerTabs =
+    askingTask?.status === AskingTaskStatus.FINISHED ||
+    isAnswerPrepared ||
+    isBreakdownOnly;
+
   return (
-    <div style={resultStyle} className="adm-answer-result">
-      <QuestionTitle className="mb-6" question={question} />
-      <StyledTabs type="card" size="small" onTabClick={onTabClick}>
-        {!isBreakdownOnly && (
-          <Tabs.TabPane
-            key={ANSWER_TAB_KEYS.ANSWER}
-            tab={
-              <>
-                <CheckCircleFilled className="mr-2" />
-                <Text>Answer</Text>
-              </>
-            }
-          >
-            <TextBasedAnswer
-              threadResponse={threadResponse}
-              isLastThreadResponse={isLastThreadResponse}
-              onInitPreviewDone={onInitPreviewDone}
-              onRegenerateTextBasedAnswer={onRegenerateTextBasedAnswer}
-            />
-          </Tabs.TabPane>
-        )}
-        <Tabs.TabPane
-          key={ANSWER_TAB_KEYS.VIEW_SQL}
-          tab={
-            <>
-              <CodeFilled className="mr-2" />
-              <Text>View SQL</Text>
-            </>
-          }
-        >
-          <BreakdownAnswer
-            motion={motion}
-            threadResponse={threadResponse}
-            isLastThreadResponse={isLastThreadResponse}
-            onInitPreviewDone={onInitPreviewDone}
-          />
-        </Tabs.TabPane>
-        <Tabs.TabPane
-          key="chart"
-          tab={
-            <>
-              <PieChartFilled className="mr-2" />
-              <Text>
-                Chart<Tag className="adm-beta-tag">Beta</Tag>
-              </Text>
-            </>
-          }
-        >
-          <ChartAnswer
-            threadResponse={threadResponse}
-            onRegenerateChartAnswer={onGenerateChartAnswer}
-            onAdjustChartAnswer={onAdjustChartAnswer}
-          />
-        </Tabs.TabPane>
-      </StyledTabs>
-      <div className="mt-2">
-        <Tooltip
-          overlayInnerStyle={{ width: 'max-content' }}
-          placement="topLeft"
-          title={knowledgeTooltip}
-        >
-          <Button
-            type="link"
+    <div style={resultStyle} data-jsid="answerResult">
+      <QuestionTitle className="mb-4" question={question} />
+      <Preparation
+        className="mb-3"
+        {...preparation}
+        data={threadResponse}
+        isAnswerPrepared={isAnswerPrepared}
+      />
+      {showAnswerTabs && (
+        <>
+          <StyledTabs
+            className="select-none"
+            type="card"
             size="small"
-            className="mr-2"
-            onClick={() =>
-              onOpenSaveToKnowledgeModal(
-                { question, sql },
-                { isCreateMode: true },
-              )
-            }
-            data-guideid="save-to-knowledge"
+            onTabClick={onTabClick}
           >
-            <div className="d-flex align-center">
-              <RobotSVG className="mr-2" />
-              Save to Knowledge
-            </div>
-          </Button>
-        </Tooltip>
-        <ViewBlock
-          view={view}
-          onClick={() => onOpenSaveAsViewModal({ sql, responseId: id })}
-        />
-      </div>
-      {renderRecommendedQuestions(
-        isLastThreadResponse,
-        recommendedQuestionProps,
-        recommendedQuestionsProps.onSelect,
+            {!isBreakdownOnly && (
+              <Tabs.TabPane
+                key={ANSWER_TAB_KEYS.ANSWER}
+                tab={
+                  <>
+                    <CheckCircleFilled className="mr-2" />
+                    <Text>Answer</Text>
+                  </>
+                }
+              >
+                <TextBasedAnswer {...props} />
+              </Tabs.TabPane>
+            )}
+            <Tabs.TabPane
+              key={ANSWER_TAB_KEYS.VIEW_SQL}
+              tab={
+                <>
+                  <CodeFilled className="mr-2" />
+                  <Text>View SQL</Text>
+                </>
+              }
+            >
+              <BreakdownAnswer {...props} />
+            </Tabs.TabPane>
+            <Tabs.TabPane
+              key="chart"
+              tab={
+                <>
+                  <PieChartFilled className="mr-2" />
+                  <Text>
+                    Chart<Tag className="adm-beta-tag">Beta</Tag>
+                  </Text>
+                </>
+              }
+            >
+              <ChartAnswer {...props} />
+            </Tabs.TabPane>
+          </StyledTabs>
+          <div className="mt-2 d-flex align-center">
+            <Tooltip
+              overlayInnerStyle={{ width: 'max-content' }}
+              placement="topLeft"
+              title={knowledgeTooltip}
+            >
+              <Button
+                type="link"
+                size="small"
+                className="mr-2"
+                onClick={() =>
+                  onOpenSaveToKnowledgeModal(
+                    { question, sql },
+                    { isCreateMode: true },
+                  )
+                }
+                data-guideid="save-to-knowledge"
+              >
+                <div className="d-flex align-center">
+                  <RobotSVG className="mr-2" />
+                  Save to Knowledge
+                </div>
+              </Button>
+            </Tooltip>
+            <ViewBlock
+              view={view}
+              onClick={() => onOpenSaveAsViewModal({ sql, responseId: id })}
+            />
+          </div>
+          {renderRecommendedQuestions(
+            isLastThreadResponse,
+            recommendedQuestionProps,
+            onSelectRecommendedQuestion,
+          )}
+        </>
       )}
     </div>
   );

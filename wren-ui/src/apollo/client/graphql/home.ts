@@ -55,6 +55,34 @@ const COMMON_CHART_DETAIL = gql`
   }
 `;
 
+const COMMON_ASKING_TASK = gql`
+  fragment CommonAskingTask on AskingTask {
+    status
+    type
+    candidates {
+      sql
+      type
+      view {
+        id
+        name
+        statement
+        displayName
+      }
+    }
+    error {
+      ...CommonError
+    }
+    rephrasedQuestion
+    intentReasoning
+    sqlGenerationReasoning
+    retrievedTables
+    invalidSql
+    traceId
+    queryId
+  }
+  ${COMMON_ERROR}
+`;
+
 const COMMON_RESPONSE = gql`
   fragment CommonResponse on ThreadResponse {
     id
@@ -76,11 +104,15 @@ const COMMON_RESPONSE = gql`
     chartDetail {
       ...CommonChartDetail
     }
+    askingTask {
+      ...CommonAskingTask
+    }
   }
 
   ${COMMON_BREAKDOWN_DETAIL}
   ${COMMON_ANSWER_DETAIL}
   ${COMMON_CHART_DETAIL}
+  ${COMMON_ASKING_TASK}
 `;
 
 const COMMON_RECOMMENDED_QUESTIONS_TASK = gql`
@@ -113,25 +145,10 @@ export const SUGGESTED_QUESTIONS = gql`
 export const ASKING_TASK = gql`
   query AskingTask($taskId: String!) {
     askingTask(taskId: $taskId) {
-      status
-      type
-      candidates {
-        sql
-        type
-        view {
-          id
-          name
-          statement
-          displayName
-        }
-      }
-      error {
-        ...CommonError
-      }
-      intentReasoning
+      ...CommonAskingTask
     }
   }
-  ${COMMON_ERROR}
+  ${COMMON_ASKING_TASK}
 `;
 
 export const THREADS = gql`
@@ -175,6 +192,14 @@ export const CREATE_ASKING_TASK = gql`
 export const CANCEL_ASKING_TASK = gql`
   mutation CancelAskingTask($taskId: String!) {
     cancelAskingTask(taskId: $taskId)
+  }
+`;
+
+export const RERUN_ASKING_TASK = gql`
+  mutation RerunAskingTask($responseId: Int!) {
+    rerunAskingTask(responseId: $responseId) {
+      id
+    }
   }
 `;
 
