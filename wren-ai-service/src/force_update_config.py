@@ -13,7 +13,10 @@ def update_config():
             # Update engine name in all pipelines
             for pipe in doc.get("pipes", []):
                 if "engine" in pipe:
-                    pipe["engine"] = "wren_ui"
+                    if pipe["name"] == "sql_functions_retrieval":
+                        pipe["engine"] = "wren_ibis"
+                    else:
+                        pipe["engine"] = "wren_ui"
 
     # Write back to the file
     with open("config.yaml", "w") as file:
