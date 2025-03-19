@@ -6,6 +6,8 @@ const SQL_PAIR = gql`
     projectId
     sql
     question
+    createdAt
+    updatedAt
   }
 `;
 

@@ -162,6 +162,9 @@ const resolvers = {
   DetailedColumn: { type: convertColumnType },
   DetailedNestedColumn: { type: convertColumnType },
   DetailedChangeColumn: { type: convertColumnType },
+
+  // Add this line to include the SqlPair nested resolver
+  SqlPair: sqlPairResolver.getSqlPairNestedResolver(),
 };
 
 export default resolvers;

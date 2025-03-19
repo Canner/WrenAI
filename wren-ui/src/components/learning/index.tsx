@@ -251,7 +251,8 @@ export default function SidebarSection(_props: Props) {
         ? `${blockHeight}px`
         : '0px';
       await nextTick(300);
-      $collapseBlock.current.style.transition = 'height 0.3s';
+      $collapseBlock.current &&
+        ($collapseBlock.current.style.transition = 'height 0.3s');
     }
   };
 

@@ -1,20 +1,26 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { uniq } from 'lodash';
+import { cloneDeep, uniq } from 'lodash';
 import {
   AskingTask,
   AskingTaskStatus,
   AskingTaskType,
+  DetailedThread,
   RecommendedQuestionsTask,
   RecommendedQuestionsTaskStatus,
+  ThreadResponse,
 } from '@/apollo/client/graphql/__types__';
 import {
   useAskingTaskLazyQuery,
   useCancelAskingTaskMutation,
   useCreateAskingTaskMutation,
+  useRerunAskingTaskMutation,
   useCreateInstantRecommendedQuestionsMutation,
   useInstantRecommendedQuestionsLazyQuery,
 } from '@/apollo/client/graphql/home.generated';
 import useAskingStreamTask from './useAskingStreamTask';
+import { THREAD } from '@/apollo/client/graphql/home';
+import { ApolloClient, NormalizedCacheObject } from '@apollo/client';
+import { nextTick } from '@/utils/time';
 
 export interface AskPromptData {
   originalQuestion: string;
@@ -30,6 +36,18 @@ export const getIsFinished = (status: AskingTaskStatus) =>
     AskingTaskStatus.STOPPED,
   ].includes(status);
 
+export const canGenerateAnswer = (askingTask: AskingTask) =>
+  askingTask === null || askingTask?.status === AskingTaskStatus.FINISHED;
+
+export const canFetchThreadResponse = (askingTask: AskingTask) =>
+  askingTask !== null &&
+  askingTask?.status !== AskingTaskStatus.FAILED &&
+  askingTask?.status !== AskingTaskStatus.STOPPED;
+
+export const isReadyToThreadResponse = (askingTask: AskingTask) =>
+  askingTask?.status === AskingTaskStatus.SEARCHING &&
+  askingTask?.type === AskingTaskType.TEXT_TO_SQL;
+
 export const isRecommendedFinished = (status: RecommendedQuestionsTaskStatus) =>
   [
     RecommendedQuestionsTaskStatus.FINISHED,
@@ -40,11 +58,97 @@ export const isRecommendedFinished = (status: RecommendedQuestionsTaskStatus) =>
   ].includes(status);
 
 const isNeedRecommendedQuestions = (askingTask: AskingTask) => {
-  return (
-    [AskingTaskType.GENERAL, AskingTaskType.MISLEADING_QUERY].includes(
-      askingTask?.type,
-    ) || askingTask?.status === AskingTaskStatus.FAILED
-  );
+  const isGeneralOrMisleadingQuery = [
+    AskingTaskType.GENERAL,
+    AskingTaskType.MISLEADING_QUERY,
+  ].includes(askingTask?.type);
+  const isFailed =
+    askingTask?.type !== AskingTaskType.TEXT_TO_SQL &&
+    askingTask?.status === AskingTaskStatus.FAILED;
+  return isGeneralOrMisleadingQuery || isFailed;
+};
+
+const isNeedPreparing = (askingTask: AskingTask) =>
+  askingTask?.type === AskingTaskType.TEXT_TO_SQL;
+
+const handleUpdateThreadCache = (
+  threadId: number,
+  askingTask: AskingTask,
+  client: ApolloClient<NormalizedCacheObject>,
+) => {
+  if (!askingTask) return;
+
+  const result = client.cache.readQuery<{ thread: DetailedThread }>({
+    query: THREAD,
+    variables: { threadId },
+  });
+
+  if (result?.thread) {
+    client.cache.updateQuery(
+      {
+        query: THREAD,
+        variables: { threadId },
+      },
+      (existingData) => {
+        return {
+          thread: {
+            ...existingData.thread,
+            responses: existingData.thread.responses.map((response) => {
+              if (response.askingTask?.queryId === askingTask?.queryId) {
+                return {
+                  ...response,
+                  askingTask: cloneDeep(askingTask),
+                };
+              }
+              return response;
+            }),
+          },
+        };
+      },
+    );
+  }
+};
+
+const handleUpdateRerunAskingTaskCache = (
+  threadId: number,
+  threadResponseId: number,
+  askingTask: AskingTask,
+  client: ApolloClient<NormalizedCacheObject>,
+) => {
+  if (!askingTask) return;
+
+  const result = client.cache.readQuery<{ thread: DetailedThread }>({
+    query: THREAD,
+    variables: { threadId },
+  });
+
+  if (result?.thread) {
+    const task = cloneDeep(askingTask);
+    // bypass understanding status to thread response
+    if (task.status === AskingTaskStatus.UNDERSTANDING) {
+      task.status = AskingTaskStatus.SEARCHING;
+      task.type = AskingTaskType.TEXT_TO_SQL;
+    }
+    client.cache.updateQuery(
+      {
+        query: THREAD,
+        variables: { threadId },
+      },
+      (existingData) => {
+        return {
+          thread: {
+            ...existingData.thread,
+            responses: existingData.thread.responses.map((response) => {
+              if (response.id === threadResponseId) {
+                return { ...response, askingTask: task };
+              }
+              return response;
+            }),
+          },
+        };
+      },
+    );
+  }
 };
 
 export default function useAskPrompt(threadId?: number) {
@@ -53,6 +157,7 @@ export default function useAskPrompt(threadId?: number) {
   const [createAskingTask, createAskingTaskResult] =
     useCreateAskingTaskMutation();
   const [cancelAskingTask] = useCancelAskingTaskMutation();
+  const [rerunAskingTask] = useRerunAskingTaskMutation();
   const [fetchAskingTask, askingTaskResult] = useAskingTaskLazyQuery({
     pollInterval: 1000,
   });
@@ -103,14 +208,32 @@ export default function useAskPrompt(threadId?: number) {
     });
   }, [originalQuestion]);
 
+  const checkFetchAskingStreamTask = useCallback(
+    (task: AskingTask) => {
+      if (!askingStreamTask && task.status === AskingTaskStatus.PLANNING) {
+        fetchAskingStreamTask(task.queryId);
+      }
+    },
+    [askingStreamTask],
+  );
+
   useEffect(() => {
     const isFinished = getIsFinished(askingTask?.status);
     if (isFinished) askingTaskResult.stopPolling();
 
+    // handle update cache for preparing component
+    if (isNeedPreparing(askingTask)) {
+      if (threadId) {
+        handleUpdateThreadCache(threadId, askingTask, askingTaskResult.client);
+        checkFetchAskingStreamTask(askingTask);
+      }
+    }
+
+    // handle instant recommended questions
     if (isNeedRecommendedQuestions(askingTask)) {
       startRecommendedQuestions();
     }
-  }, [askingTask]);
+  }, [askingTask, threadId, checkFetchAskingStreamTask]);
 
   useEffect(() => {
     if (isRecommendedFinished(recommendedQuestions?.status))
@@ -124,16 +247,41 @@ export default function useAskPrompt(threadId?: number) {
     }
   }, [askingTaskType, createAskingTaskResult.data]);
 
-  const onStop = () => {
-    const taskId = createAskingTaskResult.data?.createAskingTask.id;
+  const onStop = async (queryId?: string) => {
+    const taskId = queryId || createAskingTaskResult.data?.createAskingTask.id;
     if (taskId) {
-      cancelAskingTask({ variables: { taskId } }).catch((error) =>
+      await cancelAskingTask({ variables: { taskId } }).catch((error) =>
         console.error(error),
       );
+      // waiting for polling fetching stop
+      await nextTick(1000);
+    }
+  };
+
+  const onReRun = async (threadResponse: ThreadResponse) => {
+    askingStreamTaskResult.reset();
+    setOriginalQuestion(threadResponse.question);
+    try {
+      const response = await rerunAskingTask({
+        variables: { responseId: threadResponse.id },
+      });
+      const { data } = await fetchAskingTask({
+        variables: { taskId: response.data.rerunAskingTask.id },
+      });
+      // update the asking task in cache manually
+      handleUpdateRerunAskingTaskCache(
+        threadId,
+        threadResponse.id,
+        data.askingTask,
+        askingTaskResult.client,
+      );
+    } catch (error) {
+      console.error(error);
     }
   };
 
   const onSubmit = async (value) => {
+    askingStreamTaskResult.reset();
     setOriginalQuestion(value);
     try {
       const response = await createAskingTask({
@@ -145,6 +293,12 @@ export default function useAskPrompt(threadId?: number) {
     } catch (error) {
       console.error(error);
     }
+  };
+
+  const onFetching = async (queryId: string) => {
+    await fetchAskingTask({
+      variables: { taskId: queryId },
+    });
   };
 
   const onStopPolling = () => askingTaskResult.stopPolling();
@@ -160,7 +314,9 @@ export default function useAskPrompt(threadId?: number) {
     data,
     loading,
     onStop,
+    onReRun,
     onSubmit,
+    onFetching,
     onStopPolling,
     onStopStreaming,
     onStopRecommend,

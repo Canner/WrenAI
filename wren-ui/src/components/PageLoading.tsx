@@ -26,10 +26,18 @@ interface LoadingProps {
   spinning?: boolean;
   loading?: boolean;
   tip?: string;
+  size?: number;
+  width?: number;
+  height?: number;
+  className?: string;
 }
 
 export const defaultIndicator = (
   <LoadingOutlined style={{ fontSize: 36 }} spin />
+);
+
+export const Spinner = ({ className = '', size = 36 }) => (
+  <LoadingOutlined className={className} style={{ fontSize: size }} spin />
 );
 
 export default function PageLoading(props: Props) {

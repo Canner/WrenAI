@@ -27,6 +27,7 @@ class ServiceContainer:
     sql_pairs_service: services.SqlPairsService
     sql_question_service: services.SqlQuestionService
     instructions_service: services.InstructionsService
+    sql_correction_service: services.SqlCorrectionService
 
 
 @dataclass
@@ -236,6 +237,16 @@ def create_service_container(
                 "sql_generation_reasoning": generation.SQLGenerationReasoning(
                     **pipe_components["sql_generation_reasoning"],
                 ),
+                "sql_pairs_retrieval": retrieval.SqlPairsRetrieval(
+                    **pipe_components["sql_pairs_retrieval"],
+                    sql_pairs_similarity_threshold=settings.sql_pairs_similarity_threshold,
+                    sql_pairs_retrieval_max_size=settings.sql_pairs_retrieval_max_size,
+                ),
+                "instructions_retrieval": retrieval.Instructions(
+                    **pipe_components["instructions_retrieval"],
+                    similarity_threshold=settings.instructions_similarity_threshold,
+                    top_k=settings.instructions_top_k,
+                ),
             },
             **query_cache,
         ),
@@ -261,6 +272,15 @@ def create_service_container(
                 "instructions_indexing": indexing.Instructions(
                     **pipe_components["instructions_indexing"],
                 )
+            },
+            **query_cache,
+        ),
+        sql_correction_service=services.SqlCorrectionService(
+            pipelines={
+                "sql_correction": generation.SQLCorrection(
+                    **pipe_components["sql_correction"],
+                    engine_timeout=settings.engine_timeout,
+                ),
             },
             **query_cache,
         ),

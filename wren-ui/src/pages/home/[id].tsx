@@ -1,6 +1,13 @@
 import { useRouter } from 'next/router';
 import { useParams } from 'next/navigation';
-import { ComponentRef, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ComponentRef,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { isEmpty } from 'lodash';
 import { message } from 'antd';
 import { Path } from '@/utils/enum';
@@ -9,14 +16,16 @@ import SiderLayout from '@/components/layouts/SiderLayout';
 import Prompt from '@/components/pages/home/prompt';
 import useAskPrompt, {
   getIsFinished,
+  canFetchThreadResponse,
   isRecommendedFinished,
 } from '@/hooks/useAskPrompt';
 import useModalAction from '@/hooks/useModalAction';
 import PromptThread from '@/components/pages/home/promptThread';
 import SaveAsViewModal from '@/components/modals/SaveAsViewModal';
+import QuestionSQLPairModal from '@/components/modals/QuestionSQLPairModal';
 import { getAnswerIsFinished } from '@/components/pages/home/promptThread/TextBasedAnswer';
 import { getIsChartFinished } from '@/components/pages/home/promptThread/ChartAnswer';
-import QuestionSQLPairModal from '@/components/modals/QuestionSQLPairModal';
+import { PromptThreadProvider } from '@/components/pages/home/promptThread/store';
 import {
   useCreateThreadResponseMutation,
   useThreadQuery,
@@ -151,21 +160,18 @@ export default function HomeThread() {
     });
 
   const thread = useMemo(() => data?.thread || null, [data]);
-  const threadResponse = useMemo(
+  const responses = useMemo(() => thread?.responses || [], [thread]);
+  const pollingResponse = useMemo(
     () => threadResponseResult.data?.threadResponse || null,
     [threadResponseResult.data],
   );
-  const isFinished = useMemo(
-    () => getThreadResponseIsFinished(threadResponse),
-    [threadResponse],
+  const isPollingResponseFinished = useMemo(
+    () => getThreadResponseIsFinished(pollingResponse),
+    [pollingResponse],
   );
 
   const onGenerateThreadResponseAnswer = async (responseId: number) => {
     await generateThreadResponseAnswer({ variables: { responseId } });
-  };
-
-  const onRegenerateTextBasedAnswer = async (responseId: number) => {
-    await onGenerateThreadResponseAnswer(responseId);
     fetchThreadResponse({ variables: { responseId } });
   };
 
@@ -191,43 +197,76 @@ export default function HomeThread() {
     fetchThreadResponse({ variables: { responseId } });
   };
 
+  const onGenerateThreadRecommendedQuestions = async () => {
+    await generateThreadRecommendationQuestions({ variables: { threadId } });
+    fetchThreadRecommendationQuestions({ variables: { threadId } });
+  };
+
+  const handleUnfinishedTasks = useCallback(
+    (responses: ThreadResponse[]) => {
+      // unfinished asking task
+      const unfinishedAskingResponse = (responses || []).find(
+        (response) =>
+          response?.askingTask && !getIsFinished(response?.askingTask?.status),
+      );
+      if (unfinishedAskingResponse) {
+        askPrompt.onFetching(unfinishedAskingResponse?.askingTask?.queryId);
+        return;
+      }
+
+      // unfinished thread response
+      const unfinishedThreadResponse = (responses || []).find(
+        (response) => !getThreadResponseIsFinished(response),
+      );
+
+      if (
+        canFetchThreadResponse(unfinishedThreadResponse?.askingTask) &&
+        unfinishedThreadResponse
+      ) {
+        fetchThreadResponse({
+          variables: { responseId: unfinishedThreadResponse.id },
+        });
+      }
+    },
+    [askPrompt, fetchThreadResponse],
+  );
+
+  // store thread questions for instant recommended questions
+  const storeQuestionsToAskPrompt = useCallback(
+    (responses: ThreadResponse[]) => {
+      const questions = responses.flatMap((res) => res.question || []);
+      if (questions) askPrompt.onStoreThreadQuestions(questions);
+    },
+    [askPrompt],
+  );
+
   // stop all requests when change thread
   useEffect(() => {
-    askPrompt.onStopPolling();
-    threadResponseResult.stopPolling();
-    threadRecommendationQuestionsResult.stopPolling();
-    $prompt.current?.close();
-
     if (threadId !== null) {
       fetchThreadRecommendationQuestions({ variables: { threadId } });
       setShowRecommendedQuestions(true);
     }
+    return () => {
+      askPrompt.onStopPolling();
+      threadResponseResult.stopPolling();
+      threadRecommendationQuestionsResult.stopPolling();
+      $prompt.current?.close();
+    };
   }, [threadId]);
 
+  // initialize asking task
   useEffect(() => {
-    const unfinishedRespose = (thread?.responses || []).find(
-      (response) => !getThreadResponseIsFinished(response),
-    );
-
-    if (unfinishedRespose) {
-      if (unfinishedRespose.answerDetail?.status === null) {
-        onGenerateThreadResponseAnswer(unfinishedRespose.id);
-      }
-
-      fetchThreadResponse({ variables: { responseId: unfinishedRespose.id } });
-    }
-
-    // store thread questions for instant recommended questions
-    const questions = thread?.responses.flatMap((res) => res.question || []);
-    if (questions) askPrompt.onStoreThreadQuestions(questions);
-  }, [thread]);
+    if (!responses) return;
+    handleUnfinishedTasks(responses);
+    storeQuestionsToAskPrompt(responses);
+  }, [responses]);
 
   useEffect(() => {
-    if (isFinished) {
+    if (isPollingResponseFinished) {
       threadResponseResult.stopPolling();
       setShowRecommendedQuestions(true);
     }
-  }, [isFinished]);
+  }, [isPollingResponseFinished]);
 
   const recommendedQuestions = useMemo(
     () =>
@@ -242,52 +281,51 @@ export default function HomeThread() {
     }
   }, [recommendedQuestions]);
 
-  const result = useMemo(
-    () => ({
-      thread,
-      recommendedQuestions,
-      showRecommendedQuestions,
-    }),
-    [thread, recommendedQuestions, showRecommendedQuestions],
-  );
-
-  const onSelect = async (payload: CreateThreadResponseInput) => {
+  const onCreateResponse = async (payload: CreateThreadResponseInput) => {
     try {
       askPrompt.onStopPolling();
 
       const threadId = thread.id;
-      const response = await createThreadResponse({
+      await createThreadResponse({
         variables: { threadId, data: payload },
       });
       setShowRecommendedQuestions(false);
-
-      const responseId = response.data.createThreadResponse.id;
-      await Promise.all([
-        generateThreadResponseAnswer({ variables: { responseId } }),
-        generateThreadRecommendationQuestions({ variables: { threadId } }),
-        fetchThreadResponse({ variables: { responseId } }),
-      ]);
-
-      fetchThreadRecommendationQuestions({ variables: { threadId } });
     } catch (error) {
       console.error(error);
     }
   };
 
+  const providerValue = {
+    data: thread,
+    recommendedQuestions,
+    showRecommendedQuestions,
+    preparation: {
+      askingStreamTask: askPrompt.data?.askingStreamTask,
+      onStopAskingTask: askPrompt.onStop,
+      onReRunAskingTask: askPrompt.onReRun,
+    },
+    onOpenSaveAsViewModal: saveAsViewModal.openModal,
+    onSelectRecommendedQuestion: onCreateResponse,
+    onGenerateThreadRecommendedQuestions: onGenerateThreadRecommendedQuestions,
+    onGenerateTextBasedAnswer: onGenerateThreadResponseAnswer,
+    onGenerateBreakdownAnswer: onGenerateThreadResponseBreakdown,
+    onGenerateChartAnswer: onGenerateThreadResponseChart,
+    onAdjustChartAnswer: onAdjustThreadResponseChart,
+    onOpenSaveToKnowledgeModal: questionSqlPairModal.openModal,
+  };
+
   return (
     <SiderLayout loading={false} sidebar={homeSidebar}>
-      <PromptThread
-        data={result}
-        onOpenSaveAsViewModal={saveAsViewModal.openModal}
-        onSelect={onSelect}
-        onRegenerateTextBasedAnswer={onRegenerateTextBasedAnswer}
-        onGenerateBreakdownAnswer={onGenerateThreadResponseBreakdown}
-        onGenerateChartAnswer={onGenerateThreadResponseChart}
-        onAdjustChartAnswer={onAdjustThreadResponseChart}
-        onOpenSaveToKnowledgeModal={questionSqlPairModal.openModal}
-      />
+      <PromptThreadProvider value={providerValue}>
+        <PromptThread />
+      </PromptThreadProvider>
+
       <div className="py-12" />
-      <Prompt ref={$prompt} {...askPrompt} onSelect={onSelect} />
+      <Prompt
+        ref={$prompt}
+        {...askPrompt}
+        onCreateResponse={onCreateResponse}
+      />
       <SaveAsViewModal
         {...saveAsViewModal.state}
         loading={creating}
