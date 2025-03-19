@@ -15,17 +15,37 @@ The dataset curation process is used to prepare the evaluation dataset for the W
 - copy `.env.example` to `.env` and fill in the environment variables
 - execute the command under the `wren-ai-service` folder: `just curate_eval_data`
 
-## Eval Dataset Preparation(If using Spider 1.0 dataset)
+## Eval Dataset Preparation(If using Spider 1.0 dataset, or Bird dataset)
 
 ```cli
-just prep
+just prep <dataset-name>
 ```
 
-This command will do two things:
-1. download Spider 1.0 dataset in `wren-ai-service/tools/dev/spider1.0`; and there are two folders inside: database and spider_data
-    - database: it contains test data. It's downloaded from [this repo](https://github.com/taoyds/test-suite-sql-eval).
-    - spider_data: it contains table schema, ground truths(question sql pairs), etc. For more information, please refer to [this repo](https://github.com/taoyds/spider).
-2. prepare evaluation dataset and put them in `wren-ai-service/eval/dataset`. File name of eval dataset for Spider would look like this: `spider_<db_name>_eval_dataset.toml`
+Currently, we support two datasets for evaluation:
+
+- `spider1.0`: The Spider dataset (default if no dataset specified)
+- `bird`: The Bird dataset
+
+The command performs two main steps:
+
+1. Downloads the specified dataset to:
+
+   ```txt
+   wren-ai-service/tools/dev/etc/<dataset-name>
+   ```
+
+2. Prepares and saves evaluation datasets to:
+
+   ```txt
+   wren-ai-service/eval/dataset
+   ```
+
+   The output files follow these naming conventions:
+
+   - Spider dataset: `spider_<db_name>_eval_dataset.toml`
+   - Bird dataset: `bird_<db_name>_eval_dataset.toml`
+
+Each evaluation dataset contains questions, SQL queries, and relevant context needed for testing the system's text-to-SQL capabilities.
 
 ## Evaluation Dataset Schema
 
