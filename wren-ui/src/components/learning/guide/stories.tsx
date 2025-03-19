@@ -386,7 +386,7 @@ const playQuestionSQLPairsGuide = (
             <div className="-mx-4" style={{ minHeight: 317 }}>
               <img
                 className="mb-4"
-                src="/images/learning/question-sql-pairs.png"
+                src="/images/learning/save-to-knowledge.gif"
                 alt="question-sql-pairs-guide"
               />
             </div>

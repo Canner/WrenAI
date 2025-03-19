@@ -16,6 +16,10 @@ export const getAbsoluteTime = (time: string) => {
   return dayJs(time).utc().format('YYYY-MM-DD HH:mm:ss');
 };
 
+export const getCompactTime = (time: string) => {
+  return dayJs(time).format('YYYY-MM-DD HH:mm');
+};
+
 export const getFullNameDate = (time: string) => {
   return dayJs(time).utc().format('MMMM DD, YYYY');
 };

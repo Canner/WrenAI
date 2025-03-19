@@ -186,6 +186,7 @@ export class SqlPairService implements ISqlPairService {
     const updatedData: Partial<SqlPair> = {
       sql: existingPair.sql,
       question: existingPair.question,
+      updatedAt: new Date().toISOString(),
     };
 
     if (sqlPair.sql !== undefined) {

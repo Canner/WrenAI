@@ -4,19 +4,12 @@ import styled from 'styled-components';
 import '@/components/editor/AceEditor';
 import { Loading } from '@/components/PageLoading';
 
-const Block = styled.div<{
-  inline?: boolean;
-  maxHeight?: string;
-  multipleLine?: number;
-}>`
+const Block = styled.div<{ inline?: boolean; maxHeight?: string }>`
   position: relative;
+  white-space: pre;
   font-size: 14px;
   border: 1px var(--gray-4) solid;
   border-radius: 4px;
-
-  ${(props) =>
-    props.multipleLine ? `white-space: pre-wrap;` : `white-space: pre;`}
-
   ${(props) =>
     props.inline
       ? `
@@ -28,10 +21,6 @@ const Block = styled.div<{
   .adm-code-wrap {
     ${(props) => (props.inline ? '' : 'overflow: auto;')}
     ${(props) => (props.maxHeight ? `max-height: ${props.maxHeight}px;` : ``)}
-    ${(props) =>
-      props.multipleLine
-        ? `display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: ${props.multipleLine}; overflow: hidden;`
-        : ``}
   }
 
   .adm-code-line {
@@ -66,7 +55,6 @@ interface Props {
   loading?: boolean;
   maxHeight?: string;
   showLineNumbers?: boolean;
-  multipleLine?: number;
 }
 
 const addThemeStyleManually = (cssText) => {
@@ -82,15 +70,7 @@ const addThemeStyleManually = (cssText) => {
 };
 
 export default function CodeBlock(props: Props) {
-  const {
-    code,
-    copyable,
-    inline,
-    loading,
-    maxHeight,
-    multipleLine,
-    showLineNumbers,
-  } = props;
+  const { code, copyable, maxHeight, inline, loading, showLineNumbers } = props;
   const { ace } = window as any;
   const { Tokenizer } = ace.require('ace/tokenizer');
   const { SqlHighlightRules } = ace.require(`ace/mode/sql_highlight_rules`);
@@ -128,7 +108,6 @@ export default function CodeBlock(props: Props) {
       className="ace_editor ace-tomorrow adm_code-block"
       inline={inline}
       maxHeight={maxHeight}
-      multipleLine={multipleLine}
     >
       <Loading spinning={loading}>
         <div className="adm-code-wrap">
