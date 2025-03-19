@@ -429,6 +429,10 @@ class AskService:
                     trace_id=trace_id,
                 )
 
+                sql_functions = await self._pipelines["sql_functions_retrieval"].run(
+                    project_id=ask_request.project_id,
+                )
+
                 has_calculated_field = _retrieval_result.get(
                     "has_calculated_field", False
                 )
@@ -448,6 +452,7 @@ class AskService:
                         instructions=instructions,
                         has_calculated_field=has_calculated_field,
                         has_metric=has_metric,
+                        sql_functions=sql_functions,
                     )
                 else:
                     text_to_sql_generation_results = await self._pipelines[
@@ -462,6 +467,7 @@ class AskService:
                         instructions=instructions,
                         has_calculated_field=has_calculated_field,
                         has_metric=has_metric,
+                        sql_functions=sql_functions,
                     )
 
                 if sql_valid_results := text_to_sql_generation_results["post_process"][

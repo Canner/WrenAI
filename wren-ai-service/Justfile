@@ -26,7 +26,7 @@ up: prepare-wren-engine
 down:
 	docker compose -f ./tools/dev/docker-compose-dev.yaml --env-file ./tools/dev/.env down
 
-start: use-wren-ui-as-engine
+start: force_update_config
 	poetry run python -m src.__main__
 
 curate_eval_data:
@@ -61,7 +61,7 @@ prepare-wren-engine:
 	echo "{\"catalog\": \"test_catalog\", \"schema\": \"test_schema\", \"models\": []}" \\
 		> tools/dev/etc/mdl/sample.json
 
-use-wren-ui-as-engine:
+force_update_config:
 	poetry run python -m src.force_update_config
 
 run-sql mdl_path="" data_source="" sample_dataset="":

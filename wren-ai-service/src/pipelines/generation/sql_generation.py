@@ -16,6 +16,7 @@ from src.pipelines.generation.utils.sql import (
     construct_instructions,
     sql_generation_system_prompt,
 )
+from src.pipelines.retrieval.sql_functions import SqlFunction
 from src.web.v1.services import Configuration
 
 logger = logging.getLogger("wren-ai-service")
@@ -30,6 +31,13 @@ sql_generation_user_prompt_template = """
 {% if instructions %}
 ### INSTRUCTIONS ###
 {{ instructions }}
+{% endif %}
+
+{% if sql_functions %}
+### SQL FUNCTIONS ###
+{% for function in sql_functions %}
+{{ function }}
+{% endfor %}
 {% endif %}
 
 {% if sql_samples %}
@@ -67,6 +75,7 @@ def prompt(
     instructions: list[dict] | None = None,
     has_calculated_field: bool = False,
     has_metric: bool = False,
+    sql_functions: list[SqlFunction] | None = None,
 ) -> dict:
     return prompt_builder.run(
         query=query,
@@ -80,6 +89,7 @@ def prompt(
         ),
         sql_samples=sql_samples,
         current_time=configuration.show_current_time(),
+        sql_functions=sql_functions,
     )
 
 
@@ -147,6 +157,7 @@ class SQLGeneration(BasicPipeline):
         project_id: str | None = None,
         has_calculated_field: bool = False,
         has_metric: bool = False,
+        sql_functions: list[SqlFunction] | None = None,
     ):
         logger.info("SQL Generation pipeline is running...")
         return await self._pipe.execute(
@@ -161,6 +172,7 @@ class SQLGeneration(BasicPipeline):
                 "configuration": configuration,
                 "has_calculated_field": has_calculated_field,
                 "has_metric": has_metric,
+                "sql_functions": sql_functions,
                 **self._components,
                 **self._configs,
             },

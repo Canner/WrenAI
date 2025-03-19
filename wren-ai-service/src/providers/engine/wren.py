@@ -150,6 +150,28 @@ class WrenIbis(Engine):
         except asyncio.TimeoutError:
             return False, None, f"Request timed out: {timeout} seconds"
 
+    async def get_func_list(
+        self,
+        session: aiohttp.ClientSession,
+        data_source: str,
+        timeout: float = 30.0,
+    ) -> list[str]:
+        api_endpoint = f"{self._endpoint}/v3/connector/{data_source}/functions"
+        try:
+            async with session.get(api_endpoint, timeout=timeout) as response:
+                res = await response.json()
+
+                if response.status != 200:
+                    raise Exception(f"Request failed with message: {res}")
+
+                return res
+        except asyncio.TimeoutError:
+            logger.error(f"Request timed out: {timeout} seconds")
+            return []
+        except Exception as e:
+            logger.exception(f"Unexpected error during get_func_list: {str(e)}")
+            return []
+
 
 @provider("wren_engine")
 class WrenEngine(Engine):

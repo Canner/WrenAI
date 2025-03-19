@@ -72,6 +72,9 @@ def create_service_container(
                 "instructions": indexing.Instructions(
                     **pipe_components["instructions_indexing"],
                 ),
+                "project_meta": indexing.ProjectMeta(
+                    **pipe_components["project_meta_indexing"],
+                ),
             },
             **query_cache,
         ),
@@ -126,6 +129,10 @@ def create_service_container(
                 ),
                 "sql_regeneration": generation.SQLRegeneration(
                     **pipe_components["sql_regeneration"],
+                    engine_timeout=settings.engine_timeout,
+                ),
+                "sql_functions_retrieval": retrieval.SqlFunctions(
+                    **pipe_components["sql_functions_retrieval"],
                     engine_timeout=settings.engine_timeout,
                 ),
             },

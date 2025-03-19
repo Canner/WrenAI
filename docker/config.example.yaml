@@ -42,6 +42,11 @@ provider: wren_ui
 endpoint: http://wren-ui:3000
 
 ---
+type: engine
+provider: wren_ibis
+endpoint: http://wren-ibis:8000
+
+---
 type: document_store
 provider: qdrant
 location: http://qdrant:6333
@@ -136,6 +141,11 @@ pipes:
     document_store: qdrant
   - name: instructions_retrieval
     embedder: litellm_embedder.default
+    document_store: qdrant
+  - name: sql_functions_retrieval
+    engine: wren_ibis
+    document_store: qdrant
+  - name: project_meta_indexing
     document_store: qdrant
 
 ---

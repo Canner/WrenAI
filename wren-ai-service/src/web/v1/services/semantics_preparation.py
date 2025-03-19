@@ -84,6 +84,7 @@ class SemanticsPreparationService:
                     "historical_question",
                     "table_description",
                     "sql_pairs",
+                    "project_meta",
                 ]
             ]
 
@@ -140,7 +141,12 @@ class SemanticsPreparationService:
 
         tasks = [
             self._pipelines[name].clean(project_id=project_id)
-            for name in ["db_schema", "historical_question", "table_description"]
+            for name in [
+                "db_schema",
+                "historical_question",
+                "table_description",
+                "project_meta",
+            ]
         ] + [
             self._pipelines[name].clean(
                 project_id=project_id,

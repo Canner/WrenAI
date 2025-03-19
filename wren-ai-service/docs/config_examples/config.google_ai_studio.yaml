@@ -40,6 +40,11 @@ provider: wren_ui
 endpoint: http://wren-ui:3000
 
 ---
+type: engine
+provider: wren_ibis
+endpoint: http://wren-ibis:8000
+
+---
 type: document_store
 provider: qdrant
 location: http://qdrant:6333
@@ -139,6 +144,11 @@ pipes:
   - name: instructions_retrieval
     embedder: litellm_embedder.default
     document_store: qdrant
+  - name: sql_functions_retrieval
+    engine: wren_ibis
+    document_store: qdrant
+  - name: project_meta_indexing
+    document_store: qdrant
 
 ---
 settings:
@@ -147,7 +157,7 @@ settings:
   table_column_retrieval_size: 100
   allow_using_db_schemas_without_pruning: false # if you want to use db schemas without pruning, set this to true. It will be faster
   allow_intent_classification: true
-  allow_sql_generation_reasoning: true  
+  allow_sql_generation_reasoning: true
   query_cache_maxsize: 1000
   query_cache_ttl: 3600
   langfuse_host: https://cloud.langfuse.com
