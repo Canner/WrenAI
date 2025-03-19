@@ -299,7 +299,12 @@ export default function AnswerResult(props: Props) {
                 className="mr-2"
                 onClick={() =>
                   onOpenSaveToKnowledgeModal(
-                    { question, sql },
+                    {
+                      question:
+                        threadResponse?.askingTask?.rephrasedQuestion ||
+                        question,
+                      sql,
+                    },
                     { isCreateMode: true },
                   )
                 }
