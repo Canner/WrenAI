@@ -1,0 +1,79 @@
+name: Create Release RC
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: "Release version (e.g., 0.23.0-rc.1)"
+        required: true
+      ui_version:
+        description: "UI version (e.g., 0.22.0)"
+        required: true
+      ai_version:
+        description: "AI service version (e.g., 0.17.0)"
+        required: true
+      engine_version:
+        description: "Engine version (e.g., 0.14.7)"
+        required: true
+
+jobs:
+  create-release-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Git Identity
+        run: |
+          git config --global user.name "wren-ai[bot]"
+          git config --global user.email "dev@cannerdata.com"
+
+      - name: Create branch
+        run: |
+          BRANCH_NAME="release/${{ github.event.inputs.release_version }}"
+          git checkout -b $BRANCH_NAME
+          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+
+      - name: Update docker.go
+        run: |
+          FILE_PATH="wren-launcher/utils/docker.go"
+
+          # Replace the WREN_PRODUCT_VERSION value with the new release version
+          sed -i "s/WREN_PRODUCT_VERSION\s*string = \"[^\"]*\"/WREN_PRODUCT_VERSION\tstring = \"${{ github.event.inputs.release_version }}\"/" $FILE_PATH
+
+          # Verify the changes
+          grep "WREN_PRODUCT_VERSION" $FILE_PATH
+
+      - name: Update .env.example
+        run: |
+          FILE_PATH="docker/.env.example"
+
+          # Update all versions in the .env.example file
+          sed -i "s/WREN_PRODUCT_VERSION=.*/WREN_PRODUCT_VERSION=${{ github.event.inputs.release_version }}/" $FILE_PATH
+          sed -i "s/WREN_ENGINE_VERSION=.*/WREN_ENGINE_VERSION=${{ github.event.inputs.engine_version }}/" $FILE_PATH
+          sed -i "s/IBIS_SERVER_VERSION=.*/IBIS_SERVER_VERSION=${{ github.event.inputs.engine_version }}/" $FILE_PATH
+          sed -i "s/WREN_AI_SERVICE_VERSION=.*/WREN_AI_SERVICE_VERSION=${{ github.event.inputs.ai_version }}/" $FILE_PATH
+          sed -i "s/WREN_UI_VERSION=.*/WREN_UI_VERSION=${{ github.event.inputs.ui_version }}/" $FILE_PATH
+
+          # Verify the changes
+          grep "VERSION" $FILE_PATH
+
+      - name: Commit changes
+        run: |
+          git add wren-launcher/utils/docker.go docker/.env.example
+          git commit -m "release ${{ github.event.inputs.release_version }}"
+
+      - name: Push branch
+        run: |
+          git push --set-upstream origin ${{ env.BRANCH_NAME }}
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "release ${{ github.event.inputs.release_version }}"
+          branch: ${{ env.BRANCH_NAME }}
+          base: main
+          title: "Release ${{ github.event.inputs.release_version }}"
+          body: "Release ${{ github.event.inputs.release_version }}"
+          draft: false
