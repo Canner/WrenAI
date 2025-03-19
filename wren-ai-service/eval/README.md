@@ -154,3 +154,6 @@ This section describes the evaluation metrics used in the evaluation framework:
 - **Contextual Relevancy**: This metric helps determine how well your retriever minimizes irrelevant information while maximizing the retrieval of relevant information. It ensures the efficiency and accuracy of the retrieval process.
 - **Contextual Recall**: This metric helps determine how well the embedding model identifies and retrieves relevant information based on the given context.
 - **Contextual Precision**: This metric helps determine how well the reranker places relevant nodes higher in the ranking, ensuring that users get the most pertinent results quickly.
+- **QuestionToReasoningJudge**: This metric helps determine how well the LLM generates reasoning that is aligned with the question.
+- **ReasoningToSqlJudge**: This metric helps determine how well the LLM generates SQL that is aligned with the reasoning.
+- **SqlSemanticsJudge**: This metric helps determine how well the LLM generates SQL that is semantically equivalent to the expected SQL.
