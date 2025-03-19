@@ -3,12 +3,16 @@ import { Button, Tag, Table, TableColumnsType, Typography } from 'antd';
 import styled from 'styled-components';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import { InstructionsSVG } from '@/utils/svgs';
-import GlobalOutlined from '@ant-design/icons/GlobalOutlined';
 import QuestionOutlined from '@ant-design/icons/QuestionOutlined';
 import { MORE_ACTION } from '@/utils/enum';
 import { getCompactTime } from '@/utils/time';
 import { MoreButton } from '@/components/ActionButton';
 import { InstructionDropdown } from '@/components/diagram/CustomDropdown';
+import useDrawerAction from '@/hooks/useDrawerAction';
+import useModalAction from '@/hooks/useModalAction';
+import GlobalLabel from '@/components/pages/knowledge/GlobalLabel';
+import InstructionModal from '@/components/modals/InstructionModal';
+import InstructionDrawer from '@/components/pages/knowledge/InstructionDrawer';
 
 const { Paragraph, Title, Text } = Typography;
 
@@ -24,24 +28,18 @@ const StyledTag = styled(Tag)`
   }
 `;
 
-function GlobalContent() {
-  return (
-    <>
-      <GlobalOutlined className="mr-2" />
-      <Text className="gray-9">Global</Text>
-    </>
-  );
-}
-
 export default function ManageInstructions() {
+  const instructionModal = useModalAction();
+  const instructionDrawer = useDrawerAction();
+
   const onMoreClick = async (payload) => {
-    const { type } = payload;
+    const { type, data } = payload;
     if (type === MORE_ACTION.DELETE) {
       // TODO: Implement delete instruction
     } else if (type === MORE_ACTION.EDIT) {
-      // TODO: Implement edit instruction
+      instructionModal.openModal(data);
     } else if (type === MORE_ACTION.VIEW_INSTRUCTION) {
-      // TODO: Implement view instruction
+      instructionDrawer.openDrawer(data);
     }
   };
 
@@ -137,7 +135,7 @@ export default function ManageInstructions() {
       dataIndex: 'questions',
       width: '50%',
       render: (questions, record) => {
-        if (record.isDefault) return <GlobalContent />;
+        if (record.isDefault) return <GlobalLabel />;
 
         const displayQuestions = questions.slice(0, 2);
         const moreCount = questions.length - 2;
@@ -190,7 +188,11 @@ export default function ManageInstructions() {
             <InstructionsSVG className="mr-2 gray-8" />
             Manage Instructions
           </Title>
-          <Button type="primary" className="">
+          <Button
+            type="primary"
+            className=""
+            onClick={() => instructionModal.openModal()}
+          >
             Add an Instruction
           </Button>
         </div>
@@ -220,6 +222,19 @@ export default function ManageInstructions() {
             size: 'small',
           }}
           scroll={{ x: 1080 }}
+        />
+        <InstructionDrawer
+          {...instructionDrawer.state}
+          onClose={instructionDrawer.closeDrawer}
+        />
+        <InstructionModal
+          {...instructionModal.state}
+          onClose={instructionModal.closeModal}
+          loading={false}
+          onSubmit={async (data) => {
+            console.log('submit instruction', data);
+            // TODO: Implement submit instruction
+          }}
         />
       </div>
     </SiderLayout>

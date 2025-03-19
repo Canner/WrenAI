@@ -108,4 +108,15 @@ export const ERROR_TEXTS = {
       MAX_LENGTH: 'Question must be 300 characters or fewer.',
     },
   },
+  INSTRUCTION: {
+    DETAILS: {
+      REQUIRED: 'Please input an instruction details.',
+    },
+    QUESTIONS: {
+      REQUIRED: 'Please input a matching question.',
+    },
+    IS_DEFAULT_GLOBAL: {
+      REQUIRED: 'Please select how to apply this instruction.',
+    },
+  },
 };
