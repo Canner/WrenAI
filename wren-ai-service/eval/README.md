@@ -54,6 +54,52 @@ Each evaluation dataset contains questions, SQL queries, and relevant context ne
 - mdl
 - eval dataset
 
+## Configure the datasource for prediction and evaluation
+
+Before starting the prediction and evaluation process, you need to configure the datasource correctly. This ensures that the system can access the necessary data for making predictions and evaluations.
+
+### For Spider or Bird Datasets
+
+For the Spider or Bird datasets, a built-in datasource is used. This means that the data is stored locally and accessed through a specific path. You need to specify the `db_path_for_duckdb` in the `config.yaml` file. This path tells the system where to find the database files.
+
+Here's an example of how to set this up in the `config.yaml` file:
+
+```yaml
+db_path_for_duckdb: "etc/bird/minidev/MINIDEV/dev_databases"
+```
+
+### Configuring BigQuery as a Datasource for Other custom MDLs
+
+When working with custom MDLs that utilize BigQuery as their datasource, it's crucial to properly configure your system to access the necessary datasets. This involves setting specific parameters in the `config.yaml` file or the `.env.dev` file. Both methods are effective, but using the `.env.dev` file is particularly beneficial for keeping sensitive credentials secure.
+
+#### Encoding the credentials
+
+You can use the following command to encode the credentials:
+
+```cli
+cat <path/to/credentials.json> | base64
+```
+
+#### Configuration in `config.yaml`
+
+To enable access to your BigQuery dataset, add the following parameters to your `config.yaml` file. This configuration will guide the system in locating and authenticating with your BigQuery resources:
+
+```yaml
+bigquery_project_id: "your_project_id"
+bigquery_dataset_id: "your_dataset_id"
+bigquery_credentials: "your_credentials" # this is a base64 encoded string of the credentials
+```
+
+#### Configuration in `.env.dev`
+
+For the `.env.dev` file, you can use the following parameters:
+
+```env
+BIGQUERY_PROJECT_ID="your_project_id"
+BIGQUERY_DATASET_ID="your_dataset_id"
+BIGQUERY_CREDENTIALS="your_credentials" # this is a base64 encoded string of the credentials
+```
+
 ## Prediction Process
 
 The prediction process is used to produce the results of the evaluation data using the Wren AI service. It will create traces and a session on Langfuse to make the results available to the user. You can use the following command to predict the evaluation dataset under the `eval/dataset` directory:
