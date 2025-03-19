@@ -2,19 +2,15 @@ import { useEffect, useRef } from 'react';
 import { Typography } from 'antd';
 import MarkdownBlock from '@/components/editor/MarkdownBlock';
 import { Spinner } from '@/components/PageLoading';
-import ErrorBoundary, {
-  Props as ErrorBoundaryProps,
-} from '@/components/pages/home/preparation/ErrorBoundary';
 
 interface Props {
   stream: string;
   loading?: boolean;
-  error?: ErrorBoundaryProps['error'];
 }
 
 export default function Organizing(props: Props) {
   const $wrapper = useRef<HTMLDivElement>(null);
-  const { stream, loading, error } = props;
+  const { stream, loading } = props;
 
   const isDone = stream && !loading;
 
@@ -35,7 +31,7 @@ export default function Organizing(props: Props) {
   }, [isDone]);
 
   return (
-    <ErrorBoundary error={error}>
+    <>
       <Typography.Text className="gray-8">Organizing thoughts</Typography.Text>
       <div
         ref={$wrapper}
@@ -51,6 +47,6 @@ export default function Organizing(props: Props) {
           <MarkdownBlock content={stream} />
         )}
       </div>
-    </ErrorBoundary>
+    </>
   );
 }

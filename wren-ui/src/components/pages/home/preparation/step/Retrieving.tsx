@@ -1,14 +1,10 @@
 import { Typography, Tag } from 'antd';
 import { makeIterable } from '@/utils/iteration';
 import { Spinner } from '@/components/PageLoading';
-import ErrorBoundary, {
-  Props as ErrorBoundaryProps,
-} from '@/components/pages/home/preparation/ErrorBoundary';
 
 interface Props {
   tables: string[];
   loading?: boolean;
-  error?: ErrorBoundaryProps['error'];
 }
 
 const TagTemplate = ({ name }: { name: string }) => {
@@ -18,12 +14,12 @@ const TagTemplate = ({ name }: { name: string }) => {
 const TagIterator = makeIterable(TagTemplate);
 
 export default function Retrieving(props: Props) {
-  const { tables, loading, error } = props;
+  const { tables, loading } = props;
 
   const data = tables.map((table) => ({ name: table }));
 
   return (
-    <ErrorBoundary error={error}>
+    <>
       <Typography.Text className="gray-8">
         Retrieving related models
       </Typography.Text>
@@ -40,6 +36,6 @@ export default function Retrieving(props: Props) {
           </>
         )}
       </div>
-    </ErrorBoundary>
+    </>
   );
 }
