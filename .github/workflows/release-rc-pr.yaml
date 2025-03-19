@@ -39,7 +39,7 @@ jobs:
           FILE_PATH="wren-launcher/utils/docker.go"
 
           # Replace the WREN_PRODUCT_VERSION value with the new release version
-          sed -i "s/WREN_PRODUCT_VERSION\s*string = \"[^\"]*\"/WREN_PRODUCT_VERSION\tstring = \"${{ github.event.inputs.release_version }}\"/" $FILE_PATH
+          sed -i '' "s/WREN_PRODUCT_VERSION[[:space:]]*string = \"[^\"]*\"/WREN_PRODUCT_VERSION    string = \"${{ github.event.inputs.release_version }}\"/" $FILE_PATH
 
           # Verify the changes
           grep "WREN_PRODUCT_VERSION" $FILE_PATH
@@ -60,7 +60,7 @@ jobs:
 
       - name: Commit changes
         run: |
-          git add wren-launcher/utils/docker.go docker/.env.example
+          git add .
           git commit -m "release ${{ github.event.inputs.release_version }}"
 
       - name: Push branch
@@ -68,10 +68,10 @@ jobs:
           git push --set-upstream origin ${{ env.BRANCH_NAME }}
 
       - name: Create Pull Request
+        id: create-pr
         uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "release ${{ github.event.inputs.release_version }}"
           branch: ${{ env.BRANCH_NAME }}
           base: main
           title: "Release ${{ github.event.inputs.release_version }}"
