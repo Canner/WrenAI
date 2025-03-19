@@ -1,5 +1,12 @@
 import Link from 'next/link';
-import { Button, Tag, Table, TableColumnsType, Typography } from 'antd';
+import {
+  Button,
+  Tag,
+  Table,
+  TableColumnsType,
+  Typography,
+  message,
+} from 'antd';
 import styled from 'styled-components';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import { InstructionsSVG } from '@/utils/svgs';
@@ -13,6 +20,13 @@ import useModalAction from '@/hooks/useModalAction';
 import GlobalLabel from '@/components/pages/knowledge/GlobalLabel';
 import InstructionModal from '@/components/modals/InstructionModal';
 import InstructionDrawer from '@/components/pages/knowledge/InstructionDrawer';
+import { Instruction } from '@/apollo/client/graphql/__types__';
+import {
+  useInstructionsQuery,
+  useCreateInstructionMutation,
+  useUpdateInstructionMutation,
+  useDeleteInstructionMutation,
+} from '@/apollo/client/graphql/instructions.generated';
 
 const { Paragraph, Title, Text } = Typography;
 
@@ -32,10 +46,52 @@ export default function ManageInstructions() {
   const instructionModal = useModalAction();
   const instructionDrawer = useDrawerAction();
 
+  const { data, loading } = useInstructionsQuery({
+    fetchPolicy: 'cache-and-network',
+  });
+  const instructions = data?.instructions || [];
+
+  const getBaseOptions = (options) => {
+    return {
+      onError: (error) => console.error(error),
+      refetchQueries: ['Instructions'],
+      awaitRefetchQueries: true,
+      ...options,
+    };
+  };
+
+  const [createInstructionMutation, { loading: createInstructionLoading }] =
+    useCreateInstructionMutation(
+      getBaseOptions({
+        onCompleted: () => {
+          message.success('Successfully created instruction.');
+        },
+      }),
+    );
+
+  const [updateInstructionMutation, { loading: updateInstructionLoading }] =
+    useUpdateInstructionMutation(
+      getBaseOptions({
+        onCompleted: () => {
+          message.success('Successfully updated instruction.');
+        },
+      }),
+    );
+
+  const [deleteInstructionMutation] = useDeleteInstructionMutation(
+    getBaseOptions({
+      onCompleted: () => {
+        message.success('Successfully deleted instruction.');
+      },
+    }),
+  );
+
   const onMoreClick = async (payload) => {
     const { type, data } = payload;
     if (type === MORE_ACTION.DELETE) {
-      // TODO: Implement delete instruction
+      await deleteInstructionMutation({
+        variables: { where: { id: data.id } },
+      });
     } else if (type === MORE_ACTION.EDIT) {
       instructionModal.openModal(data);
     } else if (type === MORE_ACTION.VIEW_INSTRUCTION) {
@@ -43,84 +99,7 @@ export default function ManageInstructions() {
     }
   };
 
-  const data = [
-    {
-      id: '1',
-      projectId: 'project-1',
-      instruction:
-        "When querying customer transactions, always filter by status != 'CANCELLED' unless explicitly asked for cancelled transactions.",
-      questions: [],
-      isDefault: true,
-      createdAt: '2025-03-17 13:00',
-      updatedAt: '2025-03-17 13:00',
-    },
-    {
-      id: '2',
-      projectId: 'project-1',
-      instruction:
-        "Exclude inactive or discontinued products unless explicitly asked (WHERE product_status = 'ACTIVE').",
-      questions: [
-        'list all available products',
-        'who are the top buyers?',
-        '+1',
-        '+2',
-        '+3',
-        '+4',
-        '+5',
-      ],
-      isDefault: false,
-      createdAt: '2025-03-17 13:00',
-      updatedAt: '2025-03-17 13:00',
-    },
-    {
-      id: '3',
-      projectId: 'project-1',
-      instruction: 'What was the highest revenue product last year?',
-      questions: ['list all available products'],
-      isDefault: false,
-      createdAt: '2025-03-17 13:00',
-      updatedAt: '2025-03-17 13:00',
-    },
-    {
-      id: '4',
-      projectId: 'project-1',
-      instruction:
-        'XXX (If the Instruction Details are longer than three lines, they will be shown ellipsis) XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX',
-      questions: [
-        'who are the top buyers?',
-        'XXX (If the Instruction Details are longer than three lines, they will be shown ellipsis) XXX XXX OO',
-        '+1',
-      ],
-      isDefault: false,
-      createdAt: '2025-03-17 13:00',
-      updatedAt: '2025-03-17 13:00',
-    },
-    {
-      id: '5',
-      projectId: 'project-1',
-      instruction:
-        'Pagila is a fictional DVD rental store database designed to model the operations of a typical rental business. It includes various tables that represent key entities such as films, actors, film categories, stores, customers, and payments. The database structure supports common rental store functionalities, including tracking movie inventory across different store locations, managing customer memberships, processing rentals and returns, and recording payment transactions. By organizing data into relational tables, Pagila enables efficient queries and reporting, making it a useful dataset for learning SQL and database management concepts.',
-      questions: [
-        'How does Pagila track the availability of films across different store locations?',
-        'What relationships exist between the customers, rentals, and payments tables?',
-        'How does the database handle film categorization and actor-film associations',
-      ],
-      isDefault: false,
-      createdAt: '2025-03-17 13:00',
-      updatedAt: '2025-03-17 13:00',
-    },
-    {
-      id: '6',
-      projectId: 'project-1',
-      instruction: 'list all available products',
-      questions: ['list all available products', 'who are the top top buyers?'],
-      isDefault: false,
-      createdAt: '2025-03-17 13:00',
-      updatedAt: '2025-03-17 13:00',
-    },
-  ];
-
-  const columns: TableColumnsType<any> = [
+  const columns: TableColumnsType<Instruction> = [
     {
       title: 'Instruction Details',
       dataIndex: 'instruction',
@@ -211,8 +190,8 @@ export default function ManageInstructions() {
           </Link>
         </Text>
         <Table
-          dataSource={data}
-          loading={false}
+          dataSource={instructions}
+          loading={loading}
           columns={columns}
           className="mt-3"
           rowKey="id"
@@ -230,10 +209,15 @@ export default function ManageInstructions() {
         <InstructionModal
           {...instructionModal.state}
           onClose={instructionModal.closeModal}
-          loading={false}
-          onSubmit={async (data) => {
-            console.log('submit instruction', data);
-            // TODO: Implement submit instruction
+          loading={createInstructionLoading || updateInstructionLoading}
+          onSubmit={async ({ id, data }) => {
+            if (id) {
+              await updateInstructionMutation({
+                variables: { where: { id }, data },
+              });
+            } else {
+              await createInstructionMutation({ variables: { data } });
+            }
           }}
         />
       </div>
