@@ -1,35 +1,58 @@
+import Link from 'next/link';
 import { useRouter } from 'next/router';
-import clsx from 'clsx';
+import styled from 'styled-components';
 import FunctionOutlined from '@ant-design/icons/FunctionOutlined';
-import { StyledTreeNodeLink } from './SidebarTree';
-import { Path } from '@/utils/enum/path';
+import { Path, KNOWLEDGE } from '@/utils/enum';
 import { InstructionsSVG } from '@/utils/svgs';
+import SidebarMenu from '@/components/sidebar/SidebarMenu';
+import { MENU_KEY_MAP } from '@/components/pages/knowledge/utils';
+
+const Layout = styled.div`
+  padding: 16px 0;
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: var(--gray-2);
+  overflow: hidden;
+`;
+
+const linkStyle = { color: 'inherit', transition: 'none' };
 
 export default function Knowledge() {
   const router = useRouter();
 
+  const menuItems = [
+    {
+      label: (
+        <Link style={linkStyle} href={Path.KnowledgeQuestionSQLPairs}>
+          Question-SQL Pairs
+        </Link>
+      ),
+      icon: <FunctionOutlined />,
+      key: KNOWLEDGE.QUESTION_SQL_PAIRS,
+      className: 'pl-4',
+    },
+    {
+      label: (
+        <Link style={linkStyle} href={Path.KnowledgeInstructions}>
+          Instructions
+        </Link>
+      ),
+      icon: <InstructionsSVG />,
+      key: KNOWLEDGE.INSTRUCTIONS,
+      className: 'pl-4',
+    },
+  ];
+
   return (
-    <>
-      <StyledTreeNodeLink
-        className={clsx({
-          'adm-treeNode--selected':
-            router.pathname === Path.KnowledgeQuestionSQLPairs,
-        })}
-        href={Path.KnowledgeQuestionSQLPairs}
-      >
-        <FunctionOutlined className="mr-2" />
-        <span className="text-medium">Question-SQL Pairs</span>
-      </StyledTreeNodeLink>
-      <StyledTreeNodeLink
-        className={clsx({
-          'adm-treeNode--selected':
-            router.pathname === Path.KnowledgeInstructions,
-        })}
-        href={Path.KnowledgeInstructions}
-      >
-        <InstructionsSVG className="mr-2" />
-        <span className="text-medium">Instructions</span>
-      </StyledTreeNodeLink>
-    </>
+    <Layout>
+      <SidebarMenu
+        items={menuItems}
+        selectedKeys={MENU_KEY_MAP[router.pathname]}
+      />
+    </Layout>
   );
 }
