@@ -229,6 +229,16 @@ def create_service_container(
                 "sql_generation_reasoning": generation.SQLGenerationReasoning(
                     **pipe_components["sql_generation_reasoning"],
                 ),
+                "sql_pairs_retrieval": retrieval.SqlPairsRetrieval(
+                    **pipe_components["sql_pairs_retrieval"],
+                    sql_pairs_similarity_threshold=settings.sql_pairs_similarity_threshold,
+                    sql_pairs_retrieval_max_size=settings.sql_pairs_retrieval_max_size,
+                ),
+                "instructions_retrieval": retrieval.Instructions(
+                    **pipe_components["instructions_retrieval"],
+                    similarity_threshold=settings.instructions_similarity_threshold,
+                    top_k=settings.instructions_top_k,
+                ),
             },
             **query_cache,
         ),
