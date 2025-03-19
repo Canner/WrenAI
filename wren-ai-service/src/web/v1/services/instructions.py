@@ -51,7 +51,7 @@ class InstructionsService:
         self._cache[id] = self.Event(
             event_id=id,
             status="failed",
-            error=self.Event.Error(code=code, message=error_message),
+            error=self.Error(code=code, message=error_message),
             trace_id=trace_id,
         )
         logger.error(error_message)
@@ -151,7 +151,7 @@ class InstructionsService:
             return self.Event(
                 event_id=event_id,
                 status="failed",
-                error=self.Event.Error(code="OTHERS", message=message),
+                error=self.Error(code="OTHERS", message=message),
             )
 
         return response
