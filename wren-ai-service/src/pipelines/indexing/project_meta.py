@@ -34,6 +34,10 @@ def chunk(
     addition = {"project_id": project_id} if project_id else {}
     data_source = mdl.get("dataSource", "local_file").lower()
 
+    if data_source == "duckdb":
+        # fix duckdb to local_file due to wren-ibis implementation at the moment
+        data_source = "local_file"
+
     document = Document(
         id=str(uuid.uuid4()),
         meta={"data_source": data_source, **addition},
