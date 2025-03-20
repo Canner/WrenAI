@@ -1,7 +1,8 @@
-import { Button, Form, Modal, Typography, Timeline } from 'antd';
+import { Button, Typography, Timeline } from 'antd';
 import CloseCircleFilled from '@ant-design/icons/CloseCircleFilled';
 import ToolOutlined from '@ant-design/icons/ToolOutlined';
-import useModalAction, { ModalAction } from '@/hooks/useModalAction';
+import useModalAction from '@/hooks/useModalAction';
+import { FixSQLModal } from '@/components/modals/FixSQLModal';
 import { Error } from '@/apollo/client/graphql/__types__';
 
 export interface Props {
@@ -33,9 +34,7 @@ export default function ErrorBoundary({ children, error }: Props) {
                 className="mt-2 adm-fix-it-btn"
                 icon={<ToolOutlined />}
                 size="small"
-                onClick={() =>
-                  fixItModal.openModal({ invalidSql: error.invalidSql })
-                }
+                onClick={() => fixItModal.openModal({ sql: error.invalidSql })}
               >
                 Fix it
               </Button>
@@ -49,51 +48,5 @@ export default function ErrorBoundary({ children, error }: Props) {
         </div>
       </Timeline.Item>
     </Timeline>
-  );
-}
-
-type FixSQLModalProps = ModalAction<{
-  invalidSql: string;
-}> & {
-  loading?: boolean;
-};
-
-export function FixSQLModal(props: FixSQLModalProps) {
-  const { visible, defaultValue, loading, onSubmit, onClose } = props;
-  const [form] = Form.useForm();
-
-  const submit = async () => {
-    form
-      .validateFields()
-      .then(async (values) => {
-        await onSubmit({ data: values });
-        onClose();
-      })
-      .catch(console.error);
-  };
-
-  return (
-    <Modal
-      title="Fix SQL"
-      width={560}
-      visible={visible}
-      okText="Submit"
-      onOk={submit}
-      onCancel={onClose}
-      confirmLoading={loading}
-      maskClosable={false}
-      destroyOnClose
-      centered
-      afterClose={() => form.resetFields()}
-    >
-      <Typography.Text className="gray-8">
-        The following SQL statement needs to be fixed:
-      </Typography.Text>
-      <Form form={form}>
-        <pre className="mt-3 p-4 bg-gray-50 rounded">
-          {defaultValue?.invalidSql}
-        </pre>
-      </Form>
-    </Modal>
   );
 }
