@@ -18,7 +18,7 @@ logger = logging.getLogger("wren-ai-service")
 class SqlExpansionRequest(BaseModel):
     _query_id: str | None = None
     query: str
-    history: AskHistory
+    histories: List[AskHistory]
     # for identifying which collection to access from vectordb
     project_id: Optional[str] = None
     mdl_hash: Optional[str] = None
@@ -73,6 +73,7 @@ class SqlExpansionResultResponse(BaseModel):
     error: Optional[AskError] = None
     trace_id: Optional[str] = None
 
+
 class SqlExpansionService:
     def __init__(
         self,
@@ -112,6 +113,10 @@ class SqlExpansionService:
 
         try:
             query_id = request.query_id
+            # at the moment, we only support one history thus fix the index
+            # what if support multiple histories, then we need to change this
+            # and also pipeline for sql_expansion 
+            history = request.histories[0]
 
             if not self._is_stopped(query_id):
                 self._sql_expansion_results[query_id] = SqlExpansionResultResponse(
@@ -161,7 +166,7 @@ class SqlExpansionService:
                 ].run(
                     query=request.query,
                     contexts=documents,
-                    history=request.history,
+                    history=history,
                     project_id=request.project_id,
                     configuration=request.configurations,
                 )
@@ -244,9 +249,7 @@ class SqlExpansionService:
         except Exception as e:
             logger.exception(f"sql expansion pipeline - OTHERS: {e}")
 
-            self._sql_expansion_results[
-                request.query_id
-            ] = SqlExpansionResultResponse(
+            self._sql_expansion_results[request.query_id] = SqlExpansionResultResponse(
                 status="failed",
                 error=AskError(
                     code="OTHERS",
@@ -263,9 +266,9 @@ class SqlExpansionService:
         self,
         stop_sql_expansion_request: StopSqlExpansionRequest,
     ):
-        self._sql_expansion_results[
-            stop_sql_expansion_request.query_id
-        ] = SqlExpansionResultResponse(status="stopped")
+        self._sql_expansion_results[stop_sql_expansion_request.query_id] = (
+            SqlExpansionResultResponse(status="stopped")
+        )
 
     def get_sql_expansion_result(
         self,
