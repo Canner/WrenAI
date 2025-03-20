@@ -26,6 +26,7 @@ export default function Knowledge() {
 
   const menuItems = [
     {
+      'data-guideid': 'question-sql-pairs',
       label: (
         <Link style={linkStyle} href={Path.KnowledgeQuestionSQLPairs}>
           Question-SQL Pairs
@@ -36,6 +37,7 @@ export default function Knowledge() {
       className: 'pl-4',
     },
     {
+      'data-guideid': 'instructions',
       label: (
         <Link style={linkStyle} href={Path.KnowledgeInstructions}>
           Instructions
