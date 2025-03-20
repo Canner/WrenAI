@@ -321,6 +321,33 @@ class DeleteSqlPairErrorHandler extends ErrorHandler {
   }
 }
 
+class CreateInstructionErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to create instruction.';
+    }
+  }
+}
+
+class UpdateInstructionErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to update instruction.';
+    }
+  }
+}
+
+class DeleteInstructionErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to delete instruction.';
+    }
+  }
+}
+
 errorHandlers.set('SaveTables', new SaveTablesErrorHandler());
 errorHandlers.set('SaveRelations', new SaveRelationsErrorHandler());
 errorHandlers.set('CreateAskingTask', new CreateAskingTaskErrorHandler());
@@ -385,6 +412,11 @@ errorHandlers.set('DeleteDashboardItem', new DeleteDashboardItemErrorHandler());
 errorHandlers.set('CreateSqlPair', new CreateSqlPairErrorHandler());
 errorHandlers.set('UpdateSqlPair', new UpdateSqlPairErrorHandler());
 errorHandlers.set('DeleteSqlPair', new DeleteSqlPairErrorHandler());
+
+// Instruction
+errorHandlers.set('CreateInstruction', new CreateInstructionErrorHandler());
+errorHandlers.set('UpdateInstruction', new UpdateInstructionErrorHandler());
+errorHandlers.set('DeleteInstruction', new DeleteInstructionErrorHandler());
 
 const errorHandler = (error: ErrorResponse) => {
   // networkError
