@@ -4,9 +4,10 @@ This document describes the evaluation framework for the Wren AI service. The ev
 
 ## Requirements
 
-- Install [Just](https://github.com/casey/just?tab=readme-ov-file#packages) to run the evaluation framework commands.
-- Set up the [Langfuse](https://cloud.langfuse.com) account and get the API key and secret. Fill in the `.env.dev` file with the key and secret.
-- Execute `just up` to start the necessary development services.
+1. **Install Just**: Download and install [Just](https://github.com/casey/just?tab=readme-ov-file#packages) to run the evaluation framework commands.
+2. **Set up Langfuse**: Create an account on [Langfuse](https://cloud.langfuse.com) and obtain the API key and secret. Populate the `.env.dev` file with these credentials.
+3. **Start Development Services**: Run `just up` to initiate the necessary development services.
+4. **Configuration File**: Ensure you have a copy of `config.yaml` located in the `wren-ai-service/eval/` directory.
 
 ## Dataset Curation
 
@@ -15,17 +16,37 @@ The dataset curation process is used to prepare the evaluation dataset for the W
 - copy `.env.example` to `.env` and fill in the environment variables
 - execute the command under the `wren-ai-service` folder: `just curate_eval_data`
 
-## Eval Dataset Preparation(If using Spider 1.0 dataset)
+## Eval Dataset Preparation(If using Spider 1.0 dataset, or Bird dataset)
 
 ```cli
-just prep
+just prep <dataset-name>
 ```
 
-This command will do two things:
-1. download Spider 1.0 dataset in `wren-ai-service/tools/dev/spider1.0`; and there are two folders inside: database and spider_data
-    - database: it contains test data. It's downloaded from [this repo](https://github.com/taoyds/test-suite-sql-eval).
-    - spider_data: it contains table schema, ground truths(question sql pairs), etc. For more information, please refer to [this repo](https://github.com/taoyds/spider).
-2. prepare evaluation dataset and put them in `wren-ai-service/eval/dataset`. File name of eval dataset for Spider would look like this: `spider_<db_name>_eval_dataset.toml`
+Currently, we support two datasets for evaluation:
+
+- `spider1.0`: The Spider dataset (default if no dataset specified)
+- `bird`: The Bird dataset
+
+The command performs two main steps:
+
+1. Downloads the specified dataset to:
+
+   ```txt
+   wren-ai-service/tools/dev/etc/<dataset-name>
+   ```
+
+2. Prepares and saves evaluation datasets to:
+
+   ```txt
+   wren-ai-service/eval/dataset
+   ```
+
+   The output files follow these naming conventions:
+
+   - Spider dataset: `spider_<db_name>_eval_dataset.toml`
+   - Bird dataset: `bird_<db_name>_eval_dataset.toml`
+
+Each evaluation dataset contains questions, SQL queries, and relevant context needed for testing the system's text-to-SQL capabilities.
 
 ## Evaluation Dataset Schema
 
@@ -33,6 +54,52 @@ This command will do two things:
 - date
 - mdl
 - eval dataset
+
+## Configure the datasource for prediction and evaluation
+
+Before starting the prediction and evaluation process, you need to configure the datasource correctly. This ensures that the system can access the necessary data for making predictions and evaluations.
+
+### For Spider or Bird Datasets
+
+For the Spider or Bird datasets, a built-in datasource is used. This means that the data is stored locally and accessed through a specific path. You need to specify the `db_path_for_duckdb` in the `config.yaml` file. This path tells the system where to find the database files.
+
+Here's an example of how to set this up in the `config.yaml` file:
+
+```yaml
+db_path_for_duckdb: "etc/bird/minidev/MINIDEV/dev_databases"
+```
+
+### Configuring BigQuery as a Datasource for Other custom MDLs
+
+When working with custom MDLs that utilize BigQuery as their datasource, it's crucial to properly configure your system to access the necessary datasets. This involves setting specific parameters in the `config.yaml` file or the `.env.dev` file. Both methods are effective, but using the `.env.dev` file is particularly beneficial for keeping sensitive credentials secure.
+
+#### Encoding the credentials
+
+You can use the following command to encode the credentials:
+
+```cli
+cat <path/to/credentials.json> | base64
+```
+
+#### Configuration in `config.yaml`
+
+To enable access to your BigQuery dataset, add the following parameters to your `config.yaml` file. This configuration will guide the system in locating and authenticating with your BigQuery resources:
+
+```yaml
+bigquery_project_id: "your_project_id"
+bigquery_dataset_id: "your_dataset_id"
+bigquery_credentials: "your_credentials" # this is a base64 encoded string of the credentials
+```
+
+#### Configuration in `.env.dev`
+
+For the `.env.dev` file, you can use the following parameters:
+
+```env
+BIGQUERY_PROJECT_ID="your_project_id"
+BIGQUERY_DATASET_ID="your_dataset_id"
+BIGQUERY_CREDENTIALS="your_credentials" # this is a base64 encoded string of the credentials
+```
 
 ## Prediction Process
 
@@ -88,3 +155,6 @@ This section describes the evaluation metrics used in the evaluation framework:
 - **Contextual Relevancy**: This metric helps determine how well your retriever minimizes irrelevant information while maximizing the retrieval of relevant information. It ensures the efficiency and accuracy of the retrieval process.
 - **Contextual Recall**: This metric helps determine how well the embedding model identifies and retrieves relevant information based on the given context.
 - **Contextual Precision**: This metric helps determine how well the reranker places relevant nodes higher in the ranking, ensuring that users get the most pertinent results quickly.
+- **QuestionToReasoningJudge**: This metric helps determine how well the LLM generates reasoning that is aligned with the question.
+- **ReasoningToSqlJudge**: This metric helps determine how well the LLM generates SQL that is aligned with the reasoning.
+- **SqlSemanticsJudge**: This metric helps determine how well the LLM generates SQL that is semantically equivalent to the expected SQL.
