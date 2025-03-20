@@ -38,7 +38,7 @@ export default function Organizing(props: Props) {
         className="gray-7 text-sm mt-2"
         style={{ maxHeight: 'calc(100vh - 550px)', overflowY: 'auto' }}
       >
-        {loading ? (
+        {loading && !stream ? (
           <div className="d-flex align-center gx-2">
             Thinking
             <Spinner className="gray-6" size={12} />
