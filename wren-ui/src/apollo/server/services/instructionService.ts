@@ -117,10 +117,11 @@ export class InstructionService implements IInstructionService {
       if (!instruction) {
         throw new Error('Instruction not found');
       }
-      const instructionData = merge(instruction, {
+      const instructionData = {
+        ...instruction,
         ...input,
         updatedAt: new Date().toISOString(),
-      });
+      };
       const updatedInstruction = await this.instructionRepository.updateOne(
         input.id,
         instructionData,
