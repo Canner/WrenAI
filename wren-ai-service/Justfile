@@ -13,14 +13,14 @@ init dev='--dev':
 
 	@if [ {{dev}} = "--dev" ] || [ {{dev}} != "--non-dev" ]; then \
 		if [ ! -f .env.dev ]; then \
-				echo "{{GREEN}}env.dev does not exist. Creating from example...{{RESET}}"; \
+				echo "{{GREEN}}.env.dev does not exist. Creating from example...{{RESET}}"; \
 				cp tools/config/.env.dev.example .env.dev; \
 		else \
-			echo "{{YELLOW}}env.dev already exists. Skipping creation.{{RESET}}"; \
+			echo "{{YELLOW}}.env.dev already exists. Skipping creation.{{RESET}}"; \
 		fi \
 	fi
 
-up: prepare-wren-engine
+up: prepare-files
 	docker compose -f ./tools/dev/docker-compose-dev.yaml --env-file ./tools/dev/.env up -d
 
 down:
@@ -36,10 +36,10 @@ prep dataset='spider1.0':
 	poetry run python -m eval.preparation --dataset {{dataset}}
 
 predict dataset pipeline='ask':
-    @poetry run python -u eval/prediction.py --file {{dataset}} --pipeline {{pipeline}}
+    poetry run python -u eval/prediction.py --file {{dataset}} --pipeline {{pipeline}}
 
 eval prediction_result semantics='--no-semantics':
-    @poetry run python -u eval/evaluation.py --file {{prediction_result}} {{semantics}}
+    poetry run python -u eval/evaluation.py --file {{prediction_result}} {{semantics}}
 
 demo:
 	poetry run streamlit run demo/app.py
@@ -53,8 +53,9 @@ test-usecases usecases='all':
 load-test:
 	poetry run python -m tests.locust.locust_script
 
-prepare-wren-engine:
-	rm -rf tools/dev/etc
+prepare-files:
+	# only remove files related to engine and ui
+	rm -rf tools/dev/etc/duckdb tools/dev/etc/mdl tools/dev/etc/config.properties tools/dev/etc/db.sqlite3 tools/dev/etc/archived
 	mkdir -p tools/dev/etc
 	cp tools/dev/config.properties.example tools/dev/etc/config.properties
 	mkdir -p tools/dev/etc/mdl

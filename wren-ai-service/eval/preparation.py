@@ -236,7 +236,7 @@ def build_mdl_by_db_using_spider(destination_path: Path):
             mdl_by_db[database] = {
                 "catalog": database,
                 "schema": "main",
-                "dataSource": "DUCKDB",
+                "dataSource": "local_file",
                 "models": build_mdl_models(database, tables_info),
                 "relationships": build_mdl_relationships(tables_info),
                 "views": [],
@@ -320,7 +320,7 @@ def build_mdl_by_db_using_bird(destination_path: Path):
             mdl_by_db[database] = {
                 "catalog": database,
                 "schema": "main",
-                "dataSource": "DUCKDB",
+                "dataSource": "local_file",
                 "models": build_mdl_models(
                     database, tables_info, database_infos.get(database, {})
                 ),
