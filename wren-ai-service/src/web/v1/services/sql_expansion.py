@@ -115,7 +115,7 @@ class SqlExpansionService:
             query_id = request.query_id
             # at the moment, we only support one history thus fix the index
             # what if support multiple histories, then we need to change this
-            # and also pipeline for sql_expansion 
+            # and also pipeline for sql_expansion
             history = request.histories[0]
 
             if not self._is_stopped(query_id):
@@ -133,7 +133,7 @@ class SqlExpansionService:
                 query_for_retrieval = request.query
                 retrieval_result = await self._pipelines["retrieval"].run(
                     query=query_for_retrieval,
-                    id=request.project_id,
+                    project_id=request.project_id,
                 )
                 _retrieval_result = retrieval_result.get(
                     "construct_retrieval_results", {}
@@ -266,9 +266,9 @@ class SqlExpansionService:
         self,
         stop_sql_expansion_request: StopSqlExpansionRequest,
     ):
-        self._sql_expansion_results[stop_sql_expansion_request.query_id] = (
-            SqlExpansionResultResponse(status="stopped")
-        )
+        self._sql_expansion_results[
+            stop_sql_expansion_request.query_id
+        ] = SqlExpansionResultResponse(status="stopped")
 
     def get_sql_expansion_result(
         self,
