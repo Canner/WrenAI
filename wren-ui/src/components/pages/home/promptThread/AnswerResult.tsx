@@ -244,7 +244,6 @@ export default function AnswerResult(props: Props) {
       {showAnswerTabs && (
         <>
           <StyledTabs
-            className="select-none"
             type="card"
             size="small"
             onTabClick={onTabClick}
@@ -253,10 +252,10 @@ export default function AnswerResult(props: Props) {
               <Tabs.TabPane
                 key={ANSWER_TAB_KEYS.ANSWER}
                 tab={
-                  <>
+                  <div className="select-none">
                     <CheckCircleFilled className="mr-2" />
                     <Text>Answer</Text>
-                  </>
+                  </div>
                 }
               >
                 <TextBasedAnswer {...props} />
@@ -265,10 +264,10 @@ export default function AnswerResult(props: Props) {
             <Tabs.TabPane
               key={ANSWER_TAB_KEYS.VIEW_SQL}
               tab={
-                <>
+                <div className="select-none">
                   <CodeFilled className="mr-2" />
                   <Text>View SQL</Text>
-                </>
+                </div>
               }
             >
               <BreakdownAnswer {...props} />
@@ -276,12 +275,12 @@ export default function AnswerResult(props: Props) {
             <Tabs.TabPane
               key="chart"
               tab={
-                <>
+                <div className="select-none">
                   <PieChartFilled className="mr-2" />
                   <Text>
                     Chart<Tag className="adm-beta-tag">Beta</Tag>
                   </Text>
-                </>
+                </div>
               }
             >
               <ChartAnswer {...props} />
