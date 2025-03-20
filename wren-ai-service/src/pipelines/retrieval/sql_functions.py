@@ -122,7 +122,7 @@ class SqlFunctions(BasicPipeline):
     @observe(capture_input=False)
     async def _retrieve_metadata(self, project_id: str) -> dict[str, Any]:
         filters = None
-        if project_id is not None:
+        if project_id:
             filters = {
                 "operator": "AND",
                 "conditions": [
@@ -134,8 +134,11 @@ class SqlFunctions(BasicPipeline):
         documents = result["documents"]
 
         # only one document for a project, thus we can return the first one
-        doc = documents[0]
-        return doc.meta
+        if documents:
+            doc = documents[0]
+            return doc.meta
+        else:
+            return {}
 
     @observe(name="SQL Functions Retrieval")
     async def run(
@@ -146,7 +149,7 @@ class SqlFunctions(BasicPipeline):
             f"Project ID: {project_id} SQL Functions Retrieval pipeline is running..."
         )
 
-        metadata = await self._retrieve_metadata(project_id)
+        metadata = await self._retrieve_metadata(project_id or "")
         _data_source = metadata.get("data_source", "local_file")
 
         if _data_source in self._cache:

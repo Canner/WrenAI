@@ -12,6 +12,7 @@ class EvalSettings(Settings):
     openai_api_key: SecretStr = Field(alias="OPENAI_API_KEY")
     allow_sql_samples: bool = True
     allow_instructions: bool = True
+    allow_sql_functions: bool = True
     db_path_for_duckdb: str = ""
 
     # BigQuery
