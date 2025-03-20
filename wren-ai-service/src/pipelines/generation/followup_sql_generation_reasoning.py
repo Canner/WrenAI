@@ -139,6 +139,9 @@ class FollowUpSQLGenerationReasoning(BasicPipeline):
         )
 
     def _streaming_callback(self, chunk, query_id):
+        if query_id not in self._user_queues:
+            self._user_queues[query_id] = asyncio.Queue()
+
         # Put the chunk content into the user's queue
         asyncio.create_task(self._user_queues[query_id].put(chunk.content))
         if chunk.meta.get("finish_reason"):
@@ -149,7 +152,8 @@ class FollowUpSQLGenerationReasoning(BasicPipeline):
             return await self._user_queues[query_id].get()
 
         if query_id not in self._user_queues:
-            return []
+            yield []
+            return
 
         while True:
             try:
@@ -179,9 +183,6 @@ class FollowUpSQLGenerationReasoning(BasicPipeline):
         configuration: Configuration = Configuration(),
         query_id: Optional[str] = None,
     ):
-        if query_id:
-            self._user_queues[query_id] = asyncio.Queue()
-
         logger.info("Followup SQL Generation Reasoning pipeline is running...")
         return await self._pipe.execute(
             ["post_process"],
