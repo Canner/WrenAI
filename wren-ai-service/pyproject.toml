@@ -2,7 +2,7 @@
 name = "wren-ai-service"
 version = "0.17.0"
 description = ""
-authors = ["Jimmy Yeh <jimmy.yeh@cannerdata.com>", "Pao Sheng Wang <david.wang@cannerdata.com>", "Aster Sun <aster.sun@cannerdata.com>"]
+authors = ["dev@getwren.ai"]
 license = "AGPL-3.0"
 readme = "README.md"
 package-mode = false
