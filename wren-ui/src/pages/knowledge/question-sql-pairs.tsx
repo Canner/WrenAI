@@ -1,6 +1,5 @@
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import styled from 'styled-components';
 import { Button, message, Table, TableColumnsType, Typography } from 'antd';
 import { format } from 'sql-formatter';
 import SiderLayout from '@/components/layouts/SiderLayout';
@@ -25,15 +24,7 @@ const CodeBlock = dynamic(() => import('@/components/editor/CodeBlock'), {
   ssr: false,
 });
 
-const { Title, Text } = Typography;
-
-const StyledQuestionBlock = styled.div`
-  width: 100%;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  white-space: normal;
-`;
+const { Paragraph, Title, Text } = Typography;
 
 export default function ManageQuestionSQLPairs() {
   const questionSqlPairModal = useModalAction();
@@ -96,12 +87,11 @@ export default function ManageQuestionSQLPairs() {
     {
       title: 'Question',
       dataIndex: 'question',
-      ellipsis: true,
       width: 300,
       render: (question) => (
-        <StyledQuestionBlock className="text-truncate">
+        <Paragraph title={question} ellipsis={{ rows: 2 }}>
           {question}
-        </StyledQuestionBlock>
+        </Paragraph>
       ),
     },
     {
