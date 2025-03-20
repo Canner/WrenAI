@@ -108,4 +108,9 @@ export const ERROR_TEXTS = {
       MAX_LENGTH: 'Question must be 300 characters or fewer.',
     },
   },
+  FIX_SQL: {
+    SQL: {
+      REQUIRED: 'Please input SQL statement.',
+    },
+  },
 };
