@@ -584,7 +584,7 @@ def replace_wren_engine_env_variables(engine_type: str, data: dict, config_path:
                     config[key] = value
             if "pipes" in config:
                 for i, pipe in enumerate(config["pipes"]):
-                    if "engine" in pipe:
+                    if "engine" in pipe and pipe["name"] != "sql_functions_retrieval":
                         config["pipes"][i]["engine"] = engine_type
 
     with open(config_path, "w") as f:

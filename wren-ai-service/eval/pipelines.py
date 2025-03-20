@@ -256,8 +256,13 @@ class GenerationPipeline(Eval):
             **pipe_components["sql_generation"],
         )
 
+        self._sql_functions_retrieval = retrieval.SqlFunctions(
+            **pipe_components["sql_functions_retrieval"],
+        )
+
         self._allow_sql_samples = settings.allow_sql_samples
         self._allow_instructions = settings.allow_instructions
+        self._allow_sql_functions = settings.allow_sql_functions
         self._engine_info = engine_config(
             mdl, pipe_components, settings.db_path_for_duckdb
         )
@@ -290,6 +295,11 @@ class GenerationPipeline(Eval):
         instructions = self._get_instructions(params)
         samples = self._get_samples(params)
 
+        if self._allow_sql_functions:
+            sql_functions = await self._sql_functions_retrieval.run()
+        else:
+            sql_functions = []
+
         actual_output = await self._generation.run(
             query=params["input"],
             contexts=table_ddls,
@@ -298,6 +308,7 @@ class GenerationPipeline(Eval):
             has_metric=params.get("has_metric", False),
             sql_generation_reasoning=params.get("reasoning", ""),
             instructions=instructions,
+            sql_functions=sql_functions,
         )
 
         params["actual_output"] = actual_output
@@ -372,13 +383,16 @@ class AskPipeline(Eval):
         self._sql_reasoner = generation.SQLGenerationReasoning(
             **pipe_components["sql_generation_reasoning"],
         )
+        self._sql_functions_retrieval = retrieval.SqlFunctions(
+            **pipe_components["sql_functions_retrieval"],
+        )
         self._generation = generation.SQLGeneration(
             **pipe_components["sql_generation"],
         )
         self._allow_sql_samples = settings.allow_sql_samples
         self._allow_instructions = settings.allow_instructions
         self._allow_sql_generation_reasoning = settings.allow_sql_generation_reasoning
-
+        self._allow_sql_functions = settings.allow_sql_functions
         self._engine_info = engine_config(
             mdl, pipe_components, settings.db_path_for_duckdb
         )
@@ -425,6 +439,11 @@ class AskPipeline(Eval):
         else:
             reasoning = ""
 
+        if self._allow_sql_functions:
+            sql_functions = await self._sql_functions_retrieval.run()
+        else:
+            sql_functions = []
+
         actual_output = await self._generation.run(
             query=params["input"],
             contexts=table_ddls,
@@ -433,6 +452,7 @@ class AskPipeline(Eval):
             has_metric=has_metric,
             sql_generation_reasoning=reasoning,
             instructions=instructions,
+            sql_functions=sql_functions,
         )
 
         params["actual_output"] = actual_output
