@@ -166,7 +166,7 @@ export default function InstructionModal(props: Props) {
                       disabled={fields.length >= MAX_QUESTIONS}
                       className="mb-1"
                     >
-                      Add an Question
+                      Add a Question
                     </Button>
                   </Form.Item>
                 </>
