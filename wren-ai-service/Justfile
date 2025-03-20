@@ -56,6 +56,7 @@ load-test:
 prepare-files:
 	# only remove files related to engine and ui
 	rm -rf tools/dev/etc/duckdb tools/dev/etc/mdl tools/dev/etc/config.properties tools/dev/etc/db.sqlite3 tools/dev/etc/archived
+	mkdir -p tools/dev/etc
 	cp tools/dev/config.properties.example tools/dev/etc/config.properties
 	mkdir -p tools/dev/etc/mdl
 	echo "{\"catalog\": \"test_catalog\", \"schema\": \"test_schema\", \"models\": []}" \\
