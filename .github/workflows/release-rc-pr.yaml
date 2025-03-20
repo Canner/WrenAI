@@ -16,6 +16,10 @@ on:
         description: "Engine version (e.g., 0.14.7)"
         required: true
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   create-release-pr:
     runs-on: ubuntu-latest
@@ -58,16 +62,53 @@ jobs:
           # Verify the changes
           grep "VERSION" $FILE_PATH
 
+      - name: Show git status
+        run: git status
+
+      - name: Show git diff
+        run: |
+          echo "===== Git diff for changed files ====="
+          git diff
+
       - name: Commit changes
         run: |
           git add wren-launcher/utils/docker.go docker/.env.example
-          git commit -m "release ${{ github.event.inputs.release_version }}"
+          git commit -m "release ${{ github.event.inputs.release_version }}" || echo "No changes to commit"
+          git status
 
       - name: Push branch
         run: |
           git push --set-upstream origin ${{ env.BRANCH_NAME }}
+          echo "Branch pushed to origin/${{ env.BRANCH_NAME }}"
 
-      - name: Create Pull Request
+      - name: Install GitHub CLI
+        run: |
+          type -p curl >/dev/null || (apt update && apt install curl -y)
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+          && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+          && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+          && apt update \
+          && apt install gh -y
+
+      - name: Create Pull Request with GitHub CLI
+        run: |
+          # Check if branch has changes compared to main
+          if git diff --quiet origin/main origin/${{ env.BRANCH_NAME }}; then
+            echo "No changes detected between main and ${{ env.BRANCH_NAME }}. Cannot create PR."
+            exit 1
+          fi
+
+          # Create PR using gh cli
+          gh pr create \
+            --title "Release ${{ github.event.inputs.release_version }}" \
+            --body "Release ${{ github.event.inputs.release_version }}" \
+            --base main \
+            --head ${{ env.BRANCH_NAME }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fallback PR creation
+        if: failure()
         uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
