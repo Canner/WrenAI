@@ -13,10 +13,10 @@ init dev='--dev':
 
 	@if [ {{dev}} = "--dev" ] || [ {{dev}} != "--non-dev" ]; then \
 		if [ ! -f .env.dev ]; then \
-				echo "{{GREEN}}env.dev does not exist. Creating from example...{{RESET}}"; \
+				echo "{{GREEN}}.env.dev does not exist. Creating from example...{{RESET}}"; \
 				cp tools/config/.env.dev.example .env.dev; \
 		else \
-			echo "{{YELLOW}}env.dev already exists. Skipping creation.{{RESET}}"; \
+			echo "{{YELLOW}}.env.dev already exists. Skipping creation.{{RESET}}"; \
 		fi \
 	fi
 
