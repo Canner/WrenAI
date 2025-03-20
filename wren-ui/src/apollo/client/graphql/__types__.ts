@@ -111,6 +111,12 @@ export type CreateDashboardItemInput = {
   responseId: Scalars['Int'];
 };
 
+export type CreateInstructionInput = {
+  instruction: Scalars['String'];
+  isDefault: Scalars['Boolean'];
+  questions: Array<Scalars['String']>;
+};
+
 export type CreateModelInput = {
   fields: Array<Scalars['String']>;
   primaryKey?: InputMaybe<Scalars['String']>;
@@ -475,6 +481,21 @@ export type InstantRecommendedQuestionsInput = {
   previousQuestions?: InputMaybe<Array<Scalars['String']>>;
 };
 
+export type Instruction = {
+  __typename?: 'Instruction';
+  createdAt: Scalars['String'];
+  id: Scalars['Int'];
+  instruction: Scalars['String'];
+  isDefault: Scalars['Boolean'];
+  projectId: Scalars['Int'];
+  questions: Array<Scalars['String']>;
+  updatedAt: Scalars['String'];
+};
+
+export type InstructionWhereInput = {
+  id: Scalars['Int'];
+};
+
 export type ItemLayoutInput = {
   h: Scalars['Int'];
   itemId: Scalars['Int'];
@@ -526,6 +547,7 @@ export type Mutation = {
   createCalculatedField: Scalars['JSON'];
   createDashboardItem: DashboardItem;
   createInstantRecommendedQuestions: Task;
+  createInstruction: Instruction;
   createModel: Scalars['JSON'];
   createRelation: Scalars['JSON'];
   createSqlPair: SqlPair;
@@ -534,6 +556,7 @@ export type Mutation = {
   createView: ViewInfo;
   deleteCalculatedField: Scalars['Boolean'];
   deleteDashboardItem: Scalars['Boolean'];
+  deleteInstruction: Scalars['Boolean'];
   deleteModel: Scalars['Boolean'];
   deleteRelation: Scalars['Boolean'];
   deleteSqlPair: Scalars['Boolean'];
@@ -564,6 +587,7 @@ export type Mutation = {
   updateCurrentProject: Scalars['Boolean'];
   updateDashboardItemLayouts: Array<DashboardItem>;
   updateDataSource: DataSource;
+  updateInstruction: Instruction;
   updateModel: Scalars['JSON'];
   updateModelMetadata: Scalars['Boolean'];
   updateRelation: Scalars['JSON'];
@@ -606,6 +630,11 @@ export type MutationCreateInstantRecommendedQuestionsArgs = {
 };
 
 
+export type MutationCreateInstructionArgs = {
+  data: CreateInstructionInput;
+};
+
+
 export type MutationCreateModelArgs = {
   data: CreateModelInput;
 };
@@ -644,6 +673,11 @@ export type MutationDeleteCalculatedFieldArgs = {
 
 export type MutationDeleteDashboardItemArgs = {
   where: DashboardItemWhereInput;
+};
+
+
+export type MutationDeleteInstructionArgs = {
+  where: InstructionWhereInput;
 };
 
 
@@ -783,6 +817,12 @@ export type MutationUpdateDataSourceArgs = {
 };
 
 
+export type MutationUpdateInstructionArgs = {
+  data: UpdateInstructionInput;
+  where: InstructionWhereInput;
+};
+
+
 export type MutationUpdateModelArgs = {
   data: UpdateModelInput;
   where: ModelWhereInput;
@@ -906,6 +946,7 @@ export type Query = {
   getProjectRecommendationQuestions: RecommendedQuestionsTask;
   getThreadRecommendationQuestions: RecommendedQuestionsTask;
   instantRecommendedQuestions: RecommendedQuestionsTask;
+  instructions: Array<Maybe<Instruction>>;
   learningRecord: LearningRecord;
   listDataSourceTables: Array<CompactTable>;
   listModels: Array<ModelInfo>;
@@ -1226,6 +1267,12 @@ export type UpdateDashboardItemLayoutsInput = {
 
 export type UpdateDataSourceInput = {
   properties: Scalars['JSON'];
+};
+
+export type UpdateInstructionInput = {
+  instruction?: InputMaybe<Scalars['String']>;
+  isDefault?: InputMaybe<Scalars['Boolean']>;
+  questions?: InputMaybe<Array<Scalars['String']>>;
 };
 
 export type UpdateModelInput = {

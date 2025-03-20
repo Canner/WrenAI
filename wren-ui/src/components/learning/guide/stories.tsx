@@ -50,8 +50,8 @@ export const makeStoriesPlayer =
           playDataModelingGuide(...args, dispatcher),
         [LEARNING.SWITCH_PROJECT_LANGUAGE]: () =>
           playSwitchProjectLanguageGuide(...args, dispatcher),
-        [LEARNING.QUESTION_SQL_PAIRS_GUIDE]: () =>
-          playQuestionSQLPairsGuide(...args, dispatcher),
+        [LEARNING.KNOWLEDGE_GUIDE]: () =>
+          playKnowledgeGuide(...args, dispatcher),
         [LEARNING.SAVE_TO_KNOWLEDGE]: () =>
           playSaveToKnowledgeGuide(...args, dispatcher),
       }[id] || null;
@@ -364,7 +364,7 @@ const playSwitchProjectLanguageGuide = (
   $driver.drive();
 };
 
-const playQuestionSQLPairsGuide = (
+const playKnowledgeGuide = (
   $driver: DriverObj,
   _router: NextRouter,
   _payload: StoryPayload,
@@ -378,8 +378,10 @@ const playQuestionSQLPairsGuide = (
   if ($driver.isActive()) $driver.destroy();
 
   $driver.setConfig({ ...defaultConfigs, showProgress: true });
+
   $driver.setSteps([
     {
+      element: '[data-guideid="question-sql-pairs"]',
       popover: {
         title: renderToString(
           <div className="pt-4">
@@ -404,7 +406,35 @@ const playQuestionSQLPairsGuide = (
         onPopoverRender: (popoverDom: DriverPopoverDOM) => {
           resetPopoverStyle(popoverDom, 640);
         },
-        doneBtnText: 'Get Started',
+      },
+    },
+    {
+      element: '[data-guideid="instructions"]',
+      popover: {
+        title: renderToString(
+          <div className="pt-4">
+            <div className="-mx-4" style={{ minHeight: 317 }}>
+              <img
+                className="mb-4"
+                src="/images/learning/instructions.png"
+                alt="instructions-guide"
+              />
+            </div>
+            Build Your Knowledge Base with Instructions
+          </div>,
+        ),
+        description: renderToString(
+          <>
+            In addition to Question-SQL Pairs, you can create Instructions to
+            define <b>business rules</b> and <b>query logic</b>. These rules
+            guide Wren AI in applying consistent filters, constraints, and best
+            practices to SQL queries.
+          </>,
+        ),
+        onPopoverRender: (popoverDom: DriverPopoverDOM) => {
+          resetPopoverStyle(popoverDom, 520);
+        },
+        doneBtnText: 'Got it',
         onNextClick: () => {
           $driver.destroy();
           dispatcher?.onDone && dispatcher.onDone();

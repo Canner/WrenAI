@@ -107,3 +107,10 @@ export const DeleteQuestionSQLPairModal = makeDeleteModal(DefaultDeleteButton, {
   content:
     'This action is permanent and cannot be undone. Are you sure you want to proceed?',
 });
+
+export const DeleteInstructionModal = makeDeleteModal(DefaultDeleteButton, {
+  icon: <DeleteOutlined className="mr-2" />,
+  itemName: 'instruction',
+  content:
+    'This action is permanent and cannot be undone. Are you sure you want to proceed?',
+});
