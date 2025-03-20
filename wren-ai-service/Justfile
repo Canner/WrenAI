@@ -20,7 +20,7 @@ init dev='--dev':
 		fi \
 	fi
 
-up: prepare-wren-engine
+up: prepare-files
 	docker compose -f ./tools/dev/docker-compose-dev.yaml --env-file ./tools/dev/.env up -d
 
 down:
@@ -53,9 +53,9 @@ test-usecases usecases='all':
 load-test:
 	poetry run python -m tests.locust.locust_script
 
-prepare-wren-engine:
-	rm -rf tools/dev/etc
-	mkdir -p tools/dev/etc
+prepare-files:
+	# only remove files related to engine and ui
+	rm -rf tools/dev/etc/duckdb tools/dev/etc/mdl tools/dev/etc/config.properties tools/dev/etc/db.sqlite3 tools/dev/etc/archived
 	cp tools/dev/config.properties.example tools/dev/etc/config.properties
 	mkdir -p tools/dev/etc/mdl
 	echo "{\"catalog\": \"test_catalog\", \"schema\": \"test_schema\", \"models\": []}" \\
