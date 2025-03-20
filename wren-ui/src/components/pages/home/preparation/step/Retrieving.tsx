@@ -8,7 +8,7 @@ interface Props {
 }
 
 const TagTemplate = ({ name }: { name: string }) => {
-  return <Tag className="gray-7">{name}</Tag>;
+  return <Tag className="gray-7 mb-2">{name}</Tag>;
 };
 
 const TagIterator = makeIterable(TagTemplate);
