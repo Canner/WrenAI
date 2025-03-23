@@ -16,6 +16,7 @@ export type IPromptThreadStore = {
     askingStreamTask?: string;
     onStopAskingTask?: (queryId?: string) => Promise<void>;
     onReRunAskingTask?: (threadResponse: ThreadResponse) => Promise<void>;
+    onFixSQLStatement?: (responseId: number, sql: string) => Promise<void>;
   };
   onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
   onSelectRecommendedQuestion: ({

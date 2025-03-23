@@ -8,7 +8,7 @@ import ErrorCollapse from '@/components/ErrorCollapse';
 import PreviewData from '@/components/dataPreview/PreviewData';
 import { usePreviewSqlMutation } from '@/apollo/client/graphql/sql.generated';
 
-type Props = ModalAction<{ sql: string }> & {
+type Props = ModalAction<{ sql: string; responseId: number }> & {
   loading?: boolean;
 };
 
@@ -39,7 +39,6 @@ export function FixSQLModal(props: Props) {
     form
       .validateFields()
       .then(async (values) => {
-        await validateSql();
         await previewSqlMutation({
           variables: { data: { sql: values.sql, limit: 50 } },
         });
@@ -56,7 +55,8 @@ export function FixSQLModal(props: Props) {
     form
       .validateFields()
       .then(async (values) => {
-        await onSubmit({ data: values });
+        await validateSql();
+        await onSubmit(values.sql);
         onClose();
       })
       .catch(console.error);

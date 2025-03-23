@@ -7,7 +7,10 @@ import { Error } from '@/apollo/client/graphql/__types__';
 
 export interface Props {
   children: React.ReactNode;
-  error?: Error & { invalidSql?: string };
+  error?: Error & {
+    invalidSql?: string;
+    fixStatement?: (sql: string) => Promise<void>;
+  };
 }
 
 export default function ErrorBoundary({ children, error }: Props) {
@@ -41,7 +44,9 @@ export default function ErrorBoundary({ children, error }: Props) {
               <FixSQLModal
                 {...fixItModal.state}
                 onClose={fixItModal.closeModal}
-                onSubmit={async () => {}}
+                onSubmit={async (sql: string) => {
+                  await error.fixStatement(sql);
+                }}
               />
             </>
           )}

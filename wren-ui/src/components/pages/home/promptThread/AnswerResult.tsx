@@ -186,8 +186,7 @@ export default function AnswerResult(props: Props) {
     showRecommendedQuestions,
   );
 
-  const isAnswerPrepared =
-    !!answerDetail?.queryId || getAnswerIsFinished(answerDetail?.status);
+  const isAnswerPrepared = !!answerDetail?.queryId || !!answerDetail?.status;
   const isBreakdownOnly = useMemo(() => {
     // we support rendering different types of answers now, so we need to check if it's old data.
     // existing thread response's answerDetail is null.
@@ -232,6 +231,9 @@ export default function AnswerResult(props: Props) {
     isAnswerPrepared ||
     isBreakdownOnly;
 
+  const isAnswerFinished =
+    isAnswerPrepared && getAnswerIsFinished(answerDetail?.status);
+
   return (
     <div style={resultStyle} data-jsid="answerResult">
       <QuestionTitle className="mb-4" question={question} />
@@ -239,15 +241,11 @@ export default function AnswerResult(props: Props) {
         className="mb-3"
         {...preparation}
         data={threadResponse}
-        isAnswerPrepared={isAnswerPrepared}
+        isAnswerFinished={isAnswerFinished}
       />
       {showAnswerTabs && (
         <>
-          <StyledTabs
-            type="card"
-            size="small"
-            onTabClick={onTabClick}
-          >
+          <StyledTabs type="card" size="small" onTabClick={onTabClick}>
             {!isBreakdownOnly && (
               <Tabs.TabPane
                 key={ANSWER_TAB_KEYS.ANSWER}
