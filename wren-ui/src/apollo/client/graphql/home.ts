@@ -235,6 +235,18 @@ export const UPDATE_THREAD = gql`
   }
 `;
 
+export const UPDATE_THREAD_RESPONSE = gql`
+  mutation UpdateThreadResponse(
+    $where: ThreadResponseUniqueWhereInput!
+    $data: UpdateThreadResponseInput!
+  ) {
+    updateThreadResponse(where: $where, data: $data) {
+      ...CommonResponse
+    }
+  }
+  ${COMMON_RESPONSE}
+`;
+
 export const DELETE_THREAD = gql`
   mutation DeleteThread($where: ThreadUniqueWhereInput!) {
     deleteThread(where: $where)

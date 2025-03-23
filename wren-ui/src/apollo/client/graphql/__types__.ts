@@ -576,6 +576,7 @@ export type Mutation = {
   updateRelation: Scalars['JSON'];
   updateSqlPair: SqlPair;
   updateThread: Thread;
+  updateThreadResponse: ThreadResponse;
   updateViewMetadata: Scalars['Boolean'];
   validateCalculatedField: CalculatedFieldValidationResponse;
   validateView: ViewValidationResponse;
@@ -822,6 +823,12 @@ export type MutationUpdateSqlPairArgs = {
 export type MutationUpdateThreadArgs = {
   data: UpdateThreadInput;
   where: ThreadUniqueWhereInput;
+};
+
+
+export type MutationUpdateThreadResponseArgs = {
+  data: UpdateThreadResponseInput;
+  where: ThreadResponseUniqueWhereInput;
 };
 
 
@@ -1200,6 +1207,10 @@ export type ThreadResponseChartDetail = {
   status: ChartTaskStatus;
 };
 
+export type ThreadResponseUniqueWhereInput = {
+  id: Scalars['Int'];
+};
+
 export type ThreadUniqueWhereInput = {
   id: Scalars['Int'];
 };
@@ -1279,6 +1290,10 @@ export type UpdateSqlPairInput = {
 
 export type UpdateThreadInput = {
   summary?: InputMaybe<Scalars['String']>;
+};
+
+export type UpdateThreadResponseInput = {
+  sql?: InputMaybe<Scalars['String']>;
 };
 
 export type UpdateViewColumnMetadataInput = {

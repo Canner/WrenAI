@@ -637,6 +637,14 @@ export const typeDefs = gql`
     summary: String
   }
 
+  input ThreadResponseUniqueWhereInput {
+    id: Int!
+  }
+
+  input UpdateThreadResponseInput {
+    sql: String
+  }
+
   input AdjustThreadResponseChartInput {
     chartType: ChartType!
     xAxis: String
@@ -1005,6 +1013,10 @@ export const typeDefs = gql`
     createThreadResponse(
       threadId: Int!
       data: CreateThreadResponseInput!
+    ): ThreadResponse!
+    updateThreadResponse(
+      where: ThreadResponseUniqueWhereInput!
+      data: UpdateThreadResponseInput!
     ): ThreadResponse!
     previewData(where: PreviewDataInput!): JSON!
     previewBreakdownData(where: PreviewDataInput!): JSON!

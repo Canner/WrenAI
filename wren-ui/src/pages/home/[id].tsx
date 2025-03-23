@@ -30,6 +30,7 @@ import {
   useCreateThreadResponseMutation,
   useThreadQuery,
   useThreadResponseLazyQuery,
+  useUpdateThreadResponseMutation,
   useGenerateThreadRecommendationQuestionsMutation,
   useGetThreadRecommendationQuestionsLazyQuery,
   useGenerateThreadResponseAnswerMutation,
@@ -112,6 +113,13 @@ export default function HomeThread() {
       });
     },
   });
+  const [updateThreadResponse] = useUpdateThreadResponseMutation({
+    onCompleted: (data) => {
+      message.success('Successfully updated the SQL statement');
+      // trigger generate answer after sql statement updated
+      onGenerateThreadResponseAnswer(data.updateThreadResponse.id);
+    },
+  });
   const [fetchThreadResponse, threadResponseResult] =
     useThreadResponseLazyQuery({
       pollInterval: 1000,
@@ -169,6 +177,12 @@ export default function HomeThread() {
     () => getThreadResponseIsFinished(pollingResponse),
     [pollingResponse],
   );
+
+  const onFixSQLStatement = async (responseId: number, sql: string) => {
+    await updateThreadResponse({
+      variables: { where: { id: responseId }, data: { sql } },
+    });
+  };
 
   const onGenerateThreadResponseAnswer = async (responseId: number) => {
     await generateThreadResponseAnswer({ variables: { responseId } });
@@ -303,6 +317,7 @@ export default function HomeThread() {
       askingStreamTask: askPrompt.data?.askingStreamTask,
       onStopAskingTask: askPrompt.onStop,
       onReRunAskingTask: askPrompt.onReRun,
+      onFixSQLStatement,
     },
     onOpenSaveAsViewModal: saveAsViewModal.openModal,
     onSelectRecommendedQuestion: onCreateResponse,
