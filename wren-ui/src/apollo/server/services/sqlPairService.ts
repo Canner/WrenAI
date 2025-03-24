@@ -4,6 +4,7 @@ import {
   QuestionsStatus,
   SqlPairResult,
   SqlPairStatus,
+  WrenAILanguage,
 } from '../models/adaptor';
 import { ISqlPairRepository, SqlPair } from '../repositories/sqlPairRepository';
 import { getLogger } from '@server/utils';
@@ -60,7 +61,7 @@ export class SqlPairService implements ISqlPairService {
   ): Promise<string[]> {
     try {
       const configurations = {
-        language: project.language,
+        language: WrenAILanguage[project.language] || WrenAILanguage.EN,
       };
 
       const { queryId } = await this.wrenAIAdaptor.generateQuestions({
