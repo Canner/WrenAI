@@ -511,7 +511,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       const body = {
         sqls: input.sqls,
         project_id: input.projectId.toString(),
-        configuration: input.configurations,
+        configurations: input.configurations,
       };
 
       const res = await axios.post(
