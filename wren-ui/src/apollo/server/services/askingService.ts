@@ -719,7 +719,14 @@ export class AskingService implements IAskingService {
     responseId: number,
     data: { sql: string },
   ): Promise<ThreadResponse> {
-    return this.threadResponseRepository.updateOne(responseId, {
+    const threadResponse = await this.threadResponseRepository.findOneBy({
+      id: responseId,
+    });
+    if (!threadResponse) {
+      throw new Error(`Thread response ${responseId} not found`);
+    }
+
+    return await this.threadResponseRepository.updateOne(responseId, {
       sql: data.sql,
     });
   }
