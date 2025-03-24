@@ -1,7 +1,8 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button, Form, Modal, Typography, Alert } from 'antd';
 import { ERROR_TEXTS } from '@/utils/error';
 import { ModalAction } from '@/hooks/useModalAction';
+import { attachLoading } from '@/utils/helper';
 import { parseGraphQLError } from '@/utils/errorHandler';
 import SQLEditor from '@/components/editor/SQLEditor';
 import ErrorCollapse from '@/components/ErrorCollapse';
@@ -14,6 +15,7 @@ type Props = ModalAction<{ sql: string; responseId: number }> & {
 
 export function FixSQLModal(props: Props) {
   const { visible, defaultValue, loading, onSubmit, onClose } = props;
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [form] = Form.useForm();
 
   const [previewSqlMutation, previewSqlResult] = usePreviewSqlMutation();
@@ -39,7 +41,10 @@ export function FixSQLModal(props: Props) {
     form
       .validateFields()
       .then(async (values) => {
-        await previewSqlMutation({
+        await attachLoading(
+          previewSqlMutation,
+          setPreviewLoading,
+        )({
           variables: { data: { sql: values.sql, limit: 50 } },
         });
       })
@@ -102,15 +107,15 @@ export function FixSQLModal(props: Props) {
         </Typography.Text>
         <Button
           onClick={previewData}
-          loading={previewSqlResult.loading}
-          disabled={previewSqlResult.loading}
+          loading={previewLoading}
+          disabled={previewLoading}
         >
           Preview data
         </Button>
         {showPreview && (
           <div className="my-3">
             <PreviewData
-              loading={previewSqlResult.loading}
+              loading={previewLoading}
               previewData={previewSqlResult?.data?.previewSql}
               copyable={false}
             />
