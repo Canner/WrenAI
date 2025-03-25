@@ -2,6 +2,7 @@ import { getConfig } from '../config';
 import { PostHog } from 'posthog-node';
 import { v4 as uuidv4 } from 'uuid';
 import { getLogger } from '@server/utils';
+import { IContext } from '../types';
 
 const logger = getLogger('TELEMETRY');
 logger.level = 'debug';
@@ -68,6 +69,14 @@ export enum TelemetryEvent {
 
   // Default error
   GRAPHQL_ERROR = 'graphql_error',
+
+  // Knowledge
+  KNOWLEDGE_CREATE_INSTRUCTION = 'knowledge_create_instruction',
+  KNOWLEDGE_UPDATE_INSTRUCTION = 'knowledge_update_instruction',
+  KNOWLEDGE_DELETE_INSTRUCTION = 'knowledge_delete_instruction',
+  KNOWLEDGE_CREATE_SQL_PAIR = 'knowledge_create_sql_pair',
+  KNOWLEDGE_UPDATE_SQL_PAIR = 'knowledge_update_sql_pair',
+  KNOWLEDGE_DELETE_SQL_PAIR = 'knowledge_delete_sql_pair',
 }
 
 export enum WrenService {
@@ -118,6 +127,7 @@ export class PostHogTelemetry {
     }
     const eventName = actionSuccess ? `${event}_success` : `${event}_failed`;
     try {
+      console.log('sendEvent', eventName, properties, service, actionSuccess);
       const systemInfo = this.collectSystemInfo();
       this.posthog.capture({
         distinctId: this.userId,
@@ -157,4 +167,58 @@ export class PostHogTelemetry {
       this.posthog.shutdown();
     }
   }
+}
+
+export const withTelemetry = async <T>(
+  eventName: TelemetryEvent,
+  data: any,
+  operation: () => Promise<T>,
+  ctx: IContext,
+): Promise<T> => {
+  try {
+    const result = await operation();
+    ctx.telemetry.sendEvent(eventName, { data });
+    return result;
+  } catch (err: any) {
+    ctx.telemetry.sendEvent(
+      eventName,
+      { data, error: err.message },
+      err.extensions?.service,
+      false,
+    );
+    throw err;
+  }
+};
+
+export function TrackTelemetry(eventName: TelemetryEvent) {
+  return function (
+    _target: any,
+    _propertyKey: string,
+    descriptor: PropertyDescriptor,
+  ) {
+    const originalMethod = descriptor.value;
+
+    descriptor.value = async function (...args: [any, any, IContext]) {
+      // The last argument is typically the context in GraphQL resolvers
+      const [, , ctx] = args;
+      // Extract data using the provided extractor or use a default approach
+      const data = args[1]?.data || args[1];
+
+      try {
+        const result = await originalMethod.apply(this, args);
+        ctx.telemetry.sendEvent(eventName, { data });
+        return result;
+      } catch (err: any) {
+        ctx.telemetry.sendEvent(
+          eventName,
+          { data, error: err.message },
+          err.extensions?.service,
+          false,
+        );
+        throw err;
+      }
+    };
+
+    return descriptor;
+  };
 }

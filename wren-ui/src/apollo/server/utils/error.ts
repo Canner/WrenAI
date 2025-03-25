@@ -45,6 +45,7 @@ export enum GeneralErrorCodes {
   // when rerun from cancelled, the task is identified as general or misleading query
   IDENTIED_AS_GENERAL = 'IDENTIED_AS_GENERAL',
   IDENTIED_AS_MISLEADING_QUERY = 'IDENTIED_AS_MISLEADING_QUERY',
+  DEPLOY_TIMEOUT_ERROR = 'DEPLOY_TIMEOUT_ERROR',
 }
 
 export const errorMessages = {
@@ -98,6 +99,8 @@ export const errorMessages = {
     'The question is identified as a general question, please follow-up ask with more specific questions.',
   [GeneralErrorCodes.IDENTIED_AS_MISLEADING_QUERY]:
     'The question is identified as a misleading query, please follow-up ask with more specific questions.',
+  [GeneralErrorCodes.DEPLOY_TIMEOUT_ERROR]:
+    'LLM deployment timed out after 30 seconds',
 };
 
 export const shortMessages = {
@@ -123,6 +126,7 @@ export const shortMessages = {
   [GeneralErrorCodes.IDENTIED_AS_GENERAL]: 'Identified as general question',
   [GeneralErrorCodes.IDENTIED_AS_MISLEADING_QUERY]:
     'Identified as misleading query',
+  [GeneralErrorCodes.DEPLOY_TIMEOUT_ERROR]: 'LLM deployment timed out',
 };
 
 export const create = (
