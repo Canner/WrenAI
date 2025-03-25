@@ -2,6 +2,7 @@ import { Button, Typography, Timeline } from 'antd';
 import CloseCircleFilled from '@ant-design/icons/CloseCircleFilled';
 import ToolOutlined from '@ant-design/icons/ToolOutlined';
 import useModalAction from '@/hooks/useModalAction';
+import ErrorCollapse from '@/components/ErrorCollapse';
 import { FixSQLModal } from '@/components/modals/FixSQLModal';
 import { Error } from '@/apollo/client/graphql/__types__';
 
@@ -33,6 +34,9 @@ export default function ErrorBoundary({ children, error }: Props) {
           </div>
           {hasInvalidSql && (
             <>
+              <div className="bg-gray-2 p-2 my-4">
+                <ErrorCollapse message={error.message} defaultActive />
+              </div>
               <Button
                 className="mt-2 adm-fix-it-btn"
                 icon={<ToolOutlined />}
