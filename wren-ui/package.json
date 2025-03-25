@@ -1,6 +1,6 @@
 {
   "name": "wren-ui",
-  "version": "fix-sql-v1",
+  "version": "0.22.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
