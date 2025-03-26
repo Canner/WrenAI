@@ -24,7 +24,7 @@ jobs:
 
       - name: Get changed files
         id: changed-files
-        uses: tj-actions/changed-files@v35
+        uses: tj-actions/changed-files@v46
 
       - name: Tag PR based on changed files and title
         uses: actions/github-script@v6
