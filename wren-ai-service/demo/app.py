@@ -145,6 +145,7 @@ with st.sidebar:
             "Russian",
             "Japanese",
             "Korean",
+            "Italian"
         ],
         index=0,
         on_change=onchange_language,

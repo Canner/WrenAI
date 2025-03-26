@@ -315,6 +315,7 @@ async def main():
         "Russian",
         "Japanese",
         "Korean",
+        "Italian",
     ]
     st.selectbox(
         "Select chart-rerun output language",
