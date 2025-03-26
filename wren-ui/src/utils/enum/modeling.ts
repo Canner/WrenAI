@@ -10,4 +10,5 @@ export enum MORE_ACTION {
   REFRESH = 'refresh',
   HIDE_CATEGORY = 'hide_category',
   VIEW_SQL_PAIR = 'view_sql_pair',
+  VIEW_INSTRUCTION = 'view_instruction',
 }

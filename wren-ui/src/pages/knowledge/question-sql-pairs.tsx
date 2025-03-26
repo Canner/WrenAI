@@ -1,6 +1,5 @@
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import styled from 'styled-components';
 import { Button, message, Table, TableColumnsType, Typography } from 'antd';
 import { format } from 'sql-formatter';
 import SiderLayout from '@/components/layouts/SiderLayout';
@@ -25,15 +24,7 @@ const CodeBlock = dynamic(() => import('@/components/editor/CodeBlock'), {
   ssr: false,
 });
 
-const { Title, Text } = Typography;
-
-const StyledQuestionBlock = styled.div`
-  width: 100%;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  white-space: normal;
-`;
+const { Paragraph, Title, Text } = Typography;
 
 export default function ManageQuestionSQLPairs() {
   const questionSqlPairModal = useModalAction();
@@ -96,16 +87,15 @@ export default function ManageQuestionSQLPairs() {
     {
       title: 'Question',
       dataIndex: 'question',
-      ellipsis: true,
       width: 300,
       render: (question) => (
-        <StyledQuestionBlock className="text-truncate">
+        <Paragraph title={question} ellipsis={{ rows: 2 }}>
           {question}
-        </StyledQuestionBlock>
+        </Paragraph>
       ),
     },
     {
-      title: 'SQL Statement',
+      title: 'SQL statement',
       dataIndex: 'sql',
       width: '60%',
       render: (sql) => (
@@ -115,7 +105,7 @@ export default function ManageQuestionSQLPairs() {
       ),
     },
     {
-      title: 'Created Time',
+      title: 'Created time',
       dataIndex: 'createdAt',
       width: 130,
       render: (time) => <Text className="gray-7">{getCompactTime(time)}</Text>,
@@ -139,18 +129,18 @@ export default function ManageQuestionSQLPairs() {
         <div className="d-flex align-center justify-space-between mb-3">
           <Title level={4} className="text-medium gray-8 mb-0">
             <FunctionOutlined className="mr-2 gray-8" />
-            Manage Question-SQL Pairs
+            Manage question-SQL pairs
           </Title>
           <Button
             type="primary"
             className=""
             onClick={() => questionSqlPairModal.openModal()}
           >
-            Add Question-SQL Pair
+            Add question-SQL pair
           </Button>
         </div>
         <Text className="gray-7">
-          On this page, you can manage your saved Question-SQL Pairs. These
+          On this page, you can manage your saved question-SQL pairs. These
           pairs help Wren AI learn how your organization writes SQL, allowing it
           to generate queries that better align with your expectations.{' '}
           <Link

@@ -50,8 +50,8 @@ export const makeStoriesPlayer =
           playDataModelingGuide(...args, dispatcher),
         [LEARNING.SWITCH_PROJECT_LANGUAGE]: () =>
           playSwitchProjectLanguageGuide(...args, dispatcher),
-        [LEARNING.QUESTION_SQL_PAIRS_GUIDE]: () =>
-          playQuestionSQLPairsGuide(...args, dispatcher),
+        [LEARNING.KNOWLEDGE_GUIDE]: () =>
+          playKnowledgeGuide(...args, dispatcher),
         [LEARNING.SAVE_TO_KNOWLEDGE]: () =>
           playSaveToKnowledgeGuide(...args, dispatcher),
       }[id] || null;
@@ -364,7 +364,7 @@ const playSwitchProjectLanguageGuide = (
   $driver.drive();
 };
 
-const playQuestionSQLPairsGuide = (
+const playKnowledgeGuide = (
   $driver: DriverObj,
   _router: NextRouter,
   _payload: StoryPayload,
@@ -378,8 +378,10 @@ const playQuestionSQLPairsGuide = (
   if ($driver.isActive()) $driver.destroy();
 
   $driver.setConfig({ ...defaultConfigs, showProgress: true });
+
   $driver.setSteps([
     {
+      element: '[data-guideid="question-sql-pairs"]',
       popover: {
         title: renderToString(
           <div className="pt-4">
@@ -390,12 +392,12 @@ const playQuestionSQLPairsGuide = (
                 alt="question-sql-pairs-guide"
               />
             </div>
-            Build Your Knowledge Base
+            Build knowledge base: Question-SQL pairs
           </div>,
         ),
         description: renderToString(
           <>
-            Create and manage <b>Question-SQL Pairs</b> to refine Wren AI’s SQL
+            Create and manage <b>Question-SQL pairs</b> to refine Wren AI’s SQL
             generation. You can manually add pairs here or go to Home, ask a
             question, and save the correct answer to Knowledge. The more you
             save, the smarter Wren AI becomes!
@@ -404,7 +406,35 @@ const playQuestionSQLPairsGuide = (
         onPopoverRender: (popoverDom: DriverPopoverDOM) => {
           resetPopoverStyle(popoverDom, 640);
         },
-        doneBtnText: 'Get Started',
+      },
+    },
+    {
+      element: '[data-guideid="instructions"]',
+      popover: {
+        title: renderToString(
+          <div className="pt-4">
+            <div className="-mx-4" style={{ minHeight: 260 }}>
+              <img
+                className="mb-4"
+                src="/images/learning/instructions.png"
+                alt="instructions-guide"
+              />
+            </div>
+            Build knowledge base: Instructions
+          </div>,
+        ),
+        description: renderToString(
+          <>
+            In addition to Question-SQL pairs, you can create instructions to
+            define <b>business rules</b> and <b>query logic</b>. These rules
+            guide Wren AI in applying consistent filters, constraints, and best
+            practices to SQL queries.
+          </>,
+        ),
+        onPopoverRender: (popoverDom: DriverPopoverDOM) => {
+          resetPopoverStyle(popoverDom, 520);
+        },
+        doneBtnText: 'Got it',
         onNextClick: () => {
           $driver.destroy();
           dispatcher?.onDone && dispatcher.onDone();
@@ -447,13 +477,13 @@ const playSaveToKnowledgeGuide = async (
             <div className="mb-1">
               <RobotIcon />
             </div>
-            Save to Knowledge
+            Save to knowledge
           </>,
         ),
         description: renderToString(
           <>
             If the AI-generated answer is correct, save it as a{' '}
-            <b>Question-SQL Pairs</b> to improve AI learning. If it's incorrect,
+            <b>Question-SQL pair</b> to improve AI learning. If it's incorrect,
             refine it with follow-ups before saving to ensure accuracy.
           </>,
         ),

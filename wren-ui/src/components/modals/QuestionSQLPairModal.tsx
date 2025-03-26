@@ -12,9 +12,13 @@ import ErrorCollapse from '@/components/ErrorCollapse';
 import PreviewData from '@/components/dataPreview/PreviewData';
 import { usePreviewSqlMutation } from '@/apollo/client/graphql/sql.generated';
 import { useGenerateQuestionMutation } from '@/apollo/client/graphql/sql.generated';
+import { SqlPair } from '@/apollo/client/graphql/__types__';
 
-type Props = ModalAction<any> & {
+type Props = ModalAction<SqlPair> & {
   loading?: boolean;
+  payload?: {
+    isCreateMode: boolean;
+  };
 };
 
 const StyledForm = styled(Form)`
@@ -62,6 +66,7 @@ export default function QuestionSQLPairModal(props: Props) {
 
   const handleReset = () => {
     previewSqlResult.reset();
+    setShowPreview(false);
     setError(null);
     form.resetFields();
   };
@@ -147,7 +152,7 @@ export default function QuestionSQLPairModal(props: Props) {
 
   return (
     <Modal
-      title={`${isCreateMode ? 'Add' : 'Update'} Question-SQL Pair`}
+      title={`${isCreateMode ? 'Add' : 'Update'} question-SQL pair`}
       centered
       closable
       confirmLoading={confirmLoading}
@@ -231,7 +236,7 @@ export default function QuestionSQLPairModal(props: Props) {
           <Input />
         </Form.Item>
         <Form.Item
-          label="SQL Statement"
+          label="SQL statement"
           name="sql"
           required
           rules={[

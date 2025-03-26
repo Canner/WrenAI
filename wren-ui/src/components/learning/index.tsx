@@ -306,12 +306,12 @@ export default function SidebarSection(_props: Props) {
         },
         [Path.KnowledgeQuestionSQLPairs]: async () => {
           const isGuideDone = learningRecord.paths.includes(
-            LEARNING.QUESTION_SQL_PAIRS_GUIDE,
+            LEARNING.KNOWLEDGE_GUIDE,
           );
           if (!isGuideDone) {
             await nextTick(1000);
-            $guide.current?.play(LEARNING.QUESTION_SQL_PAIRS_GUIDE, {
-              onDone: () => saveRecord(LEARNING.QUESTION_SQL_PAIRS_GUIDE),
+            $guide.current?.play(LEARNING.KNOWLEDGE_GUIDE, {
+              onDone: () => saveRecord(LEARNING.KNOWLEDGE_GUIDE),
             });
           }
         },
