@@ -129,9 +129,8 @@ class SQLGenerationReasoning(BasicPipeline):
 
     def _streaming_callback(self, chunk, query_id):
         if query_id not in self._user_queues:
-            self._user_queues[
-                query_id
-            ] = asyncio.Queue()  # Create a new queue for the user if it doesn't exist
+            self._user_queues[query_id] = asyncio.Queue()
+
         # Put the chunk content into the user's queue
         asyncio.create_task(self._user_queues[query_id].put(chunk.content))
         if chunk.meta.get("finish_reason"):
@@ -142,9 +141,9 @@ class SQLGenerationReasoning(BasicPipeline):
             return await self._user_queues[query_id].get()
 
         if query_id not in self._user_queues:
-            self._user_queues[
-                query_id
-            ] = asyncio.Queue()  # Ensure the user's queue exists
+            yield ""
+            return
+
         while True:
             try:
                 # Wait for an item from the user's queue

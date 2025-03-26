@@ -621,8 +621,17 @@ class AskService:
                     )
                     yield event.serialize()
             elif self._ask_results.get(query_id).status == "planning":
+                # only one of the two pipelines will be used
                 async for chunk in self._pipelines[
                     "sql_generation_reasoning"
+                ].get_streaming_results(query_id):
+                    event = SSEEvent(
+                        data=SSEEvent.SSEEventMessage(message=chunk),
+                    )
+                    yield event.serialize()
+
+                async for chunk in self._pipelines[
+                    "followup_sql_generation_reasoning"
                 ].get_streaming_results(query_id):
                     event = SSEEvent(
                         data=SSEEvent.SSEEventMessage(message=chunk),
