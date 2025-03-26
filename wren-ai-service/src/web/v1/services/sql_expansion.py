@@ -133,6 +133,7 @@ class SqlExpansionService:
                 query_for_retrieval = request.query
                 retrieval_result = await self._pipelines["retrieval"].run(
                     query=query_for_retrieval,
+                    histories=[history],
                     project_id=request.project_id,
                 )
                 _retrieval_result = retrieval_result.get(
