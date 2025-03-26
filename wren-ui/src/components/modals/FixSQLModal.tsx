@@ -22,7 +22,7 @@ export function FixSQLModal(props: Props) {
   const error = useMemo(() => {
     if (!previewSqlResult.error) return null;
     const graphQLError = parseGraphQLError(previewSqlResult.error);
-    return { ...graphQLError, shortMessage: 'Invalid SQL Syntax' };
+    return { ...graphQLError, shortMessage: 'Invalid SQL syntax' };
   }, [previewSqlResult.error]);
 
   useEffect(() => {
@@ -88,7 +88,7 @@ export function FixSQLModal(props: Props) {
       </Typography.Text>
       <Form form={form} preserve={false} layout="vertical">
         <Form.Item
-          label="SQL Statement"
+          label="SQL statement"
           name="sql"
           required
           rules={[
@@ -126,7 +126,7 @@ export function FixSQLModal(props: Props) {
         <Alert
           showIcon
           type="error"
-          message="Invalid SQL Syntax"
+          message={error.shortMessage}
           description={<ErrorCollapse message={error.message} />}
         />
       )}

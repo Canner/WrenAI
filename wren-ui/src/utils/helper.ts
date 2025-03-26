@@ -26,7 +26,10 @@ export const attachLoading = (
 ) => {
   return async (...args) => {
     setLoading(true);
-    await asyncRequest(...args);
-    setLoading(false);
+    try {
+      await asyncRequest(...args);
+    } finally {
+      setLoading(false);
+    }
   };
 };
