@@ -66,6 +66,7 @@ export default function QuestionSQLPairModal(props: Props) {
 
   const handleReset = () => {
     previewSqlResult.reset();
+    setShowPreview(false);
     setError(null);
     form.resetFields();
   };
