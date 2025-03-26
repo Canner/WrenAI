@@ -1,4 +1,4 @@
-import { merge, pick } from 'lodash';
+import { pick } from 'lodash';
 import { IWrenAIAdaptor } from '@server/adaptors';
 import { InstructionInput, UpdateInstructionInput } from '@server/models';
 import {
