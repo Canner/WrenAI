@@ -413,7 +413,7 @@ const playKnowledgeGuide = (
       popover: {
         title: renderToString(
           <div className="pt-4">
-            <div className="-mx-4" style={{ minHeight: 317 }}>
+            <div className="-mx-4" style={{ minHeight: 260 }}>
               <img
                 className="mb-4"
                 src="/images/learning/instructions.png"

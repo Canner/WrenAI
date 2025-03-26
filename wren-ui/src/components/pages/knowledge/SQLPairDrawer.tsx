@@ -2,8 +2,9 @@ import { Drawer, Typography } from 'antd';
 import { getCompactTime } from '@/utils/time';
 import { DrawerAction } from '@/hooks/useDrawerAction';
 import CodeBlock from '@/components/editor/CodeBlock';
+import { SqlPair } from '@/apollo/client/graphql/__types__';
 
-type Props = DrawerAction<any>;
+type Props = DrawerAction<SqlPair>;
 
 export default function SQLPairDrawer(props: Props) {
   const { visible, defaultValue, onClose } = props;
@@ -13,7 +14,7 @@ export default function SQLPairDrawer(props: Props) {
       closable
       destroyOnClose
       onClose={onClose}
-      title="View Question-SQL Pair"
+      title="View question-SQL pair"
       visible={visible}
       width={760}
     >
@@ -22,7 +23,7 @@ export default function SQLPairDrawer(props: Props) {
         <div>{defaultValue?.question || '-'}</div>
       </div>
       <div className="mb-6">
-        <Typography.Text className="gray-7 mb-2">SQL Statement</Typography.Text>
+        <Typography.Text className="gray-7 mb-2">SQL statement</Typography.Text>
         <CodeBlock
           code={defaultValue?.sql || ''}
           showLineNumbers
@@ -30,7 +31,7 @@ export default function SQLPairDrawer(props: Props) {
         />
       </div>
       <div className="mb-6">
-        <Typography.Text className="gray-7 mb-2">Created Time</Typography.Text>
+        <Typography.Text className="gray-7 mb-2">Created time</Typography.Text>
         <div>
           {defaultValue?.createdAt
             ? getCompactTime(defaultValue.createdAt)

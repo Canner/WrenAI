@@ -95,7 +95,7 @@ export default function ManageQuestionSQLPairs() {
       ),
     },
     {
-      title: 'SQL Statement',
+      title: 'SQL statement',
       dataIndex: 'sql',
       width: '60%',
       render: (sql) => (
@@ -105,7 +105,7 @@ export default function ManageQuestionSQLPairs() {
       ),
     },
     {
-      title: 'Created Time',
+      title: 'Created time',
       dataIndex: 'createdAt',
       width: 130,
       render: (time) => <Text className="gray-7">{getCompactTime(time)}</Text>,
@@ -129,14 +129,14 @@ export default function ManageQuestionSQLPairs() {
         <div className="d-flex align-center justify-space-between mb-3">
           <Title level={4} className="text-medium gray-8 mb-0">
             <FunctionOutlined className="mr-2 gray-8" />
-            Manage Question-SQL Pairs
+            Manage question-SQL pairs
           </Title>
           <Button
             type="primary"
             className=""
             onClick={() => questionSqlPairModal.openModal()}
           >
-            Add Question-SQL Pair
+            Add question-SQL pair
           </Button>
         </div>
         <Text className="gray-7">

@@ -6,10 +6,11 @@ import { isEmpty } from 'lodash';
 import { FORM_MODE } from '@/utils/enum';
 import { ERROR_TEXTS } from '@/utils/error';
 import { ModalAction } from '@/hooks/useModalAction';
+import { Instruction } from '@/apollo/client/graphql/__types__';
 
 const MAX_QUESTIONS = 100;
 
-type Props = ModalAction<any> & {
+type Props = ModalAction<Instruction> & {
   loading?: boolean;
 };
 
@@ -48,7 +49,7 @@ export default function InstructionModal(props: Props) {
 
   return (
     <Modal
-      title={`${isCreateMode ? 'Add' : 'Update'} an Instruction`}
+      title={`${isCreateMode ? 'Add' : 'Update'} an instruction`}
       centered
       closable
       confirmLoading={loading}
@@ -64,7 +65,7 @@ export default function InstructionModal(props: Props) {
     >
       <Form form={form} preserve={false} layout="vertical">
         <Form.Item
-          label="Instruction Details"
+          label="Instruction details"
           name="instruction"
           rules={[
             {
@@ -82,7 +83,7 @@ export default function InstructionModal(props: Props) {
           />
         </Form.Item>
         <Form.Item
-          label="Apply Instruction To"
+          label="Apply instruction to"
           name="isDefault"
           required={false}
           rules={[
@@ -113,7 +114,7 @@ export default function InstructionModal(props: Props) {
         </Form.Item>
         {!isDefault && (
           <Form.Item
-            label="Matching Questions"
+            label="Matching questions"
             required
             extra="Wren AI will match user queries based on similarity and apply this instruction when relevant."
           >
@@ -166,7 +167,7 @@ export default function InstructionModal(props: Props) {
                       disabled={fields.length >= MAX_QUESTIONS}
                       className="mb-1"
                     >
-                      Add a Question
+                      Add a question
                     </Button>
                   </Form.Item>
                 </>

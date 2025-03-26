@@ -42,6 +42,11 @@ const StyledTag = styled(Tag)`
   }
 `;
 
+const StyledInstructionsIcon = styled(InstructionsSVG)`
+  width: 20px;
+  height: 20px;
+`;
+
 export default function ManageInstructions() {
   const instructionModal = useModalAction();
   const instructionDrawer = useDrawerAction();
@@ -101,7 +106,7 @@ export default function ManageInstructions() {
 
   const columns: TableColumnsType<Instruction> = [
     {
-      title: 'Instruction Details',
+      title: 'Instruction details',
       dataIndex: 'instruction',
       render: (instruction) => (
         <Paragraph title={instruction} ellipsis={{ rows: 3 }}>
@@ -110,7 +115,7 @@ export default function ManageInstructions() {
       ),
     },
     {
-      title: 'Matching Questions',
+      title: 'Matching questions',
       dataIndex: 'questions',
       width: '50%',
       render: (questions, record) => {
@@ -141,7 +146,7 @@ export default function ManageInstructions() {
       },
     },
     {
-      title: 'Created Time',
+      title: 'Created time',
       dataIndex: 'createdAt',
       width: 130,
       render: (time) => <Text className="gray-7">{getCompactTime(time)}</Text>,
@@ -164,15 +169,15 @@ export default function ManageInstructions() {
       <div className="px-6 py-4">
         <div className="d-flex align-center justify-space-between mb-3">
           <Title level={4} className="text-medium gray-8 mb-0">
-            <InstructionsSVG className="mr-2 gray-8" />
-            Manage Instructions
+            <StyledInstructionsIcon className="mr-2 gray-8" />
+            Manage instruction
           </Title>
           <Button
             type="primary"
             className=""
             onClick={() => instructionModal.openModal()}
           >
-            Add an Instruction
+            Add an instruction
           </Button>
         </div>
         <Text className="gray-7">

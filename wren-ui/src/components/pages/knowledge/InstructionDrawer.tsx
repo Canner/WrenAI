@@ -3,10 +3,11 @@ import { getCompactTime } from '@/utils/time';
 import QuestionOutlined from '@ant-design/icons/QuestionOutlined';
 import { DrawerAction } from '@/hooks/useDrawerAction';
 import GlobalLabel from '@/components/pages/knowledge/GlobalLabel';
+import { Instruction } from '@/apollo/client/graphql/__types__';
 
 const { Text } = Typography;
 
-type Props = DrawerAction<any>;
+type Props = DrawerAction<Instruction>;
 
 export default function InstructionDrawer(props: Props) {
   const { visible, defaultValue, onClose } = props;
@@ -16,19 +17,19 @@ export default function InstructionDrawer(props: Props) {
       closable
       destroyOnClose
       onClose={onClose}
-      title="View Instruction"
+      title="View instruction"
       visible={visible}
       width={760}
     >
       <div className="mb-6">
         <Typography.Text className="gray-7 mb-2">
-          Instruction Details
+          Instruction details
         </Typography.Text>
         <div>{defaultValue?.instruction || '-'}</div>
       </div>
       <div className="mb-6">
         <Typography.Text className="gray-7 mb-2">
-          Matching Questions
+          Matching questions
         </Typography.Text>
         <div>
           {defaultValue?.isDefault ? (
@@ -51,7 +52,7 @@ export default function InstructionDrawer(props: Props) {
         </div>
       </div>
       <div className="mb-6">
-        <Typography.Text className="gray-7 mb-2">Created Time</Typography.Text>
+        <Typography.Text className="gray-7 mb-2">Created time</Typography.Text>
         <div>
           {defaultValue?.createdAt
             ? getCompactTime(defaultValue.createdAt)
