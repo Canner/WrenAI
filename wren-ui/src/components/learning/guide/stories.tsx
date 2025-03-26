@@ -392,12 +392,12 @@ const playKnowledgeGuide = (
                 alt="question-sql-pairs-guide"
               />
             </div>
-            Build Your Knowledge Base
+            Build knowledge base: Question-SQL pairs
           </div>,
         ),
         description: renderToString(
           <>
-            Create and manage <b>Question-SQL Pairs</b> to refine Wren AI’s SQL
+            Create and manage <b>Question-SQL pairs</b> to refine Wren AI’s SQL
             generation. You can manually add pairs here or go to Home, ask a
             question, and save the correct answer to Knowledge. The more you
             save, the smarter Wren AI becomes!
@@ -420,12 +420,12 @@ const playKnowledgeGuide = (
                 alt="instructions-guide"
               />
             </div>
-            Build Your Knowledge Base with Instructions
+            Build knowledge base: Instructions
           </div>,
         ),
         description: renderToString(
           <>
-            In addition to Question-SQL Pairs, you can create Instructions to
+            In addition to Question-SQL pairs, you can create instructions to
             define <b>business rules</b> and <b>query logic</b>. These rules
             guide Wren AI in applying consistent filters, constraints, and best
             practices to SQL queries.
@@ -477,13 +477,13 @@ const playSaveToKnowledgeGuide = async (
             <div className="mb-1">
               <RobotIcon />
             </div>
-            Save to Knowledge
+            Save to knowledge
           </>,
         ),
         description: renderToString(
           <>
             If the AI-generated answer is correct, save it as a{' '}
-            <b>Question-SQL Pairs</b> to improve AI learning. If it's incorrect,
+            <b>Question-SQL pair</b> to improve AI learning. If it's incorrect,
             refine it with follow-ups before saving to ensure accuracy.
           </>,
         ),

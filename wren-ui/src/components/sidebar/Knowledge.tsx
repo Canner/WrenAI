@@ -29,7 +29,7 @@ export default function Knowledge() {
       'data-guideid': 'question-sql-pairs',
       label: (
         <Link style={linkStyle} href={Path.KnowledgeQuestionSQLPairs}>
-          Question-SQL Pairs
+          Question-SQL pairs
         </Link>
       ),
       icon: <FunctionOutlined />,

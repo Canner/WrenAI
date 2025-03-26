@@ -140,7 +140,7 @@ export default function ManageQuestionSQLPairs() {
           </Button>
         </div>
         <Text className="gray-7">
-          On this page, you can manage your saved Question-SQL Pairs. These
+          On this page, you can manage your saved question-SQL pairs. These
           pairs help Wren AI learn how your organization writes SQL, allowing it
           to generate queries that better align with your expectations.{' '}
           <Link

@@ -312,7 +312,7 @@ export default function AnswerResult(props: Props) {
               >
                 <div className="d-flex align-center">
                   <RobotSVG className="mr-2" />
-                  Save to Knowledge
+                  Save to knowledge
                 </div>
               </Button>
             </Tooltip>
