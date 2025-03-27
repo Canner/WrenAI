@@ -2,14 +2,19 @@ import { useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Skeleton, Typography } from 'antd';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import LoadingOutlined from '@ant-design/icons/LoadingOutlined';
+import CaretDownOutlined from '@ant-design/icons/CaretDownOutlined';
+import EditOutlined from '@ant-design/icons/EditOutlined';
 import styled from 'styled-components';
 import { BinocularsIcon } from '@/utils/icons';
 import { nextTick } from '@/utils/time';
+import { MORE_ACTION } from '@/utils/enum';
 import usePromptThreadStore from './store';
+import useDropdown from '@/hooks/useDropdown';
 import useTextBasedAnswerStreamTask from '@/hooks/useTextBasedAnswerStreamTask';
 import { Props as AnswerResultProps } from '@/components/pages/home/promptThread/AnswerResult';
 import MarkdownBlock from '@/components/editor/MarkdownBlock';
 import PreviewData from '@/components/dataPreview/PreviewData';
+import { AdjustAnswerDropdown } from '@/components/diagram/CustomDropdown';
 import { usePreviewDataMutation } from '@/apollo/client/graphql/home.generated';
 import { ThreadResponseAnswerStatus } from '@/apollo/client/graphql/__types__';
 
@@ -41,6 +46,7 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
     threadResponse?.answerDetail || {};
 
   const [textAnswer, setTextAnswer] = useState<string>('');
+  const adjustResultsDropdown = useDropdown();
 
   const [fetchAnswerStreamingTask, answerStreamTaskResult] =
     useTextBasedAnswerStreamTask();
@@ -110,6 +116,17 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
     onGenerateTextBasedAnswer(id);
   };
 
+  const onMoreClick = async (payload) => {
+    const { type, data } = payload;
+    if (type === MORE_ACTION.ADJUST_STEPS) {
+      // TODO: open adjust steps modal
+      console.log('adjust steps', data);
+    } else if (type === MORE_ACTION.ADJUST_SQL) {
+      // TODO: open adjust sql modal
+      console.log('adjust sql', data);
+    }
+  };
+
   if (error) {
     return (
       <Alert
@@ -130,6 +147,26 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
       title={false}
     >
       <div className="text-md gray-10 p-4 pr-6">
+        <div className="text-right">
+          <AdjustAnswerDropdown
+            onMoreClick={onMoreClick}
+            data={{ sql: threadResponse.sql }}
+            onDropdownVisibleChange={adjustResultsDropdown.onVisibleChange}
+          >
+            <Button
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={(event) => event.stopPropagation()}
+            >
+              Adjust the answer
+              <CaretDownOutlined
+                className="ml-1"
+                rotate={adjustResultsDropdown.visible ? 180 : 0}
+              />
+            </Button>
+          </AdjustAnswerDropdown>
+        </div>
         <MarkdownBlock content={textAnswer} />
         {isStreaming && <LoadingOutlined className="geekblue-6" spin />}
         {status === ThreadResponseAnswerStatus.INTERRUPTED && (

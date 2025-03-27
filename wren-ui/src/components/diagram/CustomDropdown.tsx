@@ -6,6 +6,8 @@ import EditOutlined from '@ant-design/icons/EditOutlined';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import EyeInvisibleOutlined from '@ant-design/icons/EyeInvisibleOutlined';
 import EyeOutlined from '@ant-design/icons/EyeOutlined';
+import CodeFilled from '@ant-design/icons/CodeFilled';
+import { EditSVG } from '@/utils/svgs';
 import {
   DeleteCalculatedFieldModal,
   DeleteRelationshipModal,
@@ -21,11 +23,12 @@ interface Props {
   onMoreClick: (type: MORE_ACTION) => void;
   onMenuEnter?: (event: React.MouseEvent) => void;
   children: React.ReactNode;
+  onDropdownVisibleChange?: (visible: boolean) => void;
 }
 
 const makeDropdown =
   (getItems: (props: Props) => ItemType[]) => (props: Props) => {
-    const { children, onMenuEnter } = props;
+    const { children, onMenuEnter, onDropdownVisibleChange } = props;
 
     const items = getItems(props);
 
@@ -40,6 +43,7 @@ const makeDropdown =
             onMouseEnter={onMenuEnter}
           />
         }
+        onVisibleChange={onDropdownVisibleChange}
       >
         {children}
       </Dropdown>
@@ -276,6 +280,41 @@ export const InstructionDropdown = makeDropdown(
         className: 'red-5',
         key: MORE_ACTION.DELETE,
         onClick: ({ domEvent }) => domEvent.stopPropagation(),
+      },
+    ];
+    return items;
+  },
+);
+
+export const AdjustAnswerDropdown = makeDropdown(
+  (
+    props: Props & {
+      onMoreClick: (payload: { type: MORE_ACTION; data: any }) => void;
+    },
+  ) => {
+    const { onMoreClick, data } = props;
+    const items: ItemType[] = [
+      {
+        label: 'Adjust steps',
+        className: 'gray-8',
+        icon: <EditSVG className="gray-8" />,
+        key: 'adjust-steps',
+        onClick: () =>
+          onMoreClick({
+            type: MORE_ACTION.ADJUST_STEPS,
+            data,
+          }),
+      },
+      {
+        label: 'Adjust SQL',
+        className: 'gray-8',
+        icon: <CodeFilled className="gray-8 text-base" />,
+        key: 'adjust-sql',
+        onClick: () =>
+          onMoreClick({
+            type: MORE_ACTION.ADJUST_SQL,
+            data,
+          }),
       },
     ];
     return items;
