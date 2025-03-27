@@ -47,8 +47,8 @@ demo:
 test test_args='': up && down
 	poetry run pytest -s {{test_args}} --ignore tests/pytest/test_usecases.py
 
-test-usecases usecases='all':
-	poetry run python -m tests.pytest.test_usecases --usecases {{usecases}}
+test-usecases usecases='all' lang='en':
+	poetry run python -m tests.pytest.test_usecases --usecases {{usecases}} --lang {{lang}}
 
 load-test:
 	poetry run python -m tests.locust.locust_script
