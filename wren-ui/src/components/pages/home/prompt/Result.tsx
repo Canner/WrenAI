@@ -159,7 +159,8 @@ const IntentionFinished = (props: Props) => {
     }
   }, [type]);
 
-  return null;
+  // To keep the UI result keep showing as understanding
+  return <Understanding {...props} />;
 };
 
 const GeneralAnswer = (props: Props) => {
