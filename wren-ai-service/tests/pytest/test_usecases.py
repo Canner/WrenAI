@@ -169,7 +169,7 @@ if __name__ == "__main__":
         "woocommerce": "bigquery",
         "stripe": "bigquery",
         "ecommerce": "duckdb",
-        "hr": "duckdb",
+        # "hr": "duckdb",
         "facebook_marketing": "bigquery",
         "google_ads": "bigquery",
     }
