@@ -783,10 +783,14 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
 
     // use custom error to transform error
     const code = body?.error?.code;
+    const isShowAIServiceErrorMessage =
+      code === Errors.GeneralErrorCodes.NO_RELEVANT_SQL ||
+      code === Errors.GeneralErrorCodes.AI_SERVICE_UNDEFINED_ERROR;
+
     const error = code
       ? Errors.create(
           code,
-          code === Errors.GeneralErrorCodes.AI_SERVICE_UNDEFINED_ERROR
+          isShowAIServiceErrorMessage
             ? {
                 customMessage: body?.error?.message,
               }
