@@ -648,10 +648,14 @@ export class AskingResolver {
         const view = response.viewId
           ? await ctx.viewRepository.findOneBy({ id: response.viewId })
           : null;
+        const sqlPair = response.sqlpairId
+          ? await ctx.sqlPairRepository.findOneBy({ id: response.sqlpairId })
+          : null;
         return {
           type: response.type,
           sql: response.sql,
           view,
+          sqlPair,
         };
       }),
     );

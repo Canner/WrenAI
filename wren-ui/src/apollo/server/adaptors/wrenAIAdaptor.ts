@@ -711,6 +711,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       type: candidate?.type?.toUpperCase() as AskCandidateType,
       sql: candidate.sql,
       viewId: candidate?.viewId ? Number(candidate.viewId) : null,
+      sqlpairId: candidate?.sqlpairId ? Number(candidate.sqlpairId) : null,
     }));
 
     return {

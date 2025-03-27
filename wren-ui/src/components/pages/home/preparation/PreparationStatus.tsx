@@ -56,7 +56,12 @@ export default function PreparationStatus(props: Props) {
     );
   } else if (askingTask.status === AskingTaskStatus.FINISHED) {
     const showView = data.view !== null;
-    return <div className="gray-6">{showView ? '1 step' : '3 steps'}</div>;
+    const showSqlPair = !!askingTask?.candidates[0]?.sqlPair;
+    return (
+      <div className="gray-6">
+        {showView || showSqlPair ? '1 step' : '3 steps'}
+      </div>
+    );
   }
 
   return null;

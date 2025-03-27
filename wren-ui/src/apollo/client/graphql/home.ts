@@ -68,6 +68,12 @@ const COMMON_ASKING_TASK = gql`
         statement
         displayName
       }
+      sqlPair {
+        id
+        question
+        sql
+        projectId
+      }
     }
     error {
       ...CommonError

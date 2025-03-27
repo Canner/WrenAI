@@ -7,6 +7,7 @@ import Organizing from './step/Organizing';
 import Generating from './step/Generating';
 import FixedSQLFinished from './step/FixedSQLFinished';
 import ViewFinished from './step/ViewFinished';
+import SQLPairFinished from './step/SQLPairFinished';
 import { PROCESS_STATE } from '@/utils/enum';
 import {
   ProcessStateMachine,
@@ -47,7 +48,7 @@ const getProcessDot = (processing: boolean) => {
 };
 
 export default function PreparationSteps(props: Props) {
-  const { className, data, askingStreamTask, isAnswerFinished } = props;
+  const { className, data, askingStreamTask, minimized } = props;
   const { askingTask, view, sql } = data;
 
   const processState = useMemo(
@@ -60,12 +61,10 @@ export default function PreparationSteps(props: Props) {
 
   // displays
   const showView = !!view;
-  const showRetrieving =
-    retrievingNextStates.includes(processState) && !showView;
-  const showOrganizing =
-    organizingNextStates.includes(processState) && !showView;
-  const showGenerating =
-    generatingNextStates.includes(processState) && !showView;
+  const showSqlPair = !!askingTask?.candidates[0]?.sqlPair;
+  const showRetrieving = retrievingNextStates.includes(processState);
+  const showOrganizing = organizingNextStates.includes(processState);
+  const showGenerating = generatingNextStates.includes(processState);
 
   // data
   const retrievedTables = askingTask.retrievedTables || [];
@@ -77,10 +76,11 @@ export default function PreparationSteps(props: Props) {
   const organizing = processState === PROCESS_STATE.PLANNING;
   const generating = processState === PROCESS_STATE.GENERATING;
   const correcting = processState === PROCESS_STATE.CORRECTING;
-  const wrapping = !isAnswerFinished;
+  const wrapping = !minimized;
 
   // templates
   if (showView) return <ViewTimelineSteps {...props} />;
+  if (showSqlPair) return <SQLPairTimelineSteps {...props} />;
   if (isFixedSQL) return <FixedSQLTimelineSteps {...props} />;
 
   // default
@@ -135,6 +135,18 @@ function ViewTimelineSteps(props: Props) {
     <Timeline className={className}>
       <Timeline.Item dot={fileDone}>
         <ViewFinished />
+      </Timeline.Item>
+    </Timeline>
+  );
+}
+
+function SQLPairTimelineSteps(props: Props) {
+  const { className } = props;
+
+  return (
+    <Timeline className={className}>
+      <Timeline.Item dot={fileDone}>
+        <SQLPairFinished />
       </Timeline.Item>
     </Timeline>
   );
