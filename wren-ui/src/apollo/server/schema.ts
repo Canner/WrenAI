@@ -571,12 +571,14 @@ export const typeDefs = gql`
   enum ResultCandidateType {
     VIEW # View type candidate is provided basd on a saved view
     LLM # LLM type candidate is created by LLM
+    SQL_PAIR # SQL pair type candidate is created by SQL pair
   }
 
   type ResultCandidate {
     type: ResultCandidateType!
     sql: String!
     view: ViewInfo
+    sqlPair: SqlPair
   }
 
   type AskingTask {

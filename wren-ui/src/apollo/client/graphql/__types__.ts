@@ -1086,12 +1086,14 @@ export type ResolveSchemaChangeWhereInput = {
 export type ResultCandidate = {
   __typename?: 'ResultCandidate';
   sql: Scalars['String'];
+  sqlPair?: Maybe<SqlPair>;
   type: ResultCandidateType;
   view?: Maybe<ViewInfo>;
 };
 
 export enum ResultCandidateType {
   LLM = 'LLM',
+  SQL_PAIR = 'SQL_PAIR',
   VIEW = 'VIEW'
 }
 
