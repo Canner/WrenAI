@@ -15,19 +15,19 @@ import {
 export type Props = IPromptThreadStore['preparation'] & {
   className?: string;
   data: ThreadResponse;
-  isAnswerFinished?: boolean;
+  minimized?: boolean;
 };
 
 export default function Preparation(props: Props) {
-  const { className, data, isAnswerFinished, onFixSQLStatement } = props;
+  const { className, data, minimized, onFixSQLStatement } = props;
   const { askingTask, id: responseId, sql } = data;
 
   const [isActive, setIsActive] = useState(!sql);
 
   // wrapping up after answer is prepared
   useEffect(() => {
-    setIsActive(!isAnswerFinished);
-  }, [isAnswerFinished]);
+    setIsActive(!minimized);
+  }, [minimized]);
   const error = useMemo(() => {
     return askingTask?.error && !sql
       ? {

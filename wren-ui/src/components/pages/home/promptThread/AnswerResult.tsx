@@ -231,9 +231,6 @@ export default function AnswerResult(props: Props) {
     isAnswerPrepared ||
     isBreakdownOnly;
 
-  const isAnswerFinished =
-    isAnswerPrepared && getAnswerIsFinished(answerDetail?.status);
-
   return (
     <div style={resultStyle} data-jsid="answerResult">
       <QuestionTitle className="mb-4" question={question} />
@@ -241,7 +238,7 @@ export default function AnswerResult(props: Props) {
         className="mb-3"
         {...preparation}
         data={threadResponse}
-        isAnswerFinished={isAnswerFinished}
+        minimized={isAnswerPrepared}
       />
       {showAnswerTabs && (
         <>
