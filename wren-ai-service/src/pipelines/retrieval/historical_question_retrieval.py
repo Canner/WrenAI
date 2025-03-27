@@ -22,16 +22,16 @@ class OutputFormatter:
         documents=List[Optional[Dict]],
     )
     def run(self, documents: List[Document]):
-        list = []
-
-        for doc in documents:
-            formatted = {
+        list = [
+            {
                 "question": doc.content,
                 "summary": doc.meta.get("summary", ""),
                 "statement": doc.meta.get("statement") or doc.meta.get("sql"),
                 "viewId": doc.meta.get("viewId", ""),
+                "sqlpairId": doc.meta.get("sql_pair_id", ""),
             }
-            list.append(formatted)
+            for doc in documents
+        ]
 
         return {"documents": list}
 
