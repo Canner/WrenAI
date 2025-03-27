@@ -1,8 +1,10 @@
 import { useEffect } from 'react';
-import { Typography } from 'antd';
+import { Button, Typography } from 'antd';
 import styled from 'styled-components';
 import '@/components/editor/AceEditor';
 import { Loading } from '@/components/PageLoading';
+import CheckOutlined from '@ant-design/icons/CheckOutlined';
+import CopyOutlined from '@ant-design/icons/CopyOutlined';
 
 const Block = styled.div<{ inline?: boolean; maxHeight?: string }>`
   position: relative;
@@ -41,7 +43,7 @@ const Block = styled.div<{ inline?: boolean; maxHeight?: string }>`
 const CopyText = styled(Typography.Text)`
   position: absolute;
   top: 8px;
-  right: 8px;
+  right: 20px;
   font-size: 0;
   .ant-typography-copy {
     font-size: 12px;
@@ -112,7 +114,27 @@ export default function CodeBlock(props: Props) {
       <Loading spinning={loading}>
         <div className="adm-code-wrap">
           {lines}
-          {copyable && <CopyText copyable>{code}</CopyText>}
+          {copyable && (
+            <CopyText
+              copyable={{
+                icon: [
+                  <Button
+                    key="copy-icon"
+                    icon={<CopyOutlined className="" />}
+                    size="small"
+                    style={{ backgroundColor: 'transparent' }}
+                  />,
+                  <Button
+                    key="copied-icon"
+                    icon={<CheckOutlined className="green-6" />}
+                    size="small"
+                  />,
+                ],
+              }}
+            >
+              {code}
+            </CopyText>
+          )}
         </div>
       </Loading>
     </Block>

@@ -16,7 +16,7 @@ import RecommendedQuestions, {
   getRecommendedQuestionProps,
 } from '@/components/pages/home/RecommendedQuestions';
 import ViewBlock from '@/components/pages/home/promptThread/ViewBlock';
-import BreakdownAnswer from '@/components/pages/home/promptThread/BreakdownAnswer';
+import ViewSQLTabContent from '@/components/pages/home/promptThread/ViewSQLTabContent';
 import TextBasedAnswer, {
   getAnswerIsFinished,
 } from '@/components/pages/home/promptThread/TextBasedAnswer';
@@ -265,7 +265,7 @@ export default function AnswerResult(props: Props) {
                 </div>
               }
             >
-              <BreakdownAnswer {...props} />
+              <ViewSQLTabContent {...props} />
             </Tabs.TabPane>
             <Tabs.TabPane
               key="chart"
