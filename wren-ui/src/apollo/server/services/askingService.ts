@@ -132,6 +132,10 @@ export interface IAskingService {
     input: AskingDetailTaskInput,
     threadId: number,
   ): Promise<ThreadResponse>;
+  updateThreadResponse(
+    responseId: number,
+    data: { sql: string },
+  ): Promise<ThreadResponse>;
   getResponsesWithThread(threadId: number): Promise<ThreadResponse[]>;
   getResponse(responseId: number): Promise<ThreadResponse>;
   generateThreadResponseBreakdown(
@@ -709,6 +713,22 @@ export class AskingService implements IAskingService {
     }
 
     return threadResponse;
+  }
+
+  public async updateThreadResponse(
+    responseId: number,
+    data: { sql: string },
+  ): Promise<ThreadResponse> {
+    const threadResponse = await this.threadResponseRepository.findOneBy({
+      id: responseId,
+    });
+    if (!threadResponse) {
+      throw new Error(`Thread response ${responseId} not found`);
+    }
+
+    return await this.threadResponseRepository.updateOne(responseId, {
+      sql: data.sql,
+    });
   }
 
   public async generateThreadResponseBreakdown(

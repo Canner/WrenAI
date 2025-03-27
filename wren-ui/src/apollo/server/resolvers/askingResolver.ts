@@ -84,6 +84,7 @@ export class AskingResolver {
     this.deleteThread = this.deleteThread.bind(this);
     this.listThreads = this.listThreads.bind(this);
     this.createThreadResponse = this.createThreadResponse.bind(this);
+    this.updateThreadResponse = this.updateThreadResponse.bind(this);
     this.getResponse = this.getResponse.bind(this);
     this.previewData = this.previewData.bind(this);
     this.previewBreakdownData = this.previewBreakdownData.bind(this);
@@ -416,6 +417,17 @@ export class AskingResolver {
       );
       throw err;
     }
+  }
+
+  public async updateThreadResponse(
+    _root: any,
+    args: { where: { id: number }; data: { sql: string } },
+    ctx: IContext,
+  ): Promise<ThreadResponse> {
+    const { where, data } = args;
+    const askingService = ctx.askingService;
+    const response = await askingService.updateThreadResponse(where.id, data);
+    return response;
   }
 
   public async rerunAskingTask(

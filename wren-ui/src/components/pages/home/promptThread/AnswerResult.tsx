@@ -186,8 +186,7 @@ export default function AnswerResult(props: Props) {
     showRecommendedQuestions,
   );
 
-  const isAnswerPrepared =
-    !!answerDetail?.queryId || getAnswerIsFinished(answerDetail?.status);
+  const isAnswerPrepared = !!answerDetail?.queryId || !!answerDetail?.status;
   const isBreakdownOnly = useMemo(() => {
     // we support rendering different types of answers now, so we need to check if it's old data.
     // existing thread response's answerDetail is null.
@@ -232,6 +231,9 @@ export default function AnswerResult(props: Props) {
     isAnswerPrepared ||
     isBreakdownOnly;
 
+  const isAnswerFinished =
+    isAnswerPrepared && getAnswerIsFinished(answerDetail?.status);
+
   return (
     <div style={resultStyle} data-jsid="answerResult">
       <QuestionTitle className="mb-4" question={question} />
@@ -239,24 +241,19 @@ export default function AnswerResult(props: Props) {
         className="mb-3"
         {...preparation}
         data={threadResponse}
-        isAnswerPrepared={isAnswerPrepared}
+        isAnswerFinished={isAnswerFinished}
       />
       {showAnswerTabs && (
         <>
-          <StyledTabs
-            className="select-none"
-            type="card"
-            size="small"
-            onTabClick={onTabClick}
-          >
+          <StyledTabs type="card" size="small" onTabClick={onTabClick}>
             {!isBreakdownOnly && (
               <Tabs.TabPane
                 key={ANSWER_TAB_KEYS.ANSWER}
                 tab={
-                  <>
+                  <div className="select-none">
                     <CheckCircleFilled className="mr-2" />
                     <Text>Answer</Text>
-                  </>
+                  </div>
                 }
               >
                 <TextBasedAnswer {...props} />
@@ -265,10 +262,10 @@ export default function AnswerResult(props: Props) {
             <Tabs.TabPane
               key={ANSWER_TAB_KEYS.VIEW_SQL}
               tab={
-                <>
+                <div className="select-none">
                   <CodeFilled className="mr-2" />
                   <Text>View SQL</Text>
-                </>
+                </div>
               }
             >
               <BreakdownAnswer {...props} />
@@ -276,12 +273,12 @@ export default function AnswerResult(props: Props) {
             <Tabs.TabPane
               key="chart"
               tab={
-                <>
+                <div className="select-none">
                   <PieChartFilled className="mr-2" />
                   <Text>
                     Chart<Tag className="adm-beta-tag">Beta</Tag>
                   </Text>
-                </>
+                </div>
               }
             >
               <ChartAnswer {...props} />

@@ -119,4 +119,9 @@ export const ERROR_TEXTS = {
       REQUIRED: 'Please select how to apply this instruction.',
     },
   },
+  FIX_SQL: {
+    SQL: {
+      REQUIRED: 'Please input SQL statement.',
+    },
+  },
 };

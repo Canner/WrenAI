@@ -111,6 +111,15 @@ class CreateThreadResponseErrorHandler extends ErrorHandler {
   }
 }
 
+class UpdateThreadResponseErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to update thread response.';
+    }
+  }
+}
+
 class GenerateThreadResponseAnswerErrorHandler extends ErrorHandler {
   public getErrorMessage(error: GraphQLError) {
     switch (error.extensions?.code) {
@@ -358,7 +367,10 @@ errorHandlers.set(
   'CreateThreadResponse',
   new CreateThreadResponseErrorHandler(),
 );
-
+errorHandlers.set(
+  'UpdateThreadResponse',
+  new UpdateThreadResponseErrorHandler(),
+);
 errorHandlers.set(
   'GenerateThreadResponseAnswer',
   new GenerateThreadResponseAnswerErrorHandler(),
