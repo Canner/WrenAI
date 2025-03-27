@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "wren-ai-service"
-version = "0.17.1"
+version = "0.17.2"
 description = ""
 authors = ["dev@getwren.ai"]
 license = "AGPL-3.0"
