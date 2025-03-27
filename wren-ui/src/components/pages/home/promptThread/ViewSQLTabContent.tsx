@@ -11,6 +11,7 @@ import { nextTick } from '@/utils/time';
 import useNativeSQL from '@/hooks/useNativeSQL';
 import { DATA_SOURCE_OPTIONS } from '@/components/pages/setup/utils';
 import { Props as AnswerResultProps } from '@/components/pages/home/promptThread/AnswerResult';
+import usePromptThreadStore from '@/components/pages/home/promptThread/store';
 import PreviewData from '@/components/dataPreview/PreviewData';
 import { usePreviewDataMutation } from '@/apollo/client/graphql/home.generated';
 
@@ -38,6 +39,7 @@ const StyledToolBar = styled.div`
 export default function ViewSQLTabContent(props: AnswerResultProps) {
   const { isLastThreadResponse, onInitPreviewDone, threadResponse } = props;
 
+  const { onOpenAdjustSQLModal } = usePromptThreadStore();
   const { fetchNativeSQL, nativeSQLResult } = useNativeSQL();
   const [previewData, previewDataResult] = usePreviewDataMutation({
     onError: (error) => console.error(error),
@@ -119,6 +121,7 @@ export default function ViewSQLTabContent(props: AnswerResultProps) {
               icon={<CodeFilled style={{ color: 'inherit' }} />}
               size="small"
               style={{ backgroundColor: 'transparent' }}
+              onClick={() => onOpenAdjustSQLModal({ sql })}
             >
               Adjust SQL
             </Button>

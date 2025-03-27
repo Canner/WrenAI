@@ -39,6 +39,7 @@ export type IPromptThreadStore = {
     retrievedTables: string[];
     sqlGenerationReasoning: string;
   }) => void;
+  onOpenAdjustSQLModal: (data: { sql: string }) => void;
 };
 
 // Register store provider

@@ -39,8 +39,11 @@ const getIsLoadingFinished = (status: ThreadResponseAnswerStatus) =>
   status === ThreadResponseAnswerStatus.STREAMING;
 
 export default function TextBasedAnswer(props: AnswerResultProps) {
-  const { onGenerateTextBasedAnswer, onOpenAdjustReasoningStepsModal } =
-    usePromptThreadStore();
+  const {
+    onGenerateTextBasedAnswer,
+    onOpenAdjustReasoningStepsModal,
+    onOpenAdjustSQLModal,
+  } = usePromptThreadStore();
   const { isLastThreadResponse, onInitPreviewDone, threadResponse } = props;
   const { id } = threadResponse;
   const { content, error, numRowsUsedInLLM, status } =
@@ -126,8 +129,7 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
           threadResponse.askingTask.sqlGenerationReasoning,
       });
     } else if (type === MORE_ACTION.ADJUST_SQL) {
-      // TODO: open adjust sql modal
-      console.log('adjust sql', data);
+      onOpenAdjustSQLModal({ sql: data.sql });
     }
   };
 
