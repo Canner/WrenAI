@@ -257,7 +257,10 @@ const getDefaultStateComponent = (state: PROCESS_STATE) => {
   return (
     {
       [PROCESS_STATE.UNDERSTANDING]: Understanding,
+      // Polling AI status for every 1 second might skip the searching state.
       [PROCESS_STATE.SEARCHING]: IntentionFinished,
+      [PROCESS_STATE.PLANNING]: IntentionFinished,
+      [PROCESS_STATE.GENERATING]: IntentionFinished,
       // The finished status will respond by AI directly if viewId found, so we need to handle with intention finished.
       [PROCESS_STATE.FINISHED]: IntentionFinished,
       [PROCESS_STATE.FAILED]: Failed,
