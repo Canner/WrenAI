@@ -1,4 +1,4 @@
-name: Create Release RC
+name: Create RC Release PR
 
 on:
   workflow_dispatch:
