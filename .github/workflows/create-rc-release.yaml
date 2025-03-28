@@ -18,13 +18,28 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: "1.23.0"
+          go-version: "1.22.0" # Use the latest stable Go version
 
-      - name: Build project
+      - name: Build for macOS
         working-directory: ./wren-launcher
         run: |
+          mkdir -p dist
           env GOARCH=amd64 GOOS=darwin CGO_ENABLED=0 go build -o dist/wren-launcher-darwin main.go
-          cd ./dist; chmod +x wren-launcher-darwin && tar zcvf wren-launcher-darwin.tar.gz wren-launcher-darwin \
+          cd dist && chmod +x wren-launcher-darwin && tar zcvf wren-launcher-darwin.tar.gz wren-launcher-darwin
+
+      - name: Build for Linux
+        working-directory: ./wren-launcher
+        run: |
+          mkdir -p dist
+          env GOARCH=amd64 GOOS=linux CGO_ENABLED=0 go build -o dist/wren-launcher-linux main.go
+          cd dist && chmod +x wren-launcher-linux && tar zcvf wren-launcher-linux.tar.gz wren-launcher-linux
+
+      - name: Build for Windows
+        working-directory: ./wren-launcher
+        run: |
+          mkdir -p dist
+          env GOARCH=amd64 GOOS=windows CGO_ENABLED=0 go build -o dist/wren-launcher-windows.exe main.go
+          cd dist && zip wren-launcher-windows.zip wren-launcher-windows.exe
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
