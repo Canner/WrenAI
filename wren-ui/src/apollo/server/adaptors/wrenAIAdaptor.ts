@@ -542,19 +542,19 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   public async generateInstruction(
     input: GenerateInstructionInput[],
   ): Promise<AsyncQueryResponse> {
-    const body = input.map((item) => ({
-      id: item.id.toString(),
-      instruction: item.instruction,
-      questions: item.questions,
-      is_default: item.isDefault,
-      project_id: item.projectId?.toString(),
-    }));
+    const body = {
+      instructions: input.map((item) => ({
+        id: item.id.toString(),
+        instruction: item.instruction,
+        questions: item.questions,
+        is_default: item.isDefault,
+      })),
+      project_id: input[0]?.projectId.toString(),
+    };
     try {
       const res = await axios.post(
         `${this.wrenAIBaseEndpoint}/v1/instructions`,
-        {
-          instructions: body,
-        },
+        body,
       );
       return { queryId: res.data.event_id };
     } catch (err: any) {
