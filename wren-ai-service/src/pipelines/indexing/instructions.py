@@ -33,8 +33,6 @@ class InstructionsConverter:
 
         addition = {"project_id": project_id} if project_id else {}
 
-        print(f"instructions: {instructions}")
-
         return {
             "documents": [
                 Document(
