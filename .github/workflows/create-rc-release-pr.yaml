@@ -1,4 +1,4 @@
-name: Create Release RC
+name: Create RC Release PR
 
 on:
   workflow_dispatch:
@@ -32,12 +32,6 @@ jobs:
           git config --global user.name "wren-ai[bot]"
           git config --global user.email "dev@cannerdata.com"
 
-      - name: Create branch
-        run: |
-          BRANCH_NAME="release/${{ github.event.inputs.release_version }}"
-          git checkout -b $BRANCH_NAME
-          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
-
       - name: Update docker.go
         run: |
           FILE_PATH="wren-launcher/utils/docker.go"
@@ -70,51 +64,12 @@ jobs:
           echo "===== Git diff for changed files ====="
           git diff
 
-      - name: Commit changes
-        run: |
-          git add wren-launcher/utils/docker.go docker/.env.example
-          git commit -m "release ${{ github.event.inputs.release_version }}" || echo "No changes to commit"
-          git status
-
-      - name: Push branch
-        run: |
-          git push --set-upstream origin ${{ env.BRANCH_NAME }}
-          echo "Branch pushed to origin/${{ env.BRANCH_NAME }}"
-
-      - name: Install GitHub CLI
-        run: |
-          type -p curl >/dev/null || (apt update && apt install curl -y)
-          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
-          && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
-          && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
-          && apt update \
-          && apt install gh -y
-
-      - name: Create Pull Request with GitHub CLI
-        run: |
-          # Check if branch has changes compared to main
-          if git diff --quiet origin/main origin/${{ env.BRANCH_NAME }}; then
-            echo "No changes detected between main and ${{ env.BRANCH_NAME }}. Cannot create PR."
-            exit 1
-          fi
-
-          # Create PR using gh cli
-          gh pr create \
-            --title "Release ${{ github.event.inputs.release_version }}" \
-            --body "Release ${{ github.event.inputs.release_version }}" \
-            --base main \
-            --head ${{ env.BRANCH_NAME }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Fallback PR creation
-        if: failure()
-        uses: peter-evans/create-pull-request@v5
+      - name: Create PR
+        uses: peter-evans/create-pull-request@v7
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "release ${{ github.event.inputs.release_version }}"
-          branch: ${{ env.BRANCH_NAME }}
           base: main
+          branch: "release/${{ github.event.inputs.release_version }}"
+          commit-message: "release ${{ github.event.inputs.release_version }}"
           title: "Release ${{ github.event.inputs.release_version }}"
           body: "Release ${{ github.event.inputs.release_version }}"
           draft: false

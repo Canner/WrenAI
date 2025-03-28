@@ -1,0 +1,81 @@
+name: Create RC Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: "Release version"
+        required: true
+  issue_comment:
+    types: [created]
+
+jobs:
+  release:
+    runs-on: macos-latest
+    if: ${{ github.event_name == 'issue_comment' && contains(github.event.comment.body, '/release-rc') && startsWith(github.event.issue.title, 'Release') }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.23.0"
+
+      - name: Add rocket emoji to comment
+        run: |
+          curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          -d '{"body": "🚀 Starting the release process!"}' \
+          "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments"
+
+      - name: Parse release version from PR title
+        id: parse_release_version
+        env:
+          GITHUB_ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: |
+          release_version=$(echo "$GITHUB_ISSUE_TITLE" | sed 's/ /\n/g' | tail -n 1)
+          echo "Release version: $release_version"
+          echo "release_version=$release_version" >> $GITHUB_OUTPUT
+
+      - name: Build for macOS
+        working-directory: ./wren-launcher
+        run: |
+          mkdir -p dist
+          env GOARCH=amd64 GOOS=darwin CGO_ENABLED=1 go build -o dist/wren-launcher-darwin main.go
+          cd dist && chmod +x wren-launcher-darwin && tar zcvf wren-launcher-darwin.tar.gz wren-launcher-darwin
+
+      - name: Build for Linux
+        working-directory: ./wren-launcher
+        run: |
+          mkdir -p dist
+          env GOARCH=amd64 GOOS=linux CGO_ENABLED=0 go build -o dist/wren-launcher-linux main.go
+          cd dist && chmod +x wren-launcher-linux && tar zcvf wren-launcher-linux.tar.gz wren-launcher-linux
+
+      - name: Build for Windows
+        working-directory: ./wren-launcher
+        run: |
+          mkdir -p dist
+          env GOARCH=amd64 GOOS=windows CGO_ENABLED=0 go build -o dist/wren-launcher-windows.exe main.go
+          cd dist && zip wren-launcher-windows.zip wren-launcher-windows.exe
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ./wren-launcher/dist/wren-launcher-darwin.tar.gz
+            ./wren-launcher/dist/wren-launcher-linux.tar.gz
+            ./wren-launcher/dist/wren-launcher-windows.zip
+          tag_name: ${{ steps.parse_release_version.outputs.release_version }}
+          prerelease: true
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Comment with release link
+        run: |
+          release_url="https://github.com/${{ github.repository }}/releases/tag/${{ steps.parse_release_version.outputs.release_version }}"
+          curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          -d "{\"body\": \"🚀 A new release has been created! [View Release](${release_url})\"}" \
+          "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments"
