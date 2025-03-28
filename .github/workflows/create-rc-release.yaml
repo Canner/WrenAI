@@ -1,16 +1,15 @@
-# .github/workflows/release.yml
 name: Create RC Release
 
 on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: "Release version (e.g., 0.23.0-rc.1)"
+        description: "Release version"
         required: true
+
 jobs:
   release:
-    runs-on: ubuntu-latest
-
+    runs-on: macos-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -18,13 +17,13 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: "1.22.0" # Use the latest stable Go version
+          go-version: "1.23.0"
 
       - name: Build for macOS
         working-directory: ./wren-launcher
         run: |
           mkdir -p dist
-          env GOARCH=amd64 GOOS=darwin CGO_ENABLED=0 go build -o dist/wren-launcher-darwin main.go
+          env GOARCH=amd64 GOOS=darwin CGO_ENABLED=1 go build -o dist/wren-launcher-darwin main.go
           cd dist && chmod +x wren-launcher-darwin && tar zcvf wren-launcher-darwin.tar.gz wren-launcher-darwin
 
       - name: Build for Linux
