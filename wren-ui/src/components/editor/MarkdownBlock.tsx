@@ -51,6 +51,22 @@ const ReactMarkdownBlock = styled(ReactMarkdown)`
     border-collapse: collapse;
     margin-bottom: 16px;
   }
+  ol,
+  ul,
+  dl {
+    padding-inline-start: 20px;
+  }
+  h1 code,
+  h2 code,
+  h3 code,
+  h4 code,
+  p code {
+    font-size: 12px;
+    background: var(--gray-4);
+    color: var(--gray-8);
+    padding: 2px 4px;
+    border-radius: 4px;
+  }
 `;
 
 export default function MarkdownBlock(props: { content: string }) {
