@@ -22,6 +22,12 @@ jobs:
         with:
           go-version: "1.23.0"
 
+      - name: Add rocket emoji to comment
+        run: |
+          curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          -d '{"body": "🚀 Starting the release process!"}' \
+          "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments"
+
       - name: Parse release version from PR title
         id: parse_release_version
         run: |
