@@ -124,4 +124,13 @@ export const ERROR_TEXTS = {
       REQUIRED: 'Please input SQL statement.',
     },
   },
+  ADJUST_REASONING: {
+    SELECTED_MODELS: {
+      REQUIRED: 'Please select at least one model',
+    },
+    STEPS: {
+      REQUIRED: 'Please input reasoning steps',
+      MAX_LENGTH: 'Reasoning steps must be 3000 characters or fewer.',
+    },
+  },
 };

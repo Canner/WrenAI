@@ -15,8 +15,10 @@ import { Props as AnswerResultProps } from '@/components/pages/home/promptThread
 import MarkdownBlock from '@/components/editor/MarkdownBlock';
 import PreviewData from '@/components/dataPreview/PreviewData';
 import { AdjustAnswerDropdown } from '@/components/diagram/CustomDropdown';
+import AdjustReasoningStepsModal from '@/components/modals/AdjustReasoningStepsModal';
 import { usePreviewDataMutation } from '@/apollo/client/graphql/home.generated';
 import { ThreadResponseAnswerStatus } from '@/apollo/client/graphql/__types__';
+import useModalAction from '@/hooks/useModalAction';
 
 const { Text } = Typography;
 
@@ -47,6 +49,7 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
 
   const [textAnswer, setTextAnswer] = useState<string>('');
   const adjustResultsDropdown = useDropdown();
+  const adjustReasoningStepsModal = useModalAction();
 
   const [fetchAnswerStreamingTask, answerStreamTaskResult] =
     useTextBasedAnswerStreamTask();
@@ -119,8 +122,11 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
   const onMoreClick = async (payload) => {
     const { type, data } = payload;
     if (type === MORE_ACTION.ADJUST_STEPS) {
-      // TODO: open adjust steps modal
-      console.log('adjust steps', data);
+      adjustReasoningStepsModal.openModal({
+        retrievedTables: threadResponse.askingTask.retrievedTables,
+        sqlGenerationReasoning:
+          threadResponse.askingTask.sqlGenerationReasoning,
+      });
     } else if (type === MORE_ACTION.ADJUST_SQL) {
       // TODO: open adjust sql modal
       console.log('adjust sql', data);
@@ -236,6 +242,11 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
           </>
         )}
       </div>
+      <AdjustReasoningStepsModal
+        {...adjustReasoningStepsModal.state}
+        onClose={adjustReasoningStepsModal.closeModal}
+        onSubmit={async () => {}}
+      />
     </StyledSkeleton>
   );
 }
