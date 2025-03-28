@@ -6,10 +6,13 @@ on:
       release_version:
         description: "Release version"
         required: true
+  issue_comment:
+    types: [created]
 
 jobs:
   release:
     runs-on: macos-latest
+    if: contains(github.event.comment.body, '/release-rc') && startsWith(github.event.issue.title, 'Release')
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -18,6 +21,13 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: "1.23.0"
+
+      - name: Parse release version from PR title
+        id: parse_release_version
+        run: |
+          release_version=$(echo ${{ github.event.issue.title }} | grep -oP 'v\d+\.\d+\.\d+')
+          echo "Release version: $release_version"
+          echo "::set-output name=release_version::$release_version"
 
       - name: Build for macOS
         working-directory: ./wren-launcher
@@ -47,7 +57,7 @@ jobs:
             ./wren-launcher/dist/wren-launcher-darwin.tar.gz
             ./wren-launcher/dist/wren-launcher-linux.tar.gz
             ./wren-launcher/dist/wren-launcher-windows.zip
-          tag_name: ${{ github.event.inputs.release_version }}
+          tag_name: ${{ steps.parse_release_version.outputs.release_version }}
           prerelease: true
           generate_release_notes: true
         env:
