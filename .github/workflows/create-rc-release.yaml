@@ -12,7 +12,7 @@ on:
 jobs:
   release:
     runs-on: macos-latest
-    if: contains(github.event.comment.body, '/release-rc') && startsWith(github.event.issue.title, 'Release')
+    if: ${{ github.event_name == 'issue_comment' && contains(github.event.comment.body, '/release-rc') && startsWith(github.event.issue.title, 'Release') }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -32,10 +32,12 @@ jobs:
 
       - name: Parse release version from PR title
         id: parse_release_version
+        env:
+          GITHUB_ISSUE_TITLE: ${{ github.event.issue.title }}
         run: |
-          release_version=$(echo ${{ github.event.issue.title }} | sed 's/ /\n/g' | tail -n 1)
+          release_version=$(echo "$GITHUB_ISSUE_TITLE" | sed 's/ /\n/g' | tail -n 1)
           echo "Release version: $release_version"
-          echo "::set-output name=release_version::$release_version"
+          echo "release_version=$release_version" >> $GITHUB_OUTPUT
 
       - name: Build for macOS
         working-directory: ./wren-launcher
