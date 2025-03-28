@@ -49,6 +49,9 @@ export const ERROR_TEXTS = {
     ACCOUNT: {
       REQUIRED: 'Please input account.',
     },
+    SSL_CERT: {
+      REQUIRED: 'Please upload SSL cert file.',
+    },
   },
   ADD_RELATION: {
     FROM_FIELD: {
