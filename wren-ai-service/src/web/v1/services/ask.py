@@ -93,9 +93,7 @@ class AskResultResponse(BaseModel):
     rephrased_question: Optional[str] = None
     intent_reasoning: Optional[str] = None
     sql_generation_reasoning: Optional[str] = None
-    type: Optional[
-        Literal["MISLEADING_QUERY", "GENERAL", "TEXT_TO_SQL", "USER_GUIDE"]
-    ] = None
+    type: Optional[Literal["MISLEADING_QUERY", "GENERAL", "TEXT_TO_SQL"]] = None
     retrieved_tables: Optional[List[str]] = None
     response: Optional[List[AskResult]] = None
     invalid_sql: Optional[str] = None
@@ -342,7 +340,7 @@ class AskService:
 
                             self._ask_results[query_id] = AskResultResponse(
                                 status="finished",
-                                type="USER_GUIDE",
+                                type="GENERAL",
                             )
                             results["metadata"]["type"] = "GENERAL"
                             return results
@@ -636,6 +634,7 @@ class AskService:
     ):
         if self._ask_results.get(query_id):
             if self._ask_results.get(query_id).type == "GENERAL":
+                # only one of the two pipelines will be used
                 async for chunk in self._pipelines[
                     "data_assistance"
                 ].get_streaming_results(query_id):
@@ -643,7 +642,7 @@ class AskService:
                         data=SSEEvent.SSEEventMessage(message=chunk),
                     )
                     yield event.serialize()
-            elif self._ask_results.get(query_id).type == "USER_GUIDE":
+
                 async for chunk in self._pipelines[
                     "user_guide_assistance"
                 ].get_streaming_results(query_id):

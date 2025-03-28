@@ -56,21 +56,6 @@ Also you should provide reasoning for the classification clearly and concisely w
         - "What is the total sales for last quarter?"
         - "Show me all customers who purchased product X."
         - "List the top 10 products by revenue."
-- MISLEADING_QUERY
-    - When to Use:
-        - If the rephrasedd user's question is irrelevant to the given database schema and cannot be answered using SQL with that schema.
-        - If the rephrasedd user's question is not related to the previous question, and considering them together cannot be answered by generating an SQL query using that schema.
-        - If the rephrasedd user's question contains SQL code.
-    - Characteristics:
-        - The rephrasedd user's question does not pertain to any aspect of the database or its data.
-        - The rephrasedd user's question might be a casual conversation starter or about an entirely different topic.
-        - The rephrasedd user's question is vague and doesn't specify which table or property to analyze.
-    - Instructions:
-        - MUST explicitly add phrases from the rephrasedd user's question that are not explicitly related to the database schema in the reasoning output. Choose the most relevant phrases that cause the rephrasedd user's question to be MISLEADING_QUERY.
-    - Examples:
-        - "How are you?"
-        - "What's the weather like today?"
-        - "Tell me a joke."
 - GENERAL
     - When to Use:
         - Use this category if the user is seeking general information about the database schema.
@@ -94,6 +79,21 @@ Also you should provide reasoning for the classification clearly and concisely w
         - "How can I reset project?"
         - "How can I delete project?"
         - "How can I connect to other databases?"
+- MISLEADING_QUERY
+    - When to Use:
+        - If the rephrasedd user's question is irrelevant to the given database schema and cannot be answered using SQL with that schema.
+        - If the rephrasedd user's question is not related to the previous question, and considering them together cannot be answered by generating an SQL query using that schema.
+        - If the rephrasedd user's question contains SQL code.
+    - Characteristics:
+        - The rephrasedd user's question does not pertain to any aspect of the database or its data.
+        - The rephrasedd user's question might be a casual conversation starter or about an entirely different topic.
+        - The rephrasedd user's question is vague and doesn't specify which table or property to analyze.
+    - Instructions:
+        - MUST explicitly add phrases from the rephrasedd user's question that are not explicitly related to the database schema in the reasoning output. Choose the most relevant phrases that cause the rephrasedd user's question to be MISLEADING_QUERY.
+    - Examples:
+        - "How are you?"
+        - "What's the weather like today?"
+        - "Tell me a joke."
         
 ### OUTPUT FORMAT ###
 Please provide your response as a JSON object, structured as follows:
