@@ -39,9 +39,6 @@ const OverflowContainer = styled.div`
 
 const LinkButton = styled(Button)`
   color: var(--gray-7);
-  &:focus {
-    color: var(--gray-7);
-  }
 `;
 
 const StyledTextArea = styled(Input.TextArea)`
