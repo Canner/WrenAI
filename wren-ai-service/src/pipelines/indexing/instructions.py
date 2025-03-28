@@ -33,6 +33,8 @@ class InstructionsConverter:
 
         addition = {"project_id": project_id} if project_id else {}
 
+        print(f"instructions: {instructions}")
+
         return {
             "documents": [
                 Document(
@@ -43,7 +45,9 @@ class InstructionsConverter:
                         "is_default": instruction.is_default,
                         **addition,
                     },
-                    content=instruction.question,
+                    content="this is a global instruction, so no question is provided"
+                    if instruction.is_default
+                    else instruction.question,
                 )
                 for instruction in instructions
             ]
