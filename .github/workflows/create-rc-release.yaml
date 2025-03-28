@@ -15,7 +15,9 @@ jobs:
     if: contains(github.event.comment.body, '/release-rc') && startsWith(github.event.issue.title, 'Release')
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Set up Go
         uses: actions/setup-go@v4
