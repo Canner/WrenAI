@@ -1,0 +1,38 @@
+# .github/workflows/release.yml
+name: Create RC Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: "Release version (e.g., 0.23.0-rc.1)"
+        required: true
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.23" # Specify your Go version
+
+      - name: Build project
+        working-directory: ./wren-launcher
+        run: make build
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ./wren-launcher/dist/wren-launcher-darwin.tar.gz
+            ./wren-launcher/dist/wren-launcher-linux.tar.gz
+            ./wren-launcher/dist/wren-launcher-windows.zip
+          tag_name: ${{ github.event.inputs.release_version }}
+          prerelease: true
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
