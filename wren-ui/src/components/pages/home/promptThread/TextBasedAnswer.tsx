@@ -130,7 +130,7 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
   if (error) {
     return (
       <Alert
-        className="m-4"
+        className="m-6"
         message={error.shortMessage}
         description={error.message}
         type="error"
@@ -146,14 +146,15 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
       paragraph={{ rows: 4 }}
       title={false}
     >
-      <div className="text-md gray-10 p-4 pr-6">
-        <div className="text-right">
+      <div className="text-md gray-10 py-4 px-6">
+        <div className="text-right mb-4">
           <AdjustAnswerDropdown
             onMoreClick={onMoreClick}
             data={{ sql: threadResponse.sql }}
             onDropdownVisibleChange={adjustResultsDropdown.onVisibleChange}
           >
             <Button
+              className="px-0"
               type="link"
               size="small"
               icon={<EditOutlined />}

@@ -23,7 +23,7 @@ export default function BreakdownAnswer(props: AnswerResultProps) {
   if (error) {
     return (
       <Alert
-        className="m-4"
+        className="m-6"
         message={error.shortMessage}
         description={error.message}
         type="error"
@@ -39,7 +39,7 @@ export default function BreakdownAnswer(props: AnswerResultProps) {
       paragraph={{ rows: 4 }}
       title={false}
     >
-      <div className="text-md gray-10 p-3 pr-10 pt-6">
+      <div className="text-md gray-10 p-3 pr-6 pt-6">
         <div className="pl-7 pb-5">{description}</div>
         {(steps || []).map((step, index) => (
           <StepContent
