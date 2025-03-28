@@ -25,7 +25,7 @@ jobs:
       - name: Parse release version from PR title
         id: parse_release_version
         run: |
-          release_version=$(echo ${{ github.event.issue.title }} | sed 's/ /\n/g' | tail -n 1
+          release_version=$(echo ${{ github.event.issue.title }} | sed 's/ /\n/g' | tail -n 1)
           echo "Release version: $release_version"
           echo "::set-output name=release_version::$release_version"
 
