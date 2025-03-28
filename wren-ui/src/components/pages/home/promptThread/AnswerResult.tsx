@@ -7,6 +7,7 @@ import CheckCircleFilled from '@ant-design/icons/CheckCircleFilled';
 import CodeFilled from '@ant-design/icons/CodeFilled';
 import PieChartFilled from '@ant-design/icons/PieChartFilled';
 import MessageOutlined from '@ant-design/icons/MessageOutlined';
+import ShareAltOutlined from '@ant-design/icons/ShareAltOutlined';
 import { RobotSVG } from '@/utils/svgs';
 import { ANSWER_TAB_KEYS } from '@/utils/enum';
 import { canGenerateAnswer } from '@/hooks/useAskPrompt';
@@ -146,6 +147,31 @@ const renderRecommendedQuestions = (
   );
 };
 
+const AdjustmentInformation = () => {
+  // TODO: use real data
+  const adjustment = {
+    type: 'ADJUST_SQL',
+  };
+  const adjustmentType = {
+    ADJUST_SQL: 'User-provided SQL applied',
+    ADJUST_REASONING_STEPS: 'Reasoning steps adjusted',
+  };
+
+  return (
+    <div className="rounded bg-gray-3 gray-6 py-2 px-3 mb-2">
+      <div className="d-flex align-center gx-2">
+        <ShareAltOutlined className="gray-7" />
+        <div className="flex-grow-1 gray-7">
+          Adjusted answer
+          <Tag className="gray-6 border border-gray-5 bg-gray-3 ml-3 text-medium">
+            {adjustmentType[adjustment.type]}
+          </Tag>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const isNeedGenerateAnswer = (answerDetail: ThreadResponseAnswerDetail) => {
   const isFinished = getAnswerIsFinished(answerDetail?.status);
   // it means the background task has not started yet, but answer is pending for generating
@@ -180,6 +206,9 @@ export default function AnswerResult(props: Props) {
   const resultStyle = isLastThreadResponse
     ? { minHeight: 'calc(100vh - (194px))' }
     : null;
+
+  // TODO: use real data
+  const isAdjustment = false;
 
   const recommendedQuestionProps = getRecommendedQuestionProps(
     recommendedQuestions,
@@ -233,6 +262,7 @@ export default function AnswerResult(props: Props) {
 
   return (
     <div style={resultStyle} data-jsid="answerResult">
+      {isAdjustment && <AdjustmentInformation />}
       <QuestionTitle className="mb-4" question={question} />
       <Preparation
         className="mb-3"
