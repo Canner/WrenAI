@@ -35,6 +35,7 @@ export type IPromptThreadStore = {
     data: { sql: string; question: string },
     payload: { isCreateMode: boolean },
   ) => void;
+  onOpenAdjustSQLModal: (data: { sql: string }) => void;
 };
 
 // Register store provider
