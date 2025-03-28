@@ -11,8 +11,7 @@ from src.globals import (
     get_service_container,
     get_service_metadata,
 )
-from src.web.v1.services import Configuration
-from src.web.v1.services.question_recommendation import QuestionRecommendation
+from src.web.v1.services import Configuration, QuestionRecommendation
 
 router = APIRouter()
 
@@ -96,26 +95,19 @@ async def recommend(
     service_container: ServiceContainer = Depends(get_service_container),
     service_metadata: ServiceMetadata = Depends(get_service_metadata),
 ) -> PostResponse:
-    id = str(uuid.uuid4())
+    event_id = str(uuid.uuid4())
     service = service_container.question_recommendation
+    service[event_id] = QuestionRecommendation.Event(event_id=event_id)
 
-    service[id] = QuestionRecommendation.Resource(id=id)
-    input = QuestionRecommendation.Input(
-        id=id,
-        mdl=request.mdl,
-        previous_questions=request.previous_questions,
-        project_id=request.project_id,
-        max_questions=request.max_questions,
-        max_categories=request.max_categories,
-        regenerate=request.regenerate,
-        configuration=request.configuration,
-    )
+    _request = QuestionRecommendation.Request(event_id=event_id, **request.model_dump())
 
     background_tasks.add_task(
-        service.recommend, input, service_metadata=asdict(service_metadata)
+        service.recommend,
+        _request,
+        service_metadata=asdict(service_metadata),
     )
 
-    return PostResponse(id=id)
+    return PostResponse(id=event_id)
 
 
 class GetResponse(BaseModel):
@@ -123,17 +115,20 @@ class GetResponse(BaseModel):
     status: Literal["generating", "finished", "failed"]
     response: Optional[dict]
     error: Optional[dict]
+    trace_id: Optional[str] = None
 
 
 @router.get(
-    "/question-recommendations/{id}",
+    "/question-recommendations/{event_id}",
     response_model=GetResponse,
 )
 async def get(
-    id: str,
+    event_id: str,
     service_container: ServiceContainer = Depends(get_service_container),
 ) -> GetResponse:
-    resource = service_container.question_recommendation[id]
+    event: QuestionRecommendation.Event = service_container.question_recommendation[
+        event_id
+    ]
 
     def _formatter(response: dict) -> dict:
         questions = [
@@ -144,8 +139,9 @@ async def get(
         return {"questions": questions}
 
     return GetResponse(
-        id=resource.id,
-        status=resource.status,
-        response=_formatter(resource.response),
-        error=resource.error and resource.error.model_dump(),
+        id=event.event_id,
+        status=event.status,
+        response=_formatter(event.response),
+        error=event.error and event.error.model_dump(),
+        trace_id=event.trace_id,
     )

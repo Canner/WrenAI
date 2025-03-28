@@ -59,6 +59,7 @@ class AskDetailsResultResponse(BaseModel):
     status: Literal["understanding", "searching", "generating", "finished", "failed"]
     response: Optional[AskDetailsResponseDetails] = None
     error: Optional[AskDetailsError] = None
+    trace_id: Optional[str] = None
 
 
 class AskDetailsService:
@@ -88,6 +89,7 @@ class AskDetailsService:
         ask_details_request: AskDetailsRequest,
         **kwargs,
     ):
+        trace_id = kwargs.get("trace_id")
         results = {
             "ask_details_result": {},
             "metadata": {
@@ -103,14 +105,17 @@ class AskDetailsService:
 
             self._ask_details_results[query_id] = AskDetailsResultResponse(
                 status="understanding",
+                trace_id=trace_id,
             )
 
             self._ask_details_results[query_id] = AskDetailsResultResponse(
                 status="searching",
+                trace_id=trace_id,
             )
 
             self._ask_details_results[query_id] = AskDetailsResultResponse(
                 status="generating",
+                trace_id=trace_id,
             )
 
             generation_result = await self._pipelines["sql_breakdown"].run(
@@ -123,8 +128,8 @@ class AskDetailsService:
             ask_details_result = generation_result["post_process"]["results"]
 
             if not ask_details_result["steps"]:
-                quoted_sql, no_error = add_quotes(ask_details_request.sql)
-                sql = quoted_sql if no_error else ask_details_request.sql
+                quoted_sql, error_message = add_quotes(ask_details_request.sql)
+                sql = quoted_sql if not error_message else ask_details_request.sql
 
                 sql_summary_results = await self._pipelines["sql_summary"].run(
                     query=ask_details_request.query,
@@ -149,6 +154,7 @@ class AskDetailsService:
                 response=AskDetailsResultResponse.AskDetailsResponseDetails(
                     **ask_details_result
                 ),
+                trace_id=trace_id,
             )
 
             results["ask_details_result"] = ask_details_result
@@ -157,14 +163,15 @@ class AskDetailsService:
         except Exception as e:
             logger.exception(f"ask-details pipeline - OTHERS: {e}")
 
-            self._ask_details_results[
-                ask_details_request.query_id
-            ] = AskDetailsResultResponse(
-                status="failed",
-                error=AskDetailsResultResponse.AskDetailsError(
-                    code="OTHERS",
-                    message=str(e),
-                ),
+            self._ask_details_results[ask_details_request.query_id] = (
+                AskDetailsResultResponse(
+                    status="failed",
+                    error=AskDetailsResultResponse.AskDetailsError(
+                        code="OTHERS",
+                        message=str(e),
+                    ),
+                    trace_id=trace_id,
+                )
             )
 
             results["metadata"]["error_type"] = "OTHERS"

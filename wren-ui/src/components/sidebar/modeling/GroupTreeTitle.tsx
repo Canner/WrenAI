@@ -1,32 +1,37 @@
+import { Fragment } from 'react';
 import Icon from '@ant-design/icons';
 
-export type IconsType = {
-  icon: any;
+export type ActionType = {
+  icon?: React.ComponentType<{ className?: string }>;
   key: React.Key;
   className?: string;
   style?: React.CSSProperties;
   disabled?: boolean;
+  render?: (props: { key: React.Key; disabled: boolean }) => React.ReactNode;
 };
 
 interface GroupTitleProps {
   title: string;
   quotaUsage?: number;
   appendSlot?: React.ReactNode;
-  icons: IconsType[];
+  actions: ActionType[];
 }
 
-const ActionIcons = ({ icons }: { icons: IconsType[] }) => {
-  const iconComponents = icons.map(
-    ({ key, icon, disabled = false, className = '', ...restProps }) => (
-      <Icon
-        key={key}
-        component={icon}
-        className={`adm-actionIcon ${className} ${
-          disabled ? 'adm-actionIcon--disabled' : ''
-        }`}
-        {...restProps}
-      />
-    ),
+const Actions = ({ actions }: { actions: ActionType[] }) => {
+  const iconComponents = (actions || []).map(
+    ({ key, icon, render, disabled = false, className = '', ...restProps }) =>
+      icon ? (
+        <Icon
+          key={key}
+          component={icon}
+          className={`adm-actionIcon ${className} ${
+            disabled ? 'adm-actionIcon--disabled' : ''
+          }`}
+          {...restProps}
+        />
+      ) : render ? (
+        <Fragment key={key}>{render({ key, disabled })}</Fragment>
+      ) : null,
   );
 
   return (
@@ -51,7 +56,7 @@ export default function GroupTreeTitle({
         </span>
         {appendSlot}
       </span>
-      <ActionIcons {...restProps} />
+      <Actions {...restProps} />
     </>
   );
 }

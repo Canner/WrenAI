@@ -21,12 +21,15 @@ export const parseJson = (data) => {
 };
 
 export const attachLoading = (
-  asyncRequest: (...args: any[]) => Promise<void>,
+  asyncRequest: (...args: any[]) => Promise<any>,
   setLoading: React.Dispatch<React.SetStateAction<boolean>>,
 ) => {
   return async (...args) => {
     setLoading(true);
-    await asyncRequest(...args);
-    setLoading(false);
+    try {
+      await asyncRequest(...args);
+    } finally {
+      setLoading(false);
+    }
   };
 };

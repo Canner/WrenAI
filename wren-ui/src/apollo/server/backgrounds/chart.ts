@@ -83,6 +83,7 @@ export class ChartBackgroundTracker {
             status: result?.status,
             error: result?.error,
             description: result?.response?.reasoning,
+            chartType: result?.response?.chartType?.toUpperCase() || null,
             chartSchema: result?.response?.chartSchema,
           };
           logger.debug(
@@ -204,6 +205,7 @@ export class ChartAdjustmentBackgroundTracker {
             status: result?.status,
             error: result?.error,
             description: result?.response?.reasoning,
+            chartType: result?.response?.chartType?.toUpperCase() || null,
             chartSchema: result?.response?.chartSchema,
             adjustment: true,
           };

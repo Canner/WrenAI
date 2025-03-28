@@ -5,6 +5,7 @@ import LoadingOutlined from '@ant-design/icons/LoadingOutlined';
 import styled from 'styled-components';
 import { BinocularsIcon } from '@/utils/icons';
 import { nextTick } from '@/utils/time';
+import usePromptThreadStore from './store';
 import useTextBasedAnswerStreamTask from '@/hooks/useTextBasedAnswerStreamTask';
 import { Props as AnswerResultProps } from '@/components/pages/home/promptThread/AnswerResult';
 import MarkdownBlock from '@/components/editor/MarkdownBlock';
@@ -32,21 +33,9 @@ const getIsLoadingFinished = (status: ThreadResponseAnswerStatus) =>
   getAnswerIsFinished(status) ||
   status === ThreadResponseAnswerStatus.STREAMING;
 
-export default function TextBasedAnswer(
-  props: Pick<
-    AnswerResultProps,
-    | 'threadResponse'
-    | 'isLastThreadResponse'
-    | 'onInitPreviewDone'
-    | 'onRegenerateTextBasedAnswer'
-  >,
-) {
-  const {
-    isLastThreadResponse,
-    onInitPreviewDone,
-    onRegenerateTextBasedAnswer,
-    threadResponse,
-  } = props;
+export default function TextBasedAnswer(props: AnswerResultProps) {
+  const { onGenerateTextBasedAnswer } = usePromptThreadStore();
+  const { isLastThreadResponse, onInitPreviewDone, threadResponse } = props;
   const { id } = threadResponse;
   const { content, error, numRowsUsedInLLM, status } =
     threadResponse?.answerDetail || {};
@@ -118,7 +107,7 @@ export default function TextBasedAnswer(
 
   const onRegenerateAnswer = () => {
     setTextAnswer('');
-    onRegenerateTextBasedAnswer(id);
+    onGenerateTextBasedAnswer(id);
   };
 
   if (error) {
@@ -177,7 +166,10 @@ export default function TextBasedAnswer(
             </Button>
 
             {previewDataResult?.data?.previewData && (
-              <div className="mt-2 mb-3">
+              <div
+                className="mt-2 mb-3"
+                data-guideid="text-answer-preview-data"
+              >
                 <Text type="secondary" className="text-sm">
                   Considering the limit of the context window, we retrieve up to
                   500 rows of results to generate the answer.

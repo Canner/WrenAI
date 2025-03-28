@@ -29,6 +29,7 @@ class RelationshipRecommendation:
         status: Literal["generating", "finished", "failed"] = "generating"
         response: Optional[dict] = None
         error: Optional[Error] = None
+        trace_id: Optional[str] = None
 
     def __init__(
         self,
@@ -46,11 +47,13 @@ class RelationshipRecommendation:
         input: Input,
         error_message: str,
         code: str = "OTHERS",
+        trace_id: Optional[str] = None,
     ):
         self._cache[input.id] = self.Resource(
             id=input.id,
             status="failed",
             error=self.Resource.Error(code=code, message=error_message),
+            trace_id=trace_id,
         )
         logger.error(error_message)
 
@@ -58,6 +61,7 @@ class RelationshipRecommendation:
     @trace_metadata
     async def recommend(self, request: Input, **kwargs) -> Resource:
         logger.info("Generate Relationship Recommendation pipeline is running...")
+        trace_id = kwargs.get("trace_id")
 
         try:
             mdl_dict = orjson.loads(request.mdl)
@@ -70,18 +74,23 @@ class RelationshipRecommendation:
             resp = await self._pipelines["relationship_recommendation"].run(**input)
 
             self._cache[request.id] = self.Resource(
-                id=request.id, status="finished", response=resp.get("validated")
+                id=request.id,
+                status="finished",
+                response=resp.get("validated"),
+                trace_id=trace_id,
             )
         except orjson.JSONDecodeError as e:
             self._handle_exception(
                 request,
                 f"Failed to parse MDL: {str(e)}",
                 code="MDL_PARSE_ERROR",
+                trace_id=trace_id,
             )
         except Exception as e:
             self._handle_exception(
                 request,
                 f"An error occurred during relationship recommendation generation: {str(e)}",
+                trace_id=trace_id,
             )
 
         return self._cache[request.id].with_metadata()

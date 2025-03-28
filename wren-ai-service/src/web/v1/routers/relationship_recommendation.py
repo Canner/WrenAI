@@ -11,8 +11,7 @@ from src.globals import (
     get_service_container,
     get_service_metadata,
 )
-from src.web.v1.services import Configuration
-from src.web.v1.services.relationship_recommendation import RelationshipRecommendation
+from src.web.v1.services import Configuration, RelationshipRecommendation
 
 router = APIRouter()
 
@@ -108,7 +107,7 @@ class GetResponse(BaseModel):
     status: Literal["generating", "finished", "failed"]
     response: Optional[dict]
     error: Optional[dict]
-
+    trace_id: Optional[str] = None
 
 @router.get(
     "/relationship-recommendations/{id}",
@@ -125,4 +124,5 @@ async def get(
         status=resource.status,
         response=resource.response,
         error=resource.error and resource.error.model_dump(),
+        trace_id=resource.trace_id,
     )

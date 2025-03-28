@@ -10,9 +10,12 @@ import orjson
 import requests
 import sqlglot
 import tomlkit
+import yaml
 from dotenv import load_dotenv
 from openai import AsyncClient
 from tomlkit import parse
+
+from src.providers.engine.wren import WrenEngine
 
 load_dotenv(".env", override=True)
 
@@ -21,16 +24,18 @@ def add_quotes(sql: str) -> Tuple[str, bool]:
     try:
         quoted_sql = sqlglot.transpile(sql, read="trino", identify=True)[0]
         return quoted_sql, True
-    except Exception:
+    except Exception as e:
+        print(f"Error in adding quotes to SQL: {sql}")
+        print(f"Error: {e}")
         return sql, False
 
 
 async def get_data_from_wren_engine(
     sql: str,
-    data_source: str,
     mdl_json: dict,
-    connection_info: dict,
     api_endpoint: str,
+    data_source: Optional[str] = None,
+    connection_info: Optional[dict] = None,
     timeout: float = 300,
     limit: Optional[int] = None,
 ):
@@ -88,7 +93,7 @@ async def get_contexts_from_sql(
     def _get_contexts_from_sql_analysis_results(sql_analysis_results: list[dict]):
         def _compose_contexts_of_select_type(select_items: list[dict]):
             return [
-                f'{expr_source['sourceDataset']}.{expr_source['sourceColumn']}'
+                f"{expr_source['sourceDataset']}.{expr_source['sourceColumn']}"
                 for select_item in select_items
                 for expr_source in select_item["exprSources"]
             ]
@@ -97,7 +102,7 @@ async def get_contexts_from_sql(
             contexts = []
             if filter["type"] == "EXPR":
                 contexts += [
-                    f'{expr_source["sourceDataset"]}.{expr_source["sourceColumn"]}'
+                    f"{expr_source['sourceDataset']}.{expr_source['sourceColumn']}"
                     for expr_source in filter["exprSources"]
                 ]
             elif filter["type"] in ("AND", "OR"):
@@ -110,7 +115,7 @@ async def get_contexts_from_sql(
             contexts = []
             for groupby_key_list in groupby_keys:
                 contexts += [
-                    f'{expr_source["sourceDataset"]}.{expr_source["sourceColumn"]}'
+                    f"{expr_source['sourceDataset']}.{expr_source['sourceColumn']}"
                     for groupby_key in groupby_key_list
                     for expr_source in groupby_key["exprSources"]
                 ]
@@ -118,7 +123,7 @@ async def get_contexts_from_sql(
 
         def _compose_contexts_of_sorting_type(sortings: list[dict]):
             return [
-                f'{expr_source["sourceDataset"]}.{expr_source["sourceColumn"]}'
+                f"{expr_source['sourceDataset']}.{expr_source['sourceColumn']}"
                 for sorting in sortings
                 for expr_source in sorting["exprSources"]
             ]
@@ -127,7 +132,7 @@ async def get_contexts_from_sql(
             contexts = []
             if relation["type"] != "TABLE" and relation["type"] != "SUBQUERY":
                 contexts += [
-                    f'{expr_source["sourceDataset"]}.{expr_source["sourceColumn"]}'
+                    f"{expr_source['sourceDataset']}.{expr_source['sourceColumn']}"
                     for expr_source in relation["exprSources"]
                 ]
 
@@ -159,14 +164,18 @@ async def get_contexts_from_sql(
     ) -> List[dict]:
         sql = sql.rstrip(";") if sql.endswith(";") else sql
         quoted_sql, no_error = add_quotes(sql)
-        assert no_error, f"Error in quoting SQL: {sql}"
+        if not no_error:
+            print(f"Error in quoting SQL: {sql}")
+            quoted_sql = sql
+
+        manifest_str = base64.b64encode(orjson.dumps(mdl_json)).decode()
 
         async with aiohttp.request(
             "GET",
-            f"{api_endpoint}/v1/analysis/sql",
+            f"{api_endpoint}/v2/analysis/sql",
             json={
                 "sql": quoted_sql,
-                "manifest": mdl_json,
+                "manifestStr": manifest_str,
             },
             timeout=aiohttp.ClientTimeout(total=timeout),
         ) as response:
@@ -196,8 +205,6 @@ def trace_metadata(
     return {
         "commit": meta["commit"],
         "dataset_id": meta["dataset_id"],
-        "embedding_model": meta["embedding_model"],
-        "generation_model": meta["generation_model"],
         "column_indexing_batch_size": meta["column_indexing_batch_size"],
         "table_retrieval_size": meta["table_retrieval_size"],
         "table_column_retrieval_size": meta["table_column_retrieval_size"],
@@ -206,11 +213,32 @@ def trace_metadata(
     }
 
 
-def engine_config(mdl: dict) -> dict:
+def engine_config(
+    mdl: dict, pipe_components: dict[str, Any] = {}, path: str = ""
+) -> dict:
+    engine = pipe_components.get("sql_generation", {}).get("engine")
+
+    if engine is None:
+        raise ValueError(
+            "SQL Generation engine not found in pipe_components. Ensure 'sql_generation' key exists and contains 'engine' configuration."
+        )
+
+    if isinstance(engine, WrenEngine):
+        print("datasource is duckdb")
+        prepare_duckdb_session_sql(engine._endpoint)
+        prepare_duckdb_init_sql(engine._endpoint, mdl["catalog"], path)
+        return {
+            "mdl_json": mdl,
+            "api_endpoint": engine._endpoint,
+            "timeout": 10,
+            "data_source": "duckdb",
+        }
+
     return {
         "mdl_json": mdl,
-        "data_source": os.getenv("DATA_SOURCE"),
-        "api_endpoint": os.getenv("WREN_ENGINE_ENDPOINT"),
+        "data_source": engine._source,
+        "api_endpoint": engine._endpoint,
+        "connection_info": engine._connection_info,
         "timeout": 10,
     }
 
@@ -233,13 +261,13 @@ def get_ddl_commands(mdl: Dict[str, Any]) -> List[str]:
                         column["properties"]["alias"] = column["properties"].pop(
                             "displayName", ""
                         )
-                        comment = f"-- {orjson.dumps(column['properties']).decode("utf-8")}\n  "
+                        comment = f"-- {orjson.dumps(column['properties']).decode('utf-8')}\n  "
                     else:
                         comment = ""
                     if "isCalculated" in column and column["isCalculated"]:
                         comment = (
                             comment
-                            + f"-- This column is a Calculated Field\n  -- column expression: {column["expression"]}\n  "
+                            + f"-- This column is a Calculated Field\n  -- column expression: {column['expression']}\n  "
                         )
                     column_name = column["name"]
                     column_type = column["type"]
@@ -289,7 +317,7 @@ def get_ddl_commands(mdl: Dict[str, Any]) -> List[str]:
                     "displayName", ""
                 )
                 comment = (
-                    f"\n/* {orjson.dumps(model['properties']).decode("utf-8")} */\n"
+                    f"\n/* {orjson.dumps(model['properties']).decode('utf-8')} */\n"
                 )
             else:
                 comment = ""
@@ -326,11 +354,11 @@ def get_ddl_commands(mdl: Dict[str, Any]) -> List[str]:
             for measure in metric["measure"]:
                 column_name = measure["name"]
                 column_type = measure["type"]
-                comment = f"-- This column is a measure\n  -- expression: {measure["expression"]}\n  "
+                comment = f"-- This column is a measure\n  -- expression: {measure['expression']}\n  "
                 column_ddl = f"{comment}{column_name} {column_type}"
                 columns_ddl.append(column_ddl)
 
-            comment = f"\n/* This table is a metric */\n/* Metric Base Object: {metric["baseObject"]} */\n"
+            comment = f"\n/* This table is a metric */\n/* Metric Base Object: {metric['baseObject']} */\n"
             create_table_ddl = (
                 f"{comment}CREATE TABLE {table_name} (\n  "
                 + ",\n  ".join(columns_ddl)
@@ -517,10 +545,8 @@ def prepare_duckdb_session_sql(api_endpoint: str):
     assert response.status_code == 200, response.text
 
 
-def prepare_duckdb_init_sql(api_endpoint: str, db: str):
-    init_sql = (
-        f"ATTACH 'etc/spider1.0/database/{db}/{db}.sqlite' AS {db} (TYPE sqlite);"
-    )
+def prepare_duckdb_init_sql(api_endpoint: str, db: str, path: str):
+    init_sql = f"ATTACH '{path}/{db}/{db}.sqlite' AS {db} (TYPE sqlite);"
 
     response = requests.put(
         f"{api_endpoint}/v1/data-source/duckdb/settings/init-sql",
@@ -544,3 +570,22 @@ def get_openai_client(
         api_key=api_key,
         timeout=timeout,
     )
+
+
+def replace_wren_engine_env_variables(engine_type: str, data: dict, config_path: str):
+    assert engine_type in ("wren_engine", "wren_ibis")
+
+    with open(config_path, "r") as f:
+        configs = list(yaml.safe_load_all(f))
+
+        for config in configs:
+            if config.get("type") == "engine" and config.get("provider") == engine_type:
+                for key, value in data.items():
+                    config[key] = value
+            if "pipes" in config:
+                for i, pipe in enumerate(config["pipes"]):
+                    if "engine" in pipe and pipe["name"] != "sql_functions_retrieval":
+                        config["pipes"][i]["engine"] = engine_type
+
+    with open(config_path, "w") as f:
+        yaml.safe_dump_all(configs, f, default_flow_style=False)

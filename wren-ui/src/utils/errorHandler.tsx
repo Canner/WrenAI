@@ -111,6 +111,15 @@ class CreateThreadResponseErrorHandler extends ErrorHandler {
   }
 }
 
+class UpdateThreadResponseErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to update thread response.';
+    }
+  }
+}
+
 class GenerateThreadResponseAnswerErrorHandler extends ErrorHandler {
   public getErrorMessage(error: GraphQLError) {
     switch (error.extensions?.code) {
@@ -267,6 +276,87 @@ class ResolveSchemaChangeErrorHandler extends ErrorHandler {
   }
 }
 
+class CreateDashboardItemErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to create dashboard item.';
+    }
+  }
+}
+
+class UpdateDashboardItemLayoutsErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to update dashboard item layouts.';
+    }
+  }
+}
+
+class DeleteDashboardItemErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to delete dashboard item.';
+    }
+  }
+}
+
+class CreateSqlPairErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to create question-sql pair.';
+    }
+  }
+}
+
+class UpdateSqlPairErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to update question-sql pair.';
+    }
+  }
+}
+
+class DeleteSqlPairErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to delete question-sql pair.';
+    }
+  }
+}
+
+class CreateInstructionErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to create instruction.';
+    }
+  }
+}
+
+class UpdateInstructionErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to update instruction.';
+    }
+  }
+}
+
+class DeleteInstructionErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to delete instruction.';
+    }
+  }
+}
+
 errorHandlers.set('SaveTables', new SaveTablesErrorHandler());
 errorHandlers.set('SaveRelations', new SaveRelationsErrorHandler());
 errorHandlers.set('CreateAskingTask', new CreateAskingTaskErrorHandler());
@@ -277,7 +367,10 @@ errorHandlers.set(
   'CreateThreadResponse',
   new CreateThreadResponseErrorHandler(),
 );
-
+errorHandlers.set(
+  'UpdateThreadResponse',
+  new UpdateThreadResponseErrorHandler(),
+);
 errorHandlers.set(
   'GenerateThreadResponseAnswer',
   new GenerateThreadResponseAnswerErrorHandler(),
@@ -318,6 +411,24 @@ errorHandlers.set(
   new TriggerDataSourceDetectionErrorHandler(),
 );
 errorHandlers.set('ResolveSchemaChange', new ResolveSchemaChangeErrorHandler());
+
+// Dashboard
+errorHandlers.set('CreateDashboardItem', new CreateDashboardItemErrorHandler());
+errorHandlers.set(
+  'UpdateDashboardItemLayouts',
+  new UpdateDashboardItemLayoutsErrorHandler(),
+);
+errorHandlers.set('DeleteDashboardItem', new DeleteDashboardItemErrorHandler());
+
+// SQL Pair
+errorHandlers.set('CreateSqlPair', new CreateSqlPairErrorHandler());
+errorHandlers.set('UpdateSqlPair', new UpdateSqlPairErrorHandler());
+errorHandlers.set('DeleteSqlPair', new DeleteSqlPairErrorHandler());
+
+// Instruction
+errorHandlers.set('CreateInstruction', new CreateInstructionErrorHandler());
+errorHandlers.set('UpdateInstruction', new UpdateInstructionErrorHandler());
+errorHandlers.set('DeleteInstruction', new DeleteInstructionErrorHandler());
 
 const errorHandler = (error: ErrorResponse) => {
   // networkError

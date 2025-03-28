@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import sys
 from typing import Any, Dict, List, Optional
@@ -21,35 +22,42 @@ class OutputFormatter:
         documents=List[Optional[Dict]],
     )
     def run(self, documents: List[Document]):
-        list = []
-
-        for doc in documents:
-            formatted = {
+        list = [
+            {
                 "question": doc.content,
-                "summary": doc.meta.get("summary"),
-                "statement": doc.meta.get("statement"),
-                "viewId": doc.meta.get("viewId"),
+                "summary": doc.meta.get("summary", ""),
+                "statement": doc.meta.get("statement") or doc.meta.get("sql"),
+                "viewId": doc.meta.get("viewId", ""),
+                "sqlpairId": doc.meta.get("sql_pair_id", ""),
             }
-            list.append(formatted)
+            for doc in documents
+        ]
 
         return {"documents": list}
 
 
 ## Start of Pipeline
 @observe(capture_input=False)
-async def count_documents(store: QdrantDocumentStore, id: Optional[str] = None) -> int:
+async def count_documents(
+    view_questions_store: QdrantDocumentStore,
+    sql_pair_store: QdrantDocumentStore,
+    project_id: Optional[str] = None,
+) -> int:
     filters = (
         {
             "operator": "AND",
             "conditions": [
-                {"field": "project_id", "operator": "==", "value": id},
+                {"field": "project_id", "operator": "==", "value": project_id},
             ],
         }
-        if id
+        if project_id
         else None
     )
-    document_count = await store.count_documents(filters=filters)
-    return document_count
+    view_question_count, sql_pair_count = await asyncio.gather(
+        view_questions_store.count_documents(filters=filters),
+        sql_pair_store.count_documents(filters=filters),
+    )
+    return view_question_count + sql_pair_count
 
 
 @observe(capture_input=False, capture_output=False)
@@ -61,32 +69,52 @@ async def embedding(count_documents: int, query: str, embedder: Any) -> dict:
 
 
 @observe(capture_input=False)
-async def retrieval(embedding: dict, id: str, retriever: Any) -> dict:
+async def retrieval(
+    embedding: dict,
+    project_id: str,
+    view_questions_retriever: Any,
+    sql_pair_retriever: Any,
+) -> dict:
     if embedding:
         filters = (
             {
                 "operator": "AND",
                 "conditions": [
-                    {"field": "project_id", "operator": "==", "value": id},
+                    {"field": "project_id", "operator": "==", "value": project_id},
                 ],
             }
-            if id
+            if project_id
             else None
         )
 
-        res = await retriever.run(
-            query_embedding=embedding.get("embedding"),
-            filters=filters,
+        view_question_res, sql_pair_res = await asyncio.gather(
+            view_questions_retriever.run(
+                query_embedding=embedding.get("embedding"),
+                filters=filters,
+            ),
+            sql_pair_retriever.run(
+                query_embedding=embedding.get("embedding"),
+                filters=filters,
+            ),
         )
-        return dict(documents=res.get("documents"))
+        return dict(
+            documents=view_question_res.get("documents") + sql_pair_res.get("documents")
+        )
 
     return {}
 
 
 @observe(capture_input=False)
-def filtered_documents(retrieval: dict, score_filter: ScoreFilter) -> dict:
+def filtered_documents(
+    retrieval: dict,
+    score_filter: ScoreFilter,
+    historical_question_retrieval_similarity_threshold: float,
+) -> dict:
     if retrieval:
-        return score_filter.run(documents=retrieval.get("documents"), score=0.9)
+        return score_filter.run(
+            documents=retrieval.get("documents"),
+            score=historical_question_retrieval_similarity_threshold,
+        )
 
     return {}
 
@@ -109,18 +137,30 @@ class HistoricalQuestionRetrieval(BasicPipeline):
         self,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
+        historical_question_retrieval_similarity_threshold: Optional[float] = 0.9,
         **kwargs,
     ) -> None:
-        store = document_store_provider.get_store(dataset_name="view_questions")
+        view_questions_store = document_store_provider.get_store(
+            dataset_name="view_questions"
+        )
+        sql_pair_store = document_store_provider.get_store(dataset_name="sql_pairs")
         self._components = {
-            "store": store,
+            "view_questions_store": view_questions_store,
+            "sql_pair_store": sql_pair_store,
             "embedder": embedder_provider.get_text_embedder(),
-            "retriever": document_store_provider.get_retriever(
-                document_store=store,
+            "view_questions_retriever": document_store_provider.get_retriever(
+                document_store=view_questions_store,
+            ),
+            "sql_pair_retriever": document_store_provider.get_retriever(
+                document_store=sql_pair_store,
             ),
             "score_filter": ScoreFilter(),
             # TODO: add a llm filter to filter out low scoring document, in case ScoreFilter is not accurate enough
             "output_formatter": OutputFormatter(),
+        }
+
+        self._configs = {
+            "historical_question_retrieval_similarity_threshold": historical_question_retrieval_similarity_threshold,
         }
 
         super().__init__(
@@ -128,14 +168,15 @@ class HistoricalQuestionRetrieval(BasicPipeline):
         )
 
     @observe(name="Historical Question")
-    async def run(self, query: str, id: Optional[str] = None):
+    async def run(self, query: str, project_id: Optional[str] = None):
         logger.info("HistoricalQuestion Retrieval pipeline is running...")
         return await self._pipe.execute(
             ["formatted_output"],
             inputs={
                 "query": query,
-                "id": id or "",
+                "project_id": project_id or "",
                 **self._components,
+                **self._configs,
             },
         )
 

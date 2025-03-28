@@ -27,10 +27,11 @@ Please answer the user's question in concise and clear manner in Markdown format
 4. Generate a concise and clear answer in string format to answerthe user's question based on the data and sql.
 5. If answer is in list format, only list top few examples, and tell users there are more results omitted.
 6. Answer must be in the same language user specified.
+7. Do not include ```markdown or ``` in the answer.
 
 ### OUTPUT FORMAT
 
-Please provide your response in proper Markdown format.
+Please provide your response in proper Markdown stringformat.
 """
 
 sql_to_answer_user_prompt_template = """

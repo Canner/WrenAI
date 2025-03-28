@@ -30,6 +30,19 @@ class Settings(BaseSettings):
     table_retrieval_size: int = Field(default=10)
     table_column_retrieval_size: int = Field(default=100)
     allow_using_db_schemas_without_pruning: bool = Field(default=False)
+    historical_question_retrieval_similarity_threshold: float = Field(default=0.9)
+    sql_pairs_similarity_threshold: float = Field(default=0.7)
+    sql_pairs_retrieval_max_size: int = Field(default=10)
+    instructions_similarity_threshold: float = Field(default=0.7)
+    instructions_top_k: int = Field(default=10)
+
+    # generation config
+    allow_intent_classification: bool = Field(default=True)
+    allow_sql_generation_reasoning: bool = Field(default=True)
+    max_histories: int = Field(default=10)
+
+    # engine config
+    engine_timeout: float = Field(default=30.0)
 
     # service config
     query_cache_ttl: int = Field(default=3600)  # unit: seconds
@@ -57,6 +70,8 @@ class Settings(BaseSettings):
     # this is used to store the config like type: llm, embedder, etc. and we will process them later
     config_path: str = Field(default="config.yaml")
     _components: list[dict]
+
+    sql_pairs_path: str = Field(default="sql_pairs.json")
 
     def __init__(self):
         load_dotenv(".env.dev", override=True)

@@ -74,8 +74,7 @@ describe('IbisAdaptor', () => {
   };
 
   const mockTrinoConnectionInfo: TRINO_CONNECTION_INFO = {
-    catalog: 'my-catalog',
-    schema: 'my-schema',
+    schemas: 'my-catalog.my-schema',
     host: 'localhost',
     port: 5450,
     password: 'my-password',
@@ -258,8 +257,10 @@ describe('IbisAdaptor', () => {
       mockTrinoConnectionInfo,
     );
 
-    const { username, catalog, host, password, port, schema, ssl } =
+    const { username, host, password, port, schemas, ssl } =
       mockTrinoConnectionInfo;
+    const schemasArray = schemas.split(',');
+    const [catalog, schema] = schemasArray[0].split('.');
     const expectConnectionInfo = {
       connectionUrl: `trino://${username}:${password}@${host}:${port}/${catalog}/${schema}`,
     };

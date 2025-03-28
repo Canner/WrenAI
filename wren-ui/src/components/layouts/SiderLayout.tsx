@@ -12,9 +12,10 @@ const basicStyle = css`
   overflow: auto;
 `;
 
-const StyledContentLayout = styled(Layout)`
+const StyledContentLayout = styled(Layout)<{ color?: string }>`
   position: relative;
   ${basicStyle}
+  ${(props) => props.color && `background-color: var(--${props.color});`}
 `;
 
 const StyledSider = styled(Sider)`
@@ -22,11 +23,12 @@ const StyledSider = styled(Sider)`
 `;
 
 type Props = React.ComponentProps<typeof SimpleLayout> & {
-  sidebar: React.ComponentProps<typeof Sidebar>;
+  sidebar?: React.ComponentProps<typeof Sidebar>;
+  color?: string;
 };
 
 export default function SiderLayout(props: Props) {
-  const { sidebar, loading } = props;
+  const { sidebar, loading, color } = props;
   const settings = useModalAction();
 
   return (
@@ -35,7 +37,9 @@ export default function SiderLayout(props: Props) {
         <StyledSider width={280}>
           <Sidebar {...sidebar} onOpenSettings={settings.openModal} />
         </StyledSider>
-        <StyledContentLayout>{props.children}</StyledContentLayout>
+        <StyledContentLayout color={color}>
+          {props.children}
+        </StyledContentLayout>
       </Layout>
       <Settings {...settings.state} onClose={settings.closeModal} />
     </SimpleLayout>

@@ -16,6 +16,7 @@ import { IContext } from '../types';
 import { getLogger } from '@server/utils';
 import { format } from 'sql-formatter';
 import {
+  AskingDetailTaskInput,
   constructCteSql,
   ThreadRecommendQuestionResult,
 } from '../services/askingService';
@@ -25,6 +26,7 @@ import {
   getSampleAskQuestions,
 } from '../data';
 import { TelemetryEvent, WrenService } from '../telemetry/telemetry';
+import { TrackedAskingResult } from '../services';
 
 const logger = getLogger('AskingResolver');
 logger.level = 'debug';
@@ -44,6 +46,13 @@ export interface AskingTask {
     sql: string;
   }>;
   error: WrenAIError | null;
+  rephrasedQuestion?: string;
+  intentReasoning?: string;
+  sqlGenerationReasoning?: string;
+  retrievedTables?: string[];
+  invalidSql?: string;
+  traceId?: string;
+  queryId?: string;
 }
 
 // DetailedThread is a type that represents a detailed thread, which is a thread with responses.
@@ -67,6 +76,7 @@ export class AskingResolver {
   constructor() {
     this.createAskingTask = this.createAskingTask.bind(this);
     this.cancelAskingTask = this.cancelAskingTask.bind(this);
+    this.rerunAskingTask = this.rerunAskingTask.bind(this);
     this.getAskingTask = this.getAskingTask.bind(this);
     this.createThread = this.createThread.bind(this);
     this.getThread = this.getThread.bind(this);
@@ -74,6 +84,7 @@ export class AskingResolver {
     this.deleteThread = this.deleteThread.bind(this);
     this.listThreads = this.listThreads.bind(this);
     this.createThreadResponse = this.createThreadResponse.bind(this);
+    this.updateThreadResponse = this.updateThreadResponse.bind(this);
     this.getResponse = this.getResponse.bind(this);
     this.previewData = this.previewData.bind(this);
     this.previewBreakdownData = this.previewBreakdownData.bind(this);
@@ -96,6 +107,7 @@ export class AskingResolver {
     this.generateThreadResponseChart =
       this.generateThreadResponseChart.bind(this);
     this.adjustThreadResponseChart = this.adjustThreadResponseChart.bind(this);
+    this.transformAskingTask = this.transformAskingTask.bind(this);
   }
 
   public async generateProjectRecommendationQuestions(
@@ -183,6 +195,10 @@ export class AskingResolver {
     const askingService = ctx.askingService;
     const askResult = await askingService.getAskingTask(taskId);
 
+    if (!askResult) {
+      return null;
+    }
+
     // telemetry
     const eventName = TelemetryEvent.HOME_ASK_CANDIDATE;
     if (askResult.status === AskResultStatus.FINISHED) {
@@ -205,26 +221,7 @@ export class AskingResolver {
       );
     }
 
-    // construct candidates from response
-    const candidates = await Promise.all(
-      (askResult.response || []).map(async (response) => {
-        const view = response.viewId
-          ? await ctx.viewRepository.findOneBy({ id: response.viewId })
-          : null;
-        return {
-          type: response.type,
-          sql: response.sql,
-          view,
-        };
-      }),
-    );
-
-    return {
-      type: askResult.type,
-      status: askResult.status,
-      error: askResult.error,
-      candidates,
-    };
+    return this.transformAskingTask(askResult, ctx);
   }
 
   public async createThread(
@@ -232,8 +229,9 @@ export class AskingResolver {
     args: {
       data: {
         question?: string;
+        taskId?: string;
+        // if we use recommendation questions, sql will be provided
         sql?: string;
-        viewId?: number;
       };
     },
     ctx: IContext,
@@ -241,9 +239,28 @@ export class AskingResolver {
     const { data } = args;
 
     const askingService = ctx.askingService;
+
+    // if taskId is provided, use the result from the asking task
+    // otherwise, use the input data
+    let threadInput: AskingDetailTaskInput;
+    if (data.taskId) {
+      const askingTask = await askingService.getAskingTask(data.taskId);
+      if (!askingTask) {
+        throw new Error(`Asking task ${data.taskId} not found`);
+      }
+
+      threadInput = {
+        question: askingTask.question,
+        trackedAskingResult: askingTask,
+      };
+    } else {
+      // when we use recommendation questions, there's no task to track
+      threadInput = data;
+    }
+
     const eventName = TelemetryEvent.HOME_CREATE_THREAD;
     try {
-      const thread = await askingService.createThread(data);
+      const thread = await askingService.createThread(threadInput);
       ctx.telemetry.sendEvent(eventName, {});
       return thread;
     } catch (err: any) {
@@ -283,6 +300,7 @@ export class AskingResolver {
           threadId: response.threadId,
           question: response.question,
           sql: response.sql,
+          askingTaskId: response.askingTaskId,
           breakdownDetail: response.breakdownDetail,
           answerDetail: response.answerDetail,
           chartDetail: response.chartDetail,
@@ -353,8 +371,9 @@ export class AskingResolver {
       threadId: number;
       data: {
         question?: string;
+        taskId?: string;
+        // if we use recommendation questions, sql will be provided
         sql?: string;
-        viewId?: number;
       };
     },
     ctx: IContext,
@@ -363,8 +382,30 @@ export class AskingResolver {
 
     const askingService = ctx.askingService;
     const eventName = TelemetryEvent.HOME_ASK_FOLLOWUP_QUESTION;
+
+    // if taskId is provided, use the result from the asking task
+    // otherwise, use the input data
+    let threadResponseInput: AskingDetailTaskInput;
+    if (data.taskId) {
+      const askingTask = await askingService.getAskingTask(data.taskId);
+      if (!askingTask) {
+        throw new Error(`Asking task ${data.taskId} not found`);
+      }
+
+      threadResponseInput = {
+        question: askingTask.question,
+        trackedAskingResult: askingTask,
+      };
+    } else {
+      // when we use recommendation questions, there's no task to track
+      threadResponseInput = data;
+    }
+
     try {
-      const response = await askingService.createThreadResponse(data, threadId);
+      const response = await askingService.createThreadResponse(
+        threadResponseInput,
+        threadId,
+      );
       ctx.telemetry.sendEvent(eventName, { data });
       return response;
     } catch (err: any) {
@@ -376,6 +417,35 @@ export class AskingResolver {
       );
       throw err;
     }
+  }
+
+  public async updateThreadResponse(
+    _root: any,
+    args: { where: { id: number }; data: { sql: string } },
+    ctx: IContext,
+  ): Promise<ThreadResponse> {
+    const { where, data } = args;
+    const askingService = ctx.askingService;
+    const response = await askingService.updateThreadResponse(where.id, data);
+    return response;
+  }
+
+  public async rerunAskingTask(
+    _root: any,
+    args: { responseId: number },
+    ctx: IContext,
+  ): Promise<Task> {
+    const { responseId } = args;
+    const askingService = ctx.askingService;
+    const project = await ctx.projectService.getCurrentProject();
+
+    const task = await askingService.rerunAskingTask(responseId, {
+      language: WrenAILanguage[project.language] || WrenAILanguage.EN,
+    });
+    ctx.telemetry.sendEvent(TelemetryEvent.HOME_RERUN_ASKING_TASK, {
+      responseId,
+    });
+    return task;
   }
 
   public async generateThreadResponseBreakdown(
@@ -531,7 +601,15 @@ export class AskingResolver {
         // construct sql from breakdownDetail
         return format(constructCteSql(parent.breakdownDetail.steps));
       }
-      return format(parent.sql);
+      return parent.sql ? format(parent.sql) : null;
+    },
+    askingTask: async (parent: ThreadResponse, _args: any, ctx: IContext) => {
+      const askingService = ctx.askingService;
+      const askingTask = await askingService.getAskingTaskById(
+        parent.askingTaskId,
+      );
+      if (!askingTask) return null;
+      return this.transformAskingTask(askingTask, ctx);
     },
   });
 
@@ -559,4 +637,47 @@ export class AskingResolver {
       };
     },
   });
+
+  private async transformAskingTask(
+    askingTask: TrackedAskingResult,
+    ctx: IContext,
+  ): Promise<AskingTask> {
+    // construct candidates from response
+    const candidates = await Promise.all(
+      (askingTask.response || []).map(async (response) => {
+        const view = response.viewId
+          ? await ctx.viewRepository.findOneBy({ id: response.viewId })
+          : null;
+        const sqlPair = response.sqlpairId
+          ? await ctx.sqlPairRepository.findOneBy({ id: response.sqlpairId })
+          : null;
+        return {
+          type: response.type,
+          sql: response.sql,
+          view,
+          sqlPair,
+        };
+      }),
+    );
+
+    // When the task got cancelled, the type is not set
+    // we set it to TEXT_TO_SQL as default
+    const type =
+      askingTask?.status === AskResultStatus.STOPPED && !askingTask.type
+        ? AskResultType.TEXT_TO_SQL
+        : askingTask.type;
+    return {
+      type,
+      status: askingTask.status,
+      error: askingTask.error,
+      candidates,
+      queryId: askingTask.queryId,
+      rephrasedQuestion: askingTask.rephrasedQuestion,
+      intentReasoning: askingTask.intentReasoning,
+      sqlGenerationReasoning: askingTask.sqlGenerationReasoning,
+      retrievedTables: askingTask.retrievedTables,
+      invalidSql: askingTask.invalidSql,
+      traceId: askingTask.traceId,
+    };
+  }
 }

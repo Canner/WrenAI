@@ -9,9 +9,11 @@ export type CommonBreakdownDetailFragment = { __typename?: 'ThreadResponseBreakd
 
 export type CommonAnswerDetailFragment = { __typename?: 'ThreadResponseAnswerDetail', queryId?: string | null, status?: Types.ThreadResponseAnswerStatus | null, content?: string | null, numRowsUsedInLLM?: number | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null };
 
-export type CommonChartDetailFragment = { __typename?: 'ThreadResponseChartDetail', queryId?: string | null, status: Types.ChartTaskStatus, description?: string | null, chartSchema?: any | null, adjustment?: boolean | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null };
+export type CommonChartDetailFragment = { __typename?: 'ThreadResponseChartDetail', queryId?: string | null, status: Types.ChartTaskStatus, description?: string | null, chartType?: Types.ChartType | null, chartSchema?: any | null, adjustment?: boolean | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null };
 
-export type CommonResponseFragment = { __typename?: 'ThreadResponse', id: number, threadId: number, question: string, sql: string, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, breakdownDetail?: { __typename?: 'ThreadResponseBreakdownDetail', queryId?: string | null, status: Types.AskingTaskStatus, description?: string | null, steps?: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, answerDetail?: { __typename?: 'ThreadResponseAnswerDetail', queryId?: string | null, status?: Types.ThreadResponseAnswerStatus | null, content?: string | null, numRowsUsedInLLM?: number | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, chartDetail?: { __typename?: 'ThreadResponseChartDetail', queryId?: string | null, status: Types.ChartTaskStatus, description?: string | null, chartSchema?: any | null, adjustment?: boolean | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null };
+export type CommonAskingTaskFragment = { __typename?: 'AskingTask', status: Types.AskingTaskStatus, type?: Types.AskingTaskType | null, rephrasedQuestion?: string | null, intentReasoning?: string | null, sqlGenerationReasoning?: string | null, retrievedTables?: Array<string> | null, invalidSql?: string | null, traceId?: string | null, queryId?: string | null, candidates: Array<{ __typename?: 'ResultCandidate', sql: string, type: Types.ResultCandidateType, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, sqlPair?: { __typename?: 'SqlPair', id: number, question: string, sql: string, projectId: number } | null }>, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null };
+
+export type CommonResponseFragment = { __typename?: 'ThreadResponse', id: number, threadId: number, question: string, sql?: string | null, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, breakdownDetail?: { __typename?: 'ThreadResponseBreakdownDetail', queryId?: string | null, status: Types.AskingTaskStatus, description?: string | null, steps?: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, answerDetail?: { __typename?: 'ThreadResponseAnswerDetail', queryId?: string | null, status?: Types.ThreadResponseAnswerStatus | null, content?: string | null, numRowsUsedInLLM?: number | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, chartDetail?: { __typename?: 'ThreadResponseChartDetail', queryId?: string | null, status: Types.ChartTaskStatus, description?: string | null, chartType?: Types.ChartType | null, chartSchema?: any | null, adjustment?: boolean | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, askingTask?: { __typename?: 'AskingTask', status: Types.AskingTaskStatus, type?: Types.AskingTaskType | null, rephrasedQuestion?: string | null, intentReasoning?: string | null, sqlGenerationReasoning?: string | null, retrievedTables?: Array<string> | null, invalidSql?: string | null, traceId?: string | null, queryId?: string | null, candidates: Array<{ __typename?: 'ResultCandidate', sql: string, type: Types.ResultCandidateType, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, sqlPair?: { __typename?: 'SqlPair', id: number, question: string, sql: string, projectId: number } | null }>, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null };
 
 export type CommonRecommendedQuestionsTaskFragment = { __typename?: 'RecommendedQuestionsTask', status: Types.RecommendedQuestionsTaskStatus, questions: Array<{ __typename?: 'ResultQuestion', question: string, category: string, sql: string }>, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null };
 
@@ -25,7 +27,7 @@ export type AskingTaskQueryVariables = Types.Exact<{
 }>;
 
 
-export type AskingTaskQuery = { __typename?: 'Query', askingTask: { __typename?: 'AskingTask', status: Types.AskingTaskStatus, type?: Types.AskingTaskType | null, candidates: Array<{ __typename?: 'ResultCandidate', sql: string, type: Types.ResultCandidateType, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null }>, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } };
+export type AskingTaskQuery = { __typename?: 'Query', askingTask?: { __typename?: 'AskingTask', status: Types.AskingTaskStatus, type?: Types.AskingTaskType | null, rephrasedQuestion?: string | null, intentReasoning?: string | null, sqlGenerationReasoning?: string | null, retrievedTables?: Array<string> | null, invalidSql?: string | null, traceId?: string | null, queryId?: string | null, candidates: Array<{ __typename?: 'ResultCandidate', sql: string, type: Types.ResultCandidateType, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, sqlPair?: { __typename?: 'SqlPair', id: number, question: string, sql: string, projectId: number } | null }>, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null };
 
 export type ThreadsQueryVariables = Types.Exact<{ [key: string]: never; }>;
 
@@ -37,14 +39,14 @@ export type ThreadQueryVariables = Types.Exact<{
 }>;
 
 
-export type ThreadQuery = { __typename?: 'Query', thread: { __typename?: 'DetailedThread', id: number, responses: Array<{ __typename?: 'ThreadResponse', id: number, threadId: number, question: string, sql: string, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, breakdownDetail?: { __typename?: 'ThreadResponseBreakdownDetail', queryId?: string | null, status: Types.AskingTaskStatus, description?: string | null, steps?: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, answerDetail?: { __typename?: 'ThreadResponseAnswerDetail', queryId?: string | null, status?: Types.ThreadResponseAnswerStatus | null, content?: string | null, numRowsUsedInLLM?: number | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, chartDetail?: { __typename?: 'ThreadResponseChartDetail', queryId?: string | null, status: Types.ChartTaskStatus, description?: string | null, chartSchema?: any | null, adjustment?: boolean | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null }> } };
+export type ThreadQuery = { __typename?: 'Query', thread: { __typename?: 'DetailedThread', id: number, responses: Array<{ __typename?: 'ThreadResponse', id: number, threadId: number, question: string, sql?: string | null, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, breakdownDetail?: { __typename?: 'ThreadResponseBreakdownDetail', queryId?: string | null, status: Types.AskingTaskStatus, description?: string | null, steps?: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, answerDetail?: { __typename?: 'ThreadResponseAnswerDetail', queryId?: string | null, status?: Types.ThreadResponseAnswerStatus | null, content?: string | null, numRowsUsedInLLM?: number | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, chartDetail?: { __typename?: 'ThreadResponseChartDetail', queryId?: string | null, status: Types.ChartTaskStatus, description?: string | null, chartType?: Types.ChartType | null, chartSchema?: any | null, adjustment?: boolean | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, askingTask?: { __typename?: 'AskingTask', status: Types.AskingTaskStatus, type?: Types.AskingTaskType | null, rephrasedQuestion?: string | null, intentReasoning?: string | null, sqlGenerationReasoning?: string | null, retrievedTables?: Array<string> | null, invalidSql?: string | null, traceId?: string | null, queryId?: string | null, candidates: Array<{ __typename?: 'ResultCandidate', sql: string, type: Types.ResultCandidateType, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, sqlPair?: { __typename?: 'SqlPair', id: number, question: string, sql: string, projectId: number } | null }>, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null }> } };
 
 export type ThreadResponseQueryVariables = Types.Exact<{
   responseId: Types.Scalars['Int'];
 }>;
 
 
-export type ThreadResponseQuery = { __typename?: 'Query', threadResponse: { __typename?: 'ThreadResponse', id: number, threadId: number, question: string, sql: string, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, breakdownDetail?: { __typename?: 'ThreadResponseBreakdownDetail', queryId?: string | null, status: Types.AskingTaskStatus, description?: string | null, steps?: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, answerDetail?: { __typename?: 'ThreadResponseAnswerDetail', queryId?: string | null, status?: Types.ThreadResponseAnswerStatus | null, content?: string | null, numRowsUsedInLLM?: number | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, chartDetail?: { __typename?: 'ThreadResponseChartDetail', queryId?: string | null, status: Types.ChartTaskStatus, description?: string | null, chartSchema?: any | null, adjustment?: boolean | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null } };
+export type ThreadResponseQuery = { __typename?: 'Query', threadResponse: { __typename?: 'ThreadResponse', id: number, threadId: number, question: string, sql?: string | null, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, breakdownDetail?: { __typename?: 'ThreadResponseBreakdownDetail', queryId?: string | null, status: Types.AskingTaskStatus, description?: string | null, steps?: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, answerDetail?: { __typename?: 'ThreadResponseAnswerDetail', queryId?: string | null, status?: Types.ThreadResponseAnswerStatus | null, content?: string | null, numRowsUsedInLLM?: number | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, chartDetail?: { __typename?: 'ThreadResponseChartDetail', queryId?: string | null, status: Types.ChartTaskStatus, description?: string | null, chartType?: Types.ChartType | null, chartSchema?: any | null, adjustment?: boolean | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, askingTask?: { __typename?: 'AskingTask', status: Types.AskingTaskStatus, type?: Types.AskingTaskType | null, rephrasedQuestion?: string | null, intentReasoning?: string | null, sqlGenerationReasoning?: string | null, retrievedTables?: Array<string> | null, invalidSql?: string | null, traceId?: string | null, queryId?: string | null, candidates: Array<{ __typename?: 'ResultCandidate', sql: string, type: Types.ResultCandidateType, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, sqlPair?: { __typename?: 'SqlPair', id: number, question: string, sql: string, projectId: number } | null }>, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null } };
 
 export type CreateAskingTaskMutationVariables = Types.Exact<{
   data: Types.AskingTaskInput;
@@ -60,6 +62,13 @@ export type CancelAskingTaskMutationVariables = Types.Exact<{
 
 export type CancelAskingTaskMutation = { __typename?: 'Mutation', cancelAskingTask: boolean };
 
+export type RerunAskingTaskMutationVariables = Types.Exact<{
+  responseId: Types.Scalars['Int'];
+}>;
+
+
+export type RerunAskingTaskMutation = { __typename?: 'Mutation', rerunAskingTask: { __typename?: 'Task', id: string } };
+
 export type CreateThreadMutationVariables = Types.Exact<{
   data: Types.CreateThreadInput;
 }>;
@@ -73,7 +82,7 @@ export type CreateThreadResponseMutationVariables = Types.Exact<{
 }>;
 
 
-export type CreateThreadResponseMutation = { __typename?: 'Mutation', createThreadResponse: { __typename?: 'ThreadResponse', id: number, threadId: number, question: string, sql: string, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, breakdownDetail?: { __typename?: 'ThreadResponseBreakdownDetail', queryId?: string | null, status: Types.AskingTaskStatus, description?: string | null, steps?: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, answerDetail?: { __typename?: 'ThreadResponseAnswerDetail', queryId?: string | null, status?: Types.ThreadResponseAnswerStatus | null, content?: string | null, numRowsUsedInLLM?: number | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, chartDetail?: { __typename?: 'ThreadResponseChartDetail', queryId?: string | null, status: Types.ChartTaskStatus, description?: string | null, chartSchema?: any | null, adjustment?: boolean | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null } };
+export type CreateThreadResponseMutation = { __typename?: 'Mutation', createThreadResponse: { __typename?: 'ThreadResponse', id: number, threadId: number, question: string, sql?: string | null, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, breakdownDetail?: { __typename?: 'ThreadResponseBreakdownDetail', queryId?: string | null, status: Types.AskingTaskStatus, description?: string | null, steps?: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, answerDetail?: { __typename?: 'ThreadResponseAnswerDetail', queryId?: string | null, status?: Types.ThreadResponseAnswerStatus | null, content?: string | null, numRowsUsedInLLM?: number | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, chartDetail?: { __typename?: 'ThreadResponseChartDetail', queryId?: string | null, status: Types.ChartTaskStatus, description?: string | null, chartType?: Types.ChartType | null, chartSchema?: any | null, adjustment?: boolean | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, askingTask?: { __typename?: 'AskingTask', status: Types.AskingTaskStatus, type?: Types.AskingTaskType | null, rephrasedQuestion?: string | null, intentReasoning?: string | null, sqlGenerationReasoning?: string | null, retrievedTables?: Array<string> | null, invalidSql?: string | null, traceId?: string | null, queryId?: string | null, candidates: Array<{ __typename?: 'ResultCandidate', sql: string, type: Types.ResultCandidateType, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, sqlPair?: { __typename?: 'SqlPair', id: number, question: string, sql: string, projectId: number } | null }>, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null } };
 
 export type UpdateThreadMutationVariables = Types.Exact<{
   where: Types.ThreadUniqueWhereInput;
@@ -82,6 +91,14 @@ export type UpdateThreadMutationVariables = Types.Exact<{
 
 
 export type UpdateThreadMutation = { __typename?: 'Mutation', updateThread: { __typename?: 'Thread', id: number, summary: string } };
+
+export type UpdateThreadResponseMutationVariables = Types.Exact<{
+  where: Types.ThreadResponseUniqueWhereInput;
+  data: Types.UpdateThreadResponseInput;
+}>;
+
+
+export type UpdateThreadResponseMutation = { __typename?: 'Mutation', updateThreadResponse: { __typename?: 'ThreadResponse', id: number, threadId: number, question: string, sql?: string | null, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, breakdownDetail?: { __typename?: 'ThreadResponseBreakdownDetail', queryId?: string | null, status: Types.AskingTaskStatus, description?: string | null, steps?: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, answerDetail?: { __typename?: 'ThreadResponseAnswerDetail', queryId?: string | null, status?: Types.ThreadResponseAnswerStatus | null, content?: string | null, numRowsUsedInLLM?: number | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, chartDetail?: { __typename?: 'ThreadResponseChartDetail', queryId?: string | null, status: Types.ChartTaskStatus, description?: string | null, chartType?: Types.ChartType | null, chartSchema?: any | null, adjustment?: boolean | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, askingTask?: { __typename?: 'AskingTask', status: Types.AskingTaskStatus, type?: Types.AskingTaskType | null, rephrasedQuestion?: string | null, intentReasoning?: string | null, sqlGenerationReasoning?: string | null, retrievedTables?: Array<string> | null, invalidSql?: string | null, traceId?: string | null, queryId?: string | null, candidates: Array<{ __typename?: 'ResultCandidate', sql: string, type: Types.ResultCandidateType, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, sqlPair?: { __typename?: 'SqlPair', id: number, question: string, sql: string, projectId: number } | null }>, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null } };
 
 export type DeleteThreadMutationVariables = Types.Exact<{
   where: Types.ThreadUniqueWhereInput;
@@ -154,21 +171,21 @@ export type GenerateThreadResponseBreakdownMutationVariables = Types.Exact<{
 }>;
 
 
-export type GenerateThreadResponseBreakdownMutation = { __typename?: 'Mutation', generateThreadResponseBreakdown: { __typename?: 'ThreadResponse', id: number, threadId: number, question: string, sql: string, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, breakdownDetail?: { __typename?: 'ThreadResponseBreakdownDetail', queryId?: string | null, status: Types.AskingTaskStatus, description?: string | null, steps?: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, answerDetail?: { __typename?: 'ThreadResponseAnswerDetail', queryId?: string | null, status?: Types.ThreadResponseAnswerStatus | null, content?: string | null, numRowsUsedInLLM?: number | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, chartDetail?: { __typename?: 'ThreadResponseChartDetail', queryId?: string | null, status: Types.ChartTaskStatus, description?: string | null, chartSchema?: any | null, adjustment?: boolean | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null } };
+export type GenerateThreadResponseBreakdownMutation = { __typename?: 'Mutation', generateThreadResponseBreakdown: { __typename?: 'ThreadResponse', id: number, threadId: number, question: string, sql?: string | null, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, breakdownDetail?: { __typename?: 'ThreadResponseBreakdownDetail', queryId?: string | null, status: Types.AskingTaskStatus, description?: string | null, steps?: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, answerDetail?: { __typename?: 'ThreadResponseAnswerDetail', queryId?: string | null, status?: Types.ThreadResponseAnswerStatus | null, content?: string | null, numRowsUsedInLLM?: number | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, chartDetail?: { __typename?: 'ThreadResponseChartDetail', queryId?: string | null, status: Types.ChartTaskStatus, description?: string | null, chartType?: Types.ChartType | null, chartSchema?: any | null, adjustment?: boolean | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, askingTask?: { __typename?: 'AskingTask', status: Types.AskingTaskStatus, type?: Types.AskingTaskType | null, rephrasedQuestion?: string | null, intentReasoning?: string | null, sqlGenerationReasoning?: string | null, retrievedTables?: Array<string> | null, invalidSql?: string | null, traceId?: string | null, queryId?: string | null, candidates: Array<{ __typename?: 'ResultCandidate', sql: string, type: Types.ResultCandidateType, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, sqlPair?: { __typename?: 'SqlPair', id: number, question: string, sql: string, projectId: number } | null }>, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null } };
 
 export type GenerateThreadResponseAnswerMutationVariables = Types.Exact<{
   responseId: Types.Scalars['Int'];
 }>;
 
 
-export type GenerateThreadResponseAnswerMutation = { __typename?: 'Mutation', generateThreadResponseAnswer: { __typename?: 'ThreadResponse', id: number, threadId: number, question: string, sql: string, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, breakdownDetail?: { __typename?: 'ThreadResponseBreakdownDetail', queryId?: string | null, status: Types.AskingTaskStatus, description?: string | null, steps?: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, answerDetail?: { __typename?: 'ThreadResponseAnswerDetail', queryId?: string | null, status?: Types.ThreadResponseAnswerStatus | null, content?: string | null, numRowsUsedInLLM?: number | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, chartDetail?: { __typename?: 'ThreadResponseChartDetail', queryId?: string | null, status: Types.ChartTaskStatus, description?: string | null, chartSchema?: any | null, adjustment?: boolean | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null } };
+export type GenerateThreadResponseAnswerMutation = { __typename?: 'Mutation', generateThreadResponseAnswer: { __typename?: 'ThreadResponse', id: number, threadId: number, question: string, sql?: string | null, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, breakdownDetail?: { __typename?: 'ThreadResponseBreakdownDetail', queryId?: string | null, status: Types.AskingTaskStatus, description?: string | null, steps?: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, answerDetail?: { __typename?: 'ThreadResponseAnswerDetail', queryId?: string | null, status?: Types.ThreadResponseAnswerStatus | null, content?: string | null, numRowsUsedInLLM?: number | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, chartDetail?: { __typename?: 'ThreadResponseChartDetail', queryId?: string | null, status: Types.ChartTaskStatus, description?: string | null, chartType?: Types.ChartType | null, chartSchema?: any | null, adjustment?: boolean | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, askingTask?: { __typename?: 'AskingTask', status: Types.AskingTaskStatus, type?: Types.AskingTaskType | null, rephrasedQuestion?: string | null, intentReasoning?: string | null, sqlGenerationReasoning?: string | null, retrievedTables?: Array<string> | null, invalidSql?: string | null, traceId?: string | null, queryId?: string | null, candidates: Array<{ __typename?: 'ResultCandidate', sql: string, type: Types.ResultCandidateType, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, sqlPair?: { __typename?: 'SqlPair', id: number, question: string, sql: string, projectId: number } | null }>, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null } };
 
 export type GenerateThreadResponseChartMutationVariables = Types.Exact<{
   responseId: Types.Scalars['Int'];
 }>;
 
 
-export type GenerateThreadResponseChartMutation = { __typename?: 'Mutation', generateThreadResponseChart: { __typename?: 'ThreadResponse', id: number, threadId: number, question: string, sql: string, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, breakdownDetail?: { __typename?: 'ThreadResponseBreakdownDetail', queryId?: string | null, status: Types.AskingTaskStatus, description?: string | null, steps?: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, answerDetail?: { __typename?: 'ThreadResponseAnswerDetail', queryId?: string | null, status?: Types.ThreadResponseAnswerStatus | null, content?: string | null, numRowsUsedInLLM?: number | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, chartDetail?: { __typename?: 'ThreadResponseChartDetail', queryId?: string | null, status: Types.ChartTaskStatus, description?: string | null, chartSchema?: any | null, adjustment?: boolean | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null } };
+export type GenerateThreadResponseChartMutation = { __typename?: 'Mutation', generateThreadResponseChart: { __typename?: 'ThreadResponse', id: number, threadId: number, question: string, sql?: string | null, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, breakdownDetail?: { __typename?: 'ThreadResponseBreakdownDetail', queryId?: string | null, status: Types.AskingTaskStatus, description?: string | null, steps?: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, answerDetail?: { __typename?: 'ThreadResponseAnswerDetail', queryId?: string | null, status?: Types.ThreadResponseAnswerStatus | null, content?: string | null, numRowsUsedInLLM?: number | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, chartDetail?: { __typename?: 'ThreadResponseChartDetail', queryId?: string | null, status: Types.ChartTaskStatus, description?: string | null, chartType?: Types.ChartType | null, chartSchema?: any | null, adjustment?: boolean | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, askingTask?: { __typename?: 'AskingTask', status: Types.AskingTaskStatus, type?: Types.AskingTaskType | null, rephrasedQuestion?: string | null, intentReasoning?: string | null, sqlGenerationReasoning?: string | null, retrievedTables?: Array<string> | null, invalidSql?: string | null, traceId?: string | null, queryId?: string | null, candidates: Array<{ __typename?: 'ResultCandidate', sql: string, type: Types.ResultCandidateType, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, sqlPair?: { __typename?: 'SqlPair', id: number, question: string, sql: string, projectId: number } | null }>, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null } };
 
 export type AdjustThreadResponseChartMutationVariables = Types.Exact<{
   responseId: Types.Scalars['Int'];
@@ -176,7 +193,7 @@ export type AdjustThreadResponseChartMutationVariables = Types.Exact<{
 }>;
 
 
-export type AdjustThreadResponseChartMutation = { __typename?: 'Mutation', adjustThreadResponseChart: { __typename?: 'ThreadResponse', id: number, threadId: number, question: string, sql: string, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, breakdownDetail?: { __typename?: 'ThreadResponseBreakdownDetail', queryId?: string | null, status: Types.AskingTaskStatus, description?: string | null, steps?: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, answerDetail?: { __typename?: 'ThreadResponseAnswerDetail', queryId?: string | null, status?: Types.ThreadResponseAnswerStatus | null, content?: string | null, numRowsUsedInLLM?: number | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, chartDetail?: { __typename?: 'ThreadResponseChartDetail', queryId?: string | null, status: Types.ChartTaskStatus, description?: string | null, chartSchema?: any | null, adjustment?: boolean | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null } };
+export type AdjustThreadResponseChartMutation = { __typename?: 'Mutation', adjustThreadResponseChart: { __typename?: 'ThreadResponse', id: number, threadId: number, question: string, sql?: string | null, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, breakdownDetail?: { __typename?: 'ThreadResponseBreakdownDetail', queryId?: string | null, status: Types.AskingTaskStatus, description?: string | null, steps?: Array<{ __typename?: 'DetailStep', summary: string, sql: string, cteName?: string | null }> | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, answerDetail?: { __typename?: 'ThreadResponseAnswerDetail', queryId?: string | null, status?: Types.ThreadResponseAnswerStatus | null, content?: string | null, numRowsUsedInLLM?: number | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, chartDetail?: { __typename?: 'ThreadResponseChartDetail', queryId?: string | null, status: Types.ChartTaskStatus, description?: string | null, chartType?: Types.ChartType | null, chartSchema?: any | null, adjustment?: boolean | null, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null, askingTask?: { __typename?: 'AskingTask', status: Types.AskingTaskStatus, type?: Types.AskingTaskType | null, rephrasedQuestion?: string | null, intentReasoning?: string | null, sqlGenerationReasoning?: string | null, retrievedTables?: Array<string> | null, invalidSql?: string | null, traceId?: string | null, queryId?: string | null, candidates: Array<{ __typename?: 'ResultCandidate', sql: string, type: Types.ResultCandidateType, view?: { __typename?: 'ViewInfo', id: number, name: string, statement: string, displayName: string } | null, sqlPair?: { __typename?: 'SqlPair', id: number, question: string, sql: string, projectId: number } | null }>, error?: { __typename?: 'Error', code?: string | null, shortMessage?: string | null, message?: string | null, stacktrace?: Array<string | null> | null } | null } | null } };
 
 export const CommonErrorFragmentDoc = gql`
     fragment CommonError on Error {
@@ -217,11 +234,44 @@ export const CommonChartDetailFragmentDoc = gql`
   queryId
   status
   description
+  chartType
   chartSchema
   error {
     ...CommonError
   }
   adjustment
+}
+    ${CommonErrorFragmentDoc}`;
+export const CommonAskingTaskFragmentDoc = gql`
+    fragment CommonAskingTask on AskingTask {
+  status
+  type
+  candidates {
+    sql
+    type
+    view {
+      id
+      name
+      statement
+      displayName
+    }
+    sqlPair {
+      id
+      question
+      sql
+      projectId
+    }
+  }
+  error {
+    ...CommonError
+  }
+  rephrasedQuestion
+  intentReasoning
+  sqlGenerationReasoning
+  retrievedTables
+  invalidSql
+  traceId
+  queryId
 }
     ${CommonErrorFragmentDoc}`;
 export const CommonResponseFragmentDoc = gql`
@@ -245,10 +295,14 @@ export const CommonResponseFragmentDoc = gql`
   chartDetail {
     ...CommonChartDetail
   }
+  askingTask {
+    ...CommonAskingTask
+  }
 }
     ${CommonBreakdownDetailFragmentDoc}
 ${CommonAnswerDetailFragmentDoc}
-${CommonChartDetailFragmentDoc}`;
+${CommonChartDetailFragmentDoc}
+${CommonAskingTaskFragmentDoc}`;
 export const CommonRecommendedQuestionsTaskFragmentDoc = gql`
     fragment CommonRecommendedQuestionsTask on RecommendedQuestionsTask {
   status
@@ -302,24 +356,10 @@ export type SuggestedQuestionsQueryResult = Apollo.QueryResult<SuggestedQuestion
 export const AskingTaskDocument = gql`
     query AskingTask($taskId: String!) {
   askingTask(taskId: $taskId) {
-    status
-    type
-    candidates {
-      sql
-      type
-      view {
-        id
-        name
-        statement
-        displayName
-      }
-    }
-    error {
-      ...CommonError
-    }
+    ...CommonAskingTask
   }
 }
-    ${CommonErrorFragmentDoc}`;
+    ${CommonAskingTaskFragmentDoc}`;
 
 /**
  * __useAskingTaskQuery__
@@ -520,6 +560,39 @@ export function useCancelAskingTaskMutation(baseOptions?: Apollo.MutationHookOpt
 export type CancelAskingTaskMutationHookResult = ReturnType<typeof useCancelAskingTaskMutation>;
 export type CancelAskingTaskMutationResult = Apollo.MutationResult<CancelAskingTaskMutation>;
 export type CancelAskingTaskMutationOptions = Apollo.BaseMutationOptions<CancelAskingTaskMutation, CancelAskingTaskMutationVariables>;
+export const RerunAskingTaskDocument = gql`
+    mutation RerunAskingTask($responseId: Int!) {
+  rerunAskingTask(responseId: $responseId) {
+    id
+  }
+}
+    `;
+export type RerunAskingTaskMutationFn = Apollo.MutationFunction<RerunAskingTaskMutation, RerunAskingTaskMutationVariables>;
+
+/**
+ * __useRerunAskingTaskMutation__
+ *
+ * To run a mutation, you first call `useRerunAskingTaskMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useRerunAskingTaskMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [rerunAskingTaskMutation, { data, loading, error }] = useRerunAskingTaskMutation({
+ *   variables: {
+ *      responseId: // value for 'responseId'
+ *   },
+ * });
+ */
+export function useRerunAskingTaskMutation(baseOptions?: Apollo.MutationHookOptions<RerunAskingTaskMutation, RerunAskingTaskMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<RerunAskingTaskMutation, RerunAskingTaskMutationVariables>(RerunAskingTaskDocument, options);
+      }
+export type RerunAskingTaskMutationHookResult = ReturnType<typeof useRerunAskingTaskMutation>;
+export type RerunAskingTaskMutationResult = Apollo.MutationResult<RerunAskingTaskMutation>;
+export type RerunAskingTaskMutationOptions = Apollo.BaseMutationOptions<RerunAskingTaskMutation, RerunAskingTaskMutationVariables>;
 export const CreateThreadDocument = gql`
     mutation CreateThread($data: CreateThreadInput!) {
   createThread(data: $data) {
@@ -622,6 +695,40 @@ export function useUpdateThreadMutation(baseOptions?: Apollo.MutationHookOptions
 export type UpdateThreadMutationHookResult = ReturnType<typeof useUpdateThreadMutation>;
 export type UpdateThreadMutationResult = Apollo.MutationResult<UpdateThreadMutation>;
 export type UpdateThreadMutationOptions = Apollo.BaseMutationOptions<UpdateThreadMutation, UpdateThreadMutationVariables>;
+export const UpdateThreadResponseDocument = gql`
+    mutation UpdateThreadResponse($where: ThreadResponseUniqueWhereInput!, $data: UpdateThreadResponseInput!) {
+  updateThreadResponse(where: $where, data: $data) {
+    ...CommonResponse
+  }
+}
+    ${CommonResponseFragmentDoc}`;
+export type UpdateThreadResponseMutationFn = Apollo.MutationFunction<UpdateThreadResponseMutation, UpdateThreadResponseMutationVariables>;
+
+/**
+ * __useUpdateThreadResponseMutation__
+ *
+ * To run a mutation, you first call `useUpdateThreadResponseMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useUpdateThreadResponseMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [updateThreadResponseMutation, { data, loading, error }] = useUpdateThreadResponseMutation({
+ *   variables: {
+ *      where: // value for 'where'
+ *      data: // value for 'data'
+ *   },
+ * });
+ */
+export function useUpdateThreadResponseMutation(baseOptions?: Apollo.MutationHookOptions<UpdateThreadResponseMutation, UpdateThreadResponseMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<UpdateThreadResponseMutation, UpdateThreadResponseMutationVariables>(UpdateThreadResponseDocument, options);
+      }
+export type UpdateThreadResponseMutationHookResult = ReturnType<typeof useUpdateThreadResponseMutation>;
+export type UpdateThreadResponseMutationResult = Apollo.MutationResult<UpdateThreadResponseMutation>;
+export type UpdateThreadResponseMutationOptions = Apollo.BaseMutationOptions<UpdateThreadResponseMutation, UpdateThreadResponseMutationVariables>;
 export const DeleteThreadDocument = gql`
     mutation DeleteThread($where: ThreadUniqueWhereInput!) {
   deleteThread(where: $where)

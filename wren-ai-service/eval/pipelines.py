@@ -1,8 +1,8 @@
 import asyncio
-import os
 import re
 import sys
 from abc import abstractmethod
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Literal
 
@@ -11,11 +11,13 @@ from haystack import Document
 from langfuse.decorators import langfuse_context, observe
 from tqdm.asyncio import tqdm_asyncio
 
+from src.core.pipeline import PipelineComponent
+
 sys.path.append(f"{Path().parent.resolve()}")
 
+from eval import EvalSettings
 from eval.metrics import (
     AccuracyMetric,
-    AccuracyMultiCandidateMetric,
     AnswerRelevancyMetric,
     ContextualPrecisionMetric,
     ContextualRecallMetric,
@@ -23,27 +25,27 @@ from eval.metrics import (
     ExactMatchAccuracy,
     ExecutionAccuracy,
     FaithfulnessMetric,
+    QuestionToReasoningJudge,
+    ReasoningToSqlJudge,
+    SqlSemanticsJudge,
 )
 from eval.utils import (
     engine_config,
     get_contexts_from_sql,
     trace_metadata,
 )
-from src.core.engine import Engine
-from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
-from src.pipelines.generation import sql_generation
-from src.pipelines.indexing import indexing
-from src.pipelines.retrieval import retrieval
+from src.pipelines import generation, indexing, retrieval
 
 
-def deploy_model(mdl: str, pipe: indexing.Indexing) -> None:
+def deploy_model(mdl: str, pipes: list) -> None:
     async def wrapper():
-        await pipe.run(orjson.dumps(mdl).decode())
+        tasks = [pipe.run(orjson.dumps(mdl).decode()) for pipe in pipes]
+        await asyncio.gather(*tasks)
 
     asyncio.run(wrapper())
 
 
-def extract_units(docs: list) -> list:
+def extract_units(ddls: list[str]) -> list:
     def parse_ddl(ddl: str) -> list:
         """
         Parses a DDL statement and returns a list of column definitions in the format table_name.column_name, excluding foreign keys.
@@ -84,8 +86,10 @@ def extract_units(docs: list) -> list:
         return columns
 
     columns = []
-    for doc in docs:
-        columns.extend(parse_ddl(doc))
+
+    for ddl in ddls:
+        columns.extend(parse_ddl(ddl))
+
     return columns
 
 
@@ -123,22 +127,25 @@ class Eval:
 
     async def _flat(self, prediction: dict, **_) -> dict:
         """
-        No operation function to be overridden by subclasses,if needed.
+        No operation function to be overridden by subclasses if needed.
         """
         return prediction
 
     @observe(name="Prediction Process", capture_input=False)
-    async def process(self, query: dict) -> dict:
+    async def process(self, params: dict) -> dict:
         prediction = {
             "trace_id": langfuse_context.get_current_trace_id(),
             "trace_url": langfuse_context.get_current_trace_url(),
-            "input": query["question"],
+            "input": params["question"],
             "actual_output": {},
-            "expected_output": query["sql"],
+            "expected_output": params["sql"],
             "retrieval_context": [],
-            "context": query["context"],
-            "samples": query.get("samples", []),
+            "context": params["context"],
+            "samples": params.get("samples", []),
+            "instructions": params.get("instructions", []),
             "type": "execution",
+            "reasoning": "",
+            "elapsed_time": 0,
         }
 
         langfuse_context.update_current_trace(
@@ -147,10 +154,20 @@ class Eval:
             metadata=trace_metadata(self._meta, type=prediction["type"]),
         )
 
-        return await self._process(prediction, **query)
+        start_time = datetime.now()
+        returned = await self._process(prediction, **params)
+        returned["elapsed_time"] = (datetime.now() - start_time).total_seconds()
+
+        return returned
 
     @observe(capture_input=False)
     async def flat(self, prediction: dict, **kwargs) -> dict:
+        """
+        This method changes the trace type to 'shallow' to handle cases where a trace has multiple actual outputs.
+        The flattening mechanism was historically used to get individual scores for evaluation when a single trace
+        produced multiple outputs. While currently maintained for backwards compatibility, this functionality may
+        be removed in the future if no longer needed.
+        """
         prediction["source_trace_id"] = prediction["trace_id"]
         prediction["source_trace_url"] = prediction["trace_url"]
         prediction["trace_id"] = langfuse_context.get_current_trace_id()
@@ -176,45 +193,48 @@ class RetrievalPipeline(Eval):
         self,
         meta: dict,
         mdl: dict,
-        llm_provider: LLMProvider,
-        embedder_provider: EmbedderProvider,
-        document_store_provider: DocumentStoreProvider,
+        pipe_components: dict,
+        settings: EvalSettings,
         **kwargs,
     ):
         super().__init__(meta)
 
-        document_store_provider.get_store(recreate_index=True)
-        _indexing = indexing.Indexing(
-            embedder_provider=embedder_provider,
-            document_store_provider=document_store_provider,
+        _db_schema_indexing = indexing.DBSchema(
+            **pipe_components["db_schema_indexing"],
+            column_batch_size=settings.column_indexing_batch_size,
         )
-        deploy_model(mdl, _indexing)
+        _table_description_indexing = indexing.TableDescription(
+            **pipe_components["table_description_indexing"],
+        )
+        deploy_model(mdl, [_db_schema_indexing, _table_description_indexing])
 
         self._retrieval = retrieval.Retrieval(
-            llm_provider=llm_provider,
-            embedder_provider=embedder_provider,
-            document_store_provider=document_store_provider,
-            table_retrieval_size=meta["table_retrieval_size"],
-            table_column_retrieval_size=meta["table_column_retrieval_size"],
+            **pipe_components["db_schema_retrieval"],
+            table_retrieval_size=settings.table_retrieval_size,
+            table_column_retrieval_size=settings.table_column_retrieval_size,
+            allow_using_db_schemas_without_pruning=settings.allow_using_db_schemas_without_pruning,
         )
 
-    async def _process(self, prediction: dict, **_) -> dict:
-        result = await self._retrieval.run(query=prediction["input"])
-        documents = result.get("construct_retrieval_results", [])
-        prediction["retrieval_context"] = extract_units(documents)
+    async def _process(self, params: dict, **_) -> dict:
+        result = await self._retrieval.run(query=params["input"])
+        documents = result.get("construct_retrieval_results", {}).get(
+            "retrieval_results", []
+        )
+        table_ddls = [document.get("table_ddl") for document in documents]
+        params["retrieval_context"] = extract_units(table_ddls)
 
-        return prediction
+        return params
 
-    async def __call__(self, query: str, **_):
-        prediction = await self.process(query)
+    async def __call__(self, params: dict, **_):
+        prediction = await self.process(params)
 
         return [prediction, await self.flat(prediction.copy())]
 
     @staticmethod
-    def mertics(config: dict) -> dict:
+    def metrics(engine_info: dict) -> dict:
         return {
             "metrics": [
-                ContextualRecallMetric(config),
+                ContextualRecallMetric(engine_info=engine_info),
                 ContextualRelevancyMetric(),
                 ContextualPrecisionMetric(),
             ]
@@ -226,41 +246,78 @@ class GenerationPipeline(Eval):
         self,
         meta: dict,
         mdl: dict,
-        llm_provider: LLMProvider,
-        engine: Engine,
+        pipe_components: dict,
+        settings: EvalSettings,
         **kwargs,
     ):
-        super().__init__(meta, 3)
+        super().__init__(meta)
         self._mdl = mdl
-        self._generation = sql_generation.SQLGeneration(
-            llm_provider=llm_provider,
-            engine=engine,
+        self._generation = generation.SQLGeneration(
+            **pipe_components["sql_generation"],
+        )
+
+        self._sql_functions_retrieval = retrieval.SqlFunctions(
+            **pipe_components["sql_functions_retrieval"],
+        )
+
+        self._allow_sql_samples = settings.allow_sql_samples
+        self._allow_instructions = settings.allow_instructions
+        self._allow_sql_functions = settings.allow_sql_functions
+        self._engine_info = engine_config(
+            mdl, pipe_components, settings.db_path_for_duckdb
         )
 
     async def _flat(self, prediction: dict, actual: str) -> dict:
         prediction["actual_output"] = actual
         prediction["actual_output_units"] = await get_contexts_from_sql(
-            sql=actual["sql"], **engine_config(self._mdl)
+            sql=actual["sql"], **self._engine_info
         )
 
         return prediction
 
-    async def _process(self, prediction: dict, document: list, **_) -> dict:
+    def _get_instructions(self, params: dict) -> list:
+        if self._allow_instructions:
+            return [
+                {"instruction": instruction}
+                for instruction in params.get("instructions", [])
+            ]
+        return []
+
+    def _get_samples(self, params: dict) -> list:
+        if self._allow_sql_samples:
+            return params.get("samples", [])
+        return []
+
+    async def _process(self, params: dict, document: list, **_) -> dict:
         documents = [Document.from_dict(doc).content for doc in document]
+        table_ddls = [document.get("table_ddl") for document in documents]
+
+        instructions = self._get_instructions(params)
+        samples = self._get_samples(params)
+
+        if self._allow_sql_functions:
+            sql_functions = await self._sql_functions_retrieval.run()
+        else:
+            sql_functions = []
+
         actual_output = await self._generation.run(
-            query=prediction["input"],
-            contexts=documents,
-            samples=prediction["samples"],
-            exclude=[],
+            query=params["input"],
+            contexts=table_ddls,
+            sql_samples=samples,
+            has_calculated_field=params.get("has_calculated_field", False),
+            has_metric=params.get("has_metric", False),
+            sql_generation_reasoning=params.get("reasoning", ""),
+            instructions=instructions,
+            sql_functions=sql_functions,
         )
 
-        prediction["actual_output"] = actual_output
-        prediction["retrieval_context"] = extract_units(documents)
+        params["actual_output"] = actual_output
+        params["retrieval_context"] = extract_units(table_ddls)
 
-        return prediction
+        return params
 
-    async def __call__(self, query: str, **_):
-        prediction = await self.process(query)
+    async def __call__(self, params: dict, **_):
+        prediction = await self.process(params)
         valid_outputs = (
             prediction["actual_output"]
             .get("post_process", {})
@@ -273,18 +330,27 @@ class GenerationPipeline(Eval):
         ]
 
     @staticmethod
-    def mertics(
-        config: dict, accuracy_config: dict, enable_semantics_comparison: bool
+    def metrics(
+        engine_info: dict,
+        enable_semantics_comparison: bool,
+        component: PipelineComponent,
     ) -> dict:
         return {
             "metrics": [
-                AccuracyMetric(accuracy_config, enable_semantics_comparison),
-                AnswerRelevancyMetric(config),
-                FaithfulnessMetric(config),
+                AccuracyMetric(
+                    engine_info=engine_info,
+                    enable_semantics_comparison=enable_semantics_comparison,
+                ),
+                AnswerRelevancyMetric(engine_info=engine_info),
+                FaithfulnessMetric(engine_info=engine_info),
+                # this is for spider dataset, rn we temporarily disable it
                 ExactMatchAccuracy(),
                 ExecutionAccuracy(),
+                QuestionToReasoningJudge(**component),
+                ReasoningToSqlJudge(**component),
+                SqlSemanticsJudge(**component),
             ],
-            "post_metrics": [AccuracyMultiCandidateMetric()],
+            "post_metrics": [],
         }
 
 
@@ -293,56 +359,112 @@ class AskPipeline(Eval):
         self,
         meta: dict,
         mdl: dict,
-        llm_provider: LLMProvider,
-        embedder_provider: EmbedderProvider,
-        document_store_provider: DocumentStoreProvider,
-        engine: Engine,
+        pipe_components: dict,
+        settings: EvalSettings,
         **kwargs,
     ):
-        super().__init__(meta, 3)
+        super().__init__(meta)
 
-        document_store_provider.get_store(recreate_index=True)
-        _indexing = indexing.Indexing(
-            embedder_provider=embedder_provider,
-            document_store_provider=document_store_provider,
+        _db_schema_indexing = indexing.DBSchema(
+            **pipe_components["db_schema_indexing"],
+            column_batch_size=settings.column_indexing_batch_size,
         )
-        deploy_model(mdl, _indexing)
+        _table_description_indexing = indexing.TableDescription(
+            **pipe_components["table_description_indexing"],
+        )
+        deploy_model(mdl, [_db_schema_indexing, _table_description_indexing])
 
-        self._mdl = mdl
         self._retrieval = retrieval.Retrieval(
-            llm_provider=llm_provider,
-            embedder_provider=embedder_provider,
-            document_store_provider=document_store_provider,
+            **pipe_components["db_schema_retrieval"],
+            table_retrieval_size=settings.table_retrieval_size,
+            table_column_retrieval_size=settings.table_column_retrieval_size,
+            allow_using_db_schemas_without_pruning=settings.allow_using_db_schemas_without_pruning,
         )
-        self._generation = sql_generation.SQLGeneration(
-            llm_provider=llm_provider,
-            engine=engine,
+        self._sql_reasoner = generation.SQLGenerationReasoning(
+            **pipe_components["sql_generation_reasoning"],
+        )
+        self._sql_functions_retrieval = retrieval.SqlFunctions(
+            **pipe_components["sql_functions_retrieval"],
+        )
+        self._generation = generation.SQLGeneration(
+            **pipe_components["sql_generation"],
+        )
+        self._allow_sql_samples = settings.allow_sql_samples
+        self._allow_instructions = settings.allow_instructions
+        self._allow_sql_generation_reasoning = settings.allow_sql_generation_reasoning
+        self._allow_sql_functions = settings.allow_sql_functions
+        self._engine_info = engine_config(
+            mdl, pipe_components, settings.db_path_for_duckdb
         )
 
     async def _flat(self, prediction: dict, actual: str) -> dict:
         prediction["actual_output"] = actual
         prediction["actual_output_units"] = await get_contexts_from_sql(
-            sql=actual["sql"], **engine_config(self._mdl)
+            sql=actual["sql"], **self._engine_info
         )
         return prediction
 
-    async def _process(self, prediction: dict, **_) -> dict:
-        result = await self._retrieval.run(query=prediction["input"])
-        documents = result.get("construct_retrieval_results", [])
+    def _get_instructions(self, params: dict) -> list:
+        if self._allow_instructions:
+            return [
+                {"instruction": instruction}
+                for instruction in params.get("instructions", [])
+            ]
+        return []
+
+    def _get_samples(self, params: dict) -> list:
+        if self._allow_sql_samples:
+            return params.get("samples", [])
+        return []
+
+    async def _process(self, params: dict, **_) -> dict:
+        result = await self._retrieval.run(query=params["input"])
+        _retrieval_result = result.get("construct_retrieval_results", {})
+
+        documents = _retrieval_result.get("retrieval_results", [])
+        table_ddls = [document.get("table_ddl") for document in documents]
+        has_calculated_field = _retrieval_result.get("has_calculated_field", False)
+        has_metric = _retrieval_result.get("has_metric", False)
+
+        instructions = self._get_instructions(params)
+        samples = self._get_samples(params)
+
+        if self._allow_sql_generation_reasoning:
+            _reasoning = await self._sql_reasoner.run(
+                query=params["input"],
+                contexts=documents,
+                sql_samples=samples,
+            )
+            reasoning = _reasoning.get("post_process", {})
+        else:
+            reasoning = ""
+
+        if self._allow_sql_functions:
+            sql_functions = await self._sql_functions_retrieval.run()
+        else:
+            sql_functions = []
+
         actual_output = await self._generation.run(
-            query=prediction["input"],
-            contexts=documents,
-            samples=prediction["samples"],
-            exclude=[],
+            query=params["input"],
+            contexts=table_ddls,
+            sql_samples=samples,
+            has_calculated_field=has_calculated_field,
+            has_metric=has_metric,
+            sql_generation_reasoning=reasoning,
+            instructions=instructions,
+            sql_functions=sql_functions,
         )
 
-        prediction["actual_output"] = actual_output
-        prediction["retrieval_context"] = extract_units(documents)
+        params["actual_output"] = actual_output
+        params["retrieval_context"] = extract_units(table_ddls)
+        params["has_calculated_field"] = has_calculated_field
+        params["has_metric"] = has_metric
+        params["reasoning"] = reasoning
 
-        return prediction
+        return params
 
-    async def __call__(self, query: str, **_):
-        prediction = await self.process(query)
+    async def __call__(self, params: dict, **_):
+        prediction = await self.process(params)
         valid_outputs = (
             prediction["actual_output"]
             .get("post_process", {})
@@ -355,21 +477,30 @@ class AskPipeline(Eval):
         ]
 
     @staticmethod
-    def mertics(
-        config: dict, accuracy_config: dict, enable_semantics_comparison: bool
+    def metrics(
+        engine_info: dict,
+        enable_semantics_comparison: bool,
+        component: PipelineComponent,
     ) -> dict:
         return {
             "metrics": [
-                AccuracyMetric(accuracy_config, enable_semantics_comparison),
-                AnswerRelevancyMetric(config),
-                FaithfulnessMetric(config),
-                ContextualRecallMetric(config),
+                AccuracyMetric(
+                    engine_info=engine_info,
+                    enable_semantics_comparison=enable_semantics_comparison,
+                ),
+                AnswerRelevancyMetric(engine_info=engine_info),
+                FaithfulnessMetric(engine_info=engine_info),
+                ContextualRecallMetric(engine_info=engine_info),
                 ContextualRelevancyMetric(),
                 ContextualPrecisionMetric(),
+                # this is for spider dataset, rn we temporarily disable it
                 ExactMatchAccuracy(),
                 ExecutionAccuracy(),
+                QuestionToReasoningJudge(**component),
+                ReasoningToSqlJudge(**component),
+                SqlSemanticsJudge(**component),
             ],
-            "post_metrics": [AccuracyMultiCandidateMetric()],
+            "post_metrics": [],
         }
 
 
@@ -377,9 +508,16 @@ def init(
     name: Literal["retrieval", "generation", "ask"],
     meta: dict,
     mdl: dict,
-    providers: Dict[str, Any],
+    components: Dict[str, Any],
+    settings: EvalSettings,
 ) -> Eval:
-    args = {"meta": meta, "mdl": mdl, **providers}
+    args = {
+        "meta": meta,
+        "mdl": mdl,
+        "pipe_components": components,
+        "settings": settings,
+    }
+
     match name:
         case "retrieval":
             return RetrievalPipeline(**args)
@@ -392,38 +530,26 @@ def init(
 
 
 def metrics_initiator(
-    pipeline: str, mdl: dict, enable_semantics_comparison: bool = True
+    pipeline: str,
+    dataset: dict,
+    pipe_components: dict[str, PipelineComponent],
+    enable_semantics_comparison: bool = True,
+    settings: EvalSettings = EvalSettings(),
 ) -> dict:
-    # todo: refactor configs
-    config = engine_config(mdl)
-    if os.getenv("DATA_SOURCE") == "bigquery":
-        accuracy_config = {
-            "api_endpoint": os.getenv("WREN_IBIS_ENDPOINT"),
-            "data_source": "bigquery",
-            "mdl_json": mdl,
-            "connection_info": {
-                "project_id": os.getenv("bigquery.project-id"),
-                "dataset_id": os.getenv("bigquery.dataset-id"),
-                "credentials": os.getenv("bigquery.credentials-key"),
-            },
-            "timeout": int(os.getenv("WREN_IBIS_TIMEOUT"))
-            if os.getenv("WREN_IBIS_TIMEOUT")
-            else 10,
-            "limit": 10,
-        }
-
-    if os.getenv("DATA_SOURCE") == "duckdb":
-        accuracy_config = config
-        accuracy_config["connection_info"] = None
-
+    engine_info = engine_config(
+        dataset["mdl"],
+        pipe_components,
+        settings.db_path_for_duckdb,
+    )
+    component = pipe_components["evaluation"]
     match pipeline:
         case "retrieval":
-            return RetrievalPipeline.mertics(config)
+            return RetrievalPipeline.metrics(engine_info)
         case "generation":
-            return GenerationPipeline.mertics(
-                config, accuracy_config, enable_semantics_comparison
+            return GenerationPipeline.metrics(
+                engine_info, enable_semantics_comparison, component
             )
         case "ask":
-            return AskPipeline.mertics(
-                config, accuracy_config, enable_semantics_comparison
+            return AskPipeline.metrics(
+                engine_info, enable_semantics_comparison, component
             )

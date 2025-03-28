@@ -101,21 +101,3 @@ def test_generate_components(mocker: MockerFixture):
     assert isinstance(result["indexing"].llm_provider, LLMProvider)
     assert isinstance(result["indexing"].document_store_provider, DocumentStoreProvider)
     assert isinstance(result["indexing"].engine, Engine)
-
-
-def test_generate_components_empty_config(mocker: MockerFixture):
-    # Mock the Wrapper class
-    mock_wrapper = mocker.patch("src.providers.Wrapper")
-
-    # Create a mock PipelineComponent
-    mock_pipeline_component = mocker.Mock(spec=PipelineComponent)
-
-    # Set the return value of Wrapper() to be the mock PipelineComponent
-    mock_wrapper.return_value = mock_pipeline_component
-
-    # Mock the load_env_vars function to avoid side effects
-    mocker.patch("src.utils.load_env_vars")
-    result = generate_components([])
-
-    assert isinstance(result, PipelineComponent)
-    assert result == mock_pipeline_component

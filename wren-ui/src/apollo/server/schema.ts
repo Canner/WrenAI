@@ -536,6 +536,7 @@ export const typeDefs = gql`
   enum AskingTaskStatus {
     UNDERSTANDING
     SEARCHING
+    PLANNING
     GENERATING
     CORRECTING
     FINISHED
@@ -561,6 +562,7 @@ export const typeDefs = gql`
     BAR
     PIE
     LINE
+    MULTI_LINE
     AREA
     GROUPED_BAR
     STACKED_BAR
@@ -569,12 +571,14 @@ export const typeDefs = gql`
   enum ResultCandidateType {
     VIEW # View type candidate is provided basd on a saved view
     LLM # LLM type candidate is created by LLM
+    SQL_PAIR # SQL pair type candidate is created by SQL pair
   }
 
   type ResultCandidate {
     type: ResultCandidateType!
     sql: String!
     view: ViewInfo
+    sqlPair: SqlPair
   }
 
   type AskingTask {
@@ -582,6 +586,13 @@ export const typeDefs = gql`
     type: AskingTaskType
     error: Error
     candidates: [ResultCandidate!]!
+    rephrasedQuestion: String
+    intentReasoning: String
+    sqlGenerationReasoning: String
+    retrievedTables: [String!]
+    invalidSql: String
+    traceId: String
+    queryId: String
   }
 
   input InstantRecommendedQuestionsInput {
@@ -611,13 +622,13 @@ export const typeDefs = gql`
   input CreateThreadInput {
     question: String
     sql: String
-    viewId: Int
+    taskId: String
   }
 
   input CreateThreadResponseInput {
     question: String
     sql: String
-    viewId: Int
+    taskId: String
   }
 
   input ThreadUniqueWhereInput {
@@ -626,6 +637,14 @@ export const typeDefs = gql`
 
   input UpdateThreadInput {
     summary: String
+  }
+
+  input ThreadResponseUniqueWhereInput {
+    id: Int!
+  }
+
+  input UpdateThreadResponseInput {
+    sql: String
   }
 
   input AdjustThreadResponseChartInput {
@@ -683,6 +702,7 @@ export const typeDefs = gql`
     status: ChartTaskStatus!
     error: Error
     description: String
+    chartType: ChartType
     chartSchema: JSON
     adjustment: Boolean
   }
@@ -691,11 +711,12 @@ export const typeDefs = gql`
     id: Int!
     threadId: Int!
     question: String!
-    sql: String!
+    sql: String
     view: ViewInfo
     breakdownDetail: ThreadResponseBreakdownDetail
     answerDetail: ThreadResponseAnswerDetail
     chartDetail: ThreadResponseChartDetail
+    askingTask: AskingTask
   }
 
   # Thread only consists of basic information of a thread
@@ -792,6 +813,122 @@ export const typeDefs = gql`
     path: String!
   }
 
+  # Dashboard
+  enum DashboardItemType {
+    BAR
+    PIE
+    LINE
+    MULTI_LINE
+    AREA
+    GROUPED_BAR
+    STACKED_BAR
+    TABLE
+    NUMBER
+  }
+
+  input DashboardItemWhereInput {
+    id: Int!
+  }
+
+  input CreateDashboardItemInput {
+    itemType: DashboardItemType!
+    responseId: Int!
+  }
+
+  input ItemLayoutInput {
+    itemId: Int!
+    x: Int!
+    y: Int!
+    w: Int!
+    h: Int!
+  }
+
+  input UpdateDashboardItemLayoutsInput {
+    layouts: [ItemLayoutInput!]!
+  }
+
+  input DeleteDashboardItemInput {
+    itemId: Int!
+  }
+
+  input PreviewItemSQLInput {
+    itemId: Int!
+    limit: Int
+  }
+
+  type DashboardItemLayout {
+    x: Int!
+    y: Int!
+    w: Int!
+    h: Int!
+  }
+
+  type DashboardItemDetail {
+    sql: String!
+    chartSchema: JSON
+  }
+
+  type DashboardItem {
+    id: Int!
+    dashboardId: Int!
+    type: DashboardItemType!
+    layout: DashboardItemLayout!
+    detail: DashboardItemDetail!
+  }
+
+  type SqlPair {
+    id: Int!
+    projectId: Int!
+    sql: String!
+    question: String!
+    createdAt: String
+    updatedAt: String
+  }
+
+  input CreateSqlPairInput {
+    sql: String!
+    question: String!
+  }
+
+  input UpdateSqlPairInput {
+    sql: String
+    question: String
+  }
+
+  input SqlPairWhereUniqueInput {
+    id: Int!
+  }
+
+  input GenerateQuestionInput {
+    sql: String!
+  }
+
+  type Instruction {
+    id: Int!
+    projectId: Int!
+    instruction: String!
+    questions: [String!]!
+    isDefault: Boolean!
+    createdAt: String!
+    updatedAt: String!
+  }
+
+  input CreateInstructionInput {
+    instruction: String!
+    questions: [String!]!
+    isDefault: Boolean!
+  }
+
+  input UpdateInstructionInput {
+    instruction: String
+    questions: [String!]
+    isDefault: Boolean
+  }
+
+  input InstructionWhereInput {
+    id: Int!
+  }
+
   # Query and Mutation
   type Query {
     # On Boarding Steps
@@ -811,7 +948,7 @@ export const typeDefs = gql`
     view(where: ViewWhereUniqueInput!): ViewInfo!
 
     # Ask
-    askingTask(taskId: String!): AskingTask!
+    askingTask(taskId: String!): AskingTask
     suggestedQuestions: SuggestedQuestionResponse!
     threads: [Thread!]!
     thread(threadId: Int!): DetailedThread!
@@ -831,6 +968,14 @@ export const typeDefs = gql`
     getThreadRecommendationQuestions(threadId: Int!): RecommendedQuestionsTask!
     getProjectRecommendationQuestions: RecommendedQuestionsTask!
     instantRecommendedQuestions(taskId: String!): RecommendedQuestionsTask!
+
+    # Dashboard
+    dashboardItems: [DashboardItem!]!
+
+    # SQL Pairs
+    sqlPairs: [SqlPair]!
+    # Instructions
+    instructions: [Instruction]!
   }
 
   type Mutation {
@@ -884,6 +1029,7 @@ export const typeDefs = gql`
     # Ask
     createAskingTask(data: AskingTaskInput!): Task!
     cancelAskingTask(taskId: String!): Boolean!
+    rerunAskingTask(responseId: Int!): Task!
 
     # Thread
     createThread(data: CreateThreadInput!): Thread!
@@ -897,6 +1043,10 @@ export const typeDefs = gql`
     createThreadResponse(
       threadId: Int!
       data: CreateThreadResponseInput!
+    ): ThreadResponse!
+    updateThreadResponse(
+      where: ThreadResponseUniqueWhereInput!
+      data: UpdateThreadResponseInput!
     ): ThreadResponse!
     previewData(where: PreviewDataInput!): JSON!
     previewBreakdownData(where: PreviewDataInput!): JSON!
@@ -933,5 +1083,29 @@ export const typeDefs = gql`
     createInstantRecommendedQuestions(
       data: InstantRecommendedQuestionsInput!
     ): Task!
+
+    # Dashboard
+    updateDashboardItemLayouts(
+      data: UpdateDashboardItemLayoutsInput!
+    ): [DashboardItem!]!
+    createDashboardItem(data: CreateDashboardItemInput!): DashboardItem!
+    deleteDashboardItem(where: DashboardItemWhereInput!): Boolean!
+    previewItemSQL(data: PreviewItemSQLInput!): JSON!
+
+    # SQL Pairs
+    createSqlPair(data: CreateSqlPairInput!): SqlPair!
+    updateSqlPair(
+      where: SqlPairWhereUniqueInput!
+      data: UpdateSqlPairInput!
+    ): SqlPair!
+    deleteSqlPair(where: SqlPairWhereUniqueInput!): Boolean!
+    generateQuestion(data: GenerateQuestionInput!): String!
+    # Instructions
+    createInstruction(data: CreateInstructionInput!): Instruction!
+    updateInstruction(
+      where: InstructionWhereInput!
+      data: UpdateInstructionInput!
+    ): Instruction!
+    deleteInstruction(where: InstructionWhereInput!): Boolean!
   }
 `;

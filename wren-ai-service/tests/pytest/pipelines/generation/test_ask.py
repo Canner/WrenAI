@@ -56,7 +56,6 @@ async def test_generation_pipeline():
     generation_result = await generation_pipeline.run(
         "How many authors are there?",
         contexts=GLOBAL_DATA["contexts"],
-        exclude=[],
         configuration=Configuration(),
     )
 
@@ -67,7 +66,6 @@ async def test_generation_pipeline():
     generation_result = await generation_pipeline.run(
         "How many authors are there?",
         contexts=GLOBAL_DATA["contexts"],
-        exclude=[{"statement": "SELECT 1 FROM author"}],
         configuration=Configuration(),
     )
 

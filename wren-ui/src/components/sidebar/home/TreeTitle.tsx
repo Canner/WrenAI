@@ -18,13 +18,15 @@ const StyledMenu = styled(Menu)`
   }
 `;
 
-export default function TreeTitle(props: {
-  threadId: string;
-  onDelete: (threadId: string) => void;
-  onRename: (threadId: string, newName: string) => void;
+interface TreeTitleProps {
+  id: string;
   title: string;
-}) {
-  const { threadId, onDelete, onRename } = props;
+  onDelete?: (id: string) => void;
+  onRename?: (id: string, newName: string) => void;
+}
+
+export default function TreeTitle(props: TreeTitleProps) {
+  const { id, onDelete, onRename } = props;
   const [title, setTitle] = useState(props.title);
   const [isEditing, setIsEditing] = useState(false);
 
@@ -36,7 +38,11 @@ export default function TreeTitle(props: {
   const onChangeTitle = (newThreadTitle: string) => {
     setIsEditing(false);
     setTitle(newThreadTitle);
-    onRename(threadId, newThreadTitle);
+    onRename && onRename(id, newThreadTitle);
+  };
+
+  const onDeleteData = (id: string) => {
+    onDelete && onDelete(id);
   };
 
   return isEditing ? (
@@ -71,7 +77,7 @@ export default function TreeTitle(props: {
                 },
                 {
                   label: (
-                    <DeleteThreadModal onConfirm={() => onDelete(threadId)} />
+                    <DeleteThreadModal onConfirm={() => onDeleteData(id)} />
                   ),
                   key: MENU_ITEM_KEYS.DELETE,
                   onClick: ({ domEvent }) => {

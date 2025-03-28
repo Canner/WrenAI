@@ -1,5 +1,4 @@
 
-
 <p align="center" id="top">
   <a href="https://getwren.ai/?utm_source=github&utm_medium=title&utm_campaign=readme">
     <picture>
@@ -28,24 +27,53 @@
   </a>
 </p>
 
-> Wren AI is an **open-source SQL AI Agent** that empowers data, product, and business teams to access insights through chat, built-in well designed intuitive UI and UX, integrating seamlessly with tools like Excel and Google Sheets.
+<p align="center">
+  <a href="https://trendshift.io/repositories/9263" target="_blank"><img src="https://trendshift.io/api/badge/repositories/9263" alt="Canner%2FWrenAI | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+</p>
+
+> Open-source GenBI AI Agent that empowers data-driven teams to chat with their data to generate Text-to-SQL, charts, spreadsheets, reports, and BI. 
 
 <p align="center">
-  <img src="./misc/wrenai_view.png">
+  <img src="./misc/wren_workflow.png">
 </p>
 
 ## 🕶 Try it yourself!
 
-https://github.com/user-attachments/assets/e4e78006-0088-4094-b58f-8868689bf787
+### GenBI (Generative Business Intelligence)
+
+[Watch GenBI Demo](https://github.com/user-attachments/assets/90ad1d35-bb1e-490b-9676-b29863ff090b)
+
+### Ask any questions
+
+
+https://github.com/user-attachments/assets/f9c1cb34-5a95-4580-8890-ec9644da4160
 
 👉 Try with your data on [Wren AI Cloud](https://getwren.ai/?utm_source=github&utm_medium=content&utm_campaign=readme) or [Install in your local environment](https://docs.getwren.ai/oss/installation/?utm_source=github&utm_medium=content&utm_campaign=readme)
 
+## Supported LLM Models
+
+Wren AI supports integration with various Large Language Models (LLMs), including but not limited to:
+- OpenAI Models
+- Azure OpenAI Models
+- DeepSeek Models
+- Google AI Studio – Gemini Models
+- Vertex AI Models (Gemini + Anthropic)
+- Bedrock Models
+- Anthropic API Models
+- Groq Models
+- Ollama Models
+- Databricks Models
+
+Check [configuration examples here](https://github.com/Canner/WrenAI/tree/main/wren-ai-service/docs/config_examples)!
+
+> [!CAUTION]
+> The performance of Wren AI depends significantly on the capabilities of the LLM you choose. We strongly recommend using the most powerful model available for optimal results. Using less capable models may lead to reduced performance, slower response times, or inaccurate outputs.
 
 ## 🎯 Our Vision & Mission
 
-Wren AI’s mission is to democratize data by bringing AI agents with SQL ability to any data source.
+At Wren AI, our mission is to revolutionize business intelligence by empowering organizations with seamless access to data through Generative Business Intelligence (GenBI). We aim to break down barriers to data insights with advanced AI-driven solutions, composable data frameworks, and semantic intelligence, enabling every team member to make faster, smarter, and data-driven decisions with confidence.
 
-🤩 [Learn more about Wren AI and our Mission](https://docs.getwren.ai/oss/overview/introduction/?utm_source=github&utm_medium=content&utm_campaign=readme)
+🤩 [Learn more about GenBI](https://getwren.ai/genbi?utm_source=github&utm_medium=content&utm_campaign=readme)
 
 ## 🤖 A User-Centric, End-to-End Open-source SQL AI Agent - Text-to-SQL Total Solution
 
@@ -57,7 +85,16 @@ Wren AI’s mission is to democratize data by bringing AI agents with SQL abilit
   <img src="./misc/wren-lang.png" style="max-width: 700px"/>
 </p>
 
-### 2. AI-powered Data Exploration Features
+### 2. GenBI Insights
+
+> The GenBI feature empowers users with AI-generated summaries that provide key insights alongside SQL queries, simplifying complex data. Instantly convert query results into AI-generated reports, charts, transforming raw data into clear, actionable visuals. With GenBI, you can make faster, smarter decisions with ease.
+
+<p align="center">
+  <img src="./misc/wren-genbi.png" alt="Screenshot of Wren AI's GenBI feature showing AI-generated summaries and visualizations" style="max-width: 700px"/>
+</p>
+
+
+### 3. AI-powered Data Exploration Features
 
 > Beyond just retrieving data from your databases, Wren AI now answers exploratory questions like “What data do I have?” or “What are the columns in my customer tables?” Additionally, our AI dynamically generates recommended questions and intelligent follow-up queries tailored to your context, making data exploration smarter, faster, and more intuitive. Empower your team to unlock deeper insights effortlessly with AI.
 
@@ -65,7 +102,7 @@ Wren AI’s mission is to democratize data by bringing AI agents with SQL abilit
   <img src="./misc/AI-generated-understanding_recommend_questions.png" style="max-width: 700px"/>
 </p>
 
-### 3. Semantic Indexing with a Well-Crafted UI/UX
+### 4. Semantic Indexing with a Well-Crafted UI/UX
 
 > Wren AI has implemented a [semantic engine architecture](https://www.getwren.ai/post/how-we-design-our-semantic-engine-for-llms-the-backbone-of-the-semantic-layer-for-llm-architecture/?utm_source=github&utm_medium=content&utm_campaign=readme) to provide the LLM context of your business; you can easily establish a logical presentation layer on your data schema that helps LLM learn more about your business context.
 
@@ -73,7 +110,7 @@ Wren AI’s mission is to democratize data by bringing AI agents with SQL abilit
   <img src="./misc/wren-modeling.png" style="max-width: 700px"/>
 </p>
 
-### 4. Generate SQL Queries with Context
+### 5. Generate SQL Queries with Context
 
 > With Wren AI, you can process metadata, schema, terminology, data relationships, and the logic behind calculations and aggregations with [“Modeling Definition Language”](https://docs.getwren.ai/oss/engine/concept/what_is_mdl/?utm_source=github&utm_medium=content&utm_campaign=readme), reducing duplicate coding and simplifying data joins.
 
@@ -81,20 +118,12 @@ Wren AI’s mission is to democratize data by bringing AI agents with SQL abilit
   <img src="./misc/wren-context.png" style="max-width: 700px"/>
 </p>
 
-### 5. Get Insights without Writing Code
+### 6. Get Insights without Writing Code
 
 > When starting a new conversation in Wren AI, your question is used to find the most relevant tables. From these, LLM generates the most relevant question for the user. You can also ask follow-up questions to get deeper insights.
 
 <p align="center">
   <img src="./misc/wren-insight.png" style="max-width: 700px"/>
-</p>
-
-### 6. AI-Powered Insights & Visuals
-
-> AI-generated summaries that deliver key insights alongside SQL queries, making complex data easier to understand. Instantly transform results into AI-generated charts, turning raw data into clear, actionable visuals – empowering faster, smarter decisions.
-
-<p align="center">
-  <img src="./misc/wren-visual.png" style="max-width: 700px"/>
 </p>
 
 ### 7. Easily Export and Visualize Your Data
@@ -143,12 +172,12 @@ Want to get our latest sharing? [Follow our blog!](https://www.getwren.ai/blog/?
 
 Using Wren AI is super simple, you can set it up within 3 minutes, and start to interact with your data!
 
-- Visit our [Installation Guide of Wren AI](http://docs.getwren.ai/oss/installation).
-- Visit the [Usage Guides](https://docs.getwren.ai/oss/guide/connect/overview) to learn more about how to use Wren AI.
+- Visit our [Installation Guide of Wren AI](http://docs.getwren.ai/oss/installation?utm_source=github&utm_medium=content&utm_campaign=readme).
+- Visit the [Usage Guides](https://docs.getwren.ai/oss/guide/connect/overview?utm_source=github&utm_medium=content&utm_campaign=readme) to learn more about how to use Wren AI.
 
 ## 📚 Documentation
 
-Visit [Wren AI documentation](https://docs.getwren.ai/oss/overview/introduction) to view the full documentation.
+Visit [Wren AI documentation](https://docs.getwren.ai/oss/overview/introduction?utm_source=github&utm_medium=content&utm_campaign=readme) to view the full documentation.
 
 ## 🛠️ Contribution
 

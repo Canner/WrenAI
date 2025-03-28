@@ -52,7 +52,7 @@ def _properties_comment(column: Dict[str, Any], **_) -> str:
     return f"-- {orjson.dumps(column_properties).decode('utf-8')}\n  "
 
 
-COLUMN_PROPRECESSORS = {
+COLUMN_PREPROCESSORS = {
     "properties": Helper(
         condition=lambda column, **_: "properties" in column,
         helper=lambda column, **_: column.get("properties"),
@@ -91,7 +91,7 @@ def load_helpers(package_path: str = "src.pipelines.indexing.utils"):
     Dynamically loads preprocessors and comment helpers from modules within a specified package path.
 
     This function walks through all modules in the given package path and looks for modules
-    that define MODEL_PREPROCESSORS, COLUMN_PROPRECESSORS and COLUMN_COMMENT_HELPERS dictionaries.
+    that define MODEL_PREPROCESSORS, COLUMN_PREPROCESSORS and COLUMN_COMMENT_HELPERS dictionaries.
     When found, these helpers are added to the corresponding global dictionaries.
 
     The helpers are used to preprocess and format comments for database schema elements like
@@ -102,7 +102,7 @@ def load_helpers(package_path: str = "src.pipelines.indexing.utils"):
                           Defaults to "src.pipelines.indexing.utils".
 
     Returns:
-        None: The function updates the global MODEL_PREPROCESSORS, COLUMN_PROPRECESSORS
+        None: The function updates the global MODEL_PREPROCESSORS, COLUMN_PREPROCESSORS
               and COLUMN_COMMENT_HELPERS dictionaries in place.
 
     Example:
@@ -115,7 +115,7 @@ def load_helpers(package_path: str = "src.pipelines.indexing.utils"):
             )
         }
 
-        COLUMN_PROPRECESSORS = {
+        COLUMN_PREPROCESSORS = {
             "example": Helper(
                 condition=lambda column: True,
                 helper=lambda column, **_: column.get("example", ""),
@@ -143,8 +143,8 @@ def load_helpers(package_path: str = "src.pipelines.indexing.utils"):
         if hasattr(module, "MODEL_PREPROCESSORS"):
             MODEL_PREPROCESSORS.update(module.MODEL_PREPROCESSORS)
             logger.info(f"Updated Helper for model preprocessors: {name}")
-        if hasattr(module, "COLUMN_PROPRECESSORS"):
-            COLUMN_PROPRECESSORS.update(module.COLUMN_PROPRECESSORS)
+        if hasattr(module, "COLUMN_PREPROCESSORS"):
+            COLUMN_PREPROCESSORS.update(module.COLUMN_PREPROCESSORS)
             logger.info(f"Updated Helper for column preprocessors: {name}")
         if hasattr(module, "COLUMN_COMMENT_HELPERS"):
             COLUMN_COMMENT_HELPERS.update(module.COLUMN_COMMENT_HELPERS)

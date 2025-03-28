@@ -3,7 +3,6 @@ import { useRouter } from 'next/router';
 import { Button, Typography } from 'antd';
 import { Logo } from '@/components/Logo';
 import { Path } from '@/utils/enum';
-import { nextTick } from '@/utils/time';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import Prompt from '@/components/pages/home/prompt';
 import DemoPrompt from '@/components/pages/home/prompt/DemoPrompt';
@@ -14,7 +13,7 @@ import RecommendedQuestionsPrompt from '@/components/pages/home/prompt/Recommend
 import {
   useSuggestedQuestionsQuery,
   useCreateThreadMutation,
-  useGenerateThreadRecommendationQuestionsMutation,
+  useThreadLazyQuery,
 } from '@/apollo/client/graphql/home.generated';
 import { useGetSettingsQuery } from '@/apollo/client/graphql/settings.generated';
 import { CreateThreadInput } from '@/apollo/client/graphql/__types__';
@@ -100,11 +99,9 @@ export default function Home() {
   const [createThread, { loading: threadCreating }] = useCreateThreadMutation({
     onCompleted: () => homeSidebar.refetch(),
   });
-
-  const [
-    generateThreadRecommendationQuestions,
-    { loading: threadRecommendationQuestionsGenerating },
-  ] = useGenerateThreadRecommendationQuestionsMutation();
+  const [preloadThread] = useThreadLazyQuery({
+    fetchPolicy: 'cache-and-network',
+  });
 
   const { data: settingsResult } = useGetSettingsQuery();
   const settings = settingsResult?.settings;
@@ -119,19 +116,16 @@ export default function Home() {
   );
 
   const onSelectQuestion = async ({ question }) => {
-    $prompt.current.setValue(question);
-    await nextTick();
-    $prompt.current.submit();
+    $prompt.current.submit(question);
   };
 
-  const onSelect = async (payload: CreateThreadInput) => {
+  const onCreateResponse = async (payload: CreateThreadInput) => {
     try {
       askPrompt.onStopPolling();
       const response = await createThread({ variables: { data: payload } });
-      await generateThreadRecommendationQuestions({
-        variables: { threadId: response.data.createThread.id },
-      });
-      router.push(Path.Home + `/${response.data.createThread.id}`);
+      const threadId = response.data.createThread.id;
+      await preloadThread({ variables: { threadId } });
+      router.push(Path.Home + `/${threadId}`);
     } catch (error) {
       console.error(error);
     }
@@ -148,11 +142,15 @@ export default function Home() {
 
       {!isSampleDataset && (
         <RecommendedQuestionsInstruction
-          onSelect={onSelect}
-          loading={threadCreating || threadRecommendationQuestionsGenerating}
+          onSelect={onCreateResponse}
+          loading={threadCreating}
         />
       )}
-      <Prompt ref={$prompt} {...askPrompt} onSelect={onSelect} />
+      <Prompt
+        ref={$prompt}
+        {...askPrompt}
+        onCreateResponse={onCreateResponse}
+      />
     </SiderLayout>
   );
 }

@@ -46,12 +46,47 @@ const COMMON_CHART_DETAIL = gql`
     queryId
     status
     description
+    chartType
     chartSchema
     error {
       ...CommonError
     }
     adjustment
   }
+`;
+
+const COMMON_ASKING_TASK = gql`
+  fragment CommonAskingTask on AskingTask {
+    status
+    type
+    candidates {
+      sql
+      type
+      view {
+        id
+        name
+        statement
+        displayName
+      }
+      sqlPair {
+        id
+        question
+        sql
+        projectId
+      }
+    }
+    error {
+      ...CommonError
+    }
+    rephrasedQuestion
+    intentReasoning
+    sqlGenerationReasoning
+    retrievedTables
+    invalidSql
+    traceId
+    queryId
+  }
+  ${COMMON_ERROR}
 `;
 
 const COMMON_RESPONSE = gql`
@@ -75,11 +110,15 @@ const COMMON_RESPONSE = gql`
     chartDetail {
       ...CommonChartDetail
     }
+    askingTask {
+      ...CommonAskingTask
+    }
   }
 
   ${COMMON_BREAKDOWN_DETAIL}
   ${COMMON_ANSWER_DETAIL}
   ${COMMON_CHART_DETAIL}
+  ${COMMON_ASKING_TASK}
 `;
 
 const COMMON_RECOMMENDED_QUESTIONS_TASK = gql`
@@ -112,24 +151,10 @@ export const SUGGESTED_QUESTIONS = gql`
 export const ASKING_TASK = gql`
   query AskingTask($taskId: String!) {
     askingTask(taskId: $taskId) {
-      status
-      type
-      candidates {
-        sql
-        type
-        view {
-          id
-          name
-          statement
-          displayName
-        }
-      }
-      error {
-        ...CommonError
-      }
+      ...CommonAskingTask
     }
   }
-  ${COMMON_ERROR}
+  ${COMMON_ASKING_TASK}
 `;
 
 export const THREADS = gql`
@@ -176,6 +201,14 @@ export const CANCEL_ASKING_TASK = gql`
   }
 `;
 
+export const RERUN_ASKING_TASK = gql`
+  mutation RerunAskingTask($responseId: Int!) {
+    rerunAskingTask(responseId: $responseId) {
+      id
+    }
+  }
+`;
+
 export const CREATE_THREAD = gql`
   mutation CreateThread($data: CreateThreadInput!) {
     createThread(data: $data) {
@@ -206,6 +239,18 @@ export const UPDATE_THREAD = gql`
       summary
     }
   }
+`;
+
+export const UPDATE_THREAD_RESPONSE = gql`
+  mutation UpdateThreadResponse(
+    $where: ThreadResponseUniqueWhereInput!
+    $data: UpdateThreadResponseInput!
+  ) {
+    updateThreadResponse(where: $where, data: $data) {
+      ...CommonResponse
+    }
+  }
+  ${COMMON_RESPONSE}
 `;
 
 export const DELETE_THREAD = gql`

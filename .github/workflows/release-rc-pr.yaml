@@ -1,0 +1,120 @@
+name: Create Release RC
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: "Release version (e.g., 0.23.0-rc.1)"
+        required: true
+      ui_version:
+        description: "UI version (e.g., 0.22.0)"
+        required: true
+      ai_version:
+        description: "AI service version (e.g., 0.17.0)"
+        required: true
+      engine_version:
+        description: "Engine version (e.g., 0.14.7)"
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  create-release-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Git Identity
+        run: |
+          git config --global user.name "wren-ai[bot]"
+          git config --global user.email "dev@cannerdata.com"
+
+      - name: Create branch
+        run: |
+          BRANCH_NAME="release/${{ github.event.inputs.release_version }}"
+          git checkout -b $BRANCH_NAME
+          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+
+      - name: Update docker.go
+        run: |
+          FILE_PATH="wren-launcher/utils/docker.go"
+
+          # Replace the WREN_PRODUCT_VERSION value with the new release version
+          sed -i "s/WREN_PRODUCT_VERSION\s*string = \"[^\"]*\"/WREN_PRODUCT_VERSION\tstring = \"${{ github.event.inputs.release_version }}\"/" $FILE_PATH
+
+          # Verify the changes
+          grep "WREN_PRODUCT_VERSION" $FILE_PATH
+
+      - name: Update .env.example
+        run: |
+          FILE_PATH="docker/.env.example"
+
+          # Update all versions in the .env.example file
+          sed -i "s/WREN_PRODUCT_VERSION=.*/WREN_PRODUCT_VERSION=${{ github.event.inputs.release_version }}/" $FILE_PATH
+          sed -i "s/WREN_ENGINE_VERSION=.*/WREN_ENGINE_VERSION=${{ github.event.inputs.engine_version }}/" $FILE_PATH
+          sed -i "s/IBIS_SERVER_VERSION=.*/IBIS_SERVER_VERSION=${{ github.event.inputs.engine_version }}/" $FILE_PATH
+          sed -i "s/WREN_AI_SERVICE_VERSION=.*/WREN_AI_SERVICE_VERSION=${{ github.event.inputs.ai_version }}/" $FILE_PATH
+          sed -i "s/WREN_UI_VERSION=.*/WREN_UI_VERSION=${{ github.event.inputs.ui_version }}/" $FILE_PATH
+
+          # Verify the changes
+          grep "VERSION" $FILE_PATH
+
+      - name: Show git status
+        run: git status
+
+      - name: Show git diff
+        run: |
+          echo "===== Git diff for changed files ====="
+          git diff
+
+      - name: Commit changes
+        run: |
+          git add wren-launcher/utils/docker.go docker/.env.example
+          git commit -m "release ${{ github.event.inputs.release_version }}" || echo "No changes to commit"
+          git status
+
+      - name: Push branch
+        run: |
+          git push --set-upstream origin ${{ env.BRANCH_NAME }}
+          echo "Branch pushed to origin/${{ env.BRANCH_NAME }}"
+
+      - name: Install GitHub CLI
+        run: |
+          type -p curl >/dev/null || (apt update && apt install curl -y)
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+          && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+          && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+          && apt update \
+          && apt install gh -y
+
+      - name: Create Pull Request with GitHub CLI
+        run: |
+          # Check if branch has changes compared to main
+          if git diff --quiet origin/main origin/${{ env.BRANCH_NAME }}; then
+            echo "No changes detected between main and ${{ env.BRANCH_NAME }}. Cannot create PR."
+            exit 1
+          fi
+
+          # Create PR using gh cli
+          gh pr create \
+            --title "Release ${{ github.event.inputs.release_version }}" \
+            --body "Release ${{ github.event.inputs.release_version }}" \
+            --base main \
+            --head ${{ env.BRANCH_NAME }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fallback PR creation
+        if: failure()
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "release ${{ github.event.inputs.release_version }}"
+          branch: ${{ env.BRANCH_NAME }}
+          base: main
+          title: "Release ${{ github.event.inputs.release_version }}"
+          body: "Release ${{ github.event.inputs.release_version }}"
+          draft: false

@@ -1,6 +1,9 @@
-import { IIbisAdaptor } from '../adaptors/ibisAdaptor';
-import { IWrenEngineAdaptor } from '../adaptors/wrenEngineAdaptor';
-import { IConfig } from '../config';
+import { IConfig } from '@server/config';
+import {
+  IIbisAdaptor,
+  IWrenAIAdaptor,
+  IWrenEngineAdaptor,
+} from '@server/adaptors';
 import {
   IModelColumnRepository,
   IModelNestedColumnRepository,
@@ -9,9 +12,13 @@ import {
   IRelationRepository,
   IViewRepository,
   ILearningRepository,
-} from '../repositories';
-import { ISchemaChangeRepository } from '../repositories/schemaChangeRepository';
-import { IDeployLogRepository } from '../repositories/deployLogRepository';
+  ISchemaChangeRepository,
+  IDeployLogRepository,
+  IDashboardRepository,
+  IDashboardItemRepository,
+  ISqlPairRepository,
+  IInstructionRepository,
+} from '@server/repositories';
 import {
   IQueryService,
   IAskingService,
@@ -19,13 +26,15 @@ import {
   IModelService,
   IMDLService,
   IProjectService,
-} from '../services';
-import { ITelemetry } from '../telemetry/telemetry';
+  IDashboardService,
+  IInstructionService,
+} from '@server/services';
+import { ITelemetry } from '@server/telemetry/telemetry';
 import {
   ProjectRecommendQuestionBackgroundTracker,
   ThreadRecommendQuestionBackgroundTracker,
-} from '../backgrounds';
-import { IWrenAIAdaptor } from '../adaptors';
+} from '@server/backgrounds';
+import { ISqlPairService } from '../services/sqlPairService';
 
 export interface IContext {
   config: IConfig;
@@ -44,6 +53,9 @@ export interface IContext {
   deployService: IDeployService;
   askingService: IAskingService;
   queryService: IQueryService;
+  dashboardService: IDashboardService;
+  sqlPairService: ISqlPairService;
+  instructionService: IInstructionService;
 
   // repository
   projectRepository: IProjectRepository;
@@ -55,6 +67,10 @@ export interface IContext {
   deployRepository: IDeployLogRepository;
   schemaChangeRepository: ISchemaChangeRepository;
   learningRepository: ILearningRepository;
+  dashboardRepository: IDashboardRepository;
+  dashboardItemRepository: IDashboardItemRepository;
+  sqlPairRepository: ISqlPairRepository;
+  instructionRepository: IInstructionRepository;
 
   // background trackers
   projectRecommendQuestionBackgroundTracker: ProjectRecommendQuestionBackgroundTracker;

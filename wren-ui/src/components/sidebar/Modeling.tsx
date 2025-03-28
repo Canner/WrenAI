@@ -1,19 +1,11 @@
 import styled from 'styled-components';
-import SidebarTree from './SidebarTree';
+import SidebarTree, { sidebarCommonStyle } from './SidebarTree';
 import ModelTree from './modeling/ModelTree';
 import { Diagram } from '@/utils/data';
 import ViewTree from './modeling/ViewTree';
 
 export const StyledSidebarTree = styled(SidebarTree)`
-  .ant-tree-title {
-    flex-grow: 1;
-    display: inline-flex;
-    align-items: center;
-    span:first-child,
-    .adm-treeTitle__title {
-      flex-grow: 1;
-    }
-  }
+  ${sidebarCommonStyle}
 
   .adm-treeNode {
     .ant-tree-title {

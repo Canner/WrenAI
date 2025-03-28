@@ -27,6 +27,7 @@ services:
       - ${WREN_ENGINE_SQL_PORT}
     volumes:
       - data:/usr/src/app/etc
+      - ${PROJECT_DIR}/data:/usr/src/app/data
     networks:
       - wren
     depends_on:

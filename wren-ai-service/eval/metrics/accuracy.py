@@ -7,17 +7,18 @@ import pandas as pd
 from deepeval.evaluate import TestResult
 from deepeval.metrics import BaseMetric
 from deepeval.test_case import LLMTestCase
+from deprecated import deprecated
 
 from eval.utils import get_data_from_wren_engine, get_openai_client
 
 
 class AccuracyMetric(BaseMetric):
-    def __init__(self, engine_config: dict, enable_semantics_comparison: bool = False):
+    def __init__(self, engine_info: dict, enable_semantics_comparison: bool = False):
         self.threshold = 0
         self.score = 0
-        self._engine_config = engine_config
-        self._enable_semantics_comparison = enable_semantics_comparison
-        if self._enable_semantics_comparison:
+        self.engine_info = engine_info
+        self.enable_semantics_comparison = enable_semantics_comparison
+        if self.enable_semantics_comparison:
             self._openai_client = get_openai_client()
 
     def measure(self, test_case: LLMTestCase):
@@ -82,7 +83,7 @@ class AccuracyMetric(BaseMetric):
         return sql
 
     async def _retrieve_data(self, sql: str) -> pd.DataFrame:
-        response = await get_data_from_wren_engine(sql=sql, **self._engine_config)
+        response = await get_data_from_wren_engine(sql=sql, **self.engine_info)
 
         df = pd.DataFrame(**response)
         sorted_columns = sorted(df.columns)
@@ -145,7 +146,7 @@ class AccuracyMetric(BaseMetric):
 
             self.score = self._count_partial_matches(expected_dataset, actual_dataset)
             # use llm to check sql semantics
-            if self.score == 0 and self._enable_semantics_comparison:
+            if self.score == 0 and self.enable_semantics_comparison:
                 # TODO: we may need to upload the sql semantics result to langfuse
                 print(f"before _check_sql_semantics: {self.score}")
                 print(f"expected sql: {rewritten_expected_output}")
@@ -170,6 +171,9 @@ class AccuracyMetric(BaseMetric):
         return "Accuracy(column-based)"
 
 
+@deprecated(
+    reason="We don't generate multiple candidates for Text to SQL task, so don't need this metric"
+)
 class AccuracyMultiCandidateMetric(BaseMetric):
     def __init__(self):
         self.threshold = 0

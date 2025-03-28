@@ -53,15 +53,11 @@ def prompt(
     db_schemas: list[str],
     language: str,
     prompt_builder: PromptBuilder,
-    history: Optional[AskHistory] = None,
+    histories: Optional[list[AskHistory]] = None,
 ) -> dict:
-    if history:
-        previous_query_summaries = [
-            step.summary for step in history.steps if step.summary
-        ]
-    else:
-        previous_query_summaries = []
-
+    previous_query_summaries = (
+        [history.question for history in histories] if histories else []
+    )
     query = "\n".join(previous_query_summaries) + "\n" + query
 
     return prompt_builder.run(
@@ -106,9 +102,9 @@ class DataAssistance(BasicPipeline):
 
     def _streaming_callback(self, chunk, query_id):
         if query_id not in self._user_queues:
-            self._user_queues[
-                query_id
-            ] = asyncio.Queue()  # Create a new queue for the user if it doesn't exist
+            self._user_queues[query_id] = (
+                asyncio.Queue()
+            )  # Create a new queue for the user if it doesn't exist
         # Put the chunk content into the user's queue
         asyncio.create_task(self._user_queues[query_id].put(chunk.content))
         if chunk.meta.get("finish_reason"):
@@ -119,9 +115,9 @@ class DataAssistance(BasicPipeline):
             return await self._user_queues[query_id].get()
 
         if query_id not in self._user_queues:
-            self._user_queues[
-                query_id
-            ] = asyncio.Queue()  # Ensure the user's queue exists
+            self._user_queues[query_id] = (
+                asyncio.Queue()
+            )  # Ensure the user's queue exists
         while True:
             try:
                 # Wait for an item from the user's queue
@@ -146,7 +142,7 @@ class DataAssistance(BasicPipeline):
         db_schemas: list[str],
         language: str,
         query_id: Optional[str] = None,
-        history: Optional[AskHistory] = None,
+        histories: Optional[list[AskHistory]] = None,
     ):
         logger.info("Data Assistance pipeline is running...")
         return await self._pipe.execute(
@@ -156,7 +152,7 @@ class DataAssistance(BasicPipeline):
                 "db_schemas": db_schemas,
                 "language": language,
                 "query_id": query_id or "",
-                "history": history,
+                "histories": histories,
                 **self._components,
             },
         )

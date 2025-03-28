@@ -66,7 +66,7 @@ class DDLChunker:
         ) -> Dict[str, Any]:
             addition = {
                 key: helper(column, **addition)
-                for key, helper in helper.COLUMN_PROPRECESSORS.items()
+                for key, helper in helper.COLUMN_PREPROCESSORS.items()
                 if helper.condition(column, **addition)
             }
 
@@ -86,6 +86,7 @@ class DDLChunker:
             columns = [
                 _column_preprocessor(column, addition)
                 for column in model.get("columns", [])
+                if column.get("isHidden") is not True
             ]
             return {
                 "name": model.get("name", ""),

@@ -1,7 +1,9 @@
-import { ReactNode, useEffect, useRef } from 'react';
+import clsx from 'clsx';
+import { ReactNode, useEffect, useRef, memo, useState } from 'react';
 import { Button } from 'antd';
 import styled from 'styled-components';
 import { PROCESS_STATE } from '@/utils/enum';
+import { attachLoading } from '@/utils/helper';
 import CloseOutlined from '@ant-design/icons/CloseOutlined';
 import StopOutlined from '@ant-design/icons/StopFilled';
 import LoadingOutlined from '@ant-design/icons/LoadingOutlined';
@@ -10,13 +12,11 @@ import WarningOutlined from '@ant-design/icons/WarningOutlined';
 import MessageOutlined from '@ant-design/icons/MessageOutlined';
 import ErrorCollapse from '@/components/ErrorCollapse';
 import InfoCircleOutlined from '@ant-design/icons/InfoCircleOutlined';
-import useAskProcessState from '@/hooks/useAskProcessState';
 import RecommendedQuestions, {
   getRecommendedQuestionProps,
 } from '@/components/pages/home/RecommendedQuestions';
 import MarkdownBlock from '@/components/editor/MarkdownBlock';
 import {
-  AskingTask,
   AskingTaskType,
   RecommendedQuestionsTask,
 } from '@/apollo/client/graphql/__types__';
@@ -33,17 +33,17 @@ const StyledResult = styled.div`
 `;
 
 interface Props {
-  processState: ReturnType<typeof useAskProcessState>;
+  processState: PROCESS_STATE;
   data: {
     type: AskingTaskType;
     originalQuestion: string;
-    candidates: AskingTask['candidates'];
     askingStreamTask: string;
     recommendedQuestions: RecommendedQuestionsTask;
+    intentReasoning: string;
   };
   error?: any;
-  onSelectResult: (payload: { sql: string; viewId: number | null }) => void;
-  onSelectQuestion: ({
+  onIntentSQLAnswer: () => void;
+  onSelectRecommendedQuestion: ({
     question,
     sql,
   }: {
@@ -51,7 +51,7 @@ interface Props {
     sql: string;
   }) => void;
   onClose: () => void;
-  onStop: () => void;
+  onStop: () => Promise<void>;
   loading?: boolean;
 }
 
@@ -68,6 +68,7 @@ const Wrapper = ({ children }) => {
 
 const makeProcessing = (text: string) => (props: Props) => {
   const { onStop } = props;
+  const [loading, setLoading] = useState(false);
   return (
     <Wrapper>
       <div className="d-flex justify-space-between">
@@ -76,10 +77,14 @@ const makeProcessing = (text: string) => (props: Props) => {
           {text}
         </span>
         <Button
-          className="adm-btn-no-style gray-7 bg-gray-3 text-sm px-2"
+          className={clsx(
+            'adm-btn-no-style bg-gray-3 text-sm px-2',
+            loading ? 'gray-6' : 'gray-7',
+          )}
           type="text"
           size="small"
-          onClick={onStop}
+          onClick={attachLoading(onStop, setLoading)}
+          disabled={loading}
         >
           <StopOutlined className="-mr-1" />
           Stop
@@ -92,7 +97,7 @@ const makeProcessing = (text: string) => (props: Props) => {
 const makeProcessingError =
   (config: { icon: ReactNode; title?: string; description?: string }) =>
   (props: Props) => {
-    const { onClose, onSelectQuestion, data, error } = props;
+    const { onClose, onSelectRecommendedQuestion, data, error } = props;
     const { message, shortMessage, stacktrace } = error || {};
     const hasStacktrace = !!stacktrace;
 
@@ -117,7 +122,9 @@ const makeProcessingError =
             Close
           </Button>
         </div>
-        <div className="gray-7">{config.description || message}</div>
+        <div className="gray-7">
+          {config.description || data.intentReasoning || message}
+        </div>
         {hasStacktrace && (
           <ErrorCollapse className="mt-2" message={stacktrace.join('\n')} />
         )}
@@ -126,7 +133,7 @@ const makeProcessingError =
           <RecommendedQuestions
             className="mt-2"
             {...recommendedQuestionProps.state}
-            onSelect={onSelectQuestion}
+            onSelect={onSelectRecommendedQuestion}
           />
         )}
       </Wrapper>
@@ -139,40 +146,25 @@ const Failed = makeProcessingError({
   icon: <ErrorIcon />,
 });
 
-const NoResult = makeProcessingError({
-  icon: <WarningOutlined className="mr-2 text-lg gold-6" />,
-  title: 'Please try again',
-  description: 'No results found. Try providing more details in your question.',
-});
-
 const Understanding = makeProcessing('Understanding question');
-const Searching = makeProcessing('Searching data');
-const Generating = makeProcessing('Generating answer');
-const Finished = (props: Props) => {
-  const { data, onSelectResult } = props;
-  // only one candidate
-  const { candidates } = data;
+
+const IntentionFinished = (props: Props) => {
+  const { data, onIntentSQLAnswer } = props;
+  const { type } = data;
 
   useEffect(() => {
-    if (candidates.length) {
-      const [result] = candidates;
-      onSelectResult &&
-        onSelectResult({ sql: result.sql, viewId: result.view?.id });
+    // create an empty response first if this is a text to sql task
+    if (type === AskingTaskType.TEXT_TO_SQL) {
+      onIntentSQLAnswer && onIntentSQLAnswer();
     }
-  }, [data]);
+  }, [type]);
 
-  if (candidates.length === 0)
-    return (
-      <Wrapper>
-        <NoResult {...props} />
-      </Wrapper>
-    );
-
-  return null;
+  // To keep the UI result keep showing as understanding
+  return <Understanding {...props} />;
 };
 
 const GeneralAnswer = (props: Props) => {
-  const { onClose, onSelectQuestion, data, loading } = props;
+  const { onClose, onSelectRecommendedQuestion, data, loading } = props;
   const $wrapper = useRef<HTMLDivElement>(null);
 
   const { originalQuestion, askingStreamTask, recommendedQuestions } = data;
@@ -233,7 +225,7 @@ const GeneralAnswer = (props: Props) => {
       {recommendedQuestionProps.show && (
         <RecommendedQuestions
           {...recommendedQuestionProps.state}
-          onSelect={onSelectQuestion}
+          onSelect={onSelectRecommendedQuestion}
         />
       )}
     </Wrapper>
@@ -243,8 +235,6 @@ const GeneralAnswer = (props: Props) => {
 const MisleadingQuery = makeProcessingError({
   icon: <WarningOutlined className="mr-2 text-lg gold-6" />,
   title: 'Clarification needed',
-  description:
-    "Could you please provide more details or specify the information you're seeking?",
 });
 
 const getGeneralAnswerStateComponent = (state: PROCESS_STATE) => {
@@ -267,9 +257,12 @@ const getDefaultStateComponent = (state: PROCESS_STATE) => {
   return (
     {
       [PROCESS_STATE.UNDERSTANDING]: Understanding,
-      [PROCESS_STATE.SEARCHING]: Searching,
-      [PROCESS_STATE.GENERATING]: Generating,
-      [PROCESS_STATE.FINISHED]: Finished,
+      // Polling AI status for every 1 second might skip the searching state.
+      [PROCESS_STATE.SEARCHING]: IntentionFinished,
+      [PROCESS_STATE.PLANNING]: IntentionFinished,
+      [PROCESS_STATE.GENERATING]: IntentionFinished,
+      // The finished status will respond by AI directly if viewId found, so we need to handle with intention finished.
+      [PROCESS_STATE.FINISHED]: IntentionFinished,
       [PROCESS_STATE.FAILED]: Failed,
     }[state] || null
   );
@@ -284,13 +277,13 @@ const makeProcessStateStrategy = (type: AskingTaskType) => {
   return getDefaultStateComponent;
 };
 
-export default function PromptResult(props: Props) {
+export default memo(function PromptResult(props: Props) {
   const { processState, data } = props;
 
   const getProcessStateComponent = makeProcessStateStrategy(data?.type);
-  const StateComponent = getProcessStateComponent(processState.currentState);
+  const StateComponent = getProcessStateComponent(processState);
 
   if (StateComponent === null) return null;
 
   return <StateComponent {...props} />;
-}
+});

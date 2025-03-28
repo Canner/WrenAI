@@ -1,0 +1,147 @@
+name: PR Tagger
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "wren-ui/src/**"
+      - "deployment/**"
+      - "wren-launcher/**"
+      - "wren-ai-service/**"
+      - "docker/**"
+
+jobs:
+  tag-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v46
+
+      - name: Tag PR based on changed files and title
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const changedFiles = '${{ steps.changed-files.outputs.all_changed_files }}'.split(' ');
+            const labels = new Set();
+
+            // Define label colors
+            const labelColors = {
+              'wren-ui': 'f29513',        // Orange
+              'launcher': 'f29513',       // Orange (same as wren-ui)
+              'wren-ai-service': 'f29513', // Orange (same as wren-ui)
+              'deployment': '0075ca',     // Blue
+              'ai-env-changed': 'd73a4a',  // Red
+              'ui-env-changed': 'd73a4a'   // Red
+            };
+
+
+            // Check for files in specific directories
+            for (const file of changedFiles) {
+              if (file.startsWith('wren-ui/src/')) {
+                labels.add('wren-ui');
+              } else if (file.startsWith('deployment/')) {
+                labels.add('deployment');
+              } else if (file.startsWith('wren-launcher/')) {
+                labels.add('launcher');
+              } else if (file.startsWith('wren-ai-service/')) {
+                labels.add('wren-ai-service');
+              } 
+              if (file.startsWith('docker/') && file.includes('.example')) {
+                labels.add('ai-env-changed'); 
+              }
+              if (file.startsWith('wren-ui/src/apollo/server/config.ts')) {
+                labels.add('ui-env-changed');
+              }
+            }
+
+            // Extract milestone from PR title
+            const prTitle = context.payload.pull_request.title;
+            const milestoneMatch = prTitle.match(/\(milestone:\s*([^)]+)\)/i);
+
+            if (milestoneMatch && milestoneMatch[1]) {
+              const milestone = milestoneMatch[1].trim();
+              if (milestone) {
+                labels.add(milestone);
+                console.log(`Found milestone in PR title: ${milestone}`);
+              }
+            }
+
+            // Append env changed label to PR title
+            if (labels.has('ai-env-changed')) {
+              // check if pr title contains "ai-env-changed"
+              if (!prTitle.includes('ai-env-changed')) {
+                const newTitle = `${prTitle} (ai-env-changed)`;
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  title: newTitle
+                });
+              }
+            }
+
+            if (labels.has('ui-env-changed')) {
+              // check if pr title contains "ui-env-changed"
+              if (!prTitle.includes('ui-env-changed')) {
+                const newTitle = `${prTitle} (ui-env-changed)`;
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  title: newTitle
+                });
+              }
+            }
+
+            if (labels.size > 0) {
+              // Create or update labels with colors
+              for (const label of labels) {
+                try {
+                  // Try to create the label with color
+                  if (labelColors[label]) {
+                    await github.rest.issues.createLabel({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      name: label,
+                      color: labelColors[label]
+                    });
+                  }
+                } catch (error) {
+                  // Label already exists, update its color if needed
+                  if (labelColors[label]) {
+                    try {
+                      await github.rest.issues.updateLabel({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        name: label,
+                        color: labelColors[label]
+                      });
+                    } catch (updateError) {
+                      console.log(`Could not update color for label ${label}: ${updateError.message}`);
+                    }
+                  }
+                }
+              }
+              
+              // Add labels to PR
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: Array.from(labels)
+              });
+              
+              console.log(`Added labels: ${Array.from(labels).join(', ')}`);
+            } else {
+              console.log('No matching directories or milestone found');
+            }

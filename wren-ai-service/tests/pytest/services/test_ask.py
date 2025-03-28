@@ -22,8 +22,10 @@ from src.web.v1.services.semantics_preparation import (
 from tests.pytest.services.mocks import (
     GenerationMock,
     HistoricalQuestionMock,
+    InstructionsRetrievalMock,
     IntentClassificationMock,
     RetrievalMock,
+    SqlPairsRetrievalMock,
     SQLSummaryMock,
 )
 
@@ -56,6 +58,12 @@ def ask_service():
             ),
             "sql_correction": generation.SQLCorrection(
                 **pipe_components["sql_correction"],
+            ),
+            "sql_pairs_retrieval": retrieval.SqlPairsRetrieval(
+                **pipe_components["sql_pairs_retrieval"],
+            ),
+            "instructions_retrieval": retrieval.Instructions(
+                **pipe_components["instructions_retrieval"],
             ),
         }
     )
@@ -175,6 +183,21 @@ def _ask_service_ttl_mock(query: str):
                     {
                         "sql": "select count(*) from books",
                         "summary": "mock summary",
+                    }
+                ]
+            ),
+            "sql_pairs_retrieval": SqlPairsRetrievalMock(
+                documents=[
+                    {
+                        "question": "How many books are there?",
+                        "sql": "select count(*) from books",
+                    }
+                ]
+            ),
+            "instructions_retrieval": InstructionsRetrievalMock(
+                documents=[
+                    {
+                        "instruction": "How many books are there?",
                     }
                 ]
             ),

@@ -1,18 +1,18 @@
 [tool.poetry]
 name = "wren-ai-service"
-version = "0.13.10"
+version = "0.18.1"
 description = ""
-authors = ["Jimmy Yeh <jimmy.yeh@cannerdata.com>", "Pao Sheng Wang <david.wang@cannerdata.com>", "Aster Sun <aster.sun@cannerdata.com>"]
+authors = ["dev@getwren.ai"]
 license = "AGPL-3.0"
 readme = "README.md"
 package-mode = false
 
 [tool.poetry.dependencies]
-python = ">=3.12.*, <4.0"
+python = ">=3.12.*, <3.13"
 fastapi = "^0.115.2"
 uvicorn = {extras = ["standard"], version = "^0.30.1"}
 python-dotenv = "^1.0.1"
-haystack-ai = "^2.4.0"
+haystack-ai = "==2.7.0"
 openai = "^1.40.0"
 qdrant-haystack = "^7.0.0"
 backoff = "^2.2.1"
@@ -33,8 +33,9 @@ pydantic-settings = "^2.5.2"
 google-auth = "^2.35.0"
 tiktoken = "^0.8.0"
 jsonschema = "^4.23.0"
-litellm = "^1.52.12"
+litellm = "^1.60.5"
 boto3 = "^1.35.90"
+qdrant-client = "==1.11.0"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.7.1"
@@ -45,18 +46,19 @@ matplotlib = "^3.9.2"
 sseclient-py = "^1.8.0"
 dspy-ai = "^2.5.26"
 requests = "^2.32.2"
-deepeval = "^1.0.6"
 extra-streamlit-components = "^0.1.71"
+deepeval = "^1.0.6"
+tomlkit = "^0.13.0"
+nltk = "^3.9.1"
 
 [tool.poetry.group.eval.dependencies]
-tomlkit = "^0.13.0"
 gitpython = "^3.1.43"
 plotly = "^5.24.1"
 nbformat = "^5.1.3"
 ipykernel = "^6.29.5"
 itables = "^2.2.1"
 gdown = "^5.2.0"
-nltk = "^3.9.1"
+streamlit-tags = "^1.2.8"
 
 [tool.poetry.group.test.dependencies]
 locust = "^2.32.0"

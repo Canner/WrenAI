@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Literal, Optional
+from typing import Any, Dict, Literal, Optional
 
 from cachetools import TTLCache
 from langfuse.decorators import observe
@@ -19,6 +19,8 @@ class ChartRequest(BaseModel):
     sql: str
     project_id: Optional[str] = None
     thread_id: Optional[str] = None
+    data: Optional[Dict[str, Any]] = None
+    remove_data_from_chart_schema: Optional[bool] = True
     configurations: Optional[Configuration] = Configuration()
 
     @property
@@ -64,7 +66,9 @@ class ChartResultRequest(BaseModel):
 
 class ChartResult(BaseModel):
     reasoning: str
-    chart_type: Literal["line", "bar", "pie", "grouped_bar", "stacked_bar", "area", ""]
+    chart_type: Literal[
+        "line", "bar", "pie", "grouped_bar", "stacked_bar", "area", "multi_line", ""
+    ]  # empty string for no chart
     chart_schema: dict
 
 
@@ -72,6 +76,7 @@ class ChartResultResponse(BaseModel):
     status: Literal["fetching", "generating", "finished", "failed", "stopped"]
     response: Optional[ChartResult] = None
     error: Optional[ChartError] = None
+    trace_id: Optional[str] = None
 
 
 class ChartService:
@@ -101,6 +106,7 @@ class ChartService:
         chart_request: ChartRequest,
         **kwargs,
     ):
+        trace_id = kwargs.get("trace_id")
         results = {
             "chart_result": {},
             "metadata": {
@@ -112,20 +118,32 @@ class ChartService:
         try:
             query_id = chart_request.query_id
 
-            self._chart_results[query_id] = ChartResultResponse(status="fetching")
+            if not chart_request.data:
+                self._chart_results[query_id] = ChartResultResponse(
+                    status="fetching",
+                    trace_id=trace_id,
+                )
 
-            sql_data = await self._pipelines["sql_executor"].run(
-                sql=chart_request.sql,
-                project_id=chart_request.project_id,
+                sql_data = (
+                    await self._pipelines["sql_executor"].run(
+                        sql=chart_request.sql,
+                        project_id=chart_request.project_id,
+                    )
+                )["execute_sql"]["results"]
+            else:
+                sql_data = chart_request.data
+
+            self._chart_results[query_id] = ChartResultResponse(
+                status="generating",
+                trace_id=trace_id,
             )
-
-            self._chart_results[query_id] = ChartResultResponse(status="generating")
 
             chart_generation_result = await self._pipelines["chart_generation"].run(
                 query=chart_request.query,
                 sql=chart_request.sql,
-                data=sql_data["execute_sql"],
+                data=sql_data,
                 language=chart_request.configurations.language,
+                remove_data_from_chart_schema=chart_request.remove_data_from_chart_schema,
             )
             chart_result = chart_generation_result["post_process"]["results"]
 
@@ -137,6 +155,7 @@ class ChartService:
                     error=ChartError(
                         code="NO_CHART", message="chart generation failed"
                     ),
+                    trace_id=trace_id,
                 )
                 results["metadata"]["error_type"] = "NO_CHART"
                 results["metadata"]["error_message"] = "chart generation failed"
@@ -144,6 +163,7 @@ class ChartService:
                 self._chart_results[query_id] = ChartResultResponse(
                     status="finished",
                     response=ChartResult(**chart_result),
+                    trace_id=trace_id,
                 )
                 results["chart_result"] = chart_result
 
@@ -157,6 +177,7 @@ class ChartService:
                     code="OTHERS",
                     message=str(e),
                 ),
+                trace_id=trace_id,
             )
 
             results["metadata"]["error_type"] = "OTHERS"

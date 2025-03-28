@@ -1,28 +1,26 @@
-import { useEffect, useState } from 'react';
+import clsx from 'clsx';
+import { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useParams } from 'next/navigation';
-import { Button } from 'antd';
 import styled from 'styled-components';
-import { DataNode } from 'antd/es/tree';
 import { Path } from '@/utils/enum';
-import { createTreeGroupNode } from '@/components/sidebar/utils';
-import PlusOutlined from '@ant-design/icons/PlusOutlined';
-import SidebarTree, { useSidebarTreeState } from './SidebarTree';
-import TreeTitle from '@/components/sidebar/home/TreeTitle';
-
-interface ThreadData {
-  id: string;
-  name: string;
-}
+import FundViewOutlined from '@ant-design/icons/FundViewOutlined';
+import SidebarTree, {
+  StyledTreeNodeLink,
+  useSidebarTreeState,
+} from './SidebarTree';
+import ThreadTree, { ThreadData } from './home/ThreadTree';
 
 export interface Props {
-  data: ThreadData[];
+  data: {
+    threads: ThreadData[];
+  };
   onSelect: (selectKeys) => void;
   onDelete: (id: string) => Promise<void>;
   onRename: (id: string, newName: string) => Promise<void>;
 }
 
-const StyledSidebarTree = styled(SidebarTree)`
+export const StyledSidebarTree = styled(SidebarTree)`
   .adm-treeNode {
     &.adm-treeNode__thread {
       padding: 0px 16px 0px 4px !important;
@@ -44,42 +42,13 @@ export default function Home(props: Props) {
   const { data, onSelect, onRename, onDelete } = props;
   const router = useRouter();
   const params = useParams<{ id: string }>();
+  const { threads } = data;
 
-  const getThreadGroupNode = createTreeGroupNode({
-    groupName: 'Thread',
-    groupKey: 'thread',
-    icons: [],
-  });
-
-  const [tree, setTree] = useState<DataNode[]>(getThreadGroupNode());
   const { treeSelectedKeys, setTreeSelectedKeys } = useSidebarTreeState();
 
   useEffect(() => {
     params?.id && setTreeSelectedKeys([params.id] as string[]);
   }, [params?.id]);
-
-  useEffect(() => {
-    setTree(
-      data.map((thread) => {
-        const nodeKey = thread.id;
-
-        return {
-          className: 'adm-treeNode adm-treeNode__thread',
-          id: nodeKey,
-          isLeaf: true,
-          key: nodeKey,
-          title: (
-            <TreeTitle
-              threadId={nodeKey}
-              title={thread.name}
-              onRename={onRename}
-              onDelete={onDeleteThread}
-            />
-          ),
-        };
-      }),
-    );
-  }, [params?.id, data]);
 
   const onDeleteThread = async (threadId: string) => {
     await onDelete(threadId);
@@ -98,21 +67,21 @@ export default function Home(props: Props) {
 
   return (
     <>
-      <div className="px-4 py-4">
-        <Button
-          style={{ backgroundColor: 'transparent' }}
-          key="add-home-result"
-          onClick={() => router.push(Path.Home)}
-          block
-        >
-          <PlusOutlined />
-          New thread
-        </Button>
-      </div>
-      <StyledSidebarTree
-        treeData={tree}
-        onSelect={onTreeSelect}
+      <StyledTreeNodeLink
+        className={clsx({
+          'adm-treeNode--selected': router.pathname === Path.HomeDashboard,
+        })}
+        href={Path.HomeDashboard}
+      >
+        <FundViewOutlined className="mr-2" />
+        <span className="text-medium">Dashboard</span>
+      </StyledTreeNodeLink>
+      <ThreadTree
+        threads={threads}
         selectedKeys={treeSelectedKeys}
+        onSelect={onTreeSelect}
+        onRename={onRename}
+        onDeleteThread={onDeleteThread}
       />
     </>
   );

@@ -19,7 +19,9 @@ from src.utils import (
 )
 from src.web.v1 import routers
 
-setup_custom_logger("wren-ai-service", level_str=settings.logging_level)
+setup_custom_logger(
+    "wren-ai-service", level_str=settings.logging_level, is_dev=settings.development
+)
 
 
 # https://fastapi.tiangolo.com/advanced/events/#lifespan
@@ -29,7 +31,7 @@ async def lifespan(app: FastAPI):
     pipe_components = generate_components(settings.components)
     app.state.service_container = create_service_container(pipe_components, settings)
     app.state.service_metadata = create_service_metadata(pipe_components)
-    init_langfuse()
+    init_langfuse(settings)
 
     yield
 

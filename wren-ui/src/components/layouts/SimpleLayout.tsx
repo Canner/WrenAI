@@ -2,6 +2,7 @@ import { Layout } from 'antd';
 import HeaderBar from '@/components/HeaderBar';
 import PageLoading from '@/components/PageLoading';
 import { useWithOnboarding } from '@/hooks/useCheckOnboarding';
+import clsx from 'clsx';
 
 const { Content } = Layout;
 
@@ -16,7 +17,9 @@ export default function SimpleLayout(props: Props) {
   const pageLoading = fetching || loading;
   return (
     <Layout
-      className={`adm-main bg-gray-3${pageLoading ? ' overflow-hidden' : ''}`}
+      className={clsx('adm-main bg-gray-3', {
+        'overflow-hidden': pageLoading,
+      })}
     >
       <HeaderBar />
       <Content className="adm-content">{children}</Content>

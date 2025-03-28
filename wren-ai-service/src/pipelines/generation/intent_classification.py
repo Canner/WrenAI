@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.pipelines.common import build_table_ddl
+from src.pipelines.generation.utils.sql import construct_instructions
 from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
 
@@ -31,11 +32,14 @@ Also you should provide reasoning for the classification clearly and concisely w
 - Steps to rephrase the user's question:
     - First, try to recognize adjectives in the user's question that are important to the user's intent.
     - Second, change the adjectives to more specific and clear ones that can be matched to columns in the database schema.
-    - Third, if the user's question is related to time/date, take the current time into consideration and add time/date format(such as YYYY-MM-DD) in the rephrased_question output.
+    - Third, only if the user's question contains time/date related information, take the current time into consideration and add time/date format(such as YYYY-MM-DD) in the rephrased_question output.
+    - Fourth, if the user's input contains previous SQLs, consider them to make the rephrased question.
 - MUST use the rephrased user's question to make the intent classification.
 - MUST put the rephrased user's question in the rephrased_question output.
 - REASONING MUST be within 20 words.
 - If the rephrased user's question is vague and doesn't specify which table or property to analyze, classify it as MISLEADING_QUERY.
+- The reasoning of the intent classification MUST use the same language as the Output Language from the user input.
+- The rephrased user's question MUST use the same language as the Output Language from the user input.
 
 ### INTENT DEFINITIONS ###
 - TEXT_TO_SQL
@@ -107,12 +111,35 @@ intent_classification_user_prompt_template = """
     {{ db_schema }}
 {% endfor %}
 
-### INPUT ###
-{% if query_history %}
-User's previous questions: {{ query_history }}
+{% if sql_samples %}
+### SQL SAMPLES ###
+{% for sql_sample in sql_samples %}
+Question:
+{{sql_sample.question}}
+SQL:
+{{sql_sample.sql}}
+{% endfor %}
 {% endif %}
+
+{% if instructions %}
+### INSTRUCTIONS ###
+{{ instructions }}
+{% endif %}
+
+{% if query_history %}
+### User's QUERY HISTORY ###
+{% for history in query_history %}
+Question:
+{{ history.question }}
+SQL:
+{{ history.sql }}
+{% endfor %}
+{% endif %}
+
+### QUESTION ###
 User's question: {{query}}
 Current Time: {{ current_time }}
+Output Language: {{ language }}
 
 Let's think step by step
 """
@@ -121,10 +148,10 @@ Let's think step by step
 ## Start of Pipeline
 @observe(capture_input=False, capture_output=False)
 async def embedding(
-    query: str, embedder: Any, history: Optional[AskHistory] = None
+    query: str, embedder: Any, histories: Optional[list[AskHistory]] = None
 ) -> dict:
     previous_query_summaries = (
-        [step.summary for step in history.steps if step.summary] if history else []
+        [history.question for history in histories] if histories else []
     )
 
     query = "\n".join(previous_query_summaries) + "\n" + query
@@ -133,7 +160,9 @@ async def embedding(
 
 
 @observe(capture_input=False)
-async def table_retrieval(embedding: dict, id: str, table_retriever: Any) -> dict:
+async def table_retrieval(
+    embedding: dict, project_id: str, table_retriever: Any
+) -> dict:
     filters = {
         "operator": "AND",
         "conditions": [
@@ -141,9 +170,9 @@ async def table_retrieval(embedding: dict, id: str, table_retriever: Any) -> dic
         ],
     }
 
-    if id:
+    if project_id:
         filters["conditions"].append(
-            {"field": "project_id", "operator": "==", "value": id}
+            {"field": "project_id", "operator": "==", "value": project_id}
         )
 
     return await table_retriever.run(
@@ -154,7 +183,7 @@ async def table_retrieval(embedding: dict, id: str, table_retriever: Any) -> dic
 
 @observe(capture_input=False)
 async def dbschema_retrieval(
-    table_retrieval: dict, embedding: dict, id: str, dbschema_retriever: Any
+    table_retrieval: dict, embedding: dict, project_id: str, dbschema_retriever: Any
 ) -> list[Document]:
     tables = table_retrieval.get("documents", [])
     table_names = []
@@ -177,9 +206,9 @@ async def dbschema_retrieval(
         ],
     }
 
-    if id:
+    if project_id:
         filters["conditions"].append(
-            {"field": "project_id", "operator": "==", "value": id}
+            {"field": "project_id", "operator": "==", "value": project_id}
         )
 
     results = await dbschema_retriever.run(
@@ -216,11 +245,8 @@ def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[str]:
     db_schemas_in_ddl = []
     for table_schema in list(db_schemas.values()):
         if table_schema["type"] == "TABLE":
-            db_schemas_in_ddl.append(
-                build_table_ddl(
-                    table_schema,
-                )
-            )
+            ddl, _ = build_table_ddl(table_schema)
+            db_schemas_in_ddl.append(ddl)
 
     return db_schemas_in_ddl
 
@@ -230,17 +256,21 @@ def prompt(
     query: str,
     construct_db_schemas: list[str],
     prompt_builder: PromptBuilder,
-    history: Optional[AskHistory] = None,
+    histories: Optional[list[AskHistory]] = None,
+    sql_samples: Optional[list[dict]] = None,
+    instructions: Optional[list[dict]] = None,
     configuration: Configuration | None = None,
 ) -> dict:
-    previous_query_summaries = (
-        [step.summary for step in history.steps if step.summary] if history else []
-    )
-
     return prompt_builder.run(
         query=query,
+        language=configuration.language,
         db_schemas=construct_db_schemas,
-        query_history=previous_query_summaries,
+        query_history=histories,
+        sql_samples=sql_samples,
+        instructions=construct_instructions(
+            instructions=instructions,
+            configuration=configuration,
+        ),
         current_time=configuration.show_current_time(),
     )
 
@@ -326,8 +356,10 @@ class IntentClassification(BasicPipeline):
     async def run(
         self,
         query: str,
-        id: Optional[str] = None,
-        history: Optional[AskHistory] = None,
+        project_id: Optional[str] = None,
+        histories: Optional[list[AskHistory]] = None,
+        sql_samples: Optional[list[dict]] = None,
+        instructions: Optional[list[dict]] = None,
         configuration: Configuration = Configuration(),
     ):
         logger.info("Intent Classification pipeline is running...")
@@ -335,8 +367,10 @@ class IntentClassification(BasicPipeline):
             ["post_process"],
             inputs={
                 "query": query,
-                "id": id or "",
-                "history": history,
+                "project_id": project_id or "",
+                "histories": histories,
+                "sql_samples": sql_samples or [],
+                "instructions": instructions or [],
                 "configuration": configuration,
                 **self._components,
             },

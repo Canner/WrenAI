@@ -31,15 +31,8 @@ def clean_generation_result(result: str) -> str:
     def _normalize_whitespace(s: str) -> str:
         return re.sub(r"\s+", " ", s).strip()
 
-    def _remove_invalid_json_chars(s: str) -> str:
-        pattern = r'(\{\s*"results"\s*:\s*\[\s*\{\s*"sql"\s*:\s*".*?"\s*\}\s*\]\s*\})'
-        matches = re.findall(pattern, s, re.DOTALL)
-        if matches:
-            return matches[0]
-        return s
-
     return (
-        _normalize_whitespace(_remove_invalid_json_chars(result))
+        _normalize_whitespace(result)
         .replace("\\n", " ")
         .replace("```sql", "")
         .replace("```json", "")
@@ -57,12 +50,14 @@ def remove_limit_statement(sql: str) -> str:
     return modified_sql
 
 
-def add_quotes(sql: str) -> Tuple[str, bool]:
+def add_quotes(sql: str) -> Tuple[str, str]:
     try:
-        quoted_sql = sqlglot.transpile(sql, read="trino", identify=True)[0]
+        quoted_sql = sqlglot.transpile(
+            sql, read="trino", identify=True, error_level=sqlglot.ErrorLevel.RAISE
+        )[0]
     except Exception as e:
         logger.exception(f"Error in sqlglot.transpile to {sql}: {e}")
 
-        return "", False
+        return "", str(e)
 
-    return quoted_sql, True
+    return quoted_sql, ""

@@ -6,34 +6,44 @@ from pathlib import Path
 from dotenv import load_dotenv
 from langfuse.decorators import langfuse_context
 
+from src.config import Settings
+
 logger = logging.getLogger("wren-ai-service")
 
 
 class CustomFormatter(logging.Formatter):
-    grey = "\x1b[38;20m"
-    yellow = "\x1b[33;20m"
-    red = "\x1b[31;20m"
-    bold_red = "\x1b[31;1m"
-    reset = "\x1b[0m"
-    format = (
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
-    )
+    def __init__(self, is_dev: bool):
+        super().__init__()
 
-    FORMATS = {
-        logging.DEBUG: yellow + format + reset,
-        logging.INFO: grey + format + reset,
-        logging.WARNING: yellow + format + reset,
-        logging.ERROR: red + format + reset,
-        logging.CRITICAL: bold_red + format + reset,
-    }
+        try:
+            if not is_dev:
+                # Imports the Cloud Logging client library
+                import google.cloud.logging
+
+                # Instantiates a client
+                client = google.cloud.logging.Client()
+
+                # Retrieves a Cloud Logging handler based on the environment
+                # you're running in and integrates the handler with the
+                # Python logging module. By default this captures all logs
+                # at INFO level and higher
+                client.setup_logging()
+        except Exception:
+            pass
 
     def format(self, record):
-        log_fmt = self.FORMATS.get(record.levelno)
-        formatter = logging.Formatter(log_fmt)
+        _LOGGING_FORMAT = "{levelname:<.1}{asctime}.{msecs:03.0f} {process} {name}:{lineno}] {message}"
+        _DATE_FMT = "%m%d %H:%M:%S"
+
+        formatter = logging.Formatter(
+            fmt=_LOGGING_FORMAT,
+            datefmt=_DATE_FMT,
+            style="{",
+        )
         return formatter.format(record)
 
 
-def setup_custom_logger(name, level_str: str):
+def setup_custom_logger(name, level_str: str, is_dev: bool):
     level_str = level_str.upper()
 
     if level_str not in logging._nameToLevel:
@@ -42,7 +52,7 @@ def setup_custom_logger(name, level_str: str):
     level = logging._nameToLevel[level_str]
 
     handler = logging.StreamHandler()
-    handler.setFormatter(CustomFormatter())
+    handler.setFormatter(CustomFormatter(is_dev))
 
     logger = logging.getLogger(name)
     logger.setLevel(level)
@@ -63,9 +73,7 @@ def remove_trailing_slash(endpoint: str) -> str:
     return endpoint.rstrip("/") if endpoint.endswith("/") else endpoint
 
 
-def init_langfuse():
-    from src.config import settings
-
+def init_langfuse(settings: Settings):
     langfuse_context.configure(
         enabled=settings.langfuse_enable,
         host=settings.langfuse_host,
@@ -115,7 +123,9 @@ def trace_metadata(func):
 
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
-        results = await func(*args, **kwargs)
+        trace_id = langfuse_context.get_current_trace_id()
+
+        results = await func(*args, **kwargs, trace_id=trace_id)
 
         addition = {}
         if isinstance(results, dict):

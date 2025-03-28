@@ -14,7 +14,9 @@ logger = logging.getLogger("wren-ai-service")
 
 # POST /v1/chart-adjustments
 class ChartAdjustmentOption(BaseModel):
-    chart_type: Literal["bar", "grouped_bar", "line", "pie", "stacked_bar", "area"]
+    chart_type: Literal[
+        "bar", "grouped_bar", "line", "pie", "stacked_bar", "area", "multi_line"
+    ]
     x_axis: Optional[str] = None
     y_axis: Optional[str] = None
     x_offset: Optional[str] = None
@@ -75,7 +77,9 @@ class ChartAdjustmentResultRequest(BaseModel):
 
 class ChartAdjustmentResult(BaseModel):
     reasoning: str
-    chart_type: Literal["line", "bar", "pie", "grouped_bar", "stacked_bar", "area", ""]
+    chart_type: Literal[
+        "line", "bar", "pie", "grouped_bar", "stacked_bar", "area", "multi_line", ""
+    ]  # empty string for no chart
     chart_schema: dict
 
 
@@ -85,7 +89,7 @@ class ChartAdjustmentResultResponse(BaseModel):
     ]
     response: Optional[ChartAdjustmentResult] = None
     error: Optional[ChartAdjustmentError] = None
-
+    trace_id: Optional[str] = None
 
 class ChartAdjustmentService:
     def __init__(
@@ -114,6 +118,7 @@ class ChartAdjustmentService:
         chart_adjustment_request: ChartAdjustmentRequest,
         **kwargs,
     ):
+        trace_id = kwargs.get("trace_id")
         results = {
             "chart_adjustment_result": {},
             "metadata": {
@@ -126,16 +131,20 @@ class ChartAdjustmentService:
             query_id = chart_adjustment_request.query_id
 
             self._chart_adjustment_results[query_id] = ChartAdjustmentResultResponse(
-                status="fetching"
+                status="fetching",
+                trace_id=trace_id,
             )
 
-            sql_data = await self._pipelines["sql_executor"].run(
-                sql=chart_adjustment_request.sql,
-                project_id=chart_adjustment_request.project_id,
-            )
+            sql_data = (
+                await self._pipelines["sql_executor"].run(
+                    sql=chart_adjustment_request.sql,
+                    project_id=chart_adjustment_request.project_id,
+                )
+            )["execute_sql"]["results"]
 
             self._chart_adjustment_results[query_id] = ChartAdjustmentResultResponse(
-                status="generating"
+                status="generating",
+                trace_id=trace_id,
             )
 
             chart_adjustment_result = await self._pipelines["chart_adjustment"].run(
@@ -143,7 +152,7 @@ class ChartAdjustmentService:
                 sql=chart_adjustment_request.sql,
                 adjustment_option=chart_adjustment_request.adjustment_option,
                 chart_schema=chart_adjustment_request.chart_schema,
-                data=sql_data["execute_sql"],
+                data=sql_data,
                 language=chart_adjustment_request.configurations.language,
             )
             chart_result = chart_adjustment_result["post_process"]["results"]
@@ -158,6 +167,7 @@ class ChartAdjustmentService:
                     error=ChartAdjustmentError(
                         code="NO_CHART", message="chart generation failed"
                     ),
+                    trace_id=trace_id,
                 )
                 results["metadata"]["error_type"] = "NO_CHART"
                 results["metadata"]["error_message"] = "chart generation failed"
@@ -167,6 +177,7 @@ class ChartAdjustmentService:
                 ] = ChartAdjustmentResultResponse(
                     status="finished",
                     response=ChartAdjustmentResult(**chart_result),
+                    trace_id=trace_id,
                 )
                 results["chart_adjustment_result"] = chart_result
 
@@ -182,6 +193,7 @@ class ChartAdjustmentService:
                     code="OTHERS",
                     message=str(e),
                 ),
+                trace_id=trace_id,
             )
 
             results["metadata"]["error_type"] = "OTHERS"
