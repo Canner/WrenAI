@@ -329,6 +329,24 @@ class AskService:
                             )
                             results["metadata"]["type"] = "GENERAL"
                             return results
+                        elif intent == "USER_GUIDE":
+                            asyncio.create_task(
+                                self._pipelines["user_guide_assistance"].run(
+                                    query=user_query,
+                                    language=ask_request.configurations.language,
+                                    query_id=ask_request.query_id,
+                                )
+                            )
+
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="finished",
+                                type="GENERAL",
+                                rephrased_question=rephrased_question,
+                                intent_reasoning=intent_reasoning,
+                                trace_id=trace_id,
+                            )
+                            results["metadata"]["type"] = "GENERAL"
+                            return results
                         else:
                             self._ask_results[query_id] = AskResultResponse(
                                 status="understanding",
@@ -619,8 +637,17 @@ class AskService:
     ):
         if self._ask_results.get(query_id):
             if self._ask_results.get(query_id).type == "GENERAL":
+                # only one of the two pipelines will be used
                 async for chunk in self._pipelines[
                     "data_assistance"
+                ].get_streaming_results(query_id):
+                    event = SSEEvent(
+                        data=SSEEvent.SSEEventMessage(message=chunk),
+                    )
+                    yield event.serialize()
+
+                async for chunk in self._pipelines[
+                    "user_guide_assistance"
                 ].get_streaming_results(query_id):
                     event = SSEEvent(
                         data=SSEEvent.SSEEventMessage(message=chunk),

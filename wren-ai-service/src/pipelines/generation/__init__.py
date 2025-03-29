@@ -16,6 +16,7 @@ from .sql_generation_reasoning import SQLGenerationReasoning
 from .sql_question import SQLQuestion
 from .sql_regeneration import SQLRegeneration
 from .sql_summary import SQLSummary
+from .user_guide_assistance import UserGuideAssistance
 
 __all__ = [
     "ChartGeneration",
@@ -33,6 +34,7 @@ __all__ = [
     "SQLGeneration",
     "SQLGenerationReasoning",
     "SQLSummary",
+    "UserGuideAssistance",
     "SQLQuestion",
     "SQLRegeneration",
     "FollowUpSQLGenerationReasoning",
