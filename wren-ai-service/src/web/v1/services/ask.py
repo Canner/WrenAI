@@ -332,7 +332,7 @@ class AskService:
                         elif intent == "USER_GUIDE":
                             asyncio.create_task(
                                 self._pipelines["user_guide_assistance"].run(
-                                    query=ask_request.query,
+                                    query=user_query,
                                     language=ask_request.configurations.language,
                                     query_id=ask_request.query_id,
                                 )
@@ -341,6 +341,9 @@ class AskService:
                             self._ask_results[query_id] = AskResultResponse(
                                 status="finished",
                                 type="GENERAL",
+                                rephrased_question=rephrased_question,
+                                intent_reasoning=intent_reasoning,
+                                trace_id=trace_id,
                             )
                             results["metadata"]["type"] = "GENERAL"
                             return results
