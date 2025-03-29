@@ -79,7 +79,7 @@ class AskResultRequest(BaseModel):
     query_id: str
 
 
-class AskResultResponse(BaseModel):
+class _AskResultResponse(BaseModel):
     status: Literal[
         "understanding",
         "searching",
@@ -99,6 +99,13 @@ class AskResultResponse(BaseModel):
     invalid_sql: Optional[str] = None
     error: Optional[AskError] = None
     trace_id: Optional[str] = None
+    is_followup: Optional[bool] = False
+    is_user_guide: Optional[bool] = False
+
+
+class AskResultResponse(_AskResultResponse):
+    is_followup: Optional[bool] = Field(False, exclude=True)
+    is_user_guide: Optional[bool] = Field(False, exclude=True)
 
 
 # POST /v1/ask-feedbacks
@@ -228,6 +235,8 @@ class AskService:
                     status="understanding",
                     trace_id=trace_id,
                 )
+                if histories:
+                    self._ask_results[query_id].is_followup = True
 
                 historical_question = await self._pipelines["historical_question"].run(
                     query=user_query,
@@ -344,6 +353,7 @@ class AskService:
                                 rephrased_question=rephrased_question,
                                 intent_reasoning=intent_reasoning,
                                 trace_id=trace_id,
+                                is_user_guide=True,
                             )
                             results["metadata"]["type"] = "GENERAL"
                             return results
@@ -637,39 +647,40 @@ class AskService:
     ):
         if self._ask_results.get(query_id):
             if self._ask_results.get(query_id).type == "GENERAL":
-                # only one of the two pipelines will be used
-                async for chunk in self._pipelines[
-                    "data_assistance"
-                ].get_streaming_results(query_id):
-                    event = SSEEvent(
-                        data=SSEEvent.SSEEventMessage(message=chunk),
-                    )
-                    yield event.serialize()
+                if self._ask_results.get(query_id).is_user_guide:
+                    async for chunk in self._pipelines[
+                        "user_guide_assistance"
+                    ].get_streaming_results(query_id):
+                        event = SSEEvent(
+                            data=SSEEvent.SSEEventMessage(message=chunk),
+                        )
+                        yield event.serialize()
+                else:
+                    async for chunk in self._pipelines[
+                        "data_assistance"
+                    ].get_streaming_results(query_id):
+                        event = SSEEvent(
+                            data=SSEEvent.SSEEventMessage(message=chunk),
+                        )
+                        yield event.serialize()
 
-                async for chunk in self._pipelines[
-                    "user_guide_assistance"
-                ].get_streaming_results(query_id):
-                    event = SSEEvent(
-                        data=SSEEvent.SSEEventMessage(message=chunk),
-                    )
-                    yield event.serialize()
             elif self._ask_results.get(query_id).status == "planning":
-                # only one of the two pipelines will be used
-                async for chunk in self._pipelines[
-                    "sql_generation_reasoning"
-                ].get_streaming_results(query_id):
-                    event = SSEEvent(
-                        data=SSEEvent.SSEEventMessage(message=chunk),
-                    )
-                    yield event.serialize()
-
-                async for chunk in self._pipelines[
-                    "followup_sql_generation_reasoning"
-                ].get_streaming_results(query_id):
-                    event = SSEEvent(
-                        data=SSEEvent.SSEEventMessage(message=chunk),
-                    )
-                    yield event.serialize()
+                if self._ask_results.get(query_id).is_followup:
+                    async for chunk in self._pipelines[
+                        "followup_sql_generation_reasoning"
+                    ].get_streaming_results(query_id):
+                        event = SSEEvent(
+                            data=SSEEvent.SSEEventMessage(message=chunk),
+                        )
+                        yield event.serialize()
+                else:
+                    async for chunk in self._pipelines[
+                        "sql_generation_reasoning"
+                    ].get_streaming_results(query_id):
+                        event = SSEEvent(
+                            data=SSEEvent.SSEEventMessage(message=chunk),
+                        )
+                        yield event.serialize()
 
     @observe(name="Ask Feedback")
     @trace_metadata

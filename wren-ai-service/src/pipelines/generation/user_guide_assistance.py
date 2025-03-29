@@ -27,6 +27,7 @@ You need to understand the user question and the user guide, and then answer the
 3. If you think you cannot answer the user question given the user guide, you should simply say "I don't know".
 4. You should add citations to the user guide(document url) in your answer.
 5. You should provide your answer in Markdown format.
+6. Link markdown format must be like this: `<a href="[link_url]" target="_blank">[link_text]</a>`
 """
 
 user_guide_assistance_user_prompt_template = """
@@ -144,8 +145,7 @@ class UserGuideAssistance(BasicPipeline):
             return await self._user_queues[query_id].get()
 
         if query_id not in self._user_queues:
-            yield ""
-            return
+            self._user_queues[query_id] = asyncio.Queue()
 
         while True:
             try:

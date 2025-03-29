@@ -115,8 +115,7 @@ class DataAssistance(BasicPipeline):
             return await self._user_queues[query_id].get()
 
         if query_id not in self._user_queues:
-            yield ""
-            return
+            self._user_queues[query_id] = asyncio.Queue()
 
         while True:
             try:
