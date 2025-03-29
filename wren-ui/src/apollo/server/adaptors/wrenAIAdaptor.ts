@@ -48,6 +48,7 @@ const getAIServiceError = (error: any) => {
 
 export interface IWrenAIAdaptor {
   deploy(deployData: DeployData): Promise<WrenAIDeployResponse>;
+  delete(projectId: number): Promise<void>;
 
   /**
    * Ask AI service a question.
@@ -126,6 +127,31 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   constructor({ wrenAIBaseEndpoint }: { wrenAIBaseEndpoint: string }) {
     this.wrenAIBaseEndpoint = wrenAIBaseEndpoint;
   }
+
+  public async delete(projectId: number): Promise<void> {
+    try {
+      if (!projectId) {
+        throw new Error('Project ID is required');
+      }
+      const url = `${this.wrenAIBaseEndpoint}/v1/semantics`;
+      const response = await axios.delete(url, {
+        params: {
+          project_id: projectId.toString(),
+        },
+      });
+
+      if (response.status === 200) {
+        logger.info(`Wren AI: Deleted semantics for project ${projectId}`);
+      } else {
+        throw new Error(`Failed to delete semantics. ${response.data?.error}`);
+      }
+    } catch (error: any) {
+      throw new Error(
+        `Wren AI: Failed to delete semantics: ${getAIServiceError(error)}`,
+      );
+    }
+  }
+
   public async deploySqlPair(
     projectId: number,
     sqlPair: Partial<SqlPair>,
