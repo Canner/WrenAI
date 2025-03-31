@@ -657,8 +657,9 @@ export const typeDefs = gql`
   }
 
   input AdjustThreadResponseInput {
-    tables: [String!]!
-    sqlGenerationReasoning: String!
+    tables: [String!]
+    sqlGenerationReasoning: String
+    sql: String
   }
 
   input PreviewDataInput {
@@ -714,6 +715,7 @@ export const typeDefs = gql`
 
   enum ThreadResponseAdjustmentType {
     REASONING
+    APPLY_SQL
   }
 
   type ThreadResponseAdjustment {
@@ -723,7 +725,7 @@ export const typeDefs = gql`
 
   type AdjustmentTask {
     queryId: String
-    status: AskingTaskStatus!
+    status: AskingTaskStatus
     error: Error
     sql: String
     traceId: String

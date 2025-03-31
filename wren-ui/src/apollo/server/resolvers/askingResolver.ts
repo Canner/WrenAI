@@ -469,13 +469,23 @@ export class AskingResolver {
     _root: any,
     args: {
       responseId: number;
-      data: { tables: string[]; sqlGenerationReasoning: string };
+      data: {
+        tables?: string[];
+        sqlGenerationReasoning?: string;
+        sql?: string;
+      };
     },
     ctx: IContext,
   ): Promise<ThreadResponse> {
     const { responseId, data } = args;
     const askingService = ctx.askingService;
     const project = await ctx.projectService.getCurrentProject();
+
+    if (data.sql) {
+      return askingService.adjustThreadResponseWithSQL(responseId, {
+        sql: data.sql,
+      });
+    }
 
     return askingService.adjustThreadResponseAnswer(
       responseId,
@@ -714,6 +724,7 @@ export class AskingResolver {
       const adjustmentTask = await askingService.getAdjustmentTaskById(
         parent.askingTaskId,
       );
+      if (!adjustmentTask) return null;
       return {
         queryId: adjustmentTask?.queryId,
         status: adjustmentTask?.status,

@@ -17,6 +17,7 @@ import { IThreadRepository, Thread } from '../repositories/threadRepository';
 import {
   IThreadResponseRepository,
   ThreadResponse,
+  ThreadResponseAdjustmentType,
 } from '../repositories/threadResponseRepository';
 import { getLogger } from '@server/utils';
 import { isEmpty, isNil } from 'lodash';
@@ -108,6 +109,10 @@ export interface AdjustmentInput {
   projectId: number;
 }
 
+export interface AdjustmentApplySqlInput {
+  sql: string;
+}
+
 export interface IAskingService {
   /**
    * Asking task.
@@ -168,6 +173,10 @@ export interface IAskingService {
     threadResponseId: number,
     input: ChartAdjustmentOption,
     configurations: { language: string },
+  ): Promise<ThreadResponse>;
+  adjustThreadResponseWithSQL(
+    threadResponseId: number,
+    input: AdjustmentApplySqlInput,
   ): Promise<ThreadResponse>;
   adjustThreadResponseAnswer(
     threadResponseId: number,
@@ -1048,6 +1057,31 @@ export class AskingService implements IAskingService {
     const { id } = await this.projectService.getCurrentProject();
     const lastDeploy = await this.deployService.getLastDeployment(id);
     return lastDeploy.hash;
+  }
+
+  public async adjustThreadResponseWithSQL(
+    threadResponseId: number,
+    input: AdjustmentApplySqlInput,
+  ): Promise<ThreadResponse> {
+    const response = await this.threadResponseRepository.findOneBy({
+      id: threadResponseId,
+    });
+    if (!response) {
+      throw new Error(`Thread response ${threadResponseId} not found`);
+    }
+
+    return await this.threadResponseRepository.createOne({
+      sql: input.sql,
+      threadId: response.threadId,
+      question: response.question,
+      adjustment: {
+        type: ThreadResponseAdjustmentType.APPLY_SQL,
+        payload: {
+          originalThreadResponseId: response.id,
+          sql: input.sql,
+        },
+      },
+    });
   }
 
   public async adjustThreadResponseAnswer(

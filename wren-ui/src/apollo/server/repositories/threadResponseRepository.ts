@@ -41,23 +41,26 @@ export interface ThreadResponseChartDetail {
 
 export enum ThreadResponseAdjustmentType {
   REASONING = 'REASONING',
+  APPLY_SQL = 'APPLY_SQL',
 }
 
 export type ThreadResponseAdjustmentReasoningPayload = {
-  originalThreadResponseId: number;
+  originalThreadResponseId?: number;
   retrievedTables?: string[];
   sqlGenerationReasoning?: string;
 };
 
-export type GenericThreadResponseAdjustment<T, P> = {
-  type: T;
-  payload?: P;
+export type ThreadResponseAdjustmentApplySqlPayload = {
+  originalThreadResponseId?: number;
+  sql?: string;
 };
 
-export type ThreadResponseAdjustment = GenericThreadResponseAdjustment<
-  ThreadResponseAdjustmentType,
-  ThreadResponseAdjustmentReasoningPayload
->;
+export interface ThreadResponseAdjustment {
+  type: ThreadResponseAdjustmentType;
+  // todo: I think we could use a better way to do this instead of using a union type
+  payload: ThreadResponseAdjustmentReasoningPayload &
+    ThreadResponseAdjustmentApplySqlPayload;
+}
 
 export interface ThreadResponse {
   id: number; // ID
