@@ -492,12 +492,12 @@ export class AskingResolver {
 
   public async cancelAdjustThreadResponseAnswer(
     _root: any,
-    args: { responseId: number },
+    args: { taskId: string },
     ctx: IContext,
   ): Promise<boolean> {
-    const { responseId } = args;
+    const { taskId } = args;
     const askingService = ctx.askingService;
-    await askingService.cancelAdjustThreadResponseAnswer(responseId);
+    await askingService.cancelAdjustThreadResponseAnswer(taskId);
     return true;
   }
 

@@ -1098,8 +1098,8 @@ export const typeDefs = gql`
       responseId: Int!
       data: AdjustThreadResponseInput!
     ): ThreadResponse!
-    cancelAdjustmentTask(queryId: String!): Boolean!
-    rerunAdjustmentTask(responseId: Int!): Task!
+    cancelAdjustmentTask(taskId: String!): Boolean!
+    rerunAdjustmentTask(responseId: Int!): Boolean!
 
     # Settings
     resetCurrentProject: Boolean!

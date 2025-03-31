@@ -174,7 +174,7 @@ export interface IAskingService {
     input: AdjustmentInput,
     configurations: { language: string },
   ): Promise<ThreadResponse>;
-  cancelAdjustThreadResponseAnswer(threadResponseId: number): Promise<void>;
+  cancelAdjustThreadResponseAnswer(taskId: string): Promise<void>;
   rerunAdjustThreadResponseAnswer(
     threadResponseId: number,
     projectId: number,
@@ -1077,20 +1077,9 @@ export class AskingService implements IAskingService {
     return createdThreadResponse;
   }
 
-  public async cancelAdjustThreadResponseAnswer(
-    threadResponseId: number,
-  ): Promise<void> {
-    const askingTask = await this.askingTaskRepository.findOneBy({
-      threadResponseId,
-    });
-    if (!askingTask) {
-      throw new Error(`Asking task ${threadResponseId} not found`);
-    }
-
+  public async cancelAdjustThreadResponseAnswer(taskId: string): Promise<void> {
     // call cancelAskFeedback on AI service
-    await this.adjustmentBackgroundTracker.cancelAdjustmentTask(
-      askingTask.queryId,
-    );
+    await this.adjustmentBackgroundTracker.cancelAdjustmentTask(taskId);
   }
 
   public async rerunAdjustThreadResponseAnswer(
