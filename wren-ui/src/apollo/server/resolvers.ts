@@ -34,6 +34,9 @@ const resolvers = {
     suggestedQuestions: askingResolver.getSuggestedQuestions,
     instantRecommendedQuestions: askingResolver.getInstantRecommendedQuestions,
 
+    // Adjustment
+    adjustmentTask: askingResolver.getAdjustmentTask,
+
     // Thread
     thread: askingResolver.getThread,
     threads: askingResolver.listThreads,
@@ -96,6 +99,11 @@ const resolvers = {
     createInstantRecommendedQuestions:
       askingResolver.createInstantRecommendedQuestions,
     rerunAskingTask: askingResolver.rerunAskingTask,
+
+    // Adjustment
+    adjustThreadResponse: askingResolver.adjustThreadResponse,
+    cancelAdjustmentTask: askingResolver.cancelAdjustThreadResponseAnswer,
+    rerunAdjustmentTask: askingResolver.rerunAdjustThreadResponseAnswer,
 
     // Thread
     createThread: askingResolver.createThread,

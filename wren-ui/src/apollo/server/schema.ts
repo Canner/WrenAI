@@ -656,6 +656,11 @@ export const typeDefs = gql`
     theta: String
   }
 
+  input AdjustThreadResponseInput {
+    tables: [String!]!
+    sqlGenerationReasoning: String!
+  }
+
   input PreviewDataInput {
     responseId: Int!
     # Optional, only used for preview data of a single step
@@ -707,6 +712,23 @@ export const typeDefs = gql`
     adjustment: Boolean
   }
 
+  enum ThreadResponseAdjustmentType {
+    REASONING
+  }
+
+  type ThreadResponseAdjustment {
+    type: ThreadResponseAdjustmentType!
+    payload: JSON
+  }
+
+  type AdjustmentTask {
+    queryId: String
+    status: AskingTaskStatus!
+    error: Error
+    sql: String
+    traceId: String
+  }
+
   type ThreadResponse {
     id: Int!
     threadId: Int!
@@ -717,6 +739,8 @@ export const typeDefs = gql`
     answerDetail: ThreadResponseAnswerDetail
     chartDetail: ThreadResponseChartDetail
     askingTask: AskingTask
+    adjustment: ThreadResponseAdjustment
+    adjustmentTask: AdjustmentTask
   }
 
   # Thread only consists of basic information of a thread
@@ -955,6 +979,9 @@ export const typeDefs = gql`
     threadResponse(responseId: Int!): ThreadResponse!
     nativeSql(responseId: Int!): String!
 
+    # Adjustment
+    adjustmentTask(taskId: String!): AdjustmentTask
+
     # Settings
     settings: Settings!
 
@@ -1065,6 +1092,14 @@ export const typeDefs = gql`
       responseId: Int!
       data: AdjustThreadResponseChartInput!
     ): ThreadResponse!
+
+    # Adjustment
+    adjustThreadResponse(
+      responseId: Int!
+      data: AdjustThreadResponseInput!
+    ): ThreadResponse!
+    cancelAdjustmentTask(queryId: String!): Boolean!
+    rerunAdjustmentTask(responseId: Int!): Task!
 
     # Settings
     resetCurrentProject: Boolean!

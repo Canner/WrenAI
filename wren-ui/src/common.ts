@@ -128,6 +128,7 @@ export const initComponents = () => {
     queryService,
     mdlService,
     askingTaskTracker,
+    askingTaskRepository,
   });
   const dashboardService = new DashboardService({
     projectService,

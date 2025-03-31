@@ -9,6 +9,7 @@ import {
   ChartStatus,
   ChartAdjustmentOption,
   WrenAILanguage,
+  ProjectConfigurations,
 } from '@server/models/adaptor';
 import { IDeployService } from './deployService';
 import { IProjectService } from './projectService';
@@ -25,13 +26,19 @@ import {
   TelemetryEvent,
   WrenService,
 } from '../telemetry/telemetry';
-import { IViewRepository, Project } from '../repositories';
+import {
+  IAskingTaskRepository,
+  IViewRepository,
+  Project,
+} from '../repositories';
 import { IQueryService, PreviewDataResponse } from './queryService';
 import { IMDLService } from './mdlService';
 import {
   ThreadRecommendQuestionBackgroundTracker,
   ChartBackgroundTracker,
   ChartAdjustmentBackgroundTracker,
+  AdjustmentBackgroundTaskTracker,
+  TrackedAdjustmentResult,
 } from '../backgrounds';
 import { getConfig } from '@server/config';
 import { TextBasedAnswerBackgroundTracker } from '../backgrounds/textBasedAnswerBackgroundTracker';
@@ -92,6 +99,13 @@ export enum ThreadResponseAnswerStatus {
   FINISHED = 'FINISHED',
   FAILED = 'FAILED',
   INTERRUPTED = 'INTERRUPTED',
+}
+
+// adjustment input
+export interface AdjustmentInput {
+  tables: string[];
+  sqlGenerationReasoning: string;
+  projectId: number;
 }
 
 export interface IAskingService {
@@ -155,6 +169,19 @@ export interface IAskingService {
     input: ChartAdjustmentOption,
     configurations: { language: string },
   ): Promise<ThreadResponse>;
+  adjustThreadResponseAnswer(
+    threadResponseId: number,
+    input: AdjustmentInput,
+    configurations: { language: string },
+  ): Promise<ThreadResponse>;
+  cancelAdjustThreadResponseAnswer(threadResponseId: number): Promise<void>;
+  rerunAdjustThreadResponseAnswer(
+    threadResponseId: number,
+    projectId: number,
+    configurations: ProjectConfigurations,
+  ): Promise<{ queryId: string }>;
+  getAdjustmentTask(taskId: string): Promise<TrackedAdjustmentResult>;
+  getAdjustmentTaskById(id: number): Promise<TrackedAdjustmentResult>;
   changeThreadResponseAnswerDetailStatus(
     responseId: number,
     status: ThreadResponseAnswerStatus,
@@ -379,6 +406,8 @@ export class AskingService implements IAskingService {
   private telemetry: PostHogTelemetry;
   private mdlService: IMDLService;
   private askingTaskTracker: IAskingTaskTracker;
+  private askingTaskRepository: IAskingTaskRepository;
+  private adjustmentBackgroundTracker: AdjustmentBackgroundTaskTracker;
 
   constructor({
     telemetry,
@@ -388,6 +417,7 @@ export class AskingService implements IAskingService {
     viewRepository,
     threadRepository,
     threadResponseRepository,
+    askingTaskRepository,
     queryService,
     mdlService,
     askingTaskTracker,
@@ -399,6 +429,7 @@ export class AskingService implements IAskingService {
     viewRepository: IViewRepository;
     threadRepository: IThreadRepository;
     threadResponseRepository: IThreadResponseRepository;
+    askingTaskRepository: IAskingTaskRepository;
     queryService: IQueryService;
     mdlService: IMDLService;
     askingTaskTracker: IAskingTaskTracker;
@@ -441,7 +472,13 @@ export class AskingService implements IAskingService {
         wrenAIAdaptor,
         threadRepository,
       });
+    this.adjustmentBackgroundTracker = new AdjustmentBackgroundTaskTracker({
+      wrenAIAdaptor,
+      askingTaskRepository,
+      threadResponseRepository,
+    });
 
+    this.askingTaskRepository = askingTaskRepository;
     this.mdlService = mdlService;
     this.askingTaskTracker = askingTaskTracker;
   }
@@ -1011,6 +1048,86 @@ export class AskingService implements IAskingService {
     const { id } = await this.projectService.getCurrentProject();
     const lastDeploy = await this.deployService.getLastDeployment(id);
     return lastDeploy.hash;
+  }
+
+  public async adjustThreadResponseAnswer(
+    threadResponseId: number,
+    input: AdjustmentInput,
+    configurations: { language: string },
+  ): Promise<ThreadResponse> {
+    const originalThreadResponse =
+      await this.threadResponseRepository.findOneBy({
+        id: threadResponseId,
+      });
+    if (!originalThreadResponse) {
+      throw new Error(`Thread response ${threadResponseId} not found`);
+    }
+
+    const { createdThreadResponse } =
+      await this.adjustmentBackgroundTracker.createAdjustmentTask({
+        threadId: originalThreadResponse.threadId,
+        tables: input.tables,
+        sqlGenerationReasoning: input.sqlGenerationReasoning,
+        sql: originalThreadResponse.sql,
+        projectId: input.projectId,
+        configurations,
+        question: originalThreadResponse.question,
+        originalThreadResponseId: originalThreadResponse.id,
+      });
+    return createdThreadResponse;
+  }
+
+  public async cancelAdjustThreadResponseAnswer(
+    threadResponseId: number,
+  ): Promise<void> {
+    const askingTask = await this.askingTaskRepository.findOneBy({
+      threadResponseId,
+    });
+    if (!askingTask) {
+      throw new Error(`Asking task ${threadResponseId} not found`);
+    }
+
+    // call cancelAskFeedback on AI service
+    await this.adjustmentBackgroundTracker.cancelAdjustmentTask(
+      askingTask.queryId,
+    );
+  }
+
+  public async rerunAdjustThreadResponseAnswer(
+    threadResponseId: number,
+    projectId: number,
+    configurations: ProjectConfigurations,
+  ): Promise<{ queryId: string }> {
+    const threadResponse = await this.threadResponseRepository.findOneBy({
+      id: threadResponseId,
+    });
+    if (!threadResponse) {
+      throw new Error(`Thread response ${threadResponseId} not found`);
+    }
+    const adjustment = threadResponse.adjustment;
+    if (!adjustment) {
+      throw new Error(`Thread response ${threadResponseId} has no adjustment`);
+    }
+    const { queryId } =
+      await this.adjustmentBackgroundTracker.rerunAdjustmentTask({
+        threadId: threadResponse.threadId,
+        threadResponseId,
+        projectId,
+        configurations,
+      });
+    return { queryId };
+  }
+
+  public async getAdjustmentTask(
+    taskId: string,
+  ): Promise<TrackedAdjustmentResult | null> {
+    return this.adjustmentBackgroundTracker.getAdjustmentResult(taskId);
+  }
+
+  public async getAdjustmentTaskById(
+    id: number,
+  ): Promise<TrackedAdjustmentResult | null> {
+    return this.adjustmentBackgroundTracker.getAdjustmentResultById(id);
   }
 
   /**
