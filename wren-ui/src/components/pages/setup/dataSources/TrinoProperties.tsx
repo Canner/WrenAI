@@ -89,6 +89,42 @@ export default function TrinoProperties({ mode }: Props) {
       >
         <Input.Password placeholder="Input password" />
       </Form.Item>
+      <Form.Item
+        label="OAuth2 Client ID"
+        name="clientId"
+        rules={[
+          {
+            required: false,
+            message: ERROR_TEXTS.CONNECTION.CLIENT_ID.REQUIRED,
+          },
+        ]}
+      >
+        <Input placeholder="OAuth2 Client ID" />
+      </Form.Item>
+      <Form.Item
+        label="OAuth2 Client Secret"
+        name="clientSecret"
+        rules={[
+          {
+            required: false,
+            message: ERROR_TEXTS.CONNECTION.CLIENT_SECRET.REQUIRED,
+          },
+        ]}
+      >
+        <Input.Password placeholder="OAuth2 Client Secret" />
+      </Form.Item>
+      <Form.Item
+        label="OAuth2 Token URL"
+        name="tokenUrl"
+        rules={[
+          {
+            required: false,
+            message: ERROR_TEXTS.CONNECTION.TOKEN_URL.REQUIRED,
+          },
+        ]}
+      >
+        <Input placeholder="OAuth2 Token URL" />
+      </Form.Item>
       <Form.Item label="Use SSL" name="ssl" valuePropName="checked">
         <Switch />
       </Form.Item>
