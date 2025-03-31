@@ -4,6 +4,7 @@ import styled from 'styled-components';
 import { Form, Modal, Select, Tag } from 'antd';
 import QuestionCircleOutlined from '@ant-design/icons/QuestionCircleOutlined';
 import { ERROR_TEXTS } from '@/utils/error';
+import useMentions from '@/hooks/useMentions';
 import { ModalAction } from '@/hooks/useModalAction';
 import MarkdownEditor from '@/components/editor/MarkdownEditor';
 import { useListModelsQuery } from '@/apollo/client/graphql/model.generated';
@@ -34,7 +35,8 @@ export default function AdjustReasoningStepsModal(props: Props) {
   const { visible, defaultValue, loading, onSubmit, onClose } = props;
   const [form] = Form.useForm();
 
-  const listModelsResult = useListModelsQuery();
+  const { mentions } = useMentions({ includeColumns: true, skip: !visible });
+  const listModelsResult = useListModelsQuery({ skip: !visible });
   const modelIdMap = keyBy(listModelsResult.data?.listModels, 'id');
   const modelOptions = useMemo(() => {
     return listModelsResult.data?.listModels.map((model) => ({
@@ -54,13 +56,6 @@ export default function AdjustReasoningStepsModal(props: Props) {
     }, []);
     form.setFieldsValue({ ...defaultValue, retrievedTables });
   }, [form, defaultValue, visible, listModelsResult.data?.listModels]);
-
-  const mentions = useMemo(() => {
-    return listModelsResult.data?.listModels.map((model) => ({
-      label: model.displayName,
-      value: model.referenceName,
-    }));
-  }, [listModelsResult.data?.listModels])
 
   const tagRender = (props) => {
     const { value, closable, onClose } = props;
