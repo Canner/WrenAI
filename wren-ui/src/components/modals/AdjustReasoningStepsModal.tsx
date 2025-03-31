@@ -55,6 +55,13 @@ export default function AdjustReasoningStepsModal(props: Props) {
     form.setFieldsValue({ ...defaultValue, retrievedTables });
   }, [form, defaultValue, visible, listModelsResult.data?.listModels]);
 
+  const mentions = useMemo(() => {
+    return listModelsResult.data?.listModels.map((model) => ({
+      label: model.displayName,
+      value: model.referenceName,
+    }));
+  }, [listModelsResult.data?.listModels])
+
   const tagRender = (props) => {
     const { value, closable, onClose } = props;
     const model = modelIdMap[value];
@@ -165,7 +172,7 @@ export default function AdjustReasoningStepsModal(props: Props) {
               },
             ]}
           >
-            <MarkdownEditor maxLength={3000} />
+            <MarkdownEditor maxLength={3000} mentions={mentions} />
           </Form.Item>
         </Form.Item>
       </Form>

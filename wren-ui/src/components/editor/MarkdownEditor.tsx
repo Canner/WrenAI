@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { Button, Input } from 'antd';
+import { Button, Mentions } from 'antd';
 import styled from 'styled-components';
 import { useState, useContext } from 'react';
 import ReadOutlined from '@ant-design/icons/ReadOutlined';
@@ -41,7 +41,7 @@ const LinkButton = styled(Button)`
   color: var(--gray-7);
 `;
 
-const StyledTextArea = styled(Input.TextArea)`
+const StyledTextArea = styled(Mentions)`
   border: none;
   border-radius: 0;
 `;
@@ -51,10 +51,22 @@ interface Props {
   onChange?: (value: string) => void;
   maxLength?: number;
   autoFocus?: boolean;
+  mentions?: {
+    label: string;
+    value: string;
+  }[];
 }
 
+const MentionOption = (props: { label: string; value: string }) => {
+  return (
+    <Mentions.Option key={props.value} value={props.value}>
+      {props.label}
+    </Mentions.Option>
+  );
+};
+
 export default function MarkdownEditor(props: Props) {
-  const { value, onChange, maxLength, autoFocus } = props;
+  const { value, onChange, maxLength, autoFocus, mentions } = props;
   const [focused, setFocused] = useState<boolean>(false);
   const [isPreviewMode, setIsPreviewMode] = useState<boolean>(false);
 
@@ -129,7 +141,9 @@ export default function MarkdownEditor(props: Props) {
             onBlur={() => setFocused(false)}
             value={value}
             maxLength={maxLength}
-          />
+          >
+            {(mentions || []).map(MentionOption)}
+          </StyledTextArea>
         )}
       </OverflowContainer>
     </Wrapper>
