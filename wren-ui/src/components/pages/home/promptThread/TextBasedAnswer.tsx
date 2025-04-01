@@ -124,10 +124,9 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
     const { type, data } = payload;
     if (type === MORE_ACTION.ADJUST_STEPS) {
       onOpenAdjustReasoningStepsModal({
-        responseId: threadResponse.id,
-        retrievedTables: threadResponse.askingTask.retrievedTables,
-        sqlGenerationReasoning:
-          threadResponse.askingTask.sqlGenerationReasoning,
+        responseId: data.responseId,
+        retrievedTables: data.retrievedTables,
+        sqlGenerationReasoning: data.sqlGenerationReasoning,
       });
     } else if (type === MORE_ACTION.ADJUST_SQL) {
       onOpenAdjustSQLModal({ sql: data.sql });
@@ -157,7 +156,13 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
         <div className="text-right mb-4">
           <AdjustAnswerDropdown
             onMoreClick={onMoreClick}
-            data={{ sql: threadResponse.sql }}
+            data={{
+              sql: threadResponse.sql,
+              retrievedTables: threadResponse.askingTask?.retrievedTables || [],
+              sqlGenerationReasoning:
+                threadResponse.askingTask?.sqlGenerationReasoning || '',
+              responseId: threadResponse.id,
+            }}
             onDropdownVisibleChange={adjustResultsDropdown.onVisibleChange}
           >
             <Button
