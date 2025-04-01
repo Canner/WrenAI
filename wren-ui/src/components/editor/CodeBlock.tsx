@@ -48,6 +48,10 @@ const CopyText = styled(Typography.Text)`
   .ant-typography-copy {
     font-size: 12px;
   }
+
+  .ant-btn:not(:hover) {
+    color: var(--gray-8);
+  }
 `;
 
 interface Props {
