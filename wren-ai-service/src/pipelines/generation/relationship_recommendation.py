@@ -20,11 +20,26 @@ logger = logging.getLogger("wren-ai-service")
 ## Start of Pipeline
 @observe(capture_input=False)
 def cleaned_models(mdl: dict) -> dict:
+    def remove_display_name(d: dict) -> dict:
+        if "property" in d and isinstance(d["property"], dict):
+            d["property"] = d["property"].copy()
+            d["property"].pop("displayName", None)
+        return d
+
     def column_filter(columns: list[dict]) -> list[dict]:
-        return [column for column in columns if "relationship" not in column]
+        filtered_columns = []
+        for column in columns:
+            if "relationship" not in column:
+                # Create a copy of the column to avoid modifying the original
+                filtered_column = column.copy()
+                filtered_column = remove_display_name(filtered_column)
+                filtered_columns.append(filtered_column)
+        return filtered_columns
 
     return [
-        {**model, "columns": column_filter(model.get("columns", []))}
+        remove_display_name(
+            {**model, "columns": column_filter(model.get("columns", []))}
+        )
         for model in mdl.get("models", [])
     ]
 
