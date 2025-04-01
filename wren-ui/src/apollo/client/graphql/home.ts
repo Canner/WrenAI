@@ -113,12 +113,26 @@ const COMMON_RESPONSE = gql`
     askingTask {
       ...CommonAskingTask
     }
+    adjustment {
+      type
+      payload
+    }
+    adjustmentTask {
+      queryId
+      status
+      error {
+        ...CommonError
+      }
+      sql
+      traceId
+    }
   }
 
   ${COMMON_BREAKDOWN_DETAIL}
   ${COMMON_ANSWER_DETAIL}
   ${COMMON_CHART_DETAIL}
   ${COMMON_ASKING_TASK}
+  ${COMMON_ERROR}
 `;
 
 const COMMON_RECOMMENDED_QUESTIONS_TASK = gql`
@@ -253,6 +267,19 @@ export const UPDATE_THREAD_RESPONSE = gql`
   ${COMMON_RESPONSE}
 `;
 
+// For adjust reasoning steps or SQL
+export const ADJUST_THREAD_RESPONSE = gql`
+  mutation AdjustThreadResponse(
+    $responseId: Int!
+    $data: AdjustThreadResponseInput!
+  ) {
+    adjustThreadResponse(responseId: $responseId, data: $data) {
+      ...CommonResponse
+    }
+  }
+  ${COMMON_RESPONSE}
+`;
+
 export const DELETE_THREAD = gql`
   mutation DeleteThread($where: ThreadUniqueWhereInput!) {
     deleteThread(where: $where)
@@ -368,4 +395,33 @@ export const ADJUST_THREAD_RESPONSE_CHART = gql`
     }
   }
   ${COMMON_RESPONSE}
+`;
+
+export const ADJUSTMENT_TASK = gql`
+  query AdjustmentTask($taskId: String!) {
+    adjustmentTask(taskId: $taskId) {
+      queryId
+      status
+      error {
+        code
+        shortMessage
+        message
+        stacktrace
+      }
+      sql
+      traceId
+    }
+  }
+`;
+
+export const CANCEL_ADJUSTMENT_TASK = gql`
+  mutation CancelAdjustmentTask($taskId: String!) {
+    cancelAdjustmentTask(taskId: $taskId)
+  }
+`;
+
+export const RERUN_ADJUSTMENT_TASK = gql`
+  mutation RerunAdjustmentTask($responseId: Int!) {
+    rerunAdjustmentTask(responseId: $responseId)
+  }
 `;

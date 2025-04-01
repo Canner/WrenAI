@@ -25,6 +25,7 @@ const TagText = styled.div`
 `;
 
 type Props = ModalAction<{
+  responseId: number;
   retrievedTables: string[];
   sqlGenerationReasoning: string;
 }> & {
@@ -37,11 +38,14 @@ export default function AdjustReasoningStepsModal(props: Props) {
 
   const { mentions } = useMentions({ includeColumns: true, skip: !visible });
   const listModelsResult = useListModelsQuery({ skip: !visible });
-  const modelIdMap = keyBy(listModelsResult.data?.listModels, 'id');
+  const modelNameMap = keyBy(
+    listModelsResult.data?.listModels,
+    'referenceName',
+  );
   const modelOptions = useMemo(() => {
     return listModelsResult.data?.listModels.map((model) => ({
       label: model.displayName,
-      value: model.id,
+      value: model.referenceName,
     }));
   }, [listModelsResult.data?.listModels]);
 
@@ -50,16 +54,20 @@ export default function AdjustReasoningStepsModal(props: Props) {
     const listModels = listModelsResult.data?.listModels || [];
     const retrievedTables = listModels.reduce((result, model) => {
       if (defaultValue?.retrievedTables.includes(model.referenceName)) {
-        result.push({ label: model.displayName, value: model.id });
+        console.log(model.referenceName);
+        result.push({ label: model.displayName, value: model.referenceName });
       }
       return result;
     }, []);
-    form.setFieldsValue({ ...defaultValue, retrievedTables });
+    form.setFieldsValue({
+      tables: retrievedTables,
+      sqlGenerationReasoning: defaultValue?.sqlGenerationReasoning,
+    });
   }, [form, defaultValue, visible, listModelsResult.data?.listModels]);
 
   const tagRender = (props) => {
     const { value, closable, onClose } = props;
-    const model = modelIdMap[value];
+    const model = modelNameMap[value];
     return (
       <Tag
         onMouseDown={(e) => e.stopPropagation()}
@@ -91,7 +99,13 @@ export default function AdjustReasoningStepsModal(props: Props) {
     form
       .validateFields()
       .then(async (values) => {
-        await onSubmit(values.steps);
+        await onSubmit({
+          responseId: defaultValue.responseId,
+          data: {
+            ...values,
+            tables: values.tables.map((table) => table.value),
+          },
+        });
         onClose();
       })
       .catch(console.error);
@@ -114,7 +128,7 @@ export default function AdjustReasoningStepsModal(props: Props) {
       <Form form={form} preserve={false} layout="vertical">
         <Form.Item
           label="Selected models"
-          name="retrievedTables"
+          name="tables"
           required={false}
           rules={[
             {

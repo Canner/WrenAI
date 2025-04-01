@@ -19,6 +19,7 @@ import useAskPrompt, {
   canFetchThreadResponse,
   isRecommendedFinished,
 } from '@/hooks/useAskPrompt';
+import useAdjustAnswer from '@/hooks/useAdjustAnswer';
 import useModalAction from '@/hooks/useModalAction';
 import PromptThread from '@/components/pages/home/promptThread';
 import SaveAsViewModal from '@/components/modals/SaveAsViewModal';
@@ -84,6 +85,7 @@ export default function HomeThread() {
   const homeSidebar = useHomeSidebar();
   const threadId = useMemo(() => Number(params?.id) || null, [params]);
   const askPrompt = useAskPrompt(threadId);
+  const adjustAnswer = useAdjustAnswer(threadId);
   const saveAsViewModal = useModalAction();
   const questionSqlPairModal = useModalAction();
   const adjustReasoningStepsModal = useModalAction();
@@ -323,6 +325,11 @@ export default function HomeThread() {
       onReRunAskingTask: askPrompt.onReRun,
       onFixSQLStatement,
     },
+    adjustment: {
+      adjustmentTask: adjustAnswer.data?.adjustmentTask,
+      onStopAdjustTask: adjustAnswer.onStop,
+      onReRunAdjustTask: adjustAnswer.onReRun,
+    },
     onOpenSaveAsViewModal: saveAsViewModal.openModal,
     onSelectRecommendedQuestion: onCreateResponse,
     onGenerateThreadRecommendedQuestions: onGenerateThreadRecommendedQuestions,
@@ -369,7 +376,13 @@ export default function HomeThread() {
       <AdjustReasoningStepsModal
         {...adjustReasoningStepsModal.state}
         onClose={adjustReasoningStepsModal.closeModal}
-        onSubmit={async () => {}}
+        loading={adjustAnswer.loading}
+        onSubmit={async (values) => {
+          await adjustAnswer.onAdjustReasoningSteps(
+            values.responseId,
+            values.data,
+          );
+        }}
       />
 
       <AdjustSQLModal

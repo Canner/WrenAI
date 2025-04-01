@@ -124,6 +124,7 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
     const { type, data } = payload;
     if (type === MORE_ACTION.ADJUST_STEPS) {
       onOpenAdjustReasoningStepsModal({
+        responseId: threadResponse.id,
         retrievedTables: threadResponse.askingTask.retrievedTables,
         sqlGenerationReasoning:
           threadResponse.askingTask.sqlGenerationReasoning,
