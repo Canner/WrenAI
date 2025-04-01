@@ -190,7 +190,6 @@ export default function AnswerResult(props: Props) {
     onOpenSaveAsViewModal,
     onGenerateThreadRecommendedQuestions,
     onGenerateTextBasedAnswer,
-    onGenerateBreakdownAnswer,
     onGenerateChartAnswer,
     onOpenSaveToKnowledgeModal,
     // recommend questions
@@ -259,13 +258,6 @@ export default function AnswerResult(props: Props) {
   ]);
 
   const onTabClick = (activeKey: string) => {
-    if (
-      activeKey === ANSWER_TAB_KEYS.VIEW_SQL &&
-      !threadResponse.breakdownDetail
-    ) {
-      onGenerateBreakdownAnswer(id);
-    }
-
     if (activeKey === ANSWER_TAB_KEYS.CHART && !threadResponse.chartDetail) {
       onGenerateChartAnswer(id);
     }

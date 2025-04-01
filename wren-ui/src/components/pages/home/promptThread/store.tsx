@@ -27,7 +27,6 @@ export type IPromptThreadStore = {
   }: SelectQuestionProps) => Promise<void>;
   onGenerateThreadRecommendedQuestions: () => Promise<void>;
   onGenerateTextBasedAnswer: (responseId: number) => Promise<void>;
-  onGenerateBreakdownAnswer: (responseId: number) => Promise<void>;
   onGenerateChartAnswer: (responseId: number) => Promise<void>;
   onAdjustChartAnswer: (
     responseId: number,
