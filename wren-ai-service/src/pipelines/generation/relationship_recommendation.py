@@ -21,9 +21,9 @@ logger = logging.getLogger("wren-ai-service")
 @observe(capture_input=False)
 def cleaned_models(mdl: dict) -> dict:
     def remove_display_name(d: dict) -> dict:
-        if "property" in d and isinstance(d["property"], dict):
-            d["property"] = d["property"].copy()
-            d["property"].pop("displayName", None)
+        if "properties" in d and isinstance(d["properties"], dict):
+            d["properties"] = d["properties"].copy()
+            d["properties"].pop("displayName", None)
         return d
 
     def column_filter(columns: list[dict]) -> list[dict]:
