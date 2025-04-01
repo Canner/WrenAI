@@ -13,7 +13,7 @@ import {
   ProcessStateMachine,
   convertAskingTaskToProcessState,
 } from '@/hooks/useAskProcessState';
-import type { Props } from './index';
+import type { Props, PreparedTask } from './index';
 
 const StyledBadge = styled(Badge)`
   position: absolute;
@@ -47,29 +47,31 @@ const getProcessDot = (processing: boolean) => {
   ) : null;
 };
 
-export default function PreparationSteps(props: Props) {
-  const { className, data, askingStreamTask, minimized } = props;
-  const { askingTask, view, sql } = data;
+export default function PreparationSteps(
+  props: Props & { preparedTask: PreparedTask },
+) {
+  const { className, data, askingStreamTask, minimized, preparedTask } = props;
+  const { view, sql } = data;
 
   const processState = useMemo(
-    () => convertAskingTaskToProcessState(askingTask),
-    [askingTask],
+    () => convertAskingTaskToProcessState(preparedTask),
+    [preparedTask],
   );
   const isFixedSQL = useMemo(() => {
-    return sql && askingTask?.invalidSql;
-  }, [sql, askingTask?.invalidSql]);
+    return sql && preparedTask?.invalidSql;
+  }, [sql, preparedTask?.invalidSql]);
 
   // displays
   const showView = !!view;
-  const showSqlPair = !!askingTask?.candidates[0]?.sqlPair;
+  const showSqlPair = !!preparedTask?.candidates[0]?.sqlPair;
   const showRetrieving = retrievingNextStates.includes(processState);
   const showOrganizing = organizingNextStates.includes(processState);
   const showGenerating = generatingNextStates.includes(processState);
 
   // data
-  const retrievedTables = askingTask.retrievedTables || [];
+  const retrievedTables = preparedTask?.retrievedTables || [];
   const sqlGenerationReasoning =
-    askingTask.sqlGenerationReasoning || askingStreamTask || '';
+    preparedTask?.sqlGenerationReasoning || askingStreamTask || '';
 
   // loadings
   const retrieving = processState === PROCESS_STATE.SEARCHING;

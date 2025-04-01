@@ -200,8 +200,16 @@ export default function AnswerResult(props: Props) {
     preparation,
   } = usePromptThreadStore();
 
-  const { askingTask, answerDetail, breakdownDetail, id, question, sql, view } =
-    threadResponse;
+  const {
+    askingTask,
+    adjustmentTask,
+    answerDetail,
+    breakdownDetail,
+    id,
+    question,
+    sql,
+    view,
+  } = threadResponse;
 
   const resultStyle = isLastThreadResponse
     ? { minHeight: 'calc(100vh - (194px))' }
@@ -225,7 +233,10 @@ export default function AnswerResult(props: Props) {
   // initialize generate answer
   useEffect(() => {
     if (isBreakdownOnly) return;
-    if (canGenerateAnswer(askingTask) && isNeedGenerateAnswer(answerDetail)) {
+    if (
+      canGenerateAnswer(askingTask, adjustmentTask) &&
+      isNeedGenerateAnswer(answerDetail)
+    ) {
       const debouncedGenerateAnswer = debounce(
         () => {
           onGenerateTextBasedAnswer(id);
@@ -240,7 +251,12 @@ export default function AnswerResult(props: Props) {
         debouncedGenerateAnswer.cancel();
       };
     }
-  }, [isBreakdownOnly, askingTask?.status, answerDetail?.status]);
+  }, [
+    isBreakdownOnly,
+    askingTask?.status,
+    adjustmentTask?.status,
+    answerDetail?.status,
+  ]);
 
   const onTabClick = (activeKey: string) => {
     if (
