@@ -238,6 +238,7 @@ class AskService:
 
                 if histories:
                     self._ask_results[query_id].is_followup = True
+                    print("is_followup: ", self._ask_results[query_id].is_followup)
 
                 historical_question = await self._pipelines["historical_question"].run(
                     query=user_query,
@@ -628,7 +629,7 @@ class AskService:
         query_id: str,
     ):
         if self._ask_results.get(query_id):
-            if self._ask_results.get(query_id).type == "GENERAL":
+            if self._ask_results["query_id"].type == "GENERAL":
                 async for chunk in self._pipelines[
                     "data_assistance"
                 ].get_streaming_results(query_id):
@@ -636,8 +637,8 @@ class AskService:
                         data=SSEEvent.SSEEventMessage(message=chunk),
                     )
                     yield event.serialize()
-            elif self._ask_results.get(query_id).status == "planning":
-                if self._ask_results.get(query_id).is_followup:
+            elif self._ask_results["query_id"].status == "planning":
+                if self._ask_results["query_id"].is_followup:
                     async for chunk in self._pipelines[
                         "followup_sql_generation_reasoning"
                     ].get_streaming_results(query_id):
