@@ -120,7 +120,7 @@ export default function CodeBlock(props: Props) {
                 icon: [
                   <Button
                     key="copy-icon"
-                    icon={<CopyOutlined className="" />}
+                    icon={<CopyOutlined />}
                     size="small"
                     style={{ backgroundColor: 'transparent' }}
                   />,

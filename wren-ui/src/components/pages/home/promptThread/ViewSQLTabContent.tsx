@@ -115,12 +115,11 @@ export default function ViewSQLTabContent(props: AnswerResultProps) {
               </label>
             )}
             <Button
-              className="adm-btn-text-geekblue"
+              type="link"
               data-ph-capture="true"
               data-ph-capture-attribute-name="view_sql_copy_sql"
-              icon={<CodeFilled style={{ color: 'inherit' }} />}
+              icon={<CodeFilled />}
               size="small"
-              style={{ backgroundColor: 'transparent' }}
               onClick={() => onOpenAdjustSQLModal({ sql })}
             >
               Adjust SQL
