@@ -27,7 +27,7 @@ const StyledMenu = styled(Menu)`
 
 interface Props {
   [key: string]: any;
-  onMoreClick: (type: MORE_ACTION) => void;
+  onMoreClick: (type: MORE_ACTION | { type: MORE_ACTION; data: any }) => void;
   onMenuEnter?: (event: React.MouseEvent) => void;
   children: React.ReactNode;
   onDropdownVisibleChange?: (visible: boolean) => void;
