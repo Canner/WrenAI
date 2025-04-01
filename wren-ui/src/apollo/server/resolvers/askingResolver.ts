@@ -676,7 +676,7 @@ export class AskingResolver {
       intentReasoning: askingTask.intentReasoning,
       sqlGenerationReasoning: askingTask.sqlGenerationReasoning,
       retrievedTables: askingTask.retrievedTables,
-      invalidSql: askingTask.invalidSql,
+      invalidSql: askingTask.invalidSql ? format(askingTask.invalidSql) : null,
       traceId: askingTask.traceId,
     };
   }
