@@ -133,11 +133,10 @@ export default function useAdjustAnswer(threadId?: number) {
     }
   };
 
-  const onReRun = async (responseId: number) => {
+  const onReRun = async (threadResponse: ThreadResponse) => {
+    const responseId = threadResponse.id;
     await rerunAdjustmentTask({ variables: { responseId } });
-    // TODO: wait backend to provide taskId
-    // const taskId = response.data?.rerunAdjustmentTask?.id;
-    // fetchAdjustmentTask({ variables: { taskId } });
+    await fetchThreadResponse({ variables: { responseId } });
   };
 
   return {
