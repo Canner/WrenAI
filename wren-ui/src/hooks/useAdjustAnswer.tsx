@@ -1,12 +1,13 @@
 import { useEffect, useMemo } from 'react';
+import { cloneDeep } from 'lodash';
 import { ApolloClient, NormalizedCacheObject } from '@apollo/client';
 import { THREAD } from '@/apollo/client/graphql/home';
 import { nextTick } from '@/utils/time';
 import {
   useAdjustThreadResponseMutation,
-  useAdjustmentTaskLazyQuery,
   useCancelAdjustmentTaskMutation,
   useRerunAdjustmentTaskMutation,
+  useThreadResponseLazyQuery,
 } from '@/apollo/client/graphql/home.generated';
 import {
   AskingTaskStatus,
@@ -38,10 +39,19 @@ const handleUpdateThreadCache = (
         variables: { threadId },
       },
       (existingData) => {
+        const isNewResponse = !existingData.thread.responses
+          .map((r) => r.id)
+          .includes(threadResponse.id);
         return {
           thread: {
             ...existingData.thread,
-            responses: [...existingData.thread.responses, threadResponse],
+            responses: isNewResponse
+              ? [...existingData.thread.responses, threadResponse]
+              : existingData.thread.responses.map((response) => {
+                  return response.id === threadResponse.id
+                    ? cloneDeep(threadResponse)
+                    : response;
+                }),
           },
         };
       },
@@ -54,16 +64,16 @@ export default function useAdjustAnswer(threadId?: number) {
   const [rerunAdjustmentTask] = useRerunAdjustmentTaskMutation();
   const [adjustThreadResponse, adjustThreadResponseResult] =
     useAdjustThreadResponseMutation();
-  const [fetchAdjustmentTask, adjustmentTaskResult] =
-    useAdjustmentTaskLazyQuery({
+  const [fetchThreadResponse, threadResponseResult] =
+    useThreadResponseLazyQuery({
       pollInterval: 1000,
     });
 
   const loading = adjustThreadResponseResult.loading;
 
   const adjustmentTask = useMemo(() => {
-    return adjustmentTaskResult.data?.adjustmentTask || null;
-  }, [adjustmentTaskResult.data]);
+    return threadResponseResult.data?.threadResponse.adjustmentTask || null;
+  }, [threadResponseResult.data]);
 
   const data = useMemo(() => {
     return {
@@ -72,11 +82,9 @@ export default function useAdjustAnswer(threadId?: number) {
   }, [adjustmentTask]);
 
   useEffect(() => {
-    const isFinished = getIsFinished(
-      adjustmentTaskResult.data?.adjustmentTask?.status,
-    );
-    if (isFinished) adjustmentTaskResult.stopPolling();
-  }, [adjustmentTaskResult.data?.adjustmentTask?.status]);
+    const isFinished = getIsFinished(adjustmentTask?.status);
+    if (isFinished) threadResponseResult.stopPolling();
+  }, [adjustmentTask?.status]);
 
   const onAdjustReasoningSteps = async (
     responseId: number,
@@ -91,17 +99,19 @@ export default function useAdjustAnswer(threadId?: number) {
         },
       },
     });
-    // TODO: wait to readjust adjustment flow
-    // update thread cache
+
+    // start polling new thread response
     const nextThreadResponse = response.data?.adjustThreadResponse;
+    await fetchThreadResponse({
+      variables: { responseId: nextThreadResponse.id },
+    });
+
+    // update new thread response to cache
     handleUpdateThreadCache(
       threadId,
       nextThreadResponse,
-      adjustmentTaskResult.client,
+      threadResponseResult.client,
     );
-    // start polling
-    const taskId = nextThreadResponse?.adjustmentTask?.queryId;
-    fetchAdjustmentTask({ variables: { taskId } });
   };
 
   const onAdjustSQL = async (responseId: number, sql: string) => {
