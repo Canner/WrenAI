@@ -79,7 +79,7 @@ export default function ViewSQLTabContent(props: AnswerResultProps) {
   };
 
   return (
-    <div className="text-md gray-10 p-4 pr-6">
+    <div className="text-md gray-10 p-6 pb-4">
       <StyledPre className="p-0 mb-3">
         <StyledToolBar className="d-flex justify-space-between text-family-base">
           <div>
