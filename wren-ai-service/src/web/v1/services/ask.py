@@ -234,9 +234,8 @@ class AskService:
                 self._ask_results[query_id] = AskResultResponse(
                     status="understanding",
                     trace_id=trace_id,
+                    is_followup=True if histories else False,
                 )
-                if histories:
-                    self._ask_results[query_id].is_followup = True
 
                 historical_question = await self._pipelines["historical_question"].run(
                     query=user_query,
@@ -313,6 +312,7 @@ class AskService:
                                 rephrased_question=rephrased_question,
                                 intent_reasoning=intent_reasoning,
                                 trace_id=trace_id,
+                                is_followup=True if histories else False,
                             )
                             results["metadata"]["type"] = "MISLEADING_QUERY"
                             return results
@@ -335,6 +335,7 @@ class AskService:
                                 rephrased_question=rephrased_question,
                                 intent_reasoning=intent_reasoning,
                                 trace_id=trace_id,
+                                is_followup=True if histories else False,
                             )
                             results["metadata"]["type"] = "GENERAL"
                             return results
@@ -364,6 +365,7 @@ class AskService:
                                 rephrased_question=rephrased_question,
                                 intent_reasoning=intent_reasoning,
                                 trace_id=trace_id,
+                                is_followup=True if histories else False,
                             )
             if not self._is_stopped(query_id, self._ask_results) and not api_results:
                 self._ask_results[query_id] = AskResultResponse(
@@ -372,6 +374,7 @@ class AskService:
                     rephrased_question=rephrased_question,
                     intent_reasoning=intent_reasoning,
                     trace_id=trace_id,
+                    is_followup=True if histories else False,
                 )
 
                 retrieval_result = await self._pipelines["retrieval"].run(
@@ -399,6 +402,7 @@ class AskService:
                             rephrased_question=rephrased_question,
                             intent_reasoning=intent_reasoning,
                             trace_id=trace_id,
+                            is_followup=True if histories else False,
                         )
                     results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
                     results["metadata"]["type"] = "TEXT_TO_SQL"
@@ -416,6 +420,7 @@ class AskService:
                     intent_reasoning=intent_reasoning,
                     retrieved_tables=table_names,
                     trace_id=trace_id,
+                    is_followup=True if histories else False,
                 )
 
                 if histories:
@@ -450,6 +455,7 @@ class AskService:
                     retrieved_tables=table_names,
                     sql_generation_reasoning=sql_generation_reasoning,
                     trace_id=trace_id,
+                    is_followup=True if histories else False,
                 )
 
             if not self._is_stopped(query_id, self._ask_results) and not api_results:
@@ -461,6 +467,7 @@ class AskService:
                     retrieved_tables=table_names,
                     sql_generation_reasoning=sql_generation_reasoning,
                     trace_id=trace_id,
+                    is_followup=True if histories else False,
                 )
 
                 sql_functions = await self._pipelines["sql_functions_retrieval"].run(
@@ -528,6 +535,7 @@ class AskService:
                             retrieved_tables=table_names,
                             sql_generation_reasoning=sql_generation_reasoning,
                             trace_id=trace_id,
+                            is_followup=True if histories else False,
                         )
                         sql_correction_results = await self._pipelines[
                             "sql_correction"
@@ -571,6 +579,7 @@ class AskService:
                         retrieved_tables=table_names,
                         sql_generation_reasoning=sql_generation_reasoning,
                         trace_id=trace_id,
+                        is_followup=True if histories else False,
                     )
                 results["ask_result"] = api_results
                 results["metadata"]["type"] = "TEXT_TO_SQL"
@@ -590,6 +599,7 @@ class AskService:
                         sql_generation_reasoning=sql_generation_reasoning,
                         invalid_sql=invalid_sql,
                         trace_id=trace_id,
+                        is_followup=True if histories else False,
                     )
                 results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
                 results["metadata"]["error_message"] = error_message
@@ -607,6 +617,7 @@ class AskService:
                     message=str(e),
                 ),
                 trace_id=trace_id,
+                is_followup=True if histories else False,
             )
 
             results["metadata"]["error_type"] = "OTHERS"
