@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 import useStoreContext, { STORE } from '@/hooks/useStoreContext';
 import {
   AdjustThreadResponseChartInput,
-  AdjustmentTask,
   DetailedThread,
   RecommendedQuestionsTask,
   ThreadResponse,
@@ -16,13 +15,10 @@ export type IPromptThreadStore = {
   preparation: {
     askingStreamTask?: string;
     onStopAskingTask?: (queryId?: string) => Promise<void>;
-    onReRunAskingTask?: (threadResponse: ThreadResponse) => Promise<void>;
-    onFixSQLStatement?: (responseId: number, sql: string) => Promise<void>;
-  };
-  adjustment: {
-    adjustmentTask?: AdjustmentTask;
     onStopAdjustTask?: (queryId?: string) => Promise<void>;
-    onReRunAdjustTask?: (responseId: number) => Promise<void>;
+    onReRunAskingTask?: (threadResponse: ThreadResponse) => Promise<void>;
+    onReRunAdjustTask?: (threadResponse: ThreadResponse) => Promise<void>;
+    onFixSQLStatement?: (responseId: number, sql: string) => Promise<void>;
   };
   onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
   onSelectRecommendedQuestion: ({

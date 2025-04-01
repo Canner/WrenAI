@@ -323,12 +323,9 @@ export default function HomeThread() {
       askingStreamTask: askPrompt.data?.askingStreamTask,
       onStopAskingTask: askPrompt.onStop,
       onReRunAskingTask: askPrompt.onReRun,
-      onFixSQLStatement,
-    },
-    adjustment: {
-      adjustmentTask: adjustAnswer.data?.adjustmentTask,
       onStopAdjustTask: adjustAnswer.onStop,
       onReRunAdjustTask: adjustAnswer.onReRun,
+      onFixSQLStatement,
     },
     onOpenSaveAsViewModal: saveAsViewModal.openModal,
     onSelectRecommendedQuestion: onCreateResponse,
