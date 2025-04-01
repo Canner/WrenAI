@@ -39,7 +39,8 @@ const getIsLoadingFinished = (status: ThreadResponseAnswerStatus) =>
   status === ThreadResponseAnswerStatus.STREAMING;
 
 export default function TextBasedAnswer(props: AnswerResultProps) {
-  const { onGenerateTextBasedAnswer } = usePromptThreadStore();
+  const { onGenerateTextBasedAnswer, onOpenAdjustReasoningStepsModal } =
+    usePromptThreadStore();
   const { isLastThreadResponse, onInitPreviewDone, threadResponse } = props;
   const { id } = threadResponse;
   const { content, error, numRowsUsedInLLM, status } =
@@ -119,8 +120,11 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
   const onMoreClick = async (payload) => {
     const { type, data } = payload;
     if (type === MORE_ACTION.ADJUST_STEPS) {
-      // TODO: open adjust steps modal
-      console.log('adjust steps', data);
+      onOpenAdjustReasoningStepsModal({
+        retrievedTables: threadResponse.askingTask.retrievedTables,
+        sqlGenerationReasoning:
+          threadResponse.askingTask.sqlGenerationReasoning,
+      });
     } else if (type === MORE_ACTION.ADJUST_SQL) {
       // TODO: open adjust sql modal
       console.log('adjust sql', data);
@@ -130,7 +134,7 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
   if (error) {
     return (
       <Alert
-        className="m-4"
+        className="m-6"
         message={error.shortMessage}
         description={error.message}
         type="error"
@@ -146,14 +150,15 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
       paragraph={{ rows: 4 }}
       title={false}
     >
-      <div className="text-md gray-10 p-4 pr-6">
-        <div className="text-right">
+      <div className="text-md gray-10 py-4 px-6">
+        <div className="text-right mb-4">
           <AdjustAnswerDropdown
             onMoreClick={onMoreClick}
             data={{ sql: threadResponse.sql }}
             onDropdownVisibleChange={adjustResultsDropdown.onVisibleChange}
           >
             <Button
+              className="px-0"
               type="link"
               size="small"
               icon={<EditOutlined />}
