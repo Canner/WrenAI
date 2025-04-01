@@ -788,7 +788,7 @@ export const typeDefs = gql`
 
   input PreviewSQLDataInput {
     sql: String!
-    projectId: Int
+    projectId: String
     limit: Int
     dryRun: Boolean
   }

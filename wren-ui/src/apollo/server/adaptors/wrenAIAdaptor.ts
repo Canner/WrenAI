@@ -665,6 +665,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
         tables: input.tables,
         sql_generation_reasoning: input.sqlGenerationReasoning,
         sql: input.sql,
+        project_id: input.projectId.toString(),
         configurations: input.configurations,
       };
 
