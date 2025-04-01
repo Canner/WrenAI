@@ -56,7 +56,7 @@ export default function AdjustSQLModal(props: Props) {
 
   const handleError = (error) => {
     const graphQLError = parseGraphQLError(error);
-    setError({ ...graphQLError, shortMessage: 'Invalid SQL Syntax' });
+    setError({ ...graphQLError, shortMessage: 'Invalid SQL syntax' });
     console.error(graphQLError);
   };
 
@@ -198,7 +198,7 @@ export default function AdjustSQLModal(props: Props) {
         <Alert
           showIcon
           type="error"
-          message="Invalid SQL Syntax"
+          message={error.shortMessage}
           description={<ErrorCollapse message={error.message} />}
         />
       )}
