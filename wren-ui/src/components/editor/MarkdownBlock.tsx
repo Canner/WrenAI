@@ -60,6 +60,7 @@ const ReactMarkdownBlock = styled(ReactMarkdown)`
   h2 code,
   h3 code,
   h4 code,
+  li code,
   p code {
     font-size: 12px;
     background: var(--gray-4);
