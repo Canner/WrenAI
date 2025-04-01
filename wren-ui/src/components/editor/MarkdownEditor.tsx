@@ -36,7 +36,7 @@ const Wrapper = styled.div`
 
 const OverflowContainer = styled.div`
   overflow-y: auto;
-  max-height: 400px;
+  max-height: 318px;
 `;
 
 const LinkButton = styled(Button)`
@@ -46,6 +46,10 @@ const LinkButton = styled(Button)`
 const StyledTextArea = styled(Mentions)`
   border: none;
   border-radius: 0;
+
+  textarea {
+    padding: 16px 16px 16px 20px;
+  }
 `;
 
 interface Props {
@@ -229,8 +233,7 @@ export default function MarkdownEditor(props: Props) {
         ) : (
           <StyledTextArea
             ref={$textarea}
-            className="p-4"
-            rows={16}
+            rows={13}
             autoFocus={autoFocus}
             getPopupContainer={() => $wrapper?.current}
             onChange={change}

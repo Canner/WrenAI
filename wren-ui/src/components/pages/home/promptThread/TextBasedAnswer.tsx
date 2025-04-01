@@ -15,10 +15,8 @@ import { Props as AnswerResultProps } from '@/components/pages/home/promptThread
 import MarkdownBlock from '@/components/editor/MarkdownBlock';
 import PreviewData from '@/components/dataPreview/PreviewData';
 import { AdjustAnswerDropdown } from '@/components/diagram/CustomDropdown';
-import AdjustReasoningStepsModal from '@/components/modals/AdjustReasoningStepsModal';
 import { usePreviewDataMutation } from '@/apollo/client/graphql/home.generated';
 import { ThreadResponseAnswerStatus } from '@/apollo/client/graphql/__types__';
-import useModalAction from '@/hooks/useModalAction';
 
 const { Text } = Typography;
 
@@ -41,7 +39,8 @@ const getIsLoadingFinished = (status: ThreadResponseAnswerStatus) =>
   status === ThreadResponseAnswerStatus.STREAMING;
 
 export default function TextBasedAnswer(props: AnswerResultProps) {
-  const { onGenerateTextBasedAnswer } = usePromptThreadStore();
+  const { onGenerateTextBasedAnswer, onOpenAdjustReasoningStepsModal } =
+    usePromptThreadStore();
   const { isLastThreadResponse, onInitPreviewDone, threadResponse } = props;
   const { id } = threadResponse;
   const { content, error, numRowsUsedInLLM, status } =
@@ -49,7 +48,6 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
 
   const [textAnswer, setTextAnswer] = useState<string>('');
   const adjustResultsDropdown = useDropdown();
-  const adjustReasoningStepsModal = useModalAction();
 
   const [fetchAnswerStreamingTask, answerStreamTaskResult] =
     useTextBasedAnswerStreamTask();
@@ -122,7 +120,7 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
   const onMoreClick = async (payload) => {
     const { type, data } = payload;
     if (type === MORE_ACTION.ADJUST_STEPS) {
-      adjustReasoningStepsModal.openModal({
+      onOpenAdjustReasoningStepsModal({
         retrievedTables: threadResponse.askingTask.retrievedTables,
         sqlGenerationReasoning:
           threadResponse.askingTask.sqlGenerationReasoning,
@@ -242,11 +240,6 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
           </>
         )}
       </div>
-      <AdjustReasoningStepsModal
-        {...adjustReasoningStepsModal.state}
-        onClose={adjustReasoningStepsModal.closeModal}
-        onSubmit={async () => {}}
-      />
     </StyledSkeleton>
   );
 }

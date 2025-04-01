@@ -35,6 +35,10 @@ export type IPromptThreadStore = {
     data: { sql: string; question: string },
     payload: { isCreateMode: boolean },
   ) => void;
+  onOpenAdjustReasoningStepsModal: (data: {
+    retrievedTables: string[];
+    sqlGenerationReasoning: string;
+  }) => void;
 };
 
 // Register store provider

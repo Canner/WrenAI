@@ -23,6 +23,7 @@ import useModalAction from '@/hooks/useModalAction';
 import PromptThread from '@/components/pages/home/promptThread';
 import SaveAsViewModal from '@/components/modals/SaveAsViewModal';
 import QuestionSQLPairModal from '@/components/modals/QuestionSQLPairModal';
+import AdjustReasoningStepsModal from '@/components/modals/AdjustReasoningStepsModal';
 import { getAnswerIsFinished } from '@/components/pages/home/promptThread/TextBasedAnswer';
 import { getIsChartFinished } from '@/components/pages/home/promptThread/ChartAnswer';
 import { PromptThreadProvider } from '@/components/pages/home/promptThread/store';
@@ -84,6 +85,7 @@ export default function HomeThread() {
   const askPrompt = useAskPrompt(threadId);
   const saveAsViewModal = useModalAction();
   const questionSqlPairModal = useModalAction();
+  const adjustReasoningStepsModal = useModalAction();
 
   const [showRecommendedQuestions, setShowRecommendedQuestions] =
     useState<boolean>(false);
@@ -327,6 +329,7 @@ export default function HomeThread() {
     onGenerateChartAnswer: onGenerateThreadResponseChart,
     onAdjustChartAnswer: onAdjustThreadResponseChart,
     onOpenSaveToKnowledgeModal: questionSqlPairModal.openModal,
+    onOpenAdjustReasoningStepsModal: adjustReasoningStepsModal.openModal,
   };
 
   return (
@@ -358,6 +361,12 @@ export default function HomeThread() {
         onSubmit={async ({ data }: { data: CreateSqlPairInput }) => {
           await createSqlPairMutation({ variables: { data } });
         }}
+      />
+
+      <AdjustReasoningStepsModal
+        {...adjustReasoningStepsModal.state}
+        onClose={adjustReasoningStepsModal.closeModal}
+        onSubmit={async () => {}}
       />
     </SiderLayout>
   );
