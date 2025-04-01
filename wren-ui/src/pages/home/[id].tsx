@@ -366,10 +366,10 @@ export default function HomeThread() {
       <AdjustSQLModal
         {...adjustSqlModal.state}
         onClose={adjustSqlModal.closeModal}
-        loading={false}
-        onSubmit={async (data) => {
-          console.log('adjust sql:', data);
-        }}
+        loading={adjustAnswer.loading}
+        onSubmit={async (values) =>
+          await adjustAnswer.onAdjustSQL(values.responseId, values.sql)
+        }
       />
     </SiderLayout>
   );

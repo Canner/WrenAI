@@ -155,7 +155,7 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
         sqlGenerationReasoning: data.sqlGenerationReasoning,
       });
     } else if (type === MORE_ACTION.ADJUST_SQL) {
-      onOpenAdjustSQLModal({ sql: data.sql });
+      onOpenAdjustSQLModal({ responseId: id, sql: data.sql });
     }
   };
 

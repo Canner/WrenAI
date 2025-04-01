@@ -115,9 +115,18 @@ export default function useAdjustAnswer(threadId?: number) {
   };
 
   const onAdjustSQL = async (responseId: number, sql: string) => {
-    await adjustThreadResponse({
+    const response = await adjustThreadResponse({
       variables: { responseId, data: { sql } },
     });
+
+    // update thread cache
+    const nextThreadResponse = response.data?.adjustThreadResponse;
+    handleUpdateThreadCache(
+      threadId,
+      nextThreadResponse,
+      threadResponseResult.client,
+    );
+
     // It won't have adjusmentTask, no need to fetch
   };
 
