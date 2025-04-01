@@ -24,6 +24,7 @@ import PromptThread from '@/components/pages/home/promptThread';
 import SaveAsViewModal from '@/components/modals/SaveAsViewModal';
 import QuestionSQLPairModal from '@/components/modals/QuestionSQLPairModal';
 import AdjustReasoningStepsModal from '@/components/modals/AdjustReasoningStepsModal';
+import AdjustSQLModal from '@/components/modals/AdjustSQLModal';
 import { getAnswerIsFinished } from '@/components/pages/home/promptThread/TextBasedAnswer';
 import { getIsChartFinished } from '@/components/pages/home/promptThread/ChartAnswer';
 import { PromptThreadProvider } from '@/components/pages/home/promptThread/store';
@@ -86,6 +87,7 @@ export default function HomeThread() {
   const saveAsViewModal = useModalAction();
   const questionSqlPairModal = useModalAction();
   const adjustReasoningStepsModal = useModalAction();
+  const adjustSqlModal = useModalAction();
 
   const [showRecommendedQuestions, setShowRecommendedQuestions] =
     useState<boolean>(false);
@@ -330,6 +332,7 @@ export default function HomeThread() {
     onAdjustChartAnswer: onAdjustThreadResponseChart,
     onOpenSaveToKnowledgeModal: questionSqlPairModal.openModal,
     onOpenAdjustReasoningStepsModal: adjustReasoningStepsModal.openModal,
+    onOpenAdjustSQLModal: adjustSqlModal.openModal,
   };
 
   return (
@@ -367,6 +370,15 @@ export default function HomeThread() {
         {...adjustReasoningStepsModal.state}
         onClose={adjustReasoningStepsModal.closeModal}
         onSubmit={async () => {}}
+      />
+
+      <AdjustSQLModal
+        {...adjustSqlModal.state}
+        onClose={adjustSqlModal.closeModal}
+        loading={false}
+        onSubmit={async (data) => {
+          console.log('adjust sql:', data);
+        }}
       />
     </SiderLayout>
   );
