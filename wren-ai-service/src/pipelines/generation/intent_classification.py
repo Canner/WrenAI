@@ -25,7 +25,7 @@ intent_classification_system_prompt = """
 ### TASK ###
 You are a great detective, who is great at intent classification.
 First, rephrase the user's question to make it more specific, clear and relevant to the database schema before making the intent classification.
-Second, you need to use rephrased user's question to classify user's intent based on given database schema to one of three conditions: MISLEADING_QUERY, TEXT_TO_SQL, GENERAL. 
+Second, you need to use rephrased user's question to classify user's intent based on given database schema to one of four conditions: MISLEADING_QUERY, TEXT_TO_SQL, GENERAL, USER_GUIDE. 
 Also you should provide reasoning for the classification clearly and concisely within 20 words.
 
 ### INSTRUCTIONS ###
@@ -56,6 +56,29 @@ Also you should provide reasoning for the classification clearly and concisely w
         - "What is the total sales for last quarter?"
         - "Show me all customers who purchased product X."
         - "List the top 10 products by revenue."
+- GENERAL
+    - When to Use:
+        - Use this category if the user is seeking general information about the database schema.
+        - If the rephrasedd user's question is related to the previous question, but considering them together cannot be answered by generating an SQL query using that schema.
+    - Characteristics:
+        - The question is about understanding the dataset or its capabilities.
+        - The user may need guidance on how to proceed or what questions to ask.
+    - Instructions:
+        - MUST explicitly add phrases from the rephrasedd user's question that are not explicitly related to the database schema in the reasoning output. Choose the most relevant phrases that cause the rephrasedd user's question to be GENERAL.
+    - Examples:
+        - "What is the dataset about?"
+        - "Tell me more about the database."
+        - "How can I analyze customer behavior with this data?"
+- USER_GUIDE
+    - When to Use:
+        - If the user's question is about Wren AI's features, capabilities, or how to use Wren AI.
+    - Characteristics:
+        - The question is about Wren AI's features, capabilities, or how to use Wren AI.
+    - Examples:
+        - "What can Wren AI do?"
+        - "How can I reset project?"
+        - "How can I delete project?"
+        - "How can I connect to other databases?"
 - MISLEADING_QUERY
     - When to Use:
         - If the rephrasedd user's question is irrelevant to the given database schema and cannot be answered using SQL with that schema.
@@ -71,28 +94,14 @@ Also you should provide reasoning for the classification clearly and concisely w
         - "How are you?"
         - "What's the weather like today?"
         - "Tell me a joke."
-- GENERAL
-    - When to Use:
-        - Use this category if the user is seeking general information about the database schema.
-        - If the rephrasedd user's question is related to the previous question, but considering them together cannot be answered by generating an SQL query using that schema.
-    - Characteristics:
-        - The question is about understanding the dataset or its capabilities.
-        - The user may need guidance on how to proceed or what questions to ask.
-    - Instructions:
-        - MUST explicitly add phrases from the rephrasedd user's question that are not explicitly related to the database schema in the reasoning output. Choose the most relevant phrases that cause the rephrasedd user's question to be GENERAL.
-    - Examples:
-        - "What is the dataset about?"
-        - "Tell me more about the database."
-        - "What can Wren AI do?"
-        - "How can I analyze customer behavior with this data?"
-
+        
 ### OUTPUT FORMAT ###
 Please provide your response as a JSON object, structured as follows:
 
 {
     "rephrased_question": "<REPHRASED_USER_QUESTION_IN_STRING_FORMAT>",
     "reasoning": "<CHAIN_OF_THOUGHT_REASONING_BASED_ON_REPHRASED_USER_QUESTION_IN_STRING_FORMAT>",
-    "results": "MISLEADING_QUERY" | "TEXT_TO_SQL" | "GENERAL"
+    "results": "MISLEADING_QUERY" | "TEXT_TO_SQL" | "GENERAL" | "USER_GUIDE"
 }
 """
 
@@ -294,7 +303,7 @@ def post_process(classify_intent: dict, construct_db_schemas: list[str]) -> dict
 
 
 class IntentClassificationResult(BaseModel):
-    results: Literal["MISLEADING_QUERY", "TEXT_TO_SQL", "GENERAL"]
+    results: Literal["MISLEADING_QUERY", "TEXT_TO_SQL", "GENERAL", "USER_GUIDE"]
     rephrased_question: str
     reasoning: str
 

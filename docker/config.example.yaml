@@ -127,6 +127,8 @@ pipes:
     llm: litellm_llm.default
   - name: chart_adjustment
     llm: litellm_llm.default
+  - name: user_guide_assistance
+    llm: litellm_llm.default
   - name: sql_question_generation
     llm: litellm_llm.default
   - name: sql_generation_reasoning
@@ -150,6 +152,8 @@ pipes:
 
 ---
 settings:
+  doc_endpoint: https://docs.getwren.ai
+  is_oss: true
   engine_timeout: 30
   column_indexing_batch_size: 50
   table_retrieval_size: 10

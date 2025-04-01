@@ -54,6 +54,10 @@ class Settings(BaseSettings):
         """,
     )
 
+    # user guide config
+    is_oss: bool = Field(default=True)
+    doc_endpoint: str = Field(default="https://docs.getwren.ai")
+
     # langfuse config
     # in order to use langfuse, we also need to set the LANGFUSE_SECRET_KEY and LANGFUSE_PUBLIC_KEY in the .env or .env.dev file
     langfuse_host: str = Field(default="https://cloud.langfuse.com")
