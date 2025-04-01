@@ -100,12 +100,10 @@ class _AskResultResponse(BaseModel):
     error: Optional[AskError] = None
     trace_id: Optional[str] = None
     is_followup: Optional[bool] = False
-    is_user_guide: Optional[bool] = False
 
 
 class AskResultResponse(_AskResultResponse):
     is_followup: Optional[bool] = Field(False, exclude=True)
-    is_user_guide: Optional[bool] = Field(False, exclude=True)
 
 
 # POST /v1/ask-feedbacks
