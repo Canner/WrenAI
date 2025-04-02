@@ -90,12 +90,20 @@ export default function PreparationSteps(
     <Timeline className={className}>
       {showRetrieving && (
         <Timeline.Item dot={getProcessDot(retrieving)}>
-          <Retrieving loading={retrieving} tables={retrievedTables} />
+          <Retrieving
+            loading={retrieving}
+            tables={retrievedTables}
+            isAdjustment={preparedTask.isAdjustment}
+          />
         </Timeline.Item>
       )}
       {showOrganizing && (
         <Timeline.Item dot={getProcessDot(organizing)}>
-          <Organizing loading={organizing} stream={sqlGenerationReasoning} />
+          <Organizing
+            loading={organizing}
+            stream={sqlGenerationReasoning}
+            isAdjustment={preparedTask.isAdjustment}
+          />
         </Timeline.Item>
       )}
       {showGenerating && (
