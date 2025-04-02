@@ -94,7 +94,7 @@ class _AskResultResponse(BaseModel):
     intent_reasoning: Optional[str] = None
     sql_generation_reasoning: Optional[str] = None
     type: Optional[Literal["MISLEADING_QUERY", "GENERAL", "TEXT_TO_SQL"]] = None
-    retrieved_tables: Optional[List[str]] = None
+    retrieved_tables: Optional[List[dict]] = None
     response: Optional[List[AskResult]] = None
     invalid_sql: Optional[str] = None
     error: Optional[AskError] = None
@@ -219,7 +219,7 @@ class AskService:
         sql_samples = []
         instructions = []
         api_results = []
-        table_names = []
+        retrieved_tables = []
         error_message = None
         invalid_sql = None
 
@@ -365,7 +365,13 @@ class AskService:
                     "construct_retrieval_results", {}
                 )
                 documents = _retrieval_result.get("retrieval_results", [])
-                table_names = [document.get("table_name") for document in documents]
+                retrieved_tables = [
+                    {
+                        "name": document.get("table_name"),
+                        "score": document.get("table_score"),
+                    }
+                    for document in documents
+                ]
                 table_ddls = [document.get("table_ddl") for document in documents]
 
                 if not documents:
@@ -397,7 +403,7 @@ class AskService:
                     type="TEXT_TO_SQL",
                     rephrased_question=rephrased_question,
                     intent_reasoning=intent_reasoning,
-                    retrieved_tables=table_names,
+                    retrieved_tables=retrieved_tables,
                     trace_id=trace_id,
                     is_followup=True if histories else False,
                 )
@@ -431,7 +437,7 @@ class AskService:
                     type="TEXT_TO_SQL",
                     rephrased_question=rephrased_question,
                     intent_reasoning=intent_reasoning,
-                    retrieved_tables=table_names,
+                    retrieved_tables=retrieved_tables,
                     sql_generation_reasoning=sql_generation_reasoning,
                     trace_id=trace_id,
                     is_followup=True if histories else False,
@@ -443,7 +449,7 @@ class AskService:
                     type="TEXT_TO_SQL",
                     rephrased_question=rephrased_question,
                     intent_reasoning=intent_reasoning,
-                    retrieved_tables=table_names,
+                    retrieved_tables=retrieved_tables,
                     sql_generation_reasoning=sql_generation_reasoning,
                     trace_id=trace_id,
                     is_followup=True if histories else False,
@@ -511,7 +517,7 @@ class AskService:
                             type="TEXT_TO_SQL",
                             rephrased_question=rephrased_question,
                             intent_reasoning=intent_reasoning,
-                            retrieved_tables=table_names,
+                            retrieved_tables=retrieved_tables,
                             sql_generation_reasoning=sql_generation_reasoning,
                             trace_id=trace_id,
                             is_followup=True if histories else False,
@@ -555,7 +561,7 @@ class AskService:
                         response=api_results,
                         rephrased_question=rephrased_question,
                         intent_reasoning=intent_reasoning,
-                        retrieved_tables=table_names,
+                        retrieved_tables=retrieved_tables,
                         sql_generation_reasoning=sql_generation_reasoning,
                         trace_id=trace_id,
                         is_followup=True if histories else False,
@@ -574,7 +580,7 @@ class AskService:
                         ),
                         rephrased_question=rephrased_question,
                         intent_reasoning=intent_reasoning,
-                        retrieved_tables=table_names,
+                        retrieved_tables=retrieved_tables,
                         sql_generation_reasoning=sql_generation_reasoning,
                         invalid_sql=invalid_sql,
                         trace_id=trace_id,
