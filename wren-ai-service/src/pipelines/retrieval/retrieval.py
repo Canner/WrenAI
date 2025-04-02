@@ -7,7 +7,6 @@ import orjson
 import tiktoken
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
-from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
 from pydantic import BaseModel
@@ -166,12 +165,15 @@ async def table_retrieval(
 @observe(capture_input=False)
 async def dbschema_retrieval(
     table_retrieval: dict, project_id: str, dbschema_retriever: Any
-) -> list[Document]:
+) -> dict:
     tables = table_retrieval.get("documents", [])
     table_names = []
+    # assign score to each table
+    table_scores = {}
     for table in tables:
         content = ast.literal_eval(table.content)
         table_names.append(content["name"])
+        table_scores[content["name"]] = table.score
 
     table_name_conditions = [
         {"field": "name", "operator": "==", "value": table_name}
@@ -192,13 +194,17 @@ async def dbschema_retrieval(
         )
 
     results = await dbschema_retriever.run(query_embedding=[], filters=filters)
-    return results["documents"]
+
+    return {
+        "documents": results["documents"],
+        "table_scores": table_scores,
+    }
 
 
 @observe()
-def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[dict]:
+def construct_db_schemas(dbschema_retrieval: dict) -> dict:
     db_schemas = {}
-    for document in dbschema_retrieval:
+    for document in dbschema_retrieval["documents"]:
         content = ast.literal_eval(document.content)
         if content["type"] == "TABLE":
             if document.meta["name"] not in db_schemas:
@@ -220,13 +226,16 @@ def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[dict]:
     # remove incomplete schemas
     db_schemas = {k: v for k, v in db_schemas.items() if "type" in v and "columns" in v}
 
-    return list(db_schemas.values())
+    return {
+        "db_schemas": list(db_schemas.values()),
+        "table_scores": dbschema_retrieval["table_scores"],
+    }
 
 
 @observe(capture_input=False)
 def check_using_db_schemas_without_pruning(
-    construct_db_schemas: list[dict],
-    dbschema_retrieval: list[Document],
+    construct_db_schemas: dict,
+    dbschema_retrieval: dict,
     encoding: tiktoken.Encoding,
     allow_using_db_schemas_without_pruning: bool,
 ) -> dict:
@@ -234,18 +243,21 @@ def check_using_db_schemas_without_pruning(
     has_calculated_field = False
     has_metric = False
 
-    for table_schema in construct_db_schemas:
+    for table_schema in construct_db_schemas["db_schemas"]:
         if table_schema["type"] == "TABLE":
             ddl, _has_calculated_field = build_table_ddl(table_schema)
             retrieval_results.append(
                 {
                     "table_name": table_schema["name"],
                     "table_ddl": ddl,
+                    "table_score": construct_db_schemas["table_scores"][
+                        table_schema["name"]
+                    ],
                 }
             )
             has_calculated_field = has_calculated_field or _has_calculated_field
 
-    for document in dbschema_retrieval:
+    for document in dbschema_retrieval["documents"]:
         content = ast.literal_eval(document.content)
 
         if content["type"] == "METRIC":
@@ -253,6 +265,9 @@ def check_using_db_schemas_without_pruning(
                 {
                     "table_name": content["name"],
                     "table_ddl": _build_metric_ddl(content),
+                    "table_score": construct_db_schemas["table_scores"][
+                        content["name"]
+                    ],
                 }
             )
             has_metric = True
@@ -261,6 +276,9 @@ def check_using_db_schemas_without_pruning(
                 {
                     "table_name": content["name"],
                     "table_ddl": _build_view_ddl(content),
+                    "table_score": construct_db_schemas["table_scores"][
+                        content["name"]
+                    ],
                 }
             )
 
@@ -287,7 +305,7 @@ def check_using_db_schemas_without_pruning(
 @observe(capture_input=False)
 def prompt(
     query: str,
-    construct_db_schemas: list[dict],
+    construct_db_schemas: dict,
     prompt_builder: PromptBuilder,
     check_using_db_schemas_without_pruning: dict,
     histories: Optional[list[AskHistory]] = None,
@@ -298,7 +316,7 @@ def prompt(
         )
         db_schemas = [
             build_table_ddl(construct_db_schema)[0]
-            for construct_db_schema in construct_db_schemas
+            for construct_db_schema in construct_db_schemas["db_schemas"]
         ]
 
         previous_query_summaries = (
@@ -325,8 +343,8 @@ async def filter_columns_in_tables(
 def construct_retrieval_results(
     check_using_db_schemas_without_pruning: dict,
     filter_columns_in_tables: dict,
-    construct_db_schemas: list[dict],
-    dbschema_retrieval: list[Document],
+    construct_db_schemas: dict,
+    dbschema_retrieval: dict,
 ) -> dict[str, Any]:
     if filter_columns_in_tables:
         columns_and_tables_needed = orjson.loads(
@@ -344,7 +362,7 @@ def construct_retrieval_results(
         has_calculated_field = False
         has_metric = False
 
-        for table_schema in construct_db_schemas:
+        for table_schema in construct_db_schemas["db_schemas"]:
             if table_schema["type"] == "TABLE" and table_schema["name"] in tables:
                 ddl, _has_calculated_field = build_table_ddl(
                     table_schema,
@@ -361,7 +379,7 @@ def construct_retrieval_results(
                     }
                 )
 
-        for document in dbschema_retrieval:
+        for document in dbschema_retrieval["documents"]:
             if document.meta["name"] in columns_and_tables_needed:
                 content = ast.literal_eval(document.content)
 
@@ -370,6 +388,9 @@ def construct_retrieval_results(
                         {
                             "table_name": content["name"],
                             "table_ddl": _build_metric_ddl(content),
+                            "table_score": dbschema_retrieval["table_scores"][
+                                content["name"]
+                            ],
                         }
                     )
                     has_metric = True
@@ -378,6 +399,9 @@ def construct_retrieval_results(
                         {
                             "table_name": content["name"],
                             "table_ddl": _build_view_ddl(content),
+                            "table_score": dbschema_retrieval["table_scores"][
+                                content["name"]
+                            ],
                         }
                     )
 
