@@ -7,13 +7,19 @@ import {
   mapValues,
   snakeCase,
 } from 'lodash';
-import { AskResult } from '../models/adaptor';
+import { AskFeedbackResult, AskResult } from '../models/adaptor';
+
+export type AskingTaskDetail =
+  | AskResult
+  | (AskFeedbackResult & {
+      adjustment?: boolean;
+    });
 
 export interface AskingTask {
   id: number;
   queryId: string;
   question?: string;
-  detail?: AskResult;
+  detail?: AskingTaskDetail;
   threadId?: number;
   threadResponseId?: number;
   createdAt: Date;

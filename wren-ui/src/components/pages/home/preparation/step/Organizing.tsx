@@ -6,11 +6,12 @@ import { Spinner } from '@/components/PageLoading';
 interface Props {
   stream: string;
   loading?: boolean;
+  isAdjustment?: boolean;
 }
 
 export default function Organizing(props: Props) {
   const $wrapper = useRef<HTMLDivElement>(null);
-  const { stream, loading } = props;
+  const { stream, loading, isAdjustment } = props;
 
   const isDone = stream && !loading;
 
@@ -30,9 +31,13 @@ export default function Organizing(props: Props) {
     if (isDone) scrollBottom();
   }, [isDone]);
 
+  const title = isAdjustment
+    ? 'User-provided reasoning steps applied'
+    : 'Organizing thoughts';
+
   return (
     <>
-      <Typography.Text className="gray-8">Organizing thoughts</Typography.Text>
+      <Typography.Text className="gray-8">{title}</Typography.Text>
       <div
         ref={$wrapper}
         className="gray-7 text-sm mt-2"

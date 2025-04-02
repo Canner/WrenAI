@@ -19,10 +19,13 @@ import useAskPrompt, {
   canFetchThreadResponse,
   isRecommendedFinished,
 } from '@/hooks/useAskPrompt';
+import useAdjustAnswer from '@/hooks/useAdjustAnswer';
 import useModalAction from '@/hooks/useModalAction';
 import PromptThread from '@/components/pages/home/promptThread';
 import SaveAsViewModal from '@/components/modals/SaveAsViewModal';
 import QuestionSQLPairModal from '@/components/modals/QuestionSQLPairModal';
+import AdjustReasoningStepsModal from '@/components/modals/AdjustReasoningStepsModal';
+import AdjustSQLModal from '@/components/modals/AdjustSQLModal';
 import { getAnswerIsFinished } from '@/components/pages/home/promptThread/TextBasedAnswer';
 import { getIsChartFinished } from '@/components/pages/home/promptThread/ChartAnswer';
 import { PromptThreadProvider } from '@/components/pages/home/promptThread/store';
@@ -34,7 +37,6 @@ import {
   useGenerateThreadRecommendationQuestionsMutation,
   useGetThreadRecommendationQuestionsLazyQuery,
   useGenerateThreadResponseAnswerMutation,
-  useGenerateThreadResponseBreakdownMutation,
   useGenerateThreadResponseChartMutation,
   useAdjustThreadResponseChartMutation,
 } from '@/apollo/client/graphql/home.generated';
@@ -54,25 +56,18 @@ const getThreadResponseIsFinished = (threadResponse: ThreadResponse) => {
 
   // false make it keep polling when the text based answer is default needed.
   let isAnswerFinished = isBreakdownOnly ? null : false;
-  let isBreakdownFinished = null;
   let isChartFinished = null;
 
   // answerDetail status can be FAILED before getting queryId from Wren AI adapter
   if (answerDetail?.queryId || answerDetail?.status) {
     isAnswerFinished = getAnswerIsFinished(answerDetail?.status);
   }
-  if (breakdownDetail?.queryId) {
-    isBreakdownFinished = getIsFinished(breakdownDetail?.status);
-  }
+
   if (chartDetail?.queryId) {
     isChartFinished = getIsChartFinished(chartDetail?.status);
   }
   // if equal false, it means it has task & the task is not finished
-  return (
-    isAnswerFinished !== false &&
-    isBreakdownFinished !== false &&
-    isChartFinished !== false
-  );
+  return isAnswerFinished !== false && isChartFinished !== false;
 };
 
 export default function HomeThread() {
@@ -82,8 +77,11 @@ export default function HomeThread() {
   const homeSidebar = useHomeSidebar();
   const threadId = useMemo(() => Number(params?.id) || null, [params]);
   const askPrompt = useAskPrompt(threadId);
+  const adjustAnswer = useAdjustAnswer(threadId);
   const saveAsViewModal = useModalAction();
   const questionSqlPairModal = useModalAction();
+  const adjustReasoningStepsModal = useModalAction();
+  const adjustSqlModal = useModalAction();
 
   const [showRecommendedQuestions, setShowRecommendedQuestions] =
     useState<boolean>(false);
@@ -150,9 +148,6 @@ export default function HomeThread() {
   const [generateThreadResponseAnswer] =
     useGenerateThreadResponseAnswerMutation();
 
-  const [generateThreadResponseBreakdown] =
-    useGenerateThreadResponseBreakdownMutation();
-
   const [generateThreadResponseChart] =
     useGenerateThreadResponseChartMutation();
   const [adjustThreadResponseChart] = useAdjustThreadResponseChartMutation();
@@ -186,13 +181,6 @@ export default function HomeThread() {
 
   const onGenerateThreadResponseAnswer = async (responseId: number) => {
     await generateThreadResponseAnswer({ variables: { responseId } });
-    fetchThreadResponse({ variables: { responseId } });
-  };
-
-  const onGenerateThreadResponseBreakdown = async (responseId: number) => {
-    await generateThreadResponseBreakdown({
-      variables: { responseId },
-    });
     fetchThreadResponse({ variables: { responseId } });
   };
 
@@ -317,16 +305,19 @@ export default function HomeThread() {
       askingStreamTask: askPrompt.data?.askingStreamTask,
       onStopAskingTask: askPrompt.onStop,
       onReRunAskingTask: askPrompt.onReRun,
+      onStopAdjustTask: adjustAnswer.onStop,
+      onReRunAdjustTask: adjustAnswer.onReRun,
       onFixSQLStatement,
     },
     onOpenSaveAsViewModal: saveAsViewModal.openModal,
     onSelectRecommendedQuestion: onCreateResponse,
     onGenerateThreadRecommendedQuestions: onGenerateThreadRecommendedQuestions,
     onGenerateTextBasedAnswer: onGenerateThreadResponseAnswer,
-    onGenerateBreakdownAnswer: onGenerateThreadResponseBreakdown,
     onGenerateChartAnswer: onGenerateThreadResponseChart,
     onAdjustChartAnswer: onAdjustThreadResponseChart,
     onOpenSaveToKnowledgeModal: questionSqlPairModal.openModal,
+    onOpenAdjustReasoningStepsModal: adjustReasoningStepsModal.openModal,
+    onOpenAdjustSQLModal: adjustSqlModal.openModal,
   };
 
   return (
@@ -358,6 +349,27 @@ export default function HomeThread() {
         onSubmit={async ({ data }: { data: CreateSqlPairInput }) => {
           await createSqlPairMutation({ variables: { data } });
         }}
+      />
+
+      <AdjustReasoningStepsModal
+        {...adjustReasoningStepsModal.state}
+        onClose={adjustReasoningStepsModal.closeModal}
+        loading={adjustAnswer.loading}
+        onSubmit={async (values) => {
+          await adjustAnswer.onAdjustReasoningSteps(
+            values.responseId,
+            values.data,
+          );
+        }}
+      />
+
+      <AdjustSQLModal
+        {...adjustSqlModal.state}
+        onClose={adjustSqlModal.closeModal}
+        loading={adjustAnswer.loading}
+        onSubmit={async (values) =>
+          await adjustAnswer.onAdjustSQL(values.responseId, values.sql)
+        }
       />
     </SiderLayout>
   );

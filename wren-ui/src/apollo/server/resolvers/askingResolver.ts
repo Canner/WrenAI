@@ -5,6 +5,7 @@ import {
   AskResultType,
   RecommendationQuestionStatus,
   ChartAdjustmentOption,
+  AskFeedbackStatus,
 } from '@server/models/adaptor';
 import { Thread } from '../repositories/threadRepository';
 import {
@@ -37,6 +38,14 @@ export interface SuggestedQuestionResponse {
 
 export interface Task {
   id: string;
+}
+
+export interface AdjustmentTask {
+  queryId: string;
+  status: AskFeedbackStatus;
+  error: WrenAIError | null;
+  sql: string;
+  traceId: string;
 }
 
 export interface AskingTask {
@@ -108,6 +117,13 @@ export class AskingResolver {
       this.generateThreadResponseChart.bind(this);
     this.adjustThreadResponseChart = this.adjustThreadResponseChart.bind(this);
     this.transformAskingTask = this.transformAskingTask.bind(this);
+
+    this.adjustThreadResponse = this.adjustThreadResponse.bind(this);
+    this.cancelAdjustThreadResponseAnswer =
+      this.cancelAdjustThreadResponseAnswer.bind(this);
+    this.rerunAdjustThreadResponseAnswer =
+      this.rerunAdjustThreadResponseAnswer.bind(this);
+    this.getAdjustmentTask = this.getAdjustmentTask.bind(this);
   }
 
   public async generateProjectRecommendationQuestions(
@@ -304,6 +320,7 @@ export class AskingResolver {
           breakdownDetail: response.breakdownDetail,
           answerDetail: response.answerDetail,
           chartDetail: response.chartDetail,
+          adjustment: response.adjustment,
         });
 
         return acc;
@@ -446,6 +463,98 @@ export class AskingResolver {
       responseId,
     });
     return task;
+  }
+
+  public async adjustThreadResponse(
+    _root: any,
+    args: {
+      responseId: number;
+      data: {
+        tables?: string[];
+        sqlGenerationReasoning?: string;
+        sql?: string;
+      };
+    },
+    ctx: IContext,
+  ): Promise<ThreadResponse> {
+    const { responseId, data } = args;
+    const askingService = ctx.askingService;
+    const project = await ctx.projectService.getCurrentProject();
+
+    if (data.sql) {
+      const response = await askingService.adjustThreadResponseWithSQL(
+        responseId,
+        {
+          sql: data.sql,
+        },
+      );
+      ctx.telemetry.sendEvent(
+        TelemetryEvent.HOME_ADJUST_THREAD_RESPONSE_WITH_SQL,
+        {
+          sql: data.sql,
+          responseId,
+        },
+      );
+      return response;
+    }
+
+    return askingService.adjustThreadResponseAnswer(
+      responseId,
+      {
+        projectId: project.id,
+        tables: data.tables,
+        sqlGenerationReasoning: data.sqlGenerationReasoning,
+      },
+      {
+        language: WrenAILanguage[project.language] || WrenAILanguage.EN,
+      },
+    );
+  }
+
+  public async cancelAdjustThreadResponseAnswer(
+    _root: any,
+    args: { taskId: string },
+    ctx: IContext,
+  ): Promise<boolean> {
+    const { taskId } = args;
+    const askingService = ctx.askingService;
+    await askingService.cancelAdjustThreadResponseAnswer(taskId);
+    return true;
+  }
+
+  public async rerunAdjustThreadResponseAnswer(
+    _root: any,
+    args: { responseId: number },
+    ctx: IContext,
+  ): Promise<boolean> {
+    const { responseId } = args;
+    const askingService = ctx.askingService;
+    const project = await ctx.projectService.getCurrentProject();
+    await askingService.rerunAdjustThreadResponseAnswer(
+      responseId,
+      project.id,
+      {
+        language: WrenAILanguage[project.language] || WrenAILanguage.EN,
+      },
+    );
+    return true;
+  }
+
+  public async getAdjustmentTask(
+    _root: any,
+    args: { taskId: string },
+    ctx: IContext,
+  ): Promise<AdjustmentTask> {
+    const { taskId } = args;
+    const askingService = ctx.askingService;
+    const adjustmentTask = await askingService.getAdjustmentTask(taskId);
+    return {
+      queryId: adjustmentTask?.queryId,
+      status: adjustmentTask?.status,
+      error: adjustmentTask?.error,
+      sql: adjustmentTask?.response?.[0]?.sql,
+      traceId: adjustmentTask?.traceId,
+    };
   }
 
   public async generateThreadResponseBreakdown(
@@ -604,12 +713,36 @@ export class AskingResolver {
       return parent.sql ? format(parent.sql) : null;
     },
     askingTask: async (parent: ThreadResponse, _args: any, ctx: IContext) => {
+      if (parent.adjustment) {
+        return null;
+      }
       const askingService = ctx.askingService;
       const askingTask = await askingService.getAskingTaskById(
         parent.askingTaskId,
       );
       if (!askingTask) return null;
       return this.transformAskingTask(askingTask, ctx);
+    },
+    adjustmentTask: async (
+      parent: ThreadResponse,
+      _args: any,
+      ctx: IContext,
+    ): Promise<AdjustmentTask> => {
+      if (!parent.adjustment) {
+        return null;
+      }
+      const askingService = ctx.askingService;
+      const adjustmentTask = await askingService.getAdjustmentTaskById(
+        parent.askingTaskId,
+      );
+      if (!adjustmentTask) return null;
+      return {
+        queryId: adjustmentTask?.queryId,
+        status: adjustmentTask?.status,
+        error: adjustmentTask?.error,
+        sql: adjustmentTask?.response?.[0]?.sql,
+        traceId: adjustmentTask?.traceId,
+      };
     },
   });
 

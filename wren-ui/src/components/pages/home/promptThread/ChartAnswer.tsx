@@ -218,7 +218,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
 
   if (error) {
     return (
-      <div className="py-6 px-4">
+      <div className="p-6">
         <Alert
           message={error.shortMessage}
           description={error.message}
@@ -239,7 +239,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
       paragraph={{ rows: 4 }}
       title={false}
     >
-      <div className="text-md gray-10 py-6 px-4">
+      <div className="text-md gray-10 p-6">
         {chartDetail?.description}
         {chartSpec ? (
           <ChartWrapper

@@ -200,7 +200,10 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
       return res.data as EngineQueryResponse;
     } catch (err: any) {
       logger.debug(`Got error when querying duckdb: ${err.message}`);
-      throw err;
+      throw Errors.create(Errors.GeneralErrorCodes.WREN_ENGINE_ERROR, {
+        customMessage: err.response?.data?.message || err.message,
+        originalError: err,
+      });
     }
   }
 
@@ -219,7 +222,10 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
       await axios.patch(url.href, configPayload, { headers });
     } catch (err: any) {
       logger.debug(`Got error when patching config: ${err.message}`);
-      throw err;
+      throw Errors.create(Errors.GeneralErrorCodes.WREN_ENGINE_ERROR, {
+        customMessage: err.response?.data?.message || err.message,
+        originalError: err,
+      });
     }
   }
 
@@ -248,7 +254,10 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
       return res.data;
     } catch (err: any) {
       logger.debug(`Got error when previewing data: ${err.message}`);
-      throw err;
+      throw Errors.create(Errors.GeneralErrorCodes.WREN_ENGINE_ERROR, {
+        customMessage: err.response?.data?.message || err.message,
+        originalError: err,
+      });
     }
   }
 

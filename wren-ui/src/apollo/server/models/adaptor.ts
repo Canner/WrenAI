@@ -291,3 +291,31 @@ export interface InstructionResult {
   status: InstructionStatus;
   error?: WrenAIError;
 }
+
+// ask feedback
+export interface AskFeedbackInput {
+  tables: string[];
+  sqlGenerationReasoning: string;
+  sql: string;
+  projectId: number;
+  configurations?: ProjectConfigurations;
+}
+
+export enum AskFeedbackStatus {
+  UNDERSTANDING = 'UNDERSTANDING',
+  GENERATING = 'GENERATING',
+  CORRECTING = 'CORRECTING',
+  FINISHED = 'FINISHED',
+  FAILED = 'FAILED',
+  STOPPED = 'STOPPED',
+}
+
+export interface AskFeedbackResult {
+  status: AskFeedbackStatus;
+  error?: WrenAIError;
+  response: Array<{
+    type: AskCandidateType.LLM;
+    sql: string;
+  }>;
+  traceId?: string;
+}

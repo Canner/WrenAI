@@ -932,7 +932,7 @@ export class ModelResolver {
   ) {
     const { sql, projectId, limit, dryRun } = args.data;
     const project = projectId
-      ? await ctx.projectService.getProjectById(projectId)
+      ? await ctx.projectService.getProjectById(parseInt(projectId))
       : await ctx.projectService.getCurrentProject();
     const { manifest } = await ctx.deployService.getLastDeployment(project.id);
     return await ctx.queryService.preview(sql, {
