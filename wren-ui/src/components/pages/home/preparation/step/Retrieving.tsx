@@ -20,7 +20,7 @@ export default function Retrieving(props: Props) {
   const data = tables.map((table) => ({ name: table }));
 
   const title = isAdjustment
-    ? 'Adjustment applied'
+    ? 'User-selected models applied'
     : 'Retrieving related models';
 
   const modelDescription = isAdjustment ? (

@@ -32,7 +32,7 @@ export default function Organizing(props: Props) {
   }, [isDone]);
 
   const title = isAdjustment
-    ? 'Reasoning steps applied'
+    ? 'User-provided reasoning steps applied'
     : 'Organizing thoughts';
 
   return (
