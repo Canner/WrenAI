@@ -343,19 +343,15 @@ export class AdjustmentBackgroundTaskTracker
               return;
             }
 
-            // update task in memory if any change
-            task.result = result;
-
-            // update the database
-            logger.info(`Updating task ${queryId} in database`);
-            await this.updateTaskInDatabase({ queryId }, task);
-
             // Check if task is now finalized
             if (this.isTaskFinalized(result.status)) {
               task.isFinalized = true;
               // update thread response if threadResponseId is provided
               if (task.threadResponseId) {
-                await this.updateThreadResponseWhenTaskFinalized(task);
+                await this.updateThreadResponseWhenTaskFinalized(
+                  task.threadResponseId,
+                  result,
+                );
               }
 
               // telemetry
@@ -384,6 +380,13 @@ export class AdjustmentBackgroundTaskTracker
                 `Task ${queryId} is finalized with status: ${result.status}`,
               );
             }
+
+            // update task in memory if any change
+            task.result = result;
+
+            // update the database
+            logger.info(`Updating task ${queryId} in database`);
+            await this.updateTaskInDatabase({ queryId }, result);
 
             // Mark the job as finished
             this.runningJobs.delete(queryId);
@@ -419,13 +422,14 @@ export class AdjustmentBackgroundTaskTracker
   }
 
   private async updateThreadResponseWhenTaskFinalized(
-    task: TrackedTask,
+    threadResponseId: number,
+    result: AskFeedbackResult,
   ): Promise<void> {
-    const response = task?.result?.response?.[0];
+    const response = result?.response?.[0];
     if (!response) {
       return;
     }
-    await this.threadResponseRepository.updateOne(task.threadResponseId, {
+    await this.threadResponseRepository.updateOne(threadResponseId, {
       sql: response?.sql,
     });
   }
@@ -457,7 +461,7 @@ export class AdjustmentBackgroundTaskTracker
 
   private async updateTaskInDatabase(
     filter: { queryId?: string; taskId?: number },
-    trackedTask: TrackedTask,
+    result: AskFeedbackResult,
   ): Promise<void> {
     const { queryId, taskId } = filter;
     let taskRecord: AskingTask | null = null;
@@ -475,7 +479,7 @@ export class AdjustmentBackgroundTaskTracker
     await this.askingTaskRepository.updateOne(taskRecord.id, {
       detail: {
         adjustment: true,
-        ...trackedTask.result,
+        ...result,
       },
     });
   }
