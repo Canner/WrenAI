@@ -54,8 +54,7 @@ export default function AdjustReasoningStepsModal(props: Props) {
     const listModels = listModelsResult.data?.listModels || [];
     const retrievedTables = listModels.reduce((result, model) => {
       if (defaultValue?.retrievedTables.includes(model.referenceName)) {
-        console.log(model.referenceName);
-        result.push({ label: model.displayName, value: model.referenceName });
+        result.push(model.referenceName);
       }
       return result;
     }, []);
@@ -101,10 +100,7 @@ export default function AdjustReasoningStepsModal(props: Props) {
       .then(async (values) => {
         await onSubmit({
           responseId: defaultValue.responseId,
-          data: {
-            ...values,
-            tables: values.tables.map((table) => table.value),
-          },
+          data: values,
         });
         onClose();
       })
