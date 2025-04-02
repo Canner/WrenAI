@@ -482,9 +482,20 @@ export class AskingResolver {
     const project = await ctx.projectService.getCurrentProject();
 
     if (data.sql) {
-      return askingService.adjustThreadResponseWithSQL(responseId, {
-        sql: data.sql,
-      });
+      const response = await askingService.adjustThreadResponseWithSQL(
+        responseId,
+        {
+          sql: data.sql,
+        },
+      );
+      ctx.telemetry.sendEvent(
+        TelemetryEvent.HOME_ADJUST_THREAD_RESPONSE_WITH_SQL,
+        {
+          sql: data.sql,
+          responseId,
+        },
+      );
+      return response;
     }
 
     return askingService.adjustThreadResponseAnswer(

@@ -58,6 +58,9 @@ export enum TelemetryEvent {
 
   // adjustment
   HOME_ADJUST_THREAD_RESPONSE = 'home_adjust_thread_response',
+  HOME_ADJUST_THREAD_RESPONSE_CANCEL = 'home_adjust_thread_response_cancel',
+  HOME_ADJUST_THREAD_RESPONSE_RERUN = 'home_adjust_thread_response_rerun',
+  HOME_ADJUST_THREAD_RESPONSE_WITH_SQL = 'home_adjust_thread_response_with_sql',
 
   // event after ask
   HOME_CREATE_VIEW = 'home_create_view',

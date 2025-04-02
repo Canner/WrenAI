@@ -13,6 +13,8 @@ import {
   ThreadResponseAdjustmentType,
 } from '@server/repositories';
 import { IWrenAIAdaptor } from '../adaptors';
+import { TelemetryEvent, WrenService } from '../telemetry/telemetry';
+import { PostHogTelemetry } from '../telemetry/telemetry';
 
 const logger = getLogger('AdjustmentTaskTracker');
 logger.level = 'debug';
@@ -26,6 +28,12 @@ interface TrackedTask {
   threadResponseId: number;
   question: string;
   originalThreadResponseId: number;
+  rerun?: boolean;
+  adjustmentPayload?: {
+    originalThreadResponseId: number;
+    retrievedTables: string[];
+    sqlGenerationReasoning: string;
+  };
 }
 
 export type TrackedAdjustmentResult = AskFeedbackResult & {
@@ -70,20 +78,24 @@ export class AdjustmentBackgroundTaskTracker
   private pollingIntervalId: NodeJS.Timeout;
   private runningJobs = new Set<string>();
   private threadResponseRepository: IThreadResponseRepository;
+  private telemetry: PostHogTelemetry;
 
   constructor({
+    telemetry,
     wrenAIAdaptor,
     askingTaskRepository,
     threadResponseRepository,
     pollingInterval = 1000, // 1 second
     memoryRetentionTime = 5 * 60 * 1000, // 5 minutes
   }: {
+    telemetry: PostHogTelemetry;
     wrenAIAdaptor: IWrenAIAdaptor;
     askingTaskRepository: IAskingTaskRepository;
     threadResponseRepository: IThreadResponseRepository;
     pollingInterval?: number;
     memoryRetentionTime?: number;
   }) {
+    this.telemetry = telemetry;
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.askingTaskRepository = askingTaskRepository;
     this.threadResponseRepository = threadResponseRepository;
@@ -144,6 +156,11 @@ export class AdjustmentBackgroundTaskTracker
         originalThreadResponseId: input.originalThreadResponseId,
         threadResponseId: createdThreadResponse.id,
         question: input.question,
+        adjustmentPayload: {
+          originalThreadResponseId: input.originalThreadResponseId,
+          retrievedTables: input.tables,
+          sqlGenerationReasoning: input.sqlGenerationReasoning,
+        },
       } as TrackedTask;
       this.trackedTasks.set(queryId, task);
       this.trackedTasksById.set(createdThreadResponse.id, task);
@@ -218,6 +235,12 @@ export class AdjustmentBackgroundTaskTracker
       originalThreadResponseId: originalThreadResponse.id,
       threadResponseId: currentThreadResponse.id,
       question: originalThreadResponse.question,
+      rerun: true,
+      adjustmentPayload: {
+        originalThreadResponseId: originalThreadResponse.id,
+        retrievedTables: adjustment.payload?.retrievedTables,
+        sqlGenerationReasoning: adjustment.payload?.sqlGenerationReasoning,
+      },
     } as TrackedTask;
     this.trackedTasks.set(queryId, task);
     this.trackedTasksById.set(currentThreadResponse.id, task);
@@ -257,6 +280,12 @@ export class AdjustmentBackgroundTaskTracker
 
   public async cancelAdjustmentTask(queryId: string): Promise<void> {
     await this.wrenAIAdaptor.cancelAskFeedback(queryId);
+
+    // telemetry
+    const eventName = TelemetryEvent.HOME_ADJUST_THREAD_RESPONSE_CANCEL;
+    this.telemetry.sendEvent(eventName, {
+      queryId,
+    });
   }
 
   public stopPolling(): void {
@@ -327,6 +356,28 @@ export class AdjustmentBackgroundTaskTracker
               // update thread response if threadResponseId is provided
               if (task.threadResponseId) {
                 await this.updateThreadResponseWhenTaskFinalized(task);
+              }
+
+              // telemetry
+              const eventName = task.rerun
+                ? TelemetryEvent.HOME_ADJUST_THREAD_RESPONSE_RERUN
+                : TelemetryEvent.HOME_ADJUST_THREAD_RESPONSE;
+              const eventProperties = {
+                taskId: task.taskId,
+                queryId: task.queryId,
+                status: result.status,
+                error: result.error,
+                adjustmentPayload: task.adjustmentPayload,
+              };
+              if (result.status === AskFeedbackStatus.FINISHED) {
+                this.telemetry.sendEvent(eventName, eventProperties);
+              } else {
+                this.telemetry.sendEvent(
+                  eventName,
+                  eventProperties,
+                  WrenService.AI,
+                  false,
+                );
               }
 
               logger.info(

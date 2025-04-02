@@ -103,13 +103,13 @@ export enum ThreadResponseAnswerStatus {
 }
 
 // adjustment input
-export interface AdjustmentInput {
+export interface AdjustmentReasoningInput {
   tables: string[];
   sqlGenerationReasoning: string;
   projectId: number;
 }
 
-export interface AdjustmentApplySqlInput {
+export interface AdjustmentSqlInput {
   sql: string;
 }
 
@@ -176,11 +176,11 @@ export interface IAskingService {
   ): Promise<ThreadResponse>;
   adjustThreadResponseWithSQL(
     threadResponseId: number,
-    input: AdjustmentApplySqlInput,
+    input: AdjustmentSqlInput,
   ): Promise<ThreadResponse>;
   adjustThreadResponseAnswer(
     threadResponseId: number,
-    input: AdjustmentInput,
+    input: AdjustmentReasoningInput,
     configurations: { language: string },
   ): Promise<ThreadResponse>;
   cancelAdjustThreadResponseAnswer(taskId: string): Promise<void>;
@@ -482,6 +482,7 @@ export class AskingService implements IAskingService {
         threadRepository,
       });
     this.adjustmentBackgroundTracker = new AdjustmentBackgroundTaskTracker({
+      telemetry,
       wrenAIAdaptor,
       askingTaskRepository,
       threadResponseRepository,
@@ -1061,7 +1062,7 @@ export class AskingService implements IAskingService {
 
   public async adjustThreadResponseWithSQL(
     threadResponseId: number,
-    input: AdjustmentApplySqlInput,
+    input: AdjustmentSqlInput,
   ): Promise<ThreadResponse> {
     const response = await this.threadResponseRepository.findOneBy({
       id: threadResponseId,
@@ -1086,7 +1087,7 @@ export class AskingService implements IAskingService {
 
   public async adjustThreadResponseAnswer(
     threadResponseId: number,
-    input: AdjustmentInput,
+    input: AdjustmentReasoningInput,
     configurations: { language: string },
   ): Promise<ThreadResponse> {
     const originalThreadResponse =
@@ -1127,10 +1128,7 @@ export class AskingService implements IAskingService {
     if (!threadResponse) {
       throw new Error(`Thread response ${threadResponseId} not found`);
     }
-    const adjustment = threadResponse.adjustment;
-    if (!adjustment) {
-      throw new Error(`Thread response ${threadResponseId} has no adjustment`);
-    }
+
     const { queryId } =
       await this.adjustmentBackgroundTracker.rerunAdjustmentTask({
         threadId: threadResponse.threadId,
