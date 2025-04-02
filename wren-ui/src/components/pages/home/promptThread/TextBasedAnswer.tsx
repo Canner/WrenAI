@@ -62,6 +62,29 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
     [status],
   );
 
+  // Adapt askingTask and adjustment reasoning data to dropdown
+  const adjustAnswerDropdownData = useMemo(() => {
+    const { payload } = threadResponse.adjustment || {};
+    return {
+      responseId: threadResponse.id,
+      sql: threadResponse.sql,
+      retrievedTables:
+        threadResponse.askingTask?.retrievedTables ||
+        payload?.retrievedTables ||
+        [],
+      sqlGenerationReasoning:
+        threadResponse.askingTask?.sqlGenerationReasoning ||
+        payload?.sqlGenerationReasoning ||
+        '',
+    };
+  }, [
+    threadResponse.id,
+    threadResponse.sql,
+    threadResponse.adjustment?.payload,
+    threadResponse.askingTask?.retrievedTables,
+    threadResponse.askingTask?.sqlGenerationReasoning,
+  ]);
+
   useEffect(() => {
     if (isStreaming) {
       setTextAnswer(answerStreamTask);
@@ -120,13 +143,16 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
     onGenerateTextBasedAnswer(id);
   };
 
-  const onMoreClick = async (payload) => {
+  const onMoreClick = async (payload: {
+    type: MORE_ACTION;
+    data: typeof adjustAnswerDropdownData;
+  }) => {
     const { type, data } = payload;
     if (type === MORE_ACTION.ADJUST_STEPS) {
       onOpenAdjustReasoningStepsModal({
-        retrievedTables: threadResponse.askingTask.retrievedTables,
-        sqlGenerationReasoning:
-          threadResponse.askingTask.sqlGenerationReasoning,
+        responseId: data.responseId,
+        retrievedTables: data.retrievedTables,
+        sqlGenerationReasoning: data.sqlGenerationReasoning,
       });
     } else if (type === MORE_ACTION.ADJUST_SQL) {
       onOpenAdjustSQLModal({ sql: data.sql });
@@ -156,7 +182,7 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
         <div className="text-right mb-4">
           <AdjustAnswerDropdown
             onMoreClick={onMoreClick}
-            data={{ sql: threadResponse.sql }}
+            data={adjustAnswerDropdownData}
             onDropdownVisibleChange={adjustResultsDropdown.onVisibleChange}
           >
             <Button

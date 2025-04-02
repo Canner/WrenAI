@@ -75,7 +75,7 @@ export default function PromptThread() {
   const responses = useMemo(() => data?.responses || [], [data?.responses]);
 
   const triggerScrollToBottom = (behavior?: ScrollBehavior) => {
-    if ((data?.responses || []).length <= 1) return;
+    if (responses.length <= 1) return;
     const contentLayout = divRef.current?.parentElement;
     const allElements = (divRef.current?.querySelectorAll(
       '[data-jsid="answerResult"]',
@@ -98,12 +98,12 @@ export default function PromptThread() {
   }, [router.query]);
 
   useEffect(() => {
-    const lastResponse = data?.responses[data?.responses.length - 1];
+    const lastResponse = responses[responses.length - 1];
     const isLastResponseFinished =
       getIsFinished(lastResponse?.askingTask?.status) ||
       getAnswerIsFinished(lastResponse?.answerDetail?.status);
     triggerScrollToBottom(isLastResponseFinished ? 'auto' : 'smooth');
-  }, [data?.responses]);
+  }, [responses]);
 
   const onInitPreviewDone = () => {
     triggerScrollToBottom();

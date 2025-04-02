@@ -15,7 +15,9 @@ export type IPromptThreadStore = {
   preparation: {
     askingStreamTask?: string;
     onStopAskingTask?: (queryId?: string) => Promise<void>;
+    onStopAdjustTask?: (queryId?: string) => Promise<void>;
     onReRunAskingTask?: (threadResponse: ThreadResponse) => Promise<void>;
+    onReRunAdjustTask?: (threadResponse: ThreadResponse) => Promise<void>;
     onFixSQLStatement?: (responseId: number, sql: string) => Promise<void>;
   };
   onOpenSaveAsViewModal: (data: { sql: string; responseId: number }) => void;
@@ -36,6 +38,7 @@ export type IPromptThreadStore = {
     payload: { isCreateMode: boolean },
   ) => void;
   onOpenAdjustReasoningStepsModal: (data: {
+    responseId: number;
     retrievedTables: string[];
     sqlGenerationReasoning: string;
   }) => void;
