@@ -18,7 +18,7 @@
     "@google-cloud/bigquery": "^6.0.3",
     "@google-cloud/storage": "^6.10.1",
     "apollo-server-micro": "^3.10.2",
-    "axios": "^1.8.2",
+    "axios": "^1.8.4",
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^9.4.3",
     "graphql": "^16.6.0",
@@ -87,7 +87,7 @@
     "ts-jest": "29.1.1",
     "ts-node": "9.1.1",
     "typescript": "5.2.2",
-    "vega": "^5.30.0",
+    "vega": "^5.31.0",
     "vega-embed": "^6.29.0",
     "vega-lite": "^5.21.0"
   },
