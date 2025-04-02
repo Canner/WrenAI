@@ -130,6 +130,7 @@ export class ProjectResolver {
       await ctx.modelService.deleteAllViewsByProjectId(id);
       await ctx.modelService.deleteAllModelsByProjectId(id);
       await ctx.projectService.deleteProject(id);
+      await ctx.wrenAIAdaptor.delete(id);
 
       // telemetry
       ctx.telemetry.sendEvent(eventName, {

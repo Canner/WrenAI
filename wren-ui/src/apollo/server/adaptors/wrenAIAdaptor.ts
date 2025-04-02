@@ -30,6 +30,9 @@ import {
   GenerateInstructionInput,
   InstructionStatus,
   InstructionResult,
+  AskFeedbackInput,
+  AskFeedbackResult,
+  AskFeedbackStatus,
 } from '@server/models/adaptor';
 import { getLogger } from '@server/utils';
 import * as Errors from '@server/utils/error';
@@ -48,6 +51,7 @@ const getAIServiceError = (error: any) => {
 
 export interface IWrenAIAdaptor {
   deploy(deployData: DeployData): Promise<WrenAIDeployResponse>;
+  delete(projectId: number): Promise<void>;
 
   /**
    * Ask AI service a question.
@@ -118,6 +122,13 @@ export interface IWrenAIAdaptor {
   ): Promise<AsyncQueryResponse>;
   getInstructionResult(queryId: string): Promise<InstructionResult>;
   deleteInstructions(ids: number[], projectId: number): Promise<void>;
+
+  /**
+   * Ask feedback APIs
+   */
+  createAskFeedback(input: AskFeedbackInput): Promise<AsyncQueryResponse>;
+  getAskFeedbackResult(queryId: string): Promise<AskFeedbackResult>;
+  cancelAskFeedback(queryId: string): Promise<void>;
 }
 
 export class WrenAIAdaptor implements IWrenAIAdaptor {
@@ -126,6 +137,31 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   constructor({ wrenAIBaseEndpoint }: { wrenAIBaseEndpoint: string }) {
     this.wrenAIBaseEndpoint = wrenAIBaseEndpoint;
   }
+
+  public async delete(projectId: number): Promise<void> {
+    try {
+      if (!projectId) {
+        throw new Error('Project ID is required');
+      }
+      const url = `${this.wrenAIBaseEndpoint}/v1/semantics`;
+      const response = await axios.delete(url, {
+        params: {
+          project_id: projectId.toString(),
+        },
+      });
+
+      if (response.status === 200) {
+        logger.info(`Wren AI: Deleted semantics for project ${projectId}`);
+      } else {
+        throw new Error(`Failed to delete semantics. ${response.data?.error}`);
+      }
+    } catch (error: any) {
+      throw new Error(
+        `Wren AI: Failed to delete semantics: ${getAIServiceError(error)}`,
+      );
+    }
+  }
+
   public async deploySqlPair(
     projectId: number,
     sqlPair: Partial<SqlPair>,
@@ -542,19 +578,19 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   public async generateInstruction(
     input: GenerateInstructionInput[],
   ): Promise<AsyncQueryResponse> {
-    const body = input.map((item) => ({
-      id: item.id.toString(),
-      instruction: item.instruction,
-      questions: item.questions,
-      is_default: item.isDefault,
-      project_id: item.projectId?.toString(),
-    }));
+    const body = {
+      instructions: input.map((item) => ({
+        id: item.id.toString(),
+        instruction: item.instruction,
+        questions: item.questions,
+        is_default: item.isDefault,
+      })),
+      project_id: input[0]?.projectId.toString(),
+    };
     try {
       const res = await axios.post(
         `${this.wrenAIBaseEndpoint}/v1/instructions`,
-        {
-          instructions: body,
-        },
+        body,
       );
       return { queryId: res.data.event_id };
     } catch (err: any) {
@@ -619,6 +655,77 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       );
       throw err;
     }
+  }
+
+  public async createAskFeedback(
+    input: AskFeedbackInput,
+  ): Promise<AsyncQueryResponse> {
+    try {
+      const body = {
+        tables: input.tables,
+        sql_generation_reasoning: input.sqlGenerationReasoning,
+        sql: input.sql,
+        project_id: input.projectId.toString(),
+        configurations: input.configurations,
+      };
+
+      const res = await axios.post(
+        `${this.wrenAIBaseEndpoint}/v1/ask-feedbacks`,
+        body,
+      );
+      return { queryId: res.data.query_id };
+    } catch (err: any) {
+      logger.debug(
+        `Got error when creating ask feedback: ${getAIServiceError(err)}`,
+      );
+      throw err;
+    }
+  }
+
+  public async getAskFeedbackResult(
+    queryId: string,
+  ): Promise<AskFeedbackResult> {
+    try {
+      const res = await axios.get(
+        `${this.wrenAIBaseEndpoint}/v1/ask-feedbacks/${queryId}`,
+      );
+      return this.transformAskFeedbackResult(res.data);
+    } catch (err: any) {
+      logger.debug(
+        `Got error when getting ask feedback result: ${getAIServiceError(err)}`,
+      );
+      throw err;
+    }
+  }
+
+  public async cancelAskFeedback(queryId: string): Promise<void> {
+    try {
+      await axios.patch(
+        `${this.wrenAIBaseEndpoint}/v1/ask-feedbacks/${queryId}`,
+        {
+          status: 'stopped',
+        },
+      );
+    } catch (err: any) {
+      logger.debug(
+        `Got error when canceling ask feedback: ${getAIServiceError(err)}`,
+      );
+      throw err;
+    }
+  }
+
+  private transformAskFeedbackResult(body: any): AskFeedbackResult {
+    const { status, error } = this.transformStatusAndError(body);
+    return {
+      status: status as AskFeedbackStatus,
+      error,
+      response:
+        body.response?.map((result: any) => ({
+          sql: result.sql,
+          type: result.type?.toUpperCase() as AskCandidateType,
+        })) || [],
+      traceId: body.trace_id,
+    };
   }
 
   private transformChartAdjustmentInput(input: ChartAdjustmentInput) {
@@ -768,7 +875,8 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       | ChartStatus
       | SqlPairStatus
       | QuestionsStatus
-      | InstructionStatus;
+      | InstructionStatus
+      | AskFeedbackStatus;
     error?: {
       code: Errors.GeneralErrorCodes;
       message: string;

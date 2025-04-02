@@ -228,12 +228,14 @@ export default function useAskPrompt(threadId?: number) {
         checkFetchAskingStreamTask(askingTask);
       }
     }
+  }, [askingTask?.status, threadId, checkFetchAskingStreamTask]);
 
+  useEffect(() => {
     // handle instant recommended questions
     if (isNeedRecommendedQuestions(askingTask)) {
       startRecommendedQuestions();
     }
-  }, [askingTask, threadId, checkFetchAskingStreamTask]);
+  }, [askingTask?.type]);
 
   useEffect(() => {
     if (isRecommendedFinished(recommendedQuestions?.status))

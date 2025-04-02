@@ -41,6 +41,9 @@ export enum GeneralErrorCodes {
   GENERATE_QUESTIONS_ERROR = 'GENERATE_QUESTIONS_ERROR',
   INVALID_SQL_ERROR = 'INVALID_SQL_ERROR',
 
+  // wren engine error
+  WREN_ENGINE_ERROR = 'WREN_ENGINE_ERROR',
+
   // asking task error
   // when rerun from cancelled, the task is identified as general or misleading query
   IDENTIED_AS_GENERAL = 'IDENTIED_AS_GENERAL',

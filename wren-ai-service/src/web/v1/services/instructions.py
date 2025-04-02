@@ -74,16 +74,27 @@ class InstructionsService:
         trace_id = kwargs.get("trace_id")
 
         try:
-            instructions = [
-                Instruction(
-                    id=instruction.id,
-                    instruction=instruction.instruction,
-                    question=question,
-                    is_default=instruction.is_default,
-                )
-                for instruction in request.instructions
-                for question in instruction.questions
-            ]
+            instructions = []
+            for instruction in request.instructions:
+                if instruction.is_default:
+                    instructions.append(
+                        Instruction(
+                            id=instruction.id,
+                            instruction=instruction.instruction,
+                            question="",
+                            is_default=True,
+                        )
+                    )
+                else:
+                    for question in instruction.questions:
+                        instructions.append(
+                            Instruction(
+                                id=instruction.id,
+                                instruction=instruction.instruction,
+                                question=question,
+                                is_default=False,
+                            )
+                        )
 
             await self._pipelines["instructions_indexing"].run(
                 project_id=request.project_id,
