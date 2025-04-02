@@ -5138,7 +5138,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"axios@npm:^1.8.3":
+"axios@npm:^1.8.4":
   version: 1.8.4
   resolution: "axios@npm:1.8.4"
   dependencies:
@@ -16422,7 +16422,7 @@ __metadata:
     ace-builds: "npm:^1.32.3"
     antd: "npm:4.20.4"
     apollo-server-micro: "npm:^3.10.2"
-    axios: "npm:^1.8.3"
+    axios: "npm:^1.8.4"
     bcryptjs: "npm:^2.4.3"
     better-sqlite3: "npm:^9.4.3"
     clsx: "npm:^2.1.1"
