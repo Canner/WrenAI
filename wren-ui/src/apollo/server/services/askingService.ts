@@ -9,7 +9,6 @@ import {
   ChartStatus,
   ChartAdjustmentOption,
   WrenAILanguage,
-  ProjectConfigurations,
 } from '@server/models/adaptor';
 import { IDeployService } from './deployService';
 import { IProjectService } from './projectService';
@@ -187,7 +186,7 @@ export interface IAskingService {
   rerunAdjustThreadResponseAnswer(
     threadResponseId: number,
     projectId: number,
-    configurations: ProjectConfigurations,
+    configurations: { language: string },
   ): Promise<{ queryId: string }>;
   getAdjustmentTask(taskId: string): Promise<TrackedAdjustmentResult>;
   getAdjustmentTaskById(id: number): Promise<TrackedAdjustmentResult>;
@@ -1120,7 +1119,7 @@ export class AskingService implements IAskingService {
   public async rerunAdjustThreadResponseAnswer(
     threadResponseId: number,
     projectId: number,
-    configurations: ProjectConfigurations,
+    configurations: { language: string },
   ): Promise<{ queryId: string }> {
     const threadResponse = await this.threadResponseRepository.findOneBy({
       id: threadResponseId,

@@ -3,7 +3,6 @@ import {
   AskFeedbackInput,
   AskFeedbackResult,
   AskFeedbackStatus,
-  ProjectConfigurations,
 } from '@server/models/adaptor';
 import {
   AskingTask,
@@ -45,13 +44,14 @@ export type CreateAdjustmentTaskInput = AskFeedbackInput & {
   threadId: number;
   question: string;
   originalThreadResponseId: number;
+  configurations: { language: string };
 };
 
 export type RerunAdjustmentTaskInput = {
   threadResponseId: number;
   threadId: number;
   projectId: number;
-  configurations: ProjectConfigurations;
+  configurations: { language: string };
 };
 
 export interface IAdjustmentBackgroundTaskTracker {

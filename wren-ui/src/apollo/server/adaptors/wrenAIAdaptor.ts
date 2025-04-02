@@ -722,7 +722,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       response:
         body.response?.map((result: any) => ({
           sql: result.sql,
-          type: result.type.toUpperCase() as AskCandidateType,
+          type: result.type?.toUpperCase() as AskCandidateType,
         })) || [],
       traceId: body.trace_id,
     };
