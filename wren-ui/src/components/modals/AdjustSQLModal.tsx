@@ -9,7 +9,12 @@ import ErrorCollapse from '@/components/ErrorCollapse';
 import PreviewData from '@/components/dataPreview/PreviewData';
 import { usePreviewSqlMutation } from '@/apollo/client/graphql/sql.generated';
 
-type Props = ModalAction<{ sql: string }> & {
+interface AdjustSQLFormValues {
+  responseId: number;
+  sql: string;
+}
+
+type Props = ModalAction<AdjustSQLFormValues, AdjustSQLFormValues> & {
   loading?: boolean;
 };
 
@@ -91,7 +96,10 @@ export default function AdjustSQLModal(props: Props) {
       .then(async (values) => {
         try {
           await onValidateSQL();
-          await onSubmit(values);
+          await onSubmit({
+            responseId: defaultValue?.responseId,
+            sql: values.sql,
+          });
           onClose();
         } catch (error) {
           handleError(error);

@@ -27,7 +27,6 @@ export type IPromptThreadStore = {
   }: SelectQuestionProps) => Promise<void>;
   onGenerateThreadRecommendedQuestions: () => Promise<void>;
   onGenerateTextBasedAnswer: (responseId: number) => Promise<void>;
-  onGenerateBreakdownAnswer: (responseId: number) => Promise<void>;
   onGenerateChartAnswer: (responseId: number) => Promise<void>;
   onAdjustChartAnswer: (
     responseId: number,
@@ -42,7 +41,7 @@ export type IPromptThreadStore = {
     retrievedTables: string[];
     sqlGenerationReasoning: string;
   }) => void;
-  onOpenAdjustSQLModal: (data: { sql: string }) => void;
+  onOpenAdjustSQLModal: (data: { responseId: number; sql: string }) => void;
 };
 
 // Register store provider

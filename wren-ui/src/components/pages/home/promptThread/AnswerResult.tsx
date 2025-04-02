@@ -28,9 +28,16 @@ import {
   ThreadResponse,
   ThreadResponseAnswerDetail,
   ThreadResponseAnswerStatus,
+  ThreadResponseAdjustment,
+  ThreadResponseAdjustmentType,
 } from '@/apollo/client/graphql/__types__';
 
 const { Title, Text } = Typography;
+
+const adjustmentType = {
+  [ThreadResponseAdjustmentType.APPLY_SQL]: 'User-provided SQL applied',
+  [ThreadResponseAdjustmentType.REASONING]: 'Reasoning steps adjusted',
+};
 
 const knowledgeTooltip = (
   <>
@@ -147,15 +154,10 @@ const renderRecommendedQuestions = (
   );
 };
 
-const AdjustmentInformation = () => {
-  // TODO: use real data
-  const adjustment = {
-    type: 'ADJUST_SQL',
-  };
-  const adjustmentType = {
-    ADJUST_SQL: 'User-provided SQL applied',
-    ADJUST_REASONING_STEPS: 'Reasoning steps adjusted',
-  };
+const AdjustmentInformation = (props: {
+  adjustment: ThreadResponseAdjustment;
+}) => {
+  const { adjustment } = props;
 
   return (
     <div className="rounded bg-gray-3 gray-6 py-2 px-3 mb-2">
@@ -190,7 +192,6 @@ export default function AnswerResult(props: Props) {
     onOpenSaveAsViewModal,
     onGenerateThreadRecommendedQuestions,
     onGenerateTextBasedAnswer,
-    onGenerateBreakdownAnswer,
     onGenerateChartAnswer,
     onOpenSaveToKnowledgeModal,
     // recommend questions
@@ -209,14 +210,14 @@ export default function AnswerResult(props: Props) {
     question,
     sql,
     view,
+    adjustment,
   } = threadResponse;
 
   const resultStyle = isLastThreadResponse
     ? { minHeight: 'calc(100vh - (194px))' }
     : null;
 
-  // TODO: use real data
-  const isAdjustment = false;
+  const isAdjustment = !!adjustment;
 
   const recommendedQuestionProps = getRecommendedQuestionProps(
     recommendedQuestions,
@@ -259,13 +260,6 @@ export default function AnswerResult(props: Props) {
   ]);
 
   const onTabClick = (activeKey: string) => {
-    if (
-      activeKey === ANSWER_TAB_KEYS.VIEW_SQL &&
-      !threadResponse.breakdownDetail
-    ) {
-      onGenerateBreakdownAnswer(id);
-    }
-
     if (activeKey === ANSWER_TAB_KEYS.CHART && !threadResponse.chartDetail) {
       onGenerateChartAnswer(id);
     }
@@ -278,7 +272,7 @@ export default function AnswerResult(props: Props) {
 
   return (
     <div style={resultStyle} data-jsid="answerResult">
-      {isAdjustment && <AdjustmentInformation />}
+      {isAdjustment && <AdjustmentInformation adjustment={adjustment} />}
       <QuestionTitle className="mb-4" question={question} />
       <Preparation
         className="mb-3"

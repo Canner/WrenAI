@@ -120,7 +120,7 @@ export default function ViewSQLTabContent(props: AnswerResultProps) {
               data-ph-capture-attribute-name="view_sql_copy_sql"
               icon={<CodeFilled />}
               size="small"
-              onClick={() => onOpenAdjustSQLModal({ sql })}
+              onClick={() => onOpenAdjustSQLModal({ sql, responseId: id })}
             >
               Adjust SQL
             </Button>

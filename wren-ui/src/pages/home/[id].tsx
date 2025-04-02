@@ -37,7 +37,6 @@ import {
   useGenerateThreadRecommendationQuestionsMutation,
   useGetThreadRecommendationQuestionsLazyQuery,
   useGenerateThreadResponseAnswerMutation,
-  useGenerateThreadResponseBreakdownMutation,
   useGenerateThreadResponseChartMutation,
   useAdjustThreadResponseChartMutation,
 } from '@/apollo/client/graphql/home.generated';
@@ -57,25 +56,18 @@ const getThreadResponseIsFinished = (threadResponse: ThreadResponse) => {
 
   // false make it keep polling when the text based answer is default needed.
   let isAnswerFinished = isBreakdownOnly ? null : false;
-  let isBreakdownFinished = null;
   let isChartFinished = null;
 
   // answerDetail status can be FAILED before getting queryId from Wren AI adapter
   if (answerDetail?.queryId || answerDetail?.status) {
     isAnswerFinished = getAnswerIsFinished(answerDetail?.status);
   }
-  if (breakdownDetail?.queryId) {
-    isBreakdownFinished = getIsFinished(breakdownDetail?.status);
-  }
+
   if (chartDetail?.queryId) {
     isChartFinished = getIsChartFinished(chartDetail?.status);
   }
   // if equal false, it means it has task & the task is not finished
-  return (
-    isAnswerFinished !== false &&
-    isBreakdownFinished !== false &&
-    isChartFinished !== false
-  );
+  return isAnswerFinished !== false && isChartFinished !== false;
 };
 
 export default function HomeThread() {
@@ -156,9 +148,6 @@ export default function HomeThread() {
   const [generateThreadResponseAnswer] =
     useGenerateThreadResponseAnswerMutation();
 
-  const [generateThreadResponseBreakdown] =
-    useGenerateThreadResponseBreakdownMutation();
-
   const [generateThreadResponseChart] =
     useGenerateThreadResponseChartMutation();
   const [adjustThreadResponseChart] = useAdjustThreadResponseChartMutation();
@@ -192,13 +181,6 @@ export default function HomeThread() {
 
   const onGenerateThreadResponseAnswer = async (responseId: number) => {
     await generateThreadResponseAnswer({ variables: { responseId } });
-    fetchThreadResponse({ variables: { responseId } });
-  };
-
-  const onGenerateThreadResponseBreakdown = async (responseId: number) => {
-    await generateThreadResponseBreakdown({
-      variables: { responseId },
-    });
     fetchThreadResponse({ variables: { responseId } });
   };
 
@@ -331,7 +313,6 @@ export default function HomeThread() {
     onSelectRecommendedQuestion: onCreateResponse,
     onGenerateThreadRecommendedQuestions: onGenerateThreadRecommendedQuestions,
     onGenerateTextBasedAnswer: onGenerateThreadResponseAnswer,
-    onGenerateBreakdownAnswer: onGenerateThreadResponseBreakdown,
     onGenerateChartAnswer: onGenerateThreadResponseChart,
     onAdjustChartAnswer: onAdjustThreadResponseChart,
     onOpenSaveToKnowledgeModal: questionSqlPairModal.openModal,
@@ -385,10 +366,10 @@ export default function HomeThread() {
       <AdjustSQLModal
         {...adjustSqlModal.state}
         onClose={adjustSqlModal.closeModal}
-        loading={false}
-        onSubmit={async (data) => {
-          console.log('adjust sql:', data);
-        }}
+        loading={adjustAnswer.loading}
+        onSubmit={async (values) =>
+          await adjustAnswer.onAdjustSQL(values.responseId, values.sql)
+        }
       />
     </SiderLayout>
   );

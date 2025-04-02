@@ -356,16 +356,6 @@ export const GENERATE_THREAD_RECOMMENDATION_QUESTIONS = gql`
   }
 `;
 
-export const GENERATE_THREAD_RESPONSE_BREAKDOWN = gql`
-  mutation GenerateThreadResponseBreakdown($responseId: Int!) {
-    generateThreadResponseBreakdown(responseId: $responseId) {
-      ...CommonResponse
-    }
-  }
-
-  ${COMMON_RESPONSE}
-`;
-
 export const GENERATE_THREAD_RESPONSE_ANSWER = gql`
   mutation GenerateThreadResponseAnswer($responseId: Int!) {
     generateThreadResponseAnswer(responseId: $responseId) {
