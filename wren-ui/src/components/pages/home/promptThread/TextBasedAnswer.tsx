@@ -159,15 +159,42 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
     }
   };
 
+  const adjustAnswerDropdown = (
+    <AdjustAnswerDropdown
+      onMoreClick={onMoreClick}
+      data={adjustAnswerDropdownData}
+      onDropdownVisibleChange={adjustResultsDropdown.onVisibleChange}
+    >
+      <Button
+        className="px-0"
+        type="link"
+        size="small"
+        icon={<EditOutlined />}
+        onClick={(event) => event.stopPropagation()}
+      >
+        Adjust the answer
+        <CaretDownOutlined
+          className="ml-1"
+          rotate={adjustResultsDropdown.visible ? 180 : 0}
+        />
+      </Button>
+    </AdjustAnswerDropdown>
+  );
+
   if (error) {
     return (
-      <Alert
-        className="m-6"
-        message={error.shortMessage}
-        description={error.message}
-        type="error"
-        showIcon
-      />
+      <>
+        <div className="py-4 px-6">
+          <div className="text-right">{adjustAnswerDropdown}</div>
+          <Alert
+            className="mt-4 mb-2"
+            message={error.shortMessage}
+            description={error.message}
+            type="error"
+            showIcon
+          />
+        </div>
+      </>
     );
   }
 
@@ -179,27 +206,7 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
       title={false}
     >
       <div className="text-md gray-10 py-4 px-6">
-        <div className="text-right mb-4">
-          <AdjustAnswerDropdown
-            onMoreClick={onMoreClick}
-            data={adjustAnswerDropdownData}
-            onDropdownVisibleChange={adjustResultsDropdown.onVisibleChange}
-          >
-            <Button
-              className="px-0"
-              type="link"
-              size="small"
-              icon={<EditOutlined />}
-              onClick={(event) => event.stopPropagation()}
-            >
-              Adjust the answer
-              <CaretDownOutlined
-                className="ml-1"
-                rotate={adjustResultsDropdown.visible ? 180 : 0}
-              />
-            </Button>
-          </AdjustAnswerDropdown>
-        </div>
+        <div className="text-right mb-4">{adjustAnswerDropdown}</div>
         <MarkdownBlock content={textAnswer} />
         {isStreaming && <LoadingOutlined className="geekblue-6" spin />}
         {status === ThreadResponseAnswerStatus.INTERRUPTED && (

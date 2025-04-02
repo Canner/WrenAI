@@ -315,6 +315,7 @@ export const AdjustAnswerDropdown = makeDropdown(
       {
         label: 'Adjust SQL',
         icon: <CodeFilled className="text-base" />,
+        disabled: !data.sql,
         key: 'adjust-sql',
         onClick: () =>
           onMoreClick({
