@@ -396,6 +396,8 @@ class QdrantProvider(DocumentStoreProvider):
         self.get_store(dataset_name="table_descriptions", recreate_index=recreate_index)
         self.get_store(dataset_name="view_questions", recreate_index=recreate_index)
         self.get_store(dataset_name="sql_pairs", recreate_index=recreate_index)
+        self.get_store(dataset_name="instructions", recreate_index=recreate_index)
+        self.get_store(dataset_name="project_meta", recreate_index=recreate_index)
 
     def get_store(
         self,
