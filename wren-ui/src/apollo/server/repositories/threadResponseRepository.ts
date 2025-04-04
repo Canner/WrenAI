@@ -39,6 +39,29 @@ export interface ThreadResponseChartDetail {
   adjustment?: boolean;
 }
 
+export enum ThreadResponseAdjustmentType {
+  REASONING = 'REASONING',
+  APPLY_SQL = 'APPLY_SQL',
+}
+
+export type ThreadResponseAdjustmentReasoningPayload = {
+  originalThreadResponseId?: number;
+  retrievedTables?: string[];
+  sqlGenerationReasoning?: string;
+};
+
+export type ThreadResponseAdjustmentApplySqlPayload = {
+  originalThreadResponseId?: number;
+  sql?: string;
+};
+
+export interface ThreadResponseAdjustment {
+  type: ThreadResponseAdjustmentType;
+  // todo: I think we could use a better way to do this instead of using a union type
+  payload: ThreadResponseAdjustmentReasoningPayload &
+    ThreadResponseAdjustmentApplySqlPayload;
+}
+
 export interface ThreadResponse {
   id: number; // ID
   askingTaskId?: number; // Reference to asking_task.id
@@ -49,6 +72,7 @@ export interface ThreadResponse {
   answerDetail?: ThreadResponseAnswerDetail; // AI generated text-based answer detail
   breakdownDetail?: ThreadResponseBreakdownDetail; // Thread response breakdown detail
   chartDetail?: ThreadResponseChartDetail; // Thread response chart detail
+  adjustment?: ThreadResponseAdjustment; // Thread response adjustment
 }
 
 export interface IThreadResponseRepository
@@ -67,6 +91,7 @@ export class ThreadResponseRepository
     'answerDetail',
     'breakdownDetail',
     'chartDetail',
+    'adjustment',
   ];
 
   constructor(knexPg: Knex) {
@@ -102,11 +127,16 @@ export class ThreadResponseRepository
           res.chartDetail && typeof res.chartDetail === 'string'
             ? JSON.parse(res.chartDetail)
             : res.chartDetail;
+        const adjustment =
+          res.adjustment && typeof res.adjustment === 'string'
+            ? JSON.parse(res.adjustment)
+            : res.adjustment;
         return {
           ...res,
           answerDetail: answerDetail || null,
           breakdownDetail: breakdownDetail || null,
           chartDetail: chartDetail || null,
+          adjustment: adjustment || null,
         };
       }) as ThreadResponse[];
   }
@@ -120,6 +150,7 @@ export class ThreadResponseRepository
       answerDetail: ThreadResponseAnswerDetail;
       breakdownDetail: ThreadResponseBreakdownDetail;
       chartDetail: ThreadResponseChartDetail;
+      adjustment: ThreadResponseAdjustment;
     }>,
     queryOptions?: IQueryOptions,
   ) {
@@ -136,6 +167,7 @@ export class ThreadResponseRepository
       chartDetail: data.chartDetail
         ? JSON.stringify(data.chartDetail)
         : undefined,
+      adjustment: data.adjustment ? JSON.stringify(data.adjustment) : undefined,
     };
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
     const [result] = await executer(this.tableName)

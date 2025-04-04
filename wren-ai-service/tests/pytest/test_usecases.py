@@ -107,12 +107,19 @@ def deploy_mdl(mdl_str: str, url: str):
     return semantics_preperation_id
 
 
-async def ask_question(question: str, url: str, semantics_preperation_id: str):
+async def ask_question(
+    question: str, url: str, semantics_preperation_id: str, lang: str = "English"
+):
     print(f"preparing to ask question: {question}")
     async with aiohttp.ClientSession() as session:
         start = time.time()
         response = await session.post(
-            f"{url}/v1/asks", json={"query": question, "id": semantics_preperation_id}
+            f"{url}/v1/asks",
+            json={
+                "query": question,
+                "id": semantics_preperation_id,
+                "configurations": {"language": lang},
+            },
         )
         assert response.status == 200
 
@@ -133,11 +140,13 @@ async def ask_question(question: str, url: str, semantics_preperation_id: str):
         return result
 
 
-async def ask_questions(questions: list[str], url: str, semantics_preperation_id: str):
+async def ask_questions(
+    questions: list[str], url: str, semantics_preperation_id: str, lang: str = "English"
+):
     tasks = []
     for question in questions:
         task = asyncio.ensure_future(
-            ask_question(question, url, semantics_preperation_id)
+            ask_question(question, url, semantics_preperation_id, lang)
         )
         tasks.append(task)
         await asyncio.sleep(10)
@@ -160,7 +169,7 @@ if __name__ == "__main__":
         "woocommerce": "bigquery",
         "stripe": "bigquery",
         "ecommerce": "duckdb",
-        "hr": "duckdb",
+        # "hr": "duckdb",
         "facebook_marketing": "bigquery",
         "google_ads": "bigquery",
     }
@@ -174,10 +183,22 @@ if __name__ == "__main__":
         default=["all"],
         choices=["all"] + usecases,
     )
+    parser.add_argument(
+        "--lang",
+        type=str,
+        choices=["en", "zh-TW", "zh-CN"],
+        default="en",
+    )
     args = parser.parse_args()
 
     if "all" not in args.usecases:
         usecases = args.usecases
+
+    lang = {
+        "en": "English",
+        "zh-TW": "Traditional Chinese",
+        "zh-CN": "Simplified Chinese",
+    }[args.lang]
 
     url = "http://localhost:5556"
 
@@ -197,7 +218,7 @@ if __name__ == "__main__":
 
         # ask questions
         results = asyncio.run(
-            ask_questions(data["questions"], url, semantics_preperation_id)
+            ask_questions(data["questions"], url, semantics_preperation_id, lang)
         )
         assert len(results) == len(data["questions"])
 

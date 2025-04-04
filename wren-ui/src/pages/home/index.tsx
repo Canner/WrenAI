@@ -13,6 +13,7 @@ import RecommendedQuestionsPrompt from '@/components/pages/home/prompt/Recommend
 import {
   useSuggestedQuestionsQuery,
   useCreateThreadMutation,
+  useThreadLazyQuery,
 } from '@/apollo/client/graphql/home.generated';
 import { useGetSettingsQuery } from '@/apollo/client/graphql/settings.generated';
 import { CreateThreadInput } from '@/apollo/client/graphql/__types__';
@@ -98,6 +99,9 @@ export default function Home() {
   const [createThread, { loading: threadCreating }] = useCreateThreadMutation({
     onCompleted: () => homeSidebar.refetch(),
   });
+  const [preloadThread] = useThreadLazyQuery({
+    fetchPolicy: 'cache-and-network',
+  });
 
   const { data: settingsResult } = useGetSettingsQuery();
   const settings = settingsResult?.settings;
@@ -119,7 +123,9 @@ export default function Home() {
     try {
       askPrompt.onStopPolling();
       const response = await createThread({ variables: { data: payload } });
-      router.push(Path.Home + `/${response.data.createThread.id}`);
+      const threadId = response.data.createThread.id;
+      await preloadThread({ variables: { threadId } });
+      router.push(Path.Home + `/${threadId}`);
     } catch (error) {
       console.error(error);
     }

@@ -195,6 +195,7 @@ def create_service_container(
                     **pipe_components["db_schema_retrieval"],
                     table_retrieval_size=settings.table_retrieval_size,
                     table_column_retrieval_size=settings.table_column_retrieval_size,
+                    allow_using_db_schemas_without_pruning=settings.allow_using_db_schemas_without_pruning,
                 ),
                 "sql_expansion": generation.SQLExpansion(
                     **pipe_components["sql_expansion"],

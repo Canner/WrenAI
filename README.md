@@ -45,7 +45,8 @@
 
 ### Ask any questions
 
-[Watch Demo](https://github.com/user-attachments/assets/e4e78006-0088-4094-b58f-8868689bf787)
+
+https://github.com/user-attachments/assets/f9c1cb34-5a95-4580-8890-ec9644da4160
 
 👉 Try with your data on [Wren AI Cloud](https://getwren.ai/?utm_source=github&utm_medium=content&utm_campaign=readme) or [Install in your local environment](https://docs.getwren.ai/oss/installation/?utm_source=github&utm_medium=content&utm_campaign=readme)
 

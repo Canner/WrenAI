@@ -16,6 +16,7 @@ import { IThreadRepository, Thread } from '../repositories/threadRepository';
 import {
   IThreadResponseRepository,
   ThreadResponse,
+  ThreadResponseAdjustmentType,
 } from '../repositories/threadResponseRepository';
 import { getLogger } from '@server/utils';
 import { isEmpty, isNil } from 'lodash';
@@ -25,13 +26,19 @@ import {
   TelemetryEvent,
   WrenService,
 } from '../telemetry/telemetry';
-import { IViewRepository, Project } from '../repositories';
+import {
+  IAskingTaskRepository,
+  IViewRepository,
+  Project,
+} from '../repositories';
 import { IQueryService, PreviewDataResponse } from './queryService';
 import { IMDLService } from './mdlService';
 import {
   ThreadRecommendQuestionBackgroundTracker,
   ChartBackgroundTracker,
   ChartAdjustmentBackgroundTracker,
+  AdjustmentBackgroundTaskTracker,
+  TrackedAdjustmentResult,
 } from '../backgrounds';
 import { getConfig } from '@server/config';
 import { TextBasedAnswerBackgroundTracker } from '../backgrounds/textBasedAnswerBackgroundTracker';
@@ -94,6 +101,17 @@ export enum ThreadResponseAnswerStatus {
   INTERRUPTED = 'INTERRUPTED',
 }
 
+// adjustment input
+export interface AdjustmentReasoningInput {
+  tables: string[];
+  sqlGenerationReasoning: string;
+  projectId: number;
+}
+
+export interface AdjustmentSqlInput {
+  sql: string;
+}
+
 export interface IAskingService {
   /**
    * Asking task.
@@ -132,6 +150,10 @@ export interface IAskingService {
     input: AskingDetailTaskInput,
     threadId: number,
   ): Promise<ThreadResponse>;
+  updateThreadResponse(
+    responseId: number,
+    data: { sql: string },
+  ): Promise<ThreadResponse>;
   getResponsesWithThread(threadId: number): Promise<ThreadResponse[]>;
   getResponse(responseId: number): Promise<ThreadResponse>;
   generateThreadResponseBreakdown(
@@ -151,6 +173,23 @@ export interface IAskingService {
     input: ChartAdjustmentOption,
     configurations: { language: string },
   ): Promise<ThreadResponse>;
+  adjustThreadResponseWithSQL(
+    threadResponseId: number,
+    input: AdjustmentSqlInput,
+  ): Promise<ThreadResponse>;
+  adjustThreadResponseAnswer(
+    threadResponseId: number,
+    input: AdjustmentReasoningInput,
+    configurations: { language: string },
+  ): Promise<ThreadResponse>;
+  cancelAdjustThreadResponseAnswer(taskId: string): Promise<void>;
+  rerunAdjustThreadResponseAnswer(
+    threadResponseId: number,
+    projectId: number,
+    configurations: { language: string },
+  ): Promise<{ queryId: string }>;
+  getAdjustmentTask(taskId: string): Promise<TrackedAdjustmentResult>;
+  getAdjustmentTaskById(id: number): Promise<TrackedAdjustmentResult>;
   changeThreadResponseAnswerDetailStatus(
     responseId: number,
     status: ThreadResponseAnswerStatus,
@@ -375,6 +414,8 @@ export class AskingService implements IAskingService {
   private telemetry: PostHogTelemetry;
   private mdlService: IMDLService;
   private askingTaskTracker: IAskingTaskTracker;
+  private askingTaskRepository: IAskingTaskRepository;
+  private adjustmentBackgroundTracker: AdjustmentBackgroundTaskTracker;
 
   constructor({
     telemetry,
@@ -384,6 +425,7 @@ export class AskingService implements IAskingService {
     viewRepository,
     threadRepository,
     threadResponseRepository,
+    askingTaskRepository,
     queryService,
     mdlService,
     askingTaskTracker,
@@ -395,6 +437,7 @@ export class AskingService implements IAskingService {
     viewRepository: IViewRepository;
     threadRepository: IThreadRepository;
     threadResponseRepository: IThreadResponseRepository;
+    askingTaskRepository: IAskingTaskRepository;
     queryService: IQueryService;
     mdlService: IMDLService;
     askingTaskTracker: IAskingTaskTracker;
@@ -437,7 +480,14 @@ export class AskingService implements IAskingService {
         wrenAIAdaptor,
         threadRepository,
       });
+    this.adjustmentBackgroundTracker = new AdjustmentBackgroundTaskTracker({
+      telemetry,
+      wrenAIAdaptor,
+      askingTaskRepository,
+      threadResponseRepository,
+    });
 
+    this.askingTaskRepository = askingTaskRepository;
     this.mdlService = mdlService;
     this.askingTaskTracker = askingTaskTracker;
   }
@@ -709,6 +759,22 @@ export class AskingService implements IAskingService {
     }
 
     return threadResponse;
+  }
+
+  public async updateThreadResponse(
+    responseId: number,
+    data: { sql: string },
+  ): Promise<ThreadResponse> {
+    const threadResponse = await this.threadResponseRepository.findOneBy({
+      id: responseId,
+    });
+    if (!threadResponse) {
+      throw new Error(`Thread response ${responseId} not found`);
+    }
+
+    return await this.threadResponseRepository.updateOne(responseId, {
+      sql: data.sql,
+    });
   }
 
   public async generateThreadResponseBreakdown(
@@ -991,6 +1057,97 @@ export class AskingService implements IAskingService {
     const { id } = await this.projectService.getCurrentProject();
     const lastDeploy = await this.deployService.getLastDeployment(id);
     return lastDeploy.hash;
+  }
+
+  public async adjustThreadResponseWithSQL(
+    threadResponseId: number,
+    input: AdjustmentSqlInput,
+  ): Promise<ThreadResponse> {
+    const response = await this.threadResponseRepository.findOneBy({
+      id: threadResponseId,
+    });
+    if (!response) {
+      throw new Error(`Thread response ${threadResponseId} not found`);
+    }
+
+    return await this.threadResponseRepository.createOne({
+      sql: input.sql,
+      threadId: response.threadId,
+      question: response.question,
+      adjustment: {
+        type: ThreadResponseAdjustmentType.APPLY_SQL,
+        payload: {
+          originalThreadResponseId: response.id,
+          sql: input.sql,
+        },
+      },
+    });
+  }
+
+  public async adjustThreadResponseAnswer(
+    threadResponseId: number,
+    input: AdjustmentReasoningInput,
+    configurations: { language: string },
+  ): Promise<ThreadResponse> {
+    const originalThreadResponse =
+      await this.threadResponseRepository.findOneBy({
+        id: threadResponseId,
+      });
+    if (!originalThreadResponse) {
+      throw new Error(`Thread response ${threadResponseId} not found`);
+    }
+
+    const { createdThreadResponse } =
+      await this.adjustmentBackgroundTracker.createAdjustmentTask({
+        threadId: originalThreadResponse.threadId,
+        tables: input.tables,
+        sqlGenerationReasoning: input.sqlGenerationReasoning,
+        sql: originalThreadResponse.sql,
+        projectId: input.projectId,
+        configurations,
+        question: originalThreadResponse.question,
+        originalThreadResponseId: originalThreadResponse.id,
+      });
+    return createdThreadResponse;
+  }
+
+  public async cancelAdjustThreadResponseAnswer(taskId: string): Promise<void> {
+    // call cancelAskFeedback on AI service
+    await this.adjustmentBackgroundTracker.cancelAdjustmentTask(taskId);
+  }
+
+  public async rerunAdjustThreadResponseAnswer(
+    threadResponseId: number,
+    projectId: number,
+    configurations: { language: string },
+  ): Promise<{ queryId: string }> {
+    const threadResponse = await this.threadResponseRepository.findOneBy({
+      id: threadResponseId,
+    });
+    if (!threadResponse) {
+      throw new Error(`Thread response ${threadResponseId} not found`);
+    }
+
+    const { queryId } =
+      await this.adjustmentBackgroundTracker.rerunAdjustmentTask({
+        threadId: threadResponse.threadId,
+        threadResponseId,
+        projectId,
+        configurations,
+      });
+    return { queryId };
+  }
+
+  public async getAdjustmentTask(
+    taskId: string,
+  ): Promise<TrackedAdjustmentResult | null> {
+    return this.adjustmentBackgroundTracker.getAdjustmentResult(taskId);
+  }
+
+  public async getAdjustmentTaskById(
+    id: number,
+  ): Promise<TrackedAdjustmentResult | null> {
+    return this.adjustmentBackgroundTracker.getAdjustmentResultById(id);
   }
 
   /**

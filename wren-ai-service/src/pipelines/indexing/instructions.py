@@ -43,7 +43,9 @@ class InstructionsConverter:
                         "is_default": instruction.is_default,
                         **addition,
                     },
-                    content=instruction.question,
+                    content="this is a global instruction, so no question is provided"
+                    if instruction.is_default
+                    else instruction.question,
                 )
                 for instruction in instructions
             ]
@@ -164,12 +166,12 @@ class Instructions(BasicPipeline):
     @observe(name="Clean Documents for Instructions")
     async def clean(
         self,
-        instructions: List[Instruction],
+        instructions: Optional[List[Instruction]] = None,
         project_id: Optional[str] = None,
         delete_all: bool = False,
     ) -> None:
         await clean(
-            instructions=instructions,
+            instructions=instructions or [],
             cleaner=self._components["cleaner"],
             project_id=project_id,
             delete_all=delete_all,

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { cloneDeep, uniq } from 'lodash';
 import {
+  AdjustmentTask,
   AskingTask,
   AskingTaskStatus,
   AskingTaskType,
@@ -36,8 +37,13 @@ export const getIsFinished = (status: AskingTaskStatus) =>
     AskingTaskStatus.STOPPED,
   ].includes(status);
 
-export const canGenerateAnswer = (askingTask: AskingTask) =>
-  askingTask === null || askingTask?.status === AskingTaskStatus.FINISHED;
+export const canGenerateAnswer = (
+  askingTask: AskingTask,
+  adjustmentTask: AdjustmentTask,
+) =>
+  (askingTask === null && adjustmentTask === null) ||
+  askingTask?.status === AskingTaskStatus.FINISHED ||
+  adjustmentTask?.status === AskingTaskStatus.FINISHED;
 
 export const canFetchThreadResponse = (askingTask: AskingTask) =>
   askingTask !== null &&
@@ -228,12 +234,14 @@ export default function useAskPrompt(threadId?: number) {
         checkFetchAskingStreamTask(askingTask);
       }
     }
+  }, [askingTask?.status, threadId, checkFetchAskingStreamTask]);
 
+  useEffect(() => {
     // handle instant recommended questions
     if (isNeedRecommendedQuestions(askingTask)) {
       startRecommendedQuestions();
     }
-  }, [askingTask, threadId, checkFetchAskingStreamTask]);
+  }, [askingTask?.type]);
 
   useEffect(() => {
     if (isRecommendedFinished(recommendedQuestions?.status))

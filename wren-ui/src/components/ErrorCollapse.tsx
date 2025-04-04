@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Collapse } from 'antd';
 import styled from 'styled-components';
 import CaretRightOutlined from '@ant-design/icons/CaretRightOutlined';
@@ -26,14 +27,21 @@ const StyledCollapse = styled(Collapse)`
 interface Props {
   message: string;
   className?: string;
+  defaultActive?: boolean;
 }
 
 export default function ErrorCollapse(props: Props) {
-  const { message, className } = props;
+  const { message, className, defaultActive } = props;
+  const [activeKey, setActiveKey] = useState<string[]>(
+    defaultActive ? ['1'] : [],
+  );
+
   return (
     <StyledCollapse
       className={className}
       ghost
+      activeKey={activeKey}
+      onChange={(key) => setActiveKey(key as string[])}
       expandIcon={({ isActive }) => (
         <CaretRightOutlined rotate={isActive ? 90 : 0} />
       )}

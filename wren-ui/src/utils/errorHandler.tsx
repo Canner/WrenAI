@@ -111,6 +111,15 @@ class CreateThreadResponseErrorHandler extends ErrorHandler {
   }
 }
 
+class UpdateThreadResponseErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to update thread response.';
+    }
+  }
+}
+
 class GenerateThreadResponseAnswerErrorHandler extends ErrorHandler {
   public getErrorMessage(error: GraphQLError) {
     switch (error.extensions?.code) {
@@ -120,11 +129,11 @@ class GenerateThreadResponseAnswerErrorHandler extends ErrorHandler {
   }
 }
 
-class GenerateThreadResponseBreakdownErrorHandler extends ErrorHandler {
+class AdjustThreadResponseErrorHandler extends ErrorHandler {
   public getErrorMessage(error: GraphQLError) {
     switch (error.extensions?.code) {
       default:
-        return 'Failed to generate thread response breakdown SQL answer.';
+        return 'Failed to adjust thread response answer.';
     }
   }
 }
@@ -358,14 +367,17 @@ errorHandlers.set(
   'CreateThreadResponse',
   new CreateThreadResponseErrorHandler(),
 );
-
+errorHandlers.set(
+  'UpdateThreadResponse',
+  new UpdateThreadResponseErrorHandler(),
+);
 errorHandlers.set(
   'GenerateThreadResponseAnswer',
   new GenerateThreadResponseAnswerErrorHandler(),
 );
 errorHandlers.set(
-  'GenerateThreadResponseBreakdown',
-  new GenerateThreadResponseBreakdownErrorHandler(),
+  'AdjustThreadResponse',
+  new AdjustThreadResponseErrorHandler(),
 );
 
 errorHandlers.set('CreateView', new CreateViewErrorHandler());

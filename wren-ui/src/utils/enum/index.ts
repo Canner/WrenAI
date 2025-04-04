@@ -8,3 +8,4 @@ export * from './diagram';
 export * from './home';
 export * from './settings';
 export * from './knowledge';
+export * from './dropdown';

@@ -91,7 +91,13 @@ export class ProcessStateMachine {
       prev: [],
     },
     [PROCESS_STATE.UNDERSTANDING]: {
-      next: [PROCESS_STATE.SEARCHING],
+      // probably skipped status if polling delay longer than AI processing time
+      // so need to allow all possible statuses
+      next: [
+        PROCESS_STATE.SEARCHING,
+        PROCESS_STATE.PLANNING,
+        PROCESS_STATE.GENERATING,
+      ],
       prev: [PROCESS_STATE.IDLE],
     },
     [PROCESS_STATE.SEARCHING]: {

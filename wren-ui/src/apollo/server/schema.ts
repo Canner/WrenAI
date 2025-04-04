@@ -572,12 +572,14 @@ export const typeDefs = gql`
   enum ResultCandidateType {
     VIEW # View type candidate is provided basd on a saved view
     LLM # LLM type candidate is created by LLM
+    SQL_PAIR # SQL pair type candidate is created by SQL pair
   }
 
   type ResultCandidate {
     type: ResultCandidateType!
     sql: String!
     view: ViewInfo
+    sqlPair: SqlPair
   }
 
   type AskingTask {
@@ -638,6 +640,14 @@ export const typeDefs = gql`
     summary: String
   }
 
+  input ThreadResponseUniqueWhereInput {
+    id: Int!
+  }
+
+  input UpdateThreadResponseInput {
+    sql: String
+  }
+
   input AdjustThreadResponseChartInput {
     chartType: ChartType!
     xAxis: String
@@ -645,6 +655,12 @@ export const typeDefs = gql`
     xOffset: String
     color: String
     theta: String
+  }
+
+  input AdjustThreadResponseInput {
+    tables: [String!]
+    sqlGenerationReasoning: String
+    sql: String
   }
 
   input PreviewDataInput {
@@ -698,6 +714,24 @@ export const typeDefs = gql`
     adjustment: Boolean
   }
 
+  enum ThreadResponseAdjustmentType {
+    REASONING
+    APPLY_SQL
+  }
+
+  type ThreadResponseAdjustment {
+    type: ThreadResponseAdjustmentType!
+    payload: JSON
+  }
+
+  type AdjustmentTask {
+    queryId: String
+    status: AskingTaskStatus
+    error: Error
+    sql: String
+    traceId: String
+  }
+
   type ThreadResponse {
     id: Int!
     threadId: Int!
@@ -708,6 +742,8 @@ export const typeDefs = gql`
     answerDetail: ThreadResponseAnswerDetail
     chartDetail: ThreadResponseChartDetail
     askingTask: AskingTask
+    adjustment: ThreadResponseAdjustment
+    adjustmentTask: AdjustmentTask
   }
 
   # Thread only consists of basic information of a thread
@@ -753,7 +789,7 @@ export const typeDefs = gql`
 
   input PreviewSQLDataInput {
     sql: String!
-    projectId: Int
+    projectId: String
     limit: Int
     dryRun: Boolean
   }
@@ -946,6 +982,9 @@ export const typeDefs = gql`
     threadResponse(responseId: Int!): ThreadResponse!
     nativeSql(responseId: Int!): String!
 
+    # Adjustment
+    adjustmentTask(taskId: String!): AdjustmentTask
+
     # Settings
     settings: Settings!
 
@@ -1035,6 +1074,10 @@ export const typeDefs = gql`
       threadId: Int!
       data: CreateThreadResponseInput!
     ): ThreadResponse!
+    updateThreadResponse(
+      where: ThreadResponseUniqueWhereInput!
+      data: UpdateThreadResponseInput!
+    ): ThreadResponse!
     previewData(where: PreviewDataInput!): JSON!
     previewBreakdownData(where: PreviewDataInput!): JSON!
 
@@ -1052,6 +1095,14 @@ export const typeDefs = gql`
       responseId: Int!
       data: AdjustThreadResponseChartInput!
     ): ThreadResponse!
+
+    # Adjustment
+    adjustThreadResponse(
+      responseId: Int!
+      data: AdjustThreadResponseInput!
+    ): ThreadResponse!
+    cancelAdjustmentTask(taskId: String!): Boolean!
+    rerunAdjustmentTask(responseId: Int!): Boolean!
 
     # Settings
     resetCurrentProject: Boolean!
