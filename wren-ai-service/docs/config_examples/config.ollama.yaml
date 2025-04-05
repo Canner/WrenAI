@@ -1,8 +1,9 @@
 # you should rename this file to config.yaml and put it in ~/.wrenai
 # please pay attention to the comments starting with # and adjust the config accordingly, 3 steps basically:
 # 1. you need to use your own llm and embedding models
-# 2. you need to use the correct pipe definitions based on https://raw.githubusercontent.com/canner/WrenAI/<WRENAI_VERSION_NUMBER>/docker/config.example.yaml
-# 3. you need to fill in correct llm and embedding models in the pipe definitions
+# 2. fill in embedding model dimension in the document_store section
+# 3. you need to use the correct pipe definitions based on https://raw.githubusercontent.com/canner/WrenAI/<WRENAI_VERSION_NUMBER>/docker/config.example.yaml
+# 4. you need to fill in correct llm and embedding models in the pipe definitions
 
 type: llm
 provider: litellm_llm
@@ -142,10 +143,11 @@ pipes:
 
 ---
 settings:
+  engine_timeout: 30
   column_indexing_batch_size: 50
   table_retrieval_size: 10
   table_column_retrieval_size: 100
-  allow_using_db_schemas_without_pruning: false # if you want to use db schemas without pruning, set this to true. It will be faster
+  allow_using_db_schemas_without_pruning: true
   allow_intent_classification: true
   allow_sql_generation_reasoning: true
   query_cache_maxsize: 1000

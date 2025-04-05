@@ -1,8 +1,10 @@
 # you should rename this file to config.yaml and put it in ~/.wrenai
 # please pay attention to the comments starting with # and adjust the config accordingly, 3 steps basically:
 # 1. you need to use your own llm and embedding models
-# 2. you need to use the correct pipe definitions based on https://raw.githubusercontent.com/canner/WrenAI/<WRENAI_VERSION_NUMBER>/docker/config.example.yaml
-# 3. you need to fill in correct llm and embedding models in the pipe definitions
+# 2. fill in embedding model dimension in the document_store section
+# 3. you need to use the correct pipe definitions based on https://raw.githubusercontent.com/canner/WrenAI/<WRENAI_VERSION_NUMBER>/docker/config.example.yaml
+# 4. you need to fill in correct llm and embedding models in the pipe definitions
+
 
 type: llm
 provider: litellm_llm
@@ -10,7 +12,6 @@ models:
   # put DEEPSEEK_API_KEY=<your_api_key> in ~/.wrenai/.env
   - api_base: https://api.deepseek.com/v1
     model: deepseek/deepseek-reasoner
-    alias: default
     timeout: 120
     kwargs:
       n: 1
@@ -27,6 +28,7 @@ models:
         type: text
   - api_base: https://api.deepseek.com/v1
     model: deepseek/deepseek-coder
+    alias: default
     timeout: 120
     kwargs:
       n: 1
@@ -40,9 +42,9 @@ provider: litellm_embedder
 models:
   # define OPENAI_API_KEY=<api_key> in ~/.wrenai/.env if you are using openai embedding model
   # please refer to LiteLLM documentation for more details: https://docs.litellm.ai/docs/providers
-  - model: text-embedding-3-large # put your embedding model name here, if it is not openai embedding model, should be <provider>/<model_name>
+  - model: text-embedding-3-large  # put your embedding model name here, if it is not openai embedding model, should be <provider>/<model_name>
     alias: default
-    api_base: https://api.openai.com/v1 # change this according to your embedding model
+    api_base: https://api.openai.com/v1  # change this according to your embedding model
     timeout: 120
 
 ---
@@ -97,7 +99,7 @@ pipes:
   - name: sql_summary
     llm: litellm_llm.default
   - name: sql_answer
-    llm: litellm_llm.default
+    llm: litellm_llm.deepseek/deepseek-chat
     engine: wren_ui
   - name: sql_breakdown
     llm: litellm_llm.default
@@ -128,7 +130,7 @@ pipes:
     embedder: litellm_embedder.default
     document_store: qdrant
   - name: data_assistance
-    llm: litellm_llm.default
+    llm: litellm_llm.deepseek/deepseek-chat
   - name: sql_pairs_indexing
     document_store: qdrant
     embedder: litellm_embedder.default
@@ -143,9 +145,9 @@ pipes:
   - name: sql_question_generation
     llm: litellm_llm.default
   - name: sql_generation_reasoning
-    llm: litellm_llm.default
+    llm: litellm_llm.deepseek/deepseek-reasoner
   - name: followup_sql_generation_reasoning
-    llm: litellm_llm.default
+    llm: litellm_llm.deepseek/deepseek-reasoner
   - name: sql_regeneration
     llm: litellm_llm.default
     engine: wren_ui
@@ -163,10 +165,11 @@ pipes:
 
 ---
 settings:
+  engine_timeout: 30
   column_indexing_batch_size: 50
   table_retrieval_size: 10
   table_column_retrieval_size: 100
-  allow_using_db_schemas_without_pruning: false # if you want to use db schemas without pruning, set this to true. It will be faster
+  allow_using_db_schemas_without_pruning: true
   allow_intent_classification: true
   allow_sql_generation_reasoning: true
   query_cache_maxsize: 1000
