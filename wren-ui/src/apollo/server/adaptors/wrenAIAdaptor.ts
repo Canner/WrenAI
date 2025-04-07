@@ -30,6 +30,9 @@ import {
   GenerateInstructionInput,
   InstructionStatus,
   InstructionResult,
+  AskFeedbackInput,
+  AskFeedbackResult,
+  AskFeedbackStatus,
 } from '@server/models/adaptor';
 import { getLogger } from '@server/utils';
 import * as Errors from '@server/utils/error';
@@ -119,6 +122,13 @@ export interface IWrenAIAdaptor {
   ): Promise<AsyncQueryResponse>;
   getInstructionResult(queryId: string): Promise<InstructionResult>;
   deleteInstructions(ids: number[], projectId: number): Promise<void>;
+
+  /**
+   * Ask feedback APIs
+   */
+  createAskFeedback(input: AskFeedbackInput): Promise<AsyncQueryResponse>;
+  getAskFeedbackResult(queryId: string): Promise<AskFeedbackResult>;
+  cancelAskFeedback(queryId: string): Promise<void>;
 }
 
 export class WrenAIAdaptor implements IWrenAIAdaptor {
@@ -647,6 +657,77 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     }
   }
 
+  public async createAskFeedback(
+    input: AskFeedbackInput,
+  ): Promise<AsyncQueryResponse> {
+    try {
+      const body = {
+        tables: input.tables,
+        sql_generation_reasoning: input.sqlGenerationReasoning,
+        sql: input.sql,
+        project_id: input.projectId.toString(),
+        configurations: input.configurations,
+      };
+
+      const res = await axios.post(
+        `${this.wrenAIBaseEndpoint}/v1/ask-feedbacks`,
+        body,
+      );
+      return { queryId: res.data.query_id };
+    } catch (err: any) {
+      logger.debug(
+        `Got error when creating ask feedback: ${getAIServiceError(err)}`,
+      );
+      throw err;
+    }
+  }
+
+  public async getAskFeedbackResult(
+    queryId: string,
+  ): Promise<AskFeedbackResult> {
+    try {
+      const res = await axios.get(
+        `${this.wrenAIBaseEndpoint}/v1/ask-feedbacks/${queryId}`,
+      );
+      return this.transformAskFeedbackResult(res.data);
+    } catch (err: any) {
+      logger.debug(
+        `Got error when getting ask feedback result: ${getAIServiceError(err)}`,
+      );
+      throw err;
+    }
+  }
+
+  public async cancelAskFeedback(queryId: string): Promise<void> {
+    try {
+      await axios.patch(
+        `${this.wrenAIBaseEndpoint}/v1/ask-feedbacks/${queryId}`,
+        {
+          status: 'stopped',
+        },
+      );
+    } catch (err: any) {
+      logger.debug(
+        `Got error when canceling ask feedback: ${getAIServiceError(err)}`,
+      );
+      throw err;
+    }
+  }
+
+  private transformAskFeedbackResult(body: any): AskFeedbackResult {
+    const { status, error } = this.transformStatusAndError(body);
+    return {
+      status: status as AskFeedbackStatus,
+      error,
+      response:
+        body.response?.map((result: any) => ({
+          sql: result.sql,
+          type: result.type?.toUpperCase() as AskCandidateType,
+        })) || [],
+      traceId: body.trace_id,
+    };
+  }
+
   private transformChartAdjustmentInput(input: ChartAdjustmentInput) {
     const { query, sql, adjustmentOption, chartSchema, configurations } = input;
     return {
@@ -794,7 +875,8 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       | ChartStatus
       | SqlPairStatus
       | QuestionsStatus
-      | InstructionStatus;
+      | InstructionStatus
+      | AskFeedbackStatus;
     error?: {
       code: Errors.GeneralErrorCodes;
       message: string;

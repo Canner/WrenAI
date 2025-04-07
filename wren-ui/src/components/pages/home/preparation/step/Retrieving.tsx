@@ -5,6 +5,7 @@ import { Spinner } from '@/components/PageLoading';
 interface Props {
   tables: string[];
   loading?: boolean;
+  isAdjustment?: boolean;
 }
 
 const TagTemplate = ({ name }: { name: string }) => {
@@ -14,15 +15,23 @@ const TagTemplate = ({ name }: { name: string }) => {
 const TagIterator = makeIterable(TagTemplate);
 
 export default function Retrieving(props: Props) {
-  const { tables, loading } = props;
+  const { tables, loading, isAdjustment } = props;
 
   const data = tables.map((table) => ({ name: table }));
 
+  const title = isAdjustment
+    ? 'User-selected models applied'
+    : 'Retrieving related models';
+
+  const modelDescription = isAdjustment ? (
+    <>{tables.length} models applied</>
+  ) : (
+    <>{tables.length} models found</>
+  );
+
   return (
     <>
-      <Typography.Text className="gray-8">
-        Retrieving related models
-      </Typography.Text>
+      <Typography.Text className="gray-8">{title}</Typography.Text>
       <div className="gray-7 text-sm mt-1">
         {loading ? (
           <div className="d-flex align-center gx-2">
@@ -31,7 +40,7 @@ export default function Retrieving(props: Props) {
           </div>
         ) : (
           <>
-            <div className="mb-1">{tables.length} models found</div>
+            <div className="mb-1">{modelDescription}</div>
             <TagIterator data={data} />
           </>
         )}
