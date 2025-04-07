@@ -157,3 +157,13 @@ def trace_metadata(func):
         return results
 
     return wrapper
+
+# For adapting deepseek response content contains "```json{....}```"
+def extract_braces_content(resp: str) -> str:
+    start = resp.find('{')
+    end = resp.rfind('}')
+
+    if start == -1 or end == -1 or end <= start:
+        return resp
+
+    return resp[start:end+1]
