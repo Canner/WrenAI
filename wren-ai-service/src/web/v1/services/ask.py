@@ -114,6 +114,7 @@ class AskResultResponse(_AskResultResponse):
 # POST /v1/ask-feedbacks
 class AskFeedbackRequest(BaseModel):
     _query_id: str | None = None
+    question: str
     tables: List[str]
     sql_generation_reasoning: str
     sql: str
@@ -165,6 +166,7 @@ class AskFeedbackResultResponse(BaseModel):
         "failed",
         "stopped",
     ]
+    invalid_sql: Optional[str] = None
     error: Optional[AskError] = None
     response: Optional[List[AskResult]] = None
     trace_id: Optional[str] = None
@@ -711,7 +713,8 @@ class AskService:
 
         query_id = ask_feedback_request.query_id
         api_results = []
-        error_message = ""
+        error_message = None
+        invalid_sql = None
 
         try:
             if not self._is_stopped(query_id, self._ask_feedback_results):
@@ -720,15 +723,43 @@ class AskService:
                     trace_id=trace_id,
                 )
 
-                retrieval_result = await self._pipelines["retrieval"].run(
-                    tables=ask_feedback_request.tables,
-                    project_id=ask_feedback_request.project_id,
+                (
+                    retrieval_task,
+                    sql_samples_task,
+                    instructions_task,
+                    sql_functions,
+                ) = await asyncio.gather(
+                    self._pipelines["retrieval"].run(
+                        tables=ask_feedback_request.tables,
+                        project_id=ask_feedback_request.project_id,
+                    ),
+                    self._pipelines["sql_pairs_retrieval"].run(
+                        query=ask_feedback_request.question,
+                        project_id=ask_feedback_request.project_id,
+                    ),
+                    self._pipelines["instructions_retrieval"].run(
+                        query=ask_feedback_request.question,
+                        project_id=ask_feedback_request.project_id,
+                    ),
+                    self._pipelines["sql_functions_retrieval"].run(
+                        project_id=ask_feedback_request.project_id,
+                    ),
                 )
-                _retrieval_result = retrieval_result.get(
+
+                # Extract results from completed tasks
+                _retrieval_result = retrieval_task.get(
                     "construct_retrieval_results", {}
                 )
+                has_calculated_field = _retrieval_result.get(
+                    "has_calculated_field", False
+                )
+                has_metric = _retrieval_result.get("has_metric", False)
                 documents = _retrieval_result.get("retrieval_results", [])
                 table_ddls = [document.get("table_ddl") for document in documents]
+                sql_samples = sql_samples_task["formatted_output"].get("documents", [])
+                instructions = instructions_task["formatted_output"].get(
+                    "documents", []
+                )
 
             if not self._is_stopped(query_id, self._ask_feedback_results):
                 self._ask_feedback_results[query_id] = AskFeedbackResultResponse(
@@ -744,6 +775,11 @@ class AskService:
                     sql=ask_feedback_request.sql,
                     project_id=ask_feedback_request.project_id,
                     configuration=ask_feedback_request.configurations,
+                    sql_samples=sql_samples,
+                    instructions=instructions,
+                    has_calculated_field=has_calculated_field,
+                    has_metric=has_metric,
+                    sql_functions=sql_functions,
                 )
 
                 if sql_valid_results := text_to_sql_generation_results["post_process"][
@@ -791,9 +827,13 @@ class AskService:
                         elif failed_dry_run_results := sql_correction_results[
                             "post_process"
                         ]["invalid_generation_results"]:
-                            error_message = failed_dry_run_results[0]["error"]
+                            invalid = failed_dry_run_results[0]
+                            invalid_sql = invalid["sql"]
+                            error_message = invalid["error"]
                     else:
-                        error_message = failed_dry_run_results[0]["error"]
+                        invalid = failed_dry_run_results[0]
+                        invalid_sql = invalid["sql"]
+                        error_message = invalid["error"]
 
             if api_results:
                 if not self._is_stopped(query_id, self._ask_feedback_results):
@@ -812,6 +852,7 @@ class AskService:
                             code="NO_RELEVANT_SQL",
                             message=error_message or "No relevant SQL",
                         ),
+                        invalid_sql=invalid_sql,
                         trace_id=trace_id,
                     )
                 results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
