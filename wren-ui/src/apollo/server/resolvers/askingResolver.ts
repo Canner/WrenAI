@@ -744,6 +744,7 @@ export class AskingResolver {
         error: adjustmentTask?.error,
         sql: adjustmentTask?.response?.[0]?.sql,
         traceId: adjustmentTask?.traceId,
+        invalidSql: adjustmentTask?.invalidSql,
       };
     },
   });
