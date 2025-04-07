@@ -46,6 +46,7 @@ export interface AdjustmentTask {
   error: WrenAIError | null;
   sql: string;
   traceId: string;
+  invalidSql?: string;
 }
 
 export interface AskingTask {
@@ -554,6 +555,7 @@ export class AskingResolver {
       error: adjustmentTask?.error,
       sql: adjustmentTask?.response?.[0]?.sql,
       traceId: adjustmentTask?.traceId,
+      invalidSql: adjustmentTask?.invalidSql,
     };
   }
 
