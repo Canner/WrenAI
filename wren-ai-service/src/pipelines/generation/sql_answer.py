@@ -70,9 +70,6 @@ async def generate_answer(prompt: dict, generator: Any, query_id: str) -> dict:
 ## End of Pipeline
 
 
-# SQL_ANSWER_MODEL_KWARGS = {"response_format": {"type": "text"}}
-
-
 class SQLAnswer(BasicPipeline):
     def __init__(
         self,
@@ -86,7 +83,6 @@ class SQLAnswer(BasicPipeline):
             ),
             "generator": llm_provider.get_generator(
                 system_prompt=sql_to_answer_system_prompt,
-                # generation_kwargs=SQL_ANSWER_MODEL_KWARGS,
                 streaming_callback=self._streaming_callback,
             ),
         }

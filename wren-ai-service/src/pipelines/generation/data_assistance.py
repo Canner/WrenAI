@@ -75,9 +75,6 @@ async def data_assistance(prompt: dict, generator: Any, query_id: str) -> dict:
 ## End of Pipeline
 
 
-# DATA_ASSISTANCE_MODEL_KWARGS = {"response_format": {"type": "text"}}
-
-
 class DataAssistance(BasicPipeline):
     def __init__(
         self,
@@ -88,7 +85,6 @@ class DataAssistance(BasicPipeline):
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=data_assistance_system_prompt,
-                # generation_kwargs=DATA_ASSISTANCE_MODEL_KWARGS,
                 streaming_callback=self._streaming_callback,
             ),
             "prompt_builder": PromptBuilder(
