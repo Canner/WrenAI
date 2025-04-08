@@ -115,9 +115,6 @@ def post_process(
 ## End of Pipeline
 
 
-SQL_GENERATION_REASONING_MODEL_KWARGS = {"response_format": {"type": "text"}}
-
-
 class FollowUpSQLGenerationReasoning(BasicPipeline):
     def __init__(
         self,
@@ -128,7 +125,6 @@ class FollowUpSQLGenerationReasoning(BasicPipeline):
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=sql_generation_reasoning_system_prompt,
-                generation_kwargs=SQL_GENERATION_REASONING_MODEL_KWARGS,
                 streaming_callback=self._streaming_callback,
             ),
             "prompt_builder": PromptBuilder(
