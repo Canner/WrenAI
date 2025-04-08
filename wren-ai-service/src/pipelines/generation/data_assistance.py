@@ -75,7 +75,7 @@ async def data_assistance(prompt: dict, generator: Any, query_id: str) -> dict:
 ## End of Pipeline
 
 
-DATA_ASSISTANCE_MODEL_KWARGS = {"response_format": {"type": "text"}}
+# DATA_ASSISTANCE_MODEL_KWARGS = {"response_format": {"type": "text"}}
 
 
 class DataAssistance(BasicPipeline):
@@ -88,7 +88,7 @@ class DataAssistance(BasicPipeline):
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=data_assistance_system_prompt,
-                generation_kwargs=DATA_ASSISTANCE_MODEL_KWARGS,
+                # generation_kwargs=DATA_ASSISTANCE_MODEL_KWARGS,
                 streaming_callback=self._streaming_callback,
             ),
             "prompt_builder": PromptBuilder(
@@ -102,9 +102,9 @@ class DataAssistance(BasicPipeline):
 
     def _streaming_callback(self, chunk, query_id):
         if query_id not in self._user_queues:
-            self._user_queues[query_id] = (
-                asyncio.Queue()
-            )  # Create a new queue for the user if it doesn't exist
+            self._user_queues[
+                query_id
+            ] = asyncio.Queue()  # Create a new queue for the user if it doesn't exist
         # Put the chunk content into the user's queue
         asyncio.create_task(self._user_queues[query_id].put(chunk.content))
         if chunk.meta.get("finish_reason"):
@@ -115,9 +115,9 @@ class DataAssistance(BasicPipeline):
             return await self._user_queues[query_id].get()
 
         if query_id not in self._user_queues:
-            self._user_queues[query_id] = (
-                asyncio.Queue()
-            )  # Ensure the user's queue exists
+            self._user_queues[
+                query_id
+            ] = asyncio.Queue()  # Ensure the user's queue exists
         while True:
             try:
                 # Wait for an item from the user's queue
