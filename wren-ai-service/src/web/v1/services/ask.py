@@ -65,9 +65,8 @@ class StopAskResponse(BaseModel):
 # GET /v1/asks/{query_id}/result
 class AskResult(BaseModel):
     sql: str
-    type: Literal["llm", "view", "sql_pair"] = "llm"
+    type: Literal["llm", "view"] = "llm"
     viewId: Optional[str] = None
-    sqlpairId: Optional[str] = None
 
 
 class AskError(BaseModel):
@@ -252,13 +251,8 @@ class AskService:
                         AskResult(
                             **{
                                 "sql": result.get("statement"),
-                                "type": "view"
-                                if result.get("viewId")
-                                else "sql_pair"
-                                if result.get("sqlpairId")
-                                else "llm",
+                                "type": "view" if result.get("viewId") else "llm",
                                 "viewId": result.get("viewId"),
-                                "sqlpairId": result.get("sqlpairId"),
                             }
                         )
                         for result in historical_question_result
