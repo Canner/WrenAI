@@ -38,7 +38,7 @@ class HistoricalQuestionMock(retrieval.HistoricalQuestionRetrieval):
 
 
 class IntentClassificationMock(generation.IntentClassification):
-    def __init__(self, intent: str = "MISLEADING_QUERY"):
+    def __init__(self, intent: str = "TEXT_TO_SQL"):
         self._intent = intent
 
     async def run(
