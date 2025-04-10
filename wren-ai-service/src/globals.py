@@ -46,6 +46,8 @@ def create_service_container(
         "ttl": settings.query_cache_ttl,
     }
     wren_ai_docs = fetch_wren_ai_docs(settings.doc_endpoint, settings.is_oss)
+    if not wren_ai_docs:
+        logger.warning("Failed to fetch Wren AI docs or response was empty.")
 
     return ServiceContainer(
         semantics_description=services.SemanticsDescription(
