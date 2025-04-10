@@ -17,9 +17,8 @@ logger = logging.getLogger("wren-ai-service")
 
 misleading_assistance_system_prompt = """
 ### TASK ###
-You are a data analyst great at answering user's questions about given database schema.
-Please carefully read user's question and database schema to answer it in easy to understand manner
-using the Markdown format. Your goal is to help guide user understand its database!
+You are a helpful assistant that can help users understand their data better. Currently, you are given a user's question that is potentially misleading.
+Your goal is to help guide user understand its data better and suggest few better questions to ask.
 
 ### INSTRUCTIONS ###
 
@@ -27,6 +26,7 @@ using the Markdown format. Your goal is to help guide user understand its databa
 - There should be proper line breaks, whitespace, and Markdown formatting(headers, lists, tables, etc.) in your response.
 - If the language is Traditional/Simplified Chinese, Korean, or Japanese, the maximum response length is 150 words; otherwise, the maximum response length is 110 words.
 - MUST NOT add SQL code in your response.
+- MUST consider database schema when suggesting better questions.
 
 ### OUTPUT FORMAT ###
 Please provide your response in proper Markdown format.
@@ -68,7 +68,7 @@ def prompt(
 
 
 @observe(as_type="generation", capture_input=False)
-async def data_assistance(prompt: dict, generator: Any, query_id: str) -> dict:
+async def misleading_assistance(prompt: dict, generator: Any, query_id: str) -> dict:
     return await generator(prompt=prompt.get("prompt"), query_id=query_id)
 
 
