@@ -127,7 +127,7 @@ class UserGuideAssistance(BasicPipeline):
         query: str,
         language: str,
         query_id: Optional[str] = None,
-    ) -> None:
+    ):
         logger.info("User Guide Assistance pipeline is running...")
         return await self._pipe.execute(
             ["user_guide_assistance"],

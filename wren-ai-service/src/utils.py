@@ -166,11 +166,15 @@ def fetch_wren_ai_docs(doc_endpoint: str, is_oss: bool) -> list[dict]:
         f"{doc_endpoint}/oss/llms.md" if is_oss else f"{doc_endpoint}/cloud/llms.md"
     )
 
-    response = requests.get(api_endpoint)
-    docs = response.text.split("\n---\n")
+    try:
+        response = requests.get(api_endpoint, timeout=10)
+        response.raise_for_status()  # Raise exception for 4XX/5XX responses
+        docs = response.text.split("\n---\n")
+    except requests.RequestException as e:
+        logger.error(f"Failed to fetch Wren AI docs: {str(e)}")
+        return []  # Return empty list on error
 
     doc_endpoint_base = f"{doc_endpoint}/oss" if is_oss else f"{doc_endpoint}/cloud"
-
     results = []
     for doc in docs:
         if doc:
