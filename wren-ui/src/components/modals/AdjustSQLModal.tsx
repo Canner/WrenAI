@@ -178,7 +178,7 @@ export default function AdjustSQLModal(props: Props) {
             },
           ]}
         >
-          <SQLEditor autoFocus />
+          <SQLEditor toolbar={<>sasas</>} autoFocus />
         </Form.Item>
       </Form>
       <div className="my-3">
