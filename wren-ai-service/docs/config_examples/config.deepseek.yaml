@@ -144,6 +144,8 @@ pipes:
     llm: litellm_llm.default
   - name: sql_executor
     engine: wren_ui
+  - name: user_guide_assistance
+    llm: litellm_llm.default
   - name: sql_question_generation
     llm: litellm_llm.default
   - name: sql_generation_reasoning

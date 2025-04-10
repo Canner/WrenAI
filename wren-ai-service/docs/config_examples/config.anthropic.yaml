@@ -116,6 +116,8 @@ pipes:
     llm: litellm_llm.default
   - name: sql_executor
     engine: wren_ui
+  - name: user_guide_assistance
+    llm: litellm_llm.default
   - name: chart_generation
     llm: litellm_llm.default
   - name: chart_adjustment
