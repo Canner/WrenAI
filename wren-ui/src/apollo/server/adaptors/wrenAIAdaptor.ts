@@ -662,13 +662,13 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   ): Promise<AsyncQueryResponse> {
     try {
       const body = {
+        question: input.question,
         tables: input.tables,
         sql_generation_reasoning: input.sqlGenerationReasoning,
         sql: input.sql,
         project_id: input.projectId.toString(),
         configurations: input.configurations,
       };
-
       const res = await axios.post(
         `${this.wrenAIBaseEndpoint}/v1/ask-feedbacks`,
         body,
@@ -725,6 +725,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
           type: result.type?.toUpperCase() as AskCandidateType,
         })) || [],
       traceId: body.trace_id,
+      invalidSql: body.invalid_sql,
     };
   }
 

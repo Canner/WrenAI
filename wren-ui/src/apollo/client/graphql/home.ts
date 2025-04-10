@@ -125,6 +125,7 @@ const COMMON_RESPONSE = gql`
       }
       sql
       traceId
+      invalidSql
     }
   }
 
@@ -400,6 +401,7 @@ export const ADJUSTMENT_TASK = gql`
       }
       sql
       traceId
+      invalidSql
     }
   }
 `;
