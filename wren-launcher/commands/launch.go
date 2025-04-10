@@ -375,6 +375,7 @@ func validateOpenaiApiKey(apiKey string) bool {
 	// insufficient credit balance error
 	if err != nil {
 		pterm.Error.Println("Invalid API key", err)
+		fmt.Scanln()
 		return true
 	}
 
