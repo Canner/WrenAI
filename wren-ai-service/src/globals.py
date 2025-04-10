@@ -7,6 +7,7 @@ from src.config import Settings
 from src.core.pipeline import PipelineComponent
 from src.core.provider import EmbedderProvider, LLMProvider
 from src.pipelines import generation, indexing, retrieval
+from src.utils import fetch_wren_ai_docs
 from src.web.v1 import services
 
 logger = logging.getLogger("wren-ai-service")
@@ -44,6 +45,8 @@ def create_service_container(
         "maxsize": settings.query_cache_maxsize,
         "ttl": settings.query_cache_ttl,
     }
+    wren_ai_docs = fetch_wren_ai_docs(settings.doc_endpoint, settings.is_oss)
+
     return ServiceContainer(
         semantics_description=services.SemanticsDescription(
             pipelines={
@@ -82,6 +85,7 @@ def create_service_container(
             pipelines={
                 "intent_classification": generation.IntentClassification(
                     **pipe_components["intent_classification"],
+                    wren_ai_docs=wren_ai_docs,
                 ),
                 "misleading_assistance": generation.MisleadingAssistance(
                     **pipe_components["misleading_assistance"],
@@ -91,8 +95,7 @@ def create_service_container(
                 ),
                 "user_guide_assistance": generation.UserGuideAssistance(
                     **pipe_components["user_guide_assistance"],
-                    is_oss=settings.is_oss,
-                    doc_endpoint=settings.doc_endpoint,
+                    wren_ai_docs=wren_ai_docs,
                 ),
                 "retrieval": retrieval.Retrieval(
                     **pipe_components["db_schema_retrieval"],

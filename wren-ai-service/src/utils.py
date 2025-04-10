@@ -3,6 +3,7 @@ import logging
 import os
 from pathlib import Path
 
+import requests
 from dotenv import load_dotenv
 from langfuse.decorators import langfuse_context
 
@@ -157,3 +158,28 @@ def trace_metadata(func):
         return results
 
     return wrapper
+
+
+def fetch_wren_ai_docs(doc_endpoint: str, is_oss: bool) -> list[dict]:
+    doc_endpoint = remove_trailing_slash(doc_endpoint)
+    api_endpoint = (
+        f"{doc_endpoint}/oss/llms.md" if is_oss else f"{doc_endpoint}/cloud/llms.md"
+    )
+
+    response = requests.get(api_endpoint)
+    docs = response.text.split("\n---\n")
+
+    doc_endpoint_base = f"{doc_endpoint}/oss" if is_oss else f"{doc_endpoint}/cloud"
+
+    results = []
+    for doc in docs:
+        if doc:
+            path, content = doc.split("\n")
+            results.append(
+                {
+                    "path": f'{doc_endpoint_base}/{path.replace(".md", "")}',
+                    "content": content,
+                }
+            )
+
+    return results

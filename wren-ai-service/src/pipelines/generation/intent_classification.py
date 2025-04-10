@@ -72,6 +72,7 @@ Also you should provide reasoning for the classification clearly and concisely w
 - USER_GUIDE
     - When to Use:
         - If the user's question is about Wren AI's features, capabilities, or how to use Wren AI.
+        - If the user's question is related to the content in the user guide.
     - Characteristics:
         - The question is about Wren AI's features, capabilities, or how to use Wren AI.
     - Examples:
@@ -79,6 +80,7 @@ Also you should provide reasoning for the classification clearly and concisely w
         - "How can I reset project?"
         - "How can I delete project?"
         - "How can I connect to other databases?"
+        - "How to draw a chart?"
 - MISLEADING_QUERY
     - When to Use:
         - If the rephrasedd user's question is irrelevant to the given database schema and cannot be answered using SQL with that schema.
@@ -135,6 +137,11 @@ SQL:
 {{ history.sql }}
 {% endfor %}
 {% endif %}
+
+### USER GUIDE ###
+{% for doc in docs %}
+- {{doc.path}}: {{doc.content}}
+{% endfor %}
 
 ### QUESTION ###
 User's question: {{query}}
@@ -254,6 +261,7 @@ def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[str]:
 @observe(capture_input=False)
 def prompt(
     query: str,
+    wren_ai_docs: list[dict],
     construct_db_schemas: list[str],
     prompt_builder: PromptBuilder,
     histories: Optional[list[AskHistory]] = None,
@@ -272,6 +280,7 @@ def prompt(
             configuration=configuration,
         ),
         current_time=configuration.show_current_time(),
+        docs=wren_ai_docs,
     )
 
 
@@ -325,6 +334,7 @@ class IntentClassification(BasicPipeline):
         llm_provider: LLMProvider,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
+        wren_ai_docs: list[dict],
         table_retrieval_size: Optional[int] = 50,
         table_column_retrieval_size: Optional[int] = 100,
         **kwargs,
@@ -346,6 +356,10 @@ class IntentClassification(BasicPipeline):
             "prompt_builder": PromptBuilder(
                 template=intent_classification_user_prompt_template
             ),
+        }
+
+        self._configs = {
+            "wren_ai_docs": wren_ai_docs,
         }
 
         super().__init__(
@@ -373,6 +387,7 @@ class IntentClassification(BasicPipeline):
                 "instructions": instructions or [],
                 "configuration": configuration,
                 **self._components,
+                **self._configs,
             },
         )
 

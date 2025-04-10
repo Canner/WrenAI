@@ -3,7 +3,6 @@ import logging
 import sys
 from typing import Any, Optional
 
-import aiohttp
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
@@ -11,7 +10,6 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.utils import remove_trailing_slash
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -27,7 +25,6 @@ You need to understand the user question and the user guide, and then answer the
 3. If you think you cannot answer the user question given the user guide, you should simply say "I don't know".
 4. You should add citations to the user guide(document url) in your answer.
 5. You should provide your answer in Markdown format.
-6. Link markdown format must be like this: `<a href="[link_url]" target="_blank">[link_text]</a>`
 """
 
 user_guide_assistance_user_prompt_template = """
@@ -37,57 +34,23 @@ User Guide:
 {% for doc in docs %}
 - {{doc.path}}: {{doc.content}}
 {% endfor %}
-Doc Endpoint: {{doc_endpoint}}
 
 Please think step by step.
 """
 
 
 ## Start of Pipeline
-@observe
-async def fetch_wren_ai_docs(doc_endpoint: str, is_oss: bool) -> str:
-    doc_endpoint = remove_trailing_slash(doc_endpoint)
-    api_endpoint = (
-        f"{doc_endpoint}/oss/llms.md" if is_oss else f"{doc_endpoint}/cloud/llms.md"
-    )
-
-    async with aiohttp.request(
-        "GET",
-        api_endpoint,
-    ) as response:
-        data = await response.text()
-
-    return data
-
-
 @observe(capture_input=False)
 def prompt(
     query: str,
     language: str,
-    fetch_wren_ai_docs: str,
-    doc_endpoint: str,
-    is_oss: bool,
+    wren_ai_docs: list[dict],
     prompt_builder: PromptBuilder,
 ) -> dict:
-    doc_endpoint_base = f"{doc_endpoint}/oss" if is_oss else f"{doc_endpoint}/cloud"
-
-    documents = fetch_wren_ai_docs.split("\n---\n")
-    docs = []
-    for doc in documents:
-        if doc:
-            path, content = doc.split("\n")
-            docs.append(
-                {
-                    "path": f'{doc_endpoint_base}/{path.replace(".md", "")}',
-                    "content": content,
-                }
-            )
-
     return prompt_builder.run(
         query=query,
         language=language,
-        doc_endpoint=doc_endpoint,
-        docs=docs,
+        docs=wren_ai_docs,
     )
 
 
@@ -99,22 +62,17 @@ async def user_guide_assistance(prompt: dict, generator: Any, query_id: str) -> 
 ## End of Pipeline
 
 
-USER_GUIDE_ASSISTANCE_MODEL_KWARGS = {"response_format": {"type": "text"}}
-
-
 class UserGuideAssistance(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
-        is_oss: bool,
-        doc_endpoint: str,
+        wren_ai_docs: list[dict],
         **kwargs,
     ):
         self._user_queues = {}
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=user_guide_assistance_system_prompt,
-                generation_kwargs=USER_GUIDE_ASSISTANCE_MODEL_KWARGS,
                 streaming_callback=self._streaming_callback,
             ),
             "prompt_builder": PromptBuilder(
@@ -122,8 +80,7 @@ class UserGuideAssistance(BasicPipeline):
             ),
         }
         self._configs = {
-            "is_oss": is_oss,
-            "doc_endpoint": doc_endpoint,
+            "wren_ai_docs": wren_ai_docs,
         }
 
         super().__init__(
