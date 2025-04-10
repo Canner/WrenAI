@@ -22,7 +22,7 @@ You need to understand the user question and the user guide, and then answer the
 ### INSTRUCTIONS ###
 1. Your answer should be in the same language as the language user provided.
 2. You must follow the user guide to answer the user question.
-3. If you think you cannot answer the user question given the user guide, you should simply say "I don't know".
+3. If you think you cannot answer the user question given the user guide, please kindly respond user that you don't find relevant answer in the user guide.
 4. You should add citations to the user guide(document url) in your answer.
 5. You should provide your answer in Markdown format.
 """
