@@ -3,6 +3,7 @@ import logging
 import os
 from pathlib import Path
 
+import requests
 from dotenv import load_dotenv
 from langfuse.decorators import langfuse_context
 
@@ -157,3 +158,32 @@ def trace_metadata(func):
         return results
 
     return wrapper
+
+
+def fetch_wren_ai_docs(doc_endpoint: str, is_oss: bool) -> list[dict]:
+    doc_endpoint = remove_trailing_slash(doc_endpoint)
+    api_endpoint = (
+        f"{doc_endpoint}/oss/llms.md" if is_oss else f"{doc_endpoint}/cloud/llms.md"
+    )
+
+    try:
+        response = requests.get(api_endpoint, timeout=10)
+        response.raise_for_status()  # Raise exception for 4XX/5XX responses
+        docs = response.text.split("\n---\n")
+    except requests.RequestException as e:
+        logger.error(f"Failed to fetch Wren AI docs: {str(e)}")
+        return []  # Return empty list on error
+
+    doc_endpoint_base = f"{doc_endpoint}/oss" if is_oss else f"{doc_endpoint}/cloud"
+    results = []
+    for doc in docs:
+        if doc:
+            path, content = doc.split("\n")
+            results.append(
+                {
+                    "path": f'{doc_endpoint_base}/{path.replace(".md", "")}',
+                    "content": content,
+                }
+            )
+
+    return results
