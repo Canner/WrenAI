@@ -178,6 +178,7 @@ def _ask_service_ttl_mock(query: str):
                 ]
             ),
             "data_assistance": "",
+            "misleading_assistance": "",
             "user_guide_assistance": "",
             "historical_question": HistoricalQuestionMock(),
             "sql_generation": GenerationMock(
