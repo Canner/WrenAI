@@ -19,43 +19,54 @@ export default function Dashboard() {
 
   const { data, refetch } = useDashboardItemsQuery({
     fetchPolicy: 'cache-and-network',
-    onError: () => {
-      message.error('Failed to fetch dashboard items.');
-      router.push(Path.Home);
+    onError: (error) => {
+      message.error(`Failed to fetch dashboard items: ${error.message}`);
+      if (router.pathname !== Path.Home) {
+        router.push(Path.Home);
+      }
     },
   });
-  const dashboardItems = useMemo(() => data?.dashboardItems || [], [data]);
+
+  const dashboardItems = useMemo(() => data?.dashboardItems || [], [data?.dashboardItems]);
 
   const [updateDashboardItemLayouts] = useUpdateDashboardItemLayoutsMutation({
-    onError: () => {
-      message.error('Failed to update dashboard item layouts.');
+    onError: (error) => {
+      message.error(`Failed to update dashboard item layouts: ${error.message}`);
     },
   });
+
   const [deleteDashboardItem] = useDeleteDashboardItemMutation({
     onCompleted: () => {
       message.success('Successfully deleted dashboard item.');
       refetch();
     },
+    onError: (error) => {
+      message.error(`Failed to delete dashboard item: ${error.message}`);
+    },
   });
 
   const onUpdateChange = async (layouts: ItemLayoutInput[]) => {
-    if (layouts && layouts.length > 0) {
+    if (!layouts || layouts.length === 0) return;
+
+    try {
       await updateDashboardItemLayouts({ variables: { data: { layouts } } });
+    } catch (error) {
+      message.error(`Error updating layouts: ${error.message}`);
     }
   };
 
   const onDelete = async (id: number) => {
-    await deleteDashboardItem({ variables: { where: { id } } });
+    try {
+      await deleteDashboardItem({ variables: { where: { id } } });
+    } catch (error) {
+      message.error(`Error deleting dashboard item: ${error.message}`);
+    }
   };
 
   return (
     <SiderLayout loading={false} color="gray-3" sidebar={homeSidebar}>
       <EmptyDashboard show={dashboardItems.length === 0}>
-        <DashboardGrid
-          items={dashboardItems}
-          onUpdateChange={onUpdateChange}
-          onDelete={onDelete}
-        />
+        <DashboardGrid items={dashboardItems} onUpdateChange={onUpdateChange} onDelete={onDelete} />
       </EmptyDashboard>
     </SiderLayout>
   );
