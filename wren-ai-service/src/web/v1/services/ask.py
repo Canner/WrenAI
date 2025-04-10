@@ -99,12 +99,16 @@ class _AskResultResponse(BaseModel):
     error: Optional[AskError] = None
     trace_id: Optional[str] = None
     is_followup: Optional[bool] = False
-    is_user_guide: Optional[bool] = False
+    general_type: Optional[
+        Literal["MISLEADING_QUERY", "DATA_ASSISTANCE", "USER_GUIDE"]
+    ] = None
 
 
 class AskResultResponse(_AskResultResponse):
     is_followup: Optional[bool] = Field(False, exclude=True)
-    is_user_guide: Optional[bool] = Field(False, exclude=True)
+    general_type: Optional[
+        Literal["MISLEADING_QUERY", "GENERAL", "USER_GUIDE"]
+    ] = Field(None, exclude=True)
 
 
 # POST /v1/ask-feedbacks
@@ -300,13 +304,26 @@ class AskService:
                             user_query = rephrased_question
 
                         if intent == "MISLEADING_QUERY":
+                            asyncio.create_task(
+                                self._pipelines["misleading_assistance"].run(
+                                    query=user_query,
+                                    histories=histories,
+                                    db_schemas=intent_classification_result.get(
+                                        "db_schemas"
+                                    ),
+                                    language=ask_request.configurations.language,
+                                    query_id=ask_request.query_id,
+                                )
+                            )
+
                             self._ask_results[query_id] = AskResultResponse(
                                 status="finished",
-                                type="MISLEADING_QUERY",
+                                type="GENERAL",
                                 rephrased_question=rephrased_question,
                                 intent_reasoning=intent_reasoning,
                                 trace_id=trace_id,
                                 is_followup=True if histories else False,
+                                general_type="MISLEADING_QUERY",
                             )
                             results["metadata"]["type"] = "MISLEADING_QUERY"
                             return results
@@ -330,6 +347,7 @@ class AskService:
                                 intent_reasoning=intent_reasoning,
                                 trace_id=trace_id,
                                 is_followup=True if histories else False,
+                                general_type="DATA_ASSISTANCE",
                             )
                             results["metadata"]["type"] = "GENERAL"
                             return results
@@ -348,7 +366,8 @@ class AskService:
                                 rephrased_question=rephrased_question,
                                 intent_reasoning=intent_reasoning,
                                 trace_id=trace_id,
-                                is_user_guide=True,
+                                is_followup=True if histories else False,
+                                general_type="USER_GUIDE",
                             )
                             results["metadata"]["type"] = "GENERAL"
                             return results
@@ -651,41 +670,28 @@ class AskService:
         query_id: str,
     ):
         if self._ask_results.get(query_id):
+            _pipeline_name = ""
             if self._ask_results.get(query_id).type == "GENERAL":
-                if self._ask_results.get(query_id).is_user_guide:
-                    async for chunk in self._pipelines[
-                        "user_guide_assistance"
-                    ].get_streaming_results(query_id):
-                        event = SSEEvent(
-                            data=SSEEvent.SSEEventMessage(message=chunk),
-                        )
-                        yield event.serialize()
-                else:
-                    async for chunk in self._pipelines[
-                        "data_assistance"
-                    ].get_streaming_results(query_id):
-                        event = SSEEvent(
-                            data=SSEEvent.SSEEventMessage(message=chunk),
-                        )
-                        yield event.serialize()
-
+                if self._ask_results.get(query_id).general_type == "USER_GUIDE":
+                    _pipeline_name = "user_guide_assistance"
+                elif self._ask_results.get(query_id).general_type == "DATA_ASSISTANCE":
+                    _pipeline_name = "data_assistance"
+                elif self._ask_results.get(query_id).general_type == "MISLEADING_QUERY":
+                    _pipeline_name = "misleading_assistance"
             elif self._ask_results.get(query_id).status == "planning":
                 if self._ask_results.get(query_id).is_followup:
-                    async for chunk in self._pipelines[
-                        "followup_sql_generation_reasoning"
-                    ].get_streaming_results(query_id):
-                        event = SSEEvent(
-                            data=SSEEvent.SSEEventMessage(message=chunk),
-                        )
-                        yield event.serialize()
+                    _pipeline_name = "followup_sql_generation_reasoning"
                 else:
-                    async for chunk in self._pipelines[
-                        "sql_generation_reasoning"
-                    ].get_streaming_results(query_id):
-                        event = SSEEvent(
-                            data=SSEEvent.SSEEventMessage(message=chunk),
-                        )
-                        yield event.serialize()
+                    _pipeline_name = "sql_generation_reasoning"
+
+            if _pipeline_name:
+                async for chunk in self._pipelines[
+                    _pipeline_name
+                ].get_streaming_results(query_id):
+                    event = SSEEvent(
+                        data=SSEEvent.SSEEventMessage(message=chunk),
+                    )
+                    yield event.serialize()
 
     @observe(name="Ask Feedback")
     @trace_metadata

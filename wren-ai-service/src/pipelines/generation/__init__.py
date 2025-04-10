@@ -4,6 +4,7 @@ from .data_assistance import DataAssistance
 from .followup_sql_generation import FollowUpSQLGeneration
 from .followup_sql_generation_reasoning import FollowUpSQLGenerationReasoning
 from .intent_classification import IntentClassification
+from .misleading_assistance import MisleadingAssistance
 from .question_recommendation import QuestionRecommendation
 from .relationship_recommendation import RelationshipRecommendation
 from .semantics_description import SemanticsDescription
@@ -38,4 +39,5 @@ __all__ = [
     "SQLQuestion",
     "SQLRegeneration",
     "FollowUpSQLGenerationReasoning",
+    "MisleadingAssistance",
 ]

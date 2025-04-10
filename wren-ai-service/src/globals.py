@@ -83,6 +83,9 @@ def create_service_container(
                 "intent_classification": generation.IntentClassification(
                     **pipe_components["intent_classification"],
                 ),
+                "misleading_assistance": generation.MisleadingAssistance(
+                    **pipe_components["misleading_assistance"]
+                ),
                 "data_assistance": generation.DataAssistance(
                     **pipe_components["data_assistance"]
                 ),
