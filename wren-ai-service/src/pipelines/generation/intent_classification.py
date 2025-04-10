@@ -25,7 +25,7 @@ intent_classification_system_prompt = """
 ### TASK ###
 You are a great detective, who is great at intent classification.
 First, rephrase the user's question to make it more specific, clear and relevant to the database schema before making the intent classification.
-Second, you need to use rephrased user's question to classify user's intent based on given database schema to one of three conditions: MISLEADING_QUERY, TEXT_TO_SQL, GENERAL. 
+Second, you need to use rephrased user's question to classify user's intent based on given database schema to one of four conditions: MISLEADING_QUERY, TEXT_TO_SQL, GENERAL, USER_GUIDE. 
 Also you should provide reasoning for the classification clearly and concisely within 20 words.
 
 ### INSTRUCTIONS ###
@@ -56,6 +56,31 @@ Also you should provide reasoning for the classification clearly and concisely w
         - "What is the total sales for last quarter?"
         - "Show me all customers who purchased product X."
         - "List the top 10 products by revenue."
+- GENERAL
+    - When to Use:
+        - Use this category if the user is seeking general information about the database schema.
+        - If the rephrasedd user's question is related to the previous question, but considering them together cannot be answered by generating an SQL query using that schema.
+    - Characteristics:
+        - The question is about understanding the dataset or its capabilities.
+        - The user may need guidance on how to proceed or what questions to ask.
+    - Instructions:
+        - MUST explicitly add phrases from the rephrasedd user's question that are not explicitly related to the database schema in the reasoning output. Choose the most relevant phrases that cause the rephrasedd user's question to be GENERAL.
+    - Examples:
+        - "What is the dataset about?"
+        - "Tell me more about the database."
+        - "How can I analyze customer behavior with this data?"
+- USER_GUIDE
+    - When to Use:
+        - If the user's question is about Wren AI's features, capabilities, or how to use Wren AI.
+        - If the user's question is related to the content in the user guide.
+    - Characteristics:
+        - The question is about Wren AI's features, capabilities, or how to use Wren AI.
+    - Examples:
+        - "What can Wren AI do?"
+        - "How can I reset project?"
+        - "How can I delete project?"
+        - "How can I connect to other databases?"
+        - "How to draw a chart?"
 - MISLEADING_QUERY
     - When to Use:
         - If the rephrasedd user's question is irrelevant to the given database schema and cannot be answered using SQL with that schema.
@@ -71,28 +96,14 @@ Also you should provide reasoning for the classification clearly and concisely w
         - "How are you?"
         - "What's the weather like today?"
         - "Tell me a joke."
-- GENERAL
-    - When to Use:
-        - Use this category if the user is seeking general information about the database schema.
-        - If the rephrasedd user's question is related to the previous question, but considering them together cannot be answered by generating an SQL query using that schema.
-    - Characteristics:
-        - The question is about understanding the dataset or its capabilities.
-        - The user may need guidance on how to proceed or what questions to ask.
-    - Instructions:
-        - MUST explicitly add phrases from the rephrasedd user's question that are not explicitly related to the database schema in the reasoning output. Choose the most relevant phrases that cause the rephrasedd user's question to be GENERAL.
-    - Examples:
-        - "What is the dataset about?"
-        - "Tell me more about the database."
-        - "What can Wren AI do?"
-        - "How can I analyze customer behavior with this data?"
-
+        
 ### OUTPUT FORMAT ###
 Please provide your response as a JSON object, structured as follows:
 
 {
     "rephrased_question": "<REPHRASED_USER_QUESTION_IN_STRING_FORMAT>",
     "reasoning": "<CHAIN_OF_THOUGHT_REASONING_BASED_ON_REPHRASED_USER_QUESTION_IN_STRING_FORMAT>",
-    "results": "MISLEADING_QUERY" | "TEXT_TO_SQL" | "GENERAL"
+    "results": "MISLEADING_QUERY" | "TEXT_TO_SQL" | "GENERAL" | "USER_GUIDE"
 }
 """
 
@@ -126,6 +137,11 @@ SQL:
 {{ history.sql }}
 {% endfor %}
 {% endif %}
+
+### USER GUIDE ###
+{% for doc in docs %}
+- {{doc.path}}: {{doc.content}}
+{% endfor %}
 
 ### QUESTION ###
 User's question: {{query}}
@@ -245,6 +261,7 @@ def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[str]:
 @observe(capture_input=False)
 def prompt(
     query: str,
+    wren_ai_docs: list[dict],
     construct_db_schemas: list[str],
     prompt_builder: PromptBuilder,
     histories: Optional[list[AskHistory]] = None,
@@ -263,6 +280,7 @@ def prompt(
             configuration=configuration,
         ),
         current_time=configuration.show_current_time(),
+        docs=wren_ai_docs,
     )
 
 
@@ -294,7 +312,7 @@ def post_process(classify_intent: dict, construct_db_schemas: list[str]) -> dict
 
 
 class IntentClassificationResult(BaseModel):
-    results: Literal["MISLEADING_QUERY", "TEXT_TO_SQL", "GENERAL"]
+    results: Literal["MISLEADING_QUERY", "TEXT_TO_SQL", "GENERAL", "USER_GUIDE"]
     rephrased_question: str
     reasoning: str
 
@@ -316,6 +334,7 @@ class IntentClassification(BasicPipeline):
         llm_provider: LLMProvider,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
+        wren_ai_docs: list[dict],
         table_retrieval_size: Optional[int] = 50,
         table_column_retrieval_size: Optional[int] = 100,
         **kwargs,
@@ -337,6 +356,10 @@ class IntentClassification(BasicPipeline):
             "prompt_builder": PromptBuilder(
                 template=intent_classification_user_prompt_template
             ),
+        }
+
+        self._configs = {
+            "wren_ai_docs": wren_ai_docs,
         }
 
         super().__init__(
@@ -364,6 +387,7 @@ class IntentClassification(BasicPipeline):
                 "instructions": instructions or [],
                 "configuration": configuration,
                 **self._components,
+                **self._configs,
             },
         )
 

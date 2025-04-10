@@ -75,12 +75,18 @@ pipes:
   - name: relationship_recommendation
     llm: openai_llm.gpt-4o-mini
     engine: wren_ui
-
+  - name: user_guide_assistance
+    llm: openai_llm.gpt-4o-mini
+  - name: data_assistance
+    llm: openai_llm.gpt-4o-mini
+    
 ---
 settings:
   host: 127.0.0.1
   port: 5556
   column_indexing_batch_size: 50
+  doc_endpoint: https://docs.getwren.ai
+  is_oss: true
   table_retrieval_size: 10
   table_column_retrieval_size: 1000
   query_cache_maxsize: 1000
