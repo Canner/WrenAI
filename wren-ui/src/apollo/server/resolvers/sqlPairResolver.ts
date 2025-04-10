@@ -103,7 +103,6 @@ export class SqlPairResolver {
     );
     const manifest = lastDeployment.manifest;
 
-    console.log('arg.data.sql', arg.data.sql);
     const wrenSQL = await ctx.sqlPairService.modelSubstitute(
       arg.data.sql as DialectSQL,
       {
@@ -111,7 +110,6 @@ export class SqlPairResolver {
         manifest,
       },
     );
-    console.log('wrenSQL', wrenSQL);
     return wrenSQL;
   }
 
