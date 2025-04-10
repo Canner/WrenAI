@@ -1,16 +1,22 @@
-import { IWrenAIAdaptor } from '../adaptors';
-import {
-  QuestionsResult,
-  QuestionsStatus,
-  SqlPairResult,
-  SqlPairStatus,
-  WrenAILanguage,
-} from '../models/adaptor';
-import { ISqlPairRepository, SqlPair } from '../repositories/sqlPairRepository';
+import { SqlPair } from '@server/repositories';
+import { IWrenAIAdaptor } from '@server/adaptors/wrenAIAdaptor';
+import { ISqlPairRepository } from '@server/repositories/sqlPairRepository';
 import { getLogger } from '@server/utils';
 import { chunk } from 'lodash';
 import * as Errors from '@server/utils/error';
 import { Project } from '../repositories';
+import { IIbisAdaptor } from '../adaptors/ibisAdaptor';
+import {
+  DialectSQL,
+  WrenSQL,
+  WrenAILanguage,
+  SqlPairResult,
+  SqlPairStatus,
+  QuestionsResult,
+  QuestionsStatus,
+} from '../models/adaptor';
+import { Manifest } from '@server/mdl/type';
+import { DataSourceName } from '@server/types';
 
 const logger = getLogger('SqlPairService');
 
@@ -22,6 +28,12 @@ export interface CreateSqlPair {
 export interface EditSqlPair {
   sql?: string;
   question?: string;
+}
+
+export interface ModelSubstituteOptions {
+  project: Project;
+  // if not given, will use the deployed manifest
+  manifest: Manifest;
 }
 
 export interface ISqlPairService {
@@ -38,21 +50,49 @@ export interface ISqlPairService {
   ): Promise<SqlPair>;
   deleteSqlPair(projectId: number, sqlPairId: number): Promise<boolean>;
   generateQuestions(project: Project, sqls: string[]): Promise<string[]>;
+  modelSubstitute(
+    sql: DialectSQL,
+    options: ModelSubstituteOptions,
+  ): Promise<WrenSQL>;
 }
 
 export class SqlPairService implements ISqlPairService {
   private sqlPairRepository: ISqlPairRepository;
   private wrenAIAdaptor: IWrenAIAdaptor;
+  private ibisAdaptor: IIbisAdaptor;
 
   constructor({
     sqlPairRepository,
     wrenAIAdaptor,
+    ibisAdaptor,
   }: {
     sqlPairRepository: ISqlPairRepository;
     wrenAIAdaptor: IWrenAIAdaptor;
+    ibisAdaptor: IIbisAdaptor;
   }) {
     this.sqlPairRepository = sqlPairRepository;
     this.wrenAIAdaptor = wrenAIAdaptor;
+    this.ibisAdaptor = ibisAdaptor;
+  }
+
+  public async modelSubstitute(
+    sql: DialectSQL,
+    options: ModelSubstituteOptions,
+  ): Promise<WrenSQL> {
+    const { manifest: mdl, project } = options;
+    const { type: dataSource, connectionInfo } = project;
+    if (dataSource === DataSourceName.DUCKDB) {
+      // engine does not implement model substitute.
+      throw Errors.create(Errors.GeneralErrorCodes.IBIS_SERVER_ERROR, {
+        customMessage: 'DuckDB data source does not support model substitute.',
+      });
+    }
+    return await this.ibisAdaptor.modelSubstitute(
+      dataSource,
+      connectionInfo,
+      mdl,
+      sql,
+    );
   }
 
   public async generateQuestions(

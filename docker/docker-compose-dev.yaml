@@ -36,7 +36,7 @@ services:
   wren-ai-service:
     image: ghcr.io/canner/wren-ai-service:${WREN_AI_SERVICE_VERSION}
     pull_policy: always
-    platform: ${PLATFORM}
+    platform: linux/arm64
     ports:
       - ${AI_SERVICE_FORWARD_PORT}:${WREN_AI_SERVICE_PORT}
     environment:
