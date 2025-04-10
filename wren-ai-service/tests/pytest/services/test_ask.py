@@ -9,6 +9,7 @@ import pytest
 from src.config import settings
 from src.pipelines import generation, indexing, retrieval
 from src.providers import generate_components
+from src.utils import fetch_wren_ai_docs
 from src.web.v1.services.ask import (
     AskRequest,
     AskResultRequest,
@@ -33,19 +34,23 @@ from tests.pytest.services.mocks import (
 @pytest.fixture
 def ask_service():
     pipe_components = generate_components(settings.components)
+    wren_ai_docs = fetch_wren_ai_docs(settings.doc_endpoint, settings.is_oss)
 
     return AskService(
         {
             "intent_classification": generation.IntentClassification(
                 **pipe_components["intent_classification"],
+                wren_ai_docs=wren_ai_docs,
+            ),
+            "misleading_assistance": generation.MisleadingAssistance(
+                **pipe_components["misleading_assistance"],
             ),
             "data_assistance": generation.DataAssistance(
                 **pipe_components["data_assistance"],
             ),
             "user_guide_assistance": generation.UserGuideAssistance(
                 **pipe_components["user_guide_assistance"],
-                is_oss=settings.is_oss,
-                doc_endpoint=settings.doc_endpoint,
+                wren_ai_docs=wren_ai_docs,
             ),
             "retrieval": retrieval.Retrieval(
                 **pipe_components["db_schema_retrieval"],
