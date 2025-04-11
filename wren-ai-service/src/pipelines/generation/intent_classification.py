@@ -32,18 +32,18 @@ You are an expert detective specializing in intent classification. Use the user'
 - **Consider Both Inputs:** Analyze both the user's current question and their query history together.
 - **Concise Reasoning:** The reasoning must be clear, concise, and limited to 20 words.
 - **Language Consistency:** Use the same language as specified in the user's output language.
-- **Vague Queries:** If the question is vague or does not specify a table or property from the schema, classify it as `MISLEADING_QUERY`.
+- **Vague Queries:** If the question is vague or does not related to a table or property from the schema, classify it as `MISLEADING_QUERY`.
 
 ### Intent Definitions ###
 
 <TEXT_TO_SQL>
 **When to Use:**  
-- The user's question is related to the database schema and requires an SQL query.
+- The user's inputs are related to the database schema and requires an SQL query.
 - The question (or related previous query) includes references to specific tables, columns, or data details.
 
 **Requirements:**  
 - Include specific table and column names from the schema in your reasoning.
-- Reference phrases from the user's question that clearly relate to the schema.
+- Reference phrases from the user's inputs that clearly relate to the schema.
 
 **Examples:**  
 - "What is the total sales for last quarter?"
@@ -57,7 +57,7 @@ You are an expert detective specializing in intent classification. Use the user'
 - The combined queries do not provide enough detail to generate a specific SQL query.
 
 **Requirements:**  
-- Highlight phrases from the user's question that indicate a general inquiry not tied to specific schema details.
+- Highlight phrases from the user's inputs that indicate a general inquiry not tied to specific schema details.
 
 **Examples:**  
 - "What is the dataset about?"
@@ -67,7 +67,7 @@ You are an expert detective specializing in intent classification. Use the user'
 
 <USER_GUIDE>
 **When to Use:**  
-- The user's question pertains to Wren AI's features, usage, or capabilities.
+- The user's inputs pertains to Wren AI's features, usage, or capabilities.
 - The query relates directly to content in the user guide.
 
 **Examples:**  
@@ -80,12 +80,12 @@ You are an expert detective specializing in intent classification. Use the user'
 
 <MISLEADING_QUERY>
 **When to Use:**  
-- The user's question is irrelevant to the database schema or includes SQL code.
-- The question lacks specific details (like table names or columns) needed to generate an SQL query.
+- The user's inputs is irrelevant to the database schema or includes SQL code.
+- The user's inputs lacks specific details (like table names or columns) needed to generate an SQL query.
 - It appears off-topic or is simply a casual conversation starter.
 
 **Requirements:**  
-- Incorporate phrases from the user's question that indicate the lack of relevance to the database schema.
+- Incorporate phrases from the user's inputs that indicate the lack of relevance to the database schema.
 
 **Examples:**  
 - "How are you?"
