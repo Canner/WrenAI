@@ -13,6 +13,7 @@ from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
+    construct_ask_history_messages,
     construct_instructions,
     sql_generation_system_prompt,
 )
@@ -55,13 +56,6 @@ SQL:
 {% endfor %}
 {% endif %}
 
-### CONTEXT ###
-User's query history:
-{% for history in histories %}
-    {{ history.question }}
-    {{ history.sql }}
-{% endfor %}
-
 ### QUESTION ###
 User's Follow-up Question: {{ query }}
 Current Time: {{ current_time }}
@@ -79,7 +73,6 @@ def prompt(
     query: str,
     documents: list[str],
     sql_generation_reasoning: str,
-    histories: list[AskHistory],
     configuration: Configuration,
     prompt_builder: PromptBuilder,
     sql_samples: list[dict] | None = None,
@@ -88,14 +81,10 @@ def prompt(
     has_metric: bool = False,
     sql_functions: list[SqlFunction] | None = None,
 ) -> dict:
-    previous_query_summaries = [history.question for history in histories]
-
     return prompt_builder.run(
         query=query,
         documents=documents,
         sql_generation_reasoning=sql_generation_reasoning,
-        histories=histories,
-        previous_query_summaries=previous_query_summaries,
         instructions=construct_instructions(
             configuration,
             has_calculated_field,
@@ -109,8 +98,13 @@ def prompt(
 
 
 @observe(as_type="generation", capture_input=False)
-async def generate_sql_in_followup(prompt: dict, generator: Any) -> dict:
-    return await generator(prompt=prompt.get("prompt"))
+async def generate_sql_in_followup(
+    prompt: dict, generator: Any, histories: list[AskHistory]
+) -> dict:
+    history_messages = construct_ask_history_messages(histories)
+    return await generator(
+        prompt=prompt.get("prompt"), history_messages=history_messages
+    )
 
 
 @observe(capture_input=False)

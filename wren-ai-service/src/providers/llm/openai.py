@@ -98,15 +98,22 @@ class AsyncGenerator(OpenAIGenerator):
     async def run(
         self,
         prompt: str,
+        history_messages: Optional[List[ChatMessage]] = None,
         generation_kwargs: Optional[Dict[str, Any]] = None,
         query_id: Optional[str] = None,
     ):
         message = ChatMessage.from_user(prompt)
         if self.system_prompt:
             # updated from_system to from_assistent as the new openai api is not accepting system prompts anymore, only user and assistant.
-            messages = [ChatMessage.from_assistant(self.system_prompt), message]
+            messages = [ChatMessage.from_system(self.system_prompt), message]
+            if history_messages:
+                messages.extend(history_messages)
+            messages.append(message)
         else:
-            messages = [message]
+            if history_messages:
+                messages = history_messages + [message]
+            else:
+                messages = [message]
 
         # update generation kwargs by merging with the generation kwargs passed to the run method
         generation_kwargs = {**self.generation_kwargs, **(generation_kwargs or {})}

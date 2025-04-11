@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.pipelines.common import build_table_ddl
+from src.pipelines.generation.utils.sql import construct_ask_history_messages
 from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
@@ -115,9 +116,7 @@ def _build_view_ddl(content: dict) -> str:
 
 ## Start of Pipeline
 @observe(capture_input=False, capture_output=False)
-async def embedding(
-    query: str, embedder: Any, histories: Optional[list[AskHistory]] = None
-) -> dict:
+async def embedding(query: str, embedder: Any, histories: list[AskHistory]) -> dict:
     if query:
         if histories:
             previous_query_summaries = [history.question for history in histories]
@@ -290,7 +289,6 @@ def prompt(
     construct_db_schemas: list[dict],
     prompt_builder: PromptBuilder,
     check_using_db_schemas_without_pruning: dict,
-    histories: Optional[list[AskHistory]] = None,
 ) -> dict:
     if not check_using_db_schemas_without_pruning["db_schemas"]:
         logger.info(
@@ -300,12 +298,6 @@ def prompt(
             build_table_ddl(construct_db_schema)[0]
             for construct_db_schema in construct_db_schemas
         ]
-
-        previous_query_summaries = (
-            [history.question for history in histories] if histories else []
-        )
-
-        query = "\n".join(previous_query_summaries) + "\n" + query
         return prompt_builder.run(question=query, db_schemas=db_schemas)
     else:
         return {}
@@ -313,10 +305,13 @@ def prompt(
 
 @observe(as_type="generation", capture_input=False)
 async def filter_columns_in_tables(
-    prompt: dict, table_columns_selection_generator: Any
+    prompt: dict, table_columns_selection_generator: Any, histories: list[AskHistory]
 ) -> dict:
     if prompt:
-        return await table_columns_selection_generator(prompt=prompt.get("prompt"))
+        history_messages = construct_ask_history_messages(histories)
+        return await table_columns_selection_generator(
+            prompt=prompt.get("prompt"), history_messages=history_messages
+        )
     else:
         return {}
 
@@ -486,7 +481,7 @@ class Retrieval(BasicPipeline):
                 "query": query,
                 "tables": tables,
                 "project_id": project_id or "",
-                "histories": histories,
+                "histories": histories or [],
                 **self._components,
                 **self._configs,
             },

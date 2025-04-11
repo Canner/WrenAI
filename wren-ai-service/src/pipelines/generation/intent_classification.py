@@ -14,7 +14,10 @@ from pydantic import BaseModel
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.pipelines.common import build_table_ddl
-from src.pipelines.generation.utils.sql import construct_instructions
+from src.pipelines.generation.utils.sql import (
+    construct_ask_history_messages,
+    construct_instructions,
+)
 from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
 
@@ -126,16 +129,6 @@ SQL:
 {% endfor %}
 
 ### INPUT ###
-{% if query_history %}
-User's QUERY HISTORY:
-{% for history in query_history %}
-Question:
-{{ history.question }}
-SQL:
-{{ history.sql }}
-{% endfor %}
-{% endif %}
-
 User's question: {{query}}
 Current Time: {{ current_time }}
 Output Language: {{ language }}
@@ -146,9 +139,7 @@ Let's think step by step
 
 ## Start of Pipeline
 @observe(capture_input=False, capture_output=False)
-async def embedding(
-    query: str, embedder: Any, histories: Optional[list[AskHistory]] = None
-) -> dict:
+async def embedding(query: str, embedder: Any, histories: list[AskHistory]) -> dict:
     previous_query_summaries = (
         [history.question for history in histories] if histories else []
     )
@@ -256,7 +247,6 @@ def prompt(
     wren_ai_docs: list[dict],
     construct_db_schemas: list[str],
     prompt_builder: PromptBuilder,
-    histories: Optional[list[AskHistory]] = None,
     sql_samples: Optional[list[dict]] = None,
     instructions: Optional[list[dict]] = None,
     configuration: Configuration | None = None,
@@ -265,7 +255,6 @@ def prompt(
         query=query,
         language=configuration.language,
         db_schemas=construct_db_schemas,
-        query_history=histories,
         sql_samples=sql_samples,
         instructions=construct_instructions(
             instructions=instructions,
@@ -277,8 +266,14 @@ def prompt(
 
 
 @observe(as_type="generation", capture_input=False)
-async def classify_intent(prompt: dict, generator: Any) -> dict:
-    return await generator(prompt=prompt.get("prompt"))
+async def classify_intent(
+    prompt: dict, histories: list[AskHistory], generator: Any
+) -> dict:
+    history_messages = construct_ask_history_messages(histories)
+
+    return await generator(
+        prompt=prompt.get("prompt"), history_messages=history_messages
+    )
 
 
 @observe(capture_input=False)
@@ -371,7 +366,7 @@ class IntentClassification(BasicPipeline):
             inputs={
                 "query": query,
                 "project_id": project_id or "",
-                "histories": histories,
+                "histories": histories or [],
                 "sql_samples": sql_samples or [],
                 "instructions": instructions or [],
                 "configuration": configuration,

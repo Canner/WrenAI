@@ -10,6 +10,7 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
+from src.pipelines.generation.utils.sql import construct_ask_history_messages
 from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
@@ -53,13 +54,7 @@ def prompt(
     db_schemas: list[str],
     language: str,
     prompt_builder: PromptBuilder,
-    histories: Optional[list[AskHistory]] = None,
 ) -> dict:
-    previous_query_summaries = (
-        [history.question for history in histories] if histories else []
-    )
-    query = "\n".join(previous_query_summaries) + "\n" + query
-
     return prompt_builder.run(
         query=query,
         db_schemas=db_schemas,
@@ -68,8 +63,16 @@ def prompt(
 
 
 @observe(as_type="generation", capture_input=False)
-async def misleading_assistance(prompt: dict, generator: Any, query_id: str) -> dict:
-    return await generator(prompt=prompt.get("prompt"), query_id=query_id)
+async def misleading_assistance(
+    prompt: dict, generator: Any, query_id: str, histories: list[AskHistory]
+) -> dict:
+    history_messages = construct_ask_history_messages(histories)
+
+    return await generator(
+        prompt=prompt.get("prompt"),
+        query_id=query_id,
+        history_messages=history_messages,
+    )
 
 
 ## End of Pipeline
@@ -148,7 +151,7 @@ class MisleadingAssistance(BasicPipeline):
                 "db_schemas": db_schemas,
                 "language": language,
                 "query_id": query_id or "",
-                "histories": histories,
+                "histories": histories or [],
                 **self._components,
             },
         )
