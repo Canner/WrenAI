@@ -138,6 +138,7 @@ export const initComponents = () => {
   const sqlPairService = new SqlPairService({
     sqlPairRepository,
     wrenAIAdaptor,
+    ibisAdaptor,
   });
   const instructionService = new InstructionService({
     instructionRepository,

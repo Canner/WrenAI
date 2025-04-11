@@ -10,7 +10,7 @@ import {
 } from '@server/repositories';
 import {
   getLogger,
-  parseJson,
+  safeParseJson,
   replaceAllowableSyntax,
   validateDisplayName,
 } from '@server/utils';
@@ -144,7 +144,7 @@ export class ModelService implements IModelService {
       } as CheckCalculatedFieldCanQueryData);
     logger.debug(`${logTitle} : checkCalculatedFieldCanQuery: ${canQuery}`);
     if (!canQuery) {
-      const parsedErrorMessage = parseJson(errorMessage);
+      const parsedErrorMessage = safeParseJson(errorMessage);
       throw Errors.create(Errors.GeneralErrorCodes.INVALID_CALCULATED_FIELD, {
         customMessage: parsedErrorMessage?.message || errorMessage,
         originalError: parsedErrorMessage || null,
