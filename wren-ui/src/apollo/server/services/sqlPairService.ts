@@ -88,7 +88,9 @@ export class SqlPairService implements ISqlPairService {
       });
     }
     // use the first model's table reference as default catalog and schema
-    const { catalog, schema } = mdl.models?.[0]?.tableReference;
+    const firstModel = mdl.models?.[0];
+    const catalog = firstModel?.tableReference?.catalog;
+    const schema = firstModel?.tableReference?.schema;
     return await this.ibisAdaptor.modelSubstitute(sql, {
       dataSource,
       connectionInfo,
