@@ -87,12 +87,15 @@ export class SqlPairService implements ISqlPairService {
         customMessage: 'DuckDB data source does not support model substitute.',
       });
     }
-    return await this.ibisAdaptor.modelSubstitute(
+    // use the first model's table reference as default catalog and schema
+    const { catalog, schema } = mdl.models?.[0]?.tableReference;
+    return await this.ibisAdaptor.modelSubstitute(sql, {
       dataSource,
       connectionInfo,
       mdl,
-      sql,
-    );
+      catalog,
+      schema,
+    });
   }
 
   public async generateQuestions(

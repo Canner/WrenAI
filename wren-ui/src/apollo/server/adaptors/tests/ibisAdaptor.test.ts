@@ -569,10 +569,12 @@ describe('IbisAdaptor', () => {
     );
 
     const result = await ibisAdaptor.modelSubstitute(
-      DataSourceName.POSTGRES,
-      mockPostgresConnectionInfo,
-      mockManifest,
       'SELECT * FROM test_table' as DialectSQL,
+      {
+        dataSource: DataSourceName.POSTGRES,
+        connectionInfo: mockPostgresConnectionInfo,
+        mdl: mockManifest,
+      },
     );
 
     expect(result).toEqual('SELECT * FROM substituted_table');
@@ -584,6 +586,12 @@ describe('IbisAdaptor', () => {
         manifestStr: Buffer.from(JSON.stringify(mockManifest)).toString(
           'base64',
         ),
+      },
+      {
+        headers: {
+          'X-WREN-CATALOG': undefined,
+          'X-WREN-SCHEMA': undefined,
+        },
       },
     );
   });
@@ -604,12 +612,11 @@ describe('IbisAdaptor', () => {
     );
 
     await expect(
-      ibisAdaptor.modelSubstitute(
-        DataSourceName.POSTGRES,
-        mockPostgresConnectionInfo,
-        mockManifest,
-        'SELECT * FROM test_table' as DialectSQL,
-      ),
+      ibisAdaptor.modelSubstitute('SELECT * FROM test_table' as DialectSQL, {
+        dataSource: DataSourceName.POSTGRES,
+        connectionInfo: mockPostgresConnectionInfo,
+        mdl: mockManifest,
+      }),
     ).rejects.toMatchObject({
       message:
         'Model not found: test_table. Try to add catalog and schema in front of your table. eg: my_database.public.test_table',
@@ -638,12 +645,11 @@ describe('IbisAdaptor', () => {
     );
 
     await expect(
-      ibisAdaptor.modelSubstitute(
-        DataSourceName.POSTGRES,
-        mockPostgresConnectionInfo,
-        mockManifest,
-        'SELECT * FROM test_table' as DialectSQL,
-      ),
+      ibisAdaptor.modelSubstitute('SELECT * FROM test_table' as DialectSQL, {
+        dataSource: DataSourceName.POSTGRES,
+        connectionInfo: mockPostgresConnectionInfo,
+        mdl: mockManifest,
+      }),
     ).rejects.toMatchObject({
       message:
         'sql.parser.ParsingException: Invalid SQL syntax. Please check your selected column and make sure its quoted for columns with non-alphanumeric characters.',
@@ -672,12 +678,11 @@ describe('IbisAdaptor', () => {
     );
 
     await expect(
-      ibisAdaptor.modelSubstitute(
-        DataSourceName.POSTGRES,
-        mockPostgresConnectionInfo,
-        mockManifest,
-        'SELECT * FROM test_table' as DialectSQL,
-      ),
+      ibisAdaptor.modelSubstitute('SELECT * FROM test_table' as DialectSQL, {
+        dataSource: DataSourceName.POSTGRES,
+        connectionInfo: mockPostgresConnectionInfo,
+        mdl: mockManifest,
+      }),
     ).rejects.toMatchObject({
       message: 'Generic error occurred',
       extensions: {
@@ -687,5 +692,45 @@ describe('IbisAdaptor', () => {
         },
       },
     });
+  });
+
+  it('should include catalog and schema in headers when provided', async () => {
+    const mockResponse = { data: 'SELECT * FROM substituted_table' };
+    mockedAxios.post.mockResolvedValue(mockResponse);
+    mockedEncryptor.prototype.decrypt.mockReturnValue(
+      JSON.stringify({ password: mockPostgresConnectionInfo.password }),
+    );
+
+    const catalog = 'my_catalog';
+    const schema = 'my_schema';
+
+    const result = await ibisAdaptor.modelSubstitute(
+      'SELECT * FROM test_table' as DialectSQL,
+      {
+        dataSource: DataSourceName.POSTGRES,
+        connectionInfo: mockPostgresConnectionInfo,
+        mdl: mockManifest,
+        catalog,
+        schema,
+      },
+    );
+
+    expect(result).toEqual('SELECT * FROM substituted_table');
+    expect(mockedAxios.post).toHaveBeenCalledWith(
+      `${ibisServerEndpoint}/v3/connector/postgres/model-substitute`,
+      {
+        sql: 'SELECT * FROM test_table',
+        connectionInfo: { connectionUrl: postgresConnectionUrl },
+        manifestStr: Buffer.from(JSON.stringify(mockManifest)).toString(
+          'base64',
+        ),
+      },
+      {
+        headers: {
+          'X-WREN-CATALOG': catalog,
+          'X-WREN-SCHEMA': schema,
+        },
+      },
+    );
   });
 });

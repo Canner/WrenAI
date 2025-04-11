@@ -147,10 +147,14 @@ export interface IIbisAdaptor {
     parameters: Record<string, any>,
   ) => Promise<ValidationResponse>;
   modelSubstitute: (
-    dataSource: DataSourceName,
-    connectionInfo: WREN_AI_CONNECTION_INFO,
-    mdl: Manifest,
     sql: DialectSQL,
+    options: {
+      dataSource: DataSourceName;
+      connectionInfo: WREN_AI_CONNECTION_INFO;
+      mdl: Manifest;
+      catalog?: string;
+      schema?: string;
+    },
   ) => Promise<WrenSQL>;
 }
 
@@ -357,12 +361,22 @@ export class IbisAdaptor implements IIbisAdaptor {
   }
 
   public async modelSubstitute(
-    dataSource: DataSourceName,
-    connectionInfo: WREN_AI_CONNECTION_INFO,
-    mdl: Manifest,
     sql: DialectSQL,
+    options: {
+      dataSource: DataSourceName;
+      connectionInfo: WREN_AI_CONNECTION_INFO;
+      mdl: Manifest;
+      catalog?: string;
+      schema?: string;
+    },
   ): Promise<WrenSQL> {
+    const { dataSource, mdl, catalog, schema } = options;
+    let connectionInfo = options.connectionInfo;
     connectionInfo = this.updateConnectionInfo(connectionInfo);
+    const headers = {
+      'X-WREN-CATALOG': catalog,
+      'X-WREN-SCHEMA': schema,
+    };
     const ibisConnectionInfo = toIbisConnectionInfo(dataSource, connectionInfo);
     const body = {
       sql,
@@ -374,6 +388,9 @@ export class IbisAdaptor implements IIbisAdaptor {
       const res = await axios.post(
         `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.MODEL_SUBSTITUTE)}/connector/${dataSourceUrlMap[dataSource]}/model-substitute`,
         body,
+        {
+          headers,
+        },
       );
       return res.data as WrenSQL;
     } catch (e) {
