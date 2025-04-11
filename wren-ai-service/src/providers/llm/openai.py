@@ -105,7 +105,7 @@ class AsyncGenerator(OpenAIGenerator):
         message = ChatMessage.from_user(prompt)
         if self.system_prompt:
             # updated from_system to from_assistent as the new openai api is not accepting system prompts anymore, only user and assistant.
-            messages = [ChatMessage.from_system(self.system_prompt), message]
+            messages = [ChatMessage.from_system(self.system_prompt)]
             if history_messages:
                 messages.extend(history_messages)
             messages.append(message)
