@@ -50,14 +50,21 @@ class LitellmLLMProvider(LLMProvider):
 
         async def _run(
             prompt: str,
+            history_messages: Optional[List[ChatMessage]] = None,
             generation_kwargs: Optional[Dict[str, Any]] = None,
             query_id: Optional[str] = None,
         ):
             message = ChatMessage.from_user(prompt)
             if system_prompt:
-                messages = [ChatMessage.from_system(system_prompt), message]
+                messages = [ChatMessage.from_system(system_prompt)]
+                if history_messages:
+                    messages.extend(history_messages)
+                messages.append(message)
             else:
-                messages = [message]
+                if history_messages:
+                    messages = history_messages + [message]
+                else:
+                    messages = [message]
 
             openai_formatted_messages = [
                 _convert_message_to_openai_format(message) for message in messages

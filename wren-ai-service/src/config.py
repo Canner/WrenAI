@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     # generation config
     allow_intent_classification: bool = Field(default=True)
     allow_sql_generation_reasoning: bool = Field(default=True)
-    max_histories: int = Field(default=10)
+    max_histories: int = Field(default=5)
 
     # engine config
     engine_timeout: float = Field(default=30.0)

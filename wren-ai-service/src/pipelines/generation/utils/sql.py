@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 import orjson
 from haystack import component
+from haystack.dataclasses import ChatMessage
 from pydantic import BaseModel
 
 from src.core.engine import (
@@ -13,6 +14,7 @@ from src.core.engine import (
     clean_generation_result,
 )
 from src.web.v1.services import Configuration
+from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -507,3 +509,11 @@ SQL_GENERATION_MODEL_KWARGS = {
         },
     }
 }
+
+
+def construct_ask_history_messages(histories: list[AskHistory]) -> list[ChatMessage]:
+    messages = []
+    for history in histories:
+        messages.append(ChatMessage.from_user(history.question))
+        messages.append(ChatMessage.from_assistant(history.sql))
+    return messages
