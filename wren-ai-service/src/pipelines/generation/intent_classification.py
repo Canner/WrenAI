@@ -23,10 +23,12 @@ logger = logging.getLogger("wren-ai-service")
 
 intent_classification_system_prompt = """
 ### Task ###
-You are an expert detective specializing in intent classification. Use the user's current question and query history to determine their true intent based on the provided database schema. Classify the intent into one of these categories: `MISLEADING_QUERY`, `TEXT_TO_SQL`, `GENERAL`, or `USER_GUIDE`. Additionally, provide a concise reasoning (maximum 20 words) for your classification.
+You are an expert detective specializing in intent classification. Combine the user's current question and previous questions to determine their true intent based on the provided database schema. Classify the intent into one of these categories: `MISLEADING_QUERY`, `TEXT_TO_SQL`, `GENERAL`, or `USER_GUIDE`. Additionally, provide a concise reasoning (maximum 20 words) for your classification.
 
 ### Instructions ###
-- **Consider Both Inputs:** Analyze both the user's current question and their query history together.
+- **Follow the user's previous questions:** If there are previous questions, try to understand the user's current question as following the previous questions.
+- **Consider Both Inputs:** Combine the user's current question and their previous questions together to identify the user's true intent.
+- **Rephrase Question":** Rewrite follow-up questions into full standalone questions using prior conversation context."
 - **Concise Reasoning:** The reasoning must be clear, concise, and limited to 20 words.
 - **Language Consistency:** Use the same language as specified in the user's output language.
 - **Vague Queries:** If the question is vague or does not related to a table or property from the schema, classify it as `MISLEADING_QUERY`.
@@ -94,8 +96,9 @@ You are an expert detective specializing in intent classification. Use the user'
 Return your response as a JSON object with the following structure:
 
 {
-  "reasoning": "<brief chain-of-thought reasoning (max 20 words)>",
-  "results": "MISLEADING_QUERY" | "TEXT_TO_SQL" | "GENERAL" | "USER_GUIDE"
+    "rephrased_question": "<rephrased question in full standalone question if there are previous questions, otherwise the original question>",
+    "reasoning": "<brief chain-of-thought reasoning (max 20 words)>",
+    "results": "MISLEADING_QUERY" | "TEXT_TO_SQL" | "GENERAL" | "USER_GUIDE"
 }
 """
 
@@ -127,16 +130,14 @@ SQL:
 
 ### INPUT ###
 {% if histories %}
-User's QUERY HISTORY:
+User's previous questions:
 {% for history in histories %}
 Question:
 {{ history.question }}
-SQL:
-{{ history.sql }}
 {% endfor %}
 {% endif %}
 
-User's question: {{query}}
+User's current question: {{query}}
 Current Time: {{ current_time }}
 Output Language: {{ language }}
 
@@ -284,12 +285,14 @@ def post_process(classify_intent: dict, construct_db_schemas: list[str]) -> dict
     try:
         results = orjson.loads(classify_intent.get("replies")[0])
         return {
+            "rephrased_question": results["rephrased_question"],
             "intent": results["results"],
             "reasoning": results["reasoning"],
             "db_schemas": construct_db_schemas,
         }
     except Exception:
         return {
+            "rephrased_question": "",
             "intent": "TEXT_TO_SQL",
             "reasoning": "",
             "db_schemas": construct_db_schemas,
@@ -300,6 +303,7 @@ def post_process(classify_intent: dict, construct_db_schemas: list[str]) -> dict
 
 
 class IntentClassificationResult(BaseModel):
+    rephrased_question: str
     results: Literal["MISLEADING_QUERY", "TEXT_TO_SQL", "GENERAL", "USER_GUIDE"]
     reasoning: str
 

@@ -295,8 +295,13 @@ class AskService:
                             )
                         ).get("post_process", {})
                         intent = intent_classification_result.get("intent")
-                        rephrased_question = user_query
+                        rephrased_question = intent_classification_result.get(
+                            "rephrased_question"
+                        )
                         intent_reasoning = intent_classification_result.get("reasoning")
+
+                        if rephrased_question:
+                            user_query = rephrased_question
 
                         if intent == "MISLEADING_QUERY":
                             asyncio.create_task(
