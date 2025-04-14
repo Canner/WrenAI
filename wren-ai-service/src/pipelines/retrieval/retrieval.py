@@ -115,9 +115,7 @@ def _build_view_ddl(content: dict) -> str:
 
 ## Start of Pipeline
 @observe(capture_input=False, capture_output=False)
-async def embedding(
-    query: str, embedder: Any, histories: Optional[list[AskHistory]] = None
-) -> dict:
+async def embedding(query: str, embedder: Any, histories: list[AskHistory]) -> dict:
     if query:
         if histories:
             previous_query_summaries = [history.question for history in histories]
@@ -290,7 +288,7 @@ def prompt(
     construct_db_schemas: list[dict],
     prompt_builder: PromptBuilder,
     check_using_db_schemas_without_pruning: dict,
-    histories: Optional[list[AskHistory]] = None,
+    histories: list[AskHistory],
 ) -> dict:
     if not check_using_db_schemas_without_pruning["db_schemas"]:
         logger.info(
@@ -306,6 +304,7 @@ def prompt(
         )
 
         query = "\n".join(previous_query_summaries) + "\n" + query
+
         return prompt_builder.run(question=query, db_schemas=db_schemas)
     else:
         return {}
@@ -486,7 +485,7 @@ class Retrieval(BasicPipeline):
                 "query": query,
                 "tables": tables,
                 "project_id": project_id or "",
-                "histories": histories,
+                "histories": histories or [],
                 **self._components,
                 **self._configs,
             },

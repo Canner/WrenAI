@@ -176,7 +176,7 @@ class AskService:
         pipelines: Dict[str, BasicPipeline],
         allow_intent_classification: bool = True,
         allow_sql_generation_reasoning: bool = True,
-        max_histories: int = 10,
+        max_histories: int = 5,
         maxsize: int = 1_000_000,
         ttl: int = 120,
     ):
@@ -217,7 +217,9 @@ class AskService:
         }
 
         query_id = ask_request.query_id
-        histories = ask_request.histories[: self._max_histories]
+        histories = ask_request.histories[: self._max_histories][
+            ::-1
+        ]  # reverse the order of histories
         rephrased_question = None
         intent_reasoning = None
         sql_generation_reasoning = None

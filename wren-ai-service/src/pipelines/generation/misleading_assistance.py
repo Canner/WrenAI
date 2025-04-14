@@ -52,8 +52,8 @@ def prompt(
     query: str,
     db_schemas: list[str],
     language: str,
+    histories: list[AskHistory],
     prompt_builder: PromptBuilder,
-    histories: Optional[list[AskHistory]] = None,
 ) -> dict:
     previous_query_summaries = (
         [history.question for history in histories] if histories else []
@@ -69,7 +69,10 @@ def prompt(
 
 @observe(as_type="generation", capture_input=False)
 async def misleading_assistance(prompt: dict, generator: Any, query_id: str) -> dict:
-    return await generator(prompt=prompt.get("prompt"), query_id=query_id)
+    return await generator(
+        prompt=prompt.get("prompt"),
+        query_id=query_id,
+    )
 
 
 ## End of Pipeline
@@ -148,7 +151,7 @@ class MisleadingAssistance(BasicPipeline):
                 "db_schemas": db_schemas,
                 "language": language,
                 "query_id": query_id or "",
-                "histories": histories,
+                "histories": histories or [],
                 **self._components,
             },
         )
