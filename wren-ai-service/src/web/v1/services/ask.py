@@ -176,7 +176,7 @@ class AskService:
         pipelines: Dict[str, BasicPipeline],
         allow_intent_classification: bool = True,
         allow_sql_generation_reasoning: bool = True,
-        max_histories: int = 10,
+        max_histories: int = 5,
         maxsize: int = 1_000_000,
         ttl: int = 120,
     ):
