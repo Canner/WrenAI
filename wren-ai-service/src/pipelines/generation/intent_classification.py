@@ -37,11 +37,12 @@ You are an expert detective specializing in intent classification. Combine the u
 
 <TEXT_TO_SQL>
 **When to Use:**  
+- The user's inputs are about modifying SQL from previous questions.
 - The user's inputs are related to the database schema and requires an SQL query.
 - The question (or related previous query) includes references to specific tables, columns, or data details.
 
-**Requirements:**  
-- Include specific table and column names from the schema in your reasoning.
+**Requirements:**
+- Include specific table and column names from the schema in your reasoning or modifying SQL from previous questions.
 - Reference phrases from the user's inputs that clearly relate to the schema.
 
 **Examples:**  
@@ -134,6 +135,8 @@ User's previous questions:
 {% for history in histories %}
 Question:
 {{ history.question }}
+SQL:
+{{ history.sql }}
 {% endfor %}
 {% endif %}
 

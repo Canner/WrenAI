@@ -217,7 +217,9 @@ class AskService:
         }
 
         query_id = ask_request.query_id
-        histories = ask_request.histories[: self._max_histories]
+        histories = ask_request.histories[: self._max_histories][
+            ::-1
+        ]  # reverse the order of histories
         rephrased_question = None
         intent_reasoning = None
         sql_generation_reasoning = None
