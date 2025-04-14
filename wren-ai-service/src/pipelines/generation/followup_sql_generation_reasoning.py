@@ -10,7 +10,9 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.pipelines.generation.utils.sql import construct_instructions
+from src.pipelines.generation.utils.sql import (
+    construct_instructions,
+)
 from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
 
@@ -102,7 +104,10 @@ def prompt(
 
 @observe(as_type="generation", capture_input=False)
 async def generate_sql_reasoning(prompt: dict, generator: Any, query_id: str) -> dict:
-    return await generator(prompt=prompt.get("prompt"), query_id=query_id)
+    return await generator(
+        prompt=prompt.get("prompt"),
+        query_id=query_id,
+    )
 
 
 @observe()
