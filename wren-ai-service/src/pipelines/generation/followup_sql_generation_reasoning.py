@@ -11,7 +11,6 @@ from langfuse.decorators import observe
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.sql import (
-    construct_ask_history_messages,
     construct_instructions,
 )
 from src.web.v1.services import Configuration
@@ -61,6 +60,14 @@ SQL:
 {{ instructions }}
 {% endif %}
 
+### User's QUERY HISTORY ###
+{% for history in histories %}
+Question:
+{{ history.question }}
+SQL:
+{{ history.sql }}
+{% endfor %}
+
 ### QUESTION ###
 User's Question: {{ query }}
 Current Time: {{ current_time }}
@@ -75,6 +82,7 @@ Let's think step by step.
 def prompt(
     query: str,
     documents: list[str],
+    histories: list[AskHistory],
     sql_samples: list[dict],
     instructions: list[dict],
     prompt_builder: PromptBuilder,
@@ -83,6 +91,7 @@ def prompt(
     return prompt_builder.run(
         query=query,
         documents=documents,
+        histories=histories,
         sql_samples=sql_samples,
         instructions=construct_instructions(
             configuration=configuration,
@@ -94,14 +103,10 @@ def prompt(
 
 
 @observe(as_type="generation", capture_input=False)
-async def generate_sql_reasoning(
-    prompt: dict, generator: Any, query_id: str, histories: list[AskHistory]
-) -> dict:
-    history_messages = construct_ask_history_messages(histories)
+async def generate_sql_reasoning(prompt: dict, generator: Any, query_id: str) -> dict:
     return await generator(
         prompt=prompt.get("prompt"),
         query_id=query_id,
-        history_messages=history_messages,
     )
 
 
