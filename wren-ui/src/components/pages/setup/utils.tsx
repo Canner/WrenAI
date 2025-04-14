@@ -7,16 +7,12 @@ import Starter from './Starter';
 import ConnectDataSource from './ConnectDataSource';
 import SelectModels from './SelectModels';
 import DefineRelations from './DefineRelations';
-import BigQueryProperties from './dataSources/BigQueryProperties';
-import DuckDBProperties from './dataSources/DuckDBProperties';
-import MySQLProperties from './dataSources/MySQLProperties';
-import PostgreSQLProperties from './dataSources/PostgreSQLProperties';
-import SQLServerProperties from './dataSources/SQLServerProperties';
-import ClickHouseProperties from './dataSources/ClickHouseProperties';
-import TrinoProperties from './dataSources/TrinoProperties';
-import SnowflakeProperties from './dataSources/SnowflakeProperties';
 import { SampleDatasetName } from '@/apollo/client/graphql/__types__';
 import { ERROR_CODES } from '@/utils/errorHandler';
+import {
+  getDataSourceConfig,
+  getDataSourceFormComponent,
+} from '@/utils/dataSourceType';
 
 type SetupStep = {
   step: number;
@@ -62,65 +58,46 @@ export const SETUP_STEPS = {
 
 export const DATA_SOURCE_OPTIONS = {
   [DATA_SOURCES.BIG_QUERY]: {
-    label: 'BigQuery',
-    logo: '/images/dataSource/bigQuery.svg',
+    ...getDataSourceConfig(DATA_SOURCES.BIG_QUERY),
     guide: 'https://docs.getwren.ai/oss/guide/connect/bigquery',
     disabled: false,
   },
   [DATA_SOURCES.DUCKDB]: {
-    label: 'DuckDB',
-    logo: '/images/dataSource/duckDb.svg',
+    ...getDataSourceConfig(DATA_SOURCES.DUCKDB),
     guide: 'https://docs.getwren.ai/oss/guide/connect/duckdb',
     disabled: false,
   },
-  [DATA_SOURCES.PG_SQL]: {
-    label: 'PostgreSQL',
-    logo: '/images/dataSource/postgreSql.svg',
+  [DATA_SOURCES.POSTGRES]: {
+    ...getDataSourceConfig(DATA_SOURCES.POSTGRES),
     guide: 'https://docs.getwren.ai/oss/guide/connect/postgresql',
     disabled: false,
   },
   [DATA_SOURCES.MYSQL]: {
-    label: 'MySQL',
-    logo: '/images/dataSource/mysql.svg',
+    ...getDataSourceConfig(DATA_SOURCES.MYSQL),
     guide: 'https://docs.getwren.ai/oss/guide/connect/mysql',
     disabled: false,
   },
   [DATA_SOURCES.MSSQL]: {
-    label: 'SQL Server',
-    logo: '/images/dataSource/sqlserver.svg',
+    ...getDataSourceConfig(DATA_SOURCES.MSSQL),
     guide: 'https://docs.getwren.ai/oss/guide/connect/sqlserver',
     disabled: false,
   },
   [DATA_SOURCES.CLICK_HOUSE]: {
-    label: 'ClickHouse',
-    logo: '/images/dataSource/clickhouse.svg',
+    ...getDataSourceConfig(DATA_SOURCES.CLICK_HOUSE),
     guide: 'https://docs.getwren.ai/oss/guide/connect/clickhouse',
     disabled: false,
   },
   [DATA_SOURCES.TRINO]: {
-    label: 'Trino',
-    logo: '/images/dataSource/trino.svg',
+    ...getDataSourceConfig(DATA_SOURCES.TRINO),
     guide: 'https://docs.getwren.ai/oss/guide/connect/trino',
     disabled: false,
   },
   [DATA_SOURCES.SNOWFLAKE]: {
-    label: 'Snowflake',
-    logo: '/images/dataSource/snowflake.svg',
+    ...getDataSourceConfig(DATA_SOURCES.SNOWFLAKE),
     guide: 'https://docs.getwren.ai/oss/guide/connect/snowflake',
     disabled: false,
   },
 } as { [key: string]: ButtonOption };
-
-export const DATA_SOURCE_FORM = {
-  [DATA_SOURCES.BIG_QUERY]: { component: BigQueryProperties },
-  [DATA_SOURCES.DUCKDB]: { component: DuckDBProperties },
-  [DATA_SOURCES.PG_SQL]: { component: PostgreSQLProperties },
-  [DATA_SOURCES.MYSQL]: { component: MySQLProperties },
-  [DATA_SOURCES.MSSQL]: { component: SQLServerProperties },
-  [DATA_SOURCES.CLICK_HOUSE]: { component: ClickHouseProperties },
-  [DATA_SOURCES.TRINO]: { component: TrinoProperties },
-  [DATA_SOURCES.SNOWFLAKE]: { component: SnowflakeProperties },
-};
 
 export const TEMPLATE_OPTIONS = {
   [SampleDatasetName.ECOMMERCE]: {
@@ -136,49 +113,13 @@ export const TEMPLATE_OPTIONS = {
 };
 
 export const getDataSources = () => {
-  return Object.keys(DATA_SOURCE_OPTIONS).map((key) => ({
-    ...DATA_SOURCE_OPTIONS[key],
-    value: key,
-  })) as ButtonOption[];
+  return Object.values(DATA_SOURCE_OPTIONS) as ButtonOption[];
 };
 
 export const getDataSource = (dataSource: DATA_SOURCES) => {
-  const defaultDataSource = merge(
-    DATA_SOURCE_OPTIONS[DATA_SOURCES.BIG_QUERY],
-    DATA_SOURCE_FORM[DATA_SOURCES.BIG_QUERY],
-  );
-  return (
-    {
-      [DATA_SOURCES.BIG_QUERY]: defaultDataSource,
-      [DATA_SOURCES.DUCKDB]: merge(
-        DATA_SOURCE_OPTIONS[DATA_SOURCES.DUCKDB],
-        DATA_SOURCE_FORM[DATA_SOURCES.DUCKDB],
-      ),
-      [DATA_SOURCES.PG_SQL]: merge(
-        DATA_SOURCE_OPTIONS[DATA_SOURCES.PG_SQL],
-        DATA_SOURCE_FORM[DATA_SOURCES.PG_SQL],
-      ),
-      [DATA_SOURCES.MYSQL]: merge(
-        DATA_SOURCE_OPTIONS[DATA_SOURCES.MYSQL],
-        DATA_SOURCE_FORM[DATA_SOURCES.MYSQL],
-      ),
-      [DATA_SOURCES.MSSQL]: merge(
-        DATA_SOURCE_OPTIONS[DATA_SOURCES.MSSQL],
-        DATA_SOURCE_FORM[DATA_SOURCES.MSSQL],
-      ),
-      [DATA_SOURCES.CLICK_HOUSE]: merge(
-        DATA_SOURCE_OPTIONS[DATA_SOURCES.CLICK_HOUSE],
-        DATA_SOURCE_FORM[DATA_SOURCES.CLICK_HOUSE],
-      ),
-      [DATA_SOURCES.TRINO]: merge(
-        DATA_SOURCE_OPTIONS[DATA_SOURCES.TRINO],
-        DATA_SOURCE_FORM[DATA_SOURCES.TRINO],
-      ),
-      [DATA_SOURCES.SNOWFLAKE]: merge(
-        DATA_SOURCE_OPTIONS[DATA_SOURCES.SNOWFLAKE],
-        DATA_SOURCE_FORM[DATA_SOURCES.SNOWFLAKE],
-      ),
-    }[dataSource] || defaultDataSource
+  return merge(
+    DATA_SOURCE_OPTIONS[dataSource],
+    getDataSourceFormComponent(dataSource),
   );
 };
 
