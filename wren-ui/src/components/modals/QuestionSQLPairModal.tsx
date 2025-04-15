@@ -13,11 +13,13 @@ import { parseGraphQLError } from '@/utils/errorHandler';
 import { createSQLPairQuestionValidator } from '@/utils/validator';
 import ErrorCollapse from '@/components/ErrorCollapse';
 import PreviewData from '@/components/dataPreview/PreviewData';
-import ImportDataSourceSQLModal from '@/components/modals/ImportDataSourceSQLModal';
+import ImportDataSourceSQLModal, {
+  isSupportSubstitute,
+} from '@/components/modals/ImportDataSourceSQLModal';
 import { usePreviewSqlMutation } from '@/apollo/client/graphql/sql.generated';
+import { useGetSettingsQuery } from '@/apollo/client/graphql/settings.generated';
 import { useGenerateQuestionMutation } from '@/apollo/client/graphql/sql.generated';
 import { SqlPair } from '@/apollo/client/graphql/__types__';
-import { useGetSettingsQuery } from '@/apollo/client/graphql/settings.generated';
 
 type Props = ModalAction<SqlPair> & {
   loading?: boolean;
@@ -68,7 +70,7 @@ export default function QuestionSQLPairModal(props: Props) {
   const settings = settingsResult?.settings;
   const dataSource = useMemo(
     () => ({
-      isOwned: !settings?.dataSource?.sampleDataset,
+      isSupportSubstitute: isSupportSubstitute(settings?.dataSource),
       type: settings?.dataSource?.type,
     }),
     [settings?.dataSource],
@@ -282,7 +284,7 @@ export default function QuestionSQLPairModal(props: Props) {
           >
             <SQLEditor
               toolbar={
-                dataSource.isOwned && (
+                dataSource.isSupportSubstitute && (
                   <Toolbar
                     dataSource={dataSource.type}
                     onClick={() =>
@@ -328,7 +330,7 @@ export default function QuestionSQLPairModal(props: Props) {
           />
         )}
       </Modal>
-      {dataSource.isOwned && (
+      {dataSource.isSupportSubstitute && (
         <ImportDataSourceSQLModal
           {...importDataSourceSQLModal.state}
           onClose={importDataSourceSQLModal.closeModal}

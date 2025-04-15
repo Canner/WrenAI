@@ -1,10 +1,14 @@
+import { useMemo } from 'react';
 import { Modal, Form, Alert } from 'antd';
 import { ModalAction } from '@/hooks/useModalAction';
 import { getDataSourceImage, getDataSourceName } from '@/utils/dataSourceType';
 import { DATA_SOURCES } from '@/utils/enum';
-import SQLEditor from '@/components/editor/SQLEditor';
 import { ERROR_TEXTS } from '@/utils/error';
-import ErrorCollapse from '../ErrorCollapse';
+import { parseGraphQLError } from '@/utils/errorHandler';
+import SQLEditor from '@/components/editor/SQLEditor';
+import ErrorCollapse from '@/components/ErrorCollapse';
+import { useModelSubstituteMutation } from '@/apollo/client/graphql/sql.generated';
+import { DataSource, DataSourceName } from '@/apollo/client/graphql/__types__';
 
 type Props = ModalAction<{ dataSource: DATA_SOURCES }> & {
   loading?: boolean;
@@ -25,26 +29,45 @@ const Toolbar = (props) => {
   );
 };
 
+export const isSupportSubstitute = (dataSource: DataSource) => {
+  // DuckDB not supported, sample dataset as well
+  return (
+    !dataSource?.sampleDataset && dataSource?.type !== DataSourceName.DUCKDB
+  );
+};
+
 export default function ImportDataSourceSQLModal(props: Props) {
   const { visible, defaultValue, loading, onSubmit, onClose } = props;
   const name = getDataSourceName(defaultValue?.dataSource) || 'data source';
 
-  const error = {
-    shortMessage: 'Error',
-    message: 'Error',
-  };
+  const [substituteDialectSQL, modelSubstitudeResult] =
+    useModelSubstituteMutation();
+  const error = useMemo(
+    () =>
+      modelSubstitudeResult.error
+        ? {
+            ...parseGraphQLError(modelSubstitudeResult.error),
+            shortMessage: `Invalid ${name} SQL syntax`,
+          }
+        : null,
+    [modelSubstitudeResult.error],
+  );
 
   const [form] = Form.useForm();
 
   const reset = () => {
     form.resetFields();
+    modelSubstitudeResult.reset();
   };
 
   const submit = async () => {
     form
       .validateFields()
       .then(async (values) => {
-        onSubmit(values);
+        const response = await substituteDialectSQL({
+          variables: { data: { sql: values.sql } },
+        });
+        await onSubmit(response.data?.modelSubstitute);
         onClose();
       })
       .catch(console.error);
