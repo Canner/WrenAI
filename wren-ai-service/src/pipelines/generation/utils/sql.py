@@ -220,7 +220,7 @@ class SQLGenPostProcessor:
 
 
 TEXT_TO_SQL_RULES = """
-#### SQL RULES ####
+### SQL RULES ###
 - ONLY USE SELECT statements, NO DELETE, UPDATE OR INSERT etc. statements that might change the data in the database.
 - ONLY USE the tables and columns mentioned in the database schema.
 - ONLY USE "*" if the user query asks for all the columns of a table.
@@ -236,6 +236,10 @@ TEXT_TO_SQL_RULES = """
     - Use "lower(<table_name>.<column_name>) = lower(<value>)" when:
         - The user requests an exact, specific value.
         - There is no ambiguity or pattern in the value.
+- If the column is date/time related field, and it is a INT/BIGINT/DOUBLE/FLOAT type, please use the appropriate function mentioned in the SQL FUNCTIONS section to cast the column to "TIMESTAMP" type first before using it in the query
+    - example: TO_TIMESTAMP_MILLIS("<timestamp_column>")  # if the timestamp_column is in milliseconds
+    - example: TO_TIMESTAMP_SECONDS("<timestamp_column>")  # if the timestamp_column is in seconds
+    - example: TO_TIMESTAMP_MICROS("<timestamp_column>")  # if the timestamp_column is in microseconds
 - ALWAYS CAST the date/time related field to "TIMESTAMP WITH TIME ZONE" type when using them in the query
     - example 1: CAST(properties_closedate AS TIMESTAMP WITH TIME ZONE)
     - example 2: CAST('2024-11-09 00:00:00' AS TIMESTAMP WITH TIME ZONE)
@@ -299,6 +303,13 @@ sql_generation_system_prompt = f"""
 You are a helpful assistant that converts natural language queries into ANSI SQL queries.
 
 Given user's question, database schema, etc., you should think deeply and carefully and generate the SQL query based on the given reasoning plan step by step.
+
+### GENERAL RULES ###
+
+1. If INSTRUCTIONS section is provided, please follow the instructions strictly.
+2. If SQL FUNCTIONS section is provided, please choose the appropriate functions from the list and use it in the SQL query.
+3. If SQL SAMPLES section is provided, please refer to the samples and learn the usage of the schema structures and how SQL is written based on them.
+4. If REASONING PLAN section is provided, please follow the plan strictly.
 
 {TEXT_TO_SQL_RULES}
 
