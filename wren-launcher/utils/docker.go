@@ -31,6 +31,9 @@ const (
 )
 
 var generationModelToModelName = map[string]string{
+	"gpt-4.1-nano": "gpt-4.1-nano-2025-04-14",
+	"gpt-4.1-mini": "gpt-4.1-mini-2025-04-14",
+	"gpt-4.1":      "gpt-4.1-2025-04-14",
 	"gpt-4o-mini": "gpt-4o-mini-2024-07-18",
 	"o3-mini":     "o3-mini-2025-01-31",
 	"gpt-4o":      "gpt-4o-2024-08-06",
@@ -154,7 +157,7 @@ func PrepareConfigFileForOpenAI(projectDir string, generationModel string) error
 
 	// replace the generation model in config.yaml
 	config := string(content)
-	config = strings.ReplaceAll(config, "litellm_llm.gpt-4o-mini-2024-07-18", "litellm_llm."+generationModelToModelName[generationModel])
+	config = strings.ReplaceAll(config, "litellm_llm.default", "litellm_llm."+generationModelToModelName[generationModel])
 
 	// replace allow_using_db_schemas_without_pruning setting
 	// enable this feature since OpenAI models have sufficient context window size to handle full schema
