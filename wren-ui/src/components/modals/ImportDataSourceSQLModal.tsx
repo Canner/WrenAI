@@ -65,7 +65,7 @@ export default function ImportDataSourceSQLModal(props: Props) {
       .validateFields()
       .then(async (values) => {
         const response = await substituteDialectSQL({
-          variables: { data: { sql: values.sql } },
+          variables: { data: { sql: values.dialectSql } },
         });
         await onSubmit(response.data?.modelSubstitute);
         onClose();
@@ -92,7 +92,7 @@ export default function ImportDataSourceSQLModal(props: Props) {
     >
       <Form form={form} layout="vertical">
         <Form.Item
-          name="sql"
+          name="dialectSql"
           label="SQL statement"
           rules={[
             {

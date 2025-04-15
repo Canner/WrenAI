@@ -334,8 +334,8 @@ export default function QuestionSQLPairModal(props: Props) {
         <ImportDataSourceSQLModal
           {...importDataSourceSQLModal.state}
           onClose={importDataSourceSQLModal.closeModal}
-          onSubmit={async (values) => {
-            console.log(values);
+          onSubmit={async (convertedSql: string) => {
+            form.setFieldsValue({ sql: convertedSql });
           }}
         />
       )}

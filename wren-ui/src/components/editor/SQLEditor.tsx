@@ -65,7 +65,18 @@ export default function SQLEditor(props: Props) {
     skip: !autoComplete,
   });
 
+  const resetCompleters = () => {
+    // clear custom completer
+    const langTools = getLangTools();
+    langTools?.setCompleters([
+      langTools.keyWordCompleter,
+      langTools.snippetCompleter,
+      langTools.textCompleter,
+    ]);
+  };
+
   useEffect(() => {
+    resetCompleters();
     if (!autoComplete || completers.length === 0) return;
 
     const langTools = getLangTools();
@@ -76,15 +87,8 @@ export default function SQLEditor(props: Props) {
     };
     langTools?.addCompleter(customCompleter);
 
-    // clear custom completer
-    return () => {
-      langTools?.setCompleters([
-        langTools.keyWordCompleter,
-        langTools.snippetCompleter,
-        langTools.textCompleter,
-      ]);
-    };
-  }, [autoComplete, completers]);
+    return () => resetCompleters();
+  }, [focused, autoComplete, completers]);
 
   const [sql, setSql] = useState(value || '');
 
