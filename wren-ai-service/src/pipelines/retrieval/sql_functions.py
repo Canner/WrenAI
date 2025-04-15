@@ -22,17 +22,11 @@ class SqlFunction:
 
     def __init__(self, definition: dict):
         def _extract() -> tuple[str, list, str]:
-            name = definition["name"]
-
-            _param_types = definition.get("param_types") or "any"
-            param_types = _param_types.split(",") if _param_types else []
-
-            return_type = definition.get("return_type") or "any"
-
-            if return_type in ["same as input", "same as arg types"]:
-                return_type = param_types
-
-            return name, param_types, return_type
+            return (
+                definition.get("name", "").upper(),
+                definition.get("function_type", ""),
+                definition.get("description", ""),
+            )
 
         def _param_expr(param_type: str, index: int) -> str:
             if param_type == "any":
@@ -42,12 +36,17 @@ class SqlFunction:
             param_name = f"${index}"
             return f"{param_name}: {param_type}"
 
-        name, param_types, return_type = _extract()
+        name, function_type, description = _extract()
 
-        params = [_param_expr(type, index) for index, type in enumerate(param_types)]
-        param_str = ", ".join(params)
+        self._expr = f"type: {function_type}, name: {name}, description: {description}"
 
-        self._expr = f"{name}({param_str}) -> {return_type}"
+    @classmethod
+    def empty(cls, definition: dict):
+        return (
+            not definition.get("name", "")
+            or not definition.get("function_type", "")
+            or not definition.get("description", "")
+        )
 
     def __str__(self):
         return self._expr
@@ -58,7 +57,7 @@ class SqlFunction:
 
 ## Start of Pipeline
 @observe(capture_input=False)
-@extract_fields(dict(func_list=List[str]))
+@extract_fields(dict(func_list=List[dict]))
 async def get_functions(
     engine: WrenIbis,
     data_source: str,
@@ -75,9 +74,13 @@ async def get_functions(
 
 @observe(capture_input=False)
 def sql_functions(
-    func_list: List[str],
+    func_list: List[dict],
 ) -> List[SqlFunction]:
-    return [SqlFunction(definition=func) for func in func_list]
+    return [
+        SqlFunction(definition=func)
+        for func in func_list
+        if not SqlFunction.empty(func)
+    ]
 
 
 @observe(capture_input=False)
