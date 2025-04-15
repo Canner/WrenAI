@@ -293,6 +293,7 @@ export default function QuestionSQLPairModal(props: Props) {
                   />
                 )
               }
+              autoComplete
               autoFocus
             />
           </Form.Item>
