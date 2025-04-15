@@ -66,7 +66,7 @@ export default function SQLEditor(props: Props) {
   });
 
   useEffect(() => {
-    if (completers.length === 0) return;
+    if (!autoComplete || completers.length === 0) return;
 
     const langTools = getLangTools();
     const customCompleter = {
@@ -75,6 +75,15 @@ export default function SQLEditor(props: Props) {
       },
     };
     langTools?.addCompleter(customCompleter);
+
+    // clear custom completer
+    return () => {
+      langTools?.setCompleters([
+        langTools.keyWordCompleter,
+        langTools.snippetCompleter,
+        langTools.textCompleter,
+      ]);
+    };
   }, [autoComplete, completers]);
 
   const [sql, setSql] = useState(value || '');

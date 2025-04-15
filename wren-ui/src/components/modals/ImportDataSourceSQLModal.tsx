@@ -1,0 +1,97 @@
+import { Modal, Form, Alert } from 'antd';
+import { ModalAction } from '@/hooks/useModalAction';
+import { getDataSourceImage, getDataSourceName } from '@/utils/dataSourceType';
+import { DATA_SOURCES } from '@/utils/enum';
+import SQLEditor from '@/components/editor/SQLEditor';
+import { ERROR_TEXTS } from '@/utils/error';
+import ErrorCollapse from '../ErrorCollapse';
+
+type Props = ModalAction<{ dataSource: DATA_SOURCES }> & {
+  loading?: boolean;
+};
+
+const Toolbar = (props) => {
+  const { dataSource } = props;
+  if (!dataSource) return null;
+  const logo = getDataSourceImage(dataSource);
+  const name = getDataSourceName(dataSource);
+  return (
+    <>
+      <span className="d-flex align-center gx-2">
+        <img src={logo} alt="logo" width="20" height="20" />
+        {name}
+      </span>
+    </>
+  );
+};
+
+export default function ImportDataSourceSQLModal(props: Props) {
+  const { visible, defaultValue, loading, onSubmit, onClose } = props;
+  const name = getDataSourceName(defaultValue?.dataSource) || 'data source';
+
+  const error = {
+    shortMessage: 'Error',
+    message: 'Error',
+  };
+
+  const [form] = Form.useForm();
+
+  const reset = () => {
+    form.resetFields();
+  };
+
+  const submit = async () => {
+    form
+      .validateFields()
+      .then(async (values) => {
+        onSubmit(values);
+        onClose();
+      })
+      .catch(console.error);
+  };
+
+  return (
+    <Modal
+      title={`Import from ${name} SQL`}
+      centered
+      closable
+      confirmLoading={loading}
+      destroyOnClose
+      maskClosable={false}
+      onCancel={onClose}
+      onOk={submit}
+      okText="Convert"
+      visible={visible}
+      width={600}
+      cancelButtonProps={{ disabled: loading }}
+      okButtonProps={{ disabled: loading }}
+      afterClose={() => reset()}
+    >
+      <Form form={form} layout="vertical">
+        <Form.Item
+          name="sql"
+          label="SQL statement"
+          rules={[
+            {
+              required: true,
+              message: ERROR_TEXTS.IMPORT_DATA_SOURCE_SQL.SQL.REQUIRED,
+            },
+          ]}
+        >
+          <SQLEditor
+            toolbar={<Toolbar dataSource={defaultValue?.dataSource} />}
+            autoFocus
+          />
+        </Form.Item>
+      </Form>
+      {!!error && (
+        <Alert
+          showIcon
+          type="error"
+          message={error.shortMessage}
+          description={<ErrorCollapse message={error.message} />}
+        />
+      )}
+    </Modal>
+  );
+}
