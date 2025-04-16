@@ -32,6 +32,10 @@ const getDocHTML = (item: (Model | Field) & { parent?: Model }) => {
     .join('');
 };
 
+const shouldQuoteIdentifier = (word: string) => {
+  return /[^a-z0-9_]/.test(word) || /^\d/.test(word);
+};
+
 // For mention usage
 export const convertMention = (item: (Model | Field) & { parent?: Model }) => {
   return {
@@ -55,7 +59,9 @@ export const convertCompleter = (
     caption: item.parent
       ? `${item.parent.displayName}.${item.displayName}`
       : item.displayName,
-    value: item.referenceName,
+    value: shouldQuoteIdentifier(item.referenceName)
+      ? `"${item.referenceName}"`
+      : item.referenceName,
     meta: item.nodeType.toLowerCase(),
     // Higher score for models, views
     score: item.parent ? 1 : 10,
