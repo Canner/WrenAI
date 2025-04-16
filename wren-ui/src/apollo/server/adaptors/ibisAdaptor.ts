@@ -374,8 +374,8 @@ export class IbisAdaptor implements IIbisAdaptor {
     let connectionInfo = options.connectionInfo;
     connectionInfo = this.updateConnectionInfo(connectionInfo);
     const headers = {
-      'X-WREN-CATALOG': catalog,
-      'X-WREN-SCHEMA': schema,
+      'X-User-CATALOG': catalog,
+      'X-User-SCHEMA': schema,
     };
     const ibisConnectionInfo = toIbisConnectionInfo(dataSource, connectionInfo);
     const body = {

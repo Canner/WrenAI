@@ -589,8 +589,8 @@ describe('IbisAdaptor', () => {
       },
       {
         headers: {
-          'X-WREN-CATALOG': undefined,
-          'X-WREN-SCHEMA': undefined,
+          'X-User-CATALOG': undefined,
+          'X-User-SCHEMA': undefined,
         },
       },
     );
@@ -727,8 +727,8 @@ describe('IbisAdaptor', () => {
       },
       {
         headers: {
-          'X-WREN-CATALOG': catalog,
-          'X-WREN-SCHEMA': schema,
+          'X-User-CATALOG': catalog,
+          'X-User-SCHEMA': schema,
         },
       },
     );
