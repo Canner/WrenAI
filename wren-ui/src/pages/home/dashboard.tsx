@@ -4,8 +4,10 @@ import { Path } from '@/utils/enum';
 import { useRouter } from 'next/router';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import useHomeSidebar from '@/hooks/useHomeSidebar';
+import { LoadingWrapper } from '@/components/PageLoading';
 import DashboardGrid from '@/components/pages/home/dashboardGrid';
 import EmptyDashboard from '@/components/pages/home/dashboardGrid/EmptyDashboard';
+import DashboardHeader from '@/components/pages/home/dashboardGrid/DashboardHeader';
 import {
   useDashboardItemsQuery,
   useDeleteDashboardItemMutation,
@@ -17,7 +19,11 @@ export default function Dashboard() {
   const router = useRouter();
   const homeSidebar = useHomeSidebar();
 
-  const { data, refetch } = useDashboardItemsQuery({
+  const {
+    data,
+    loading,
+    updateQuery: updateDashboardItemQuery,
+  } = useDashboardItemsQuery({
     fetchPolicy: 'cache-and-network',
     onError: () => {
       message.error('Failed to fetch dashboard items.');
@@ -32,11 +38,21 @@ export default function Dashboard() {
     },
   });
   const [deleteDashboardItem] = useDeleteDashboardItemMutation({
-    onCompleted: () => {
+    onCompleted: (_, query) => {
       message.success('Successfully deleted dashboard item.');
-      refetch();
+      onRemoveDashboardItemFromQueryCache(query.variables.where.id);
     },
   });
+
+  const onRemoveDashboardItemFromQueryCache = (id: number) => {
+    updateDashboardItemQuery((prev) => {
+      return {
+        ...prev,
+        dashboardItems:
+          prev?.dashboardItems?.filter((item) => item.id !== id) || [],
+      };
+    });
+  };
 
   const onUpdateChange = async (layouts: ItemLayoutInput[]) => {
     if (layouts && layouts.length > 0) {
@@ -50,13 +66,16 @@ export default function Dashboard() {
 
   return (
     <SiderLayout loading={false} color="gray-3" sidebar={homeSidebar}>
-      <EmptyDashboard show={dashboardItems.length === 0}>
-        <DashboardGrid
-          items={dashboardItems}
-          onUpdateChange={onUpdateChange}
-          onDelete={onDelete}
-        />
-      </EmptyDashboard>
+      <LoadingWrapper loading={loading}>
+        <EmptyDashboard show={dashboardItems.length === 0}>
+          <DashboardHeader />
+          <DashboardGrid
+            items={dashboardItems}
+            onUpdateChange={onUpdateChange}
+            onDelete={onDelete}
+          />
+        </EmptyDashboard>
+      </LoadingWrapper>
     </SiderLayout>
   );
 }
