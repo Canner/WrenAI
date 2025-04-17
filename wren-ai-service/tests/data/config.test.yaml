@@ -54,8 +54,6 @@ pipes:
   - name: followup_sql_generation
     llm: openai_llm.gpt-4o-mini
     engine: wren_ui
-  - name: sql_summary
-    llm: openai_llm.gpt-4o-mini
   - name: sql_answer
     llm: openai_llm.gpt-4o-mini
     engine: wren_ui

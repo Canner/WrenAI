@@ -135,9 +135,6 @@ def create_service_container(
                     **pipe_components["followup_sql_generation"],
                     engine_timeout=settings.engine_timeout,
                 ),
-                "sql_summary": generation.SQLSummary(
-                    **pipe_components["sql_summary"],
-                ),
                 "sql_regeneration": generation.SQLRegeneration(
                     **pipe_components["sql_regeneration"],
                     engine_timeout=settings.engine_timeout,

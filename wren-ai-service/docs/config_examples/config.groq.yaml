@@ -77,8 +77,6 @@ pipes:
   - name: followup_sql_generation
     llm: litellm_llm.default
     engine: wren_ui
-  - name: sql_summary
-    llm: litellm_llm.default
   - name: sql_answer
     llm: litellm_llm.default
   - name: semantics_description
