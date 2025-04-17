@@ -3,26 +3,34 @@ import * as Types from './__types__';
 import { gql } from '@apollo/client';
 import * as Apollo from '@apollo/client';
 const defaultOptions = {} as const;
-export type CommonDashboardItemFragment = { __typename?: 'DashboardItem', id: number, dashboardId: number, type: Types.DashboardItemType, layout: { __typename?: 'DashboardItemLayout', x: number, y: number, w: number, h: number }, detail: { __typename?: 'DashboardItemDetail', sql: string, chartSchema?: any | null } };
+export type CommonDashboardItemFragment = { __typename?: 'DashboardItem', id: number, dashboardId: number, type: Types.DashboardItemType, displayName?: string | null, layout: { __typename?: 'DashboardItemLayout', x: number, y: number, w: number, h: number }, detail: { __typename?: 'DashboardItemDetail', sql: string, chartSchema?: any | null } };
 
 export type DashboardItemsQueryVariables = Types.Exact<{ [key: string]: never; }>;
 
 
-export type DashboardItemsQuery = { __typename?: 'Query', dashboardItems: Array<{ __typename?: 'DashboardItem', id: number, dashboardId: number, type: Types.DashboardItemType, layout: { __typename?: 'DashboardItemLayout', x: number, y: number, w: number, h: number }, detail: { __typename?: 'DashboardItemDetail', sql: string, chartSchema?: any | null } }> };
+export type DashboardItemsQuery = { __typename?: 'Query', dashboardItems: Array<{ __typename?: 'DashboardItem', id: number, dashboardId: number, type: Types.DashboardItemType, displayName?: string | null, layout: { __typename?: 'DashboardItemLayout', x: number, y: number, w: number, h: number }, detail: { __typename?: 'DashboardItemDetail', sql: string, chartSchema?: any | null } }> };
 
 export type CreateDashboardItemMutationVariables = Types.Exact<{
   data: Types.CreateDashboardItemInput;
 }>;
 
 
-export type CreateDashboardItemMutation = { __typename?: 'Mutation', createDashboardItem: { __typename?: 'DashboardItem', id: number, dashboardId: number, type: Types.DashboardItemType, layout: { __typename?: 'DashboardItemLayout', x: number, y: number, w: number, h: number }, detail: { __typename?: 'DashboardItemDetail', sql: string, chartSchema?: any | null } } };
+export type CreateDashboardItemMutation = { __typename?: 'Mutation', createDashboardItem: { __typename?: 'DashboardItem', id: number, dashboardId: number, type: Types.DashboardItemType, displayName?: string | null, layout: { __typename?: 'DashboardItemLayout', x: number, y: number, w: number, h: number }, detail: { __typename?: 'DashboardItemDetail', sql: string, chartSchema?: any | null } } };
+
+export type UpdateDashboardItemMutationVariables = Types.Exact<{
+  where: Types.DashboardItemWhereInput;
+  data: Types.UpdateDashboardItemInput;
+}>;
+
+
+export type UpdateDashboardItemMutation = { __typename?: 'Mutation', updateDashboardItem: { __typename?: 'DashboardItem', id: number, dashboardId: number, type: Types.DashboardItemType, displayName?: string | null, layout: { __typename?: 'DashboardItemLayout', x: number, y: number, w: number, h: number }, detail: { __typename?: 'DashboardItemDetail', sql: string, chartSchema?: any | null } } };
 
 export type UpdateDashboardItemLayoutsMutationVariables = Types.Exact<{
   data: Types.UpdateDashboardItemLayoutsInput;
 }>;
 
 
-export type UpdateDashboardItemLayoutsMutation = { __typename?: 'Mutation', updateDashboardItemLayouts: Array<{ __typename?: 'DashboardItem', id: number, dashboardId: number, type: Types.DashboardItemType, layout: { __typename?: 'DashboardItemLayout', x: number, y: number, w: number, h: number }, detail: { __typename?: 'DashboardItemDetail', sql: string, chartSchema?: any | null } }> };
+export type UpdateDashboardItemLayoutsMutation = { __typename?: 'Mutation', updateDashboardItemLayouts: Array<{ __typename?: 'DashboardItem', id: number, dashboardId: number, type: Types.DashboardItemType, displayName?: string | null, layout: { __typename?: 'DashboardItemLayout', x: number, y: number, w: number, h: number }, detail: { __typename?: 'DashboardItemDetail', sql: string, chartSchema?: any | null } }> };
 
 export type DeleteDashboardItemMutationVariables = Types.Exact<{
   where: Types.DashboardItemWhereInput;
@@ -53,6 +61,7 @@ export const CommonDashboardItemFragmentDoc = gql`
     sql
     chartSchema
   }
+  displayName
 }
     `;
 export const DashboardItemsDocument = gql`
@@ -122,6 +131,40 @@ export function useCreateDashboardItemMutation(baseOptions?: Apollo.MutationHook
 export type CreateDashboardItemMutationHookResult = ReturnType<typeof useCreateDashboardItemMutation>;
 export type CreateDashboardItemMutationResult = Apollo.MutationResult<CreateDashboardItemMutation>;
 export type CreateDashboardItemMutationOptions = Apollo.BaseMutationOptions<CreateDashboardItemMutation, CreateDashboardItemMutationVariables>;
+export const UpdateDashboardItemDocument = gql`
+    mutation UpdateDashboardItem($where: DashboardItemWhereInput!, $data: UpdateDashboardItemInput!) {
+  updateDashboardItem(where: $where, data: $data) {
+    ...CommonDashboardItem
+  }
+}
+    ${CommonDashboardItemFragmentDoc}`;
+export type UpdateDashboardItemMutationFn = Apollo.MutationFunction<UpdateDashboardItemMutation, UpdateDashboardItemMutationVariables>;
+
+/**
+ * __useUpdateDashboardItemMutation__
+ *
+ * To run a mutation, you first call `useUpdateDashboardItemMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useUpdateDashboardItemMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [updateDashboardItemMutation, { data, loading, error }] = useUpdateDashboardItemMutation({
+ *   variables: {
+ *      where: // value for 'where'
+ *      data: // value for 'data'
+ *   },
+ * });
+ */
+export function useUpdateDashboardItemMutation(baseOptions?: Apollo.MutationHookOptions<UpdateDashboardItemMutation, UpdateDashboardItemMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<UpdateDashboardItemMutation, UpdateDashboardItemMutationVariables>(UpdateDashboardItemDocument, options);
+      }
+export type UpdateDashboardItemMutationHookResult = ReturnType<typeof useUpdateDashboardItemMutation>;
+export type UpdateDashboardItemMutationResult = Apollo.MutationResult<UpdateDashboardItemMutation>;
+export type UpdateDashboardItemMutationOptions = Apollo.BaseMutationOptions<UpdateDashboardItemMutation, UpdateDashboardItemMutationVariables>;
 export const UpdateDashboardItemLayoutsDocument = gql`
     mutation UpdateDashboardItemLayouts($data: UpdateDashboardItemLayoutsInput!) {
   updateDashboardItemLayouts(data: $data) {
