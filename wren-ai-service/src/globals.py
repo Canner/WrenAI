@@ -16,7 +16,6 @@ logger = logging.getLogger("wren-ai-service")
 @dataclass
 class ServiceContainer:
     ask_service: services.AskService
-    ask_details_service: services.AskDetailsService
     question_recommendation: services.QuestionRecommendation
     relationship_recommendation: services.RelationshipRecommendation
     semantics_description: services.SemanticsDescription
@@ -185,18 +184,6 @@ def create_service_container(
                 "sql_answer": generation.SQLAnswer(
                     **pipe_components["sql_answer"],
                     engine_timeout=settings.engine_timeout,
-                ),
-            },
-            **query_cache,
-        ),
-        ask_details_service=services.AskDetailsService(
-            pipelines={
-                "sql_breakdown": generation.SQLBreakdown(
-                    **pipe_components["sql_breakdown"],
-                    engine_timeout=settings.engine_timeout,
-                ),
-                "sql_summary": generation.SQLSummary(
-                    **pipe_components["sql_summary"],
                 ),
             },
             **query_cache,

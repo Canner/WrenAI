@@ -9,7 +9,6 @@ from .question_recommendation import QuestionRecommendation
 from .relationship_recommendation import RelationshipRecommendation
 from .semantics_description import SemanticsDescription
 from .sql_answer import SQLAnswer
-from .sql_breakdown import SQLBreakdown
 from .sql_correction import SQLCorrection
 from .sql_generation import SQLGeneration
 from .sql_generation_reasoning import SQLGenerationReasoning
@@ -28,7 +27,6 @@ __all__ = [
     "RelationshipRecommendation",
     "SemanticsDescription",
     "SQLAnswer",
-    "SQLBreakdown",
     "SQLCorrection",
     "SQLGeneration",
     "SQLGenerationReasoning",
