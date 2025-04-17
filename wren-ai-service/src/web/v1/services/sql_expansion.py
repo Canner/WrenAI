@@ -9,7 +9,6 @@ from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
 from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskError, AskHistory
-from src.web.v1.services.ask_details import SQLBreakdown
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -59,6 +58,12 @@ class StopSqlExpansionResponse(BaseModel):
 # GET /v1/sql-expansions/{query_id}/result
 class SqlExpansionResultRequest(BaseModel):
     query_id: str
+
+
+class SQLBreakdown(BaseModel):
+    sql: str
+    summary: str
+    cte_name: str
 
 
 class SqlExpansionResultResponse(BaseModel):
