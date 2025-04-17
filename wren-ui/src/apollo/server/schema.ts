@@ -729,6 +729,7 @@ export const typeDefs = gql`
     error: Error
     sql: String
     traceId: String
+    invalidSql: String
   }
 
   type ThreadResponse {
