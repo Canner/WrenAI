@@ -6,11 +6,7 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
 });
 
 const resolveAlias = {
-  antd$: path.resolve(__dirname, 'node_modules/antd/lib'),
-  '@ant-design/icons$': path.resolve(
-    __dirname,
-    'node_modules/@ant-design/icons/lib',
-  ),
+  antd$: path.resolve(__dirname, 'src/import/antd'),
 };
 
 /** @type {import('next').NextConfig} */
