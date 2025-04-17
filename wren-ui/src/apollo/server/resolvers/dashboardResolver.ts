@@ -15,6 +15,7 @@ export class DashboardResolver {
   constructor() {
     this.getDashboardItems = this.getDashboardItems.bind(this);
     this.createDashboardItem = this.createDashboardItem.bind(this);
+    this.updateDashboardItem = this.updateDashboardItem.bind(this);
     this.deleteDashboardItem = this.deleteDashboardItem.bind(this);
     this.updateDashboardItemLayouts =
       this.updateDashboardItemLayouts.bind(this);
@@ -60,6 +61,20 @@ export class DashboardResolver {
       sql: response.sql,
       chartSchema: response.chartDetail?.chartSchema,
     });
+  }
+
+  public async updateDashboardItem(
+    _root: any,
+    args: { where: { id: number }; data: { displayName: string } },
+    ctx: IContext,
+  ): Promise<DashboardItem> {
+    const { id } = args.where;
+    const { displayName } = args.data;
+    const item = await ctx.dashboardService.getDashboardItem(id);
+    if (!item) {
+      throw new Error(`Dashboard item not found. id: ${id}`);
+    }
+    return await ctx.dashboardService.updateDashboardItem(id, { displayName });
   }
 
   public async deleteDashboardItem(

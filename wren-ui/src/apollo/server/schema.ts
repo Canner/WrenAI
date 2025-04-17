@@ -862,6 +862,10 @@ export const typeDefs = gql`
     responseId: Int!
   }
 
+  input UpdateDashboardItemInput {
+    displayName: String!
+  }
+
   input ItemLayoutInput {
     itemId: Int!
     x: Int!
@@ -901,6 +905,7 @@ export const typeDefs = gql`
     type: DashboardItemType!
     layout: DashboardItemLayout!
     detail: DashboardItemDetail!
+    displayName: String
   }
 
   type SqlPair {
@@ -1127,6 +1132,10 @@ export const typeDefs = gql`
       data: UpdateDashboardItemLayoutsInput!
     ): [DashboardItem!]!
     createDashboardItem(data: CreateDashboardItemInput!): DashboardItem!
+    updateDashboardItem(
+      where: DashboardItemWhereInput!
+      data: UpdateDashboardItemInput!
+    ): DashboardItem!
     deleteDashboardItem(where: DashboardItemWhereInput!): Boolean!
     previewItemSQL(data: PreviewItemSQLInput!): JSON!
 

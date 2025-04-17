@@ -154,6 +154,7 @@ const resolvers = {
     // Dashboard
     updateDashboardItemLayouts: dashboardResolver.updateDashboardItemLayouts,
     createDashboardItem: dashboardResolver.createDashboardItem,
+    updateDashboardItem: dashboardResolver.updateDashboardItem,
     deleteDashboardItem: dashboardResolver.deleteDashboardItem,
     previewItemSQL: dashboardResolver.previewItemSQL,
 
