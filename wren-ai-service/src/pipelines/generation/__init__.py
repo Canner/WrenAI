@@ -10,12 +10,10 @@ from .relationship_recommendation import RelationshipRecommendation
 from .semantics_description import SemanticsDescription
 from .sql_answer import SQLAnswer
 from .sql_correction import SQLCorrection
-from .sql_expansion import SQLExpansion
 from .sql_generation import SQLGeneration
 from .sql_generation_reasoning import SQLGenerationReasoning
 from .sql_question import SQLQuestion
 from .sql_regeneration import SQLRegeneration
-from .sql_summary import SQLSummary
 from .user_guide_assistance import UserGuideAssistance
 
 __all__ = [
@@ -29,10 +27,8 @@ __all__ = [
     "SemanticsDescription",
     "SQLAnswer",
     "SQLCorrection",
-    "SQLExpansion",
     "SQLGeneration",
     "SQLGenerationReasoning",
-    "SQLSummary",
     "UserGuideAssistance",
     "SQLQuestion",
     "SQLRegeneration",
