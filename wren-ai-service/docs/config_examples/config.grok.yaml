@@ -1,83 +1,56 @@
+# you should rename this file to config.yaml and put it in ~/.wrenai
+# please pay attention to the comments starting with # and adjust the config accordingly, 3 steps basically:
+# 1. you need to use your own llm and embedding models
+# 2. fill in embedding model dimension in the document_store section
+# 3. you need to use the correct pipe definitions based on https://raw.githubusercontent.com/canner/WrenAI/<WRENAI_VERSION_NUMBER>/docker/config.example.yaml
+# 4. you need to fill in correct llm and embedding models in the pipe definitions
+
 type: llm
 provider: litellm_llm
-timeout: 120
 models:
-  - alias: default
-    model: gpt-4.1-nano-2025-04-14
-    kwargs:
-      max_tokens: 4096
-      n: 1
-      seed: 0
-      temperature: 0
-  - model: gpt-4.1-mini-2025-04-14
-    kwargs:
-      max_tokens: 4096
-      n: 1
-      seed: 0
-      temperature: 0
-  - model: gpt-4.1-2025-04-14
-    kwargs:
-      max_tokens: 4096
-      n: 1
-      seed: 0
-      temperature: 0
-  - model: gpt-4o-mini-2024-07-18
+  # put XAI_API_KEY=<your_api_key> in ~/.wrenai/.env
+  - api_base: https://api.x.ai/v1
+    model: xai/grok-3-latest 
+    alias: default
+    timeout: 120
     kwargs:
       temperature: 0
-      n: 1
-      # for better consistency of llm response, refer: https://platform.openai.com/docs/api-reference/chat/create#chat-create-seed
-      seed: 0
       max_tokens: 4096
-  - model: gpt-4o-2024-08-06
-    kwargs:
-      temperature: 0
       n: 1
-      # for better consistency of llm response, refer: https://platform.openai.com/docs/api-reference/chat/create#chat-create-seed
-      seed: 0
-      max_tokens: 4096
-  - model: o3-mini-2025-01-31
-    kwargs:
-      n: 1
-      seed: 0
-      max_completion_tokens: 4096
-      reasoning_effort: low
 
 ---
 type: embedder
 provider: litellm_embedder
 models:
-  - model: text-embedding-3-large
+  # define OPENAI_API_KEY=<api_key> in ~/.wrenai/.env if you are using openai embedding model
+  # please refer to LiteLLM documentation for more details: https://docs.litellm.ai/docs/providers
+  - model: text-embedding-3-large # put your embedding model name here, if it is not openai embedding model, should be <provider>/<model_name>
     alias: default
+    api_base: https://api.openai.com/v1 # change this according to your embedding model
     timeout: 120
 
 ---
 type: engine
 provider: wren_ui
-endpoint: http://localhost:3000
+endpoint: http://wren-ui:3000
 
 ---
 type: engine
 provider: wren_ibis
-endpoint: http://localhost:8000
-source: bigquery
-manifest: "" # base64 encoded string of the MDL
-connection_info: "" # base64 encoded string of the connection info
-
----
-type: engine
-provider: wren_engine
-endpoint: http://localhost:8080
-manifest: ""
+endpoint: http://wren-ibis:8000
 
 ---
 type: document_store
 provider: qdrant
-location: http://localhost:6333
-embedding_model_dim: 3072
+location: http://qdrant:6333
+embedding_model_dim: 3072 # put your embedding model dimension here
 timeout: 120
-recreate_index: false
+recreate_index: true
 
 ---
+# please change the llm and embedder names to the ones you want to use
+# the format of llm and embedder should be <provider>.<model_name> such as litellm_llm.gpt-4o-2024-08-06
+# the pipes may be not the latest version, please refer to the latest version: https://raw.githubusercontent.com/canner/WrenAI/<WRENAI_VERSION_NUMBER>/docker/config.example.yaml
 type: pipeline
 pipes:
   - name: db_schema_indexing
@@ -163,8 +136,6 @@ pipes:
   - name: sql_regeneration
     llm: litellm_llm.default
     engine: wren_ui
-  - name: evaluation
-    llm: litellm_llm.default
   - name: instructions_indexing
     embedder: litellm_embedder.default
     document_store: qdrant
@@ -179,17 +150,13 @@ pipes:
 
 ---
 settings:
-  host: 127.0.0.1
-  port: 5556
-  doc_endpoint: https://docs.getwren.ai
-  is_oss: true
   engine_timeout: 30
   column_indexing_batch_size: 50
   table_retrieval_size: 10
   table_column_retrieval_size: 100
+  allow_using_db_schemas_without_pruning: true
   allow_intent_classification: true
   allow_sql_generation_reasoning: true
-  allow_using_db_schemas_without_pruning: false
   query_cache_maxsize: 1000
   query_cache_ttl: 3600
   langfuse_host: https://cloud.langfuse.com
