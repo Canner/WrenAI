@@ -24,7 +24,6 @@ class ServiceContainer:
     chart_service: services.ChartService
     chart_adjustment_service: services.ChartAdjustmentService
     sql_answer_service: services.SqlAnswerService
-    sql_expansion_service: services.SqlExpansionService
     sql_pairs_service: services.SqlPairsService
     sql_question_service: services.SqlQuestionService
     instructions_service: services.InstructionsService
@@ -194,28 +193,6 @@ def create_service_container(
             pipelines={
                 "sql_breakdown": generation.SQLBreakdown(
                     **pipe_components["sql_breakdown"],
-                    engine_timeout=settings.engine_timeout,
-                ),
-                "sql_summary": generation.SQLSummary(
-                    **pipe_components["sql_summary"],
-                ),
-            },
-            **query_cache,
-        ),
-        sql_expansion_service=services.SqlExpansionService(
-            pipelines={
-                "retrieval": retrieval.Retrieval(
-                    **pipe_components["db_schema_retrieval"],
-                    table_retrieval_size=settings.table_retrieval_size,
-                    table_column_retrieval_size=settings.table_column_retrieval_size,
-                    allow_using_db_schemas_without_pruning=settings.allow_using_db_schemas_without_pruning,
-                ),
-                "sql_expansion": generation.SQLExpansion(
-                    **pipe_components["sql_expansion"],
-                    engine_timeout=settings.engine_timeout,
-                ),
-                "sql_correction": generation.SQLCorrection(
-                    **pipe_components["sql_correction"],
                     engine_timeout=settings.engine_timeout,
                 ),
                 "sql_summary": generation.SQLSummary(
