@@ -11,7 +11,6 @@ from .semantics_description import SemanticsDescription
 from .sql_answer import SQLAnswer
 from .sql_breakdown import SQLBreakdown
 from .sql_correction import SQLCorrection
-from .sql_expansion import SQLExpansion
 from .sql_generation import SQLGeneration
 from .sql_generation_reasoning import SQLGenerationReasoning
 from .sql_question import SQLQuestion
@@ -31,7 +30,6 @@ __all__ = [
     "SQLAnswer",
     "SQLBreakdown",
     "SQLCorrection",
-    "SQLExpansion",
     "SQLGeneration",
     "SQLGenerationReasoning",
     "SQLSummary",

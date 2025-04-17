@@ -70,7 +70,6 @@ from .semantics_description import SemanticsDescription  # noqa: E402
 from .semantics_preparation import SemanticsPreparationService  # noqa: E402
 from .sql_answer import SqlAnswerService  # noqa: E402
 from .sql_corrections import SqlCorrectionService  # noqa: E402
-from .sql_expansion import SqlExpansionService  # noqa: E402
 from .sql_pairs import SqlPairsService  # noqa: E402
 from .sql_question import SqlQuestionService  # noqa: E402
 
@@ -85,7 +84,6 @@ __all__ = [
     "SemanticsPreparationService",
     "SqlAnswerService",
     "SqlCorrectionService",
-    "SqlExpansionService",
     "SqlPairsService",
     "SqlQuestionService",
     "InstructionsService",
