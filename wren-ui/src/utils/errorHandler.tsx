@@ -285,6 +285,15 @@ class CreateDashboardItemErrorHandler extends ErrorHandler {
   }
 }
 
+class UpdateDashboardItemErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to update dashboard item.';
+    }
+  }
+}
+
 class UpdateDashboardItemLayoutsErrorHandler extends ErrorHandler {
   public getErrorMessage(error: GraphQLError) {
     switch (error.extensions?.code) {
@@ -414,6 +423,7 @@ errorHandlers.set('ResolveSchemaChange', new ResolveSchemaChangeErrorHandler());
 
 // Dashboard
 errorHandlers.set('CreateDashboardItem', new CreateDashboardItemErrorHandler());
+errorHandlers.set('UpdateDashboardItem', new UpdateDashboardItemErrorHandler());
 errorHandlers.set(
   'UpdateDashboardItemLayouts',
   new UpdateDashboardItemLayoutsErrorHandler(),
