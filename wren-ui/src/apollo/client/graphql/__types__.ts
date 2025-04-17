@@ -32,6 +32,7 @@ export type AdjustThreadResponseInput = {
 export type AdjustmentTask = {
   __typename?: 'AdjustmentTask';
   error?: Maybe<Error>;
+  invalidSql?: Maybe<Scalars['String']>;
   queryId?: Maybe<Scalars['String']>;
   sql?: Maybe<Scalars['String']>;
   status?: Maybe<AskingTaskStatus>;
