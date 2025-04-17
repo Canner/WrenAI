@@ -16,6 +16,7 @@ from src.pipelines.generation.utils.sql import (
     SQLGenPostProcessor,
     construct_instructions,
 )
+from src.pipelines.retrieval.sql_functions import SqlFunction
 from src.web.v1.services import Configuration
 
 logger = logging.getLogger("wren-ai-service")
@@ -49,6 +50,23 @@ sql_regeneration_user_prompt_template = """
 {{ instructions }}
 {% endif %}
 
+{% if sql_functions %}
+### SQL FUNCTIONS ###
+{% for function in sql_functions %}
+{{ function }}
+{% endfor %}
+{% endif %}
+
+{% if sql_samples %}
+### SQL SAMPLES ###
+{% for sample in sql_samples %}
+Question:
+{{sample.question}}
+SQL:
+{{sample.sql}}
+{% endfor %}
+{% endif %}
+
 ### QUESTION ###
 SQL generation reasoning: {{ sql_generation_reasoning }}
 Original SQL query: {{ sql }}
@@ -65,8 +83,11 @@ def prompt(
     sql: str,
     prompt_builder: PromptBuilder,
     configuration: Configuration | None = Configuration(),
+    sql_samples: list[dict] | None = None,
+    instructions: list[dict] | None = None,
     has_calculated_field: bool = False,
     has_metric: bool = False,
+    sql_functions: list[SqlFunction] | None = None,
 ) -> dict:
     return prompt_builder.run(
         sql=sql,
@@ -76,8 +97,11 @@ def prompt(
             configuration,
             has_calculated_field,
             has_metric,
+            instructions,
         ),
+        sql_samples=sql_samples,
         current_time=configuration.show_current_time(),
+        sql_functions=sql_functions,
     )
 
 
@@ -140,9 +164,12 @@ class SQLRegeneration(BasicPipeline):
         sql_generation_reasoning: str,
         sql: str,
         configuration: Configuration = Configuration(),
+        sql_samples: list[dict] | None = None,
+        instructions: list[dict] | None = None,
         project_id: str | None = None,
         has_calculated_field: bool = False,
         has_metric: bool = False,
+        sql_functions: list[SqlFunction] | None = None,
     ):
         logger.info("SQL Regeneration pipeline is running...")
         return await self._pipe.execute(
@@ -151,10 +178,13 @@ class SQLRegeneration(BasicPipeline):
                 "documents": contexts,
                 "sql_generation_reasoning": sql_generation_reasoning,
                 "sql": sql,
+                "sql_samples": sql_samples,
+                "instructions": instructions,
                 "project_id": project_id,
                 "configuration": configuration,
                 "has_calculated_field": has_calculated_field,
                 "has_metric": has_metric,
+                "sql_functions": sql_functions,
                 **self._components,
                 **self._configs,
             },
