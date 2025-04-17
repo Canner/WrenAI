@@ -22,8 +22,6 @@ def gen_report(
                 return trace_url
             case "Ask Details(Breakdown SQL)":
                 return trace_url
-            case "SQL Expansion":
-                return trace_url
             case "SQL Answer":
                 return trace_url
             case "Generate Semantics Description":
@@ -80,7 +78,6 @@ async def main():
         # text2sql
         "Ask Question",
         "Ask Details(Breakdown SQL)",
-        "SQL Expansion",
         "SQL Answer",
         # context enrichment
         "Generate Semantics Description",
