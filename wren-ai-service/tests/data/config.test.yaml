@@ -62,9 +62,6 @@ pipes:
   - name: sql_breakdown
     llm: openai_llm.gpt-4o-mini
     engine: wren_ui
-  - name: sql_expansion
-    llm: openai_llm.gpt-4o-mini
-    engine: wren_ui
   - name: sql_explanation
     llm: openai_llm.gpt-4o-mini
   - name: sql_regeneration
