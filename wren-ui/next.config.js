@@ -1,6 +1,9 @@
 /* eslint-disable @typescript-eslint/no-var-requires */
 const path = require('path');
 const withLess = require('next-with-less');
+const withBundleAnalyzer = require('@next/bundle-analyzer')({
+  enabled: process.env.ANALYZE === 'true',
+});
 
 const resolveAlias = {
   antd$: path.resolve(__dirname, 'node_modules/antd/lib'),
@@ -43,4 +46,4 @@ const nextConfig = withLess({
   },
 });
 
-module.exports = nextConfig;
+module.exports = withBundleAnalyzer(nextConfig);
