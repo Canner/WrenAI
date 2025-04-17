@@ -103,9 +103,6 @@ pipes:
   - name: sql_breakdown
     llm: litellm_llm.default
     engine: wren_ui
-  - name: sql_expansion
-    llm: litellm_llm.default
-    engine: wren_ui
   - name: semantics_description
     llm: litellm_llm.default
   - name: relationship_recommendation
