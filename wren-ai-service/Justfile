@@ -41,9 +41,6 @@ predict dataset pipeline='ask':
 eval prediction_result semantics='--no-semantics':
     poetry run python -u eval/evaluation.py --file {{prediction_result}} {{semantics}}
 
-demo:
-	poetry run streamlit run demo/app.py
-
 test test_args='': up && down
 	poetry run pytest -s {{test_args}} --ignore tests/pytest/test_usecases.py
 
@@ -64,9 +61,6 @@ prepare-files:
 
 force_update_config:
 	poetry run python -m src.force_update_config
-
-run-sql mdl_path="" data_source="" sample_dataset="":
-	poetry run python demo/run_sql.py --mdl-path "{{mdl_path}}" --data-source "{{data_source}}" --sample-dataset "{{sample_dataset}}"
 
 report-gen:
 	poetry run python -m eval.llm_trace_analysis.report_gen
