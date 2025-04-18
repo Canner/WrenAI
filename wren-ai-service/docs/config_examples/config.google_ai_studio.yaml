@@ -4,6 +4,8 @@
 # 2. fill in embedding model dimension in the document_store section
 # 3. you need to use the correct pipe definitions based on https://raw.githubusercontent.com/canner/WrenAI/<WRENAI_VERSION_NUMBER>/docker/config.example.yaml
 # 4. you need to fill in correct llm and embedding models in the pipe definitions
+# 5. API Key should be in ~/.wrenai/.env as GEMINI_API_KEY after the qdrant seciont as :GEMINI_API_KEY=<api key>
+# 6. WREN_AI_SERVICE_VERSION=0.19.3(change this in env)
 
 type: llm
 provider: litellm_llm
@@ -29,6 +31,7 @@ type: embedder
 provider: litellm_embedder
 models:
   # put GEMINI_API_KEY=<your_api_key> in ~/.wrenai/.env
+
   - model: gemini/text-embedding-004 # gemini/<gemini_model_name>
     alias: default
     timeout: 120

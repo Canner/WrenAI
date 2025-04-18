@@ -4,6 +4,8 @@
 # 2. fill in embedding model dimension in the document_store section
 # 3. you need to use the correct pipe definitions based on https://raw.githubusercontent.com/canner/WrenAI/<WRENAI_VERSION_NUMBER>/docker/config.example.yaml
 # 4. you need to fill in correct llm and embedding models in the pipe definitions
+# 5. HOST_PORT=3000 (this host is for ollama)
+# 6.api_base can be defined for local host as: http://localhost/:<ollama_port>
 
 type: llm
 provider: litellm_llm
