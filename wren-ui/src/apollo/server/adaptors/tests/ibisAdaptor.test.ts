@@ -619,7 +619,115 @@ describe('IbisAdaptor', () => {
       }),
     ).rejects.toMatchObject({
       message:
-        'Model not found: test_table. Try to add catalog and schema in front of your table. eg: my_database.public.test_table',
+        'Model not found: test_table. Try adding both catalog and schema before your table name. e.g. my_database.public.test_table',
+      extensions: {
+        other: {
+          correlationId: '123',
+          processTime: '1s',
+        },
+      },
+    });
+  });
+
+  it('should handle error when model substitution fails with MODEL_NOT_FOUND and one dot in model name', async () => {
+    const mockError = {
+      response: {
+        data: 'Model not found: public.test_table',
+        headers: {
+          'x-correlation-id': '123',
+          'x-process-time': '1s',
+        },
+      },
+    };
+    mockedAxios.post.mockRejectedValue(mockError);
+    mockedEncryptor.prototype.decrypt.mockReturnValue(
+      JSON.stringify({ password: mockPostgresConnectionInfo.password }),
+    );
+
+    await expect(
+      ibisAdaptor.modelSubstitute(
+        'SELECT * FROM public.test_table' as DialectSQL,
+        {
+          dataSource: DataSourceName.POSTGRES,
+          connectionInfo: mockPostgresConnectionInfo,
+          mdl: mockManifest,
+        },
+      ),
+    ).rejects.toMatchObject({
+      message:
+        'Model not found: public.test_table. Try adding the catalog before the schema in your table name. e.g. my_database.public.test_table',
+      extensions: {
+        other: {
+          correlationId: '123',
+          processTime: '1s',
+        },
+      },
+    });
+  });
+
+  it('should handle error when model substitution fails with MODEL_NOT_FOUND and two dots in model name', async () => {
+    const mockError = {
+      response: {
+        data: 'Model not found: my_database.public.test_table',
+        headers: {
+          'x-correlation-id': '123',
+          'x-process-time': '1s',
+        },
+      },
+    };
+    mockedAxios.post.mockRejectedValue(mockError);
+    mockedEncryptor.prototype.decrypt.mockReturnValue(
+      JSON.stringify({ password: mockPostgresConnectionInfo.password }),
+    );
+
+    await expect(
+      ibisAdaptor.modelSubstitute(
+        'SELECT * FROM my_database.public.test_table' as DialectSQL,
+        {
+          dataSource: DataSourceName.POSTGRES,
+          connectionInfo: mockPostgresConnectionInfo,
+          mdl: mockManifest,
+        },
+      ),
+    ).rejects.toMatchObject({
+      message:
+        'Model not found: my_database.public.test_table. It may be missing from models, misnamed, or have a case mismatch.',
+      extensions: {
+        other: {
+          correlationId: '123',
+          processTime: '1s',
+        },
+      },
+    });
+  });
+
+  it('should handle error when model substitution fails with MODEL_NOT_FOUND and more than two dots in model name', async () => {
+    const mockError = {
+      response: {
+        data: 'Model not found: my_database.public.schema.test_table',
+        headers: {
+          'x-correlation-id': '123',
+          'x-process-time': '1s',
+        },
+      },
+    };
+    mockedAxios.post.mockRejectedValue(mockError);
+    mockedEncryptor.prototype.decrypt.mockReturnValue(
+      JSON.stringify({ password: mockPostgresConnectionInfo.password }),
+    );
+
+    await expect(
+      ibisAdaptor.modelSubstitute(
+        'SELECT * FROM my_database.public.schema.test_table' as DialectSQL,
+        {
+          dataSource: DataSourceName.POSTGRES,
+          connectionInfo: mockPostgresConnectionInfo,
+          mdl: mockManifest,
+        },
+      ),
+    ).rejects.toMatchObject({
+      message:
+        'Model not found: my_database.public.schema.test_table. It may be missing from models, misnamed, or have a case mismatch.',
       extensions: {
         other: {
           correlationId: '123',

@@ -497,10 +497,29 @@ export class IbisAdaptor implements IIbisAdaptor {
     };
     if (ModelSubstituteErrorEnum.MODEL_NOT_FOUND()) {
       const modelName = message.split(': ')[1];
-      return (
-        message +
-        `. Try to add catalog and schema in front of your table. eg: my_database.public.${modelName}`
-      );
+      const dotCount = modelName.split('.').length - 1;
+      switch (dotCount) {
+        case 0:
+          return (
+            message +
+            `. Try adding both catalog and schema before your table name. e.g. my_database.public.${modelName}`
+          );
+        case 1:
+          return (
+            message +
+            `. Try adding the catalog before the schema in your table name. e.g. my_database.${modelName}`
+          );
+        case 2:
+          return (
+            message +
+            `. It may be missing from models, misnamed, or have a case mismatch.`
+          );
+        default:
+          return (
+            message +
+            `. It may be missing from models, misnamed, or have a case mismatch.`
+          );
+      }
     } else if (ModelSubstituteErrorEnum.PARSING_EXCEPTION()) {
       return (
         message +
