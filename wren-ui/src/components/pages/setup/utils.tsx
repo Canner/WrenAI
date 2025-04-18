@@ -1,5 +1,5 @@
 import { merge } from 'lodash';
-import IconComponentProps from '@ant-design/icons';
+import { IconComponentProps } from '@/import/icon';
 import ShoppingCartOutlined from '@ant-design/icons/ShoppingCartOutlined';
 import IdCardOutlined from '@ant-design/icons/IdcardOutlined';
 import { SETUP, DATA_SOURCES } from '@/utils/enum';
@@ -28,7 +28,7 @@ type SetupStep = {
 export type ButtonOption = {
   label: string;
   logo?: string;
-  IconComponent?: typeof IconComponentProps;
+  IconComponent?: IconComponentProps['component'];
   guide?: string;
   disabled?: boolean;
   submitting?: boolean;

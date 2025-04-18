@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { groupBy, orderBy, flatMap } from 'lodash';
 import { message } from 'antd';
-import Icon from '@ant-design/icons';
+import Icon from '@/import/icon';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import { CopilotSVG } from '@/utils/svgs';
 import { isRecommendedFinished } from '@/hooks/useAskPrompt';

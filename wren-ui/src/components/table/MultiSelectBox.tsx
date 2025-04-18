@@ -3,7 +3,7 @@ import styled from 'styled-components';
 import { isString, difference } from 'lodash';
 import { Input, Table } from 'antd';
 import { ColumnsType } from 'antd/lib/table';
-import { SearchOutlined } from '@ant-design/icons';
+import SearchOutlined from '@ant-design/icons/SearchOutlined';
 import {
   FormItemInputContext,
   FormItemStatusContextProps,
