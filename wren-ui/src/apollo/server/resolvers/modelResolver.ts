@@ -980,7 +980,8 @@ export class ModelResolver {
         mdl: manifest,
       });
     }
-    return format(nativeSql);
+    const language = project.type === DataSourceName.MSSQL ? 'tsql' : undefined;
+    return format(nativeSql, { language });
   }
 
   public async updateViewMetadata(
