@@ -1,6 +1,6 @@
 import dynamic from 'next/dynamic';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Button } from 'antd';
+import { Button, Form } from 'antd';
 import styled from 'styled-components';
 import GridLayout, { Layout } from 'react-grid-layout';
 import { MoreIcon } from '@/utils/icons';
@@ -8,11 +8,15 @@ import { MORE_ACTION } from '@/utils/enum';
 import { nextTick } from '@/utils/time';
 import { LoadingWrapper } from '@/components/PageLoading';
 import { DashboardItemDropdown } from '@/components/diagram/CustomDropdown';
+import EditableWrapper, { EditableContext } from '@/components/EditableWrapper';
 import {
   DashboardItem,
   ItemLayoutInput,
 } from '@/apollo/client/graphql/__types__';
-import { usePreviewItemSqlMutation } from '@/apollo/client/graphql/dashboard.generated';
+import {
+  usePreviewItemSqlMutation,
+  useUpdateDashboardItemMutation,
+} from '@/apollo/client/graphql/dashboard.generated';
 
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
@@ -49,20 +53,22 @@ const StyledDashboardGrid = styled.div`
     justify-content: space-between;
     align-items: center;
     padding: 16px 8px 0 16px;
+    * {
+      min-width: 0;
+    }
   }
 
   .adm-pinned-item-title {
     font-size: 14px;
     font-weight: 700;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    flex-grow: 1;
   }
 
   .adm-pinned-actions {
     display: flex;
     gap: 4px;
     align-items: center;
+    flex-shrink: 0;
   }
 
   .adm-pinned-content {
@@ -187,6 +193,41 @@ export default function DashboardGrid(props: Props) {
   );
 }
 
+const PinnedItemTitle = (props: { id: number; title: string }) => {
+  const { title } = props;
+  const [form] = Form.useForm();
+
+  const [updateDashboardItem] = useUpdateDashboardItemMutation({
+    onError: (error) => console.error(error),
+  });
+
+  const handleSave = (dashboardItemId: number, values: { title: string }) => {
+    if (values.title === title) return;
+    updateDashboardItem({
+      variables: {
+        where: { id: dashboardItemId },
+        data: {
+          displayName: values.title.trim(),
+        },
+      },
+    });
+  };
+
+  return (
+    <EditableContext.Provider value={form}>
+      <Form className="d-flex" form={form}>
+        <EditableWrapper
+          record={props}
+          dataIndex="title"
+          handleSave={handleSave}
+        >
+          {title}
+        </EditableWrapper>
+      </Form>
+    </EditableContext.Provider>
+  );
+};
+
 export function PinnedItem(props: {
   item: DashboardItem;
   onDelete: (id: number) => Promise<void>;
@@ -209,11 +250,11 @@ export function PinnedItem(props: {
       setForceUpdate((prev) => prev + 1);
       setForceLoading(false);
     });
-  }, [item]);
+  }, [item.layout]);
 
   const title = useMemo(() => {
-    return item.detail.chartSchema?.title || '';
-  }, [item.detail.chartSchema?.title]);
+    return item.displayName || item.detail.chartSchema?.title || '';
+  }, [item.displayName, item.detail.chartSchema?.title]);
 
   const onHideLegend = () => {
     setIsHideLegend(!isHideLegend);
@@ -235,8 +276,12 @@ export function PinnedItem(props: {
   return (
     <div className="adm-pinned-item">
       <div className="adm-pinned-item-header">
-        <div className="adm-pinned-item-title" title={title}>
-          {title}
+        <div
+          className="adm-pinned-item-title"
+          title={title}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <PinnedItemTitle id={item.id} title={title} />
         </div>
         <div className="adm-pinned-actions">
           <DashboardItemDropdown

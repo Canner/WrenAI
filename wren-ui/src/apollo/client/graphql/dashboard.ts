@@ -15,6 +15,7 @@ export const COMMON_DASHBOARD_ITEM = gql`
       sql
       chartSchema
     }
+    displayName
   }
 `;
 
@@ -30,6 +31,18 @@ export const DASHBOARD_ITEMS = gql`
 export const CREATE_DASHBOARD_ITEM = gql`
   mutation CreateDashboardItem($data: CreateDashboardItemInput!) {
     createDashboardItem(data: $data) {
+      ...CommonDashboardItem
+    }
+  }
+  ${COMMON_DASHBOARD_ITEM}
+`;
+
+export const UPDATE_DASHBOARD_ITEM = gql`
+  mutation UpdateDashboardItem(
+    $where: DashboardItemWhereInput!
+    $data: UpdateDashboardItemInput!
+  ) {
+    updateDashboardItem(where: $where, data: $data) {
       ...CommonDashboardItem
     }
   }

@@ -190,6 +190,7 @@ export type DashboardItem = {
   __typename?: 'DashboardItem';
   dashboardId: Scalars['Int'];
   detail: DashboardItemDetail;
+  displayName?: Maybe<Scalars['String']>;
   id: Scalars['Int'];
   layout: DashboardItemLayout;
   type: DashboardItemType;
@@ -617,6 +618,7 @@ export type Mutation = {
   triggerDataSourceDetection: Scalars['Boolean'];
   updateCalculatedField: Scalars['JSON'];
   updateCurrentProject: Scalars['Boolean'];
+  updateDashboardItem: DashboardItem;
   updateDashboardItemLayouts: Array<DashboardItem>;
   updateDataSource: DataSource;
   updateInstruction: Instruction;
@@ -863,6 +865,12 @@ export type MutationUpdateCalculatedFieldArgs = {
 
 export type MutationUpdateCurrentProjectArgs = {
   data: UpdateCurrentProjectInput;
+};
+
+
+export type MutationUpdateDashboardItemArgs = {
+  data: UpdateDashboardItemInput;
+  where: DashboardItemWhereInput;
 };
 
 
@@ -1352,6 +1360,10 @@ export type UpdateColumnMetadataInput = {
 
 export type UpdateCurrentProjectInput = {
   language: ProjectLanguage;
+};
+
+export type UpdateDashboardItemInput = {
+  displayName: Scalars['String'];
 };
 
 export type UpdateDashboardItemLayoutsInput = {
