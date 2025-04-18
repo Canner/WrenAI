@@ -36,16 +36,17 @@ helmCharts:
 
 
 images:
+  # for the latest versions, please check here: https://github.com/Canner/WrenAI/blob/main/docker/.env.example#L23
   - name: ghcr.io/canner/wren-bootstrap
     newTag: 0.1.5 # WREN_BOOTSTRAP_VERSION
   - name: ghcr.io/canner/wren-engine
-    newTag: 0.9.0 # WREN_ENGINE_VERSION
+    newTag: 0.14.8 # WREN_ENGINE_VERSION
   - name: ghcr.io/canner/wren-ui
-    newTag: 0.9.2 # WREN_UI_VERSION
+    newTag: 0.24.1 # WREN_UI_VERSION
   - name: ghcr.io/canner/wren-ai-service
-    newTag: commit-391ea49 # WREN_AI_SERVICE_VERSION
+    newTag: 0.19.7 # WREN_AI_SERVICE_VERSION
   - name: ghcr.io/canner/wren-engine-ibis
-    newTag: 0.9.0 # IBIS_SERVER_VERSION
+    newTag: 0.14.8 # IBIS_SERVER_VERSION
 
 resources:
   - base/cm.yaml

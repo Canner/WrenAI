@@ -294,6 +294,7 @@ export interface InstructionResult {
 
 // ask feedback
 export interface AskFeedbackInput {
+  question: string;
   tables: string[];
   sqlGenerationReasoning: string;
   sql: string;
@@ -318,4 +319,5 @@ export interface AskFeedbackResult {
     sql: string;
   }>;
   traceId?: string;
+  invalidSql?: string;
 }
