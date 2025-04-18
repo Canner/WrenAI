@@ -56,6 +56,7 @@ export interface IbisTrinoConnectionInfo {
   schema: string;
   user: string;
   password: string;
+  auth?: OAuth2Authentication;
 }
 
 export interface IbisSnowflakeConnectionInfo {
@@ -64,6 +65,12 @@ export interface IbisSnowflakeConnectionInfo {
   account: string;
   database: string;
   schema: string;
+}
+
+export interface OAuth2Authentication {
+  clientId: string;
+  clientSecret: string;
+  tokenUrl: string;
 }
 
 export type IbisConnectionInfo =
