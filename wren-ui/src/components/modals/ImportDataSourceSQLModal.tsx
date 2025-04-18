@@ -10,9 +10,7 @@ import ErrorCollapse from '@/components/ErrorCollapse';
 import { useModelSubstituteMutation } from '@/apollo/client/graphql/sql.generated';
 import { DataSource, DataSourceName } from '@/apollo/client/graphql/__types__';
 
-type Props = ModalAction<{ dataSource: DATA_SOURCES }> & {
-  loading?: boolean;
-};
+type Props = ModalAction<{ dataSource: DATA_SOURCES }>;
 
 const Toolbar = (props) => {
   const { dataSource } = props;
@@ -37,7 +35,7 @@ export const isSupportSubstitute = (dataSource: DataSource) => {
 };
 
 export default function ImportDataSourceSQLModal(props: Props) {
-  const { visible, defaultValue, loading, onSubmit, onClose } = props;
+  const { visible, defaultValue, onSubmit, onClose } = props;
   const name = getDataSourceName(defaultValue?.dataSource) || 'data source';
 
   const [substituteDialectSQL, modelSubstitudeResult] =
@@ -73,6 +71,8 @@ export default function ImportDataSourceSQLModal(props: Props) {
       .catch(console.error);
   };
 
+  const loading = modelSubstitudeResult.loading;
+
   return (
     <Modal
       title={`Import from ${name} SQL`}
@@ -87,7 +87,6 @@ export default function ImportDataSourceSQLModal(props: Props) {
       visible={visible}
       width={600}
       cancelButtonProps={{ disabled: loading }}
-      okButtonProps={{ disabled: loading }}
       afterClose={() => reset()}
     >
       <Form form={form} layout="vertical">
