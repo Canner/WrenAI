@@ -62,6 +62,9 @@ prepare-files:
 force_update_config:
 	poetry run python -m src.force_update_config
 
+run-sql mdl_path="" data_source="" sample_dataset="":
+	poetry run python tools/run_sql.py --mdl-path "{{mdl_path}}" --data-source "{{data_source}}" --sample-dataset "{{sample_dataset}}"
+
 report-gen:
 	poetry run python -m eval.llm_trace_analysis.report_gen
 
