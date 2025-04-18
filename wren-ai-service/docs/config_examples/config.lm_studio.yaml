@@ -10,7 +10,7 @@ provider: litellm_llm
 models:
   # put LM_STUDIO_API_KEY=<random_string> in ~/.wrenai/.env
   - api_base: http://host.docker.internal:1234/v1
-    model: openai/phi-4 # openai/<lm_studio_model_name>
+    model: lm_studio/phi-4 # lm_studio/<lm_studio_model_name>
     alias: default
     timeout: 600
     kwargs:
@@ -22,7 +22,7 @@ type: embedder
 provider: litellm_embedder
 models:
   # put LM_STUDIO_API_KEY=<random_string> in ~/.wrenai/.env
-  - model: openai/text-embedding-nomic-embed-text-v1.5 # put your lm_studio embedder model name here, openai/<lm_studio_model_name>
+  - model: lm_studio/text-embedding-nomic-embed-text-v1.5 # put your lm_studio embedder model name here, lm_studio/<lm_studio_model_name>
     alias: default
     api_base: http://host.docker.internal:1234/v1
     timeout: 600
