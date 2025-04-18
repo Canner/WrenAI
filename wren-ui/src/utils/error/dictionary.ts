@@ -133,4 +133,9 @@ export const ERROR_TEXTS = {
       MAX_LENGTH: 'Reasoning steps must be 3000 characters or fewer.',
     },
   },
+  IMPORT_DATA_SOURCE_SQL: {
+    SQL: {
+      REQUIRED: 'Please input SQL statement.',
+    },
+  },
 };

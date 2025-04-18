@@ -11,6 +11,7 @@ export type Scalars = {
   Boolean: boolean;
   Int: number;
   Float: number;
+  DialectSQL: any;
   JSON: any;
 };
 
@@ -552,6 +553,10 @@ export type ModelInfo = {
   sourceTableName: Scalars['String'];
 };
 
+export type ModelSubstituteInput = {
+  sql: Scalars['DialectSQL'];
+};
+
 export type ModelSyncResponse = {
   __typename?: 'ModelSyncResponse';
   status: SyncStatus;
@@ -593,6 +598,7 @@ export type Mutation = {
   generateThreadResponseAnswer: ThreadResponse;
   generateThreadResponseBreakdown: ThreadResponse;
   generateThreadResponseChart: ThreadResponse;
+  modelSubstitute: Scalars['String'];
   previewBreakdownData: Scalars['JSON'];
   previewData: Scalars['JSON'];
   previewItemSQL: Scalars['JSON'];
@@ -771,6 +777,11 @@ export type MutationGenerateThreadResponseBreakdownArgs = {
 
 export type MutationGenerateThreadResponseChartArgs = {
   responseId: Scalars['Int'];
+};
+
+
+export type MutationModelSubstituteArgs = {
+  data: ModelSubstituteInput;
 };
 
 

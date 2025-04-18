@@ -5,7 +5,7 @@ import { useState, useContext, useRef } from 'react';
 import ReadOutlined from '@ant-design/icons/ReadOutlined';
 import EditOutlined from '@ant-design/icons/EditOutlined';
 import { nextTick } from '@/utils/time';
-import { Mention } from '@/hooks/useMentions';
+import { Mention } from '@/hooks/useAutoComplete';
 import { FormItemInputContext } from 'antd/lib/form/context';
 import MarkdownBlock from './MarkdownBlock';
 

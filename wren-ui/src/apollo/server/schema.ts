@@ -2,6 +2,7 @@ import { gql } from 'apollo-server-micro';
 
 export const typeDefs = gql`
   scalar JSON
+  scalar DialectSQL
 
   enum DataSourceName {
     BIG_QUERY
@@ -930,6 +931,10 @@ export const typeDefs = gql`
     sql: String!
   }
 
+  input ModelSubstituteInput {
+    sql: DialectSQL!
+  }
+
   type Instruction {
     id: Int!
     projectId: Int!
@@ -1138,6 +1143,7 @@ export const typeDefs = gql`
     ): SqlPair!
     deleteSqlPair(where: SqlPairWhereUniqueInput!): Boolean!
     generateQuestion(data: GenerateQuestionInput!): String!
+    modelSubstitute(data: ModelSubstituteInput!): String!
     # Instructions
     createInstruction(data: CreateInstructionInput!): Instruction!
     updateInstruction(
