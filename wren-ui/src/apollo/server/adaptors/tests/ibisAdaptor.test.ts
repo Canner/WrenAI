@@ -619,7 +619,7 @@ describe('IbisAdaptor', () => {
       }),
     ).rejects.toMatchObject({
       message:
-        'Model not found: test_table. Try to add catalog and schema in front of your table. eg: my_database.public.test_table',
+        'Model not found: test_table. Try adding both catalog and schema before your table name. e.g. my_database.public.test_table',
       extensions: {
         other: {
           correlationId: '123',
@@ -655,7 +655,7 @@ describe('IbisAdaptor', () => {
       ),
     ).rejects.toMatchObject({
       message:
-        'Model not found: public.test_table. Try to add catalog in front of your table. eg: my_database.public.test_table',
+        'Model not found: public.test_table. Try adding the catalog before the schema in your table name. e.g. my_database.public.test_table',
       extensions: {
         other: {
           correlationId: '123',

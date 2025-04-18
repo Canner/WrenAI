@@ -502,12 +502,12 @@ export class IbisAdaptor implements IIbisAdaptor {
         case 0:
           return (
             message +
-            `. Try to add catalog and schema in front of your table. eg: my_database.public.${modelName}`
+            `. Try adding both catalog and schema before your table name. e.g. my_database.public.${modelName}`
           );
         case 1:
           return (
             message +
-            `. Try to add catalog in front of your table. eg: my_database.${modelName}`
+            `. Try adding the catalog before the schema in your table name. e.g. my_database.${modelName}`
           );
         case 2:
           return (
