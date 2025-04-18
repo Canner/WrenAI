@@ -21,7 +21,7 @@ export const getDataSourceImage = (dataSource: DATA_SOURCES | string) => {
     case DATA_SOURCES.CLICK_HOUSE:
       return '/images/dataSource/clickhouse.svg';
     case DATA_SOURCES.DUCKDB:
-      return '/images/dataSource/duckdb.svg';
+      return '/images/dataSource/duckDb.svg';
     case DATA_SOURCES.TRINO:
       return '/images/dataSource/trino.svg';
     case DATA_SOURCES.SNOWFLAKE:
