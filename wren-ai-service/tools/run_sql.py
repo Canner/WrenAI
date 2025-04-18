@@ -10,6 +10,9 @@ import pandas as pd
 import requests
 import sqlglot
 import yaml
+from dotenv import load_dotenv
+
+load_dotenv("tools/.env", override=True)
 
 WREN_ENGINE_API_URL = "http://localhost:8080"
 WREN_IBIS_API_URL = "http://localhost:8000"
