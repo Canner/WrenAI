@@ -48,7 +48,7 @@ func evaluateTelemetryPreferences() (bool, error) {
 
 func askForLLMProvider() (string, error) {
 	// let users know we're asking for a LLM provider
-	pterm.Warning.Println("We highly recommend using OpenAI models with Wren AI, especailly the latest models.")
+	pterm.Warning.Println("We highly recommend using OpenAI models with Wren AI, especially the latest models.")
 	pterm.Warning.Println("These models have been extensively tested to ensure optimal performance and compatibility.")
 	pterm.Warning.Println("While it is technically possible to integrate other AI models, please note that they have not been fully tested with our system.")
 	pterm.Warning.Println("Therefore, using alternative models is at your own risk and may result in unexpected behavior or suboptimal performance.")
