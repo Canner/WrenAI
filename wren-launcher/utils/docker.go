@@ -39,10 +39,14 @@ var generationModelToModelName = map[string]string{
 	"gpt-4o":       "gpt-4o-2024-08-06",
 }
 
-func replaceEnvFileContent(content string, projectDir string, openaiApiKey string, openAIGenerationModel string, hostPort int, aiPort int, userUUID string, telemetryEnabled bool) string {
+func replaceEnvFileContent(content string, projectDir string, openaiApiKey string, openAIGenerationModel string, hostPort int, aiPort int, userUUID string, telemetryEnabled bool, platform string) string {
+	// replace PLATFORM
+	reg := regexp.MustCompile(`PLATFORM=(.*)`)
+	str := reg.ReplaceAllString(content, "PLATFORM="+platform)
+
 	// replace PROJECT_DIR
-	reg := regexp.MustCompile(`PROJECT_DIR=(.*)`)
-	str := reg.ReplaceAllString(content, "PROJECT_DIR="+projectDir)
+	reg = regexp.MustCompile(`PROJECT_DIR=(.*)`)
+	str = reg.ReplaceAllString(str, "PROJECT_DIR="+projectDir)
 
 	// replace SHOULD_FORCE_DEPLOY
 	reg = regexp.MustCompile(`SHOULD_FORCE_DEPLOY=(.*)`)
@@ -76,10 +80,6 @@ func replaceEnvFileContent(content string, projectDir string, openaiApiKey strin
 	// replace EXPERIMENTAL_ENGINE_RUST_VERSION
 	reg = regexp.MustCompile(`EXPERIMENTAL_ENGINE_RUST_VERSION=(.*)`)
 	str = reg.ReplaceAllString(str, "EXPERIMENTAL_ENGINE_RUST_VERSION="+fmt.Sprintf("%t", config.IsExperimentalEngineRustVersion()))
-
-	// replace PLATFORM
-	reg = regexp.MustCompile(`PLATFORM=(.*)`)
-	str = reg.ReplaceAllString(str, "PLATFORM="+fmt.Sprintf("%s", config.GetPlatform()))
 
 	return str
 }
@@ -237,7 +237,7 @@ func mergeEnvContent(newEnvFile string, envFileContent string) (string, error) {
 	return envFileContent, nil
 }
 
-func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostPort int, aiPort int, projectDir string, telemetryEnabled bool, llmProvider string) error {
+func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostPort int, aiPort int, projectDir string, telemetryEnabled bool, llmProvider string, platform string) error {
 	// download docker-compose file
 	composeFile := path.Join(projectDir, "docker-compose.yaml")
 	pterm.Info.Println("Downloading docker-compose file to", composeFile)
@@ -276,6 +276,7 @@ func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostP
 			aiPort,
 			userUUID,
 			telemetryEnabled,
+			platform,
 		)
 		newEnvFile := getEnvFilePath(projectDir)
 
