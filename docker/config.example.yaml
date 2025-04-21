@@ -21,26 +21,6 @@ models:
       n: 1
       seed: 0
       temperature: 0
-  - model: gpt-4o-mini-2024-07-18
-    kwargs:
-      temperature: 0
-      n: 1
-      # for better consistency of llm response, refer: https://platform.openai.com/docs/api-reference/chat/create#chat-create-seed
-      seed: 0
-      max_tokens: 4096
-  - model: gpt-4o-2024-08-06
-    kwargs:
-      temperature: 0
-      n: 1
-      # for better consistency of llm response, refer: https://platform.openai.com/docs/api-reference/chat/create#chat-create-seed
-      seed: 0
-      max_tokens: 4096
-  - model: o3-mini-2025-01-31
-    kwargs:
-      n: 1
-      seed: 0
-      max_completion_tokens: 4096
-      reasoning_effort: low
 
 ---
 type: embedder
