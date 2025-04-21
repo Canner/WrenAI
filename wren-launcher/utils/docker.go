@@ -154,7 +154,10 @@ func PrepareConfigFileForOpenAI(projectDir string, generationModel string) error
 
 	// replace the generation model in config.yaml
 	config := string(content)
-	config = strings.ReplaceAll(config, "litellm_llm.default", "litellm_llm."+generationModelToModelName[generationModel])
+	// gpt-4.1-nano is the default model, so we don't need to replace it
+	if generationModel != "gpt-4.1-nano" {
+		config = strings.ReplaceAll(config, "litellm_llm.default", "litellm_llm."+generationModelToModelName[generationModel])
+	}
 
 	// replace allow_using_db_schemas_without_pruning setting
 	// enable this feature since OpenAI models have sufficient context window size to handle full schema
