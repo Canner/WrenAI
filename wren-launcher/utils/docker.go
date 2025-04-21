@@ -31,12 +31,9 @@ const (
 )
 
 var generationModelToModelName = map[string]string{
-	"gpt-4.1-nano": "gpt-4.1-nano-2025-04-14",
-	"gpt-4.1-mini": "gpt-4.1-mini-2025-04-14",
 	"gpt-4.1":      "gpt-4.1-2025-04-14",
-	"gpt-4o-mini":  "gpt-4o-mini-2024-07-18",
-	"o3-mini":      "o3-mini-2025-01-31",
-	"gpt-4o":       "gpt-4o-2024-08-06",
+	"gpt-4.1-mini": "gpt-4.1-mini-2025-04-14",
+	"gpt-4.1-nano": "gpt-4.1-nano-2025-04-14",
 }
 
 func replaceEnvFileContent(content string, projectDir string, openaiApiKey string, openAIGenerationModel string, hostPort int, aiPort int, userUUID string, telemetryEnabled bool, platform string) string {
