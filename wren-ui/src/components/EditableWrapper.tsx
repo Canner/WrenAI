@@ -9,7 +9,7 @@ interface Props {
   dataIndex: string;
   record: any;
   rules?: any[];
-  handleSave: (id: string, value: { [key: string]: string }) => void;
+  handleSave: (id: string | number, value: { [key: string]: string }) => void;
 }
 
 const EditableStyle = styled.div`
@@ -40,6 +40,8 @@ export default function EditableWrapper(props: Props) {
   const { children, dataIndex, record, rules, handleSave } = props;
 
   const [editing, setEditing] = useState(false);
+  const textRef = useRef<HTMLDivElement>(null);
+  const inputWidth = useRef(0);
   const inputRef = useRef<InputRef>(null);
   const form = useContext(EditableContext);
   const dataIndexKey = Array.isArray(dataIndex)
@@ -51,6 +53,7 @@ export default function EditableWrapper(props: Props) {
   }, [editing]);
 
   const toggleEdit = () => {
+    if (textRef.current) inputWidth.current = textRef.current.clientWidth;
     setEditing(!editing);
     const value = get(record, dataIndexKey);
     form.setFieldsValue({ [dataIndexKey]: value });
@@ -69,10 +72,17 @@ export default function EditableWrapper(props: Props) {
 
   const childNode = editing ? (
     <Form.Item style={{ margin: 0 }} name={dataIndexKey} rules={rules}>
-      <Input size="small" ref={inputRef} onPressEnter={save} onBlur={save} />
+      <Input
+        size="small"
+        ref={inputRef}
+        onPressEnter={save}
+        onBlur={save}
+        style={{ width: inputWidth.current }}
+      />
     </Form.Item>
   ) : (
     <div
+      ref={textRef}
       className="editable-cell-value-wrap"
       style={{ paddingRight: 24 }}
       onClick={toggleEdit}

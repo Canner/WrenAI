@@ -89,7 +89,7 @@ jobs:
         working-directory: /tmp/digests
         # tag with input version and latest
         run: |
-          TAGS=$(echo "${{ steps.meta.outputs.tags }} --tag latest" | awk '{printf "--tag %s ", $0}') 
+          TAGS=$(echo "${{ steps.meta.outputs.tags }}" | awk '{printf "--tag %s ", $0}')
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
             $(printf '${{ env.WREN_UI_IMAGE }}@sha256:%s ' *) \
             $TAGS

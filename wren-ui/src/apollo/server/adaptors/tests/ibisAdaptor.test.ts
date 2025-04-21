@@ -8,6 +8,7 @@ import {
 } from '../ibisAdaptor';
 import { DataSourceName } from '../../types';
 import { Manifest } from '../../mdl/type';
+import { DialectSQL } from '../../models/adaptor';
 import {
   BIG_QUERY_CONNECTION_INFO,
   CLICK_HOUSE_CONNECTION_INFO,
@@ -257,15 +258,17 @@ describe('IbisAdaptor', () => {
       mockTrinoConnectionInfo,
     );
 
-    const { username, host, password, port, schemas, ssl } =
-      mockTrinoConnectionInfo;
+    const { username, host, password, port, schemas } = mockTrinoConnectionInfo;
     const schemasArray = schemas.split(',');
     const [catalog, schema] = schemasArray[0].split('.');
     const expectConnectionInfo = {
-      connectionUrl: `trino://${username}:${password}@${host}:${port}/${catalog}/${schema}`,
+      catalog,
+      host: `https://${host}`,
+      password,
+      port,
+      schema,
+      user: username,
     };
-
-    if (ssl) expectConnectionInfo.connectionUrl += '&SSL=true';
 
     expect(result).toEqual([]);
     expect(mockedAxios.post).toHaveBeenCalledWith(
@@ -395,7 +398,7 @@ describe('IbisAdaptor', () => {
 
     expect(result).toEqual({ valid: true, message: null });
     expect(mockedAxios.post).toHaveBeenCalledWith(
-      `${ibisServerEndpoint}/v2/connector/postgres/validate/column_is_valid`,
+      `${ibisServerEndpoint}/v3/connector/postgres/validate/column_is_valid`,
       {
         connectionInfo: { connectionUrl: postgresConnectionUrl },
         manifestStr: Buffer.from(JSON.stringify(mockManifest)).toString(
@@ -427,7 +430,7 @@ describe('IbisAdaptor', () => {
 
     expect(result).toEqual({ valid: false, message: 'Error' });
     expect(mockedAxios.post).toHaveBeenCalledWith(
-      `${ibisServerEndpoint}/v2/connector/postgres/validate/column_is_valid`,
+      `${ibisServerEndpoint}/v3/connector/postgres/validate/column_is_valid`,
       {
         connectionInfo: { connectionUrl: postgresConnectionUrl },
         manifestStr: Buffer.from(JSON.stringify(mockManifest)).toString(
@@ -470,7 +473,7 @@ describe('IbisAdaptor', () => {
   });
 
   it('should throw an exception with correlationId and processTime when query fails', async () => {
-    mockedAxios.post.mockRejectedValue({
+    const mockError = {
       response: {
         data: 'Error message',
         headers: {
@@ -478,7 +481,8 @@ describe('IbisAdaptor', () => {
           'x-process-time': '1s',
         },
       },
-    });
+    };
+    mockedAxios.post.mockRejectedValue(mockError);
     mockedEncryptor.prototype.decrypt.mockReturnValue(
       JSON.stringify({ password: mockPostgresConnectionInfo.password }),
     );
@@ -526,7 +530,7 @@ describe('IbisAdaptor', () => {
   });
 
   it('should throw an exception with correlationId and processTime when dry run fails', async () => {
-    mockedAxios.post.mockRejectedValue({
+    const mockError = {
       response: {
         data: 'Error message',
         headers: {
@@ -534,7 +538,8 @@ describe('IbisAdaptor', () => {
           'x-process-time': '1s',
         },
       },
-    });
+    };
+    mockedAxios.post.mockRejectedValue(mockError);
     mockedEncryptor.prototype.decrypt.mockReturnValue(
       JSON.stringify({ password: mockPostgresConnectionInfo.password }),
     );
@@ -554,5 +559,286 @@ describe('IbisAdaptor', () => {
         },
       },
     });
+  });
+
+  it('should successfully substitute SQL with model', async () => {
+    const mockResponse = { data: 'SELECT * FROM substituted_table' };
+    mockedAxios.post.mockResolvedValue(mockResponse);
+    mockedEncryptor.prototype.decrypt.mockReturnValue(
+      JSON.stringify({ password: mockPostgresConnectionInfo.password }),
+    );
+
+    const result = await ibisAdaptor.modelSubstitute(
+      'SELECT * FROM test_table' as DialectSQL,
+      {
+        dataSource: DataSourceName.POSTGRES,
+        connectionInfo: mockPostgresConnectionInfo,
+        mdl: mockManifest,
+      },
+    );
+
+    expect(result).toEqual('SELECT * FROM substituted_table');
+    expect(mockedAxios.post).toHaveBeenCalledWith(
+      `${ibisServerEndpoint}/v3/connector/postgres/model-substitute`,
+      {
+        sql: 'SELECT * FROM test_table',
+        connectionInfo: { connectionUrl: postgresConnectionUrl },
+        manifestStr: Buffer.from(JSON.stringify(mockManifest)).toString(
+          'base64',
+        ),
+      },
+      {
+        headers: {
+          'X-User-CATALOG': undefined,
+          'X-User-SCHEMA': undefined,
+        },
+      },
+    );
+  });
+
+  it('should handle error when model substitution fails with MODEL_NOT_FOUND', async () => {
+    const mockError = {
+      response: {
+        data: 'Model not found: test_table',
+        headers: {
+          'x-correlation-id': '123',
+          'x-process-time': '1s',
+        },
+      },
+    };
+    mockedAxios.post.mockRejectedValue(mockError);
+    mockedEncryptor.prototype.decrypt.mockReturnValue(
+      JSON.stringify({ password: mockPostgresConnectionInfo.password }),
+    );
+
+    await expect(
+      ibisAdaptor.modelSubstitute('SELECT * FROM test_table' as DialectSQL, {
+        dataSource: DataSourceName.POSTGRES,
+        connectionInfo: mockPostgresConnectionInfo,
+        mdl: mockManifest,
+      }),
+    ).rejects.toMatchObject({
+      message:
+        'Model not found: test_table. Try adding both catalog and schema before your table name. e.g. my_database.public.test_table',
+      extensions: {
+        other: {
+          correlationId: '123',
+          processTime: '1s',
+        },
+      },
+    });
+  });
+
+  it('should handle error when model substitution fails with MODEL_NOT_FOUND and one dot in model name', async () => {
+    const mockError = {
+      response: {
+        data: 'Model not found: public.test_table',
+        headers: {
+          'x-correlation-id': '123',
+          'x-process-time': '1s',
+        },
+      },
+    };
+    mockedAxios.post.mockRejectedValue(mockError);
+    mockedEncryptor.prototype.decrypt.mockReturnValue(
+      JSON.stringify({ password: mockPostgresConnectionInfo.password }),
+    );
+
+    await expect(
+      ibisAdaptor.modelSubstitute(
+        'SELECT * FROM public.test_table' as DialectSQL,
+        {
+          dataSource: DataSourceName.POSTGRES,
+          connectionInfo: mockPostgresConnectionInfo,
+          mdl: mockManifest,
+        },
+      ),
+    ).rejects.toMatchObject({
+      message:
+        'Model not found: public.test_table. Try adding the catalog before the schema in your table name. e.g. my_database.public.test_table',
+      extensions: {
+        other: {
+          correlationId: '123',
+          processTime: '1s',
+        },
+      },
+    });
+  });
+
+  it('should handle error when model substitution fails with MODEL_NOT_FOUND and two dots in model name', async () => {
+    const mockError = {
+      response: {
+        data: 'Model not found: my_database.public.test_table',
+        headers: {
+          'x-correlation-id': '123',
+          'x-process-time': '1s',
+        },
+      },
+    };
+    mockedAxios.post.mockRejectedValue(mockError);
+    mockedEncryptor.prototype.decrypt.mockReturnValue(
+      JSON.stringify({ password: mockPostgresConnectionInfo.password }),
+    );
+
+    await expect(
+      ibisAdaptor.modelSubstitute(
+        'SELECT * FROM my_database.public.test_table' as DialectSQL,
+        {
+          dataSource: DataSourceName.POSTGRES,
+          connectionInfo: mockPostgresConnectionInfo,
+          mdl: mockManifest,
+        },
+      ),
+    ).rejects.toMatchObject({
+      message:
+        'Model not found: my_database.public.test_table. It may be missing from models, misnamed, or have a case mismatch.',
+      extensions: {
+        other: {
+          correlationId: '123',
+          processTime: '1s',
+        },
+      },
+    });
+  });
+
+  it('should handle error when model substitution fails with MODEL_NOT_FOUND and more than two dots in model name', async () => {
+    const mockError = {
+      response: {
+        data: 'Model not found: my_database.public.schema.test_table',
+        headers: {
+          'x-correlation-id': '123',
+          'x-process-time': '1s',
+        },
+      },
+    };
+    mockedAxios.post.mockRejectedValue(mockError);
+    mockedEncryptor.prototype.decrypt.mockReturnValue(
+      JSON.stringify({ password: mockPostgresConnectionInfo.password }),
+    );
+
+    await expect(
+      ibisAdaptor.modelSubstitute(
+        'SELECT * FROM my_database.public.schema.test_table' as DialectSQL,
+        {
+          dataSource: DataSourceName.POSTGRES,
+          connectionInfo: mockPostgresConnectionInfo,
+          mdl: mockManifest,
+        },
+      ),
+    ).rejects.toMatchObject({
+      message:
+        'Model not found: my_database.public.schema.test_table. It may be missing from models, misnamed, or have a case mismatch.',
+      extensions: {
+        other: {
+          correlationId: '123',
+          processTime: '1s',
+        },
+      },
+    });
+  });
+
+  it('should handle error when model substitution fails with PARSING_EXCEPTION', async () => {
+    const mockError = {
+      response: {
+        data: 'sql.parser.ParsingException: Invalid SQL syntax',
+        headers: {
+          'x-correlation-id': '123',
+          'x-process-time': '1s',
+        },
+      },
+    };
+    mockedAxios.post.mockRejectedValue(mockError);
+    mockedEncryptor.prototype.decrypt.mockReturnValue(
+      JSON.stringify({ password: mockPostgresConnectionInfo.password }),
+    );
+
+    await expect(
+      ibisAdaptor.modelSubstitute('SELECT * FROM test_table' as DialectSQL, {
+        dataSource: DataSourceName.POSTGRES,
+        connectionInfo: mockPostgresConnectionInfo,
+        mdl: mockManifest,
+      }),
+    ).rejects.toMatchObject({
+      message:
+        'sql.parser.ParsingException: Invalid SQL syntax. Please check your selected column and make sure its quoted for columns with non-alphanumeric characters.',
+      extensions: {
+        other: {
+          correlationId: '123',
+          processTime: '1s',
+        },
+      },
+    });
+  });
+
+  it('should handle error when model substitution fails with generic error', async () => {
+    const mockError = {
+      response: {
+        data: 'Generic error occurred',
+        headers: {
+          'x-correlation-id': '123',
+          'x-process-time': '1s',
+        },
+      },
+    };
+    mockedAxios.post.mockRejectedValue(mockError);
+    mockedEncryptor.prototype.decrypt.mockReturnValue(
+      JSON.stringify({ password: mockPostgresConnectionInfo.password }),
+    );
+
+    await expect(
+      ibisAdaptor.modelSubstitute('SELECT * FROM test_table' as DialectSQL, {
+        dataSource: DataSourceName.POSTGRES,
+        connectionInfo: mockPostgresConnectionInfo,
+        mdl: mockManifest,
+      }),
+    ).rejects.toMatchObject({
+      message: 'Generic error occurred',
+      extensions: {
+        other: {
+          correlationId: '123',
+          processTime: '1s',
+        },
+      },
+    });
+  });
+
+  it('should include catalog and schema in headers when provided', async () => {
+    const mockResponse = { data: 'SELECT * FROM substituted_table' };
+    mockedAxios.post.mockResolvedValue(mockResponse);
+    mockedEncryptor.prototype.decrypt.mockReturnValue(
+      JSON.stringify({ password: mockPostgresConnectionInfo.password }),
+    );
+
+    const catalog = 'my_catalog';
+    const schema = 'my_schema';
+
+    const result = await ibisAdaptor.modelSubstitute(
+      'SELECT * FROM test_table' as DialectSQL,
+      {
+        dataSource: DataSourceName.POSTGRES,
+        connectionInfo: mockPostgresConnectionInfo,
+        mdl: mockManifest,
+        catalog,
+        schema,
+      },
+    );
+
+    expect(result).toEqual('SELECT * FROM substituted_table');
+    expect(mockedAxios.post).toHaveBeenCalledWith(
+      `${ibisServerEndpoint}/v3/connector/postgres/model-substitute`,
+      {
+        sql: 'SELECT * FROM test_table',
+        connectionInfo: { connectionUrl: postgresConnectionUrl },
+        manifestStr: Buffer.from(JSON.stringify(mockManifest)).toString(
+          'base64',
+        ),
+      },
+      {
+        headers: {
+          'X-User-CATALOG': catalog,
+          'X-User-SCHEMA': schema,
+        },
+      },
+    );
   });
 });

@@ -4,7 +4,7 @@ import styled from 'styled-components';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Form, Button, Skeleton, Modal, message } from 'antd';
 import { attachLoading } from '@/utils/helper';
-import { ReloadOutlined } from '@ant-design/icons';
+import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import BasicProperties from '@/components/chart/properties/BasicProperties';
 import DonutProperties from '@/components/chart/properties/DonutProperties';
 import LineProperties from '@/components/chart/properties/LineProperties';

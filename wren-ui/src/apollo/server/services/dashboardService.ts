@@ -20,6 +20,10 @@ export interface CreateDashboardItemInput {
   chartSchema: DashboardItemDetail['chartSchema'];
 }
 
+export interface UpdateDashboardItemInput {
+  displayName: string;
+}
+
 export type UpdateDashboardItemLayouts = (DashboardItemLayout & {
   itemId: number;
 })[];
@@ -30,6 +34,10 @@ export interface IDashboardService {
   getDashboardItem(dashboardItemId: number): Promise<DashboardItem>;
   getDashboardItems(dashboardId: number): Promise<DashboardItem[]>;
   createDashboardItem(input: CreateDashboardItemInput): Promise<DashboardItem>;
+  updateDashboardItem(
+    dashboardItemId: number,
+    input: UpdateDashboardItemInput,
+  ): Promise<DashboardItem>;
   deleteDashboardItem(dashboardItemId: number): Promise<boolean>;
   updateDashboardItemLayouts(
     layouts: UpdateDashboardItemLayouts,
@@ -111,6 +119,15 @@ export class DashboardService implements IDashboardService {
         chartSchema: input.chartSchema,
       },
       layout,
+    });
+  }
+
+  public async updateDashboardItem(
+    dashboardItemId: number,
+    input: UpdateDashboardItemInput,
+  ): Promise<DashboardItem> {
+    return await this.dashboardItemRepository.updateOne(dashboardItemId, {
+      displayName: input.displayName,
     });
   }
 

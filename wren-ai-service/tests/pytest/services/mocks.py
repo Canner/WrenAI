@@ -72,26 +72,3 @@ class GenerationMock(generation.SQLGeneration):
                 "invalid_generation_results": self._invalid,
             }
         }
-
-
-class SQLSummaryMock(generation.SQLSummary):
-    """
-    Example for the results:
-     [
-         {
-             "sql": "select 1",
-             "summary": "the description of the sql",
-         }
-     ]
-    """
-
-    def __init__(self, results: list = []):
-        self._results = results
-
-    async def run(
-        self,
-        query: str,
-        sqls: list[str],
-        language: str,
-    ):
-        return {"post_process": {"sql_summary_results": self._results}}

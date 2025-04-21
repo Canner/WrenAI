@@ -94,7 +94,7 @@ if __name__ == "__main__":
         port=settings.port,
         reload=settings.development,
         reload_includes=["src/**/*.py", ".env.dev", "config.yaml"],
-        reload_excludes=["demo/*.py", "tests/**/*.py", "eval/**/*.py"],
+        reload_excludes=["tests/**/*.py", "eval/**/*.py"],
         workers=1,
         loop="uvloop",
         http="httptools",

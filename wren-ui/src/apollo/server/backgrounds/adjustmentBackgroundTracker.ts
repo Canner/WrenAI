@@ -208,6 +208,7 @@ export class AdjustmentBackgroundTaskTracker
       tables: adjustment.payload?.retrievedTables,
       sqlGenerationReasoning: adjustment.payload?.sqlGenerationReasoning,
       sql: originalThreadResponse.sql,
+      question: originalThreadResponse.question,
     });
     const queryId = response.queryId;
 

@@ -50,12 +50,6 @@ def on_test_start(environment, **kwargs):
 def on_test_stop(environment, **kwargs):
     logging.info(f"Total finished ask queries: {len(finished_ask_query)}")
     logging.info(f"Total successful ask queries: {len(successful_ask_query)}")
-    logging.info(
-        f"Total finished ask details queries: {len(finished_ask_details_query)}"
-    )
-    logging.info(
-        f"Total successful ask details queries: {len(successful_ask_details_query)}"
-    )
 
 
 class IndexingUser(FastHttpUser):
@@ -139,55 +133,6 @@ class AskUser(FastHttpUser):
                         time.sleep(1.0)
                 except AssertionError:
                     finished_ask_query.append(query_id)
-                    response.failure(response.content.decode("utf-8"))
-
-
-class AskDetailsUser(FastHttpUser):
-    @task
-    def ask(self):
-        with self.client.post(
-            url="/v1/ask-details",
-            json={
-                "query": "How many books are there?",
-                "sql": "SELECT COUNT(*) FROM book",
-                "summary": "Retrieve the number of books",
-            },
-            catch_response=True,
-        ) as response:
-            query_id = json.loads(response.content.decode("utf-8"))["query_id"]
-            try:
-                assert response.status_code == 200
-                assert query_id != ""
-                response.success()
-            except AssertionError:
-                response.failure(response.content.decode("utf-8"))
-
-        status = "understanding"
-
-        while status in ["understanding", "searching", "generating"]:
-            with self.client.get(
-                url=f"/v1/ask-details/{query_id}/result",
-                catch_response=True,
-            ) as response:
-                try:
-                    assert response.status_code == 200
-                    status = json.loads(response.content.decode("utf-8"))["status"]
-                    assert status in [
-                        "understanding",
-                        "searching",
-                        "generating",
-                        "finished",
-                    ]
-                    response.success()
-                    if status == "finished":
-                        finished_ask_details_query.append(query_id)
-                        successful_ask_details_query.append(
-                            response.content.decode("utf-8")
-                        )
-                    else:
-                        time.sleep(1.0)
-                except AssertionError:
-                    finished_ask_details_query.append(query_id)
                     response.failure(response.content.decode("utf-8"))
 
 

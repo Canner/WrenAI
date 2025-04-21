@@ -72,24 +72,6 @@ data:
         n: 1
         seed: 0
         temperature: 0
-    - model: gpt-4o-mini-2024-07-18
-      kwargs:
-        temperature: 0
-        n: 1
-        seed: 0
-        max_tokens: 4096
-    - model: gpt-4o-2024-08-06
-      kwargs:
-        temperature: 0
-        n: 1
-        seed: 0
-        max_tokens: 4096
-    - model: o3-mini-2025-01-31
-      kwargs:
-        n: 1
-        seed: 0
-        max_completion_tokens: 4096
-        reasoning_effort: low
 
     ---
     type: embedder
@@ -144,16 +126,8 @@ data:
       - name: followup_sql_generation
         llm: litellm_llm.default
         engine: wren_ui
-      - name: sql_summary
-        llm: litellm_llm.default
       - name: sql_answer
         llm: litellm_llm.default
-      - name: sql_breakdown
-        llm: litellm_llm.default
-        engine: wren_ui
-      - name: sql_expansion
-        llm: litellm_llm.default
-        engine: wren_ui
       - name: semantics_description
         llm: litellm_llm.default
       - name: relationship_recommendation
