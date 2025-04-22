@@ -8,6 +8,7 @@ import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import EyeInvisibleOutlined from '@ant-design/icons/EyeInvisibleOutlined';
 import EyeOutlined from '@ant-design/icons/EyeOutlined';
 import CodeFilled from '@ant-design/icons/CodeFilled';
+import DatabaseOutlined from '@ant-design/icons/DatabaseOutlined';
 import { EditSVG } from '@/utils/svgs';
 import {
   DeleteCalculatedFieldModal,
@@ -130,6 +131,33 @@ export const ColumnDropdown = makeDropdown((props: Props) => {
     },
   ];
 
+  return items;
+});
+
+export const DashboardDropdown = makeDropdown((props: Props) => {
+  const { onMoreClick } = props;
+  const items: ItemType[] = [
+    {
+      label: (
+        <>
+          <DatabaseOutlined className="mr-2" />
+          Cache settings
+        </>
+      ),
+      key: MORE_ACTION.CACHE_SETTINGS,
+      onClick: () => onMoreClick(MORE_ACTION.CACHE_SETTINGS),
+    },
+    {
+      label: (
+        <>
+          <ReloadOutlined className="mr-2" />
+          Refresh all
+        </>
+      ),
+      key: MORE_ACTION.REFRESH,
+      onClick: () => onMoreClick(MORE_ACTION.REFRESH),
+    },
+  ];
   return items;
 });
 

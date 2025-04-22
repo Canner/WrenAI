@@ -4,6 +4,7 @@ import { Path } from '@/utils/enum';
 import { useRouter } from 'next/router';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import useHomeSidebar from '@/hooks/useHomeSidebar';
+import useDrawerAction from '@/hooks/useDrawerAction';
 import { LoadingWrapper } from '@/components/PageLoading';
 import DashboardGrid from '@/components/pages/home/dashboardGrid';
 import EmptyDashboard from '@/components/pages/home/dashboardGrid/EmptyDashboard';
@@ -14,10 +15,12 @@ import {
   useUpdateDashboardItemLayoutsMutation,
 } from '@/apollo/client/graphql/dashboard.generated';
 import { ItemLayoutInput } from '@/apollo/client/graphql/__types__';
+import CacheSettingsDrawer from '@/components/pages/home/dashboardGrid/CacheSettingsDrawer';
 
 export default function Dashboard() {
   const router = useRouter();
   const homeSidebar = useHomeSidebar();
+  const cacheSettingsDrawer = useDrawerAction();
 
   const {
     data,
@@ -64,17 +67,52 @@ export default function Dashboard() {
     await deleteDashboardItem({ variables: { where: { id } } });
   };
 
+  // TODO: replace with actual data
+  // const schedule = {
+  //   frequency: 'WEEKLY',
+  //   day: 'MONDAY',
+  //   hour: 23,
+  //   minute: 50,
+  // };
+
+  const schedule = {
+    frequency: 'NEVER',
+    day: null,
+    hour: null,
+    minute: null,
+  };
+  const nextScheduleTime = new Date().toISOString();
+
   return (
     <SiderLayout loading={false} color="gray-3" sidebar={homeSidebar}>
       <LoadingWrapper loading={loading}>
-        <EmptyDashboard show={dashboardItems.length === 0}>
-          <DashboardHeader />
-          <DashboardGrid
-            items={dashboardItems}
-            onUpdateChange={onUpdateChange}
-            onDelete={onDelete}
+        <>
+          <EmptyDashboard show={dashboardItems.length === 0}>
+            <DashboardHeader
+              schedule={schedule}
+              nextScheduleTime={nextScheduleTime}
+              onCacheSettings={() => {
+                cacheSettingsDrawer.openDrawer({
+                  enabled: true,
+                  schedule,
+                  nextScheduleTime,
+                });
+              }}
+            />
+            <DashboardGrid
+              items={dashboardItems}
+              onUpdateChange={onUpdateChange}
+              onDelete={onDelete}
+            />
+          </EmptyDashboard>
+          <CacheSettingsDrawer
+            {...cacheSettingsDrawer.state}
+            onClose={cacheSettingsDrawer.closeDrawer}
+            onSubmit={async (values) => {
+              console.log(values);
+            }}
           />
-        </EmptyDashboard>
+        </>
       </LoadingWrapper>
     </SiderLayout>
   );
