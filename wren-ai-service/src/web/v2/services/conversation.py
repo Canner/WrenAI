@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from typing import Dict, List, Optional
 
 import orjson
@@ -10,7 +11,7 @@ from pydantic import BaseModel, Field
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
 from src.web.v2.services import (
-    Configuration,
+    Configurations,
     Error,
     QueryEventManager,
 )
@@ -30,7 +31,7 @@ class ConversationRequest(BaseModel):
     project_id: Optional[str] = None
     mdl_hash: Optional[str] = None
     histories: Optional[List[ConversationHistory]] = Field(default_factory=list)
-    configurations: Optional[Configuration] = Configuration()
+    configurations: Optional[Configurations] = Configurations()
 
     @property
     def query_id(self) -> str:
@@ -104,10 +105,15 @@ class ConversationService:
 
         return results
 
+    def stop_conversation(self, query_id: str):
+        self._query_event_manager.stop_queue(query_id)
+
     async def get_conversation_streaming_result(self, query_id: str, request: Request):
         queue = self._query_event_manager.get_queue(query_id)
 
         async def event_generator():
+            last_ping = time.monotonic()
+
             while True:
                 # if client disconnects, break
                 if await request.is_disconnected():
@@ -116,7 +122,13 @@ class ConversationService:
                 try:
                     event, data = await asyncio.wait_for(queue.get(), timeout=15)
                 except asyncio.TimeoutError:
-                    break
+                    now = time.monotonic()
+                    if now - last_ping >= 10:
+                        # sending a line that starts with a colon is the canonical way to emit an SSE “comment,”
+                        # which browsers and EventSource clients ignore as data but do reset idle timeouts
+                        yield ": keep-alive\n\n"
+                        last_ping = now
+                    continue
 
                 payload = orjson.dumps(data).decode()
                 yield f"event: {event}\n"

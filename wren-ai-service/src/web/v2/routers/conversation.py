@@ -2,7 +2,7 @@ import uuid
 from dataclasses import asdict
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from src.globals import (
     ServiceContainer,
@@ -10,6 +10,7 @@ from src.globals import (
     get_service_container,
     get_service_metadata,
 )
+from src.web.v2.services import QueueNotFoundError
 from src.web.v2.services.conversation import (
     ConversationRequest,
     ConversationResponse,
@@ -34,6 +35,24 @@ async def start_conversation(
         service_metadata=asdict(service_metadata),
     )
     return ConversationResponse(query_id=query_id)
+
+
+@router.post("/conversations/{query_id}/stop")
+async def stop_conversation(
+    query_id: str,
+    service_container: ServiceContainer = Depends(get_service_container),
+):
+    try:
+        service_container.conversation_service.stop_conversation(query_id)
+    except QueueNotFoundError:
+        return JSONResponse(
+            {
+                "stopped": False,
+            },
+            status_code=404,
+        )
+
+    return {"stopped": True}
 
 
 @router.get("/conversations/{query_id}/stream")

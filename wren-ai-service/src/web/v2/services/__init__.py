@@ -1,5 +1,4 @@
 import asyncio
-from collections import defaultdict
 from datetime import datetime
 from typing import Iterable, Iterator, Literal, Optional
 
@@ -8,7 +7,7 @@ import pytz
 from pydantic import BaseModel
 
 
-class Configuration(BaseModel):
+class Configurations(BaseModel):
     def show_current_time(self):
         # Get the current time in the specified timezone
         tz = pytz.timezone(
@@ -27,13 +26,38 @@ class Error(BaseModel):
     message: str
 
 
+class QueueNotFoundError(Exception):
+    """Raised when someone tries to access or stop a non-existent queue."""
+
+    def __init__(self, query_id: str):
+        super().__init__(f"No queue found for query_id: {query_id}")
+        self.query_id = query_id
+
+
 class QueryEventManager:
     def __init__(self):
         # one queue per query_id
-        self.queues: dict[str, asyncio.Queue] = defaultdict(asyncio.Queue)
+        self._queues: dict[str, asyncio.Queue] = {}
 
     def get_queue(self, query_id: str) -> asyncio.Queue:
-        return self.queues[query_id]
+        if query_id not in self._queues:
+            raise QueueNotFoundError(query_id)
+        return self._queues[query_id]
+
+    def start_queue(self, query_id: str):
+        self._queues[query_id] = asyncio.Queue()
+
+    def stop_queue(self, query_id: str):
+        q = self.get_queue(query_id)
+        _event = "message_stop"
+        _data = {
+            "type": "message_stop",
+            "message": {
+                "query_id": query_id,
+            },
+        }
+        q.put_nowait((_event, _data))
+        self.cleanup(query_id)
 
     async def _publish(self, query_id: str, event: str, data: dict):
         q = self.get_queue(query_id)
@@ -41,13 +65,14 @@ class QueryEventManager:
 
     def cleanup(self, query_id: str):
         # remove the queue so it can be GC’d
-        self.queues.pop(query_id, None)
+        self._queues.pop(query_id, None)
 
     async def emit_message_start(
         self,
         query_id: str,
         trace_id: str,
     ):
+        self.start_queue(query_id)
         await self._publish(
             query_id,
             "message_start",
