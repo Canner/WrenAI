@@ -9,6 +9,7 @@ from src.core.provider import EmbedderProvider, LLMProvider
 from src.pipelines import generation, indexing, retrieval
 from src.utils import fetch_wren_ai_docs
 from src.web.v1 import services
+from src.web.v2 import services as v2_services
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -27,6 +28,7 @@ class ServiceContainer:
     sql_question_service: services.SqlQuestionService
     instructions_service: services.InstructionsService
     sql_correction_service: services.SqlCorrectionService
+    conversation_service: v2_services.ConversationService
 
 
 @dataclass
@@ -268,6 +270,10 @@ def create_service_container(
                 ),
             },
             **query_cache,
+        ),
+        conversation_service=v2_services.ConversationService(
+            pipelines={},
+            max_histories=settings.max_histories,
         ),
     )
 
