@@ -15,6 +15,29 @@ export interface ApiHistoryPagination {
   limit: number;
 }
 
+/**
+ * Sanitize response payload to remove large data fields
+ * This prevents excessive data transfer when displaying API history
+ * @param payload The response payload to sanitize
+ * @param apiType The type of API that generated this response
+ */
+const sanitizeResponsePayload = (payload: any, apiType?: ApiType): any => {
+  if (!payload) return payload;
+
+  const sanitized = { ...payload };
+
+  // Handle specifically RUN_SQL responses that contain large record sets
+  if (apiType === ApiType.RUN_SQL) {
+    // Remove records array but keep metadata about how many records were returned
+    if (sanitized.records && Array.isArray(sanitized.records)) {
+      const recordCount = sanitized.records.length;
+      sanitized.records = [`${recordCount} records omitted`];
+    }
+  }
+
+  return sanitized;
+};
+
 export class ApiHistoryResolver {
   constructor() {
     this.getApiHistory = this.getApiHistory.bind(this);
@@ -97,6 +120,13 @@ export class ApiHistoryResolver {
     },
     updatedAt: (apiHistory: ApiHistory) => {
       return new Date(apiHistory.updatedAt).toISOString();
+    },
+    responsePayload: (apiHistory: ApiHistory) => {
+      if (!apiHistory.responsePayload) return null;
+      return sanitizeResponsePayload(
+        apiHistory.responsePayload,
+        apiHistory.apiType,
+      );
     },
   });
 }
