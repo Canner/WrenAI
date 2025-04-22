@@ -49,6 +49,9 @@ export enum GeneralErrorCodes {
   IDENTIED_AS_GENERAL = 'IDENTIED_AS_GENERAL',
   IDENTIED_AS_MISLEADING_QUERY = 'IDENTIED_AS_MISLEADING_QUERY',
   DEPLOY_TIMEOUT_ERROR = 'DEPLOY_TIMEOUT_ERROR',
+
+  // api error
+  NON_SQL_QUERY = 'NON_SQL_QUERY',
 }
 
 export const errorMessages = {
@@ -104,6 +107,9 @@ export const errorMessages = {
     'The question is identified as a misleading query, please follow-up ask with more specific questions.',
   [GeneralErrorCodes.DEPLOY_TIMEOUT_ERROR]:
     'LLM deployment timed out after 30 seconds',
+
+  // api error
+  [GeneralErrorCodes.NON_SQL_QUERY]: 'Cannot generate SQL from this question.',
 };
 
 export const shortMessages = {
@@ -130,6 +136,7 @@ export const shortMessages = {
   [GeneralErrorCodes.IDENTIED_AS_MISLEADING_QUERY]:
     'Identified as misleading query',
   [GeneralErrorCodes.DEPLOY_TIMEOUT_ERROR]: 'LLM deployment timed out',
+  [GeneralErrorCodes.NON_SQL_QUERY]: 'Cannot generate SQL from this question.',
 };
 
 export const create = (

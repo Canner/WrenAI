@@ -1,22 +1,41 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
-import {
-  ApiType,
-  ApiStatus,
-  ApiHistory,
-} from '@server/repositories/apiHistoryRepository';
+import { ApiType, ApiHistory } from '@server/repositories/apiHistoryRepository';
 import {
   AskResult,
   AskResultStatus,
+  AskResultType,
   WrenAILanguage,
+  WrenAIError,
 } from '@/apollo/server/models/adaptor';
+import * as Errors from '@/apollo/server/utils/error';
+import { getLogger } from '@server/utils';
+import { v4 as uuidv4 } from 'uuid';
+
+const logger = getLogger('API_GENERATE_SQL');
+logger.level = 'debug';
 
 const { apiHistoryRepository, projectService, deployService, wrenAIAdaptor } =
   components;
 
 interface GenerateSqlRequest {
   question: string;
-  threadId?: number;
+  threadId?: string;
+}
+
+class ApiError extends Error {
+  statusCode: number;
+  code?: Errors.GeneralErrorCodes;
+
+  constructor(
+    message: string,
+    statusCode: number,
+    code?: Errors.GeneralErrorCodes,
+  ) {
+    super(message);
+    this.statusCode = statusCode;
+    this.code = code;
+  }
 }
 
 const isAskResultFinished = (result: AskResult) => {
@@ -33,36 +52,78 @@ const transformHistoryInput = (histories: ApiHistory[]) => {
     return [];
   }
   return histories
-    .filter((history) => history.responsePayload?.sql)
+    .filter(
+      (history) =>
+        history.responsePayload?.sql && history.requestPayload?.question,
+    )
     .map((history) => ({
-      question: history.input.question,
+      question: history.requestPayload?.question,
       sql: history.responsePayload?.sql,
     }));
+};
+
+const respondWith = async ({
+  res,
+  statusCode,
+  responsePayload,
+  projectId,
+  apiType = ApiType.GENERATE_SQL,
+  threadId,
+  headers,
+  requestPayload,
+  startTime,
+}: {
+  res: NextApiResponse;
+  statusCode: number;
+  responsePayload: any;
+  projectId: number;
+  apiType?: ApiType;
+  startTime: number;
+  requestPayload?: Record<string, any>;
+  threadId?: string;
+  headers?: Record<string, string>;
+}) => {
+  const durationMs = startTime ? Date.now() - startTime : undefined;
+  await apiHistoryRepository.createOne({
+    id: uuidv4(),
+    projectId,
+    apiType,
+    threadId,
+    headers,
+    requestPayload,
+    responsePayload,
+    statusCode,
+    durationMs,
+  });
+
+  return res.status(statusCode).json(responsePayload);
 };
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
-  // Only allow POST method
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  const startTime = Date.now();
   const { question, threadId } = req.body as GenerateSqlRequest;
+  const startTime = Date.now();
+  let project;
 
   try {
-    // 1. Validation
-    if (!question) {
-      return res.status(400).json({ error: 'Question is required' });
+    project = await projectService.getCurrentProject();
+
+    // Only allow POST method
+    if (req.method !== 'POST') {
+      throw new ApiError('Method not allowed', 405);
     }
 
-    // 2. Get current project
-    const project = await projectService.getCurrentProject();
+    // input validation
+    if (!question) {
+      throw new ApiError('Question is required', 400);
+    }
+
+    // get current project's last deployment
     const lastDeploy = await deployService.getLastDeployment(project.id);
 
-    // 3. Ask AI service to generate SQL
+    // ask AI service to generate SQL
     const histories = threadId
       ? await apiHistoryRepository.findAllBy({ threadId })
       : undefined;
@@ -75,67 +136,82 @@ export default async function handler(
       },
     });
 
-    // 4. Poll for the result
+    // polling for the result
     let result: AskResult;
     while (true) {
       result = await wrenAIAdaptor.getAskResult(task.queryId);
       if (isAskResultFinished(result)) {
         break;
       }
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // Poll every second
+      await new Promise((resolve) => setTimeout(resolve, 1000)); // poll every second
     }
 
-    const durationMs = Date.now() - startTime;
-
-    // 5. Log API request in history
-    await apiHistoryRepository.createOne({
-      projectId: project.id,
-      apiType: ApiType.GENERATE_SQL,
-      threadId,
-      input: { question, threadId },
-      headers: req.headers as Record<string, string>,
-      requestPayload: req.body,
-      responsePayload: result,
-      status: result.error ? ApiStatus.FAILED : ApiStatus.SUCCESS,
-      durationMs,
-    });
-
-    // 6. If there was an error, return it
+    // if it's failed, throw the error
     if (result.error) {
-      return res.status(400).json({
-        error: result.error.message,
-        code: result.error.code,
-      });
+      const errorMessage =
+        (result.error as WrenAIError).message || 'Unknown error';
+      throw new ApiError(errorMessage, 400);
     }
 
-    // 7. Return successful response with SQL
-    return res.status(200).json({
-      sql: result.response?.[0]?.sql,
+    // if it's a misleading type response, throw error
+    if (result.type === AskResultType.MISLEADING_QUERY) {
+      throw new ApiError(
+        result.intentReasoning ||
+          Errors.errorMessages[Errors.GeneralErrorCodes.NON_SQL_QUERY],
+        400,
+        Errors.GeneralErrorCodes.NON_SQL_QUERY,
+      );
+    }
+
+    // if it's a general type response, throw error
+    if (result.type === AskResultType.GENERAL) {
+      throw new ApiError(
+        Errors.errorMessages[Errors.GeneralErrorCodes.NON_SQL_QUERY],
+        400,
+        Errors.GeneralErrorCodes.NON_SQL_QUERY,
+      );
+    }
+
+    // return the SQL
+    // create a new thread if it's a new question
+    const newThreadId = threadId || uuidv4();
+    await respondWith({
+      res,
+      statusCode: 200,
+      responsePayload: {
+        sql: result.response?.[0]?.sql,
+        threadId: newThreadId,
+      },
+      projectId: project.id,
+      startTime,
+      requestPayload: req.body,
+      threadId: newThreadId,
+      headers: req.headers as Record<string, string>,
     });
   } catch (error) {
-    console.error('Error generating SQL:', error);
+    logger.error('Error generating SQL:', error);
 
-    // Log error in API history
-    try {
-      const project = await projectService.getCurrentProject();
-      await apiHistoryRepository.createOne({
-        projectId: project.id,
-        apiType: ApiType.GENERATE_SQL,
-        threadId,
-        input: { question, threadId },
-        headers: req.headers,
-        requestPayload: req.body,
-        responsePayload: { error: error.message },
-        status: ApiStatus.FAILED,
-        durationMs: Date.now() - startTime,
-      });
-    } catch (logError) {
-      console.error('Error logging API history:', logError);
+    const statusCode = error instanceof ApiError ? error.statusCode : 500;
+    let responsePayload;
+
+    if (error instanceof ApiError && error.code) {
+      responsePayload = {
+        code: error.code,
+        error: error.message,
+      };
+    } else {
+      responsePayload = { error: error.message };
     }
 
-    return res.status(500).json({
-      error: 'Internal server error',
-      message: error.message,
+    await respondWith({
+      res,
+      statusCode,
+      responsePayload,
+      projectId: project?.id,
+      startTime,
+      requestPayload: req.body,
+      threadId,
+      headers: req.headers as Record<string, string>,
     });
   }
 }

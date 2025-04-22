@@ -4,29 +4,26 @@
  */
 exports.up = function (knex) {
   return knex.schema.createTable('api_history', (table) => {
-    table.increments('id').primary();
+    table.string('id').primary();
 
     // Project
     table.integer('project_id').notNullable();
 
     // Thread
-    table.integer('thread_id').notNullable();
+    table.string('thread_id');
 
     // API Type
     table.string('api_type').notNullable();
 
-    // API Input
-    table.jsonb('api_input').notNullable();
-
     // Request
-    table.jsonb('headers').notNullable();
-    table.jsonb('request_payload').notNullable();
+    table.jsonb('headers');
+    table.jsonb('request_payload');
 
     // Response
-    table.jsonb('response_payload').notNullable();
+    table.jsonb('response_payload');
 
     // Result
-    table.string('status').notNullable();
+    table.integer('status_code').notNullable();
     table.integer('duration_ms').notNullable();
     table.timestamps(true, true);
   });

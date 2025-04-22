@@ -7,21 +7,15 @@ export enum ApiType {
   RUN_SQL = 'RUN_SQL',
 }
 
-export enum ApiStatus {
-  SUCCESS = 'SUCCESS',
-  FAILED = 'FAILED',
-}
-
 export interface ApiHistory {
-  id?: number;
+  id?: string;
   projectId: number;
   apiType: ApiType;
-  threadId?: number;
-  input?: Record<string, any>;
+  threadId?: string;
   headers?: Record<string, string>;
   requestPayload?: Record<string, any>;
   responsePayload?: Record<string, any>;
-  status: ApiStatus;
+  statusCode?: number;
   durationMs?: number;
   createdAt?: string;
   updatedAt?: string;
@@ -37,7 +31,6 @@ export class ApiHistoryRepository
     'headers',
     'requestPayload',
     'responsePayload',
-    'input',
   ];
 
   constructor(knexPg: Knex) {
