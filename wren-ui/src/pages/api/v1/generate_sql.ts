@@ -11,6 +11,11 @@ import {
 import * as Errors from '@/apollo/server/utils/error';
 import { getLogger } from '@server/utils';
 import { v4 as uuidv4 } from 'uuid';
+import {
+  ApiError,
+  respondWith,
+  handleApiError,
+} from '@/apollo/server/utils/apiUtils';
 
 const logger = getLogger('API_GENERATE_SQL');
 logger.level = 'debug';
@@ -21,21 +26,6 @@ const { apiHistoryRepository, projectService, deployService, wrenAIAdaptor } =
 interface GenerateSqlRequest {
   question: string;
   threadId?: string;
-}
-
-class ApiError extends Error {
-  statusCode: number;
-  code?: Errors.GeneralErrorCodes;
-
-  constructor(
-    message: string,
-    statusCode: number,
-    code?: Errors.GeneralErrorCodes,
-  ) {
-    super(message);
-    this.statusCode = statusCode;
-    this.code = code;
-  }
 }
 
 const isAskResultFinished = (result: AskResult) => {
@@ -60,43 +50,6 @@ const transformHistoryInput = (histories: ApiHistory[]) => {
       question: history.requestPayload?.question,
       sql: history.responsePayload?.sql,
     }));
-};
-
-const respondWith = async ({
-  res,
-  statusCode,
-  responsePayload,
-  projectId,
-  apiType = ApiType.GENERATE_SQL,
-  threadId,
-  headers,
-  requestPayload,
-  startTime,
-}: {
-  res: NextApiResponse;
-  statusCode: number;
-  responsePayload: any;
-  projectId: number;
-  apiType?: ApiType;
-  startTime: number;
-  requestPayload?: Record<string, any>;
-  threadId?: string;
-  headers?: Record<string, string>;
-}) => {
-  const durationMs = startTime ? Date.now() - startTime : undefined;
-  await apiHistoryRepository.createOne({
-    id: uuidv4(),
-    projectId,
-    apiType,
-    threadId,
-    headers,
-    requestPayload,
-    responsePayload,
-    statusCode,
-    durationMs,
-  });
-
-  return res.status(statusCode).json(responsePayload);
 };
 
 export default async function handler(
@@ -184,35 +137,23 @@ export default async function handler(
         threadId: newThreadId,
       },
       projectId: project.id,
+      apiType: ApiType.GENERATE_SQL,
       startTime,
       requestPayload: req.body,
       threadId: newThreadId,
       headers: req.headers as Record<string, string>,
     });
   } catch (error) {
-    logger.error('Error generating SQL:', error);
-
-    const statusCode = error instanceof ApiError ? error.statusCode : 500;
-    let responsePayload;
-
-    if (error instanceof ApiError && error.code) {
-      responsePayload = {
-        code: error.code,
-        error: error.message,
-      };
-    } else {
-      responsePayload = { error: error.message };
-    }
-
-    await respondWith({
+    await handleApiError({
+      error,
       res,
-      statusCode,
-      responsePayload,
       projectId: project?.id,
-      startTime,
+      apiType: ApiType.GENERATE_SQL,
       requestPayload: req.body,
       threadId,
       headers: req.headers as Record<string, string>,
+      startTime,
+      logger,
     });
   }
 }

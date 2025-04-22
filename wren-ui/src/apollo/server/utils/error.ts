@@ -52,6 +52,7 @@ export enum GeneralErrorCodes {
 
   // api error
   NON_SQL_QUERY = 'NON_SQL_QUERY',
+  NO_DEPLOYMENT_FOUND = 'NO_DEPLOYMENT_FOUND',
 }
 
 export const errorMessages = {
@@ -110,6 +111,8 @@ export const errorMessages = {
 
   // api error
   [GeneralErrorCodes.NON_SQL_QUERY]: 'Cannot generate SQL from this question.',
+  [GeneralErrorCodes.NO_DEPLOYMENT_FOUND]:
+    'No deployment found, please deploy your project first',
 };
 
 export const shortMessages = {
@@ -137,6 +140,8 @@ export const shortMessages = {
     'Identified as misleading query',
   [GeneralErrorCodes.DEPLOY_TIMEOUT_ERROR]: 'LLM deployment timed out',
   [GeneralErrorCodes.NON_SQL_QUERY]: 'Cannot generate SQL from this question.',
+  [GeneralErrorCodes.NO_DEPLOYMENT_FOUND]:
+    'No deployment found, please deploy your project first',
 };
 
 export const create = (
