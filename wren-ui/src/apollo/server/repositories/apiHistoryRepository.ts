@@ -21,7 +21,23 @@ export interface ApiHistory {
   updatedAt?: string;
 }
 
-export interface IApiHistoryRepository extends IBasicRepository<ApiHistory> {}
+export interface PaginationOptions {
+  offset: number;
+  limit: number;
+  orderBy?: Record<string, 'asc' | 'desc'>;
+}
+
+export interface IApiHistoryRepository extends IBasicRepository<ApiHistory> {
+  count(
+    filter?: Partial<ApiHistory>,
+    dateFilter?: { startDate?: Date; endDate?: Date },
+  ): Promise<number>;
+  findAllWithPagination(
+    filter?: Partial<ApiHistory>,
+    dateFilter?: { startDate?: Date; endDate?: Date },
+    pagination?: PaginationOptions,
+  ): Promise<ApiHistory[]>;
+}
 
 export class ApiHistoryRepository
   extends BaseRepository<ApiHistory>
@@ -35,6 +51,74 @@ export class ApiHistoryRepository
 
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'api_history' });
+  }
+
+  /**
+   * Count API history records with filtering
+   */
+  public async count(
+    filter?: Partial<ApiHistory>,
+    dateFilter?: { startDate?: Date; endDate?: Date },
+  ): Promise<number> {
+    let query = this.knex(this.tableName).count('id as count');
+
+    if (filter) {
+      query = query.where(this.transformToDBData(filter));
+    }
+
+    if (dateFilter) {
+      if (dateFilter.startDate) {
+        query = query.where('created_at', '>=', dateFilter.startDate);
+      }
+
+      if (dateFilter.endDate) {
+        query = query.where('created_at', '<=', dateFilter.endDate);
+      }
+    }
+
+    const result = await query;
+    return parseInt(result[0].count as string, 10);
+  }
+
+  /**
+   * Find API history records with pagination
+   */
+  public async findAllWithPagination(
+    filter?: Partial<ApiHistory>,
+    dateFilter?: { startDate?: Date; endDate?: Date },
+    pagination?: PaginationOptions,
+  ): Promise<ApiHistory[]> {
+    let query = this.knex(this.tableName).select('*');
+
+    if (filter) {
+      query = query.where(this.transformToDBData(filter));
+    }
+
+    if (dateFilter) {
+      if (dateFilter.startDate) {
+        query = query.where('created_at', '>=', dateFilter.startDate);
+      }
+
+      if (dateFilter.endDate) {
+        query = query.where('created_at', '<=', dateFilter.endDate);
+      }
+    }
+
+    if (pagination) {
+      if (pagination.orderBy) {
+        Object.entries(pagination.orderBy).forEach(([field, direction]) => {
+          query = query.orderBy(this.camelToSnakeCase(field), direction);
+        });
+      } else {
+        // Default sort by created_at desc
+        query = query.orderBy('created_at', 'desc');
+      }
+
+      query = query.offset(pagination.offset).limit(pagination.limit);
+    }
+
+    const result = await query;
+    return result.map(this.transformFromDBData);
   }
 
   protected override transformFromDBData = (data: any): ApiHistory => {
@@ -55,4 +139,11 @@ export class ApiHistoryRepository
     }) as ApiHistory;
     return formattedData;
   };
+
+  /**
+   * Convert camelCase to snake_case for DB column names
+   */
+  private camelToSnakeCase(str: string): string {
+    return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+  }
 }

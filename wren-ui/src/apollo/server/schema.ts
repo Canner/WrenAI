@@ -4,6 +4,45 @@ export const typeDefs = gql`
   scalar JSON
   scalar DialectSQL
 
+  enum ApiType {
+    GENERATE_SQL
+    RUN_SQL
+  }
+
+  input ApiHistoryFilterInput {
+    apiType: ApiType
+    statusCode: Int
+    threadId: String
+    projectId: Int
+    startDate: String
+    endDate: String
+  }
+
+  input ApiHistoryPaginationInput {
+    offset: Int!
+    limit: Int!
+  }
+
+  type ApiHistoryResponse {
+    id: String!
+    projectId: Int!
+    apiType: ApiType!
+    threadId: String
+    headers: JSON
+    requestPayload: JSON
+    responsePayload: JSON
+    statusCode: Int
+    durationMs: Int
+    createdAt: String!
+    updatedAt: String!
+  }
+
+  type ApiHistoryPaginatedResponse {
+    items: [ApiHistoryResponse!]!
+    total: Int!
+    hasMore: Boolean!
+  }
+
   enum DataSourceName {
     BIG_QUERY
     DUCKDB
@@ -1016,6 +1055,12 @@ export const typeDefs = gql`
     sqlPairs: [SqlPair]!
     # Instructions
     instructions: [Instruction]!
+
+    # Api History
+    apiHistory(
+      filter: ApiHistoryFilterInput
+      pagination: ApiHistoryPaginationInput
+    ): ApiHistoryPaginatedResponse!
   }
 
   type Mutation {
