@@ -49,8 +49,9 @@ export const respondWith = async ({
   headers?: Record<string, string>;
 }) => {
   const durationMs = startTime ? Date.now() - startTime : undefined;
+  const responseId = uuidv4();
   await apiHistoryRepository.createOne({
-    id: uuidv4(),
+    id: responseId,
     projectId,
     apiType,
     threadId,
@@ -61,7 +62,10 @@ export const respondWith = async ({
     durationMs,
   });
 
-  return res.status(statusCode).json(responsePayload);
+  return res.status(statusCode).json({
+    id: responseId,
+    ...responsePayload,
+  });
 };
 
 /**
