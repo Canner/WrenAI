@@ -35,7 +35,7 @@ class QueryEventManager:
     def get_queue(self, query_id: str) -> asyncio.Queue:
         return self.queues[query_id]
 
-    async def publish(self, query_id: str, event: str, data: dict):
+    async def _publish(self, query_id: str, event: str, data: dict):
         q = self.get_queue(query_id)
         await q.put((event, data))
 
@@ -43,114 +43,113 @@ class QueryEventManager:
         # remove the queue so it can be GC’d
         self.queues.pop(query_id, None)
 
-
-async def emit_message_start(
-    query_manager: QueryEventManager,
-    query_id: str,
-    trace_id: str,
-):
-    await query_manager.publish(
-        query_id,
-        "message_start",
-        {
-            "type": "message_start",
-            "message": {
-                "query_id": query_id,
-                "trace_id": trace_id,
-            },
-        },
-    )
-
-
-async def emit_message_stop(
-    query_manager: QueryEventManager,
-    query_id: str,
-    trace_id: str,
-):
-    await query_manager.publish(
-        query_id,
-        "message_stop",
-        {
-            "type": "message_stop",
-            "message": {
-                "query_id": query_id,
-                "trace_id": trace_id,
-            },
-        },
-    )
-
-
-async def emit_error(
-    query_manager: QueryEventManager,
-    query_id: str,
-    trace_id: str,
-    error: Error,
-):
-    await query_manager.publish(
-        query_id,
-        "error",
-        {
-            "type": "error",
-            "message": {
-                "query_id": query_id,
-                "trace_id": trace_id,
-                "code": error.code,
-                "message": error.message,
-            },
-        },
-    )
-
-
-async def emit_content_block(
-    query_manager: QueryEventManager,
-    query_id: str,
-    trace_id: str,
-    index: int,
-    pieces: Iterable[str],
-    *,
-    block_type: Literal["tool_use", "text"] = "tool_use",
-):
-    """Emit a complete content block (start → delta → stop)."""
-    # 1) start
-    await query_manager.publish(
-        query_id,
-        "content_block_start",
-        {
-            "type": "content_block_start",
-            "index": index,
-            "message": {
-                "type": block_type,
-                "trace_id": trace_id,
-            },
-        },
-    )
-    # 2) the actual payload
-    for chunk in pieces:
-        await query_manager.publish(
+    async def emit_message_start(
+        self,
+        query_id: str,
+        trace_id: str,
+    ):
+        await self._publish(
             query_id,
-            "content_block_delta",
+            "message_start",
             {
-                "type": "content_block_delta",
-                "index": index,
+                "type": "message_start",
                 "message": {
-                    "type": ("json" if block_type == "tool_use" else "text") + "_delta",
-                    "content": orjson.dumps(chunk) if block_type == "json" else chunk,
+                    "query_id": query_id,
                     "trace_id": trace_id,
                 },
             },
         )
-    # 3) stop
-    await query_manager.publish(
-        query_id,
-        "content_block_stop",
-        {
-            "type": "content_block_stop",
-            "index": index,
-            "message": {
-                "trace_id": trace_id,
+
+    async def emit_message_stop(
+        self,
+        query_id: str,
+        trace_id: str,
+    ):
+        await self._publish(
+            query_id,
+            "message_stop",
+            {
+                "type": "message_stop",
+                "message": {
+                    "query_id": query_id,
+                    "trace_id": trace_id,
+                },
             },
-        },
-    )
+        )
+
+    async def emit_error(
+        self,
+        query_id: str,
+        trace_id: str,
+        error: Error,
+    ):
+        await self._publish(
+            query_id,
+            "error",
+            {
+                "type": "error",
+                "message": {
+                    "query_id": query_id,
+                    "trace_id": trace_id,
+                    "code": error.code,
+                    "message": error.message,
+                },
+            },
+        )
+
+    async def emit_content_block(
+        self,
+        query_id: str,
+        trace_id: str,
+        index: int,
+        pieces: Iterable[str],
+        *,
+        block_type: Literal["tool_use", "text"] = "tool_use",
+    ):
+        """Emit a complete content block (start → delta → stop)."""
+        # 1) start
+        await self._publish(
+            query_id,
+            "content_block_start",
+            {
+                "type": "content_block_start",
+                "index": index,
+                "message": {
+                    "type": block_type,
+                    "trace_id": trace_id,
+                },
+            },
+        )
+        # 2) the actual payload
+        for chunk in pieces:
+            await self._publish(
+                query_id,
+                "content_block_delta",
+                {
+                    "type": "content_block_delta",
+                    "index": index,
+                    "message": {
+                        "type": ("json" if block_type == "tool_use" else "text")
+                        + "_delta",
+                        "content": orjson.dumps(chunk)
+                        if block_type == "json"
+                        else chunk,
+                        "trace_id": trace_id,
+                    },
+                },
+            )
+        # 3) stop
+        await self._publish(
+            query_id,
+            "content_block_stop",
+            {
+                "type": "content_block_stop",
+                "index": index,
+                "message": {
+                    "trace_id": trace_id,
+                },
+            },
+        )
 
 
 def chunk_text(s: str, size: int = 10) -> Iterator[str]:

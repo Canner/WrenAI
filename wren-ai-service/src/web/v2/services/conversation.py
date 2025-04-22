@@ -13,8 +13,6 @@ from src.web.v2.services import (
     Configuration,
     Error,
     QueryEventManager,
-    emit_error,
-    emit_message_start,
 )
 
 logger = logging.getLogger("wren-ai-service")
@@ -80,16 +78,19 @@ class ConversationService:
         # ]  # reverse the order of histories
 
         try:
-            await emit_message_start(
-                self._query_event_manager,
+            await self._query_event_manager.emit_message_start(
+                query_id,
+                trace_id,
+            )
+
+            await self._query_event_manager.emit_message_stop(
                 query_id,
                 trace_id,
             )
         except Exception as e:
             logger.exception(f"conversation pipeline - OTHERS: {e}")
 
-            await emit_error(
-                self._query_event_manager,
+            await self._query_event_manager.emit_error(
                 query_id,
                 trace_id,
                 Error(
