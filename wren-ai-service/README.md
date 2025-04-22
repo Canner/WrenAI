@@ -96,18 +96,6 @@ This setup ensures a consistent development environment and helps maintain code 
 
 For a comprehensive understanding of how to evaluate the pipelines, please refer to the [evaluation framework](./eval/README.md). This document provides detailed guidelines on the evaluation process, including how to set up and run evaluations, interpret results, and utilize the evaluation metrics effectively. It is a valuable resource for ensuring that the evaluation is conducted accurately and that the results are meaningful.
 
-### Demo
-
-- in the `wren-ai-service` folder, open three terminals
-  - in the first terminal, run `just up` to start the docker container
-  - in the second terminal, run `just start` to start the wren-ai service
-  - in the third terminal, run `just demo` to start the demo service
-- ports of the services:
-  - wren-engine: ports should be 8080
-  - wren-ai-service: port should be 5556
-  - wren-ui: port should be 3000
-  - qdrant: ports should be 6333, 6334
-
 ### Estimate the Speed of the Pipeline(may be outdated)
 
 - to run the load test

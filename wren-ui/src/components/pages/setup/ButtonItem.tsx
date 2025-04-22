@@ -1,7 +1,7 @@
 import Image from 'next/image';
 import { Button } from 'antd';
 import styled from 'styled-components';
-import Icon from '@ant-design/icons';
+import Icon from '@/import/icon';
 import { IterableComponent } from '@/utils/iteration';
 import { ButtonOption } from './utils';
 import { SampleDatasetName } from '@/apollo/client/graphql/__types__';

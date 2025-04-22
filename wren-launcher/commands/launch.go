@@ -48,7 +48,7 @@ func evaluateTelemetryPreferences() (bool, error) {
 
 func askForLLMProvider() (string, error) {
 	// let users know we're asking for a LLM provider
-	pterm.Warning.Println("We highly recommend using OpenAI GPT-4o or GPT-4o-mini with Wren AI.")
+	pterm.Warning.Println("We highly recommend using OpenAI models with Wren AI, especially the latest models.")
 	pterm.Warning.Println("These models have been extensively tested to ensure optimal performance and compatibility.")
 	pterm.Warning.Println("While it is technically possible to integrate other AI models, please note that they have not been fully tested with our system.")
 	pterm.Warning.Println("Therefore, using alternative models is at your own risk and may result in unexpected behavior or suboptimal performance.")
@@ -108,7 +108,7 @@ func askForGenerationModel() (string, error) {
 
 	prompt := promptui.Select{
 		Label: "Select an OpenAI's generation model",
-		Items: []string{"gpt-4.1-nano", "gpt-4.1-mini", "gpt-4.1", "gpt-4o-mini", "gpt-4o", "o3-mini"},
+		Items: []string{"gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano"},
 	}
 
 	_, result, err := prompt.Run()
@@ -232,7 +232,16 @@ func Launch() {
 	uiPort := utils.FindAvailablePort(3000)
 	aiPort := utils.FindAvailablePort(5555)
 
-	err = utils.PrepareDockerFiles(openaiApiKey, openaiGenerationModel, uiPort, aiPort, projectDir, telemetryEnabled, llmProvider)
+	err = utils.PrepareDockerFiles(
+		openaiApiKey,
+		openaiGenerationModel,
+		uiPort,
+		aiPort,
+		projectDir,
+		telemetryEnabled,
+		llmProvider,
+		platform,
+	)
 	if err != nil {
 		panic(err)
 	}
@@ -300,12 +309,9 @@ func getOpenaiGenerationModel() (string, bool) {
 		// validate if input args is a valid generation model
 		pterm.Info.Println("OpenAI generation model is provided")
 		validModels := map[string]bool{
-			"gpt-4.1-nano": true,
-			"gpt-4.1-mini": true,
 			"gpt-4.1":      true,
-			"gpt-4o-mini":   true,
-			"gpt-4o":        true,
-			"o3-mini":       true,
+			"gpt-4.1-mini": true,
+			"gpt-4.1-nano": true,
 		}
 		if !validModels[openaiGenerationModel] {
 			pterm.Error.Println("Invalid generation model", openaiGenerationModel)

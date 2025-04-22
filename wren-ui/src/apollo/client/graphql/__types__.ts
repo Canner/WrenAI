@@ -11,6 +11,7 @@ export type Scalars = {
   Boolean: boolean;
   Int: number;
   Float: number;
+  DialectSQL: any;
   JSON: any;
 };
 
@@ -32,6 +33,7 @@ export type AdjustThreadResponseInput = {
 export type AdjustmentTask = {
   __typename?: 'AdjustmentTask';
   error?: Maybe<Error>;
+  invalidSql?: Maybe<Scalars['String']>;
   queryId?: Maybe<Scalars['String']>;
   sql?: Maybe<Scalars['String']>;
   status?: Maybe<AskingTaskStatus>;
@@ -188,6 +190,7 @@ export type DashboardItem = {
   __typename?: 'DashboardItem';
   dashboardId: Scalars['Int'];
   detail: DashboardItemDetail;
+  displayName?: Maybe<Scalars['String']>;
   id: Scalars['Int'];
   layout: DashboardItemLayout;
   type: DashboardItemType;
@@ -551,6 +554,10 @@ export type ModelInfo = {
   sourceTableName: Scalars['String'];
 };
 
+export type ModelSubstituteInput = {
+  sql: Scalars['DialectSQL'];
+};
+
 export type ModelSyncResponse = {
   __typename?: 'ModelSyncResponse';
   status: SyncStatus;
@@ -592,6 +599,7 @@ export type Mutation = {
   generateThreadResponseAnswer: ThreadResponse;
   generateThreadResponseBreakdown: ThreadResponse;
   generateThreadResponseChart: ThreadResponse;
+  modelSubstitute: Scalars['String'];
   previewBreakdownData: Scalars['JSON'];
   previewData: Scalars['JSON'];
   previewItemSQL: Scalars['JSON'];
@@ -610,6 +618,7 @@ export type Mutation = {
   triggerDataSourceDetection: Scalars['Boolean'];
   updateCalculatedField: Scalars['JSON'];
   updateCurrentProject: Scalars['Boolean'];
+  updateDashboardItem: DashboardItem;
   updateDashboardItemLayouts: Array<DashboardItem>;
   updateDataSource: DataSource;
   updateInstruction: Instruction;
@@ -773,6 +782,11 @@ export type MutationGenerateThreadResponseChartArgs = {
 };
 
 
+export type MutationModelSubstituteArgs = {
+  data: ModelSubstituteInput;
+};
+
+
 export type MutationPreviewBreakdownDataArgs = {
   where: PreviewDataInput;
 };
@@ -851,6 +865,12 @@ export type MutationUpdateCalculatedFieldArgs = {
 
 export type MutationUpdateCurrentProjectArgs = {
   data: UpdateCurrentProjectInput;
+};
+
+
+export type MutationUpdateDashboardItemArgs = {
+  data: UpdateDashboardItemInput;
+  where: DashboardItemWhereInput;
 };
 
 
@@ -1340,6 +1360,10 @@ export type UpdateColumnMetadataInput = {
 
 export type UpdateCurrentProjectInput = {
   language: ProjectLanguage;
+};
+
+export type UpdateDashboardItemInput = {
+  displayName: Scalars['String'];
 };
 
 export type UpdateDashboardItemLayoutsInput = {

@@ -9,7 +9,6 @@ from src.pipelines.generation.sql_generation import SQLGeneration
 from src.pipelines.retrieval.retrieval import Retrieval
 from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
-from src.web.v1.services.ask_details import SQLBreakdown
 
 GLOBAL_DATA = {
     "contexts": None,
@@ -87,13 +86,6 @@ async def test_followup_generation_pipeline():
         history=AskHistory(
             sql="SELECT COUNT(*) FROM book",
             summary="Retrieve the number of books",
-            steps=[
-                SQLBreakdown(
-                    sql="SELECT COUNT(*) FROM book",
-                    summary="Retrieve the number of books",
-                    cte_name="",
-                )
-            ],
         ),
         configuration=Configuration(),
     )

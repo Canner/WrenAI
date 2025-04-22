@@ -1,13 +1,12 @@
 /* eslint-disable @typescript-eslint/no-var-requires */
 const path = require('path');
 const withLess = require('next-with-less');
+const withBundleAnalyzer = require('@next/bundle-analyzer')({
+  enabled: process.env.ANALYZE === 'true',
+});
 
 const resolveAlias = {
-  antd$: path.resolve(__dirname, 'node_modules/antd/lib'),
-  '@ant-design/icons$': path.resolve(
-    __dirname,
-    'node_modules/@ant-design/icons/lib',
-  ),
+  antd$: path.resolve(__dirname, 'src/import/antd'),
 };
 
 /** @type {import('next').NextConfig} */
@@ -43,4 +42,4 @@ const nextConfig = withLess({
   },
 });
 
-module.exports = nextConfig;
+module.exports = withBundleAnalyzer(nextConfig);

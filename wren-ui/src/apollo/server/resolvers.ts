@@ -8,6 +8,7 @@ import { DashboardResolver } from './resolvers/dashboardResolver';
 import { SqlPairResolver } from './resolvers/sqlPairResolver';
 import { InstructionResolver } from './resolvers/instructionResolver';
 import { convertColumnType } from '@server/utils';
+import { DialectSQLScalar } from './scalars';
 
 const projectResolver = new ProjectResolver();
 const modelResolver = new ModelResolver();
@@ -19,6 +20,7 @@ const sqlPairResolver = new SqlPairResolver();
 const instructionResolver = new InstructionResolver();
 const resolvers = {
   JSON: GraphQLJSON,
+  DialectSQL: DialectSQLScalar,
   Query: {
     listDataSourceTables: projectResolver.listDataSourceTables,
     autoGenerateRelation: projectResolver.autoGenerateRelation,
@@ -154,6 +156,7 @@ const resolvers = {
     // Dashboard
     updateDashboardItemLayouts: dashboardResolver.updateDashboardItemLayouts,
     createDashboardItem: dashboardResolver.createDashboardItem,
+    updateDashboardItem: dashboardResolver.updateDashboardItem,
     deleteDashboardItem: dashboardResolver.deleteDashboardItem,
     previewItemSQL: dashboardResolver.previewItemSQL,
 
@@ -162,6 +165,7 @@ const resolvers = {
     updateSqlPair: sqlPairResolver.updateSqlPair,
     deleteSqlPair: sqlPairResolver.deleteSqlPair,
     generateQuestion: sqlPairResolver.generateQuestion,
+    modelSubstitute: sqlPairResolver.modelSubstitute,
     // Instructions
     createInstruction: instructionResolver.createInstruction,
     updateInstruction: instructionResolver.updateInstruction,

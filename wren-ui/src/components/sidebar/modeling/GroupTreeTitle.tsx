@@ -1,5 +1,5 @@
 import { Fragment } from 'react';
-import Icon from '@ant-design/icons';
+import Icon from '@/import/icon';
 
 export type ActionType = {
   icon?: React.ComponentType<{ className?: string }>;

@@ -2,6 +2,12 @@ import * as Errors from '@server/utils/error';
 import { Manifest } from '@server/mdl/type';
 import { ThreadResponse } from '../repositories';
 
+// Add branded types for SQL strings
+type Brand<T, B> = T & { __brand: B };
+
+export type DialectSQL = Brand<string, 'DialectSQL'>;
+export type WrenSQL = Brand<string, 'WrenSQL'>;
+
 export interface WrenAIError {
   code: Errors.GeneralErrorCodes;
   message: string;
@@ -294,6 +300,7 @@ export interface InstructionResult {
 
 // ask feedback
 export interface AskFeedbackInput {
+  question: string;
   tables: string[];
   sqlGenerationReasoning: string;
   sql: string;
@@ -318,4 +325,5 @@ export interface AskFeedbackResult {
     sql: string;
   }>;
   traceId?: string;
+  invalidSql?: string;
 }

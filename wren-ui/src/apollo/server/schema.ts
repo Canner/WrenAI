@@ -2,6 +2,7 @@ import { gql } from 'apollo-server-micro';
 
 export const typeDefs = gql`
   scalar JSON
+  scalar DialectSQL
 
   enum DataSourceName {
     BIG_QUERY
@@ -729,6 +730,7 @@ export const typeDefs = gql`
     error: Error
     sql: String
     traceId: String
+    invalidSql: String
   }
 
   type ThreadResponse {
@@ -861,6 +863,10 @@ export const typeDefs = gql`
     responseId: Int!
   }
 
+  input UpdateDashboardItemInput {
+    displayName: String!
+  }
+
   input ItemLayoutInput {
     itemId: Int!
     x: Int!
@@ -900,6 +906,7 @@ export const typeDefs = gql`
     type: DashboardItemType!
     layout: DashboardItemLayout!
     detail: DashboardItemDetail!
+    displayName: String
   }
 
   type SqlPair {
@@ -927,6 +934,10 @@ export const typeDefs = gql`
 
   input GenerateQuestionInput {
     sql: String!
+  }
+
+  input ModelSubstituteInput {
+    sql: DialectSQL!
   }
 
   type Instruction {
@@ -1126,6 +1137,10 @@ export const typeDefs = gql`
       data: UpdateDashboardItemLayoutsInput!
     ): [DashboardItem!]!
     createDashboardItem(data: CreateDashboardItemInput!): DashboardItem!
+    updateDashboardItem(
+      where: DashboardItemWhereInput!
+      data: UpdateDashboardItemInput!
+    ): DashboardItem!
     deleteDashboardItem(where: DashboardItemWhereInput!): Boolean!
     previewItemSQL(data: PreviewItemSQLInput!): JSON!
 
@@ -1137,6 +1152,7 @@ export const typeDefs = gql`
     ): SqlPair!
     deleteSqlPair(where: SqlPairWhereUniqueInput!): Boolean!
     generateQuestion(data: GenerateQuestionInput!): String!
+    modelSubstitute(data: ModelSubstituteInput!): String!
     # Instructions
     createInstruction(data: CreateInstructionInput!): Instruction!
     updateInstruction(

@@ -4,7 +4,7 @@ import styled from 'styled-components';
 import { Form, Modal, Select, Tag } from 'antd';
 import QuestionCircleOutlined from '@ant-design/icons/QuestionCircleOutlined';
 import { ERROR_TEXTS } from '@/utils/error';
-import useMentions from '@/hooks/useMentions';
+import useAutoComplete, { convertMention } from '@/hooks/useAutoComplete';
 import { ModalAction } from '@/hooks/useModalAction';
 import MarkdownEditor from '@/components/editor/MarkdownEditor';
 import { useListModelsQuery } from '@/apollo/client/graphql/model.generated';
@@ -36,7 +36,11 @@ export default function AdjustReasoningStepsModal(props: Props) {
   const { visible, defaultValue, loading, onSubmit, onClose } = props;
   const [form] = Form.useForm();
 
-  const { mentions } = useMentions({ includeColumns: true, skip: !visible });
+  const mentions = useAutoComplete({
+    convertor: convertMention,
+    includeColumns: true,
+    skip: !visible,
+  });
   const listModelsResult = useListModelsQuery({ skip: !visible });
   const modelNameMap = keyBy(
     listModelsResult.data?.listModels,

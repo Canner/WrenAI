@@ -148,7 +148,8 @@ If you prefer to learn by example, you can refer to this Trino [issue](https://g
    - Implement the data source form template in this file
 
 3. Set up the data source template:
-   - Navigate to `wren-ui/src/components/pages/setup/utils` > `DATA_SOURCE_FORM`
+   - Navigate to `wren-ui/src/utils/dataSourceType.ts`
+   - Add new data source image, name, properties
    - Update the necessary files to include the new data source template settings
 
 4. Update the data source list:

@@ -24,25 +24,26 @@ import (
 
 const (
 	// please change the version when the version is updated
-	WREN_PRODUCT_VERSION	string = "0.19.2"
+	WREN_PRODUCT_VERSION    string = "0.20.0"
 	DOCKER_COMPOSE_YAML_URL string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/docker-compose.yaml"
 	DOCKER_COMPOSE_ENV_URL  string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/.env.example"
 	AI_SERVICE_CONFIG_URL   string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/config.example.yaml"
 )
 
 var generationModelToModelName = map[string]string{
-	"gpt-4.1-nano": "gpt-4.1-nano-2025-04-14",
-	"gpt-4.1-mini": "gpt-4.1-mini-2025-04-14",
 	"gpt-4.1":      "gpt-4.1-2025-04-14",
-	"gpt-4o-mini": "gpt-4o-mini-2024-07-18",
-	"o3-mini":     "o3-mini-2025-01-31",
-	"gpt-4o":      "gpt-4o-2024-08-06",
+	"gpt-4.1-mini": "gpt-4.1-mini-2025-04-14",
+	"gpt-4.1-nano": "gpt-4.1-nano-2025-04-14",
 }
 
-func replaceEnvFileContent(content string, projectDir string, openaiApiKey string, openAIGenerationModel string, hostPort int, aiPort int, userUUID string, telemetryEnabled bool) string {
+func replaceEnvFileContent(content string, projectDir string, openaiApiKey string, openAIGenerationModel string, hostPort int, aiPort int, userUUID string, telemetryEnabled bool, platform string) string {
+	// replace PLATFORM
+	reg := regexp.MustCompile(`PLATFORM=(.*)`)
+	str := reg.ReplaceAllString(content, "PLATFORM="+platform)
+
 	// replace PROJECT_DIR
-	reg := regexp.MustCompile(`PROJECT_DIR=(.*)`)
-	str := reg.ReplaceAllString(content, "PROJECT_DIR="+projectDir)
+	reg = regexp.MustCompile(`PROJECT_DIR=(.*)`)
+	str = reg.ReplaceAllString(str, "PROJECT_DIR="+projectDir)
 
 	// replace SHOULD_FORCE_DEPLOY
 	reg = regexp.MustCompile(`SHOULD_FORCE_DEPLOY=(.*)`)
@@ -76,10 +77,6 @@ func replaceEnvFileContent(content string, projectDir string, openaiApiKey strin
 	// replace EXPERIMENTAL_ENGINE_RUST_VERSION
 	reg = regexp.MustCompile(`EXPERIMENTAL_ENGINE_RUST_VERSION=(.*)`)
 	str = reg.ReplaceAllString(str, "EXPERIMENTAL_ENGINE_RUST_VERSION="+fmt.Sprintf("%t", config.IsExperimentalEngineRustVersion()))
-
-	// replace PLATFORM
-	reg = regexp.MustCompile(`PLATFORM=(.*)`)
-	str = reg.ReplaceAllString(str, "PLATFORM="+fmt.Sprintf("%s", config.GetPlatform()))
 
 	return str
 }
@@ -157,7 +154,10 @@ func PrepareConfigFileForOpenAI(projectDir string, generationModel string) error
 
 	// replace the generation model in config.yaml
 	config := string(content)
-	config = strings.ReplaceAll(config, "litellm_llm.default", "litellm_llm."+generationModelToModelName[generationModel])
+	// gpt-4.1-nano is the default model, so we don't need to replace it
+	if generationModel != "gpt-4.1-nano" {
+		config = strings.ReplaceAll(config, "litellm_llm.default", "litellm_llm."+generationModelToModelName[generationModel])
+	}
 
 	// replace allow_using_db_schemas_without_pruning setting
 	// enable this feature since OpenAI models have sufficient context window size to handle full schema
@@ -237,7 +237,7 @@ func mergeEnvContent(newEnvFile string, envFileContent string) (string, error) {
 	return envFileContent, nil
 }
 
-func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostPort int, aiPort int, projectDir string, telemetryEnabled bool, llmProvider string) error {
+func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostPort int, aiPort int, projectDir string, telemetryEnabled bool, llmProvider string, platform string) error {
 	// download docker-compose file
 	composeFile := path.Join(projectDir, "docker-compose.yaml")
 	pterm.Info.Println("Downloading docker-compose file to", composeFile)
@@ -276,6 +276,7 @@ func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostP
 			aiPort,
 			userUUID,
 			telemetryEnabled,
+			platform,
 		)
 		newEnvFile := getEnvFilePath(projectDir)
 
