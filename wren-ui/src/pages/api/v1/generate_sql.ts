@@ -166,7 +166,8 @@ export default async function handler(
     // if it's a general type response, throw error
     if (result.type === AskResultType.GENERAL) {
       throw new ApiError(
-        Errors.errorMessages[Errors.GeneralErrorCodes.NON_SQL_QUERY],
+        result.intentReasoning ||
+          Errors.errorMessages[Errors.GeneralErrorCodes.NON_SQL_QUERY],
         400,
         Errors.GeneralErrorCodes.NON_SQL_QUERY,
       );
