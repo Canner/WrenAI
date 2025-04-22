@@ -272,7 +272,68 @@ def create_service_container(
             **query_cache,
         ),
         conversation_service=v2_services.ConversationService(
-            pipelines={},
+            pipelines={
+                "intent_classification": generation.IntentClassification(
+                    **pipe_components["intent_classification"],
+                    wren_ai_docs=wren_ai_docs,
+                ),
+                "misleading_assistance": generation.MisleadingAssistance(
+                    **pipe_components["misleading_assistance"],
+                ),
+                "data_assistance": generation.DataAssistance(
+                    **pipe_components["data_assistance"]
+                ),
+                "user_guide_assistance": generation.UserGuideAssistance(
+                    **pipe_components["user_guide_assistance"],
+                    wren_ai_docs=wren_ai_docs,
+                ),
+                "retrieval": retrieval.Retrieval(
+                    **pipe_components["db_schema_retrieval"],
+                    table_retrieval_size=settings.table_retrieval_size,
+                    table_column_retrieval_size=settings.table_column_retrieval_size,
+                    allow_using_db_schemas_without_pruning=settings.allow_using_db_schemas_without_pruning,
+                ),
+                "historical_question": retrieval.HistoricalQuestionRetrieval(
+                    **pipe_components["historical_question_retrieval"],
+                    historical_question_retrieval_similarity_threshold=settings.historical_question_retrieval_similarity_threshold,
+                ),
+                "sql_pairs_retrieval": retrieval.SqlPairsRetrieval(
+                    **pipe_components["sql_pairs_retrieval"],
+                    sql_pairs_similarity_threshold=settings.sql_pairs_similarity_threshold,
+                    sql_pairs_retrieval_max_size=settings.sql_pairs_retrieval_max_size,
+                ),
+                "instructions_retrieval": retrieval.Instructions(
+                    **pipe_components["instructions_retrieval"],
+                    similarity_threshold=settings.instructions_similarity_threshold,
+                    top_k=settings.instructions_top_k,
+                ),
+                "sql_generation": generation.SQLGeneration(
+                    **pipe_components["sql_generation"],
+                    engine_timeout=settings.engine_timeout,
+                ),
+                "sql_generation_reasoning": generation.SQLGenerationReasoning(
+                    **pipe_components["sql_generation_reasoning"],
+                ),
+                "followup_sql_generation_reasoning": generation.FollowUpSQLGenerationReasoning(
+                    **pipe_components["followup_sql_generation_reasoning"],
+                ),
+                "sql_correction": generation.SQLCorrection(
+                    **pipe_components["sql_correction"],
+                    engine_timeout=settings.engine_timeout,
+                ),
+                "followup_sql_generation": generation.FollowUpSQLGeneration(
+                    **pipe_components["followup_sql_generation"],
+                    engine_timeout=settings.engine_timeout,
+                ),
+                "sql_regeneration": generation.SQLRegeneration(
+                    **pipe_components["sql_regeneration"],
+                    engine_timeout=settings.engine_timeout,
+                ),
+                "sql_functions_retrieval": retrieval.SqlFunctions(
+                    **pipe_components["sql_functions_retrieval"],
+                    engine_timeout=settings.engine_timeout,
+                ),
+            },
             max_histories=settings.max_histories,
         ),
     )

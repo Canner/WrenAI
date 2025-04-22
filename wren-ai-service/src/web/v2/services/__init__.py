@@ -30,7 +30,7 @@ class QueueNotFoundError(Exception):
     """Raised when someone tries to access or stop a non-existent queue."""
 
     def __init__(self, query_id: str):
-        super().__init__(f"No queue found for query_id: {query_id}")
+        super().__init__(f"No result found for query_id: {query_id}")
         self.query_id = query_id
 
 
