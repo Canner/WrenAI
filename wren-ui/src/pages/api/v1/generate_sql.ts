@@ -146,6 +146,7 @@ export default async function handler(
           Errors.errorMessages[Errors.GeneralErrorCodes.NON_SQL_QUERY],
         400,
         Errors.GeneralErrorCodes.NON_SQL_QUERY,
+        { explanationQueryId: task.queryId },
       );
     }
 
