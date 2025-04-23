@@ -153,7 +153,6 @@ const DashboardGrid = forwardRef(
 
     // set up initial item refs
     useEffect(() => {
-      itemRefs.current = {};
       items.forEach((item) => {
         itemRefs.current[item.id] = createRef();
       });

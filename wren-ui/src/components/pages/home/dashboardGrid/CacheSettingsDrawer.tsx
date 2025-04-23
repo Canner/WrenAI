@@ -20,6 +20,7 @@ import {
 import QuestionCircleOutlined from '@ant-design/icons/QuestionCircleOutlined';
 import { browserTimeZone } from '@/utils/time';
 import { DrawerAction } from '@/hooks/useDrawerAction';
+import { ERROR_TEXTS } from '@/utils/error';
 
 type Props = DrawerAction & {
   loading?: boolean;
@@ -92,6 +93,7 @@ const getInitialSchedule = (frequency: string) => {
 };
 
 export const getScheduleText = (schedule: Schedule): string => {
+  if (!schedule) return '';
   const { frequency } = schedule;
 
   const convertTime = (schedule: Schedule) => {
@@ -161,7 +163,7 @@ const getNextScheduleByCron = (cron: string) => {
   if (!cron || cron?.trim().split(' ').length < 5) return null;
   try {
     const interval = CronExpressionParser.parse(cron, { tz: 'UTC' });
-    const targetTime = moment(interval.next().toString());
+    const targetTime = moment.utc(interval.next().toDate()).local();
     return targetTime.isValid() ? targetTime.format('YYYY-MM-DD HH:mm') : null;
   } catch (error) {
     console.warn(error);
@@ -282,7 +284,7 @@ function Schedule() {
 
   const onFrequencyChange = (value: string) => {
     form.setFieldsValue({
-      schedule: getInitialSchedule(value),
+      schedule: { frequency: value, ...getInitialSchedule(value) },
     });
   };
 
@@ -308,6 +310,13 @@ function Schedule() {
         <Form.Item
           label="Cron Expression"
           name={['schedule', 'cron']}
+          required={false}
+          rules={[
+            {
+              required: true,
+              message: ERROR_TEXTS.CACHE_SETTINGS.CRON.REQUIRED,
+            },
+          ]}
           extra="Cron expression will be executed in UTC timezone (e.g. '0 0 * * *' for daily at midnight UTC)"
         >
           <Input style={{ maxWidth: 200 }} placeholder="* * * * *" />
@@ -328,7 +337,17 @@ function Schedule() {
 function DailyTimeSelection() {
   return (
     <>
-      <Form.Item label="Time" name={['schedule', 'time']}>
+      <Form.Item
+        label="Time"
+        name={['schedule', 'time']}
+        required={false}
+        rules={[
+          {
+            required: true,
+            message: ERROR_TEXTS.CACHE_SETTINGS.TIME.REQUIRED,
+          },
+        ]}
+      >
         <TimePicker minuteStep={10} format={timeFormat} />
       </Form.Item>
     </>
@@ -340,7 +359,17 @@ function WeeklyTimeSelection() {
     <>
       <Row gutter={16}>
         <Col>
-          <Form.Item label="Day" name={['schedule', 'day']}>
+          <Form.Item
+            label="Day"
+            name={['schedule', 'day']}
+            required={false}
+            rules={[
+              {
+                required: true,
+                message: ERROR_TEXTS.CACHE_SETTINGS.DAY.REQUIRED,
+              },
+            ]}
+          >
             <Select
               style={{ minWidth: 123 }}
               options={DAY_OF_WEEK.map((value) => ({
@@ -352,7 +381,17 @@ function WeeklyTimeSelection() {
           </Form.Item>
         </Col>
         <Col>
-          <Form.Item label="Time" name={['schedule', 'time']}>
+          <Form.Item
+            label="Time"
+            name={['schedule', 'time']}
+            required={false}
+            rules={[
+              {
+                required: true,
+                message: ERROR_TEXTS.CACHE_SETTINGS.TIME.REQUIRED,
+              },
+            ]}
+          >
             <TimePicker minuteStep={10} format={timeFormat} />
           </Form.Item>
         </Col>
