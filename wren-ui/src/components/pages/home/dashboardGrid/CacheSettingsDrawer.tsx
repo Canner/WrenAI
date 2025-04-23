@@ -14,8 +14,10 @@ import {
   Col,
   Tag,
   Divider,
+  Tooltip,
   TimePicker,
 } from 'antd';
+import QuestionCircleOutlined from '@ant-design/icons/QuestionCircleOutlined';
 import { browserTimeZone } from '@/utils/time';
 import { DrawerAction } from '@/hooks/useDrawerAction';
 
@@ -103,17 +105,17 @@ export const getScheduleText = (schedule: Schedule): string => {
   switch (frequency) {
     case FREQUENCY.DAILY: {
       const time = convertTime(schedule);
-      return `Data refreshed every day at ${time}`;
+      return `Cache refreshes daily at ${time}`;
     }
     case FREQUENCY.WEEKLY: {
       const time = convertTime(schedule);
-      return `Data refreshed every ${capitalize(schedule.day.toLowerCase())} at ${time}`;
+      return `Cache refreshes every ${capitalize(schedule.day.toLowerCase())} at ${time}`;
     }
     case FREQUENCY.CUSTOM: {
-      return `Data refreshed according to cron expression ${schedule.cron}`;
+      return `Cache refreshes on custom schedule`;
     }
     case FREQUENCY.NEVER: {
-      return 'Manual refresh only';
+      return 'Cache auto-refresh disabled';
     }
     default: {
       return '';
@@ -247,7 +249,22 @@ export default function CacheSettingsDrawer(props: Props) {
       }
     >
       <Form form={form} layout="vertical">
-        <Form.Item label="Caching" name="enabled" valuePropName="checked">
+        <Form.Item
+          label={
+            <>
+              Caching{' '}
+              <Tooltip
+                title="Turning on caching helps dashboards load faster by avoiding redundant queries."
+                placement="right"
+              >
+                <QuestionCircleOutlined className="gray-6 ml-1 cursor-pointer" />
+              </Tooltip>
+            </>
+          }
+          name="enabled"
+          valuePropName="checked"
+          extra="Cached results will refresh automatically based on the schedule you set below."
+        >
           <Switch />
         </Form.Item>
         {enabled && <Schedule />}
@@ -299,9 +316,9 @@ function Schedule() {
 
       {nextSchedule && (
         <div className="gray-7">
-          Estimated scheduled time:
+          Next scheduled refresh:
           <Tag className="ml-2">{nextSchedule}</Tag>
-          <div>Current timezone: {browserTimeZone}</div>
+          <div>Displayed in your timezone: {browserTimeZone}</div>
         </div>
       )}
     </>
