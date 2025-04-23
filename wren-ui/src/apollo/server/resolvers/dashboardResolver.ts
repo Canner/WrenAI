@@ -57,6 +57,18 @@ export class DashboardResolver {
       );
     }
 
+    // query with cache enabled
+    const project = await ctx.projectService.getCurrentProject();
+    const deployment = await ctx.deployService.getLastDeployment(project.id);
+    const mdl = deployment.manifest;
+    await ctx.queryService.preview(response.sql, {
+      project,
+      manifest: mdl,
+      limit: DEFAULT_PREVIEW_LIMIT,
+      cacheEnabled: true,
+      refresh: true,
+    });
+
     return await ctx.dashboardService.createDashboardItem({
       dashboardId: dashboard.id,
       type: itemType,
