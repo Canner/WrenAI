@@ -16,17 +16,25 @@ import {
   respondWith,
   handleApiError,
 } from '@/apollo/server/utils/apiUtils';
+import { DataSourceName } from '@server/types';
 
 const logger = getLogger('API_GENERATE_SQL');
 logger.level = 'debug';
 
-const { apiHistoryRepository, projectService, deployService, wrenAIAdaptor } =
-  components;
+const {
+  apiHistoryRepository,
+  projectService,
+  deployService,
+  wrenAIAdaptor,
+  wrenEngineAdaptor,
+  ibisAdaptor,
+} = components;
 
 interface GenerateSqlRequest {
   question: string;
   threadId?: string;
   language?: string;
+  returnSqlDialect?: boolean;
 }
 
 const isAskResultFinished = (result: AskResult) => {
@@ -57,7 +65,12 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
-  const { question, threadId, language } = req.body as GenerateSqlRequest;
+  const {
+    question,
+    threadId,
+    language,
+    returnSqlDialect = false,
+  } = req.body as GenerateSqlRequest;
   const startTime = Date.now();
   let project;
 
@@ -136,14 +149,38 @@ export default async function handler(
       );
     }
 
-    // return the SQL
-    // create a new thread if it's a new question
+    // Get the generated SQL
+    let sql = result.response?.[0]?.sql;
+
+    // Create a new thread if it's a new question
     const newThreadId = threadId || uuidv4();
+
+    // If returnSqlDialect is true, also get and return the native SQL
+    if (returnSqlDialect && sql) {
+      let nativeSql: string;
+      if (project.type === DataSourceName.DUCKDB) {
+        nativeSql = await wrenEngineAdaptor.getNativeSQL(sql, {
+          manifest: lastDeploy.manifest,
+          modelingOnly: false,
+        });
+      } else {
+        nativeSql = await ibisAdaptor.getNativeSql({
+          dataSource: project.type,
+          sql,
+          mdl: lastDeploy.manifest,
+        });
+      }
+
+      // If the native SQL is not empty, use it
+      sql = nativeSql || sql;
+    }
+
+    // Return just the SQL
     await respondWith({
       res,
       statusCode: 200,
       responsePayload: {
-        sql: result.response?.[0]?.sql,
+        sql,
         threadId: newThreadId,
       },
       projectId: project.id,
