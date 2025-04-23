@@ -4,7 +4,7 @@ from pathlib import Path
 import yaml
 import uuid
 
-# --- 檔案路徑設定 ---
+# --- constant ---
 CONFIG_INPUT_PATH = Path("config.yaml")
 CONFIG_OUTPUT_PATH = Path("generated_config.yaml")
 
@@ -33,6 +33,7 @@ with open(CONFIG_INPUT_PATH, "r") as f:
     full_config = list(yaml.safe_load_all(f))
 
 llm_block = next((item for item in full_config if item["type"] == "llm"), {})
+st.success(llm_block)
 embedder_block = next((item for item in full_config if item["type"] == "embedder"), {})
 engine_blocks = [
     item for item in full_config
@@ -111,10 +112,9 @@ with col1:
     if "llm_models" not in st.session_state:      # 真的「存檔」後的結果
         st.session_state.llm_models = []
 
-    # -------------------------------
-    # UI 版面
-    # -------------------------------
     st.subheader("LLM Configuration")
+
+    # IMPORT YAML
     uploaded_file = st.file_uploader("Choose a YAML file", type=["yaml", "yml"])
 
     if uploaded_file is not None:
