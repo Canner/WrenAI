@@ -3,6 +3,7 @@ import requests
 import yaml
 from pathlib import Path
 import constants as cst
+from typing import Any, Dict, List 
 
 def download_config():
     try:
@@ -13,10 +14,11 @@ def download_config():
     except requests.RequestException as e:
         return False, str(e)
 
-def load_blocks(path: Path):
+def load_yaml_list(path: Path) -> List[Dict[str, Any]]:
     with path.open("r", encoding="utf-8") as f:
-        blocks = list(yaml.safe_load_all(f))
+        return list(yaml.safe_load_all(f))
 
+def group_blocks(blocks: List[Dict[str, Any]]) -> Dict[str, Any]:
     save_blocks = {}
     for block in blocks:
         key = block.get("type") or ("settings" if "settings" in block else None)
@@ -30,3 +32,4 @@ def load_blocks(path: Path):
         else:
             save_blocks[key] = block
     return save_blocks
+
