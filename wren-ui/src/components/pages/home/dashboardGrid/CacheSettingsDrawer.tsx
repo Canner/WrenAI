@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { capitalize } from 'lodash';
+import { CronExpressionParser } from 'cron-parser';
 import moment from 'moment';
 import {
   Button,
@@ -11,6 +12,7 @@ import {
   Input,
   Row,
   Col,
+  Tag,
   Divider,
   TimePicker,
 } from 'antd';
@@ -50,6 +52,43 @@ const DAY_OF_WEEK = [
   'SATURDAY',
 ];
 
+const getInitialSchedule = (frequency: string) => {
+  let schedule = {};
+  switch (frequency) {
+    case FREQUENCY.DAILY:
+      schedule = {
+        day: null,
+        time: moment('00:00', timeFormat),
+        cron: null,
+      };
+      break;
+    case FREQUENCY.WEEKLY:
+      schedule = {
+        day: DAY_OF_WEEK[0],
+        time: moment('00:00', timeFormat),
+        cron: null,
+      };
+      break;
+    case FREQUENCY.CUSTOM:
+      schedule = {
+        day: null,
+        time: null,
+        cron: '0 0 * * *',
+      };
+      break;
+    case FREQUENCY.NEVER:
+      schedule = {
+        day: null,
+        time: null,
+        cron: null,
+      };
+      break;
+    default:
+      break;
+  }
+  return schedule;
+};
+
 export const getScheduleText = (schedule: Schedule): string => {
   const { frequency } = schedule;
 
@@ -57,7 +96,7 @@ export const getScheduleText = (schedule: Schedule): string => {
     const time = moment(
       `${schedule.hour}:${schedule.minute}`,
       timeFormat,
-    ).format('hh:mm a');
+    ).format(timeFormat);
     return time;
   };
 
@@ -86,10 +125,13 @@ const getNextSchedule = (data: {
   frequency: string;
   day: string;
   time: moment.Moment;
+  cron: string;
 }) => {
-  const { frequency, day, time } = data;
+  const { frequency, day, time, cron } = data;
+  if (frequency === FREQUENCY.CUSTOM) return getNextScheduleByCron(cron);
   if (frequency === FREQUENCY.NEVER || !time) return null;
 
+  // frequency daily or weekly calculation
   const now = moment();
   const targetTime = moment(
     `${now.format('YYYY-MM-DD')} ${time.format(timeFormat)}`,
@@ -113,15 +155,15 @@ const getNextSchedule = (data: {
   return targetTime.isValid() ? targetTime.format('YYYY-MM-DD HH:mm') : null;
 };
 
-const getExtraDescription = (frequency: string) => {
-  switch (frequency) {
-    case FREQUENCY.DAILY:
-    case FREQUENCY.WEEKLY:
-      return 'The scheduled refresh time is based on browser timezone.';
-    case FREQUENCY.CUSTOM:
-      return 'The scheduled refresh time is based on UTC timezone.';
-    default:
-      return '';
+const getNextScheduleByCron = (cron: string) => {
+  if (!cron || cron?.trim().split(' ').length < 5) return null;
+  try {
+    const interval = CronExpressionParser.parse(cron, { tz: 'UTC' });
+    const targetTime = moment(interval.next().toString());
+    return targetTime.isValid() ? targetTime.format('YYYY-MM-DD HH:mm') : null;
+  } catch (error) {
+    console.warn(error);
+    return null;
   }
 };
 
@@ -162,14 +204,16 @@ export default function CacheSettingsDrawer(props: Props) {
         const { schedule } = values;
         await onSubmit({
           ...values,
-          schedule: {
-            frequency: schedule?.frequency,
-            day: schedule?.day,
-            hour: schedule?.time?.hour(),
-            minute: schedule?.time?.minute(),
-            cron: schedule?.cron,
-            timezone: browserTimeZone,
-          },
+          schedule: values.enabled
+            ? {
+                frequency: schedule?.frequency,
+                day: schedule?.day,
+                hour: schedule?.time?.hour(),
+                minute: schedule?.time?.minute(),
+                cron: schedule?.cron,
+                timezone: browserTimeZone,
+              }
+            : null,
         });
         onClose();
       })
@@ -183,6 +227,7 @@ export default function CacheSettingsDrawer(props: Props) {
       width={410}
       closable
       destroyOnClose
+      maskClosable={false}
       afterVisibleChange={afterVisibleChange}
       onClose={onClose}
       footer={
@@ -216,23 +261,27 @@ function Schedule() {
   const frequency = Form.useWatch(['schedule', 'frequency'], form);
   const day = Form.useWatch(['schedule', 'day'], form);
   const time = Form.useWatch(['schedule', 'time'], form);
+  const cron = Form.useWatch(['schedule', 'cron'], form);
 
-  const nextSchedule = getNextSchedule({ frequency, day, time });
+  const onFrequencyChange = (value: string) => {
+    form.setFieldsValue({
+      schedule: getInitialSchedule(value),
+    });
+  };
+
+  const nextSchedule = getNextSchedule({ frequency, day, time, cron });
 
   return (
     <>
       <Divider className="gray-6 text-sm">Scheduled refresh</Divider>
-      <Form.Item
-        label="Frequency"
-        name={['schedule', 'frequency']}
-        extra={getExtraDescription(frequency)}
-      >
+      <Form.Item label="Frequency" name={['schedule', 'frequency']}>
         <Select
           placeholder="Select frequency"
           options={Object.keys(FREQUENCY).map((key) => ({
             label: capitalize(key),
             value: FREQUENCY[key],
           }))}
+          onChange={onFrequencyChange}
         />
       </Form.Item>
 
@@ -240,18 +289,19 @@ function Schedule() {
       {frequency === FREQUENCY.WEEKLY && <WeeklyTimeSelection />}
       {frequency === FREQUENCY.CUSTOM && (
         <Form.Item
-          label="Crontab Expression"
+          label="Cron Expression"
           name={['schedule', 'cron']}
-          initialValue="0 0 * * *"
+          extra="Cron expression will be executed in UTC timezone (e.g. '0 0 * * *' for daily at midnight UTC)"
         >
-          <Input style={{ maxWidth: 200 }} />
+          <Input style={{ maxWidth: 200 }} placeholder="* * * * *" />
         </Form.Item>
       )}
 
       {nextSchedule && (
         <div className="gray-7">
           Estimated scheduled time:
-          <span className="ml-2">{nextSchedule}</span>
+          <Tag className="ml-2">{nextSchedule}</Tag>
+          <div>Current timezone: {browserTimeZone}</div>
         </div>
       )}
     </>
@@ -273,26 +323,19 @@ function WeeklyTimeSelection() {
     <>
       <Row gutter={16}>
         <Col>
-          <Form.Item
-            label="Day"
-            name={['schedule', 'day']}
-            initialValue={DAY_OF_WEEK[0]}
-          >
+          <Form.Item label="Day" name={['schedule', 'day']}>
             <Select
               style={{ minWidth: 123 }}
               options={DAY_OF_WEEK.map((value) => ({
                 label: capitalize(value),
                 value,
               }))}
+              placeholder="Select day"
             />
           </Form.Item>
         </Col>
         <Col>
-          <Form.Item
-            label="Time"
-            name={['schedule', 'time']}
-            initialValue={moment('00:00', timeFormat)}
-          >
+          <Form.Item label="Time" name={['schedule', 'time']}>
             <TimePicker minuteStep={10} format={timeFormat} />
           </Form.Item>
         </Col>

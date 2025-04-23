@@ -68,19 +68,19 @@ export default function Dashboard() {
   };
 
   // TODO: replace with actual data
-  // const schedule = {
-  //   frequency: 'WEEKLY',
-  //   day: 'MONDAY',
-  //   hour: 23,
-  //   minute: 50,
-  // };
-
   const schedule = {
-    frequency: 'NEVER',
-    day: null,
-    hour: null,
-    minute: null,
+    frequency: 'WEEKLY',
+    day: 'MONDAY',
+    hour: 23,
+    minute: 50,
   };
+
+  // const schedule = {
+  //   frequency: 'NEVER',
+  //   day: null,
+  //   hour: null,
+  //   minute: null,
+  // };
   const nextScheduleTime = new Date().toISOString();
 
   return (
@@ -95,7 +95,6 @@ export default function Dashboard() {
                 cacheSettingsDrawer.openDrawer({
                   enabled: true,
                   schedule,
-                  nextScheduleTime,
                 });
               }}
             />
