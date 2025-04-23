@@ -35,6 +35,18 @@ const sanitizeResponsePayload = (payload: any, apiType?: ApiType): any => {
     }
   }
 
+  // Handle specifically GENERATE_VEGA_SPEC responses that contain large data values
+  if (apiType === ApiType.GENERATE_VEGA_SPEC) {
+    // Remove vegaSpec.data.values array but keep the structure
+    if (
+      sanitized.vegaSpec?.data?.values &&
+      Array.isArray(sanitized.vegaSpec.data.values)
+    ) {
+      const dataCount = sanitized.vegaSpec.data.values.length;
+      sanitized.vegaSpec.data.values = [`${dataCount} data points omitted`];
+    }
+  }
+
   return sanitized;
 };
 

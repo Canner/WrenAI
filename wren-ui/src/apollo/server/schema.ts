@@ -7,6 +7,7 @@ export const typeDefs = gql`
   enum ApiType {
     GENERATE_SQL
     RUN_SQL
+    GENERATE_VEGA_SPEC
   }
 
   input ApiHistoryFilterInput {
