@@ -1,6 +1,7 @@
 import constants as cst
 from config_loader import download_config, load_yaml_list, group_blocks
 from session_state import ConfigState
+from ui_components import render_llm_config
 
 import streamlit as st
 import yaml
@@ -23,7 +24,7 @@ blocks = group_blocks(yaml_list)
 llm_block = blocks.get("llm", {})
 embedder_block = blocks.get("embedder", {})
 document_store_block   = blocks.get("document_store", {})
-engine_blocks = [b for t, b in blocks.items() if t == "engine"]
+engine_blocks = blocks.get("engine", [])
 pipeline_block = blocks.get("pipeline", {})
 settings_block = blocks.get("settings", {})
 
@@ -73,124 +74,8 @@ with col1:
                 st.success("YAML 匯入成功，設定已更新。")
             except Exception as e:
                 st.error(f"匯入 YAML 檔案時發生錯誤: {e}")
-            # st.rerun()  # 重新載入頁面以顯示更新的內容
 
-
-    # ① 新增一個空白表單（Expander）──會觸發 rerun，下一輪就看得到
-    if st.button("➕  Add model", key="btn_add_model"):
-        st.session_state.llm_forms.append({
-            "id": str(uuid.uuid4()),  # 加上唯一識別碼
-            "model": "new-model",
-            "alias": "",
-            "api_base": "",
-            "timeout": "120",
-            "kwargs": []
-        })
-
-    # ② 逐一渲染 Expander
-    for idx, form in enumerate(st.session_state.llm_forms):
-        form_id = form["id"]
-
-        # ── 讓 Expander 標題隨「model」欄位變動 ──
-        title = form["model"] or f"LLM Model {idx+1}"
-        with st.expander(title, expanded=False):
-
-            # ----- 基本欄位 -----
-            form["model"] = st.text_input(
-                "Model name (e.g. gpt-4o-2024-08-06)",
-                key=f"model_name_{idx}",
-                value=form["model"]
-            )
-            form["alias"] = st.text_input(
-                "Alias (optional, e.g. default)",
-                key=f"alias_{idx}",
-                value=form["alias"]
-            )
-            form["api_base"] = st.text_input(
-                "API Base URL",
-                key=f"api_base_{idx}",
-                value=form["api_base"]
-            )
-            form["timeout"] = st.text_input(
-                "Timeout (default: 120)",
-                key=f"timeout_{idx}",
-                value=form["timeout"]
-            )
-
-            # ----- 動態 KWArgs -----
-            if st.button("➕ Add KWArg Field", key=f"add_kwarg_{idx}"):
-                form["kwargs"].append({"key": "", "value": ""})
-
-            # 逐列顯示 kwargs
-            for kw_idx, pair in enumerate(form["kwargs"]):
-                kcol, vcol, rcol = st.columns([4, 4, 3])
-                with kcol:
-                    pair["key"] = st.text_input(
-                        "Key",
-                        key=f"kw_key_{idx}_{kw_idx}",
-                        value=pair["key"]
-                    )
-                with vcol:
-                    pair["value"] = st.text_input(
-                        "Value",
-                        key=f"kw_val_{idx}_{kw_idx}",
-                        value=pair["value"]
-                    )
-                with rcol:
-                    # st.markdown(" ")
-                    st.markdown("<br>", unsafe_allow_html=True)  # 對齊用的空行
-                    if st.button("DEl", key=f"del_kw_{idx}_{kw_idx}"):
-                        form["kwargs"].pop(kw_idx)
-                        st.rerun()
-
-            # ----- 儲存／刪除 這筆表單 -----
-            c1, c2 = st.columns(2)
-            with c1:
-                if st.button("💾  Save this model", key=f"save_{idx}"):
-                    # 轉成 kwargs dict
-                    kwargs_dict = {}
-                    for p in form["kwargs"]:
-                        if p["key"]:
-                            try:
-                                kwargs_dict[p["key"]] = eval(p["value"])
-                            except Exception:
-                                kwargs_dict[p["key"]] = p["value"]
-
-                    saved_entry = {
-                        "model": form["model"],
-                        "alias": form["alias"],
-                        "api_base": form["api_base"],
-                        "timeout": form["timeout"],
-                        "kwargs": kwargs_dict,
-                    }
-
-                    existing_ids = [m.get("id") for m in st.session_state.llm_models]
-                    if form_id in existing_ids:
-                        index = existing_ids.index(form_id)
-                        st.session_state.llm_models[index] = {**saved_entry, "id": form_id}
-                        st.success(f"Updated model: {form['model']}")
-                    else:
-                        st.session_state.llm_models.append({**saved_entry, "id": form_id})
-                        st.success(f"Added new model: {form['model']}")
-                    st.rerun()
-            with c2:
-                if st.button("🗑️  Remove this form", key=f"remove_form_{idx}"):
-                    existing_ids = [m.get("id") for m in st.session_state.llm_models]
-        
-                    if form_id in existing_ids:
-                        # 刪除 llm_forms 中這個 id 的表單
-                        st.session_state.llm_forms = [
-                            f for f in st.session_state.llm_forms if f["id"] != form_id
-                        ]
-
-                        # 刪除 llm_models 中這個 id 的模型（如果存在）
-                        st.session_state.llm_models = [
-                            m for m in st.session_state.llm_models if m.get("id") != form_id
-                        ]
-                        st.rerun()
-                    else:
-                        st.warning("還沒有這筆表單，或資料已損壞")
-                    
+    render_llm_config()
 
     # =====================
     # Embedder Configuration
@@ -280,7 +165,7 @@ with col2:
             "pipes": pipeline_block.get("pipes", []) 
         }
         settings_block = {
-            "settings": settings_block
+            "settings": settings_block.get("settings", {})
         }
         final_blocks = [
             llm_preview, 
