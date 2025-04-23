@@ -157,7 +157,7 @@ class ConversationService:
                 await self._query_event_manager.emit_content_block(
                     query_id,
                     trace_id,
-                    index=1,
+                    index=0,
                     pieces=[
                         {
                             "rephrased_question": intent_classification_result.get(
