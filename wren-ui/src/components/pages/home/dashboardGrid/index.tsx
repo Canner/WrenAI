@@ -5,7 +5,7 @@ import styled from 'styled-components';
 import GridLayout, { Layout } from 'react-grid-layout';
 import { MoreIcon } from '@/utils/icons';
 import { MORE_ACTION } from '@/utils/enum';
-import { nextTick } from '@/utils/time';
+import { getCompactTime, nextTick } from '@/utils/time';
 import { LoadingWrapper } from '@/components/PageLoading';
 import { DashboardItemDropdown } from '@/components/diagram/CustomDropdown';
 import EditableWrapper, { EditableContext } from '@/components/EditableWrapper';
@@ -56,6 +56,12 @@ const StyledDashboardGrid = styled.div`
     * {
       min-width: 0;
     }
+  }
+
+  .adm-pinned-item-info {
+    padding: 4px 8px 0 20px;
+    font-size: 12px;
+    color: var(--gray-6);
   }
 
   .adm-pinned-item-title {
@@ -234,6 +240,8 @@ export function PinnedItem(props: {
 }) {
   const { item, onDelete } = props;
   const { detail } = item;
+  // TODO: get last refresh time from backend
+  const lastRefreshTime = '2025-04-23T03:53:21.302Z';
   const [isHideLegend, setIsHideLegend] = useState(true);
   const [forceLoading, setForceLoading] = useState(false);
   const [forceUpdate, setForceUpdate] = useState(0);
@@ -283,6 +291,7 @@ export function PinnedItem(props: {
         >
           <PinnedItemTitle id={item.id} title={title} />
         </div>
+
         <div className="adm-pinned-actions">
           <DashboardItemDropdown
             onMoreClick={onMoreClick}
@@ -298,6 +307,11 @@ export function PinnedItem(props: {
           </DashboardItemDropdown>
         </div>
       </div>
+      {lastRefreshTime && (
+        <div className="adm-pinned-item-info">
+          Last refresh time: {getCompactTime(lastRefreshTime)}
+        </div>
+      )}
       <div className="adm-pinned-content">
         <div className="adm-pinned-content-overflow adm-scrollbar-track">
           <LoadingWrapper loading={loading} tip="Loading...">
