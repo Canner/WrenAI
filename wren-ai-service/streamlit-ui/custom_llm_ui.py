@@ -1,47 +1,72 @@
+import constants as cst
+
 import streamlit as st
 import requests
 from pathlib import Path
 import yaml
 import uuid
 
-# --- constant ---
-CONFIG_INPUT_PATH = Path("config.yaml")
-CONFIG_OUTPUT_PATH = Path("generated_config.yaml")
+
 
 st.set_page_config(
     layout="wide",  # 使用寬屏模式
-    # 或者選擇 "centered" 為居中模式
     initial_sidebar_state="expanded"  # 控制側邊欄的初始狀態
 )
 
-# 設定 GitHub raw 連結
-version = "0.19.2"
-url = f"https://raw.githubusercontent.com/Canner/WrenAI/{version}/docker/config.example.yaml"
-
-# 執行下載與寫入
-response = requests.get(url)
-
-if response.status_code == 200:
-    CONFIG_INPUT_PATH.write_text(response.text, encoding='utf-8')
-    print(f"成功下載並儲存 config.yaml 到 {CONFIG_INPUT_PATH}")
-else:
-    print(f"下載失敗，HTTP 狀態碼: {response.status_code}")
+def download_config():
+    try:
+        response = requests.get(cst.CONFIG_URL, timeout=cst.REQUEST_TIMEOUT)
+        response.raise_for_status()  # 檢查請求是否成功
+        cst.CONFIG_IN_PATH.write_text(response.text, encoding='utf-8')
+        st.success(f"成功下載並儲存 config.yaml 到 {cst.CONFIG_IN_PATH}")
+    except requests.RequestException as e:
+        st.error(f"下載失敗，錯誤訊息: {e}")
 
 
-# --- 載入 YAML 設定 ---
-with open(CONFIG_INPUT_PATH, "r") as f:
-    full_config = list(yaml.safe_load_all(f))
+def load_blocks(path: Path):
+    with path.open("r", encoding="utf-8") as f:
+        blocks = list(yaml.safe_load_all(f))
+        
+        save_blocks = {}
 
-llm_block = next((item for item in full_config if item["type"] == "llm"), {})
-st.success(llm_block)
-embedder_block = next((item for item in full_config if item["type"] == "embedder"), {})
-engine_blocks = [
-    item for item in full_config
-    if isinstance(item, dict) and item.get("type") == "engine"
-]
-document_store_block = next((item for item in full_config if item["type"] == "document_store"), {})
-pipeline_block = next((item for item in full_config if item["type"] == "pipeline"), {})
-settings_block = next((item.get("settings") for item in full_config if "settings" in item), {})
+        for block in blocks:
+
+            # 判斷是 type 還是 settings
+            if "type" in block:
+                key = block["type"]
+            elif "settings" in block:
+                key = "settings"
+            else:
+                continue  # 如果沒有 type 也沒有 settings，就跳過
+        
+            # 檢查 key 是否已存在 blocks 裡
+            if key in save_blocks:
+                # 如果已經有這個分類（例如 engine），就加進 list 裡
+                # 確保是 list 型別
+                if isinstance(save_blocks[key], list):
+                    save_blocks[key].append(block)
+                else:
+                    # 原本是單一個，轉成 list
+                    save_blocks[key] = [save_blocks[key], block]
+            else:
+                # 第一次遇到這個 key，直接存
+                save_blocks[key] = block
+        
+        return save_blocks
+  
+
+
+if not cst.CONFIG_IN_PATH.exists():
+    download_config()
+    
+blocks = load_blocks(cst.CONFIG_IN_PATH)
+llm_block = blocks.get("llm", {})
+embedder_block = blocks.get("embedder", {})
+document_store_block   = blocks.get("document_store", {})
+engine_blocks = [b for t, b in blocks.items() if t == "engine"]
+pipeline_block = blocks.get("pipeline", {})
+settings_block = blocks.get("settings", {})
+
 
 # --- Streamlit UI --
 st.title(" Custom LLM Config Generator")
@@ -362,6 +387,6 @@ with col2:
             settings_block
         ]
         
-        with open(CONFIG_OUTPUT_PATH, "w") as f:
+        with open(cst.CONFIG_OUT_PATH, "w") as f:
             yaml.dump_all(final_blocks, f, sort_keys=False)
-        st.success(f" Config saved to {CONFIG_OUTPUT_PATH.resolve()}")
+        st.success(f" Config saved to {cst.CONFIG_OUT_PATH.resolve()}")
