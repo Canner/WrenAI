@@ -53,6 +53,9 @@ export enum GeneralErrorCodes {
   // api error
   NON_SQL_QUERY = 'NON_SQL_QUERY',
   NO_DEPLOYMENT_FOUND = 'NO_DEPLOYMENT_FOUND',
+
+  // vega schema error
+  FAILED_TO_GENERATE_VEGA_SCHEMA = 'FAILED_TO_GENERATE_VEGA_SCHEMA',
 }
 
 export const errorMessages = {
@@ -60,11 +63,11 @@ export const errorMessages = {
 
   // AI service errors
   [GeneralErrorCodes.NO_RELEVANT_DATA]:
-    'I can’t find the exact data you’re looking for, but feel free to ask about other available topics.',
+    "I can't find the exact data you're looking for, but feel free to ask about other available topics.",
   [GeneralErrorCodes.NO_RELEVANT_SQL]:
     "Could you please provide more details or specify the information you're seeking?",
   [GeneralErrorCodes.NO_CHART]:
-    'The chart couldn’t be generated this time. Please try regenerating the chart or rephrasing your question for better results.',
+    "The chart couldn't be generated this time. Please try regenerating the chart or rephrasing your question for better results.",
 
   // Connector errors
   [GeneralErrorCodes.CONNECTION_ERROR]: 'Can not connect to data source',
@@ -113,6 +116,10 @@ export const errorMessages = {
   [GeneralErrorCodes.NON_SQL_QUERY]: 'Cannot generate SQL from this question.',
   [GeneralErrorCodes.NO_DEPLOYMENT_FOUND]:
     'No deployment found, please deploy your project first',
+
+  // vega schema error
+  [GeneralErrorCodes.FAILED_TO_GENERATE_VEGA_SCHEMA]:
+    'Failed to generate Vega spec',
 };
 
 export const shortMessages = {
@@ -142,6 +149,8 @@ export const shortMessages = {
   [GeneralErrorCodes.NON_SQL_QUERY]: 'Cannot generate SQL from this question.',
   [GeneralErrorCodes.NO_DEPLOYMENT_FOUND]:
     'No deployment found, please deploy your project first',
+  [GeneralErrorCodes.FAILED_TO_GENERATE_VEGA_SCHEMA]:
+    'Failed to generate Vega spec',
 };
 
 export const create = (

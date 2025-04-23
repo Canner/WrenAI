@@ -4,15 +4,13 @@ import { ApiType } from '@server/repositories/apiHistoryRepository';
 import * as Errors from '@/apollo/server/utils/error';
 import { getLogger } from '@server/utils';
 import { v4 as uuidv4 } from 'uuid';
-import {
-  PreviewDataResponse,
-  ColumnMetadata,
-} from '@server/services/queryService';
+import { PreviewDataResponse } from '@server/services/queryService';
 import {
   ApiError,
   respondWith,
   handleApiError,
 } from '@/apollo/server/utils/apiUtils';
+import { transformToObjects } from '@server/utils/dataUtils';
 
 const logger = getLogger('API_RUN_SQL');
 logger.level = 'debug';
@@ -24,29 +22,6 @@ interface RunSqlRequest {
   threadId?: string;
   limit?: number;
 }
-
-/**
- * Transform raw data (columns + rows) into an array of objects
- * @param columns Column metadata (name, type)
- * @param rows Raw data rows
- * @returns Array of objects with column names as keys
- */
-const transformToObjects = (
-  columns: ColumnMetadata[],
-  rows: any[][],
-): Record<string, any>[] => {
-  if (!rows || !columns || rows.length === 0 || columns.length === 0) {
-    return [];
-  }
-
-  return rows.map((row) => {
-    const obj: Record<string, any> = {};
-    columns.forEach((col, index) => {
-      obj[col.name] = row[index];
-    });
-    return obj;
-  });
-};
 
 export default async function handler(
   req: NextApiRequest,
