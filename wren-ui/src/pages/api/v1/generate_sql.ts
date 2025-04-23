@@ -99,11 +99,18 @@ export default async function handler(
       await new Promise((resolve) => setTimeout(resolve, 1000)); // poll every second
     }
 
-    // if it's failed, throw the error
+    // if it's failed, throw the error with any additional data
     if (result.error) {
       const errorMessage =
         (result.error as WrenAIError).message || 'Unknown error';
-      throw new ApiError(errorMessage, 400);
+      const additionalData: Record<string, any> = {};
+
+      // Include invalid SQL if available
+      if (result.invalidSql) {
+        additionalData.invalidSql = result.invalidSql;
+      }
+
+      throw new ApiError(errorMessage, 400, result.error.code, additionalData);
     }
 
     // if it's a misleading type response, throw error

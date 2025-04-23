@@ -12,15 +12,18 @@ const { apiHistoryRepository } = components;
 export class ApiError extends Error {
   statusCode: number;
   code?: Errors.GeneralErrorCodes;
+  additionalData?: Record<string, any>;
 
   constructor(
     message: string,
     statusCode: number,
     code?: Errors.GeneralErrorCodes,
+    additionalData?: Record<string, any>,
   ) {
     super(message);
     this.statusCode = statusCode;
     this.code = code;
+    this.additionalData = additionalData;
   }
 }
 
@@ -97,13 +100,18 @@ export const handleApiError = async ({
   }
 
   const statusCode = error instanceof ApiError ? error.statusCode : 500;
-  let responsePayload;
+  let responsePayload: Record<string, any>;
 
   if (error instanceof ApiError && error.code) {
     responsePayload = {
       code: error.code,
       error: error.message,
     };
+
+    // Include any additional data associated with the error
+    if (error.additionalData) {
+      Object.assign(responsePayload, error.additionalData);
+    }
   } else {
     responsePayload = { error: error.message };
   }
