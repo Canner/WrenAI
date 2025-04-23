@@ -26,6 +26,7 @@ const { apiHistoryRepository, projectService, deployService, wrenAIAdaptor } =
 interface GenerateSqlRequest {
   question: string;
   threadId?: string;
+  language?: string;
 }
 
 const isAskResultFinished = (result: AskResult) => {
@@ -56,7 +57,7 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
-  const { question, threadId } = req.body as GenerateSqlRequest;
+  const { question, threadId, language } = req.body as GenerateSqlRequest;
   const startTime = Date.now();
   let project;
 
@@ -85,7 +86,9 @@ export default async function handler(
       deployId: lastDeploy.hash,
       histories: transformHistoryInput(histories) as any,
       configurations: {
-        language: WrenAILanguage[project.language] || WrenAILanguage.EN,
+        language: language
+          ? WrenAILanguage[language]
+          : WrenAILanguage[project.language] || WrenAILanguage.EN,
       },
     });
 
