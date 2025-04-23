@@ -13,6 +13,7 @@ interface Props {
   nextScheduleTime?: string;
   schedule?: Schedule;
   onCacheSettings?: () => void;
+  onRefreshAll?: () => void;
 }
 
 const StyledHeader = styled.div`
@@ -26,7 +27,7 @@ const StyledHeader = styled.div`
 `;
 
 export default function DashboardHeader(props: Props) {
-  const { nextScheduleTime, schedule, onCacheSettings } = props;
+  const { nextScheduleTime, schedule, onCacheSettings, onRefreshAll } = props;
 
   const scheduleTime = getScheduleText(schedule);
 
@@ -34,7 +35,7 @@ export default function DashboardHeader(props: Props) {
     if (action === MORE_ACTION.CACHE_SETTINGS) {
       onCacheSettings?.();
     } else if (action === MORE_ACTION.REFRESH) {
-      // TODO: refresh dashboard
+      onRefreshAll?.();
     }
   };
 

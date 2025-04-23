@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { message } from 'antd';
 import { Path } from '@/utils/enum';
 import { useRouter } from 'next/router';
@@ -19,6 +19,7 @@ import CacheSettingsDrawer from '@/components/pages/home/dashboardGrid/CacheSett
 
 export default function Dashboard() {
   const router = useRouter();
+  const dashboardGridRef = useRef<{ onRefreshAll: () => void }>(null);
   const homeSidebar = useHomeSidebar();
   const cacheSettingsDrawer = useDrawerAction();
 
@@ -97,8 +98,12 @@ export default function Dashboard() {
                   schedule,
                 });
               }}
+              onRefreshAll={() => {
+                dashboardGridRef?.current?.onRefreshAll();
+              }}
             />
             <DashboardGrid
+              ref={dashboardGridRef}
               items={dashboardItems}
               onUpdateChange={onUpdateChange}
               onDelete={onDelete}
