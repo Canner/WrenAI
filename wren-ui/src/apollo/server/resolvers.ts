@@ -159,6 +159,7 @@ const resolvers = {
     updateDashboardItem: dashboardResolver.updateDashboardItem,
     deleteDashboardItem: dashboardResolver.deleteDashboardItem,
     previewItemSQL: dashboardResolver.previewItemSQL,
+    setDashboardSchedule: dashboardResolver.setDashboardSchedule,
 
     // SQL Pairs
     createSqlPair: sqlPairResolver.createSqlPair,
