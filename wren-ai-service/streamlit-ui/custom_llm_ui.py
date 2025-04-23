@@ -1,5 +1,6 @@
 import constants as cst
-from config_loader import download_config, load_blocks
+from config_loader import download_config, load_yaml_list, group_blocks
+from session_state import ConfigState
 
 import streamlit as st
 import yaml
@@ -16,7 +17,9 @@ st.set_page_config(
 if not cst.CONFIG_IN_PATH.exists():
     download_config()
     
-blocks = load_blocks(cst.CONFIG_IN_PATH)
+yaml_list = load_yaml_list(cst.CONFIG_IN_PATH)
+blocks = group_blocks(yaml_list)
+
 llm_block = blocks.get("llm", {})
 embedder_block = blocks.get("embedder", {})
 document_store_block   = blocks.get("document_store", {})
@@ -30,63 +33,11 @@ st.title(" Custom LLM Config Generator")
 st.markdown("")
 col1, col2 = st.columns([1.5, 1])  # 左右欄位
 
-
 # =====================
 # LLM Configuration
 # =====================
 
-def reinit_session_state_from_yaml(llm_block, embedder_block, document_store_block):
-    # 1. 初始化 llm_forms
-    st.session_state.llm_forms = []
-    st.session_state.llm_models = []  # ← 必須清空重建
-    for model_item in llm_block.get("models", []):
-        form_entry = {
-            "id": str(uuid.uuid4()),
-            "model": model_item.get("model", ""),
-            "alias": model_item.get("alias", ""),
-            "api_base": "https://api.openai.com/v1",
-            "timeout": str(llm_block.get("timeout", 120)),
-            "kwargs": [
-                {"key": k, "value": v}
-                for k, v in model_item.get("kwargs", {}).items()
-            ]
-        }
-        st.session_state.llm_forms.append(form_entry)
-
-        # 轉成儲存格式（kwargs 要是 dict）
-        model_entry = {
-            "id": form_entry["id"],
-            "model": form_entry["model"],
-            "alias": form_entry["alias"],
-            "api_base": form_entry["api_base"],
-            "timeout": form_entry["timeout"],
-            "kwargs": {k["key"]: k["value"] for k in form_entry["kwargs"] if k["key"]},
-        }
-        st.session_state.llm_models.append(model_entry)
-
-
-    # 2. 初始化 embedding_model
-    embedder_models = embedder_block.get("models", [])
-    if embedder_models:
-        st.session_state.embedding_model = {
-            "type": "embedder",
-            "provider": embedder_block.get("provider"),
-            "models": embedder_models
-        }
-
-    # 3. 初始化 document_store
-    st.session_state.document_store = {
-        "type": "document_store",
-        "provider": document_store_block.get("provider"),
-        "location": document_store_block.get("location"),
-        "embedding_model_dim": document_store_block.get("embedding_model_dim", 3072),
-        "timeout": document_store_block.get("timeout", 120),
-        "recreate_index": document_store_block.get("recreate_index", False),
-    }
-
-# --- 初始化 session state ---
-if "llm_forms" not in st.session_state or "embedding_model" not in st.session_state:
-    reinit_session_state_from_yaml(llm_block, embedder_block, document_store_block)
+ConfigState.init(llm_block, embedder_block, document_store_block)
 
 with col1:
     
@@ -98,35 +49,31 @@ with col1:
 
     # IMPORT YAML
     uploaded_file = st.file_uploader("Choose a YAML file", type=["yaml", "yml"])
-
+    
     if uploaded_file is not None:
-        if st.button("Import .yaml", key="import_yaml"):
+        if st.button("Import.yaml", key="import_yaml"):
             try:
                 # 解析使用者上傳的 yaml 檔案
-                user_config = list(yaml.safe_load_all(uploaded_file))
+                user_config_list = list(yaml.safe_load_all(uploaded_file))
+                user_config_block = group_blocks(user_config_list)  # 將 YAML 轉換為字典格式
 
                 # 用於更新的暫存區
-                user_llm_block = next((item for item in user_config if item.get("type") == "llm"), None)
-                user_embedder_block = next((item for item in user_config if item.get("type") == "embedder"), None)
-                # user_engine_blocks = [item for item in user_config if item.get("type") == "engine"]
-                user_document_store_block = next((item for item in user_config if item.get("type") == "document_store"), None)
-                user_pipeline_block = next((item for item in user_config if item.get("type") == "pipeline"), None)
-                # user_settings_block = next((item.get("settings") for item in user_config if "settings" in item), None)
+                user_llm_block = user_config_block.get("llm", {})
+                user_embedder_block = user_config_block.get("embedder", {})
+                user_document_store_block = user_config_block.get("document_store", {})
+                user_pipeline_block = user_config_block.get("pipeline", {})
 
                 # 僅在有新資料時才更新對應的 block
                 if user_llm_block: llm_block = user_llm_block
                 if user_embedder_block: embedder_block = user_embedder_block
-                # if user_engine_blocks: engine_blocks = user_engine_blocks
                 if user_document_store_block: document_store_block = user_document_store_block
                 if user_pipeline_block: pipeline_block = user_pipeline_block
-                # if user_settings_block: settings_block = user_settings_block
                 
-                reinit_session_state_from_yaml(llm_block, embedder_block, document_store_block)
+                ConfigState.init(llm_block, embedder_block, document_store_block, force=True)  # 強制重新初始化 Session State
                 st.success("YAML 匯入成功，設定已更新。")
-                # st.write(llm_block)
             except Exception as e:
                 st.error(f"匯入 YAML 檔案時發生錯誤: {e}")
-            st.rerun()  # 重新載入頁面以顯示更新的內容
+            # st.rerun()  # 重新載入頁面以顯示更新的內容
 
 
     # ① 新增一個空白表單（Expander）──會觸發 rerun，下一輪就看得到
