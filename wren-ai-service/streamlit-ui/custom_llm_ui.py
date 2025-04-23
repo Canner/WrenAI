@@ -1,8 +1,7 @@
 import constants as cst
+from config_loader import download_config, load_blocks
 
 import streamlit as st
-import requests
-from pathlib import Path
 import yaml
 import uuid
 
@@ -12,48 +11,6 @@ st.set_page_config(
     layout="wide",  # 使用寬屏模式
     initial_sidebar_state="expanded"  # 控制側邊欄的初始狀態
 )
-
-def download_config():
-    try:
-        response = requests.get(cst.CONFIG_URL, timeout=cst.REQUEST_TIMEOUT)
-        response.raise_for_status()  # 檢查請求是否成功
-        cst.CONFIG_IN_PATH.write_text(response.text, encoding='utf-8')
-        st.success(f"成功下載並儲存 config.yaml 到 {cst.CONFIG_IN_PATH}")
-    except requests.RequestException as e:
-        st.error(f"下載失敗，錯誤訊息: {e}")
-
-
-def load_blocks(path: Path):
-    with path.open("r", encoding="utf-8") as f:
-        blocks = list(yaml.safe_load_all(f))
-        
-        save_blocks = {}
-
-        for block in blocks:
-
-            # 判斷是 type 還是 settings
-            if "type" in block:
-                key = block["type"]
-            elif "settings" in block:
-                key = "settings"
-            else:
-                continue  # 如果沒有 type 也沒有 settings，就跳過
-        
-            # 檢查 key 是否已存在 blocks 裡
-            if key in save_blocks:
-                # 如果已經有這個分類（例如 engine），就加進 list 裡
-                # 確保是 list 型別
-                if isinstance(save_blocks[key], list):
-                    save_blocks[key].append(block)
-                else:
-                    # 原本是單一個，轉成 list
-                    save_blocks[key] = [save_blocks[key], block]
-            else:
-                # 第一次遇到這個 key，直接存
-                save_blocks[key] = block
-        
-        return save_blocks
-  
 
 
 if not cst.CONFIG_IN_PATH.exists():
