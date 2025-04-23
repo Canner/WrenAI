@@ -1,10 +1,21 @@
 import asyncio
 from datetime import datetime
-from typing import Iterable, Iterator, Literal, Optional
+from typing import Callable, Literal, Optional
 
 import orjson
 import pytz
 from pydantic import BaseModel
+
+
+async def ensure_async(iterable):
+    # if it's already async, just yield from it;
+    # otherwise wrap the sync iterable.
+    if hasattr(iterable, "__aiter__"):
+        async for item in iterable:
+            yield item
+    else:
+        for item in iterable:
+            yield item
 
 
 class Configurations(BaseModel):
@@ -127,9 +138,11 @@ class QueryEventManager:
         query_id: str,
         trace_id: str,
         index: int,
-        pieces: Iterable[str],
+        emit_content_func: Callable,
+        emit_content_func_kwargs: dict,
         *,
         block_type: Literal["tool_use", "text"] = "tool_use",
+        stream: bool = False,
     ):
         """Emit a complete content block (start → delta → stop)."""
         # 1) start
@@ -145,8 +158,17 @@ class QueryEventManager:
                 },
             },
         )
-        # 2) the actual payload
-        for chunk in pieces:
+
+        result = emit_content_func(**emit_content_func_kwargs)
+        if not stream:
+            result, result_for_pipeline = await result
+            final_result = result_for_pipeline
+        else:
+            final_result = ""
+
+        async for chunk in ensure_async(result):
+            if stream and block_type == "text":
+                final_result += chunk
             await self._publish(
                 query_id,
                 "content_block_delta",
@@ -163,6 +185,7 @@ class QueryEventManager:
                     },
                 },
             )
+
         # 3) stop
         await self._publish(
             query_id,
@@ -176,10 +199,7 @@ class QueryEventManager:
             },
         )
 
-
-def chunk_text(s: str, size: int = 10) -> Iterator[str]:
-    for i in range(0, len(s), size):
-        yield s[i : i + size]
+        return final_result
 
 
 from .conversation import ConversationService  # noqa: E402

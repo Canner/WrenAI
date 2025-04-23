@@ -62,6 +62,339 @@ class ConversationService:
         self._query_event_manager = QueryEventManager()
         self._max_histories = max_histories
 
+    async def _run_historical_question_pipeline(self, query: str, project_id: str):
+        historical_question = await self._pipelines["historical_question"].run(
+            query=query,
+            project_id=project_id,
+        )
+
+        # we only return top 1 result
+        historical_question_result = historical_question.get(
+            "formatted_output", {}
+        ).get("documents", [])[:1]
+
+        if historical_question_result:
+            return [
+                {
+                    "sql": historical_question_result[0].get("statement"),
+                    "type": (
+                        "view" if historical_question_result[0].get("viewId") else "llm"
+                    ),
+                    "viewId": historical_question_result[0].get("viewId"),
+                }
+            ], {
+                "sql": historical_question_result[0].get("statement"),
+                "type": (
+                    "view" if historical_question_result[0].get("viewId") else "llm"
+                ),
+                "viewId": historical_question_result[0].get("viewId"),
+            }
+        else:
+            return [], {}
+
+    async def _run_sql_pairs_retrieval(
+        self,
+        query: str,
+        project_id: str,
+    ):
+        sql_pairs_retrieval = await self._pipelines["sql_pairs_retrieval"].run(
+            query=query,
+            project_id=project_id,
+        )
+        return (
+            sql_pairs_retrieval.get("formatted_output", {}).get("documents", []),
+            sql_pairs_retrieval.get("formatted_output", {}).get("documents", []),
+        )
+
+    async def _run_instructions_retrieval(
+        self,
+        query: str,
+        project_id: str,
+    ):
+        instructions_retrieval = await self._pipelines["instructions_retrieval"].run(
+            query=query,
+            project_id=project_id,
+        )
+        return (
+            instructions_retrieval.get("formatted_output", {}).get("documents", []),
+            instructions_retrieval.get("formatted_output", {}).get("documents", []),
+        )
+
+    async def _run_intent_classification(
+        self,
+        query: str,
+        histories: List[ConversationHistory],
+        sql_samples: List[QuestionResult],
+        instructions: List[QuestionResult],
+        project_id: str,
+        configurations: Configurations,
+    ):
+        intent_classification_result = (
+            await self._pipelines["intent_classification"].run(
+                query=query,
+                histories=histories,
+                sql_samples=sql_samples,
+                instructions=instructions,
+                project_id=project_id,
+                configuration=configurations,
+            )
+        ).get("post_process", {})
+
+        return [
+            {
+                "rephrased_question": intent_classification_result.get(
+                    "rephrased_question"
+                ),
+                "intent": intent_classification_result.get("intent"),
+                "reasoning": intent_classification_result.get("reasoning"),
+                "db_schemas": intent_classification_result.get("db_schemas"),
+            }
+        ], intent_classification_result
+
+    def _run_misleading_assistance(
+        self,
+        query: str,
+        histories: List[ConversationHistory],
+        db_schemas: List[str],
+        language: str,
+        query_id: str,
+    ):
+        asyncio.create_task(
+            self._pipelines["misleading_assistance"].run(
+                query=query,
+                histories=histories,
+                db_schemas=db_schemas,
+                language=language,
+                query_id=query_id,
+            )
+        )
+
+        return self._pipelines["misleading_assistance"].get_streaming_results(query_id)
+
+    def _run_data_assistance(
+        self,
+        query: str,
+        histories: List[ConversationHistory],
+        db_schemas: List[str],
+        language: str,
+        query_id: str,
+    ):
+        asyncio.create_task(
+            self._pipelines["data_assistance"].run(
+                query=query,
+                histories=histories,
+                db_schemas=db_schemas,
+                language=language,
+                query_id=query_id,
+            )
+        )
+
+        return self._pipelines["data_assistance"].get_streaming_results(query_id)
+
+    def _run_user_guide_assistance(
+        self,
+        query: str,
+        language: str,
+        query_id: str,
+    ):
+        asyncio.create_task(
+            self._pipelines["user_guide_assistance"].run(
+                query=query,
+                language=language,
+                query_id=query_id,
+            )
+        )
+
+        return self._pipelines["user_guide_assistance"].get_streaming_results(query_id)
+
+    async def _run_retrieval(
+        self,
+        query: str,
+        histories: List[ConversationHistory],
+        project_id: str,
+    ):
+        retrieval_results = (
+            await self._pipelines["retrieval"].run(
+                query=query,
+                histories=histories,
+                project_id=project_id,
+            )
+        ).get("construct_retrieval_results", {})
+
+        return [
+            {
+                "retrieved_tables": [
+                    document.get("table_name")
+                    for document in retrieval_results.get("retrieval_results", [])
+                ],
+            }
+        ], retrieval_results
+
+    def _run_followup_sql_generation_reasoning(
+        self,
+        query: str,
+        contexts: List[str],
+        histories: List[ConversationHistory],
+        sql_samples: List[QuestionResult],
+        instructions: List[QuestionResult],
+        configuration: Configurations,
+        query_id: str,
+    ):
+        asyncio.create_task(
+            self._pipelines["followup_sql_generation_reasoning"].run(
+                query=query,
+                contexts=contexts,
+                histories=histories,
+                sql_samples=sql_samples,
+                instructions=instructions,
+                configuration=configuration,
+                query_id=query_id,
+            )
+        )
+
+        return self._pipelines[
+            "followup_sql_generation_reasoning"
+        ].get_streaming_results(query_id)
+
+    def _run_sql_generation_reasoning(
+        self,
+        query: str,
+        contexts: List[str],
+        sql_samples: List[QuestionResult],
+        instructions: List[QuestionResult],
+        configuration: Configurations,
+        query_id: str,
+    ):
+        asyncio.create_task(
+            self._pipelines["sql_generation_reasoning"].run(
+                query=query,
+                contexts=contexts,
+                sql_samples=sql_samples,
+                instructions=instructions,
+                configuration=configuration,
+                query_id=query_id,
+            )
+        )
+
+        return self._pipelines["sql_generation_reasoning"].get_streaming_results(
+            query_id
+        )
+
+    # no emit content block at the moment
+    async def _run_sql_functions_retrieval(
+        self,
+        project_id: str,
+    ):
+        sql_functions = await self._pipelines["sql_functions_retrieval"].run(
+            project_id=project_id,
+        )
+
+        return sql_functions
+
+    async def _run_followup_sql_generation(
+        self,
+        query: str,
+        contexts: List[str],
+        sql_generation_reasoning: str,
+        histories: List[ConversationHistory],
+        project_id: str,
+        configurations: Configurations,
+        sql_samples: List[QuestionResult],
+        instructions: List[QuestionResult],
+        has_calculated_field: bool,
+        has_metric: bool,
+        sql_functions: List[str],
+    ):
+        followup_sql_generation_results = await self._pipelines[
+            "followup_sql_generation"
+        ].run(
+            query=query,
+            contexts=contexts,
+            sql_generation_reasoning=sql_generation_reasoning,
+            histories=histories,
+            project_id=project_id,
+            configuration=configurations,
+            sql_samples=sql_samples,
+            instructions=instructions,
+            has_calculated_field=has_calculated_field,
+            has_metric=has_metric,
+            sql_functions=sql_functions,
+        )
+
+        if sql_valid_results := followup_sql_generation_results["post_process"][
+            "valid_generation_results"
+        ]:
+            return [
+                {
+                    "sql": sql_valid_results[0].get("sql"),
+                    "type": "llm",
+                }
+            ], followup_sql_generation_results
+        else:
+            return [], followup_sql_generation_results
+
+    async def _run_sql_generation(
+        self,
+        query: str,
+        contexts: List[str],
+        sql_generation_reasoning: str,
+        project_id: str,
+        configurations: Configurations,
+        sql_samples: List[QuestionResult],
+        instructions: List[QuestionResult],
+        has_calculated_field: bool,
+        has_metric: bool,
+        sql_functions: List[str],
+    ):
+        sql_generation_results = await self._pipelines["sql_generation"].run(
+            query=query,
+            contexts=contexts,
+            sql_generation_reasoning=sql_generation_reasoning,
+            project_id=project_id,
+            configuration=configurations,
+            sql_samples=sql_samples,
+            instructions=instructions,
+            has_calculated_field=has_calculated_field,
+            has_metric=has_metric,
+            sql_functions=sql_functions,
+        )
+
+        if sql_valid_results := sql_generation_results["post_process"][
+            "valid_generation_results"
+        ]:
+            return [
+                {
+                    "sql": sql_valid_results[0].get("sql"),
+                    "type": "llm",
+                }
+            ], sql_generation_results
+        else:
+            return [], sql_generation_results
+
+    async def _run_sql_correction(
+        self,
+        contexts: List[str],
+        invalid_generation_results: List[QuestionResult],
+        project_id: str,
+    ):
+        sql_correction_results = await self._pipelines["sql_correction"].run(
+            contexts=contexts,
+            invalid_generation_results=invalid_generation_results,
+            project_id=project_id,
+        )
+
+        if sql_valid_results := sql_correction_results["post_process"][
+            "valid_generation_results"
+        ]:
+            return [
+                {
+                    "sql": sql_valid_results[0].get("sql"),
+                    "type": "llm",
+                }
+            ], sql_correction_results
+        else:
+            return [], sql_correction_results
+
     @observe(name="Start Conversation")
     @trace_metadata
     async def start_conversation(
@@ -93,309 +426,242 @@ class ConversationService:
                 trace_id,
             )
 
-            historical_question = await self._pipelines["historical_question"].run(
-                query=user_query,
-                project_id=project_id,
-            )
-            # we only return top 1 result
-            historical_question_result = historical_question.get(
-                "formatted_output", {}
-            ).get("documents", [])[:1]
-
-            if historical_question_result:
-                historical_question_result = QuestionResult(
-                    sql=historical_question_result[0].get("statement"),
-                    type="view"
-                    if historical_question_result[0].get("viewId")
-                    else "llm",
-                    viewId=historical_question_result[0].get("viewId"),
-                )
-
-                await self._query_event_manager.emit_content_block(
+            if not await self._query_event_manager.emit_content_block(
+                query_id,
+                trace_id,
+                index=0,
+                emit_content_func=self._run_historical_question_pipeline,
+                emit_content_func_kwargs={
+                    "query": user_query,
+                    "project_id": project_id,
+                },
+                block_type="tool_use",
+            ):
+                sql_samples = await self._query_event_manager.emit_content_block(
                     query_id,
                     trace_id,
-                    index=0,
-                    pieces=[
-                        {
-                            "sql": historical_question_result.sql,
-                            "type": historical_question_result.type,
-                            "viewId": historical_question_result.viewId,
-                        }
-                    ],
+                    index=1,
+                    emit_content_func=self._run_sql_pairs_retrieval,
+                    emit_content_func_kwargs={
+                        "query": user_query,
+                        "project_id": project_id,
+                    },
                     block_type="tool_use",
                 )
-            else:
-                # Run both pipeline operations concurrently
-                sql_samples_task, instructions_task = await asyncio.gather(
-                    self._pipelines["sql_pairs_retrieval"].run(
-                        query=user_query,
-                        project_id=project_id,
-                    ),
-                    self._pipelines["instructions_retrieval"].run(
-                        query=user_query,
-                        project_id=project_id,
-                    ),
-                )
 
-                # Extract results from completed tasks
-                sql_samples = sql_samples_task["formatted_output"].get("documents", [])
-                instructions = instructions_task["formatted_output"].get(
-                    "documents", []
+                instructions = await self._query_event_manager.emit_content_block(
+                    query_id,
+                    trace_id,
+                    index=2,
+                    emit_content_func=self._run_instructions_retrieval,
+                    emit_content_func_kwargs={
+                        "query": user_query,
+                        "project_id": project_id,
+                    },
+                    block_type="tool_use",
                 )
 
                 intent_classification_result = (
-                    await self._pipelines["intent_classification"].run(
-                        query=user_query,
-                        histories=histories,
-                        sql_samples=sql_samples,
-                        instructions=instructions,
-                        project_id=project_id,
-                        configuration=configurations,
+                    await self._query_event_manager.emit_content_block(
+                        query_id,
+                        trace_id,
+                        index=3,
+                        emit_content_func=self._run_intent_classification,
+                        emit_content_func_kwargs={
+                            "query": user_query,
+                            "histories": histories,
+                            "sql_samples": sql_samples,
+                            "instructions": instructions,
+                            "project_id": project_id,
+                            "configurations": configurations,
+                        },
+                        block_type="tool_use",
                     )
-                ).get("post_process", {})
-
-                await self._query_event_manager.emit_content_block(
-                    query_id,
-                    trace_id,
-                    index=0,
-                    pieces=[
-                        {
-                            "rephrased_question": intent_classification_result.get(
-                                "rephrased_question"
-                            ),
-                            "intent": intent_classification_result.get("intent"),
-                            "reasoning": intent_classification_result.get("reasoning"),
-                        }
-                    ],
-                    block_type="tool_use",
                 )
 
                 intent = intent_classification_result.get("intent")
                 rephrased_question = intent_classification_result.get(
                     "rephrased_question"
                 )
+                db_schemas = intent_classification_result.get("db_schemas")
 
                 if rephrased_question:
                     user_query = rephrased_question
 
                 if intent == "MISLEADING_QUERY":
-                    asyncio.create_task(
-                        self._pipelines["misleading_assistance"].run(
-                            query=user_query,
-                            histories=histories,
-                            db_schemas=intent_classification_result.get("db_schemas"),
-                            language=configurations.language,
-                            query_id=query_id,
-                        )
+                    await self._query_event_manager.emit_content_block(
+                        query_id,
+                        trace_id,
+                        index=4,
+                        emit_content_func=self._run_misleading_assistance,
+                        emit_content_func_kwargs={
+                            "query": user_query,
+                            "histories": histories,
+                            "db_schemas": db_schemas,
+                            "language": configurations.language,
+                            "query_id": query_id,
+                        },
+                        block_type="text",
+                        stream=True,
                     )
-
-                    async for chunk in self._pipelines[
-                        "misleading_assistance"
-                    ].get_streaming_results(query_id):
-                        await self._query_event_manager.emit_content_block(
-                            query_id,
-                            trace_id,
-                            index=2,
-                            pieces=chunk,
-                            block_type="text",
-                        )
                 elif intent == "GENERAL":
-                    asyncio.create_task(
-                        self._pipelines["data_assistance"].run(
-                            query=user_query,
-                            histories=histories,
-                            db_schemas=intent_classification_result.get("db_schemas"),
-                            language=configurations.language,
-                            query_id=query_id,
-                        )
+                    await self._query_event_manager.emit_content_block(
+                        query_id,
+                        trace_id,
+                        index=4,
+                        emit_content_func=self._run_data_assistance,
+                        emit_content_func_kwargs={
+                            "query": user_query,
+                            "histories": histories,
+                            "db_schemas": db_schemas,
+                            "language": configurations.language,
+                            "query_id": query_id,
+                        },
+                        block_type="text",
+                        stream=True,
                     )
-
-                    async for chunk in self._pipelines[
-                        "data_assistance"
-                    ].get_streaming_results(query_id):
-                        await self._query_event_manager.emit_content_block(
-                            query_id,
-                            trace_id,
-                            index=3,
-                            pieces=chunk,
-                            block_type="text",
-                        )
                 elif intent == "USER_GUIDE":
-                    asyncio.create_task(
-                        self._pipelines["user_guide_assistance"].run(
-                            query=user_query,
-                            language=configurations.language,
-                            query_id=query_id,
-                        )
+                    await self._query_event_manager.emit_content_block(
+                        query_id,
+                        trace_id,
+                        index=4,
+                        emit_content_func=self._run_user_guide_assistance,
+                        emit_content_func_kwargs={
+                            "query": user_query,
+                            "language": configurations.language,
+                            "query_id": query_id,
+                        },
+                        block_type="text",
+                        stream=True,
                     )
-
-                    async for chunk in self._pipelines[
-                        "user_guide_assistance"
-                    ].get_streaming_results(query_id):
+                else:  # TEXT_TO_SQL
+                    retrieval_results = (
                         await self._query_event_manager.emit_content_block(
                             query_id,
                             trace_id,
                             index=4,
-                            pieces=chunk,
-                            block_type="text",
+                            emit_content_func=self._run_retrieval,
+                            emit_content_func_kwargs={
+                                "query": user_query,
+                                "histories": histories,
+                                "project_id": project_id,
+                            },
+                            block_type="tool_use",
                         )
-                else:  # TEXT_TO_SQL
-                    retrieval_result = await self._pipelines["retrieval"].run(
-                        query=user_query,
-                        histories=histories,
-                        project_id=project_id,
                     )
-                    _retrieval_result = retrieval_result.get(
-                        "construct_retrieval_results", {}
-                    )
-                    documents = _retrieval_result.get("retrieval_results", [])
+
+                    documents = retrieval_results.get("retrieval_results", [])
                     table_names = [document.get("table_name") for document in documents]
                     table_ddls = [document.get("table_ddl") for document in documents]
 
-                    await self._query_event_manager.emit_content_block(
-                        query_id,
-                        trace_id,
-                        index=5,
-                        pieces=[{"retrieved_tables": table_names}],
-                        block_type="tool_use",
-                    )
-
                     if table_names:
                         if histories:
-                            _reasoning_pipeline_name = (
-                                "followup_sql_generation_reasoning"
-                            )
-                            asyncio.create_task(
-                                self._pipelines[_reasoning_pipeline_name].run(
-                                    query=user_query,
-                                    contexts=table_ddls,
-                                    histories=histories,
-                                    sql_samples=sql_samples,
-                                    instructions=instructions,
-                                    configuration=configurations,
-                                    query_id=query_id,
-                                )
+                            sql_generation_reasoning = await self._query_event_manager.emit_content_block(
+                                query_id,
+                                trace_id,
+                                index=5,
+                                emit_content_func=self._run_followup_sql_generation_reasoning,
+                                emit_content_func_kwargs={
+                                    "query": user_query,
+                                    "contexts": table_ddls,
+                                    "histories": histories,
+                                    "sql_samples": sql_samples,
+                                    "instructions": instructions,
+                                    "configuration": configurations,
+                                    "query_id": query_id,
+                                },
+                                block_type="text",
+                                stream=True,
                             )
                         else:
-                            _reasoning_pipeline_name = "sql_generation_reasoning"
-                            asyncio.create_task(
-                                self._pipelines[_reasoning_pipeline_name].run(
-                                    query=user_query,
-                                    contexts=table_ddls,
-                                    sql_samples=sql_samples,
-                                    instructions=instructions,
-                                    configuration=configurations,
-                                    query_id=query_id,
-                                )
+                            sql_generation_reasoning = await self._query_event_manager.emit_content_block(
+                                query_id,
+                                trace_id,
+                                index=5,
+                                emit_content_func=self._run_sql_generation_reasoning,
+                                emit_content_func_kwargs={
+                                    "query": user_query,
+                                    "contexts": table_ddls,
+                                    "sql_samples": sql_samples,
+                                    "instructions": instructions,
+                                    "configuration": configurations,
+                                    "query_id": query_id,
+                                },
+                                block_type="text",
+                                stream=True,
                             )
 
-                        sql_generation_reasoning = ""
-                        async for chunk in self._pipelines[
-                            _reasoning_pipeline_name
-                        ].get_streaming_results(query_id):
-                            sql_generation_reasoning += chunk
-                            await self._query_event_manager.emit_content_block(
+                        sql_functions = await self._run_sql_functions_retrieval(
+                            project_id
+                        )
+
+                        has_calculated_field = retrieval_results.get(
+                            "has_calculated_field", False
+                        )
+                        has_metric = retrieval_results.get("has_metric", False)
+
+                        if histories:
+                            text_to_sql_generation_results = await self._query_event_manager.emit_content_block(
                                 query_id,
                                 trace_id,
                                 index=6,
-                                pieces=chunk,
-                                block_type="text",
-                            )
-
-                        sql_functions = await self._pipelines[
-                            "sql_functions_retrieval"
-                        ].run(
-                            project_id=project_id,
-                        )
-
-                        has_calculated_field = _retrieval_result.get(
-                            "has_calculated_field", False
-                        )
-                        has_metric = _retrieval_result.get("has_metric", False)
-
-                        if histories:
-                            text_to_sql_generation_results = await self._pipelines[
-                                "followup_sql_generation"
-                            ].run(
-                                query=user_query,
-                                contexts=table_ddls,
-                                sql_generation_reasoning=sql_generation_reasoning,
-                                histories=histories,
-                                project_id=project_id,
-                                configuration=configurations,
-                                sql_samples=sql_samples,
-                                instructions=instructions,
-                                has_calculated_field=has_calculated_field,
-                                has_metric=has_metric,
-                                sql_functions=sql_functions,
-                            )
-                        else:
-                            text_to_sql_generation_results = await self._pipelines[
-                                "sql_generation"
-                            ].run(
-                                query=user_query,
-                                contexts=table_ddls,
-                                sql_generation_reasoning=sql_generation_reasoning,
-                                project_id=project_id,
-                                configuration=configurations,
-                                sql_samples=sql_samples,
-                                instructions=instructions,
-                                has_calculated_field=has_calculated_field,
-                                has_metric=has_metric,
-                                sql_functions=sql_functions,
-                            )
-
-                        if sql_valid_results := text_to_sql_generation_results[
-                            "post_process"
-                        ]["valid_generation_results"]:
-                            question_result = QuestionResult(
-                                sql=sql_valid_results[0].get("sql"),
-                                type="llm",
-                            )
-                            await self._query_event_manager.emit_content_block(
-                                query_id,
-                                trace_id,
-                                index=7,
-                                pieces=[
-                                    {
-                                        "sql": question_result.sql,
-                                        "type": question_result.type,
-                                    }
-                                ],
+                                emit_content_func=self._run_followup_sql_generation,
+                                emit_content_func_kwargs={
+                                    "query": user_query,
+                                    "contexts": table_ddls,
+                                    "sql_generation_reasoning": sql_generation_reasoning,
+                                    "histories": histories,
+                                    "project_id": project_id,
+                                    "configurations": configurations,
+                                    "sql_samples": sql_samples,
+                                    "instructions": instructions,
+                                    "has_calculated_field": has_calculated_field,
+                                    "has_metric": has_metric,
+                                    "sql_functions": sql_functions,
+                                },
                                 block_type="tool_use",
                             )
-                        elif failed_dry_run_results := text_to_sql_generation_results[
+                        else:
+                            text_to_sql_generation_results = await self._query_event_manager.emit_content_block(
+                                query_id,
+                                trace_id,
+                                index=6,
+                                emit_content_func=self._run_sql_generation,
+                                emit_content_func_kwargs={
+                                    "query": user_query,
+                                    "contexts": table_ddls,
+                                    "sql_generation_reasoning": sql_generation_reasoning,
+                                    "project_id": project_id,
+                                    "configurations": configurations,
+                                    "sql_samples": sql_samples,
+                                    "instructions": instructions,
+                                    "has_calculated_field": has_calculated_field,
+                                    "has_metric": has_metric,
+                                    "sql_functions": sql_functions,
+                                },
+                                block_type="tool_use",
+                            )
+
+                        if failed_dry_run_results := text_to_sql_generation_results[
                             "post_process"
                         ]["invalid_generation_results"]:
                             if failed_dry_run_results[0]["type"] != "TIME_OUT":
-                                sql_correction_results = await self._pipelines[
-                                    "sql_correction"
-                                ].run(
-                                    contexts=[],
-                                    invalid_generation_results=failed_dry_run_results,
-                                    project_id=project_id,
+                                sql_correction_results = await self._query_event_manager.emit_content_block(
+                                    query_id,
+                                    trace_id,
+                                    index=7,
+                                    emit_content_func=self._run_sql_correction,
+                                    emit_content_func_kwargs={
+                                        "contexts": [],
+                                        "invalid_generation_results": failed_dry_run_results,
+                                        "project_id": project_id,
+                                    },
+                                    block_type="tool_use",
                                 )
 
-                                if sql_valid_results := sql_correction_results[
+                                if failed_dry_run_results := sql_correction_results[
                                     "post_process"
-                                ]["valid_generation_results"]:
-                                    question_result = QuestionResult(
-                                        sql=sql_valid_results[0].get("sql"),
-                                        type="llm",
-                                    )
-                                    await self._query_event_manager.emit_content_block(
-                                        query_id,
-                                        trace_id,
-                                        index=7,
-                                        pieces=[
-                                            {
-                                                "sql": question_result.sql,
-                                                "type": question_result.type,
-                                            }
-                                        ],
-                                        block_type="tool_use",
-                                    )
-                                else:
+                                ]["invalid_generation_results"]:
                                     await self._query_event_manager.emit_error(
                                         query_id=query_id,
                                         trace_id=trace_id,
