@@ -1,9 +1,5 @@
 import streamlit as st
 import uuid
-
-
-# session_state.py
-
 import streamlit as st
 import uuid
 
@@ -27,11 +23,9 @@ class ConfigState:
             return
         
         """初始化 LLM Forms"""
-        # st.session_state.setdefault(cls.LLM_FORMS_KEY, [])
-        # st.session_state.setdefault(cls.LLM_MODELS_KEY, [])
         st.session_state[cls.LLM_FORMS_KEY] = []
         st.session_state[cls.LLM_MODELS_KEY] = []
-        
+
 
         # 如果 llm_forms 是空的，從 llm_block 讀取
         if not st.session_state[cls.LLM_FORMS_KEY]:
@@ -64,7 +58,6 @@ class ConfigState:
         if not force and cls.EMBEDDER_KEY in st.session_state and st.session_state[cls.EMBEDDER_KEY]:
             return
         
-        # st.session_state.setdefault(cls.EMBEDDER_KEY, None)
         st.session_state[cls.EMBEDDER_KEY] = None
         if embedder_block.get("models"):
             st.session_state[cls.EMBEDDER_KEY] = {
@@ -77,7 +70,7 @@ class ConfigState:
     def init_document_store(cls, document_store_block, force=False):
         if not force and cls.DOC_STORE_KEY in st.session_state and st.session_state[cls.DOC_STORE_KEY]:
             return
-        # st.session_state.setdefault(cls.DOC_STORE_KEY, None)
+
         st.session_state[cls.DOC_STORE_KEY] = {
             "type": "document_store",
             "provider": document_store_block.get("provider"),
