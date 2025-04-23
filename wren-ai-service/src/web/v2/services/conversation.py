@@ -364,6 +364,55 @@ class ConversationService:
                                 ],
                                 block_type="tool_use",
                             )
+                        elif failed_dry_run_results := text_to_sql_generation_results[
+                            "post_process"
+                        ]["invalid_generation_results"]:
+                            if failed_dry_run_results[0]["type"] != "TIME_OUT":
+                                sql_correction_results = await self._pipelines[
+                                    "sql_correction"
+                                ].run(
+                                    contexts=[],
+                                    invalid_generation_results=failed_dry_run_results,
+                                    project_id=project_id,
+                                )
+
+                                if sql_valid_results := sql_correction_results[
+                                    "post_process"
+                                ]["valid_generation_results"]:
+                                    question_result = QuestionResult(
+                                        sql=sql_valid_results[0].get("sql"),
+                                        type="llm",
+                                    )
+                                    await self._query_event_manager.emit_content_block(
+                                        query_id,
+                                        trace_id,
+                                        index=7,
+                                        pieces=[
+                                            {
+                                                "sql": question_result.sql,
+                                                "type": question_result.type,
+                                            }
+                                        ],
+                                        block_type="tool_use",
+                                    )
+                                else:
+                                    await self._query_event_manager.emit_error(
+                                        query_id=query_id,
+                                        trace_id=trace_id,
+                                        error=Error(
+                                            code="NO_RELEVANT_SQL",
+                                            message=failed_dry_run_results[0]["error"],
+                                        ),
+                                    )
+                            else:
+                                await self._query_event_manager.emit_error(
+                                    query_id=query_id,
+                                    trace_id=trace_id,
+                                    error=Error(
+                                        code="NO_RELEVANT_SQL",
+                                        message=failed_dry_run_results[0]["error"],
+                                    ),
+                                )
 
             await self._query_event_manager.emit_message_stop(
                 query_id,
