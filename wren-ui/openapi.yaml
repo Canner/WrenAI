@@ -1,0 +1,216 @@
+openapi: 3.0.0
+info:
+  title: Wren AI API
+  description: API for interacting with Wren AI services
+  version: 1.0.0
+servers:
+  - url: /api/v1
+    description: Wren AI API v1
+paths:
+  /generate_sql:
+    post:
+      summary: Generate SQL from natural language
+      description: Converts a natural language question into a SQL query
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - question
+              properties:
+                question:
+                  type: string
+                  description: The natural language question to convert to SQL
+                threadId:
+                  type: string
+                  description: Optional thread ID for conversation context
+                language:
+                  type: string
+                  description: Optional language override for the AI response (EN, ES, etc.)
+      responses:
+        '200':
+          description: Successfully generated SQL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sql:
+                    type: string
+                    description: The generated SQL statement
+                  threadId:
+                    type: string
+                    description: ID of the thread (existing or newly created)
+        '400':
+          description: Bad request or unable to generate SQL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '405':
+          description: Method not allowed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /run_sql:
+    post:
+      summary: Execute SQL and return results
+      description: Runs a SQL query and returns the results as structured data
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - sql
+              properties:
+                sql:
+                  type: string
+                  description: The SQL query to execute
+                threadId:
+                  type: string
+                  description: Optional thread ID for conversation context
+                limit:
+                  type: integer
+                  description: Maximum number of rows to return
+                  default: 1000
+      responses:
+        '200':
+          description: Successfully executed SQL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  records:
+                    type: array
+                    description: Array of records, each represented as an object
+                    items:
+                      type: object
+                  columns:
+                    type: array
+                    description: Metadata about the result columns
+                    items:
+                      $ref: '#/components/schemas/ColumnMetadata'
+                  threadId:
+                    type: string
+                    description: ID of the thread (existing or newly created)
+                  totalRows:
+                    type: integer
+                    description: The total number of rows returned
+        '400':
+          description: Bad request or SQL execution error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '405':
+          description: Method not allowed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /generate_vega_spec:
+    post:
+      summary: Generate Vega visualization spec
+      description: Generates a Vega specification for data visualization from a question and SQL query
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - question
+                - sql
+              properties:
+                question:
+                  type: string
+                  description: The natural language question about visualization
+                sql:
+                  type: string
+                  description: The SQL query that produces the data to visualize
+                threadId:
+                  type: string
+                  description: Optional thread ID for conversation context
+                sampleSize:
+                  type: integer
+                  description: Maximum number of rows to include in the visualization
+                  default: 10000
+      responses:
+        '200':
+          description: Successfully generated Vega specification
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  vegaSpec:
+                    type: object
+                    description: The Vega specification with embedded data
+                  threadId:
+                    type: string
+                    description: ID of the thread (existing or newly created)
+        '400':
+          description: Bad request or specification generation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '405':
+          description: Method not allowed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /stream_explanation:
+    get:
+      summary: Stream an explanation
+      description: Streams an explanation for a non-SQL query using server-sent events
+      parameters:
+        - name: queryId
+          in: query
+          description: The query ID to stream results from
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Stream of explanation events
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: Server-sent events stream with explanation chunks
+        '500':
+          description: Internal server error
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+        code:
+          type: string
+          description: Error code
+    ColumnMetadata:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Column name
+        type:
+          type: string
+          description: Data type of the column
+        notNull:
+          type: boolean
+          description: Whether the column allows null values
+        properties:
+          type: object
+          description: Additional column properties
