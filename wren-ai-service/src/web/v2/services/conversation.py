@@ -427,6 +427,7 @@ class ConversationService:
                     "query": user_query,
                     "project_id": project_id,
                 },
+                content_block_label="HISTORICAL_QUESTION_RETRIEVAL",
                 block_type="tool_use",
             ):
                 sql_samples = await self._query_event_manager.emit_content_block(
@@ -438,6 +439,7 @@ class ConversationService:
                         "query": user_query,
                         "project_id": project_id,
                     },
+                    content_block_label="SQL_PAIRS_RETRIEVAL",
                     block_type="tool_use",
                 )
 
@@ -450,6 +452,7 @@ class ConversationService:
                         "query": user_query,
                         "project_id": project_id,
                     },
+                    content_block_label="INSTRUCTIONS_RETRIEVAL",
                     block_type="tool_use",
                 )
 
@@ -529,6 +532,7 @@ class ConversationService:
                                 "histories": histories,
                                 "project_id": project_id,
                             },
+                            content_block_label="DB_SCHEMA_RETRIEVAL",
                             block_type="tool_use",
                         )
                     )
@@ -553,6 +557,7 @@ class ConversationService:
                                     "configuration": configurations,
                                     "query_id": query_id,
                                 },
+                                content_block_label="SQL_GENERATION_REASONING",
                                 block_type="text",
                                 stream=True,
                             )
@@ -570,6 +575,7 @@ class ConversationService:
                                     "configuration": configurations,
                                     "query_id": query_id,
                                 },
+                                content_block_label="SQL_GENERATION_REASONING",
                                 block_type="text",
                                 stream=True,
                             )
@@ -602,6 +608,7 @@ class ConversationService:
                                     "has_metric": has_metric,
                                     "sql_functions": sql_functions,
                                 },
+                                content_block_label="SQL_GENERATION",
                                 block_type="tool_use",
                             )
                         else:
@@ -622,6 +629,7 @@ class ConversationService:
                                     "has_metric": has_metric,
                                     "sql_functions": sql_functions,
                                 },
+                                content_block_label="SQL_GENERATION",
                                 block_type="tool_use",
                             )
 
@@ -639,6 +647,7 @@ class ConversationService:
                                         "invalid_generation_results": failed_dry_run_results,
                                         "project_id": project_id,
                                     },
+                                    content_block_label="SQL_CORRECTION",
                                     block_type="tool_use",
                                 )
 

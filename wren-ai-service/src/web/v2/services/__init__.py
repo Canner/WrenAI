@@ -141,6 +141,7 @@ class QueryEventManager:
         emit_content_func: Callable,
         emit_content_func_kwargs: dict,
         *,
+        content_block_label: Optional[str] = None,
         block_type: Literal["tool_use", "text"] = "tool_use",
         stream: bool = False,
     ):
@@ -154,6 +155,7 @@ class QueryEventManager:
                 "index": index,
                 "message": {
                     "type": block_type,
+                    "content_block_label": content_block_label or "",
                     "trace_id": trace_id,
                 },
             },
@@ -178,6 +180,7 @@ class QueryEventManager:
                     "message": {
                         "type": ("json" if block_type == "tool_use" else "text")
                         + "_delta",
+                        "content_block_label": content_block_label,
                         "content": orjson.dumps(chunk)
                         if block_type == "json"
                         else chunk,
