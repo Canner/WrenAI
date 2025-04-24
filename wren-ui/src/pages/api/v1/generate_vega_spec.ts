@@ -16,6 +16,8 @@ import { enhanceVegaSpec } from '@/utils/vegaSpecUtils';
 const { projectService, wrenAIAdaptor, deployService, queryService } =
   components;
 
+const MAX_WAIT_TIME = 1000 * 60 * 3; // 3 minutes
+
 interface GenerateVegaSpecRequest {
   question: string;
   sql: string;
@@ -98,6 +100,7 @@ export default async function handler(
     }
 
     // Poll for the result
+    const deadline = Date.now() + MAX_WAIT_TIME;
     let result: ChartResult;
     while (true) {
       result = await wrenAIAdaptor.getChartResult(task.queryId);
@@ -107,6 +110,15 @@ export default async function handler(
       ) {
         break;
       }
+
+      if (Date.now() > deadline) {
+        throw new ApiError(
+          'Timeout waiting for Vega spec generation',
+          500,
+          Errors.GeneralErrorCodes.POLLING_TIMEOUT,
+        );
+      }
+
       await new Promise((resolve) => setTimeout(resolve, 1000)); // Poll every second
     }
 

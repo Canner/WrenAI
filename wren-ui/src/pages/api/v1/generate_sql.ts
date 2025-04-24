@@ -37,6 +37,8 @@ interface GenerateSqlRequest {
   returnSqlDialect?: boolean;
 }
 
+const MAX_WAIT_TIME = 1000 * 60 * 3; // 3 minutes
+
 const isAskResultFinished = (result: AskResult) => {
   return (
     result.status === AskResultStatus.FINISHED ||
@@ -90,6 +92,14 @@ export default async function handler(
     // get current project's last deployment
     const lastDeploy = await deployService.getLastDeployment(project.id);
 
+    if (!lastDeploy) {
+      throw new ApiError(
+        'No deployment found, please deploy a model first',
+        400,
+        Errors.GeneralErrorCodes.NO_DEPLOYMENT_FOUND,
+      );
+    }
+
     // ask AI service to generate SQL
     const histories = threadId
       ? await apiHistoryRepository.findAllBy({ threadId })
@@ -106,15 +116,24 @@ export default async function handler(
     });
 
     // polling for the result
+    const deadline = Date.now() + MAX_WAIT_TIME;
     let result: AskResult;
     while (true) {
       result = await wrenAIAdaptor.getAskResult(task.queryId);
       if (isAskResultFinished(result)) {
         break;
       }
+
+      if (Date.now() > deadline) {
+        throw new ApiError(
+          'Timeout waiting for SQL generation',
+          500,
+          Errors.GeneralErrorCodes.POLLING_TIMEOUT,
+        );
+      }
+
       await new Promise((resolve) => setTimeout(resolve, 1000)); // poll every second
     }
-
     // if it's failed, throw the error with any additional data
     if (result.error) {
       const errorMessage =
