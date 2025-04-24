@@ -393,6 +393,50 @@ class ConversationService:
         else:
             return [], sql_correction_results
 
+    # no emit content block at the moment
+    async def _run_sql_executor(
+        self,
+        sql: str,
+        project_id: str,
+    ):
+        sql_data = (
+            await self._pipelines["sql_executor"].run(
+                sql=sql,
+                project_id=project_id,
+            )
+        )["execute_sql"]["results"]
+
+        preprocessed_sql_data = (
+            self._pipelines["preprocess_sql_data"]
+            .run(
+                sql_data=sql_data,
+            )
+            .get("preprocess", {})
+            .get("sql_data", {})
+        )
+
+        return preprocessed_sql_data
+
+    def _run_sql_answer(
+        self,
+        query: str,
+        sql: str,
+        sql_data: Dict,
+        configurations: Configurations,
+        query_id: str,
+    ):
+        asyncio.create_task(
+            self._pipelines["sql_answer"].run(
+                query=query,
+                sql=sql,
+                sql_data=sql_data,
+                language=configurations.language,
+                query_id=query_id,
+            )
+        )
+
+        return self._pipelines["sql_answer"].get_streaming_results(query_id)
+
     @observe(name="Start Conversation")
     @trace_metadata
     async def start_conversation(
@@ -480,15 +524,6 @@ class ConversationService:
                         block_type="tool_use",
                     )
                 )
-
-                # intent_classification_result = await self._run_intent_classification(
-                #     query=user_query,
-                #     histories=histories,
-                #     sql_samples=sql_samples,
-                #     instructions=instructions,
-                #     project_id=project_id,
-                #     configurations=configurations,
-                # )
 
                 intent = intent_classification_result.get("intent")
                 rephrased_question = intent_classification_result.get(
@@ -658,6 +693,7 @@ class ConversationService:
                                 block_type="tool_use",
                             )
 
+                        sql = ""
                         if failed_dry_run_results := text_to_sql_generation_results[
                             "post_process"
                         ]["invalid_generation_results"]:
@@ -687,6 +723,10 @@ class ConversationService:
                                             message=failed_dry_run_results[0]["error"],
                                         ),
                                     )
+                                else:
+                                    sql = sql_correction_results["post_process"][
+                                        "valid_generation_results"
+                                    ][0]["sql"]
                             else:
                                 await self._query_event_manager.emit_error(
                                     query_id=query_id,
@@ -696,6 +736,32 @@ class ConversationService:
                                         message=failed_dry_run_results[0]["error"],
                                     ),
                                 )
+                        else:
+                            sql = text_to_sql_generation_results["post_process"][
+                                "valid_generation_results"
+                            ][0]["sql"]
+
+                        if sql:
+                            sql_data = await self._run_sql_executor(
+                                sql=sql,
+                                project_id=project_id,
+                            )
+
+                            await self._query_event_manager.emit_content_block(
+                                query_id,
+                                trace_id,
+                                index=8,
+                                emit_content_func=self._run_sql_answer,
+                                emit_content_func_kwargs={
+                                    "query": user_query,
+                                    "sql": sql,
+                                    "sql_data": sql_data,
+                                    "configurations": configurations,
+                                    "query_id": query_id,
+                                },
+                                block_type="text",
+                                stream=True,
+                            )
 
             await self._query_event_manager.emit_message_stop(
                 query_id,
