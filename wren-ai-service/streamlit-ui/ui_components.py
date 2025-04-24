@@ -2,6 +2,11 @@ import streamlit as st
 import uuid
 from session_state import ConfigState
 
+
+if "save_error" in st.session_state:
+    st.error(st.session_state["save_error"])
+
+
 def render_llm_config():
     # st.subheader("LLM Configuration")
 
@@ -48,13 +53,15 @@ def render_llm_config():
             c1, c2 = st.columns(2)
             with c1:
                 if st.button("💾  Save this model", key=f"save_{form_id}"):
+                    # 如果沒有錯誤，就清除錯誤訊息
+                    st.session_state.pop("save_error", None)
                     save_llm_model(form, form_id)
-                    st.rerun()
             with c2:
                 if st.button("🗑️  Remove this form", key=f"remove_form_{form_id}"):
                     remove_llm_model(form_id)
-                    st.rerun()
-    
+
+
+def render_embedder_config():
     # =====================
     # Embedder Configuration
     # =====================
@@ -80,15 +87,15 @@ def render_llm_config():
                 "models": custom_embedding_setting
             }
 
+
+def render_document_store_config():
     # =====================
     # Document Store Configuration
     # =====================
 
     with st.expander(" Document Store Configuration", expanded=False):
         st.markdown(f"**type:** `document_store`")
-        # st.markdown(f"**provider:** `{document_store_block.get('provider')}`")
         st.markdown(f"**provider:** `{st.session_state[ConfigState.DOC_STORE_KEY].get('provider')}`")
-
         st.markdown(f"**location:** `{st.session_state[ConfigState.DOC_STORE_KEY].get('location')}`")
         document_store_timeout = st.text_input("Timeout (optional, default: 120)", key="document_store_timeout" , value="120")
         st.markdown(f"**timeout:** `120`")
@@ -118,6 +125,17 @@ def save_llm_model(form, form_id):
             except Exception:
                 kwargs_dict[p["key"]] = p["value"]
 
+    # 檢查 alias 是否重複
+    if form["alias"]:
+        existing_aliases = [
+            m.get("alias") for m in st.session_state[ConfigState.LLM_MODELS_KEY] 
+            if m.get("id") != form_id and "alias" in m
+        ]
+        if form["alias"] in existing_aliases:
+            # 儲存錯誤訊息到 session state
+            st.error(f"Duplicate alias name: {form['alias']}.")
+            return False  # 不儲存
+    
     saved_entry = {
         "model": form["model"],
         **({"alias": form["alias"]} if form["alias"] else {}),
