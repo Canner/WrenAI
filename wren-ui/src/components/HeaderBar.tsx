@@ -71,6 +71,14 @@ export default function HeaderBar() {
               >
                 Knowledge
               </StyledButton>
+              <StyledButton
+                shape="round"
+                size="small"
+                $isHighlight={pathname.startsWith(Path.APIHistory)}
+                onClick={() => router.push(Path.APIHistory)}
+              >
+                API History
+              </StyledButton>
             </Space>
           )}
         </Space>

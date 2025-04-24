@@ -8,6 +8,7 @@ import SettingOutlined from '@ant-design/icons/SettingOutlined';
 import Home, { Props as HomeSidebarProps } from './Home';
 import Modeling, { Props as ModelingSidebarProps } from './Modeling';
 import Knowledge from './Knowledge';
+import APIHistory from './APIHistory';
 import LearningSection from '@/components/learning';
 
 const Layout = styled.div`
@@ -61,6 +62,10 @@ const DynamicSidebar = (
 
     if (pathname.startsWith(Path.Knowledge)) {
       return <Knowledge />;
+    }
+
+    if (pathname.startsWith(Path.APIHistory)) {
+      return <APIHistory />;
     }
 
     return null;
