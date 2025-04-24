@@ -28,7 +28,7 @@ def render_import_yaml():
                 if user_document_store_block: document_store_block = user_document_store_block
                 if user_pipeline_block: pipeline_block = user_pipeline_block
                 
-                ConfigState.init(llm_block, embedder_block, document_store_block, force=True)  # 強制重新初始化 Session State
+                ConfigState.init(llm_block, embedder_block, document_store_block, pipeline_block,force=True)  # 強制重新初始化 Session State
                 st.success("YAML 匯入成功，設定已更新。")
             except Exception as e:
                 st.error(f"匯入 YAML 檔案時發生錯誤: {e}")
@@ -78,8 +78,6 @@ def render_llm_config():
             c1, c2 = st.columns(2)
             with c1:
                 if st.button("💾  Save this model", key=f"save_{form_id}"):
-                    # 如果沒有錯誤，就清除錯誤訊息
-                    st.session_state.pop("save_error", None)
                     save_llm_model(form, form_id)
             with c2:
                 if st.button("🗑️  Remove this form", key=f"remove_form_{form_id}"):
@@ -111,6 +109,8 @@ def render_embedder_config():
                 "provider": st.session_state[ConfigState.EMBEDDER_KEY].get("provider"),
                 "models": custom_embedding_setting
             }
+            st.success(f"Updated embedder models")
+        
 
 
 def render_document_store_config():
@@ -138,8 +138,40 @@ def render_document_store_config():
                 "recreate_index": st.session_state[ConfigState.DOC_STORE_KEY].get("recreate_index")
 
             }
+            st.success(f"Updated document store models")
 
+def render_pipeline_config():
+    # =====================
+    # Pipeline Configuration
+    # =====================
+    pipeline__llm_options = []
+    pipeline_name_options = [n for n in st.session_state[ConfigState.PIPELINE_KEY].get("pipes")]
 
+    for model in st.session_state[ConfigState.LLM_MODELS_KEY]:
+        if model.get("alias"):
+            pipeline__llm_options.append("litellm_llm." + model["alias"])
+        elif model.get("model"):
+            pipeline__llm_options.append("litellm_llm." + model["model"])
+    
+    with st.expander("Pipeline Configuration", expanded=False):
+        selected_pipeline_name  = st.selectbox("pipeline_name", options=[n.get("name") for n in pipeline_name_options if n.get("llm")])
+            # 根據選擇的 pipeline 顯示相應的 Expander
+        for idx, form in enumerate(pipeline_name_options):
+            if form.get("name") == selected_pipeline_name:
+                for key, value in form.items():
+                    if key == "llm":
+                        pipeline_llm = st.selectbox(
+                            "llm",
+                            options=[m for m in pipeline__llm_options],
+                            index=pipeline__llm_options.index(value) if value in pipeline__llm_options else 0,
+                            key=f"llm_{idx}"
+                        )
+                    else:
+                        st.markdown(f"**{key}:** `{value}`")
+                if st.button("💾  Save this llm", key=f"save_{form["name"]}"):
+                    st.session_state[ConfigState.PIPELINE_KEY]["pipes"][idx]["llm"] = pipeline_llm
+                    st.success(f"Updated pipeline llm: {pipeline_llm}")
+        
 def render_preview_and_generate(engine_blocks, pipeline_block, settings_block):
     st.subheader("Current Configuration (Preview)")
 
@@ -159,9 +191,19 @@ def render_preview_and_generate(engine_blocks, pipeline_block, settings_block):
     # ---- 取得 Document Store 配置 ----
     document_store_preview = st.session_state.get(ConfigState.DOC_STORE_KEY)
 
-    # ---- 合併所有配置 ----
-    preview_blocks = [llm_preview, embedder_preview, document_store_preview]
+    # --- 取得 Pipeline llm 配置 ----
+    pipeline_preview = {
+        "type": "pipeline",
+        "pipes": [form for form in st.session_state.get(ConfigState.PIPELINE_KEY, {}).get("pipes", []) if form.get("llm")]
+    }
 
+    # ---- 合併所有配置 ----
+    preview_blocks = [llm_preview, embedder_preview, document_store_preview, pipeline_preview]
+
+    generate_pipeline_block = {
+        "type": "pipeline",
+        "pipes": st.session_state.get(ConfigState.PIPELINE_KEY, {}).get("pipes", [])
+    }
     generate_yaml_blocks = [
         llm_preview,
         embedder_preview,
@@ -170,7 +212,7 @@ def render_preview_and_generate(engine_blocks, pipeline_block, settings_block):
             for engine in engine_blocks
         ],
         document_store_preview,
-        {"type": "pipeline", "pipes": pipeline_block.get("pipes", [])},
+        generate_pipeline_block,
         {"settings": settings_block}
     ]
 

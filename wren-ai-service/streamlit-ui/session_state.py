@@ -8,13 +8,15 @@ class ConfigState:
     LLM_MODELS_KEY = "llm_models"
     EMBEDDER_KEY = "embedding_model"
     DOC_STORE_KEY = "document_store"
+    PIPELINE_KEY = "pipeline"
 
     @classmethod
-    def init(cls, llm_block, embedder_block, document_store_block, force=False):
+    def init(cls, llm_block, embedder_block, document_store_block, pipeline_block,force=False):
         """初始化所有 Session State"""
         cls.init_llm_forms(llm_block, force=force)
         cls.init_embedder(embedder_block, force=force)
         cls.init_document_store(document_store_block, force=force)
+        cls.init_pipeline(pipeline_block, force=force)
 
     @classmethod
     def init_llm_forms(cls, llm_block, force=False):
@@ -82,5 +84,14 @@ class ConfigState:
             "recreate_index": document_store_block.get("recreate_index", False),
         }
 
+    @classmethod
+    def init_pipeline(cls, pipeline_block, force=False):
+        if not force and cls.PIPELINE_KEY in st.session_state and st.session_state[cls.PIPELINE_KEY]:
+            return
+
+        st.session_state[cls.PIPELINE_KEY] = {
+            "type": "pipeline",
+            "pipes": pipeline_block.get("pipes", []),
+        }
     # 可以額外做 CRUD：新增 LLM、刪除 LLM、更新 Embedder...
 

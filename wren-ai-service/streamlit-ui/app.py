@@ -6,6 +6,7 @@ from ui_components import (
     render_embedder_config, 
     render_document_store_config, 
     render_import_yaml, 
+    render_pipeline_config,
     render_preview_and_generate
 )
 import streamlit as st
@@ -35,7 +36,7 @@ st.title(" Custom LLM Config Generator")
 st.markdown("")
 col1, col2 = st.columns([1.5, 1])  # 左右欄位
 
-ConfigState.init(llm_block, embedder_block, document_store_block)
+ConfigState.init(llm_block, embedder_block, document_store_block, pipeline_block)
 
 with col1:
     # =====================
@@ -45,7 +46,10 @@ with col1:
     render_llm_config()
     render_embedder_config()
     render_document_store_config()
+    render_pipeline_config()
 
 with col2:
-
+    # =====================
+    # preview and generate YAML UI 
+    # =====================
     render_preview_and_generate(engine_blocks, pipeline_block, settings_block)
