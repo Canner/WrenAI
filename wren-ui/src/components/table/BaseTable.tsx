@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Table, TableProps, Row, Col } from 'antd';
 import EllipsisWrapper from '@/components/EllipsisWrapper';
-import CodeBlock from '@/components/editor/CodeBlock';
+import SQLCodeBlock from '@/components/code/SQLCodeBlock';
 import { getColumnTypeIcon } from '@/utils/columnType';
 import { ComposeDiagramField, getJoinTypeText } from '@/utils/data';
 import { makeIterable } from '@/utils/iteration';
@@ -40,7 +40,7 @@ export const COLUMN = {
     render: (expression) => {
       return (
         <EllipsisWrapper text={expression}>
-          <CodeBlock code={expression} inline />
+          <SQLCodeBlock code={expression} inline />
         </EllipsisWrapper>
       );
     },

@@ -21,7 +21,7 @@ import {
   useDeleteSqlPairMutation,
 } from '@/apollo/client/graphql/sqlPairs.generated';
 
-const CodeBlock = dynamic(() => import('@/components/editor/CodeBlock'), {
+const SQLCodeBlock = dynamic(() => import('@/components/code/SQLCodeBlock'), {
   ssr: false,
 });
 
@@ -101,7 +101,7 @@ export default function ManageQuestionSQLPairs() {
       width: '60%',
       render: (sql) => (
         <div style={{ width: '100%' }}>
-          <CodeBlock code={sql} maxHeight="130" />
+          <SQLCodeBlock code={sql} maxHeight="130" />
         </div>
       ),
     },

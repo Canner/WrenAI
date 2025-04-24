@@ -1,5 +1,5 @@
 import { Button, Typography } from 'antd';
-import CodeBlock from '@/components/editor/CodeBlock';
+import SQLCodeBlock from '@/components/code/SQLCodeBlock';
 import PreviewData from '@/components/dataPreview/PreviewData';
 import { COLUMN } from '@/components/table/BaseTable';
 import FieldTable from '@/components/table/FieldTable';
@@ -55,7 +55,7 @@ export default function ViewMetadata(props: Props) {
         <Typography.Text className="d-block gray-7 mb-2">
           SQL statement
         </Typography.Text>
-        <CodeBlock code={statement} showLineNumbers maxHeight="300" />
+        <SQLCodeBlock code={statement} showLineNumbers maxHeight="300" />
       </div>
 
       <div className="mb-6" data-testid="metadata__preview-data">
