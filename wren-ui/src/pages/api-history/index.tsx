@@ -100,6 +100,15 @@ export default function APIHistory() {
       },
     },
     {
+      title: 'Duration (ms)',
+      dataIndex: 'durationMs',
+      key: 'durationMs',
+      width: 124,
+      render: (durationMs: number) => (
+        <div className="gray-7 text-right">{durationMs || '-'}</div>
+      ),
+    },
+    {
       title: 'Actions',
       key: 'actions',
       width: 110,
