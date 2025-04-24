@@ -77,59 +77,6 @@ with col1:
 
     render_llm_config()
 
-    # =====================
-    # Embedder Configuration
-    # =====================
-
-    with st.expander(" Embedder Configuration", expanded=False):
-        st.markdown(f"**type:** `embedder`")
-        st.markdown(f"**provider:** `{embedder_block.get('provider')}`")
-
-        embedding_model_name = st.text_input("Embedding Model Name", key="embedding_model_name", value="text-embedding-3-large")
-        embedding_model_alias = st.text_input("Alias (optional, e.g. default)", key="embedding_model_alias", value="default")
-        embedding_model_timeout = st.text_input("Timeout (optional, default: 120)", key="embedding_model_timeout", value="120")
-
-        custom_embedding_setting = [{
-            "model": embedding_model_name,
-            "alias": embedding_model_alias,
-            "timeout": embedding_model_timeout
-        }]
-
-        if st.button("save", key="save_embedding_model"):
-            st.session_state.embedding_model = {
-                "type": "embedder",
-                "provider": embedder_block.get("provider"),
-                "models": custom_embedding_setting
-            }
-
-
-
-    # =====================
-    # Document Store Configuration
-    # =====================
-
-    with st.expander(" Document Store Configuration", expanded=False):
-        st.markdown(f"**type:** `document_store`")
-        st.markdown(f"**provider:** `{document_store_block.get('provider')}`")
-        st.markdown(f"**location:** `{document_store_block.get('location')}`")
-        document_store_timeout = st.text_input("Timeout (optional, default: 120)", key="document_store_timeout" , value="120")
-        st.markdown(f"**timeout:** `120`")
-        st.markdown(f"**recreate_index:** `{document_store_block.get('recreate_index')}`")
-        document_store_dim = st.text_input("Embedding_model_dim", value="3072")
-
-        if st.button("save", key="save_document_store"):
-            st.session_state.document_store = {
-
-                "type": "document_store",
-                "provider": document_store_block.get("provider"),
-                "location": document_store_block.get("location"),
-                "embedding_model_dim": document_store_dim,
-                "timeout": document_store_timeout,
-                "recreate_index": document_store_block.get("recreate_index")
-
-            }
-
-
 with col2:
 
     st.subheader("Current LLM Configuration (Preview)")
@@ -138,7 +85,7 @@ with col2:
     
         llm_preview = {
             "type": "llm",
-            "provider": llm_block.get("provider"),
+            "provider": "litellm_embedder",
             "models": [
                 {k: v for k, v in model.items() if k != "id"}
                 for model in st.session_state.llm_models

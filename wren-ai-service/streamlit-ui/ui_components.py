@@ -1,5 +1,3 @@
-# ui_components.py
-
 import streamlit as st
 import uuid
 from session_state import ConfigState
@@ -14,7 +12,7 @@ def render_llm_config():
             "model": "new-model",
             "alias": "",
             "api_base": "",
-            "timeout": "120",
+            "timeout": 120,
             "kwargs": []
         })
 
@@ -56,6 +54,59 @@ def render_llm_config():
                 if st.button("🗑️  Remove this form", key=f"remove_form_{form_id}"):
                     remove_llm_model(form_id)
                     st.rerun()
+    
+    # =====================
+    # Embedder Configuration
+    # =====================
+
+    with st.expander(" Embedder Configuration", expanded=False):
+        st.markdown(f"**type:** `embedder`")
+        st.markdown(f"**provider:** `{st.session_state[ConfigState.EMBEDDER_KEY].get('provider')}`")
+
+        embedding_model_name = st.text_input("Embedding Model Name", key="embedding_model_name", value="text-embedding-3-large")
+        embedding_model_alias = st.text_input("Alias (optional, e.g. default)", key="embedding_model_alias", value="default")
+        embedding_model_timeout = st.text_input("Timeout (optional, default: 120)", key="embedding_model_timeout", value="120")
+
+        custom_embedding_setting = [{
+            "model": embedding_model_name,
+            "alias": embedding_model_alias,
+            "timeout": embedding_model_timeout
+        }]
+
+        if st.button("save", key="save_embedding_model"):
+            st.session_state.embedding_model = {
+                "type": "embedder",
+                "provider": st.session_state[ConfigState.EMBEDDER_KEY].get("provider"),
+                "models": custom_embedding_setting
+            }
+
+    # =====================
+    # Document Store Configuration
+    # =====================
+
+    with st.expander(" Document Store Configuration", expanded=False):
+        st.markdown(f"**type:** `document_store`")
+        # st.markdown(f"**provider:** `{document_store_block.get('provider')}`")
+        st.markdown(f"**provider:** `{st.session_state[ConfigState.DOC_STORE_KEY].get('provider')}`")
+
+        st.markdown(f"**location:** `{st.session_state[ConfigState.DOC_STORE_KEY].get('location')}`")
+        document_store_timeout = st.text_input("Timeout (optional, default: 120)", key="document_store_timeout" , value="120")
+        st.markdown(f"**timeout:** `120`")
+        st.markdown(f"**recreate_index:** `{st.session_state[ConfigState.DOC_STORE_KEY].get('recreate_index')}`")
+        document_store_dim = st.text_input("Embedding_model_dim", value="3072")
+
+        if st.button("save", key="save_document_store"):
+            st.session_state.document_store = {
+
+                "type": "document_store",
+                "provider": st.session_state[ConfigState.DOC_STORE_KEY].get("provider"),
+                "location": st.session_state[ConfigState.DOC_STORE_KEY].get("location"),
+                "embedding_model_dim": document_store_dim,
+                "timeout": document_store_timeout,
+                "recreate_index": st.session_state[ConfigState.DOC_STORE_KEY].get("recreate_index")
+
+            }
+
 
 def save_llm_model(form, form_id):
     # 轉成 kwargs dict
@@ -69,9 +120,9 @@ def save_llm_model(form, form_id):
 
     saved_entry = {
         "model": form["model"],
-        "alias": form["alias"],
+        **({"alias": form["alias"]} if form["alias"] else {}),
         "api_base": form["api_base"],
-        "timeout": form["timeout"],
+        "timeout": safe_eval(form["timeout"], default=120),
         "kwargs": kwargs_dict,
     }
 
@@ -94,3 +145,11 @@ def remove_llm_model(form_id):
         m for m in st.session_state[ConfigState.LLM_MODELS_KEY] if m.get("id") != form_id
     ]
 
+def safe_eval(value, default=None):
+    """安全地評估字符串值，失敗時返回原始值或默認值"""
+    if not value:
+        return default
+    try:
+        return eval(value)
+    except Exception:
+        return value

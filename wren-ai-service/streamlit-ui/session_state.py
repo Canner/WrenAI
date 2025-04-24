@@ -34,23 +34,25 @@ class ConfigState:
                     "id": str(uuid.uuid4()),
                     "model": model_item.get("model", ""),
                     "alias": model_item.get("alias", ""),
-                    "api_base": "https://api.openai.com/v1",
-                    "timeout": str(llm_block.get("timeout", 120)),
+                    "api_base": model_item.get("api_base", "https://api.openai.com/v1"),
+                    "timeout": int(llm_block.get("timeout", 120)),
                     "kwargs": [
                         {"key": k, "value": v}
                         for k, v in model_item.get("kwargs", {}).items()
                     ]
                 }
+
                 st.session_state[cls.LLM_FORMS_KEY].append(form_entry)
 
                 model_entry = {
                     "id": form_entry["id"],
                     "model": form_entry["model"],
-                    "alias": form_entry["alias"],
+                    **({'alias': form_entry["alias"]} if form_entry["alias"] else {}),
                     "api_base": form_entry["api_base"],
                     "timeout": form_entry["timeout"],
                     "kwargs": {k["key"]: k["value"] for k in form_entry["kwargs"] if k["key"]},
                 }
+
                 st.session_state[cls.LLM_MODELS_KEY].append(model_entry)
 
     @classmethod
