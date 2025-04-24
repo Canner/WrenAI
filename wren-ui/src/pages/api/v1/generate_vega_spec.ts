@@ -11,6 +11,7 @@ import {
 import { ChartResult, ChartStatus } from '@/apollo/server/models/adaptor';
 import { PreviewDataResponse } from '@server/services/queryService';
 import { transformToObjects } from '@server/utils/dataUtils';
+import { enhanceVegaSpec } from '@/utils/vegaSpecUtils';
 
 const { projectService, wrenAIAdaptor, deployService, queryService } =
   components;
@@ -123,16 +124,16 @@ export default async function handler(
 
     // Get the generated Vega spec
     const vegaSpec = result?.response?.chartSchema;
-    vegaSpec.data = {
-      values: dataObjects,
-    };
+
+    // Enhance the Vega spec with styling and configuration
+    const enhancedVegaSpec = enhanceVegaSpec(vegaSpec, dataObjects);
 
     // Return the Vega spec with data included
     await respondWith({
       res,
       statusCode: 200,
       responsePayload: {
-        vegaSpec,
+        vegaSpec: enhancedVegaSpec,
         threadId: newThreadId,
       },
       projectId: project.id,
