@@ -147,6 +147,8 @@ export default function APIHistory() {
               <Link
                 className="gray-8 underline mr-2"
                 href="https://docs.getwren.ai/oss/guide/api-history"
+                target="_blank"
+                rel="noopener noreferrer"
               >
                 API reference
               </Link>
@@ -157,6 +159,8 @@ export default function APIHistory() {
               <Link
                 className="gray-8 underline mr-2"
                 href="https://docs.getwren.ai/oss/guide/api-history"
+                target="_blank"
+                rel="noopener noreferrer"
               >
                 Page guide
               </Link>
