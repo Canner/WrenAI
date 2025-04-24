@@ -1,14 +1,39 @@
 import streamlit as st
 import uuid
 from session_state import ConfigState
+from config_loader import group_blocks
+import yaml
 
+def render_import_yaml():
+    st.subheader("LLM Configuration")
+    # IMPORT YAML
+    uploaded_file = st.file_uploader("Choose a YAML file", type=["yaml", "yml"])
+    
+    if uploaded_file is not None:
+        if st.button("Import.yaml", key="import_yaml"):
+            try:
+                # 解析使用者上傳的 yaml 檔案
+                user_config_list = list(yaml.safe_load_all(uploaded_file))
+                user_config_block = group_blocks(user_config_list)  # 將 YAML 轉換為字典格式
 
-if "save_error" in st.session_state:
-    st.error(st.session_state["save_error"])
+                # 用於更新的暫存區
+                user_llm_block = user_config_block.get("llm", {})
+                user_embedder_block = user_config_block.get("embedder", {})
+                user_document_store_block = user_config_block.get("document_store", {})
+                user_pipeline_block = user_config_block.get("pipeline", {})
 
+                # 僅在有新資料時才更新對應的 block
+                if user_llm_block: llm_block = user_llm_block
+                if user_embedder_block: embedder_block = user_embedder_block
+                if user_document_store_block: document_store_block = user_document_store_block
+                if user_pipeline_block: pipeline_block = user_pipeline_block
+                
+                ConfigState.init(llm_block, embedder_block, document_store_block, force=True)  # 強制重新初始化 Session State
+                st.success("YAML 匯入成功，設定已更新。")
+            except Exception as e:
+                st.error(f"匯入 YAML 檔案時發生錯誤: {e}")
 
 def render_llm_config():
-    # st.subheader("LLM Configuration")
 
     # ① 新增一個空白表單
     if st.button("➕  Add model", key="btn_add_model"):
@@ -113,6 +138,52 @@ def render_document_store_config():
                 "recreate_index": st.session_state[ConfigState.DOC_STORE_KEY].get("recreate_index")
 
             }
+
+
+def render_preview_and_generate(engine_blocks, pipeline_block, settings_block):
+    st.subheader("Current Configuration (Preview)")
+
+    # ---- 取得目前的 LLM 配置 ----
+    llm_preview = {
+        "type": "llm",
+        "provider": "litellm_llm",
+        "models": [
+            {k: v for k, v in model.items() if k != "id"}
+            for model in st.session_state.get(ConfigState.LLM_MODELS_KEY, [])
+        ]
+    }
+
+    # ---- 取得 Embedder 配置 ----
+    embedder_preview = st.session_state.get(ConfigState.EMBEDDER_KEY)
+
+    # ---- 取得 Document Store 配置 ----
+    document_store_preview = st.session_state.get(ConfigState.DOC_STORE_KEY)
+
+    # ---- 合併所有配置 ----
+    preview_blocks = [llm_preview, embedder_preview, document_store_preview]
+
+    generate_yaml_blocks = [
+        llm_preview,
+        embedder_preview,
+        *[
+            {"type": "engine", "provider": engine.get("provider"), "endpoint": engine.get("endpoint")}
+            for engine in engine_blocks
+        ],
+        document_store_preview,
+        {"type": "pipeline", "pipes": pipeline_block.get("pipes", [])},
+        {"settings": settings_block}
+    ]
+
+    # ---- 顯示 JSON 預覽 ----
+    st.json(preview_blocks)
+
+    # ---- 生成 YAML 按鈕 ----
+    if st.button("Generate config.yaml"):
+        from constants import CONFIG_OUT_PATH
+        with open(CONFIG_OUT_PATH, "w", encoding="utf-8") as f:
+            yaml.dump_all(generate_yaml_blocks, f, sort_keys=False, allow_unicode=True)
+        st.success(f"Config saved to {CONFIG_OUT_PATH.resolve()}")
+
 
 
 def save_llm_model(form, form_id):
