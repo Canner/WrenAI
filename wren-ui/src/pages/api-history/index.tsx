@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Table, TableColumnsType, Button, Tag, Typography } from 'antd';
 import { getAbsoluteTime } from '@/utils/time';
+import useDrawerAction from '@/hooks/useDrawerAction';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import PageLayout from '@/components/layouts/PageLayout';
 import ApiOutlined from '@ant-design/icons/ApiOutlined';
@@ -9,11 +10,14 @@ import InfoCircleOutlined from '@ant-design/icons/InfoCircleOutlined';
 import EyeOutlined from '@ant-design/icons/EyeOutlined';
 import CheckCircleOutlined from '@ant-design/icons/CheckCircleOutlined';
 import CloseCircleOutlined from '@ant-design/icons/CloseCircleOutlined';
-import CodeBlock from '@/components/editor/CodeBlock';
+import SQLCodeBlock from '@/components/code/SQLCodeBlock';
+import DetailsDrawer from '@/components/pages/apiHistory/DetailsDrawer';
 import { useApiHistoryQuery } from '@/apollo/client/graphql/apiHistory.generated';
 import { ApiType, ApiHistoryResponse } from '@/apollo/client/graphql/__types__';
 
 export default function APIHistory() {
+  const detailsDrawer = useDrawerAction();
+
   const { data, loading } = useApiHistoryQuery({
     fetchPolicy: 'cache-and-network',
     variables: {
@@ -68,7 +72,7 @@ export default function APIHistory() {
         if (record.apiType === ApiType.RUN_SQL && payload.sql) {
           return (
             <div style={{ width: '100%' }}>
-              <CodeBlock code={payload.sql} maxHeight="130" />
+              <SQLCodeBlock code={payload.sql} maxHeight="130" />
             </div>
           );
         }
@@ -101,8 +105,13 @@ export default function APIHistory() {
       width: 110,
       align: 'center',
       fixed: 'right',
-      render: () => (
-        <Button className="gray-8" type="text" size="small">
+      render: (record) => (
+        <Button
+          className="gray-8"
+          type="text"
+          size="small"
+          onClick={() => detailsDrawer.openDrawer(record)}
+        >
           <EyeOutlined /> Details
         </Button>
       ),
@@ -159,6 +168,10 @@ export default function APIHistory() {
             size: 'small',
           }}
           scroll={{ x: 1080 }}
+        />
+        <DetailsDrawer
+          {...detailsDrawer.state}
+          onClose={detailsDrawer.closeDrawer}
         />
       </PageLayout>
     </SiderLayout>
