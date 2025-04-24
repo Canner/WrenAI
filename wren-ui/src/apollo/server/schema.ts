@@ -889,9 +889,26 @@ export const typeDefs = gql`
     refresh: Boolean
   }
 
+  type PreviewItemResponse {
+    data: JSON!
+    cacheHit: Boolean!
+    cacheCreatedAt: String
+    cacheOverrideAt: String
+    override: Boolean!
+  }
+
   input SetDashboardScheduleInput {
     cacheEnabled: Boolean!
     schedule: SetDashboardScheduleData!
+  }
+
+  type DashboardSchedule {
+    frequency: ScheduleFrequencyEnum!
+    hour: Int!
+    minute: Int!
+    day: CacheScheduleDayEnum
+    timezone: String
+    cron: String
   }
 
   input SetDashboardScheduleData {
@@ -939,6 +956,15 @@ export const typeDefs = gql`
     layout: DashboardItemLayout!
     detail: DashboardItemDetail!
     displayName: String
+  }
+
+  type DetailedDashboard {
+    id: Int!
+    name: String!
+    description: String
+    nextScheduledAt: String
+    schedule: DashboardSchedule!
+    items: [DashboardItem!]!
   }
 
   type SqlPair {
@@ -1043,6 +1069,7 @@ export const typeDefs = gql`
 
     # Dashboard
     dashboardItems: [DashboardItem!]!
+    dashboard: DetailedDashboard!
 
     # SQL Pairs
     sqlPairs: [SqlPair]!
