@@ -13,6 +13,11 @@ export default async function handler(
   res.flushHeaders();
 
   const { queryId } = req.query;
+  if (!queryId) {
+    res.status(400).json({ error: 'queryId is required' });
+    return;
+  }
+
   try {
     const stream = await wrenAIAdaptor.getAskStreamingResult(queryId as string);
 
@@ -32,6 +37,6 @@ export default async function handler(
     });
   } catch (error) {
     console.error(error);
-    res.status(500).end();
+    res.status(500).json({ error: error.message });
   }
 }

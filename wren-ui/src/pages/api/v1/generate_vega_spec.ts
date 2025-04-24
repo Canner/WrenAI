@@ -55,6 +55,14 @@ export default async function handler(
       throw new ApiError('SQL is required', 400);
     }
 
+    if (
+      !Number.isInteger(sampleSize) ||
+      sampleSize <= 0 ||
+      sampleSize > 1000000
+    ) {
+      throw new ApiError('Invalid sampleSize', 400);
+    }
+
     // Get current project's last deployment
     const lastDeploy = await deployService.getLastDeployment(project.id);
     if (!lastDeploy) {
@@ -136,6 +144,10 @@ export default async function handler(
 
     // Get the generated Vega spec
     const vegaSpec = result?.response?.chartSchema;
+
+    if (!vegaSpec) {
+      throw new ApiError('Failed to generate Vega spec', 500);
+    }
 
     // Enhance the Vega spec with styling and configuration
     const enhancedVegaSpec = enhanceVegaSpec(vegaSpec, dataObjects);

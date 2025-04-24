@@ -14,6 +14,13 @@ export const transformToObjects = (
     return [];
   }
 
+  // throw an error if the number of columns in the rows does not match the number of columns in the columns array
+  if (rows[0].length !== columns.length) {
+    throw new Error(
+      'Number of columns in the rows does not match the number of columns in the columns array',
+    );
+  }
+
   return rows.map((row) => {
     const obj: Record<string, any> = {};
     columns.forEach((col, index) => {

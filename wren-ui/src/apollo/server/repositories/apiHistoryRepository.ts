@@ -131,7 +131,13 @@ export class ApiHistoryRepository
       if (this.jsonbColumns.includes(key)) {
         // The value from Sqlite will be string type, while the value from PG is JSON object
         if (typeof value === 'string') {
-          return value ? JSON.parse(value) : value;
+          if (!value) return value;
+          try {
+            return JSON.parse(value);
+          } catch (error) {
+            console.error(`Failed to parse JSON for ${key}:`, error);
+            return value; // Return raw value if parsing fails
+          }
         } else {
           return value;
         }
