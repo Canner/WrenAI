@@ -8,6 +8,8 @@ from dotenv import load_dotenv
 from langfuse.decorators import langfuse_context
 
 from src.config import Settings
+from src.web.v1.services.ask import AskHistory
+from src.web.v2.services.conversation import ConversationHistory
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -187,3 +189,14 @@ def fetch_wren_ai_docs(doc_endpoint: str, is_oss: bool) -> list[dict]:
             )
 
     return results
+
+
+# although history.response may not be a sql, we still use AskHistory as the type
+# because the AskHistory type is used in the Ask pipeline
+def convert_conversation_history_to_ask_history(
+    conversation_history: list[ConversationHistory],
+) -> list[AskHistory]:
+    return [
+        AskHistory(question=history.request, sql=history.response)
+        for history in conversation_history
+    ]

@@ -9,7 +9,10 @@ from langfuse.decorators import observe
 from pydantic import BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
-from src.utils import trace_metadata
+from src.utils import (
+    convert_conversation_history_to_ask_history,
+    trace_metadata,
+)
 from src.web.v2.services import (
     Configurations,
     Error,
@@ -26,8 +29,8 @@ class QuestionResult(BaseModel):
 
 
 class ConversationHistory(BaseModel):
-    question: str
-    sql: str
+    request: str
+    response: str
 
 
 # POST /v2/conversations
@@ -132,7 +135,7 @@ class ConversationService:
         intent_classification_result = (
             await self._pipelines["intent_classification"].run(
                 query=query,
-                histories=histories,
+                histories=convert_conversation_history_to_ask_history(histories),
                 sql_samples=sql_samples,
                 instructions=instructions,
                 project_id=project_id,
@@ -160,7 +163,7 @@ class ConversationService:
         asyncio.create_task(
             self._pipelines["misleading_assistance"].run(
                 query=query,
-                histories=histories,
+                histories=convert_conversation_history_to_ask_history(histories),
                 db_schemas=db_schemas,
                 language=language,
                 query_id=query_id,
@@ -180,7 +183,7 @@ class ConversationService:
         asyncio.create_task(
             self._pipelines["data_assistance"].run(
                 query=query,
-                histories=histories,
+                histories=convert_conversation_history_to_ask_history(histories),
                 db_schemas=db_schemas,
                 language=language,
                 query_id=query_id,
@@ -214,7 +217,7 @@ class ConversationService:
         retrieval_results = (
             await self._pipelines["retrieval"].run(
                 query=query,
-                histories=histories,
+                histories=convert_conversation_history_to_ask_history(histories),
                 project_id=project_id,
             )
         ).get("construct_retrieval_results", {})
@@ -242,7 +245,7 @@ class ConversationService:
             self._pipelines["followup_sql_generation_reasoning"].run(
                 query=query,
                 contexts=contexts,
-                histories=histories,
+                histories=convert_conversation_history_to_ask_history(histories),
                 sql_samples=sql_samples,
                 instructions=instructions,
                 configuration=configuration,
@@ -309,7 +312,7 @@ class ConversationService:
             query=query,
             contexts=contexts,
             sql_generation_reasoning=sql_generation_reasoning,
-            histories=histories,
+            histories=convert_conversation_history_to_ask_history(histories),
             project_id=project_id,
             configuration=configurations,
             sql_samples=sql_samples,

@@ -133,9 +133,9 @@ SQL:
 {% if histories %}
 User's previous questions:
 {% for history in histories %}
-Question:
+User's Question:
 {{ history.question }}
-SQL:
+Assistant's Response:
 {{ history.sql }}
 {% endfor %}
 {% endif %}
