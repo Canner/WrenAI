@@ -128,10 +128,14 @@ export class ApiHistoryResolver {
    */
   public getApiHistoryNestedResolver = () => ({
     createdAt: (apiHistory: ApiHistory) => {
-      return new Date(apiHistory.createdAt).toISOString();
+      return apiHistory.createdAt
+        ? new Date(apiHistory.createdAt).toISOString()
+        : null;
     },
     updatedAt: (apiHistory: ApiHistory) => {
-      return new Date(apiHistory.updatedAt).toISOString();
+      return apiHistory.updatedAt
+        ? new Date(apiHistory.updatedAt).toISOString()
+        : null;
     },
     responsePayload: (apiHistory: ApiHistory) => {
       if (!apiHistory.responsePayload) return null;
