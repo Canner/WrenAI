@@ -120,7 +120,6 @@ class ConversationService:
             instructions_retrieval.get("formatted_output", {}).get("documents", []),
         )
 
-    # no emit content block at the moment
     async def _run_intent_classification(
         self,
         query: str,
@@ -141,7 +140,14 @@ class ConversationService:
             )
         ).get("post_process", {})
 
-        return intent_classification_result
+        return [
+            {
+                "rephrased_question": intent_classification_result.get(
+                    "rephrased_question"
+                ),
+                "reasoning": intent_classification_result.get("reasoning"),
+            }
+        ], intent_classification_result
 
     def _run_misleading_assistance(
         self,
@@ -456,14 +462,33 @@ class ConversationService:
                     block_type="tool_use",
                 )
 
-                intent_classification_result = await self._run_intent_classification(
-                    query=user_query,
-                    histories=histories,
-                    sql_samples=sql_samples,
-                    instructions=instructions,
-                    project_id=project_id,
-                    configurations=configurations,
+                intent_classification_result = (
+                    await self._query_event_manager.emit_content_block(
+                        query_id,
+                        trace_id,
+                        index=3,
+                        emit_content_func=self._run_intent_classification,
+                        emit_content_func_kwargs={
+                            "query": user_query,
+                            "histories": histories,
+                            "sql_samples": sql_samples,
+                            "instructions": instructions,
+                            "project_id": project_id,
+                            "configurations": configurations,
+                        },
+                        content_block_label="INTENT_CLASSIFICATION",
+                        block_type="tool_use",
+                    )
                 )
+
+                # intent_classification_result = await self._run_intent_classification(
+                #     query=user_query,
+                #     histories=histories,
+                #     sql_samples=sql_samples,
+                #     instructions=instructions,
+                #     project_id=project_id,
+                #     configurations=configurations,
+                # )
 
                 intent = intent_classification_result.get("intent")
                 rephrased_question = intent_classification_result.get(
