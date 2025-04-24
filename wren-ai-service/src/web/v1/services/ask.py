@@ -30,6 +30,7 @@ class AskRequest(BaseModel):
     thread_id: Optional[str] = None
     histories: Optional[list[AskHistory]] = Field(default_factory=list)
     configurations: Optional[Configuration] = Configuration()
+    ignore_sql_generation_reasoning: Optional[bool] = False
 
     @property
     def query_id(self) -> str:
@@ -231,6 +232,10 @@ class AskService:
         table_names = []
         error_message = None
         invalid_sql = None
+        allow_sql_generation_reasoning = (
+            self._allow_sql_generation_reasoning
+            and not ask_request.ignore_sql_generation_reasoning
+        )
 
         try:
             user_query = ask_request.query
@@ -428,7 +433,7 @@ class AskService:
             if (
                 not self._is_stopped(query_id, self._ask_results)
                 and not api_results
-                and self._allow_sql_generation_reasoning
+                and allow_sql_generation_reasoning
             ):
                 self._ask_results[query_id] = AskResultResponse(
                     status="planning",
