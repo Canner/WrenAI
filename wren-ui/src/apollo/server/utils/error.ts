@@ -56,6 +56,7 @@ export enum GeneralErrorCodes {
 
   // vega schema error
   FAILED_TO_GENERATE_VEGA_SCHEMA = 'FAILED_TO_GENERATE_VEGA_SCHEMA',
+  POLLING_TIMEOUT = 'POLLING_TIMEOUT',
 }
 
 export const errorMessages = {
@@ -120,6 +121,7 @@ export const errorMessages = {
   // vega schema error
   [GeneralErrorCodes.FAILED_TO_GENERATE_VEGA_SCHEMA]:
     'Failed to generate Vega spec',
+  [GeneralErrorCodes.POLLING_TIMEOUT]: 'Polling timeout',
 };
 
 export const shortMessages = {
@@ -151,6 +153,7 @@ export const shortMessages = {
     'No deployment found, please deploy your project first',
   [GeneralErrorCodes.FAILED_TO_GENERATE_VEGA_SCHEMA]:
     'Failed to generate Vega spec',
+  [GeneralErrorCodes.POLLING_TIMEOUT]: 'Polling timeout',
 };
 
 export const create = (
