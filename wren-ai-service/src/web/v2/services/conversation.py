@@ -697,7 +697,10 @@ class ConversationService:
                         if failed_dry_run_results := text_to_sql_generation_results[
                             "post_process"
                         ]["invalid_generation_results"]:
-                            if failed_dry_run_results[0]["type"] != "TIME_OUT":
+                            if (
+                                failed_dry_run_results[0]["type"] != "TIME_OUT"
+                                and failed_dry_run_results[0]["type"] != "ADD_QUOTES"
+                            ):
                                 sql_correction_results = await self._query_event_manager.emit_content_block(
                                     query_id,
                                     trace_id,
@@ -721,6 +724,9 @@ class ConversationService:
                                         error=Error(
                                             code="NO_RELEVANT_SQL",
                                             message=failed_dry_run_results[0]["error"],
+                                            invalid_sql=failed_dry_run_results[0][
+                                                "sql"
+                                            ],
                                         ),
                                     )
                                 else:
@@ -734,6 +740,7 @@ class ConversationService:
                                     error=Error(
                                         code="NO_RELEVANT_SQL",
                                         message=failed_dry_run_results[0]["error"],
+                                        invalid_sql=failed_dry_run_results[0]["sql"],
                                     ),
                                 )
                         else:

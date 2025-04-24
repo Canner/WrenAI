@@ -35,6 +35,7 @@ class Configurations(BaseModel):
 class Error(BaseModel):
     code: Literal["NO_RELEVANT_DATA", "NO_RELEVANT_SQL", "OTHERS"]
     message: str
+    invalid_sql: Optional[str] = None
 
 
 class QueueNotFoundError(Exception):
