@@ -1060,7 +1060,7 @@ export const typeDefs = gql`
     # Api History
     apiHistory(
       filter: ApiHistoryFilterInput
-      pagination: ApiHistoryPaginationInput
+      pagination: ApiHistoryPaginationInput!
     ): ApiHistoryPaginatedResponse!
   }
 
