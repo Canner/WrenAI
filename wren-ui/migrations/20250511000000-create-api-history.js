@@ -8,6 +8,11 @@ exports.up = function (knex) {
 
     // Project
     table.integer('project_id').notNullable();
+    table
+      .foreign('project_id')
+      .references('id')
+      .inTable('projects')
+      .onDelete('CASCADE');
 
     // Thread
     table.string('thread_id');
