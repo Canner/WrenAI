@@ -7,13 +7,19 @@ import {
 } from '@server/services';
 import { DashboardItem, DashboardItemType } from '@server/repositories';
 import { getLogger } from '@server/utils';
-import { SetDashboardCacheData } from '@server/models/dashboard';
+import {
+  DetailedDashboard,
+  SetDashboardCacheData,
+  DashboardSchedule,
+  PreviewItemResponse,
+} from '@server/models/dashboard';
 
 const logger = getLogger('DashboardResolver');
 logger.level = 'debug';
 
 export class DashboardResolver {
   constructor() {
+    this.getDashboard = this.getDashboard.bind(this);
     this.getDashboardItems = this.getDashboardItems.bind(this);
     this.createDashboardItem = this.createDashboardItem.bind(this);
     this.updateDashboardItem = this.updateDashboardItem.bind(this);
@@ -22,6 +28,28 @@ export class DashboardResolver {
       this.updateDashboardItemLayouts.bind(this);
     this.previewItemSQL = this.previewItemSQL.bind(this);
     this.setDashboardSchedule = this.setDashboardSchedule.bind(this);
+  }
+
+  public async getDashboard(
+    _root: any,
+    _args: any,
+    ctx: IContext,
+  ): Promise<DetailedDashboard & { schedule: DashboardSchedule }> {
+    const dashboard = await ctx.dashboardService.getCurrentDashboard();
+    if (!dashboard) {
+      throw new Error('Dashboard not found.');
+    }
+    const schedule = ctx.dashboardService.parseCronExpression(dashboard);
+    if (!dashboard) {
+      throw new Error('Dashboard not found.');
+    }
+    const items = await ctx.dashboardService.getDashboardItems(dashboard.id);
+    return {
+      ...dashboard,
+      nextScheduledAt: dashboard.nextScheduledAt?.toISOString(),
+      schedule,
+      items,
+    };
   }
 
   public async getDashboardItems(
@@ -120,7 +148,7 @@ export class DashboardResolver {
     _root: any,
     args: { data: { itemId: number; limit?: number; refresh?: boolean } },
     ctx: IContext,
-  ): Promise<Record<string, any>[]> {
+  ): Promise<PreviewItemResponse> {
     const { itemId, limit, refresh } = args.data;
     try {
       const item = await ctx.dashboardService.getDashboardItem(itemId);
@@ -143,7 +171,13 @@ export class DashboardResolver {
           return acc;
         }, {});
       });
-      return values;
+      return {
+        cacheHit: data.cacheHit || false,
+        cacheCreatedAt: data.cacheCreatedAt || null,
+        cacheOverrideAt: data.cacheOverrideAt || null,
+        override: data.override || false,
+        data: values,
+      } as PreviewItemResponse;
     } catch (error) {
       logger.error(`Error previewing SQL item ${itemId}: ${error}`);
       throw error;

@@ -66,6 +66,7 @@ const resolvers = {
 
     // Dashboard
     dashboardItems: dashboardResolver.getDashboardItems,
+    dashboard: dashboardResolver.getDashboard,
 
     // SQL Pairs
     sqlPairs: sqlPairResolver.getProjectSqlPairs,
