@@ -77,7 +77,7 @@ export default function HeaderBar() {
                 $isHighlight={pathname.startsWith(Path.APIHistory)}
                 onClick={() => router.push(Path.APIHistory)}
               >
-                API History
+                API history
               </StyledButton>
             </Space>
           )}

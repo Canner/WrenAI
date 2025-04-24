@@ -30,7 +30,7 @@ export default function APIHistory() {
       'data-guideid': 'api-history',
       label: (
         <Link style={linkStyle} href={Path.APIHistory}>
-          API History
+          API history
         </Link>
       ),
       icon: <ApiOutlined />,
