@@ -109,9 +109,8 @@ export default async function handler(
       deployId: lastDeploy.hash,
       histories: transformHistoryInput(histories) as any,
       configurations: {
-        language: language
-          ? WrenAILanguage[language]
-          : WrenAILanguage[project.language] || WrenAILanguage.EN,
+        language:
+          language || WrenAILanguage[project.language] || WrenAILanguage.EN,
       },
     });
 
