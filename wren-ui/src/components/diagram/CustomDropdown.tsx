@@ -151,7 +151,7 @@ export const DashboardDropdown = makeDropdown((props: Props) => {
       label: (
         <>
           <ReloadOutlined className="mr-2" />
-          Refresh all
+          Refresh all caches
         </>
       ),
       key: MORE_ACTION.REFRESH,
@@ -183,7 +183,7 @@ export const DashboardItemDropdown = makeDropdown((props: Props) => {
       label: (
         <>
           <ReloadOutlined className="mr-2" />
-          Refresh
+          Refresh cache
         </>
       ),
       key: MORE_ACTION.REFRESH,

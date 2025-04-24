@@ -66,12 +66,6 @@ const StyledDashboardGrid = styled.div`
     }
   }
 
-  .adm-pinned-item-info {
-    padding: 4px 8px 0 20px;
-    font-size: 12px;
-    color: var(--gray-6);
-  }
-
   .adm-pinned-item-title {
     font-size: 14px;
     font-weight: 700;
@@ -91,8 +85,15 @@ const StyledDashboardGrid = styled.div`
 
     &-overflow {
       overflow: auto;
-      height: 100%;
+      height: calc(100% - 18px);
       padding: 8px 12px;
+    }
+
+    &-info {
+      font-size: 12px;
+      color: var(--gray-6);
+      text-align: right;
+      user-select: none;
     }
   }
 
@@ -355,11 +356,6 @@ const PinnedItem = forwardRef(
             </DashboardItemDropdown>
           </div>
         </div>
-        {lastRefreshTime && (
-          <div className="adm-pinned-item-info">
-            Last refresh time: {getCompactTime(lastRefreshTime)}
-          </div>
-        )}
         <div className="adm-pinned-content">
           <div className="adm-pinned-content-overflow adm-scrollbar-track">
             <LoadingWrapper loading={loading} tip="Loading...">
@@ -377,6 +373,11 @@ const PinnedItem = forwardRef(
               />
             </LoadingWrapper>
           </div>
+          {lastRefreshTime && (
+            <div className="adm-pinned-content-info">
+              Last refreshed: {getCompactTime(lastRefreshTime)}
+            </div>
+          )}
         </div>
       </div>
     );

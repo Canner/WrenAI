@@ -49,7 +49,20 @@ export default function DashboardHeader(props: Props) {
               {nextScheduleTime ? (
                 <Tooltip
                   placement="bottom"
-                  title={`Next schedule: ${getCompactTime(nextScheduleTime)}`}
+                  title={
+                    <>
+                      <div>
+                        <span className="gray-6">Next schedule:</span>{' '}
+                        {getCompactTime(nextScheduleTime)}
+                      </div>
+                      {schedule.cron && (
+                        <div>
+                          <span className="gray-6">Cron expression:</span>{' '}
+                          {schedule.cron}
+                        </div>
+                      )}
+                    </>
+                  }
                 >
                   <span className="cursor-pointer">{scheduleTime}</span>
                 </Tooltip>

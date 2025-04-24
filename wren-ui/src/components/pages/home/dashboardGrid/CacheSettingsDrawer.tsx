@@ -12,15 +12,13 @@ import {
   Input,
   Row,
   Col,
-  Tag,
   Divider,
-  Tooltip,
   TimePicker,
 } from 'antd';
-import QuestionCircleOutlined from '@ant-design/icons/QuestionCircleOutlined';
 import { browserTimeZone } from '@/utils/time';
 import { DrawerAction } from '@/hooks/useDrawerAction';
 import { ERROR_TEXTS } from '@/utils/error';
+import { isValidCron, cronValidator } from '@/utils/validator';
 
 type Props = DrawerAction & {
   loading?: boolean;
@@ -54,6 +52,11 @@ const DAY_OF_WEEK = [
   'FRIDAY',
   'SATURDAY',
 ];
+
+const getFrequencyText = (frequency: string) => {
+  if (frequency === FREQUENCY.NEVER) return 'Manual refresh only';
+  return capitalize(frequency);
+};
 
 const getInitialSchedule = (frequency: string) => {
   let schedule = {};
@@ -160,7 +163,7 @@ const getNextSchedule = (data: {
 };
 
 const getNextScheduleByCron = (cron: string) => {
-  if (!cron || cron?.trim().split(' ').length < 5) return null;
+  if (!cron || !isValidCron(cron)) return null;
   try {
     const interval = CronExpressionParser.parse(cron, { tz: 'UTC' });
     const targetTime = moment.utc(interval.next().toDate()).local();
@@ -227,7 +230,7 @@ export default function CacheSettingsDrawer(props: Props) {
   return (
     <Drawer
       visible={visible}
-      title="Cache Settings"
+      title="Cache settings"
       width={410}
       closable
       destroyOnClose
@@ -252,20 +255,10 @@ export default function CacheSettingsDrawer(props: Props) {
     >
       <Form form={form} layout="vertical">
         <Form.Item
-          label={
-            <>
-              Caching{' '}
-              <Tooltip
-                title="Turning on caching helps dashboards load faster by avoiding redundant queries."
-                placement="right"
-              >
-                <QuestionCircleOutlined className="gray-6 ml-1 cursor-pointer" />
-              </Tooltip>
-            </>
-          }
+          label="Enable caching"
           name="enabled"
           valuePropName="checked"
-          extra="Cached results will refresh automatically based on the schedule you set below."
+          extra="Enable caching to speed up dashboard loading by reusing recent results. Choose a refresh schedule that fits your needs below."
         >
           <Switch />
         </Form.Item>
@@ -292,12 +285,12 @@ function Schedule() {
 
   return (
     <>
-      <Divider className="gray-6 text-sm">Scheduled refresh</Divider>
+      <Divider className="gray-6 text-sm">Refresh settings</Divider>
       <Form.Item label="Frequency" name={['schedule', 'frequency']}>
         <Select
           placeholder="Select frequency"
           options={Object.keys(FREQUENCY).map((key) => ({
-            label: capitalize(key),
+            label: getFrequencyText(key),
             value: FREQUENCY[key],
           }))}
           onChange={onFrequencyChange}
@@ -308,15 +301,10 @@ function Schedule() {
       {frequency === FREQUENCY.WEEKLY && <WeeklyTimeSelection />}
       {frequency === FREQUENCY.CUSTOM && (
         <Form.Item
-          label="Cron Expression"
+          label="Cron expression"
           name={['schedule', 'cron']}
           required={false}
-          rules={[
-            {
-              required: true,
-              message: ERROR_TEXTS.CACHE_SETTINGS.CRON.REQUIRED,
-            },
-          ]}
+          rules={[{ validator: cronValidator }]}
           extra="Cron expression will be executed in UTC timezone (e.g. '0 0 * * *' for daily at midnight UTC)"
         >
           <Input style={{ maxWidth: 200 }} placeholder="* * * * *" />
@@ -326,8 +314,9 @@ function Schedule() {
       {nextSchedule && (
         <div className="gray-7">
           Next scheduled refresh:
-          <Tag className="ml-2">{nextSchedule}</Tag>
-          <div>Displayed in your timezone: {browserTimeZone}</div>
+          <div className="gray-8">
+            {nextSchedule} {browserTimeZone && <span>({browserTimeZone})</span>}
+          </div>
         </div>
       )}
     </>

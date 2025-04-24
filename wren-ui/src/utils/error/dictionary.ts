@@ -138,15 +138,16 @@ export const ERROR_TEXTS = {
       REQUIRED: 'Please input SQL statement.',
     },
   },
+  CRON: {
+    REQUIRED: 'Please input cron expression.',
+    INVALID: 'Invalid cron expression.',
+  },
   CACHE_SETTINGS: {
     DAY: {
       REQUIRED: 'Please select day.',
     },
     TIME: {
       REQUIRED: 'Please select time.',
-    },
-    CRON: {
-      REQUIRED: 'Please input cron expression.',
     },
   },
 };
