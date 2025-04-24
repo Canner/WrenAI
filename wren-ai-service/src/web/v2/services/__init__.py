@@ -180,7 +180,7 @@ class QueryEventManager:
                     "message": {
                         "type": ("json" if block_type == "tool_use" else "text")
                         + "_delta",
-                        "content_block_label": content_block_label,
+                        "content_block_label": content_block_label or "",
                         "content": orjson.dumps(chunk)
                         if block_type == "json"
                         else chunk,
