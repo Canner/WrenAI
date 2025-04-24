@@ -10,9 +10,9 @@ from pydantic import BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
 from src.utils import (
-    convert_conversation_history_to_ask_history,
     trace_metadata,
 )
+from src.web.v1.services.ask import AskHistory
 from src.web.v2.services import (
     Configurations,
     Error,
@@ -53,6 +53,17 @@ class ConversationRequest(BaseModel):
 
 class ConversationResponse(BaseModel):
     query_id: str
+
+
+# although history.response may not be a sql, we still use AskHistory as the type
+# because the AskHistory type is used in the Ask pipeline
+def convert_conversation_history_to_ask_history(
+    conversation_history: list[ConversationHistory],
+) -> list[AskHistory]:
+    return [
+        AskHistory(question=history.request, sql=history.response)
+        for history in conversation_history
+    ]
 
 
 class ConversationService:
