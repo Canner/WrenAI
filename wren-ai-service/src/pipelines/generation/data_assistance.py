@@ -29,7 +29,7 @@ using the Markdown format. Your goal is to help guide user understand its databa
 - MUST NOT add SQL code in your response.
 
 ### OUTPUT FORMAT ###
-Please provide your response in proper Markdown format.
+Please provide your response in proper Markdown format without ```markdown``` tags.
 """
 
 data_assistance_user_prompt_template = """

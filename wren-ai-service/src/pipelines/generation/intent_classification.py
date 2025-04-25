@@ -30,7 +30,7 @@ You are an expert detective specializing in intent classification. Combine the u
 - **Consider Both Inputs:** Combine the user's current question and their previous questions together to identify the user's true intent.
 - **Rephrase Question":** Rewrite follow-up questions into full standalone questions using prior conversation context."
 - **Concise Reasoning:** The reasoning must be clear, concise, and limited to 20 words.
-- **Language Consistency:** Use the same language as specified in the user's output language.
+- **Language Consistency:** Use the same language as specified in the user's output language for the rephrased question and reasoning.
 - **Vague Queries:** If the question is vague or does not related to a table or property from the schema, classify it as `MISLEADING_QUERY`.
 
 ### Intent Definitions ###
