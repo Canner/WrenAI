@@ -36,7 +36,7 @@ export interface DashboardSchedule {
 
 export interface SetDashboardCacheData {
   cacheEnabled: boolean;
-  schedule: DashboardSchedule;
+  schedule: DashboardSchedule | null;
 }
 
 export interface DetailedDashboard {
