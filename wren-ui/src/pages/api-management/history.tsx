@@ -12,7 +12,7 @@ import CheckCircleOutlined from '@ant-design/icons/CheckCircleOutlined';
 import CloseCircleOutlined from '@ant-design/icons/CloseCircleOutlined';
 import SQLCodeBlock from '@/components/code/SQLCodeBlock';
 import DetailsDrawer from '@/components/pages/apiManagement/DetailsDrawer';
-import { useApiHistoryQuery } from '@/apollo/client/graphql/apiHistory.generated';
+import { useApiHistoryQuery } from '@/apollo/client/graphql/apiManagement.generated';
 import { ApiType, ApiHistoryResponse } from '@/apollo/client/graphql/__types__';
 
 const PAGE_SIZE = 10;
@@ -79,9 +79,9 @@ export default function APIHistory() {
         );
       },
       filters: [
-        { text: '200', value: 200 },
-        { text: '400', value: 400 },
-        { text: '500', value: 500 },
+        { text: 'Successful (code: 2xx)', value: 200 },
+        { text: 'Client error (code: 4xx)', value: 400 },
+        { text: 'Server error (code: 5xx)', value: 500 },
       ],
       filteredValue: filters['statusCode'],
       filterMultiple: false,
