@@ -445,7 +445,8 @@ export class DashboardService implements IDashboardService {
     }
 
     if (schedule.frequency === ScheduleFrequencyEnum.CUSTOM) {
-      // can not less than 10 minute
+      // can not less than 10 minutes, skip if is local
+      if (process.env.NODE_ENV === 'development') return;
       const baseInterval = CronExpressionParser.parse(schedule.cron, {
         currentDate: new Date(),
       });
