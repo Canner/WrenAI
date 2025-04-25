@@ -108,56 +108,58 @@ export class DashboardCacheBackgroundTracker {
       const hash = uuidv4();
 
       // Refresh cache for each item
-      for (const item of items) {
-        try {
-          // Create a record for this refresh job
-          const refreshJob =
-            await this.dashboardCacheRefreshRepository.createOne({
-              hash,
-              dashboardId: dashboard.id,
-              dashboardItemId: item.id,
-              startedAt: new Date(),
-              finishedAt: null,
-              status: DashboardCacheRefreshStatus.IN_PROGRESS,
-              errorMessage: null,
-            });
-
+      await Promise.all(
+        items.map(async (item) => {
           try {
-            await this.queryService.preview(item.detail.sql, {
-              project,
-              manifest: mdl,
-              cacheEnabled: true,
-              refresh: true,
-            });
+            // Create a record for this refresh job
+            const refreshJob =
+              await this.dashboardCacheRefreshRepository.createOne({
+                hash,
+                dashboardId: dashboard.id,
+                dashboardItemId: item.id,
+                startedAt: new Date(),
+                finishedAt: null,
+                status: DashboardCacheRefreshStatus.IN_PROGRESS,
+                errorMessage: null,
+              });
 
-            // Update the record with success
-            await this.dashboardCacheRefreshRepository.updateOne(
-              refreshJob.id,
-              {
-                finishedAt: new Date(),
-                status: DashboardCacheRefreshStatus.SUCCESS,
-              },
-            );
+            try {
+              await this.queryService.preview(item.detail.sql, {
+                project,
+                manifest: mdl,
+                cacheEnabled: true,
+                refresh: true,
+              });
+
+              // Update the record with success
+              await this.dashboardCacheRefreshRepository.updateOne(
+                refreshJob.id,
+                {
+                  finishedAt: new Date(),
+                  status: DashboardCacheRefreshStatus.SUCCESS,
+                },
+              );
+            } catch (error) {
+              // Update the record with failure
+              await this.dashboardCacheRefreshRepository.updateOne(
+                refreshJob.id,
+                {
+                  finishedAt: new Date(),
+                  status: DashboardCacheRefreshStatus.FAILED,
+                  errorMessage: error.message,
+                },
+              );
+              logger.debug(
+                `Error refreshing cache for item ${item.id}: ${error.message}`,
+              );
+            }
           } catch (error) {
-            // Update the record with failure
-            await this.dashboardCacheRefreshRepository.updateOne(
-              refreshJob.id,
-              {
-                finishedAt: new Date(),
-                status: DashboardCacheRefreshStatus.FAILED,
-                errorMessage: error.message,
-              },
-            );
             logger.debug(
-              `Error refreshing cache for item ${item.id}: ${error.message}`,
+              `Error creating refresh job record for item ${item.id}: ${error.message}`,
             );
           }
-        } catch (error) {
-          logger.debug(
-            `Error creating refresh job record for item ${item.id}: ${error.message}`,
-          );
-        }
-      }
+        }),
+      );
 
       // Calculate next scheduled time
       const nextScheduledAt = this.calculateNextRunTime(dashboard.scheduleCron);
