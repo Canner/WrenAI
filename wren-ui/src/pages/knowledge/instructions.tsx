@@ -9,6 +9,7 @@ import {
 } from 'antd';
 import styled from 'styled-components';
 import SiderLayout from '@/components/layouts/SiderLayout';
+import PageLayout from '@/components/layouts/PageLayout';
 import { InstructionsSVG } from '@/utils/svgs';
 import QuestionOutlined from '@ant-design/icons/QuestionOutlined';
 import { MORE_ACTION } from '@/utils/enum';
@@ -28,7 +29,7 @@ import {
   useDeleteInstructionMutation,
 } from '@/apollo/client/graphql/instructions.generated';
 
-const { Paragraph, Title, Text } = Typography;
+const { Paragraph, Text } = Typography;
 
 const StyledQuestionsBlock = styled.div`
   margin: -2px -4px;
@@ -166,39 +167,40 @@ export default function ManageInstructions() {
 
   return (
     <SiderLayout loading={false}>
-      <div className="px-6 py-4">
-        <div className="d-flex align-center justify-space-between mb-3">
-          <Title level={4} className="text-medium gray-8 mb-0">
+      <PageLayout
+        title={
+          <>
             <StyledInstructionsIcon className="mr-2 gray-8" />
             Manage instruction
-          </Title>
-          <Button
-            type="primary"
-            className=""
-            onClick={() => instructionModal.openModal()}
-          >
+          </>
+        }
+        titleExtra={
+          <Button type="primary" onClick={() => instructionModal.openModal()}>
             Add an instruction
           </Button>
-        </div>
-        <Text className="gray-7">
-          On this page, you can manage saved instructions that guide Wren AI in
-          generating SQL queries. These instructions help Wren AI understand
-          your data model and business rules, improving query accuracy and
-          reducing the need for manual refinements.{' '}
-          <Link
-            className="gray-8 underline"
-            href="https://docs.getwren.ai/oss/guide/knowledge/instructions"
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            Learn more.
-          </Link>
-        </Text>
+        }
+        description={
+          <>
+            On this page, you can manage saved instructions that guide Wren AI
+            in generating SQL queries. These instructions help Wren AI
+            understand your data model and business rules, improving query
+            accuracy and reducing the need for manual refinements.{' '}
+            <Link
+              className="gray-8 underline"
+              href="https://docs.getwren.ai/oss/guide/knowledge/instructions"
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              Learn more.
+            </Link>
+          </>
+        }
+      >
         <Table
+          className="ant-table-has-header"
           dataSource={instructions}
           loading={loading}
           columns={columns}
-          className="mt-3"
           rowKey="id"
           pagination={{
             hideOnSinglePage: true,
@@ -225,7 +227,7 @@ export default function ManageInstructions() {
             }
           }}
         />
-      </div>
+      </PageLayout>
     </SiderLayout>
   );
 }

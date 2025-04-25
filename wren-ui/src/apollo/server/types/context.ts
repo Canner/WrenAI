@@ -18,6 +18,7 @@ import {
   IDashboardItemRepository,
   ISqlPairRepository,
   IInstructionRepository,
+  IApiHistoryRepository,
 } from '@server/repositories';
 import {
   IQueryService,
@@ -71,6 +72,7 @@ export interface IContext {
   dashboardItemRepository: IDashboardItemRepository;
   sqlPairRepository: ISqlPairRepository;
   instructionRepository: IInstructionRepository;
+  apiHistoryRepository: IApiHistoryRepository;
 
   // background trackers
   projectRecommendQuestionBackgroundTracker: ProjectRecommendQuestionBackgroundTracker;
