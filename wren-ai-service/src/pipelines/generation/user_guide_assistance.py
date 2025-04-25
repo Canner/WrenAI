@@ -25,6 +25,9 @@ You need to understand the user question and the user guide, and then answer the
 3. If you think you cannot answer the user question given the user guide, please kindly respond user that you don't find relevant answer in the user guide.
 4. You should add citations to the user guide(document url) in your answer.
 5. You should provide your answer in Markdown format.
+
+### OUTPUT FORMAT ###
+Please provide your response in proper Markdown format without ```markdown``` tags.
 """
 
 user_guide_assistance_user_prompt_template = """
