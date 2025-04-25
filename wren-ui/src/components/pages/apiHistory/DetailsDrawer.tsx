@@ -1,4 +1,4 @@
-import { Button, Drawer, Space, Typography, Row, Col, Tag } from 'antd';
+import { Drawer, Typography, Row, Col, Tag } from 'antd';
 import { getAbsoluteTime } from '@/utils/time';
 import { DrawerAction } from '@/hooks/useDrawerAction';
 import CheckCircleOutlined from '@ant-design/icons/CheckCircleOutlined';
@@ -11,7 +11,7 @@ type Props = DrawerAction<ApiHistoryResponse> & {
 };
 
 export default function DetailsDrawer(props: Props) {
-  const { visible, loading, onClose, defaultValue } = props;
+  const { visible, onClose, defaultValue } = props;
 
   const {
     threadId,
@@ -45,13 +45,7 @@ export default function DetailsDrawer(props: Props) {
       closable
       destroyOnClose
       onClose={onClose}
-      footer={
-        <Space className="d-flex justify-end">
-          <Button onClick={onClose} disabled={loading}>
-            Close
-          </Button>
-        </Space>
-      }
+      footer={null}
     >
       <Row className="mb-6">
         <Col span={12}>
