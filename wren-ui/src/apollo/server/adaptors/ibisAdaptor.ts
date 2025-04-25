@@ -171,7 +171,7 @@ export interface IbisQueryResponse extends IbisResponse {
   dtypes: Record<string, string>;
   cacheHit?: boolean;
   cacheCreatedAt?: string;
-  cacheOverrideAt?: string;
+  cacheOverrodeAt?: string;
   override?: boolean;
 }
 
@@ -242,7 +242,7 @@ export class IbisAdaptor implements IIbisAdaptor {
         cacheCreatedAt:
           res.headers['x-cache-create-at'] &&
           new Date(parseInt(res.headers['x-cache-create-at'])).toISOString(),
-        cacheOverrideAt:
+        cacheOverrodeAt:
           res.headers['x-cache-override-at'] &&
           new Date(parseInt(res.headers['x-cache-override-at'])).toISOString(),
         override: res.headers['x-cache-override'] === 'true',

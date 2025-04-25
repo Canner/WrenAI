@@ -108,9 +108,7 @@ export class DashboardService implements IDashboardService {
       // Process schedule if caching is enabled
       if (cacheEnabled && schedule.frequency !== ScheduleFrequencyEnum.NEVER) {
         cronExpression = this.generateCronExpression(schedule);
-        if (cronExpression) {
-          nextScheduledAt = this.calculateNextRunTime(cronExpression);
-        }
+        nextScheduledAt = this.calculateNextRunTime(cronExpression);
       }
 
       // Update dashboard with new schedule

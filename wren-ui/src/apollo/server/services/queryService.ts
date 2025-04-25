@@ -27,7 +27,7 @@ export interface PreviewDataResponse extends IbisResponse {
   data: any[][];
   cacheHit?: boolean;
   cacheCreatedAt?: string;
-  cacheOverrideAt?: string;
+  cacheOverrodeAt?: string;
   override?: boolean;
 }
 
@@ -236,7 +236,7 @@ export class QueryService implements IQueryService {
         correlationId: res.correlationId,
         cacheHit: res.cacheHit,
         cacheCreatedAt: res.cacheCreatedAt,
-        cacheOverrideAt: res.cacheOverrideAt,
+        cacheOverrodeAt: res.cacheOverrodeAt,
         override: res.override,
         ...data,
       };

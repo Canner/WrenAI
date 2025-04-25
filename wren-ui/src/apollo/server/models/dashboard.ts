@@ -4,7 +4,7 @@ export interface PreviewItemResponse {
   data: Record<string, any>[];
   cacheHit: boolean;
   cacheCreatedAt: string | null;
-  cacheOverrideAt: string | null;
+  cacheOverrodeAt: string | null;
   override: boolean;
 }
 

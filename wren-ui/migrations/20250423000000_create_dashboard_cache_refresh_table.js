@@ -1,7 +1,7 @@
 exports.up = function (knex) {
   return knex.schema.createTable('dashboard_cache_refresh', (table) => {
     table.increments('id').primary();
-    table.string('hash').notNullable();
+    table.string('hash').notNullable().comment('uuid for the refresh job');
     table.integer('dashboard_id').notNullable();
     table.integer('dashboard_item_id').notNullable();
     table.timestamp('started_at').notNullable();

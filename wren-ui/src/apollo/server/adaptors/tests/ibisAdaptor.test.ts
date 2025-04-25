@@ -509,7 +509,7 @@ describe('IbisAdaptor', () => {
     expect(res.cacheHit).toEqual('true');
     expect(res.cacheCreatedAt).toEqual('2024-01-01T00:00:00Z');
     expect(res.override).toEqual('false');
-    expect(res.cacheOverrideAt).toEqual('2024-01-01T00:00:00Z');
+    expect(res.cacheOverrodeAt).toEqual('2024-01-01T00:00:00Z');
     expect(mockedAxios.post).toHaveBeenCalledWith(
       `${ibisServerEndpoint}/v3/connector/postgres/query?cacheEnabled=true`,
       expect.any(Object),

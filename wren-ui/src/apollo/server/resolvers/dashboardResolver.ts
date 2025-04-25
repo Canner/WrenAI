@@ -182,7 +182,7 @@ export class DashboardResolver {
       return {
         cacheHit: data.cacheHit || false,
         cacheCreatedAt: data.cacheCreatedAt || null,
-        cacheOverrideAt: data.cacheOverrideAt || null,
+        cacheOverrodeAt: data.cacheOverrodeAt || null,
         override: data.override || false,
         data: values,
       } as PreviewItemResponse;

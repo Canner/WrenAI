@@ -933,7 +933,7 @@ export const typeDefs = gql`
     data: JSON!
     cacheHit: Boolean!
     cacheCreatedAt: String
-    cacheOverrideAt: String
+    cacheOverrodeAt: String
     override: Boolean!
   }
 
