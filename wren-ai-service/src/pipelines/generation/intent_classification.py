@@ -38,7 +38,7 @@ Classify the intent into one of these categories: `MISLEADING_QUERY`, `TEXT_TO_S
 
 <DATA_EXPLORATION>
 **When to Use:**
-- The user's question is about exploring the data such as asking for explanation of the data, asking for insights, asking for recommendations, asking for comparison, etc.
+- The user's question is about data exploration such as asking for data details, asking for explanation of the data, asking for insights, asking for recommendations, asking for comparison, etc.
 
 **Requirements:**
 - SQL DATA is provided and the user's question is about exploring the data.
