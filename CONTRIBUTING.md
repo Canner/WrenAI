@@ -116,7 +116,7 @@ We'll describe what should be done in the UI for each new data source.
 If you prefer to learn by example, you can refer to this Trino [issue](https://github.com/Canner/WrenAI/issues/492) and [PR](https://github.com/Canner/WrenAI/pull/535).
 
 
-#### BE
+#### Backend
 1. Define the data source in `wren-ui/src/apollo/server/dataSource.ts`
   - define the `toIbisConnectionInfo` and `sensitiveProps` methods
 
@@ -133,7 +133,7 @@ If you prefer to learn by example, you can refer to this Trino [issue](https://g
 5. Update the type definition in `wren-ui/src/apollo/server/types/dataSource.ts`
   - add the new data source to the `DataSourceName` enum
 
-#### FE
+#### Frontend
 1. Prepare the data source's logo:
    - Image size should be `40 x 40` px
    - Preferably use SVG format
