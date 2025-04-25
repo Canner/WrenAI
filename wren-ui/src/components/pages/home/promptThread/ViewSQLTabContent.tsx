@@ -15,7 +15,7 @@ import usePromptThreadStore from '@/components/pages/home/promptThread/store';
 import PreviewData from '@/components/dataPreview/PreviewData';
 import { usePreviewDataMutation } from '@/apollo/client/graphql/home.generated';
 
-const CodeBlock = dynamic(() => import('@/components/editor/CodeBlock'), {
+const SQLCodeBlock = dynamic(() => import('@/components/code/SQLCodeBlock'), {
   ssr: false,
 });
 
@@ -126,7 +126,7 @@ export default function ViewSQLTabContent(props: AnswerResultProps) {
             </Button>
           </Space>
         </StyledToolBar>
-        <CodeBlock
+        <SQLCodeBlock
           code={sqls}
           showLineNumbers
           maxHeight="300"

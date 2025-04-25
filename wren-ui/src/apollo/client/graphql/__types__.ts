@@ -40,6 +40,48 @@ export type AdjustmentTask = {
   traceId?: Maybe<Scalars['String']>;
 };
 
+export type ApiHistoryFilterInput = {
+  apiType?: InputMaybe<ApiType>;
+  endDate?: InputMaybe<Scalars['String']>;
+  projectId?: InputMaybe<Scalars['Int']>;
+  startDate?: InputMaybe<Scalars['String']>;
+  statusCode?: InputMaybe<Scalars['Int']>;
+  threadId?: InputMaybe<Scalars['String']>;
+};
+
+export type ApiHistoryPaginatedResponse = {
+  __typename?: 'ApiHistoryPaginatedResponse';
+  hasMore: Scalars['Boolean'];
+  items: Array<ApiHistoryResponse>;
+  total: Scalars['Int'];
+};
+
+export type ApiHistoryPaginationInput = {
+  limit: Scalars['Int'];
+  offset: Scalars['Int'];
+};
+
+export type ApiHistoryResponse = {
+  __typename?: 'ApiHistoryResponse';
+  apiType: ApiType;
+  createdAt: Scalars['String'];
+  durationMs?: Maybe<Scalars['Int']>;
+  headers?: Maybe<Scalars['JSON']>;
+  id: Scalars['String'];
+  projectId: Scalars['Int'];
+  requestPayload?: Maybe<Scalars['JSON']>;
+  responsePayload?: Maybe<Scalars['JSON']>;
+  statusCode?: Maybe<Scalars['Int']>;
+  threadId?: Maybe<Scalars['String']>;
+  updatedAt: Scalars['String'];
+};
+
+export enum ApiType {
+  GENERATE_SQL = 'GENERATE_SQL',
+  GENERATE_VEGA_SPEC = 'GENERATE_VEGA_SPEC',
+  RUN_SQL = 'RUN_SQL'
+}
+
 export type AskingTask = {
   __typename?: 'AskingTask';
   candidates: Array<ResultCandidate>;
@@ -1012,6 +1054,7 @@ export enum ProjectLanguage {
 export type Query = {
   __typename?: 'Query';
   adjustmentTask?: Maybe<AdjustmentTask>;
+  apiHistory: ApiHistoryPaginatedResponse;
   askingTask?: Maybe<AskingTask>;
   autoGenerateRelation: Array<RecommendRelations>;
   dashboardItems: Array<DashboardItem>;
@@ -1042,6 +1085,12 @@ export type Query = {
 
 export type QueryAdjustmentTaskArgs = {
   taskId: Scalars['String'];
+};
+
+
+export type QueryApiHistoryArgs = {
+  filter?: InputMaybe<ApiHistoryFilterInput>;
+  pagination?: InputMaybe<ApiHistoryPaginationInput>;
 };
 
 

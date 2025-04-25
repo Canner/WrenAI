@@ -2,7 +2,7 @@ import { Button, Form, Input, Modal, Typography } from 'antd';
 import InfoCircleOutlined from '@ant-design/icons/InfoCircleOutlined';
 import { ModalAction } from '@/hooks/useModalAction';
 import { createViewNameValidator } from '@/utils/validator';
-import CodeBlock from '@/components/editor/CodeBlock';
+import SQLCodeBlock from '@/components/code/SQLCodeBlock';
 import { useValidateViewMutation } from '@/apollo/client/graphql/view.generated';
 
 const { Text } = Typography;
@@ -78,7 +78,7 @@ export default function SaveAsViewModal(props: Props) {
           <Input />
         </Form.Item>
         <Form.Item label="SQL Statement">
-          <CodeBlock code={sql} showLineNumbers maxHeight="300" />
+          <SQLCodeBlock code={sql} showLineNumbers maxHeight="300" />
         </Form.Item>
       </Form>
     </Modal>
