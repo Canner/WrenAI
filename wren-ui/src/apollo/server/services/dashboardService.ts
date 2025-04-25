@@ -255,7 +255,7 @@ export class DashboardService implements IDashboardService {
     return { x, y, w: 3, h: 2 };
   }
 
-  private toUTC(schedule: DashboardSchedule): DashboardSchedule {
+  protected toUTC(schedule: DashboardSchedule): DashboardSchedule {
     // If no timezone is specified or it's a custom schedule, return as is
     if (
       !schedule.timezone ||
@@ -318,7 +318,7 @@ export class DashboardService implements IDashboardService {
     };
   }
 
-  private toTimezone(schedule: DashboardSchedule): DashboardSchedule {
+  protected toTimezone(schedule: DashboardSchedule): DashboardSchedule {
     const { timezone } = schedule;
     // If it's a custom schedule or no timezone is specified, return as is
     if (
@@ -386,7 +386,7 @@ export class DashboardService implements IDashboardService {
     };
   }
 
-  private generateCronExpression(schedule: DashboardSchedule): string | null {
+  protected generateCronExpression(schedule: DashboardSchedule): string | null {
     const { frequency, day, hour, minute } = this.toUTC(schedule);
 
     switch (frequency) {
@@ -405,7 +405,7 @@ export class DashboardService implements IDashboardService {
     }
   }
 
-  private calculateNextRunTime(cronExpression: string): Date | null {
+  protected calculateNextRunTime(cronExpression: string): Date | null {
     try {
       const interval = CronExpressionParser.parse(cronExpression, {
         currentDate: new Date(),
@@ -417,7 +417,7 @@ export class DashboardService implements IDashboardService {
     }
   }
 
-  private validateScheduleInput(data: SetDashboardCacheData): void {
+  protected validateScheduleInput(data: SetDashboardCacheData): void {
     const { schedule } = data;
 
     if (schedule.frequency === ScheduleFrequencyEnum.WEEKLY && !schedule.day) {

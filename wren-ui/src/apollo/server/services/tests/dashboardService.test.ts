@@ -1,10 +1,38 @@
 import { DashboardService } from '../dashboardService';
 import { ScheduleFrequencyEnum } from '@server/models/dashboard';
 import { CacheScheduleDayEnum } from '@server/models/dashboard';
-import { SetDashboardCacheData } from '@server/models/dashboard';
+import {
+  SetDashboardCacheData,
+  DashboardSchedule,
+} from '@server/models/dashboard';
+
+// Create a test class that extends DashboardService to access protected methods
+class TestDashboardService extends DashboardService {
+  public testGenerateCronExpression(
+    schedule: DashboardSchedule,
+  ): string | null {
+    return this.generateCronExpression(schedule);
+  }
+
+  public testCalculateNextRunTime(cronExpression: string): Date | null {
+    return this.calculateNextRunTime(cronExpression);
+  }
+
+  public testToUTC(schedule: DashboardSchedule): DashboardSchedule {
+    return this.toUTC(schedule);
+  }
+
+  public testToTimezone(schedule: DashboardSchedule): DashboardSchedule {
+    return this.toTimezone(schedule);
+  }
+
+  public testValidateScheduleInput(data: SetDashboardCacheData): void {
+    return this.validateScheduleInput(data);
+  }
+}
 
 describe('DashboardService', () => {
-  let dashboardService: DashboardService;
+  let dashboardService: TestDashboardService;
   let mockProjectService;
   let mockDashboardItemRepository;
   let mockDashboardRepository;
@@ -50,7 +78,7 @@ describe('DashboardService', () => {
       updateOne: jest.fn(),
     };
 
-    dashboardService = new DashboardService({
+    dashboardService = new TestDashboardService({
       projectService: mockProjectService,
       dashboardItemRepository: mockDashboardItemRepository,
       dashboardRepository: mockDashboardRepository,
@@ -63,9 +91,12 @@ describe('DashboardService', () => {
         frequency: ScheduleFrequencyEnum.DAILY,
         hour: 14,
         minute: 30,
+        timezone: '',
+        day: null,
+        cron: null,
       };
 
-      const result = (dashboardService as any).generateCronExpression(schedule);
+      const result = dashboardService.testGenerateCronExpression(schedule);
       expect(result).toBe('30 14 * * *');
     });
 
@@ -75,9 +106,11 @@ describe('DashboardService', () => {
         day: CacheScheduleDayEnum.MON,
         hour: 9,
         minute: 0,
+        timezone: '',
+        cron: null,
       };
 
-      const result = (dashboardService as any).generateCronExpression(schedule);
+      const result = dashboardService.testGenerateCronExpression(schedule);
       expect(result).toBe('0 9 * * MON');
     });
 
@@ -85,31 +118,40 @@ describe('DashboardService', () => {
       const schedule = {
         frequency: ScheduleFrequencyEnum.CUSTOM,
         cron: '0 0 * * *',
+        timezone: '',
+        day: null,
+        hour: 0,
+        minute: 0,
       };
 
-      const result = (dashboardService as any).generateCronExpression(schedule);
+      const result = dashboardService.testGenerateCronExpression(schedule);
       expect(result).toBe('0 0 * * *');
     });
 
     it('should return null for never schedule', () => {
       const schedule = {
         frequency: ScheduleFrequencyEnum.NEVER,
+        timezone: '',
+        day: null,
+        hour: 0,
+        minute: 0,
+        cron: null,
       };
 
-      const result = (dashboardService as any).generateCronExpression(schedule);
+      const result = dashboardService.testGenerateCronExpression(schedule);
       expect(result).toBeNull();
     });
   });
 
   describe('calculateNextRunTime', () => {
     it('should return null for invalid cron expression', () => {
-      const result = dashboardService['calculateNextRunTime']('invalid-cron');
+      const result = dashboardService.testCalculateNextRunTime('invalid-cron');
       expect(result).toBeNull();
     });
 
     it('should calculate next run time for daily schedule', () => {
       const cronExpression = '0 12 * * *'; // Every day at 12:00 PM
-      const result = dashboardService['calculateNextRunTime'](cronExpression);
+      const result = dashboardService.testCalculateNextRunTime(cronExpression);
 
       const now = Date.now();
       expect(result).toBeInstanceOf(Date);
@@ -128,7 +170,7 @@ describe('DashboardService', () => {
 
     it('should calculate next run time for weekly schedule', () => {
       const cronExpression = '0 12 * * 1'; // Every Monday at 12:00 PM
-      const result = dashboardService['calculateNextRunTime'](cronExpression);
+      const result = dashboardService.testCalculateNextRunTime(cronExpression);
 
       expect(result).toBeInstanceOf(Date);
       const now = Date.now();
@@ -140,7 +182,7 @@ describe('DashboardService', () => {
 
     it('should calculate next run time for custom schedule', () => {
       const cronExpression = '0 */2 * * *'; // Every 2 hours
-      const result = dashboardService['calculateNextRunTime'](cronExpression);
+      const result = dashboardService.testCalculateNextRunTime(cronExpression);
 
       expect(result).toBeInstanceOf(Date);
       const now = Date.now();
@@ -163,8 +205,8 @@ describe('DashboardService', () => {
       };
 
       const cronExpression =
-        dashboardService['generateCronExpression'](schedule);
-      const result = dashboardService['calculateNextRunTime'](
+        dashboardService.testGenerateCronExpression(schedule);
+      const result = dashboardService.testCalculateNextRunTime(
         cronExpression ?? '',
       );
 
@@ -173,6 +215,7 @@ describe('DashboardService', () => {
       expect(result!.getTime()).toBeGreaterThan(now);
     });
   });
+
   describe('toUTC', () => {
     beforeEach(() => {
       // Mock the current date to a fixed value for consistent testing
@@ -188,9 +231,12 @@ describe('DashboardService', () => {
         frequency: ScheduleFrequencyEnum.DAILY,
         hour: 14,
         minute: 30,
+        timezone: '',
+        day: null,
+        cron: null,
       };
 
-      const result = (dashboardService as any).toUTC(schedule);
+      const result = dashboardService.testToUTC(schedule);
       expect(result).toEqual(schedule);
     });
 
@@ -200,8 +246,10 @@ describe('DashboardService', () => {
         hour: 14,
         minute: 30,
         timezone: 'America/New_York', // UTC-4
+        day: null,
+        cron: null,
       };
-      const result = (dashboardService as any).toUTC(schedule);
+      const result = dashboardService.testToUTC(schedule);
       expect(result).toEqual({
         ...schedule,
         hour: 18, // 14 + 4 = 18 UTC
@@ -216,9 +264,10 @@ describe('DashboardService', () => {
         hour: 14,
         minute: 30,
         timezone: 'America/New_York', // UTC-4
+        cron: null,
       };
 
-      const result = (dashboardService as any).toUTC(schedule);
+      const result = dashboardService.testToUTC(schedule);
       expect(result).toEqual({
         ...schedule,
         hour: 18, // 14 + 4 = 18 UTC
@@ -234,9 +283,10 @@ describe('DashboardService', () => {
         hour: 23,
         minute: 30,
         timezone: 'America/New_York', // UTC-4
+        cron: null,
       };
 
-      const result = (dashboardService as any).toUTC(schedule);
+      const result = dashboardService.testToUTC(schedule);
       expect(result).toEqual({
         ...schedule,
         hour: 3, // 23 + 4 = 3 UTC (next day)
@@ -252,9 +302,10 @@ describe('DashboardService', () => {
         hour: 23,
         minute: 30,
         timezone: 'America/New_York', // UTC-4
+        cron: null,
       };
 
-      const result = (dashboardService as any).toUTC(schedule);
+      const result = dashboardService.testToUTC(schedule);
       expect(result).toEqual({
         ...schedule,
         hour: 3, // 23 + 4 = 3 UTC (next day)
@@ -270,9 +321,10 @@ describe('DashboardService', () => {
         hour: 1,
         minute: 30,
         timezone: 'Asia/Tokyo', // UTC+9
+        cron: null,
       };
 
-      const result = (dashboardService as any).toUTC(schedule);
+      const result = dashboardService.testToUTC(schedule);
       expect(result).toEqual({
         ...schedule,
         hour: 16, // 1 - 9 = 16 UTC (previous day)
@@ -288,9 +340,10 @@ describe('DashboardService', () => {
         hour: 1,
         minute: 30,
         timezone: 'Asia/Tokyo', // UTC+9
+        cron: null,
       };
 
-      const result = (dashboardService as any).toUTC(schedule);
+      const result = dashboardService.testToUTC(schedule);
       expect(result).toEqual({
         ...schedule,
         hour: 16, // 1 - 9 = 16 UTC (previous day)
@@ -304,9 +357,12 @@ describe('DashboardService', () => {
         frequency: ScheduleFrequencyEnum.CUSTOM,
         cron: '0 0 * * *',
         timezone: 'America/New_York',
+        day: null,
+        hour: 0,
+        minute: 0,
       };
 
-      const result = (dashboardService as any).toUTC(schedule);
+      const result = dashboardService.testToUTC(schedule);
       expect(result).toEqual(schedule);
     });
 
@@ -316,9 +372,11 @@ describe('DashboardService', () => {
         hour: 14,
         minute: 30,
         timezone: 'Asia/Kolkata', // UTC+5:30
+        day: null,
+        cron: null,
       };
 
-      const result = (dashboardService as any).toUTC(schedule);
+      const result = dashboardService.testToUTC(schedule);
       expect(result).toEqual({
         ...schedule,
         hour: 9, // 14 - 5 = 9 UTC
@@ -333,9 +391,10 @@ describe('DashboardService', () => {
         hour: 23,
         minute: 45,
         timezone: 'Asia/Kolkata', // UTC+5:30
+        cron: null,
       };
 
-      const result = (dashboardService as any).toUTC(schedule);
+      const result = dashboardService.testToUTC(schedule);
       expect(result).toEqual({
         ...schedule,
         hour: 18, // 23 - 5 = 18 UTC
@@ -365,7 +424,7 @@ describe('DashboardService', () => {
         cron: null,
       };
 
-      const result = (dashboardService as any).toTimezone(schedule);
+      const result = dashboardService.testToTimezone(schedule);
       expect(result).toEqual(schedule);
     });
 
@@ -378,7 +437,7 @@ describe('DashboardService', () => {
         timezone: 'America/New_York', // UTC-4
         cron: null,
       };
-      const result = (dashboardService as any).toTimezone(schedule);
+      const result = dashboardService.testToTimezone(schedule);
       expect(result).toEqual({
         ...schedule,
         hour: 14, // 18 - 4 = 14 local time
@@ -396,7 +455,7 @@ describe('DashboardService', () => {
         cron: null,
       };
 
-      const result = (dashboardService as any).toTimezone(schedule);
+      const result = dashboardService.testToTimezone(schedule);
       expect(result).toEqual({
         ...schedule,
         hour: 14, // 18 - 4 = 14 local time
@@ -415,7 +474,7 @@ describe('DashboardService', () => {
         cron: null,
       };
 
-      const result = (dashboardService as any).toTimezone(schedule);
+      const result = dashboardService.testToTimezone(schedule);
       expect(result).toEqual({
         ...schedule,
         hour: 23, // 3 + 4 = 23 local time (previous day)
@@ -434,7 +493,7 @@ describe('DashboardService', () => {
         cron: null,
       };
 
-      const result = (dashboardService as any).toTimezone(schedule);
+      const result = dashboardService.testToTimezone(schedule);
       expect(result).toEqual({
         ...schedule,
         hour: 23, // 3 + 4 = 23 local time (previous day)
@@ -453,7 +512,7 @@ describe('DashboardService', () => {
         cron: null,
       };
 
-      const result = (dashboardService as any).toTimezone(schedule);
+      const result = dashboardService.testToTimezone(schedule);
       expect(result).toEqual({
         ...schedule,
         hour: 1, // 16 - 9 = 1 local time (next day)
@@ -472,7 +531,7 @@ describe('DashboardService', () => {
         cron: null,
       };
 
-      const result = (dashboardService as any).toTimezone(schedule);
+      const result = dashboardService.testToTimezone(schedule);
       expect(result).toEqual({
         ...schedule,
         hour: 1, // 16 - 9 = 1 local time (next day)
@@ -491,7 +550,7 @@ describe('DashboardService', () => {
         timezone: 'America/New_York',
       };
 
-      const result = (dashboardService as any).toTimezone(schedule);
+      const result = dashboardService.testToTimezone(schedule);
       expect(result).toEqual(schedule);
     });
 
@@ -505,7 +564,7 @@ describe('DashboardService', () => {
         cron: null,
       };
 
-      const result = (dashboardService as any).toTimezone(schedule);
+      const result = dashboardService.testToTimezone(schedule);
       expect(result).toEqual({
         ...schedule,
         hour: 14, // 9 + 5 = 14 local time
@@ -523,7 +582,7 @@ describe('DashboardService', () => {
         cron: null,
       };
 
-      const result = (dashboardService as any).toTimezone(schedule);
+      const result = dashboardService.testToTimezone(schedule);
       expect(result).toEqual({
         ...schedule,
         hour: 23, // 18 + 5 = 23 local time
@@ -541,11 +600,14 @@ describe('DashboardService', () => {
           frequency: ScheduleFrequencyEnum.WEEKLY,
           hour: 12,
           minute: 0,
+          timezone: '',
+          day: null,
+          cron: null,
         },
       };
 
       expect(() => {
-        (dashboardService as any).validateScheduleInput(data);
+        dashboardService.testValidateScheduleInput(data);
       }).toThrow('Day of week is required for weekly schedule');
     });
 
@@ -556,11 +618,14 @@ describe('DashboardService', () => {
           frequency: ScheduleFrequencyEnum.CUSTOM,
           hour: 12,
           minute: 0,
+          timezone: '',
+          day: null,
+          cron: null,
         },
       };
 
       expect(() => {
-        (dashboardService as any).validateScheduleInput(data);
+        dashboardService.testValidateScheduleInput(data);
       }).toThrow('Cron expression is required for custom schedule');
     });
 
@@ -571,11 +636,14 @@ describe('DashboardService', () => {
           frequency: ScheduleFrequencyEnum.DAILY,
           hour: 24,
           minute: 0,
+          timezone: '',
+          day: null,
+          cron: null,
         },
       };
 
       expect(() => {
-        (dashboardService as any).validateScheduleInput(data);
+        dashboardService.testValidateScheduleInput(data);
       }).toThrow('Hour must be between 0 and 23');
     });
 
@@ -586,11 +654,14 @@ describe('DashboardService', () => {
           frequency: ScheduleFrequencyEnum.DAILY,
           hour: 12,
           minute: 60,
+          timezone: '',
+          day: null,
+          cron: null,
         },
       };
 
       expect(() => {
-        (dashboardService as any).validateScheduleInput(data);
+        dashboardService.testValidateScheduleInput(data);
       }).toThrow('Minute must be between 0 and 59');
     });
 
@@ -602,11 +673,13 @@ describe('DashboardService', () => {
           hour: 12,
           minute: 0,
           timezone: 'Invalid/Timezone',
+          day: null,
+          cron: null,
         },
       };
 
       expect(() => {
-        (dashboardService as any).validateScheduleInput(data);
+        dashboardService.testValidateScheduleInput(data);
       }).toThrow('Invalid timezone: Invalid/Timezone');
     });
 
@@ -616,11 +689,15 @@ describe('DashboardService', () => {
         schedule: {
           frequency: ScheduleFrequencyEnum.CUSTOM,
           cron: '*/5 * * * *', // Every 5 minutes
+          timezone: '',
+          day: null,
+          hour: 0,
+          minute: 0,
         },
       };
 
       expect(() => {
-        (dashboardService as any).validateScheduleInput(data);
+        dashboardService.testValidateScheduleInput(data);
       }).toThrow('Custom cron expression must be at least 10 minutes apart');
     });
 
@@ -638,7 +715,7 @@ describe('DashboardService', () => {
       };
 
       expect(() => {
-        (dashboardService as any).validateScheduleInput(data);
+        dashboardService.testValidateScheduleInput(data);
       }).not.toThrow();
     });
 
@@ -650,11 +727,13 @@ describe('DashboardService', () => {
           day: CacheScheduleDayEnum.MON,
           hour: 12,
           minute: 0,
+          timezone: '',
+          cron: null,
         },
       };
 
       expect(() => {
-        (dashboardService as any).validateScheduleInput(data);
+        dashboardService.testValidateScheduleInput(data);
       }).not.toThrow();
     });
 
@@ -664,11 +743,15 @@ describe('DashboardService', () => {
         schedule: {
           frequency: ScheduleFrequencyEnum.CUSTOM,
           cron: '0 */15 * * *', // Every 15 minutes
+          timezone: '',
+          day: null,
+          hour: 0,
+          minute: 0,
         },
       };
 
       expect(() => {
-        (dashboardService as any).validateScheduleInput(data);
+        dashboardService.testValidateScheduleInput(data);
       }).not.toThrow();
     });
 
@@ -680,11 +763,13 @@ describe('DashboardService', () => {
           hour: 12,
           minute: 0,
           timezone: 'America/New_York',
+          day: null,
+          cron: null,
         },
       };
 
       expect(() => {
-        (dashboardService as any).validateScheduleInput(data);
+        dashboardService.testValidateScheduleInput(data);
       }).not.toThrow();
     });
   });
@@ -721,6 +806,7 @@ describe('DashboardService', () => {
         scheduleFrequency: ScheduleFrequencyEnum.DAILY,
         scheduleCron: '0 12 * * *',
         nextScheduledAt: expect.any(Date),
+        scheduleTimezone: '',
       });
 
       const data = createScheduleData(ScheduleFrequencyEnum.DAILY, {
@@ -735,6 +821,7 @@ describe('DashboardService', () => {
         scheduleFrequency: ScheduleFrequencyEnum.DAILY,
         scheduleCron: '0 12 * * *',
         nextScheduledAt: expect.any(Date),
+        scheduleTimezone: '',
       });
     });
 
@@ -751,6 +838,7 @@ describe('DashboardService', () => {
         scheduleFrequency: ScheduleFrequencyEnum.WEEKLY,
         scheduleCron: '0 12 * * MON',
         nextScheduledAt: expect.any(Date),
+        scheduleTimezone: '',
       });
 
       const data = createScheduleData(ScheduleFrequencyEnum.WEEKLY, {
@@ -766,6 +854,7 @@ describe('DashboardService', () => {
         scheduleFrequency: ScheduleFrequencyEnum.WEEKLY,
         scheduleCron: '0 12 * * MON',
         nextScheduledAt: expect.any(Date),
+        scheduleTimezone: '',
       });
     });
 
@@ -782,6 +871,7 @@ describe('DashboardService', () => {
         scheduleFrequency: ScheduleFrequencyEnum.CUSTOM,
         scheduleCron: '0 */15 * * *',
         nextScheduledAt: expect.any(Date),
+        scheduleTimezone: '',
       });
 
       const data = createScheduleData(ScheduleFrequencyEnum.CUSTOM, {
@@ -795,6 +885,7 @@ describe('DashboardService', () => {
         scheduleFrequency: ScheduleFrequencyEnum.CUSTOM,
         scheduleCron: '0 */15 * * *',
         nextScheduledAt: expect.any(Date),
+        scheduleTimezone: '',
       });
     });
 
@@ -808,9 +899,10 @@ describe('DashboardService', () => {
       mockDashboardRepository.updateOne.mockResolvedValue({
         ...mockDashboard,
         cacheEnabled: false,
-        scheduleFrequency: ScheduleFrequencyEnum.NEVER,
+        scheduleFrequency: null,
         scheduleCron: null,
         nextScheduledAt: null,
+        scheduleTimezone: null,
       });
 
       const data = createScheduleData(ScheduleFrequencyEnum.NEVER, {
@@ -821,9 +913,10 @@ describe('DashboardService', () => {
 
       expect(mockDashboardRepository.updateOne).toHaveBeenCalledWith(1, {
         cacheEnabled: false,
-        scheduleFrequency: ScheduleFrequencyEnum.NEVER,
+        scheduleFrequency: null,
         scheduleCron: null,
         nextScheduledAt: null,
+        scheduleTimezone: null,
       });
     });
 
@@ -840,6 +933,7 @@ describe('DashboardService', () => {
         scheduleFrequency: ScheduleFrequencyEnum.DAILY,
         scheduleCron: '0 16 * * *', // 12:00 PM EST = 16:00 UTC
         nextScheduledAt: expect.any(Date),
+        scheduleTimezone: 'America/New_York',
       });
 
       const data = createScheduleData(ScheduleFrequencyEnum.DAILY, {
@@ -855,6 +949,7 @@ describe('DashboardService', () => {
         scheduleFrequency: ScheduleFrequencyEnum.DAILY,
         scheduleCron: '0 16 * * *',
         nextScheduledAt: expect.any(Date),
+        scheduleTimezone: 'America/New_York',
       });
     });
 
