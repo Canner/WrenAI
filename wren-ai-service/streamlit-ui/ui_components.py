@@ -2,7 +2,27 @@ import streamlit as st
 import uuid
 from session_state import ConfigState
 from config_loader import group_blocks
+from dry_run_test import llm_completion_test, llm_embedding_test
 import yaml
+
+def render_apikey():
+    with st.expander("API Key", expanded=False):
+
+        api_key = st.text_input(
+            "Enter your API key:",
+            type="password",
+            key="api_key_input"
+        )
+
+        if st.button("save", key="save_apikey"):
+            if not api_key:
+                st.error("請輸入 API Key")
+            else:
+                st.session_state[ConfigState.API_KEY] = api_key
+
+
+
+        
 
 def render_import_yaml():
     st.subheader("LLM Configuration")

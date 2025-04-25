@@ -1,7 +1,6 @@
 import streamlit as st
 import uuid
-import streamlit as st
-import uuid
+
 
 class ConfigState:
     LLM_FORMS_KEY = "llm_forms"
@@ -9,6 +8,7 @@ class ConfigState:
     EMBEDDER_KEY = "embedding_model"
     DOC_STORE_KEY = "document_store"
     PIPELINE_KEY = "pipeline"
+    API_KEY = "api_key"
 
     @classmethod
     def init(cls, llm_block, embedder_block, document_store_block, pipeline_block,force=False):
@@ -17,6 +17,7 @@ class ConfigState:
         cls.init_embedder(embedder_block, force=force)
         cls.init_document_store(document_store_block, force=force)
         cls.init_pipeline(pipeline_block, force=force)
+        cls.init_apikey()
 
     @classmethod
     def init_llm_forms(cls, llm_block, force=False):
@@ -93,5 +94,10 @@ class ConfigState:
             "type": "pipeline",
             "pipes": pipeline_block.get("pipes", []),
         }
+
+    @classmethod
+    def init_apikey(cls):
+        st.session_state[cls.API_KEY] = ""
+
     # 可以額外做 CRUD：新增 LLM、刪除 LLM、更新 Embedder...
 

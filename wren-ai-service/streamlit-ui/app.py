@@ -7,7 +7,8 @@ from ui_components import (
     render_document_store_config, 
     render_import_yaml, 
     render_pipeline_config,
-    render_preview_and_generate
+    render_preview_and_generate,
+    render_apikey
 )
 import streamlit as st
 
@@ -43,6 +44,7 @@ with col1:
     # LLM Configuration UI
     # =====================
     render_import_yaml()
+    render_apikey()
     render_llm_config()
     render_embedder_config()
     render_document_store_config()
