@@ -43,7 +43,7 @@ export default function APIManagement() {
       label: (
         <Link
           className="gray-8 d-inline-flex align-center"
-          href="https://docs.getwren.ai/oss/guide/api-history/api-reference"
+          href="https://wrenai.readme.io"
           target="_blank"
           rel="noopener noreferrer"
         >
