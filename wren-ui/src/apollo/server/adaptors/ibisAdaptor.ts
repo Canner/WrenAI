@@ -238,10 +238,14 @@ export class IbisAdaptor implements IIbisAdaptor {
         ...res.data,
         correlationId: res.headers['x-correlation-id'],
         processTime: res.headers['x-process-time'],
-        cacheHit: res.headers['x-cache-hit'],
-        cacheCreatedAt: res.headers['x-cache-create-at'],
-        override: res.headers['x-cache-override'],
-        cacheOverrideAt: res.headers['x-cache-override-at'],
+        cacheHit: res.headers['x-cache-hit'] === 'true',
+        cacheCreatedAt:
+          res.headers['x-cache-create-at'] &&
+          new Date(parseInt(res.headers['x-cache-create-at'])),
+        cacheOverrideAt:
+          res.headers['x-cache-override-at'] &&
+          new Date(parseInt(res.headers['x-cache-override-at'])),
+        override: res.headers['x-cache-override'] === 'true',
       };
     } catch (e) {
       logger.debug(`Query error: ${e.response?.data || e.message}`);
@@ -545,9 +549,9 @@ export class IbisAdaptor implements IIbisAdaptor {
       return '';
     }
     const queryString = [];
-    queryString.push('cacheEnabled=true');
+    queryString.push('cacheEnable=true');
     if (options.refresh) {
-      queryString.push('cacheOverride=true');
+      queryString.push('overrideCache=true');
     }
     return `?${queryString.join('&')}`;
   }

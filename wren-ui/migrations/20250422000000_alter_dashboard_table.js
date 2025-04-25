@@ -7,6 +7,7 @@ exports.up = function (knex) {
     table.boolean('cache_enabled').defaultTo(true);
     table.string('schedule_frequency').nullable().defaultTo('Never'); // Weekly, Daily, Custom, Never
     table.string('schedule_cron').nullable().defaultTo(null); // cron expression string
+    table.string('schedule_timezone').nullable().defaultTo(null);
     table.timestamp('next_scheduled_at').nullable().defaultTo(null); // Next scheduled run timestamp
   });
 };
@@ -20,6 +21,7 @@ exports.down = function (knex) {
     table.dropColumn('cache_enabled');
     table.dropColumn('schedule_frequency');
     table.dropColumn('schedule_cron');
+    table.dropColumn('schedule_timezone');
     table.dropColumn('next_scheduled_at');
   });
 };

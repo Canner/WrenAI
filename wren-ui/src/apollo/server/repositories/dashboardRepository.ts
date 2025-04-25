@@ -8,7 +8,7 @@ export interface Dashboard {
   name: string;
   cacheEnabled: boolean;
   scheduleFrequency: ScheduleFrequencyEnum | null;
-  timezone: string | null; // e.g. 'America/New_York', 'Asia/Taipei'
+  scheduleTimezone: string | null; // e.g. 'America/New_York', 'Asia/Taipei'
   scheduleCron: string | null; // cron expression string
   nextScheduledAt: Date | null; // Next scheduled run timestamp
 }
