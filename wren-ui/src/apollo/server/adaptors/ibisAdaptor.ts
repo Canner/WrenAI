@@ -241,10 +241,10 @@ export class IbisAdaptor implements IIbisAdaptor {
         cacheHit: res.headers['x-cache-hit'] === 'true',
         cacheCreatedAt:
           res.headers['x-cache-create-at'] &&
-          new Date(parseInt(res.headers['x-cache-create-at'])),
+          new Date(parseInt(res.headers['x-cache-create-at'])).toISOString(),
         cacheOverrideAt:
           res.headers['x-cache-override-at'] &&
-          new Date(parseInt(res.headers['x-cache-override-at'])),
+          new Date(parseInt(res.headers['x-cache-override-at'])).toISOString(),
         override: res.headers['x-cache-override'] === 'true',
       };
     } catch (e) {
