@@ -130,6 +130,7 @@ class QueryEventManager:
                     "trace_id": trace_id,
                     "code": error.code,
                     "message": error.message,
+                    "invalid_sql": error.invalid_sql or "",
                 },
             },
         )

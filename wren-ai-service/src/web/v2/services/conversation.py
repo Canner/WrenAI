@@ -362,7 +362,6 @@ class ConversationService:
             return [
                 {
                     "sql": sql_valid_results[0].get("sql"),
-                    "type": "llm",
                 }
             ], followup_sql_generation_results
         else:
@@ -400,7 +399,6 @@ class ConversationService:
             return [
                 {
                     "sql": sql_valid_results[0].get("sql"),
-                    "type": "llm",
                 }
             ], sql_generation_results
         else:
@@ -424,7 +422,6 @@ class ConversationService:
             return [
                 {
                     "sql": sql_valid_results[0].get("sql"),
-                    "type": "llm",
                 }
             ], sql_correction_results
         else:
