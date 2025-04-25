@@ -5,10 +5,13 @@ import {
   PreviewDataResponse,
   DEFAULT_PREVIEW_LIMIT,
 } from '@server/services';
-import { DashboardItem, DashboardItemType } from '@server/repositories';
+import {
+  Dashboard,
+  DashboardItem,
+  DashboardItemType,
+} from '@server/repositories';
 import { getLogger } from '@server/utils';
 import {
-  DetailedDashboard,
   SetDashboardCacheData,
   DashboardSchedule,
   PreviewItemResponse,
@@ -34,7 +37,13 @@ export class DashboardResolver {
     _root: any,
     _args: any,
     ctx: IContext,
-  ): Promise<DetailedDashboard & { schedule: DashboardSchedule }> {
+  ): Promise<
+    Omit<Dashboard, 'nextScheduledAt'> & {
+      schedule: DashboardSchedule;
+      items: DashboardItem[];
+      nextScheduledAt: string | null;
+    }
+  > {
     const dashboard = await ctx.dashboardService.getCurrentDashboard();
     if (!dashboard) {
       throw new Error('Dashboard not found.');
@@ -46,7 +55,9 @@ export class DashboardResolver {
     const items = await ctx.dashboardService.getDashboardItems(dashboard.id);
     return {
       ...dashboard,
-      nextScheduledAt: dashboard.nextScheduledAt?.toISOString(),
+      nextScheduledAt: dashboard.nextScheduledAt
+        ? new Date(dashboard.nextScheduledAt).toISOString()
+        : null,
       schedule,
       items,
     };

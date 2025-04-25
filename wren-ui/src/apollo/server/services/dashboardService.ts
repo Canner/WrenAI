@@ -108,6 +108,7 @@ export class DashboardService implements IDashboardService {
       await this.dashboardRepository.updateOne(dashboardId, {
         cacheEnabled: data.cacheEnabled,
         scheduleFrequency: data.schedule.frequency,
+        scheduleTimezone: data.schedule.timezone,
         scheduleCron: cronExpression,
         nextScheduledAt,
       });
@@ -378,9 +379,7 @@ export class DashboardService implements IDashboardService {
     };
   }
 
-  private generateCronExpression(
-    schedule: SetDashboardCacheData['schedule'],
-  ): string | null {
+  private generateCronExpression(schedule: DashboardSchedule): string | null {
     const { frequency, day, hour, minute } = this.toUTC(schedule);
 
     switch (frequency) {
@@ -465,7 +464,7 @@ export class DashboardService implements IDashboardService {
         hour: 0,
         minute: 0,
         day: null,
-        timezone: dashboard.timezone || '',
+        timezone: dashboard.scheduleTimezone || '',
         cron: '',
       } as DashboardSchedule;
     }
@@ -476,7 +475,7 @@ export class DashboardService implements IDashboardService {
           hour: 0,
           minute: 0,
           day: null,
-          timezone: dashboard.timezone || '',
+          timezone: dashboard.scheduleTimezone || '',
           cron: dashboard.scheduleCron,
         };
       case ScheduleFrequencyEnum.Daily:
@@ -486,12 +485,16 @@ export class DashboardService implements IDashboardService {
           throw new Error('Invalid cron expression format');
         }
         const [minute, hour, , , dayOfWeek] = parts;
+        console.log({ parts });
         return this.toTimezone({
           frequency: dashboard.scheduleFrequency,
           hour: parseInt(hour, 10),
           minute: parseInt(minute, 10),
-          day: dayOfWeek as CacheScheduleDayEnum,
-          timezone: dashboard.timezone || '',
+          day:
+            dashboard.scheduleFrequency === ScheduleFrequencyEnum.Weekly
+              ? (dayOfWeek as CacheScheduleDayEnum)
+              : null,
+          timezone: dashboard.scheduleTimezone || '',
           cron: null,
         } as DashboardSchedule);
       }
@@ -501,7 +504,7 @@ export class DashboardService implements IDashboardService {
           hour: null,
           minute: null,
           day: null,
-          timezone: dashboard.timezone || '',
+          timezone: dashboard.scheduleTimezone || '',
           cron: null,
         } as DashboardSchedule;
       }

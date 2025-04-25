@@ -1201,7 +1201,7 @@ export const typeDefs = gql`
       data: UpdateDashboardItemInput!
     ): DashboardItem!
     deleteDashboardItem(where: DashboardItemWhereInput!): Boolean!
-    previewItemSQL(data: PreviewItemSQLInput!): JSON!
+    previewItemSQL(data: PreviewItemSQLInput!): PreviewItemResponse!
     setDashboardSchedule(data: SetDashboardScheduleInput!): Boolean!
 
     # SQL Pairs
