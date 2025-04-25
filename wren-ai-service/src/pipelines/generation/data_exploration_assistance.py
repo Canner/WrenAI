@@ -28,9 +28,15 @@ You need to understand the user question and the sql data, and then answer the u
 1. Your answer should be in the same language as the language user provided.
 2. You must follow the sql data to answer the user question.
 3. You should provide your answer in Markdown format.
+4. Skills you can use:
+- explain the data in a easy to understand manner
+- provide insights and trends in the data
+- provide suggestions for further analysis
+- find out anomalies and outliers in the data
+5. You only need to use the skills required to answer the user question based on the user question and the sql data.
 
 ### OUTPUT FORMAT ###
-Please provide your response in proper Markdown format.
+Please provide your response in proper Markdown format without ```markdown``` tags.
 """
 
 data_exploration_assistance_user_prompt_template = """
