@@ -49,6 +49,7 @@ export const typeDefs = gql`
     DUCKDB
     POSTGRES
     MYSQL
+    ORACLE
     MSSQL
     CLICK_HOUSE
     TRINO

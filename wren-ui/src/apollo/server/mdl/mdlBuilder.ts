@@ -500,6 +500,8 @@ export class MDLBuilder implements IMDLBuilder {
         return WrenEngineDataSourceType.POSTGRES;
       case DataSourceName.MYSQL:
         return WrenEngineDataSourceType.MYSQL;
+      case DataSourceName.ORACLE:
+        return WrenEngineDataSourceType.ORACLE;
       case DataSourceName.MSSQL:
         return WrenEngineDataSourceType.MSSQL;
       case DataSourceName.CLICK_HOUSE:
