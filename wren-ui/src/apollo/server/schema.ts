@@ -886,7 +886,7 @@ export const typeDefs = gql`
   input PreviewItemSQLInput {
     itemId: Int!
     limit: Int
-    refresh: Boolean
+    refresh: Boolean = false
   }
 
   type PreviewItemResponse {
@@ -913,18 +913,18 @@ export const typeDefs = gql`
 
   input SetDashboardScheduleData {
     frequency: ScheduleFrequencyEnum!
-    hour: Int!
-    minute: Int!
+    hour: Int
+    minute: Int
     day: CacheScheduleDayEnum
     timezone: String
     cron: String
   }
 
   enum ScheduleFrequencyEnum {
-    Daily
-    Weekly
-    Custom
-    Never
+    DAILY
+    WEEKLY
+    CUSTOM
+    NEVER
   }
 
   enum CacheScheduleDayEnum {
@@ -956,6 +956,17 @@ export const typeDefs = gql`
     layout: DashboardItemLayout!
     detail: DashboardItemDetail!
     displayName: String
+  }
+
+  type Dashboard {
+    id: Int!
+    projectId: Int!
+    name: String!
+    cacheEnabled: Boolean!
+    scheduleFrequency: ScheduleFrequencyEnum
+    scheduleTimezone: String
+    scheduleCron: String
+    nextScheduledAt: String
   }
 
   type DetailedDashboard {
@@ -1202,7 +1213,7 @@ export const typeDefs = gql`
     ): DashboardItem!
     deleteDashboardItem(where: DashboardItemWhereInput!): Boolean!
     previewItemSQL(data: PreviewItemSQLInput!): PreviewItemResponse!
-    setDashboardSchedule(data: SetDashboardScheduleInput!): Boolean!
+    setDashboardSchedule(data: SetDashboardScheduleInput!): Dashboard!
 
     # SQL Pairs
     createSqlPair(data: CreateSqlPairInput!): SqlPair!
