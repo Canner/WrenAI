@@ -52,7 +52,7 @@ export default function APIHistory() {
       title: 'API type',
       dataIndex: 'apiType',
       key: 'apiType',
-      width: 130,
+      width: 180,
       render: (type: ApiHistoryResponse['apiType']) => (
         <Tag className="gray-8">{type.toLowerCase()}</Tag>
       ),
@@ -67,7 +67,7 @@ export default function APIHistory() {
       title: 'Status',
       dataIndex: 'statusCode',
       key: 'statusCode',
-      width: 80,
+      width: 100,
       render: (status: number) => {
         const icon =
           status === 200 ? <CheckCircleOutlined /> : <CloseCircleOutlined />;
@@ -192,7 +192,7 @@ export default function APIHistory() {
             size: 'small',
             total: data?.apiHistory.total,
           }}
-          scroll={{ x: 1080 }}
+          scroll={{ x: 1200 }}
           onChange={(pagination, filters, _sorter) => {
             setCurrentPage(pagination.current);
             setFilters(filters);
