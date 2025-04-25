@@ -1,7 +1,9 @@
 import Link from 'next/link';
+import { useState } from 'react';
 import { Table, TableColumnsType, Button, Tag, Typography } from 'antd';
 import { getAbsoluteTime } from '@/utils/time';
 import useDrawerAction from '@/hooks/useDrawerAction';
+import { getColumnSearchProps } from '@/utils/table';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import PageLayout from '@/components/layouts/PageLayout';
 import ApiOutlined from '@ant-design/icons/ApiOutlined';
@@ -15,15 +17,24 @@ import DetailsDrawer from '@/components/pages/apiHistory/DetailsDrawer';
 import { useApiHistoryQuery } from '@/apollo/client/graphql/apiHistory.generated';
 import { ApiType, ApiHistoryResponse } from '@/apollo/client/graphql/__types__';
 
+const PAGE_SIZE = 10;
+
 export default function APIHistory() {
   const detailsDrawer = useDrawerAction();
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [filters, setFilters] = useState<Record<string, any>>({});
 
   const { data, loading } = useApiHistoryQuery({
     fetchPolicy: 'cache-and-network',
     variables: {
       pagination: {
-        offset: 0,
-        limit: 10,
+        offset: (currentPage - 1) * PAGE_SIZE,
+        limit: PAGE_SIZE,
+      },
+      filter: {
+        apiType: filters['apiType']?.[0],
+        statusCode: filters['statusCode']?.[0],
+        threadId: filters['threadId']?.[0],
       },
     },
     onError: (error) => console.error(error),
@@ -47,6 +58,12 @@ export default function APIHistory() {
       render: (type: ApiHistoryResponse['apiType']) => (
         <Tag className="gray-8">{type.toLowerCase()}</Tag>
       ),
+      filters: Object.keys(ApiType).map((type) => ({
+        text: type.toLowerCase(),
+        value: type,
+      })),
+      filteredValue: filters['apiType'],
+      filterMultiple: false,
     },
     {
       title: 'Status',
@@ -63,6 +80,13 @@ export default function APIHistory() {
           </Tag>
         );
       },
+      filters: [
+        { text: '200', value: 200 },
+        { text: '400', value: 400 },
+        { text: '500', value: 500 },
+      ],
+      filteredValue: filters['statusCode'],
+      filterMultiple: false,
     },
     {
       title: 'Question / SQL',
@@ -98,6 +122,11 @@ export default function APIHistory() {
           </Typography.Text>
         );
       },
+      ...getColumnSearchProps({
+        dataIndex: 'threadId',
+        placeholder: 'thread ID',
+        filteredValue: filters['threadId'],
+      }),
     },
     {
       title: 'Duration (ms)',
@@ -177,10 +206,15 @@ export default function APIHistory() {
           rowKey="id"
           pagination={{
             hideOnSinglePage: true,
-            pageSize: 10,
+            pageSize: PAGE_SIZE,
             size: 'small',
+            total: data?.apiHistory.total,
           }}
           scroll={{ x: 1080 }}
+          onChange={(pagination, filters, _sorter) => {
+            setCurrentPage(pagination.current);
+            setFilters(filters);
+          }}
         />
         <DetailsDrawer
           {...detailsDrawer.state}
