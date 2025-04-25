@@ -7,13 +7,11 @@ import { getColumnSearchProps } from '@/utils/table';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import PageLayout from '@/components/layouts/PageLayout';
 import ApiOutlined from '@ant-design/icons/ApiOutlined';
-import ReadOutlined from '@ant-design/icons/ReadOutlined';
-import InfoCircleOutlined from '@ant-design/icons/InfoCircleOutlined';
 import EyeOutlined from '@ant-design/icons/EyeOutlined';
 import CheckCircleOutlined from '@ant-design/icons/CheckCircleOutlined';
 import CloseCircleOutlined from '@ant-design/icons/CloseCircleOutlined';
 import SQLCodeBlock from '@/components/code/SQLCodeBlock';
-import DetailsDrawer from '@/components/pages/apiHistory/DetailsDrawer';
+import DetailsDrawer from '@/components/pages/apiManagement/DetailsDrawer';
 import { useApiHistoryQuery } from '@/apollo/client/graphql/apiHistory.generated';
 import { ApiType, ApiHistoryResponse } from '@/apollo/client/graphql/__types__';
 
@@ -169,31 +167,15 @@ export default function APIHistory() {
           <>
             <div>
               Here you can view the full history of API calls, including request
-              inputs, responses, and execution details.
-            </div>
-            <div className="d-flex align-center mt-3">
-              <ReadOutlined className="mr-2 gray-8" />
+              inputs, responses, and execution details.{' '}
               <Link
                 className="gray-8 underline mr-2"
                 href="https://docs.getwren.ai/oss/guide/api-history"
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                API reference
+                Learn more.
               </Link>
-              Learn how to use each API
-            </div>
-            <div className="d-flex align-center mt-1">
-              <InfoCircleOutlined className="mr-2 gray-8" />
-              <Link
-                className="gray-8 underline mr-2"
-                href="https://docs.getwren.ai/oss/guide/api-history"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Page guide
-              </Link>
-              Understand how to read and use this history log
             </div>
           </>
         }

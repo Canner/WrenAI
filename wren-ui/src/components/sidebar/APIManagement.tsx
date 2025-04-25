@@ -1,8 +1,10 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import styled from 'styled-components';
-import ApiOutlined from '@ant-design/icons/ApiOutlined';
 import { Path, MENU_KEY } from '@/utils/enum';
+import { OpenInNewIcon } from '@/utils/icons';
+import ApiOutlined from '@ant-design/icons/ApiOutlined';
+import ReadOutlined from '@ant-design/icons/ReadOutlined';
 import SidebarMenu from '@/components/sidebar/SidebarMenu';
 
 const Layout = styled.div`
@@ -17,24 +19,40 @@ const Layout = styled.div`
 `;
 
 const MENU_KEY_MAP = {
-  [Path.APIHistory]: MENU_KEY.API_HISTORY,
+  [Path.APIManagementHistory]: MENU_KEY.API_HISTORY,
 };
 
 const linkStyle = { color: 'inherit', transition: 'none' };
 
-export default function APIHistory() {
+export default function APIManagement() {
   const router = useRouter();
 
   const menuItems = [
     {
       'data-guideid': 'api-history',
       label: (
-        <Link style={linkStyle} href={Path.APIHistory}>
+        <Link style={linkStyle} href={Path.APIManagementHistory}>
           API history
         </Link>
       ),
       icon: <ApiOutlined />,
       key: MENU_KEY.API_HISTORY,
+      className: 'pl-4',
+    },
+    {
+      label: (
+        <Link
+          className="gray-8 d-inline-flex align-center"
+          href="https://docs.getwren.ai/oss/guide/api-history/api-reference"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          API reference
+          <OpenInNewIcon className="ml-1" />
+        </Link>
+      ),
+      icon: <ReadOutlined />,
+      key: MENU_KEY.API_REFERENCE,
       className: 'pl-4',
     },
   ];
