@@ -18,7 +18,7 @@ import {
   AskingTaskRepository,
   InstructionRepository,
   ApiHistoryRepository,
-  DashboardCacheRefreshRepository,
+  DashboardItemRefreshJobRepository,
 } from '@server/repositories';
 import {
   WrenEngineAdaptor,
@@ -73,9 +73,8 @@ export const initComponents = () => {
   const askingTaskRepository = new AskingTaskRepository(knex);
   const instructionRepository = new InstructionRepository(knex);
   const apiHistoryRepository = new ApiHistoryRepository(knex);
-  const dashboardCacheRefreshRepository = new DashboardCacheRefreshRepository(
-    knex,
-  );
+  const dashboardItemRefreshJobRepository =
+    new DashboardItemRefreshJobRepository(knex);
 
   // adaptors
   const wrenEngineAdaptor = new WrenEngineAdaptor({
@@ -168,7 +167,7 @@ export const initComponents = () => {
   const dashboardCacheBackgroundTracker = new DashboardCacheBackgroundTracker({
     dashboardRepository,
     dashboardItemRepository,
-    dashboardCacheRefreshRepository,
+    dashboardItemRefreshJobRepository,
     projectService,
     deployService,
     queryService,
@@ -196,7 +195,7 @@ export const initComponents = () => {
     askingTaskRepository,
     apiHistoryRepository,
     instructionRepository,
-    dashboardCacheRefreshRepository,
+    dashboardItemRefreshJobRepository,
 
     // adaptors
     wrenEngineAdaptor,

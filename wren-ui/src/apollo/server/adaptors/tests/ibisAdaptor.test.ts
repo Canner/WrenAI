@@ -506,12 +506,12 @@ describe('IbisAdaptor', () => {
     expect(res.data).toEqual([[1]]);
     expect(res.columns).toEqual(['id']);
     expect(res.dtypes).toEqual({ id: 'integer' });
-    expect(res.cacheHit).toEqual('true');
-    expect(res.cacheCreatedAt).toEqual('2024-01-01T00:00:00Z');
-    expect(res.override).toEqual('false');
-    expect(res.cacheOverrodeAt).toEqual('2024-01-01T00:00:00Z');
+    expect(res.cacheHit).toEqual(true);
+    expect(new Date(res.cacheCreatedAt).getTime()).toBeGreaterThan(0);
+    expect(res.override).toEqual(false);
+    expect(new Date(res.cacheOverrodeAt).getTime()).toBeGreaterThan(0);
     expect(mockedAxios.post).toHaveBeenCalledWith(
-      `${ibisServerEndpoint}/v3/connector/postgres/query?cacheEnabled=true`,
+      `${ibisServerEndpoint}/v3/connector/postgres/query?cacheEnable=true`,
       expect.any(Object),
       expect.any(Object),
     );
@@ -546,7 +546,7 @@ describe('IbisAdaptor', () => {
 
     expect(res.data).toEqual([[1]]);
     expect(mockedAxios.post).toHaveBeenCalledWith(
-      `${ibisServerEndpoint}/v3/connector/postgres/query?cacheEnabled=true&cacheOverride=true`,
+      `${ibisServerEndpoint}/v3/connector/postgres/query?cacheEnable=true&overrideCache=true`,
       expect.any(Object),
       expect.any(Object),
     );

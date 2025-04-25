@@ -2,7 +2,7 @@ import { getLogger } from '@server/utils';
 import {
   IDashboardRepository,
   IDashboardItemRepository,
-  IDashboardCacheRefreshRepository,
+  IDashboardItemRefreshJobRepository,
   DashboardCacheRefreshStatus,
 } from '@server/repositories';
 import {
@@ -20,7 +20,7 @@ export class DashboardCacheBackgroundTracker {
   private intervalTime: number;
   private dashboardRepository: IDashboardRepository;
   private dashboardItemRepository: IDashboardItemRepository;
-  private dashboardCacheRefreshRepository: IDashboardCacheRefreshRepository;
+  private dashboardItemRefreshJobRepository: IDashboardItemRefreshJobRepository;
   private projectService: IProjectService;
   private deployService: IDeployService;
   private queryService: IQueryService;
@@ -29,21 +29,21 @@ export class DashboardCacheBackgroundTracker {
   constructor({
     dashboardRepository,
     dashboardItemRepository,
-    dashboardCacheRefreshRepository,
+    dashboardItemRefreshJobRepository,
     projectService,
     deployService,
     queryService,
   }: {
     dashboardRepository: IDashboardRepository;
     dashboardItemRepository: IDashboardItemRepository;
-    dashboardCacheRefreshRepository: IDashboardCacheRefreshRepository;
+    dashboardItemRefreshJobRepository: IDashboardItemRefreshJobRepository;
     projectService: IProjectService;
     deployService: IDeployService;
     queryService: IQueryService;
   }) {
     this.dashboardRepository = dashboardRepository;
     this.dashboardItemRepository = dashboardItemRepository;
-    this.dashboardCacheRefreshRepository = dashboardCacheRefreshRepository;
+    this.dashboardItemRefreshJobRepository = dashboardItemRefreshJobRepository;
     this.projectService = projectService;
     this.deployService = deployService;
     this.queryService = queryService;
@@ -113,7 +113,7 @@ export class DashboardCacheBackgroundTracker {
           try {
             // Create a record for this refresh job
             const refreshJob =
-              await this.dashboardCacheRefreshRepository.createOne({
+              await this.dashboardItemRefreshJobRepository.createOne({
                 hash,
                 dashboardId: dashboard.id,
                 dashboardItemId: item.id,
@@ -132,7 +132,7 @@ export class DashboardCacheBackgroundTracker {
               });
 
               // Update the record with success
-              await this.dashboardCacheRefreshRepository.updateOne(
+              await this.dashboardItemRefreshJobRepository.updateOne(
                 refreshJob.id,
                 {
                   finishedAt: new Date(),
@@ -141,7 +141,7 @@ export class DashboardCacheBackgroundTracker {
               );
             } catch (error) {
               // Update the record with failure
-              await this.dashboardCacheRefreshRepository.updateOne(
+              await this.dashboardItemRefreshJobRepository.updateOne(
                 refreshJob.id,
                 {
                   finishedAt: new Date(),

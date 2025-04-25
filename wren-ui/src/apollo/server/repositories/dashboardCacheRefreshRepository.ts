@@ -7,7 +7,7 @@ export enum DashboardCacheRefreshStatus {
   FAILED = 'failed',
 }
 
-export interface DashboardCacheRefresh {
+export interface DashboardItemRefreshJob {
   id: number;
   hash: string;
   dashboardId: number;
@@ -20,14 +20,14 @@ export interface DashboardCacheRefresh {
   updatedAt: Date;
 }
 
-export interface IDashboardCacheRefreshRepository
-  extends IBasicRepository<DashboardCacheRefresh> {}
+export interface IDashboardItemRefreshJobRepository
+  extends IBasicRepository<DashboardItemRefreshJob> {}
 
-export class DashboardCacheRefreshRepository
-  extends BaseRepository<DashboardCacheRefresh>
-  implements IDashboardCacheRefreshRepository
+export class DashboardItemRefreshJobRepository
+  extends BaseRepository<DashboardItemRefreshJob>
+  implements IDashboardItemRefreshJobRepository
 {
   constructor(knexPg: Knex) {
-    super({ knexPg, tableName: 'dashboard_cache_refresh' });
+    super({ knexPg, tableName: 'dashboard_item_refresh_job' });
   }
 }
