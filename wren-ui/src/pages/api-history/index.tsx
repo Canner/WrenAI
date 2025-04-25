@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Table, TableColumnsType, Button, Tag, Typography } from 'antd';
 import { getAbsoluteTime } from '@/utils/time';
 import useDrawerAction from '@/hooks/useDrawerAction';
-import { getColumnSearchProps } from '@/utils/table';
+import { getColumnSearchProps, getColumnDateFilterProps } from '@/utils/table';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import PageLayout from '@/components/layouts/PageLayout';
 import ApiOutlined from '@ant-design/icons/ApiOutlined';
@@ -35,6 +35,8 @@ export default function APIHistory() {
         apiType: filters['apiType']?.[0],
         statusCode: filters['statusCode']?.[0],
         threadId: filters['threadId']?.[0],
+        startDate: filters['createdAt']?.[0],
+        endDate: filters['createdAt']?.[1],
       },
     },
     onError: (error) => console.error(error),
@@ -49,6 +51,10 @@ export default function APIHistory() {
       render: (timestamp: string) => (
         <div className="gray-7">{getAbsoluteTime(timestamp)}</div>
       ),
+      ...getColumnDateFilterProps({
+        dataIndex: 'createdAt',
+        filteredValue: filters['createdAt'],
+      }),
     },
     {
       title: 'API type',
