@@ -11,7 +11,7 @@ exports.up = function (knex) {
     table
       .foreign('project_id')
       .references('id')
-      .inTable('projects')
+      .inTable('project')
       .onDelete('CASCADE');
 
     // Thread
