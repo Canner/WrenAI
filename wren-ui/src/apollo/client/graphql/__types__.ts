@@ -119,6 +119,16 @@ export enum AskingTaskType {
   TEXT_TO_SQL = 'TEXT_TO_SQL'
 }
 
+export enum CacheScheduleDayEnum {
+  FRI = 'FRI',
+  MON = 'MON',
+  SAT = 'SAT',
+  SUN = 'SUN',
+  THU = 'THU',
+  TUE = 'TUE',
+  WED = 'WED'
+}
+
 export type CalculatedFieldInput = {
   diagram?: InputMaybe<Scalars['JSON']>;
   expression: Scalars['String'];
@@ -228,6 +238,18 @@ export type CustomFieldInput = {
   name: Scalars['String'];
 };
 
+export type Dashboard = {
+  __typename?: 'Dashboard';
+  cacheEnabled: Scalars['Boolean'];
+  id: Scalars['Int'];
+  name: Scalars['String'];
+  nextScheduledAt?: Maybe<Scalars['String']>;
+  projectId: Scalars['Int'];
+  scheduleCron?: Maybe<Scalars['String']>;
+  scheduleFrequency?: Maybe<ScheduleFrequencyEnum>;
+  scheduleTimezone?: Maybe<Scalars['String']>;
+};
+
 export type DashboardItem = {
   __typename?: 'DashboardItem';
   dashboardId: Scalars['Int'];
@@ -266,6 +288,16 @@ export enum DashboardItemType {
 
 export type DashboardItemWhereInput = {
   id: Scalars['Int'];
+};
+
+export type DashboardSchedule = {
+  __typename?: 'DashboardSchedule';
+  cron?: Maybe<Scalars['String']>;
+  day?: Maybe<CacheScheduleDayEnum>;
+  frequency: ScheduleFrequencyEnum;
+  hour: Scalars['Int'];
+  minute: Scalars['Int'];
+  timezone?: Maybe<Scalars['String']>;
 };
 
 export type DataSource = {
@@ -341,6 +373,16 @@ export type DetailedColumn = {
   referenceName: Scalars['String'];
   sourceColumnName: Scalars['String'];
   type?: Maybe<Scalars['String']>;
+};
+
+export type DetailedDashboard = {
+  __typename?: 'DetailedDashboard';
+  description?: Maybe<Scalars['String']>;
+  id: Scalars['Int'];
+  items: Array<DashboardItem>;
+  name: Scalars['String'];
+  nextScheduledAt?: Maybe<Scalars['String']>;
+  schedule: DashboardSchedule;
 };
 
 export type DetailedModel = {
@@ -644,7 +686,7 @@ export type Mutation = {
   modelSubstitute: Scalars['String'];
   previewBreakdownData: Scalars['JSON'];
   previewData: Scalars['JSON'];
-  previewItemSQL: Scalars['JSON'];
+  previewItemSQL: PreviewItemResponse;
   previewModelData: Scalars['JSON'];
   previewSql: Scalars['JSON'];
   previewViewData: Scalars['JSON'];
@@ -656,6 +698,7 @@ export type Mutation = {
   saveLearningRecord: LearningRecord;
   saveRelations: Scalars['JSON'];
   saveTables: Scalars['JSON'];
+  setDashboardSchedule: Dashboard;
   startSampleDataset: Scalars['JSON'];
   triggerDataSourceDetection: Scalars['Boolean'];
   updateCalculatedField: Scalars['JSON'];
@@ -894,6 +937,11 @@ export type MutationSaveTablesArgs = {
 };
 
 
+export type MutationSetDashboardScheduleArgs = {
+  data: SetDashboardScheduleInput;
+};
+
+
 export type MutationStartSampleDatasetArgs = {
   data: SampleDatasetInput;
 };
@@ -1021,9 +1069,19 @@ export type PreviewDataInput = {
   stepIndex?: InputMaybe<Scalars['Int']>;
 };
 
+export type PreviewItemResponse = {
+  __typename?: 'PreviewItemResponse';
+  cacheCreatedAt?: Maybe<Scalars['String']>;
+  cacheHit: Scalars['Boolean'];
+  cacheOverrideAt?: Maybe<Scalars['String']>;
+  data: Scalars['JSON'];
+  override: Scalars['Boolean'];
+};
+
 export type PreviewItemSqlInput = {
   itemId: Scalars['Int'];
   limit?: InputMaybe<Scalars['Int']>;
+  refresh?: InputMaybe<Scalars['Boolean']>;
 };
 
 export type PreviewSqlDataInput = {
@@ -1057,6 +1115,7 @@ export type Query = {
   apiHistory: ApiHistoryPaginatedResponse;
   askingTask?: Maybe<AskingTask>;
   autoGenerateRelation: Array<RecommendRelations>;
+  dashboard: DetailedDashboard;
   dashboardItems: Array<DashboardItem>;
   diagram: Diagram;
   getMDL: GetMdlResult;
@@ -1236,6 +1295,13 @@ export type SaveTablesInput = {
   tables: Array<Scalars['String']>;
 };
 
+export enum ScheduleFrequencyEnum {
+  CUSTOM = 'CUSTOM',
+  DAILY = 'DAILY',
+  NEVER = 'NEVER',
+  WEEKLY = 'WEEKLY'
+}
+
 export type SchemaChange = {
   __typename?: 'SchemaChange';
   deletedColumns?: Maybe<Array<DetailedChangeTable>>;
@@ -1249,6 +1315,20 @@ export enum SchemaChangeType {
   DELETED_TABLES = 'DELETED_TABLES',
   MODIFIED_COLUMNS = 'MODIFIED_COLUMNS'
 }
+
+export type SetDashboardScheduleData = {
+  cron?: InputMaybe<Scalars['String']>;
+  day?: InputMaybe<CacheScheduleDayEnum>;
+  frequency: ScheduleFrequencyEnum;
+  hour?: InputMaybe<Scalars['Int']>;
+  minute?: InputMaybe<Scalars['Int']>;
+  timezone?: InputMaybe<Scalars['String']>;
+};
+
+export type SetDashboardScheduleInput = {
+  cacheEnabled: Scalars['Boolean'];
+  schedule: SetDashboardScheduleData;
+};
 
 export type Settings = {
   __typename?: 'Settings';
