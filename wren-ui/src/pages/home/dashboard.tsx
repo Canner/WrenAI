@@ -111,12 +111,7 @@ export default function Dashboard() {
             {...cacheSettingsDrawer.state}
             onClose={cacheSettingsDrawer.closeDrawer}
             onSubmit={async (values) => {
-              console.log(values);
-              await setDashboardSchedule({
-                variables: {
-                  data: values,
-                },
-              });
+              await setDashboardSchedule({ variables: { data: values } });
             }}
           />
         </>
