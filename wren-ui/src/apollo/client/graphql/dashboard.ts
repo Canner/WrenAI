@@ -97,6 +97,7 @@ export const DASHBOARD = gql`
       id
       name
       description
+      cacheEnabled
       nextScheduledAt
       schedule {
         frequency

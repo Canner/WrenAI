@@ -377,6 +377,7 @@ export type DetailedColumn = {
 
 export type DetailedDashboard = {
   __typename?: 'DetailedDashboard';
+  cacheEnabled: Scalars['Boolean'];
   description?: Maybe<Scalars['String']>;
   id: Scalars['Int'];
   items: Array<DashboardItem>;
@@ -1327,7 +1328,7 @@ export type SetDashboardScheduleData = {
 
 export type SetDashboardScheduleInput = {
   cacheEnabled: Scalars['Boolean'];
-  schedule: SetDashboardScheduleData;
+  schedule?: InputMaybe<SetDashboardScheduleData>;
 };
 
 export type Settings = {

@@ -56,7 +56,7 @@ export type SetDashboardScheduleMutation = { __typename?: 'Mutation', setDashboa
 export type DashboardQueryVariables = Types.Exact<{ [key: string]: never; }>;
 
 
-export type DashboardQuery = { __typename?: 'Query', dashboard: { __typename?: 'DetailedDashboard', id: number, name: string, description?: string | null, nextScheduledAt?: string | null, schedule: { __typename?: 'DashboardSchedule', frequency: Types.ScheduleFrequencyEnum, hour: number, minute: number, day?: Types.CacheScheduleDayEnum | null, timezone?: string | null, cron?: string | null }, items: Array<{ __typename?: 'DashboardItem', id: number, dashboardId: number, type: Types.DashboardItemType, displayName?: string | null, layout: { __typename?: 'DashboardItemLayout', x: number, y: number, w: number, h: number }, detail: { __typename?: 'DashboardItemDetail', sql: string, chartSchema?: any | null } }> } };
+export type DashboardQuery = { __typename?: 'Query', dashboard: { __typename?: 'DetailedDashboard', id: number, name: string, description?: string | null, cacheEnabled: boolean, nextScheduledAt?: string | null, schedule: { __typename?: 'DashboardSchedule', frequency: Types.ScheduleFrequencyEnum, hour: number, minute: number, day?: Types.CacheScheduleDayEnum | null, timezone?: string | null, cron?: string | null }, items: Array<{ __typename?: 'DashboardItem', id: number, dashboardId: number, type: Types.DashboardItemType, displayName?: string | null, layout: { __typename?: 'DashboardItemLayout', x: number, y: number, w: number, h: number }, detail: { __typename?: 'DashboardItemDetail', sql: string, chartSchema?: any | null } }> } };
 
 export const CommonDashboardItemFragmentDoc = gql`
     fragment CommonDashboardItem on DashboardItem {
@@ -324,6 +324,7 @@ export const DashboardDocument = gql`
     id
     name
     description
+    cacheEnabled
     nextScheduledAt
     schedule {
       frequency
