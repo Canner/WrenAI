@@ -49,9 +49,6 @@ export class DashboardResolver {
       throw new Error('Dashboard not found.');
     }
     const schedule = ctx.dashboardService.parseCronExpression(dashboard);
-    if (!dashboard) {
-      throw new Error('Dashboard not found.');
-    }
     const items = await ctx.dashboardService.getDashboardItems(dashboard.id);
     return {
       ...dashboard,
@@ -199,15 +196,17 @@ export class DashboardResolver {
     _root: any,
     args: { data: SetDashboardCacheData },
     ctx: IContext,
-  ): Promise<boolean> {
+  ): Promise<Dashboard> {
     try {
       const dashboard = await ctx.dashboardService.getCurrentDashboard();
       if (!dashboard) {
         throw new Error('Dashboard not found.');
       }
 
-      await ctx.dashboardService.setDashboardSchedule(dashboard.id, args.data);
-      return true;
+      return await ctx.dashboardService.setDashboardSchedule(
+        dashboard.id,
+        args.data,
+      );
     } catch (error) {
       logger.error(`Failed to set dashboard schedule: ${error.message}`);
       throw error;

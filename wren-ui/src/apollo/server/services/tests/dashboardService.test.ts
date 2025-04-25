@@ -60,7 +60,7 @@ describe('DashboardService', () => {
   describe('generateCronExpression', () => {
     it('should generate correct cron expression for daily schedule', () => {
       const schedule = {
-        frequency: ScheduleFrequencyEnum.Daily,
+        frequency: ScheduleFrequencyEnum.DAILY,
         hour: 14,
         minute: 30,
       };
@@ -71,8 +71,8 @@ describe('DashboardService', () => {
 
     it('should generate correct cron expression for weekly schedule', () => {
       const schedule = {
-        frequency: ScheduleFrequencyEnum.Weekly,
-        day: 'MON',
+        frequency: ScheduleFrequencyEnum.WEEKLY,
+        day: CacheScheduleDayEnum.MON,
         hour: 9,
         minute: 0,
       };
@@ -83,7 +83,7 @@ describe('DashboardService', () => {
 
     it('should return custom cron expression for custom schedule', () => {
       const schedule = {
-        frequency: ScheduleFrequencyEnum.Custom,
+        frequency: ScheduleFrequencyEnum.CUSTOM,
         cron: '0 0 * * *',
       };
 
@@ -93,7 +93,7 @@ describe('DashboardService', () => {
 
     it('should return null for never schedule', () => {
       const schedule = {
-        frequency: ScheduleFrequencyEnum.Never,
+        frequency: ScheduleFrequencyEnum.NEVER,
       };
 
       const result = (dashboardService as any).generateCronExpression(schedule);
@@ -111,8 +111,9 @@ describe('DashboardService', () => {
       const cronExpression = '0 12 * * *'; // Every day at 12:00 PM
       const result = dashboardService['calculateNextRunTime'](cronExpression);
 
+      const now = Date.now();
       expect(result).toBeInstanceOf(Date);
-      expect(result?.getTime()).toBeGreaterThan(new Date().getTime());
+      expect(result!.getTime()).toBeGreaterThan(now);
 
       // Verify the time is correct (within 1 minute of expected time)
       const expectedTime = new Date();
@@ -130,7 +131,8 @@ describe('DashboardService', () => {
       const result = dashboardService['calculateNextRunTime'](cronExpression);
 
       expect(result).toBeInstanceOf(Date);
-      expect(result?.getTime()).toBeGreaterThan(new Date().getTime());
+      const now = Date.now();
+      expect(result!.getTime()).toBeGreaterThan(now);
 
       // Verify it's a Monday
       expect(result?.getDay()).toBe(1); // 1 represents Monday
@@ -141,7 +143,8 @@ describe('DashboardService', () => {
       const result = dashboardService['calculateNextRunTime'](cronExpression);
 
       expect(result).toBeInstanceOf(Date);
-      expect(result?.getTime()).toBeGreaterThan(new Date().getTime());
+      const now = Date.now();
+      expect(result!.getTime()).toBeGreaterThan(now);
 
       // Verify the time is in 2-hour intervals
       const hours = result?.getHours() ?? 0;
@@ -151,7 +154,7 @@ describe('DashboardService', () => {
     it('should handle timezone conversion correctly', () => {
       // Test with a schedule that would be affected by timezone conversion
       const schedule = {
-        frequency: ScheduleFrequencyEnum.Daily,
+        frequency: ScheduleFrequencyEnum.DAILY,
         timezone: 'America/New_York',
         hour: 12,
         minute: 0,
@@ -166,7 +169,8 @@ describe('DashboardService', () => {
       );
 
       expect(result).toBeInstanceOf(Date);
-      expect(result?.getTime()).toBeGreaterThan(new Date().getTime());
+      const now = Date.now();
+      expect(result!.getTime()).toBeGreaterThan(now);
     });
   });
   describe('toUTC', () => {
@@ -181,7 +185,7 @@ describe('DashboardService', () => {
 
     it('should return original schedule if no timezone is specified', () => {
       const schedule = {
-        frequency: ScheduleFrequencyEnum.Daily,
+        frequency: ScheduleFrequencyEnum.DAILY,
         hour: 14,
         minute: 30,
       };
@@ -192,7 +196,7 @@ describe('DashboardService', () => {
 
     it('should convert daily schedule from local time to UTC', () => {
       const schedule = {
-        frequency: ScheduleFrequencyEnum.Daily,
+        frequency: ScheduleFrequencyEnum.DAILY,
         hour: 14,
         minute: 30,
         timezone: 'America/New_York', // UTC-4
@@ -207,7 +211,7 @@ describe('DashboardService', () => {
 
     it('should convert weekly schedule from local time to UTC without day change', () => {
       const schedule = {
-        frequency: ScheduleFrequencyEnum.Weekly,
+        frequency: ScheduleFrequencyEnum.WEEKLY,
         day: CacheScheduleDayEnum.MON,
         hour: 14,
         minute: 30,
@@ -225,7 +229,7 @@ describe('DashboardService', () => {
 
     it('should adjust day forward for weekly schedule when UTC time crosses midnight', () => {
       const schedule = {
-        frequency: ScheduleFrequencyEnum.Weekly,
+        frequency: ScheduleFrequencyEnum.WEEKLY,
         day: CacheScheduleDayEnum.MON,
         hour: 23,
         minute: 30,
@@ -243,7 +247,7 @@ describe('DashboardService', () => {
 
     it('should adjust day forward from Saturday to Sunday when UTC time crosses midnight', () => {
       const schedule = {
-        frequency: ScheduleFrequencyEnum.Weekly,
+        frequency: ScheduleFrequencyEnum.WEEKLY,
         day: CacheScheduleDayEnum.SAT,
         hour: 23,
         minute: 30,
@@ -261,7 +265,7 @@ describe('DashboardService', () => {
 
     it('should adjust day backward for weekly schedule when UTC time is on previous day', () => {
       const schedule = {
-        frequency: ScheduleFrequencyEnum.Weekly,
+        frequency: ScheduleFrequencyEnum.WEEKLY,
         day: CacheScheduleDayEnum.MON,
         hour: 1,
         minute: 30,
@@ -279,7 +283,7 @@ describe('DashboardService', () => {
 
     it('should adjust day backward from Sunday to Saturday when UTC time crosses midnight', () => {
       const schedule = {
-        frequency: ScheduleFrequencyEnum.Weekly,
+        frequency: ScheduleFrequencyEnum.WEEKLY,
         day: CacheScheduleDayEnum.SUN,
         hour: 1,
         minute: 30,
@@ -297,7 +301,7 @@ describe('DashboardService', () => {
 
     it('should handle custom schedule without timezone conversion', () => {
       const schedule = {
-        frequency: ScheduleFrequencyEnum.Custom,
+        frequency: ScheduleFrequencyEnum.CUSTOM,
         cron: '0 0 * * *',
         timezone: 'America/New_York',
       };
@@ -308,7 +312,7 @@ describe('DashboardService', () => {
 
     it('should handle timezone with non-hour offset (UTC+2:15)', () => {
       const schedule = {
-        frequency: ScheduleFrequencyEnum.Daily,
+        frequency: ScheduleFrequencyEnum.DAILY,
         hour: 14,
         minute: 30,
         timezone: 'Asia/Kolkata', // UTC+5:30
@@ -324,7 +328,7 @@ describe('DashboardService', () => {
 
     it('should handle timezone with non-hour offset crossing midnight', () => {
       const schedule = {
-        frequency: ScheduleFrequencyEnum.Weekly,
+        frequency: ScheduleFrequencyEnum.WEEKLY,
         day: CacheScheduleDayEnum.MON,
         hour: 23,
         minute: 45,
@@ -353,7 +357,7 @@ describe('DashboardService', () => {
 
     it('should return original schedule if no timezone is specified', () => {
       const schedule = {
-        frequency: ScheduleFrequencyEnum.Daily,
+        frequency: ScheduleFrequencyEnum.DAILY,
         hour: 14,
         minute: 30,
         day: null,
@@ -367,7 +371,7 @@ describe('DashboardService', () => {
 
     it('should convert daily schedule from UTC to local time', () => {
       const schedule = {
-        frequency: ScheduleFrequencyEnum.Daily,
+        frequency: ScheduleFrequencyEnum.DAILY,
         hour: 18,
         minute: 30,
         day: null,
@@ -384,7 +388,7 @@ describe('DashboardService', () => {
 
     it('should convert weekly schedule from UTC to local time without day change', () => {
       const schedule = {
-        frequency: ScheduleFrequencyEnum.Weekly,
+        frequency: ScheduleFrequencyEnum.WEEKLY,
         day: CacheScheduleDayEnum.MON,
         hour: 18,
         minute: 30,
@@ -403,7 +407,7 @@ describe('DashboardService', () => {
 
     it('should adjust day forward for weekly schedule when local time crosses midnight', () => {
       const schedule = {
-        frequency: ScheduleFrequencyEnum.Weekly,
+        frequency: ScheduleFrequencyEnum.WEEKLY,
         day: CacheScheduleDayEnum.MON,
         hour: 3,
         minute: 30,
@@ -422,7 +426,7 @@ describe('DashboardService', () => {
 
     it('should adjust day forward from Saturday to Sunday when local time crosses midnight', () => {
       const schedule = {
-        frequency: ScheduleFrequencyEnum.Weekly,
+        frequency: ScheduleFrequencyEnum.WEEKLY,
         day: CacheScheduleDayEnum.SAT,
         hour: 3,
         minute: 30,
@@ -441,7 +445,7 @@ describe('DashboardService', () => {
 
     it('should adjust day backward for weekly schedule when local time is on next day', () => {
       const schedule = {
-        frequency: ScheduleFrequencyEnum.Weekly,
+        frequency: ScheduleFrequencyEnum.WEEKLY,
         day: CacheScheduleDayEnum.MON,
         hour: 16,
         minute: 30,
@@ -460,7 +464,7 @@ describe('DashboardService', () => {
 
     it('should adjust day backward from Sunday to Monday when local time crosses midnight', () => {
       const schedule = {
-        frequency: ScheduleFrequencyEnum.Weekly,
+        frequency: ScheduleFrequencyEnum.WEEKLY,
         day: CacheScheduleDayEnum.SUN,
         hour: 16,
         minute: 30,
@@ -479,7 +483,7 @@ describe('DashboardService', () => {
 
     it('should handle custom schedule without timezone conversion', () => {
       const schedule = {
-        frequency: ScheduleFrequencyEnum.Custom,
+        frequency: ScheduleFrequencyEnum.CUSTOM,
         minute: null,
         hour: null,
         day: null,
@@ -493,7 +497,7 @@ describe('DashboardService', () => {
 
     it('should handle timezone with non-hour offset (UTC+2:15)', () => {
       const schedule = {
-        frequency: ScheduleFrequencyEnum.Daily,
+        frequency: ScheduleFrequencyEnum.DAILY,
         hour: 9,
         minute: 0,
         day: null,
@@ -511,7 +515,7 @@ describe('DashboardService', () => {
 
     it('should handle timezone with non-hour offset crossing midnight', () => {
       const schedule = {
-        frequency: ScheduleFrequencyEnum.Weekly,
+        frequency: ScheduleFrequencyEnum.WEEKLY,
         day: CacheScheduleDayEnum.MON,
         hour: 18,
         minute: 15,
@@ -534,7 +538,7 @@ describe('DashboardService', () => {
       const data = {
         cacheEnabled: true,
         schedule: {
-          frequency: ScheduleFrequencyEnum.Weekly,
+          frequency: ScheduleFrequencyEnum.WEEKLY,
           hour: 12,
           minute: 0,
         },
@@ -549,7 +553,7 @@ describe('DashboardService', () => {
       const data = {
         cacheEnabled: true,
         schedule: {
-          frequency: ScheduleFrequencyEnum.Custom,
+          frequency: ScheduleFrequencyEnum.CUSTOM,
           hour: 12,
           minute: 0,
         },
@@ -564,7 +568,7 @@ describe('DashboardService', () => {
       const data = {
         cacheEnabled: true,
         schedule: {
-          frequency: ScheduleFrequencyEnum.Daily,
+          frequency: ScheduleFrequencyEnum.DAILY,
           hour: 24,
           minute: 0,
         },
@@ -579,7 +583,7 @@ describe('DashboardService', () => {
       const data = {
         cacheEnabled: true,
         schedule: {
-          frequency: ScheduleFrequencyEnum.Daily,
+          frequency: ScheduleFrequencyEnum.DAILY,
           hour: 12,
           minute: 60,
         },
@@ -594,7 +598,7 @@ describe('DashboardService', () => {
       const data = {
         cacheEnabled: true,
         schedule: {
-          frequency: ScheduleFrequencyEnum.Daily,
+          frequency: ScheduleFrequencyEnum.DAILY,
           hour: 12,
           minute: 0,
           timezone: 'Invalid/Timezone',
@@ -610,7 +614,7 @@ describe('DashboardService', () => {
       const data = {
         cacheEnabled: true,
         schedule: {
-          frequency: ScheduleFrequencyEnum.Custom,
+          frequency: ScheduleFrequencyEnum.CUSTOM,
           cron: '*/5 * * * *', // Every 5 minutes
         },
       };
@@ -624,7 +628,7 @@ describe('DashboardService', () => {
       const data = {
         cacheEnabled: true,
         schedule: {
-          frequency: ScheduleFrequencyEnum.Daily,
+          frequency: ScheduleFrequencyEnum.DAILY,
           hour: 12,
           minute: 0,
           timezone: '',
@@ -642,7 +646,7 @@ describe('DashboardService', () => {
       const data = {
         cacheEnabled: true,
         schedule: {
-          frequency: ScheduleFrequencyEnum.Weekly,
+          frequency: ScheduleFrequencyEnum.WEEKLY,
           day: CacheScheduleDayEnum.MON,
           hour: 12,
           minute: 0,
@@ -658,7 +662,7 @@ describe('DashboardService', () => {
       const data = {
         cacheEnabled: true,
         schedule: {
-          frequency: ScheduleFrequencyEnum.Custom,
+          frequency: ScheduleFrequencyEnum.CUSTOM,
           cron: '0 */15 * * *', // Every 15 minutes
         },
       };
@@ -672,7 +676,7 @@ describe('DashboardService', () => {
       const data = {
         cacheEnabled: true,
         schedule: {
-          frequency: ScheduleFrequencyEnum.Daily,
+          frequency: ScheduleFrequencyEnum.DAILY,
           hour: 12,
           minute: 0,
           timezone: 'America/New_York',
@@ -694,7 +698,7 @@ describe('DashboardService', () => {
     it('should throw error if dashboard not found', async () => {
       mockDashboardRepository.findOneBy.mockResolvedValue(null);
 
-      const data = createScheduleData(ScheduleFrequencyEnum.Daily, {
+      const data = createScheduleData(ScheduleFrequencyEnum.DAILY, {
         hour: 12,
         minute: 0,
       });
@@ -714,12 +718,12 @@ describe('DashboardService', () => {
       mockDashboardRepository.updateOne.mockResolvedValue({
         ...mockDashboard,
         cacheEnabled: true,
-        scheduleFrequency: ScheduleFrequencyEnum.Daily,
+        scheduleFrequency: ScheduleFrequencyEnum.DAILY,
         scheduleCron: '0 12 * * *',
         nextScheduledAt: expect.any(Date),
       });
 
-      const data = createScheduleData(ScheduleFrequencyEnum.Daily, {
+      const data = createScheduleData(ScheduleFrequencyEnum.DAILY, {
         hour: 12,
         minute: 0,
       });
@@ -728,7 +732,7 @@ describe('DashboardService', () => {
 
       expect(mockDashboardRepository.updateOne).toHaveBeenCalledWith(1, {
         cacheEnabled: true,
-        scheduleFrequency: ScheduleFrequencyEnum.Daily,
+        scheduleFrequency: ScheduleFrequencyEnum.DAILY,
         scheduleCron: '0 12 * * *',
         nextScheduledAt: expect.any(Date),
       });
@@ -744,12 +748,12 @@ describe('DashboardService', () => {
       mockDashboardRepository.updateOne.mockResolvedValue({
         ...mockDashboard,
         cacheEnabled: true,
-        scheduleFrequency: ScheduleFrequencyEnum.Weekly,
+        scheduleFrequency: ScheduleFrequencyEnum.WEEKLY,
         scheduleCron: '0 12 * * MON',
         nextScheduledAt: expect.any(Date),
       });
 
-      const data = createScheduleData(ScheduleFrequencyEnum.Weekly, {
+      const data = createScheduleData(ScheduleFrequencyEnum.WEEKLY, {
         day: CacheScheduleDayEnum.MON,
         hour: 12,
         minute: 0,
@@ -759,7 +763,7 @@ describe('DashboardService', () => {
 
       expect(mockDashboardRepository.updateOne).toHaveBeenCalledWith(1, {
         cacheEnabled: true,
-        scheduleFrequency: ScheduleFrequencyEnum.Weekly,
+        scheduleFrequency: ScheduleFrequencyEnum.WEEKLY,
         scheduleCron: '0 12 * * MON',
         nextScheduledAt: expect.any(Date),
       });
@@ -775,12 +779,12 @@ describe('DashboardService', () => {
       mockDashboardRepository.updateOne.mockResolvedValue({
         ...mockDashboard,
         cacheEnabled: true,
-        scheduleFrequency: ScheduleFrequencyEnum.Custom,
+        scheduleFrequency: ScheduleFrequencyEnum.CUSTOM,
         scheduleCron: '0 */15 * * *',
         nextScheduledAt: expect.any(Date),
       });
 
-      const data = createScheduleData(ScheduleFrequencyEnum.Custom, {
+      const data = createScheduleData(ScheduleFrequencyEnum.CUSTOM, {
         cron: '0 */15 * * *',
       });
 
@@ -788,7 +792,7 @@ describe('DashboardService', () => {
 
       expect(mockDashboardRepository.updateOne).toHaveBeenCalledWith(1, {
         cacheEnabled: true,
-        scheduleFrequency: ScheduleFrequencyEnum.Custom,
+        scheduleFrequency: ScheduleFrequencyEnum.CUSTOM,
         scheduleCron: '0 */15 * * *',
         nextScheduledAt: expect.any(Date),
       });
@@ -804,12 +808,12 @@ describe('DashboardService', () => {
       mockDashboardRepository.updateOne.mockResolvedValue({
         ...mockDashboard,
         cacheEnabled: false,
-        scheduleFrequency: ScheduleFrequencyEnum.Never,
+        scheduleFrequency: ScheduleFrequencyEnum.NEVER,
         scheduleCron: null,
         nextScheduledAt: null,
       });
 
-      const data = createScheduleData(ScheduleFrequencyEnum.Never, {
+      const data = createScheduleData(ScheduleFrequencyEnum.NEVER, {
         cacheEnabled: false,
       });
 
@@ -817,7 +821,7 @@ describe('DashboardService', () => {
 
       expect(mockDashboardRepository.updateOne).toHaveBeenCalledWith(1, {
         cacheEnabled: false,
-        scheduleFrequency: ScheduleFrequencyEnum.Never,
+        scheduleFrequency: ScheduleFrequencyEnum.NEVER,
         scheduleCron: null,
         nextScheduledAt: null,
       });
@@ -833,12 +837,12 @@ describe('DashboardService', () => {
       mockDashboardRepository.updateOne.mockResolvedValue({
         ...mockDashboard,
         cacheEnabled: true,
-        scheduleFrequency: ScheduleFrequencyEnum.Daily,
+        scheduleFrequency: ScheduleFrequencyEnum.DAILY,
         scheduleCron: '0 16 * * *', // 12:00 PM EST = 16:00 UTC
         nextScheduledAt: expect.any(Date),
       });
 
-      const data = createScheduleData(ScheduleFrequencyEnum.Daily, {
+      const data = createScheduleData(ScheduleFrequencyEnum.DAILY, {
         hour: 12,
         minute: 0,
         timezone: 'America/New_York',
@@ -848,7 +852,7 @@ describe('DashboardService', () => {
 
       expect(mockDashboardRepository.updateOne).toHaveBeenCalledWith(1, {
         cacheEnabled: true,
-        scheduleFrequency: ScheduleFrequencyEnum.Daily,
+        scheduleFrequency: ScheduleFrequencyEnum.DAILY,
         scheduleCron: '0 16 * * *',
         nextScheduledAt: expect.any(Date),
       });
@@ -865,7 +869,7 @@ describe('DashboardService', () => {
         new Error('Update failed'),
       );
 
-      const data = createScheduleData(ScheduleFrequencyEnum.Daily, {
+      const data = createScheduleData(ScheduleFrequencyEnum.DAILY, {
         hour: 12,
         minute: 0,
       });

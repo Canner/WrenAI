@@ -50,7 +50,10 @@ export interface IDashboardService {
   updateDashboardItemLayouts(
     layouts: UpdateDashboardItemLayouts,
   ): Promise<DashboardItem[]>;
-  setDashboardSchedule(dashboardId: number, data: SetDashboardCacheData);
+  setDashboardSchedule(
+    dashboardId: number,
+    data: SetDashboardCacheData,
+  ): Promise<Dashboard>;
   parseCronExpression(dashboard: Dashboard): DashboardSchedule;
 }
 
@@ -76,8 +79,9 @@ export class DashboardService implements IDashboardService {
   public async setDashboardSchedule(
     dashboardId: number,
     data: SetDashboardCacheData,
-  ): Promise<void> {
+  ): Promise<Dashboard> {
     try {
+      const { cacheEnabled, schedule } = data;
       // Validate input
       this.validateScheduleInput(data);
 
@@ -88,32 +92,35 @@ export class DashboardService implements IDashboardService {
       if (!dashboard) {
         throw new Error(`Dashboard with id ${dashboardId} not found`);
       }
-
+      if (!cacheEnabled) {
+        return await this.dashboardRepository.updateOne(dashboardId, {
+          cacheEnabled: false,
+          scheduleFrequency: null,
+          scheduleTimezone: null,
+          scheduleCron: null,
+          nextScheduledAt: null,
+        });
+      }
       // Initialize schedule-related variables
       let cronExpression: string | null = null;
       let nextScheduledAt: Date | null = null;
 
       // Process schedule if caching is enabled
-      if (
-        data.cacheEnabled &&
-        data.schedule.frequency !== ScheduleFrequencyEnum.Never
-      ) {
-        cronExpression = this.generateCronExpression(data.schedule);
+      if (cacheEnabled && schedule.frequency !== ScheduleFrequencyEnum.NEVER) {
+        cronExpression = this.generateCronExpression(schedule);
         if (cronExpression) {
           nextScheduledAt = this.calculateNextRunTime(cronExpression);
         }
       }
 
       // Update dashboard with new schedule
-      await this.dashboardRepository.updateOne(dashboardId, {
-        cacheEnabled: data.cacheEnabled,
-        scheduleFrequency: data.schedule.frequency,
-        scheduleTimezone: data.schedule.timezone,
+      return await this.dashboardRepository.updateOne(dashboardId, {
+        cacheEnabled,
+        scheduleFrequency: schedule.frequency,
+        scheduleTimezone: schedule.timezone,
         scheduleCron: cronExpression,
         nextScheduledAt,
       });
-
-      logger.info(`Successfully updated schedule for dashboard ${dashboardId}`);
     } catch (error) {
       logger.error(`Failed to set dashboard schedule: ${error.message}`);
       throw error;
@@ -252,7 +259,7 @@ export class DashboardService implements IDashboardService {
     // If no timezone is specified or it's a custom schedule, return as is
     if (
       !schedule.timezone ||
-      schedule.frequency === ScheduleFrequencyEnum.Custom
+      schedule.frequency === ScheduleFrequencyEnum.CUSTOM
     ) {
       return schedule;
     }
@@ -290,7 +297,7 @@ export class DashboardService implements IDashboardService {
 
     // For weekly schedules, adjust the day if needed
     if (
-      schedule.frequency === ScheduleFrequencyEnum.Weekly &&
+      schedule.frequency === ScheduleFrequencyEnum.WEEKLY &&
       dayAdjustment !== 0
     ) {
       const currentDayIndex = DAYS.indexOf(schedule.day);
@@ -315,7 +322,7 @@ export class DashboardService implements IDashboardService {
     const { timezone } = schedule;
     // If it's a custom schedule or no timezone is specified, return as is
     if (
-      [ScheduleFrequencyEnum.Custom, ScheduleFrequencyEnum.Never].includes(
+      [ScheduleFrequencyEnum.CUSTOM, ScheduleFrequencyEnum.NEVER].includes(
         schedule.frequency,
       ) ||
       !timezone
@@ -356,7 +363,7 @@ export class DashboardService implements IDashboardService {
 
     // For weekly schedules, adjust the day if needed
     if (
-      schedule.frequency === ScheduleFrequencyEnum.Weekly &&
+      schedule.frequency === ScheduleFrequencyEnum.WEEKLY &&
       dayAdjustment !== 0
     ) {
       const currentDayIndex = DAYS.indexOf(schedule.day);
@@ -383,14 +390,14 @@ export class DashboardService implements IDashboardService {
     const { frequency, day, hour, minute } = this.toUTC(schedule);
 
     switch (frequency) {
-      case ScheduleFrequencyEnum.Daily:
+      case ScheduleFrequencyEnum.DAILY:
         return `${minute} ${hour} * * *`;
-      case ScheduleFrequencyEnum.Weekly:
+      case ScheduleFrequencyEnum.WEEKLY:
         // e.g. 0 10 * * MON
         return `${minute} ${hour} * * ${day}`;
-      case ScheduleFrequencyEnum.Custom:
+      case ScheduleFrequencyEnum.CUSTOM:
         return schedule.cron;
-      case ScheduleFrequencyEnum.Never:
+      case ScheduleFrequencyEnum.NEVER:
         return null;
       default:
         logger.warn(`Unsupported schedule frequency: ${frequency}`);
@@ -413,11 +420,11 @@ export class DashboardService implements IDashboardService {
   private validateScheduleInput(data: SetDashboardCacheData): void {
     const { schedule } = data;
 
-    if (schedule.frequency === ScheduleFrequencyEnum.Weekly && !schedule.day) {
+    if (schedule.frequency === ScheduleFrequencyEnum.WEEKLY && !schedule.day) {
       throw new Error('Day of week is required for weekly schedule');
     }
 
-    if (schedule.frequency === ScheduleFrequencyEnum.Custom && !schedule.cron) {
+    if (schedule.frequency === ScheduleFrequencyEnum.CUSTOM && !schedule.cron) {
       throw new Error('Cron expression is required for custom schedule');
     }
 
@@ -437,7 +444,7 @@ export class DashboardService implements IDashboardService {
       }
     }
 
-    if (schedule.frequency === ScheduleFrequencyEnum.Custom) {
+    if (schedule.frequency === ScheduleFrequencyEnum.CUSTOM) {
       // can not less than 10 minute
       const baseInterval = CronExpressionParser.parse(schedule.cron, {
         currentDate: new Date(),
@@ -469,38 +476,37 @@ export class DashboardService implements IDashboardService {
       } as DashboardSchedule;
     }
     switch (dashboard.scheduleFrequency) {
-      case ScheduleFrequencyEnum.Custom:
+      case ScheduleFrequencyEnum.CUSTOM:
         return {
-          frequency: ScheduleFrequencyEnum.Custom,
+          frequency: ScheduleFrequencyEnum.CUSTOM,
           hour: 0,
           minute: 0,
           day: null,
           timezone: dashboard.scheduleTimezone || '',
           cron: dashboard.scheduleCron,
         };
-      case ScheduleFrequencyEnum.Daily:
-      case ScheduleFrequencyEnum.Weekly: {
+      case ScheduleFrequencyEnum.DAILY:
+      case ScheduleFrequencyEnum.WEEKLY: {
         const parts = dashboard.scheduleCron.split(' ');
         if (parts.length !== 5) {
           throw new Error('Invalid cron expression format');
         }
         const [minute, hour, , , dayOfWeek] = parts;
-        console.log({ parts });
         return this.toTimezone({
           frequency: dashboard.scheduleFrequency,
           hour: parseInt(hour, 10),
           minute: parseInt(minute, 10),
           day:
-            dashboard.scheduleFrequency === ScheduleFrequencyEnum.Weekly
+            dashboard.scheduleFrequency === ScheduleFrequencyEnum.WEEKLY
               ? (dayOfWeek as CacheScheduleDayEnum)
               : null,
           timezone: dashboard.scheduleTimezone || '',
           cron: null,
         } as DashboardSchedule);
       }
-      case ScheduleFrequencyEnum.Never: {
+      case ScheduleFrequencyEnum.NEVER: {
         return {
-          frequency: ScheduleFrequencyEnum.Never,
+          frequency: ScheduleFrequencyEnum.NEVER,
           hour: null,
           minute: null,
           day: null,

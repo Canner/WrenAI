@@ -217,8 +217,8 @@ export class QueryService implements IQueryService {
     connectionInfo: any,
     mdl: Manifest,
     limit: number,
-    refresh: boolean,
-    cacheEnabled: boolean,
+    refresh?: boolean,
+    cacheEnabled?: boolean,
   ): Promise<PreviewDataResponse> {
     const event = TelemetryEvent.IBIS_QUERY;
     try {

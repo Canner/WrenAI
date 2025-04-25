@@ -5,7 +5,7 @@ export function getUTCOffsetMinutes(timeZone: string) {
   ) as any;
   const tzDate = new Date(date.toLocaleString('en-US', { timeZone })) as any;
 
-  return (tzDate - utcDate) / 60000; // 轉換為分鐘
+  return (tzDate - utcDate) / 60000; // Convert to minutes
 }
 
 export function formatUTCOffset(offsetMinutes: number) {
