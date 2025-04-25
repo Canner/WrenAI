@@ -1013,6 +1013,7 @@ export const typeDefs = gql`
     id: Int!
     name: String!
     description: String
+    cacheEnabled: Boolean!
     nextScheduledAt: String
     schedule: DashboardSchedule!
     items: [DashboardItem!]!

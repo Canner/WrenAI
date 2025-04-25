@@ -5,7 +5,7 @@
 exports.up = function (knex) {
   return knex.schema.alterTable('dashboard', function (table) {
     table.boolean('cache_enabled').defaultTo(true);
-    table.string('schedule_frequency').nullable().defaultTo('Never'); // Weekly, Daily, Custom, Never
+    table.string('schedule_frequency').nullable().defaultTo('NEVER'); // Weekly, Daily, Custom, Never
     table.string('schedule_cron').nullable().defaultTo(null); // cron expression string
     table.string('schedule_timezone').nullable().defaultTo(null);
     table.timestamp('next_scheduled_at').nullable().defaultTo(null); // Next scheduled run timestamp
