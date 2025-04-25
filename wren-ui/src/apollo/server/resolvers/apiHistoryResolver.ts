@@ -35,8 +35,8 @@ const sanitizeResponsePayload = (payload: any, apiType?: ApiType): any => {
     }
   }
 
-  // Handle specifically GENERATE_VEGA_SPEC responses that contain large data values
-  if (apiType === ApiType.GENERATE_VEGA_SPEC) {
+  // Handle specifically GENERATE_VEGA_CHART responses that contain large data values
+  if (apiType === ApiType.GENERATE_VEGA_CHART) {
     // Remove vegaSpec.data.values array but keep the structure
     if (
       sanitized.vegaSpec?.data?.values &&
@@ -104,6 +104,14 @@ export class ApiHistoryResolver {
       filterCriteria,
       dateFilter,
     );
+
+    if (total === 0 || total <= offset) {
+      return {
+        items: [],
+        total,
+        hasMore: false,
+      };
+    }
 
     // Get paginated items
     const items = await ctx.apiHistoryRepository.findAllWithPagination(

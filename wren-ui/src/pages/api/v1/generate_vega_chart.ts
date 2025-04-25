@@ -18,6 +18,27 @@ const { projectService, wrenAIAdaptor, deployService, queryService } =
 
 const MAX_WAIT_TIME = 1000 * 60 * 3; // 3 minutes
 
+/**
+ * Validates the chart generation result and checks for errors
+ * @param result The chart result to validate
+ * @throws ApiError if the result has errors or is in a failed state
+ */
+const validateChartResult = (result: ChartResult): void => {
+  // Check for errors or failed status
+  if (result.status === ChartStatus.FAILED || result.error) {
+    throw new ApiError(
+      result.error?.message || 'Failed to generate Vega spec',
+      400,
+      Errors.GeneralErrorCodes.FAILED_TO_GENERATE_VEGA_SCHEMA,
+    );
+  }
+
+  // Verify that the chartSchema is present
+  if (!result?.response?.chartSchema) {
+    throw new ApiError('Failed to generate Vega spec', 500);
+  }
+};
+
 interface GenerateVegaSpecRequest {
   question: string;
   sql: string;
@@ -130,24 +151,14 @@ export default async function handler(
       await new Promise((resolve) => setTimeout(resolve, 1000)); // Poll every second
     }
 
-    // Check for errors
-    if (result.status === ChartStatus.FAILED || result.error) {
-      throw new ApiError(
-        result.error?.message || 'Failed to generate Vega spec',
-        400,
-        Errors.GeneralErrorCodes.FAILED_TO_GENERATE_VEGA_SCHEMA,
-      );
-    }
+    // Validate the chart result
+    validateChartResult(result);
 
     // Create a new thread if it's a new question
     const newThreadId = threadId || uuidv4();
 
     // Get the generated Vega spec
     const vegaSpec = result?.response?.chartSchema;
-
-    if (!vegaSpec) {
-      throw new ApiError('Failed to generate Vega spec', 500);
-    }
 
     // Enhance the Vega spec with styling and configuration
     const enhancedVegaSpec = enhanceVegaSpec(vegaSpec, dataObjects);
@@ -161,7 +172,7 @@ export default async function handler(
         threadId: newThreadId,
       },
       projectId: project.id,
-      apiType: ApiType.GENERATE_VEGA_SPEC,
+      apiType: ApiType.GENERATE_VEGA_CHART,
       startTime,
       requestPayload: req.body,
       threadId: newThreadId,
@@ -172,7 +183,7 @@ export default async function handler(
       error,
       res,
       projectId: project?.id,
-      apiType: ApiType.GENERATE_VEGA_SPEC,
+      apiType: ApiType.GENERATE_VEGA_CHART,
       requestPayload: req.body,
       threadId,
       headers: req.headers as Record<string, string>,

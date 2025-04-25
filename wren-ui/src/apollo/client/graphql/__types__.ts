@@ -78,7 +78,7 @@ export type ApiHistoryResponse = {
 
 export enum ApiType {
   GENERATE_SQL = 'GENERATE_SQL',
-  GENERATE_VEGA_SPEC = 'GENERATE_VEGA_SPEC',
+  GENERATE_VEGA_CHART = 'GENERATE_VEGA_CHART',
   RUN_SQL = 'RUN_SQL'
 }
 

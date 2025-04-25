@@ -17,6 +17,21 @@ logger.level = 'debug';
 
 const { projectService, queryService, deployService } = components;
 
+/**
+ * Validates the SQL result and ensures it has the expected format
+ * @param result The result to validate
+ * @returns The validated result as PreviewDataResponse
+ * @throws ApiError if the result is in an unexpected format
+ */
+const validateSqlResult = (result: any): PreviewDataResponse => {
+  // Ensure we have a valid result with expected properties
+  if (typeof result === 'boolean') {
+    throw new ApiError('Unexpected query result format', 500);
+  }
+
+  return result as PreviewDataResponse;
+};
+
 interface RunSqlRequest {
   sql: string;
   threadId?: string;
@@ -32,8 +47,6 @@ export default async function handler(
   let project;
 
   try {
-    project = await projectService.getCurrentProject();
-
     // Only allow POST method
     if (req.method !== 'POST') {
       throw new ApiError('Method not allowed', 405);
@@ -43,6 +56,8 @@ export default async function handler(
     if (!sql) {
       throw new ApiError('SQL is required', 400);
     }
+
+    project = await projectService.getCurrentProject();
 
     const deployment = await deployService.getLastDeployment(project.id);
 
@@ -65,12 +80,8 @@ export default async function handler(
         modelingOnly: false,
       });
 
-      // Ensure we have a valid result with expected properties
-      if (typeof result === 'boolean') {
-        throw new ApiError('Unexpected query result format', 500);
-      }
-
-      const queryResult = result as PreviewDataResponse;
+      // Validate the SQL result
+      const queryResult = validateSqlResult(result);
 
       // Transform data into array of objects
       const transformedData = transformToObjects(

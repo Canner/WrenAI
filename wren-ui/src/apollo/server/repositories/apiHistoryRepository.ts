@@ -5,7 +5,7 @@ import { Knex } from 'knex';
 export enum ApiType {
   GENERATE_SQL = 'GENERATE_SQL',
   RUN_SQL = 'RUN_SQL',
-  GENERATE_VEGA_SPEC = 'GENERATE_VEGA_SPEC',
+  GENERATE_VEGA_CHART = 'GENERATE_VEGA_CHART',
 }
 
 export interface ApiHistory {

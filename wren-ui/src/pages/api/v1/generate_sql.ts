@@ -48,6 +48,49 @@ const isAskResultFinished = (result: AskResult) => {
   );
 };
 
+/**
+ * Validates the AI result and throws appropriate errors for different failure cases
+ * @param result The AI result to validate
+ * @param taskQueryId The query ID of the task (used for explanation queries)
+ * @throws ApiError if result contains errors or is of an invalid type
+ */
+const validateAskResult = (result: AskResult, taskQueryId: string): void => {
+  // Check for error in result
+  if (result.error) {
+    const errorMessage =
+      (result.error as WrenAIError).message || 'Unknown error';
+    const additionalData: Record<string, any> = {};
+
+    // Include invalid SQL if available
+    if (result.invalidSql) {
+      additionalData.invalidSql = result.invalidSql;
+    }
+
+    throw new ApiError(errorMessage, 400, result.error.code, additionalData);
+  }
+
+  // Check for misleading query type
+  if (result.type === AskResultType.MISLEADING_QUERY) {
+    throw new ApiError(
+      result.intentReasoning ||
+        Errors.errorMessages[Errors.GeneralErrorCodes.NON_SQL_QUERY],
+      400,
+      Errors.GeneralErrorCodes.NON_SQL_QUERY,
+    );
+  }
+
+  // Check for general type response
+  if (result.type === AskResultType.GENERAL) {
+    throw new ApiError(
+      result.intentReasoning ||
+        Errors.errorMessages[Errors.GeneralErrorCodes.NON_SQL_QUERY],
+      400,
+      Errors.GeneralErrorCodes.NON_SQL_QUERY,
+      { explanationQueryId: taskQueryId },
+    );
+  }
+};
+
 const transformHistoryInput = (histories: ApiHistory[]) => {
   if (!histories) {
     return [];
@@ -133,40 +176,9 @@ export default async function handler(
 
       await new Promise((resolve) => setTimeout(resolve, 1000)); // poll every second
     }
-    // if it's failed, throw the error with any additional data
-    if (result.error) {
-      const errorMessage =
-        (result.error as WrenAIError).message || 'Unknown error';
-      const additionalData: Record<string, any> = {};
 
-      // Include invalid SQL if available
-      if (result.invalidSql) {
-        additionalData.invalidSql = result.invalidSql;
-      }
-
-      throw new ApiError(errorMessage, 400, result.error.code, additionalData);
-    }
-
-    // if it's a misleading type response, throw error
-    if (result.type === AskResultType.MISLEADING_QUERY) {
-      throw new ApiError(
-        result.intentReasoning ||
-          Errors.errorMessages[Errors.GeneralErrorCodes.NON_SQL_QUERY],
-        400,
-        Errors.GeneralErrorCodes.NON_SQL_QUERY,
-      );
-    }
-
-    // if it's a general type response, throw error
-    if (result.type === AskResultType.GENERAL) {
-      throw new ApiError(
-        result.intentReasoning ||
-          Errors.errorMessages[Errors.GeneralErrorCodes.NON_SQL_QUERY],
-        400,
-        Errors.GeneralErrorCodes.NON_SQL_QUERY,
-        { explanationQueryId: task.queryId },
-      );
-    }
+    // Validate the AI result
+    validateAskResult(result, task.queryId);
 
     // Get the generated SQL
     let sql = result.response?.[0]?.sql;

@@ -114,10 +114,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /generate_vega_spec:
+  /generate_vega_chart:
     post:
-      summary: Generate Vega visualization spec
-      description: Generates a Vega specification for data visualization from a question and SQL query
+      summary: Generate Vega visualization chart spec
+      description: Generates a Vega chart spec for data visualization from a question and SQL query
       requestBody:
         required: true
         content:
