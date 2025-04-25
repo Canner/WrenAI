@@ -283,19 +283,22 @@ const PinnedItem = forwardRef(
   ) => {
     const { item, onDelete } = props;
     const { detail } = item;
-    // TODO: get last refresh time from backend
-    const lastRefreshTime = '2025-04-23T03:53:21.302Z';
     const [isHideLegend, setIsHideLegend] = useState(true);
     const [forceLoading, setForceLoading] = useState(false);
     const [forceUpdate, setForceUpdate] = useState(0);
 
     useImperativeHandle(ref, () => ({
       onRefresh: () => {
-        previewItemSQL({ variables: { data: { itemId: item.id } } });
+        previewItemSQL({
+          variables: { data: { itemId: item.id, refresh: true } },
+        });
       },
     }));
 
     const [previewItemSQL, previewItemSQLResult] = usePreviewItemSqlMutation();
+    const previewItem = previewItemSQLResult.data?.previewItemSQL;
+    const lastRefreshTime =
+      previewItem?.cacheOverrideAt || previewItem?.cacheCreatedAt;
 
     useEffect(() => {
       previewItemSQL({ variables: { data: { itemId: item.id } } });
@@ -322,7 +325,9 @@ const PinnedItem = forwardRef(
       if (action === MORE_ACTION.DELETE) {
         await onDelete(item.id);
       } else if (action === MORE_ACTION.REFRESH) {
-        previewItemSQL({ variables: { data: { itemId: item.id } } });
+        previewItemSQL({
+          variables: { data: { itemId: item.id, refresh: true } },
+        });
       } else if (action === MORE_ACTION.HIDE_CATEGORY) {
         onHideLegend();
       }
@@ -364,7 +369,7 @@ const PinnedItem = forwardRef(
                 width="100%"
                 height="100%"
                 spec={detail.chartSchema}
-                values={previewItemSQLResult.data?.previewItemSQL}
+                values={previewItem?.data}
                 forceUpdate={forceUpdate}
                 autoFilter
                 hideActions

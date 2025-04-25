@@ -19,6 +19,7 @@ import { browserTimeZone } from '@/utils/time';
 import { DrawerAction } from '@/hooks/useDrawerAction';
 import { ERROR_TEXTS } from '@/utils/error';
 import { isValidCron, cronValidator } from '@/utils/validator';
+import { CacheScheduleDayEnum } from '@/apollo/client/graphql/__types__';
 
 type Props = DrawerAction & {
   loading?: boolean;
@@ -44,14 +45,28 @@ const FREQUENCY = {
 
 // This sequence follows the first day of the week
 const DAY_OF_WEEK = [
-  'SUNDAY',
-  'MONDAY',
-  'TUESDAY',
-  'WEDNESDAY',
-  'THURSDAY',
-  'FRIDAY',
-  'SATURDAY',
+  CacheScheduleDayEnum.SUN,
+  CacheScheduleDayEnum.MON,
+  CacheScheduleDayEnum.TUE,
+  CacheScheduleDayEnum.WED,
+  CacheScheduleDayEnum.THU,
+  CacheScheduleDayEnum.FRI,
+  CacheScheduleDayEnum.SAT,
 ];
+
+const getDayOfWeekText = (day: CacheScheduleDayEnum) => {
+  return (
+    {
+      [CacheScheduleDayEnum.MON]: 'Monday',
+      [CacheScheduleDayEnum.TUE]: 'Tuesday',
+      [CacheScheduleDayEnum.WED]: 'Wednesday',
+      [CacheScheduleDayEnum.THU]: 'Thursday',
+      [CacheScheduleDayEnum.FRI]: 'Friday',
+      [CacheScheduleDayEnum.SAT]: 'Saturday',
+      [CacheScheduleDayEnum.SUN]: 'Sunday',
+    }[day] || ''
+  );
+};
 
 const getFrequencyText = (frequency: string) => {
   if (frequency === FREQUENCY.NEVER) return 'Manual refresh only';
@@ -114,7 +129,7 @@ export const getScheduleText = (schedule: Schedule): string => {
     }
     case FREQUENCY.WEEKLY: {
       const time = convertTime(schedule);
-      return `Cache refreshes every ${capitalize(schedule.day.toLowerCase())} at ${time}`;
+      return `Cache refreshes every ${getDayOfWeekText(schedule.day as CacheScheduleDayEnum)} at ${time}`;
     }
     case FREQUENCY.CUSTOM: {
       return `Cache refreshes on custom schedule`;
@@ -178,7 +193,7 @@ export default function CacheSettingsDrawer(props: Props) {
   const { visible, defaultValue, loading, onClose, onSubmit } = props;
   const [form] = Form.useForm();
 
-  const enabled = Form.useWatch('enabled', form);
+  const cacheEnabled = Form.useWatch('cacheEnabled', form);
 
   useEffect(() => {
     if (visible) {
@@ -189,7 +204,7 @@ export default function CacheSettingsDrawer(props: Props) {
           day: schedule?.day,
           frequency: schedule?.frequency,
           time:
-            schedule?.hour && schedule?.minute
+            schedule?.hour.toString() && schedule?.minute.toString()
               ? moment(`${schedule?.hour}:${schedule?.minute}`, timeFormat)
               : null,
           cron: schedule?.cron,
@@ -211,7 +226,7 @@ export default function CacheSettingsDrawer(props: Props) {
         const { schedule } = values;
         await onSubmit({
           ...values,
-          schedule: values.enabled
+          schedule: values.cacheEnabled
             ? {
                 frequency: schedule?.frequency,
                 day: schedule?.day,
@@ -256,13 +271,13 @@ export default function CacheSettingsDrawer(props: Props) {
       <Form form={form} layout="vertical">
         <Form.Item
           label="Enable caching"
-          name="enabled"
+          name="cacheEnabled"
           valuePropName="checked"
           extra="Enable caching to speed up dashboard loading by reusing recent results. Choose a refresh schedule that fits your needs below."
         >
           <Switch />
         </Form.Item>
-        {enabled && <Schedule />}
+        {cacheEnabled && <Schedule />}
       </Form>
     </Drawer>
   );
@@ -362,7 +377,7 @@ function WeeklyTimeSelection() {
             <Select
               style={{ minWidth: 123 }}
               options={DAY_OF_WEEK.map((value) => ({
-                label: capitalize(value),
+                label: getDayOfWeekText(value),
                 value,
               }))}
               placeholder="Select day"

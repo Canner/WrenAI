@@ -70,7 +70,10 @@ export default function DashboardHeader(props: Props) {
                 scheduleTime
               )}
               <DashboardDropdown onMoreClick={onMoreClick}>
-                <Button type="text" icon={<MoreIcon />}></Button>
+                <Button
+                  type="text"
+                  icon={<MoreIcon className="gray-8" />}
+                ></Button>
               </DashboardDropdown>
             </div>
           </div>

@@ -10,9 +10,10 @@ import DashboardGrid from '@/components/pages/home/dashboardGrid';
 import EmptyDashboard from '@/components/pages/home/dashboardGrid/EmptyDashboard';
 import DashboardHeader from '@/components/pages/home/dashboardGrid/DashboardHeader';
 import {
-  useDashboardItemsQuery,
+  useDashboardQuery,
   useDeleteDashboardItemMutation,
   useUpdateDashboardItemLayoutsMutation,
+  useSetDashboardScheduleMutation,
 } from '@/apollo/client/graphql/dashboard.generated';
 import { ItemLayoutInput } from '@/apollo/client/graphql/__types__';
 import CacheSettingsDrawer from '@/components/pages/home/dashboardGrid/CacheSettingsDrawer';
@@ -26,15 +27,26 @@ export default function Dashboard() {
   const {
     data,
     loading,
-    updateQuery: updateDashboardItemQuery,
-  } = useDashboardItemsQuery({
+    updateQuery: updateDashboardQuery,
+  } = useDashboardQuery({
     fetchPolicy: 'cache-and-network',
     onError: () => {
       message.error('Failed to fetch dashboard items.');
       router.push(Path.Home);
     },
   });
-  const dashboardItems = useMemo(() => data?.dashboardItems || [], [data]);
+  const dashboardItems = useMemo(
+    () => data?.dashboard?.items || [],
+    [data?.dashboard?.items],
+  );
+
+  const [setDashboardSchedule] = useSetDashboardScheduleMutation({
+    refetchQueries: ['Dashboard'],
+    onCompleted: () => {
+      message.success('Successfully updated dashboard schedule.');
+    },
+    onError: (error) => console.error(error),
+  });
 
   const [updateDashboardItemLayouts] = useUpdateDashboardItemLayoutsMutation({
     onError: () => {
@@ -49,11 +61,13 @@ export default function Dashboard() {
   });
 
   const onRemoveDashboardItemFromQueryCache = (id: number) => {
-    updateDashboardItemQuery((prev) => {
+    updateDashboardQuery((prev) => {
       return {
         ...prev,
-        dashboardItems:
-          prev?.dashboardItems?.filter((item) => item.id !== id) || [],
+        dashboard: {
+          ...prev.dashboard,
+          items: prev?.dashboard?.items?.filter((item) => item.id !== id) || [],
+        },
       };
     });
   };
@@ -68,34 +82,18 @@ export default function Dashboard() {
     await deleteDashboardItem({ variables: { where: { id } } });
   };
 
-  // TODO: replace with actual data
-  const schedule = {
-    frequency: 'WEEKLY',
-    day: 'MONDAY',
-    hour: 23,
-    minute: 50,
-  };
-
-  // const schedule = {
-  //   frequency: 'NEVER',
-  //   day: null,
-  //   hour: null,
-  //   minute: null,
-  // };
-  const nextScheduleTime = new Date().toISOString();
-
   return (
     <SiderLayout loading={false} color="gray-3" sidebar={homeSidebar}>
       <LoadingWrapper loading={loading}>
         <>
           <EmptyDashboard show={dashboardItems.length === 0}>
             <DashboardHeader
-              schedule={schedule}
-              nextScheduleTime={nextScheduleTime}
+              schedule={data?.dashboard?.schedule}
+              nextScheduleTime={data?.dashboard?.nextScheduledAt}
               onCacheSettings={() => {
                 cacheSettingsDrawer.openDrawer({
-                  enabled: true,
-                  schedule,
+                  cacheEnabled: data?.dashboard?.cacheEnabled,
+                  schedule: data?.dashboard?.schedule,
                 });
               }}
               onRefreshAll={() => {
@@ -114,6 +112,11 @@ export default function Dashboard() {
             onClose={cacheSettingsDrawer.closeDrawer}
             onSubmit={async (values) => {
               console.log(values);
+              await setDashboardSchedule({
+                variables: {
+                  data: values,
+                },
+              });
             }}
           />
         </>
