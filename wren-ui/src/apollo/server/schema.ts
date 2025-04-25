@@ -939,7 +939,7 @@ export const typeDefs = gql`
 
   input SetDashboardScheduleInput {
     cacheEnabled: Boolean!
-    schedule: SetDashboardScheduleData!
+    schedule: SetDashboardScheduleData
   }
 
   type DashboardSchedule {
