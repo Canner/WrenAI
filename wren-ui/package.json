@@ -3,9 +3,9 @@
   "version": "0.25.1",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "TZ=UTC next dev",
     "build": "NODE_OPTIONS=--max-old-space-size=8192 next build",
-    "start": "next start",
+    "start": "TZ=UTC next start",
     "lint": "yarn check-types && next lint",
     "test": "jest",
     "test:e2e": "npx playwright install chromium && npx playwright test",
