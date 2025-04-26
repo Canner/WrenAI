@@ -4,6 +4,7 @@ from session_state import ConfigState
 from config_loader import group_blocks
 from dry_run_test import llm_completion_test, llm_embedding_test
 import yaml
+import ast
 
 def render_apikey():
     with st.expander("API Key", expanded=False):
@@ -14,7 +15,7 @@ def render_apikey():
             key="api_key_input"
         )
 
-        if st.button("save", key="save_apikey"):
+        if st.button("💾  save", key="save_apikey"):
             if not api_key:
                 st.error("請輸入 API Key")
             else:
@@ -55,6 +56,10 @@ def render_import_yaml():
 
 def render_llm_config():
 
+    # 用一個 dict 來暫存每個 form_id 對應的 title
+    if "form_titles" not in st.session_state:
+        st.session_state.form_titles = {}
+
     # ① 新增一個空白表單
     if st.button("➕  Add model", key="btn_add_model"):
         st.session_state[ConfigState.LLM_FORMS_KEY].append({
@@ -69,12 +74,17 @@ def render_llm_config():
     # ② 逐一渲染 Expander
     for idx, form in enumerate(st.session_state[ConfigState.LLM_FORMS_KEY]):
         form_id = form["id"]
-        title = form["model"] or f"LLM Model {idx+1}"
+        # title = form["model"]
+
+        # 如果 model name 有值，更新 title，否則保留舊的 title
+        if form["model"]:
+            st.session_state.form_titles[form_id] = form["model"]
+        title = st.session_state.form_titles.get(form_id, "new-model")
 
         with st.expander(title, expanded=False):
             # 基本欄位
             form["model"] = st.text_input("Model name", key=f"model_name_{form_id}", value=form["model"])
-            form["alias"] = st.text_input("Alias", key=f"alias_{form_id}", value=form["alias"])
+            form["alias"] = st.text_input("Alias (Optional)", key=f"alias_{form_id}", value=form["alias"])
             form["api_base"] = st.text_input("API Base URL", key=f"api_base_{form_id}", value=form["api_base"])
             form["timeout"] = st.text_input("Timeout", key=f"timeout_{form_id}", value=form["timeout"])
 
@@ -98,10 +108,13 @@ def render_llm_config():
             c1, c2 = st.columns(2)
             with c1:
                 if st.button("💾  Save this model", key=f"save_{form_id}"):
-                    save_llm_model(form, form_id)
+                    return_state, msg = save_llm_model(form, form_id)
+                    if return_state:
+                        st.success(msg)
             with c2:
                 if st.button("🗑️  Remove this form", key=f"remove_form_{form_id}"):
                     remove_llm_model(form_id)
+                    st.rerun()
 
 
 def render_embedder_config():
@@ -115,7 +128,7 @@ def render_embedder_config():
 
         embedding_model_name = st.text_input("Embedding Model Name", key="embedding_model_name", value="text-embedding-3-large")
         embedding_model_alias = st.text_input("Alias (optional, e.g. default)", key="embedding_model_alias", value="default")
-        embedding_model_timeout = st.text_input("Timeout (optional, default: 120)", key="embedding_model_timeout", value="120")
+        embedding_model_timeout = st.text_input("Timeout (default: 120)", key="embedding_model_timeout", value="120")
 
         custom_embedding_setting = [{
             "model": embedding_model_name,
@@ -123,13 +136,28 @@ def render_embedder_config():
             "timeout": embedding_model_timeout
         }]
 
-        if st.button("save", key="save_embedding_model"):
-            st.session_state.embedding_model = {
-                "type": "embedder",
-                "provider": st.session_state[ConfigState.EMBEDDER_KEY].get("provider"),
-                "models": custom_embedding_setting
-            }
-            st.success(f"Updated embedder models")
+        if st.button("💾  save", key="save_embedding_model"):
+            errors = []
+            if not embedding_model_name:
+                errors.append("Embedding Model Name is required.")
+            if not embedding_model_timeout:
+                errors.append("Timeout is required.")
+            else:
+                try:
+                    int(embedding_model_timeout)
+                except ValueError:
+                    errors.append("Timeout must be an integer.")
+
+            if errors:
+                for error in errors:
+                    st.error(error)
+            else:
+                st.session_state.embedding_model = {
+                    "type": "embedder",
+                    "provider": st.session_state[ConfigState.EMBEDDER_KEY].get("provider"),
+                    "models": custom_embedding_setting
+                }
+                st.success(f"Updated embedder models")
         
 
 
@@ -142,23 +170,42 @@ def render_document_store_config():
         st.markdown(f"**type:** `document_store`")
         st.markdown(f"**provider:** `{st.session_state[ConfigState.DOC_STORE_KEY].get('provider')}`")
         st.markdown(f"**location:** `{st.session_state[ConfigState.DOC_STORE_KEY].get('location')}`")
-        document_store_timeout = st.text_input("Timeout (optional, default: 120)", key="document_store_timeout" , value="120")
+        document_store_timeout = st.text_input("Timeout (default: 120)", key="document_store_timeout" , value="120")
         st.markdown(f"**timeout:** `120`")
         st.markdown(f"**recreate_index:** `{st.session_state[ConfigState.DOC_STORE_KEY].get('recreate_index')}`")
         document_store_dim = st.text_input("Embedding_model_dim", value="3072")
 
-        if st.button("save", key="save_document_store"):
-            st.session_state.document_store = {
+        if st.button("💾  save", key="save_document_store"):
+            errors = []
+            if not document_store_dim:
+                errors.append("Embedding model dim is required.")
+            else:
+                try:
+                    int(document_store_dim)
+                except ValueError:
+                    errors.append("Embedding model dim must be an integer.")
 
-                "type": "document_store",
-                "provider": st.session_state[ConfigState.DOC_STORE_KEY].get("provider"),
-                "location": st.session_state[ConfigState.DOC_STORE_KEY].get("location"),
-                "embedding_model_dim": document_store_dim,
-                "timeout": document_store_timeout,
-                "recreate_index": st.session_state[ConfigState.DOC_STORE_KEY].get("recreate_index")
+            if not document_store_timeout:
+                errors.append("Timeout is required.")
+            else:
+                try:
+                    int(document_store_timeout)
+                except ValueError:
+                    errors.append("Timeout must be an integer.")
 
-            }
-            st.success(f"Updated document store models")
+            if errors:
+                for error in errors:
+                    st.error(error)
+            else:
+                st.session_state.document_store = {
+                    "type": "document_store",
+                    "provider": st.session_state[ConfigState.DOC_STORE_KEY].get("provider"),
+                    "location": st.session_state[ConfigState.DOC_STORE_KEY].get("location"),
+                    "embedding_model_dim": document_store_dim,
+                    "timeout": document_store_timeout,
+                    "recreate_index": st.session_state[ConfigState.DOC_STORE_KEY].get("recreate_index")
+                }
+                st.success(f"Updated document store models")
 
 def render_pipeline_config():
     # =====================
@@ -249,6 +296,14 @@ def render_preview_and_generate(engine_blocks, pipeline_block, settings_block):
 
 
 def save_llm_model(form, form_id):
+
+    # --- 檢查必填欄位 ---
+    errors = validate_llm_form(form)
+    if errors:
+        for error in errors:
+            st.error(error)
+        return False, None  # 中止存檔
+    
     # 轉成 kwargs dict
     kwargs_dict = {}
     for p in form["kwargs"]:
@@ -267,13 +322,13 @@ def save_llm_model(form, form_id):
         if form["alias"] in existing_aliases:
             # 儲存錯誤訊息到 session state
             st.error(f"Duplicate alias name: {form['alias']}.")
-            return False  # 不儲存
+            return False, None  # 不儲存
     
     saved_entry = {
         "model": form["model"],
         **({"alias": form["alias"]} if form["alias"] else {}),
         "api_base": form["api_base"],
-        "timeout": safe_eval(form["timeout"], default=120),
+        "timeout": form["timeout"],
         "kwargs": kwargs_dict,
     }
 
@@ -281,10 +336,12 @@ def save_llm_model(form, form_id):
     if form_id in existing_ids:
         index = existing_ids.index(form_id)
         st.session_state[ConfigState.LLM_MODELS_KEY][index] = {**saved_entry, "id": form_id}
-        st.success(f"Updated model: {form['model']}")
+        # st.success(f"Updated model: {form['model']}")
+        return True, f"Updated model: {form['model']}"
     else:
         st.session_state[ConfigState.LLM_MODELS_KEY].append({**saved_entry, "id": form_id})
-        st.success(f"Added new model: {form['model']}")
+        # st.success(f"Added new model: {form['model']}")
+        return True, f"Added new model: {form['model']}"
 
 def remove_llm_model(form_id):
     # 刪除 llm_forms
@@ -296,11 +353,28 @@ def remove_llm_model(form_id):
         m for m in st.session_state[ConfigState.LLM_MODELS_KEY] if m.get("id") != form_id
     ]
 
-def safe_eval(value, default=None):
-    """安全地評估字符串值，失敗時返回原始值或默認值"""
-    if not value:
-        return default
-    try:
-        return eval(value)
-    except Exception:
-        return value
+
+def validate_llm_form(form):
+    errors = []
+
+    if not form.get("model"):
+        errors.append("Model name is required.")
+    if not form.get("api_base"):
+        errors.append("API Base URL is required.")
+    if not form.get("timeout"):
+        errors.append("Timeout is required.")
+    else:
+        # 檢查 timeout 是否為整數
+        try:
+            int(form["timeout"])
+        except ValueError:
+            errors.append("Timeout must be an integer.")
+
+    # 檢查 kwargs 是否有 key 但沒有 value 或相反
+    for idx, pair in enumerate(form.get("kwargs", [])):
+        if pair.get("key") and not pair.get("value"):
+            errors.append(f"KWArg field {idx+1}: Value is required when key is provided.")
+        if pair.get("value") and not pair.get("key"):
+            errors.append(f"KWArg field {idx+1}: Key is required when value is provided.")
+    
+    return errors
