@@ -1,5 +1,5 @@
 exports.up = function (knex) {
-  return knex.schema.createTable('dashboard_cache_refresh', (table) => {
+  return knex.schema.createTable('dashboard_item_refresh_job', (table) => {
     table.increments('id').primary();
     table.string('hash').notNullable().comment('uuid for the refresh job');
     table.integer('dashboard_id').notNullable();
@@ -31,5 +31,5 @@ exports.up = function (knex) {
 };
 
 exports.down = function (knex) {
-  return knex.schema.dropTable('dashboard_cache_refresh');
+  return knex.schema.dropTable('dashboard_item_refresh_job');
 };
