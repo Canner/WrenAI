@@ -21,6 +21,7 @@ import {
   Pageview,
   Explore,
   Translate,
+  OpenInNew,
 } from '@styled-icons/material-outlined';
 import FieldBinaryOutlined from '@ant-design/icons/FieldBinaryOutlined';
 import MonitorOutlined from '@ant-design/icons/MonitorOutlined';
@@ -112,5 +113,9 @@ export const GithubIcon = styled(Github)`
 `;
 
 export const TranslateIcon = styled(Translate)`
+  height: 1em;
+`;
+
+export const OpenInNewIcon = styled(OpenInNew)`
   height: 1em;
 `;

@@ -31,7 +31,7 @@
   <a href="https://trendshift.io/repositories/9263" target="_blank"><img src="https://trendshift.io/api/badge/repositories/9263" alt="Canner%2FWrenAI | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 </p>
 
-> Open-source GenBI AI Agent that empowers data-driven teams to chat with their data to generate Text-to-SQL, charts, spreadsheets, reports, and BI. 
+> Open-source GenBI AI Agent that empowers data-driven teams to chat with their data to generate Text-to-SQL, charts, spreadsheets, reports, BI and embedded AI. 
 
 <p align="center">
   <img src="./misc/wren_workflow.png">
@@ -126,13 +126,15 @@ At Wren AI, our mission is to revolutionize business intelligence by empowering 
   <img src="./misc/wren-insight.png" style="max-width: 700px"/>
 </p>
 
-### 7. Easily Export and Visualize Your Data
+### 7. Embedded AI-Powered SQL and Charts with the Wren AI API
 
-> Wren AI provides a seamless end-to-end workflow, enabling you to connect your data effortlessly with popular analysis tools such as [Excel](https://docs.getwren.ai/oss/guide/integrations/excel-add-in/?utm_source=github&utm_medium=content&utm_campaign=readme) and [Google Sheets](https://docs.getwren.ai/oss/guide/integrations/google-add-on/?utm_source=github&utm_medium=content&utm_campaign=readme). This way, your insights remain accessible, allowing for further analysis using the tools you know best.
+> Unlock the full power of Wren AI in your own applications. Our API lets you generate SQL queries and rich charts from natural language, effortlessly embedding Wren AI’s intelligence into your workflows. Plus, monitor and manage every interaction with our built-in API History for complete transparency and control.
 
 <p align="center">
-  <img src="./misc/wren-excel.png" style="max-width: 700px"/>
+  <img src="./misc/API_doc.png" style="max-width: 700px"/>
 </p>
+
+Check out the [full API documentation here](https://wrenai.readme.io/reference/welcome)
 
 ## 🤔 Why Wren AI?
 
@@ -149,6 +151,10 @@ We focus on providing an open, secure, and accurate SQL AI Agent for everyone.
 ### 3. Open-source End-to-end Solution
 
 > Deploy Wren AI anywhere you like on your own data, LLM APIs, and environment, it's free.
+
+### 4. Embedded AI with Wren AI API
+
+> Build your own AI agents and applications with accurate and powerful GenBI capabilities powered by Wren AI API.
 
 ## 🤖 Wren AI Text-to-SQL Agentic Architecture
 

@@ -15051,6 +15051,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"uuid@npm:^11.1.0":
+  version: 11.1.0
+  resolution: "uuid@npm:11.1.0"
+  bin:
+    uuid: dist/esm/bin/uuid
+  checksum: 10c0/34aa51b9874ae398c2b799c88a127701408cd581ee89ec3baa53509dd8728cbb25826f2a038f9465f8b7be446f0fbf11558862965b18d21c993684297628d4d3
+  languageName: node
+  linkType: hard
+
 "uuid@npm:^8.0.0":
   version: 8.3.2
   resolution: "uuid@npm:8.3.2"
@@ -15060,7 +15069,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"uuid@npm:^9.0.0, uuid@npm:^9.0.1":
+"uuid@npm:^9.0.0":
   version: 9.0.1
   resolution: "uuid@npm:9.0.1"
   bin:
@@ -15887,7 +15896,7 @@ __metadata:
     ts-jest: "npm:29.1.1"
     ts-node: "npm:9.1.1"
     typescript: "npm:5.2.2"
-    uuid: "npm:^9.0.1"
+    uuid: "npm:^11.1.0"
     vega: "npm:^5.31.0"
     vega-embed: "npm:^6.29.0"
     vega-lite: "npm:^5.21.0"

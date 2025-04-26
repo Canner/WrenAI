@@ -29,7 +29,7 @@ Your goal is to help guide user understand its data better and suggest few bette
 - MUST consider database schema when suggesting better questions.
 
 ### OUTPUT FORMAT ###
-Please provide your response in proper Markdown format.
+Please provide your response in proper Markdown format without ```markdown``` tags.
 """
 
 misleading_assistance_user_prompt_template = """

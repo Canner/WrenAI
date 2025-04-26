@@ -1,9 +1,10 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import styled from 'styled-components';
-import FunctionOutlined from '@ant-design/icons/FunctionOutlined';
 import { Path, MENU_KEY } from '@/utils/enum';
-import { InstructionsSVG } from '@/utils/svgs';
+import { OpenInNewIcon } from '@/utils/icons';
+import ApiOutlined from '@ant-design/icons/ApiOutlined';
+import ReadOutlined from '@ant-design/icons/ReadOutlined';
 import SidebarMenu from '@/components/sidebar/SidebarMenu';
 
 const Layout = styled.div`
@@ -18,36 +19,40 @@ const Layout = styled.div`
 `;
 
 const MENU_KEY_MAP = {
-  [Path.KnowledgeQuestionSQLPairs]: MENU_KEY.QUESTION_SQL_PAIRS,
-  [Path.KnowledgeInstructions]: MENU_KEY.INSTRUCTIONS,
+  [Path.APIManagementHistory]: MENU_KEY.API_HISTORY,
 };
 
 const linkStyle = { color: 'inherit', transition: 'none' };
 
-export default function Knowledge() {
+export default function APIManagement() {
   const router = useRouter();
 
   const menuItems = [
     {
-      'data-guideid': 'question-sql-pairs',
+      'data-guideid': 'api-history',
       label: (
-        <Link style={linkStyle} href={Path.KnowledgeQuestionSQLPairs}>
-          Question-SQL pairs
+        <Link style={linkStyle} href={Path.APIManagementHistory}>
+          API history
         </Link>
       ),
-      icon: <FunctionOutlined />,
-      key: MENU_KEY.QUESTION_SQL_PAIRS,
+      icon: <ApiOutlined />,
+      key: MENU_KEY.API_HISTORY,
       className: 'pl-4',
     },
     {
-      'data-guideid': 'instructions',
       label: (
-        <Link style={linkStyle} href={Path.KnowledgeInstructions}>
-          Instructions
+        <Link
+          className="gray-8 d-inline-flex align-center"
+          href="https://wrenai.readme.io/reference/sql-generation"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          API reference
+          <OpenInNewIcon className="ml-1" />
         </Link>
       ),
-      icon: <InstructionsSVG />,
-      key: MENU_KEY.INSTRUCTIONS,
+      icon: <ReadOutlined />,
+      key: MENU_KEY.API_REFERENCE,
       className: 'pl-4',
     },
   ];

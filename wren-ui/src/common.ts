@@ -17,6 +17,7 @@ import {
   SqlPairRepository,
   AskingTaskRepository,
   InstructionRepository,
+  ApiHistoryRepository,
 } from '@server/repositories';
 import {
   WrenEngineAdaptor,
@@ -69,6 +70,7 @@ export const initComponents = () => {
   const sqlPairRepository = new SqlPairRepository(knex);
   const askingTaskRepository = new AskingTaskRepository(knex);
   const instructionRepository = new InstructionRepository(knex);
+  const apiHistoryRepository = new ApiHistoryRepository(knex);
 
   // adaptors
   const wrenEngineAdaptor = new WrenEngineAdaptor({
@@ -179,8 +181,9 @@ export const initComponents = () => {
     dashboardItemRepository,
     sqlPairRepository,
     askingTaskRepository,
-
+    apiHistoryRepository,
     instructionRepository,
+
     // adaptors
     wrenEngineAdaptor,
     wrenAIAdaptor,

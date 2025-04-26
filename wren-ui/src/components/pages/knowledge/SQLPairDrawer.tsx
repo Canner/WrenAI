@@ -1,7 +1,7 @@
 import { Drawer, Typography } from 'antd';
 import { getCompactTime } from '@/utils/time';
 import { DrawerAction } from '@/hooks/useDrawerAction';
-import CodeBlock from '@/components/editor/CodeBlock';
+import SQLCodeBlock from '@/components/code/SQLCodeBlock';
 import { SqlPair } from '@/apollo/client/graphql/__types__';
 
 type Props = DrawerAction<SqlPair>;
@@ -24,7 +24,7 @@ export default function SQLPairDrawer(props: Props) {
       </div>
       <div className="mb-6">
         <Typography.Text className="gray-7 mb-2">SQL statement</Typography.Text>
-        <CodeBlock
+        <SQLCodeBlock
           code={defaultValue?.sql || ''}
           showLineNumbers
           maxHeight="500"

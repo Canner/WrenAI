@@ -7,6 +7,7 @@ import { LearningResolver } from './resolvers/learningResolver';
 import { DashboardResolver } from './resolvers/dashboardResolver';
 import { SqlPairResolver } from './resolvers/sqlPairResolver';
 import { InstructionResolver } from './resolvers/instructionResolver';
+import { ApiHistoryResolver } from './resolvers/apiHistoryResolver';
 import { convertColumnType } from '@server/utils';
 import { DialectSQLScalar } from './scalars';
 
@@ -18,6 +19,7 @@ const learningResolver = new LearningResolver();
 const dashboardResolver = new DashboardResolver();
 const sqlPairResolver = new SqlPairResolver();
 const instructionResolver = new InstructionResolver();
+const apiHistoryResolver = new ApiHistoryResolver();
 const resolvers = {
   JSON: GraphQLJSON,
   DialectSQL: DialectSQLScalar,
@@ -69,6 +71,9 @@ const resolvers = {
     sqlPairs: sqlPairResolver.getProjectSqlPairs,
     // Instructions
     instructions: instructionResolver.getInstructions,
+
+    // API History
+    apiHistory: apiHistoryResolver.getApiHistory,
   },
   Mutation: {
     deploy: modelResolver.deploy,
@@ -186,6 +191,9 @@ const resolvers = {
 
   // Add this line to include the SqlPair nested resolver
   SqlPair: sqlPairResolver.getSqlPairNestedResolver(),
+
+  // Add ApiHistoryResponse nested resolvers
+  ApiHistoryResponse: apiHistoryResolver.getApiHistoryNestedResolver(),
 };
 
 export default resolvers;
