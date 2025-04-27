@@ -4,24 +4,54 @@ from session_state import ConfigState
 from config_loader import group_blocks
 from dry_run_test import llm_completion_test, llm_embedding_test
 import yaml
-import ast
 
 def render_apikey():
     with st.expander("API Key", expanded=False):
+        
+        add_api_key = st.session_state[ConfigState.API_KEY]
+        add_api_key_form = st.session_state[ConfigState.API_KEY_FORM]
+    
+        if st.button("➕ API KEY", key=f"add_api_key_form"):
+            add_api_key_form.append({"id": str(uuid.uuid4()), "key": "", "value": ""})
+        
+        for apikey in add_api_key_form:
+            kcol, vcol, rcol = st.columns([4, 8, 2])
+            with kcol:
+                apikey["key"] = st.text_input("apikey_name (EX. OPENAI_API_KEY)", key=f"api_key_{apikey["id"]}", value=apikey["key"])
+            with vcol:
+                apikey["value"] = st.text_input("apikey",type="password", key=f"api_val_{apikey["id"]}", value=apikey["value"])
+            with rcol:
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button("DEL", key=f"del_apikey_{apikey["id"]}"):
+                    add_api_key_form[:] = [item for item in add_api_key_form if item["id"] != apikey["id"]]
+                    st.rerun()
+        
+        if st.button("SAVE", key="save_apikey"):
+            keys = []
+            if len(add_api_key_form) == 0:
+                st.error("No APi key be added")
+                return
 
-        api_key = st.text_input(
-            "Enter your API key:",
-            type="password",
-            key="api_key_input"
-        )
+            for fields in add_api_key_form:
+                # 檢查有沒有空的 key 或 value
+                if not fields["key"] or not fields["value"]:
+                    st.error("Each API key and value must be filled out.")
+                    return
+                keys.append(fields["key"])
+            
+            # 檢查 key 有沒有重複
+            if len(keys) != len(set(keys)):
+                st.error("API key names must be unique. Duplicate keys found.")
+                return
+            
+            processed_keys = [{k: v for k, v in item.items() if k != "id"} for item in add_api_key_form]
+            # 如果檢查都通過，加入到 add_api_key 裡
+            add_api_key.clear()  # 清空舊的（看需求）
+            add_api_key.extend(processed_keys)
+            st.success("API keys saved successfully.")
 
-        if st.button("💾  save", key="save_apikey"):
-            if not api_key:
-                st.error("請輸入 API Key")
-            else:
-                st.session_state[ConfigState.API_KEY] = api_key
 
-
+                
 
         
 
@@ -72,9 +102,8 @@ def render_llm_config():
         })
 
     # ② 逐一渲染 Expander
-    for idx, form in enumerate(st.session_state[ConfigState.LLM_FORMS_KEY]):
+    for form in st.session_state[ConfigState.LLM_FORMS_KEY]:
         form_id = form["id"]
-        # title = form["model"]
 
         # 如果 model name 有值，更新 title，否則保留舊的 title
         if form["model"]:
@@ -89,15 +118,15 @@ def render_llm_config():
             form["timeout"] = st.text_input("Timeout", key=f"timeout_{form_id}", value=form["timeout"])
 
             # 動態 KWArgs
-            if st.button("➕ Add KWArg Field", key=f"add_kwarg_{idx}"):
+            if st.button("➕ Add KWArg Field", key=f"add_kwarg_{form_id}"):
                 form["kwargs"].append({"key": "", "value": ""})
 
             for kw_idx, pair in enumerate(form["kwargs"]):
                 kcol, vcol, rcol = st.columns([4, 4, 3])
                 with kcol:
-                    pair["key"] = st.text_input("Key", key=f"kw_key_{idx}_{kw_idx}", value=pair["key"])
+                    pair["key"] = st.text_input("Key", key=f"kw_key_{form_id}_{kw_idx}", value=pair["key"])
                 with vcol:
-                    pair["value"] = st.text_input("Value", key=f"kw_val_{idx}_{kw_idx}", value=pair["value"])
+                    pair["value"] = st.text_input("Value", key=f"kw_val_{form_id}_{kw_idx}", value=pair["value"])
                 with rcol:
                     st.markdown("<br>", unsafe_allow_html=True)
                     if st.button("DEL", key=f"del_kw_{form_id}_{kw_idx}"):
@@ -336,11 +365,9 @@ def save_llm_model(form, form_id):
     if form_id in existing_ids:
         index = existing_ids.index(form_id)
         st.session_state[ConfigState.LLM_MODELS_KEY][index] = {**saved_entry, "id": form_id}
-        # st.success(f"Updated model: {form['model']}")
         return True, f"Updated model: {form['model']}"
     else:
         st.session_state[ConfigState.LLM_MODELS_KEY].append({**saved_entry, "id": form_id})
-        # st.success(f"Added new model: {form['model']}")
         return True, f"Added new model: {form['model']}"
 
 def remove_llm_model(form_id):

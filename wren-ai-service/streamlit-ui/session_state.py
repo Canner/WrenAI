@@ -9,6 +9,7 @@ class ConfigState:
     DOC_STORE_KEY = "document_store"
     PIPELINE_KEY = "pipeline"
     API_KEY = "api_key"
+    API_KEY_FORM = "api_key_form"
 
     @classmethod
     def init(cls, llm_block, embedder_block, document_store_block, pipeline_block,force=False):
@@ -97,7 +98,10 @@ class ConfigState:
 
     @classmethod
     def init_apikey(cls):
-        st.session_state[cls.API_KEY] = ""
+        if cls.API_KEY not in st.session_state:
+            st.session_state[cls.API_KEY] = []
+        if ConfigState.API_KEY_FORM not in st.session_state:
+            st.session_state[cls.API_KEY_FORM] = []
 
     # 可以額外做 CRUD：新增 LLM、刪除 LLM、更新 Embedder...
 
