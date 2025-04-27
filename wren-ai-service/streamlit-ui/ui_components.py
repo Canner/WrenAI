@@ -13,11 +13,11 @@ def render_apikey():
     
         if st.button("➕ API KEY", key=f"add_api_key_form"):
             add_api_key_form.append({"id": str(uuid.uuid4()), "key": "", "value": ""})
-        
+
         for apikey in add_api_key_form:
-            kcol, vcol, rcol = st.columns([4, 8, 2])
+            kcol, vcol, rcol = st.columns([4, 6, 2])
             with kcol:
-                apikey["key"] = st.text_input("apikey_name (EX. OPENAI_API_KEY)", key=f"api_key_{apikey["id"]}", value=apikey["key"])
+                apikey["key"] = st.text_input("apikey_service (e.g., SERVICE_API_KEY)", key=f"api_key_{apikey["id"]}", value=apikey["key"])
             with vcol:
                 apikey["value"] = st.text_input("apikey",type="password", key=f"api_val_{apikey["id"]}", value=apikey["value"])
             with rcol:
