@@ -298,7 +298,7 @@ const PinnedItem = forwardRef(
     const [previewItemSQL, previewItemSQLResult] = usePreviewItemSqlMutation();
     const previewItem = previewItemSQLResult.data?.previewItemSQL;
     const lastRefreshTime =
-      previewItem?.cacheOverrideAt || previewItem?.cacheCreatedAt;
+      previewItem?.cacheOverrodeAt || previewItem?.cacheCreatedAt;
 
     useEffect(() => {
       previewItemSQL({ variables: { data: { itemId: item.id } } });

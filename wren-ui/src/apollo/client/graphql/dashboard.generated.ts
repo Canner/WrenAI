@@ -44,7 +44,7 @@ export type PreviewItemSqlMutationVariables = Types.Exact<{
 }>;
 
 
-export type PreviewItemSqlMutation = { __typename?: 'Mutation', previewItemSQL: { __typename?: 'PreviewItemResponse', data: any, cacheHit: boolean, cacheCreatedAt?: string | null, cacheOverrideAt?: string | null, override: boolean } };
+export type PreviewItemSqlMutation = { __typename?: 'Mutation', previewItemSQL: { __typename?: 'PreviewItemResponse', data: any, cacheHit: boolean, cacheCreatedAt?: string | null, cacheOverrodeAt?: string | null, override: boolean } };
 
 export type SetDashboardScheduleMutationVariables = Types.Exact<{
   data: Types.SetDashboardScheduleInput;
@@ -247,7 +247,7 @@ export const PreviewItemSqlDocument = gql`
     data
     cacheHit
     cacheCreatedAt
-    cacheOverrideAt
+    cacheOverrodeAt
     override
   }
 }

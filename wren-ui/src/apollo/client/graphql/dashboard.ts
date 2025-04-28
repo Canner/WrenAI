@@ -70,7 +70,7 @@ export const PREVIEW_ITEM_SQL = gql`
       data
       cacheHit
       cacheCreatedAt
-      cacheOverrideAt
+      cacheOverrodeAt
       override
     }
   }

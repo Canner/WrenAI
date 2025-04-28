@@ -1074,7 +1074,7 @@ export type PreviewItemResponse = {
   __typename?: 'PreviewItemResponse';
   cacheCreatedAt?: Maybe<Scalars['String']>;
   cacheHit: Scalars['Boolean'];
-  cacheOverrideAt?: Maybe<Scalars['String']>;
+  cacheOverrodeAt?: Maybe<Scalars['String']>;
   data: Scalars['JSON'];
   override: Scalars['Boolean'];
 };
@@ -1150,7 +1150,7 @@ export type QueryAdjustmentTaskArgs = {
 
 export type QueryApiHistoryArgs = {
   filter?: InputMaybe<ApiHistoryFilterInput>;
-  pagination?: InputMaybe<ApiHistoryPaginationInput>;
+  pagination: ApiHistoryPaginationInput;
 };
 
 
