@@ -146,6 +146,7 @@ class QueryEventManager:
         content_block_label: Optional[str] = None,
         block_type: Literal["tool_use", "text"] = "tool_use",
         stream: bool = False,
+        should_put_in_conversation_history: bool = False,
     ):
         """Emit a complete content block (start → delta → stop)."""
         # 1) start
@@ -159,6 +160,7 @@ class QueryEventManager:
                     "type": block_type,
                     "content_block_label": content_block_label or "",
                     "trace_id": trace_id,
+                    "should_put_in_conversation_history": should_put_in_conversation_history,
                 },
             },
         )
@@ -187,6 +189,7 @@ class QueryEventManager:
                         if block_type == "json"
                         else chunk,
                         "trace_id": trace_id,
+                        "should_put_in_conversation_history": should_put_in_conversation_history,
                     },
                 },
             )

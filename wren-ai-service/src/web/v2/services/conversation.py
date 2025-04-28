@@ -29,8 +29,12 @@ class QuestionResult(BaseModel):
 
 
 class ConversationHistory(BaseModel):
-    request: str
-    response: str
+    class ConversationRequest(BaseModel):
+        query: str
+        additional_info: Optional[dict] = None
+
+    request: ConversationRequest
+    response: dict
 
 
 # POST /v2/conversations
@@ -62,8 +66,9 @@ def convert_conversation_history_to_ask_history(
     conversation_history: list[ConversationHistory],
 ) -> list[AskHistory]:
     return [
-        AskHistory(question=history.request, sql=history.response)
+        AskHistory(question=history.request.query, sql=history.response["sql"])
         for history in conversation_history
+        if history.response.get("sql")
     ]
 
 
@@ -241,6 +246,29 @@ class ConversationService:
         return self._pipelines["data_exploration_assistance"].get_streaming_results(
             query_id
         )
+
+    async def _run_chart_generation(
+        self,
+        query: str,
+        sql: str,
+        data: Dict,
+        language: str,
+    ):
+        chart_generation_result = await self._pipelines["chart_generation"].run(
+            query=query,
+            sql=sql,
+            data=data,
+            language=language,
+        )
+
+        return [
+            {
+                "chart_result": chart_generation_result["post_process"]["results"],
+                "sql": sql,
+            }
+        ], {
+            "chart_result": chart_generation_result["post_process"]["results"],
+        }
 
     async def _run_retrieval(
         self,
@@ -514,6 +542,7 @@ class ConversationService:
                 },
                 content_block_label="HISTORICAL_QUESTION_RETRIEVAL",
                 block_type="tool_use",
+                should_put_in_conversation_history=True,
             ):
                 sql_samples = await self._query_event_manager.emit_content_block(
                     query_id,
@@ -566,6 +595,7 @@ class ConversationService:
                     "rephrased_question"
                 )
                 db_schemas = intent_classification_result.get("db_schemas")
+                intent_sql = intent_classification_result.get("sql")
 
                 if rephrased_question:
                     user_query = rephrased_question
@@ -630,6 +660,22 @@ class ConversationService:
                         },
                         block_type="text",
                         stream=True,
+                    )
+                elif intent == "CHART":
+                    await self._query_event_manager.emit_content_block(
+                        query_id,
+                        trace_id,
+                        index=4,
+                        emit_content_func=self._run_chart_generation,
+                        emit_content_func_kwargs={
+                            "query": user_query,
+                            "sql": intent_sql,
+                            "data": sql_data,
+                            "language": configurations.language,
+                        },
+                        content_block_label="CHART_GENERATION",
+                        block_type="tool_use",
+                        should_put_in_conversation_history=True,
                     )
                 else:  # TEXT_TO_SQL
                     retrieval_results = (
@@ -721,6 +767,7 @@ class ConversationService:
                                 },
                                 content_block_label="SQL_GENERATION",
                                 block_type="tool_use",
+                                should_put_in_conversation_history=True,
                             )
                         else:
                             text_to_sql_generation_results = await self._query_event_manager.emit_content_block(
@@ -742,6 +789,7 @@ class ConversationService:
                                 },
                                 content_block_label="SQL_GENERATION",
                                 block_type="tool_use",
+                                should_put_in_conversation_history=True,
                             )
 
                         sql = ""

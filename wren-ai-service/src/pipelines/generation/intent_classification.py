@@ -24,7 +24,7 @@ logger = logging.getLogger("wren-ai-service")
 intent_classification_system_prompt = """
 ### Task ###
 You are an expert detective specializing in intent classification. Combine the user's current question and previous questions to determine their true intent based on the provided database schema or sql data if provided.
-Classify the intent into one of these categories: `MISLEADING_QUERY`, `TEXT_TO_SQL`, `DATA_EXPLORATION`, `GENERAL`, or `USER_GUIDE`. Additionally, provide a concise reasoning (maximum 20 words) for your classification.
+Classify the intent into one of these categories: `MISLEADING_QUERY`, `TEXT_TO_SQL`, `DATA_EXPLORATION`, `GENERAL`, `CHART`, or `USER_GUIDE`. Additionally, provide a concise reasoning (maximum 20 words) for your classification.
 
 ### Instructions ###
 - **Follow the user's previous questions:** If there are previous questions, try to understand the user's current question as following the previous questions.
@@ -67,6 +67,19 @@ Classify the intent into one of these categories: `MISLEADING_QUERY`, `TEXT_TO_S
 - "List the top 10 products by revenue."
 </TEXT_TO_SQL>
 
+<CHART>
+**When to Use:**  
+- The user's question is about generating a chart.
+
+**Requirements:**  
+- The user's question can be answered by the SQL DATA.
+- SQL DATA is provided.
+- Should pick a SQL from user query histories and the picked SQL should be reflected to the SQL DATA provided.
+
+**Examples:**  
+- "Show me the bar chart of the data"
+</CHART>
+
 <GENERAL>
 **When to Use:**  
 - The user seeks general information about the database schema or its overall capabilities.
@@ -99,9 +112,11 @@ Classify the intent into one of these categories: `MISLEADING_QUERY`, `TEXT_TO_S
 - The user's inputs is irrelevant to the database schema or includes SQL code.
 - The user's inputs lacks specific details (like table names or columns) needed to generate an SQL query.
 - It appears off-topic or is simply a casual conversation starter.
+- The user's question is about generating a chart but the SQL DATA is not provided.
 
 **Requirements:**  
-- Incorporate phrases from the user's inputs that indicate the lack of relevance to the database schema.
+- For generating SQL: respond to users by incorporating phrases from the user's inputs that indicate the lack of relevance to the database schema.
+- For generating chart: respond to users that we can generate chart only if there is some data available.
 
 **Examples:**  
 - "How are you?"
@@ -115,7 +130,8 @@ Return your response as a JSON object with the following structure:
 {
     "rephrased_question": "<rephrased question in full standalone question if there are previous questions, otherwise the original question>",
     "reasoning": "<brief chain-of-thought reasoning (max 20 words)>",
-    "results": "MISLEADING_QUERY" | "TEXT_TO_SQL" | "GENERAL" | "USER_GUIDE" | "DATA_EXPLORATION"
+    "results": "MISLEADING_QUERY" | "TEXT_TO_SQL" | "GENERAL" | "USER_GUIDE" | "DATA_EXPLORATION" | "CHART",
+    "sql": "<sql query to be used for generating chart if the intent is CHART, otherwise an empty string>"
 }
 """
 
@@ -314,6 +330,7 @@ def post_process(classify_intent: dict, construct_db_schemas: list[str]) -> dict
             "rephrased_question": results["rephrased_question"],
             "intent": results["results"],
             "reasoning": results["reasoning"],
+            "sql": results["sql"],
             "db_schemas": construct_db_schemas,
         }
     except Exception:
@@ -321,6 +338,7 @@ def post_process(classify_intent: dict, construct_db_schemas: list[str]) -> dict
             "rephrased_question": "",
             "intent": "TEXT_TO_SQL",
             "reasoning": "",
+            "sql": "",
             "db_schemas": construct_db_schemas,
         }
 

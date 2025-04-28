@@ -347,6 +347,12 @@ def create_service_container(
                     **pipe_components["sql_answer"],
                     engine_timeout=settings.engine_timeout,
                 ),
+                "chart_generation": generation.ChartGeneration(
+                    **pipe_components["chart_generation"],
+                ),
+                "chart_adjustment": generation.ChartAdjustment(
+                    **pipe_components["chart_adjustment"],
+                ),
             },
             max_histories=settings.max_histories,
         ),
