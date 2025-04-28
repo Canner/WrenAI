@@ -841,4 +841,109 @@ describe('IbisAdaptor', () => {
       },
     );
   });
+
+  it('should get version successfully', async () => {
+    const mockVersion = '1.2.3';
+    mockedAxios.post.mockResolvedValue({ data: mockVersion });
+    mockedEncryptor.prototype.decrypt.mockReturnValue(
+      JSON.stringify({ password: mockPostgresConnectionInfo.password }),
+    );
+
+    const result = await ibisAdaptor.getVersion(
+      DataSourceName.POSTGRES,
+      mockPostgresConnectionInfo,
+    );
+
+    expect(result).toEqual(mockVersion);
+    expect(mockedAxios.post).toHaveBeenCalledWith(
+      `${ibisServerEndpoint}/v2/connector/postgres/metadata/version`,
+      {
+        connectionInfo: { connectionUrl: postgresConnectionUrl },
+      },
+    );
+  });
+
+  it('should throw an error when getting version fails', async () => {
+    const mockError = {
+      response: {
+        data: 'Failed to get version',
+        headers: {
+          'x-correlation-id': '123',
+          'x-process-time': '1s',
+        },
+      },
+    };
+    mockedAxios.post.mockRejectedValue(mockError);
+    mockedEncryptor.prototype.decrypt.mockReturnValue(
+      JSON.stringify({ password: mockPostgresConnectionInfo.password }),
+    );
+
+    await expect(
+      ibisAdaptor.getVersion(
+        DataSourceName.POSTGRES,
+        mockPostgresConnectionInfo,
+      ),
+    ).rejects.toMatchObject({
+      message: 'Failed to get version',
+      extensions: {
+        other: {
+          correlationId: '123',
+          processTime: '1s',
+        },
+      },
+    });
+  });
+
+  it('should get version for different data sources', async () => {
+    const mockVersion = '1.2.3';
+    mockedAxios.post.mockResolvedValue({ data: mockVersion });
+
+    // Test BigQuery
+    mockedEncryptor.prototype.decrypt.mockReturnValue(
+      JSON.stringify({ credentials: mockBigQueryConnectionInfo.credentials }),
+    );
+
+    const bigQueryResult = await ibisAdaptor.getVersion(
+      DataSourceName.BIG_QUERY,
+      mockBigQueryConnectionInfo,
+    );
+
+    expect(bigQueryResult).toEqual(mockVersion);
+    expect(mockedAxios.post).toHaveBeenCalledWith(
+      `${ibisServerEndpoint}/v2/connector/bigquery/metadata/version`,
+      {
+        connectionInfo: {
+          project_id: mockBigQueryConnectionInfo.projectId,
+          dataset_id: mockBigQueryConnectionInfo.datasetId,
+          credentials: Buffer.from(
+            JSON.stringify(mockBigQueryConnectionInfo.credentials),
+          ).toString('base64'),
+        },
+      },
+    );
+
+    // Test Snowflake
+    mockedEncryptor.prototype.decrypt.mockReturnValue(
+      JSON.stringify({ password: mockSnowflakeConnectionInfo.password }),
+    );
+
+    const snowflakeResult = await ibisAdaptor.getVersion(
+      DataSourceName.SNOWFLAKE,
+      mockSnowflakeConnectionInfo,
+    );
+
+    expect(snowflakeResult).toEqual(mockVersion);
+    expect(mockedAxios.post).toHaveBeenCalledWith(
+      `${ibisServerEndpoint}/v2/connector/snowflake/metadata/version`,
+      {
+        connectionInfo: {
+          user: mockSnowflakeConnectionInfo.user,
+          password: mockSnowflakeConnectionInfo.password,
+          account: mockSnowflakeConnectionInfo.account,
+          database: mockSnowflakeConnectionInfo.database,
+          schema: mockSnowflakeConnectionInfo.schema,
+        },
+      },
+    );
+  });
 });
