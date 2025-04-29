@@ -10,7 +10,7 @@ def download_config():
         response = requests.get(cst.CONFIG_URL, timeout=cst.REQUEST_TIMEOUT)
         response.raise_for_status()
         cst.CONFIG_IN_PATH.write_text(response.text, encoding='utf-8')
-        return True
+        return True, "Download Successed"
     except requests.RequestException as e:
         return False, str(e)
 
