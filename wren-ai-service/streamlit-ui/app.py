@@ -19,8 +19,11 @@ st.set_page_config(
 )
 
 if not cst.CONFIG_IN_PATH.exists():
-    download_config()
-    
+    download_state, download_msg = download_config()
+    if not download_state:
+        st.error(download_msg)
+
+
 yaml_list = load_yaml_list(cst.CONFIG_IN_PATH)
 blocks = group_blocks(yaml_list)
 
