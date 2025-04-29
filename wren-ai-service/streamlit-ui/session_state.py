@@ -99,7 +99,7 @@ class ConfigState:
     @classmethod
     def init_apikey(cls):
         if cls.API_KEY not in st.session_state:
-            st.session_state[cls.API_KEY] = []
+            st.session_state[cls.API_KEY] = {}
         if ConfigState.API_KEY_FORM not in st.session_state:
             st.session_state[cls.API_KEY_FORM] = []
 

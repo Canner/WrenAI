@@ -4,16 +4,13 @@ import streamlit as st
 import os
 
 
-# os.environ["OPENAI_API_KEY"] = "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"
-
-
-def llm_completion_test():
-    os.environ["OPENAI_API_KEY"] = st.session_state[ConfigState.API_KEY]
+def llm_completion_test(llm_from):
+    save_api_key()
     try:
     # 發送測試訊息
         response_completion = completion(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": "hi"}]
+            model=llm_from["model"],
+            messages=[{"role": "user", "content": "hi, who are you"}]
         )
 
         # 判斷回傳值是否有包含 choices 和 message 內容
@@ -29,7 +26,7 @@ def llm_completion_test():
 
 
 def llm_embedding_test():
-    os.environ["OPENAI_API_KEY"] = st.session_state[ConfigState.API_KEY]
+    save_api_key()
     try:
         embedder_block = st.session_state[ConfigState.EMBEDDER_KEY]
         embedding_model_name = embedder_block.get("models", [])[0].get("model")
@@ -53,4 +50,7 @@ def llm_embedding_test():
         return False, str(e)
 
 
+def save_api_key():
+    for service, api_key in st.session_state[ConfigState.API_KEY].items():
+        os.environ[service] = api_key
 

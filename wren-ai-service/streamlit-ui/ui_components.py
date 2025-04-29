@@ -4,6 +4,7 @@ from session_state import ConfigState
 from config_loader import group_blocks
 from dry_run_test import llm_completion_test, llm_embedding_test
 import yaml
+import os
 
 def render_apikey():
     with st.expander("API Key", expanded=False):
@@ -12,48 +13,57 @@ def render_apikey():
         add_api_key_form = st.session_state[ConfigState.API_KEY_FORM]
     
         if st.button("➕ API KEY", key=f"add_api_key_form"):
-            add_api_key_form.append({"id": str(uuid.uuid4()), "key": "", "value": ""})
+            add_api_key_form.append({"id": str(uuid.uuid4()), "key": "", "value": "", "is_saved": False})
 
         for apikey in add_api_key_form:
             kcol, vcol, rcol = st.columns([4, 6, 2])
+
             with kcol:
-                apikey["key"] = st.text_input("apikey_service (e.g., SERVICE_API_KEY)", key=f"api_key_{apikey["id"]}", value=apikey["key"])
+                if apikey.get("is_saved"):
+                    st.text_input("apikey_service", key=f"api_key_{apikey['id']}", value=apikey["key"], disabled=True)
+                else:
+                    apikey["key"] = st.text_input("apikey_service", key=f"api_key_{apikey['id']}", value=apikey["key"])
+
             with vcol:
-                apikey["value"] = st.text_input("apikey",type="password", key=f"api_val_{apikey["id"]}", value=apikey["value"])
+                if apikey.get("is_saved"):
+                    st.text_input("apikey", key=f"api_val_{apikey['id']}", value=apikey["value"], disabled=True, type="password")
+                else:
+                    apikey["value"] = st.text_input("apikey", key=f"api_val_{apikey['id']}", value=apikey["value"], type="password")
+
             with rcol:
                 st.markdown("<br>", unsafe_allow_html=True)
-                if st.button("DEL", key=f"del_apikey_{apikey["id"]}"):
+                if st.button("DEL", key=f"del_apikey_{apikey['id']}"):
+                    os.environ.pop(apikey["key"], None)
+                    add_api_key.pop(apikey["key"], None)
                     add_api_key_form[:] = [item for item in add_api_key_form if item["id"] != apikey["id"]]
                     st.rerun()
-        
+
         if st.button("SAVE", key="save_apikey"):
             keys = []
             if len(add_api_key_form) == 0:
-                st.error("No APi key be added")
+                st.error("No API key has been added.")
                 return
 
             for fields in add_api_key_form:
-                # 檢查有沒有空的 key 或 value
                 if not fields["key"] or not fields["value"]:
                     st.error("Each API key and value must be filled out.")
                     return
                 keys.append(fields["key"])
-            
-            # 檢查 key 有沒有重複
+
             if len(keys) != len(set(keys)):
                 st.error("API key names must be unique. Duplicate keys found.")
                 return
-            
-            processed_keys = [{k: v for k, v in item.items() if k != "id"} for item in add_api_key_form]
-            # 如果檢查都通過，加入到 add_api_key 裡
-            add_api_key.clear()  # 清空舊的（看需求）
-            add_api_key.extend(processed_keys)
-            st.success("API keys saved successfully.")
 
+            # 把 key-value form 轉成 dict
+            processed_keys = {item["key"]: item["value"] for item in add_api_key_form}
 
-                
+            add_api_key.clear()
+            add_api_key.update(processed_keys)
 
-        
+            # 標記所有 form 為已保存
+            for item in add_api_key_form:
+                item["is_saved"] = True
+            st.rerun()
 
 def render_import_yaml():
     st.subheader("LLM Configuration")
@@ -133,17 +143,27 @@ def render_llm_config():
                         form["kwargs"].pop(kw_idx)
                         st.rerun()
 
-            # 儲存/刪除 按鈕
-            c1, c2 = st.columns(2)
-            with c1:
-                if st.button("💾  Save this model", key=f"save_{form_id}"):
-                    return_state, msg = save_llm_model(form, form_id)
-                    if return_state:
-                        st.success(msg)
-            with c2:
-                if st.button("🗑️  Remove this form", key=f"remove_form_{form_id}"):
-                    remove_llm_model(form_id)
-                    st.rerun()
+            if st.button("💾  Save this model", key=f"save_{form_id}"):
+                return_state, msg = save_llm_model(form, form_id)
+                if return_state:
+                    st.success(msg)
+
+            if st.button("🗑️  Remove this form", key=f"remove_form_{form_id}"):
+                remove_llm_model(form_id)
+                st.rerun()
+
+            if st.button("test_llm_model", key=f"test_llm_{form_id}"):
+                if not st.session_state[ConfigState.API_KEY]:
+                    st.error("No API key has been saved.")
+                    return
+                
+                llm_state, llm_msg = llm_completion_test(form)
+                if llm_state:
+                    st.success("Test Success")
+                    st.success(llm_msg)
+                else:
+                    st.error(llm_msg)
+
 
 
 def render_embedder_config():
@@ -188,6 +208,17 @@ def render_embedder_config():
                 }
                 st.success(f"Updated embedder models")
         
+        if st.button("test_embedding_model", key="test_embedding_model"):
+            if not st.session_state[ConfigState.API_KEY]:
+                st.error("No API key has been saved.")
+                return
+
+            embedding_state, embedding_msg = llm_embedding_test()
+            if embedding_state:
+                st.success(embedding_msg)
+            else:
+                st.error(embedding_msg)
+
 
 
 def render_document_store_config():
