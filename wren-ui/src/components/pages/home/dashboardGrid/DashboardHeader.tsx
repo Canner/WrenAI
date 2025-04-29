@@ -10,6 +10,7 @@ import {
 } from '@/components/pages/home/dashboardGrid/CacheSettingsDrawer';
 
 interface Props {
+  isSupportCached: boolean;
   nextScheduleTime?: string;
   schedule?: Schedule;
   onCacheSettings?: () => void;
@@ -27,7 +28,13 @@ const StyledHeader = styled.div`
 `;
 
 export default function DashboardHeader(props: Props) {
-  const { nextScheduleTime, schedule, onCacheSettings, onRefreshAll } = props;
+  const {
+    isSupportCached,
+    nextScheduleTime,
+    schedule,
+    onCacheSettings,
+    onRefreshAll,
+  } = props;
 
   const scheduleTime = getScheduleText(schedule);
 
@@ -44,38 +51,40 @@ export default function DashboardHeader(props: Props) {
       <div />
       <div>
         {schedule && (
-          <div>
-            <div className="d-flex align-center gray-6 gx-2">
-              {nextScheduleTime ? (
-                <Tooltip
-                  placement="bottom"
-                  title={
-                    <>
-                      <div>
-                        <span className="gray-6">Next schedule:</span>{' '}
-                        {getCompactTime(nextScheduleTime)}
-                      </div>
-                      {schedule.cron && (
+          <div className="d-flex align-center gray-6 gx-2">
+            {isSupportCached && (
+              <>
+                {nextScheduleTime ? (
+                  <Tooltip
+                    placement="bottom"
+                    title={
+                      <>
                         <div>
-                          <span className="gray-6">Cron expression:</span>{' '}
-                          {schedule.cron}
+                          <span className="gray-6">Next schedule:</span>{' '}
+                          {getCompactTime(nextScheduleTime)}
                         </div>
-                      )}
-                    </>
-                  }
-                >
-                  <span className="cursor-pointer">{scheduleTime}</span>
-                </Tooltip>
-              ) : (
-                scheduleTime
-              )}
-              <DashboardDropdown onMoreClick={onMoreClick}>
-                <Button
-                  type="text"
-                  icon={<MoreIcon className="gray-8" />}
-                ></Button>
-              </DashboardDropdown>
-            </div>
+                        {schedule.cron && (
+                          <div>
+                            <span className="gray-6">Cron expression:</span>{' '}
+                            {schedule.cron}
+                          </div>
+                        )}
+                      </>
+                    }
+                  >
+                    <span className="cursor-pointer">{scheduleTime}</span>
+                  </Tooltip>
+                ) : (
+                  scheduleTime
+                )}
+              </>
+            )}
+            <DashboardDropdown
+              onMoreClick={onMoreClick}
+              isSupportCached={isSupportCached}
+            >
+              <Button type="text" icon={<MoreIcon className="gray-8" />} />
+            </DashboardDropdown>
           </div>
         )}
       </div>

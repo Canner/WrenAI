@@ -135,9 +135,9 @@ export const ColumnDropdown = makeDropdown((props: Props) => {
 });
 
 export const DashboardDropdown = makeDropdown((props: Props) => {
-  const { onMoreClick } = props;
+  const { onMoreClick, isSupportCached } = props;
   const items: ItemType[] = [
-    {
+    isSupportCached && {
       label: (
         <>
           <DatabaseOutlined className="mr-2" />
@@ -151,18 +151,18 @@ export const DashboardDropdown = makeDropdown((props: Props) => {
       label: (
         <>
           <ReloadOutlined className="mr-2" />
-          Refresh all caches
+          {isSupportCached ? 'Refresh all caches' : 'Refresh all'}
         </>
       ),
       key: MORE_ACTION.REFRESH,
       onClick: () => onMoreClick(MORE_ACTION.REFRESH),
     },
-  ];
+  ].filter(Boolean);
   return items;
 });
 
 export const DashboardItemDropdown = makeDropdown((props: Props) => {
-  const { onMoreClick, isHideLegend } = props;
+  const { onMoreClick, isHideLegend, isSupportCached } = props;
   const items: ItemType[] = [
     {
       label: isHideLegend ? (
@@ -183,7 +183,7 @@ export const DashboardItemDropdown = makeDropdown((props: Props) => {
       label: (
         <>
           <ReloadOutlined className="mr-2" />
-          Refresh cache
+          {isSupportCached ? 'Refresh cache' : 'Refresh'}
         </>
       ),
       key: MORE_ACTION.REFRESH,

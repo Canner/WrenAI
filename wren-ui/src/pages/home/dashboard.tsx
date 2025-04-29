@@ -9,20 +9,38 @@ import { LoadingWrapper } from '@/components/PageLoading';
 import DashboardGrid from '@/components/pages/home/dashboardGrid';
 import EmptyDashboard from '@/components/pages/home/dashboardGrid/EmptyDashboard';
 import DashboardHeader from '@/components/pages/home/dashboardGrid/DashboardHeader';
+import CacheSettingsDrawer from '@/components/pages/home/dashboardGrid/CacheSettingsDrawer';
 import {
   useDashboardQuery,
   useDeleteDashboardItemMutation,
   useUpdateDashboardItemLayoutsMutation,
   useSetDashboardScheduleMutation,
 } from '@/apollo/client/graphql/dashboard.generated';
-import { ItemLayoutInput } from '@/apollo/client/graphql/__types__';
-import CacheSettingsDrawer from '@/components/pages/home/dashboardGrid/CacheSettingsDrawer';
+import { useGetSettingsQuery } from '@/apollo/client/graphql/settings.generated';
+import {
+  DataSource,
+  DataSourceName,
+  ItemLayoutInput,
+} from '@/apollo/client/graphql/__types__';
+
+const isSupportCachedSettings = (dataSource: DataSource) => {
+  // DuckDB not supported, sample dataset as well
+  return (
+    !dataSource?.sampleDataset && dataSource?.type !== DataSourceName.DUCKDB
+  );
+};
 
 export default function Dashboard() {
   const router = useRouter();
   const dashboardGridRef = useRef<{ onRefreshAll: () => void }>(null);
   const homeSidebar = useHomeSidebar();
   const cacheSettingsDrawer = useDrawerAction();
+  const { data: settingsResult } = useGetSettingsQuery();
+  const settings = settingsResult?.settings;
+  const isSupportCached = useMemo(
+    () => isSupportCachedSettings(settings?.dataSource),
+    [settings?.dataSource],
+  );
 
   const {
     data,
@@ -88,6 +106,7 @@ export default function Dashboard() {
         <>
           <EmptyDashboard show={dashboardItems.length === 0}>
             <DashboardHeader
+              isSupportCached={isSupportCached}
               schedule={data?.dashboard?.schedule}
               nextScheduleTime={data?.dashboard?.nextScheduledAt}
               onCacheSettings={() => {
@@ -103,17 +122,20 @@ export default function Dashboard() {
             <DashboardGrid
               ref={dashboardGridRef}
               items={dashboardItems}
+              isSupportCached={isSupportCached}
               onUpdateChange={onUpdateChange}
               onDelete={onDelete}
             />
           </EmptyDashboard>
-          <CacheSettingsDrawer
-            {...cacheSettingsDrawer.state}
-            onClose={cacheSettingsDrawer.closeDrawer}
-            onSubmit={async (values) => {
-              await setDashboardSchedule({ variables: { data: values } });
-            }}
-          />
+          {isSupportCached && (
+            <CacheSettingsDrawer
+              {...cacheSettingsDrawer.state}
+              onClose={cacheSettingsDrawer.closeDrawer}
+              onSubmit={async (values) => {
+                await setDashboardSchedule({ variables: { data: values } });
+              }}
+            />
+          )}
         </>
       </LoadingWrapper>
     </SiderLayout>

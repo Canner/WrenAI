@@ -139,13 +139,14 @@ const getLayoutToUpdateItem = (layout: Layout) => {
 
 interface Props {
   items: DashboardItem[];
+  isSupportCached: boolean;
   onUpdateChange: (layouts: ItemLayoutInput[]) => void;
   onDelete: (id: number) => Promise<void>;
 }
 
 const DashboardGrid = forwardRef(
   (props: Props, ref: React.RefObject<{ onRefreshAll: () => void }>) => {
-    const { items, onUpdateChange, onDelete } = props;
+    const { items, isSupportCached, onUpdateChange, onDelete } = props;
     const itemRefs = useRef<{
       [key: string]: React.RefObject<{ onRefresh: () => void }>;
     }>({});
@@ -181,6 +182,7 @@ const DashboardGrid = forwardRef(
           <div key={item.id}>
             <PinnedItem
               ref={itemRefs.current[item.id]}
+              isSupportCached={isSupportCached}
               item={item}
               onDelete={onDelete}
             />
@@ -277,23 +279,28 @@ const PinnedItem = forwardRef(
   (
     props: {
       item: DashboardItem;
+      isSupportCached: boolean;
       onDelete: (id: number) => Promise<void>;
     },
     ref: React.RefObject<{ onRefresh: () => void }>,
   ) => {
-    const { item, onDelete } = props;
+    const { item, isSupportCached, onDelete } = props;
     const { detail } = item;
     const [isHideLegend, setIsHideLegend] = useState(true);
     const [forceLoading, setForceLoading] = useState(false);
     const [forceUpdate, setForceUpdate] = useState(0);
 
-    useImperativeHandle(ref, () => ({
-      onRefresh: () => {
-        previewItemSQL({
-          variables: { data: { itemId: item.id, refresh: true } },
-        });
-      },
-    }));
+    useImperativeHandle(
+      ref,
+      () => ({
+        onRefresh: () => {
+          previewItemSQL({
+            variables: { data: { itemId: item.id, refresh: isSupportCached } },
+          });
+        },
+      }),
+      [item.id],
+    );
 
     const [previewItemSQL, previewItemSQLResult] = usePreviewItemSqlMutation();
     const previewItem = previewItemSQLResult.data?.previewItemSQL;
@@ -326,7 +333,7 @@ const PinnedItem = forwardRef(
         await onDelete(item.id);
       } else if (action === MORE_ACTION.REFRESH) {
         previewItemSQL({
-          variables: { data: { itemId: item.id, refresh: true } },
+          variables: { data: { itemId: item.id, refresh: isSupportCached } },
         });
       } else if (action === MORE_ACTION.HIDE_CATEGORY) {
         onHideLegend();
@@ -350,6 +357,7 @@ const PinnedItem = forwardRef(
             <DashboardItemDropdown
               onMoreClick={onMoreClick}
               isHideLegend={isHideLegend}
+              isSupportCached={isSupportCached}
             >
               <Button
                 className="adm-pinned-more gray-8"
