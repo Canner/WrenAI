@@ -175,14 +175,19 @@ def render_embedder_config():
         st.markdown(f"**type:** `embedder`")
         st.markdown(f"**provider:** `{st.session_state[ConfigState.EMBEDDER_KEY].get('provider')}`")
 
+        embedding_models = st.session_state[ConfigState.EMBEDDER_KEY].get("models", [])
+        embedding_api_base = embedding_models[0].get("api_base", "https://api.openai.com/v1") if embedding_models else ""
+
         embedding_model_name = st.text_input("Embedding Model Name", key="embedding_model_name", value="text-embedding-3-large")
         embedding_model_alias = st.text_input("Alias (optional, e.g. default)", key="embedding_model_alias", value="default")
+        embedding_model_api_base = st.text_input("API Base URL", key="embedding_model_api_base", value=f"{embedding_api_base}")
         embedding_model_timeout = st.text_input("Timeout (default: 120)", key="embedding_model_timeout", value="120")
 
         custom_embedding_setting = [{
             "model": embedding_model_name,
             "alias": embedding_model_alias,
-            "timeout": embedding_model_timeout
+            "timeout": embedding_model_timeout,
+            "api_base": embedding_model_api_base
         }]
 
         if st.button("💾  save", key="save_embedding_model"):

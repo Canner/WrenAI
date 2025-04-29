@@ -66,10 +66,16 @@ class ConfigState:
         
         st.session_state[cls.EMBEDDER_KEY] = None
         if embedder_block.get("models"):
+            embedder_block_models = embedder_block.get("models")
+
+            for yields in embedder_block.get("models"):
+                if "api_base" not in yields:
+                    yields["api_base"] = "https://api.openai.com/v1"
+
             st.session_state[cls.EMBEDDER_KEY] = {
                 "type": "embedder",
                 "provider": embedder_block.get("provider"),
-                "models": embedder_block.get("models"),
+                "models": embedder_block.get("models"),       
             }
 
     @classmethod
