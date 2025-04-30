@@ -9,32 +9,62 @@ import { LoadingWrapper } from '@/components/PageLoading';
 import DashboardGrid from '@/components/pages/home/dashboardGrid';
 import EmptyDashboard from '@/components/pages/home/dashboardGrid/EmptyDashboard';
 import DashboardHeader from '@/components/pages/home/dashboardGrid/DashboardHeader';
+import CacheSettingsDrawer from '@/components/pages/home/dashboardGrid/CacheSettingsDrawer';
 import {
-  useDashboardItemsQuery,
+  useDashboardQuery,
   useDeleteDashboardItemMutation,
   useUpdateDashboardItemLayoutsMutation,
+  useSetDashboardScheduleMutation,
 } from '@/apollo/client/graphql/dashboard.generated';
-import { ItemLayoutInput } from '@/apollo/client/graphql/__types__';
-import CacheSettingsDrawer from '@/components/pages/home/dashboardGrid/CacheSettingsDrawer';
+import { useGetSettingsQuery } from '@/apollo/client/graphql/settings.generated';
+import {
+  DataSource,
+  DataSourceName,
+  ItemLayoutInput,
+} from '@/apollo/client/graphql/__types__';
+
+const isSupportCachedSettings = (dataSource: DataSource) => {
+  // DuckDB not supported, sample dataset as well
+  return (
+    !dataSource?.sampleDataset && dataSource?.type !== DataSourceName.DUCKDB
+  );
+};
 
 export default function Dashboard() {
   const router = useRouter();
   const dashboardGridRef = useRef<{ onRefreshAll: () => void }>(null);
   const homeSidebar = useHomeSidebar();
   const cacheSettingsDrawer = useDrawerAction();
+  const { data: settingsResult } = useGetSettingsQuery();
+  const settings = settingsResult?.settings;
+  const isSupportCached = useMemo(
+    () => isSupportCachedSettings(settings?.dataSource),
+    [settings?.dataSource],
+  );
 
   const {
     data,
     loading,
-    updateQuery: updateDashboardItemQuery,
-  } = useDashboardItemsQuery({
+    updateQuery: updateDashboardQuery,
+  } = useDashboardQuery({
     fetchPolicy: 'cache-and-network',
     onError: () => {
       message.error('Failed to fetch dashboard items.');
       router.push(Path.Home);
     },
   });
-  const dashboardItems = useMemo(() => data?.dashboardItems || [], [data]);
+  const dashboardItems = useMemo(
+    () => data?.dashboard?.items || [],
+    [data?.dashboard?.items],
+  );
+
+  const [setDashboardSchedule] = useSetDashboardScheduleMutation({
+    refetchQueries: ['Dashboard'],
+    onCompleted: () => {
+      message.success('Successfully updated dashboard schedule.');
+    },
+    onError: (error) => console.error(error),
+  });
 
   const [updateDashboardItemLayouts] = useUpdateDashboardItemLayoutsMutation({
     onError: () => {
@@ -49,11 +79,13 @@ export default function Dashboard() {
   });
 
   const onRemoveDashboardItemFromQueryCache = (id: number) => {
-    updateDashboardItemQuery((prev) => {
+    updateDashboardQuery((prev) => {
       return {
         ...prev,
-        dashboardItems:
-          prev?.dashboardItems?.filter((item) => item.id !== id) || [],
+        dashboard: {
+          ...prev.dashboard,
+          items: prev?.dashboard?.items?.filter((item) => item.id !== id) || [],
+        },
       };
     });
   };
@@ -68,34 +100,19 @@ export default function Dashboard() {
     await deleteDashboardItem({ variables: { where: { id } } });
   };
 
-  // TODO: replace with actual data
-  const schedule = {
-    frequency: 'WEEKLY',
-    day: 'MONDAY',
-    hour: 23,
-    minute: 50,
-  };
-
-  // const schedule = {
-  //   frequency: 'NEVER',
-  //   day: null,
-  //   hour: null,
-  //   minute: null,
-  // };
-  const nextScheduleTime = new Date().toISOString();
-
   return (
     <SiderLayout loading={false} color="gray-3" sidebar={homeSidebar}>
       <LoadingWrapper loading={loading}>
         <>
           <EmptyDashboard show={dashboardItems.length === 0}>
             <DashboardHeader
-              schedule={schedule}
-              nextScheduleTime={nextScheduleTime}
+              isSupportCached={isSupportCached}
+              schedule={data?.dashboard?.schedule}
+              nextScheduleTime={data?.dashboard?.nextScheduledAt}
               onCacheSettings={() => {
                 cacheSettingsDrawer.openDrawer({
-                  enabled: true,
-                  schedule,
+                  cacheEnabled: data?.dashboard?.cacheEnabled,
+                  schedule: data?.dashboard?.schedule,
                 });
               }}
               onRefreshAll={() => {
@@ -105,17 +122,20 @@ export default function Dashboard() {
             <DashboardGrid
               ref={dashboardGridRef}
               items={dashboardItems}
+              isSupportCached={isSupportCached}
               onUpdateChange={onUpdateChange}
               onDelete={onDelete}
             />
           </EmptyDashboard>
-          <CacheSettingsDrawer
-            {...cacheSettingsDrawer.state}
-            onClose={cacheSettingsDrawer.closeDrawer}
-            onSubmit={async (values) => {
-              console.log(values);
-            }}
-          />
+          {isSupportCached && (
+            <CacheSettingsDrawer
+              {...cacheSettingsDrawer.state}
+              onClose={cacheSettingsDrawer.closeDrawer}
+              onSubmit={async (values) => {
+                await setDashboardSchedule({ variables: { data: values } });
+              }}
+            />
+          )}
         </>
       </LoadingWrapper>
     </SiderLayout>
