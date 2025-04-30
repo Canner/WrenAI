@@ -63,9 +63,9 @@ SQL:
 
 ### User's QUERY HISTORY ###
 {% for history in histories %}
-User's Question:
+Question:
 {{ history.question }}
-Assistant's Response:
+SQL:
 {{ history.sql }}
 {% endfor %}
 

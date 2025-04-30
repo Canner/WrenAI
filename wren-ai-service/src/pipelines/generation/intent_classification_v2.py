@@ -23,7 +23,8 @@ logger = logging.getLogger("wren-ai-service")
 
 intent_classification_system_prompt = """
 ### Task ###
-You are an expert detective specializing in intent classification. Combine the user's current question and previous questions to determine their true intent based on the provided database schema. Classify the intent into one of these categories: `MISLEADING_QUERY`, `TEXT_TO_SQL`, `GENERAL`, or `USER_GUIDE`. Additionally, provide a concise reasoning (maximum 20 words) for your classification.
+You are an expert detective specializing in intent classification. Combine the user's current question and previous questions to determine their true intent based on the provided database schema or sql data if provided.
+Classify the intent into one of these categories: `MISLEADING_QUERY`, `TEXT_TO_SQL`, `DATA_EXPLORATION`, `GENERAL`, `CHART`, or `USER_GUIDE`. Additionally, provide a concise reasoning (maximum 20 words) for your classification.
 
 ### Instructions ###
 - **Follow the user's previous questions:** If there are previous questions, try to understand the user's current question as following the previous questions.
@@ -35,6 +36,20 @@ You are an expert detective specializing in intent classification. Combine the u
 
 ### Intent Definitions ###
 
+<DATA_EXPLORATION>
+**When to Use:**
+- The user's question is about data exploration such as asking for data details, asking for explanation of the data, asking for insights, asking for recommendations, asking for comparison, etc.
+
+**Requirements:**
+- SQL DATA is provided and the user's question is about exploring the data.
+- The user's question can be answered by the SQL DATA.
+
+**Examples:**  
+- "Show me the part where the data appears abnormal"
+- "Please explain the data in the table"
+- "What's the trend of the data?"
+</DATA_EXPLORATION>
+
 <TEXT_TO_SQL>
 **When to Use:**  
 - The user's inputs are about modifying SQL from previous questions.
@@ -44,12 +59,26 @@ You are an expert detective specializing in intent classification. Combine the u
 **Requirements:**
 - Include specific table and column names from the schema in your reasoning or modifying SQL from previous questions.
 - Reference phrases from the user's inputs that clearly relate to the schema.
+- The SQL DATA is not provided or SQL DATA cannot answer the user's question, and the user's question can be answered given the database schema.
 
 **Examples:**  
 - "What is the total sales for last quarter?"
 - "Show me all customers who purchased product X."
 - "List the top 10 products by revenue."
 </TEXT_TO_SQL>
+
+<CHART>
+**When to Use:**  
+- The user's question is about generating a chart or modifying a chart.
+
+**Requirements:**
+- Should pick the last SQL from user query histories.
+
+**Examples:**  
+- "Show me the bar chart of the data"
+- "Change the bar chart to a line chart"
+- "Change the color of the bars to red"
+</CHART>
 
 <GENERAL>
 **When to Use:**  
@@ -83,9 +112,11 @@ You are an expert detective specializing in intent classification. Combine the u
 - The user's inputs is irrelevant to the database schema or includes SQL code.
 - The user's inputs lacks specific details (like table names or columns) needed to generate an SQL query.
 - It appears off-topic or is simply a casual conversation starter.
+- The user's question is about generating a chart but the SQL DATA is not provided.
 
 **Requirements:**  
-- Incorporate phrases from the user's inputs that indicate the lack of relevance to the database schema.
+- For generating SQL: respond to users by incorporating phrases from the user's inputs that indicate the lack of relevance to the database schema.
+- For generating chart: respond to users that we can generate chart only if there is some data available.
 
 **Examples:**  
 - "How are you?"
@@ -99,7 +130,8 @@ Return your response as a JSON object with the following structure:
 {
     "rephrased_question": "<rephrased question in full standalone question if there are previous questions, otherwise the original question>",
     "reasoning": "<brief chain-of-thought reasoning (max 20 words)>",
-    "results": "MISLEADING_QUERY" | "TEXT_TO_SQL" | "GENERAL" | "USER_GUIDE"
+    "intent": "MISLEADING_QUERY" | "TEXT_TO_SQL" | "GENERAL" | "USER_GUIDE" | "DATA_EXPLORATION" | "CHART",
+    "sql": "<sql query to be used for generating chart if the intent is CHART, otherwise an empty string>"
 }
 """
 
@@ -129,13 +161,23 @@ SQL:
 - {{doc.path}}: {{doc.content}}
 {% endfor %}
 
+{% if sql_data %}
+### SQL DATA ###
+{{ sql_data }}
+{% endif %}
+
+{% if chart_schema %}
+### CHART SCHEMA ###
+{{ chart_schema }}
+{% endif %}
+
 ### INPUT ###
 {% if histories %}
 User's previous questions:
 {% for history in histories %}
-Question:
+User's Question:
 {{ history.question }}
-SQL:
+Assistant's Response:
 {{ history.sql }}
 {% endfor %}
 {% endif %}
@@ -259,6 +301,8 @@ def prompt(
     construct_db_schemas: list[str],
     histories: list[AskHistory],
     prompt_builder: PromptBuilder,
+    sql_data: dict,
+    chart_schema: dict,
     sql_samples: Optional[list[dict]] = None,
     instructions: Optional[list[dict]] = None,
     configuration: Configuration | None = None,
@@ -275,6 +319,8 @@ def prompt(
         ),
         current_time=configuration.show_current_time(),
         docs=wren_ai_docs,
+        sql_data=sql_data,
+        chart_schema=chart_schema,
     )
 
 
@@ -289,8 +335,9 @@ def post_process(classify_intent: dict, construct_db_schemas: list[str]) -> dict
         results = orjson.loads(classify_intent.get("replies")[0])
         return {
             "rephrased_question": results["rephrased_question"],
-            "intent": results["results"],
+            "intent": results["intent"],
             "reasoning": results["reasoning"],
+            "sql": results["sql"],
             "db_schemas": construct_db_schemas,
         }
     except Exception:
@@ -298,6 +345,7 @@ def post_process(classify_intent: dict, construct_db_schemas: list[str]) -> dict
             "rephrased_question": "",
             "intent": "TEXT_TO_SQL",
             "reasoning": "",
+            "sql": "",
             "db_schemas": construct_db_schemas,
         }
 
@@ -307,7 +355,14 @@ def post_process(classify_intent: dict, construct_db_schemas: list[str]) -> dict
 
 class IntentClassificationResult(BaseModel):
     rephrased_question: str
-    results: Literal["MISLEADING_QUERY", "TEXT_TO_SQL", "GENERAL", "USER_GUIDE"]
+    results: Literal[
+        "MISLEADING_QUERY",
+        "TEXT_TO_SQL",
+        "GENERAL",
+        "USER_GUIDE",
+        "DATA_EXPLORATION",
+        "CHART",
+    ]
     reasoning: str
 
 
@@ -322,7 +377,7 @@ INTENT_CLASSIFICAION_MODEL_KWARGS = {
 }
 
 
-class IntentClassification(BasicPipeline):
+class IntentClassificationV2(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
@@ -369,6 +424,8 @@ class IntentClassification(BasicPipeline):
         sql_samples: Optional[list[dict]] = None,
         instructions: Optional[list[dict]] = None,
         configuration: Configuration = Configuration(),
+        sql_data: Optional[dict] = None,
+        chart_schema: Optional[dict] = None,
     ):
         logger.info("Intent Classification pipeline is running...")
         return await self._pipe.execute(
@@ -380,6 +437,8 @@ class IntentClassification(BasicPipeline):
                 "sql_samples": sql_samples or [],
                 "instructions": instructions or [],
                 "configuration": configuration,
+                "sql_data": sql_data or {},
+                "chart_schema": chart_schema or {},
                 **self._components,
                 **self._configs,
             },
@@ -390,7 +449,7 @@ if __name__ == "__main__":
     from src.pipelines.common import dry_run_pipeline
 
     dry_run_pipeline(
-        IntentClassification,
+        IntentClassificationV2,
         "intent_classification",
         query="show me the dataset",
     )

@@ -273,7 +273,7 @@ def create_service_container(
         ),
         conversation_service=v2_services.ConversationService(
             pipelines={
-                "intent_classification": generation.IntentClassification(
+                "intent_classification": generation.IntentClassificationV2(
                     **pipe_components["intent_classification"],
                     wren_ai_docs=wren_ai_docs,
                 ),
@@ -350,7 +350,7 @@ def create_service_container(
                 "chart_generation": generation.ChartGeneration(
                     **pipe_components["chart_generation"],
                 ),
-                "chart_adjustment": generation.ChartAdjustment(
+                "chart_adjustment": generation.ChartAdjustmentV2(
                     **pipe_components["chart_adjustment"],
                 ),
             },

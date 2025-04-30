@@ -42,6 +42,7 @@ class ConversationRequest(BaseModel):
     _query_id: str | None = None
     query: str
     sql_data: Optional[Dict] = None
+    chart_schema: Optional[Dict] = None
     project_id: Optional[str] = None
     mdl_hash: Optional[str] = None
     histories: Optional[List[ConversationHistory]] = Field(default_factory=list)
@@ -149,6 +150,7 @@ class ConversationService:
         project_id: str,
         configurations: Configurations,
         sql_data: Optional[Dict] = None,
+        chart_schema: Optional[Dict] = None,
     ):
         intent_classification_result = (
             await self._pipelines["intent_classification"].run(
@@ -159,6 +161,7 @@ class ConversationService:
                 project_id=project_id,
                 configuration=configurations,
                 sql_data=sql_data,
+                chart_schema=chart_schema,
             )
         ).get("post_process", {})
 
@@ -251,13 +254,13 @@ class ConversationService:
         self,
         query: str,
         sql: str,
-        data: Dict,
+        sql_data: Dict,
         language: str,
     ):
         chart_generation_result = await self._pipelines["chart_generation"].run(
             query=query,
             sql=sql,
-            data=data,
+            data=sql_data,
             language=language,
         )
 
@@ -269,6 +272,29 @@ class ConversationService:
         ], {
             "chart_result": chart_generation_result["post_process"]["results"],
         }
+
+    async def _run_chart_adjustment(
+        self,
+        query: str,
+        sql: str,
+        sql_data: Dict,
+        chart_schema: Dict,
+        language: str,
+    ):
+        chart_adjustment_result = await self._pipelines["chart_adjustment"].run(
+            query=query,
+            sql=sql,
+            chart_schema=chart_schema,
+            data=sql_data,
+            language=language,
+        )
+
+        return [
+            {
+                "chart_result": chart_adjustment_result["post_process"]["results"],
+                "sql": sql,
+            }
+        ], chart_adjustment_result
 
     async def _run_retrieval(
         self,
@@ -524,6 +550,7 @@ class ConversationService:
         ]  # reverse the order of histories
         configurations = conversation_request.configurations
         sql_data = conversation_request.sql_data
+        chart_schema = conversation_request.chart_schema
 
         try:
             await self._query_event_manager.emit_message_start(
@@ -584,6 +611,7 @@ class ConversationService:
                             "project_id": project_id,
                             "configurations": configurations,
                             "sql_data": sql_data,
+                            "chart_schema": chart_schema,
                         },
                         content_block_label="INTENT_CLASSIFICATION",
                         block_type="tool_use",
@@ -662,21 +690,44 @@ class ConversationService:
                         stream=True,
                     )
                 elif intent == "CHART":
-                    await self._query_event_manager.emit_content_block(
-                        query_id,
-                        trace_id,
-                        index=4,
-                        emit_content_func=self._run_chart_generation,
-                        emit_content_func_kwargs={
-                            "query": user_query,
-                            "sql": intent_sql,
-                            "data": sql_data,
-                            "language": configurations.language,
-                        },
-                        content_block_label="CHART_GENERATION",
-                        block_type="tool_use",
-                        should_put_in_conversation_history=True,
+                    sql_data = await self._run_sql_executor(
+                        sql=intent_sql,
+                        project_id=project_id,
                     )
+
+                    if chart_schema:
+                        await self._query_event_manager.emit_content_block(
+                            query_id,
+                            trace_id,
+                            index=4,
+                            emit_content_func=self._run_chart_adjustment,
+                            emit_content_func_kwargs={
+                                "query": user_query,
+                                "sql": intent_sql,
+                                "sql_data": sql_data,
+                                "chart_schema": chart_schema,
+                                "language": configurations.language,
+                            },
+                            content_block_label="CHART_ADJUSTMENT",
+                            block_type="tool_use",
+                            should_put_in_conversation_history=True,
+                        )
+                    else:
+                        await self._query_event_manager.emit_content_block(
+                            query_id,
+                            trace_id,
+                            index=4,
+                            emit_content_func=self._run_chart_generation,
+                            emit_content_func_kwargs={
+                                "query": user_query,
+                                "sql": intent_sql,
+                                "sql_data": sql_data,
+                                "language": configurations.language,
+                            },
+                            content_block_label="CHART_GENERATION",
+                            block_type="tool_use",
+                            should_put_in_conversation_history=True,
+                        )
                 else:  # TEXT_TO_SQL
                     retrieval_results = (
                         await self._query_event_manager.emit_content_block(
