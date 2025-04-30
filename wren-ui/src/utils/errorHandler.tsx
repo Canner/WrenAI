@@ -312,6 +312,15 @@ class DeleteDashboardItemErrorHandler extends ErrorHandler {
   }
 }
 
+class SetDashboardScheduleErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: GraphQLError) {
+    switch (error.extensions?.code) {
+      default:
+        return 'Failed to set dashboard schedule.';
+    }
+  }
+}
+
 class CreateSqlPairErrorHandler extends ErrorHandler {
   public getErrorMessage(error: GraphQLError) {
     switch (error.extensions?.code) {
@@ -429,6 +438,10 @@ errorHandlers.set(
   new UpdateDashboardItemLayoutsErrorHandler(),
 );
 errorHandlers.set('DeleteDashboardItem', new DeleteDashboardItemErrorHandler());
+errorHandlers.set(
+  'SetDashboardSchedule',
+  new SetDashboardScheduleErrorHandler(),
+);
 
 // SQL Pair
 errorHandlers.set('CreateSqlPair', new CreateSqlPairErrorHandler());

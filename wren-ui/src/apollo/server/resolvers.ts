@@ -66,6 +66,7 @@ const resolvers = {
 
     // Dashboard
     dashboardItems: dashboardResolver.getDashboardItems,
+    dashboard: dashboardResolver.getDashboard,
 
     // SQL Pairs
     sqlPairs: sqlPairResolver.getProjectSqlPairs,
@@ -164,6 +165,7 @@ const resolvers = {
     updateDashboardItem: dashboardResolver.updateDashboardItem,
     deleteDashboardItem: dashboardResolver.deleteDashboardItem,
     previewItemSQL: dashboardResolver.previewItemSQL,
+    setDashboardSchedule: dashboardResolver.setDashboardSchedule,
 
     // SQL Pairs
     createSqlPair: sqlPairResolver.createSqlPair,

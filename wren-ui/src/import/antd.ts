@@ -62,7 +62,7 @@ export { default as Tree } from 'antd/lib/tree';
 // export { default as TreeSelect } from 'antd/lib/tree-select';
 export { default as Tabs } from 'antd/lib/tabs';
 export { default as Tag } from 'antd/lib/tag';
-// export { default as TimePicker } from 'antd/lib/time-picker';
+export { default as TimePicker } from 'antd/lib/time-picker';
 export { default as Timeline } from 'antd/lib/timeline';
 export { default as Tooltip } from 'antd/lib/tooltip';
 export { default as Typography } from 'antd/lib/typography';

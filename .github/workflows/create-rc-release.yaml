@@ -46,12 +46,26 @@ jobs:
           env GOARCH=amd64 GOOS=darwin CGO_ENABLED=1 go build -o dist/wren-launcher-darwin main.go
           cd dist && chmod +x wren-launcher-darwin && tar zcvf wren-launcher-darwin.tar.gz wren-launcher-darwin
 
+      - name: Build for macOS(arm64)
+        working-directory: ./wren-launcher
+        run: |
+          mkdir -p dist
+          env GOARCH=arm64 GOOS=darwin CGO_ENABLED=1 go build -o dist/wren-launcher-darwin-arm64 main.go
+          cd dist && chmod +x wren-launcher-darwin-arm64 && tar zcvf wren-launcher-darwin-arm64.tar.gz wren-launcher-darwin-arm64
+
       - name: Build for Linux
         working-directory: ./wren-launcher
         run: |
           mkdir -p dist
           env GOARCH=amd64 GOOS=linux CGO_ENABLED=0 go build -o dist/wren-launcher-linux main.go
           cd dist && chmod +x wren-launcher-linux && tar zcvf wren-launcher-linux.tar.gz wren-launcher-linux
+
+      - name: Build for Linux(arm64)
+        working-directory: ./wren-launcher
+        run: |
+          mkdir -p dist
+          env GOARCH=arm64 GOOS=linux CGO_ENABLED=0 go build -o dist/wren-launcher-linux-arm64 main.go
+          cd dist && chmod +x wren-launcher-linux-arm64 && tar zcvf wren-launcher-linux-arm64.tar.gz wren-launcher-linux-arm64
 
       - name: Build for Windows
         working-directory: ./wren-launcher
@@ -67,6 +81,8 @@ jobs:
             ./wren-launcher/dist/wren-launcher-darwin.tar.gz
             ./wren-launcher/dist/wren-launcher-linux.tar.gz
             ./wren-launcher/dist/wren-launcher-windows.zip
+            ./wren-launcher/dist/wren-launcher-darwin-arm64.tar.gz
+            ./wren-launcher/dist/wren-launcher-linux-arm64.tar.gz
           tag_name: ${{ steps.parse_release_version.outputs.release_version }}
           prerelease: true
           generate_release_notes: true

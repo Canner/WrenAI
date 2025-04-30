@@ -5,14 +5,24 @@ import {
   PreviewDataResponse,
   DEFAULT_PREVIEW_LIMIT,
 } from '@server/services';
-import { DashboardItem, DashboardItemType } from '@server/repositories';
+import {
+  Dashboard,
+  DashboardItem,
+  DashboardItemType,
+} from '@server/repositories';
 import { getLogger } from '@server/utils';
+import {
+  SetDashboardCacheData,
+  DashboardSchedule,
+  PreviewItemResponse,
+} from '@server/models/dashboard';
 
 const logger = getLogger('DashboardResolver');
 logger.level = 'debug';
 
 export class DashboardResolver {
   constructor() {
+    this.getDashboard = this.getDashboard.bind(this);
     this.getDashboardItems = this.getDashboardItems.bind(this);
     this.createDashboardItem = this.createDashboardItem.bind(this);
     this.updateDashboardItem = this.updateDashboardItem.bind(this);
@@ -20,6 +30,34 @@ export class DashboardResolver {
     this.updateDashboardItemLayouts =
       this.updateDashboardItemLayouts.bind(this);
     this.previewItemSQL = this.previewItemSQL.bind(this);
+    this.setDashboardSchedule = this.setDashboardSchedule.bind(this);
+  }
+
+  public async getDashboard(
+    _root: any,
+    _args: any,
+    ctx: IContext,
+  ): Promise<
+    Omit<Dashboard, 'nextScheduledAt'> & {
+      schedule: DashboardSchedule;
+      items: DashboardItem[];
+      nextScheduledAt: string | null;
+    }
+  > {
+    const dashboard = await ctx.dashboardService.getCurrentDashboard();
+    if (!dashboard) {
+      throw new Error('Dashboard not found.');
+    }
+    const schedule = ctx.dashboardService.parseCronExpression(dashboard);
+    const items = await ctx.dashboardService.getDashboardItems(dashboard.id);
+    return {
+      ...dashboard,
+      nextScheduledAt: dashboard.nextScheduledAt
+        ? new Date(dashboard.nextScheduledAt).toISOString()
+        : null,
+      schedule,
+      items,
+    };
   }
 
   public async getDashboardItems(
@@ -54,6 +92,18 @@ export class DashboardResolver {
         `Chart schema not found in thread response. responseId: ${responseId}`,
       );
     }
+
+    // query with cache enabled
+    const project = await ctx.projectService.getCurrentProject();
+    const deployment = await ctx.deployService.getLastDeployment(project.id);
+    const mdl = deployment.manifest;
+    await ctx.queryService.preview(response.sql, {
+      project,
+      manifest: mdl,
+      limit: DEFAULT_PREVIEW_LIMIT,
+      cacheEnabled: true,
+      refresh: true,
+    });
 
     return await ctx.dashboardService.createDashboardItem({
       dashboardId: dashboard.id,
@@ -104,12 +154,13 @@ export class DashboardResolver {
 
   public async previewItemSQL(
     _root: any,
-    args: { data: { itemId: number; limit?: number } },
+    args: { data: { itemId: number; limit?: number; refresh?: boolean } },
     ctx: IContext,
-  ): Promise<Record<string, any>[]> {
-    const { itemId, limit } = args.data;
+  ): Promise<PreviewItemResponse> {
+    const { itemId, limit, refresh } = args.data;
     try {
       const item = await ctx.dashboardService.getDashboardItem(itemId);
+      const { cacheEnabled } = await ctx.dashboardService.getCurrentDashboard();
       const project = await ctx.projectService.getCurrentProject();
       const deployment = await ctx.deployService.getLastDeployment(project.id);
       const mdl = deployment.manifest;
@@ -117,6 +168,8 @@ export class DashboardResolver {
         project,
         manifest: mdl,
         limit: limit || DEFAULT_PREVIEW_LIMIT,
+        cacheEnabled,
+        refresh: refresh || false,
       })) as PreviewDataResponse;
 
       // handle data to [{ column1: value1, column2: value2, ... }]
@@ -126,9 +179,36 @@ export class DashboardResolver {
           return acc;
         }, {});
       });
-      return values;
+      return {
+        cacheHit: data.cacheHit || false,
+        cacheCreatedAt: data.cacheCreatedAt || null,
+        cacheOverrodeAt: data.cacheOverrodeAt || null,
+        override: data.override || false,
+        data: values,
+      } as PreviewItemResponse;
     } catch (error) {
       logger.error(`Error previewing SQL item ${itemId}: ${error}`);
+      throw error;
+    }
+  }
+
+  public async setDashboardSchedule(
+    _root: any,
+    args: { data: SetDashboardCacheData },
+    ctx: IContext,
+  ): Promise<Dashboard> {
+    try {
+      const dashboard = await ctx.dashboardService.getCurrentDashboard();
+      if (!dashboard) {
+        throw new Error('Dashboard not found.');
+      }
+
+      return await ctx.dashboardService.setDashboardSchedule(
+        dashboard.id,
+        args.data,
+      );
+    } catch (error) {
+      logger.error(`Failed to set dashboard schedule: ${error.message}`);
       throw error;
     }
   }

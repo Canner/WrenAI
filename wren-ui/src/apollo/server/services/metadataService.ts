@@ -48,6 +48,7 @@ export interface RecommendConstraint {
 export interface IDataSourceMetadataService {
   listTables(project: Project): Promise<CompactTable[]>;
   listConstraints(project: Project): Promise<RecommendConstraint[]>;
+  getVersion(project: Project): Promise<string>;
 }
 
 export class DataSourceMetadataService implements IDataSourceMetadataService {
@@ -82,5 +83,10 @@ export class DataSourceMetadataService implements IDataSourceMetadataService {
       return [];
     }
     return await this.ibisAdaptor.getConstraints(dataSource, connectionInfo);
+  }
+
+  public async getVersion(project: Project): Promise<string> {
+    const { type: dataSource, connectionInfo } = project;
+    return await this.ibisAdaptor.getVersion(dataSource, connectionInfo);
   }
 }

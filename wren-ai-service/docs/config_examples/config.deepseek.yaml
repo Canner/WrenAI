@@ -164,7 +164,7 @@ settings:
   column_indexing_batch_size: 50
   table_retrieval_size: 10
   table_column_retrieval_size: 100
-  allow_using_db_schemas_without_pruning: true
+  enable_column_pruning: false
   allow_intent_classification: true
   allow_sql_generation_reasoning: true
   query_cache_maxsize: 1000

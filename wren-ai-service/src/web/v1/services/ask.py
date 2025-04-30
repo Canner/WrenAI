@@ -31,6 +31,7 @@ class AskRequest(BaseModel):
     histories: Optional[list[AskHistory]] = Field(default_factory=list)
     configurations: Optional[Configuration] = Configuration()
     ignore_sql_generation_reasoning: Optional[bool] = False
+    enable_column_pruning: Optional[bool] = False
 
     @property
     def query_id(self) -> str:
@@ -179,6 +180,7 @@ class AskService:
         pipelines: Dict[str, BasicPipeline],
         allow_intent_classification: bool = True,
         allow_sql_generation_reasoning: bool = True,
+        enable_column_pruning: bool = False,
         max_histories: int = 5,
         maxsize: int = 1_000_000,
         ttl: int = 120,
@@ -192,6 +194,7 @@ class AskService:
         )
         self._allow_sql_generation_reasoning = allow_sql_generation_reasoning
         self._allow_intent_classification = allow_intent_classification
+        self._enable_column_pruning = enable_column_pruning
         self._max_histories = max_histories
 
     def _is_stopped(self, query_id: str, container: dict):
@@ -235,6 +238,9 @@ class AskService:
         allow_sql_generation_reasoning = (
             self._allow_sql_generation_reasoning
             and not ask_request.ignore_sql_generation_reasoning
+        )
+        enable_column_pruning = (
+            self._enable_column_pruning or ask_request.enable_column_pruning
         )
 
         try:
@@ -403,6 +409,7 @@ class AskService:
                     query=user_query,
                     histories=histories,
                     project_id=ask_request.project_id,
+                    enable_column_pruning=enable_column_pruning,
                 )
                 _retrieval_result = retrieval_result.get(
                     "construct_retrieval_results", {}

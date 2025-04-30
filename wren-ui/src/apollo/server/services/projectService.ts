@@ -43,11 +43,19 @@ export interface ProjectRecommendationQuestionsResult {
 }
 export interface IProjectService {
   createProject: (projectData: ProjectData) => Promise<Project>;
+  updateProject: (
+    projectId: number,
+    projectData: Partial<Project>,
+  ) => Promise<Project>;
   getGeneralConnectionInfo: (project: Project) => Record<string, any>;
   getProjectDataSourceTables: (
     project?: Project,
     projectId?: number,
   ) => Promise<CompactTable[]>;
+  getProjectDataSourceVersion: (
+    project?: Project,
+    projectId?: number,
+  ) => Promise<string>;
   getProjectSuggestedConstraint: (
     project?: Project,
     projectId?: number,
@@ -95,6 +103,24 @@ export class ProjectService implements IProjectService {
         telemetry,
         wrenAIAdaptor,
       });
+  }
+  public async updateProject(
+    projectId: number,
+    projectData: Partial<Project>,
+  ): Promise<Project> {
+    return await this.projectRepository.updateOne(projectId, projectData);
+  }
+
+  public async getProjectDataSourceVersion(
+    project?: Project,
+    projectId?: number,
+  ): Promise<string> {
+    const usedProject = project
+      ? project
+      : projectId
+        ? await this.getProjectById(projectId)
+        : await this.getCurrentProject();
+    return await this.metadataService.getVersion(usedProject);
   }
 
   public async generateProjectRecommendationQuestions(): Promise<void> {
