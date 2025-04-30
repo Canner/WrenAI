@@ -46,6 +46,7 @@ const bootstrapServer = async () => {
     sqlPairRepository,
     instructionRepository,
     apiHistoryRepository,
+    dashboardItemRefreshJobRepository,
     // adaptors
     wrenEngineAdaptor,
     ibisAdaptor,
@@ -64,6 +65,7 @@ const bootstrapServer = async () => {
     // background trackers
     projectRecommendQuestionBackgroundTracker,
     threadRecommendQuestionBackgroundTracker,
+    dashboardCacheBackgroundTracker,
   } = components;
 
   const modelService = new ModelService({
@@ -155,9 +157,11 @@ const bootstrapServer = async () => {
       sqlPairRepository,
       instructionRepository,
       apiHistoryRepository,
+      dashboardItemRefreshJobRepository,
       // background trackers
       projectRecommendQuestionBackgroundTracker,
       threadRecommendQuestionBackgroundTracker,
+      dashboardCacheBackgroundTracker,
     }),
   });
   await apolloServer.start();
