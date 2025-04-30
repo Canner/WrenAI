@@ -101,7 +101,6 @@ def create_service_container(
                     **pipe_components["db_schema_retrieval"],
                     table_retrieval_size=settings.table_retrieval_size,
                     table_column_retrieval_size=settings.table_column_retrieval_size,
-                    allow_using_db_schemas_without_pruning=settings.allow_using_db_schemas_without_pruning,
                 ),
                 "historical_question": retrieval.HistoricalQuestionRetrieval(
                     **pipe_components["historical_question_retrieval"],
@@ -147,6 +146,7 @@ def create_service_container(
             allow_intent_classification=settings.allow_intent_classification,
             allow_sql_generation_reasoning=settings.allow_sql_generation_reasoning,
             max_histories=settings.max_histories,
+            enable_column_pruning=settings.enable_column_pruning,
             **query_cache,
         ),
         chart_service=services.ChartService(
@@ -203,7 +203,6 @@ def create_service_container(
                     **pipe_components["question_recommendation_db_schema_retrieval"],
                     table_retrieval_size=settings.table_retrieval_size,
                     table_column_retrieval_size=settings.table_column_retrieval_size,
-                    allow_using_db_schemas_without_pruning=settings.allow_using_db_schemas_without_pruning,
                 ),
                 "sql_generation": generation.SQLGeneration(
                     **pipe_components["question_recommendation_sql_generation"],

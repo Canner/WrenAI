@@ -297,6 +297,11 @@ export class ProjectResolver {
       } else {
         // handle other data source
         await ctx.projectService.getProjectDataSourceTables(project);
+        const version =
+          await ctx.projectService.getProjectDataSourceVersion(project);
+        await ctx.projectService.updateProject(project.id, {
+          version,
+        });
         logger.debug(`Data source tables fetched`);
       }
       // telemetry

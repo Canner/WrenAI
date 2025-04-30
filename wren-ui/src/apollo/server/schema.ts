@@ -926,6 +926,55 @@ export const typeDefs = gql`
   input PreviewItemSQLInput {
     itemId: Int!
     limit: Int
+    refresh: Boolean = false
+  }
+
+  type PreviewItemResponse {
+    data: JSON!
+    cacheHit: Boolean!
+    cacheCreatedAt: String
+    cacheOverrodeAt: String
+    override: Boolean!
+  }
+
+  input SetDashboardScheduleInput {
+    cacheEnabled: Boolean!
+    schedule: SetDashboardScheduleData
+  }
+
+  type DashboardSchedule {
+    frequency: ScheduleFrequencyEnum
+    hour: Int
+    minute: Int
+    day: CacheScheduleDayEnum
+    timezone: String
+    cron: String
+  }
+
+  input SetDashboardScheduleData {
+    frequency: ScheduleFrequencyEnum!
+    hour: Int
+    minute: Int
+    day: CacheScheduleDayEnum
+    timezone: String
+    cron: String
+  }
+
+  enum ScheduleFrequencyEnum {
+    DAILY
+    WEEKLY
+    CUSTOM
+    NEVER
+  }
+
+  enum CacheScheduleDayEnum {
+    SUN
+    MON
+    TUE
+    WED
+    THU
+    FRI
+    SAT
   }
 
   type DashboardItemLayout {
@@ -947,6 +996,27 @@ export const typeDefs = gql`
     layout: DashboardItemLayout!
     detail: DashboardItemDetail!
     displayName: String
+  }
+
+  type Dashboard {
+    id: Int!
+    projectId: Int!
+    name: String!
+    cacheEnabled: Boolean!
+    scheduleFrequency: ScheduleFrequencyEnum
+    scheduleTimezone: String
+    scheduleCron: String
+    nextScheduledAt: String
+  }
+
+  type DetailedDashboard {
+    id: Int!
+    name: String!
+    description: String
+    cacheEnabled: Boolean!
+    nextScheduledAt: String
+    schedule: DashboardSchedule
+    items: [DashboardItem!]!
   }
 
   type SqlPair {
@@ -1051,6 +1121,7 @@ export const typeDefs = gql`
 
     # Dashboard
     dashboardItems: [DashboardItem!]!
+    dashboard: DetailedDashboard!
 
     # SQL Pairs
     sqlPairs: [SqlPair]!
@@ -1188,7 +1259,8 @@ export const typeDefs = gql`
       data: UpdateDashboardItemInput!
     ): DashboardItem!
     deleteDashboardItem(where: DashboardItemWhereInput!): Boolean!
-    previewItemSQL(data: PreviewItemSQLInput!): JSON!
+    previewItemSQL(data: PreviewItemSQLInput!): PreviewItemResponse!
+    setDashboardSchedule(data: SetDashboardScheduleInput!): Dashboard!
 
     # SQL Pairs
     createSqlPair(data: CreateSqlPairInput!): SqlPair!
