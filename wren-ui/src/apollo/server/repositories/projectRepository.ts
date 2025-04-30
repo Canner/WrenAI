@@ -92,6 +92,7 @@ export interface RecommendationQuestionResult {
 export interface Project {
   id: number; // ID
   type: DataSourceName; // Project datasource type. ex: bigquery, mysql, postgresql, mongodb, etc
+  version: string; // Project datasource version
   displayName: string; // Project display name
   catalog: string; // Catalog name
   schema: string; // Schema name

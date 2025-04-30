@@ -158,6 +158,10 @@ export interface IIbisAdaptor {
       schema?: string;
     },
   ) => Promise<WrenSQL>;
+  getVersion: (
+    dataSource: DataSourceName,
+    connectionInfo: WREN_AI_CONNECTION_INFO,
+  ) => Promise<string>;
 }
 
 export interface IbisResponse {
@@ -417,6 +421,28 @@ export class IbisAdaptor implements IIbisAdaptor {
         'Error running model substitution with ibis server',
         this.modelSubstituteErrorMessageBuilder,
       );
+    }
+  }
+
+  public async getVersion(
+    dataSource: DataSourceName,
+    connectionInfo: WREN_AI_CONNECTION_INFO,
+  ): Promise<string> {
+    connectionInfo = this.updateConnectionInfo(connectionInfo);
+    const ibisConnectionInfo = toIbisConnectionInfo(dataSource, connectionInfo);
+    const body = {
+      connectionInfo: ibisConnectionInfo,
+    };
+    try {
+      logger.debug(`Getting version from ibis`);
+      const res: AxiosResponse<string> = await axios.post(
+        `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.METADATA)}/connector/${dataSourceUrlMap[dataSource]}/metadata/version`,
+        body,
+      );
+      return res.data;
+    } catch (e) {
+      logger.debug(`Get version error: ${e.response?.data || e.message}`);
+      this.throwError(e, 'Error getting version from ibis server');
     }
   }
 
