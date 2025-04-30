@@ -7,49 +7,51 @@ import yaml
 import os
 
 def render_import_yaml():
+    """
+    Render the configuration YAML import section.
+    Supports loading example YAMLs from GitHub or uploading a custom YAML.
+    """
     with st.expander("Import Configuration YAML", expanded=False):
-        # IMPORT LATESET VERSION OF CONFIG.EXAMPLES.YAML FORM GITHUB
+        # Load example YAML filenames from GitHub
         example_names = ["None"] + st.session_state.get("example_yaml_names", [])
-        selected_examples_yaml  = st.selectbox("Select config.examples.yaml from WrenAI", options=example_names)
+        selected_examples_yaml = st.selectbox("Select example config YAML", options=example_names)
 
+        # Load selected example YAML
         if selected_examples_yaml != "None" and st.button("Import.yaml", key="import__examples_yaml"):
             blocks = load_selected_example_yaml(selected_examples_yaml)
             apply_config_blocks(blocks)
-            st.success("YAML 匯入成功，設定已更新。")
+            st.success("YAML import succeeded. Settings updated.")
 
-        uploaded_file = st.file_uploader("Choose your own YAML file", type=["yaml", "yml"])
+        # Upload custom YAML
+        uploaded_file = st.file_uploader("Upload your own YAML file", type=["yaml", "yml"])
         if uploaded_file is not None and st.button("Import.yaml", key="import_own_yaml"):
             try:
                 blocks = list(yaml.safe_load_all(uploaded_file))
                 apply_config_blocks(blocks)
             except Exception as e:
-                st.error(f"匯入 YAML 檔案時發生錯誤: {e}")
-
+                st.error(f"Failed to import YAML file: {e}")
 
 
 def render_apikey():
+    """
+    Render the API Key configuration section.
+    Supports adding, editing, saving, and deleting multiple API keys.
+    """
     with st.expander("API Key", expanded=False):
-        
         add_api_key = st.session_state[ConfigState.API_KEY]
         add_api_key_form = st.session_state[ConfigState.API_KEY_FORM]
-    
-        if st.button("➕ API KEY", key=f"add_api_key_form"):
+
+        if st.button("➕ API KEY", key="add_api_key_form"):
             add_api_key_form.append({"id": str(uuid.uuid4()), "key": "", "value": "", "is_saved": False})
 
         for apikey in add_api_key_form:
             kcol, vcol, rcol = st.columns([4, 6, 2])
 
             with kcol:
-                if apikey.get("is_saved"):
-                    st.text_input("apikey_service (LLMAI_API_KEY)", key=f"api_key_{apikey['id']}", value=apikey["key"], disabled=True)
-                else:
-                    apikey["key"] = st.text_input("apikey_service (LLMAI_API_KEY)", key=f"api_key_{apikey['id']}", value=apikey["key"])
+                apikey["key"] = st.text_input("apikey_service (LLMAI_API_KEY)", key=f"api_key_{apikey['id']}", value=apikey["key"], disabled=apikey.get("is_saved", False))
 
             with vcol:
-                if apikey.get("is_saved"):
-                    st.text_input("apikey", key=f"api_val_{apikey['id']}", value=apikey["value"], disabled=True, type="password")
-                else:
-                    apikey["value"] = st.text_input("apikey", key=f"api_val_{apikey['id']}", value=apikey["value"], type="password")
+                apikey["value"] = st.text_input("apikey", key=f"api_val_{apikey['id']}", value=apikey["value"], type="password", disabled=apikey.get("is_saved", False))
 
             with rcol:
                 st.markdown("<br>", unsafe_allow_html=True)
@@ -75,24 +77,24 @@ def render_apikey():
                 st.error("API key names must be unique. Duplicate keys found.")
                 return
 
-            # 把 key-value form 轉成 dict
+            # Convert key-value form into a dictionary
             processed_keys = {item["key"]: item["value"] for item in add_api_key_form}
 
             add_api_key.clear()
             add_api_key.update(processed_keys)
 
-            # 標記所有 form 為已保存
             for item in add_api_key_form:
                 item["is_saved"] = True
             st.rerun()
 
 def render_llm_config():
-
-    # 用一個 dict 來暫存每個 form_id 對應的 title
+    """
+    Render the LLM configuration section.
+    Allows creating, editing, validating, testing, and saving LLM model entries.
+    """
     if "form_titles" not in st.session_state:
         st.session_state.form_titles = {}
 
-    # ① 新增一個空白表單
     if st.button("➕  Add model", key="btn_add_model"):
         st.session_state[ConfigState.LLM_FORMS_KEY].append({
             "id": str(uuid.uuid4()),
@@ -103,23 +105,18 @@ def render_llm_config():
             "kwargs": []
         })
 
-    # ② 逐一渲染 Expander
     for form in st.session_state[ConfigState.LLM_FORMS_KEY]:
         form_id = form["id"]
-
-        # 如果 model name 有值，更新 title，否則保留舊的 title
         if form["model"]:
             st.session_state.form_titles[form_id] = form["model"]
         title = st.session_state.form_titles.get(form_id, "new-model")
 
         with st.expander(title, expanded=False):
-            # 基本欄位
             form["model"] = st.text_input("Model name", key=f"model_name_{form_id}", value=form["model"])
             form["alias"] = st.text_input("Alias (Optional)", key=f"alias_{form_id}", value=form["alias"])
             form["api_base"] = st.text_input("API Base URL", key=f"api_base_{form_id}", value=form["api_base"])
             form["timeout"] = st.text_input("Timeout", key=f"timeout_{form_id}", value=form["timeout"])
 
-            # 動態 KWArgs
             if st.button("➕ Add KWArg Field", key=f"add_kwarg_{form_id}"):
                 form["kwargs"].append({"key": "", "value": ""})
 
@@ -148,7 +145,7 @@ def render_llm_config():
                 if not st.session_state[ConfigState.API_KEY]:
                     st.error("No API key has been saved.")
                     return
-                
+
                 llm_state, llm_msg = llm_completion_test(form)
                 if llm_state:
                     st.success("Test Success")
@@ -159,11 +156,12 @@ def render_llm_config():
 
 
 def render_embedder_config():
-    # =====================
-    # Embedder Configuration
-    # =====================
-
-    with st.expander(" Embedder Configuration", expanded=False):
+    """
+    Render the embedding model configuration section.
+    Displays current provider settings and allows users to override the model name,
+    alias, timeout, and base URL. Supports testing and saving.
+    """
+    with st.expander("Embedder Configuration", expanded=False):
         st.markdown(f"**type:** `embedder`")
         st.markdown(f"**provider:** `{st.session_state[ConfigState.EMBEDDER_KEY].get('provider')}`")
 
@@ -172,7 +170,7 @@ def render_embedder_config():
 
         embedding_model_name = st.text_input("Embedding Model Name", key="embedding_model_name", value="text-embedding-3-large")
         embedding_model_alias = st.text_input("Alias (optional, e.g. default)", key="embedding_model_alias", value="default")
-        embedding_model_api_base = st.text_input("API Base URL", key="embedding_model_api_base", value=f"{embedding_api_base}")
+        embedding_model_api_base = st.text_input("API Base URL", key="embedding_model_api_base", value=embedding_api_base)
         embedding_model_timeout = st.text_input("Timeout (default: 120)", key="embedding_model_timeout", value="120")
 
         custom_embedding_setting = [{
@@ -203,8 +201,8 @@ def render_embedder_config():
                     "provider": st.session_state[ConfigState.EMBEDDER_KEY].get("provider"),
                     "models": custom_embedding_setting
                 }
-                st.success(f"Updated embedder models")
-        
+                st.success("Updated embedder model configuration")
+
         if st.button("test_embedding_model", key="test_embedding_model"):
             if not st.session_state[ConfigState.API_KEY]:
                 st.error("No API key has been saved.")
@@ -219,17 +217,19 @@ def render_embedder_config():
 
 
 def render_document_store_config():
-    # =====================
-    # Document Store Configuration
-    # =====================
-
-    with st.expander(" Document Store Configuration", expanded=False):
+    """
+    Render the document store configuration section.
+    Displays current settings and allows updating index location, dimensions, timeout, etc.
+    """
+    with st.expander("Document Store Configuration", expanded=False):
         st.markdown(f"**type:** `document_store`")
         st.markdown(f"**provider:** `{st.session_state[ConfigState.DOC_STORE_KEY].get('provider')}`")
         st.markdown(f"**location:** `{st.session_state[ConfigState.DOC_STORE_KEY].get('location')}`")
-        document_store_timeout = st.text_input("Timeout (default: 120)", key="document_store_timeout" , value="120")
+
+        document_store_timeout = st.text_input("Timeout (default: 120)", key="document_store_timeout", value="120")
         st.markdown(f"**timeout:** `120`")
         st.markdown(f"**recreate_index:** `{st.session_state[ConfigState.DOC_STORE_KEY].get('recreate_index')}`")
+
         document_store_dim = st.text_input("Embedding_model_dim", value="3072")
 
         if st.button("💾  save", key="save_document_store"):
@@ -262,12 +262,14 @@ def render_document_store_config():
                     "timeout": document_store_timeout,
                     "recreate_index": st.session_state[ConfigState.DOC_STORE_KEY].get("recreate_index")
                 }
-                st.success(f"Updated document store models")
+                st.success("Updated document store configuration")
+
 
 def render_pipeline_config():
-    # =====================
-    # Pipeline Configuration
-    # =====================
+    """
+    Render the pipeline configuration section.
+    Allows selecting LLM models for each defined pipeline step.
+    """
     pipeline__llm_options = []
     pipeline_name_options = [n for n in st.session_state[ConfigState.PIPELINE_KEY].get("pipes")]
 
@@ -276,30 +278,36 @@ def render_pipeline_config():
             pipeline__llm_options.append("litellm_llm." + model["alias"])
         elif model.get("model"):
             pipeline__llm_options.append("litellm_llm." + model["model"])
-    
+
     with st.expander("Pipeline Configuration", expanded=False):
-        selected_pipeline_name  = st.selectbox("pipeline_name", options=[n.get("name") for n in pipeline_name_options if n.get("llm")])
-            # 根據選擇的 pipeline 顯示相應的 Expander
+        selected_pipeline_name = st.selectbox("pipeline_name", options=[n.get("name") for n in pipeline_name_options if n.get("llm")])
+
         for idx, form in enumerate(pipeline_name_options):
             if form.get("name") == selected_pipeline_name:
                 for key, value in form.items():
                     if key == "llm":
                         pipeline_llm = st.selectbox(
                             "llm",
-                            options=[m for m in pipeline__llm_options],
+                            options=pipeline__llm_options,
                             index=pipeline__llm_options.index(value) if value in pipeline__llm_options else 0,
                             key=f"llm_{idx}"
                         )
                     else:
                         st.markdown(f"**{key}:** `{value}`")
-                if st.button("💾  Save this llm", key=f"save_{form["name"]}"):
+
+                if st.button("💾  Save this llm", key=f"save_{form['name']}"):
                     st.session_state[ConfigState.PIPELINE_KEY]["pipes"][idx]["llm"] = pipeline_llm
-                    st.success(f"Updated pipeline llm: {pipeline_llm}")
-        
+                    st.success(f"Updated pipeline LLM: {pipeline_llm}")
+
+
 def render_preview_and_generate(engine_blocks, pipeline_block, settings_block):
+    """
+    Render the preview section and generate final YAML output.
+    Displays all configured components and writes to a local file.
+    """
     st.subheader("Current Configuration (Preview)")
 
-    # ---- 取得目前的 LLM 配置 ----
+    # Compose LLM block
     llm_preview = {
         "type": "llm",
         "provider": "litellm_llm",
@@ -309,25 +317,21 @@ def render_preview_and_generate(engine_blocks, pipeline_block, settings_block):
         ]
     }
 
-    # ---- 取得 Embedder 配置 ----
     embedder_preview = st.session_state.get(ConfigState.EMBEDDER_KEY)
-
-    # ---- 取得 Document Store 配置 ----
     document_store_preview = st.session_state.get(ConfigState.DOC_STORE_KEY)
 
-    # --- 取得 Pipeline llm 配置 ----
     pipeline_preview = {
         "type": "pipeline",
         "pipes": [form for form in st.session_state.get(ConfigState.PIPELINE_KEY, {}).get("pipes", []) if form.get("llm")]
     }
 
-    # ---- 合併所有配置 ----
     preview_blocks = [llm_preview, embedder_preview, document_store_preview, pipeline_preview]
 
     generate_pipeline_block = {
         "type": "pipeline",
         "pipes": st.session_state.get(ConfigState.PIPELINE_KEY, {}).get("pipes", [])
     }
+
     generate_yaml_blocks = [
         llm_preview,
         embedder_preview,
@@ -340,10 +344,8 @@ def render_preview_and_generate(engine_blocks, pipeline_block, settings_block):
         {"settings": settings_block}
     ]
 
-    # ---- 顯示 JSON 預覽 ----
     st.json(preview_blocks)
 
-    # ---- 生成 YAML 按鈕 ----
     if st.button("Generate config.yaml"):
         from constants import CONFIG_OUT_PATH
         with open(CONFIG_OUT_PATH, "w", encoding="utf-8") as f:
@@ -353,15 +355,17 @@ def render_preview_and_generate(engine_blocks, pipeline_block, settings_block):
 
 
 def save_llm_model(form, form_id):
-
-    # --- 檢查必填欄位 ---
+    """
+    Validate and save a single LLM model form to session state.
+    Checks for required fields, converts kwargs, and handles alias uniqueness.
+    """
     errors = validate_llm_form(form)
     if errors:
         for error in errors:
             st.error(error)
-        return False, None  # 中止存檔
-    
-    # 轉成 kwargs dict
+        return False, None
+
+    # Convert list of kwargs to dictionary
     kwargs_dict = {}
     for p in form["kwargs"]:
         if p["key"]:
@@ -370,17 +374,16 @@ def save_llm_model(form, form_id):
             except Exception:
                 kwargs_dict[p["key"]] = p["value"]
 
-    # 檢查 alias 是否重複
+    # Prevent duplicate aliases
     if form["alias"]:
         existing_aliases = [
-            m.get("alias") for m in st.session_state[ConfigState.LLM_MODELS_KEY] 
+            m.get("alias") for m in st.session_state[ConfigState.LLM_MODELS_KEY]
             if m.get("id") != form_id and "alias" in m
         ]
         if form["alias"] in existing_aliases:
-            # 儲存錯誤訊息到 session state
             st.error(f"Duplicate alias name: {form['alias']}.")
-            return False, None  # 不儲存
-    
+            return False, None
+
     saved_entry = {
         "model": form["model"],
         **({"alias": form["alias"]} if form["alias"] else {}),
@@ -398,18 +401,24 @@ def save_llm_model(form, form_id):
         st.session_state[ConfigState.LLM_MODELS_KEY].append({**saved_entry, "id": form_id})
         return True, f"Added new model: {form['model']}"
 
+
 def remove_llm_model(form_id):
-    # 刪除 llm_forms
+    """
+    Remove a model and its form from session state by ID.
+    """
     st.session_state[ConfigState.LLM_FORMS_KEY] = [
         f for f in st.session_state[ConfigState.LLM_FORMS_KEY] if f["id"] != form_id
     ]
-    # 刪除 llm_models
     st.session_state[ConfigState.LLM_MODELS_KEY] = [
         m for m in st.session_state[ConfigState.LLM_MODELS_KEY] if m.get("id") != form_id
     ]
 
 
 def validate_llm_form(form):
+    """
+    Validate a single LLM form for completeness and formatting.
+    Returns a list of error messages if validation fails.
+    """
     errors = []
 
     if not form.get("model"):
@@ -419,17 +428,15 @@ def validate_llm_form(form):
     if not form.get("timeout"):
         errors.append("Timeout is required.")
     else:
-        # 檢查 timeout 是否為整數
         try:
             int(form["timeout"])
         except ValueError:
             errors.append("Timeout must be an integer.")
 
-    # 檢查 kwargs 是否有 key 但沒有 value 或相反
     for idx, pair in enumerate(form.get("kwargs", [])):
         if pair.get("key") and not pair.get("value"):
             errors.append(f"KWArg field {idx+1}: Value is required when key is provided.")
         if pair.get("value") and not pair.get("key"):
             errors.append(f"KWArg field {idx+1}: Key is required when value is provided.")
-    
+
     return errors

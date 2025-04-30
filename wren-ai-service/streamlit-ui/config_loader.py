@@ -3,11 +3,12 @@ import yaml
 from session_state import ConfigState
 from pathlib import Path
 import constants as cst
-from typing import Any, Dict, List 
+from typing import Any, Dict, List
 
 def load_config_yaml_blocks() -> List[Dict[str, Any]]:
     """
-    嘗試從本地讀 config.yaml，若不存在則從 GitHub 讀取（不下載）。
+    Load the config.yaml from local disk if available; 
+    otherwise, fetch it from the GitHub URL without downloading it.
     """
     if cst.CONFIG_IN_PATH.exists():
         try:
@@ -18,18 +19,31 @@ def load_config_yaml_blocks() -> List[Dict[str, Any]]:
     else:
         return fetch_yaml_from_url(cst.CONFIG_URL)
 
-def load_selected_example_yaml(example_name: str) -> List[Dict[str, Any]]:
-    url = cst.CONFIG_EXAMPLES_SELECTED_URL + example_name
-    return fetch_yaml_from_url(url)
+def load_selected_example_yaml(selected_example: str) -> List[Dict[str, Any]]:
+    """
+    Fetch a selected YAML example file from GitHub and return it as a list of blocks.
+    """
+    selected_url = cst.CONFIG_EXAMPLES_SELECTED_URL + selected_example
+    try:
+        response = requests.get(selected_url, timeout=cst.REQUEST_TIMEOUT)
+        response.raise_for_status()
+        return list(yaml.safe_load_all(response.text))
+    except requests.RequestException as e:
+        print(f"❌ Error loading config from GitHub: {e}")
+        return []
 
 def fetch_yaml_from_url(url: str) -> List[Dict[str, Any]]:
+    """
+    Fetch and parse a YAML list from a remote URL.
+    Returns an empty list if fetch or parsing fails.
+    """
     try:
         response = requests.get(url, timeout=cst.REQUEST_TIMEOUT)
         response.raise_for_status()
         config_list = list(yaml.safe_load_all(response.text))
 
         if not config_list:
-            raise ValueError(f"⚠️ GitHub 回傳的 YAML 是空的，URL: {url}")
+            raise ValueError(f"⚠️ Received empty YAML content from: {url}")
 
         return config_list
 
@@ -39,7 +53,8 @@ def fetch_yaml_from_url(url: str) -> List[Dict[str, Any]]:
 
 def extract_config_blocks(config_list: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
-    傳入 YAML List，回傳各 block 分類後的 dict
+    Convert a flat list of config blocks into grouped dictionary format 
+    with keys like 'llm', 'embedder', 'document_store', and 'pipeline'.
     """
     grouped = group_blocks(config_list)
     return {
@@ -49,22 +64,18 @@ def extract_config_blocks(config_list: List[Dict[str, Any]]) -> Dict[str, Any]:
         "pipeline": grouped.get("pipeline", {})
     }
 
-def load__selected_config_yaml_blocks(selected_examples) -> List[Dict[str, Any]]:
-        selected_url = cst.CONFIG_EXAMPLES_SELECTED_URL + selected_examples
-        # return selected_url
-        try:
-            response = requests.get(selected_url, timeout=cst.REQUEST_TIMEOUT)
-            response.raise_for_status()
-            return list(yaml.safe_load_all(response.text))
-        except requests.RequestException as e:
-            print(f"❌ Error loading config from GitHub: {e}")
-            return []
-         
 def load_yaml_list(path: Path) -> List[Dict[str, Any]]:
+    """
+    Load and parse all YAML documents from a file path.
+    """
     with path.open("r", encoding="utf-8") as f:
         return list(yaml.safe_load_all(f))
 
 def group_blocks(blocks: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Group YAML blocks by their 'type' field.
+    If multiple blocks share the same type, they are stored as a list.
+    """
     save_blocks = {}
     for block in blocks:
         key = block.get("type") or ("settings" if "settings" in block else None)
@@ -80,7 +91,10 @@ def group_blocks(blocks: List[Dict[str, Any]]) -> Dict[str, Any]:
     return save_blocks
 
 def fetch_example_yaml_filenames() -> List[str]:
-    """從 GitHub 的 config_examples 目錄中取得所有 .yaml 檔案名稱（不載入內容）"""
+    """
+    Fetch the filenames of all .yaml example configs from the GitHub directory 
+    (does not download the content).
+    """
     try:
         response = requests.get(cst.CONFIG_EXAMPLES_URL, timeout=cst.REQUEST_TIMEOUT)
         response.raise_for_status()
@@ -91,9 +105,11 @@ def fetch_example_yaml_filenames() -> List[str]:
         return []
 
 def apply_config_blocks(config_blocks: List[Dict[str, Any]]):
+    """
+    Group and apply config blocks by updating the Streamlit session state via ConfigState.
+    """
     grouped = extract_config_blocks(config_blocks)
 
-    # 更新 ConfigState
     ConfigState.init(
         grouped["llm"],
         grouped["embedder"],
