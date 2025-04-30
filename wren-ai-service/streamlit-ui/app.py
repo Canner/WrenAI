@@ -1,5 +1,4 @@
-import constants as cst
-from config_loader import download_config, load_yaml_list, group_blocks
+from config_loader import load_config_yaml_blocks, group_blocks
 from session_state import ConfigState
 from ui_components import (
     render_llm_config, 
@@ -18,13 +17,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"  # 控制側邊欄的初始狀態
 )
 
-if not cst.CONFIG_IN_PATH.exists():
-    download_state, download_msg = download_config()
-    if not download_state:
-        st.error(download_msg)
-
-
-yaml_list = load_yaml_list(cst.CONFIG_IN_PATH)
+yaml_list = load_config_yaml_blocks()
 blocks = group_blocks(yaml_list)
 
 llm_block = blocks.get("llm", {})
@@ -43,6 +36,7 @@ col1, col2 = st.columns([1.5, 1])  # 左右欄位
 ConfigState.init(llm_block, embedder_block, document_store_block, pipeline_block)
 
 with col1:
+    st.subheader("LLM Configuration")
     # =====================
     # LLM Configuration UI
     # =====================

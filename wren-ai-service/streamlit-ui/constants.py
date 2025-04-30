@@ -18,6 +18,8 @@ def get_latest_config_version():
 # --- constant ---
 CONFIG_VERSION = get_latest_config_version()
 CONFIG_URL = f"https://raw.githubusercontent.com/Canner/WrenAI/{CONFIG_VERSION}/docker/config.example.yaml"
+CONFIG_EXAMPLES_URL = f"https://api.github.com/repos/Canner/WrenAI/contents/wren-ai-service/docs/config_examples?ref={CONFIG_VERSION}"
+CONFIG_EXAMPLES_SELECTED_URL = f"https://raw.githubusercontent.com/Canner/WrenAI/{CONFIG_VERSION}/wren-ai-service/docs/config_examples/"
 CONFIG_IN_PATH = Path("config.yaml")
 CONFIG_OUT_PATH = Path("generated_config.yaml")
 REQUEST_TIMEOUT = 10  # seconds

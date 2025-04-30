@@ -1,10 +1,31 @@
 import streamlit as st
 import uuid
 from session_state import ConfigState
-from config_loader import group_blocks
+from config_loader import load_selected_example_yaml, apply_config_blocks
 from dry_run_test import llm_completion_test, llm_embedding_test
 import yaml
 import os
+
+def render_import_yaml():
+    with st.expander("Import Configuration YAML", expanded=False):
+        # IMPORT LATESET VERSION OF CONFIG.EXAMPLES.YAML FORM GITHUB
+        example_names = ["None"] + st.session_state.get("example_yaml_names", [])
+        selected_examples_yaml  = st.selectbox("Select config.examples.yaml from WrenAI", options=example_names)
+
+        if selected_examples_yaml != "None" and st.button("Import.yaml", key="import__examples_yaml"):
+            blocks = load_selected_example_yaml(selected_examples_yaml)
+            apply_config_blocks(blocks)
+            st.success("YAML 匯入成功，設定已更新。")
+
+        uploaded_file = st.file_uploader("Choose your own YAML file", type=["yaml", "yml"])
+        if uploaded_file is not None and st.button("Import.yaml", key="import_own_yaml"):
+            try:
+                blocks = list(yaml.safe_load_all(uploaded_file))
+                apply_config_blocks(blocks)
+            except Exception as e:
+                st.error(f"匯入 YAML 檔案時發生錯誤: {e}")
+
+
 
 def render_apikey():
     with st.expander("API Key", expanded=False):
@@ -20,9 +41,9 @@ def render_apikey():
 
             with kcol:
                 if apikey.get("is_saved"):
-                    st.text_input("apikey_service", key=f"api_key_{apikey['id']}", value=apikey["key"], disabled=True)
+                    st.text_input("apikey_service (LLMAI_API_KEY)", key=f"api_key_{apikey['id']}", value=apikey["key"], disabled=True)
                 else:
-                    apikey["key"] = st.text_input("apikey_service", key=f"api_key_{apikey['id']}", value=apikey["key"])
+                    apikey["key"] = st.text_input("apikey_service (LLMAI_API_KEY)", key=f"api_key_{apikey['id']}", value=apikey["key"])
 
             with vcol:
                 if apikey.get("is_saved"):
@@ -64,35 +85,6 @@ def render_apikey():
             for item in add_api_key_form:
                 item["is_saved"] = True
             st.rerun()
-
-def render_import_yaml():
-    st.subheader("LLM Configuration")
-    # IMPORT YAML
-    uploaded_file = st.file_uploader("Choose a YAML file", type=["yaml", "yml"])
-    
-    if uploaded_file is not None:
-        if st.button("Import.yaml", key="import_yaml"):
-            try:
-                # 解析使用者上傳的 yaml 檔案
-                user_config_list = list(yaml.safe_load_all(uploaded_file))
-                user_config_block = group_blocks(user_config_list)  # 將 YAML 轉換為字典格式
-
-                # 用於更新的暫存區
-                user_llm_block = user_config_block.get("llm", {})
-                user_embedder_block = user_config_block.get("embedder", {})
-                user_document_store_block = user_config_block.get("document_store", {})
-                user_pipeline_block = user_config_block.get("pipeline", {})
-
-                # 僅在有新資料時才更新對應的 block
-                if user_llm_block: llm_block = user_llm_block
-                if user_embedder_block: embedder_block = user_embedder_block
-                if user_document_store_block: document_store_block = user_document_store_block
-                if user_pipeline_block: pipeline_block = user_pipeline_block
-                
-                ConfigState.init(llm_block, embedder_block, document_store_block, pipeline_block,force=True)  # 強制重新初始化 Session State
-                st.success("YAML 匯入成功，設定已更新。")
-            except Exception as e:
-                st.error(f"匯入 YAML 檔案時發生錯誤: {e}")
 
 def render_llm_config():
 

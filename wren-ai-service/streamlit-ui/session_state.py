@@ -10,6 +10,7 @@ class ConfigState:
     PIPELINE_KEY = "pipeline"
     API_KEY = "api_key"
     API_KEY_FORM = "api_key_form"
+    EXAMPLE_CONFIG_NAMES_KEY = "example_yaml_names"
 
     @classmethod
     def init(cls, llm_block, embedder_block, document_store_block, pipeline_block,force=False):
@@ -19,6 +20,7 @@ class ConfigState:
         cls.init_document_store(document_store_block, force=force)
         cls.init_pipeline(pipeline_block, force=force)
         cls.init_apikey()
+        cls.init_example_configs()
 
     @classmethod
     def init_llm_forms(cls, llm_block, force=False):
@@ -103,11 +105,15 @@ class ConfigState:
         }
 
     @classmethod
-    def init_apikey(cls):
+    def init_apikey(cls, force=False):
         if cls.API_KEY not in st.session_state:
             st.session_state[cls.API_KEY] = {}
         if ConfigState.API_KEY_FORM not in st.session_state:
             st.session_state[cls.API_KEY_FORM] = []
 
+    @classmethod
+    def init_example_configs(cls, force=False):
+        from config_loader import fetch_example_yaml_filenames  # 避免循環 import，要晚點 import
+        st.session_state[cls.EXAMPLE_CONFIG_NAMES_KEY] = fetch_example_yaml_filenames()
     # 可以額外做 CRUD：新增 LLM、刪除 LLM、更新 Embedder...
 
