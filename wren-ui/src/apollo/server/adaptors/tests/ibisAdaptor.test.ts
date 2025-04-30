@@ -20,6 +20,7 @@ import {
 } from '../../repositories';
 import { snakeCase } from 'lodash';
 import { Encryptor } from '../../utils';
+import { DEFAULT_PREVIEW_LIMIT } from '../../services';
 
 jest.mock('axios');
 jest.mock('@server/utils/encryptor');
@@ -470,6 +471,153 @@ describe('IbisAdaptor', () => {
     expect(res.data).toEqual([]);
     expect(res.correlationId).toEqual('123');
     expect(res.processTime).toEqual('1s');
+  });
+
+  it('should handle query with cache-related headers', async () => {
+    mockedAxios.post.mockResolvedValue({
+      data: {
+        columns: ['id'],
+        data: [[1]],
+        dtypes: { id: 'integer' },
+      },
+      headers: {
+        'x-correlation-id': '123',
+        'x-process-time': '1s',
+        'x-cache-hit': 'true',
+        'x-cache-create-at': '2024-01-01T00:00:00Z',
+        'x-cache-override': 'false',
+        'x-cache-override-at': '2024-01-01T00:00:00Z',
+      },
+    });
+    mockedEncryptor.prototype.decrypt.mockReturnValue(
+      JSON.stringify({ password: mockPostgresConnectionInfo.password }),
+    );
+
+    const res: IbisQueryResponse = await ibisAdaptor.query(
+      'SELECT * FROM test_table',
+      {
+        dataSource: DataSourceName.POSTGRES,
+        connectionInfo: mockPostgresConnectionInfo,
+        mdl: mockManifest,
+        cacheEnabled: true,
+      } as IbisQueryOptions,
+    );
+
+    expect(res.data).toEqual([[1]]);
+    expect(res.columns).toEqual(['id']);
+    expect(res.dtypes).toEqual({ id: 'integer' });
+    expect(res.cacheHit).toEqual(true);
+    expect(new Date(res.cacheCreatedAt).getTime()).toBeGreaterThan(0);
+    expect(res.override).toEqual(false);
+    expect(new Date(res.cacheOverrodeAt).getTime()).toBeGreaterThan(0);
+    expect(mockedAxios.post).toHaveBeenCalledWith(
+      `${ibisServerEndpoint}/v3/connector/postgres/query?cacheEnable=true`,
+      expect.any(Object),
+      expect.any(Object),
+    );
+  });
+
+  it('should handle query with cache refresh', async () => {
+    mockedAxios.post.mockResolvedValue({
+      data: {
+        columns: ['id'],
+        data: [[1]],
+        dtypes: { id: 'integer' },
+      },
+      headers: {
+        'x-correlation-id': '123',
+        'x-process-time': '1s',
+      },
+    });
+    mockedEncryptor.prototype.decrypt.mockReturnValue(
+      JSON.stringify({ password: mockPostgresConnectionInfo.password }),
+    );
+
+    const res: IbisQueryResponse = await ibisAdaptor.query(
+      'SELECT * FROM test_table',
+      {
+        dataSource: DataSourceName.POSTGRES,
+        connectionInfo: mockPostgresConnectionInfo,
+        mdl: mockManifest,
+        cacheEnabled: true,
+        refresh: true,
+      } as IbisQueryOptions,
+    );
+
+    expect(res.data).toEqual([[1]]);
+    expect(mockedAxios.post).toHaveBeenCalledWith(
+      `${ibisServerEndpoint}/v3/connector/postgres/query?cacheEnable=true&overrideCache=true`,
+      expect.any(Object),
+      expect.any(Object),
+    );
+  });
+
+  it('should use default limit when not specified', async () => {
+    mockedAxios.post.mockResolvedValue({
+      data: {
+        columns: ['id'],
+        data: [[1]],
+        dtypes: { id: 'integer' },
+      },
+      headers: {
+        'x-correlation-id': '123',
+        'x-process-time': '1s',
+      },
+    });
+    mockedEncryptor.prototype.decrypt.mockReturnValue(
+      JSON.stringify({ password: mockPostgresConnectionInfo.password }),
+    );
+
+    await ibisAdaptor.query('SELECT * FROM test_table', {
+      dataSource: DataSourceName.POSTGRES,
+      connectionInfo: mockPostgresConnectionInfo,
+      mdl: mockManifest,
+    } as IbisQueryOptions);
+
+    expect(mockedAxios.post).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Object),
+      {
+        params: {
+          limit: DEFAULT_PREVIEW_LIMIT,
+        },
+      },
+    );
+  });
+
+  it('should use custom limit when specified', async () => {
+    mockedAxios.post.mockResolvedValue({
+      data: {
+        columns: ['id'],
+        data: [[1]],
+        dtypes: { id: 'integer' },
+      },
+      headers: {
+        'x-correlation-id': '123',
+        'x-process-time': '1s',
+      },
+    });
+    mockedEncryptor.prototype.decrypt.mockReturnValue(
+      JSON.stringify({ password: mockPostgresConnectionInfo.password }),
+    );
+
+    const customLimit = 50;
+    await ibisAdaptor.query('SELECT * FROM test_table', {
+      dataSource: DataSourceName.POSTGRES,
+      connectionInfo: mockPostgresConnectionInfo,
+      mdl: mockManifest,
+      limit: customLimit,
+    } as IbisQueryOptions);
+
+    expect(mockedAxios.post).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Object),
+      {
+        params: {
+          limit: customLimit,
+        },
+      },
+    );
   });
 
   it('should throw an exception with correlationId and processTime when query fails', async () => {
