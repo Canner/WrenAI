@@ -943,9 +943,9 @@ export const typeDefs = gql`
   }
 
   type DashboardSchedule {
-    frequency: ScheduleFrequencyEnum!
-    hour: Int!
-    minute: Int!
+    frequency: ScheduleFrequencyEnum
+    hour: Int
+    minute: Int
     day: CacheScheduleDayEnum
     timezone: String
     cron: String
@@ -1015,7 +1015,7 @@ export const typeDefs = gql`
     description: String
     cacheEnabled: Boolean!
     nextScheduledAt: String
-    schedule: DashboardSchedule!
+    schedule: DashboardSchedule
     items: [DashboardItem!]!
   }
 
