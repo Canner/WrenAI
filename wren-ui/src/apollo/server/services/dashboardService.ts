@@ -417,7 +417,9 @@ export class DashboardService implements IDashboardService {
 
   protected validateScheduleInput(data: SetDashboardCacheData): void {
     const { schedule } = data;
-
+    if (!schedule) {
+      return;
+    }
     if (schedule.frequency === ScheduleFrequencyEnum.WEEKLY && !schedule.day) {
       throw new Error('Day of week is required for weekly schedule');
     }
