@@ -355,7 +355,7 @@ def post_process(classify_intent: dict, construct_db_schemas: list[str]) -> dict
 
 class IntentClassificationResult(BaseModel):
     rephrased_question: str
-    results: Literal[
+    intent: Literal[
         "MISLEADING_QUERY",
         "TEXT_TO_SQL",
         "GENERAL",
@@ -364,6 +364,7 @@ class IntentClassificationResult(BaseModel):
         "CHART",
     ]
     reasoning: str
+    sql: Optional[str] = ""
 
 
 INTENT_CLASSIFICAION_MODEL_KWARGS = {
