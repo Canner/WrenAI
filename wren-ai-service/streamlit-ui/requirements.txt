@@ -1,2 +1,4 @@
 streamlit
 pyyaml
+requests
+litellm
