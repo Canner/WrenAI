@@ -1,4 +1,5 @@
 import streamlit as st
+from pathlib import Path
 import uuid
 
 class ConfigState:
@@ -120,13 +121,45 @@ class ConfigState:
     @classmethod
     def init_apikey(cls, force=False):
         """
-        Initialize the API key input state.
-        Stores both the key-value pair and a user-editable form.
+        Initialize the API key input state from the .env file.
+
+        Loads keys from /app/data/.env where the key name ends with 'API_KEY'
+        (excluding POSTHOG_API_KEY), and stores them in both:
+        - A dictionary for runtime access (cls.API_KEY)
+        - A list of dictionaries for editable form rendering (cls.API_KEY_FORM)
+
+        Args:
+            force (bool): If True, clears and reloads the state even if already initialized.
         """
-        if cls.API_KEY not in st.session_state:
-            st.session_state[cls.API_KEY] = {}
-        if cls.API_KEY_FORM not in st.session_state:
+        env_path = Path("/app/data/.env")
+
+        # Initialize or force reload API keys
+        if force or cls.API_KEY_FORM not in st.session_state:
             st.session_state[cls.API_KEY_FORM] = []
+            st.session_state[cls.API_KEY] = {}
+
+            if env_path.exists():
+                with open(env_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+
+                        # Skip blank lines and comments
+                        if not line or line.startswith("#") or "=" not in line:
+                            continue
+
+                        key, _, value = line.partition("=")
+                        key = key.strip()
+                        value = value.strip()
+
+                        # Only load keys that end with 'API_KEY', excluding 'POSTHOG_API_KEY'
+                        if key.endswith("API_KEY") and key != "POSTHOG_API_KEY":
+                            st.session_state[cls.API_KEY_FORM].append({
+                                "id": str(uuid.uuid4()),
+                                "key": key,
+                                "value": value,
+                                "is_saved": True
+                            })
+                            st.session_state[cls.API_KEY][key] = value
 
     @classmethod
     def init_example_configs(cls, force=False):

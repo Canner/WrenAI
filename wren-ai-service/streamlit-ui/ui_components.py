@@ -56,9 +56,27 @@ def render_apikey():
             with rcol:
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.button("DEL", key=f"del_apikey_{apikey['id']}"):
+                    # Attempt to remove the API key from the .env file if it exists
+                    from pathlib import Path
+
+                    env_path = Path("/app/data/.env")
+                    key_to_delete = apikey["key"]
+
+                    if env_path.exists():
+                        with open(env_path, "r", encoding="utf-8") as f:
+                            lines = f.readlines()
+
+                        # Remove the line that starts with the specified key
+                        new_lines = [line for line in lines if not line.strip().startswith(f"{key_to_delete}=")]
+
+                        with open(env_path, "w", encoding="utf-8") as f:
+                            f.writelines(new_lines)
+
+                    # Remove the key from both the environment and session state
                     os.environ.pop(apikey["key"], None)
                     add_api_key.pop(apikey["key"], None)
                     add_api_key_form[:] = [item for item in add_api_key_form if item["id"] != apikey["id"]]
+
                     st.rerun()
 
         if st.button("SAVE", key="save_apikey"):
@@ -85,6 +103,45 @@ def render_apikey():
 
             for item in add_api_key_form:
                 item["is_saved"] = True
+
+            # ✅ Overwrite or append keys to /app/data/.env
+            from pathlib import Path
+
+            env_path = Path("/app/data/.env")
+            existing_lines = []
+
+            # Read existing lines if the .env file exists
+            if env_path.exists():
+                with open(env_path, "r", encoding="utf-8") as f:
+                    existing_lines = f.readlines()
+
+            new_lines = []
+            seen_keys = set()
+
+            # First, update values of keys that already exist in the .env file
+            for line in existing_lines:
+                if "=" in line:
+                    k, _, v = line.partition("=")
+                    k = k.strip()
+                    if k in processed_keys:
+                        new_lines.append(f"{k}={processed_keys[k]}\n")
+                        seen_keys.add(k)
+                    else:
+                        new_lines.append(line)
+                else:
+                    new_lines.append(line)
+
+            # Then, append any new keys that were not seen in the existing file
+            for k, v in processed_keys.items():
+                if k not in seen_keys:
+                    new_lines.append(f"{k}={v}\n")
+
+            # Write updated lines back to the .env file
+            with open(env_path, "w", encoding="utf-8") as f:
+                f.writelines(new_lines)
+
+            st.success("API keys saved to .env.")
+
             st.rerun()
 
 def render_llm_config():
@@ -346,11 +403,28 @@ def render_preview_and_generate(engine_blocks, pipeline_block, settings_block):
 
     st.json(preview_blocks)
 
-    if st.button("Generate config.yaml"):
+    if st.button("Generate config.yaml", key="generate_config_yaml"):
         from constants import CONFIG_OUT_PATH
         with open(CONFIG_OUT_PATH, "w", encoding="utf-8") as f:
             yaml.dump_all(generate_yaml_blocks, f, sort_keys=False, allow_unicode=True)
         st.success(f"Config saved to {CONFIG_OUT_PATH.resolve()}")
+
+def render_finished_setting():
+    """
+    Render a button to mark configuration as complete.
+    This writes 'true' to the config.done file and notifies the user.
+    """
+    if st.button("FINISHED SETTING", key="finished_configuration_setting"):
+        from constants import CONFIG_DONE_PATH
+        try:
+            # Overwrite the config.done file to signal setup completion
+            with open(CONFIG_DONE_PATH, "w", encoding="utf-8") as f:
+                f.write("true\n")
+
+            st.success("✅ Configuration completed. Please return to the CLI.")
+        except Exception as e:
+            st.error(f"❌ Failed to mark as finished: {e}")
+
 
 
 

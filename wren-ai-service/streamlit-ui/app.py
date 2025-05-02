@@ -7,7 +7,8 @@ from ui_components import (
     render_import_yaml, 
     render_pipeline_config,
     render_preview_and_generate,
-    render_apikey
+    render_apikey,
+    render_finished_setting
 )
 import streamlit as st
 
@@ -64,3 +65,6 @@ with col1:
 with col2:
     # Final preview and export of the combined configuration as YAML
     render_preview_and_generate(engine_blocks, pipeline_block, settings_block)
+    
+    # Signal that configuration is complete and ready for CLI continuation
+    render_finished_setting()
