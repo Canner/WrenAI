@@ -200,6 +200,39 @@ func Launch() {
 		}
 	}
 
+	if strings.ToLower(llmProvider) == "custom" {
+		containerName := "wrenai-streamlitui"
+
+		// 🧹 Remove any existing container (whether running or stopped)
+		if err := utils.RemoveContainerIfExists(containerName); err != nil {
+			pterm.Warning.Println("⚠️ Failed to remove existing container:", err)
+		}
+
+		// 🔨 Build and start the Streamlit UI container
+		err := utils.RunStreamlitUIContainer()
+		if err != nil {
+			pterm.Error.Println("❌ Failed to start Streamlit UI:", err)
+			return
+		}
+
+		pterm.Info.Println("🚀 UI container started at http://localhost:8501")
+
+		// ✅ Wait for user to complete configuration in the UI
+		pterm.Info.Println("⌛ Waiting for user to finish UI configuration...")
+		for {
+			if utils.IsCustomConfigReady() {
+				pterm.Info.Println("✅ Detected config.done. Proceeding...")
+				break
+			}
+			time.Sleep(3 * time.Second)
+		}
+
+		// 🧹 Clean up container after config is complete
+		if err := utils.RemoveContainerIfExists(containerName); err != nil {
+			pterm.Warning.Println("⚠️ Failed to remove existing container:", err)
+		}
+	}
+
 	// ask for telemetry consent
 	pterm.Print("\n")
 	telemetryEnabled, err := evaluateTelemetryPreferences()

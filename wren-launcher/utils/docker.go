@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path"
 	"regexp"
 	"strings"
@@ -24,7 +25,7 @@ import (
 
 const (
 	// please change the version when the version is updated
-	WREN_PRODUCT_VERSION	string = "0.22.0"
+	WREN_PRODUCT_VERSION    string = "0.22.0"
 	DOCKER_COMPOSE_YAML_URL string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/docker-compose.yaml"
 	DOCKER_COMPOSE_ENV_URL  string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/.env.example"
 	AI_SERVICE_CONFIG_URL   string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/config.example.yaml"
@@ -508,4 +509,87 @@ func CheckAIServiceStarted(url string) error {
 		return fmt.Errorf("AI service is not started yet")
 	}
 	return nil
+}
+
+// getWrenAIDir returns the path to the user's ~/.wrenai directory.
+func getWrenAIDir() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return path.Join(homeDir, ".wrenai"), nil
+}
+
+// RunStreamlitUIContainer builds and runs the Streamlit UI container.
+// It ensures that config.yaml, .env, and config.done are mounted,
+// and initializes config.done with 'false' for setup flow control.
+func RunStreamlitUIContainer() error {
+	// Build the Docker image for the Streamlit UI
+	buildCmd := exec.Command("docker", "build", "-t", "wrenai-streamlitui", "../wren-ai-service/streamlit-ui")
+	buildOutput, err := buildCmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("build failed: %v\n%s", err, string(buildOutput))
+	}
+
+	// Resolve the ~/.wrenai directory
+	wrenAIDir, err := getWrenAIDir()
+	if err != nil {
+		return fmt.Errorf("failed to get ~/.wrenai: %v", err)
+	}
+
+	// Initialize config.done with 'false'
+	donePath := path.Join(wrenAIDir, "config.done")
+	err = os.WriteFile(donePath, []byte("false"), 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write to config.done: %v", err)
+	}
+
+	// Mount user config.yaml and .env for the UI to read/write
+	configPath := path.Join(wrenAIDir, "config.yaml")
+	envPath := path.Join(wrenAIDir, ".env")
+
+	runCmd := exec.Command("docker", "run", "--rm", "-d",
+		"-p", "8501:8501",
+		"--name", "wrenai-streamlitui",
+		"-v", configPath+":/app/data/config.yaml",
+		"-v", envPath+":/app/data/.env",
+		"-v", donePath+":/app/data/config.done",
+		"wrenai-streamlitui",
+	)
+	runOutput, err := runCmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("run failed: %v\n%s", err, string(runOutput))
+	}
+
+	return nil
+}
+
+// RemoveContainerIfExists forcibly removes a Docker container if it exists.
+func RemoveContainerIfExists(name string) error {
+	cmd := exec.Command("docker", "rm", "-f", name)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to force-remove container: %v\n%s", err, string(out))
+	}
+	pterm.Info.Println("🧹 Container forcibly removed:", name)
+	return nil
+}
+
+// IsCustomConfigReady checks whether the config.done file contains 'true',
+// indicating that the Streamlit configuration process is complete.
+func IsCustomConfigReady() bool {
+	wrenAIDir, err := getWrenAIDir()
+	if err != nil {
+		return false
+	}
+
+	configDonePath := path.Join(wrenAIDir, "config.done")
+	data, err := os.ReadFile(configDonePath)
+	if err != nil {
+		return false
+	}
+
+	// Trim whitespace and compare case-insensitively
+	trimmed := strings.TrimSpace(string(data))
+	return strings.EqualFold(trimmed, "true")
 }
