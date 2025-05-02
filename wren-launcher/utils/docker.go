@@ -511,44 +511,79 @@ func CheckAIServiceStarted(url string) error {
 	return nil
 }
 
-// getWrenAIDir returns the path to the user's ~/.wrenai directory.
-func getWrenAIDir() (string, error) {
+func TryGetWrenAIDir() (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return path.Join(homeDir, ".wrenai"), nil
+	wrenDir := path.Join(homeDir, ".wrenai")
+
+	info, err := os.Stat(wrenDir)
+	if err != nil || !info.IsDir() {
+		return "", nil // 不存在或不是資料夾，就視為跳過
+	}
+	return wrenDir, nil
 }
 
 // RunStreamlitUIContainer builds and runs the Streamlit UI container.
 // It ensures that config.yaml, .env, and config.done are mounted,
 // and initializes config.done with 'false' for setup flow control.
 func RunStreamlitUIContainer() error {
+
 	// Build the Docker image for the Streamlit UI
-	buildCmd := exec.Command("docker", "build", "-t", "wrenai-streamlitui", "../wren-ai-service/streamlit-ui")
-	buildOutput, err := buildCmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("build failed: %v\n%s", err, string(buildOutput))
+	if err := buildStreamlitImage(); err != nil {
+		return err
 	}
 
-	// Resolve the ~/.wrenai directory
-	wrenAIDir, err := getWrenAIDir()
+	// Get ~/.wrenai directory
+	wrenAIDir, err := TryGetWrenAIDir()
 	if err != nil {
 		return fmt.Errorf("failed to get ~/.wrenai: %v", err)
 	}
 
 	// Initialize config.done with 'false'
-	donePath := path.Join(wrenAIDir, "config.done")
-	err = os.WriteFile(donePath, []byte("false"), 0644)
+	donePath, err := prepareConfigDoneFile(wrenAIDir)
 	if err != nil {
 		return fmt.Errorf("failed to write to config.done: %v", err)
 	}
 
 	// Mount user config.yaml and .env for the UI to read/write
-	configPath := path.Join(wrenAIDir, "config.yaml")
-	envPath := path.Join(wrenAIDir, ".env")
+	configPath, envPath, _ := getMountPaths(wrenAIDir)
 
-	runCmd := exec.Command("docker", "run", "--rm", "-d",
+	// run docker and mount volume
+	if err := runStreamlitContainer(configPath, envPath, donePath); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func buildStreamlitImage() error {
+	cmd := exec.Command("docker", "build", "-t", "wrenai-streamlitui", "../wren-ai-service/streamlit-ui")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("build failed: %v\n%s", err, output)
+	}
+	return nil
+}
+
+func prepareConfigDoneFile(wrenAIDir string) (string, error) {
+	donePath := path.Join(wrenAIDir, "config.done")
+	err := os.WriteFile(donePath, []byte("false"), 0644)
+	if err != nil {
+		return "", fmt.Errorf("failed to write config.done: %v", err)
+	}
+	return donePath, nil
+}
+
+func getMountPaths(wrenDir string) (string, string, string) {
+	return path.Join(wrenDir, "config.yaml"),
+		path.Join(wrenDir, ".env"),
+		path.Join(wrenDir, "config.done")
+}
+
+func runStreamlitContainer(configPath, envPath, donePath string) error {
+	cmd := exec.Command("docker", "run", "--rm", "-d",
 		"-p", "8501:8501",
 		"--name", "wrenai-streamlitui",
 		"-v", configPath+":/app/data/config.yaml",
@@ -556,21 +591,29 @@ func RunStreamlitUIContainer() error {
 		"-v", donePath+":/app/data/config.done",
 		"wrenai-streamlitui",
 	)
-	runOutput, err := runCmd.CombinedOutput()
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("run failed: %v\n%s", err, string(runOutput))
+		return fmt.Errorf("run failed: %v\n%s", err, output)
 	}
-
 	return nil
 }
 
 // RemoveContainerIfExists forcibly removes a Docker container if it exists.
 func RemoveContainerIfExists(name string) error {
+	// 內嵌 container 存在判斷
+	err := exec.Command("docker", "inspect", name).Run()
+	if err != nil {
+		pterm.Info.Println("🔍 Container does not exist, skipping:", name)
+		return nil
+	}
+
+	// 確實存在才刪除
 	cmd := exec.Command("docker", "rm", "-f", name)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to force-remove container: %v\n%s", err, string(out))
 	}
+
 	pterm.Info.Println("🧹 Container forcibly removed:", name)
 	return nil
 }
@@ -578,7 +621,7 @@ func RemoveContainerIfExists(name string) error {
 // IsCustomConfigReady checks whether the config.done file contains 'true',
 // indicating that the Streamlit configuration process is complete.
 func IsCustomConfigReady() bool {
-	wrenAIDir, err := getWrenAIDir()
+	wrenAIDir, err := TryGetWrenAIDir()
 	if err != nil {
 		return false
 	}
