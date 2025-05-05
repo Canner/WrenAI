@@ -545,9 +545,7 @@ class ConversationService:
         query_id = conversation_request.query_id
         user_query = conversation_request.query
         project_id = conversation_request.project_id
-        histories = conversation_request.histories[: self._max_histories][
-            ::-1
-        ]  # reverse the order of histories
+        histories = conversation_request.histories[: self._max_histories]
         configurations = conversation_request.configurations
         sql_data = conversation_request.sql_data
         chart_schema = conversation_request.chart_schema
