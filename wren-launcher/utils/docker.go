@@ -295,14 +295,52 @@ func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostP
 			return err
 		}
 	} else if strings.ToLower(llmProvider) == "custom" {
-		// if .env file does not exist, return error
-		if _, err := os.Stat(getEnvFilePath(projectDir)); os.IsNotExist(err) {
-			return fmt.Errorf(".env file does not exist, please download the env file from %s to ~/.wrenai, rename it to .env and fill in the required information", DOCKER_COMPOSE_ENV_URL)
+
+		// Generate or load existing USER_UUID
+		userUUID, err := prepareUserUUID(projectDir)
+		if err != nil {
+			return err
 		}
 
-		// if config.yaml file does not exist, return error
-		if _, err := os.Stat(getConfigFilePath(projectDir)); os.IsNotExist(err) {
-			return fmt.Errorf("config.yaml file does not exist, please download the config.yaml file from %s to ~/.wrenai, rename it to config.yaml and fill in the required information", AI_SERVICE_CONFIG_URL)
+		// Ensure .env exists (download if missing)
+		envFilePath := getEnvFilePath(projectDir)
+		if _, err := os.Stat(envFilePath); os.IsNotExist(err) {
+			pterm.Println(".env file not found, downloading from default URL...")
+			err = downloadFile(envFilePath, DOCKER_COMPOSE_ENV_URL)
+			if err != nil {
+				return fmt.Errorf("failed to download .env: %v", err)
+			}
+
+			// Read downloaded .env content
+			contentBytes, err := os.ReadFile(envFilePath)
+			if err != nil {
+				return fmt.Errorf("failed to read .env: %v", err)
+			}
+			str := string(contentBytes)
+
+			// Replace or append USER_UUID
+			reg := regexp.MustCompile(`(?m)^USER_UUID=.*$`)
+			if reg.MatchString(str) {
+				str = reg.ReplaceAllString(str, "USER_UUID="+userUUID)
+			} else {
+				str = str + "\nUSER_UUID=" + userUUID + "\n"
+			}
+
+			// Save updated .env file
+			err = os.WriteFile(envFilePath, []byte(str), 0644)
+			if err != nil {
+				return fmt.Errorf("failed to write updated .env: %v", err)
+			}
+		}
+
+		// Ensure config.yaml exists (download if missing)
+		configFilePath := getConfigFilePath(projectDir)
+		if _, err := os.Stat(configFilePath); os.IsNotExist(err) {
+			pterm.Println("config.yaml not found, downloading from default URL...")
+			err = downloadFile(configFilePath, AI_SERVICE_CONFIG_URL)
+			if err != nil {
+				return fmt.Errorf("failed to download config.yaml: %v", err)
+			}
 		}
 	}
 
@@ -525,6 +563,13 @@ func TryGetWrenAIDir() (string, error) {
 	return wrenDir, nil
 }
 
+func ensureFileExists(filePath string, defaultContent []byte) error {
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return os.WriteFile(filePath, defaultContent, 0644)
+	}
+	return nil
+}
+
 // RunStreamlitUIContainer builds and runs the Streamlit UI container.
 // It ensures that config.yaml, .env, and config.done are mounted,
 // and initializes config.done with 'false' for setup flow control.
@@ -549,6 +594,8 @@ func RunStreamlitUIContainer() error {
 
 	// Mount user config.yaml and .env for the UI to read/write
 	configPath, envPath, _ := getMountPaths(wrenAIDir)
+	_ = ensureFileExists(configPath, []byte("# Create a temporary yaml file"))
+	_ = ensureFileExists(envPath, []byte("# Put your API keys here\n"))
 
 	// run docker and mount volume
 	if err := runStreamlitContainer(configPath, envPath, donePath); err != nil {
@@ -567,11 +614,14 @@ func buildStreamlitImage() error {
 	return nil
 }
 
+// prepareConfigDoneFile creates or overwrites the config.done file,
+// marking the UI configuration state as "not finished" by default ("false").
+// Returns the full path to config.done and any error.
 func prepareConfigDoneFile(wrenAIDir string) (string, error) {
 	donePath := path.Join(wrenAIDir, "config.done")
 	err := os.WriteFile(donePath, []byte("false"), 0644)
 	if err != nil {
-		return "", fmt.Errorf("failed to write config.done: %v", err)
+		return "", fmt.Errorf("❌ Failed to write config.done: %v", err)
 	}
 	return donePath, nil
 }
@@ -582,6 +632,9 @@ func getMountPaths(wrenDir string) (string, string, string) {
 		path.Join(wrenDir, "config.done")
 }
 
+// runStreamlitContainer starts the Streamlit UI Docker container with the given bind-mount paths.
+// It maps port 8501 and runs the container in detached mode.
+// Returns an error if the container fails to start.
 func runStreamlitContainer(configPath, envPath, donePath string) error {
 	cmd := exec.Command("docker", "run", "--rm", "-d",
 		"-p", "8501:8501",
@@ -591,27 +644,29 @@ func runStreamlitContainer(configPath, envPath, donePath string) error {
 		"-v", donePath+":/app/data/config.done",
 		"wrenai-streamlitui",
 	)
+
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("run failed: %v\n%s", err, output)
+		return fmt.Errorf("❌ Failed to run Streamlit UI container: %v\n%s", err, output)
 	}
 	return nil
 }
 
-// RemoveContainerIfExists forcibly removes a Docker container if it exists.
+// RemoveContainerIfExists forcibly removes the specified Docker container
+// if it currently exists (running or stopped). Logs the removal result.
 func RemoveContainerIfExists(name string) error {
-	// 內嵌 container 存在判斷
+	// Check if the container exists (inspect will fail if not)
 	err := exec.Command("docker", "inspect", name).Run()
 	if err != nil {
 		pterm.Info.Println("🔍 Container does not exist, skipping:", name)
 		return nil
 	}
 
-	// 確實存在才刪除
+	// Remove container forcefully
 	cmd := exec.Command("docker", "rm", "-f", name)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to force-remove container: %v\n%s", err, string(out))
+		return fmt.Errorf("❌ Failed to force-remove container: %v\n%s", err, string(out))
 	}
 
 	pterm.Info.Println("🧹 Container forcibly removed:", name)
