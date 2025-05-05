@@ -180,6 +180,7 @@ class AskService:
         pipelines: Dict[str, BasicPipeline],
         allow_intent_classification: bool = True,
         allow_sql_generation_reasoning: bool = True,
+        allow_sql_functions_retrieval: bool = True,
         enable_column_pruning: bool = False,
         max_histories: int = 5,
         maxsize: int = 1_000_000,
@@ -193,6 +194,7 @@ class AskService:
             maxsize=maxsize, ttl=ttl
         )
         self._allow_sql_generation_reasoning = allow_sql_generation_reasoning
+        self._allow_sql_functions_retrieval = allow_sql_functions_retrieval
         self._allow_intent_classification = allow_intent_classification
         self._enable_column_pruning = enable_column_pruning
         self._max_histories = max_histories
@@ -242,6 +244,7 @@ class AskService:
         enable_column_pruning = (
             self._enable_column_pruning or ask_request.enable_column_pruning
         )
+        allow_sql_functions_retrieval = self._allow_sql_functions_retrieval
 
         try:
             user_query = ask_request.query
@@ -499,9 +502,14 @@ class AskService:
                     is_followup=True if histories else False,
                 )
 
-                sql_functions = await self._pipelines["sql_functions_retrieval"].run(
-                    project_id=ask_request.project_id,
-                )
+                if allow_sql_functions_retrieval:
+                    sql_functions = await self._pipelines[
+                        "sql_functions_retrieval"
+                    ].run(
+                        project_id=ask_request.project_id,
+                    )
+                else:
+                    sql_functions = []
 
                 has_calculated_field = _retrieval_result.get(
                     "has_calculated_field", False
