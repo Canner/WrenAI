@@ -162,6 +162,7 @@ settings:
   query_cache_maxsize: 1000
   allow_intent_classification: true
   allow_sql_generation_reasoning: true
+  allow_sql_functions_retrieval: true
   enable_column_pruning: false
   query_cache_ttl: 3600
   langfuse_host: https://cloud.langfuse.com
