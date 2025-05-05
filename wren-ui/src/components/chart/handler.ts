@@ -57,8 +57,11 @@ const pickedColorScheme = [
 const DEFAULT_COLOR = colorScheme[2];
 
 // type EncodingFieldType = 'quantitative' | 'nominal' | 'temporal';
-type DataSpec = Extract<TopLevelSpec, { data?: any }>['data'];
-type EncodingSpec = Extract<TopLevelSpec, { encoding?: any }>['encoding'];
+type DataSpec = { values: Record<string, any>[] };
+type EncodingSpec = Extract<TopLevelSpec, { encoding?: any }>['encoding'] & {
+  x: { type: string; field: string };
+  y: { type: string; field: string };
+};
 type MarkSpec = Extract<TopLevelSpec, { mark?: any }>['mark'] extends
   | string
   | infer M
@@ -151,7 +154,7 @@ export default class ChartSpecHandler {
 
   constructor(spec: TopLevelSpec, options?: ChartOptions) {
     this.config = config;
-    this.data = spec.data;
+    this.data = spec.data as DataSpec;
     this.autosize = { type: 'fit', contains: 'padding' };
     this.params = [
       {
@@ -214,6 +217,9 @@ export default class ChartSpecHandler {
       this.title = null;
     }
 
+    // transform values
+    this.data = this.transformDataValues(this.data, this.encoding);
+
     return {
       $schema: this.$schema,
       title: this.title,
@@ -242,11 +248,13 @@ export default class ChartSpecHandler {
     if ('encoding' in spec) {
       // filter top categories before encoding scale calculation
       if (this.options?.isShowTopCategories) {
-        const filteredData = this.filterTopCategories(spec.encoding);
+        const filteredData = this.filterTopCategories(
+          spec.encoding as EncodingSpec,
+        );
         if (filteredData) this.data = filteredData;
       }
 
-      this.addEncoding(spec.encoding);
+      this.addEncoding(spec.encoding as EncodingSpec);
     }
   }
 
@@ -405,6 +413,45 @@ export default class ChartSpecHandler {
       (axis) => encoding[axis]?.field === field && encoding[axis]?.title,
     ) as any;
     return encoding[axis]?.title || undefined;
+  }
+
+  private transformDataValues(
+    data: DataSpec,
+    encoding: {
+      x: { type: string; field: string };
+      y: { type: string; field: string };
+    },
+  ) {
+    // If axis x is temporal
+    if (encoding.x.type === 'temporal') {
+      const transformedValues = data.values.map((val) => ({
+        ...val,
+        [encoding.x.field]: this.transformTemporalValue(val[encoding.x.field]),
+      }));
+      return { ...data, values: transformedValues };
+    }
+    // If axis y is temporal
+    if (encoding.y.type === 'temporal') {
+      const transformedValues = data.values.map((val) => ({
+        ...val,
+        [encoding.y.field]: this.transformTemporalValue(val[encoding.y.field]),
+      }));
+      return { ...data, values: transformedValues };
+    }
+    return data;
+  }
+
+  private transformTemporalValue(value: string | any) {
+    if (value === null || value === undefined) {
+      return value;
+    }
+    const strValue = typeof value === 'string' ? value : String(value);
+    // Safari not support if containing "YYYY-MM-DD HH:mm:ss.SSS UTC+00:00"
+    // so we remove the UTC+00:00 for compatibility
+    if (strValue.includes('UTC')) {
+      return strValue.replace(/\s+UTC\+[0-9]+(:?[0-9]+)?/, '');
+    }
+    return strValue;
   }
 }
 
