@@ -42,16 +42,17 @@ def check_finish_reason(message: ChatMessage) -> None:
     """
     if message.meta["finish_reason"] == "length":
         logger.warning(
-            "The completion for index {index} has been truncated before reaching a natural stopping point. "
-            "Increase the max_tokens parameter to allow for longer completions.",
-            index=message.meta["index"],
-            finish_reason=message.meta["finish_reason"],
+            "The completion for index %s has been truncated before reaching a natural stopping point. "
+            "Finish reason: %s. Increase the max_tokens parameter to allow for longer completions.",
+            message.meta["index"],
+            message.meta["finish_reason"],
         )
     if message.meta["finish_reason"] == "content_filter":
         logger.warning(
-            "The completion for index {index} has been truncated due to the content filter.",
-            index=message.meta["index"],
-            finish_reason=message.meta["finish_reason"],
+            "The completion for index %s has been truncated due to the content filter. "
+            "Finish reason: %s.",
+            message.meta["index"],
+            message.meta["finish_reason"],
         )
 
 
