@@ -547,19 +547,23 @@ class ConversationService:
                 trace_id,
             )
 
-            if not await self._query_event_manager.emit_content_block(
-                query_id,
-                trace_id,
-                index=0,
-                emit_content_func=self._run_historical_question_pipeline,
-                emit_content_func_kwargs={
-                    "query": user_query,
-                    "project_id": project_id,
-                },
-                content_block_label="HISTORICAL_QUESTION_RETRIEVAL",
-                block_type="tool_use",
-                should_put_in_conversation_history=True,
-            ):
+            historical_question_result = (
+                await self._query_event_manager.emit_content_block(
+                    query_id,
+                    trace_id,
+                    index=0,
+                    emit_content_func=self._run_historical_question_pipeline,
+                    emit_content_func_kwargs={
+                        "query": user_query,
+                        "project_id": project_id,
+                    },
+                    content_block_label="HISTORICAL_QUESTION_RETRIEVAL",
+                    block_type="tool_use",
+                    should_put_in_conversation_history=True,
+                )
+            )
+
+            if not historical_question_result:
                 sql_samples = await self._query_event_manager.emit_content_block(
                     query_id,
                     trace_id,
@@ -630,6 +634,7 @@ class ConversationService:
                             "language": configurations.language,
                             "query_id": query_id,
                         },
+                        content_block_label="MISLEADING_QUERY_ASSISTANCE",
                         block_type="text",
                         stream=True,
                     )
@@ -646,6 +651,7 @@ class ConversationService:
                             "language": configurations.language,
                             "query_id": query_id,
                         },
+                        content_block_label="GENERAL_ASSISTANCE",
                         block_type="text",
                         stream=True,
                     )
@@ -660,6 +666,7 @@ class ConversationService:
                             "language": configurations.language,
                             "query_id": query_id,
                         },
+                        content_block_label="USER_GUIDE_ASSISTANCE",
                         block_type="text",
                         stream=True,
                     )
@@ -675,6 +682,7 @@ class ConversationService:
                             "language": configurations.language,
                             "query_id": query_id,
                         },
+                        content_block_label="DATA_EXPLORATION",
                         block_type="text",
                         stream=True,
                     )
@@ -905,9 +913,33 @@ class ConversationService:
                                     "configurations": configurations,
                                     "query_id": query_id,
                                 },
+                                content_block_label="SQL_ANSWER",
                                 block_type="text",
                                 stream=True,
                             )
+            else:
+                sql = historical_question_result["sql"]
+                sql_data = await self._run_sql_executor(
+                    sql=sql,
+                    project_id=project_id,
+                )
+
+                await self._query_event_manager.emit_content_block(
+                    query_id,
+                    trace_id,
+                    index=8,
+                    emit_content_func=self._run_sql_answer,
+                    emit_content_func_kwargs={
+                        "query": user_query,
+                        "sql": sql,
+                        "sql_data": sql_data,
+                        "configurations": configurations,
+                        "query_id": query_id,
+                    },
+                    content_block_label="SQL_ANSWER",
+                    block_type="text",
+                    stream=True,
+                )
 
             await self._query_event_manager.emit_message_stop(
                 query_id,
