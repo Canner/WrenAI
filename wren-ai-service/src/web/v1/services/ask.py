@@ -749,7 +749,6 @@ class AskService:
                     retrieval_task,
                     sql_samples_task,
                     instructions_task,
-                    sql_functions,
                 ) = await asyncio.gather(
                     self._pipelines["retrieval"].run(
                         tables=ask_feedback_request.tables,
@@ -763,10 +762,16 @@ class AskService:
                         query=ask_feedback_request.question,
                         project_id=ask_feedback_request.project_id,
                     ),
-                    self._pipelines["sql_functions_retrieval"].run(
-                        project_id=ask_feedback_request.project_id,
-                    ),
                 )
+
+                if self._allow_sql_functions_retrieval:
+                    sql_functions = await self._pipelines[
+                        "sql_functions_retrieval"
+                    ].run(
+                        project_id=ask_feedback_request.project_id,
+                    )
+                else:
+                    sql_functions = []
 
                 # Extract results from completed tasks
                 _retrieval_result = retrieval_task.get(
