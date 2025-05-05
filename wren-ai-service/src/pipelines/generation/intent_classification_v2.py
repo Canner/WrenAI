@@ -43,6 +43,7 @@ Classify the intent into one of these categories: `MISLEADING_QUERY`, `TEXT_TO_S
 **Requirements:**
 - SQL DATA is provided and the user's question is about exploring the data.
 - The user's question can be answered by the SQL DATA.
+- The row size of the SQL DATA is less than 500.
 
 **Examples:**  
 - "Show me the part where the data appears abnormal"
@@ -164,6 +165,8 @@ SQL:
 {% if sql_data %}
 ### SQL DATA ###
 {{ sql_data }}
+
+row size of SQL DATA: {{ sql_data_size }}
 {% endif %}
 
 {% if chart_schema %}
@@ -320,6 +323,7 @@ def prompt(
         current_time=configuration.show_current_time(),
         docs=wren_ai_docs,
         sql_data=sql_data,
+        sql_data_size=len(sql_data.get("data", [])),
         chart_schema=chart_schema,
     )
 

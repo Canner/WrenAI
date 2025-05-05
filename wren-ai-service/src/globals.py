@@ -339,9 +339,6 @@ def create_service_container(
                     **pipe_components["sql_executor"],
                     engine_timeout=settings.engine_timeout,
                 ),
-                "preprocess_sql_data": retrieval.PreprocessSqlData(
-                    **pipe_components["preprocess_sql_data"],
-                ),
                 "sql_answer": generation.SQLAnswer(
                     **pipe_components["sql_answer"],
                     engine_timeout=settings.engine_timeout,

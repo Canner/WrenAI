@@ -494,16 +494,7 @@ class ConversationService:
             )
         )["execute_sql"]["results"]
 
-        preprocessed_sql_data = (
-            self._pipelines["preprocess_sql_data"]
-            .run(
-                sql_data=sql_data,
-            )
-            .get("preprocess", {})
-            .get("sql_data", {})
-        )
-
-        return preprocessed_sql_data
+        return sql_data
 
     def _run_sql_answer(
         self,
