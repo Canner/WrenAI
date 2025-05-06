@@ -176,21 +176,24 @@ async def dbschema_retrieval(
         for table_name in table_names
     ]
 
-    filters = {
-        "operator": "AND",
-        "conditions": [
-            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
-            {"operator": "OR", "conditions": table_name_conditions},
-        ],
-    }
+    if table_name_conditions:
+        filters = {
+            "operator": "AND",
+            "conditions": [
+                {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
+                {"operator": "OR", "conditions": table_name_conditions},
+            ],
+        }
 
-    if project_id:
-        filters["conditions"].append(
-            {"field": "project_id", "operator": "==", "value": project_id}
-        )
+        if project_id:
+            filters["conditions"].append(
+                {"field": "project_id", "operator": "==", "value": project_id}
+            )
 
-    results = await dbschema_retriever.run(query_embedding=[], filters=filters)
-    return results["documents"]
+        results = await dbschema_retriever.run(query_embedding=[], filters=filters)
+        return results["documents"]
+
+    return []
 
 
 @observe()

@@ -104,11 +104,9 @@ class SqlCorrectionService:
 
             if not valid:
                 error_message = invalid[0]["error"]
-                error_code = invalid[0]["type"]
                 self._handle_exception(
                     event_id,
                     f"An error occurred during SQL correction: {error_message}",
-                    code=error_code,
                     trace_id=trace_id,
                 )
             else:
