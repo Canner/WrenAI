@@ -303,7 +303,7 @@ class ConversationService:
         project_id: str,
     ):
         retrieval_results = (
-            await self._pipelines["retrieval"].run(
+            await self._pipelines["db_schema_retrieval"].run(
                 query=query,
                 histories=convert_conversation_history_to_ask_history(histories),
                 project_id=project_id,

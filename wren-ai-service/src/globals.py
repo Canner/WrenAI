@@ -290,7 +290,7 @@ def create_service_container(
                 "data_exploration_assistance": generation.DataExplorationAssistance(
                     **pipe_components["data_exploration_assistance"],
                 ),
-                "retrieval": retrieval.Retrieval(
+                "db_schema_retrieval": retrieval.DbSchemaRetrieval(
                     **pipe_components["db_schema_retrieval"],
                     table_retrieval_size=settings.table_retrieval_size,
                     table_column_retrieval_size=settings.table_column_retrieval_size,
