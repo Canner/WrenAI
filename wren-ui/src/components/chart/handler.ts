@@ -449,7 +449,7 @@ export default class ChartSpecHandler {
     // Safari not support if containing "YYYY-MM-DD HH:mm:ss.SSS UTC+00:00"
     // so we remove the UTC+00:00 for compatibility
     if (strValue.includes('UTC')) {
-      return strValue.replace(/\s+UTC[+-][0-9]+(:?[0-9]+)?/, '');
+      return strValue.replace(/\s+UTC[+-][0-9]+(:[0-9]+)?/, '');
     }
     return strValue;
   }
