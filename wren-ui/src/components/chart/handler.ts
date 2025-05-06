@@ -418,12 +418,12 @@ export default class ChartSpecHandler {
   private transformDataValues(
     data: DataSpec,
     encoding: {
-      x: { type: string; field: string };
-      y: { type: string; field: string };
+      x?: { type?: string; field?: string };
+      y?: { type?: string; field?: string };
     },
   ) {
     // If axis x is temporal
-    if (encoding.x.type === 'temporal') {
+    if (encoding?.x?.type === 'temporal') {
       const transformedValues = data.values.map((val) => ({
         ...val,
         [encoding.x.field]: this.transformTemporalValue(val[encoding.x.field]),
@@ -431,7 +431,7 @@ export default class ChartSpecHandler {
       return { ...data, values: transformedValues };
     }
     // If axis y is temporal
-    if (encoding.y.type === 'temporal') {
+    if (encoding?.y?.type === 'temporal') {
       const transformedValues = data.values.map((val) => ({
         ...val,
         [encoding.y.field]: this.transformTemporalValue(val[encoding.y.field]),
