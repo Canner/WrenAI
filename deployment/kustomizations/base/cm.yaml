@@ -187,6 +187,9 @@ data:
         document_store: qdrant
       - name: project_meta_indexing
         document_store: qdrant
+      - name: sql_tables_extraction
+        llm: litellm_llm.default
+
     ---
     settings:
       doc_endpoint: https://docs.getwren.ai

@@ -5,7 +5,7 @@ from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
 
 
-class RetrievalMock(retrieval.Retrieval):
+class RetrievalMock(retrieval.DbSchemaRetrieval):
     def __init__(self, documents: list = []):
         self._documents = documents
 
