@@ -145,6 +145,7 @@ def create_service_container(
             },
             allow_intent_classification=settings.allow_intent_classification,
             allow_sql_generation_reasoning=settings.allow_sql_generation_reasoning,
+            allow_sql_functions_retrieval=settings.allow_sql_functions_retrieval,
             max_histories=settings.max_histories,
             enable_column_pruning=settings.enable_column_pruning,
             **query_cache,
@@ -208,9 +209,6 @@ def create_service_container(
                     **pipe_components["question_recommendation_sql_generation"],
                     engine_timeout=settings.engine_timeout,
                 ),
-                "sql_generation_reasoning": generation.SQLGenerationReasoning(
-                    **pipe_components["sql_generation_reasoning"],
-                ),
                 "sql_pairs_retrieval": retrieval.SqlPairsRetrieval(
                     **pipe_components["sql_pairs_retrieval"],
                     sql_pairs_similarity_threshold=settings.sql_pairs_similarity_threshold,
@@ -221,7 +219,12 @@ def create_service_container(
                     similarity_threshold=settings.instructions_similarity_threshold,
                     top_k=settings.instructions_top_k,
                 ),
+                "sql_functions_retrieval": retrieval.SqlFunctions(
+                    **pipe_components["sql_functions_retrieval"],
+                    engine_timeout=settings.engine_timeout,
+                ),
             },
+            allow_sql_functions_retrieval=settings.allow_sql_functions_retrieval,
             **query_cache,
         ),
         sql_pairs_service=services.SqlPairsService(
