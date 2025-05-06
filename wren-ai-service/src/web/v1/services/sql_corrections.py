@@ -99,19 +99,22 @@ class SqlCorrectionService:
             invalid = post_process["invalid_generation_results"]
 
             if not valid:
-                error = invalid[0]["error"]
-                raise Exception(
-                    f"Unable to correct the SQL query. Error: {error}. Please try with a different SQL query or simplify your request."
+                error_message = invalid[0]["error"]
+                error_code = invalid[0]["type"]
+                self._handle_exception(
+                    request.event_id,
+                    f"An error occurred during SQL correction: {error_message}",
+                    code=error_code,
+                    trace_id=trace_id,
                 )
-
-            corrected = valid[0]["sql"]
-
-            self._cache[request.event_id] = self.Event(
-                event_id=request.event_id,
-                status="finished",
-                trace_id=trace_id,
-                response=corrected,
-            )
+            else:
+                corrected = valid[0]["sql"]
+                self._cache[request.event_id] = self.Event(
+                    event_id=request.event_id,
+                    status="finished",
+                    trace_id=trace_id,
+                    response=corrected,
+                )
 
         except Exception as e:
             self._handle_exception(
