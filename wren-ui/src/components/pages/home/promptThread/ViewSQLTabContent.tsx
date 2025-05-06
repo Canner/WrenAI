@@ -2,7 +2,16 @@ import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { useEffect } from 'react';
 import styled from 'styled-components';
-import { Button, Divider, Empty, Space, Switch, Typography } from 'antd';
+import {
+  Alert,
+  Button,
+  Divider,
+  Empty,
+  message,
+  Space,
+  Switch,
+  Typography,
+} from 'antd';
 import CheckOutlined from '@ant-design/icons/CheckOutlined';
 import CloseOutlined from '@ant-design/icons/CloseOutlined';
 import CodeFilled from '@ant-design/icons/CodeFilled';
@@ -10,6 +19,7 @@ import { BinocularsIcon } from '@/utils/icons';
 import { nextTick } from '@/utils/time';
 import useNativeSQL from '@/hooks/useNativeSQL';
 import { DATA_SOURCE_OPTIONS } from '@/components/pages/setup/utils';
+import { Logo } from '@/components/Logo';
 import { Props as AnswerResultProps } from '@/components/pages/home/promptThread/AnswerResult';
 import usePromptThreadStore from '@/components/pages/home/promptThread/store';
 import PreviewData from '@/components/dataPreview/PreviewData';
@@ -78,12 +88,49 @@ export default function ViewSQLTabContent(props: AnswerResultProps) {
     checked && fetchNativeSQL({ variables: { responseId: id } });
   };
 
+  const onCopy = () => {
+    if (!nativeSQLResult.nativeSQLMode) {
+      message.success(
+        <>
+          You copied Wren SQL. This dialect is for the Wren Engine and may not
+          run directly on your database.
+          {hasNativeSQL && (
+            <>
+              {' '}
+              Click “<b>Show original SQL</b>” to get the executable version.
+            </>
+          )}
+        </>,
+      );
+    }
+  };
+
   return (
     <div className="text-md gray-10 p-6 pb-4">
+      <Alert
+        banner
+        className="mb-3 adm-alert-info"
+        message={
+          <>
+            You’re viewing Wren SQL by default. If you want to run this query on
+            your own database, click “Show original SQL” to get the exact
+            syntax.
+            <Typography.Link
+              className="underline ml-1"
+              href="https://docs.getwren.ai/oss/guide/home/wren_sql"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Learn more about Wren SQL
+            </Typography.Link>
+          </>
+        }
+        type="info"
+      />
       <StyledPre className="p-0 mb-3">
-        <StyledToolBar className="d-flex justify-space-between text-family-base">
+        <StyledToolBar className="d-flex align-center justify-space-between text-family-base">
           <div>
-            {nativeSQLResult.nativeSQLMode && (
+            {nativeSQLResult.nativeSQLMode ? (
               <>
                 <Image
                   className="mr-2"
@@ -96,23 +143,33 @@ export default function ViewSQLTabContent(props: AnswerResultProps) {
                   {DATA_SOURCE_OPTIONS[dataSourceType].label}
                 </Text>
               </>
+            ) : (
+              <span className="d-flex align-center gx-2">
+                <Logo size={18} />
+                <Text className="gray-8 text-medium text-sm">Wren SQL</Text>
+              </span>
             )}
           </div>
           <Space split={<Divider type="vertical" className="m-0" />}>
             {showNativeSQL && (
-              <label className="d-flex align-center cursor-pointer">
+              <div
+                className="d-flex align-center cursor-pointer"
+                onClick={() =>
+                  onChangeNativeSQL(!nativeSQLResult.nativeSQLMode)
+                }
+              >
                 <Switch
                   checkedChildren={<CheckOutlined />}
                   unCheckedChildren={<CloseOutlined />}
                   className="mr-2"
                   size="small"
-                  onChange={onChangeNativeSQL}
+                  checked={nativeSQLResult.nativeSQLMode}
                   loading={nativeSQLResult.loading}
                 />
                 <Text className="gray-8 text-medium text-base">
                   Show original SQL
                 </Text>
-              </label>
+              </div>
             )}
             <Button
               type="link"
@@ -132,6 +189,7 @@ export default function ViewSQLTabContent(props: AnswerResultProps) {
           maxHeight="300"
           loading={nativeSQLResult.loading}
           copyable
+          onCopy={onCopy}
         />
       </StyledPre>
       <div className="mt-6">

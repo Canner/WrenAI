@@ -14,6 +14,7 @@ export interface BaseProps {
   maxHeight?: string;
   showLineNumbers?: boolean;
   backgroundColor?: string;
+  onCopy?: () => void;
 }
 
 const getBlockStyles = (props: {
@@ -114,6 +115,7 @@ export const createCodeBlock = (HighlightRules: any) => {
       loading,
       showLineNumbers,
       backgroundColor,
+      onCopy,
     } = props;
     const { ace } = window as any;
     const { Tokenizer } = ace.require('ace/tokenizer');
@@ -174,6 +176,7 @@ export const createCodeBlock = (HighlightRules: any) => {
             {copyable && (
               <CopyText
                 copyable={{
+                  onCopy,
                   icon: [
                     <Button
                       key="copy-icon"
