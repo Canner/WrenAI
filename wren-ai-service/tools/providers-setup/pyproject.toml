@@ -4,9 +4,10 @@ version = "0.1.0"
 description = ""
 authors = ["YI-CHIEH LU <steven.yichieh.lu@gmail.com>"]
 readme = "README.md"
+package-mode = false
 
 [tool.poetry.dependencies]
-python = ">=3.12"
+python = ">=3.12,<3.13"
 streamlit = ">=1.45.0,<2.0.0"
 pyyaml = ">=6.0.2,<7.0.0"
 requests = ">=2.32.3,<3.0.0"
