@@ -63,23 +63,27 @@ class SqlCorrectionService:
     ):
         logger.info(f"Request {request.event_id}: SQL Correction process is running...")
         trace_id = kwargs.get("trace_id")
+        event_id = request.event_id
+        sql = request.sql
+        error = request.error
+        project_id = request.project_id
 
         try:
             _invalid = {
-                "sql": request.sql,
-                "error": request.error,
+                "sql": sql,
+                "error": error,
             }
 
             tables = (
                 await self._pipelines["sql_tables_extraction"].run(
-                    sql=request.sql,
+                    sql=sql,
                 )
             )["post_process"]
 
             documents = (
                 (
                     await self._pipelines["db_schema_retrieval"].run(
-                        project_id=request.project_id,
+                        project_id=project_id,
                         tables=tables,
                     )
                 )
@@ -91,7 +95,7 @@ class SqlCorrectionService:
             res = await self._pipelines["sql_correction"].run(
                 contexts=table_ddls,
                 invalid_generation_results=[_invalid],
-                project_id=request.project_id,
+                project_id=project_id,
             )
 
             post_process = res["post_process"]
@@ -102,15 +106,15 @@ class SqlCorrectionService:
                 error_message = invalid[0]["error"]
                 error_code = invalid[0]["type"]
                 self._handle_exception(
-                    request.event_id,
+                    event_id,
                     f"An error occurred during SQL correction: {error_message}",
                     code=error_code,
                     trace_id=trace_id,
                 )
             else:
                 corrected = valid[0]["sql"]
-                self._cache[request.event_id] = self.Event(
-                    event_id=request.event_id,
+                self._cache[event_id] = self.Event(
+                    event_id=event_id,
                     status="finished",
                     trace_id=trace_id,
                     response=corrected,
@@ -118,12 +122,12 @@ class SqlCorrectionService:
 
         except Exception as e:
             self._handle_exception(
-                request.event_id,
+                event_id,
                 f"An error occurred during SQL correction: {str(e)}",
                 trace_id=trace_id,
             )
 
-        return self._cache[request.event_id].with_metadata()
+        return self._cache[event_id].with_metadata()
 
     def __getitem__(self, event_id: str) -> Event:
         response = self._cache.get(event_id)
