@@ -137,6 +137,8 @@ pipes:
     document_store: qdrant
   - name: project_meta_indexing
     document_store: qdrant
+  - name: sql_tables_extraction
+    llm: litellm_llm.default
 
 ---
 settings:
@@ -147,6 +149,7 @@ settings:
   enable_column_pruning: false
   allow_intent_classification: true
   allow_sql_generation_reasoning: true
+  allow_sql_functions_retrieval: true
   query_cache_maxsize: 1000
   query_cache_ttl: 3600
   langfuse_host: https://cloud.langfuse.com

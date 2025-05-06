@@ -208,7 +208,7 @@ class RetrievalPipeline(Eval):
         )
         deploy_model(mdl, [_db_schema_indexing, _table_description_indexing])
 
-        self._retrieval = retrieval.Retrieval(
+        self._retrieval = retrieval.DbSchemaRetrieval(
             **pipe_components["db_schema_retrieval"],
             table_retrieval_size=settings.table_retrieval_size,
             table_column_retrieval_size=settings.table_column_retrieval_size,
@@ -373,7 +373,7 @@ class AskPipeline(Eval):
         )
         deploy_model(mdl, [_db_schema_indexing, _table_description_indexing])
 
-        self._retrieval = retrieval.Retrieval(
+        self._retrieval = retrieval.DbSchemaRetrieval(
             **pipe_components["db_schema_retrieval"],
             table_retrieval_size=settings.table_retrieval_size,
             table_column_retrieval_size=settings.table_column_retrieval_size,
