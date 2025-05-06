@@ -65,7 +65,7 @@ class QuestionRecommendation:
         configuration: Optional[Configuration] = Configuration(),
     ):
         async def _document_retrieval() -> tuple[list[str], bool, bool]:
-            retrieval_result = await self._pipelines["retrieval"].run(
+            retrieval_result = await self._pipelines["db_schema_retrieval"].run(
                 query=candidate["question"],
                 project_id=project_id,
             )

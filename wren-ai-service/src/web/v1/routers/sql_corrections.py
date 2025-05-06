@@ -66,7 +66,7 @@ Results are cached with a TTL defined in the service configuration.
 class PostRequest(BaseModel):
     sql: str
     error: str
-    project_id: Optional[str] = None
+    project_id: str
 
 
 class PostResponse(BaseModel):

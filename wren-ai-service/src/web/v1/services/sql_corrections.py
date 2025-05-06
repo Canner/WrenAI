@@ -70,8 +70,26 @@ class SqlCorrectionService:
                 "error": request.error,
             }
 
+            tables = (
+                await self._pipelines["sql_tables_extraction"].run(
+                    sql=request.sql,
+                )
+            )["post_process"]
+
+            documents = (
+                (
+                    await self._pipelines["db_schema_retrieval"].run(
+                        project_id=request.project_id,
+                        tables=tables,
+                    )
+                )
+                .get("construct_retrieval_results", {})
+                .get("retrieval_results", [])
+            )
+            table_ddls = [document.get("table_ddl") for document in documents]
+
             res = await self._pipelines["sql_correction"].run(
-                contexts=[],
+                contexts=table_ddls,
                 invalid_generation_results=[_invalid],
                 project_id=request.project_id,
             )

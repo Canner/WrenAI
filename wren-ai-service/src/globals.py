@@ -97,7 +97,7 @@ def create_service_container(
                     **pipe_components["user_guide_assistance"],
                     wren_ai_docs=wren_ai_docs,
                 ),
-                "retrieval": retrieval.DbSchemaRetrieval(
+                "db_schema_retrieval": retrieval.DbSchemaRetrieval(
                     **pipe_components["db_schema_retrieval"],
                     table_retrieval_size=settings.table_retrieval_size,
                     table_column_retrieval_size=settings.table_column_retrieval_size,
@@ -200,7 +200,7 @@ def create_service_container(
                 "question_recommendation": generation.QuestionRecommendation(
                     **pipe_components["question_recommendation"],
                 ),
-                "retrieval": retrieval.DbSchemaRetrieval(
+                "db_schema_retrieval": retrieval.DbSchemaRetrieval(
                     **pipe_components["question_recommendation_db_schema_retrieval"],
                     table_retrieval_size=settings.table_retrieval_size,
                     table_column_retrieval_size=settings.table_column_retrieval_size,
@@ -254,6 +254,14 @@ def create_service_container(
         ),
         sql_correction_service=services.SqlCorrectionService(
             pipelines={
+                "sql_tables_extraction": generation.SQLTablesExtraction(
+                    **pipe_components["sql_tables_extraction"],
+                ),
+                "db_schema_retrieval": retrieval.DbSchemaRetrieval(
+                    **pipe_components["db_schema_retrieval"],
+                    table_retrieval_size=settings.table_retrieval_size,
+                    table_column_retrieval_size=settings.table_column_retrieval_size,
+                ),
                 "sql_correction": generation.SQLCorrection(
                     **pipe_components["sql_correction"],
                     engine_timeout=settings.engine_timeout,

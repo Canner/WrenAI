@@ -408,7 +408,7 @@ class AskService:
                     is_followup=True if histories else False,
                 )
 
-                retrieval_result = await self._pipelines["retrieval"].run(
+                retrieval_result = await self._pipelines["db_schema_retrieval"].run(
                     query=user_query,
                     histories=histories,
                     project_id=ask_request.project_id,
