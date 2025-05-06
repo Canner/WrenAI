@@ -750,7 +750,7 @@ class AskService:
                     sql_samples_task,
                     instructions_task,
                 ) = await asyncio.gather(
-                    self._pipelines["retrieval"].run(
+                    self._pipelines["db_schema_retrieval"].run(
                         tables=ask_feedback_request.tables,
                         project_id=ask_feedback_request.project_id,
                     ),
