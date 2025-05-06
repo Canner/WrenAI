@@ -1,6 +1,7 @@
 from .chart_adjustment import ChartAdjustment
 from .chart_generation import ChartGeneration
 from .data_assistance import DataAssistance
+from .data_exploration_assistance import DataExplorationAssistance
 from .followup_sql_generation import FollowUpSQLGeneration
 from .followup_sql_generation_reasoning import FollowUpSQLGenerationReasoning
 from .intent_classification import IntentClassification
@@ -36,4 +37,5 @@ __all__ = [
     "FollowUpSQLGenerationReasoning",
     "MisleadingAssistance",
     "SQLTablesExtraction",
+    "DataExplorationAssistance",
 ]

@@ -37,6 +37,7 @@ class ConversationHistory(BaseModel):
 class ConversationRequest(BaseModel):
     _query_id: str | None = None
     query: str
+    sql_data: Optional[Dict] = None
     project_id: Optional[str] = None
     mdl_hash: Optional[str] = None
     histories: Optional[List[ConversationHistory]] = Field(default_factory=list)
@@ -142,6 +143,7 @@ class ConversationService:
         instructions: List[QuestionResult],
         project_id: str,
         configurations: Configurations,
+        sql_data: Optional[Dict] = None,
     ):
         intent_classification_result = (
             await self._pipelines["intent_classification"].run(
@@ -151,6 +153,7 @@ class ConversationService:
                 instructions=instructions,
                 project_id=project_id,
                 configuration=configurations,
+                sql_data=sql_data,
             )
         ).get("post_process", {})
 
@@ -218,6 +221,26 @@ class ConversationService:
         )
 
         return self._pipelines["user_guide_assistance"].get_streaming_results(query_id)
+
+    def _run_data_exploration_assistance(
+        self,
+        query: str,
+        sql_data: Dict,
+        language: str,
+        query_id: str,
+    ):
+        asyncio.create_task(
+            self._pipelines["data_exploration_assistance"].run(
+                query=query,
+                sql_data=sql_data,
+                language=language,
+                query_id=query_id,
+            )
+        )
+
+        return self._pipelines["data_exploration_assistance"].get_streaming_results(
+            query_id
+        )
 
     async def _run_retrieval(
         self,
@@ -475,6 +498,7 @@ class ConversationService:
             ::-1
         ]  # reverse the order of histories
         configurations = conversation_request.configurations
+        sql_data = conversation_request.sql_data
 
         try:
             await self._query_event_manager.emit_message_start(
@@ -533,6 +557,7 @@ class ConversationService:
                             "instructions": instructions,
                             "project_id": project_id,
                             "configurations": configurations,
+                            "sql_data": sql_data,
                         },
                         content_block_label="INTENT_CLASSIFICATION",
                         block_type="tool_use",
@@ -588,6 +613,21 @@ class ConversationService:
                         emit_content_func=self._run_user_guide_assistance,
                         emit_content_func_kwargs={
                             "query": user_query,
+                            "language": configurations.language,
+                            "query_id": query_id,
+                        },
+                        block_type="text",
+                        stream=True,
+                    )
+                elif intent == "DATA_EXPLORATION":
+                    await self._query_event_manager.emit_content_block(
+                        query_id,
+                        trace_id,
+                        index=4,
+                        emit_content_func=self._run_data_exploration_assistance,
+                        emit_content_func_kwargs={
+                            "query": user_query,
+                            "sql_data": sql_data,
                             "language": configurations.language,
                             "query_id": query_id,
                         },

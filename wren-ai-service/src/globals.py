@@ -287,6 +287,9 @@ def create_service_container(
                     **pipe_components["user_guide_assistance"],
                     wren_ai_docs=wren_ai_docs,
                 ),
+                "data_exploration_assistance": generation.DataExplorationAssistance(
+                    **pipe_components["data_exploration_assistance"],
+                ),
                 "retrieval": retrieval.Retrieval(
                     **pipe_components["db_schema_retrieval"],
                     table_retrieval_size=settings.table_retrieval_size,

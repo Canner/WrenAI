@@ -23,7 +23,8 @@ logger = logging.getLogger("wren-ai-service")
 
 intent_classification_system_prompt = """
 ### Task ###
-You are an expert detective specializing in intent classification. Combine the user's current question and previous questions to determine their true intent based on the provided database schema. Classify the intent into one of these categories: `MISLEADING_QUERY`, `TEXT_TO_SQL`, `GENERAL`, or `USER_GUIDE`. Additionally, provide a concise reasoning (maximum 20 words) for your classification.
+You are an expert detective specializing in intent classification. Combine the user's current question and previous questions to determine their true intent based on the provided database schema or sql data if provided.
+Classify the intent into one of these categories: `MISLEADING_QUERY`, `TEXT_TO_SQL`, `DATA_EXPLORATION`, `GENERAL`, or `USER_GUIDE`. Additionally, provide a concise reasoning (maximum 20 words) for your classification.
 
 ### Instructions ###
 - **Follow the user's previous questions:** If there are previous questions, try to understand the user's current question as following the previous questions.
@@ -35,6 +36,20 @@ You are an expert detective specializing in intent classification. Combine the u
 
 ### Intent Definitions ###
 
+<DATA_EXPLORATION>
+**When to Use:**
+- The user's question is about exploring the data such as asking for explanation of the data, asking for insights, asking for recommendations, asking for comparison, etc.
+
+**Requirements:**
+- SQL DATA is provided and the user's question is about exploring the data.
+- The user's question can be answered by the SQL DATA.
+
+**Examples:**  
+- "Show me the part where the data appears abnormal"
+- "Please explain the data in the table"
+- "What's the trend of the data?"
+</DATA_EXPLORATION>
+
 <TEXT_TO_SQL>
 **When to Use:**  
 - The user's inputs are about modifying SQL from previous questions.
@@ -44,6 +59,7 @@ You are an expert detective specializing in intent classification. Combine the u
 **Requirements:**
 - Include specific table and column names from the schema in your reasoning or modifying SQL from previous questions.
 - Reference phrases from the user's inputs that clearly relate to the schema.
+- The SQL DATA is not provided or SQL DATA cannot answer the user's question, and the user's question can be answered given the database schema.
 
 **Examples:**  
 - "What is the total sales for last quarter?"
@@ -99,7 +115,7 @@ Return your response as a JSON object with the following structure:
 {
     "rephrased_question": "<rephrased question in full standalone question if there are previous questions, otherwise the original question>",
     "reasoning": "<brief chain-of-thought reasoning (max 20 words)>",
-    "results": "MISLEADING_QUERY" | "TEXT_TO_SQL" | "GENERAL" | "USER_GUIDE"
+    "results": "MISLEADING_QUERY" | "TEXT_TO_SQL" | "GENERAL" | "USER_GUIDE" | "DATA_EXPLORATION"
 }
 """
 
@@ -128,6 +144,11 @@ SQL:
 {% for doc in docs %}
 - {{doc.path}}: {{doc.content}}
 {% endfor %}
+
+{% if sql_data %}
+### SQL DATA ###
+{{ sql_data }}
+{% endif %}
 
 ### INPUT ###
 {% if histories %}
@@ -259,6 +280,7 @@ def prompt(
     construct_db_schemas: list[str],
     histories: list[AskHistory],
     prompt_builder: PromptBuilder,
+    sql_data: dict,
     sql_samples: Optional[list[dict]] = None,
     instructions: Optional[list[dict]] = None,
     configuration: Configuration | None = None,
@@ -275,6 +297,7 @@ def prompt(
         ),
         current_time=configuration.show_current_time(),
         docs=wren_ai_docs,
+        sql_data=sql_data,
     )
 
 
@@ -307,7 +330,9 @@ def post_process(classify_intent: dict, construct_db_schemas: list[str]) -> dict
 
 class IntentClassificationResult(BaseModel):
     rephrased_question: str
-    results: Literal["MISLEADING_QUERY", "TEXT_TO_SQL", "GENERAL", "USER_GUIDE"]
+    results: Literal[
+        "MISLEADING_QUERY", "TEXT_TO_SQL", "GENERAL", "USER_GUIDE", "DATA_EXPLORATION"
+    ]
     reasoning: str
 
 
@@ -369,6 +394,7 @@ class IntentClassification(BasicPipeline):
         sql_samples: Optional[list[dict]] = None,
         instructions: Optional[list[dict]] = None,
         configuration: Configuration = Configuration(),
+        sql_data: Optional[dict] = None,
     ):
         logger.info("Intent Classification pipeline is running...")
         return await self._pipe.execute(
@@ -380,6 +406,7 @@ class IntentClassification(BasicPipeline):
                 "sql_samples": sql_samples or [],
                 "instructions": instructions or [],
                 "configuration": configuration,
+                "sql_data": sql_data or {},
                 **self._components,
                 **self._configs,
             },
