@@ -36,29 +36,33 @@ ConfigState.init(llm_block, embedder_block, document_store_block, pipeline_block
 # ----------------------
 # Streamlit UI rendering
 # ----------------------
-st.title("Custom LLM Config Generator")
+st.title("Custom Provider Config Generator")
 
 # Layout: two columns – left for inputs, right for preview/export
 col1, col2 = st.columns([1.5, 1])  
 
 with col1:
-    st.subheader("LLM Configuration")
     
-    # Upload and parse YAML file into session state
-    render_import_yaml()
-    
+    st.subheader("API_KEY Configuration")
     # API key input section
     render_apikey()
+
+    st.subheader("LLM Configuration") 
+    # Upload and parse YAML file into session state
+    render_import_yaml()
     
     # LLM model configuration UI
     render_llm_config()
     
+    st.subheader("Embedder Configuration")
     # Embedding model configuration UI
     render_embedder_config()
     
+    st.subheader("Document Store Configuration")
     # Document store configuration UI
     render_document_store_config()
     
+    st.subheader("Pipeline Configuration")
     # Pipeline flow configuration UI
     render_pipeline_config()
 
