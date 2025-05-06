@@ -131,7 +131,7 @@ class ChartService:
                     )
                 )["execute_sql"]["results"]
             else:
-                sql_data = chart_request.data or {}
+                sql_data = chart_request.data
 
             self._chart_results[query_id] = ChartResultResponse(
                 status="generating",
