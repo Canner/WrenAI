@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "providers-setup"
+version = "0.1.0"
+description = ""
+authors = ["YI-CHIEH LU <steven.yichieh.lu@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.12"
+streamlit = ">=1.45.0,<2.0.0"
+pyyaml = ">=6.0.2,<7.0.0"
+requests = ">=2.32.3,<3.0.0"
+litellm = ">=1.68.0,<2.0.0"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
