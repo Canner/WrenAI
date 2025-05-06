@@ -558,7 +558,7 @@ func TryGetWrenAIDir() (string, error) {
 
 	info, err := os.Stat(wrenDir)
 	if err != nil || !info.IsDir() {
-		return "", nil // 不存在或不是資料夾，就視為跳過
+		return "", nil
 	}
 	return wrenDir, nil
 }
@@ -606,7 +606,7 @@ func RunStreamlitUIContainer() error {
 }
 
 func buildStreamlitImage() error {
-	cmd := exec.Command("docker", "build", "-t", "wrenai-streamlitui", "../wren-ai-service/streamlit-ui")
+	cmd := exec.Command("docker", "build", "-t", "wrenai-providers-setup", "../wren-ai-service/tools/providers-setup")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("build failed: %v\n%s", err, output)
@@ -638,16 +638,16 @@ func getMountPaths(wrenDir string) (string, string, string) {
 func runStreamlitContainer(configPath, envPath, donePath string) error {
 	cmd := exec.Command("docker", "run", "--rm", "-d",
 		"-p", "8501:8501",
-		"--name", "wrenai-streamlitui",
+		"--name", "wrenai-providers-setup",
 		"-v", configPath+":/app/data/config.yaml",
 		"-v", envPath+":/app/data/.env",
 		"-v", donePath+":/app/data/config.done",
-		"wrenai-streamlitui",
+		"wrenai-providers-setup",
 	)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("❌ Failed to run Streamlit UI container: %v\n%s", err, output)
+		return fmt.Errorf("❌ Failed to run providers-setup UI container: %v\n%s", err, output)
 	}
 	return nil
 }

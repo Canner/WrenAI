@@ -255,7 +255,7 @@ func Launch() {
 			return
 		}
 
-		containerName := "wrenai-streamlitui"
+		containerName := "wrenai-providers-setup"
 
 		// Remove any existing container (whether running or stopped)
 		if err := utils.RemoveContainerIfExists(containerName); err != nil {
@@ -269,7 +269,7 @@ func Launch() {
 			return
 		}
 
-		pterm.Info.Println("🚀 UI container started at http://localhost:8501")
+		pterm.Info.Println("🚀 providers-setup UI container started at http://localhost:8501")
 
 		// Wait for user to complete configuration in the UI
 		pterm.Info.Println("⌛ Waiting for user to finish UI configuration...")
