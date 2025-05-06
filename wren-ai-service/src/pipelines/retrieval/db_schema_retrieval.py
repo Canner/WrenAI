@@ -424,7 +424,7 @@ RETRIEVAL_MODEL_KWARGS = {
 }
 
 
-class Retrieval(BasicPipeline):
+class DbSchemaRetrieval(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
@@ -496,7 +496,7 @@ if __name__ == "__main__":
     from src.pipelines.common import dry_run_pipeline
 
     dry_run_pipeline(
-        Retrieval,
+        DbSchemaRetrieval,
         "db_schema_retrieval",
         query="this is a test query",
     )
