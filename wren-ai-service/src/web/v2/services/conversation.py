@@ -797,7 +797,6 @@ class ConversationService:
                                 content_block_label="PREVIEW_DATA",
                                 block_type="tool_use",
                             )
-
                 else:  # TEXT_TO_SQL
                     (
                         retrieval_results,
