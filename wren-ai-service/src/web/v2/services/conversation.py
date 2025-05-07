@@ -515,6 +515,18 @@ class ConversationService:
 
         return sql_data
 
+    async def _run_preview_data(
+        self,
+        data: Dict,
+    ):
+        return [
+            {
+                "data": data,
+            }
+        ], {
+            "data": data,
+        }
+
     def _run_sql_answer(
         self,
         query: str,
@@ -747,7 +759,10 @@ class ConversationService:
                             should_put_in_conversation_history=True,
                         )
                     else:
-                        _, index = await self._query_event_manager.emit_content_block(
+                        (
+                            chart_generation_result,
+                            index,
+                        ) = await self._query_event_manager.emit_content_block(
                             query_id,
                             trace_id,
                             index=index,
@@ -762,6 +777,27 @@ class ConversationService:
                             block_type="tool_use",
                             should_put_in_conversation_history=True,
                         )
+
+                        if chart_schema := chart_generation_result.get(
+                            "chart_result", {}
+                        ).get("chart_schema"):
+                            (
+                                _,
+                                index,
+                            ) = await self._query_event_manager.emit_content_block(
+                                query_id,
+                                trace_id,
+                                index=index,
+                                emit_content_func=self._run_preview_data,
+                                emit_content_func_kwargs={
+                                    "data": {
+                                        "chart_schema": chart_schema,
+                                    },
+                                },
+                                content_block_label="PREVIEW_DATA",
+                                block_type="tool_use",
+                            )
+
                 else:  # TEXT_TO_SQL
                     (
                         retrieval_results,
@@ -949,10 +985,24 @@ class ConversationService:
                             ][0]["sql"]
                             has_sql = True
             else:
-                has_sql = True
                 sql = historical_question_result["sql"]
+                has_sql = True
 
             if has_sql:
+                _, index = await self._query_event_manager.emit_content_block(
+                    query_id,
+                    trace_id,
+                    index=index,
+                    emit_content_func=self._run_preview_data,
+                    emit_content_func_kwargs={
+                        "data": {
+                            "sql": sql,
+                        },
+                    },
+                    content_block_label="PREVIEW_DATA",
+                    block_type="tool_use",
+                )
+
                 sql_data = await self._run_sql_executor(
                     sql=sql,
                     project_id=project_id,
