@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { Button, Typography } from 'antd';
 import CheckOutlined from '@ant-design/icons/CheckOutlined';
@@ -76,10 +76,10 @@ export const Block = styled.div<{
   }
 `;
 
-export const CopyText = styled(Typography.Text)`
+export const CopyText = styled(Typography.Text)<{ $hasVScrollbar: boolean }>`
   position: absolute;
   top: 0;
-  right: 0;
+  right: ${(props) => (props.$hasVScrollbar ? '20px' : '0')};
   font-size: 0;
   button {
     background: var(--gray-1) !important;
@@ -122,10 +122,22 @@ export const createCodeBlock = (HighlightRules: any) => {
     const rules = new HighlightRules();
     const tokenizer = new Tokenizer(rules.getRules());
 
+    const codeWrapRef = useRef<HTMLDivElement>(null);
+    const [hasVerticalScrollbar, setHasVerticalScrollbar] =
+      useState<boolean>(false);
+
     useEffect(() => {
       const { cssText } = ace.require('ace/theme/tomorrow');
       addThemeStyleManually(cssText);
     }, []);
+
+    useEffect(() => {
+      const el = codeWrapRef.current;
+      if (!el) return;
+
+      const hasScroll = el.scrollHeight > el.clientHeight;
+      setHasVerticalScrollbar(hasScroll);
+    }, [code]);
 
     const lines = (code || '').split('\n').map((line, index) => {
       const tokens = tokenizer.getLineTokens(line).tokens;
@@ -171,10 +183,11 @@ export const createCodeBlock = (HighlightRules: any) => {
         onKeyDown={handleKeyDown}
       >
         <Loading spinning={loading}>
-          <div className="adm-code-wrap">
+          <div className="adm-code-wrap" ref={codeWrapRef}>
             {lines}
             {copyable && (
               <CopyText
+                $hasVScrollbar={hasVerticalScrollbar}
                 copyable={{
                   onCopy,
                   icon: [
