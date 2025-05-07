@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import random
 import time
 from typing import Dict, List, Literal, Optional
 
@@ -82,6 +83,23 @@ class ConversationService:
         self._pipelines = pipelines
         self._query_event_manager = QueryEventManager()
         self._max_histories = max_histories
+
+    def _run_greetings(self):
+        greetings = [
+            "Got your query! Let me look into that for you.",
+            "Thanks for your question — I'm working on it now.",
+            "Query received! I'll get back with insights shortly.",
+            "You're all set. Let me process that for you.",
+            "Thanks! Let me dig into that and find the best answer.",
+            "Appreciate your patience — working on your request!",
+            "Thanks for submitting your query. I'm on it!",
+            "Received and understood. Let's get you some answers.",
+            "Great question! Let me get the details for you.",
+            "Thanks! I'll get back to you with what I find.",
+        ]
+
+        for text in random.choice(greetings):
+            yield text
 
     async def _run_historical_question_pipeline(self, query: str, project_id: str):
         historical_question = await self._pipelines["historical_question"].run(
@@ -167,6 +185,7 @@ class ConversationService:
 
         return [
             {
+                "intent": intent_classification_result.get("intent"),
                 "rephrased_question": intent_classification_result.get(
                     "rephrased_question"
                 ),
@@ -540,6 +559,7 @@ class ConversationService:
         configurations = conversation_request.configurations
         sql_data = conversation_request.sql_data
         chart_schema = conversation_request.chart_schema
+        index = 0
 
         try:
             await self._query_event_manager.emit_message_start(
@@ -547,27 +567,38 @@ class ConversationService:
                 trace_id,
             )
 
-            historical_question_result = (
-                await self._query_event_manager.emit_content_block(
-                    query_id,
-                    trace_id,
-                    index=0,
-                    emit_content_func=self._run_historical_question_pipeline,
-                    emit_content_func_kwargs={
-                        "query": user_query,
-                        "project_id": project_id,
-                    },
-                    content_block_label="HISTORICAL_QUESTION_RETRIEVAL",
-                    block_type="tool_use",
-                    should_put_in_conversation_history=True,
-                )
+            _, index = await self._query_event_manager.emit_content_block(
+                query_id,
+                trace_id,
+                index=index,
+                emit_content_func=self._run_greetings,
+                content_block_label="GREETINGS",
+                block_type="text",
+                stream=True,
+            )
+
+            (
+                historical_question_result,
+                index,
+            ) = await self._query_event_manager.emit_content_block(
+                query_id,
+                trace_id,
+                index=index,
+                emit_content_func=self._run_historical_question_pipeline,
+                emit_content_func_kwargs={
+                    "query": user_query,
+                    "project_id": project_id,
+                },
+                content_block_label="HISTORICAL_QUESTION_RETRIEVAL",
+                block_type="tool_use",
+                should_put_in_conversation_history=True,
             )
 
             if not historical_question_result:
-                sql_samples = await self._query_event_manager.emit_content_block(
+                sql_samples, index = await self._query_event_manager.emit_content_block(
                     query_id,
                     trace_id,
-                    index=1,
+                    index=index,
                     emit_content_func=self._run_sql_pairs_retrieval,
                     emit_content_func_kwargs={
                         "query": user_query,
@@ -577,10 +608,13 @@ class ConversationService:
                     block_type="tool_use",
                 )
 
-                instructions = await self._query_event_manager.emit_content_block(
+                (
+                    instructions,
+                    index,
+                ) = await self._query_event_manager.emit_content_block(
                     query_id,
                     trace_id,
-                    index=2,
+                    index=index,
                     emit_content_func=self._run_instructions_retrieval,
                     emit_content_func_kwargs={
                         "query": user_query,
@@ -590,25 +624,26 @@ class ConversationService:
                     block_type="tool_use",
                 )
 
-                intent_classification_result = (
-                    await self._query_event_manager.emit_content_block(
-                        query_id,
-                        trace_id,
-                        index=3,
-                        emit_content_func=self._run_intent_classification,
-                        emit_content_func_kwargs={
-                            "query": user_query,
-                            "histories": histories,
-                            "sql_samples": sql_samples,
-                            "instructions": instructions,
-                            "project_id": project_id,
-                            "configurations": configurations,
-                            "sql_data": sql_data,
-                            "chart_schema": chart_schema,
-                        },
-                        content_block_label="INTENT_CLASSIFICATION",
-                        block_type="tool_use",
-                    )
+                (
+                    intent_classification_result,
+                    index,
+                ) = await self._query_event_manager.emit_content_block(
+                    query_id,
+                    trace_id,
+                    index=index,
+                    emit_content_func=self._run_intent_classification,
+                    emit_content_func_kwargs={
+                        "query": user_query,
+                        "histories": histories,
+                        "sql_samples": sql_samples,
+                        "instructions": instructions,
+                        "project_id": project_id,
+                        "configurations": configurations,
+                        "sql_data": sql_data,
+                        "chart_schema": chart_schema,
+                    },
+                    content_block_label="INTENT_CLASSIFICATION",
+                    block_type="tool_use",
                 )
 
                 intent = intent_classification_result.get("intent")
@@ -622,10 +657,10 @@ class ConversationService:
                     user_query = rephrased_question
 
                 if intent == "MISLEADING_QUERY":
-                    await self._query_event_manager.emit_content_block(
+                    _, index = await self._query_event_manager.emit_content_block(
                         query_id,
                         trace_id,
-                        index=4,
+                        index=index,
                         emit_content_func=self._run_misleading_assistance,
                         emit_content_func_kwargs={
                             "query": user_query,
@@ -639,10 +674,10 @@ class ConversationService:
                         stream=True,
                     )
                 elif intent == "GENERAL":
-                    await self._query_event_manager.emit_content_block(
+                    _, index = await self._query_event_manager.emit_content_block(
                         query_id,
                         trace_id,
-                        index=4,
+                        index=index,
                         emit_content_func=self._run_data_assistance,
                         emit_content_func_kwargs={
                             "query": user_query,
@@ -656,10 +691,10 @@ class ConversationService:
                         stream=True,
                     )
                 elif intent == "USER_GUIDE":
-                    await self._query_event_manager.emit_content_block(
+                    _, index = await self._query_event_manager.emit_content_block(
                         query_id,
                         trace_id,
-                        index=4,
+                        index=index,
                         emit_content_func=self._run_user_guide_assistance,
                         emit_content_func_kwargs={
                             "query": user_query,
@@ -671,10 +706,10 @@ class ConversationService:
                         stream=True,
                     )
                 elif intent == "DATA_EXPLORATION":
-                    await self._query_event_manager.emit_content_block(
+                    _, index = await self._query_event_manager.emit_content_block(
                         query_id,
                         trace_id,
-                        index=4,
+                        index=index,
                         emit_content_func=self._run_data_exploration_assistance,
                         emit_content_func_kwargs={
                             "query": user_query,
@@ -693,10 +728,10 @@ class ConversationService:
                     )
 
                     if chart_schema:
-                        await self._query_event_manager.emit_content_block(
+                        _, index = await self._query_event_manager.emit_content_block(
                             query_id,
                             trace_id,
-                            index=4,
+                            index=index,
                             emit_content_func=self._run_chart_adjustment,
                             emit_content_func_kwargs={
                                 "query": user_query,
@@ -710,10 +745,10 @@ class ConversationService:
                             should_put_in_conversation_history=True,
                         )
                     else:
-                        await self._query_event_manager.emit_content_block(
+                        _, index = await self._query_event_manager.emit_content_block(
                             query_id,
                             trace_id,
-                            index=4,
+                            index=index,
                             emit_content_func=self._run_chart_generation,
                             emit_content_func_kwargs={
                                 "query": user_query,
@@ -726,20 +761,21 @@ class ConversationService:
                             should_put_in_conversation_history=True,
                         )
                 else:  # TEXT_TO_SQL
-                    retrieval_results = (
-                        await self._query_event_manager.emit_content_block(
-                            query_id,
-                            trace_id,
-                            index=4,
-                            emit_content_func=self._run_retrieval,
-                            emit_content_func_kwargs={
-                                "query": user_query,
-                                "histories": histories,
-                                "project_id": project_id,
-                            },
-                            content_block_label="DB_SCHEMA_RETRIEVAL",
-                            block_type="tool_use",
-                        )
+                    (
+                        retrieval_results,
+                        index,
+                    ) = await self._query_event_manager.emit_content_block(
+                        query_id,
+                        trace_id,
+                        index=index,
+                        emit_content_func=self._run_retrieval,
+                        emit_content_func_kwargs={
+                            "query": user_query,
+                            "histories": histories,
+                            "project_id": project_id,
+                        },
+                        content_block_label="DB_SCHEMA_RETRIEVAL",
+                        block_type="tool_use",
                     )
 
                     documents = retrieval_results.get("retrieval_results", [])
@@ -748,10 +784,13 @@ class ConversationService:
 
                     if table_names:
                         if histories:
-                            sql_generation_reasoning = await self._query_event_manager.emit_content_block(
+                            (
+                                sql_generation_reasoning,
+                                index,
+                            ) = await self._query_event_manager.emit_content_block(
                                 query_id,
                                 trace_id,
-                                index=5,
+                                index=index,
                                 emit_content_func=self._run_followup_sql_generation_reasoning,
                                 emit_content_func_kwargs={
                                     "query": user_query,
@@ -763,14 +802,17 @@ class ConversationService:
                                     "query_id": query_id,
                                 },
                                 content_block_label="SQL_GENERATION_REASONING",
-                                block_type="text",
+                                block_type="think",
                                 stream=True,
                             )
                         else:
-                            sql_generation_reasoning = await self._query_event_manager.emit_content_block(
+                            (
+                                sql_generation_reasoning,
+                                index,
+                            ) = await self._query_event_manager.emit_content_block(
                                 query_id,
                                 trace_id,
-                                index=5,
+                                index=index,
                                 emit_content_func=self._run_sql_generation_reasoning,
                                 emit_content_func_kwargs={
                                     "query": user_query,
@@ -781,7 +823,7 @@ class ConversationService:
                                     "query_id": query_id,
                                 },
                                 content_block_label="SQL_GENERATION_REASONING",
-                                block_type="text",
+                                block_type="think",
                                 stream=True,
                             )
 
@@ -795,10 +837,13 @@ class ConversationService:
                         has_metric = retrieval_results.get("has_metric", False)
 
                         if histories:
-                            text_to_sql_generation_results = await self._query_event_manager.emit_content_block(
+                            (
+                                text_to_sql_generation_results,
+                                index,
+                            ) = await self._query_event_manager.emit_content_block(
                                 query_id,
                                 trace_id,
-                                index=6,
+                                index=index,
                                 emit_content_func=self._run_followup_sql_generation,
                                 emit_content_func_kwargs={
                                     "query": user_query,
@@ -818,10 +863,13 @@ class ConversationService:
                                 should_put_in_conversation_history=True,
                             )
                         else:
-                            text_to_sql_generation_results = await self._query_event_manager.emit_content_block(
+                            (
+                                text_to_sql_generation_results,
+                                index,
+                            ) = await self._query_event_manager.emit_content_block(
                                 query_id,
                                 trace_id,
-                                index=6,
+                                index=index,
                                 emit_content_func=self._run_sql_generation,
                                 emit_content_func_kwargs={
                                     "query": user_query,
@@ -848,10 +896,13 @@ class ConversationService:
                                 failed_dry_run_results[0]["type"] != "TIME_OUT"
                                 and failed_dry_run_results[0]["type"] != "ADD_QUOTES"
                             ):
-                                sql_correction_results = await self._query_event_manager.emit_content_block(
+                                (
+                                    sql_correction_results,
+                                    index,
+                                ) = await self._query_event_manager.emit_content_block(
                                     query_id,
                                     trace_id,
-                                    index=7,
+                                    index=index,
                                     emit_content_func=self._run_sql_correction,
                                     emit_content_func_kwargs={
                                         "contexts": [],
@@ -901,10 +952,13 @@ class ConversationService:
                                 project_id=project_id,
                             )
 
-                            await self._query_event_manager.emit_content_block(
+                            (
+                                _,
+                                index,
+                            ) = await self._query_event_manager.emit_content_block(
                                 query_id,
                                 trace_id,
-                                index=8,
+                                index=index,
                                 emit_content_func=self._run_sql_answer,
                                 emit_content_func_kwargs={
                                     "query": user_query,
@@ -924,10 +978,10 @@ class ConversationService:
                     project_id=project_id,
                 )
 
-                await self._query_event_manager.emit_content_block(
+                _, index = await self._query_event_manager.emit_content_block(
                     query_id,
                     trace_id,
-                    index=8,
+                    index=index,
                     emit_content_func=self._run_sql_answer,
                     emit_content_func_kwargs={
                         "query": user_query,

@@ -141,10 +141,10 @@ class QueryEventManager:
         trace_id: str,
         index: int,
         emit_content_func: Callable,
-        emit_content_func_kwargs: dict,
         *,
+        emit_content_func_kwargs: Optional[dict] = {},
         content_block_label: Optional[str] = None,
-        block_type: Literal["tool_use", "text"] = "tool_use",
+        block_type: Literal["tool_use", "text", "think"] = "tool_use",
         stream: bool = False,
         should_put_in_conversation_history: bool = False,
     ):
@@ -173,7 +173,7 @@ class QueryEventManager:
             final_result = ""
 
         async for chunk in ensure_async(result):
-            if stream and block_type == "text":
+            if stream and (block_type == "text" or block_type == "think"):
                 final_result += chunk
             await self._publish(
                 query_id,
@@ -185,9 +185,9 @@ class QueryEventManager:
                         "type": ("json" if block_type == "tool_use" else "text")
                         + "_delta",
                         "content_block_label": content_block_label or "",
-                        "content": orjson.dumps(chunk)
-                        if block_type == "json"
-                        else chunk,
+                        "content": (
+                            orjson.dumps(chunk) if block_type == "json" else chunk
+                        ),
                         "trace_id": trace_id,
                         "should_put_in_conversation_history": should_put_in_conversation_history,
                     },
@@ -207,7 +207,7 @@ class QueryEventManager:
             },
         )
 
-        return final_result
+        return final_result, index + 1
 
 
 from .conversation import ConversationService  # noqa: E402
