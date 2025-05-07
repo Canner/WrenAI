@@ -517,17 +517,11 @@ class ConversationService:
 
         return sql_data
 
-    async def _run_preview_data(
+    async def _run_DATA_PREVIEW(
         self,
         data: Dict,
     ):
-        return [
-            {
-                "data": data,
-            }
-        ], {
-            "data": data,
-        }
+        return [data], data
 
     def _run_sql_answer(
         self,
@@ -793,7 +787,7 @@ class ConversationService:
                             query_id,
                             trace_id,
                             index=index,
-                            emit_content_func=self._run_preview_data,
+                            emit_content_func=self._run_DATA_PREVIEW,
                             emit_content_func_kwargs={
                                 "data": {
                                     "type": "CHART",
@@ -803,7 +797,7 @@ class ConversationService:
                                     },
                                 },
                             },
-                            content_block_label="PREVIEW_DATA",
+                            content_block_label="DATA_PREVIEW",
                             block_type="tool_use",
                         )
                 else:  # TEXT_TO_SQL
@@ -1001,7 +995,7 @@ class ConversationService:
                     query_id,
                     trace_id,
                     index=index,
-                    emit_content_func=self._run_preview_data,
+                    emit_content_func=self._run_DATA_PREVIEW,
                     emit_content_func_kwargs={
                         "data": {
                             "type": "TABLE",
@@ -1010,7 +1004,7 @@ class ConversationService:
                             },
                         },
                     },
-                    content_block_label="PREVIEW_DATA",
+                    content_block_label="DATA_PREVIEW",
                     block_type="tool_use",
                 )
 
