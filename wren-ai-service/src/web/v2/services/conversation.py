@@ -286,10 +286,10 @@ class ConversationService:
         return [
             {
                 "chart_result": chart_generation_result["post_process"]["results"],
-                "sql": sql,
             }
         ], {
             "chart_result": chart_generation_result["post_process"]["results"],
+            "sql": sql,
         }
 
     async def _run_chart_adjustment(
@@ -311,9 +311,11 @@ class ConversationService:
         return [
             {
                 "chart_result": chart_adjustment_result["post_process"]["results"],
-                "sql": sql,
             }
-        ], chart_adjustment_result
+        ], {
+            "chart_result": chart_adjustment_result["post_process"]["results"],
+            "sql": sql,
+        }
 
     async def _run_retrieval(
         self,
@@ -742,7 +744,10 @@ class ConversationService:
                     )
 
                     if chart_schema:
-                        _, index = await self._query_event_manager.emit_content_block(
+                        (
+                            chart_generation_result,
+                            index,
+                        ) = await self._query_event_manager.emit_content_block(
                             query_id,
                             trace_id,
                             index=index,
@@ -778,25 +783,26 @@ class ConversationService:
                             should_put_in_conversation_history=True,
                         )
 
-                        if chart_schema := chart_generation_result.get(
-                            "chart_result", {}
-                        ).get("chart_schema"):
-                            (
-                                _,
-                                index,
-                            ) = await self._query_event_manager.emit_content_block(
-                                query_id,
-                                trace_id,
-                                index=index,
-                                emit_content_func=self._run_preview_data,
-                                emit_content_func_kwargs={
-                                    "data": {
-                                        "chart_schema": chart_schema,
-                                    },
+                    if chart_schema := chart_generation_result.get(
+                        "chart_result", {}
+                    ).get("chart_schema"):
+                        (
+                            _,
+                            index,
+                        ) = await self._query_event_manager.emit_content_block(
+                            query_id,
+                            trace_id,
+                            index=index,
+                            emit_content_func=self._run_preview_data,
+                            emit_content_func_kwargs={
+                                "data": {
+                                    "chart_schema": chart_schema,
+                                    "sql": chart_generation_result.get("sql"),
                                 },
-                                content_block_label="PREVIEW_DATA",
-                                block_type="tool_use",
-                            )
+                            },
+                            content_block_label="PREVIEW_DATA",
+                            block_type="tool_use",
+                        )
                 else:  # TEXT_TO_SQL
                     (
                         retrieval_results,
