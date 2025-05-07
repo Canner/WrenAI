@@ -560,6 +560,8 @@ class ConversationService:
         sql_data = conversation_request.sql_data
         chart_schema = conversation_request.chart_schema
         index = 0
+        has_sql = False
+        sql = ""
 
         try:
             await self._query_event_manager.emit_message_start(
@@ -888,7 +890,6 @@ class ConversationService:
                                 should_put_in_conversation_history=True,
                             )
 
-                        sql = ""
                         if failed_dry_run_results := text_to_sql_generation_results[
                             "post_process"
                         ]["invalid_generation_results"]:
@@ -931,6 +932,7 @@ class ConversationService:
                                     sql = sql_correction_results["post_process"][
                                         "valid_generation_results"
                                     ][0]["sql"]
+                                    has_sql = True
                             else:
                                 await self._query_event_manager.emit_error(
                                     query_id=query_id,
@@ -945,34 +947,12 @@ class ConversationService:
                             sql = text_to_sql_generation_results["post_process"][
                                 "valid_generation_results"
                             ][0]["sql"]
-
-                        if sql:
-                            sql_data = await self._run_sql_executor(
-                                sql=sql,
-                                project_id=project_id,
-                            )
-
-                            (
-                                _,
-                                index,
-                            ) = await self._query_event_manager.emit_content_block(
-                                query_id,
-                                trace_id,
-                                index=index,
-                                emit_content_func=self._run_sql_answer,
-                                emit_content_func_kwargs={
-                                    "query": user_query,
-                                    "sql": sql,
-                                    "sql_data": sql_data,
-                                    "configurations": configurations,
-                                    "query_id": query_id,
-                                },
-                                content_block_label="SQL_ANSWER",
-                                block_type="text",
-                                stream=True,
-                            )
+                            has_sql = True
             else:
+                has_sql = True
                 sql = historical_question_result["sql"]
+
+            if has_sql:
                 sql_data = await self._run_sql_executor(
                     sql=sql,
                     project_id=project_id,
