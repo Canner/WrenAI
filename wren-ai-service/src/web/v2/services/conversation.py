@@ -796,8 +796,11 @@ class ConversationService:
                             emit_content_func=self._run_preview_data,
                             emit_content_func_kwargs={
                                 "data": {
-                                    "chart_schema": chart_schema,
-                                    "sql": chart_generation_result.get("sql"),
+                                    "type": "CHART",
+                                    "payload": {
+                                        "chart_schema": chart_schema,
+                                        "sql": chart_generation_result.get("sql"),
+                                    },
                                 },
                             },
                             content_block_label="PREVIEW_DATA",
@@ -1001,7 +1004,10 @@ class ConversationService:
                     emit_content_func=self._run_preview_data,
                     emit_content_func_kwargs={
                         "data": {
-                            "sql": sql,
+                            "type": "TABLE",
+                            "payload": {
+                                "sql": sql,
+                            },
                         },
                     },
                     content_block_label="PREVIEW_DATA",
