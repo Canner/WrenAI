@@ -792,6 +792,7 @@ class ConversationService:
                                 "data": {
                                     "type": "CHART",
                                     "payload": {
+                                        "title": user_query,
                                         "chart_schema": chart_schema,
                                         "sql": chart_generation_result.get("sql"),
                                     },
@@ -1000,6 +1001,7 @@ class ConversationService:
                         "data": {
                             "type": "TABLE",
                             "payload": {
+                                "title": user_query,
                                 "sql": sql,
                             },
                         },
