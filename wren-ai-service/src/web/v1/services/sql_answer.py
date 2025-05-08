@@ -51,6 +51,7 @@ class SqlAnswerResultResponse(BaseModel):
     error: Optional[SqlAnswerError] = None
     trace_id: Optional[str] = None
 
+
 class SqlAnswerService:
     def __init__(
         self,
@@ -92,6 +93,10 @@ class SqlAnswerService:
             preprocessed_sql_data = self._pipelines["preprocess_sql_data"].run(
                 sql_data=sql_answer_request.sql_data,
             )["preprocess"]
+
+            if preprocessed_sql_data.get("num_rows_used_in_llm") == 0:
+                results["metadata"]["error_type"] = "NO_DATA"
+                results["metadata"]["error_message"] = "No data to answer"
 
             self._sql_answer_results[query_id] = SqlAnswerResultResponse(
                 status="succeeded",
