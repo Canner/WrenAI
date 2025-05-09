@@ -29,6 +29,9 @@ interface Props {
   onStopRecommend: () => void;
   data: AskPromptData;
   loading: boolean;
+  inputProps: {
+    placeholder: string;
+  };
 }
 
 interface Attributes {
