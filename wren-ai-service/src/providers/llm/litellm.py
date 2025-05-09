@@ -16,7 +16,7 @@ from src.providers.llm import (
     connect_chunks,
 )
 from src.providers.loader import provider
-from src.utils import remove_trailing_slash
+from src.utils import remove_trailing_slash, extract_braces_content
 
 
 @provider("litellm_llm")
@@ -113,7 +113,7 @@ class LitellmLLMProvider(LLMProvider):
                 check_finish_reason(response)
 
             return {
-                "replies": [message.content for message in completions],
+                "replies": [extract_braces_content(message.content) for message in completions],
                 "meta": [message.meta for message in completions],
             }
 
