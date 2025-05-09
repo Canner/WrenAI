@@ -317,7 +317,7 @@ class ConversationService:
             "sql": sql,
         }
 
-    async def _run_retrieval(
+    async def _run_db_schema_retrieval(
         self,
         query: str,
         histories: List[ConversationHistory],
@@ -809,7 +809,7 @@ class ConversationService:
                         query_id,
                         trace_id,
                         index=index,
-                        emit_content_func=self._run_retrieval,
+                        emit_content_func=self._run_db_schema_retrieval,
                         emit_content_func_kwargs={
                             "query": user_query,
                             "histories": histories,
