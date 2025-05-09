@@ -115,7 +115,7 @@ class WrenIbis(Engine):
         limit: int = 500,
         **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
-        api_endpoint = f"{self._endpoint}/v2/connector/{self._source}/query"
+        api_endpoint = f"{self._endpoint}/v3/connector/{self._source}/query"
         if dry_run:
             api_endpoint += "?dryRun=true&limit=1"
         else:
@@ -147,14 +147,14 @@ class WrenIbis(Engine):
 
                 return (
                     False,
-                    None,
+                    {},
                     {
                         "error_message": res,
                         "correlation_id": "",
                     },
                 )
         except asyncio.TimeoutError:
-            return False, None, f"Request timed out: {timeout} seconds"
+            return False, {}, f"Request timed out: {timeout} seconds"
 
     async def get_func_list(
         self,
@@ -234,11 +234,11 @@ class WrenEngine(Engine):
 
                 return (
                     False,
-                    None,
+                    {},
                     {
                         "error_message": res,
                         "correlation_id": "",
                     },
                 )
         except asyncio.TimeoutError:
-            return False, None, f"Request timed out: {timeout} seconds"
+            return False, {}, f"Request timed out: {timeout} seconds"
