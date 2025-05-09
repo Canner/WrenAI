@@ -147,14 +147,14 @@ class WrenIbis(Engine):
 
                 return (
                     False,
-                    None,
+                    {},
                     {
                         "error_message": res,
                         "correlation_id": "",
                     },
                 )
         except asyncio.TimeoutError:
-            return False, None, f"Request timed out: {timeout} seconds"
+            return False, {}, f"Request timed out: {timeout} seconds"
 
     async def get_func_list(
         self,
@@ -234,11 +234,11 @@ class WrenEngine(Engine):
 
                 return (
                     False,
-                    None,
+                    {},
                     {
                         "error_message": res,
                         "correlation_id": "",
                     },
                 )
         except asyncio.TimeoutError:
-            return False, None, f"Request timed out: {timeout} seconds"
+            return False, {}, f"Request timed out: {timeout} seconds"
