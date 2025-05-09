@@ -92,6 +92,18 @@ describe('IbisAdaptor', () => {
     schema: 'my-schema',
   };
 
+  const mockOAuth2TrinoConnectionInfo = {
+    schemas: 'my-catalog.my-schema',
+    host: 'localhost',
+    port: 5450,
+    username: 'my-username',
+    auth: {
+      clientId: 'my-client-id',
+      clientSecret: 'my-client-secret',
+      tokenUrl: 'https://example.com/token',
+    },
+  };
+
   const mockManifest: Manifest = {
     catalog: 'wrenai', // eg: "test-catalog"
     schema: 'wrenai', // eg: "test-schema"
@@ -269,6 +281,34 @@ describe('IbisAdaptor', () => {
       port,
       schema,
       user: username,
+    };
+
+    expect(result).toEqual([]);
+    expect(mockedAxios.post).toHaveBeenCalledWith(
+      `${ibisServerEndpoint}/v2/connector/trino/metadata/constraints`,
+      { connectionInfo: expectConnectionInfo },
+    );
+  });
+
+  it('should get trino constraints with OAuth2', async () => {
+    const mockResponse = { data: [] };
+    mockedAxios.post.mockResolvedValue(mockResponse);
+
+    const result = await ibisAdaptor.getConstraints(
+      DataSourceName.TRINO,
+      mockOAuth2TrinoConnectionInfo,
+    );
+
+    const { username, host, port, schemas, auth } = mockOAuth2TrinoConnectionInfo;
+    const schemasArray = schemas.split(',');
+    const [catalog, schema] = schemasArray[0].split('.');
+    const expectConnectionInfo = {
+      connectionUrl: `trino://${username}@${host}:${port}/${catalog}/${schema}`,
+      auth: {
+        clientId: auth.clientId,
+        clientSecret: auth.clientSecret,
+        tokenUrl: auth.tokenUrl,
+      },
     };
 
     expect(result).toEqual([]);
