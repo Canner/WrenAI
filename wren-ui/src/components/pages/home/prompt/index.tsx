@@ -57,6 +57,7 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
     onCreateResponse,
     onStopStreaming,
     onStopRecommend,
+    inputProps,
   } = props;
   const askProcessState = useAskProcessState();
 
@@ -156,6 +157,7 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
         question={question}
         isProcessing={isProcessing}
         onAsk={submitAsk}
+        inputProps={inputProps}
       />
 
       {showResult && (
