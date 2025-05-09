@@ -329,5 +329,10 @@ export default function useAskPrompt(threadId?: number) {
     onStopStreaming,
     onStopRecommend,
     onStoreThreadQuestions,
+    inputProps: {
+      placeholder: threadId
+        ? 'Ask follow-up questions to explore your data'
+        : 'Ask to explore your data',
+    },
   };
 }
