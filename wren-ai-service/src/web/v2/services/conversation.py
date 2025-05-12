@@ -35,7 +35,7 @@ class ConversationHistory(BaseModel):
         additional_info: Optional[dict] = None
 
     request: ConversationRequest
-    response: dict
+    response: str | dict
 
 
 # POST /v2/conversations
@@ -70,7 +70,7 @@ def convert_conversation_history_to_ask_history(
     return [
         AskHistory(question=history.request.query, sql=history.response["sql"])
         for history in conversation_history
-        if history.response.get("sql")
+        if isinstance(history.response, dict) and history.response.get("sql")
     ]
 
 
@@ -682,6 +682,7 @@ class ConversationService:
                         content_block_label="MISLEADING_QUERY_ASSISTANCE",
                         block_type="text",
                         stream=True,
+                        should_put_in_conversation_history=True,
                     )
                 elif intent == "GENERAL":
                     _, index = await self._query_event_manager.emit_content_block(
@@ -699,6 +700,7 @@ class ConversationService:
                         content_block_label="GENERAL_ASSISTANCE",
                         block_type="text",
                         stream=True,
+                        should_put_in_conversation_history=True,
                     )
                 elif intent == "USER_GUIDE":
                     _, index = await self._query_event_manager.emit_content_block(
@@ -714,6 +716,7 @@ class ConversationService:
                         content_block_label="USER_GUIDE_ASSISTANCE",
                         block_type="text",
                         stream=True,
+                        should_put_in_conversation_history=True,
                     )
                 elif intent == "DATA_EXPLORATION":
                     _, index = await self._query_event_manager.emit_content_block(
@@ -730,6 +733,7 @@ class ConversationService:
                         content_block_label="DATA_EXPLORATION",
                         block_type="text",
                         stream=True,
+                        should_put_in_conversation_history=True,
                     )
                 elif intent == "CHART":
                     sql_data = await self._run_sql_executor(
