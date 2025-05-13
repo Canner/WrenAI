@@ -9,6 +9,7 @@ from src.core.provider import EmbedderProvider, LLMProvider
 from src.pipelines import generation, indexing, retrieval
 from src.utils import fetch_wren_ai_docs
 from src.web.v1 import services
+from src.web.v2 import services as v2_services
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -27,6 +28,7 @@ class ServiceContainer:
     sql_question_service: services.SqlQuestionService
     instructions_service: services.InstructionsService
     sql_correction_service: services.SqlCorrectionService
+    conversation_service: v2_services.ConversationService
 
 
 @dataclass
@@ -268,6 +270,87 @@ def create_service_container(
                 ),
             },
             **query_cache,
+        ),
+        conversation_service=v2_services.ConversationService(
+            pipelines={
+                "intent_classification": generation.IntentClassificationV2(
+                    **pipe_components["intent_classification"],
+                    wren_ai_docs=wren_ai_docs,
+                ),
+                "misleading_assistance": generation.MisleadingAssistance(
+                    **pipe_components["misleading_assistance"],
+                ),
+                "data_assistance": generation.DataAssistance(
+                    **pipe_components["data_assistance"]
+                ),
+                "user_guide_assistance": generation.UserGuideAssistance(
+                    **pipe_components["user_guide_assistance"],
+                    wren_ai_docs=wren_ai_docs,
+                ),
+                "data_exploration_assistance": generation.DataExplorationAssistance(
+                    **pipe_components["data_exploration_assistance"],
+                ),
+                "db_schema_retrieval": retrieval.DbSchemaRetrieval(
+                    **pipe_components["db_schema_retrieval"],
+                    table_retrieval_size=settings.table_retrieval_size,
+                    table_column_retrieval_size=settings.table_column_retrieval_size,
+                ),
+                "historical_question": retrieval.HistoricalQuestionRetrieval(
+                    **pipe_components["historical_question_retrieval"],
+                    historical_question_retrieval_similarity_threshold=settings.historical_question_retrieval_similarity_threshold,
+                ),
+                "sql_pairs_retrieval": retrieval.SqlPairsRetrieval(
+                    **pipe_components["sql_pairs_retrieval"],
+                    sql_pairs_similarity_threshold=settings.sql_pairs_similarity_threshold,
+                    sql_pairs_retrieval_max_size=settings.sql_pairs_retrieval_max_size,
+                ),
+                "instructions_retrieval": retrieval.Instructions(
+                    **pipe_components["instructions_retrieval"],
+                    similarity_threshold=settings.instructions_similarity_threshold,
+                    top_k=settings.instructions_top_k,
+                ),
+                "sql_generation": generation.SQLGeneration(
+                    **pipe_components["sql_generation"],
+                    engine_timeout=settings.engine_timeout,
+                ),
+                "sql_generation_reasoning": generation.SQLGenerationReasoning(
+                    **pipe_components["sql_generation_reasoning"],
+                ),
+                "followup_sql_generation_reasoning": generation.FollowUpSQLGenerationReasoning(
+                    **pipe_components["followup_sql_generation_reasoning"],
+                ),
+                "sql_correction": generation.SQLCorrection(
+                    **pipe_components["sql_correction"],
+                    engine_timeout=settings.engine_timeout,
+                ),
+                "followup_sql_generation": generation.FollowUpSQLGeneration(
+                    **pipe_components["followup_sql_generation"],
+                    engine_timeout=settings.engine_timeout,
+                ),
+                "sql_regeneration": generation.SQLRegeneration(
+                    **pipe_components["sql_regeneration"],
+                    engine_timeout=settings.engine_timeout,
+                ),
+                "sql_functions_retrieval": retrieval.SqlFunctions(
+                    **pipe_components["sql_functions_retrieval"],
+                    engine_timeout=settings.engine_timeout,
+                ),
+                "sql_executor": retrieval.SQLExecutor(
+                    **pipe_components["sql_executor"],
+                    engine_timeout=settings.engine_timeout,
+                ),
+                "sql_answer": generation.SQLAnswer(
+                    **pipe_components["sql_answer"],
+                    engine_timeout=settings.engine_timeout,
+                ),
+                "chart_generation": generation.ChartGeneration(
+                    **pipe_components["chart_generation"],
+                ),
+                "chart_adjustment": generation.ChartAdjustmentV2(
+                    **pipe_components["chart_adjustment"],
+                ),
+            },
+            max_histories=settings.max_histories,
         ),
     )
 

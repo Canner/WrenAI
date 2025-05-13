@@ -403,7 +403,7 @@ def construct_instructions(
 ):
     _instructions = ""
     if configuration:
-        if configuration.fiscal_year:
+        if hasattr(configuration, "fiscal_year") and configuration.fiscal_year:
             _instructions += f"\n- For calendar year related computation, it should be started from {configuration.fiscal_year.start} to {configuration.fiscal_year.end}\n\n"
     if has_calculated_field:
         _instructions += calculated_field_instructions

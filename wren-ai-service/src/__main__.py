@@ -18,6 +18,7 @@ from src.utils import (
     setup_custom_logger,
 )
 from src.web.v1 import routers
+from src.web.v2 import routers as v2_routers
 
 setup_custom_logger(
     "wren-ai-service", level_str=settings.logging_level, is_dev=settings.development
@@ -54,6 +55,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(routers.router, prefix="/v1", tags=["v1"])
+app.include_router(v2_routers.router, prefix="/v2", tags=["v2"])
 # TODO: deprecated, it was used for load testing using locust only. should be removed in the future
 if settings.development:
     from src.web import development

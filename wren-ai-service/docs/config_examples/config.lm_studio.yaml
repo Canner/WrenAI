@@ -139,7 +139,8 @@ pipes:
     document_store: qdrant
   - name: sql_tables_extraction
     llm: litellm_llm.default
-
+  - name: data_exploration_assistance
+    llm: litellm_llm.default
 ---
 settings:
   engine_timeout: 30
