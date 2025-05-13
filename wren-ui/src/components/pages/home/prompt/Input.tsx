@@ -11,10 +11,13 @@ interface Props {
   question: string;
   isProcessing: boolean;
   onAsk: (value: string) => Promise<void>;
+  inputProps: {
+    placeholder?: string;
+  };
 }
 
 export default function PromptInput(props: Props) {
-  const { onAsk, isProcessing, question } = props;
+  const { onAsk, isProcessing, question, inputProps } = props;
   const $promptInput = useRef<HTMLTextAreaElement>(null);
   const [inputValue, setInputValue] = useState('');
   const [innerLoading, setInnerLoading] = useState(false);
@@ -57,11 +60,11 @@ export default function PromptInput(props: Props) {
         data-gramm="false"
         size="large"
         autoSize
-        placeholder="Ask to explore your data"
         value={inputValue}
         onInput={syncInputValue}
         onPressEnter={inputEnter}
         disabled={isDisabled}
+        {...inputProps}
       />
       <PromptButton
         type="primary"

@@ -1,6 +1,7 @@
 import functools
 import logging
 import os
+import re
 from pathlib import Path
 
 import requests
@@ -187,3 +188,11 @@ def fetch_wren_ai_docs(doc_endpoint: str, is_oss: bool) -> list[dict]:
             )
 
     return results
+
+def extract_braces_content(resp: str) -> str:
+    """
+    Extracts JSON content enclosed in a markdown code block that starts with ```json.
+    Returns the JSON string including braces, or the original string if no match is found.
+    """
+    match = re.search(r'```json\s*(\{.*?\})\s*```', resp, re.DOTALL)
+    return match.group(1) if match else resp

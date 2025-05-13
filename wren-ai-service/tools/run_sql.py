@@ -80,12 +80,11 @@ def get_data_from_wren_engine(
         quoted_sql, no_error = add_quotes(sql)
         assert no_error, f"Error in adding quotes to SQL: {sql}"
         response = requests.post(
-            f"{WREN_IBIS_API_URL}/v2/connector/{dataset_type}/query?limit={limit}",
+            f"{WREN_IBIS_API_URL}/v3/connector/{dataset_type}/query?limit={limit}",
             json={
                 "sql": quoted_sql,
                 "manifestStr": base64.b64encode(orjson.dumps(manifest)).decode(),
                 "connectionInfo": _get_connection_info(dataset_type),
-                "limit": limit,
             },
         )
 

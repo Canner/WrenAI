@@ -187,6 +187,9 @@ data:
         document_store: qdrant
       - name: project_meta_indexing
         document_store: qdrant
+      - name: sql_tables_extraction
+        llm: litellm_llm.default
+
     ---
     settings:
       doc_endpoint: https://docs.getwren.ai
@@ -197,6 +200,7 @@ data:
       table_column_retrieval_size: 100
       allow_intent_classification: true
       allow_sql_generation_reasoning: true
+      allow_sql_functions_retrieval: true
       enable_column_pruning: false
       query_cache_maxsize: 1000
       query_cache_ttl: 3600

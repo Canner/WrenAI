@@ -66,7 +66,7 @@ async def is_sql_valid(
     else:
         async with aiohttp.request(
             "POST",
-            f"{api_endpoint}/v2/connector/{data_source}/query?dryRun=true",
+            f"{api_endpoint}/v3/connector/{data_source}/query?dryRun=true",
             json={
                 "sql": remove_limit_statement(quoted_sql),
                 "manifestStr": base64.b64encode(orjson.dumps(mdl_json)).decode(),

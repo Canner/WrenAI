@@ -62,22 +62,28 @@ class WrenUI(Engine):
                             "correlation_id": res.get("correlationId"),
                         },
                     )
+
+                error_message = res.get("errors", [{}])[0].get(
+                    "message", "Unknown error"
+                )
+                logger.error(f"Error executing SQL: {error_message}")
+
                 return (
                     False,
-                    None,
+                    {},
                     {
-                        "error_message": res.get("errors", [{}])[0].get(
-                            "message", "Unknown error"
+                        "error_message": error_message,
+                        "correlation_id": (
+                            res.get("extensions", {})
+                            .get("other", {})
+                            .get("correlationId")
                         ),
-                        "correlation_id": res.get("extensions", {})
-                        .get("other", {})
-                        .get("correlationId"),
                     },
                 )
         except asyncio.TimeoutError:
             return (
                 False,
-                None,
+                {},
                 {"error_message": f"Request timed out: {timeout} seconds"},
             )
 
@@ -109,7 +115,7 @@ class WrenIbis(Engine):
         limit: int = 500,
         **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
-        api_endpoint = f"{self._endpoint}/v2/connector/{self._source}/query"
+        api_endpoint = f"{self._endpoint}/v3/connector/{self._source}/query"
         if dry_run:
             api_endpoint += "?dryRun=true&limit=1"
         else:
