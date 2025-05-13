@@ -38,7 +38,6 @@ export interface ORACLE_CONNECTION_INFO {
   user: string;
   password: string;
   database: string;
-  ssl: boolean;
 }
 
 export interface MS_SQL_CONNECTION_INFO {
