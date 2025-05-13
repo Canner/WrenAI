@@ -2,13 +2,12 @@ from config_loader import load_config_yaml_blocks, group_blocks
 from session_state import ConfigState
 from ui_components import (
     render_llm_config, 
-    render_embedder_config, 
-    render_document_store_config, 
+    render_embedder_config,  
     render_import_yaml, 
     render_pipeline_config,
-    render_preview_and_generate,
+    render_preview,
     render_apikey,
-    render_finished_setting
+    render_generate_button
 )
 import streamlit as st
 
@@ -43,32 +42,29 @@ col1, col2 = st.columns([1.5, 1])
 
 with col1:
     
-    st.subheader("API_KEY Configuration")
     # API key input section
+    st.subheader("API_KEY Configuration")
     render_apikey()
 
-    st.subheader("LLM Configuration") 
     # Upload and parse YAML file into session state
+    st.subheader("LLM Configuration") 
     render_import_yaml()
     
     # LLM model configuration UI
     render_llm_config()
     
-    st.subheader("Embedder Configuration")
     # Embedding model configuration UI
+    st.subheader("Embedder Configuration")
     render_embedder_config()
     
-    st.subheader("Document Store Configuration")
-    # Document store configuration UI
-    render_document_store_config()
-    
-    st.subheader("Pipeline Configuration")
     # Pipeline flow configuration UI
+    st.subheader("Pipeline Configuration")
     render_pipeline_config()
+
+    # Generate config.yaml and save configuration button
+    render_generate_button(engine_blocks, settings_block)
 
 with col2:
     # Final preview and export of the combined configuration as YAML
-    render_preview_and_generate(engine_blocks, pipeline_block, settings_block)
-    
-    # Signal that configuration is complete and ready for CLI continuation
-    render_finished_setting()
+    render_preview(engine_blocks, settings_block)
+

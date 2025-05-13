@@ -206,7 +206,6 @@ def render_llm_config():
                 llm_state, llm_msg = llm_completion_test(form)
                 if llm_state:
                     st.success("Test Success")
-                    st.success(llm_msg)
                 else:
                     st.error(llm_msg)
 
@@ -218,17 +217,22 @@ def render_embedder_config():
     Displays current provider settings and allows users to override the model name,
     alias, timeout, and base URL. Supports testing and saving.
     """
-    with st.expander("Embedder Configuration", expanded=False):
+    embedding_models = st.session_state[ConfigState.EMBEDDER_KEY].get("models", [])
+    default_name = embedding_models[0].get("model") or "text-embedding-3-large"
+    
+    with st.expander(f"{default_name}", expanded=False):
         st.markdown(f"**type:** `embedder`")
         st.markdown(f"**provider:** `{st.session_state[ConfigState.EMBEDDER_KEY].get('provider')}`")
 
-        embedding_models = st.session_state[ConfigState.EMBEDDER_KEY].get("models", [])
         embedding_api_base = embedding_models[0].get("api_base", "https://api.openai.com/v1") if embedding_models else ""
 
-        embedding_model_name = st.text_input("Embedding Model Name", key="embedding_model_name", value="text-embedding-3-large")
+        embedding_model_name = st.text_input("Embedding Model Name", key="embedding_model_name", value=default_name)
         embedding_model_alias = st.text_input("Alias (optional, e.g. default)", key="embedding_model_alias", value="default")
         embedding_model_api_base = st.text_input("API Base URL", key="embedding_model_api_base", value=embedding_api_base)
         embedding_model_timeout = st.text_input("Timeout (default: 120)", key="embedding_model_timeout", value="120")
+
+        # Dimension of the embedding model output vector, used by document store for index creation
+        document_store_dim = st.text_input("Embedding_model_dim (placed in doucument_store)", key="embedding_model_dim", value="3072")
 
         custom_embedding_setting = [{
             "model": embedding_model_name,
@@ -249,6 +253,14 @@ def render_embedder_config():
                 except ValueError:
                     errors.append("Timeout must be an integer.")
 
+            if not document_store_dim:
+                errors.append("Embedding model dim is required.")
+            else:
+                try:
+                    int(document_store_dim)
+                except ValueError:
+                    errors.append("Embedding model dim must be an integer.")
+
             if errors:
                 for error in errors:
                     st.error(error)
@@ -258,7 +270,18 @@ def render_embedder_config():
                     "provider": st.session_state[ConfigState.EMBEDDER_KEY].get("provider"),
                     "models": custom_embedding_setting
                 }
+
+                st.session_state.document_store = {
+                    "type": "document_store",
+                    "provider": st.session_state[ConfigState.DOC_STORE_KEY].get("provider"),
+                    "location": st.session_state[ConfigState.DOC_STORE_KEY].get("location"),
+                    "embedding_model_dim": document_store_dim,
+                    "timeout": st.session_state[ConfigState.DOC_STORE_KEY].get("timeout"),
+                    "recreate_index": st.session_state[ConfigState.DOC_STORE_KEY].get("recreate_index")
+                }
+                
                 st.success("Updated embedder model configuration")
+                st.rerun()
 
         if st.button("test_embedding_model", key="test_embedding_model"):
             if not st.session_state[ConfigState.API_KEY]:
@@ -267,164 +290,128 @@ def render_embedder_config():
 
             embedding_state, embedding_msg = llm_embedding_test()
             if embedding_state:
-                st.success(embedding_msg)
+                st.success("Success")
             else:
                 st.error(embedding_msg)
 
 
+# DELETE 
+# def render_document_store_config():
+#     """
+#     Render the document store configuration section.
+#     Displays current settings and allows updating index location, dimensions, timeout, etc.
+#     """
+#     with st.expander("Document Store Configuration", expanded=False):
+#         st.markdown(f"**type:** `document_store`")
+#         st.markdown(f"**provider:** `{st.session_state[ConfigState.DOC_STORE_KEY].get('provider')}`")
+#         st.markdown(f"**location:** `{st.session_state[ConfigState.DOC_STORE_KEY].get('location')}`")
 
-def render_document_store_config():
-    """
-    Render the document store configuration section.
-    Displays current settings and allows updating index location, dimensions, timeout, etc.
-    """
-    with st.expander("Document Store Configuration", expanded=False):
-        st.markdown(f"**type:** `document_store`")
-        st.markdown(f"**provider:** `{st.session_state[ConfigState.DOC_STORE_KEY].get('provider')}`")
-        st.markdown(f"**location:** `{st.session_state[ConfigState.DOC_STORE_KEY].get('location')}`")
+#         document_store_timeout = st.text_input("Timeout (default: 120)", key="document_store_timeout", value="120")
+#         st.markdown(f"**timeout:** `120`")
+#         st.markdown(f"**recreate_index:** `{st.session_state[ConfigState.DOC_STORE_KEY].get('recreate_index')}`")
 
-        document_store_timeout = st.text_input("Timeout (default: 120)", key="document_store_timeout", value="120")
-        st.markdown(f"**timeout:** `120`")
-        st.markdown(f"**recreate_index:** `{st.session_state[ConfigState.DOC_STORE_KEY].get('recreate_index')}`")
+#         document_store_dim = st.text_input("Embedding_model_dim", value="3072")
 
-        document_store_dim = st.text_input("Embedding_model_dim", value="3072")
+#         if st.button("💾  save", key="save_document_store"):
+#             errors = []
+#             if not document_store_dim:
+#                 errors.append("Embedding model dim is required.")
+#             else:
+#                 try:
+#                     int(document_store_dim)
+#                 except ValueError:
+#                     errors.append("Embedding model dim must be an integer.")
 
-        if st.button("💾  save", key="save_document_store"):
-            errors = []
-            if not document_store_dim:
-                errors.append("Embedding model dim is required.")
-            else:
-                try:
-                    int(document_store_dim)
-                except ValueError:
-                    errors.append("Embedding model dim must be an integer.")
+#             if not document_store_timeout:
+#                 errors.append("Timeout is required.")
+#             else:
+#                 try:
+#                     int(document_store_timeout)
+#                 except ValueError:
+#                     errors.append("Timeout must be an integer.")
 
-            if not document_store_timeout:
-                errors.append("Timeout is required.")
-            else:
-                try:
-                    int(document_store_timeout)
-                except ValueError:
-                    errors.append("Timeout must be an integer.")
-
-            if errors:
-                for error in errors:
-                    st.error(error)
-            else:
-                st.session_state.document_store = {
-                    "type": "document_store",
-                    "provider": st.session_state[ConfigState.DOC_STORE_KEY].get("provider"),
-                    "location": st.session_state[ConfigState.DOC_STORE_KEY].get("location"),
-                    "embedding_model_dim": document_store_dim,
-                    "timeout": document_store_timeout,
-                    "recreate_index": st.session_state[ConfigState.DOC_STORE_KEY].get("recreate_index")
-                }
-                st.success("Updated document store configuration")
-
+#             if errors:
+#                 for error in errors:
+#                     st.error(error)
+#             else:
+#                 st.session_state.document_store = {
+#                     "type": "document_store",
+#                     "provider": st.session_state[ConfigState.DOC_STORE_KEY].get("provider"),
+#                     "location": st.session_state[ConfigState.DOC_STORE_KEY].get("location"),
+#                     "embedding_model_dim": document_store_dim,
+#                     "timeout": document_store_timeout,
+#                     "recreate_index": st.session_state[ConfigState.DOC_STORE_KEY].get("recreate_index")
+#                 }
+#                 st.success("Updated document store configuration")
 
 def render_pipeline_config():
     """
     Render the pipeline configuration section.
     Allows selecting LLM models for each defined pipeline step.
     """
-    pipeline__llm_options = []
-    pipeline_name_options = [n for n in st.session_state[ConfigState.PIPELINE_KEY].get("pipes")]
+    pipeline_llm_options = []
+    all_pipelines = st.session_state[ConfigState.PIPELINE_KEY].get("pipes", [])
 
+    # set all LLM models options
     for model in st.session_state[ConfigState.LLM_MODELS_KEY]:
         if model.get("alias"):
-            pipeline__llm_options.append("litellm_llm." + model["alias"])
+            pipeline_llm_options.append("litellm_llm." + model["alias"])
         elif model.get("model"):
-            pipeline__llm_options.append("litellm_llm." + model["model"])
+            pipeline_llm_options.append("litellm_llm." + model["model"])
 
-    with st.expander("Pipeline Configuration", expanded=False):
-        selected_pipeline_name = st.selectbox("pipeline_name", options=[n.get("name") for n in pipeline_name_options if n.get("llm")])
+    # enumerate all pipelines, record original index
+    for original_idx, pipe in enumerate(all_pipelines):
+        if not pipe.get("llm"):
+            continue
 
-        for idx, form in enumerate(pipeline_name_options):
-            if form.get("name") == selected_pipeline_name:
-                for key, value in form.items():
-                    if key == "llm":
-                        pipeline_llm = st.selectbox(
-                            "llm",
-                            options=pipeline__llm_options,
-                            index=pipeline__llm_options.index(value) if value in pipeline__llm_options else 0,
-                            key=f"llm_{idx}"
-                        )
-                    else:
-                        st.markdown(f"**{key}:** `{value}`")
+        pipe_name = pipe.get("name", f"Unnamed Pipeline {original_idx}")
+        with st.expander(f"🔧 Pipeline: {pipe_name}", expanded=False):
+            for key, value in pipe.items():
+                if key == "llm":
+                    selected_llm = st.selectbox(
+                        "LLM Model",
+                        options=pipeline_llm_options,
+                        index=pipeline_llm_options.index(value) if value in pipeline_llm_options else 0,
+                        key=f"llm_{original_idx}"
+                    )
+                else:
+                    st.markdown(f"**{key}:** `{value}`")
 
-                if st.button("💾  Save this llm", key=f"save_{form['name']}"):
-                    st.session_state[ConfigState.PIPELINE_KEY]["pipes"][idx]["llm"] = pipeline_llm
-                    st.success(f"Updated pipeline LLM: {pipeline_llm}")
+            if st.button("💾  Save this llm", key=f"save_{pipe_name}"):
+                # ✅ use original index to update llm
+                st.session_state[ConfigState.PIPELINE_KEY]["pipes"][original_idx]["llm"] = selected_llm
+                st.success(f"✅ Updated pipeline `{pipe_name}` LLM to `{selected_llm}`")
 
 
-def render_preview_and_generate(engine_blocks, pipeline_block, settings_block):
+
+def render_preview(engine_blocks, settings_block):
     """
-    Render the preview section and generate final YAML output.
-    Displays all configured components and writes to a local file.
+    Render the preview section and display all configured components 
     """
     st.subheader("Current Configuration (Preview)")
 
-    # Compose LLM block
-    llm_preview = {
-        "type": "llm",
-        "provider": "litellm_llm",
-        "models": [
-            {k: v for k, v in model.items() if k != "id"}
-            for model in st.session_state.get(ConfigState.LLM_MODELS_KEY, [])
-        ]
-    }
-
-    embedder_preview = st.session_state.get(ConfigState.EMBEDDER_KEY)
-    document_store_preview = st.session_state.get(ConfigState.DOC_STORE_KEY)
-
-    pipeline_preview = {
-        "type": "pipeline",
-        "pipes": [form for form in st.session_state.get(ConfigState.PIPELINE_KEY, {}).get("pipes", []) if form.get("llm")]
-    }
-
-    preview_blocks = [llm_preview, embedder_preview, document_store_preview, pipeline_preview]
-
-    generate_pipeline_block = {
-        "type": "pipeline",
-        "pipes": st.session_state.get(ConfigState.PIPELINE_KEY, {}).get("pipes", [])
-    }
-
-    generate_yaml_blocks = [
-        llm_preview,
-        embedder_preview,
-        *[
-            {"type": "engine", "provider": engine.get("provider"), "endpoint": engine.get("endpoint")}
-            for engine in engine_blocks
-        ],
-        document_store_preview,
-        generate_pipeline_block,
-        {"settings": settings_block}
-    ]
-
+    preview_blocks, _ = get_config_blocks(engine_blocks, settings_block)
     st.json(preview_blocks)
 
-    if st.button("Generate config.yaml", key="generate_config_yaml"):
-        from constants import CONFIG_OUT_PATH
-        with open(CONFIG_OUT_PATH, "w", encoding="utf-8") as f:
-            yaml.dump_all(generate_yaml_blocks, f, sort_keys=False, allow_unicode=True)
-        st.success(f"Config saved to {CONFIG_OUT_PATH.resolve()}")
+def render_generate_button(engine_blocks, settings_block):
+    """
+    Render the generate button section and handle saving configuration to files.
+    Writes the final configuration to config.yaml and creates config.done marker file.
+    """
+    if st.button("Save configuration", key="generate_config_yaml"):
+        from constants import CONFIG_OUT_PATH, CONFIG_DONE_PATH
+        _, generate_blocks = get_config_blocks(engine_blocks, settings_block)
 
-def render_finished_setting():
-    """
-    Render a button to mark configuration as complete.
-    This writes 'true' to the config.done file and notifies the user.
-    """
-    if st.button("FINISHED SETTING", key="finished_configuration_setting"):
-        from constants import CONFIG_DONE_PATH
         try:
-            # Overwrite the config.done file to signal setup completion
+            with open(CONFIG_OUT_PATH, "w", encoding="utf-8") as f:
+                yaml.dump_all(generate_blocks, f, sort_keys=False, allow_unicode=True)
+            st.success(f"Config saved to {CONFIG_OUT_PATH.resolve()}")
+
             with open(CONFIG_DONE_PATH, "w", encoding="utf-8") as f:
                 f.write("true\n")
-
             st.success("✅ Configuration completed. Please return to the CLI.")
         except Exception as e:
-            st.error(f"❌ Failed to mark as finished: {e}")
-
+            st.error(f"❌ Failed to generate config: {e}")
 
 
 
@@ -514,3 +501,45 @@ def validate_llm_form(form):
             errors.append(f"KWArg field {idx+1}: Key is required when value is provided.")
 
     return errors
+
+
+def get_config_blocks(engine_blocks, settings_block): 
+    """
+    Returns preview blocks for display and generate blocks for saving.
+    """
+    llm_preview = {
+        "type": "llm",
+        "provider": "litellm_llm",
+        "models": [
+            {k: v for k, v in model.items() if k != "id"}
+            for model in st.session_state.get(ConfigState.LLM_MODELS_KEY, [])
+        ]
+    }
+
+    embedder_preview = st.session_state.get(ConfigState.EMBEDDER_KEY)
+    document_store_preview = st.session_state.get(ConfigState.DOC_STORE_KEY)
+
+    pipeline_preview = {
+        "type": "pipeline",
+        "pipes": [form for form in st.session_state.get(ConfigState.PIPELINE_KEY, {}).get("pipes", []) if form.get("llm")]
+    }
+
+    generate_pipeline_block = {
+        "type": "pipeline",
+        "pipes": st.session_state.get(ConfigState.PIPELINE_KEY, {}).get("pipes", [])
+    }
+
+    preview_blocks = [llm_preview, embedder_preview, document_store_preview, pipeline_preview]
+    generate_blocks = [
+        llm_preview,
+        embedder_preview,
+        *[
+            {"type": "engine", "provider": engine.get("provider"), "endpoint": engine.get("endpoint")}
+            for engine in engine_blocks
+        ],
+        document_store_preview,
+        generate_pipeline_block,
+        {"settings": settings_block}
+    ]
+
+    return preview_blocks, generate_blocks
