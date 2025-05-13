@@ -115,7 +115,7 @@ class WrenIbis(Engine):
         limit: int = 500,
         **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
-        api_endpoint = f"{self._endpoint}/v2/connector/{self._source}/query"
+        api_endpoint = f"{self._endpoint}/v3/connector/{self._source}/query"
         if dry_run:
             api_endpoint += "?dryRun=true&limit=1"
         else:
