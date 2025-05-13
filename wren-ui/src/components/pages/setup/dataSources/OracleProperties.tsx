@@ -89,9 +89,6 @@ export default function OracleProperties(props: Props) {
       >
         <Input placeholder="Oracle database name" disabled={isEditMode} />
       </Form.Item>
-      <Form.Item label="Use SSL" name="ssl" valuePropName="checked">
-        <Switch />
-      </Form.Item>
     </>
   );
 }
