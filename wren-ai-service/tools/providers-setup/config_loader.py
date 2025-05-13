@@ -4,6 +4,7 @@ from session_state import ConfigState
 from pathlib import Path
 import constants as cst
 from typing import Any, Dict, List
+import streamlit as st
 
 def load_config_yaml_blocks() -> List[Dict[str, Any]]:
     """
@@ -15,7 +16,7 @@ def load_config_yaml_blocks() -> List[Dict[str, Any]]:
         try:
             return load_yaml_list(CONFIG_IN_PATH)
         except Exception as e:
-            print(f"❌ Failed to parse local config.yaml: {e}")
+            st.error(f"❌ Failed to parse local config.yaml: {e}")
             return []
     else:
         return fetch_yaml_from_url(cst.CONFIG_URL)
@@ -30,7 +31,7 @@ def load_selected_example_yaml(selected_example: str) -> List[Dict[str, Any]]:
         response.raise_for_status()
         return list(yaml.safe_load_all(response.text))
     except requests.RequestException as e:
-        print(f"❌ Error loading config from GitHub: {e}")
+        st.error(f"❌ Error loading config from GitHub: {e}")
         return []
 
 def fetch_yaml_from_url(url: str) -> List[Dict[str, Any]]:
@@ -49,7 +50,7 @@ def fetch_yaml_from_url(url: str) -> List[Dict[str, Any]]:
         return config_list
 
     except (requests.RequestException, ValueError, yaml.YAMLError) as e:
-        print(f"❌ Error loading config from {url}: {e}")
+        st.error(f"❌ Error loading config from {url}: {e}")
         return []
 
 def extract_config_blocks(config_list: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -102,7 +103,7 @@ def fetch_example_yaml_filenames() -> List[str]:
         file_list = response.json()
         return [f["name"] for f in file_list if f["name"].endswith(".yaml")]
     except requests.RequestException as e:
-        print(f"Error fetching config example filenames: {e}")
+        st.error(f"Error fetching config example filenames: {e}")
         return []
 
 def apply_config_blocks(config_blocks: List[Dict[str, Any]]):

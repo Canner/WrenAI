@@ -29,6 +29,25 @@ engine_blocks = blocks.get("engine", [])
 pipeline_block = blocks.get("pipeline", {})
 settings_block = blocks.get("settings", {})
 
+
+# Validate required blocks (type + content)
+missing_blocks = []
+
+if not isinstance(llm_block, dict) or not llm_block:
+    missing_blocks.append("LLM")
+if not isinstance(embedder_block, dict) or not embedder_block:
+    missing_blocks.append("Embedder")
+if not isinstance(document_store_block, dict) or not document_store_block:
+    missing_blocks.append("Document Store")
+if not isinstance(pipeline_block, dict) or not pipeline_block:
+    missing_blocks.append("Pipeline")
+
+if missing_blocks:
+    st.warning(
+        f"⚠️ Missing or empty configuration blocks: {', '.join(missing_blocks)}. "
+        "Default values will be used where applicable."
+    )
+    
 # Initialize session state with default or imported config values
 ConfigState.init(llm_block, embedder_block, document_store_block, pipeline_block)
 
