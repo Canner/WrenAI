@@ -257,6 +257,10 @@ func Launch() {
 
 		containerName := "wrenai-providers-setup"
 
+		// Find available port for Streamlit UI
+		streamlitPort := utils.FindAvailablePort(8501)
+		pterm.Info.Println("Using port", streamlitPort, "for Streamlit UI")
+
 		// Remove any existing container (whether running or stopped)
 		if err := utils.RemoveContainerIfExists(containerName); err != nil {
 			pterm.Warning.Println("⚠️ Failed to remove existing container:", err)
@@ -269,7 +273,7 @@ func Launch() {
 			return
 		}
 
-		pterm.Info.Println("🚀 providers-setup UI container started at http://localhost:8501")
+		pterm.Info.Println(fmt.Sprintf("🚀 providers-setup UI container started at http://localhost:%d", streamlitPort))
 
 		// Wait for user to complete configuration in the UI
 		pterm.Info.Println("⌛ Waiting for user to finish UI configuration...")

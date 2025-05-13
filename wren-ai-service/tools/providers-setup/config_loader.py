@@ -55,15 +55,21 @@ def fetch_yaml_from_url(url: str) -> List[Dict[str, Any]]:
 
 def extract_config_blocks(config_list: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
-    Convert a flat list of config blocks into grouped dictionary format 
-    with keys like 'llm', 'embedder', 'document_store', and 'pipeline'.
+    Extract the first block of each type from the config list.
     """
     grouped = group_blocks(config_list)
+
+    def get_first_or_empty(key: str) -> Dict[str, Any]:
+        val = grouped.get(key, {})
+        if isinstance(val, list):
+            return val[0] if val else {}
+        return val or {}
+
     return {
-        "llm": grouped.get("llm", {}),
-        "embedder": grouped.get("embedder", {}),
-        "document_store": grouped.get("document_store", {}),
-        "pipeline": grouped.get("pipeline", {})
+        "llm": get_first_or_empty("llm"),
+        "embedder": get_first_or_empty("embedder"),
+        "document_store": get_first_or_empty("document_store"),
+        "pipeline": get_first_or_empty("pipeline"),
     }
 
 def load_yaml_list(path: Path) -> List[Dict[str, Any]]:
