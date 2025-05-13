@@ -10,9 +10,10 @@ def load_config_yaml_blocks() -> List[Dict[str, Any]]:
     Load the config.yaml from local disk if available; 
     otherwise, fetch it from the GitHub URL without downloading it.
     """
-    if cst.CONFIG_IN_PATH.exists():
+    CONFIG_IN_PATH = cst.get_config_path()
+    if CONFIG_IN_PATH.exists():
         try:
-            return load_yaml_list(cst.CONFIG_IN_PATH)
+            return load_yaml_list(CONFIG_IN_PATH)
         except Exception as e:
             print(f"❌ Failed to parse local config.yaml: {e}")
             return []

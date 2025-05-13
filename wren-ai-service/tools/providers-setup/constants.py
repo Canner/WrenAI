@@ -53,20 +53,35 @@ CONFIG_EXAMPLES_SELECTED_URL = (
 
 volume_app_data = Path("/app/data")
 
-# Docker environment: mounted config.yaml
-docker_path = volume_app_data / "config.yaml"
-
-# Local fallback: ~/.wrenai/config.yaml
-local_path = Path(os.path.expanduser("~")) / ".wrenai" / "config.yaml"
-
-# Path to signal that configuration is complete
-CONFIG_DONE_PATH = volume_app_data / "config.done"
-
-# Input path for reading config: prefer Docker path if it exists
-CONFIG_IN_PATH = docker_path if docker_path.exists() else local_path
-
-# Output path for generated YAML
-CONFIG_OUT_PATH = volume_app_data / "config.yaml"
-
 # Global HTTP request timeout in seconds
 REQUEST_TIMEOUT = 10
+
+def get_config_done_path():
+    # Docker environment: mounted config.done
+    docker_path = volume_app_data / "config.done"
+    local_path = Path.home() / ".wrenai" / "config.done"
+
+    if docker_path.exists():
+        return docker_path
+    else:
+        return local_path
+
+def get_config_path():
+    # Docker environment: mounted config.yaml
+    docker_path = volume_app_data / "config.yaml"
+    local_path = Path.home() / ".wrenai" / "config.yaml"
+
+    if docker_path.exists():
+        return docker_path
+    else:
+        return local_path
+
+# Path to the .env file
+def get_env_path():
+    docker_path = volume_app_data / ".env"
+    local_path = Path.home() / ".wrenAI" / ".env"
+
+    if docker_path.exists():
+        return docker_path
+    else:
+        return local_path

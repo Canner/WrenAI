@@ -38,6 +38,8 @@ def render_apikey():
     Supports adding, editing, saving, and deleting multiple API keys.
     """
     with st.expander("API Key", expanded=False):
+        from constants import get_env_path
+        CONFIG_ENV_PATH = get_env_path()
         add_api_key = st.session_state[ConfigState.API_KEY]
         add_api_key_form = st.session_state[ConfigState.API_KEY_FORM]
 
@@ -56,20 +58,17 @@ def render_apikey():
             with rcol:
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.button("DEL", key=f"del_apikey_{apikey['id']}"):
-                    # Attempt to remove the API key from the .env file if it exists
-                    from pathlib import Path
-
-                    env_path = Path("/app/data/.env")
+                    # Attempt to remove the API key from the .env file if it exists  
                     key_to_delete = apikey["key"]
 
-                    if env_path.exists():
-                        with open(env_path, "r", encoding="utf-8") as f:
+                    if CONFIG_ENV_PATH.exists():
+                        with open(CONFIG_ENV_PATH, "r", encoding="utf-8") as f:
                             lines = f.readlines()
 
                         # Remove the line that starts with the specified key
                         new_lines = [line for line in lines if not line.strip().startswith(f"{key_to_delete}=")]
 
-                        with open(env_path, "w", encoding="utf-8") as f:
+                        with open(CONFIG_ENV_PATH, "w", encoding="utf-8") as f:
                             f.writelines(new_lines)
 
                     # Remove the key from both the environment and session state
@@ -105,14 +104,11 @@ def render_apikey():
                 item["is_saved"] = True
 
             # ✅ Overwrite or append keys to /app/data/.env
-            from pathlib import Path
-
-            env_path = Path("/app/data/.env")
             existing_lines = []
 
             # Read existing lines if the .env file exists
-            if env_path.exists():
-                with open(env_path, "r", encoding="utf-8") as f:
+            if CONFIG_ENV_PATH.exists():
+                with open(CONFIG_ENV_PATH, "r", encoding="utf-8") as f:
                     existing_lines = f.readlines()
 
             new_lines = []
@@ -137,7 +133,7 @@ def render_apikey():
                     new_lines.append(f"{k}={v}\n")
 
             # Write updated lines back to the .env file
-            with open(env_path, "w", encoding="utf-8") as f:
+            with open(CONFIG_ENV_PATH, "w", encoding="utf-8") as f:
                 f.writelines(new_lines)
 
             st.success("API keys saved to .env.")
@@ -399,7 +395,9 @@ def render_generate_button(engine_blocks, settings_block):
     Writes the final configuration to config.yaml and creates config.done marker file.
     """
     if st.button("Save configuration", key="generate_config_yaml"):
-        from constants import CONFIG_OUT_PATH, CONFIG_DONE_PATH
+        from constants import get_config_path, get_config_done_path
+        CONFIG_OUT_PATH = get_config_path()
+        CONFIG_DONE_PATH = get_config_done_path()
         _, generate_blocks = get_config_blocks(engine_blocks, settings_block)
 
         try:
