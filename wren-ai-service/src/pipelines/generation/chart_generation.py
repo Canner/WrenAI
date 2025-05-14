@@ -32,10 +32,11 @@ Besides, you need to give a concise and easy-to-understand reasoning to describe
 
 ### OUTPUT FORMAT ###
 
-Please provide your chain of thought reasoning, and the vega-lite schema in JSON format.
+Please provide your chain of thought reasoning, chart type and the vega-lite schema in JSON format.
 
 {{
     "reasoning": <REASON_TO_CHOOSE_THE_SCHEMA_IN_STRING_FORMATTED_IN_LANGUAGE_PROVIDED_BY_USER>,
+    "chart_type": <CHART_TYPE_IN_STRING>,
     "chart_schema": <VEGA_LITE_JSON_SCHEMA>
 }}
 """
@@ -89,16 +90,14 @@ async def generate_chart(prompt: dict, generator: Any) -> dict:
 @observe(capture_input=False)
 def post_process(
     generate_chart: dict,
-    vega_lite_schema: Dict[str, Any],
     remove_data_from_chart_schema: bool,
     preprocess_data: dict,
     post_processor: ChartGenerationPostProcessor,
 ) -> dict:
     return post_processor.run(
         generate_chart.get("replies"),
-        vega_lite_schema,
         preprocess_data["sample_data"],
-        remove_data_from_chart_schema,
+        remove_data_from_chart_schema=remove_data_from_chart_schema,
     )
 
 
@@ -135,10 +134,6 @@ class ChartGeneration(BasicPipeline):
             "post_processor": ChartGenerationPostProcessor(),
         }
 
-        self._configs = {
-            "vega_lite_schema": _vega_lite_schema,
-        }
-
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
@@ -162,7 +157,6 @@ class ChartGeneration(BasicPipeline):
                 "language": language,
                 "remove_data_from_chart_schema": remove_data_from_chart_schema,
                 **self._components,
-                **self._configs,
             },
         )
 

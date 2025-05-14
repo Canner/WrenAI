@@ -66,11 +66,7 @@ class ChartResultRequest(BaseModel):
 
 class ChartResult(BaseModel):
     reasoning: str
-    chart_type: Optional[
-        Literal[
-            "line", "bar", "pie", "grouped_bar", "stacked_bar", "area", "multi_line", ""
-        ]
-    ] = ""
+    chart_type: Optional[str] = ""
     chart_schema: Optional[dict] = None
 
 

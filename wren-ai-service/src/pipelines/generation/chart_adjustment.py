@@ -14,22 +14,25 @@ from src.pipelines.generation.utils.chart import (
     ChartDataPreprocessor,
     ChartGenerationPostProcessor,
     ChartGenerationResults,
-    chart_generation_instructions,
 )
-from src.web.v1.services.chart_adjustment import ChartAdjustmentOption
 
 logger = logging.getLogger("wren-ai-service")
 
 
-chart_adjustment_system_prompt = f"""
+def gen_chart_adjustment_system_prompt(vega_lite_schema: Dict[str, Any]) -> str:
+    return f"""
 ### TASK ###
 
-You are a data analyst great at visualizing data using vega-lite! Given the user's question, SQL, sample data, sample column values, original vega-lite schema and adjustment options, 
-you need to re-generate vega-lite schema in JSON and provide suitable chart type.
-Besides, you need to give a concise and easy-to-understand reasoning to describe why you provide such vega-lite schema based on the question, SQL, sample data, sample column values, original vega-lite schema and adjustment options.
+You are a data analyst great at generating data visualization using vega-lite! Given the user's question, SQL, sample data, sample column values, original vega-lite schema and adjustment command, 
+you need to think about the best chart type and generate correspondingvega-lite schema in JSON format.
+Besides, you need to give a concise and easy-to-understand reasoning to describe why you provide such vega-lite schema based on the question, SQL, sample data, sample column values, original vega-lite schema and adjustment command.
 
-{chart_generation_instructions}
-- If you think the adjustment options are not suitable for the data, you can return an empty string for the schema and chart type and give reasoning to explain why.
+### INSTRUCTIONS ###
+- If you think the adjustment command is not suitable for the data, you can return an empty string for the schema and chart type and give reasoning to explain why.
+
+### VEGA-LITE SCHEMA ###
+
+{vega_lite_schema}
 
 ### OUTPUT FORMAT ###
 
@@ -37,10 +40,11 @@ Please provide your chain of thought reasoning, chart type and the vega-lite sch
 
 {{
     "reasoning": <REASON_TO_CHOOSE_THE_SCHEMA_IN_STRING_FORMATTED_IN_LANGUAGE_PROVIDED_BY_USER>,
-    "chart_type": "line" | "multi_line" | "bar" | "pie" | "grouped_bar" | "stacked_bar" | "area" | "",
+    "chart_type": <CHART_TYPE_IN_STRING>,
     "chart_schema": <VEGA_LITE_JSON_SCHEMA>
 }}
 """
+
 
 chart_adjustment_user_prompt_template = """
 ### INPUT ###
@@ -51,25 +55,7 @@ Sample Data: {{ sample_data }}
 Sample Column Values: {{ sample_column_values }}
 Language: {{ language }}
 
-Adjustment Options:
-- Chart Type: {{ adjustment_option.chart_type }}
-{% if adjustment_option.chart_type != "pie" %}
-{% if adjustment_option.x_axis %}
-- X Axis: {{ adjustment_option.x_axis }}
-{% endif %}
-{% if adjustment_option.y_axis %}
-- Y Axis: {{ adjustment_option.y_axis }}
-{% endif %}
-{% endif %}
-{% if adjustment_option.x_offset and adjustment_option.chart_type == "grouped_bar" %}
-- X Offset: {{ adjustment_option.x_offset }}
-{% endif %}
-{% if adjustment_option.color and adjustment_option.chart_type != "area" %}
-- Color: {{ adjustment_option.color }}
-{% endif %}
-{% if adjustment_option.theta and adjustment_option.chart_type == "pie" %}
-- Theta: {{ adjustment_option.theta }}
-{% endif %}
+Adjustment Command: {{ adjustment_command }}
 
 Please think step by step
 """
@@ -87,7 +73,7 @@ def preprocess_data(
 def prompt(
     query: str,
     sql: str,
-    adjustment_option: ChartAdjustmentOption,
+    adjustment_command: str,
     chart_schema: dict,
     preprocess_data: dict,
     language: str,
@@ -99,7 +85,7 @@ def prompt(
     return prompt_builder.run(
         query=query,
         sql=sql,
-        adjustment_option=adjustment_option,
+        adjustment_command=adjustment_command,
         chart_schema=chart_schema,
         sample_data=sample_data,
         sample_column_values=sample_column_values,
@@ -115,14 +101,14 @@ async def generate_chart_adjustment(prompt: dict, generator: Any) -> dict:
 @observe(capture_input=False)
 def post_process(
     generate_chart_adjustment: dict,
-    vega_schema: Dict[str, Any],
     preprocess_data: dict,
+    remove_data_from_chart_schema: bool,
     post_processor: ChartGenerationPostProcessor,
 ) -> dict:
     return post_processor.run(
         generate_chart_adjustment.get("replies"),
-        vega_schema,
         preprocess_data["sample_data"],
+        remove_data_from_chart_schema=remove_data_from_chart_schema,
     )
 
 
@@ -144,24 +130,21 @@ class ChartAdjustment(BasicPipeline):
         llm_provider: LLMProvider,
         **kwargs,
     ):
+        with open("src/pipelines/generation/utils/vega-lite-schema-v5.json", "r") as f:
+            _vega_lite_schema = orjson.loads(f.read())
+
         self._components = {
             "prompt_builder": PromptBuilder(
                 template=chart_adjustment_user_prompt_template
             ),
             "generator": llm_provider.get_generator(
-                system_prompt=chart_adjustment_system_prompt,
+                system_prompt=gen_chart_adjustment_system_prompt(_vega_lite_schema),
                 generation_kwargs=CHART_ADJUSTMENT_MODEL_KWARGS,
             ),
             "chart_data_preprocessor": ChartDataPreprocessor(),
             "post_processor": ChartGenerationPostProcessor(),
         }
 
-        with open("src/pipelines/generation/utils/vega-lite-schema-v5.json", "r") as f:
-            _vega_schema = orjson.loads(f.read())
-
-        self._configs = {
-            "vega_schema": _vega_schema,
-        }
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
@@ -171,10 +154,11 @@ class ChartAdjustment(BasicPipeline):
         self,
         query: str,
         sql: str,
-        adjustment_option: ChartAdjustmentOption,
+        adjustment_command: str,
         chart_schema: dict,
         data: dict,
         language: str,
+        remove_data_from_chart_schema: bool = True,
     ) -> dict:
         logger.info("Chart Adjustment pipeline is running...")
 
@@ -183,12 +167,12 @@ class ChartAdjustment(BasicPipeline):
             inputs={
                 "query": query,
                 "sql": sql,
-                "adjustment_option": adjustment_option,
+                "adjustment_command": adjustment_command,
                 "chart_schema": chart_schema,
                 "data": data,
                 "language": language,
+                "remove_data_from_chart_schema": remove_data_from_chart_schema,
                 **self._components,
-                **self._configs,
             },
         )
 
@@ -201,7 +185,7 @@ if __name__ == "__main__":
         "chart_adjustment",
         query="show me the dataset",
         sql="",
-        adjustment_option=ChartAdjustmentOption(),
+        adjustment_command="",
         chart_schema={},
         # data={},
         language="English",
