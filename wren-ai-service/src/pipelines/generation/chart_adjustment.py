@@ -2,7 +2,6 @@ import logging
 import sys
 from typing import Any, Dict
 
-import orjson
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
@@ -14,6 +13,7 @@ from src.pipelines.generation.utils.chart import (
     ChartDataPreprocessor,
     ChartGenerationPostProcessor,
     ChartGenerationResults,
+    read_vega_lite_schema,
 )
 
 logger = logging.getLogger("wren-ai-service")
@@ -130,15 +130,14 @@ class ChartAdjustment(BasicPipeline):
         llm_provider: LLMProvider,
         **kwargs,
     ):
-        with open("src/pipelines/generation/utils/vega-lite-schema-v5.json", "r") as f:
-            _vega_lite_schema = orjson.loads(f.read())
-
         self._components = {
             "prompt_builder": PromptBuilder(
                 template=chart_adjustment_user_prompt_template
             ),
             "generator": llm_provider.get_generator(
-                system_prompt=gen_chart_adjustment_system_prompt(_vega_lite_schema),
+                system_prompt=gen_chart_adjustment_system_prompt(
+                    read_vega_lite_schema()
+                ),
                 generation_kwargs=CHART_ADJUSTMENT_MODEL_KWARGS,
             ),
             "chart_data_preprocessor": ChartDataPreprocessor(),
