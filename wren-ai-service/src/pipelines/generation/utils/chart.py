@@ -286,7 +286,7 @@ class ChartGenerationPostProcessor:
     def run(
         self,
         replies: str,
-        vega_schema: Dict[str, Any],
+        vega_lite_schema: Dict[str, Any],
         sample_data: list[dict],
         remove_data_from_chart_schema: Optional[bool] = True,
     ):
@@ -304,7 +304,7 @@ class ChartGenerationPostProcessor:
                 ] = "https://vega.github.io/schema/vega-lite/v5.json"
                 chart_schema["data"] = {"values": sample_data}
 
-                validate(chart_schema, schema=vega_schema)
+                validate(chart_schema, schema=vega_lite_schema)
 
                 if remove_data_from_chart_schema:
                     chart_schema["data"]["values"] = []
