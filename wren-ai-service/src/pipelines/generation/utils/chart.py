@@ -342,6 +342,13 @@ class ChartGenerationPostProcessor:
             }
 
 
+def read_vega_lite_schema() -> Dict[str, Any]:
+    with open("src/pipelines/generation/utils/vega-lite-schema-v6.1.2.json", "r") as f:
+        vega_lite_schema = orjson.loads(f.read())
+
+    return vega_lite_schema
+
+
 class ChartSchema(BaseModel):
     class ChartType(BaseModel):
         type: Literal["bar", "line", "area", "arc"]
