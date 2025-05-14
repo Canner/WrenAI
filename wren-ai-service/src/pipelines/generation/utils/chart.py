@@ -243,6 +243,11 @@ chart_generation_instructions = """
 """
 
 
+def load_custom_theme() -> Dict[str, Any]:
+    with open("src/pipelines/generation/utils/theme_powerbi.json", "r") as f:
+        return orjson.loads(f.read())
+
+
 @component
 class ChartDataPreprocessor:
     @component.output_types(
@@ -301,6 +306,7 @@ class ChartGenerationPostProcessor:
                     "$schema"
                 ] = "https://vega.github.io/schema/vega-lite/v5.json"
                 chart_schema["data"] = {"values": sample_data}
+                chart_schema["config"] = load_custom_theme()
 
                 if remove_data_from_chart_schema:
                     chart_schema["data"]["values"] = []
@@ -343,7 +349,7 @@ class ChartGenerationPostProcessor:
 
 
 def read_vega_lite_schema() -> Dict[str, Any]:
-    with open("src/pipelines/generation/utils/vega-lite-schema-v6.1.2.json", "r") as f:
+    with open("src/pipelines/generation/utils/vega-lite-schema-v5.json", "r") as f:
         vega_lite_schema = orjson.loads(f.read())
 
     return vega_lite_schema

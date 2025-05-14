@@ -1,0 +1,128 @@
+{
+    "view": {
+        "stroke": "transparent"
+    },
+    "background": "transparent",
+    "font": "Segoe UI",
+    "header": {
+        "titleFont": "wf_standard-font, helvetica, arial, sans-serif",
+        "titleFontSize": 16,
+        "titleColor": "#252423",
+        "labelFont": "Segoe UI",
+        "labelFontSize": 13.333333333333334,
+        "labelColor": "#605E5C"
+    },
+    "axis": {
+        "ticks": false,
+        "grid": false,
+        "domain": false,
+        "labelColor": "#605E5C",
+        "labelFontSize": 12,
+        "titleFont": "wf_standard-font, helvetica, arial, sans-serif",
+        "titleColor": "#252423",
+        "titleFontSize": 16,
+        "titleFontWeight": "normal"
+    },
+    "axisQuantitative": {
+        "tickCount": 3,
+        "grid": true,
+        "gridColor": "#C8C6C4",
+        "gridDash": [
+            1,
+            5
+        ],
+        "labelFlush": false
+    },
+    "axisBand": {
+        "tickExtra": true
+    },
+    "axisX": {
+        "labelPadding": 5
+    },
+    "axisY": {
+        "labelPadding": 10
+    },
+    "bar": {
+        "fill": "#118DFF"
+    },
+    "line": {
+        "stroke": "#118DFF",
+        "strokeWidth": 3,
+        "strokeCap": "round",
+        "strokeJoin": "round"
+    },
+    "text": {
+        "font": "Segoe UI",
+        "fontSize": 12,
+        "fill": "#605E5C"
+    },
+    "arc": {
+        "fill": "#118DFF"
+    },
+    "area": {
+        "fill": "#118DFF",
+        "line": true,
+        "opacity": 0.6
+    },
+    "path": {
+        "stroke": "#118DFF"
+    },
+    "rect": {
+        "fill": "#118DFF"
+    },
+    "point": {
+        "fill": "#118DFF",
+        "filled": true,
+        "size": 75
+    },
+    "shape": {
+        "stroke": "#118DFF"
+    },
+    "symbol": {
+        "fill": "#118DFF",
+        "strokeWidth": 1.5,
+        "size": 50
+    },
+    "legend": {
+        "titleFont": "Segoe UI",
+        "titleFontWeight": "bold",
+        "titleColor": "#605E5C",
+        "labelFont": "Segoe UI",
+        "labelFontSize": 13.333333333333334,
+        "labelColor": "#605E5C",
+        "symbolType": "circle",
+        "symbolSize": 75
+    },
+    "range": {
+        "category": [
+            "#118DFF",
+            "#12239E",
+            "#E66C37",
+            "#6B007B",
+            "#E044A7",
+            "#744EC2",
+            "#D9B300",
+            "#D64550"
+        ],
+        "diverging": [
+            "#DEEFFF",
+            "#118DFF"
+        ],
+        "heatmap": [
+            "#DEEFFF",
+            "#118DFF"
+        ],
+        "ordinal": [
+            "#DEEFFF",
+            "#c7e4ff",
+            "#b0d9ff",
+            "#9aceff",
+            "#83c3ff",
+            "#6cb9ff",
+            "#55aeff",
+            "#3fa3ff",
+            "#2898ff",
+            "#118DFF"
+        ]
+    }
+}
