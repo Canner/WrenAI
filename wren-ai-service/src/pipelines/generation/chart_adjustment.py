@@ -28,6 +28,7 @@ you need to think about the best chart type and generate corresponding vega-lite
 Besides, you need to give a concise and easy-to-understand reasoning to describe why you provide such vega-lite schema based on the question, SQL, sample data, sample column values, original vega-lite schema and adjustment command.
 
 ### INSTRUCTIONS ###
+
 - If you think the adjustment command is not suitable for the data, you can return an empty string for the schema and chart type and give reasoning to explain why.
 
 ### VEGA-LITE SCHEMA ###
