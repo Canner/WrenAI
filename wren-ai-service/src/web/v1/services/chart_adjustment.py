@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Literal, Optional
+from typing import Any, Dict, Literal, Optional
 
 from cachetools import TTLCache
 from langfuse.decorators import observe
@@ -28,11 +28,14 @@ class ChartAdjustmentRequest(BaseModel):
     _query_id: str | None = None
     query: str
     sql: str
-    adjustment_option: ChartAdjustmentOption
+    adjustment_command: str
+    data: Optional[Dict[str, Any]] = None
+    adjustment_option: Optional[ChartAdjustmentOption] = None
     chart_schema: dict
     project_id: Optional[str] = None
     thread_id: Optional[str] = None
     configurations: Optional[Configuration] = Configuration()
+    remove_data_from_chart_schema: Optional[bool] = True
 
     @property
     def query_id(self) -> str:
@@ -77,9 +80,7 @@ class ChartAdjustmentResultRequest(BaseModel):
 
 class ChartAdjustmentResult(BaseModel):
     reasoning: str
-    chart_type: Literal[
-        "line", "bar", "pie", "grouped_bar", "stacked_bar", "area", "multi_line", ""
-    ]  # empty string for no chart
+    chart_type: Optional[str] = ""
     chart_schema: dict
 
 
@@ -90,6 +91,7 @@ class ChartAdjustmentResultResponse(BaseModel):
     response: Optional[ChartAdjustmentResult] = None
     error: Optional[ChartAdjustmentError] = None
     trace_id: Optional[str] = None
+
 
 class ChartAdjustmentService:
     def __init__(
@@ -135,12 +137,15 @@ class ChartAdjustmentService:
                 trace_id=trace_id,
             )
 
-            sql_data = (
-                await self._pipelines["sql_executor"].run(
-                    sql=chart_adjustment_request.sql,
-                    project_id=chart_adjustment_request.project_id,
-                )
-            )["execute_sql"]["results"]
+            if not chart_adjustment_request.data:
+                sql_data = (
+                    await self._pipelines["sql_executor"].run(
+                        sql=chart_adjustment_request.sql,
+                        project_id=chart_adjustment_request.project_id,
+                    )
+                )["execute_sql"]["results"]
+            else:
+                sql_data = chart_adjustment_request.data
 
             self._chart_adjustment_results[query_id] = ChartAdjustmentResultResponse(
                 status="generating",
@@ -150,9 +155,10 @@ class ChartAdjustmentService:
             chart_adjustment_result = await self._pipelines["chart_adjustment"].run(
                 query=chart_adjustment_request.query,
                 sql=chart_adjustment_request.sql,
-                adjustment_option=chart_adjustment_request.adjustment_option,
+                adjustment_command=chart_adjustment_request.adjustment_command,
                 chart_schema=chart_adjustment_request.chart_schema,
                 data=sql_data,
+                remove_data_from_chart_schema=chart_adjustment_request.remove_data_from_chart_schema,
                 language=chart_adjustment_request.configurations.language,
             )
             chart_result = chart_adjustment_result["post_process"]["results"]

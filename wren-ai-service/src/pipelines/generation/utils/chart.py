@@ -4,7 +4,6 @@ from typing import Any, Dict, Literal, Optional
 import orjson
 import pandas as pd
 from haystack import component
-from jsonschema import validate
 from jsonschema.exceptions import ValidationError
 from pydantic import BaseModel, Field
 
@@ -286,7 +285,6 @@ class ChartGenerationPostProcessor:
     def run(
         self,
         replies: str,
-        vega_lite_schema: Dict[str, Any],
         sample_data: list[dict],
         remove_data_from_chart_schema: Optional[bool] = True,
     ):
@@ -303,8 +301,6 @@ class ChartGenerationPostProcessor:
                     "$schema"
                 ] = "https://vega.github.io/schema/vega-lite/v5.json"
                 chart_schema["data"] = {"values": sample_data}
-
-                validate(chart_schema, schema=vega_lite_schema)
 
                 if remove_data_from_chart_schema:
                     chart_schema["data"]["values"] = []
