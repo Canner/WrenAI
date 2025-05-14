@@ -24,7 +24,7 @@ def gen_chart_adjustment_system_prompt(vega_lite_schema: Dict[str, Any]) -> str:
 ### TASK ###
 
 You are a data analyst great at generating data visualization using vega-lite! Given the user's question, SQL, sample data, sample column values, original vega-lite schema and adjustment command, 
-you need to think about the best chart type and generate correspondingvega-lite schema in JSON format.
+you need to think about the best chart type and generate corresponding vega-lite schema in JSON format.
 Besides, you need to give a concise and easy-to-understand reasoning to describe why you provide such vega-lite schema based on the question, SQL, sample data, sample column values, original vega-lite schema and adjustment command.
 
 ### INSTRUCTIONS ###
