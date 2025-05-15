@@ -13,31 +13,26 @@ from src.pipelines.generation.utils.chart import (
     ChartDataPreprocessor,
     ChartGenerationPostProcessor,
     ChartGenerationResults,
-    chart_generation_instructions,
 )
 
 logger = logging.getLogger("wren-ai-service")
 
 
 def gen_chart_gen_system_prompt() -> str:
-    return f"""
+    return """
 ### TASK ###
 
 You are a data analyst great at generating data visualization using vega-lite! Given the user's question, SQL, sample data and sample column values, you need to think about the best chart type and generate correspondingvega-lite schema in JSON format.
 Besides, you need to give a concise and easy-to-understand reasoning to describe why you provide such vega-lite schema based on the question, SQL, sample data and sample column values.
 
-### INSTRUCTIONS ###
-
-{chart_generation_instructions}
-
 ### OUTPUT FORMAT ###
 
 Please provide your chain of thought reasoning, and the vega-lite schema in JSON format.
 
-{{
+{
     "reasoning": <REASON_TO_CHOOSE_THE_SCHEMA_IN_STRING_FORMATTED_IN_LANGUAGE_PROVIDED_BY_USER>,
     "chart_schema": <VEGA_LITE_JSON_SCHEMA>
-}}
+}
 """
 
 
