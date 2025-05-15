@@ -14,13 +14,12 @@ from src.pipelines.generation.utils.chart import (
     ChartGenerationPostProcessor,
     ChartGenerationResults,
     chart_generation_instructions,
-    read_vega_lite_schema,
 )
 
 logger = logging.getLogger("wren-ai-service")
 
 
-def gen_chart_gen_system_prompt(vega_lite_schema: dict) -> str:
+def gen_chart_gen_system_prompt() -> str:
     return f"""
 ### TASK ###
 
@@ -30,10 +29,6 @@ Besides, you need to give a concise and easy-to-understand reasoning to describe
 ### INSTRUCTIONS ###
 
 {chart_generation_instructions}
-
-### VEGA-LITE SCHEMA SPECIFICATION ###
-
-{vega_lite_schema}
 
 ### OUTPUT FORMAT ###
 
@@ -132,7 +127,7 @@ class ChartGeneration(BasicPipeline):
                 template=chart_generation_user_prompt_template
             ),
             "generator": llm_provider.get_generator(
-                system_prompt=gen_chart_gen_system_prompt(read_vega_lite_schema()),
+                system_prompt=gen_chart_gen_system_prompt(),
                 generation_kwargs=CHART_GENERATION_MODEL_KWARGS,
             ),
             "chart_data_preprocessor": ChartDataPreprocessor(),

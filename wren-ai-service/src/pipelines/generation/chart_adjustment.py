@@ -13,14 +13,13 @@ from src.pipelines.generation.utils.chart import (
     ChartDataPreprocessor,
     ChartGenerationPostProcessor,
     ChartGenerationResults,
-    read_vega_lite_schema,
 )
 
 logger = logging.getLogger("wren-ai-service")
 
 
-def gen_chart_adjustment_system_prompt(vega_lite_schema: Dict[str, Any]) -> str:
-    return f"""
+def gen_chart_adjustment_system_prompt() -> str:
+    return """
 ### TASK ###
 
 You are a data analyst great at generating data visualization using vega-lite! Given the user's question, SQL, sample data, sample column values, original vega-lite schema and adjustment command, 
@@ -31,19 +30,15 @@ Besides, you need to give a concise and easy-to-understand reasoning to describe
 
 - If you think the adjustment command is not suitable for the data, you can return an empty string for the schema and chart type and give reasoning to explain why.
 
-### VEGA-LITE SCHEMA ###
-
-{vega_lite_schema}
-
 ### OUTPUT FORMAT ###
 
 Please provide your chain of thought reasoning, chart type and the vega-lite schema in JSON format.
 
-{{
+{
     "reasoning": <REASON_TO_CHOOSE_THE_SCHEMA_IN_STRING_FORMATTED_IN_LANGUAGE_PROVIDED_BY_USER>,
     "chart_type": <CHART_TYPE_IN_STRING>,
     "chart_schema": <VEGA_LITE_JSON_SCHEMA>
-}}
+}
 """
 
 
@@ -139,9 +134,7 @@ class ChartAdjustment(BasicPipeline):
                 template=chart_adjustment_user_prompt_template
             ),
             "generator": llm_provider.get_generator(
-                system_prompt=gen_chart_adjustment_system_prompt(
-                    read_vega_lite_schema()
-                ),
+                system_prompt=gen_chart_adjustment_system_prompt(),
                 generation_kwargs=CHART_ADJUSTMENT_MODEL_KWARGS,
             ),
             "chart_data_preprocessor": ChartDataPreprocessor(),
