@@ -32,11 +32,10 @@ Besides, you need to give a concise and easy-to-understand reasoning to describe
 
 ### OUTPUT FORMAT ###
 
-Please provide your chain of thought reasoning, chart type and the vega-lite schema in JSON format.
+Please provide your chain of thought reasoning, and the vega-lite schema in JSON format.
 
 {{
     "reasoning": <REASON_TO_CHOOSE_THE_SCHEMA_IN_STRING_FORMATTED_IN_LANGUAGE_PROVIDED_BY_USER>,
-    "chart_type": <CHART_TYPE_IN_STRING>,
     "chart_schema": <VEGA_LITE_JSON_SCHEMA>
 }}
 """

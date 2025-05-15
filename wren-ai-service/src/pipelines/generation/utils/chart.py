@@ -295,15 +295,9 @@ class AreaChartSchema(ChartSchema):
 
 class ChartGenerationResults(BaseModel):
     reasoning: str
-    chart_type: Literal[
-        "line", "multi_line", "bar", "pie", "grouped_bar", "stacked_bar", "area", ""
-    ]  # empty string for no chart
-    chart_schema: (
-        LineChartSchema
-        | MultiLineChartSchema
-        | BarChartSchema
-        | PieChartSchema
-        | GroupedBarChartSchema
-        | StackedBarChartSchema
-        | AreaChartSchema
-    )
+    chart_type: Optional[
+        Literal[
+            "line", "multi_line", "bar", "pie", "grouped_bar", "stacked_bar", "area", ""
+        ]
+    ] = ""  # empty string for no chart
+    chart_schema: dict[str, Any]
