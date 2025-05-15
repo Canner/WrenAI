@@ -104,7 +104,7 @@ def post_process(
 ) -> dict:
     return post_processor.run(
         generate_chart.get("replies"),
-        preprocess_data["sample_data"] if data_provided else data["data"],
+        data["data"] if data_provided else preprocess_data["sample_data"],
         remove_data_from_chart_schema=remove_data_from_chart_schema,
     )
 
