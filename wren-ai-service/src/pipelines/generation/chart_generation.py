@@ -94,12 +94,13 @@ def post_process(
     remove_data_from_chart_schema: bool,
     preprocess_data: dict,
     data_provided: bool,
-    data: dict,
     post_processor: ChartGenerationPostProcessor,
 ) -> dict:
     return post_processor.run(
         generate_chart.get("replies"),
-        data["data"] if data_provided else preprocess_data["sample_data"],
+        preprocess_data["raw_data"]
+        if data_provided
+        else preprocess_data["sample_data"],
         remove_data_from_chart_schema=remove_data_from_chart_schema,
     )
 

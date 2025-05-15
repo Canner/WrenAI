@@ -96,6 +96,7 @@ class ChartDataPreprocessor:
             sample_data = df.to_dict(orient="records")
 
         return {
+            "raw_data": df.to_dict(orient="records"),
             "sample_data": sample_data,
             "sample_column_values": sample_column_values,
         }
