@@ -13,6 +13,7 @@ from src.pipelines.generation.utils.chart import (
     ChartDataPreprocessor,
     ChartGenerationPostProcessor,
     ChartGenerationResults,
+    chart_generation_instructions,
     read_vega_lite_schema,
 )
 
@@ -26,7 +27,11 @@ def gen_chart_gen_system_prompt(vega_lite_schema: dict) -> str:
 You are a data analyst great at generating data visualization using vega-lite! Given the user's question, SQL, sample data and sample column values, you need to think about the best chart type and generate correspondingvega-lite schema in JSON format.
 Besides, you need to give a concise and easy-to-understand reasoning to describe why you provide such vega-lite schema based on the question, SQL, sample data and sample column values.
 
-### VEGA-LITE SCHEMA ###
+### INSTRUCTIONS ###
+
+{chart_generation_instructions}
+
+### VEGA-LITE SCHEMA SPECIFICATION ###
 
 {vega_lite_schema}
 
@@ -57,7 +62,8 @@ Please think step by step
 ## Start of Pipeline
 @observe(capture_input=False)
 def preprocess_data(
-    data: Dict[str, Any], chart_data_preprocessor: ChartDataPreprocessor
+    data: Dict[str, Any],
+    chart_data_preprocessor: ChartDataPreprocessor,
 ) -> dict:
     return chart_data_preprocessor.run(data)
 
@@ -92,11 +98,13 @@ def post_process(
     generate_chart: dict,
     remove_data_from_chart_schema: bool,
     preprocess_data: dict,
+    data_provided: bool,
+    data: dict,
     post_processor: ChartGenerationPostProcessor,
 ) -> dict:
     return post_processor.run(
         generate_chart.get("replies"),
-        preprocess_data["sample_data"],
+        preprocess_data["sample_data"] if data_provided else data["data"],
         remove_data_from_chart_schema=remove_data_from_chart_schema,
     )
 
@@ -143,6 +151,7 @@ class ChartGeneration(BasicPipeline):
         data: dict,
         language: str,
         remove_data_from_chart_schema: Optional[bool] = True,
+        data_provided: Optional[bool] = False,
     ) -> dict:
         logger.info("Chart Generation pipeline is running...")
         return await self._pipe.execute(
@@ -153,6 +162,7 @@ class ChartGeneration(BasicPipeline):
                 "data": data,
                 "language": language,
                 "remove_data_from_chart_schema": remove_data_from_chart_schema,
+                "data_provided": data_provided,
                 **self._components,
             },
         )

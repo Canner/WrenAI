@@ -130,6 +130,7 @@ class ChartAdjustmentService:
         }
 
         try:
+            data_provided = False
             query_id = chart_adjustment_request.query_id
 
             self._chart_adjustment_results[query_id] = ChartAdjustmentResultResponse(
@@ -146,6 +147,7 @@ class ChartAdjustmentService:
                 )["execute_sql"]["results"]
             else:
                 sql_data = chart_adjustment_request.data
+                data_provided = True
 
             self._chart_adjustment_results[query_id] = ChartAdjustmentResultResponse(
                 status="generating",
@@ -160,6 +162,7 @@ class ChartAdjustmentService:
                 data=sql_data,
                 remove_data_from_chart_schema=chart_adjustment_request.remove_data_from_chart_schema,
                 language=chart_adjustment_request.configurations.language,
+                data_provided=data_provided,
             )
             chart_result = chart_adjustment_result["post_process"]["results"]
 
