@@ -1,65 +1,13 @@
 import logging
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Dict, Optional
 
 import orjson
 import pandas as pd
 from haystack import component
 from jsonschema.exceptions import ValidationError
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 logger = logging.getLogger("wren-ai-service")
-
-
-chart_generation_instructions = """
-1. Please check VEGA-LITE SCHEMA SPECIFICATION to make sure the vega-lite schema is valid.
-2. The following are examples of several chart types and their corresponding vega-lite schema:
-
-a.  Chart Type: Candlestick Chart
-    When to use: When you want to visualize the price changes of a stock or other financial instrument over time.
-    Vega-Lite Schema in JSON format(only include the necessary part):
-    {
-        "encoding": {
-            "x": {
-                "field": "date",
-                "type": "temporal",
-                "title": "<title>",
-                "axis": {
-                    "format": "<format>",
-                    "labelAngle": <labelAngle>,
-                    "title": "<x_axis_title>"
-                }
-            },
-            "y": {
-                "type": "quantitative",
-                "scale": {"zero": false},
-                "axis": {"title": "<y_axis_title>"}
-            },
-            "color": {
-                "condition": {
-                    "test": "datum.open < datum.close",
-                    "value": "#06982d"
-                },
-                "value": "#ae1325"
-            }
-        },
-        "layer": [
-            {
-                "mark": "rule",
-                "encoding": {
-                    "y": {"field": "low"},
-                    "y2": {"field": "high"}
-                }
-            },
-            {
-                "mark": "bar",
-                "encoding": {
-                    "y": {"field": "open"},
-                    "y2": {"field": "close"}
-                }
-            }
-        ]
-    }
-"""
 
 
 def load_custom_theme() -> Dict[str, Any]:
@@ -175,129 +123,7 @@ def read_vega_lite_schema() -> Dict[str, Any]:
     return vega_lite_schema
 
 
-class ChartSchema(BaseModel):
-    class ChartType(BaseModel):
-        type: Literal["bar", "line", "area", "arc"]
-
-    class ChartEncoding(BaseModel):
-        field: str
-        type: Literal["ordinal", "quantitative", "nominal"]
-        title: str
-
-    title: str
-    mark: ChartType
-    encoding: ChartEncoding
-
-
-class TemporalChartEncoding(ChartSchema.ChartEncoding):
-    type: Literal["temporal"] = Field(default="temporal")
-    timeUnit: str = Field(default="yearmonth")
-
-
-class LineChartSchema(ChartSchema):
-    class LineChartMark(BaseModel):
-        type: Literal["line"] = Field(default="line")
-
-    class LineChartEncoding(BaseModel):
-        x: TemporalChartEncoding | ChartSchema.ChartEncoding
-        y: ChartSchema.ChartEncoding
-        color: ChartSchema.ChartEncoding
-
-    mark: LineChartMark
-    encoding: LineChartEncoding
-
-
-class MultiLineChartSchema(ChartSchema):
-    class MultiLineChartMark(BaseModel):
-        type: Literal["line"] = Field(default="line")
-
-    class MultiLineChartTransform(BaseModel):
-        fold: list[str]
-        as_: list[str] = Field(alias="as")
-
-    class MultiLineChartEncoding(BaseModel):
-        x: TemporalChartEncoding | ChartSchema.ChartEncoding
-        y: ChartSchema.ChartEncoding
-        color: ChartSchema.ChartEncoding
-
-    mark: MultiLineChartMark
-    transform: list[MultiLineChartTransform]
-    encoding: MultiLineChartEncoding
-
-
-class BarChartSchema(ChartSchema):
-    class BarChartMark(BaseModel):
-        type: Literal["bar"] = Field(default="bar")
-
-    class BarChartEncoding(BaseModel):
-        x: TemporalChartEncoding | ChartSchema.ChartEncoding
-        y: ChartSchema.ChartEncoding
-        color: ChartSchema.ChartEncoding
-
-    mark: BarChartMark
-    encoding: BarChartEncoding
-
-
-class GroupedBarChartSchema(ChartSchema):
-    class GroupedBarChartMark(BaseModel):
-        type: Literal["bar"] = Field(default="bar")
-
-    class GroupedBarChartEncoding(BaseModel):
-        x: TemporalChartEncoding | ChartSchema.ChartEncoding
-        y: ChartSchema.ChartEncoding
-        xOffset: ChartSchema.ChartEncoding
-        color: ChartSchema.ChartEncoding
-
-    mark: GroupedBarChartMark
-    encoding: GroupedBarChartEncoding
-
-
-class StackedBarChartYEncoding(ChartSchema.ChartEncoding):
-    stack: Literal["zero"] = Field(default="zero")
-
-
-class StackedBarChartSchema(ChartSchema):
-    class StackedBarChartMark(BaseModel):
-        type: Literal["bar"] = Field(default="bar")
-
-    class StackedBarChartEncoding(BaseModel):
-        x: TemporalChartEncoding | ChartSchema.ChartEncoding
-        y: StackedBarChartYEncoding
-        color: ChartSchema.ChartEncoding
-
-    mark: StackedBarChartMark
-    encoding: StackedBarChartEncoding
-
-
-class PieChartSchema(ChartSchema):
-    class PieChartMark(BaseModel):
-        type: Literal["arc"] = Field(default="arc")
-
-    class PieChartEncoding(BaseModel):
-        theta: ChartSchema.ChartEncoding
-        color: ChartSchema.ChartEncoding
-
-    mark: PieChartMark
-    encoding: PieChartEncoding
-
-
-class AreaChartSchema(ChartSchema):
-    class AreaChartMark(BaseModel):
-        type: Literal["area"] = Field(default="area")
-
-    class AreaChartEncoding(BaseModel):
-        x: TemporalChartEncoding | ChartSchema.ChartEncoding
-        y: ChartSchema.ChartEncoding
-
-    mark: AreaChartMark
-    encoding: AreaChartEncoding
-
-
 class ChartGenerationResults(BaseModel):
     reasoning: str
-    chart_type: Optional[
-        Literal[
-            "line", "multi_line", "bar", "pie", "grouped_bar", "stacked_bar", "area", ""
-        ]
-    ] = ""  # empty string for no chart
     chart_schema: dict[str, Any]
+    chart_type: Optional[str] = ""  # deprecated
