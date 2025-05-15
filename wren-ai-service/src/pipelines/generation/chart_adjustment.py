@@ -65,7 +65,8 @@ Please think step by step
 ## Start of Pipeline
 @observe(capture_input=False)
 def preprocess_data(
-    data: Dict[str, Any], chart_data_preprocessor: ChartDataPreprocessor
+    data: Dict[str, Any],
+    chart_data_preprocessor: ChartDataPreprocessor,
 ) -> dict:
     return chart_data_preprocessor.run(data)
 
@@ -104,11 +105,13 @@ def post_process(
     generate_chart_adjustment: dict,
     preprocess_data: dict,
     remove_data_from_chart_schema: bool,
+    data_provided: bool,
+    data: dict,
     post_processor: ChartGenerationPostProcessor,
 ) -> dict:
     return post_processor.run(
         generate_chart_adjustment.get("replies"),
-        preprocess_data["sample_data"],
+        preprocess_data["sample_data"] if data_provided else data["data"],
         remove_data_from_chart_schema=remove_data_from_chart_schema,
     )
 
@@ -159,6 +162,7 @@ class ChartAdjustment(BasicPipeline):
         data: dict,
         language: str,
         remove_data_from_chart_schema: bool = True,
+        data_provided: bool = False,
     ) -> dict:
         logger.info("Chart Adjustment pipeline is running...")
 
@@ -172,6 +176,7 @@ class ChartAdjustment(BasicPipeline):
                 "data": data,
                 "language": language,
                 "remove_data_from_chart_schema": remove_data_from_chart_schema,
+                "data_provided": data_provided,
                 **self._components,
             },
         )
