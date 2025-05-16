@@ -30,6 +30,7 @@ Besides, you need to give a concise and easy-to-understand reasoning to describe
 
 - You need to generate the new vega-lite schema based on the adjustment command and the original vega-lite schema.
 - If you think the adjustment command is not suitable for the data, you can return an empty string for the schema and chart type and give reasoning to explain why.
+- If the user provides an image, you need to use the image as reference to generate a new chart schema that follows user's adjustment command.
 
 ### OUTPUT FORMAT ###
 
@@ -91,8 +92,10 @@ def prompt(
 
 
 @observe(as_type="generation", capture_input=False)
-async def generate_chart_adjustment(prompt: dict, generator: Any) -> dict:
-    return await generator(prompt=prompt.get("prompt"))
+async def generate_chart_adjustment(
+    prompt: dict, image_url: str, generator: Any
+) -> dict:
+    return await generator(prompt=prompt.get("prompt"), image_url=image_url)
 
 
 @observe(capture_input=False)
@@ -157,6 +160,7 @@ class ChartAdjustment(BasicPipeline):
         language: str,
         remove_data_from_chart_schema: bool = True,
         data_provided: bool = False,
+        image_url: str = "",
     ) -> dict:
         logger.info("Chart Adjustment pipeline is running...")
 
@@ -171,6 +175,7 @@ class ChartAdjustment(BasicPipeline):
                 "language": language,
                 "remove_data_from_chart_schema": remove_data_from_chart_schema,
                 "data_provided": data_provided,
+                "image_url": image_url,
                 **self._components,
             },
         )

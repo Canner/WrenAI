@@ -1,9 +1,132 @@
 import logging
-from typing import Any, List
-
-from haystack.dataclasses import ChatMessage, StreamingChunk
+from dataclasses import asdict, dataclass, field
+from enum import Enum
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("wren-ai-service")
+
+
+class ChatRole(str, Enum):
+    """Enumeration representing the roles within a chat."""
+
+    ASSISTANT = "assistant"
+    USER = "user"
+    SYSTEM = "system"
+    FUNCTION = "function"
+
+
+@dataclass
+class ChatMessage:
+    """
+    Represents a message in a LLM chat conversation.
+
+    :param content: The text content of the message.
+    :param role: The role of the entity sending the message.
+    :param name: The name of the function being called (only applicable for role FUNCTION).
+    :param meta: Additional metadata associated with the message.
+    """
+
+    content: str
+    role: ChatRole
+    name: Optional[str]
+    image_url: Optional[str]
+    meta: Dict[str, Any] = field(default_factory=dict, hash=False)
+
+    def is_from(self, role: ChatRole) -> bool:
+        """
+        Check if the message is from a specific role.
+
+        :param role: The role to check against.
+        :returns: True if the message is from the specified role, False otherwise.
+        """
+        return self.role == role
+
+    @classmethod
+    def from_assistant(
+        cls, content: str, meta: Optional[Dict[str, Any]] = None
+    ) -> "ChatMessage":
+        """
+        Create a message from the assistant.
+
+        :param content: The text content of the message.
+        :param meta: Additional metadata associated with the message.
+        :returns: A new ChatMessage instance.
+        """
+        return cls(
+            content, ChatRole.ASSISTANT, name=None, image_url=None, meta=meta or {}
+        )
+
+    @classmethod
+    def from_user(cls, content: str, image_url: Optional[str] = None) -> "ChatMessage":
+        """
+        Create a message from the user.
+
+        :param content: The text content of the message.
+        :returns: A new ChatMessage instance.
+        """
+        return cls(content, ChatRole.USER, name=None, image_url=image_url)
+
+    @classmethod
+    def from_system(cls, content: str) -> "ChatMessage":
+        """
+        Create a message from the system.
+
+        :param content: The text content of the message.
+        :returns: A new ChatMessage instance.
+        """
+        return cls(content, ChatRole.SYSTEM, name=None, image_url=None)
+
+    @classmethod
+    def from_function(cls, content: str, name: str) -> "ChatMessage":
+        """
+        Create a message from a function call.
+
+        :param content: The text content of the message.
+        :param name: The name of the function being called.
+        :returns: A new ChatMessage instance.
+        """
+        return cls(content, ChatRole.FUNCTION, name=name, image_url=None, meta=None)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Converts ChatMessage into a dictionary.
+
+        :returns:
+            Serialized version of the object.
+        """
+        data = asdict(self)
+        data["role"] = self.role.value
+
+        return data
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ChatMessage":
+        """
+        Creates a new ChatMessage object from a dictionary.
+
+        :param data:
+            The dictionary to build the ChatMessage object.
+        :returns:
+            The created object.
+        """
+        data["role"] = ChatRole(data["role"])
+
+        return cls(**data)
+
+
+@dataclass
+class StreamingChunk:
+    """
+    The StreamingChunk class encapsulates a segment of streamed content along with associated metadata.
+
+    This structure facilitates the handling and processing of streamed data in a systematic manner.
+
+    :param content: The content of the message chunk as a string.
+    :param meta: A dictionary containing metadata related to the message chunk.
+    """
+
+    content: str
+    meta: Dict[str, Any] = field(default_factory=dict, hash=False)
 
 
 def build_message(completion: Any, choice: Any) -> ChatMessage:
@@ -96,3 +219,34 @@ def build_chunk(chunk: Any) -> StreamingChunk:
         }
     )
     return chunk_message
+
+
+def convert_message_to_openai_format(message: ChatMessage) -> Dict[str, str]:
+    """
+    Convert a message to the format expected by OpenAI's Chat API.
+
+    See the [API reference](https://platform.openai.com/docs/api-reference/chat/create) for details.
+
+    :returns: A dictionary with the following key:
+        - `role`
+        - `content`
+        - `name` (optional)
+    """
+    openai_msg = {"role": message.role.value}
+
+    if message.content and message.image_url:
+        openai_msg["content"] = [
+            {"type": "text", "text": message.content},
+            {"type": "image_url", "image_url": {"url": message.image_url}},
+        ]
+    elif message.content:
+        openai_msg["content"] = message.content
+    elif message.image_url:
+        openai_msg["content"] = [
+            {"type": "image_url", "image_url": {"url": message.image_url}}
+        ]
+
+    if message.name:
+        openai_msg["name"] = message.name
+
+    return openai_msg
