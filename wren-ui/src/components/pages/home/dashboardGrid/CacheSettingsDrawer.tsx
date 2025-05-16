@@ -135,7 +135,7 @@ export const getScheduleText = (schedule: Schedule): string => {
       return `Cache refreshes on custom schedule`;
     }
     case FREQUENCY.NEVER: {
-      return 'Cache auto-refresh disabled';
+      return 'Cache refresh: manual only';
     }
     default: {
       return '';
