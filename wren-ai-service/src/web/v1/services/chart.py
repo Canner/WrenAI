@@ -66,10 +66,8 @@ class ChartResultRequest(BaseModel):
 
 class ChartResult(BaseModel):
     reasoning: str
-    chart_type: Literal[
-        "line", "bar", "pie", "grouped_bar", "stacked_bar", "area", "multi_line", ""
-    ]  # empty string for no chart
-    chart_schema: dict
+    chart_type: Optional[str] = ""
+    chart_schema: Optional[dict] = None
 
 
 class ChartResultResponse(BaseModel):
@@ -116,6 +114,7 @@ class ChartService:
         }
 
         try:
+            data_provided = False
             query_id = chart_request.query_id
 
             if not chart_request.data:
@@ -132,6 +131,7 @@ class ChartService:
                 )["execute_sql"]["results"]
             else:
                 sql_data = chart_request.data
+                data_provided = True
 
             self._chart_results[query_id] = ChartResultResponse(
                 status="generating",
@@ -144,6 +144,7 @@ class ChartService:
                 data=sql_data,
                 language=chart_request.configurations.language,
                 remove_data_from_chart_schema=chart_request.remove_data_from_chart_schema,
+                data_provided=data_provided,
             )
             chart_result = chart_generation_result["post_process"]["results"]
 

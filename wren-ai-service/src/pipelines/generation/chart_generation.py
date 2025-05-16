@@ -2,7 +2,6 @@ import logging
 import sys
 from typing import Any, Dict, Optional
 
-import orjson
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
@@ -14,29 +13,28 @@ from src.pipelines.generation.utils.chart import (
     ChartDataPreprocessor,
     ChartGenerationPostProcessor,
     ChartGenerationResults,
-    chart_generation_instructions,
 )
 
 logger = logging.getLogger("wren-ai-service")
 
-chart_generation_system_prompt = f"""
+
+def gen_chart_gen_system_prompt() -> str:
+    return """
 ### TASK ###
 
-You are a data analyst great at visualizing data using vega-lite! Given the user's question, SQL, sample data and sample column values, you need to generate vega-lite schema in JSON and provide suitable chart type.
+You are a data analyst great at generating data visualization using vega-lite! Given the user's question, SQL, sample data and sample column values, you need to think about the best chart type and generate correspondingvega-lite schema in JSON format.
 Besides, you need to give a concise and easy-to-understand reasoning to describe why you provide such vega-lite schema based on the question, SQL, sample data and sample column values.
-
-{chart_generation_instructions}
 
 ### OUTPUT FORMAT ###
 
-Please provide your chain of thought reasoning, chart type and the vega-lite schema in JSON format.
+Please provide your chain of thought reasoning, and the vega-lite schema in JSON format.
 
-{{
+{
     "reasoning": <REASON_TO_CHOOSE_THE_SCHEMA_IN_STRING_FORMATTED_IN_LANGUAGE_PROVIDED_BY_USER>,
-    "chart_type": "line" | "multi_line" | "bar" | "pie" | "grouped_bar" | "stacked_bar" | "area" | "",
     "chart_schema": <VEGA_LITE_JSON_SCHEMA>
-}}
+}
 """
+
 
 chart_generation_user_prompt_template = """
 ### INPUT ###
@@ -53,7 +51,8 @@ Please think step by step
 ## Start of Pipeline
 @observe(capture_input=False)
 def preprocess_data(
-    data: Dict[str, Any], chart_data_preprocessor: ChartDataPreprocessor
+    data: Dict[str, Any],
+    chart_data_preprocessor: ChartDataPreprocessor,
 ) -> dict:
     return chart_data_preprocessor.run(data)
 
@@ -86,16 +85,17 @@ async def generate_chart(prompt: dict, generator: Any) -> dict:
 @observe(capture_input=False)
 def post_process(
     generate_chart: dict,
-    vega_schema: Dict[str, Any],
     remove_data_from_chart_schema: bool,
     preprocess_data: dict,
+    data_provided: bool,
     post_processor: ChartGenerationPostProcessor,
 ) -> dict:
     return post_processor.run(
         generate_chart.get("replies"),
-        vega_schema,
-        preprocess_data["sample_data"],
-        remove_data_from_chart_schema,
+        preprocess_data["raw_data"]
+        if data_provided
+        else preprocess_data["sample_data"],
+        remove_data_from_chart_schema=remove_data_from_chart_schema,
     )
 
 
@@ -122,18 +122,11 @@ class ChartGeneration(BasicPipeline):
                 template=chart_generation_user_prompt_template
             ),
             "generator": llm_provider.get_generator(
-                system_prompt=chart_generation_system_prompt,
+                system_prompt=gen_chart_gen_system_prompt(),
                 generation_kwargs=CHART_GENERATION_MODEL_KWARGS,
             ),
             "chart_data_preprocessor": ChartDataPreprocessor(),
             "post_processor": ChartGenerationPostProcessor(),
-        }
-
-        with open("src/pipelines/generation/utils/vega-lite-schema-v5.json", "r") as f:
-            _vega_schema = orjson.loads(f.read())
-
-        self._configs = {
-            "vega_schema": _vega_schema,
         }
 
         super().__init__(
@@ -148,6 +141,7 @@ class ChartGeneration(BasicPipeline):
         data: dict,
         language: str,
         remove_data_from_chart_schema: Optional[bool] = True,
+        data_provided: Optional[bool] = False,
     ) -> dict:
         logger.info("Chart Generation pipeline is running...")
         return await self._pipe.execute(
@@ -158,8 +152,8 @@ class ChartGeneration(BasicPipeline):
                 "data": data,
                 "language": language,
                 "remove_data_from_chart_schema": remove_data_from_chart_schema,
+                "data_provided": data_provided,
                 **self._components,
-                **self._configs,
             },
         )
 
