@@ -1,22 +1,21 @@
 import os
 from typing import Any, Callable, Dict, List, Optional, Union
 
-from haystack.components.generators.openai_utils import (
-    _convert_message_to_openai_format,
-)
-from haystack.dataclasses import ChatMessage, StreamingChunk
 from litellm import acompletion
 from litellm.types.utils import ModelResponse
 
 from src.core.provider import LLMProvider
 from src.providers.llm import (
+    ChatMessage,
+    StreamingChunk,
     build_chunk,
     build_message,
     check_finish_reason,
     connect_chunks,
+    convert_message_to_openai_format,
 )
 from src.providers.loader import provider
-from src.utils import remove_trailing_slash, extract_braces_content
+from src.utils import extract_braces_content, remove_trailing_slash
 
 
 @provider("litellm_llm")
@@ -46,15 +45,19 @@ class LitellmLLMProvider(LLMProvider):
         generation_kwargs: Optional[Dict[str, Any]] = None,
         streaming_callback: Optional[Callable[[StreamingChunk], None]] = None,
     ):
-        combined_generation_kwargs = {**(generation_kwargs or {}), **self._model_kwargs}
+        combined_generation_kwargs = {
+            **(generation_kwargs or {}),
+            **(self._model_kwargs or {}),
+        }
 
         async def _run(
             prompt: str,
+            image_url: Optional[str] = None,
             history_messages: Optional[List[ChatMessage]] = None,
             generation_kwargs: Optional[Dict[str, Any]] = None,
             query_id: Optional[str] = None,
         ):
-            message = ChatMessage.from_user(prompt)
+            message = ChatMessage.from_user(prompt, image_url)
             if system_prompt:
                 messages = [ChatMessage.from_system(system_prompt)]
                 if history_messages:
@@ -67,7 +70,7 @@ class LitellmLLMProvider(LLMProvider):
                     messages = [message]
 
             openai_formatted_messages = [
-                _convert_message_to_openai_format(message) for message in messages
+                convert_message_to_openai_format(message) for message in messages
             ]
 
             generation_kwargs = {
@@ -113,7 +116,9 @@ class LitellmLLMProvider(LLMProvider):
                 check_finish_reason(response)
 
             return {
-                "replies": [extract_braces_content(message.content) for message in completions],
+                "replies": [
+                    extract_braces_content(message.content) for message in completions
+                ],
                 "meta": [message.meta for message in completions],
             }
 

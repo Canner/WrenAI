@@ -30,12 +30,13 @@ class ChartAdjustmentRequest(BaseModel):
     sql: str
     adjustment_command: str
     data: Optional[Dict[str, Any]] = None
-    adjustment_option: Optional[ChartAdjustmentOption] = None
+    image_url: Optional[str] = None
     chart_schema: dict
     project_id: Optional[str] = None
     thread_id: Optional[str] = None
     configurations: Optional[Configuration] = Configuration()
     remove_data_from_chart_schema: Optional[bool] = True
+    adjustment_option: Optional[ChartAdjustmentOption] = None  # deprecated
 
     @property
     def query_id(self) -> str:
@@ -163,6 +164,7 @@ class ChartAdjustmentService:
                 remove_data_from_chart_schema=chart_adjustment_request.remove_data_from_chart_schema,
                 language=chart_adjustment_request.configurations.language,
                 data_provided=data_provided,
+                image_url=chart_adjustment_request.image_url,
             )
             chart_result = chart_adjustment_result["post_process"]["results"]
 
