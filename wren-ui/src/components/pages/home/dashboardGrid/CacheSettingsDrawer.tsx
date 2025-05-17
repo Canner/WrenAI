@@ -18,7 +18,7 @@ import {
 import { browserTimeZone } from '@/utils/time';
 import { DrawerAction } from '@/hooks/useDrawerAction';
 import { ERROR_TEXTS } from '@/utils/error';
-import { isValidCron, cronValidator } from '@/utils/validator';
+import { isValidCronLength, cronValidator } from '@/utils/validator';
 import { CacheScheduleDayEnum } from '@/apollo/client/graphql/__types__';
 
 type Props = DrawerAction & {
@@ -135,7 +135,7 @@ export const getScheduleText = (schedule: Schedule): string => {
       return `Cache refreshes on custom schedule`;
     }
     case FREQUENCY.NEVER: {
-      return 'Cache auto-refresh disabled';
+      return 'Cache refresh: manual only';
     }
     default: {
       return '';
@@ -178,7 +178,7 @@ const getNextSchedule = (data: {
 };
 
 const getNextScheduleByCron = (cron: string) => {
-  if (!cron || !isValidCron(cron)) return null;
+  if (!cron || !isValidCronLength(cron)) return null;
   try {
     const interval = CronExpressionParser.parse(cron, { tz: 'UTC' });
     const targetTime = moment.utc(interval.next().toDate()).local();
