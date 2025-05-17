@@ -47,7 +47,7 @@ At Wren AI, our mission is to revolutionize business intelligence by empowering 
 
 ### 1. Talk to Your Data in Any Language
 
-> Wren AI speaks [your language](https://docs.getwren.ai/oss/guide/settings/pj_settings#change-project-language?utm_source=github&utm_medium=content&utm_campaign=readme), such as English, German, Spanish, French, Japanese, Korean, Portuguese, Chinese, and more. Unlock valuable insights by asking your business questions to Wren AI. It goes beyond surface-level data analysis to reveal meaningful information and simplifies obtaining answers from lead scoring templates to customer segmentation.
+> Wren AI speaks [your language](https://docs.getwren.ai/oss/guide/settings/pj_settings#change-project-language?utm_source=github&utm_medium=content&utm_campaign=readme). Unlock valuable insights by asking your business questions to Wren AI. It goes beyond surface-level data analysis to reveal meaningful information and simplifies obtaining answers by just asking.
 
 ### 2. GenBI Insights
 
@@ -55,11 +55,11 @@ At Wren AI, our mission is to revolutionize business intelligence by empowering 
 
 ### 3. Semantic Layer with a Well-Crafted UI/UX
 
-> Wren AI has implemented a [semantic engine architecture](https://www.getwren.ai/post/how-we-design-our-semantic-engine-for-llms-the-backbone-of-the-semantic-layer-for-llm-architecture/?utm_source=github&utm_medium=content&utm_campaign=readme) to provide the LLM context of your business; you can easily establish a logical presentation layer on your data schema that helps LLM learn more about your business context.
+> Wren AI has implemented a [semantic engine architecture](https://www.getwren.ai/post/how-we-design-our-semantic-engine-for-llms-the-backbone-of-the-semantic-layer-for-llm-architecture/?utm_source=github&utm_medium=content&utm_campaign=readme) to provide the LLM context of your business; you can easily establish a semantic layer on top of your data schema that helps LLM learn more about your business context.
 
 ### 4. Embedded AI-Powered SQL and Charts with the Wren AI API
 
-> Unlock the full power of Wren AI in your own applications. Our API lets you generate SQL queries and rich charts from natural language, effortlessly embedding Wren AI’s intelligence into your workflows. Plus, monitor and manage every interaction with our built-in API History for complete transparency and control.
+> Unlock the full power of Wren AI in your custom AI Agents and applications. Our API lets you generate SQL queries and rich charts from natural language, effortlessly embedding Wren AI’s intelligence into your workflows. Plus, monitor and manage every interaction with our built-in API History for complete transparency and control.
 
 Check out the [full API documentation here](https://wrenai.readme.io/reference/welcome)
 
@@ -71,13 +71,13 @@ We focus on providing an open, secure, and accurate SQL AI Agent for everyone.
 
 > Wren AI makes it easy to onboard your data. Discover and analyze your data with our user interface. Effortlessly generate results without needing to code.
 
-### 2. Secure SQL Generation
+### 2. End-to-end Solution
 
-> We use RAG architecture to leverage your schema and context, generating SQL queries without requiring you to expose or upload your data to LLM models.
+> Wren AI helps you go from natural language to insights—automatically generating SQL queries, visual charts, and API responses based on your database schema and context.
 
-### 3. Open-source End-to-end Solution
+### 3. Open-sourced & Free
 
-> Deploy Wren AI anywhere you like on your own data, LLM APIs, and environment, it's free.
+> Deploy Wren AI anywhere you like on your own data, LLM APIs, and environment.
 
 ## 🕶 Try it yourself!
 
