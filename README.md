@@ -134,7 +134,7 @@ Want to contribute to Wren AI? Check out our [Contribution Guidelines](https://g
 
 - Welcome to our [Discord server](https://discord.gg/5DvshJqG8Z) to give us feedback!
 - If there are any issues, please visit [GitHub Issues](https://github.com/Canner/WrenAI/issues).
-- Explore our [public roadmap](https://github.com/orgs/Canner/projects/12/views/1) to stay updated on upcoming features and improvements!
+- Explore our [public roadmap](https://wrenai.notion.site/) to stay updated on upcoming features and improvements!
 
 Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren AI community channels. Users are **highly encouraged** to read and adhere to them to avoid repercussions.
 
