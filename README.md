@@ -79,10 +79,6 @@ We focus on providing an open, secure, and accurate SQL AI Agent for everyone.
 
 > Deploy Wren AI anywhere you like on your own data, LLM APIs, and environment, it's free.
 
-### 4. Embedded AI with Wren AI API
-
-> Build your own AI agents and applications with accurate and powerful GenBI capabilities powered by Wren AI API.
-
 ## 🕶 Try it yourself!
 
 ### GenBI (Generative Business Intelligence)
