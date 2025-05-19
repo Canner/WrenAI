@@ -29,7 +29,7 @@ If the content of the chart is empty, you will need to return False as the value
 You will need to return a JSON object with the following schema:
 
 {
-    "valid": bool
+    "valid": <boolean>
 }
 """
 

@@ -116,13 +116,6 @@ class ChartGenerationPostProcessor:
             }
 
 
-def read_vega_lite_schema() -> Dict[str, Any]:
-    with open("src/pipelines/generation/utils/vega-lite-schema-v5.json", "r") as f:
-        vega_lite_schema = orjson.loads(f.read())
-
-    return vega_lite_schema
-
-
 class ChartGenerationResults(BaseModel):
     reasoning: str
     chart_schema: dict[str, Any]
