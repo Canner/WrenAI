@@ -36,6 +36,7 @@ jsonschema = "^4.23.0"
 litellm = "^1.65.1"
 boto3 = "^1.35.90"
 qdrant-client = "==1.11.0"
+vl-convert-python = "^1.7.0"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.7.1"

@@ -18,8 +18,7 @@ from src.pipelines.generation.utils.chart import (
 logger = logging.getLogger("wren-ai-service")
 
 
-def gen_chart_adjustment_system_prompt() -> str:
-    return """
+chart_adjustment_system_prompt = """
 ### TASK ###
 
 You are a data analyst great at generating data visualization using vega-lite! Given the user's question, SQL, sample data, sample column values, original vega-lite schema and adjustment command, 
@@ -138,7 +137,7 @@ class ChartAdjustment(BasicPipeline):
                 template=chart_adjustment_user_prompt_template
             ),
             "generator": llm_provider.get_generator(
-                system_prompt=gen_chart_adjustment_system_prompt(),
+                system_prompt=chart_adjustment_system_prompt,
                 generation_kwargs=CHART_ADJUSTMENT_MODEL_KWARGS,
             ),
             "chart_data_preprocessor": ChartDataPreprocessor(),

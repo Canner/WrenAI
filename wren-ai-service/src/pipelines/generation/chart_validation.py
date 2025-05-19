@@ -18,32 +18,11 @@ from src.pipelines.generation.utils.chart import (
 logger = logging.getLogger("wren-ai-service")
 
 
-chart_generation_system_prompt = """
-### TASK ###
-
-You are a data analyst great at generating data visualization using vega-lite! Given the user's question, SQL, sample data and sample column values, you need to think about the best chart type and generate correspondingvega-lite schema in JSON format.
-Besides, you need to give a concise and easy-to-understand reasoning to describe why you provide such vega-lite schema based on the question, SQL, sample data and sample column values.
-
-### OUTPUT FORMAT ###
-
-Please provide your chain of thought reasoning, and the vega-lite schema in JSON format.
-
-{
-    "reasoning": <REASON_TO_CHOOSE_THE_SCHEMA_IN_STRING_FORMATTED_IN_LANGUAGE_PROVIDED_BY_USER>,
-    "chart_schema": <VEGA_LITE_JSON_SCHEMA>
-}
+chart_validation_system_prompt = """
 """
 
 
-chart_generation_user_prompt_template = """
-### INPUT ###
-Question: {{ query }}
-SQL: {{ sql }}
-Sample Data: {{ sample_data }}
-Sample Column Values: {{ sample_column_values }}
-Language: {{ language }}
-
-Please think step by step
+chart_validation_user_prompt_template = """
 """
 
 
@@ -110,7 +89,7 @@ CHART_GENERATION_MODEL_KWARGS = {
 }
 
 
-class ChartGeneration(BasicPipeline):
+class ChartValidation(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
@@ -118,10 +97,10 @@ class ChartGeneration(BasicPipeline):
     ):
         self._components = {
             "prompt_builder": PromptBuilder(
-                template=chart_generation_user_prompt_template
+                template=chart_validation_user_prompt_template
             ),
             "generator": llm_provider.get_generator(
-                system_prompt=chart_generation_system_prompt,
+                system_prompt=chart_validation_system_prompt,
                 generation_kwargs=CHART_GENERATION_MODEL_KWARGS,
             ),
             "chart_data_preprocessor": ChartDataPreprocessor(),
@@ -161,8 +140,8 @@ if __name__ == "__main__":
     from src.pipelines.common import dry_run_pipeline
 
     dry_run_pipeline(
-        ChartGeneration,
-        "chart_generation",
+        ChartValidation,
+        "chart_validation",
         query="show me the dataset",
         sql="",
         data={},

@@ -6525,6 +6525,21 @@ docs = ["furo (>=2023.7.26)", "proselint (>=0.13)", "sphinx (>=7.1.2,!=7.3)", "s
 test = ["covdefaults (>=2.3)", "coverage (>=7.2.7)", "coverage-enable-subprocess (>=1)", "flaky (>=3.7)", "packaging (>=23.1)", "pytest (>=7.4)", "pytest-env (>=0.8.2)", "pytest-freezer (>=0.4.8)", "pytest-mock (>=3.11.1)", "pytest-randomly (>=3.12)", "pytest-timeout (>=2.1)", "setuptools (>=68)", "time-machine (>=2.10)"]
 
 [[package]]
+name = "vl-convert-python"
+version = "1.7.0"
+description = "Convert Vega-Lite chart specifications to SVG, PNG, or Vega"
+optional = false
+python-versions = ">=3.7"
+files = [
+    {file = "vl_convert_python-1.7.0-cp37-abi3-macosx_10_12_x86_64.whl", hash = "sha256:90fba4356bd621bd31e72507a55e26dd13ebe79efa784715743116109afd0d47"},
+    {file = "vl_convert_python-1.7.0-cp37-abi3-macosx_11_0_arm64.whl", hash = "sha256:51f99c58b1d0d74126455ece7d41972740cb4430b8dfdf7e0908270eed5be32d"},
+    {file = "vl_convert_python-1.7.0-cp37-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:962100d7670b9d35f9bb9745cdf590412f62f57c134b4a142340ba93a4dbddba"},
+    {file = "vl_convert_python-1.7.0-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:8b50c492b640abb89a54a71e2c26f0f2d2c1cedc42030cc55bcc202670334724"},
+    {file = "vl_convert_python-1.7.0-cp37-abi3-win_amd64.whl", hash = "sha256:285bbadb1ce8a922c87f6e75a9544fe10a652d37bd4c1519fb93f90bab381588"},
+    {file = "vl_convert_python-1.7.0.tar.gz", hash = "sha256:bc9e1f8ca0d8d3b3789c66e37cd6a8cf0a83406427d5143133346c2b5004485b"},
+]
+
+[[package]]
 name = "watchdog"
 version = "4.0.2"
 description = "Filesystem events monitoring"
@@ -7334,4 +7349,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.12.*, <3.13"
-content-hash = "891a93be6c7064485fb82d2a1552c1f82be2337491e048167b5a4f5e8d11b5a6"
+content-hash = "28bcfd0fd19552ad82f0ad06af0302f38cbffe21b24417edb37cd5768dd3d5d2"
