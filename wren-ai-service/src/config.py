@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     allow_sql_functions_retrieval: bool = Field(default=True)
     max_histories: int = Field(default=5)
     max_sql_correction_retries: int = Field(default=3)
+    allow_chart_validation: bool = Field(default=False)
 
     # engine config
     engine_timeout: float = Field(default=30.0)

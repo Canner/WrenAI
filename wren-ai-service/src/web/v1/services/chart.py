@@ -81,6 +81,7 @@ class ChartService:
     def __init__(
         self,
         pipelines: Dict[str, BasicPipeline],
+        allow_chart_validation: bool = False,
         maxsize: int = 1_000_000,
         ttl: int = 120,
     ):
@@ -88,6 +89,7 @@ class ChartService:
         self._chart_results: Dict[str, ChartResultResponse] = TTLCache(
             maxsize=maxsize, ttl=ttl
         )
+        self._allow_chart_validation = allow_chart_validation
 
     def _is_stopped(self, query_id: str):
         if (
@@ -116,6 +118,7 @@ class ChartService:
         try:
             data_provided = False
             query_id = chart_request.query_id
+            allow_chart_validation = self._allow_chart_validation
 
             if not chart_request.data:
                 self._chart_results[query_id] = ChartResultResponse(
@@ -160,6 +163,28 @@ class ChartService:
                 )
                 results["metadata"]["error_type"] = "NO_CHART"
                 results["metadata"]["error_message"] = "chart generation failed"
+            elif allow_chart_validation:
+                chart_validation_result = await self._pipelines["chart_validation"].run(
+                    chart_schema=chart_schema,
+                )
+
+                if chart_validation_result.get("valid", True):
+                    self._chart_results[query_id] = ChartResultResponse(
+                        status="finished",
+                        response=ChartResult(**chart_result),
+                        trace_id=trace_id,
+                    )
+                    results["chart_result"] = chart_result
+                else:
+                    self._chart_results[query_id] = ChartResultResponse(
+                        status="failed",
+                        error=ChartError(
+                            code="NO_CHART", message="chart generation failed"
+                        ),
+                        trace_id=trace_id,
+                    )
+                    results["metadata"]["error_type"] = "NO_CHART"
+                    results["metadata"]["error_message"] = "chart generation failed"
             else:
                 self._chart_results[query_id] = ChartResultResponse(
                     status="finished",

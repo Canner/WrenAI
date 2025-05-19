@@ -1,5 +1,6 @@
 from .chart_adjustment import ChartAdjustment
 from .chart_generation import ChartGeneration
+from .chart_validation import ChartValidation
 from .data_assistance import DataAssistance
 from .followup_sql_generation import FollowUpSQLGeneration
 from .followup_sql_generation_reasoning import FollowUpSQLGenerationReasoning
@@ -36,4 +37,5 @@ __all__ = [
     "FollowUpSQLGenerationReasoning",
     "MisleadingAssistance",
     "SQLTablesExtraction",
+    "ChartValidation",
 ]
