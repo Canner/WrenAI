@@ -42,15 +42,19 @@ Please check the chart image and decide if the content of the chart is empty or 
 ## Start of Pipeline
 @observe()
 async def preprocess_chart_schema(chart_schema: dict) -> str:
-    # Convert Vega-Lite to PNG in a separate thread since it's CPU-bound
-    png_bytes = await asyncio.to_thread(
-        vlc.vegalite_to_png, vl_spec=chart_schema, vl_version="v5.15"
-    )
-    # Base64 encode and decode to UTF-8 string
-    b64_str = base64.b64encode(png_bytes).decode("utf-8")
-    # Prepend the data URL header
-    data_url = f"data:image/png;base64,{b64_str}"
-    return data_url
+    try:
+        # Convert Vega-Lite to PNG in a separate thread since it's CPU-bound
+        png_bytes = await asyncio.to_thread(
+            vlc.vegalite_to_png, vl_spec=chart_schema, vl_version="v5.15"
+        )
+        # Base64 encode and decode to UTF-8 string
+        b64_str = base64.b64encode(png_bytes).decode("utf-8")
+        # Prepend the data URL header
+        data_url = f"data:image/png;base64,{b64_str}"
+        return data_url
+    except Exception as e:
+        logger.error(f"Error converting Vega-Lite to PNG: {e}")
+        return ""
 
 
 @observe(capture_input=False)
@@ -64,6 +68,9 @@ def prompt(
 async def validate_chart(
     prompt: dict, preprocess_chart_schema: str, generator: Any
 ) -> dict:
+    if not preprocess_chart_schema:
+        return {"replies": ['{"valid": true}']}
+
     return await generator(
         prompt=prompt.get("prompt"), image_url=preprocess_chart_schema
     )
