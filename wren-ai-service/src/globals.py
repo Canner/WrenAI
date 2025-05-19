@@ -148,6 +148,7 @@ def create_service_container(
             allow_sql_functions_retrieval=settings.allow_sql_functions_retrieval,
             max_histories=settings.max_histories,
             enable_column_pruning=settings.enable_column_pruning,
+            max_sql_correction_retries=settings.max_sql_correction_retries,
             **query_cache,
         ),
         chart_service=services.ChartService(
