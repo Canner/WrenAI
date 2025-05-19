@@ -60,7 +60,7 @@ async def get_data_from_wren_engine(
             column_names = [col["name"] for col in data["columns"]]
             return {"data": data["data"], "columns": column_names}
     else:
-        url = f"{api_endpoint}/v2/connector/{data_source}/query"
+        url = f"{api_endpoint}/v3/connector/{data_source}/query"
         if limit is not None:
             url += f"?limit={limit}"
 
