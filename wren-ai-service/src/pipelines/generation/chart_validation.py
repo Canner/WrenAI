@@ -1,89 +1,94 @@
+import asyncio
+import base64
 import logging
 import sys
-from typing import Any, Dict, Optional
+from typing import Any
 
+import orjson
+import vl_convert as vlc
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
+from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.pipelines.generation.utils.chart import (
-    ChartDataPreprocessor,
-    ChartGenerationPostProcessor,
-    ChartGenerationResults,
-)
 
 logger = logging.getLogger("wren-ai-service")
 
 
 chart_validation_system_prompt = """
+### TASK ###
+
+You are a chart validation expert. You will be given a chart image. You will need to validate if the content of the chart is empty or not.
+If the content of the chart is empty, you will need to return False as the value of the "valid" field; otherwise, you will need to return True.
+
+### OUTPUT ###
+
+You will need to return a JSON object with the following schema:
+
+{
+    "valid": bool
+}
 """
 
 
 chart_validation_user_prompt_template = """
+Please check the chart image and decide if the content of the chart is empty or not.
 """
 
 
 ## Start of Pipeline
-@observe(capture_input=False)
-def preprocess_data(
-    data: Dict[str, Any],
-    chart_data_preprocessor: ChartDataPreprocessor,
-) -> dict:
-    return chart_data_preprocessor.run(data)
+@observe()
+async def preprocess_chart_schema(chart_schema: dict) -> str:
+    # Convert Vega-Lite to PNG in a separate thread since it's CPU-bound
+    png_bytes = await asyncio.to_thread(
+        vlc.vegalite_to_png, vl_spec=chart_schema, vl_version="v5.15"
+    )
+    # Base64 encode and decode to UTF-8 string
+    b64_str = base64.b64encode(png_bytes).decode("utf-8")
+    # Prepend the data URL header
+    data_url = f"data:image/png;base64,{b64_str}"
+    return data_url
 
 
 @observe(capture_input=False)
 def prompt(
-    query: str,
-    sql: str,
-    preprocess_data: dict,
-    language: str,
     prompt_builder: PromptBuilder,
 ) -> dict:
-    sample_data = preprocess_data.get("sample_data")
-    sample_column_values = preprocess_data.get("sample_column_values")
-
-    return prompt_builder.run(
-        query=query,
-        sql=sql,
-        sample_data=sample_data,
-        sample_column_values=sample_column_values,
-        language=language,
-    )
+    return prompt_builder.run()
 
 
 @observe(as_type="generation", capture_input=False)
-async def generate_chart(prompt: dict, generator: Any) -> dict:
-    return await generator(prompt=prompt.get("prompt"))
+async def validate_chart(
+    prompt: dict, preprocess_chart_schema: str, generator: Any
+) -> dict:
+    return await generator(
+        prompt=prompt.get("prompt"), image_url=preprocess_chart_schema
+    )
 
 
 @observe(capture_input=False)
 def post_process(
-    generate_chart: dict,
-    remove_data_from_chart_schema: bool,
-    preprocess_data: dict,
-    data_provided: bool,
-    post_processor: ChartGenerationPostProcessor,
+    validate_chart: dict,
 ) -> dict:
-    return post_processor.run(
-        generate_chart.get("replies"),
-        preprocess_data["raw_data"]
-        if data_provided
-        else preprocess_data["sample_data"],
-        remove_data_from_chart_schema=remove_data_from_chart_schema,
-    )
+    return orjson.loads(validate_chart.get("replies")[0])
 
 
 ## End of Pipeline
+
+
+class ChartValidationResults(BaseModel):
+    valid: bool
+
+
 CHART_GENERATION_MODEL_KWARGS = {
     "response_format": {
         "type": "json_schema",
         "json_schema": {
-            "name": "chart_generation_schema",
-            "schema": ChartGenerationResults.model_json_schema(),
+            "name": "chart_validation_schema",
+            "schema": ChartValidationResults.model_json_schema(),
         },
     }
 }
@@ -103,34 +108,22 @@ class ChartValidation(BasicPipeline):
                 system_prompt=chart_validation_system_prompt,
                 generation_kwargs=CHART_GENERATION_MODEL_KWARGS,
             ),
-            "chart_data_preprocessor": ChartDataPreprocessor(),
-            "post_processor": ChartGenerationPostProcessor(),
         }
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    @observe(name="Chart Generation")
+    @observe(name="Chart Validation")
     async def run(
         self,
-        query: str,
-        sql: str,
-        data: dict,
-        language: str,
-        remove_data_from_chart_schema: Optional[bool] = True,
-        data_provided: Optional[bool] = False,
+        chart_schema: dict,
     ) -> dict:
-        logger.info("Chart Generation pipeline is running...")
+        logger.info("Chart Validation pipeline is running...")
         return await self._pipe.execute(
             ["post_process"],
             inputs={
-                "query": query,
-                "sql": sql,
-                "data": data,
-                "language": language,
-                "remove_data_from_chart_schema": remove_data_from_chart_schema,
-                "data_provided": data_provided,
+                "chart_schema": chart_schema,
                 **self._components,
             },
         )

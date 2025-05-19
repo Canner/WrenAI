@@ -160,7 +160,11 @@ def create_service_container(
                 "chart_generation": generation.ChartGeneration(
                     **pipe_components["chart_generation"],
                 ),
+                "chart_validation": generation.ChartValidation(
+                    **pipe_components["chart_validation"],
+                ),
             },
+            allow_chart_validation=settings.allow_chart_validation,
             **query_cache,
         ),
         chart_adjustment_service=services.ChartAdjustmentService(
