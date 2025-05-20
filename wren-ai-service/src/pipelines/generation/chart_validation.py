@@ -41,7 +41,7 @@ Please check the chart image and decide if the content of the chart is empty or 
 
 ## Start of Pipeline
 @observe()
-async def preprocess_chart_schema(chart_schema: dict) -> str:
+async def preprocess_chart_schema(chart_schema: dict) -> str | None:
     try:
         # Convert Vega-Lite to PNG in a separate thread since it's CPU-bound
         png_bytes = await asyncio.to_thread(
@@ -54,7 +54,7 @@ async def preprocess_chart_schema(chart_schema: dict) -> str:
         return data_url
     except Exception as e:
         logger.error(f"Error converting Vega-Lite to PNG: {e}")
-        return ""
+        return None
 
 
 @observe(capture_input=False)
@@ -66,9 +66,9 @@ def prompt(
 
 @observe(as_type="generation", capture_input=False)
 async def validate_chart(
-    prompt: dict, preprocess_chart_schema: str, generator: Any
+    prompt: dict, preprocess_chart_schema: str | None, generator: Any
 ) -> dict:
-    if not preprocess_chart_schema:
+    if preprocess_chart_schema is None:
         return {"replies": ['{"valid": true}']}
 
     return await generator(
