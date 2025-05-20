@@ -176,12 +176,12 @@ export default function AdjustReasoningStepsModal(props: Props) {
                 message: ERROR_TEXTS.ADJUST_REASONING.STEPS.REQUIRED,
               },
               {
-                max: 3000,
+                max: 6000,
                 message: ERROR_TEXTS.ADJUST_REASONING.STEPS.MAX_LENGTH,
               },
             ]}
           >
-            <MarkdownEditor maxLength={3000} mentions={mentions} />
+            <MarkdownEditor maxLength={6000} mentions={mentions} />
           </Form.Item>
         </Form.Item>
       </Form>
