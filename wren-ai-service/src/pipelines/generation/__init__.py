@@ -1,4 +1,5 @@
 from .chart_adjustment import ChartAdjustment
+from .chart_correction import ChartCorrection
 from .chart_generation import ChartGeneration
 from .chart_validation import ChartValidation
 from .data_assistance import DataAssistance
@@ -38,4 +39,5 @@ __all__ = [
     "MisleadingAssistance",
     "SQLTablesExtraction",
     "ChartValidation",
+    "ChartCorrection",
 ]

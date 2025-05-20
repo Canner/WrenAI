@@ -51,6 +51,16 @@ class ChartDataPreprocessor:
 
 
 @component
+class ChartSchemaPreprocessor:
+    @component.output_types(
+        chart_schema=dict[str, Any],
+    )
+    def run(self, chart_schema: dict[str, Any]):
+        del chart_schema["config"]
+        return chart_schema
+
+
+@component
 class ChartGenerationPostProcessor:
     @component.output_types(
         results=Dict[str, Any],
@@ -58,8 +68,8 @@ class ChartGenerationPostProcessor:
     def run(
         self,
         replies: str,
-        sample_data: list[dict],
-        remove_data_from_chart_schema: Optional[bool] = True,
+        sample_data: Optional[list[dict]] = None,
+        custom_theme: Optional[dict[str, Any]] = None,
     ):
         try:
             generation_result = orjson.loads(replies[0])
@@ -73,11 +83,11 @@ class ChartGenerationPostProcessor:
                 chart_schema[
                     "$schema"
                 ] = "https://vega.github.io/schema/vega-lite/v5.json"
-                chart_schema["data"] = {"values": sample_data}
-                chart_schema["config"] = load_custom_theme()
 
-                if remove_data_from_chart_schema:
-                    chart_schema["data"]["values"] = []
+                if sample_data:
+                    chart_schema["data"] = {"values": sample_data}
+                if custom_theme:
+                    chart_schema["config"] = custom_theme
 
                 return {
                     "results": {
@@ -120,3 +130,14 @@ class ChartGenerationResults(BaseModel):
     reasoning: str
     chart_schema: dict[str, Any]
     chart_type: Optional[str] = ""  # deprecated
+
+
+CHART_GENERATION_MODEL_KWARGS = {
+    "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "chart_generation_results",
+            "schema": ChartGenerationResults.model_json_schema(),
+        },
+    }
+}

@@ -10,9 +10,9 @@ from langfuse.decorators import observe
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.chart import (
+    CHART_GENERATION_MODEL_KWARGS,
     ChartDataPreprocessor,
     ChartGenerationPostProcessor,
-    ChartGenerationResults,
 )
 
 logger = logging.getLogger("wren-ai-service")
@@ -115,15 +115,6 @@ def post_process(
 
 
 ## End of Pipeline
-CHART_ADJUSTMENT_MODEL_KWARGS = {
-    "response_format": {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "chart_adjustment_results",
-            "schema": ChartGenerationResults.model_json_schema(),
-        },
-    }
-}
 
 
 class ChartAdjustment(BasicPipeline):
@@ -138,7 +129,7 @@ class ChartAdjustment(BasicPipeline):
             ),
             "generator": llm_provider.get_generator(
                 system_prompt=chart_adjustment_system_prompt,
-                generation_kwargs=CHART_ADJUSTMENT_MODEL_KWARGS,
+                generation_kwargs=CHART_GENERATION_MODEL_KWARGS,
             ),
             "chart_data_preprocessor": ChartDataPreprocessor(),
             "post_processor": ChartGenerationPostProcessor(),

@@ -139,6 +139,8 @@ pipes:
     llm: litellm_llm.default
   - name: chart_validation
     llm: litellm_llm.default
+  - name: chart_correction
+    llm: litellm_llm.default
 
 ---
 settings:
