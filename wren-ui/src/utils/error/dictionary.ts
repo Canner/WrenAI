@@ -130,7 +130,7 @@ export const ERROR_TEXTS = {
     },
     STEPS: {
       REQUIRED: 'Please input reasoning steps',
-      MAX_LENGTH: 'Reasoning steps must be 3000 characters or fewer.',
+      MAX_LENGTH: 'Reasoning steps must be 6000 characters or fewer.',
     },
   },
   IMPORT_DATA_SOURCE_SQL: {
