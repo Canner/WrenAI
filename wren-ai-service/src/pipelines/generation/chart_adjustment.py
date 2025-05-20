@@ -121,7 +121,7 @@ def post_process(
 ) -> dict:
     return post_processor.run(
         generate_chart_adjustment.get("replies"),
-        sample_data=(
+        (
             preprocess_data["raw_data"]
             if data_provided
             else preprocess_data["sample_data"]

@@ -68,7 +68,7 @@ class ChartGenerationPostProcessor:
     def run(
         self,
         replies: str,
-        sample_data: Optional[list[dict]] = None,
+        sample_data: list[dict],
         custom_theme: Optional[dict[str, Any]] = None,
     ):
         try:
@@ -83,9 +83,8 @@ class ChartGenerationPostProcessor:
                 chart_schema[
                     "$schema"
                 ] = "https://vega.github.io/schema/vega-lite/v5.json"
+                chart_schema["data"] = {"values": sample_data}
 
-                if sample_data:
-                    chart_schema["data"] = {"values": sample_data}
                 if custom_theme:
                     chart_schema["config"] = custom_theme
 
