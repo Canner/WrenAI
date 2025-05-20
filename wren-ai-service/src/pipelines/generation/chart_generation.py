@@ -10,9 +10,10 @@ from langfuse.decorators import observe
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.chart import (
+    CHART_GENERATION_MODEL_KWARGS,
     ChartDataPreprocessor,
     ChartGenerationPostProcessor,
-    ChartGenerationResults,
+    load_custom_theme,
 )
 
 logger = logging.getLogger("wren-ai-service")
@@ -84,30 +85,23 @@ async def generate_chart(prompt: dict, generator: Any) -> dict:
 @observe(capture_input=False)
 def post_process(
     generate_chart: dict,
-    remove_data_from_chart_schema: bool,
     preprocess_data: dict,
     data_provided: bool,
+    custom_theme: dict[str, Any],
     post_processor: ChartGenerationPostProcessor,
 ) -> dict:
     return post_processor.run(
         generate_chart.get("replies"),
-        preprocess_data["raw_data"]
-        if data_provided
-        else preprocess_data["sample_data"],
-        remove_data_from_chart_schema=remove_data_from_chart_schema,
+        sample_data=(
+            preprocess_data["raw_data"]
+            if data_provided
+            else preprocess_data["sample_data"]
+        ),
+        custom_theme=custom_theme,
     )
 
 
 ## End of Pipeline
-CHART_GENERATION_MODEL_KWARGS = {
-    "response_format": {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "chart_generation_schema",
-            "schema": ChartGenerationResults.model_json_schema(),
-        },
-    }
-}
 
 
 class ChartGeneration(BasicPipeline):
@@ -128,6 +122,10 @@ class ChartGeneration(BasicPipeline):
             "post_processor": ChartGenerationPostProcessor(),
         }
 
+        self._configs = {
+            "custom_theme": load_custom_theme(),
+        }
+
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
@@ -139,7 +137,6 @@ class ChartGeneration(BasicPipeline):
         sql: str,
         data: dict,
         language: str,
-        remove_data_from_chart_schema: Optional[bool] = True,
         data_provided: Optional[bool] = False,
     ) -> dict:
         logger.info("Chart Generation pipeline is running...")
@@ -150,9 +147,9 @@ class ChartGeneration(BasicPipeline):
                 "sql": sql,
                 "data": data,
                 "language": language,
-                "remove_data_from_chart_schema": remove_data_from_chart_schema,
                 "data_provided": data_provided,
                 **self._components,
+                **self._configs,
             },
         )
 

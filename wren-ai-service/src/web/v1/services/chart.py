@@ -82,6 +82,7 @@ class ChartService:
         self,
         pipelines: Dict[str, BasicPipeline],
         allow_chart_validation: bool = False,
+        max_chart_correction_retries: int = 3,
         maxsize: int = 1_000_000,
         ttl: int = 120,
     ):
@@ -90,6 +91,7 @@ class ChartService:
             maxsize=maxsize, ttl=ttl
         )
         self._allow_chart_validation = allow_chart_validation
+        self._max_chart_correction_retries = max_chart_correction_retries
 
     def _is_stopped(self, query_id: str):
         if (
@@ -119,6 +121,9 @@ class ChartService:
             data_provided = False
             query_id = chart_request.query_id
             allow_chart_validation = self._allow_chart_validation
+            remove_data_from_chart_schema = chart_request.remove_data_from_chart_schema
+            max_chart_correction_retries = self._max_chart_correction_retries
+            current_chart_correction_retries = 0
 
             if not chart_request.data:
                 self._chart_results[query_id] = ChartResultResponse(
@@ -146,7 +151,6 @@ class ChartService:
                 sql=chart_request.sql,
                 data=sql_data,
                 language=chart_request.configurations.language,
-                remove_data_from_chart_schema=chart_request.remove_data_from_chart_schema,
                 data_provided=data_provided,
             )
             chart_result = chart_generation_result["post_process"]["results"]
@@ -164,28 +168,52 @@ class ChartService:
                 results["metadata"]["error_type"] = "NO_CHART"
                 results["metadata"]["error_message"] = "chart generation failed"
             elif allow_chart_validation:
-                chart_validation_result = await self._pipelines["chart_validation"].run(
-                    chart_schema=chart_schema,
-                )
+                while current_chart_correction_retries <= max_chart_correction_retries:
+                    chart_validation_result = await self._pipelines[
+                        "chart_validation"
+                    ].run(
+                        chart_schema=chart_schema,
+                    )
 
-                if chart_validation_result.get("valid", True):
-                    self._chart_results[query_id] = ChartResultResponse(
-                        status="finished",
-                        response=ChartResult(**chart_result),
-                        trace_id=trace_id,
-                    )
-                    results["chart_result"] = chart_result
-                else:
-                    self._chart_results[query_id] = ChartResultResponse(
-                        status="failed",
-                        error=ChartError(
-                            code="NO_CHART", message="chart generation failed"
-                        ),
-                        trace_id=trace_id,
-                    )
-                    results["metadata"]["error_type"] = "NO_CHART"
-                    results["metadata"]["error_message"] = "chart generation failed"
+                    if chart_validation_result.get("valid", True):
+                        if remove_data_from_chart_schema:
+                            chart_result["chart_schema"]["data"]["values"] = []
+
+                        self._chart_results[query_id] = ChartResultResponse(
+                            status="finished",
+                            response=ChartResult(**chart_result),
+                            trace_id=trace_id,
+                        )
+                        results["chart_result"] = chart_result
+                        break
+                    elif (
+                        current_chart_correction_retries == max_chart_correction_retries
+                    ):
+                        self._chart_results[query_id] = ChartResultResponse(
+                            status="failed",
+                            error=ChartError(
+                                code="NO_CHART", message="chart generation failed"
+                            ),
+                            trace_id=trace_id,
+                        )
+                        results["metadata"]["error_type"] = "NO_CHART"
+                        results["metadata"]["error_message"] = "chart generation failed"
+                    else:
+                        current_chart_correction_retries += 1
+                        chart_correction_result = await self._pipelines[
+                            "chart_correction"
+                        ].run(
+                            query=chart_request.query,
+                            sql=chart_request.sql,
+                            chart_schema=chart_schema,
+                        )
+                        chart_schema = chart_correction_result["post_process"][
+                            "results"
+                        ].get("chart_schema", {})
             else:
+                if remove_data_from_chart_schema:
+                    chart_result["chart_schema"]["data"]["values"] = []
+
                 self._chart_results[query_id] = ChartResultResponse(
                     status="finished",
                     response=ChartResult(**chart_result),

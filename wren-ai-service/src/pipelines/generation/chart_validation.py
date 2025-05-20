@@ -90,7 +90,7 @@ class ChartValidationResults(BaseModel):
     valid: bool
 
 
-CHART_GENERATION_MODEL_KWARGS = {
+CHART_VALIDATION_MODEL_KWARGS = {
     "response_format": {
         "type": "json_schema",
         "json_schema": {
@@ -113,7 +113,7 @@ class ChartValidation(BasicPipeline):
             ),
             "generator": llm_provider.get_generator(
                 system_prompt=chart_validation_system_prompt,
-                generation_kwargs=CHART_GENERATION_MODEL_KWARGS,
+                generation_kwargs=CHART_VALIDATION_MODEL_KWARGS,
             ),
         }
 
@@ -142,8 +142,5 @@ if __name__ == "__main__":
     dry_run_pipeline(
         ChartValidation,
         "chart_validation",
-        query="show me the dataset",
-        sql="",
-        data={},
-        language="English",
+        chart_schema={},
     )
