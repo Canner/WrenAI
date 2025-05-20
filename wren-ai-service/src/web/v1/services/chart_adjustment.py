@@ -171,7 +171,6 @@ class ChartAdjustmentService:
                 adjustment_command=chart_adjustment_request.adjustment_command,
                 chart_schema=chart_adjustment_request.chart_schema,
                 data=sql_data,
-                remove_data_from_chart_schema=chart_adjustment_request.remove_data_from_chart_schema,
                 language=chart_adjustment_request.configurations.language,
                 data_provided=data_provided,
                 image_url=chart_adjustment_request.image_url,
