@@ -56,7 +56,7 @@ class ChartSchemaPreprocessor:
         chart_schema=dict[str, Any],
     )
     def run(self, chart_schema: dict[str, Any]):
-        del chart_schema["config"]
+        chart_schema.pop("config", None)
         return chart_schema
 
 
