@@ -180,7 +180,15 @@ def create_service_container(
                 "chart_adjustment": generation.ChartAdjustment(
                     **pipe_components["chart_adjustment"],
                 ),
+                "chart_validation": generation.ChartValidation(
+                    **pipe_components["chart_validation"],
+                ),
+                "chart_correction": generation.ChartCorrection(
+                    **pipe_components["chart_correction"],
+                ),
             },
+            allow_chart_validation=settings.allow_chart_validation,
+            max_chart_correction_retries=settings.max_chart_correction_retries,
             **query_cache,
         ),
         sql_answer_service=services.SqlAnswerService(
