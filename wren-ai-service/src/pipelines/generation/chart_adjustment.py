@@ -13,6 +13,8 @@ from src.pipelines.generation.utils.chart import (
     CHART_GENERATION_MODEL_KWARGS,
     ChartDataPreprocessor,
     ChartGenerationPostProcessor,
+    ChartSchemaPreprocessor,
+    load_custom_theme,
 )
 
 logger = logging.getLogger("wren-ai-service")
@@ -67,11 +69,19 @@ def preprocess_data(
 
 
 @observe(capture_input=False)
+def preprocess_chart_schema(
+    chart_schema: dict,
+    chart_schema_preprocessor: ChartSchemaPreprocessor,
+) -> dict:
+    return chart_schema_preprocessor.run(chart_schema)
+
+
+@observe(capture_input=False)
 def prompt(
     query: str,
     sql: str,
     adjustment_command: str,
-    chart_schema: dict,
+    preprocess_chart_schema: dict,
     preprocess_data: dict,
     language: str,
     prompt_builder: PromptBuilder,
@@ -83,7 +93,7 @@ def prompt(
         query=query,
         sql=sql,
         adjustment_command=adjustment_command,
-        chart_schema=chart_schema,
+        chart_schema=preprocess_chart_schema,
         sample_data=sample_data,
         sample_column_values=sample_column_values,
         language=language,
@@ -100,17 +110,19 @@ async def generate_chart_adjustment(
 @observe(capture_input=False)
 def post_process(
     generate_chart_adjustment: dict,
-    remove_data_from_chart_schema: bool,
     preprocess_data: dict,
     data_provided: bool,
+    custom_theme: dict[str, Any],
     post_processor: ChartGenerationPostProcessor,
 ) -> dict:
     return post_processor.run(
         generate_chart_adjustment.get("replies"),
-        preprocess_data["raw_data"]
-        if data_provided
-        else preprocess_data["sample_data"],
-        remove_data_from_chart_schema=remove_data_from_chart_schema,
+        sample_data=(
+            preprocess_data["raw_data"]
+            if data_provided
+            else preprocess_data["sample_data"]
+        ),
+        custom_theme=custom_theme,
     )
 
 
@@ -132,7 +144,12 @@ class ChartAdjustment(BasicPipeline):
                 generation_kwargs=CHART_GENERATION_MODEL_KWARGS,
             ),
             "chart_data_preprocessor": ChartDataPreprocessor(),
+            "chart_schema_preprocessor": ChartSchemaPreprocessor(),
             "post_processor": ChartGenerationPostProcessor(),
+        }
+
+        self._configs = {
+            "custom_theme": load_custom_theme(),
         }
 
         super().__init__(
@@ -148,7 +165,6 @@ class ChartAdjustment(BasicPipeline):
         chart_schema: dict,
         data: dict,
         language: str,
-        remove_data_from_chart_schema: bool = True,
         data_provided: bool = False,
         image_url: str = "",
     ) -> dict:
@@ -163,10 +179,10 @@ class ChartAdjustment(BasicPipeline):
                 "chart_schema": chart_schema,
                 "data": data,
                 "language": language,
-                "remove_data_from_chart_schema": remove_data_from_chart_schema,
                 "data_provided": data_provided,
                 "image_url": image_url,
                 **self._components,
+                **self._configs,
             },
         )
 

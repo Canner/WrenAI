@@ -132,6 +132,7 @@ class ChartCorrection(BasicPipeline):
                 "sql": sql,
                 "chart_schema": chart_schema,
                 **self._components,
+                **self._configs,
             },
         )
 
