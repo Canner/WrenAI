@@ -28,8 +28,8 @@ class ChatMessage:
 
     content: str
     role: ChatRole
-    name: Optional[str]
-    image_url: Optional[str]
+    name: Optional[str] = None
+    image_url: Optional[str] = None
     meta: Dict[str, Any] = field(default_factory=dict, hash=False)
 
     def is_from(self, role: ChatRole) -> bool:
