@@ -208,9 +208,10 @@ class ChartService:
                             sql=chart_request.sql,
                             chart_schema=chart_schema,
                         )
-                        chart_schema = chart_correction_result["post_process"][
+                        chart_result = chart_correction_result["post_process"][
                             "results"
-                        ].get("chart_schema", {})
+                        ]
+                        chart_schema = chart_result.get("chart_schema", {})
             else:
                 if remove_data_from_chart_schema:
                     chart_result["chart_schema"]["data"]["values"] = []
