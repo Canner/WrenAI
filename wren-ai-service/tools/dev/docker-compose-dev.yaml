@@ -8,7 +8,7 @@ networks:
     driver: bridge
 
 services:
-  engine:
+  wren-engine:
     image: ghcr.io/canner/wren-engine:${WREN_ENGINE_VERSION}
     pull_policy: always
     platform: ${PLATFORM}
@@ -20,7 +20,7 @@ services:
     networks:
       - wren
 
-  ibis:
+  ibis-server:
     image: ghcr.io/canner/wren-engine-ibis:${IBIS_SERVER_VERSION}
     pull_policy: always
     platform: ${PLATFORM}
@@ -41,7 +41,7 @@ services:
     networks:
       - wren
 
-  ui:
+  wren-ui:
     image: ghcr.io/canner/wren-ui:${WREN_UI_VERSION}
     pull_policy: always
     platform: ${PLATFORM}
