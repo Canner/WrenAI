@@ -3,7 +3,7 @@ from dataclasses import asdict
 from typing import Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.globals import (
     ServiceContainer,
@@ -75,10 +75,10 @@ class PostRequest(BaseModel):
     mdl: str
     previous_questions: list[str] = []
     project_id: Optional[str] = None
-    max_questions: Optional[int] = 5
-    max_categories: Optional[int] = 3
-    regenerate: Optional[bool] = False
-    configuration: Optional[Configuration] = Configuration()
+    max_questions: int = 5
+    max_categories: int = 3
+    regenerate: bool = False
+    configuration: Configuration = Field(default_factory=Configuration)
 
 
 class PostResponse(BaseModel):

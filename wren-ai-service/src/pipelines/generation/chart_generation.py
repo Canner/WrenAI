@@ -1,6 +1,6 @@
 import logging
 import sys
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
@@ -144,7 +144,7 @@ class ChartGeneration(BasicPipeline):
         sql: str,
         data: dict,
         language: str,
-        data_provided: Optional[bool] = False,
+        data_provided: bool = False,
     ) -> dict:
         logger.info("Chart Generation pipeline is running...")
         return await self._pipe.execute(
