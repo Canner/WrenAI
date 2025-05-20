@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 import orjson
 from haystack import component
+from haystack.dataclasses import ChatMessage
 from pydantic import BaseModel
 
 from src.core.engine import (
@@ -13,98 +14,9 @@ from src.core.engine import (
     clean_generation_result,
 )
 from src.web.v1.services import Configuration
+from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
-
-
-@component
-class SQLBreakdownGenPostProcessor:
-    def __init__(self, engine: Engine):
-        self._engine = engine
-
-    @component.output_types(
-        results=Optional[Dict[str, Any]],
-    )
-    async def run(
-        self,
-        replies: List[str],
-        project_id: str | None = None,
-        timeout: Optional[float] = 30.0,
-    ) -> Dict[str, Any]:
-        cleaned_generation_result = orjson.loads(clean_generation_result(replies[0]))
-
-        steps = cleaned_generation_result.get("steps", [])
-        if not steps:
-            return {
-                "results": {
-                    "description": cleaned_generation_result["description"],
-                    "steps": [],
-                },
-            }
-
-        # make sure the last step has an empty cte_name
-        steps[-1]["cte_name"] = ""
-
-        for step in steps:
-            step["sql"], error_message = add_quotes(step["sql"])
-            if error_message:
-                return {
-                    "results": {
-                        "description": cleaned_generation_result["description"],
-                        "steps": [],
-                    },
-                }
-
-        sql = self._build_cte_query(steps)
-
-        if not await self._check_if_sql_executable(
-            sql,
-            project_id=project_id,
-            timeout=timeout,
-        ):
-            return {
-                "results": {
-                    "description": cleaned_generation_result["description"],
-                    "steps": [],
-                },
-            }
-
-        return {
-            "results": {
-                "description": cleaned_generation_result["description"],
-                "steps": steps,
-            },
-        }
-
-    def _build_cte_query(self, steps) -> str:
-        ctes = ",\n".join(
-            f"{step['cte_name']} AS ({step['sql']})"
-            for step in steps
-            if step["cte_name"]
-        )
-
-        return f"WITH {ctes}\n" + steps[-1]["sql"] if ctes else steps[-1]["sql"]
-
-    async def _check_if_sql_executable(
-        self,
-        sql: str,
-        project_id: str | None = None,
-        timeout: Optional[float] = 30.0,
-    ):
-        async with aiohttp.ClientSession() as session:
-            status, _, addition = await self._engine.execute_sql(
-                sql,
-                session,
-                project_id=project_id,
-                timeout=timeout,
-            )
-
-        if not status:
-            logger.exception(
-                f"SQL is not executable: {addition.get('error_message', '')}"
-            )
-
-        return status
 
 
 @component
@@ -218,11 +130,12 @@ class SQLGenPostProcessor:
 
 
 TEXT_TO_SQL_RULES = """
-#### SQL RULES ####
+### SQL RULES ###
 - ONLY USE SELECT statements, NO DELETE, UPDATE OR INSERT etc. statements that might change the data in the database.
 - ONLY USE the tables and columns mentioned in the database schema.
 - ONLY USE "*" if the user query asks for all the columns of a table.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
+- DON'T INCLUDE comments in the generated SQL query.
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
 - ALWAYS QUALIFY column names with their table name or table alias to avoid ambiguity (e.g., orders.OrderId, o.OrderId)
 - YOU MUST USE "lower(<table_name>.<column_name>) like lower(<value>)" function or "lower(<table_name>.<column_name>) = lower(<value>)" function for case-insensitive comparison!
@@ -233,6 +146,10 @@ TEXT_TO_SQL_RULES = """
     - Use "lower(<table_name>.<column_name>) = lower(<value>)" when:
         - The user requests an exact, specific value.
         - There is no ambiguity or pattern in the value.
+- If the column is date/time related field, and it is a INT/BIGINT/DOUBLE/FLOAT type, please use the appropriate function mentioned in the SQL FUNCTIONS section to cast the column to "TIMESTAMP" type first before using it in the query
+    - example: TO_TIMESTAMP_MILLIS("<timestamp_column>")  # if the timestamp_column is in milliseconds
+    - example: TO_TIMESTAMP_SECONDS("<timestamp_column>")  # if the timestamp_column is in seconds
+    - example: TO_TIMESTAMP_MICROS("<timestamp_column>")  # if the timestamp_column is in microseconds
 - ALWAYS CAST the date/time related field to "TIMESTAMP WITH TIME ZONE" type when using them in the query
     - example 1: CAST(properties_closedate AS TIMESTAMP WITH TIME ZONE)
     - example 2: CAST('2024-11-09 00:00:00' AS TIMESTAMP WITH TIME ZONE)
@@ -296,6 +213,13 @@ sql_generation_system_prompt = f"""
 You are a helpful assistant that converts natural language queries into ANSI SQL queries.
 
 Given user's question, database schema, etc., you should think deeply and carefully and generate the SQL query based on the given reasoning plan step by step.
+
+### GENERAL RULES ###
+
+1. If INSTRUCTIONS section is provided, please follow the instructions strictly.
+2. If SQL FUNCTIONS section is provided, please choose the appropriate functions from the list and use it in the SQL query.
+3. If SQL SAMPLES section is provided, please refer to the samples and learn the usage of the schema structures and how SQL is written based on them.
+4. If REASONING PLAN section is provided, please follow the plan strictly.
 
 {TEXT_TO_SQL_RULES}
 
@@ -506,3 +430,11 @@ SQL_GENERATION_MODEL_KWARGS = {
         },
     }
 }
+
+
+def construct_ask_history_messages(histories: list[AskHistory]) -> list[ChatMessage]:
+    messages = []
+    for history in histories:
+        messages.append(ChatMessage.from_user(history.question))
+        messages.append(ChatMessage.from_assistant(history.sql))
+    return messages

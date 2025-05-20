@@ -5,7 +5,7 @@ from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
 
 
-class RetrievalMock(retrieval.Retrieval):
+class RetrievalMock(retrieval.DbSchemaRetrieval):
     def __init__(self, documents: list = []):
         self._documents = documents
 
@@ -38,7 +38,7 @@ class HistoricalQuestionMock(retrieval.HistoricalQuestionRetrieval):
 
 
 class IntentClassificationMock(generation.IntentClassification):
-    def __init__(self, intent: str = "MISLEADING_QUERY"):
+    def __init__(self, intent: str = "TEXT_TO_SQL"):
         self._intent = intent
 
     async def run(
@@ -72,26 +72,3 @@ class GenerationMock(generation.SQLGeneration):
                 "invalid_generation_results": self._invalid,
             }
         }
-
-
-class SQLSummaryMock(generation.SQLSummary):
-    """
-    Example for the results:
-     [
-         {
-             "sql": "select 1",
-             "summary": "the description of the sql",
-         }
-     ]
-    """
-
-    def __init__(self, results: list = []):
-        self._results = results
-
-    async def run(
-        self,
-        query: str,
-        sqls: list[str],
-        language: str,
-    ):
-        return {"post_process": {"sql_summary_results": self._results}}

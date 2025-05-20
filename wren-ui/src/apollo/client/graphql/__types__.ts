@@ -11,6 +11,7 @@ export type Scalars = {
   Boolean: boolean;
   Int: number;
   Float: number;
+  DialectSQL: any;
   JSON: any;
 };
 
@@ -32,11 +33,54 @@ export type AdjustThreadResponseInput = {
 export type AdjustmentTask = {
   __typename?: 'AdjustmentTask';
   error?: Maybe<Error>;
+  invalidSql?: Maybe<Scalars['String']>;
   queryId?: Maybe<Scalars['String']>;
   sql?: Maybe<Scalars['String']>;
   status?: Maybe<AskingTaskStatus>;
   traceId?: Maybe<Scalars['String']>;
 };
+
+export type ApiHistoryFilterInput = {
+  apiType?: InputMaybe<ApiType>;
+  endDate?: InputMaybe<Scalars['String']>;
+  projectId?: InputMaybe<Scalars['Int']>;
+  startDate?: InputMaybe<Scalars['String']>;
+  statusCode?: InputMaybe<Scalars['Int']>;
+  threadId?: InputMaybe<Scalars['String']>;
+};
+
+export type ApiHistoryPaginatedResponse = {
+  __typename?: 'ApiHistoryPaginatedResponse';
+  hasMore: Scalars['Boolean'];
+  items: Array<ApiHistoryResponse>;
+  total: Scalars['Int'];
+};
+
+export type ApiHistoryPaginationInput = {
+  limit: Scalars['Int'];
+  offset: Scalars['Int'];
+};
+
+export type ApiHistoryResponse = {
+  __typename?: 'ApiHistoryResponse';
+  apiType: ApiType;
+  createdAt: Scalars['String'];
+  durationMs?: Maybe<Scalars['Int']>;
+  headers?: Maybe<Scalars['JSON']>;
+  id: Scalars['String'];
+  projectId: Scalars['Int'];
+  requestPayload?: Maybe<Scalars['JSON']>;
+  responsePayload?: Maybe<Scalars['JSON']>;
+  statusCode?: Maybe<Scalars['Int']>;
+  threadId?: Maybe<Scalars['String']>;
+  updatedAt: Scalars['String'];
+};
+
+export enum ApiType {
+  GENERATE_SQL = 'GENERATE_SQL',
+  GENERATE_VEGA_CHART = 'GENERATE_VEGA_CHART',
+  RUN_SQL = 'RUN_SQL'
+}
 
 export type AskingTask = {
   __typename?: 'AskingTask';
@@ -73,6 +117,16 @@ export enum AskingTaskType {
   GENERAL = 'GENERAL',
   MISLEADING_QUERY = 'MISLEADING_QUERY',
   TEXT_TO_SQL = 'TEXT_TO_SQL'
+}
+
+export enum CacheScheduleDayEnum {
+  FRI = 'FRI',
+  MON = 'MON',
+  SAT = 'SAT',
+  SUN = 'SUN',
+  THU = 'THU',
+  TUE = 'TUE',
+  WED = 'WED'
 }
 
 export type CalculatedFieldInput = {
@@ -184,10 +238,23 @@ export type CustomFieldInput = {
   name: Scalars['String'];
 };
 
+export type Dashboard = {
+  __typename?: 'Dashboard';
+  cacheEnabled: Scalars['Boolean'];
+  id: Scalars['Int'];
+  name: Scalars['String'];
+  nextScheduledAt?: Maybe<Scalars['String']>;
+  projectId: Scalars['Int'];
+  scheduleCron?: Maybe<Scalars['String']>;
+  scheduleFrequency?: Maybe<ScheduleFrequencyEnum>;
+  scheduleTimezone?: Maybe<Scalars['String']>;
+};
+
 export type DashboardItem = {
   __typename?: 'DashboardItem';
   dashboardId: Scalars['Int'];
   detail: DashboardItemDetail;
+  displayName?: Maybe<Scalars['String']>;
   id: Scalars['Int'];
   layout: DashboardItemLayout;
   type: DashboardItemType;
@@ -221,6 +288,16 @@ export enum DashboardItemType {
 
 export type DashboardItemWhereInput = {
   id: Scalars['Int'];
+};
+
+export type DashboardSchedule = {
+  __typename?: 'DashboardSchedule';
+  cron?: Maybe<Scalars['String']>;
+  day?: Maybe<CacheScheduleDayEnum>;
+  frequency: ScheduleFrequencyEnum;
+  hour: Scalars['Int'];
+  minute: Scalars['Int'];
+  timezone?: Maybe<Scalars['String']>;
 };
 
 export type DataSource = {
@@ -296,6 +373,17 @@ export type DetailedColumn = {
   referenceName: Scalars['String'];
   sourceColumnName: Scalars['String'];
   type?: Maybe<Scalars['String']>;
+};
+
+export type DetailedDashboard = {
+  __typename?: 'DetailedDashboard';
+  cacheEnabled: Scalars['Boolean'];
+  description?: Maybe<Scalars['String']>;
+  id: Scalars['Int'];
+  items: Array<DashboardItem>;
+  name: Scalars['String'];
+  nextScheduledAt?: Maybe<Scalars['String']>;
+  schedule: DashboardSchedule;
 };
 
 export type DetailedModel = {
@@ -551,6 +639,10 @@ export type ModelInfo = {
   sourceTableName: Scalars['String'];
 };
 
+export type ModelSubstituteInput = {
+  sql: Scalars['DialectSQL'];
+};
+
 export type ModelSyncResponse = {
   __typename?: 'ModelSyncResponse';
   status: SyncStatus;
@@ -592,9 +684,10 @@ export type Mutation = {
   generateThreadResponseAnswer: ThreadResponse;
   generateThreadResponseBreakdown: ThreadResponse;
   generateThreadResponseChart: ThreadResponse;
+  modelSubstitute: Scalars['String'];
   previewBreakdownData: Scalars['JSON'];
   previewData: Scalars['JSON'];
-  previewItemSQL: Scalars['JSON'];
+  previewItemSQL: PreviewItemResponse;
   previewModelData: Scalars['JSON'];
   previewSql: Scalars['JSON'];
   previewViewData: Scalars['JSON'];
@@ -606,10 +699,12 @@ export type Mutation = {
   saveLearningRecord: LearningRecord;
   saveRelations: Scalars['JSON'];
   saveTables: Scalars['JSON'];
+  setDashboardSchedule: Dashboard;
   startSampleDataset: Scalars['JSON'];
   triggerDataSourceDetection: Scalars['Boolean'];
   updateCalculatedField: Scalars['JSON'];
   updateCurrentProject: Scalars['Boolean'];
+  updateDashboardItem: DashboardItem;
   updateDashboardItemLayouts: Array<DashboardItem>;
   updateDataSource: DataSource;
   updateInstruction: Instruction;
@@ -773,6 +868,11 @@ export type MutationGenerateThreadResponseChartArgs = {
 };
 
 
+export type MutationModelSubstituteArgs = {
+  data: ModelSubstituteInput;
+};
+
+
 export type MutationPreviewBreakdownDataArgs = {
   where: PreviewDataInput;
 };
@@ -838,6 +938,11 @@ export type MutationSaveTablesArgs = {
 };
 
 
+export type MutationSetDashboardScheduleArgs = {
+  data: SetDashboardScheduleInput;
+};
+
+
 export type MutationStartSampleDatasetArgs = {
   data: SampleDatasetInput;
 };
@@ -851,6 +956,12 @@ export type MutationUpdateCalculatedFieldArgs = {
 
 export type MutationUpdateCurrentProjectArgs = {
   data: UpdateCurrentProjectInput;
+};
+
+
+export type MutationUpdateDashboardItemArgs = {
+  data: UpdateDashboardItemInput;
+  where: DashboardItemWhereInput;
 };
 
 
@@ -959,9 +1070,19 @@ export type PreviewDataInput = {
   stepIndex?: InputMaybe<Scalars['Int']>;
 };
 
+export type PreviewItemResponse = {
+  __typename?: 'PreviewItemResponse';
+  cacheCreatedAt?: Maybe<Scalars['String']>;
+  cacheHit: Scalars['Boolean'];
+  cacheOverrodeAt?: Maybe<Scalars['String']>;
+  data: Scalars['JSON'];
+  override: Scalars['Boolean'];
+};
+
 export type PreviewItemSqlInput = {
   itemId: Scalars['Int'];
   limit?: InputMaybe<Scalars['Int']>;
+  refresh?: InputMaybe<Scalars['Boolean']>;
 };
 
 export type PreviewSqlDataInput = {
@@ -993,8 +1114,10 @@ export enum ProjectLanguage {
 export type Query = {
   __typename?: 'Query';
   adjustmentTask?: Maybe<AdjustmentTask>;
+  apiHistory: ApiHistoryPaginatedResponse;
   askingTask?: Maybe<AskingTask>;
   autoGenerateRelation: Array<RecommendRelations>;
+  dashboard: DetailedDashboard;
   dashboardItems: Array<DashboardItem>;
   diagram: Diagram;
   getMDL: GetMdlResult;
@@ -1023,6 +1146,12 @@ export type Query = {
 
 export type QueryAdjustmentTaskArgs = {
   taskId: Scalars['String'];
+};
+
+
+export type QueryApiHistoryArgs = {
+  filter?: InputMaybe<ApiHistoryFilterInput>;
+  pagination: ApiHistoryPaginationInput;
 };
 
 
@@ -1168,6 +1297,13 @@ export type SaveTablesInput = {
   tables: Array<Scalars['String']>;
 };
 
+export enum ScheduleFrequencyEnum {
+  CUSTOM = 'CUSTOM',
+  DAILY = 'DAILY',
+  NEVER = 'NEVER',
+  WEEKLY = 'WEEKLY'
+}
+
 export type SchemaChange = {
   __typename?: 'SchemaChange';
   deletedColumns?: Maybe<Array<DetailedChangeTable>>;
@@ -1181,6 +1317,20 @@ export enum SchemaChangeType {
   DELETED_TABLES = 'DELETED_TABLES',
   MODIFIED_COLUMNS = 'MODIFIED_COLUMNS'
 }
+
+export type SetDashboardScheduleData = {
+  cron?: InputMaybe<Scalars['String']>;
+  day?: InputMaybe<CacheScheduleDayEnum>;
+  frequency: ScheduleFrequencyEnum;
+  hour?: InputMaybe<Scalars['Int']>;
+  minute?: InputMaybe<Scalars['Int']>;
+  timezone?: InputMaybe<Scalars['String']>;
+};
+
+export type SetDashboardScheduleInput = {
+  cacheEnabled: Scalars['Boolean'];
+  schedule?: InputMaybe<SetDashboardScheduleData>;
+};
 
 export type Settings = {
   __typename?: 'Settings';
@@ -1341,6 +1491,10 @@ export type UpdateColumnMetadataInput = {
 
 export type UpdateCurrentProjectInput = {
   language: ProjectLanguage;
+};
+
+export type UpdateDashboardItemInput = {
+  displayName: Scalars['String'];
 };
 
 export type UpdateDashboardItemLayoutsInput = {

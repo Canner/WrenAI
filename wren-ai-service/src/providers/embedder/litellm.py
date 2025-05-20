@@ -157,16 +157,16 @@ class AsyncDocumentEmbedder:
 class LitellmEmbedderProvider(EmbedderProvider):
     def __init__(
         self,
-        api_base: str,
         model: str,
         api_key_name: Optional[
             str
         ] = None,  # e.g. EMBEDDER_OPENAI_API_KEY, EMBEDDER_ANTHROPIC_API_KEY, etc.
+        api_base: Optional[str] = None,
         timeout: Optional[float] = 120.0,
         **kwargs,
     ):
         self._api_key = os.getenv(api_key_name) if api_key_name else None
-        self._api_base = remove_trailing_slash(api_base)
+        self._api_base = remove_trailing_slash(api_base) if api_base else None
         self._embedding_model = model
         self._timeout = timeout
         if "provider" in kwargs:

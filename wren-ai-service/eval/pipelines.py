@@ -208,11 +208,10 @@ class RetrievalPipeline(Eval):
         )
         deploy_model(mdl, [_db_schema_indexing, _table_description_indexing])
 
-        self._retrieval = retrieval.Retrieval(
+        self._retrieval = retrieval.DbSchemaRetrieval(
             **pipe_components["db_schema_retrieval"],
             table_retrieval_size=settings.table_retrieval_size,
             table_column_retrieval_size=settings.table_column_retrieval_size,
-            allow_using_db_schemas_without_pruning=settings.allow_using_db_schemas_without_pruning,
         )
 
     async def _process(self, params: dict, **_) -> dict:
@@ -374,11 +373,10 @@ class AskPipeline(Eval):
         )
         deploy_model(mdl, [_db_schema_indexing, _table_description_indexing])
 
-        self._retrieval = retrieval.Retrieval(
+        self._retrieval = retrieval.DbSchemaRetrieval(
             **pipe_components["db_schema_retrieval"],
             table_retrieval_size=settings.table_retrieval_size,
             table_column_retrieval_size=settings.table_column_retrieval_size,
-            allow_using_db_schemas_without_pruning=settings.allow_using_db_schemas_without_pruning,
         )
         self._sql_reasoner = generation.SQLGenerationReasoning(
             **pipe_components["sql_generation_reasoning"],

@@ -2,6 +2,7 @@ import { useRouter } from 'next/router';
 import { useEffect, useMemo, useRef } from 'react';
 import { Divider } from 'antd';
 import styled from 'styled-components';
+import { nextTick } from '@/utils/time';
 import usePromptThreadStore from './store';
 import AnswerResult from './AnswerResult';
 import { makeIterable, IterableComponent } from '@/utils/iteration';
@@ -102,8 +103,10 @@ export default function PromptThread() {
     const isLastResponseFinished =
       getIsFinished(lastResponse?.askingTask?.status) ||
       getAnswerIsFinished(lastResponse?.answerDetail?.status);
-    triggerScrollToBottom(isLastResponseFinished ? 'auto' : 'smooth');
-  }, [responses]);
+    nextTick().then(() => {
+      triggerScrollToBottom(isLastResponseFinished ? 'auto' : 'smooth');
+    });
+  }, [responses.length]);
 
   const onInitPreviewDone = () => {
     triggerScrollToBottom();

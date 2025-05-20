@@ -89,7 +89,7 @@ export default function ConnectDataSource(props: Props) {
         <Alert
           message={connectError.shortMessage}
           description={
-            dataSource === DATA_SOURCES.PG_SQL
+            dataSource === DATA_SOURCES.POSTGRES
               ? getPostgresErrorMessage(connectError)
               : connectError.message
           }

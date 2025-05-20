@@ -53,7 +53,7 @@ export default function EllipsisWrapper(props: Props) {
   useEffect(() => {
     if (ref.current && !hasWidth) {
       const cellWidth = ref.current.clientWidth;
-      setWidth(cellWidth);
+      cellWidth === 0 ? setWidth('auto') : setWidth(cellWidth);
     }
 
     // Reset state when unmount

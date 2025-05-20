@@ -1,6 +1,4 @@
 import json
-import re
-import time
 import uuid
 
 import orjson
@@ -9,40 +7,40 @@ import pytest
 from src.config import settings
 from src.pipelines import generation, indexing, retrieval
 from src.providers import generate_components
+from src.utils import fetch_wren_ai_docs
 from src.web.v1.services.ask import (
     AskRequest,
     AskResultRequest,
-    AskResultResponse,
     AskService,
 )
 from src.web.v1.services.semantics_preparation import (
     SemanticsPreparationRequest,
     SemanticsPreparationService,
 )
-from tests.pytest.services.mocks import (
-    GenerationMock,
-    HistoricalQuestionMock,
-    InstructionsRetrievalMock,
-    IntentClassificationMock,
-    RetrievalMock,
-    SqlPairsRetrievalMock,
-    SQLSummaryMock,
-)
 
 
 @pytest.fixture
 def ask_service():
     pipe_components = generate_components(settings.components)
+    wren_ai_docs = fetch_wren_ai_docs(settings.doc_endpoint, settings.is_oss)
 
     return AskService(
         {
             "intent_classification": generation.IntentClassification(
                 **pipe_components["intent_classification"],
+                wren_ai_docs=wren_ai_docs,
+            ),
+            "misleading_assistance": generation.MisleadingAssistance(
+                **pipe_components["misleading_assistance"],
             ),
             "data_assistance": generation.DataAssistance(
                 **pipe_components["data_assistance"],
             ),
-            "retrieval": retrieval.Retrieval(
+            "user_guide_assistance": generation.UserGuideAssistance(
+                **pipe_components["user_guide_assistance"],
+                wren_ai_docs=wren_ai_docs,
+            ),
+            "retrieval": retrieval.DbSchemaRetrieval(
                 **pipe_components["db_schema_retrieval"],
             ),
             "historical_question": retrieval.HistoricalQuestionRetrieval(
@@ -155,84 +153,3 @@ async def test_ask_with_successful_query(
     # assert ask_result_response.response[0].sql != ""
     # assert ask_result_response.response[0].summary != ""
     # assert ask_result_response.response[0].type == "llm" or "view"
-
-
-def _ask_service_ttl_mock(query: str):
-    return AskService(
-        {
-            "intent_classification": IntentClassificationMock(),
-            "data_assistance": "",
-            "retrieval": RetrievalMock(
-                [
-                    f"mock document 1 for {query}",
-                    f"mock document 2 for {query}",
-                ]
-            ),
-            "historical_question": HistoricalQuestionMock(),
-            "sql_generation": GenerationMock(
-                valid=[{"sql": "select count(*) from books"}],
-            ),
-            "sql_summary": SQLSummaryMock(
-                results=[
-                    {
-                        "sql": "select count(*) from books",
-                        "summary": "mock summary",
-                    }
-                ]
-            ),
-            "sql_pairs_retrieval": SqlPairsRetrievalMock(
-                documents=[
-                    {
-                        "question": "How many books are there?",
-                        "sql": "select count(*) from books",
-                    }
-                ]
-            ),
-            "instructions_retrieval": InstructionsRetrievalMock(
-                documents=[
-                    {
-                        "instruction": "How many books are there?",
-                    }
-                ]
-            ),
-        },
-        ttl=3,
-    )
-
-
-@pytest.mark.asyncio
-async def test_ask_query_ttl(service_metadata: dict):
-    query = "How many books are there?"
-    query_id = str(uuid.uuid4())
-
-    ask_service = _ask_service_ttl_mock(query)
-    ask_service._ask_results[query_id] = AskResultResponse(
-        status="understanding",
-    )
-
-    request = AskRequest(
-        query=query,
-        mdl_hash="mock mdl hash",
-    )
-    request.query_id = query_id
-
-    await ask_service.ask(request, service_metadata=service_metadata)
-
-    time.sleep(1)
-    response = ask_service.get_ask_result(
-        AskResultRequest(
-            query_id=query_id,
-        )
-    )
-    assert response.status == "finished"
-
-    time.sleep(3)
-    response = ask_service.get_ask_result(
-        AskResultRequest(
-            query_id=query_id,
-        )
-    )
-
-    assert response.status == "failed"
-    assert response.error.code == "OTHERS"
-    assert re.match(r".+ is not found", response.error.message)

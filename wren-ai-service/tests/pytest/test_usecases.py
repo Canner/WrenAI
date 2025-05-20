@@ -12,13 +12,93 @@ import orjson
 import requests
 import sqlparse
 import yaml
+from dotenv import load_dotenv
 
-from demo.utils import (
-    _get_connection_info,
-    _prepare_duckdb,
-    _replace_wren_engine_env_variables,
-    _update_wren_engine_configs,
-)
+load_dotenv(".env.dev", override=True)
+
+WREN_AI_SERVICE_BASE_URL = "http://localhost:5556"
+WREN_ENGINE_API_URL = "http://localhost:8080"
+
+
+def _get_connection_info(data_source: str):
+    if data_source == "bigquery":
+        return {
+            "project_id": os.getenv("bigquery.project-id"),
+            "dataset_id": os.getenv("bigquery.dataset-id"),
+            "credentials": os.getenv("bigquery.credentials-key"),
+        }
+    elif data_source == "postgres":
+        return {
+            "host": os.getenv("postgres.host"),
+            "port": int(os.getenv("postgres.port")),
+            "database": os.getenv("postgres.database"),
+            "user": os.getenv("postgres.user"),
+            "password": os.getenv("postgres.password"),
+        }
+
+
+def _prepare_duckdb(dataset_name: str):
+    assert dataset_name in ["ecommerce", "hr"]
+
+    init_sqls = {
+        "ecommerce": """
+CREATE TABLE olist_customers_dataset AS FROM read_parquet('https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_customers_dataset.parquet');
+CREATE TABLE olist_order_items_dataset AS FROM read_parquet('https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_order_items_dataset.parquet');
+CREATE TABLE olist_orders_dataset AS FROM read_parquet('https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_orders_dataset.parquet');
+CREATE TABLE olist_order_payments_dataset AS FROM read_parquet('https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_order_payments_dataset.parquet');
+CREATE TABLE olist_products_dataset AS FROM read_parquet('https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_products_dataset.parquet');
+CREATE TABLE olist_order_reviews_dataset AS FROM read_parquet('https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_order_reviews_dataset.parquet');
+CREATE TABLE olist_geolocation_dataset AS FROM read_parquet('https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_geolocation_dataset.parquet');
+CREATE TABLE olist_sellers_dataset AS FROM read_parquet('https://assets.getwren.ai/sample_data/brazilian-ecommerce/olist_sellers_dataset.parquet');
+CREATE TABLE product_category_name_translation AS FROM read_parquet('https://assets.getwren.ai/sample_data/brazilian-ecommerce/product_category_name_translation.parquet');
+""",
+        "hr": """
+CREATE TABLE salaries AS FROM read_parquet('https://assets.getwren.ai/sample_data/employees/salaries.parquet');
+CREATE TABLE titles AS FROM read_parquet('https://assets.getwren.ai/sample_data/employees/titles.parquet');
+CREATE TABLE dept_emp AS FROM read_parquet('https://assets.getwren.ai/sample_data/employees/dept_emp.parquet');
+CREATE TABLE departments AS FROM read_parquet('https://assets.getwren.ai/sample_data/employees/departments.parquet');
+CREATE TABLE employees AS FROM read_parquet('https://assets.getwren.ai/sample_data/employees/employees.parquet');
+CREATE TABLE dept_manager AS FROM read_parquet('https://assets.getwren.ai/sample_data/employees/dept_manager.parquet');
+""",
+    }
+
+    with open("./tools/dev/etc/duckdb-init.sql", "w") as f:
+        f.write("")
+
+    response = requests.put(
+        f"{WREN_ENGINE_API_URL}/v1/data-source/duckdb/settings/init-sql",
+        data=init_sqls[dataset_name],
+    )
+
+    assert response.status_code == 200, response.text
+
+
+def _update_wren_engine_configs(configs: list[dict]):
+    response = requests.patch(
+        f"{WREN_ENGINE_API_URL}/v1/config",
+        json=configs,
+    )
+
+    assert response.status_code == 200
+
+
+def _replace_wren_engine_env_variables(engine_type: str, data: dict):
+    assert engine_type in ("wren_engine", "wren_ibis")
+
+    with open("config.yaml", "r") as f:
+        configs = list(yaml.safe_load_all(f))
+
+        for config in configs:
+            if config.get("type") == "engine" and config.get("provider") == engine_type:
+                for key, value in data.items():
+                    config[key] = value
+            if "pipes" in config:
+                for i, pipe in enumerate(config["pipes"]):
+                    if "engine" in pipe and pipe["name"] != "sql_functions_retrieval":
+                        config["pipes"][i]["engine"] = engine_type
+
+    with open("config.yaml", "w") as f:
+        yaml.safe_dump_all(configs, f, default_flow_style=False)
 
 
 def is_ai_service_ready(url: str):
@@ -51,7 +131,7 @@ def test_load_mdl_and_questions(usecases: list[str]):
     return mdls_and_questions
 
 
-def setup_datasource(mdl_str: str, dataset: str, dataset_type: str):
+def setup_datasource(mdl_str: str, dataset: str, dataset_type: str, url: str):
     assert dataset_type in ["bigquery", "duckdb"]
 
     manifest = base64.b64encode(mdl_str.encode("utf-8")).decode("utf-8")
@@ -200,10 +280,8 @@ if __name__ == "__main__":
         "zh-CN": "Simplified Chinese",
     }[args.lang]
 
-    url = "http://localhost:5556"
-
     assert is_ai_service_ready(
-        url
+        WREN_AI_SERVICE_BASE_URL
     ), "WrenAI AI service is not running, please start it first via 'just up && just start'"
 
     mdls_and_questions_by_usecase = test_load_mdl_and_questions(usecases)
@@ -212,13 +290,23 @@ if __name__ == "__main__":
     for usecase, data in mdls_and_questions_by_usecase.items():
         print(f"testing usecase: {usecase}")
 
-        setup_datasource(data["mdl_str"], usecase, usecase_to_dataset_type[usecase])
+        setup_datasource(
+            data["mdl_str"],
+            usecase,
+            usecase_to_dataset_type[usecase],
+            WREN_AI_SERVICE_BASE_URL,
+        )
 
-        semantics_preperation_id = deploy_mdl(data["mdl_str"], url)
+        semantics_preperation_id = deploy_mdl(data["mdl_str"], WREN_AI_SERVICE_BASE_URL)
 
         # ask questions
         results = asyncio.run(
-            ask_questions(data["questions"], url, semantics_preperation_id, lang)
+            ask_questions(
+                data["questions"],
+                WREN_AI_SERVICE_BASE_URL,
+                semantics_preperation_id,
+                lang,
+            )
         )
         assert len(results) == len(data["questions"])
 

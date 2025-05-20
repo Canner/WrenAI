@@ -98,7 +98,7 @@ export function FixSQLModal(props: Props) {
             },
           ]}
         >
-          <SQLEditor autoFocus />
+          <SQLEditor autoComplete autoFocus />
         </Form.Item>
       </Form>
       <div className="my-3">

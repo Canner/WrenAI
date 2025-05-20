@@ -25,6 +25,10 @@ export interface ColumnMetadata {
 export interface PreviewDataResponse extends IbisResponse {
   columns: ColumnMetadata[];
   data: any[][];
+  cacheHit?: boolean;
+  cacheCreatedAt?: string;
+  cacheOverrodeAt?: string;
+  override?: boolean;
 }
 
 export interface DescribeStatementResponse {
@@ -38,6 +42,8 @@ export interface PreviewOptions {
   manifest: Manifest;
   limit?: number;
   dryRun?: boolean;
+  refresh?: boolean;
+  cacheEnabled?: boolean;
 }
 
 export interface SqlValidateOptions {
@@ -93,7 +99,14 @@ export class QueryService implements IQueryService {
     sql: string,
     options: PreviewOptions,
   ): Promise<IbisResponse | PreviewDataResponse | boolean> {
-    const { project, manifest: mdl, limit, dryRun } = options;
+    const {
+      project,
+      manifest: mdl,
+      limit,
+      dryRun,
+      refresh,
+      cacheEnabled,
+    } = options;
     const { type: dataSource, connectionInfo } = project;
     if (this.useEngine(dataSource)) {
       if (dryRun) {
@@ -120,6 +133,8 @@ export class QueryService implements IQueryService {
           connectionInfo,
           mdl,
           limit,
+          refresh,
+          cacheEnabled,
         );
       }
     }
@@ -202,6 +217,8 @@ export class QueryService implements IQueryService {
     connectionInfo: any,
     mdl: Manifest,
     limit: number,
+    refresh?: boolean,
+    cacheEnabled?: boolean,
   ): Promise<PreviewDataResponse> {
     const event = TelemetryEvent.IBIS_QUERY;
     try {
@@ -210,11 +227,17 @@ export class QueryService implements IQueryService {
         connectionInfo,
         mdl,
         limit,
+        refresh,
+        cacheEnabled,
       });
       this.sendIbisEvent(event, res, { dataSource, sql });
       const data = this.transformDataType(res);
       return {
         correlationId: res.correlationId,
+        cacheHit: res.cacheHit,
+        cacheCreatedAt: res.cacheCreatedAt,
+        cacheOverrodeAt: res.cacheOverrodeAt,
+        override: res.override,
         ...data,
       };
     } catch (err: any) {

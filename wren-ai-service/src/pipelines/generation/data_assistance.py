@@ -29,7 +29,7 @@ using the Markdown format. Your goal is to help guide user understand its databa
 - MUST NOT add SQL code in your response.
 
 ### OUTPUT FORMAT ###
-Please provide your response in proper Markdown format.
+Please provide your response in proper Markdown format without ```markdown``` tags.
 """
 
 data_assistance_user_prompt_template = """
@@ -52,8 +52,8 @@ def prompt(
     query: str,
     db_schemas: list[str],
     language: str,
+    histories: list[AskHistory],
     prompt_builder: PromptBuilder,
-    histories: Optional[list[AskHistory]] = None,
 ) -> dict:
     previous_query_summaries = (
         [history.question for history in histories] if histories else []
@@ -69,13 +69,13 @@ def prompt(
 
 @observe(as_type="generation", capture_input=False)
 async def data_assistance(prompt: dict, generator: Any, query_id: str) -> dict:
-    return await generator(prompt=prompt.get("prompt"), query_id=query_id)
+    return await generator(
+        prompt=prompt.get("prompt"),
+        query_id=query_id,
+    )
 
 
 ## End of Pipeline
-
-
-DATA_ASSISTANCE_MODEL_KWARGS = {"response_format": {"type": "text"}}
 
 
 class DataAssistance(BasicPipeline):
@@ -88,7 +88,6 @@ class DataAssistance(BasicPipeline):
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=data_assistance_system_prompt,
-                generation_kwargs=DATA_ASSISTANCE_MODEL_KWARGS,
                 streaming_callback=self._streaming_callback,
             ),
             "prompt_builder": PromptBuilder(
@@ -102,9 +101,9 @@ class DataAssistance(BasicPipeline):
 
     def _streaming_callback(self, chunk, query_id):
         if query_id not in self._user_queues:
-            self._user_queues[query_id] = (
-                asyncio.Queue()
-            )  # Create a new queue for the user if it doesn't exist
+            self._user_queues[
+                query_id
+            ] = asyncio.Queue()  # Create a new queue for the user if it doesn't exist
         # Put the chunk content into the user's queue
         asyncio.create_task(self._user_queues[query_id].put(chunk.content))
         if chunk.meta.get("finish_reason"):
@@ -115,9 +114,9 @@ class DataAssistance(BasicPipeline):
             return await self._user_queues[query_id].get()
 
         if query_id not in self._user_queues:
-            self._user_queues[query_id] = (
-                asyncio.Queue()
-            )  # Ensure the user's queue exists
+            self._user_queues[
+                query_id
+            ] = asyncio.Queue()  # Ensure the user's queue exists
         while True:
             try:
                 # Wait for an item from the user's queue
@@ -152,7 +151,7 @@ class DataAssistance(BasicPipeline):
                 "db_schemas": db_schemas,
                 "language": language,
                 "query_id": query_id or "",
-                "histories": histories,
+                "histories": histories or [],
                 **self._components,
             },
         )

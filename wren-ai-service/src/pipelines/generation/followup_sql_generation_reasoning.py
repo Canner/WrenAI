@@ -10,7 +10,9 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.pipelines.generation.utils.sql import construct_instructions
+from src.pipelines.generation.utils.sql import (
+    construct_instructions,
+)
 from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
 
@@ -29,9 +31,10 @@ You are a helpful data analyst who is great at thinking deeply and reasoning abo
 5. Don't include SQL in the reasoning plan.
 6. Each step in the reasoning plan must start with a number, a title(in bold format in markdown), and a reasoning for the step.
 7. If SQL SAMPLES are provided, make sure to consider them in the reasoning plan.
-8. Do not include ```markdown or ``` in the answer.
-9. A table name in the reasoning plan must be in this format: `table: <table_name>`.
-10. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
+8. If INSTRUCTIONS section is provided, please follow them strictly.
+9. Do not include ```markdown or ``` in the answer.
+10. A table name in the reasoning plan must be in this format: `table: <table_name>`.
+11. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
@@ -102,7 +105,10 @@ def prompt(
 
 @observe(as_type="generation", capture_input=False)
 async def generate_sql_reasoning(prompt: dict, generator: Any, query_id: str) -> dict:
-    return await generator(prompt=prompt.get("prompt"), query_id=query_id)
+    return await generator(
+        prompt=prompt.get("prompt"),
+        query_id=query_id,
+    )
 
 
 @observe()
@@ -115,9 +121,6 @@ def post_process(
 ## End of Pipeline
 
 
-SQL_GENERATION_REASONING_MODEL_KWARGS = {"response_format": {"type": "text"}}
-
-
 class FollowUpSQLGenerationReasoning(BasicPipeline):
     def __init__(
         self,
@@ -128,7 +131,6 @@ class FollowUpSQLGenerationReasoning(BasicPipeline):
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=sql_generation_reasoning_system_prompt,
-                generation_kwargs=SQL_GENERATION_REASONING_MODEL_KWARGS,
                 streaming_callback=self._streaming_callback,
             ),
             "prompt_builder": PromptBuilder(

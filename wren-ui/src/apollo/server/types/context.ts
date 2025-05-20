@@ -18,6 +18,8 @@ import {
   IDashboardItemRepository,
   ISqlPairRepository,
   IInstructionRepository,
+  IApiHistoryRepository,
+  IDashboardItemRefreshJobRepository,
 } from '@server/repositories';
 import {
   IQueryService,
@@ -33,6 +35,7 @@ import { ITelemetry } from '@server/telemetry/telemetry';
 import {
   ProjectRecommendQuestionBackgroundTracker,
   ThreadRecommendQuestionBackgroundTracker,
+  DashboardCacheBackgroundTracker,
 } from '@server/backgrounds';
 import { ISqlPairService } from '../services/sqlPairService';
 
@@ -71,8 +74,11 @@ export interface IContext {
   dashboardItemRepository: IDashboardItemRepository;
   sqlPairRepository: ISqlPairRepository;
   instructionRepository: IInstructionRepository;
+  apiHistoryRepository: IApiHistoryRepository;
+  dashboardItemRefreshJobRepository: IDashboardItemRefreshJobRepository;
 
   // background trackers
   projectRecommendQuestionBackgroundTracker: ProjectRecommendQuestionBackgroundTracker;
   threadRecommendQuestionBackgroundTracker: ThreadRecommendQuestionBackgroundTracker;
+  dashboardCacheBackgroundTracker: DashboardCacheBackgroundTracker;
 }

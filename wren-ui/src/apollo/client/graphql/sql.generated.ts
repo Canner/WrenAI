@@ -17,6 +17,13 @@ export type GenerateQuestionMutationVariables = Types.Exact<{
 
 export type GenerateQuestionMutation = { __typename?: 'Mutation', generateQuestion: string };
 
+export type ModelSubstituteMutationVariables = Types.Exact<{
+  data: Types.ModelSubstituteInput;
+}>;
+
+
+export type ModelSubstituteMutation = { __typename?: 'Mutation', modelSubstitute: string };
+
 
 export const PreviewSqlDocument = gql`
     mutation PreviewSQL($data: PreviewSQLDataInput!) {
@@ -80,3 +87,34 @@ export function useGenerateQuestionMutation(baseOptions?: Apollo.MutationHookOpt
 export type GenerateQuestionMutationHookResult = ReturnType<typeof useGenerateQuestionMutation>;
 export type GenerateQuestionMutationResult = Apollo.MutationResult<GenerateQuestionMutation>;
 export type GenerateQuestionMutationOptions = Apollo.BaseMutationOptions<GenerateQuestionMutation, GenerateQuestionMutationVariables>;
+export const ModelSubstituteDocument = gql`
+    mutation ModelSubstitute($data: ModelSubstituteInput!) {
+  modelSubstitute(data: $data)
+}
+    `;
+export type ModelSubstituteMutationFn = Apollo.MutationFunction<ModelSubstituteMutation, ModelSubstituteMutationVariables>;
+
+/**
+ * __useModelSubstituteMutation__
+ *
+ * To run a mutation, you first call `useModelSubstituteMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useModelSubstituteMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [modelSubstituteMutation, { data, loading, error }] = useModelSubstituteMutation({
+ *   variables: {
+ *      data: // value for 'data'
+ *   },
+ * });
+ */
+export function useModelSubstituteMutation(baseOptions?: Apollo.MutationHookOptions<ModelSubstituteMutation, ModelSubstituteMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<ModelSubstituteMutation, ModelSubstituteMutationVariables>(ModelSubstituteDocument, options);
+      }
+export type ModelSubstituteMutationHookResult = ReturnType<typeof useModelSubstituteMutation>;
+export type ModelSubstituteMutationResult = Apollo.MutationResult<ModelSubstituteMutation>;
+export type ModelSubstituteMutationOptions = Apollo.BaseMutationOptions<ModelSubstituteMutation, ModelSubstituteMutationVariables>;

@@ -1,18 +1,30 @@
 import dynamic from 'next/dynamic';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Button } from 'antd';
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  createRef,
+  forwardRef,
+  useImperativeHandle,
+} from 'react';
+import { Button, Form } from 'antd';
 import styled from 'styled-components';
 import GridLayout, { Layout } from 'react-grid-layout';
 import { MoreIcon } from '@/utils/icons';
 import { MORE_ACTION } from '@/utils/enum';
-import { nextTick } from '@/utils/time';
+import { getCompactTime, nextTick } from '@/utils/time';
 import { LoadingWrapper } from '@/components/PageLoading';
 import { DashboardItemDropdown } from '@/components/diagram/CustomDropdown';
+import EditableWrapper, { EditableContext } from '@/components/EditableWrapper';
 import {
   DashboardItem,
   ItemLayoutInput,
 } from '@/apollo/client/graphql/__types__';
-import { usePreviewItemSqlMutation } from '@/apollo/client/graphql/dashboard.generated';
+import {
+  usePreviewItemSqlMutation,
+  useUpdateDashboardItemMutation,
+} from '@/apollo/client/graphql/dashboard.generated';
 
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
@@ -49,20 +61,22 @@ const StyledDashboardGrid = styled.div`
     justify-content: space-between;
     align-items: center;
     padding: 16px 8px 0 16px;
+    * {
+      min-width: 0;
+    }
   }
 
   .adm-pinned-item-title {
     font-size: 14px;
     font-weight: 700;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    flex-grow: 1;
   }
 
   .adm-pinned-actions {
     display: flex;
     gap: 4px;
     align-items: center;
+    flex-shrink: 0;
   }
 
   .adm-pinned-content {
@@ -71,8 +85,15 @@ const StyledDashboardGrid = styled.div`
 
     &-overflow {
       overflow: auto;
-      height: 100%;
+      height: calc(100% - 18px);
       padding: 8px 12px;
+    }
+
+    &-info {
+      font-size: 12px;
+      color: var(--gray-6);
+      text-align: right;
+      user-select: none;
     }
   }
 
@@ -118,159 +139,260 @@ const getLayoutToUpdateItem = (layout: Layout) => {
 
 interface Props {
   items: DashboardItem[];
+  isSupportCached: boolean;
   onUpdateChange: (layouts: ItemLayoutInput[]) => void;
   onDelete: (id: number) => Promise<void>;
 }
 
-export default function DashboardGrid(props: Props) {
-  const { items, onUpdateChange, onDelete } = props;
-  const $container = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState(250);
+const DashboardGrid = forwardRef(
+  (props: Props, ref: React.RefObject<{ onRefreshAll: () => void }>) => {
+    const { items, isSupportCached, onUpdateChange, onDelete } = props;
+    const itemRefs = useRef<{
+      [key: string]: React.RefObject<{ onRefresh: () => void }>;
+    }>({});
+    const $container = useRef<HTMLDivElement>(null);
+    const [size, setSize] = useState(250);
 
-  const layouts = useMemo(() => {
-    return items.map((item) => getLayoutToGrid(item));
-  }, [items]);
+    // set up initial item refs
+    useEffect(() => {
+      items.forEach((item) => {
+        itemRefs.current[item.id] = createRef();
+      });
+    }, [items]);
 
-  const getGridItemLayouts = () =>
-    items.map((item) => {
-      return (
-        <div key={item.id}>
-          <PinnedItem item={item} onDelete={onDelete} />
-        </div>
-      );
+    useImperativeHandle(
+      ref,
+      () => ({
+        onRefreshAll: () => {
+          Object.values(itemRefs.current).forEach((itemRef) => {
+            itemRef.current?.onRefresh();
+          });
+        },
+      }),
+      [items],
+    );
+
+    const layouts = useMemo(() => {
+      return items.map((item) => getLayoutToGrid(item));
+    }, [items]);
+
+    const getGridItemLayouts = () =>
+      items.map((item) => {
+        return (
+          <div key={item.id}>
+            <PinnedItem
+              ref={itemRefs.current[item.id]}
+              isSupportCached={isSupportCached}
+              item={item}
+              onDelete={onDelete}
+            />
+          </div>
+        );
+      });
+
+    useEffect(() => {
+      const renderColumnSize = () => {
+        if (!$container.current) return;
+        const sidebarWidth = 280;
+        const padding = 16 * 2;
+        const containerWidth = window.innerWidth - sidebarWidth - padding;
+
+        const minContainerWidth = 1024;
+        let calculatedWidth = containerWidth;
+        if (containerWidth <= minContainerWidth) {
+          calculatedWidth = minContainerWidth;
+          $container.current.style.minWidth = `${minContainerWidth + padding}px`;
+        } else {
+          $container.current.style.minWidth = '100%';
+        }
+
+        const columnSize = calculateColumnSize(calculatedWidth);
+        setSize(columnSize);
+      };
+      renderColumnSize();
+      window.addEventListener('resize', renderColumnSize);
+      return () => {
+        window.removeEventListener('resize', renderColumnSize);
+      };
+    }, [$container]);
+
+    const onLayoutChange = (layouts: Layout[]) => {
+      onUpdateChange(layouts.map((layout) => getLayoutToUpdateItem(layout)));
+    };
+
+    return (
+      <StyledDashboardGrid ref={$container}>
+        <GridLayout
+          layout={layouts}
+          cols={COLUMN_COUNT}
+          margin={[GUTTER, GUTTER]}
+          containerPadding={[0, 0]}
+          rowHeight={size}
+          width={calculateLayoutWidth(size)}
+          onLayoutChange={onLayoutChange}
+        >
+          {getGridItemLayouts()}
+        </GridLayout>
+      </StyledDashboardGrid>
+    );
+  },
+);
+
+export default DashboardGrid;
+
+const PinnedItemTitle = (props: { id: number; title: string }) => {
+  const { title } = props;
+  const [form] = Form.useForm();
+
+  const [updateDashboardItem] = useUpdateDashboardItemMutation({
+    onError: (error) => console.error(error),
+  });
+
+  const handleSave = (dashboardItemId: number, values: { title: string }) => {
+    if (values.title === title) return;
+    updateDashboardItem({
+      variables: {
+        where: { id: dashboardItemId },
+        data: {
+          displayName: values.title.trim(),
+        },
+      },
     });
-
-  useEffect(() => {
-    const renderColumnSize = () => {
-      if (!$container.current) return;
-      const sidebarWidth = 280;
-      const padding = 16 * 2;
-      const containerWidth = window.innerWidth - sidebarWidth - padding;
-
-      const minContainerWidth = 1024;
-      let calculatedWidth = containerWidth;
-      if (containerWidth <= minContainerWidth) {
-        calculatedWidth = minContainerWidth;
-        $container.current.style.minWidth = `${minContainerWidth + padding}px`;
-      } else {
-        $container.current.style.minWidth = '100%';
-      }
-
-      const columnSize = calculateColumnSize(calculatedWidth);
-      setSize(columnSize);
-    };
-    renderColumnSize();
-    window.addEventListener('resize', renderColumnSize);
-    return () => {
-      window.removeEventListener('resize', renderColumnSize);
-    };
-  }, [$container]);
-
-  const onLayoutChange = (layouts: Layout[]) => {
-    onUpdateChange(layouts.map((layout) => getLayoutToUpdateItem(layout)));
   };
 
   return (
-    <StyledDashboardGrid ref={$container}>
-      <GridLayout
-        layout={layouts}
-        cols={COLUMN_COUNT}
-        margin={[GUTTER, GUTTER]}
-        containerPadding={[0, 0]}
-        rowHeight={size}
-        width={calculateLayoutWidth(size)}
-        onLayoutChange={onLayoutChange}
-      >
-        {getGridItemLayouts()}
-      </GridLayout>
-    </StyledDashboardGrid>
-  );
-}
-
-export function PinnedItem(props: {
-  item: DashboardItem;
-  onDelete: (id: number) => Promise<void>;
-}) {
-  const { item, onDelete } = props;
-  const { detail } = item;
-  const [isHideLegend, setIsHideLegend] = useState(true);
-  const [forceLoading, setForceLoading] = useState(false);
-  const [forceUpdate, setForceUpdate] = useState(0);
-
-  const [previewItemSQL, previewItemSQLResult] = usePreviewItemSqlMutation();
-
-  useEffect(() => {
-    previewItemSQL({ variables: { data: { itemId: item.id } } });
-  }, [item.id]);
-
-  useEffect(() => {
-    setForceLoading(true);
-    nextTick(200).then(() => {
-      setForceUpdate((prev) => prev + 1);
-      setForceLoading(false);
-    });
-  }, [item]);
-
-  const title = useMemo(() => {
-    return item.detail.chartSchema?.title || '';
-  }, [item.detail.chartSchema?.title]);
-
-  const onHideLegend = () => {
-    setIsHideLegend(!isHideLegend);
-    setForceUpdate((prev) => prev + 1);
-  };
-
-  const onMoreClick = async (action: MORE_ACTION) => {
-    if (action === MORE_ACTION.DELETE) {
-      await onDelete(item.id);
-    } else if (action === MORE_ACTION.REFRESH) {
-      previewItemSQL({ variables: { data: { itemId: item.id } } });
-    } else if (action === MORE_ACTION.HIDE_CATEGORY) {
-      onHideLegend();
-    }
-  };
-
-  const loading = forceLoading || previewItemSQLResult.loading;
-
-  return (
-    <div className="adm-pinned-item">
-      <div className="adm-pinned-item-header">
-        <div className="adm-pinned-item-title" title={title}>
+    <EditableContext.Provider value={form}>
+      <Form className="d-flex" form={form}>
+        <EditableWrapper
+          record={props}
+          dataIndex="title"
+          handleSave={handleSave}
+        >
           {title}
-        </div>
-        <div className="adm-pinned-actions">
-          <DashboardItemDropdown
-            onMoreClick={onMoreClick}
-            isHideLegend={isHideLegend}
-          >
-            <Button
-              className="adm-pinned-more gray-8"
-              type="text"
-              size="small"
-              icon={<MoreIcon />}
-              onMouseDown={(e) => e.stopPropagation()}
-            />
-          </DashboardItemDropdown>
-        </div>
-      </div>
-      <div className="adm-pinned-content">
-        <div className="adm-pinned-content-overflow adm-scrollbar-track">
-          <LoadingWrapper loading={loading} tip="Loading...">
-            <Chart
-              className="adm-pinned-item-chart"
-              width="100%"
-              height="100%"
-              spec={detail.chartSchema}
-              values={previewItemSQLResult.data?.previewItemSQL}
-              forceUpdate={forceUpdate}
-              autoFilter
-              hideActions
-              hideTitle
-              hideLegend={isHideLegend}
-            />
-          </LoadingWrapper>
-        </div>
-      </div>
-    </div>
+        </EditableWrapper>
+      </Form>
+    </EditableContext.Provider>
   );
-}
+};
+
+const PinnedItem = forwardRef(
+  (
+    props: {
+      item: DashboardItem;
+      isSupportCached: boolean;
+      onDelete: (id: number) => Promise<void>;
+    },
+    ref: React.RefObject<{ onRefresh: () => void }>,
+  ) => {
+    const { item, isSupportCached, onDelete } = props;
+    const { detail } = item;
+    const [isHideLegend, setIsHideLegend] = useState(true);
+    const [forceLoading, setForceLoading] = useState(false);
+    const [forceUpdate, setForceUpdate] = useState(0);
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        onRefresh: () => {
+          previewItemSQL({
+            variables: { data: { itemId: item.id, refresh: isSupportCached } },
+          });
+        },
+      }),
+      [item.id],
+    );
+
+    const [previewItemSQL, previewItemSQLResult] = usePreviewItemSqlMutation();
+    const previewItem = previewItemSQLResult.data?.previewItemSQL;
+    const lastRefreshTime =
+      previewItem?.cacheOverrodeAt || previewItem?.cacheCreatedAt;
+
+    useEffect(() => {
+      previewItemSQL({ variables: { data: { itemId: item.id } } });
+    }, [item.id]);
+
+    useEffect(() => {
+      setForceLoading(true);
+      nextTick(200).then(() => {
+        setForceUpdate((prev) => prev + 1);
+        setForceLoading(false);
+      });
+    }, [item.layout]);
+
+    const title = useMemo(() => {
+      return item.displayName || item.detail.chartSchema?.title || '';
+    }, [item.displayName, item.detail.chartSchema?.title]);
+
+    const onHideLegend = () => {
+      setIsHideLegend(!isHideLegend);
+      setForceUpdate((prev) => prev + 1);
+    };
+
+    const onMoreClick = async (action: MORE_ACTION) => {
+      if (action === MORE_ACTION.DELETE) {
+        await onDelete(item.id);
+      } else if (action === MORE_ACTION.REFRESH) {
+        previewItemSQL({
+          variables: { data: { itemId: item.id, refresh: isSupportCached } },
+        });
+      } else if (action === MORE_ACTION.HIDE_CATEGORY) {
+        onHideLegend();
+      }
+    };
+
+    const loading = forceLoading || previewItemSQLResult.loading;
+
+    return (
+      <div className="adm-pinned-item">
+        <div className="adm-pinned-item-header">
+          <div
+            className="adm-pinned-item-title"
+            title={title}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <PinnedItemTitle id={item.id} title={title} />
+          </div>
+
+          <div className="adm-pinned-actions">
+            <DashboardItemDropdown
+              onMoreClick={onMoreClick}
+              isHideLegend={isHideLegend}
+              isSupportCached={isSupportCached}
+            >
+              <Button
+                className="adm-pinned-more gray-8"
+                type="text"
+                size="small"
+                icon={<MoreIcon />}
+                onMouseDown={(e) => e.stopPropagation()}
+              />
+            </DashboardItemDropdown>
+          </div>
+        </div>
+        <div className="adm-pinned-content">
+          <div className="adm-pinned-content-overflow adm-scrollbar-track">
+            <LoadingWrapper loading={loading} tip="Loading...">
+              <Chart
+                className="adm-pinned-item-chart"
+                width="100%"
+                height="100%"
+                spec={detail.chartSchema}
+                values={previewItem?.data}
+                forceUpdate={forceUpdate}
+                autoFilter
+                hideActions
+                hideTitle
+                hideLegend={isHideLegend}
+              />
+            </LoadingWrapper>
+          </div>
+          {lastRefreshTime && (
+            <div className="adm-pinned-content-info">
+              Last refreshed: {getCompactTime(lastRefreshTime)}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  },
+);

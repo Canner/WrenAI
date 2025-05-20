@@ -15,6 +15,7 @@ export const COMMON_DASHBOARD_ITEM = gql`
       sql
       chartSchema
     }
+    displayName
   }
 `;
 
@@ -30,6 +31,18 @@ export const DASHBOARD_ITEMS = gql`
 export const CREATE_DASHBOARD_ITEM = gql`
   mutation CreateDashboardItem($data: CreateDashboardItemInput!) {
     createDashboardItem(data: $data) {
+      ...CommonDashboardItem
+    }
+  }
+  ${COMMON_DASHBOARD_ITEM}
+`;
+
+export const UPDATE_DASHBOARD_ITEM = gql`
+  mutation UpdateDashboardItem(
+    $where: DashboardItemWhereInput!
+    $data: UpdateDashboardItemInput!
+  ) {
+    updateDashboardItem(where: $where, data: $data) {
       ...CommonDashboardItem
     }
   }
@@ -53,6 +66,51 @@ export const DELETE_DASHBOARD_ITEM = gql`
 
 export const PREVIEW_ITEM_SQL = gql`
   mutation PreviewItemSQL($data: PreviewItemSQLInput!) {
-    previewItemSQL(data: $data)
+    previewItemSQL(data: $data) {
+      data
+      cacheHit
+      cacheCreatedAt
+      cacheOverrodeAt
+      override
+    }
   }
+`;
+
+export const SET_DASHBOARD_SCHEDULE = gql`
+  mutation SetDashboardSchedule($data: SetDashboardScheduleInput!) {
+    setDashboardSchedule(data: $data) {
+      id
+      projectId
+      name
+      cacheEnabled
+      scheduleFrequency
+      scheduleTimezone
+      scheduleCron
+      nextScheduledAt
+    }
+  }
+`;
+
+export const DASHBOARD = gql`
+  query Dashboard {
+    dashboard {
+      id
+      name
+      description
+      cacheEnabled
+      nextScheduledAt
+      schedule {
+        frequency
+        hour
+        minute
+        day
+        timezone
+        cron
+      }
+      items {
+        ...CommonDashboardItem
+      }
+    }
+  }
+  ${COMMON_DASHBOARD_ITEM}
 `;

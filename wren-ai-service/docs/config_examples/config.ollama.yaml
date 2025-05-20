@@ -1,8 +1,9 @@
 # you should rename this file to config.yaml and put it in ~/.wrenai
 # please pay attention to the comments starting with # and adjust the config accordingly, 3 steps basically:
 # 1. you need to use your own llm and embedding models
-# 2. you need to use the correct pipe definitions based on https://raw.githubusercontent.com/canner/WrenAI/<WRENAI_VERSION_NUMBER>/docker/config.example.yaml
-# 3. you need to fill in correct llm and embedding models in the pipe definitions
+# 2. fill in embedding model dimension in the document_store section
+# 3. you need to use the correct pipe definitions based on https://raw.githubusercontent.com/canner/WrenAI/<WRENAI_VERSION_NUMBER>/docker/config.example.yaml
+# 4. you need to fill in correct llm and embedding models in the pipe definitions
 
 type: llm
 provider: litellm_llm
@@ -73,17 +74,8 @@ pipes:
   - name: followup_sql_generation
     llm: litellm_llm.default
     engine: wren_ui
-  - name: sql_summary
-    llm: litellm_llm.default
   - name: sql_answer
     llm: litellm_llm.default
-    engine: wren_ui
-  - name: sql_breakdown
-    llm: litellm_llm.default
-    engine: wren_ui
-  - name: sql_expansion
-    llm: litellm_llm.default
-    engine: wren_ui
   - name: semantics_description
     llm: litellm_llm.default
   - name: relationship_recommendation
@@ -106,6 +98,8 @@ pipes:
     llm: litellm_llm.default
     embedder: litellm_embedder.default
     document_store: qdrant
+  - name: misleading_assistance
+    llm: litellm_llm.default
   - name: data_assistance
     llm: litellm_llm.default
   - name: sql_pairs_indexing
@@ -119,6 +113,8 @@ pipes:
     llm: litellm_llm.default
   - name: sql_executor
     engine: wren_ui
+  - name: user_guide_assistance
+    llm: litellm_llm.default
   - name: sql_question_generation
     llm: litellm_llm.default
   - name: sql_generation_reasoning
@@ -139,15 +135,20 @@ pipes:
     document_store: qdrant
   - name: project_meta_indexing
     document_store: qdrant
+  - name: sql_tables_extraction
+    llm: litellm_llm.default
 
 ---
 settings:
+  engine_timeout: 30
   column_indexing_batch_size: 50
   table_retrieval_size: 10
   table_column_retrieval_size: 100
-  allow_using_db_schemas_without_pruning: false # if you want to use db schemas without pruning, set this to true. It will be faster
   allow_intent_classification: true
   allow_sql_generation_reasoning: true
+  allow_sql_functions_retrieval: true
+  enable_column_pruning: false
+  max_sql_correction_retries: 3
   query_cache_maxsize: 1000
   query_cache_ttl: 3600
   langfuse_host: https://cloud.langfuse.com

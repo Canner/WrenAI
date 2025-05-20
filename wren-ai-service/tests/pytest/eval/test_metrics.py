@@ -67,7 +67,7 @@ def _success_retrive_data(m, ibis_config, repeat=1):
     df = pd.DataFrame({"foo": ["a", "b"], "boo": [1, 2]}).to_dict(orient="split")
     for _ in range(repeat):
         m.post(
-            f"{ibis_config['api_endpoint']}/v2/connector/{ibis_config['data_source']}/query?limit={ibis_config['limit']}",
+            f"{ibis_config['api_endpoint']}/v3/connector/{ibis_config['data_source']}/query?limit={ibis_config['limit']}",
             payload={
                 "data": df.get("data"),
                 "columns": df.get("columns"),

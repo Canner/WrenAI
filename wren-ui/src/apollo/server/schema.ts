@@ -2,6 +2,47 @@ import { gql } from 'apollo-server-micro';
 
 export const typeDefs = gql`
   scalar JSON
+  scalar DialectSQL
+
+  enum ApiType {
+    GENERATE_SQL
+    RUN_SQL
+    GENERATE_VEGA_CHART
+  }
+
+  input ApiHistoryFilterInput {
+    apiType: ApiType
+    statusCode: Int
+    threadId: String
+    projectId: Int
+    startDate: String
+    endDate: String
+  }
+
+  input ApiHistoryPaginationInput {
+    offset: Int!
+    limit: Int!
+  }
+
+  type ApiHistoryResponse {
+    id: String!
+    projectId: Int!
+    apiType: ApiType!
+    threadId: String
+    headers: JSON
+    requestPayload: JSON
+    responsePayload: JSON
+    statusCode: Int
+    durationMs: Int
+    createdAt: String!
+    updatedAt: String!
+  }
+
+  type ApiHistoryPaginatedResponse {
+    items: [ApiHistoryResponse!]!
+    total: Int!
+    hasMore: Boolean!
+  }
 
   enum DataSourceName {
     BIG_QUERY
@@ -730,6 +771,7 @@ export const typeDefs = gql`
     error: Error
     sql: String
     traceId: String
+    invalidSql: String
   }
 
   type ThreadResponse {
@@ -862,6 +904,10 @@ export const typeDefs = gql`
     responseId: Int!
   }
 
+  input UpdateDashboardItemInput {
+    displayName: String!
+  }
+
   input ItemLayoutInput {
     itemId: Int!
     x: Int!
@@ -881,6 +927,55 @@ export const typeDefs = gql`
   input PreviewItemSQLInput {
     itemId: Int!
     limit: Int
+    refresh: Boolean = false
+  }
+
+  type PreviewItemResponse {
+    data: JSON!
+    cacheHit: Boolean!
+    cacheCreatedAt: String
+    cacheOverrodeAt: String
+    override: Boolean!
+  }
+
+  input SetDashboardScheduleInput {
+    cacheEnabled: Boolean!
+    schedule: SetDashboardScheduleData
+  }
+
+  type DashboardSchedule {
+    frequency: ScheduleFrequencyEnum
+    hour: Int
+    minute: Int
+    day: CacheScheduleDayEnum
+    timezone: String
+    cron: String
+  }
+
+  input SetDashboardScheduleData {
+    frequency: ScheduleFrequencyEnum!
+    hour: Int
+    minute: Int
+    day: CacheScheduleDayEnum
+    timezone: String
+    cron: String
+  }
+
+  enum ScheduleFrequencyEnum {
+    DAILY
+    WEEKLY
+    CUSTOM
+    NEVER
+  }
+
+  enum CacheScheduleDayEnum {
+    SUN
+    MON
+    TUE
+    WED
+    THU
+    FRI
+    SAT
   }
 
   type DashboardItemLayout {
@@ -901,6 +996,28 @@ export const typeDefs = gql`
     type: DashboardItemType!
     layout: DashboardItemLayout!
     detail: DashboardItemDetail!
+    displayName: String
+  }
+
+  type Dashboard {
+    id: Int!
+    projectId: Int!
+    name: String!
+    cacheEnabled: Boolean!
+    scheduleFrequency: ScheduleFrequencyEnum
+    scheduleTimezone: String
+    scheduleCron: String
+    nextScheduledAt: String
+  }
+
+  type DetailedDashboard {
+    id: Int!
+    name: String!
+    description: String
+    cacheEnabled: Boolean!
+    nextScheduledAt: String
+    schedule: DashboardSchedule
+    items: [DashboardItem!]!
   }
 
   type SqlPair {
@@ -928,6 +1045,10 @@ export const typeDefs = gql`
 
   input GenerateQuestionInput {
     sql: String!
+  }
+
+  input ModelSubstituteInput {
+    sql: DialectSQL!
   }
 
   type Instruction {
@@ -1001,11 +1122,18 @@ export const typeDefs = gql`
 
     # Dashboard
     dashboardItems: [DashboardItem!]!
+    dashboard: DetailedDashboard!
 
     # SQL Pairs
     sqlPairs: [SqlPair]!
     # Instructions
     instructions: [Instruction]!
+
+    # Api History
+    apiHistory(
+      filter: ApiHistoryFilterInput
+      pagination: ApiHistoryPaginationInput!
+    ): ApiHistoryPaginatedResponse!
   }
 
   type Mutation {
@@ -1127,8 +1255,13 @@ export const typeDefs = gql`
       data: UpdateDashboardItemLayoutsInput!
     ): [DashboardItem!]!
     createDashboardItem(data: CreateDashboardItemInput!): DashboardItem!
+    updateDashboardItem(
+      where: DashboardItemWhereInput!
+      data: UpdateDashboardItemInput!
+    ): DashboardItem!
     deleteDashboardItem(where: DashboardItemWhereInput!): Boolean!
-    previewItemSQL(data: PreviewItemSQLInput!): JSON!
+    previewItemSQL(data: PreviewItemSQLInput!): PreviewItemResponse!
+    setDashboardSchedule(data: SetDashboardScheduleInput!): Dashboard!
 
     # SQL Pairs
     createSqlPair(data: CreateSqlPairInput!): SqlPair!
@@ -1138,6 +1271,7 @@ export const typeDefs = gql`
     ): SqlPair!
     deleteSqlPair(where: SqlPairWhereUniqueInput!): Boolean!
     generateQuestion(data: GenerateQuestionInput!): String!
+    modelSubstitute(data: ModelSubstituteInput!): String!
     # Instructions
     createInstruction(data: CreateInstructionInput!): Instruction!
     updateInstruction(

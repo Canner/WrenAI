@@ -2,6 +2,9 @@ import { IContext } from '@server/types/context';
 import { SqlPair } from '@server/repositories';
 import * as Errors from '@server/utils/error';
 import { TelemetryEvent, TrackTelemetry } from '@server/telemetry/telemetry';
+import { DialectSQL, WrenSQL } from '@server/models/adaptor';
+import { format } from 'sql-formatter';
+
 export class SqlPairResolver {
   constructor() {
     this.getProjectSqlPairs = this.getProjectSqlPairs.bind(this);
@@ -9,6 +12,7 @@ export class SqlPairResolver {
     this.updateSqlPair = this.updateSqlPair.bind(this);
     this.deleteSqlPair = this.deleteSqlPair.bind(this);
     this.generateQuestion = this.generateQuestion.bind(this);
+    this.modelSubstitute = this.modelSubstitute.bind(this);
   }
 
   public async getProjectSqlPairs(
@@ -83,6 +87,31 @@ export class SqlPairResolver {
       arg.data.sql,
     ]);
     return questions[0];
+  }
+
+  public async modelSubstitute(
+    _root: unknown,
+    arg: {
+      data: {
+        sql: DialectSQL;
+      };
+    },
+    ctx: IContext,
+  ): Promise<WrenSQL> {
+    const project = await ctx.projectService.getCurrentProject();
+    const lastDeployment = await ctx.deployService.getLastDeployment(
+      project.id,
+    );
+    const manifest = lastDeployment.manifest;
+
+    const wrenSQL = await ctx.sqlPairService.modelSubstitute(
+      arg.data.sql as DialectSQL,
+      {
+        project,
+        manifest,
+      },
+    );
+    return format(wrenSQL, { language: 'postgresql' }) as WrenSQL;
   }
 
   private async validateSql(sql: string, ctx: IContext) {

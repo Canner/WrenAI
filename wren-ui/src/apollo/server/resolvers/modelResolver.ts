@@ -221,6 +221,13 @@ export class ModelResolver {
     ctx: IContext,
   ): Promise<DeployResponse> {
     const project = await ctx.projectService.getCurrentProject();
+    if (!project.version && project.type !== DataSourceName.DUCKDB) {
+      const version =
+        await ctx.projectService.getProjectDataSourceVersion(project);
+      await ctx.projectService.updateProject(project.id, {
+        version,
+      });
+    }
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
     const deployRes = await ctx.deployService.deploy(
       manifest,
@@ -980,7 +987,8 @@ export class ModelResolver {
         mdl: manifest,
       });
     }
-    return format(nativeSql);
+    const language = project.type === DataSourceName.MSSQL ? 'tsql' : undefined;
+    return format(nativeSql, { language });
   }
 
   public async updateViewMetadata(

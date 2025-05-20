@@ -2,30 +2,25 @@ type: llm
 provider: litellm_llm
 timeout: 120
 models:
-  - model: gpt-4o-mini-2024-07-18
-    alias: default
-    api_base: https://api.openai.com/v1
+  - alias: default
+    model: gpt-4.1-nano-2025-04-14
     kwargs:
-      temperature: 0
-      n: 1
-      # for better consistency of llm response, refer: https://platform.openai.com/docs/api-reference/chat/create#chat-create-seed
-      seed: 0
       max_tokens: 4096
-  - model: gpt-4o-2024-08-06
-    api_base: https://api.openai.com/v1
-    kwargs:
+      n: 1
+      seed: 0
       temperature: 0
-      n: 1
-      # for better consistency of llm response, refer: https://platform.openai.com/docs/api-reference/chat/create#chat-create-seed
-      seed: 0
-      max_tokens: 4096
-  - model: o3-mini-2025-01-31
-    api_base: https://api.openai.com/v1
+  - model: gpt-4.1-mini-2025-04-14
     kwargs:
+      max_tokens: 4096
       n: 1
       seed: 0
-      max_completion_tokens: 4096
-      reasoning_effort: low
+      temperature: 0
+  - model: gpt-4.1-2025-04-14
+    kwargs:
+      max_tokens: 4096
+      n: 1
+      seed: 0
+      temperature: 0
 
 ---
 type: embedder
@@ -33,7 +28,6 @@ provider: litellm_embedder
 models:
   - model: text-embedding-3-large
     alias: default
-    api_base: https://api.openai.com/v1
     timeout: 120
 
 ---
@@ -82,16 +76,8 @@ pipes:
   - name: followup_sql_generation
     llm: litellm_llm.default
     engine: wren_ui
-  - name: sql_summary
-    llm: litellm_llm.default
   - name: sql_answer
     llm: litellm_llm.default
-  - name: sql_breakdown
-    llm: litellm_llm.default
-    engine: wren_ui
-  - name: sql_expansion
-    llm: litellm_llm.default
-    engine: wren_ui
   - name: semantics_description
     llm: litellm_llm.default
   - name: relationship_recommendation
@@ -110,6 +96,8 @@ pipes:
     llm: litellm_llm.default
     embedder: litellm_embedder.default
     document_store: qdrant
+  - name: misleading_assistance
+    llm: litellm_llm.default
   - name: data_assistance
     llm: litellm_llm.default
   - name: sql_pairs_indexing
@@ -126,6 +114,8 @@ pipes:
   - name: chart_generation
     llm: litellm_llm.default
   - name: chart_adjustment
+    llm: litellm_llm.default
+  - name: user_guide_assistance
     llm: litellm_llm.default
   - name: sql_question_generation
     llm: litellm_llm.default
@@ -147,16 +137,22 @@ pipes:
     document_store: qdrant
   - name: project_meta_indexing
     document_store: qdrant
+  - name: sql_tables_extraction
+    llm: litellm_llm.default
 
 ---
 settings:
+  doc_endpoint: https://docs.getwren.ai
+  is_oss: true
   engine_timeout: 30
   column_indexing_batch_size: 50
   table_retrieval_size: 10
   table_column_retrieval_size: 100
   allow_intent_classification: true
   allow_sql_generation_reasoning: true
-  allow_using_db_schemas_without_pruning: false
+  allow_sql_functions_retrieval: true
+  enable_column_pruning: false
+  max_sql_correction_retries: 3
   query_cache_maxsize: 1000
   query_cache_ttl: 3600
   langfuse_host: https://cloud.langfuse.com

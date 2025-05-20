@@ -2,10 +2,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import styled from 'styled-components';
 import FunctionOutlined from '@ant-design/icons/FunctionOutlined';
-import { Path, KNOWLEDGE } from '@/utils/enum';
+import { Path, MENU_KEY } from '@/utils/enum';
 import { InstructionsSVG } from '@/utils/svgs';
 import SidebarMenu from '@/components/sidebar/SidebarMenu';
-import { MENU_KEY_MAP } from '@/components/pages/knowledge/utils';
 
 const Layout = styled.div`
   padding: 16px 0;
@@ -17,6 +16,11 @@ const Layout = styled.div`
   background-color: var(--gray-2);
   overflow: hidden;
 `;
+
+const MENU_KEY_MAP = {
+  [Path.KnowledgeQuestionSQLPairs]: MENU_KEY.QUESTION_SQL_PAIRS,
+  [Path.KnowledgeInstructions]: MENU_KEY.INSTRUCTIONS,
+};
 
 const linkStyle = { color: 'inherit', transition: 'none' };
 
@@ -32,7 +36,7 @@ export default function Knowledge() {
         </Link>
       ),
       icon: <FunctionOutlined />,
-      key: KNOWLEDGE.QUESTION_SQL_PAIRS,
+      key: MENU_KEY.QUESTION_SQL_PAIRS,
       className: 'pl-4',
     },
     {
@@ -43,7 +47,7 @@ export default function Knowledge() {
         </Link>
       ),
       icon: <InstructionsSVG />,
-      key: KNOWLEDGE.INSTRUCTIONS,
+      key: MENU_KEY.INSTRUCTIONS,
       className: 'pl-4',
     },
   ];

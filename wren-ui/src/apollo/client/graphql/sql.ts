@@ -11,3 +11,9 @@ export const GENERATE_QUESTION = gql`
     generateQuestion(data: $data)
   }
 `;
+
+export const MODEL_SUBSTITUDE = gql`
+  mutation ModelSubstitute($data: ModelSubstituteInput!) {
+    modelSubstitute(data: $data)
+  }
+`;

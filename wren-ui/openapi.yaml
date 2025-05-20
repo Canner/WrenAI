@@ -1,0 +1,358 @@
+openapi: 3.0.0
+info:
+  title: WrenAI API
+  description: Restful API for interacting with Wren AI
+  version: 1.0.0
+servers:
+  - url: /api/v1
+    description: WrenAI API v1
+paths:
+  /generate_sql:
+    post:
+      summary: Generate SQL from natural language
+      description: Converts a natural language question into a SQL query
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - question
+              properties:
+                question:
+                  type: string
+                  description: The natural language question to convert to SQL
+                threadId:
+                  type: string
+                  description: Optional thread ID to maintain conversation context
+                language:
+                  type: string
+                  description: Optional language override for AI responses. If not provided, will use the project's default language. Affects error messages and explanation responses. The format is not strictly enforced, but it is recommended to follow the language list in RFC 5646 (check https://gist.github.com/msikma/8912e62ed866778ff8cd for reference).
+                returnSqlDialect:
+                  type: boolean
+                  description: Whether to return the SQL dialect in the response. If true, the SQL returned will be in the dialect of the database.
+                  default: false
+      responses:
+        '200':
+          description: Successfully generated SQL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    description: The unique identifier for the response
+                  sql:
+                    type: string
+                    description: The generated SQL statement
+                  threadId:
+                    type: string
+                    description: ID of the thread (existing or newly created)
+                example:
+                  id: "1fbc0d64-1c58-45b2-a990-9183bbbcf913"
+                  sql: "SELECT * FROM \"olist_customers_dataset\""
+                  threadId: "9c537507-9cec-46ed-b877-07bfa6322bed"
+        '400':
+          description: Bad request or unable to generate SQL
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+                  - type: object
+                    properties:
+                      explanationQueryId:
+                        type: string
+                        description: ID that can be used with the /stream_explanation endpoint to get a detailed explanation for non-SQL queries
+                example:
+                  id: "75c13d09-6f86-4e79-a00e-a4f85f73f2d7"
+                  code: "NON_SQL_QUERY"
+                  error: "User asks about Wren AI's features and capabilities, unrelated to database schema."
+                  explanationQueryId: "71b016c5-42bb-4897-82d6-46f9b0bf7d94"
+  /run_sql:
+    post:
+      summary: Execute SQL and return results
+      description: Runs a SQL query and returns the results as structured data
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - sql
+              properties:
+                sql:
+                  type: string
+                  description: The SQL query to execute
+                threadId:
+                  type: string
+                  description: Optional thread ID for conversation context
+                limit:
+                  type: integer
+                  description: Maximum number of rows to return
+                  default: 1000
+      responses:
+        '200':
+          description: Successfully executed SQL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  records:
+                    type: array
+                    description: Array of records, each represented as an object
+                    items:
+                      type: object
+                  columns:
+                    type: array
+                    description: Metadata about the result columns
+                    items:
+                      $ref: '#/components/schemas/ColumnMetadata'
+                  threadId:
+                    type: string
+                    description: ID of the thread (existing or newly created)
+                  totalRows:
+                    type: integer
+                    description: The total number of rows returned
+                example:
+                  id: "09d46224-0068-4ca3-bce4-f1fc85093eb6"
+                  records: [
+                    {
+                      "customer_id": "00012a2ce6f8dcda20d059ce98491703",
+                      "customer_unique_id": "248ffe10d632bebe4f7267f1f44844c9",
+                      "customer_zip_code_prefix": "06273",
+                      "customer_city": "osasco",
+                      "customer_state": "SP"
+                    },
+                    {
+                      "customer_id": "000161a058600d5901f007fab4c27140",
+                      "customer_unique_id": "b0015e09bb4b6e47c52844fab5fb6638",
+                      "customer_zip_code_prefix": "35550",
+                      "customer_city": "itapecerica",
+                      "customer_state": "MG"
+                    },
+                    "... additional records truncated for brevity ..."
+                  ]
+                  columns: [
+                    {
+                      "name": "customer_id",
+                      "type": "VARCHAR"
+                    },
+                    {
+                      "name": "customer_unique_id",
+                      "type": "VARCHAR"
+                    },
+                    {
+                      "name": "customer_zip_code_prefix",
+                      "type": "VARCHAR"
+                    },
+                    {
+                      "name": "customer_city",
+                      "type": "VARCHAR"
+                    },
+                    {
+                      "name": "customer_state",
+                      "type": "VARCHAR"
+                    }
+                  ]
+                  threadId: "503a8ca5-8171-43b5-b45b-86de2849467b"
+                  totalRows: 10
+        '400':
+          description: Bad request or SQL execution error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '405':
+          description: Method not allowed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /generate_vega_chart:
+    post:
+      summary: Generate Vega visualization chart spec
+      description: Generates a Vega chart spec for data visualization from a question and SQL query
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - question
+                - sql
+              properties:
+                question:
+                  type: string
+                  description: The natural language question
+                sql:
+                  type: string
+                  description: The SQL query that produces the data to visualize
+                threadId:
+                  type: string
+                  description: Optional thread ID for conversation context
+                sampleSize:
+                  type: integer
+                  description: Maximum number of rows to include in the visualization
+                  default: 10000
+      responses:
+        '200':
+          description: Successfully generated Vega specification
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  vegaSpec:
+                    type: object
+                    description: The Vega specification with embedded data
+                  threadId:
+                    type: string
+                    description: ID of the thread (existing or newly created)
+                example:
+                  threadId: "75ab23c8-9124-4560-a125-fbe7e321dcba"
+                  vegaSpec: {
+                    "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+                    "config": {
+                      "mark": {
+                        "tooltip": true
+                      },
+                      "font": "Roboto, Arial, Noto Sans, sans-serif",
+                      "padding": {
+                        "top": 30,
+                        "bottom": 20,
+                        "left": 0,
+                        "right": 0
+                      },
+                      "title": {
+                        "color": "#262626",
+                        "fontSize": 14
+                      },
+                      "axis": {
+                        "labelFontSize": 10,
+                        "gridColor": "#d9d9d9",
+                        "titleColor": "#434343",
+                        "labelColor": "#65676c"
+                      },
+                      "axisX": {
+                        "labelAngle": -45
+                      },
+                      "bar": {
+                        "color": "#1570EF"
+                      }
+                    },
+                    "title": "Total Payments by Customer State",
+                    "data": {
+                      "values": [
+                        {
+                          "customer_state": "PR",
+                          "total_payment_value": 811156.38
+                        },
+                        {
+                          "customer_state": "BA",
+                          "total_payment_value": 616645.82
+                        }
+                      ]
+                    },
+                    "mark": {
+                      "type": "bar"
+                    },
+                    "width": "container",
+                    "height": "container",
+                    "encoding": {
+                      "x": {
+                        "field": "customer_state",
+                        "type": "nominal",
+                        "title": "Customer State"
+                      },
+                      "y": {
+                        "field": "total_payment_value",
+                        "type": "quantitative",
+                        "title": "Total Payment Value"
+                      },
+                      "color": {
+                        "field": "customer_state",
+                        "type": "nominal",
+                        "title": "Customer State"
+                      }
+                    }
+                  }
+        '400':
+          description: Bad request or specification generation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /stream_explanation:
+    get:
+      summary: Stream an explanation
+      description: Streams an explanation for a non-SQL query using server-sent events
+      parameters:
+        - name: queryId
+          in: query
+          description: The query ID to stream results from
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Stream of explanation events
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: Server-sent events stream with explanation chunks
+              example: |
+                data: {"message":"Wren AI is "}
+
+                data: {"message":"designed to "}
+
+                data: {"message":"help you analyze "}
+
+                data: {"message":"your data with "}
+
+                data: {"message":"natural language queries. I can "}
+
+                data: {"message":"provide insights about "}
+
+                data: {"message":"your business data and "}
+
+                data: {"message":"create visualizations."}
+
+                data: {"done":true}
+        '500':
+          description: Internal server error
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the error response
+        error:
+          type: string
+          description: Error message
+        code:
+          type: string
+          description: Error code
+    ColumnMetadata:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Column name
+        type:
+          type: string
+          description: Data type of the column
+        notNull:
+          type: boolean
+          description: Whether the column allows null values
+        properties:
+          type: object
+          description: Additional column properties

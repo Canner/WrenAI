@@ -6,10 +6,9 @@ import pytest
 from src.pipelines.generation.followup_sql_generation import FollowUpSQLGeneration
 from src.pipelines.generation.sql_correction import SQLCorrection
 from src.pipelines.generation.sql_generation import SQLGeneration
-from src.pipelines.retrieval.retrieval import Retrieval
+from src.pipelines.retrieval.db_schema_retrieval import DbSchemaRetrieval
 from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
-from src.web.v1.services.ask_details import SQLBreakdown
 
 GLOBAL_DATA = {
     "contexts": None,
@@ -35,7 +34,7 @@ def pipeline_components():
 )
 @pytest.mark.asyncio
 async def test_retrieval_pipeline(pipeline_components):
-    retrieval_pipeline = Retrieval(**pipeline_components["db_schema_retrieval"])
+    retrieval_pipeline = DbSchemaRetrieval(**pipeline_components["db_schema_retrieval"])
 
     retrieval_result = await retrieval_pipeline.run(
         "How many books are there?",
@@ -87,13 +86,6 @@ async def test_followup_generation_pipeline():
         history=AskHistory(
             sql="SELECT COUNT(*) FROM book",
             summary="Retrieve the number of books",
-            steps=[
-                SQLBreakdown(
-                    sql="SELECT COUNT(*) FROM book",
-                    summary="Retrieve the number of books",
-                    cte_name="",
-                )
-            ],
         ),
         configuration=Configuration(),
     )

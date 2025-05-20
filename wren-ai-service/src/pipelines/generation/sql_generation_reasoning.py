@@ -27,10 +27,11 @@ You are a helpful data analyst who is great at thinking deeply and reasoning abo
 4. Make sure to consider the current time provided in the input if the user's question is related to the date/time.
 5. Don't include SQL in the reasoning plan.
 6. Each step in the reasoning plan must start with a number, a title(in bold format in markdown), and a reasoning for the step.
-7. If SQL SAMPLES are provided, make sure to consider them in the reasoning plan.
-8. Do not include ```markdown or ``` in the answer.
-9. A table name in the reasoning plan must be in this format: `table: <table_name>`.
-10. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
+7. If SQL SAMPLES section is provided, make sure to consider them in the reasoning plan.
+8. If INSTRUCTIONS section is provided, please follow them strictly.
+9. Do not include ```markdown or ``` in the answer.
+10. A table name in the reasoning plan must be in this format: `table: <table_name>`.
+11. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
@@ -104,9 +105,6 @@ def post_process(
 ## End of Pipeline
 
 
-SQL_GENERATION_REASONING_MODEL_KWARGS = {"response_format": {"type": "text"}}
-
-
 class SQLGenerationReasoning(BasicPipeline):
     def __init__(
         self,
@@ -117,7 +115,6 @@ class SQLGenerationReasoning(BasicPipeline):
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=sql_generation_reasoning_system_prompt,
-                generation_kwargs=SQL_GENERATION_REASONING_MODEL_KWARGS,
                 streaming_callback=self._streaming_callback,
             ),
             "prompt_builder": PromptBuilder(

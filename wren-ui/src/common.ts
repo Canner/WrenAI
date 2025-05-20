@@ -17,6 +17,8 @@ import {
   SqlPairRepository,
   AskingTaskRepository,
   InstructionRepository,
+  ApiHistoryRepository,
+  DashboardItemRefreshJobRepository,
 } from '@server/repositories';
 import {
   WrenEngineAdaptor,
@@ -38,6 +40,7 @@ import { PostHogTelemetry } from './apollo/server/telemetry/telemetry';
 import {
   ProjectRecommendQuestionBackgroundTracker,
   ThreadRecommendQuestionBackgroundTracker,
+  DashboardCacheBackgroundTracker,
 } from './apollo/server/backgrounds';
 import { SqlPairService } from './apollo/server/services/sqlPairService';
 
@@ -69,6 +72,9 @@ export const initComponents = () => {
   const sqlPairRepository = new SqlPairRepository(knex);
   const askingTaskRepository = new AskingTaskRepository(knex);
   const instructionRepository = new InstructionRepository(knex);
+  const apiHistoryRepository = new ApiHistoryRepository(knex);
+  const dashboardItemRefreshJobRepository =
+    new DashboardItemRefreshJobRepository(knex);
 
   // adaptors
   const wrenEngineAdaptor = new WrenEngineAdaptor({
@@ -138,6 +144,7 @@ export const initComponents = () => {
   const sqlPairService = new SqlPairService({
     sqlPairRepository,
     wrenAIAdaptor,
+    ibisAdaptor,
   });
   const instructionService = new InstructionService({
     instructionRepository,
@@ -157,6 +164,14 @@ export const initComponents = () => {
       wrenAIAdaptor,
       threadRepository,
     });
+  const dashboardCacheBackgroundTracker = new DashboardCacheBackgroundTracker({
+    dashboardRepository,
+    dashboardItemRepository,
+    dashboardItemRefreshJobRepository,
+    projectService,
+    deployService,
+    queryService,
+  });
 
   return {
     knex,
@@ -178,8 +193,10 @@ export const initComponents = () => {
     dashboardItemRepository,
     sqlPairRepository,
     askingTaskRepository,
-
+    apiHistoryRepository,
     instructionRepository,
+    dashboardItemRefreshJobRepository,
+
     // adaptors
     wrenEngineAdaptor,
     wrenAIAdaptor,
@@ -195,11 +212,12 @@ export const initComponents = () => {
     dashboardService,
     sqlPairService,
     instructionService,
-
     askingTaskTracker,
+
     // background trackers
     projectRecommendQuestionBackgroundTracker,
     threadRecommendQuestionBackgroundTracker,
+    dashboardCacheBackgroundTracker,
   };
 };
 

@@ -7,7 +7,9 @@ import { LearningResolver } from './resolvers/learningResolver';
 import { DashboardResolver } from './resolvers/dashboardResolver';
 import { SqlPairResolver } from './resolvers/sqlPairResolver';
 import { InstructionResolver } from './resolvers/instructionResolver';
+import { ApiHistoryResolver } from './resolvers/apiHistoryResolver';
 import { convertColumnType } from '@server/utils';
+import { DialectSQLScalar } from './scalars';
 
 const projectResolver = new ProjectResolver();
 const modelResolver = new ModelResolver();
@@ -17,8 +19,10 @@ const learningResolver = new LearningResolver();
 const dashboardResolver = new DashboardResolver();
 const sqlPairResolver = new SqlPairResolver();
 const instructionResolver = new InstructionResolver();
+const apiHistoryResolver = new ApiHistoryResolver();
 const resolvers = {
   JSON: GraphQLJSON,
+  DialectSQL: DialectSQLScalar,
   Query: {
     listDataSourceTables: projectResolver.listDataSourceTables,
     autoGenerateRelation: projectResolver.autoGenerateRelation,
@@ -62,11 +66,15 @@ const resolvers = {
 
     // Dashboard
     dashboardItems: dashboardResolver.getDashboardItems,
+    dashboard: dashboardResolver.getDashboard,
 
     // SQL Pairs
     sqlPairs: sqlPairResolver.getProjectSqlPairs,
     // Instructions
     instructions: instructionResolver.getInstructions,
+
+    // API History
+    apiHistory: apiHistoryResolver.getApiHistory,
   },
   Mutation: {
     deploy: modelResolver.deploy,
@@ -154,14 +162,17 @@ const resolvers = {
     // Dashboard
     updateDashboardItemLayouts: dashboardResolver.updateDashboardItemLayouts,
     createDashboardItem: dashboardResolver.createDashboardItem,
+    updateDashboardItem: dashboardResolver.updateDashboardItem,
     deleteDashboardItem: dashboardResolver.deleteDashboardItem,
     previewItemSQL: dashboardResolver.previewItemSQL,
+    setDashboardSchedule: dashboardResolver.setDashboardSchedule,
 
     // SQL Pairs
     createSqlPair: sqlPairResolver.createSqlPair,
     updateSqlPair: sqlPairResolver.updateSqlPair,
     deleteSqlPair: sqlPairResolver.deleteSqlPair,
     generateQuestion: sqlPairResolver.generateQuestion,
+    modelSubstitute: sqlPairResolver.modelSubstitute,
     // Instructions
     createInstruction: instructionResolver.createInstruction,
     updateInstruction: instructionResolver.updateInstruction,
@@ -182,6 +193,9 @@ const resolvers = {
 
   // Add this line to include the SqlPair nested resolver
   SqlPair: sqlPairResolver.getSqlPairNestedResolver(),
+
+  // Add ApiHistoryResponse nested resolvers
+  ApiHistoryResponse: apiHistoryResolver.getApiHistoryNestedResolver(),
 };
 
 export default resolvers;

@@ -21,12 +21,12 @@ export default function Retrieving(props: Props) {
 
   const title = isAdjustment
     ? 'User-selected models applied'
-    : 'Retrieving related models';
+    : 'Retrieving top 10 model candidates';
 
   const modelDescription = isAdjustment ? (
     <>{tables.length} models applied</>
   ) : (
-    <>{tables.length} models found</>
+    <>Top {tables.length} model candidates identified</>
   );
 
   return (

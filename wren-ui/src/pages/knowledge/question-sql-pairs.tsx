@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Button, message, Table, TableColumnsType, Typography } from 'antd';
 import { format } from 'sql-formatter';
 import SiderLayout from '@/components/layouts/SiderLayout';
+import PageLayout from '@/components/layouts/PageLayout';
 import FunctionOutlined from '@ant-design/icons/FunctionOutlined';
 import { MORE_ACTION } from '@/utils/enum';
 import { getCompactTime } from '@/utils/time';
@@ -20,11 +21,11 @@ import {
   useDeleteSqlPairMutation,
 } from '@/apollo/client/graphql/sqlPairs.generated';
 
-const CodeBlock = dynamic(() => import('@/components/editor/CodeBlock'), {
+const SQLCodeBlock = dynamic(() => import('@/components/code/SQLCodeBlock'), {
   ssr: false,
 });
 
-const { Paragraph, Title, Text } = Typography;
+const { Paragraph, Text } = Typography;
 
 export default function ManageQuestionSQLPairs() {
   const questionSqlPairModal = useModalAction();
@@ -100,7 +101,7 @@ export default function ManageQuestionSQLPairs() {
       width: '60%',
       render: (sql) => (
         <div style={{ width: '100%' }}>
-          <CodeBlock code={sql} maxHeight="130" />
+          <SQLCodeBlock code={sql} maxHeight="130" />
         </div>
       ),
     },
@@ -125,12 +126,14 @@ export default function ManageQuestionSQLPairs() {
 
   return (
     <SiderLayout loading={false}>
-      <div className="px-6 py-4">
-        <div className="d-flex align-center justify-space-between mb-3">
-          <Title level={4} className="text-medium gray-8 mb-0">
+      <PageLayout
+        title={
+          <>
             <FunctionOutlined className="mr-2 gray-8" />
             Manage question-SQL pairs
-          </Title>
+          </>
+        }
+        titleExtra={
           <Button
             type="primary"
             className=""
@@ -138,25 +141,28 @@ export default function ManageQuestionSQLPairs() {
           >
             Add question-SQL pair
           </Button>
-        </div>
-        <Text className="gray-7">
-          On this page, you can manage your saved question-SQL pairs. These
-          pairs help Wren AI learn how your organization writes SQL, allowing it
-          to generate queries that better align with your expectations.{' '}
-          <Link
-            className="gray-8 underline"
-            href="https://docs.getwren.ai/oss/guide/knowledge/question-sql-pairs"
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            Learn more.
-          </Link>
-        </Text>
+        }
+        description={
+          <>
+            On this page, you can manage your saved question-SQL pairs. These
+            pairs help Wren AI learn how your organization writes SQL, allowing
+            it to generate queries that better align with your expectations.{' '}
+            <Link
+              className="gray-8 underline"
+              href="https://docs.getwren.ai/oss/guide/knowledge/question-sql-pairs"
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              Learn more.
+            </Link>
+          </>
+        }
+      >
         <Table
+          className="ant-table-has-header"
           dataSource={sqlPairs}
           loading={loading}
           columns={columns}
-          className="mt-3"
           rowKey="id"
           pagination={{
             hideOnSinglePage: true,
@@ -183,7 +189,7 @@ export default function ManageQuestionSQLPairs() {
             }
           }}
         />
-      </div>
+      </PageLayout>
     </SiderLayout>
   );
 }

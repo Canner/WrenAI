@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import sys
 from typing import Any, Dict, List, Optional
@@ -28,7 +27,6 @@ class OutputFormatter:
                 "summary": doc.meta.get("summary", ""),
                 "statement": doc.meta.get("statement") or doc.meta.get("sql"),
                 "viewId": doc.meta.get("viewId", ""),
-                "sqlpairId": doc.meta.get("sql_pair_id", ""),
             }
             for doc in documents
         ]
@@ -40,7 +38,6 @@ class OutputFormatter:
 @observe(capture_input=False)
 async def count_documents(
     view_questions_store: QdrantDocumentStore,
-    sql_pair_store: QdrantDocumentStore,
     project_id: Optional[str] = None,
 ) -> int:
     filters = (
@@ -53,11 +50,8 @@ async def count_documents(
         if project_id
         else None
     )
-    view_question_count, sql_pair_count = await asyncio.gather(
-        view_questions_store.count_documents(filters=filters),
-        sql_pair_store.count_documents(filters=filters),
-    )
-    return view_question_count + sql_pair_count
+
+    return await view_questions_store.count_documents(filters=filters)
 
 
 @observe(capture_input=False, capture_output=False)
@@ -73,7 +67,6 @@ async def retrieval(
     embedding: dict,
     project_id: str,
     view_questions_retriever: Any,
-    sql_pair_retriever: Any,
 ) -> dict:
     if embedding:
         filters = (
@@ -87,19 +80,11 @@ async def retrieval(
             else None
         )
 
-        view_question_res, sql_pair_res = await asyncio.gather(
-            view_questions_retriever.run(
-                query_embedding=embedding.get("embedding"),
-                filters=filters,
-            ),
-            sql_pair_retriever.run(
-                query_embedding=embedding.get("embedding"),
-                filters=filters,
-            ),
+        view_question_res = await view_questions_retriever.run(
+            query_embedding=embedding.get("embedding"),
+            filters=filters,
         )
-        return dict(
-            documents=view_question_res.get("documents") + sql_pair_res.get("documents")
-        )
+        return dict(documents=view_question_res.get("documents"))
 
     return {}
 
@@ -143,16 +128,11 @@ class HistoricalQuestionRetrieval(BasicPipeline):
         view_questions_store = document_store_provider.get_store(
             dataset_name="view_questions"
         )
-        sql_pair_store = document_store_provider.get_store(dataset_name="sql_pairs")
         self._components = {
             "view_questions_store": view_questions_store,
-            "sql_pair_store": sql_pair_store,
             "embedder": embedder_provider.get_text_embedder(),
             "view_questions_retriever": document_store_provider.get_retriever(
                 document_store=view_questions_store,
-            ),
-            "sql_pair_retriever": document_store_provider.get_retriever(
-                document_store=sql_pair_store,
             ),
             "score_filter": ScoreFilter(),
             # TODO: add a llm filter to filter out low scoring document, in case ScoreFilter is not accurate enough

@@ -17,3 +17,5 @@ export * from './dashboardItemRepository';
 export * from './sqlPairRepository';
 export * from './askingTaskRepository';
 export * from './instructionRepository';
+export * from './apiHistoryRepository';
+export * from './dashboardItemRefreshJobRepository';
