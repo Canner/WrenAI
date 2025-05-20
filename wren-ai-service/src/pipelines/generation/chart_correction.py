@@ -85,10 +85,12 @@ async def correct_chart(prompt: dict, generator: Any) -> dict:
 def post_process(
     correct_chart: dict,
     custom_theme: dict[str, Any],
+    sample_data: list[dict],
     post_processor: ChartGenerationPostProcessor,
 ) -> dict:
     return post_processor.run(
         correct_chart.get("replies"),
+        sample_data,
         custom_theme=custom_theme,
     )
 
@@ -136,6 +138,7 @@ class ChartCorrection(BasicPipeline):
                 "query": query,
                 "sql": sql,
                 "chart_schema": chart_schema,
+                "sample_data": chart_schema.get("data", {}).get("values", []),
                 **self._components,
                 **self._configs,
             },
