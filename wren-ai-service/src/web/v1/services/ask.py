@@ -28,10 +28,10 @@ class AskRequest(BaseModel):
     # so we need to support as a choice, and will remove it in the future
     mdl_hash: Optional[str] = Field(validation_alias=AliasChoices("mdl_hash", "id"))
     thread_id: Optional[str] = None
-    histories: Optional[list[AskHistory]] = Field(default_factory=list)
-    configurations: Optional[Configuration] = Configuration()
-    ignore_sql_generation_reasoning: Optional[bool] = False
-    enable_column_pruning: Optional[bool] = False
+    histories: list[AskHistory] = Field(default_factory=list)
+    configurations: Configuration = Field(default_factory=Configuration)
+    ignore_sql_generation_reasoning: bool = False
+    enable_column_pruning: bool = False
 
     @property
     def query_id(self) -> str:
@@ -100,14 +100,14 @@ class _AskResultResponse(BaseModel):
     invalid_sql: Optional[str] = None
     error: Optional[AskError] = None
     trace_id: Optional[str] = None
-    is_followup: Optional[bool] = False
+    is_followup: bool = False
     general_type: Optional[
         Literal["MISLEADING_QUERY", "DATA_ASSISTANCE", "USER_GUIDE"]
     ] = None
 
 
 class AskResultResponse(_AskResultResponse):
-    is_followup: Optional[bool] = Field(False, exclude=True)
+    is_followup: bool = Field(False, exclude=True)
     general_type: Optional[
         Literal["MISLEADING_QUERY", "DATA_ASSISTANCE", "USER_GUIDE"]
     ] = Field(None, exclude=True)
@@ -121,7 +121,7 @@ class AskFeedbackRequest(BaseModel):
     sql_generation_reasoning: str
     sql: str
     project_id: Optional[str] = None
-    configurations: Optional[Configuration] = Configuration()
+    configurations: Configuration = Field(default_factory=Configuration)
 
     @property
     def query_id(self) -> str:

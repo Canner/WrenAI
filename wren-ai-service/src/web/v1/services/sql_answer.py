@@ -4,7 +4,7 @@ from typing import Dict, Literal, Optional
 
 from cachetools import TTLCache
 from langfuse.decorators import observe
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
@@ -21,7 +21,7 @@ class SqlAnswerRequest(BaseModel):
     sql_data: Dict
     project_id: Optional[str] = None
     thread_id: Optional[str] = None
-    configurations: Optional[Configuration] = Configuration()
+    configurations: Configuration = Field(default_factory=Configuration)
 
     @property
     def query_id(self) -> str:
