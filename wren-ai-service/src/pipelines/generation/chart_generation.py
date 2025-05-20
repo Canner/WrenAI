@@ -27,7 +27,9 @@ Besides, you need to give a concise and easy-to-understand reasoning to describe
 
 ### INSTRUCTIONS ###
 
+- Please generate the vega-lite schema using the v5 specification.
 - Please omit the "data" field while generating the vega-lite schema.
+- Please omit the "$schema" field while generating the vega-lite schema.
 - Please remember to add the "description" field to the vega-lite schema.
 
 ### OUTPUT FORMAT ###

@@ -29,10 +29,12 @@ Besides, you need to give a concise and easy-to-understand reasoning to describe
 
 ### INSTRUCTIONS ###
 
+- Please generate the vega-lite schema using the v5 specification.
 - You need to generate the new vega-lite schema based on the adjustment command and the original vega-lite schema.
 - If you think the adjustment command is not suitable for the data, you can return an empty string for the schema and chart type and give reasoning to explain why.
 - If the user provides an image, you need to use the image as reference to generate a new chart schema that follows user's adjustment command.
 - Please omit the "data" field while generating the vega-lite schema.
+- Please omit the "$schema" field while generating the vega-lite schema.
 - Please remember to add the "description" field to the vega-lite schema.
 
 ### OUTPUT FORMAT ###
