@@ -67,7 +67,7 @@ class ChartGenerationPostProcessor:
     )
     def run(
         self,
-        replies: str,
+        replies: list[str],
         sample_data: list[dict],
         custom_theme: Optional[dict[str, Any]] = None,
     ):
