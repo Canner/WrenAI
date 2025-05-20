@@ -198,6 +198,7 @@ class ChartService:
                         )
                         results["metadata"]["error_type"] = "NO_CHART"
                         results["metadata"]["error_message"] = "chart generation failed"
+                        break
                     else:
                         current_chart_correction_retries += 1
                         chart_correction_result = await self._pipelines[
