@@ -234,19 +234,19 @@ def convert_message_to_openai_format(message: ChatMessage) -> Dict[str, str]:
     """
     openai_msg = {"role": message.role.value}
 
-    if message.content and message.image_url:
+    if message.content and hasattr(message, "image_url") and message.image_url:
         openai_msg["content"] = [
             {"type": "text", "text": message.content},
             {"type": "image_url", "image_url": {"url": message.image_url}},
         ]
     elif message.content:
         openai_msg["content"] = message.content
-    elif message.image_url:
+    elif hasattr(message, "image_url") and message.image_url:
         openai_msg["content"] = [
             {"type": "image_url", "image_url": {"url": message.image_url}}
         ]
 
-    if message.name:
+    if hasattr(message, "name") and message.name:
         openai_msg["name"] = message.name
 
     return openai_msg
