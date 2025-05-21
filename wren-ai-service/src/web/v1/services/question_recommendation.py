@@ -22,7 +22,7 @@ class QuestionRecommendation:
     class Event(BaseModel, MetadataTraceable):
         event_id: str
         status: Literal["generating", "finished", "failed"] = "generating"
-        response: Optional[dict] = {"questions": {}}
+        response: dict = {"questions": {}}
         error: Optional["QuestionRecommendation.Error"] = None
         trace_id: Optional[str] = None
 

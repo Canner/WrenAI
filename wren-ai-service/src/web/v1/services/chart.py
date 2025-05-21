@@ -66,7 +66,7 @@ class ChartResultRequest(BaseModel):
 
 class ChartResult(BaseModel):
     reasoning: str
-    chart_type: Optional[str] = ""
+    chart_type: str = ""
     chart_schema: Optional[dict] = None
 
 

@@ -81,14 +81,12 @@ class ChartAdjustmentResultRequest(BaseModel):
 
 class ChartAdjustmentResult(BaseModel):
     reasoning: str
-    chart_type: Optional[str] = ""
+    chart_type: str = ""
     chart_schema: dict
 
 
 class ChartAdjustmentResultResponse(BaseModel):
-    status: Literal[
-        "understanding", "fetching", "generating", "finished", "failed", "stopped"
-    ]
+    status: Literal["fetching", "generating", "finished", "failed", "stopped"]
     response: Optional[ChartAdjustmentResult] = None
     error: Optional[ChartAdjustmentError] = None
     trace_id: Optional[str] = None
