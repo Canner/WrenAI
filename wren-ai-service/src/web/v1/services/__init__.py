@@ -41,8 +41,8 @@ class Configuration(BaseModel):
         return f"{current_time.strftime('%Y-%m-%d %A %H:%M:%S')}"  # YYYY-MM-DD weekday_name HH:MM:SS, ex: 2024-10-23 Wednesday 12:00:00
 
     fiscal_year: Optional[FiscalYear] = None
-    language: Optional[str] = "English"
-    timezone: Optional[Timezone] = Timezone()
+    language: str = "English"
+    timezone: Timezone = Timezone()
 
 
 class SSEEvent(BaseModel):

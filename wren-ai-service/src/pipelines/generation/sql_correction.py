@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
@@ -101,7 +101,7 @@ class SQLCorrection(BasicPipeline):
         self,
         llm_provider: LLMProvider,
         engine: Engine,
-        engine_timeout: Optional[float] = 30.0,
+        engine_timeout: float = 30.0,
         **kwargs,
     ):
         self._components = {

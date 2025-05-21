@@ -128,7 +128,7 @@ class ChartGenerationPostProcessor:
 class ChartGenerationResults(BaseModel):
     reasoning: str
     chart_schema: dict[str, Any]
-    chart_type: Optional[str] = ""  # deprecated
+    chart_type: str = ""  # deprecated
 
 
 CHART_GENERATION_MODEL_KWARGS = {

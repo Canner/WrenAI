@@ -1,6 +1,6 @@
 import logging
 import sys
-from typing import Any, Optional
+from typing import Any
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
@@ -135,7 +135,7 @@ class SQLRegeneration(BasicPipeline):
         self,
         llm_provider: LLMProvider,
         engine: Engine,
-        engine_timeout: Optional[float] = 30.0,
+        engine_timeout: float = 30.0,
         **kwargs,
     ):
         self._components = {

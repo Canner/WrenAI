@@ -101,8 +101,8 @@ class SqlFunctions(BasicPipeline):
         self,
         engine: Engine,
         document_store_provider: DocumentStoreProvider,
-        engine_timeout: Optional[float] = 30.0,
-        ttl: Optional[int] = 60 * 60 * 24,
+        engine_timeout: float = 30.0,
+        ttl: int = 60 * 60 * 24,
         **kwargs,
     ) -> None:
         self._retriever = document_store_provider.get_retriever(
