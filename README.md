@@ -92,6 +92,18 @@ https://github.com/user-attachments/assets/f9c1cb34-5a95-4580-8890-ec9644da4160
 
 👉 Try with your data on [Wren AI Cloud](https://getwren.ai/?utm_source=github&utm_medium=content&utm_campaign=readme) or [Install in your local environment](https://docs.getwren.ai/oss/installation/?utm_source=github&utm_medium=content&utm_campaign=readme)
 
+## Supported Data Sources
+
+If your data source is not listed here, vote for it in our [GitHub discussion thread](https://github.com/Canner/WrenAI/discussions/327). It will be a valuable input for us to decide on the next supported data sources.
+- BigQuery
+- DuckDB
+- PostgreSQL
+- MySQL
+- Microsoft SQL Server
+- ClickHouse
+- Trino
+- Snowflake
+
 ## Supported LLM Models
 
 Wren AI supports integration with various Large Language Models (LLMs), including but not limited to:
