@@ -13,17 +13,6 @@ logger = logging.getLogger("wren-ai-service")
 
 
 # POST /v1/chart-adjustments
-class ChartAdjustmentOption(BaseModel):
-    chart_type: Literal[
-        "bar", "grouped_bar", "line", "pie", "stacked_bar", "area", "multi_line"
-    ]
-    x_axis: Optional[str] = None
-    y_axis: Optional[str] = None
-    x_offset: Optional[str] = None
-    color: Optional[str] = None
-    theta: Optional[str] = None
-
-
 class ChartAdjustmentRequest(BaseModel):
     _query_id: str | None = None
     query: str
@@ -36,7 +25,6 @@ class ChartAdjustmentRequest(BaseModel):
     thread_id: Optional[str] = None
     configurations: Configuration = Field(default_factory=Configuration)
     remove_data_from_chart_schema: bool = True
-    adjustment_option: ChartAdjustmentOption | None = None  # deprecated
 
     @property
     def query_id(self) -> str:
