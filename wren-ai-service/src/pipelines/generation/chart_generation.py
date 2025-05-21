@@ -31,6 +31,7 @@ Besides, you need to give a concise and easy-to-understand reasoning to describe
 - Please omit the "data" field while generating the vega-lite schema.
 - Please omit the "$schema" field while generating the vega-lite schema.
 - Please remember to add the "description" field to the vega-lite schema.
+- The language of the reasoning should be the same as the language provided by the user.
 
 ### OUTPUT FORMAT ###
 
