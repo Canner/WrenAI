@@ -9,7 +9,8 @@ on:
 
 # Not sure the name is correct in env
 env:
-  IMAGE_NAME: ghcr.io/canner/wren-setup-provider-ui 
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/wren-setup-provider-ui  # push to my docker hub
 
 jobs:
   build:
