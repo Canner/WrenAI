@@ -10,7 +10,7 @@ on:
 # Not sure the name is correct in env
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/wren-setup-provider-ui  # push to my docker hub
+  PROVIDER_UI_IMAGE: ${{ github.repository_owner }}/wren-setup-provider-ui  # push to my docker hub
 
 jobs:
   build:
@@ -19,7 +19,7 @@ jobs:
         arch:
           - runner: ubuntu-latest
             platform: linux/amd64
-          - runner: linux_arm64_runner
+          - runner: ubuntu-24.04-arm
             platform: linux/arm64
     runs-on: ${{ matrix.arch.runner }}
     steps:
@@ -51,4 +51,4 @@ jobs:
           file: ./wren-ai-service/tools/providers-setup/Dockerfile
           platforms: ${{ matrix.arch.platform }}
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.TAG }}
+          tags: ${{ env.REGISTRY }}/${{ env.PROVIDER_UI_IMAGE }}:${{ env.TAG }}

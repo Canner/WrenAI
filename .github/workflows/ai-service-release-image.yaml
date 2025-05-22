@@ -24,8 +24,8 @@ jobs:
         arch:
           - runner: ubuntu-latest
             platform: linux/amd64
-          # - runner: linux_arm64_runner
-          #   platform: linux/arm64
+          - runner: linux_arm64_runner
+            platform: linux/arm64
     runs-on: ${{ matrix.arch.runner }}
     steps:
       - uses: actions/checkout@v4
