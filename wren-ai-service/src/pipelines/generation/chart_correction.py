@@ -31,7 +31,9 @@ You are a vega-lite chart expert. You are given a chart schema, a query, and a S
 - The content of the chart schema should be compatible to the SQL query that fulfills the user's query.
 - Please omit the "data" field while generating the vega-lite schema.
 - Please omit the "$schema" field while generating the vega-lite schema.
-- Please remember to add the "description" field to the vega-lite schema.
+- Please omit the "description" field while generating the vega-lite schema.
+- Please remember to add the "title" field to the vega-lite schema.
+- Please remember to add the legend to the vega-lite schema.
 
 ### OUTPUT FORMAT ###
 
