@@ -36,13 +36,15 @@ Please read the [documentation](https://docs.getwren.ai/oss/concept/wren_ai_serv
 
    This creates both `.env.dev` and `config.yaml`. Use `just init --non-dev` to generate only `config.yaml`.
 
-3. **Configure Environment**:
+    > For Windows, add the line `set shell:= ["bash", "-cu"]` at the start of the Justfile.
+
+4. **Configure Environment**:
 
    - Edit `.env.dev` to set environment variables
    - Modify `config.yaml` to configure components, pipelines, and other settings
    - Refer to [AI Service Configuration](./docs/configuration.md) for detailed setup instructions
 
-4. **Set Up Development Environment** (optional):
+5. **Set Up Development Environment** (optional):
 
    - Install pre-commit hooks:
 
@@ -56,7 +58,7 @@ Please read the [documentation](https://docs.getwren.ai/oss/concept/wren_ai_serv
      poetry run pre-commit run --all-files
      ```
 
-5. **Run Tests** (optional):
+6. **Run Tests** (optional):
 
    ```bash
    just test
