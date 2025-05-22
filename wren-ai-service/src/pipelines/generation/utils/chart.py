@@ -125,6 +125,17 @@ class ChartGenerationPostProcessor:
             }
 
 
+CHART_GENERATION_GENERAL_INSTRUCTIONS = """
+- Please generate the vega-lite schema using the v5 specification.
+- Please omit the "data" field while generating the vega-lite schema.
+- Please omit the "$schema" field while generating the vega-lite schema.
+- Please omit the "description" field while generating the vega-lite schema.
+- Please remember to add the "title" field to the vega-lite schema.
+- Please remember to add the legend to the vega-lite schema.
+- The language of the "title" field should be the same as the language provided by the user.
+"""
+
+
 class ChartGenerationResults(BaseModel):
     reasoning: str
     chart_schema: dict

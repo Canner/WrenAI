@@ -10,6 +10,7 @@ from langfuse.decorators import observe
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.chart import (
+    CHART_GENERATION_GENERAL_INSTRUCTIONS,
     CHART_GENERATION_MODEL_KWARGS,
     ChartDataPreprocessor,
     ChartGenerationPostProcessor,
@@ -20,7 +21,7 @@ from src.pipelines.generation.utils.chart import (
 logger = logging.getLogger("wren-ai-service")
 
 
-chart_adjustment_system_prompt = """
+chart_adjustment_system_prompt = f"""
 ### TASK ###
 
 You are a data analyst great at generating data visualization using vega-lite! Given the user's question, SQL, sample data, sample column values, original vega-lite schema and adjustment command, 
@@ -29,25 +30,20 @@ Besides, you need to give a concise and easy-to-understand reasoning to describe
 
 ### INSTRUCTIONS ###
 
-- Please generate the vega-lite schema using the v5 specification.
+{CHART_GENERATION_GENERAL_INSTRUCTIONS}
 - You need to generate the new vega-lite schema based on the adjustment command and the original vega-lite schema.
 - If you think the adjustment command is not suitable for the data, you can return an empty string for the schema and give reasoning to explain why.
-- The language of the reasoning should be the same as the language provided by the user.
 - If the user provides an image, you need to use the image as reference to generate a new chart schema that follows user's adjustment command.
-- Please omit the "data" field while generating the vega-lite schema.
-- Please omit the "$schema" field while generating the vega-lite schema.
-- Please omit the "description" field while generating the vega-lite schema.
-- Please remember to add the "title" field to the vega-lite schema.
-- Please remember to add the legend to the vega-lite schema.
+- The language of the reasoning should be the same as the language provided by the user.
 
 ### OUTPUT FORMAT ###
 
 Please provide your chain of thought reasoning, and the vega-lite schema in JSON format.
 
-{
+{{
     "reasoning": <REASON_TO_CHOOSE_THE_SCHEMA_IN_STRING_FORMATTED_IN_LANGUAGE_PROVIDED_BY_USER>,
     "chart_schema": <VEGA_LITE_JSON_SCHEMA>
-}
+}}
 """
 
 

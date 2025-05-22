@@ -10,6 +10,7 @@ from langfuse.decorators import observe
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.chart import (
+    CHART_GENERATION_GENERAL_INSTRUCTIONS,
     CHART_GENERATION_MODEL_KWARGS,
     ChartGenerationPostProcessor,
     ChartSchemaPreprocessor,
@@ -19,29 +20,22 @@ from src.pipelines.generation.utils.chart import (
 logger = logging.getLogger("wren-ai-service")
 
 
-chart_correction_system_prompt = """
+chart_correction_system_prompt = f"""
 ### TASK ###
 You are a vega-lite chart expert. You are given a chart schema, a query, and a SQL. You need to correct the chart schema to make it more accurate.
 
 ### INSTRUCTIONS ###
 
-- Please generate the vega-lite schema using the v5 specification.
-- You need to return the corrected chart schema in the json format.
-- You need to use the vega-lite json schema.
+{CHART_GENERATION_GENERAL_INSTRUCTIONS}
 - The content of the chart schema should be compatible to the SQL query that fulfills the user's query.
-- Please omit the "data" field while generating the vega-lite schema.
-- Please omit the "$schema" field while generating the vega-lite schema.
-- Please omit the "description" field while generating the vega-lite schema.
-- Please remember to add the "title" field to the vega-lite schema.
-- Please remember to add the legend to the vega-lite schema.
 
 ### OUTPUT FORMAT ###
 
 Please provide the vega-lite schema in JSON format.
 
-{
+{{
     "chart_schema": <VEGA_LITE_JSON_SCHEMA>
-}
+}}
 """
 
 
@@ -50,6 +44,7 @@ chart_correction_user_prompt_template = """
 Question: {{ query }}
 SQL: {{ sql }}
 Chart Schema: {{ chart_schema }}
+Language: {{ language }}
 
 Please think step by step
 """
@@ -69,12 +64,14 @@ def prompt(
     query: str,
     sql: str,
     preprocess_chart_schema: dict,
+    language: str,
     prompt_builder: PromptBuilder,
 ) -> dict:
     return prompt_builder.run(
         query=query,
         sql=sql,
         chart_schema=preprocess_chart_schema,
+        language=language,
     )
 
 
@@ -132,6 +129,7 @@ class ChartCorrection(BasicPipeline):
         query: str,
         sql: str,
         chart_schema: dict,
+        language: str,
     ) -> dict:
         logger.info("Chart Correction pipeline is running...")
         return await self._pipe.execute(
@@ -141,6 +139,7 @@ class ChartCorrection(BasicPipeline):
                 "sql": sql,
                 "chart_schema": chart_schema,
                 "sample_data": chart_schema.get("data", {}).get("values", []),
+                "language": language,
                 **self._components,
                 **self._configs,
             },
