@@ -3,7 +3,7 @@ from typing import Dict, Literal, Optional
 
 from cachetools import TTLCache
 from langfuse.decorators import observe
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
@@ -17,7 +17,7 @@ class SqlQuestionRequest(BaseModel):
     _query_id: str | None = None
     sqls: list[str]
     project_id: Optional[str] = None
-    configurations: Optional[Configuration] = Configuration()
+    configurations: Configuration = Field(default_factory=Configuration)
 
     @property
     def query_id(self) -> str:
@@ -46,6 +46,7 @@ class SqlQuestionResultResponse(BaseModel):
     error: Optional[SqlQuestionError] = None
     questions: Optional[list[str]] = None
     trace_id: Optional[str] = None
+
 
 class SqlQuestionService:
     def __init__(

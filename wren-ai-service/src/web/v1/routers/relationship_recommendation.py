@@ -3,7 +3,7 @@ from dataclasses import asdict
 from typing import Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.globals import (
     ServiceContainer,
@@ -67,7 +67,7 @@ Note: The actual generation is performed in the background using FastAPI's Backg
 class PostRequest(BaseModel):
     mdl: str
     project_id: Optional[str] = None
-    configuration: Optional[Configuration] = Configuration()
+    configuration: Configuration = Field(default_factory=Configuration)
 
 
 class PostResponse(BaseModel):
@@ -108,6 +108,7 @@ class GetResponse(BaseModel):
     response: Optional[dict]
     error: Optional[dict]
     trace_id: Optional[str] = None
+
 
 @router.get(
     "/relationship-recommendations/{id}",

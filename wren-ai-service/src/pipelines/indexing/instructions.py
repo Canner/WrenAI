@@ -28,7 +28,7 @@ class Instruction(BaseModel):
 @component
 class InstructionsConverter:
     @component.output_types(documents=List[Document])
-    def run(self, instructions: list[Instruction], project_id: Optional[str] = ""):
+    def run(self, instructions: list[Instruction], project_id: str = ""):
         logger.info(f"Project ID: {project_id} Converting instructions to documents...")
 
         addition = {"project_id": project_id} if project_id else {}
@@ -83,7 +83,7 @@ class InstructionsCleaner:
 def to_documents(
     instructions: List[Instruction],
     document_converter: InstructionsConverter,
-    project_id: Optional[str] = "",
+    project_id: str = "",
 ) -> Dict[str, Any]:
     return document_converter.run(instructions=instructions, project_id=project_id)
 
@@ -101,7 +101,7 @@ async def clean(
     cleaner: InstructionsCleaner,
     instructions: List[Instruction],
     embedding: Dict[str, Any] = {},
-    project_id: Optional[str] = "",
+    project_id: str = "",
     delete_all: bool = False,
 ) -> Dict[str, Any]:
     instruction_ids = [instruction.id for instruction in instructions]
@@ -149,7 +149,7 @@ class Instructions(BasicPipeline):
     async def run(
         self,
         instructions: list[Instruction],
-        project_id: Optional[str] = "",
+        project_id: str = "",
     ) -> Dict[str, Any]:
         logger.info(
             f"Project ID: {project_id} Instructions Indexing pipeline is running..."
