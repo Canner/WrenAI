@@ -11,8 +11,15 @@ logger = logging.getLogger("wren-ai-service")
 
 
 def load_custom_theme() -> Dict[str, Any]:
-    with open("src/pipelines/generation/utils/theme_powerbi.json", "r") as f:
-        return orjson.loads(f.read())
+    try:
+        with open("src/pipelines/generation/utils/theme_powerbi.json", "r") as f:
+            return orjson.loads(f.read())
+    except (FileNotFoundError, IOError) as e:
+        logger.error(f"Failed to load custom theme: {e}")
+        return {}
+    except orjson.JSONDecodeError as e:
+        logger.error(f"Failed to parse custom theme: {e}")
+        return {}
 
 
 @component
