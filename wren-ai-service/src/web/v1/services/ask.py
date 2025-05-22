@@ -182,6 +182,7 @@ class AskService:
         allow_sql_generation_reasoning: bool = True,
         allow_sql_functions_retrieval: bool = True,
         enable_column_pruning: bool = False,
+        max_sql_correction_retries: int = 3,
         max_histories: int = 5,
         maxsize: int = 1_000_000,
         ttl: int = 120,
@@ -198,6 +199,7 @@ class AskService:
         self._allow_intent_classification = allow_intent_classification
         self._enable_column_pruning = enable_column_pruning
         self._max_histories = max_histories
+        self._max_sql_correction_retries = max_sql_correction_retries
 
     def _is_stopped(self, query_id: str, container: dict):
         if (
@@ -245,6 +247,8 @@ class AskService:
             self._enable_column_pruning or ask_request.enable_column_pruning
         )
         allow_sql_functions_retrieval = self._allow_sql_functions_retrieval
+        max_sql_correction_retries = self._max_sql_correction_retries
+        current_sql_correction_retries = 0
 
         try:
             user_query = ask_request.query
@@ -563,7 +567,16 @@ class AskService:
                 elif failed_dry_run_results := text_to_sql_generation_results[
                     "post_process"
                 ]["invalid_generation_results"]:
-                    if failed_dry_run_results[0]["type"] != "TIME_OUT":
+                    while current_sql_correction_retries < max_sql_correction_retries:
+                        invalid = failed_dry_run_results[0]
+                        invalid_sql = invalid["sql"]
+                        error_message = invalid["error"]
+
+                        if invalid["type"] == "TIME_OUT":
+                            break
+
+                        current_sql_correction_retries += 1
+
                         self._ask_results[query_id] = AskResultResponse(
                             status="correcting",
                             type="TEXT_TO_SQL",
@@ -594,16 +607,11 @@ class AskService:
                                 )
                                 for valid_generation_result in valid_generation_results
                             ][:1]
-                        elif failed_dry_run_results := sql_correction_results[
-                            "post_process"
-                        ]["invalid_generation_results"]:
-                            invalid = failed_dry_run_results[0]
-                            invalid_sql = invalid["sql"]
-                            error_message = invalid["error"]
-                    else:
-                        invalid = failed_dry_run_results[0]
-                        invalid_sql = invalid["sql"]
-                        error_message = invalid["error"]
+                            break
+
+                        failed_dry_run_results = sql_correction_results["post_process"][
+                            "invalid_generation_results"
+                        ]
 
             if api_results:
                 if not self._is_stopped(query_id, self._ask_results):
