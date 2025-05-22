@@ -51,4 +51,4 @@ jobs:
           file: ./wren-ai-service/tools/providers-setup/Dockerfile
           platforms: ${{ matrix.arch.platform }}
           push: true
-          tags: ${{ env.IMAGE_NAME }}:${{ env.TAG }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.TAG }}
