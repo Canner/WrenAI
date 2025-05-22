@@ -207,6 +207,7 @@ class ChartService:
                             query=chart_request.query,
                             sql=chart_request.sql,
                             chart_schema=chart_schema,
+                            language=chart_request.configurations.language,
                         )
                         chart_result = chart_correction_result["post_process"][
                             "results"
