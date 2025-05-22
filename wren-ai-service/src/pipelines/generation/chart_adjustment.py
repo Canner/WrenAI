@@ -36,7 +36,9 @@ Besides, you need to give a concise and easy-to-understand reasoning to describe
 - If the user provides an image, you need to use the image as reference to generate a new chart schema that follows user's adjustment command.
 - Please omit the "data" field while generating the vega-lite schema.
 - Please omit the "$schema" field while generating the vega-lite schema.
-- Please remember to add the "description" field to the vega-lite schema.
+- Please omit the "description" field while generating the vega-lite schema.
+- Please remember to add the "title" field to the vega-lite schema.
+- Please remember to add the legend to the vega-lite schema.
 
 ### OUTPUT FORMAT ###
 
