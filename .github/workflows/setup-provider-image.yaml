@@ -4,51 +4,127 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: Docker image tag name (Optional)
+        description: 'Docker image tag name (optional)'
         type: string
 
-# Not sure the name is correct in env
+
+# permissions:
+#   contents: read
+#   packages: write
+
 env:
   REGISTRY: ghcr.io
-  PROVIDER_UI_IMAGE: ${{ github.repository_owner }}/wren-setup-provider-ui  # push to my docker hub
+  PROVIDER_UI_IMAGE: ${{ github.repository_owner }}/wren-setup-provider-ui
+
 
 jobs:
-  build:
+  build-image:
+    outputs:
+      tag_name: ${{ steps.prep-tag.outputs.TAG_NAME }}
+
     strategy:
+      fail-fast: false
       matrix:
         arch:
-          - runner: ubuntu-latest
+          - runner: ubuntu-latest         
             platform: linux/amd64
-          - runner: ubuntu-24.04-arm
+          - runner: ubuntu-24.04-arm      
             platform: linux/arm64
+
     runs-on: ${{ matrix.arch.runner }}
+
     steps:
       - uses: actions/checkout@v4
 
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
+          registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Prepare tag
-        id: tag
+        id: prep-tag
         run: |
           if [ -n "${{ github.event.inputs.tag_name }}" ]; then
-            echo "TAG=${{ github.event.inputs.tag_name }}" >> $GITHUB_ENV
+            TAG="${{ github.event.inputs.tag_name }}"
           else
-            echo "TAG=commit-$(git log -1 --pretty=%h)" >> $GITHUB_ENV
+            TAG="commit-$(git rev-parse --short HEAD)"
           fi
+          echo "TAG_NAME=$TAG" >> "$GITHUB_OUTPUT"
+          echo "TAG=$TAG"       >> "$GITHUB_ENV"
 
-      - name: Setup Docker Buildx
+      - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and Push
+      - name: Prepare platform env
+        run: |
+          echo "PLATFORM_PAIR=${{ matrix.arch.platform // '/' '-'}}" >> "$GITHUB_ENV"
+
+      - name: Build and push by digest
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: ./wren-ai-service/tools/providers-setup
           file: ./wren-ai-service/tools/providers-setup/Dockerfile
           platforms: ${{ matrix.arch.platform }}
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.PROVIDER_UI_IMAGE }}:${{ env.TAG }}
+          labels: ${{ env.REGISTRY }}/${{ env.PROVIDER_UI_IMAGE }}
+          outputs: |
+            type=image,\
+            name=${{ env.REGISTRY }}/${{ env.PROVIDER_UI_IMAGE }},\
+            push-by-digest=true,\
+            name-canonical=true,\
+            push=true
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    needs: [build-image]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker meta (tag list)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.PROVIDER_UI_IMAGE }}
+          tags: |
+            ${{ needs.build-image.outputs.tag_name }}
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create & push manifest list
+        working-directory: /tmp/digests
+        run: |
+          TAGS=$(jq -cr '.tags | map("--tag " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+          docker buildx imagetools create \
+          $(printf '${{ env.REGISTRY }}/${{ env.PROVIDER_UI_IMAGE }}@sha256:%s ' *) \
+          $TAGS
+
