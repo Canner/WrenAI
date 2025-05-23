@@ -3,6 +3,7 @@ export enum DataSourceName {
   DUCKDB = 'DUCKDB',
   POSTGRES = 'POSTGRES',
   MYSQL = 'MYSQL',
+  ORACLE = 'ORACLE',
   MSSQL = 'MSSQL',
   CLICK_HOUSE = 'CLICK_HOUSE',
   TRINO = 'TRINO',

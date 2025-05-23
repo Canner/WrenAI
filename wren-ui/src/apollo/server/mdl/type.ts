@@ -88,6 +88,7 @@ export enum WrenEngineDataSourceType {
   CANNER = 'CANNER',
   CLICKHOUSE = 'CLICKHOUSE',
   MSSQL = 'MSSQL',
+  ORACLE = 'ORACLE',
   MYSQL = 'MYSQL',
   POSTGRES = 'POSTGRES',
   SNOWFLAKE = 'SNOWFLAKE',
