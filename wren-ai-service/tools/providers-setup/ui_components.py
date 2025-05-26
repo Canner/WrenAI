@@ -373,7 +373,7 @@ def render_pipeline_config():
                 else:
                     st.markdown(f"**{key}:** `{value}`")
 
-            if st.button("💾  Save this llm", key=f"save_{pipe_name}"):
+            if st.button("💾  Save this llm", key=f"save_{pipe_name}_{original_idx}"):
                 # ✅ use original index to update llm
                 st.session_state[ConfigState.PIPELINE_KEY]["pipes"][original_idx]["llm"] = selected_llm
                 st.success(f"✅ Updated pipeline `{pipe_name}` LLM to `{selected_llm}`")

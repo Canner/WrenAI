@@ -26,6 +26,7 @@ class ConfigState:
         cls.init_apikey()
         cls.init_example_configs()
 
+
     @classmethod
     def init_llm_forms(cls, llm_block, force=False):
         """
@@ -109,14 +110,46 @@ class ConfigState:
     def init_pipeline(cls, pipeline_block, force=False):
         """
         Initialize pipeline configuration block.
+        Compare with the latest config.example.yaml and add missing pipelines.
         """
+        from config_loader import fetch_yaml_from_url
+        from constants import CONFIG_URL
+
         if not force and cls.PIPELINE_KEY in st.session_state and st.session_state[cls.PIPELINE_KEY]:
             return
 
+        # Fetch the latest config.example.yaml
+        latest_config = fetch_yaml_from_url(CONFIG_URL)
+        latest_pipeline = None
+
+        # Extract the pipeline block from the latest config
+        for block in latest_config:
+            if block.get('type') == 'pipeline':
+                latest_pipeline = block
+                break
+
+        # Initialize current pipeline
+        current_pipes = pipeline_block.get("pipes", [])
         st.session_state[cls.PIPELINE_KEY] = {
             "type": "pipeline",
-            "pipes": pipeline_block.get("pipes", []),
+            "pipes": current_pipes,
         }
+
+        # Compare and add missing pipes
+        if latest_pipeline:
+            latest_pipes = latest_pipeline.get("pipes", [])
+            current_pipe_names = {pipe.get("name") for pipe in current_pipes if pipe.get("name")}
+            new_pipes = [pipe for pipe in latest_pipes if pipe.get("name") not in current_pipe_names]
+
+            if new_pipes:
+                st.session_state[cls.PIPELINE_KEY]["pipes"].extend(new_pipes)
+                # Show success message for each new pipe added
+                for pipe in new_pipes:
+                    if pipe.get("name"):
+                        st.success(f"✅ Added new pipeline: {pipe['name']}")
+
+        else:
+            st.warning("⚠️ Could not find pipeline configuration in the latest config.example.yaml.")
 
     @classmethod
     def init_apikey(cls, force=False):
