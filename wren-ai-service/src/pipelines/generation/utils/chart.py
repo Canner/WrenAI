@@ -90,8 +90,9 @@ class ChartGenerationPostProcessor:
                     "$schema"
                 ] = "https://vega.github.io/schema/vega-lite/v5.json"
                 chart_schema["data"] = {"values": sample_data}
-                chart_schema["autosize"] = {"type": "fit", "contains": "padding"}
-                chart_schema["height"] = 350
+                if "hconcat" not in chart_schema and "vconcat" not in chart_schema:
+                    chart_schema["autosize"] = {"type": "fit-x", "contains": "padding"}
+                    chart_schema["width"] = 700
                 if custom_theme:
                     if "config" not in chart_schema:
                         chart_schema["config"] = {}
@@ -438,7 +439,7 @@ Sample schema:
 **Heatmap**
 When to use:
 - Use when you need to visualize magnitude or density across two categorical (or binned) dimensions.
-- Ideal for correlation matrices, frequency tables (e.g. hour-of-day × day-of-week traffic), or any scenario where color intensity encodes value.
+- Ideal for correlation matrices, frequency tables (e.g. hour-of-day x day-of-week traffic), or any scenario where color intensity encodes value.
 Sample schema:
 {
   "mark": "rect",
@@ -680,6 +681,92 @@ Sample schema:
       }
     }
   ]
+}
+
+**Box plot**
+When to use:
+- Use when you want to visualize the distribution of a numeric variable across categories.
+- Ideal for comparing the spread and central tendency of data across different groups.
+Sample schema:
+{
+  "mark": "boxplot",
+  "encoding": {
+    "x": {"field": "Species", "type": "nominal"},
+    "color": {"field": "Species", "type": "nominal", "legend": null},
+    "y": {
+      "field": "Body Mass (g)",
+      "type": "quantitative",
+      "scale": {"zero": false}
+    }
+  }
+}
+
+**Population pyramid**
+When to use:
+- Use it for demographic analysis, comparative cohort studies, monitoring population change, policy and resource planning
+- Ideal for two complementary groups, ordered, exhaustive cohorts, sufficient sample size, desire for shape-based insights, clear labeling and axis scaling
+Sample schema:
+{
+  "spacing": 0,
+  "hconcat": [{
+    "transform": [{
+      "filter": {"field": "gender", "equal": "Female"}
+    }],
+    "title": "Female",
+    "mark": "bar",
+    "encoding": {
+      "y": {
+        "field": "age", "axis": null, "sort": "descending"
+      },
+      "x": {
+        "aggregate": "sum", "field": "people",
+        "title": "population",
+        "axis": {"format": "s"},
+        "sort": "descending"
+      },
+      "color": {
+        "field": "gender",
+        "scale": {"range": ["#675193", "#ca8861"]},
+        "legend": null
+      }
+    }
+  }, {
+    "width": 20,
+    "view": {"stroke": null},
+    "mark": {
+      "type": "text",
+      "align": "center"
+    },
+    "encoding": {
+      "y": {"field": "age", "type": "ordinal", "axis": null, "sort": "descending"},
+      "text": {"field": "age", "type": "quantitative"}
+    }
+  }, {
+    "transform": [{
+      "filter": {"field": "gender", "equal": "Male"}
+    }],
+    "title": "Male",
+    "mark": "bar",
+    "encoding": {
+      "y": {
+        "field": "age", "title": null,
+        "axis": null, "sort": "descending"
+      },
+      "x": {
+        "aggregate": "sum", "field": "people",
+        "title": "population",
+        "axis": {"format": "s"}
+      },
+      "color": {
+        "field": "gender",
+        "legend": null
+      }
+    }
+  }],
+  "config": {
+    "view": {"stroke": null},
+    "axis": {"grid": false}
+  }
 }
 """
 
