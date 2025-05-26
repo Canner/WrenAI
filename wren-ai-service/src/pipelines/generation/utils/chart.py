@@ -138,6 +138,8 @@ CHART_GENERATION_GENERAL_INSTRUCTIONS = """
 - If the sample data is empty, return an empty string as the value of the "chart_schema" field and explain the reason in the "reasoning" field.
 - If there is only one column in the sample data and the column is not a number, return an empty string as the value of the "chart_schema" field and explain the reason in the "reasoning" field.
 - If there is only one column in the sample data and the column is a number, chart type should be "text", the font size should be 60, width should be 300, height should be 100.
+- If user is asking for a chart showing proportion/percentage by a certain column, chart type should be "pie chart".
+- For charts with dual y-axes, evaluate the scale of each y-axis separately.
 """
 
 
