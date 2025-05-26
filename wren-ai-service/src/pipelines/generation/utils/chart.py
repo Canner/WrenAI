@@ -142,7 +142,7 @@ CHART_GENERATION_GENERAL_INSTRUCTIONS = """
 - The language of the "title" field should be the same as the language provided by the user.
 - If the sample data is empty, return an empty string as the value of the "chart_schema" field and explain the reason in the "reasoning" field.
 - If there is only one column in the sample data and the column is not a number, return an empty string as the value of the "chart_schema" field and explain the reason in the "reasoning" field.
-- If there is only one column in the sample data and the column is a number, chart type should be "text".
+- If there is only one column in the sample data and the column is a number, chart type should be "text" and the font size should be 60.
 """
 
 
