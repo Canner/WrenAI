@@ -92,7 +92,7 @@ class ChartGenerationPostProcessor:
                 chart_schema["data"] = {"values": sample_data}
                 if "hconcat" not in chart_schema and "vconcat" not in chart_schema:
                     chart_schema["autosize"] = {"type": "fit-x", "contains": "padding"}
-                    chart_schema["width"] = 700
+                    chart_schema["height"] = 320
                 if custom_theme:
                     if "config" not in chart_schema:
                         chart_schema["config"] = {}
@@ -550,7 +550,7 @@ Sample schema:
           "axis": null,
           "sort": null,
           "scale": {
-            "padding": 0.5
+            "padding": 0.3
           }
         },
         "color": {
@@ -598,7 +598,7 @@ Sample schema:
           "sort": null
         },
         "yOffset": {
-          "value": -9
+          "value": -12
         },
         "text": {
           "condition": {
