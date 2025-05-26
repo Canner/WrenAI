@@ -67,7 +67,6 @@ class ChartResultRequest(BaseModel):
 class ChartResult(BaseModel):
     reasoning: str
     chart_schema: dict
-    chart_type: str = ""  # deprecated
 
 
 class ChartResultResponse(BaseModel):

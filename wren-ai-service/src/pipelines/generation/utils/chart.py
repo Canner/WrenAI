@@ -81,7 +81,6 @@ class ChartGenerationPostProcessor:
         try:
             generation_result = orjson.loads(replies[0])
             reasoning = generation_result.get("reasoning", "")
-            chart_type = generation_result.get("chart_type", "")
             if chart_schema := generation_result.get("chart_schema", {}):
                 # sometimes the chart_schema is still in string format
                 if isinstance(chart_schema, str):
@@ -99,7 +98,6 @@ class ChartGenerationPostProcessor:
                     "results": {
                         "chart_schema": chart_schema,
                         "reasoning": reasoning,
-                        "chart_type": chart_type,
                     }
                 }
 
@@ -107,7 +105,6 @@ class ChartGenerationPostProcessor:
                 "results": {
                     "chart_schema": {},
                     "reasoning": reasoning,
-                    "chart_type": chart_type,
                 }
             }
         except ValidationError as e:
@@ -117,7 +114,6 @@ class ChartGenerationPostProcessor:
                 "results": {
                     "chart_schema": {},
                     "reasoning": "",
-                    "chart_type": "",
                 }
             }
         except Exception as e:
@@ -127,7 +123,6 @@ class ChartGenerationPostProcessor:
                 "results": {
                     "chart_schema": {},
                     "reasoning": "",
-                    "chart_type": "",
                 }
             }
 
@@ -149,7 +144,6 @@ CHART_GENERATION_GENERAL_INSTRUCTIONS = """
 class ChartGenerationResults(BaseModel):
     reasoning: str
     chart_schema: dict
-    chart_type: str = ""  # deprecated
 
 
 CHART_GENERATION_MODEL_KWARGS = {
