@@ -12,6 +12,7 @@ from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.chart import (
     CHART_GENERATION_GENERAL_INSTRUCTIONS,
     CHART_GENERATION_MODEL_KWARGS,
+    SAMPLE_VEGA_LITE_SCHEMA_EXAMPLES,
     ChartGenerationPostProcessor,
     ChartSchemaPreprocessor,
     load_custom_theme,
@@ -28,6 +29,10 @@ You are a vega-lite chart expert. You are given a chart schema, a query, and a S
 
 {CHART_GENERATION_GENERAL_INSTRUCTIONS}
 - The content of the chart schema should be compatible to the SQL query that fulfills the user's query.
+
+### VEGA-LITE SCHEMA EXAMPLES ###
+
+{SAMPLE_VEGA_LITE_SCHEMA_EXAMPLES}
 
 ### OUTPUT FORMAT ###
 

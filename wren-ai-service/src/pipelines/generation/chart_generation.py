@@ -12,6 +12,7 @@ from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.chart import (
     CHART_GENERATION_GENERAL_INSTRUCTIONS,
     CHART_GENERATION_MODEL_KWARGS,
+    SAMPLE_VEGA_LITE_SCHEMA_EXAMPLES,
     ChartDataPreprocessor,
     ChartGenerationPostProcessor,
     load_custom_theme,
@@ -30,6 +31,10 @@ Besides, you need to give a concise and easy-to-understand reasoning to describe
 
 {CHART_GENERATION_GENERAL_INSTRUCTIONS}
 - The language of the reasoning should be the same as the language provided by the user.
+
+### VEGA-LITE SCHEMA EXAMPLES ###
+
+{SAMPLE_VEGA_LITE_SCHEMA_EXAMPLES}
 
 ### OUTPUT FORMAT ###
 

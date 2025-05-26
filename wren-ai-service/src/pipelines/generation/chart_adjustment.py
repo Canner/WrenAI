@@ -12,6 +12,7 @@ from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.chart import (
     CHART_GENERATION_GENERAL_INSTRUCTIONS,
     CHART_GENERATION_MODEL_KWARGS,
+    SAMPLE_VEGA_LITE_SCHEMA_EXAMPLES,
     ChartDataPreprocessor,
     ChartGenerationPostProcessor,
     ChartSchemaPreprocessor,
@@ -35,6 +36,10 @@ Besides, you need to give a concise and easy-to-understand reasoning to describe
 - If you think the adjustment command is not suitable for the data, you can return an empty string for the schema and give reasoning to explain why.
 - If the user provides an image, you need to use the image as reference to generate a new chart schema that follows user's adjustment command.
 - The language of the reasoning should be the same as the language provided by the user.
+
+### VEGA-LITE SCHEMA EXAMPLES ###
+
+{SAMPLE_VEGA_LITE_SCHEMA_EXAMPLES}
 
 ### OUTPUT FORMAT ###
 

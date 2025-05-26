@@ -92,7 +92,9 @@ class ChartGenerationPostProcessor:
                 chart_schema["data"] = {"values": sample_data}
 
                 if custom_theme:
-                    chart_schema["config"] = custom_theme
+                    if "config" not in chart_schema:
+                        chart_schema["config"] = {}
+                    chart_schema["config"].update(custom_theme)
 
                 return {
                     "results": {
@@ -133,13 +135,372 @@ CHART_GENERATION_GENERAL_INSTRUCTIONS = """
 - Please omit the "$schema" field while generating the vega-lite schema.
 - Please omit the "description" field while generating the vega-lite schema.
 - Please remember to add the "title" field to the vega-lite schema.
-- Please remember to add the legend to the vega-lite schema.
+- Please remember to add the legend to the vega-lite schema if necessary.
 - The language of the "title" field should be the same as the language provided by the user.
 - If the sample data is empty, return an empty string as the value of the "chart_schema" field and explain the reason in the "reasoning" field.
 - If there is only one column in the sample data and the column is not a number, return an empty string as the value of the "chart_schema" field and explain the reason in the "reasoning" field.
 - If there is only one column in the sample data and the column is a number, chart type should be "text", the font size should be 60, width should be 300, height should be 100.
 - If user is asking for a chart showing proportion/percentage by a certain column, chart type should be "pie chart".
-- For charts with dual y-axes, evaluate the scale of each y-axis separately.
+"""
+
+SAMPLE_VEGA_LITE_SCHEMA_EXAMPLES = """
+Following are some examples of vega-lite schema only including "key fields":
+
+**Scatter plot with color**
+When to use:
+- Use when you need to explore or show the relationship between two (or three, with color/size) quantitative variables.
+- Ideal for spotting correlations, clusters, trends, and outliers (e.g. height vs. weight, advertising spend vs. sales).
+Sample schema:
+{
+  "mark": "point",
+  "encoding": {
+    "x": {
+      "field": "Horsepower",
+      "type": "quantitative",
+      "axis": {"title": "Horsepower"}
+    },
+    "y": {
+      "field": "Miles_per_Gallon",
+      "type": "quantitative",
+      "axis": {"title": "Miles per Gallon"}
+    },
+    "color": {
+      "field": "Origin",
+      "type": "nominal",
+      "legend": {"title": "Origin"}
+    }
+  }
+}
+
+**Stacked histogram**
+When to use:
+- Use when you want to compare the distribution of a numeric variable across two or more categories.
+- Ideal for seeing both overall frequency and how groups (e.g. genders, segments) contribute within each bin.
+Sample schema:
+{
+  "mark": "bar",
+  "encoding": {
+    "x": {
+      "field": "weight",
+      "type": "quantitative",
+      "bin": { "maxbins": 30 },
+      "axis": {
+        "title": "weight →"
+      }
+    },
+    "y": {
+      "aggregate": "count",
+      "type": "quantitative",
+      "stack": "zero",
+      "axis": {
+        "title": "Frequency"
+      }
+    },
+    "color": {
+      "field": "gender",
+      "type": "nominal",
+      "scale": {
+        "domain": ["female", "male"],
+        "range": ["steelblue", "gold"]
+      },
+      "legend": {
+        "title": ""
+      }
+    }
+  }
+}
+
+**Layered Plot with Dual-Axis**
+When to use:
+- Use when you have two related metrics with very different scales but want to show them on the same domain (e.g. time).
+- Ideal for contrasting trends—like overlaying revenue (in millions) and number of transactions (in thousands) over months—while cautioning that dual axes can be misleading if over-interpreted.
+Sample schema:
+{
+  "encoding": {
+    "x": {
+      "timeUnit": "month",
+      "field": "date",
+      "axis": {"format": "%b", "title": null}
+    }
+  },
+  "layer": [
+    {
+      "mark": {"opacity": 0.3, "type": "area", "color": "#85C5A6"},
+      "encoding": {
+        "y": {
+          "aggregate": "average",
+          "field": "temp_max",
+          "scale": {"domain": [0, 30]},
+          "title": "Avg. Temperature (°C)",
+          "axis": {"titleColor": "#85C5A6"}
+        },
+        "y2": {
+          "aggregate": "average",
+          "field": "temp_min"
+        }
+      }
+    },
+    {
+      "mark": {"stroke": "#85A9C5", "type": "line", "interpolate": "monotone"},
+      "encoding": {
+        "y": {
+          "aggregate": "average",
+          "field": "precipitation",
+          "title": "Precipitation (inches)",
+          "axis": {"titleColor":"#85A9C5"}
+        }
+      }
+    }
+  ],
+  "resolve": {"scale": {"y": "independent"}}
+}
+
+**Heatmap**
+When to use:
+- Use when you need to visualize magnitude or density across two categorical (or binned) dimensions.
+- Ideal for correlation matrices, frequency tables (e.g. hour-of-day × day-of-week traffic), or any scenario where color intensity encodes value.
+Sample schema:
+{
+  "mark": "rect",
+  "encoding": {
+    "x": {
+      "field": "orders_order_date_week",
+      "type": "temporal"
+    },
+    "y": {
+      "field": "orders_status",
+      "type": "nominal"
+    },
+    "color": {
+      "field": "orders_total_order_amount",
+      "type": "quantitative",
+      "aggregate": "sum",
+      "scale": {
+        "scheme": "reds"
+      }
+    },
+    "tooltip": [
+      {
+        "field": "orders_total_order_amount",
+        "type": "quantitative",
+        "aggregate": "sum"
+      }
+    ]
+  }
+}
+
+**Bubble plot**
+When to use:
+- Use when you want to extend a scatter plot by encoding a third quantitative variable in bubble size (and possibly a fourth in color).
+- Ideal for three-dimensional comparisons—like plotting companies by revenue (x), profit margin (y), and market cap (bubble size).
+Sample schema:
+{
+  "mark": "point",
+  "encoding": {
+    "x": {
+      "field": "orders_order_date_week",
+      "type": "temporal"
+    },
+    "y": {
+      "field": "orders_total_order_amount",
+      "type": "quantitative"
+    },
+    "size": {
+      "field": "customers_unique_customer_count",
+      "type": "quantitative"
+    }
+  }
+}
+
+**Funnel chart**
+When to use: 
+- Use when you need to show a process that progresses through discrete stages with drop-offs at each step.
+- Ideal for conversion analysis—e.g. website visits → product views → add-to-cart → purchases.
+Sample schema:
+{
+  "config": {
+    "view": {
+      "strokeWidth": 0
+    }
+  },
+  "transform": [
+    {
+      "calculate": "datum.orders_total_order_amount + ' ' + datum.orders_status",
+      "as": "label"
+    },
+    {
+      "window": [
+        {
+          "op": "lag",
+          "field": "orders_total_order_amount",
+          "as": "previous_value"
+        }
+      ],
+      "frame": [
+        1,
+        0
+      ]
+    },
+    {
+      "calculate": "datum.previous_value ? (datum.orders_total_order_amount / datum.previous_value) * 100 : null",
+      "as": "percent_of_previous"
+    },
+    {
+      "calculate": "isValid(datum.percent_of_previous) ? '↓ ' + format(datum.percent_of_previous, '.1f') + '%' : 'N/A'",
+      "as": "change_label"
+    }
+  ],
+  "layer": [
+    {
+      "mark": {
+        "type": "bar",
+        "color": "#40817c"
+      },
+      "encoding": {
+        "x": {
+          "field": "orders_total_order_amount",
+          "type": "quantitative",
+          "stack": "center",
+          "axis": null
+        },
+        "y": {
+          "field": "orders_status",
+          "type": "nominal",
+          "axis": null,
+          "sort": null,
+          "scale": {
+            "padding": 0.5
+          }
+        },
+        "color": {
+          "field": "orders_status",
+          "scale": {
+            "range": [
+              "#bde4e2",
+              "#a2d0ce",
+              "#87bcb9",
+              "#6ea8a5",
+              "#569490",
+              "#40817c"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "mark": {
+        "type": "text",
+        "color": "white"
+      },
+      "encoding": {
+        "y": {
+          "field": "orders_status",
+          "type": "nominal",
+          "axis": null,
+          "sort": null
+        },
+        "text": {
+          "field": "label"
+        }
+      }
+    },
+    {
+      "mark": {
+        "type": "text",
+        "color": "black"
+      },
+      "encoding": {
+        "y": {
+          "field": "orders_status",
+          "type": "nominal",
+          "axis": null,
+          "sort": null
+        },
+        "yOffset": {
+          "value": -9
+        },
+        "text": {
+          "condition": {
+            "test": "datum.change_label !== 'N/A'",
+            "field": "change_label"
+          },
+          "value": ""
+        }
+      }
+    }
+  ]
+}
+
+**Map chart**
+When to use:
+- Use when your data has a geographic component and you want to reveal spatial patterns.
+- Ideal for choropleth maps (e.g. population density, election results by region) or symbol maps (e.g. store locations sized by sales).
+Sample schema:
+{
+  "projection": {
+    "type": "mercator",
+    "scale": 100, // Change scale to zoom into the map
+    "center": [
+      10,
+      50
+    ]
+  },
+  "layer": [
+    {
+      "data": {
+        "url": "https://vega.github.io/vega-lite/data/world-110m.json",
+        "format": {
+          "type": "topojson",
+          "feature": "countries"
+        }
+      },
+      "mark": {
+        "fill": "lightgray",
+        "type": "geoshape",
+        "stroke": "white"
+      }
+    },
+    {
+      "mark": "circle",
+      "encoding": {
+        "size": {
+          "type": "quantitative",
+          "field": "orders_total_order_amount",
+          "legend": {
+            "title": "Total Order Amount"
+          }
+        },
+        "color": {
+          "field": "orders_status",
+          "type": "nominal",
+          "legend": {
+            "title": "Order Status"
+          }
+        },
+        "tooltip": [
+          {
+            "type": "ordinal",
+            "field": "orders_status",
+            "title": "Status"
+          },
+          {
+            "type": "quantitative",
+            "field": "orders_total_order_amount",
+            "title": "Total Order Amount"
+          }         
+        ],
+        "latitude": {
+          "type": "quantitative",
+          "field": "latitude"
+        },
+        "longitude": {
+          "type": "quantitative",
+          "field": "longitude"
+        }
+      }
+    }
+  ]
+}
 """
 
 
