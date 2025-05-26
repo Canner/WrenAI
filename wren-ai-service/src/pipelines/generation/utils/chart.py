@@ -90,7 +90,8 @@ class ChartGenerationPostProcessor:
                     "$schema"
                 ] = "https://vega.github.io/schema/vega-lite/v5.json"
                 chart_schema["data"] = {"values": sample_data}
-
+                chart_schema["autosize"] = {"type": "fit", "contains": "padding"}
+                chart_schema["height"] = 350
                 if custom_theme:
                     if "config" not in chart_schema:
                         chart_schema["config"] = {}
@@ -140,11 +141,190 @@ CHART_GENERATION_GENERAL_INSTRUCTIONS = """
 - If the sample data is empty, return an empty string as the value of the "chart_schema" field and explain the reason in the "reasoning" field.
 - If there is only one column in the sample data and the column is not a number, return an empty string as the value of the "chart_schema" field and explain the reason in the "reasoning" field.
 - If there is only one column in the sample data and the column is a number, chart type should be "text", the font size should be 60, width should be 300, height should be 100.
-- If user is asking for a chart showing proportion/percentage by a certain column, chart type should be "pie chart".
+- If user is asking for a chart showing proportion/percentage by a certain column, chart type should be "donut chart".
+- For horizontal bar charts, the order of the bars should be sorted descendingly by the value of the y-axis.
 """
 
 SAMPLE_VEGA_LITE_SCHEMA_EXAMPLES = """
 Following are some examples of vega-lite schema only including "key fields":
+
+**Single value chart**
+When to use:
+- Use when you want to show a single value.
+- Ideal for showing a single value, such as a total, average, or count.
+Sample schema:
+{
+    "mark": "text",
+    "encoding": {
+        "text": {
+            "field": "max_order_amount",
+            "type": "quantitative"
+        },
+        "size": {
+            "value": 60
+        }
+    }
+}
+
+**Vertical bar chart**
+When to use:
+- Use when you want to compare the values of different categories.
+- Ideal for comparing values across categories, such as sales by product or revenue by region.
+Sample schema:
+{
+    "mark": "bar",
+    "encoding": {
+        "x": {
+            "field":"plan_type",
+            "type":"nominal",
+            "axis":{
+                "title":"Plan Type"
+            }
+        },
+        "y": {
+            "field":"registrations",
+            "type":"quantitative",
+            "axis":{
+                "title":"Registrations"
+            }
+        },
+        "color": {
+            "field":"plan_type",
+            "type":"nominal",
+            "legend": {
+                "title":"Plan Type"
+            }
+        }
+    }
+}
+
+**Horizontal bar chart**
+When to use:
+- Use when you want to compare the values of different categories and each categorical value is long or there are more than 10 categories.
+- Ideal for comparing values across categories, such as sales by product or revenue by region.
+Sample schema:
+{
+    "mark": "bar",
+    "encoding": {
+        "y": {
+            "field":"tutorial_title",
+            "type":"nominal",
+            "axis":{
+                "title":"Tutorial Title"
+            }
+        },
+        "x": {
+            "field":"total_view_time",
+            "type":"quantitative",
+            "axis":{
+                "title":"Total View Time (Minutes)"
+            }
+        },
+        "color": {
+            "field":"tutorial_title",
+            "type":"nominal",
+            "legend": {
+                "title":"Tutorial Title"
+            }
+        }
+        }
+}
+
+**Area chart**
+When to use:
+- Use when you want to show how values develop over time.
+- Ideal when the total is as important as its parts.
+- Ideal when there are big differences between your values.
+- Ideal when you're showing multiple series over time.
+- Ideal when you have many data points.
+Sample schema:
+{
+    "mark": "area",
+    "encoding": {
+        "x": {
+            "field":"month",
+            "type":"temporal",
+            "axis":{
+                "title":"Month",
+                "format":"%b"
+            }
+        },
+        "y": {
+            "field":"Revenue",
+            "type":"quantitative",
+            "axis":{
+                "title":"Revenue"
+            }
+        },
+        "color": {
+            "field":"Category",
+            "type":"nominal",
+            "legend": {
+                "title":"Product Category"
+            }
+        }
+    }
+}
+
+**Stacked bar chart**
+When to use:
+- Use when you want to compare the values of different categories and the values of the categories are related.
+- Ideal for comparing values across categories, such as sales by product or revenue by region.
+Sample schema:
+{
+    "mark": "bar",
+    "encoding": {
+        "x": {
+            "field":"quarter",
+            "type":"ordinal",
+            "axis": {
+                "title":"Quarter"
+            }
+        },
+        "y": {
+            "field":"Profit",
+            "type":"quantitative",
+            "axis": {
+                "title":"Profit"
+            }
+        },
+        "color": {
+            "field":"Region",
+            "type":"nominal",
+            "legend": {
+                "title":"Region"
+            }
+        }
+    }
+}
+
+**Line chart**
+When to use:
+- Use when you want to show the trend of a numeric variable over time.
+- Ideal for showing the trend of a numeric variable over time.
+- Ideal when you have small changes between your values.
+- Ideal when you have lots of x-axis values.
+Sample schema:
+{
+    "mark": "line",
+    "encoding": {
+        "x": {
+            "field":"month",
+            "type":"temporal",
+            "axis":{
+                "title":"Month",
+                "format":"%b"
+            }
+        },
+        "y": {
+            "field":"avg_duration",
+            "type":"quantitative",
+            "axis":{
+                "title":"Average Session Duration (minutes)"
+            }
+        }
+    }
+}
 
 **Scatter plot with color**
 When to use:
@@ -390,7 +570,7 @@ Sample schema:
     {
       "mark": {
         "type": "text",
-        "color": "white"
+        "color": "black"
       },
       "encoding": {
         "y": {
