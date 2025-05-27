@@ -230,6 +230,7 @@ def check_using_db_schemas_without_pruning(
     dbschema_retrieval: list[Document],
     encoding: tiktoken.Encoding,
     enable_column_pruning: bool,
+    context_window_size: int,
 ) -> dict:
     retrieval_results = []
     has_calculated_field = False
@@ -269,7 +270,7 @@ def check_using_db_schemas_without_pruning(
         retrieval_result["table_ddl"] for retrieval_result in retrieval_results
     ]
     _token_count = len(encoding.encode(" ".join(table_ddls)))
-    if _token_count > 100_000 or enable_column_pruning:
+    if _token_count > context_window_size or enable_column_pruning:
         return {
             "db_schemas": [],
             "tokens": _token_count,
@@ -465,6 +466,7 @@ class DbSchemaRetrieval(BasicPipeline):
 
         self._configs = {
             "encoding": _encoding,
+            "context_window_size": llm_provider.get_context_window_size(),
         }
 
         super().__init__(

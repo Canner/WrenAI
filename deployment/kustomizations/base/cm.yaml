@@ -55,18 +55,21 @@ data:
     models:
     - alias: default
       model: gpt-4.1-nano-2025-04-14
+      context_window_size: 1000000
       kwargs:
         max_tokens: 4096
         n: 1
         seed: 0
         temperature: 0
     - model: gpt-4.1-mini-2025-04-14
+      context_window_size: 1000000
       kwargs:
         max_tokens: 4096
         n: 1
         seed: 0
         temperature: 0
     - model: gpt-4.1-2025-04-14
+      context_window_size: 1000000
       kwargs:
         max_tokens: 4096
         n: 1
