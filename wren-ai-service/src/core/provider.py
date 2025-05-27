@@ -14,6 +14,9 @@ class LLMProvider(metaclass=ABCMeta):
     def get_model_kwargs(self):
         return self._model_kwargs
 
+    def get_context_window_size(self):
+        return self._context_window_size
+
 
 class EmbedderProvider(metaclass=ABCMeta):
     @abstractmethod

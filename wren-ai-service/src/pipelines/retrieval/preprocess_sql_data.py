@@ -18,6 +18,7 @@ logger = logging.getLogger("wren-ai-service")
 def preprocess(
     sql_data: Dict,
     encoding: tiktoken.Encoding,
+    context_window_size: int,
 ) -> Dict:
     def reduce_data_size(data: list, reduction_step: int = 50) -> list:
         """Reduce the size of data by removing elements from the end.
@@ -48,8 +49,8 @@ def preprocess(
     _token_count = len(encoding.encode(str(sql_data)))
     num_rows_used_in_llm = len(sql_data.get("data", []))
     iteration = 0
-
-    while _token_count > 100_000:
+    
+    while _token_count > context_window_size:
         if iteration > 1000:
             """
             Avoid infinite loop
@@ -89,6 +90,7 @@ class PreprocessSqlData(BasicPipeline):
 
         self._configs = {
             "encoding": _encoding,
+            "context_window_size": llm_provider.get_context_window_size(),
         }
 
         super().__init__(Driver({}, sys.modules[__name__], adapter=base.DictResult()))

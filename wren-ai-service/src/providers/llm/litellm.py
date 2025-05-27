@@ -31,6 +31,7 @@ class LitellmLLMProvider(LLMProvider):
         api_version: Optional[str] = None,
         kwargs: Optional[Dict[str, Any]] = None,
         timeout: float = 120.0,
+        context_window_size: Optional[int] = 200000,
         **_,
     ):
         self._model = model
@@ -39,6 +40,7 @@ class LitellmLLMProvider(LLMProvider):
         self._api_version = api_version
         self._model_kwargs = kwargs
         self._timeout = timeout
+        self._context_window_size = context_window_size
 
     def get_generator(
         self,
