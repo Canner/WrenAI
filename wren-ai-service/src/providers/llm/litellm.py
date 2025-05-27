@@ -16,7 +16,7 @@ from src.providers.llm import (
     connect_chunks,
 )
 from src.providers.loader import provider
-from src.utils import remove_trailing_slash, extract_braces_content
+from src.utils import extract_braces_content, remove_trailing_slash
 
 
 @provider("litellm_llm")
@@ -31,7 +31,7 @@ class LitellmLLMProvider(LLMProvider):
         api_version: Optional[str] = None,
         kwargs: Optional[Dict[str, Any]] = None,
         timeout: float = 120.0,
-        context_window_size: Optional[int] = 200000,
+        context_window_size: int = 100000,
         **_,
     ):
         self._model = model
@@ -115,7 +115,9 @@ class LitellmLLMProvider(LLMProvider):
                 check_finish_reason(response)
 
             return {
-                "replies": [extract_braces_content(message.content) for message in completions],
+                "replies": [
+                    extract_braces_content(message.content) for message in completions
+                ],
                 "meta": [message.meta for message in completions],
             }
 
