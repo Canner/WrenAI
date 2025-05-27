@@ -774,6 +774,145 @@ Sample schema:
     "axis": {"grid": false}
   }
 }
+
+**Candlestick chart**
+When to use:
+- Use when you want to visualize the price movement of a security over time.
+- Ideal for financial analysis, technical analysis, and trend identification.
+Sample schema:
+{
+    "vconcat": [
+        {
+            "title": "Daily OHLC Candlestick Chart with Trading Signals (June 1 - July 31, 2009)",
+            "width": 700,
+            "height": 300,
+            "layer": [
+                {
+                    "mark": {
+                        "type": "rule"
+                    },
+                    "encoding": {
+                        "x": {
+                            "field": "date",
+                            "type": "temporal",
+                            "axis": {
+                                "title": "Date"
+                            }
+                        },
+                        "y": {
+                            "field": "low",
+                            "type": "quantitative",
+                            "axis": {
+                                "title": "Price"
+                            }
+                        },
+                        "y2": {
+                            "field": "high",
+                            "type": "quantitative"
+                        },
+                        "color": {
+                            "field": "signal",
+                            "type": "nominal",
+                            "legend": {
+                                "title": "Signal"
+                            },
+                            "scale": {
+                                "domain": [
+                                    "long",
+                                    "short",
+                                    "neutral"
+                                ],
+                                "range": [
+                                    "#2ca02c",
+                                    "#d62728",
+                                    "#7f7f7f"
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "mark": {
+                        "type": "bar",
+                        "size": 8
+                    },
+                    "encoding": {
+                        "x": {
+                            "field": "date",
+                            "type": "temporal"
+                        },
+                        "y": {
+                            "field": "open",
+                            "type": "quantitative"
+                        },
+                        "y2": {
+                            "field": "close",
+                            "type": "quantitative"
+                        },
+                        "color": {
+                            "field": "signal",
+                            "type": "nominal",
+                            "legend": null,
+                            "scale": {
+                                "domain": [
+                                    "long",
+                                    "short",
+                                    "neutral"
+                                ],
+                                "range": [
+                                    "#2ca02c",
+                                    "#d62728",
+                                    "#7f7f7f"
+                                ]
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "title": "Daily Return (%) by Trading Signal (June 1 - July 31, 2009)",
+            "width": 700,
+            "height": 120,
+            "mark": "bar",
+            "encoding": {
+                "x": {
+                    "field": "date",
+                    "type": "temporal",
+                    "axis": {
+                        "title": "Date"
+                    }
+                },
+                "y": {
+                    "field": "ret",
+                    "type": "quantitative",
+                    "axis": {
+                        "title": "Return (%)"
+                    }
+                },
+                "color": {
+                    "field": "signal",
+                    "type": "nominal",
+                    "legend": {
+                        "title": "Signal"
+                    },
+                    "scale": {
+                        "domain": [
+                            "long",
+                            "short",
+                            "neutral"
+                        ],
+                        "range": [
+                            "#2ca02c",
+                            "#d62728",
+                            "#7f7f7f"
+                        ]
+                    }
+                }
+            }
+        }
+    ]
+}
 """
 
 
