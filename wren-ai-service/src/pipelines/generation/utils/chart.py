@@ -91,7 +91,11 @@ class ChartGenerationPostProcessor:
                 ] = "https://vega.github.io/schema/vega-lite/v5.json"
                 chart_schema["data"] = {"values": sample_data}
                 if "hconcat" not in chart_schema and "vconcat" not in chart_schema:
-                    chart_schema["autosize"] = {"type": "fit", "contains": "padding"}
+                    chart_schema["autosize"] = {
+                        "type": "fit",
+                        "contains": "padding",
+                        "resize": True,
+                    }
                     chart_schema["height"] = 320
                     chart_schema["width"] = "container"
 
