@@ -90,6 +90,14 @@ class ChartGenerationPostProcessor:
                     "$schema"
                 ] = "https://vega.github.io/schema/vega-lite/v5.json"
                 chart_schema["data"] = {"values": sample_data}
+                if "mark" in chart_schema:
+                    if isinstance(chart_schema["mark"], str):
+                        chart_schema["mark"] = {
+                            "type": chart_schema["mark"],
+                            "tooltip": True,
+                        }
+                    else:
+                        chart_schema["mark"]["tooltip"] = True
                 if "hconcat" not in chart_schema and "vconcat" not in chart_schema:
                     chart_schema["autosize"] = {
                         "type": "fit",
