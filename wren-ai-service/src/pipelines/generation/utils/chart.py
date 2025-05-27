@@ -143,7 +143,8 @@ CHART_GENERATION_GENERAL_INSTRUCTIONS = """
 - Please omit the "$schema" field while generating the vega-lite schema.
 - Please omit the "description" field while generating the vega-lite schema.
 - Please remember to add the "title" field to the vega-lite schema.
-- Please remember to add the legend to the vega-lite schema if necessary.
+- Please remember to add the legend to the vega-lite schema.
+- Please remember to add the "tooltip" field to the vega-lite schema.
 - The language of the "title" field should be the same as the language provided by the user.
 - If the sample data is empty, return an empty string as the value of the "chart_schema" field and explain the reason in the "reasoning" field.
 - If there is only one column in the sample data and the column is not a number, return an empty string as the value of the "chart_schema" field and explain the reason in the "reasoning" field.
@@ -161,7 +162,7 @@ When to use:
 - Ideal for showing a single value, such as a total, average, or count.
 Sample schema:
 {
-    "mark": "text",
+    "mark": {"type": "text", "tooltip": True},
     "encoding": {
         "text": {
             "field": "max_order_amount",
@@ -179,7 +180,7 @@ When to use:
 - Ideal for comparing values across categories, such as sales by product or revenue by region.
 Sample schema:
 {
-    "mark": "bar",
+    "mark": {"type": "bar", "tooltip": True},
     "encoding": {
         "x": {
             "field":"plan_type",
@@ -211,7 +212,7 @@ When to use:
 - Ideal for comparing values across categories, such as sales by product or revenue by region.
 Sample schema:
 {
-    "mark": "bar",
+    "mark": {"type": "bar", "tooltip": True},
     "encoding": {
         "y": {
             "field":"tutorial_title",
@@ -246,7 +247,7 @@ When to use:
 - Ideal when you have many data points.
 Sample schema:
 {
-    "mark": "area",
+    "mark": {"type": "area", "tooltip": True},
     "encoding": {
         "x": {
             "field":"month",
@@ -279,7 +280,7 @@ When to use:
 - Ideal for comparing values across categories, such as sales by product or revenue by region.
 Sample schema:
 {
-    "mark": "bar",
+    "mark": {"type": "bar", "tooltip": True},
     "encoding": {
         "x": {
             "field":"quarter",
@@ -313,7 +314,7 @@ When to use:
 - Ideal when you have lots of x-axis values.
 Sample schema:
 {
-    "mark": "line",
+    "mark": {"type": "line", "tooltip": True},
     "encoding": {
         "x": {
             "field":"month",
@@ -339,7 +340,7 @@ When to use:
 - Ideal for spotting correlations, clusters, trends, and outliers (e.g. height vs. weight, advertising spend vs. sales).
 Sample schema:
 {
-  "mark": "point",
+  "mark": {"type": "point", "tooltip": True},
   "encoding": {
     "x": {
       "field": "Horsepower",
@@ -365,7 +366,7 @@ When to use:
 - Ideal for seeing both overall frequency and how groups (e.g. genders, segments) contribute within each bin.
 Sample schema:
 {
-  "mark": "bar",
+  "mark": {"type": "bar", "tooltip": True},
   "encoding": {
     "x": {
       "field": "weight",
@@ -412,7 +413,7 @@ Sample schema:
   },
   "layer": [
     {
-      "mark": {"opacity": 0.3, "type": "area", "color": "#85C5A6"},
+      "mark": {"opacity": 0.3, "type": "area", "color": "#85C5A6", "tooltip": True},
       "encoding": {
         "y": {
           "aggregate": "average",
@@ -428,7 +429,7 @@ Sample schema:
       }
     },
     {
-      "mark": {"stroke": "#85A9C5", "type": "line", "interpolate": "monotone"},
+      "mark": {"stroke": "#85A9C5", "type": "line", "interpolate": "monotone", "tooltip": True},
       "encoding": {
         "y": {
           "aggregate": "average",
@@ -439,7 +440,14 @@ Sample schema:
       }
     }
   ],
-  "resolve": {"scale": {"y": "independent"}}
+  "resolve": {
+    "scale": {
+      "y": "independent"
+    },
+    "legend": {
+      "color": "shared"
+    }
+  }
 }
 
 **Heatmap**
@@ -448,7 +456,7 @@ When to use:
 - Ideal for correlation matrices, frequency tables (e.g. hour-of-day x day-of-week traffic), or any scenario where color intensity encodes value.
 Sample schema:
 {
-  "mark": "rect",
+  "mark": {"type": "rect", "tooltip": True},
   "encoding": {
     "x": {
       "field": "orders_order_date_week",
@@ -482,7 +490,7 @@ When to use:
 - Ideal for three-dimensional comparisons—like plotting companies by revenue (x), profit margin (y), and market cap (bubble size).
 Sample schema:
 {
-  "mark": "point",
+  "mark": {"type": "point", "tooltip": True},
   "encoding": {
     "x": {
       "field": "orders_order_date_week",
@@ -541,7 +549,8 @@ Sample schema:
     {
       "mark": {
         "type": "bar",
-        "color": "#40817c"
+        "color": "#40817c",
+        "tooltip": True
       },
       "encoding": {
         "x": {
@@ -577,7 +586,8 @@ Sample schema:
     {
       "mark": {
         "type": "text",
-        "color": "black"
+        "color": "black",
+        "tooltip": True
       },
       "encoding": {
         "y": {
@@ -594,7 +604,8 @@ Sample schema:
     {
       "mark": {
         "type": "text",
-        "color": "black"
+        "color": "black",
+        "tooltip": True
       },
       "encoding": {
         "y": {
@@ -644,11 +655,12 @@ Sample schema:
       "mark": {
         "fill": "lightgray",
         "type": "geoshape",
-        "stroke": "white"
+        "stroke": "white",
+        "tooltip": True
       }
     },
     {
-      "mark": "circle",
+      "mark": {"type": "circle", "tooltip": True},
       "encoding": {
         "size": {
           "type": "quantitative",
@@ -695,7 +707,7 @@ When to use:
 - Ideal for comparing the spread and central tendency of data across different groups.
 Sample schema:
 {
-  "mark": "boxplot",
+  "mark": {"type": "boxplot", "tooltip": True},
   "encoding": {
     "x": {"field": "Species", "type": "nominal"},
     "color": {"field": "Species", "type": "nominal", "legend": null},
@@ -716,14 +728,14 @@ Sample schema:
   "encoding": {"y": {"field": "Species", "type": "nominal", "title": null}},
   "layer": [
     {
-      "mark": {"type": "rule"},
+      "mark": {"type": "rule", "tooltip": True},
       "encoding": {
         "x": {"field": "lower", "type": "quantitative","scale": {"zero": false}, "title": null},
         "x2": {"field": "upper"}
       }
     },
     {
-      "mark": {"type": "bar", "size": 14},
+      "mark": {"type": "bar", "size": 14, "tooltip": True},
       "encoding": {
         "x": {"field": "q1", "type": "quantitative"},
         "x2": {"field": "q3"},
@@ -731,14 +743,14 @@ Sample schema:
       }
     },
     {
-      "mark": {"type": "tick", "color": "white", "size": 14},
+      "mark": {"type": "tick", "color": "white", "size": 14, "tooltip": True},
       "encoding": {
         "x": {"field": "median", "type": "quantitative"}
       }
     },
     {
       "transform": [{"flatten": ["outliers"]}],
-      "mark": {"type": "point", "style": "boxplot-outliers"},
+      "mark": {"type": "point", "style": "boxplot-outliers", "tooltip": True},
       "encoding": {
         "x": {"field": "outliers", "type": "quantitative"}
       }
@@ -758,7 +770,7 @@ Sample schema:
       "filter": {"field": "gender", "equal": "Female"}
     }],
     "title": "Female",
-    "mark": "bar",
+    "mark": {"type": "bar", "tooltip": True},
     "encoding": {
       "y": {
         "field": "age", "axis": null, "sort": "descending"
@@ -780,7 +792,8 @@ Sample schema:
     "view": {"stroke": null},
     "mark": {
       "type": "text",
-      "align": "center"
+      "align": "center",
+      "tooltip": True
     },
     "encoding": {
       "y": {"field": "age", "type": "ordinal", "axis": null, "sort": "descending"},
@@ -791,7 +804,7 @@ Sample schema:
       "filter": {"field": "gender", "equal": "Male"}
     }],
     "title": "Male",
-    "mark": "bar",
+    "mark": {"type": "bar", "tooltip": True},
     "encoding": {
       "y": {
         "field": "age", "title": null,
@@ -828,7 +841,8 @@ Sample schema:
             "layer": [
                 {
                     "mark": {
-                        "type": "rule"
+                        "type": "rule",
+                        "tooltip": True
                     },
                     "encoding": {
                         "x": {
@@ -873,7 +887,8 @@ Sample schema:
                 {
                     "mark": {
                         "type": "bar",
-                        "size": 8
+                        "size": 8,
+                        "tooltip": True
                     },
                     "encoding": {
                         "x": {
@@ -913,7 +928,7 @@ Sample schema:
             "title": "Daily Return (%) by Trading Signal (June 1 - July 31, 2009)",
             "width": 700,
             "height": 120,
-            "mark": "bar",
+            "mark": {"type": "bar", "tooltip": True},
             "encoding": {
                 "x": {
                     "field": "date",
