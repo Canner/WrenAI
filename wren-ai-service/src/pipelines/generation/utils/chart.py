@@ -689,7 +689,7 @@ Sample schema:
   ]
 }
 
-**Box plot**
+**Box plot with raw data**
 When to use:
 - Use when you want to visualize the distribution of a numeric variable across categories.
 - Ideal for comparing the spread and central tendency of data across different groups.
@@ -705,6 +705,45 @@ Sample schema:
       "scale": {"zero": false}
     }
   }
+}
+
+**Box plot with pre-aggregated data**
+When to use:
+- Use when you want to visualize the distribution of a numeric variable across categories.
+- Ideal for comparing the spread and central tendency of data across different groups.
+Sample schema:
+{
+  "encoding": {"y": {"field": "Species", "type": "nominal", "title": null}},
+  "layer": [
+    {
+      "mark": {"type": "rule"},
+      "encoding": {
+        "x": {"field": "lower", "type": "quantitative","scale": {"zero": false}, "title": null},
+        "x2": {"field": "upper"}
+      }
+    },
+    {
+      "mark": {"type": "bar", "size": 14},
+      "encoding": {
+        "x": {"field": "q1", "type": "quantitative"},
+        "x2": {"field": "q3"},
+        "color": {"field": "Species", "type": "nominal", "legend": null}
+      }
+    },
+    {
+      "mark": {"type": "tick", "color": "white", "size": 14},
+      "encoding": {
+        "x": {"field": "median", "type": "quantitative"}
+      }
+    },
+    {
+      "transform": [{"flatten": ["outliers"]}],
+      "mark": {"type": "point", "style": "boxplot-outliers"},
+      "encoding": {
+        "x": {"field": "outliers", "type": "quantitative"}
+      }
+    }
+  ]
 }
 
 **Population pyramid**
