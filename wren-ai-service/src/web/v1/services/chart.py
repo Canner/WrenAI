@@ -176,7 +176,11 @@ class ChartService:
 
                     if chart_validation_result.get("valid", True):
                         if remove_data_from_chart_schema:
-                            chart_result["chart_schema"]["data"]["values"] = []
+                            if (
+                                "data" in chart_result["chart_schema"]
+                                and "values" in chart_result["chart_schema"]["data"]
+                            ):
+                                chart_result["chart_schema"]["data"]["values"] = []
 
                         self._chart_results[query_id] = ChartResultResponse(
                             status="finished",
@@ -214,7 +218,11 @@ class ChartService:
                         chart_schema = chart_result.get("chart_schema", {})
             else:
                 if remove_data_from_chart_schema:
-                    chart_result["chart_schema"]["data"]["values"] = []
+                    if (
+                        "data" in chart_result["chart_schema"]
+                        and "values" in chart_result["chart_schema"]["data"]
+                    ):
+                        chart_result["chart_schema"]["data"]["values"] = []
 
                 self._chart_results[query_id] = ChartResultResponse(
                     status="finished",
