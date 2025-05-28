@@ -77,6 +77,11 @@ export const DATA_SOURCE_OPTIONS = {
     guide: 'https://docs.getwren.ai/oss/guide/connect/mysql',
     disabled: false,
   },
+  [DATA_SOURCES.ORACLE]: {
+    ...getDataSourceConfig(DATA_SOURCES.ORACLE),
+    guide: 'https://docs.getwren.ai/oss/guide/connect/oracle',
+    disabled: false,
+  },
   [DATA_SOURCES.MSSQL]: {
     ...getDataSourceConfig(DATA_SOURCES.MSSQL),
     guide: 'https://docs.getwren.ai/oss/guide/connect/sqlserver',

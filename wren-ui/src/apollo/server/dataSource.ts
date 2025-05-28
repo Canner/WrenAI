@@ -16,6 +16,7 @@ import {
   CLICK_HOUSE_CONNECTION_INFO,
   TRINO_CONNECTION_INFO,
   SNOWFLAKE_CONNECTION_INFO,
+  ORACLE_CONNECTION_INFO,
 } from './repositories';
 import { DataSourceName } from './types';
 import { getConfig } from './config';
@@ -128,6 +129,23 @@ const dataSource = {
     },
   } as IDataSourceConnectionInfo<
     MYSQL_CONNECTION_INFO,
+    HostBasedConnectionInfo
+  >,
+
+  // Oracle
+  [DataSourceName.ORACLE]: {
+    sensitiveProps: ['password'],
+    toIbisConnectionInfo(connectionInfo) {
+      const decryptedConnectionInfo = decryptConnectionInfo(
+        DataSourceName.ORACLE,
+        connectionInfo,
+      );
+      const { host, port, database, user, password } =
+        decryptedConnectionInfo as ORACLE_CONNECTION_INFO;
+      return { host, port, database, user, password };
+    },
+  } as IDataSourceConnectionInfo<
+    ORACLE_CONNECTION_INFO,
     HostBasedConnectionInfo
   >,
 

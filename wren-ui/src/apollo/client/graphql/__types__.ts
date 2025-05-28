@@ -317,6 +317,7 @@ export enum DataSourceName {
   CLICK_HOUSE = 'CLICK_HOUSE',
   DUCKDB = 'DUCKDB',
   MSSQL = 'MSSQL',
+  ORACLE = 'ORACLE',
   MYSQL = 'MYSQL',
   POSTGRES = 'POSTGRES',
   SNOWFLAKE = 'SNOWFLAKE',
