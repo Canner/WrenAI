@@ -155,6 +155,7 @@ def render_llm_config():
             "alias": "",
             "api_base": "",
             "timeout": 120,
+            "context_window_size": 100000,
             "kwargs": []
         })
 
@@ -169,6 +170,7 @@ def render_llm_config():
             form["alias"] = st.text_input("Alias (Optional)", key=f"alias_{form_id}", value=form["alias"])
             form["api_base"] = st.text_input("API Base URL", key=f"api_base_{form_id}", value=form["api_base"])
             form["timeout"] = st.text_input("Timeout", key=f"timeout_{form_id}", value=form["timeout"])
+            form["context_window_size"] = st.text_input("Context Window Size", key=f"context_window_size_{form_id}", value=form["context_window_size"])
 
             if st.button("➕ Add KWArg Field", key=f"add_kwarg_{form_id}"):
                 form["kwargs"].append({"key": "", "value": ""})
@@ -447,8 +449,9 @@ def save_llm_model(form, form_id):
         "model": form["model"],
         **({"alias": form["alias"]} if form["alias"] else {}),
         "api_base": form["api_base"],
-        "timeout": form["timeout"],
+        "timeout": int(form["timeout"]),
         "kwargs": kwargs_dict,
+        "context_window_size": int(form["context_window_size"])
     }
 
     existing_ids = [m.get("id") for m in st.session_state[ConfigState.LLM_MODELS_KEY]]
@@ -486,11 +489,14 @@ def validate_llm_form(form):
         errors.append("API Base URL is required.")
     if not form.get("timeout"):
         errors.append("Timeout is required.")
+    if not form.get("context_window_size"):
+        errors.append("Context Window Size is required.")
     else:
         try:
             int(form["timeout"])
+            int(form["context_window_size"])
         except ValueError:
-            errors.append("Timeout must be an integer.")
+            errors.append("Timeout and Context Window Size must be an integer.")
 
     for idx, pair in enumerate(form.get("kwargs", [])):
         if pair.get("key") and not pair.get("value"):

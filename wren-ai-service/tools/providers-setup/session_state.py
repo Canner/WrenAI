@@ -49,7 +49,8 @@ class ConfigState:
                 "kwargs": [
                     {"key": k, "value": v}
                     for k, v in model_item.get("kwargs", {}).items()
-                ]
+                ],
+                "context_window_size": int(model_item.get("context_window_size", 100000))
             }
 
             st.session_state[cls.LLM_FORMS_KEY].append(form_entry)
@@ -62,6 +63,7 @@ class ConfigState:
                 "api_base": form_entry["api_base"],
                 "timeout": form_entry["timeout"],
                 "kwargs": {k["key"]: k["value"] for k in form_entry["kwargs"] if k["key"]},
+                "context_window_size": form_entry["context_window_size"]
             }
 
             st.session_state[cls.LLM_MODELS_KEY].append(model_entry)
