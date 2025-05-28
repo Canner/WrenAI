@@ -130,12 +130,24 @@ export const ERROR_TEXTS = {
     },
     STEPS: {
       REQUIRED: 'Please input reasoning steps',
-      MAX_LENGTH: 'Reasoning steps must be 3000 characters or fewer.',
+      MAX_LENGTH: 'Reasoning steps must be 6000 characters or fewer.',
     },
   },
   IMPORT_DATA_SOURCE_SQL: {
     SQL: {
       REQUIRED: 'Please input SQL statement.',
+    },
+  },
+  CRON: {
+    REQUIRED: 'Please input cron expression.',
+    INVALID: 'Invalid cron expression.',
+  },
+  CACHE_SETTINGS: {
+    DAY: {
+      REQUIRED: 'Please select day.',
+    },
+    TIME: {
+      REQUIRED: 'Please select time.',
     },
   },
 };

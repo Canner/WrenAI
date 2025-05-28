@@ -34,7 +34,8 @@ def llm_processor(entry: dict) -> dict:
                     "n": 1,
                     "max_tokens": 4096,
                     "response_format": {"type": "json_object"}
-                }
+                },
+                "context_window_size": 100000
             }
         ],
         "api_base": "https://api.openai.com/v1"
@@ -52,6 +53,7 @@ def llm_processor(entry: dict) -> dict:
                 "max_tokens": 4096,
                 "response_format": {"type": "json_object"}
             },
+            "context_window_size": 100000,
             "api_base": "https://api.openai.com/v1"
         }
     }
@@ -70,12 +72,15 @@ def llm_processor(entry: dict) -> dict:
     for model in entry.get("models", []):
         model_name = f"{entry.get('provider')}.{model.get('alias', model.get('model'))}"
         model_additional_params = {
-            k: v for k, v in model.items() if k not in ["model", "kwargs", "alias"]
+            k: v
+            for k, v in model.items()
+            if k not in ["model", "kwargs", "alias", "context_window_size"]
         }
         returned[model_name] = {
             "provider": entry["provider"],
             "model": model["model"],
             "kwargs": model["kwargs"],
+            "context_window_size": model.get("context_window_size", 100000),
             **model_additional_params,
             **others,
         }

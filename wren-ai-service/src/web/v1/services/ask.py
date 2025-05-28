@@ -31,6 +31,7 @@ class AskRequest(BaseModel):
     histories: Optional[list[AskHistory]] = Field(default_factory=list)
     configurations: Optional[Configuration] = Configuration()
     ignore_sql_generation_reasoning: Optional[bool] = False
+    enable_column_pruning: Optional[bool] = False
 
     @property
     def query_id(self) -> str:
@@ -179,6 +180,9 @@ class AskService:
         pipelines: Dict[str, BasicPipeline],
         allow_intent_classification: bool = True,
         allow_sql_generation_reasoning: bool = True,
+        allow_sql_functions_retrieval: bool = True,
+        enable_column_pruning: bool = False,
+        max_sql_correction_retries: int = 3,
         max_histories: int = 5,
         maxsize: int = 1_000_000,
         ttl: int = 120,
@@ -191,8 +195,11 @@ class AskService:
             maxsize=maxsize, ttl=ttl
         )
         self._allow_sql_generation_reasoning = allow_sql_generation_reasoning
+        self._allow_sql_functions_retrieval = allow_sql_functions_retrieval
         self._allow_intent_classification = allow_intent_classification
+        self._enable_column_pruning = enable_column_pruning
         self._max_histories = max_histories
+        self._max_sql_correction_retries = max_sql_correction_retries
 
     def _is_stopped(self, query_id: str, container: dict):
         if (
@@ -236,6 +243,12 @@ class AskService:
             self._allow_sql_generation_reasoning
             and not ask_request.ignore_sql_generation_reasoning
         )
+        enable_column_pruning = (
+            self._enable_column_pruning or ask_request.enable_column_pruning
+        )
+        allow_sql_functions_retrieval = self._allow_sql_functions_retrieval
+        max_sql_correction_retries = self._max_sql_correction_retries
+        current_sql_correction_retries = 0
 
         try:
             user_query = ask_request.query
@@ -399,10 +412,11 @@ class AskService:
                     is_followup=True if histories else False,
                 )
 
-                retrieval_result = await self._pipelines["retrieval"].run(
+                retrieval_result = await self._pipelines["db_schema_retrieval"].run(
                     query=user_query,
                     histories=histories,
                     project_id=ask_request.project_id,
+                    enable_column_pruning=enable_column_pruning,
                 )
                 _retrieval_result = retrieval_result.get(
                     "construct_retrieval_results", {}
@@ -492,9 +506,14 @@ class AskService:
                     is_followup=True if histories else False,
                 )
 
-                sql_functions = await self._pipelines["sql_functions_retrieval"].run(
-                    project_id=ask_request.project_id,
-                )
+                if allow_sql_functions_retrieval:
+                    sql_functions = await self._pipelines[
+                        "sql_functions_retrieval"
+                    ].run(
+                        project_id=ask_request.project_id,
+                    )
+                else:
+                    sql_functions = []
 
                 has_calculated_field = _retrieval_result.get(
                     "has_calculated_field", False
@@ -548,7 +567,16 @@ class AskService:
                 elif failed_dry_run_results := text_to_sql_generation_results[
                     "post_process"
                 ]["invalid_generation_results"]:
-                    if failed_dry_run_results[0]["type"] != "TIME_OUT":
+                    while current_sql_correction_retries < max_sql_correction_retries:
+                        invalid = failed_dry_run_results[0]
+                        invalid_sql = invalid["sql"]
+                        error_message = invalid["error"]
+
+                        if invalid["type"] == "TIME_OUT":
+                            break
+
+                        current_sql_correction_retries += 1
+
                         self._ask_results[query_id] = AskResultResponse(
                             status="correcting",
                             type="TEXT_TO_SQL",
@@ -579,16 +607,11 @@ class AskService:
                                 )
                                 for valid_generation_result in valid_generation_results
                             ][:1]
-                        elif failed_dry_run_results := sql_correction_results[
-                            "post_process"
-                        ]["invalid_generation_results"]:
-                            invalid = failed_dry_run_results[0]
-                            invalid_sql = invalid["sql"]
-                            error_message = invalid["error"]
-                    else:
-                        invalid = failed_dry_run_results[0]
-                        invalid_sql = invalid["sql"]
-                        error_message = invalid["error"]
+                            break
+
+                        failed_dry_run_results = sql_correction_results["post_process"][
+                            "invalid_generation_results"
+                        ]
 
             if api_results:
                 if not self._is_stopped(query_id, self._ask_results):
@@ -734,9 +757,8 @@ class AskService:
                     retrieval_task,
                     sql_samples_task,
                     instructions_task,
-                    sql_functions,
                 ) = await asyncio.gather(
-                    self._pipelines["retrieval"].run(
+                    self._pipelines["db_schema_retrieval"].run(
                         tables=ask_feedback_request.tables,
                         project_id=ask_feedback_request.project_id,
                     ),
@@ -748,10 +770,16 @@ class AskService:
                         query=ask_feedback_request.question,
                         project_id=ask_feedback_request.project_id,
                     ),
-                    self._pipelines["sql_functions_retrieval"].run(
-                        project_id=ask_feedback_request.project_id,
-                    ),
                 )
+
+                if self._allow_sql_functions_retrieval:
+                    sql_functions = await self._pipelines[
+                        "sql_functions_retrieval"
+                    ].run(
+                        project_id=ask_feedback_request.project_id,
+                    )
+                else:
+                    sql_functions = []
 
                 # Extract results from completed tasks
                 _retrieval_result = retrieval_task.get(

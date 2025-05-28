@@ -97,11 +97,10 @@ def create_service_container(
                     **pipe_components["user_guide_assistance"],
                     wren_ai_docs=wren_ai_docs,
                 ),
-                "retrieval": retrieval.Retrieval(
+                "db_schema_retrieval": retrieval.DbSchemaRetrieval(
                     **pipe_components["db_schema_retrieval"],
                     table_retrieval_size=settings.table_retrieval_size,
                     table_column_retrieval_size=settings.table_column_retrieval_size,
-                    allow_using_db_schemas_without_pruning=settings.allow_using_db_schemas_without_pruning,
                 ),
                 "historical_question": retrieval.HistoricalQuestionRetrieval(
                     **pipe_components["historical_question_retrieval"],
@@ -146,7 +145,10 @@ def create_service_container(
             },
             allow_intent_classification=settings.allow_intent_classification,
             allow_sql_generation_reasoning=settings.allow_sql_generation_reasoning,
+            allow_sql_functions_retrieval=settings.allow_sql_functions_retrieval,
             max_histories=settings.max_histories,
+            enable_column_pruning=settings.enable_column_pruning,
+            max_sql_correction_retries=settings.max_sql_correction_retries,
             **query_cache,
         ),
         chart_service=services.ChartService(
@@ -199,18 +201,14 @@ def create_service_container(
                 "question_recommendation": generation.QuestionRecommendation(
                     **pipe_components["question_recommendation"],
                 ),
-                "retrieval": retrieval.Retrieval(
+                "db_schema_retrieval": retrieval.DbSchemaRetrieval(
                     **pipe_components["question_recommendation_db_schema_retrieval"],
                     table_retrieval_size=settings.table_retrieval_size,
                     table_column_retrieval_size=settings.table_column_retrieval_size,
-                    allow_using_db_schemas_without_pruning=settings.allow_using_db_schemas_without_pruning,
                 ),
                 "sql_generation": generation.SQLGeneration(
                     **pipe_components["question_recommendation_sql_generation"],
                     engine_timeout=settings.engine_timeout,
-                ),
-                "sql_generation_reasoning": generation.SQLGenerationReasoning(
-                    **pipe_components["sql_generation_reasoning"],
                 ),
                 "sql_pairs_retrieval": retrieval.SqlPairsRetrieval(
                     **pipe_components["sql_pairs_retrieval"],
@@ -222,7 +220,12 @@ def create_service_container(
                     similarity_threshold=settings.instructions_similarity_threshold,
                     top_k=settings.instructions_top_k,
                 ),
+                "sql_functions_retrieval": retrieval.SqlFunctions(
+                    **pipe_components["sql_functions_retrieval"],
+                    engine_timeout=settings.engine_timeout,
+                ),
             },
+            allow_sql_functions_retrieval=settings.allow_sql_functions_retrieval,
             **query_cache,
         ),
         sql_pairs_service=services.SqlPairsService(
@@ -252,6 +255,14 @@ def create_service_container(
         ),
         sql_correction_service=services.SqlCorrectionService(
             pipelines={
+                "sql_tables_extraction": generation.SQLTablesExtraction(
+                    **pipe_components["sql_tables_extraction"],
+                ),
+                "db_schema_retrieval": retrieval.DbSchemaRetrieval(
+                    **pipe_components["db_schema_retrieval"],
+                    table_retrieval_size=settings.table_retrieval_size,
+                    table_column_retrieval_size=settings.table_column_retrieval_size,
+                ),
                 "sql_correction": generation.SQLCorrection(
                     **pipe_components["sql_correction"],
                     engine_timeout=settings.engine_timeout,

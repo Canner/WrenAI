@@ -176,21 +176,24 @@ async def dbschema_retrieval(
         for table_name in table_names
     ]
 
-    filters = {
-        "operator": "AND",
-        "conditions": [
-            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
-            {"operator": "OR", "conditions": table_name_conditions},
-        ],
-    }
+    if table_name_conditions:
+        filters = {
+            "operator": "AND",
+            "conditions": [
+                {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
+                {"operator": "OR", "conditions": table_name_conditions},
+            ],
+        }
 
-    if project_id:
-        filters["conditions"].append(
-            {"field": "project_id", "operator": "==", "value": project_id}
-        )
+        if project_id:
+            filters["conditions"].append(
+                {"field": "project_id", "operator": "==", "value": project_id}
+            )
 
-    results = await dbschema_retriever.run(query_embedding=[], filters=filters)
-    return results["documents"]
+        results = await dbschema_retriever.run(query_embedding=[], filters=filters)
+        return results["documents"]
+
+    return []
 
 
 @observe()
@@ -226,7 +229,8 @@ def check_using_db_schemas_without_pruning(
     construct_db_schemas: list[dict],
     dbschema_retrieval: list[Document],
     encoding: tiktoken.Encoding,
-    allow_using_db_schemas_without_pruning: bool,
+    enable_column_pruning: bool,
+    context_window_size: int,
 ) -> dict:
     retrieval_results = []
     has_calculated_field = False
@@ -266,7 +270,7 @@ def check_using_db_schemas_without_pruning(
         retrieval_result["table_ddl"] for retrieval_result in retrieval_results
     ]
     _token_count = len(encoding.encode(" ".join(table_ddls)))
-    if _token_count > 100_000 or not allow_using_db_schemas_without_pruning:
+    if _token_count > context_window_size or enable_column_pruning:
         return {
             "db_schemas": [],
             "tokens": _token_count,
@@ -424,7 +428,7 @@ RETRIEVAL_MODEL_KWARGS = {
 }
 
 
-class Retrieval(BasicPipeline):
+class DbSchemaRetrieval(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
@@ -432,7 +436,6 @@ class Retrieval(BasicPipeline):
         document_store_provider: DocumentStoreProvider,
         table_retrieval_size: Optional[int] = 10,
         table_column_retrieval_size: Optional[int] = 100,
-        allow_using_db_schemas_without_pruning: Optional[bool] = False,
         **kwargs,
     ):
         self._components = {
@@ -463,7 +466,7 @@ class Retrieval(BasicPipeline):
 
         self._configs = {
             "encoding": _encoding,
-            "allow_using_db_schemas_without_pruning": allow_using_db_schemas_without_pruning,
+            "context_window_size": llm_provider.get_context_window_size(),
         }
 
         super().__init__(
@@ -477,6 +480,7 @@ class Retrieval(BasicPipeline):
         tables: Optional[list[str]] = None,
         project_id: Optional[str] = None,
         histories: Optional[list[AskHistory]] = None,
+        enable_column_pruning: bool = False,
     ):
         logger.info("Ask Retrieval pipeline is running...")
         return await self._pipe.execute(
@@ -486,6 +490,7 @@ class Retrieval(BasicPipeline):
                 "tables": tables,
                 "project_id": project_id or "",
                 "histories": histories or [],
+                "enable_column_pruning": enable_column_pruning,
                 **self._components,
                 **self._configs,
             },
@@ -496,7 +501,7 @@ if __name__ == "__main__":
     from src.pipelines.common import dry_run_pipeline
 
     dry_run_pipeline(
-        Retrieval,
+        DbSchemaRetrieval,
         "db_schema_retrieval",
         query="this is a test query",
     )

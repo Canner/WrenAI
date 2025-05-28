@@ -40,7 +40,7 @@ def ask_service():
                 **pipe_components["user_guide_assistance"],
                 wren_ai_docs=wren_ai_docs,
             ),
-            "retrieval": retrieval.Retrieval(
+            "retrieval": retrieval.DbSchemaRetrieval(
                 **pipe_components["db_schema_retrieval"],
             ),
             "historical_question": retrieval.HistoricalQuestionRetrieval(

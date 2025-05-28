@@ -55,18 +55,21 @@ data:
     models:
     - alias: default
       model: gpt-4.1-nano-2025-04-14
+      context_window_size: 1000000
       kwargs:
         max_tokens: 4096
         n: 1
         seed: 0
         temperature: 0
     - model: gpt-4.1-mini-2025-04-14
+      context_window_size: 1000000
       kwargs:
         max_tokens: 4096
         n: 1
         seed: 0
         temperature: 0
     - model: gpt-4.1-2025-04-14
+      context_window_size: 1000000
       kwargs:
         max_tokens: 4096
         n: 1
@@ -187,6 +190,9 @@ data:
         document_store: qdrant
       - name: project_meta_indexing
         document_store: qdrant
+      - name: sql_tables_extraction
+        llm: litellm_llm.default
+
     ---
     settings:
       doc_endpoint: https://docs.getwren.ai
@@ -197,7 +203,9 @@ data:
       table_column_retrieval_size: 100
       allow_intent_classification: true
       allow_sql_generation_reasoning: true
-      allow_using_db_schemas_without_pruning: false
+      allow_sql_functions_retrieval: true
+      enable_column_pruning: false
+      max_sql_correction_retries: 3
       query_cache_maxsize: 1000
       query_cache_ttl: 3600
       langfuse_host: https://cloud.langfuse.com

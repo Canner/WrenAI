@@ -132,7 +132,7 @@ wren-ai-service:
     ports:
       - ${AI_SERVICE_FORWARD_PORT}:${WREN_AI_SERVICE_PORT}
     environment:
-      WREN_UI_ENDPOINT: http://docker.for.mac.localhost:${WREN_UI_PORT}
+      WREN_UI_ENDPOINT: http://host.docker.internal:${WREN_UI_PORT}
       # sometimes the console won't show print messages,
       # using PYTHONUNBUFFERED: 1 can fix this
       PYTHONUNBUFFERED: 1

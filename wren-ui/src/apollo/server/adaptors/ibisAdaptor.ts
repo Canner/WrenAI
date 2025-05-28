@@ -116,6 +116,8 @@ export interface IbisBaseOptions {
 }
 export interface IbisQueryOptions extends IbisBaseOptions {
   limit?: number;
+  refresh?: boolean;
+  cacheEnabled?: boolean;
 }
 export interface IbisDryPlanOptions {
   dataSource: DataSourceName;
@@ -158,6 +160,10 @@ export interface IIbisAdaptor {
       schema?: string;
     },
   ) => Promise<WrenSQL>;
+  getVersion: (
+    dataSource: DataSourceName,
+    connectionInfo: WREN_AI_CONNECTION_INFO,
+  ) => Promise<string>;
 }
 
 export interface IbisResponse {
@@ -169,6 +175,10 @@ export interface IbisQueryResponse extends IbisResponse {
   columns: string[];
   data: any[];
   dtypes: Record<string, string>;
+  cacheHit?: boolean;
+  cacheCreatedAt?: string;
+  cacheOverrodeAt?: string;
+  override?: boolean;
 }
 
 export interface DryRunResponse extends IbisResponse {}
@@ -214,6 +224,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     const { dataSource, mdl } = options;
     const connectionInfo = this.updateConnectionInfo(options.connectionInfo);
     const ibisConnectionInfo = toIbisConnectionInfo(dataSource, connectionInfo);
+    const queryString = this.buildQueryString(options);
     const body = {
       sql: query,
       connectionInfo: ibisConnectionInfo,
@@ -221,7 +232,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     };
     try {
       const res = await axios.post(
-        `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.QUERY)}/connector/${dataSourceUrlMap[dataSource]}/query`,
+        `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.QUERY)}/connector/${dataSourceUrlMap[dataSource]}/query${queryString}`,
         body,
         {
           params: {
@@ -233,6 +244,14 @@ export class IbisAdaptor implements IIbisAdaptor {
         ...res.data,
         correlationId: res.headers['x-correlation-id'],
         processTime: res.headers['x-process-time'],
+        cacheHit: res.headers['x-cache-hit'] === 'true',
+        cacheCreatedAt:
+          res.headers['x-cache-create-at'] &&
+          new Date(parseInt(res.headers['x-cache-create-at'])).toISOString(),
+        cacheOverrodeAt:
+          res.headers['x-cache-override-at'] &&
+          new Date(parseInt(res.headers['x-cache-override-at'])).toISOString(),
+        override: res.headers['x-cache-override'] === 'true',
       };
     } catch (e) {
       logger.debug(`Query error: ${e.response?.data || e.message}`);
@@ -407,6 +426,28 @@ export class IbisAdaptor implements IIbisAdaptor {
     }
   }
 
+  public async getVersion(
+    dataSource: DataSourceName,
+    connectionInfo: WREN_AI_CONNECTION_INFO,
+  ): Promise<string> {
+    connectionInfo = this.updateConnectionInfo(connectionInfo);
+    const ibisConnectionInfo = toIbisConnectionInfo(dataSource, connectionInfo);
+    const body = {
+      connectionInfo: ibisConnectionInfo,
+    };
+    try {
+      logger.debug(`Getting version from ibis`);
+      const res: AxiosResponse<string> = await axios.post(
+        `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.METADATA)}/connector/${dataSourceUrlMap[dataSource]}/metadata/version`,
+        body,
+      );
+      return res.data;
+    } catch (e) {
+      logger.debug(`Get version error: ${e.response?.data || e.message}`);
+      this.throwError(e, 'Error getting version from ibis server');
+    }
+  }
+
   private updateConnectionInfo(connectionInfo: any) {
     if (
       config.otherServiceUsingDocker &&
@@ -529,5 +570,17 @@ export class IbisAdaptor implements IIbisAdaptor {
       );
     }
     return message;
+  }
+
+  private buildQueryString(options: IbisQueryOptions) {
+    if (!options.cacheEnabled) {
+      return '';
+    }
+    const queryString = [];
+    queryString.push('cacheEnable=true');
+    if (options.refresh) {
+      queryString.push('overrideCache=true');
+    }
+    return `?${queryString.join('&')}`;
   }
 }
