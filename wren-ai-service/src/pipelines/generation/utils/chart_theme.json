@@ -3,14 +3,21 @@
         "stroke": "transparent"
     },
     "background": "transparent",
-    "font": "Segoe UI",
+    "font": "wf_standard-font, helvetica, arial, sans-serif",
     "header": {
         "titleFont": "wf_standard-font, helvetica, arial, sans-serif",
         "titleFontSize": 16,
         "titleColor": "#252423",
-        "labelFont": "Segoe UI",
+        "labelFont": "wf_standard-font, helvetica, arial, sans-serif",
         "labelFontSize": 13.333333333333334,
         "labelColor": "#605E5C"
+    },
+    "title": {
+        "color": "#605E5C",
+        "fontSize": 18,
+        "font": "wf_standard-font, helvetica, arial, sans-serif",
+        "fontWeight": "bold",
+        "dy": -20
     },
     "axis": {
         "ticks": false,
@@ -52,7 +59,7 @@
         "strokeJoin": "round"
     },
     "text": {
-        "font": "Segoe UI",
+        "font": "wf_standard-font, helvetica, arial, sans-serif",
         "fontSize": 12,
         "fill": "#605E5C"
     },
@@ -84,10 +91,10 @@
         "size": 50
     },
     "legend": {
-        "titleFont": "Segoe UI",
+        "titleFont": "wf_standard-font, helvetica, arial, sans-serif",
         "titleFontWeight": "bold",
         "titleColor": "#605E5C",
-        "labelFont": "Segoe UI",
+        "labelFont": "wf_standard-font, helvetica, arial, sans-serif",
         "labelFontSize": 13.333333333333334,
         "labelColor": "#605E5C",
         "symbolType": "circle",

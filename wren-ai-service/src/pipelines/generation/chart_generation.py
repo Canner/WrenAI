@@ -15,7 +15,7 @@ from src.pipelines.generation.utils.chart import (
     SAMPLE_VEGA_LITE_SCHEMA_EXAMPLES,
     ChartDataPreprocessor,
     ChartGenerationPostProcessor,
-    load_custom_theme,
+    load_chart_theme,
 )
 
 logger = logging.getLogger("wren-ai-service")
@@ -98,7 +98,7 @@ def post_process(
     generate_chart: dict,
     preprocess_data: dict,
     data_provided: bool,
-    custom_theme: dict[str, Any],
+    chart_theme: dict[str, Any],
     post_processor: ChartGenerationPostProcessor,
 ) -> dict:
     return post_processor.run(
@@ -108,7 +108,7 @@ def post_process(
             if data_provided
             else preprocess_data["sample_data"]
         ),
-        custom_theme=custom_theme,
+        chart_theme=chart_theme,
     )
 
 
@@ -134,7 +134,7 @@ class ChartGeneration(BasicPipeline):
         }
 
         self._configs = {
-            "custom_theme": load_custom_theme(),
+            "chart_theme": load_chart_theme(),
         }
 
         super().__init__(

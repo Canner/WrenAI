@@ -15,7 +15,7 @@ from src.pipelines.generation.utils.chart import (
     SAMPLE_VEGA_LITE_SCHEMA_EXAMPLES,
     ChartGenerationPostProcessor,
     ChartSchemaPreprocessor,
-    load_custom_theme,
+    load_chart_theme,
 )
 
 logger = logging.getLogger("wren-ai-service")
@@ -88,14 +88,14 @@ async def correct_chart(prompt: dict, generator: Any) -> dict:
 @observe(capture_input=False)
 def post_process(
     correct_chart: dict,
-    custom_theme: dict[str, Any],
+    chart_theme: dict[str, Any],
     sample_data: list[dict],
     post_processor: ChartGenerationPostProcessor,
 ) -> dict:
     return post_processor.run(
         correct_chart.get("replies"),
         sample_data,
-        custom_theme=custom_theme,
+        chart_theme=chart_theme,
     )
 
 
@@ -121,7 +121,7 @@ class ChartCorrection(BasicPipeline):
         }
 
         self._configs = {
-            "custom_theme": load_custom_theme(),
+            "chart_theme": load_chart_theme(),
         }
 
         super().__init__(

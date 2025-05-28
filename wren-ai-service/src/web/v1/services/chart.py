@@ -174,7 +174,7 @@ class ChartService:
                         chart_schema=chart_schema,
                     )
 
-                    if chart_validation_result.get("valid", True):
+                    if chart_validation_result.get("valid", False):
                         if remove_data_from_chart_schema:
                             if (
                                 "data" in chart_result["chart_schema"]

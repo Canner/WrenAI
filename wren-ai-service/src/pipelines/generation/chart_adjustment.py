@@ -16,7 +16,7 @@ from src.pipelines.generation.utils.chart import (
     ChartDataPreprocessor,
     ChartGenerationPostProcessor,
     ChartSchemaPreprocessor,
-    load_custom_theme,
+    load_chart_theme,
 )
 
 logger = logging.getLogger("wren-ai-service")
@@ -120,7 +120,7 @@ def post_process(
     generate_chart_adjustment: dict,
     preprocess_data: dict,
     data_provided: bool,
-    custom_theme: dict[str, Any],
+    chart_theme: dict[str, Any],
     post_processor: ChartGenerationPostProcessor,
 ) -> dict:
     return post_processor.run(
@@ -130,7 +130,7 @@ def post_process(
             if data_provided
             else preprocess_data["sample_data"]
         ),
-        custom_theme=custom_theme,
+        chart_theme=chart_theme,
     )
 
 
@@ -157,7 +157,7 @@ class ChartAdjustment(BasicPipeline):
         }
 
         self._configs = {
-            "custom_theme": load_custom_theme(),
+            "chart_theme": load_chart_theme(),
         }
 
         super().__init__(

@@ -10,9 +10,9 @@ from pydantic import BaseModel
 logger = logging.getLogger("wren-ai-service")
 
 
-def load_custom_theme() -> Dict[str, Any]:
+def load_chart_theme() -> Dict[str, Any]:
     try:
-        with open("src/pipelines/generation/utils/theme_powerbi.json", "r") as f:
+        with open("src/pipelines/generation/utils/chart_theme.json", "r") as f:
             return orjson.loads(f.read())
     except (FileNotFoundError, IOError) as e:
         logger.error(f"Failed to load custom theme: {e}")
@@ -76,7 +76,7 @@ class ChartGenerationPostProcessor:
         self,
         replies: list[str],
         sample_data: list[dict],
-        custom_theme: Optional[dict[str, Any]] = None,
+        chart_theme: Optional[dict[str, Any]] = None,
     ):
         try:
             generation_result = orjson.loads(replies[0])
@@ -107,10 +107,10 @@ class ChartGenerationPostProcessor:
                     chart_schema["height"] = 320
                     chart_schema["width"] = "container"
 
-                if custom_theme:
+                if chart_theme:
                     if "config" not in chart_schema:
                         chart_schema["config"] = {}
-                    chart_schema["config"].update(custom_theme)
+                    chart_schema["config"].update(chart_theme)
 
                 return {
                     "results": {

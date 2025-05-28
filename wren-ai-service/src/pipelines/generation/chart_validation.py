@@ -69,7 +69,7 @@ async def validate_chart(
     prompt: dict, preprocess_chart_schema: str | None, generator: Any
 ) -> dict:
     if preprocess_chart_schema is None:
-        return {"replies": ['{"valid": true}']}
+        return {"replies": ['{"valid": false}']}
 
     return await generator(
         prompt=prompt.get("prompt"), image_url=preprocess_chart_schema
