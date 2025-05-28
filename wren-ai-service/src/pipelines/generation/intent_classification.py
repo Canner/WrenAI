@@ -120,8 +120,10 @@ SQL:
 {% endif %}
 
 {% if instructions %}
-### INSTRUCTIONS ###
-{{ instructions }}
+### USER INSTRUCTIONS ###
+{% for instruction in instructions %}
+    {{ loop.index }}. {{ instruction }}
+{% endfor %}
 {% endif %}
 
 ### USER GUIDE ###

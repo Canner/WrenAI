@@ -13,8 +13,10 @@ from src.core.provider import LLMProvider
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
+    calculated_field_instructions,
     construct_ask_history_messages,
     construct_instructions,
+    metric_instructions,
     sql_generation_system_prompt,
 )
 from src.pipelines.retrieval.sql_functions import SqlFunction
@@ -34,9 +36,12 @@ generate one SQL query to best answer user's question.
     {{ document }}
 {% endfor %}
 
-{% if instructions %}
-### INSTRUCTIONS ###
-{{ instructions }}
+{% if calculated_field_instructions %}
+{{ calculated_field_instructions }}
+{% endif %}
+
+{% if metric_instructions %}
+{{ metric_instructions }}
 {% endif %}
 
 {% if sql_functions %}
@@ -53,6 +58,13 @@ Summary:
 {{sample.summary}}
 SQL:
 {{sample.sql}}
+{% endfor %}
+{% endif %}
+
+{% if instructions %}
+### USER INSTRUCTIONS ###
+{% for instruction in instructions %}
+    {{ loop.index }}. {{ instruction }}
 {% endfor %}
 {% endif %}
 
@@ -87,10 +99,12 @@ def prompt(
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             configuration,
-            has_calculated_field,
-            has_metric,
             instructions,
         ),
+        calculated_field_instructions=calculated_field_instructions
+        if has_calculated_field
+        else "",
+        metric_instructions=metric_instructions if has_metric else "",
         current_time=configuration.show_current_time(),
         sql_samples=sql_samples,
         sql_functions=sql_functions,

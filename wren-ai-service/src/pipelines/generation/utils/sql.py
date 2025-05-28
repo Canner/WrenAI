@@ -398,22 +398,17 @@ Learn about the usage of the schema structures and generate SQL based on them.
 
 def construct_instructions(
     configuration: Configuration | None = Configuration(),
-    has_calculated_field: bool = False,
-    has_metric: bool = False,
     instructions: list[dict] | None = None,
 ):
-    _instructions = ""
-    if configuration:
-        if configuration.fiscal_year:
-            _instructions += f"\n- For calendar year related computation, it should be started from {configuration.fiscal_year.start} to {configuration.fiscal_year.end}\n\n"
-    if has_calculated_field:
-        _instructions += calculated_field_instructions
-    if has_metric:
-        _instructions += metric_instructions
-    if instructions:
-        _instructions += "\n\n".join(
-            [f"{instruction.get('instruction')}\n\n" for instruction in instructions]
+    _instructions = []
+    if configuration and configuration.fiscal_year:
+        _instructions.append(
+            f"For calendar year related computation, it should be started from {configuration.fiscal_year.start} to {configuration.fiscal_year.end}"
         )
+    if instructions:
+        _instructions += [
+            instruction.get("instruction") for instruction in instructions
+        ]
 
     return _instructions
 
