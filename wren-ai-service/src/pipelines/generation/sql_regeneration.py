@@ -75,7 +75,7 @@ SQL:
 {% if instructions %}
 ### USER INSTRUCTIONS ###
 {% for instruction in instructions %}
-    {{ loop.index }}. {{ instruction }}
+{{ loop.index }}. {{ instruction }}
 {% endfor %}
 {% endif %}
 
