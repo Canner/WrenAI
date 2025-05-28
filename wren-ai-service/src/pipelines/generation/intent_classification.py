@@ -32,6 +32,7 @@ You are an expert detective specializing in intent classification. Combine the u
 - **Concise Reasoning:** The reasoning must be clear, concise, and limited to 20 words.
 - **Language Consistency:** Use the same language as specified in the user's output language for the rephrased question and reasoning.
 - **Vague Queries:** If the question is vague or does not related to a table or property from the schema, classify it as `MISLEADING_QUERY`.
+- **Time-related Queries:** Don't rephrase time-related information in the user's question.
 
 ### Intent Definitions ###
 
@@ -143,7 +144,6 @@ SQL:
 {% endif %}
 
 User's current question: {{query}}
-Current Time: {{ current_time }}
 Output Language: {{ language }}
 
 Let's think step by step
@@ -275,7 +275,6 @@ def prompt(
             instructions=instructions,
             configuration=configuration,
         ),
-        current_time=configuration.show_current_time(),
         docs=wren_ai_docs,
     )
 

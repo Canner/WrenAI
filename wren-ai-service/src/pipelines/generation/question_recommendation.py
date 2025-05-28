@@ -1,6 +1,5 @@
 import logging
 import sys
-from datetime import datetime
 from typing import Any
 
 import orjson
@@ -22,7 +21,6 @@ def prompt(
     mdl: dict,
     previous_questions: list[str],
     language: str,
-    current_date: str,
     max_questions: int,
     max_categories: int,
     prompt_builder: PromptBuilder,
@@ -37,7 +35,6 @@ def prompt(
         models=[] if previous_questions else mdl.get("models", []),
         previous_questions=previous_questions,
         language=language,
-        current_date=current_date,
         max_questions=max_questions,
         max_categories=max_categories,
     )
@@ -222,8 +219,6 @@ Previous Questions: {{previous_questions}}
 Categories: {{categories}}
 {% endif %}
 
-Current Date: {{current_date}}
-
 Please generate {{max_questions}} insightful questions for each of the {{max_categories}} categories based on the provided data model. Both the questions and category names should be translated into {{language}}{% if user_question %} and be related to the user's question{% endif %}. The output format should maintain the structure but with localized text.
 """
 
@@ -255,7 +250,6 @@ class QuestionRecommendation(BasicPipeline):
         previous_questions: list[str] = [],
         categories: list[str] = [],
         language: str = "en",
-        current_date: str = datetime.now().strftime("%Y-%m-%d %A %H:%M:%S"),
         max_questions: int = 5,
         max_categories: int = 3,
         **_,
@@ -268,7 +262,6 @@ class QuestionRecommendation(BasicPipeline):
                 "previous_questions": previous_questions,
                 "categories": categories,
                 "language": language,
-                "current_date": current_date,
                 "max_questions": max_questions,
                 "max_categories": max_categories,
                 **self._components,
@@ -286,7 +279,6 @@ if __name__ == "__main__":
         previous_questions=[],
         categories=[],
         language="en",
-        current_date=datetime.now().strftime("%Y-%m-%d %A %H:%M:%S"),
         max_questions=5,
         max_categories=3,
     )

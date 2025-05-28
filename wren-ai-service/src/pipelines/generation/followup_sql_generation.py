@@ -70,7 +70,6 @@ SQL:
 
 ### QUESTION ###
 User's Follow-up Question: {{ query }}
-Current Time: {{ current_time }}
 
 ### REASONING PLAN ###
 {{ sql_generation_reasoning }}
@@ -105,7 +104,6 @@ def prompt(
         if has_calculated_field
         else "",
         metric_instructions=metric_instructions if has_metric else "",
-        current_time=configuration.show_current_time(),
         sql_samples=sql_samples,
         sql_functions=sql_functions,
     )

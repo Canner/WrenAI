@@ -114,7 +114,6 @@ def prompt(
         else "",
         metric_instructions=metric_instructions if has_metric else "",
         sql_samples=sql_samples,
-        current_time=configuration.show_current_time(),
         sql_functions=sql_functions,
     )
 

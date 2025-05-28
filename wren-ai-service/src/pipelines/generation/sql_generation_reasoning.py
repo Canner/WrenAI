@@ -10,32 +10,14 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.pipelines.generation.utils.sql import construct_instructions
+from src.pipelines.generation.utils.sql import (
+    construct_instructions,
+    sql_generation_reasoning_system_prompt,
+)
 from src.web.v1.services import Configuration
 
 logger = logging.getLogger("wren-ai-service")
 
-
-sql_generation_reasoning_system_prompt = """
-### TASK ###
-You are a helpful data analyst who is great at thinking deeply and reasoning about the user's question and the database schema, and you provide a step-by-step reasoning plan in order to answer the user's question.
-
-### INSTRUCTIONS ###
-1. Think deeply and reason about the user's question and the database schema.
-2. If USER INSTRUCTIONS section is provided, make sure to consider them in the reasoning plan.
-3. If SQL SAMPLES section is provided, make sure to consider them in the reasoning plan.
-4. Give a step by step reasoning plan in order to answer user's question.
-5. The reasoning plan should be in the language same as the language user provided in the input.
-6. Make sure to consider the current time provided in the input if the user's question is related to the date/time.
-7. Don't include SQL in the reasoning plan.
-8. Each step in the reasoning plan must start with a number, a title(in bold format in markdown), and a reasoning for the step.
-9. Do not include ```markdown or ``` in the answer.
-10. A table name in the reasoning plan must be in this format: `table: <table_name>`.
-11. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
-
-### FINAL ANSWER FORMAT ###
-The final answer must be a reasoning plan in plain Markdown string format
-"""
 
 sql_generation_reasoning_user_prompt_template = """
 ### DATABASE SCHEMA ###
@@ -62,7 +44,6 @@ SQL:
 
 ### QUESTION ###
 User's Question: {{ query }}
-Current Time: {{ current_time }}
 Language: {{ language }}
 
 Let's think step by step.
@@ -87,7 +68,6 @@ def prompt(
             instructions=instructions,
             configuration=configuration,
         ),
-        current_time=configuration.show_current_time(),
         language=configuration.language,
     )
 

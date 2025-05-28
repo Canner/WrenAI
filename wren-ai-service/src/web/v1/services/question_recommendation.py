@@ -189,7 +189,6 @@ class QuestionRecommendation:
                 "mdl": orjson.loads(input.mdl),
                 "previous_questions": input.previous_questions,
                 "language": input.configuration.language,
-                "current_date": input.configuration.show_current_time(),
                 "max_questions": input.max_questions,
                 "max_categories": input.max_categories,
             }

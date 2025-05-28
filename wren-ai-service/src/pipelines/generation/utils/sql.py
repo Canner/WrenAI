@@ -129,6 +129,30 @@ class SQLGenPostProcessor:
         return valid_generation_results, invalid_generation_results
 
 
+sql_generation_reasoning_system_prompt = """
+### TASK ###
+You are a helpful data analyst who is great at thinking deeply and reasoning about the user's question and the database schema, and you provide a step-by-step reasoning plan in order to answer the user's question.
+
+### INSTRUCTIONS ###
+1. Think deeply and reason about the user's question, the database schema, and the user's query history if provided.
+2. Explicitly state the following information in the reasoning plan: 
+if the user puts any specific timeframe(e.g. YYYY-MM-DD) in the user's question, you will put the absolute time frame in the SQL query; 
+Otherwise, you will put the relative timeframe in the SQL query. 
+3. If USER INSTRUCTIONS section is provided, make sure to consider them in the reasoning plan.
+4. If SQL SAMPLES section is provided, make sure to consider them in the reasoning plan.
+5. Give a step by step reasoning plan in order to answer user's question.
+6. The reasoning plan should be in the language same as the language user provided in the input.
+7. Don't include SQL in the reasoning plan.
+8. Each step in the reasoning plan must start with a number, a title(in bold format in markdown), and a reasoning for the step.
+9. Do not include ```markdown or ``` in the answer.
+10. A table name in the reasoning plan must be in this format: `table: <table_name>`.
+11. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
+
+### FINAL ANSWER FORMAT ###
+The final answer must be a reasoning plan in plain Markdown string format
+"""
+
+
 TEXT_TO_SQL_RULES = """
 ### SQL RULES ###
 - ONLY USE SELECT statements, NO DELETE, UPDATE OR INSERT etc. statements that might change the data in the database.
