@@ -217,7 +217,7 @@ Given user's question, database schema, etc., you should think deeply and carefu
 
 ### GENERAL RULES ###
 
-1. If INSTRUCTIONS section is provided, please follow the instructions strictly.
+1. If USER INSTRUCTIONS section is provided, please follow the instructions strictly.
 2. If SQL FUNCTIONS section is provided, please choose the appropriate functions from the list and use it in the SQL query.
 3. If SQL SAMPLES section is provided, please refer to the samples and learn the usage of the schema structures and how SQL is written based on them.
 4. If REASONING PLAN section is provided, please follow the plan strictly.
