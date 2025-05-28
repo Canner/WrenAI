@@ -2,6 +2,7 @@ import { DATA_SOURCES } from '@/utils/enum';
 import BigQueryProperties from '@/components/pages/setup/dataSources/BigQueryProperties';
 import DuckDBProperties from '@/components/pages/setup/dataSources/DuckDBProperties';
 import MySQLProperties from '@/components/pages/setup/dataSources/MySQLProperties';
+import OracleProperties from '@/components/pages/setup/dataSources/OracleProperties';
 import PostgreSQLProperties from '@/components/pages/setup/dataSources/PostgreSQLProperties';
 import SQLServerProperties from '@/components/pages/setup/dataSources/SQLServerProperties';
 import ClickHouseProperties from '@/components/pages/setup/dataSources/ClickHouseProperties';
@@ -16,6 +17,8 @@ export const getDataSourceImage = (dataSource: DATA_SOURCES | string) => {
       return '/images/dataSource/postgreSql.svg';
     case DATA_SOURCES.MYSQL:
       return '/images/dataSource/mysql.svg';
+    case DATA_SOURCES.ORACLE:
+      return '/images/dataSource/oracle.svg';
     case DATA_SOURCES.MSSQL:
       return '/images/dataSource/sqlserver.svg';
     case DATA_SOURCES.CLICK_HOUSE:
@@ -39,6 +42,8 @@ export const getDataSourceName = (dataSource: DATA_SOURCES | string) => {
       return 'PostgreSQL';
     case DATA_SOURCES.MYSQL:
       return 'MySQL';
+    case DATA_SOURCES.ORACLE:
+      return 'Oracle';
     case DATA_SOURCES.MSSQL:
       return 'SQL Server';
     case DATA_SOURCES.CLICK_HOUSE:
@@ -62,6 +67,8 @@ export const getDataSourceProperties = (dataSource: DATA_SOURCES | string) => {
       return PostgreSQLProperties;
     case DATA_SOURCES.MYSQL:
       return MySQLProperties;
+    case DATA_SOURCES.ORACLE:
+      return OracleProperties;
     case DATA_SOURCES.MSSQL:
       return SQLServerProperties;
     case DATA_SOURCES.CLICK_HOUSE:
