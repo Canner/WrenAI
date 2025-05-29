@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
+from src.utils import trace_cost
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -40,9 +41,10 @@ def prompt(
     )
 
 
-@observe(capture_input=False, as_type="generation")
-async def generate(prompt: dict, generator: Any) -> dict:
-    return await generator(prompt=prompt.get("prompt"))
+@observe(as_type="generation", capture_input=False)
+@trace_cost
+async def generate(prompt: dict, generator: Any, generator_name: str) -> dict:
+    return await generator(prompt=prompt.get("prompt")), generator_name
 
 
 @observe(capture_input=False)
@@ -235,6 +237,7 @@ class QuestionRecommendation(BasicPipeline):
                 system_prompt=system_prompt,
                 generation_kwargs=QUESTION_RECOMMENDATION_MODEL_KWARGS,
             ),
+            "generator_name": llm_provider.get_model(),
         }
 
         self._final = "normalized"

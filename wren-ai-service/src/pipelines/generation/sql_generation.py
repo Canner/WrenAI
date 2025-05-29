@@ -5,7 +5,7 @@ from typing import Any, Optional
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
-from langfuse.decorators import langfuse_context, observe
+from langfuse.decorators import observe
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
@@ -19,6 +19,7 @@ from src.pipelines.generation.utils.sql import (
     sql_generation_system_prompt,
 )
 from src.pipelines.retrieval.sql_functions import SqlFunction
+from src.utils import trace_cost
 from src.web.v1.services import Configuration
 
 logger = logging.getLogger("wren-ai-service")
@@ -106,22 +107,13 @@ def prompt(
 
 
 @observe(as_type="generation", capture_input=False)
+@trace_cost
 async def generate_sql(
     prompt: dict,
     generator: Any,
+    generator_name: str,
 ) -> dict:
-    langfuse_context.update_current_observation(
-        model="gpt-4.1-mini-2025-04-14",
-    )
-
-    result = await generator(prompt=prompt.get("prompt"))
-
-    if meta := result.get("meta", []):
-        langfuse_context.update_current_observation(
-            usage_details=meta[0].get("usage", {}),
-        )
-
-    return result
+    return await generator(prompt=prompt.get("prompt")), generator_name
 
 
 @observe(capture_input=False)
@@ -154,6 +146,7 @@ class SQLGeneration(BasicPipeline):
                 system_prompt=sql_generation_system_prompt,
                 generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
             ),
+            "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
                 template=sql_generation_user_prompt_template
             ),
