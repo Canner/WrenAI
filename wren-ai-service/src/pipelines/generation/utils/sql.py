@@ -129,6 +129,30 @@ class SQLGenPostProcessor:
         return valid_generation_results, invalid_generation_results
 
 
+sql_generation_reasoning_system_prompt = """
+### TASK ###
+You are a helpful data analyst who is great at thinking deeply and reasoning about the user's question and the database schema, and you provide a step-by-step reasoning plan in order to answer the user's question.
+
+### INSTRUCTIONS ###
+1. Think deeply and reason about the user's question, the database schema, and the user's query history if provided.
+2. Explicitly state the following information in the reasoning plan: 
+if the user puts any specific timeframe(e.g. YYYY-MM-DD) in the user's question, you will put the absolute time frame in the SQL query; 
+Otherwise, you will put the relative timeframe in the SQL query. 
+3. If USER INSTRUCTIONS section is provided, make sure to consider them in the reasoning plan.
+4. If SQL SAMPLES section is provided, make sure to consider them in the reasoning plan.
+5. Give a step by step reasoning plan in order to answer user's question.
+6. The reasoning plan should be in the language same as the language user provided in the input.
+7. Don't include SQL in the reasoning plan.
+8. Each step in the reasoning plan must start with a number, a title(in bold format in markdown), and a reasoning for the step.
+9. Do not include ```markdown or ``` in the answer.
+10. A table name in the reasoning plan must be in this format: `table: <table_name>`.
+11. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
+
+### FINAL ANSWER FORMAT ###
+The final answer must be a reasoning plan in plain Markdown string format
+"""
+
+
 TEXT_TO_SQL_RULES = """
 ### SQL RULES ###
 - ONLY USE SELECT statements, NO DELETE, UPDATE OR INSERT etc. statements that might change the data in the database.
@@ -174,6 +198,7 @@ TEXT_TO_SQL_RULES = """
 - DON'T USE "FILTER(WHERE <expression>)" clause in the generated SQL query.
 - DON'T USE "EXTRACT(EPOCH FROM <expression>)" clause in the generated SQL query.
 - DON'T USE INTERVAL or generate INTERVAL-like expression in the generated SQL query.
+- Aggregate functions are not allowed in the WHERE clause. Instead, they belong in the HAVING clause, which is used to filter after aggregation.
 - ONLY USE JSON_QUERY for querying fields if "json_type":"JSON" is identified in the columns comment, NOT the deprecated JSON_EXTRACT_SCALAR function.
     - DON'T USE CAST for JSON fields, ONLY USE the following funtions:
       - LAX_BOOL for boolean fields
@@ -216,7 +241,7 @@ Given user's question, database schema, etc., you should think deeply and carefu
 
 ### GENERAL RULES ###
 
-1. If INSTRUCTIONS section is provided, please follow the instructions strictly.
+1. If USER INSTRUCTIONS section is provided, please follow the instructions strictly.
 2. If SQL FUNCTIONS section is provided, please choose the appropriate functions from the list and use it in the SQL query.
 3. If SQL SAMPLES section is provided, please refer to the samples and learn the usage of the schema structures and how SQL is written based on them.
 4. If REASONING PLAN section is provided, please follow the plan strictly.
@@ -397,22 +422,17 @@ Learn about the usage of the schema structures and generate SQL based on them.
 
 def construct_instructions(
     configuration: Configuration | None = Configuration(),
-    has_calculated_field: bool = False,
-    has_metric: bool = False,
     instructions: list[dict] | None = None,
 ):
-    _instructions = ""
-    if configuration:
-        if configuration.fiscal_year:
-            _instructions += f"\n- For calendar year related computation, it should be started from {configuration.fiscal_year.start} to {configuration.fiscal_year.end}\n\n"
-    if has_calculated_field:
-        _instructions += calculated_field_instructions
-    if has_metric:
-        _instructions += metric_instructions
-    if instructions:
-        _instructions += "\n\n".join(
-            [f"{instruction.get('instruction')}\n\n" for instruction in instructions]
+    _instructions = []
+    if configuration and configuration.fiscal_year:
+        _instructions.append(
+            f"For calendar year related computation, it should be started from {configuration.fiscal_year.start} to {configuration.fiscal_year.end}"
         )
+    if instructions:
+        _instructions += [
+            instruction.get("instruction") for instruction in instructions
+        ]
 
     return _instructions
 
