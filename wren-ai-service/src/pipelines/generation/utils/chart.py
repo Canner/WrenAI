@@ -106,6 +106,13 @@ class ChartGenerationPostProcessor:
                     }
                     chart_schema["height"] = 320
                     chart_schema["width"] = "container"
+                if "encoding" in chart_schema:
+                    if "x" in chart_schema["encoding"]:
+                        if "axis" in chart_schema["encoding"]["x"]:
+                            chart_schema["encoding"]["x"]["axis"]["labelAngle"] = 0
+                    if "y" in chart_schema["encoding"]:
+                        if "axis" in chart_schema["encoding"]["y"]:
+                            chart_schema["encoding"]["y"]["axis"]["labelAngle"] = 0
 
                 if chart_theme:
                     if "config" not in chart_schema:
