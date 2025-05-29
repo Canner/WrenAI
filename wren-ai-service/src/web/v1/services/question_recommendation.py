@@ -225,14 +225,14 @@ class QuestionRecommendation:
 
         except orjson.JSONDecodeError as e:
             self._handle_exception(
-                input,
+                input.event_id,
                 f"Failed to parse MDL: {str(e)}",
                 code="MDL_PARSE_ERROR",
                 trace_id=trace_id,
             )
         except Exception as e:
             self._handle_exception(
-                input,
+                input.event_id,
                 f"An error occurred during question recommendation generation: {str(e)}",
                 trace_id=trace_id,
             )
