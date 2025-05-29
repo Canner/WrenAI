@@ -153,6 +153,7 @@ CHART_GENERATION_GENERAL_INSTRUCTIONS = """
 - Please remember to add the "title" field to the vega-lite schema.
 - Please remember to add the legend to the vega-lite schema.
 - Please remember to add the "tooltip" field to the vega-lite schema.
+- Please think hard and consider each example in SAMPLE_VEGA_LITE_SCHEMA_EXAMPLES first to generate the most appropriate vega-lite schema based on the sample data and the user's request.
 - The language of the "title" field should be the same as the language provided by the user.
 - If the sample data is empty, return an empty string as the value of the "chart_schema" field and explain the reason in the "reasoning" field.
 - If there is only one column in the sample data and the column is not a number, return an empty string as the value of the "chart_schema" field and explain the reason in the "reasoning" field.
@@ -709,7 +710,7 @@ Sample schema:
   ]
 }
 
-**Box plot with raw data**
+**Box plot with raw data(single quantitative field)**
 When to use:
 - Use when you want to visualize the distribution of a numeric variable across categories.
 - Ideal for comparing the spread and central tendency of data across different groups.
@@ -727,7 +728,7 @@ Sample schema:
   }
 }
 
-**Box plot with pre-aggregated data**
+**Box plot with pre-aggregated data(min, Q1, median, Q3, max, etc.)**
 When to use:
 - Use when you want to visualize the distribution of a numeric variable across categories.
 - Ideal for comparing the spread and central tendency of data across different groups.
