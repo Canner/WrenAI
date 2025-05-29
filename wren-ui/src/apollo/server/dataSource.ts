@@ -117,15 +117,27 @@ const dataSource = {
 
   // mysql
   [DataSourceName.MYSQL]: {
-    sensitiveProps: ['password'],
+    sensitiveProps: ['password', 'sslCA'],
     toIbisConnectionInfo(connectionInfo) {
       const decryptedConnectionInfo = decryptConnectionInfo(
         DataSourceName.MYSQL,
         connectionInfo,
       );
-      const { host, port, database, user, password } =
+      const { host, port, database, user, password, ...ssl } =
         decryptedConnectionInfo as MYSQL_CONNECTION_INFO;
-      return { host, port, database, user, password };
+      return {
+        host,
+        port,
+        database,
+        user,
+        password,
+        sslMode: ssl.sslMode,
+        ...(ssl.sslCA && {
+          sslCA: Buffer.from(
+            ssl.sslCA,
+          ).toString('base64')
+        }),
+      };
     },
   } as IDataSourceConnectionInfo<
     MYSQL_CONNECTION_INFO,

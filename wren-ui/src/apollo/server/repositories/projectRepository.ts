@@ -8,7 +8,7 @@ import {
   snakeCase,
   isEmpty,
 } from 'lodash';
-import { DataSourceName } from '@server/types';
+import { DataSourceName, SSLMode } from '@server/types';
 
 export interface BIG_QUERY_CONNECTION_INFO {
   projectId: string;
@@ -30,6 +30,8 @@ export interface MYSQL_CONNECTION_INFO {
   user: string;
   password: string;
   database: string;
+  sslMode: SSLMode;
+  sslCA?: string;
 }
 
 export interface ORACLE_CONNECTION_INFO {
