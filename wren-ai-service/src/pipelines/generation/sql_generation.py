@@ -5,7 +5,7 @@ from typing import Any, Optional
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
-from langfuse.decorators import observe
+from langfuse.decorators import langfuse_context, observe
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
@@ -110,7 +110,18 @@ async def generate_sql(
     prompt: dict,
     generator: Any,
 ) -> dict:
-    return await generator(prompt=prompt.get("prompt"))
+    langfuse_context.update_current_observation(
+        model="gpt-4.1-mini-2025-04-14",
+    )
+
+    result = await generator(prompt=prompt.get("prompt"))
+
+    if meta := result.get("meta", []):
+        langfuse_context.update_current_observation(
+            usage_details=meta[0].get("usage", {}),
+        )
+
+    return result
 
 
 @observe(capture_input=False)
