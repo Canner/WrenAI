@@ -30,6 +30,7 @@ export interface MYSQL_CONNECTION_INFO {
   user: string;
   password: string;
   database: string;
+  ssl: boolean;
 }
 
 export interface ORACLE_CONNECTION_INFO {

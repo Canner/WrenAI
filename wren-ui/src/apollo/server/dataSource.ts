@@ -123,9 +123,16 @@ const dataSource = {
         DataSourceName.MYSQL,
         connectionInfo,
       );
-      const { host, port, database, user, password } =
+      const { host, port, database, user, password, ssl } =
         decryptedConnectionInfo as MYSQL_CONNECTION_INFO;
-      return { host, port, database, user, password };
+      return {
+        host,
+        port,
+        database,
+        user,
+        password,
+        sslMode: ssl ? 'ENABLED' : 'DISABLED',
+      };
     },
   } as IDataSourceConnectionInfo<
     MYSQL_CONNECTION_INFO,
