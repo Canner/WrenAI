@@ -68,7 +68,7 @@ def connect_chunks(chunk: Any, chunks: List[StreamingChunk]) -> ChatMessage:
             "model": chunk.model,
             "index": 0,
             "finish_reason": chunk.choices[0].finish_reason,
-            "usage": {},  # we don't have usage data for streaming responses
+            "usage": chunk.usage,
         }
     )
     return complete_response
