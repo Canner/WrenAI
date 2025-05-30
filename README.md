@@ -46,8 +46,6 @@ https://github.com/user-attachments/assets/f9c1cb34-5a95-4580-8890-ec9644da4160
 
 [Watch GenBI Demo](https://github.com/user-attachments/assets/90ad1d35-bb1e-490b-9676-b29863ff090b)
 
-👉 Try with your data on [Wren AI Cloud](https://getwren.ai/?utm_source=github&utm_medium=content&utm_campaign=readme) or [Install in your local environment](https://docs.getwren.ai/oss/installation/?utm_source=github&utm_medium=content&utm_campaign=readme)
-
 ## 🤖 Features
 
 |                    | What you get | Why it matters |
@@ -63,8 +61,9 @@ https://github.com/user-attachments/assets/f9c1cb34-5a95-4580-8890-ec9644da4160
 
 Using Wren AI is super simple, you can set it up within 3 minutes, and start to interact with your data!
 
-- Visit our [Installation Guide of Wren AI](http://docs.getwren.ai/oss/installation?utm_source=github&utm_medium=content&utm_campaign=readme).
+- Visit our [Install in your local environment](http://docs.getwren.ai/oss/installation?utm_source=github&utm_medium=content&utm_campaign=readme).
 - Visit the [Usage Guides](https://docs.getwren.ai/oss/guide/connect/overview?utm_source=github&utm_medium=content&utm_campaign=readme) to learn more about how to use Wren AI.
+- Or just start with [Wren AI Cloud](https://getwren.ai/?utm_source=github&utm_medium=content&utm_campaign=readme) with zero setup ([OSS vs. Commercial Plans](https://docs.getwren.ai/oss/overview/cloud_vs_self_host)).
 
 ## 🏗️ Architecture
 
