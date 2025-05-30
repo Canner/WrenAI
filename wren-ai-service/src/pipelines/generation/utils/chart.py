@@ -22,6 +22,14 @@ def load_chart_theme() -> Dict[str, Any]:
         return {}
 
 
+def safe_str(x):
+    try:
+        hash(x)
+        return x
+    except TypeError:
+        return str(x)
+
+
 @component
 class ChartDataPreprocessor:
     @component.output_types(
@@ -38,9 +46,10 @@ class ChartDataPreprocessor:
             column.get("name", "") if isinstance(column, dict) else column
             for column in data.get("columns", [])
         ]
-        data = data.get("data", [])
+        raw_rows = data.get("data", [])
+        cleaned_rows = [[safe_str(cell) for cell in row] for row in raw_rows]
 
-        df = pd.DataFrame(data, columns=columns)
+        df = pd.DataFrame(cleaned_rows, columns=columns)
         sample_column_values = {
             col: list(df[col].unique())[:sample_column_size] for col in df.columns
         }
