@@ -3,7 +3,7 @@ from dataclasses import asdict
 from typing import Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.globals import (
     ServiceContainer,
@@ -90,7 +90,7 @@ class PostRequest(BaseModel):
     user_prompt: str
     mdl: str
     project_id: Optional[str] = None
-    configuration: Optional[Configuration] = Configuration()
+    configuration: Configuration = Field(default_factory=Configuration)
 
 
 class PostResponse(BaseModel):

@@ -336,7 +336,7 @@ class DBSchema(BasicPipeline):
         self,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
-        column_batch_size: Optional[int] = 50,
+        column_batch_size: int = 50,
         **kwargs,
     ) -> None:
         dbschema_store = document_store_provider.get_store()

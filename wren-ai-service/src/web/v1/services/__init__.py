@@ -30,8 +30,8 @@ class Configuration(BaseModel):
         utc_offset: str = ""  # Deprecated, will be removed in the future
 
     fiscal_year: Optional[FiscalYear] = None
-    language: Optional[str] = "English"
-    timezone: Optional[Timezone] = Timezone()
+    language: str = "English"
+    timezone: Timezone = Timezone()
 
 
 class SSEEvent(BaseModel):

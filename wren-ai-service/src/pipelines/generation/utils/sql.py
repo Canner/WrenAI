@@ -31,7 +31,7 @@ class SQLGenPostProcessor:
     async def run(
         self,
         replies: List[str] | List[List[str]],
-        timeout: Optional[float] = 30.0,
+        timeout: float = 30.0,
         project_id: str | None = None,
     ) -> dict:
         try:
