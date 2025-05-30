@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.pipelines.common import build_table_ddl
+from src.utils import trace_cost
 from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
@@ -315,13 +316,16 @@ def prompt(
 
 
 @observe(as_type="generation", capture_input=False)
+@trace_cost
 async def filter_columns_in_tables(
-    prompt: dict, table_columns_selection_generator: Any
+    prompt: dict, table_columns_selection_generator: Any, generator_name: str
 ) -> dict:
     if prompt:
-        return await table_columns_selection_generator(prompt=prompt.get("prompt"))
+        return await table_columns_selection_generator(
+            prompt=prompt.get("prompt")
+        ), generator_name
     else:
-        return {}
+        return {}, generator_name
 
 
 @observe()
@@ -452,6 +456,7 @@ class DbSchemaRetrieval(BasicPipeline):
                 system_prompt=table_columns_selection_system_prompt,
                 generation_kwargs=RETRIEVAL_MODEL_KWARGS,
             ),
+            "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
                 template=table_columns_selection_user_prompt_template
             ),

@@ -17,6 +17,7 @@ from src.pipelines.generation.utils.sql import (
     TEXT_TO_SQL_RULES,
     SQLGenPostProcessor,
 )
+from src.utils import trace_cost
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -70,13 +71,16 @@ def prompts(
 
 
 @observe(as_type="generation", capture_input=False)
-async def generate_sql_corrections(prompts: list[dict], generator: Any) -> list[dict]:
+@trace_cost
+async def generate_sql_corrections(
+    prompts: list[dict], generator: Any, generator_name: str
+) -> list[dict]:
     tasks = []
     for prompt in prompts:
         task = asyncio.ensure_future(generator(prompt=prompt.get("prompt")))
         tasks.append(task)
 
-    return await asyncio.gather(*tasks)
+    return await asyncio.gather(*tasks), generator_name
 
 
 @observe(capture_input=False)
@@ -109,6 +113,7 @@ class SQLCorrection(BasicPipeline):
                 system_prompt=sql_correction_system_prompt,
                 generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
             ),
+            "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
                 template=sql_correction_user_prompt_template
             ),

@@ -19,6 +19,7 @@ from src.pipelines.generation.utils.sql import (
     metric_instructions,
 )
 from src.pipelines.retrieval.sql_functions import SqlFunction
+from src.utils import trace_cost
 from src.web.v1.services import Configuration
 
 logger = logging.getLogger("wren-ai-service")
@@ -119,11 +120,13 @@ def prompt(
 
 
 @observe(as_type="generation", capture_input=False)
+@trace_cost
 async def regenerate_sql(
     prompt: dict,
     generator: Any,
+    generator_name: str,
 ) -> dict:
-    return await generator(prompt=prompt.get("prompt"))
+    return await generator(prompt=prompt.get("prompt")), generator_name
 
 
 @observe(capture_input=False)
@@ -156,6 +159,7 @@ class SQLRegeneration(BasicPipeline):
                 system_prompt=sql_regeneration_system_prompt,
                 generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
             ),
+            "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
                 template=sql_regeneration_user_prompt_template
             ),

@@ -14,6 +14,7 @@ from src.pipelines.generation.utils.sql import (
     construct_instructions,
     sql_generation_reasoning_system_prompt,
 )
+from src.utils import trace_cost
 from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
 
@@ -84,11 +85,17 @@ def prompt(
 
 
 @observe(as_type="generation", capture_input=False)
-async def generate_sql_reasoning(prompt: dict, generator: Any, query_id: str) -> dict:
+@trace_cost
+async def generate_sql_reasoning(
+    prompt: dict,
+    generator: Any,
+    query_id: str,
+    generator_name: str,
+) -> dict:
     return await generator(
         prompt=prompt.get("prompt"),
         query_id=query_id,
-    )
+    ), generator_name
 
 
 @observe()
@@ -113,6 +120,7 @@ class FollowUpSQLGenerationReasoning(BasicPipeline):
                 system_prompt=sql_generation_reasoning_system_prompt,
                 streaming_callback=self._streaming_callback,
             ),
+            "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
                 template=sql_generation_reasoning_user_prompt_template
             ),

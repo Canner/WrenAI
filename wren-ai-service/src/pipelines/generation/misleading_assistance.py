@@ -10,6 +10,7 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
+from src.utils import trace_cost
 from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
@@ -68,11 +69,14 @@ def prompt(
 
 
 @observe(as_type="generation", capture_input=False)
-async def misleading_assistance(prompt: dict, generator: Any, query_id: str) -> dict:
+@trace_cost
+async def misleading_assistance(
+    prompt: dict, generator: Any, query_id: str, generator_name: str
+) -> dict:
     return await generator(
         prompt=prompt.get("prompt"),
         query_id=query_id,
-    )
+    ), generator_name
 
 
 ## End of Pipeline
@@ -90,6 +94,7 @@ class MisleadingAssistance(BasicPipeline):
                 system_prompt=misleading_assistance_system_prompt,
                 streaming_callback=self._streaming_callback,
             ),
+            "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
                 template=misleading_assistance_user_prompt_template
             ),

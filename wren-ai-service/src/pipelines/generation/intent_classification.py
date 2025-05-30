@@ -15,6 +15,7 @@ from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.pipelines.common import build_table_ddl
 from src.pipelines.generation.utils.sql import construct_instructions
+from src.utils import trace_cost
 from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
 
@@ -280,8 +281,9 @@ def prompt(
 
 
 @observe(as_type="generation", capture_input=False)
-async def classify_intent(prompt: dict, generator: Any) -> dict:
-    return await generator(prompt=prompt.get("prompt"))
+@trace_cost
+async def classify_intent(prompt: dict, generator: Any, generator_name: str) -> dict:
+    return await generator(prompt=prompt.get("prompt")), generator_name
 
 
 @observe(capture_input=False)
@@ -348,6 +350,7 @@ class IntentClassification(BasicPipeline):
                 system_prompt=intent_classification_system_prompt,
                 generation_kwargs=INTENT_CLASSIFICAION_MODEL_KWARGS,
             ),
+            "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
                 template=intent_classification_user_prompt_template
             ),

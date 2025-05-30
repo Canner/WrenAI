@@ -161,6 +161,30 @@ def trace_metadata(func):
     return wrapper
 
 
+def trace_cost(func):
+    @functools.wraps(func)
+    async def wrapper(*args, **kwargs):
+        result, generator_name = await func(*args, **kwargs)
+
+        if isinstance(result, dict):
+            if meta := result.get("meta", []):
+                langfuse_context.update_current_observation(
+                    model=generator_name,
+                    usage_details=meta[0].get("usage", {}),
+                )
+        elif isinstance(result, list):
+            for item in result:
+                if meta := item.get("meta", []):
+                    langfuse_context.update_current_observation(
+                        model=generator_name,
+                        usage_details=meta[0].get("usage", {}),
+                    )
+
+        return result
+
+    return wrapper
+
+
 def fetch_wren_ai_docs(doc_endpoint: str, is_oss: bool) -> list[dict]:
     doc_endpoint = remove_trailing_slash(doc_endpoint)
     api_endpoint = (
@@ -189,10 +213,11 @@ def fetch_wren_ai_docs(doc_endpoint: str, is_oss: bool) -> list[dict]:
 
     return results
 
+
 def extract_braces_content(resp: str) -> str:
     """
     Extracts JSON content enclosed in a markdown code block that starts with ```json.
     Returns the JSON string including braces, or the original string if no match is found.
     """
-    match = re.search(r'```json\s*(\{.*?\})\s*```', resp, re.DOTALL)
+    match = re.search(r"```json\s*(\{.*?\})\s*```", resp, re.DOTALL)
     return match.group(1) if match else resp

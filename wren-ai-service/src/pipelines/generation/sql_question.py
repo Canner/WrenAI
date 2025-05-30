@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
+from src.utils import trace_cost
 from src.web.v1.services import Configuration
 
 logger = logging.getLogger("wren-ai-service")
@@ -61,11 +62,14 @@ def prompts(
 
 
 @observe(as_type="generation", capture_input=False)
-async def generate_sql_questions(prompts: list[dict], generator: Any) -> list[dict]:
+@trace_cost
+async def generate_sql_questions(
+    prompts: list[dict], generator: Any, generator_name: str
+) -> list[dict]:
     # use asyncio.gather to run all prompts in parallel
     return await asyncio.gather(
         *[generator(prompt=prompt.get("prompt")) for prompt in prompts]
-    )
+    ), generator_name
 
 
 @observe(capture_input=False)
@@ -107,6 +111,7 @@ class SQLQuestion(BasicPipeline):
                 system_prompt=sql_question_system_prompt,
                 generation_kwargs=SQL_QUESTION_MODEL_KWARGS,
             ),
+            "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(template=sql_question_user_prompt_template),
         }
 
