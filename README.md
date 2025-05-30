@@ -74,7 +74,7 @@ Using Wren AI is super simple, you can set it up within 3 minutes, and start to 
 👉 [Learn more about our Design](https://getwren.ai/post/how-we-design-our-semantic-engine-for-llms-the-backbone-of-the-semantic-layer-for-llm-architecture?utm_source=github&utm_medium=content&utm_campaign=readme)
 
 
-## Supported Data Sources
+## 🔌 Data Sources
 
 If your data source is not listed here, vote for it in our [GitHub discussion thread](https://github.com/Canner/WrenAI/discussions/327). It will be a valuable input for us to decide on the next supported data sources.
 - BigQuery
@@ -86,7 +86,7 @@ If your data source is not listed here, vote for it in our [GitHub discussion th
 - Trino
 - Snowflake
 
-## Supported LLM Models
+## 🤖 LLM Models
 
 Wren AI supports integration with various Large Language Models (LLMs), including but not limited to:
 - OpenAI Models
@@ -109,9 +109,9 @@ Check [configuration examples here](https://github.com/Canner/WrenAI/tree/main/w
 
 Visit [Wren AI documentation](https://docs.getwren.ai/oss/overview/introduction?utm_source=github&utm_medium=content&utm_campaign=readme) to view the full documentation.
 
-## ❤️ Knowledge Sharing From Wren AI
+## 📪 Keep Posted?
 
-Want to get our latest sharing? [Follow our blog!](https://www.getwren.ai/blog/?utm_source=github&utm_medium=content&utm_campaign=readme)
+Want to get our latest updates? [Follow our blog!](https://www.getwren.ai/blog/?utm_source=github&utm_medium=content&utm_campaign=readme) and [LinkedIn](https://www.linkedin.com/company/wrenai)
 
 ## 🛠️ Contribution
 
