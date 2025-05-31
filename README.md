@@ -111,7 +111,7 @@ Visit [Wren AI documentation](https://docs.getwren.ai/oss/overview/introduction?
 
 ## 📪 Keep Posted?
 
-Want to get our latest updates? [Follow our blog!](https://www.getwren.ai/blog/?utm_source=github&utm_medium=content&utm_campaign=readme) and [LinkedIn](https://www.linkedin.com/company/wrenai)
+[Subscribe our blog](https://www.getwren.ai/blog/?utm_source=github&utm_medium=content&utm_campaign=readme) and [Follow our LinkedIn](https://www.linkedin.com/company/wrenai)
 
 ## 🛠️ Contribution
 
