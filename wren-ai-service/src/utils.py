@@ -166,19 +166,13 @@ def trace_cost(func):
     async def wrapper(*args, **kwargs):
         result, generator_name = await func(*args, **kwargs)
 
+        # WIP: deal with the case where the result is a list of dicts
         if isinstance(result, dict):
             if meta := result.get("meta", []):
                 langfuse_context.update_current_observation(
                     model=generator_name,
                     usage_details=meta[0].get("usage", {}),
                 )
-        elif isinstance(result, list):
-            for item in result:
-                if meta := item.get("meta", []):
-                    langfuse_context.update_current_observation(
-                        model=generator_name,
-                        usage_details=meta[0].get("usage", {}),
-                    )
 
         return result
 
