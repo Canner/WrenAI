@@ -99,6 +99,8 @@ class ChartGenerationPostProcessor:
                     "$schema"
                 ] = "https://vega.github.io/schema/vega-lite/v5.json"
                 chart_schema["data"] = {"values": sample_data}
+
+                # tooltip
                 if "mark" in chart_schema:
                     if isinstance(chart_schema["mark"], str):
                         chart_schema["mark"] = {
@@ -107,7 +109,12 @@ class ChartGenerationPostProcessor:
                         }
                     else:
                         chart_schema["mark"]["tooltip"] = True
-                if "hconcat" not in chart_schema and "vconcat" not in chart_schema:
+
+                # setting height and width
+                if (
+                    "mark" in chart_schema
+                    and chart_schema["mark"]["type"] in ["arc", "text"]
+                ) or "projection" in chart_schema:
                     chart_schema["autosize"] = {
                         "type": "fit",
                         "contains": "padding",
@@ -115,10 +122,22 @@ class ChartGenerationPostProcessor:
                     }
                     chart_schema["height"] = 320
                     chart_schema["width"] = "container"
+                elif (
+                    "hconcat" in chart_schema
+                    or "vconcat" in chart_schema
+                    or "layer" in chart_schema
+                ):
+                    chart_schema["height"] = {"step": 70}
+                    chart_schema["width"] = {"step": 70}
+                else:
+                    chart_schema["height"] = {"step": 35}
+                    chart_schema["width"] = {"step": 35}
+
+                # axis label angle
                 if "encoding" in chart_schema:
                     if "x" in chart_schema["encoding"]:
                         if "axis" in chart_schema["encoding"]["x"]:
-                            chart_schema["encoding"]["x"]["axis"]["labelAngle"] = 0
+                            chart_schema["encoding"]["x"]["axis"]["labelAngle"] = -45
                     if "y" in chart_schema["encoding"]:
                         if "axis" in chart_schema["encoding"]["y"]:
                             chart_schema["encoding"]["y"]["axis"]["labelAngle"] = 0
@@ -176,6 +195,7 @@ CHART_GENERATION_GENERAL_INSTRUCTIONS = """
 - If there is only one column in the sample data and the column is a number, chart type should be "text", the font size should be 60, width should be 300, height should be 100.
 - If user is asking for a chart showing proportion/percentage by a certain column, chart type should be "donut chart".
 - For horizontal bar charts, the order of the bars should be sorted descendingly by the value of the y-axis.
+- We don't support "table" chart type, please leave the vega-lite schema empty string and explain the reason in the "reasoning" field.
 """
 
 SAMPLE_VEGA_LITE_SCHEMA_EXAMPLES = """
@@ -301,7 +321,7 @@ Sample schema:
 
 **Stacked bar chart**
 When to use:
-- Use when you want to compare the values of different categories and the values of the categories are related.
+- Use when you want to compare the values of different categories aggregated together and the values of the categories are related.
 - Ideal for comparing values across categories, such as sales by product or revenue by region.
 Sample schema:
 {
@@ -314,6 +334,39 @@ Sample schema:
                 "title":"Quarter"
             }
         },
+        "y": {
+            "field":"Profit",
+            "type":"quantitative",
+            "axis": {
+                "title":"Profit"
+            }
+        },
+        "color": {
+            "field":"Region",
+            "type":"nominal",
+            "legend": {
+                "title":"Region"
+            }
+        }
+    }
+}
+
+**Grouped bar chart**
+When to use:
+- Use when you want to compare the values of different categories each by itself and the values of the categories are related.
+- Ideal for comparing values across categories, such as sales by product or revenue by region.
+Sample schema:
+{
+    "mark": {"type": "bar", "tooltip": True},
+    "encoding": {
+        "x": {
+            "field":"quarter",
+            "type":"ordinal",
+            "axis": {
+                "title":"Quarter"
+            }
+        },
+        "xOffset": {"field": "quarter"},
         "y": {
             "field":"Profit",
             "type":"quantitative",
