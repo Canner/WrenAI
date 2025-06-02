@@ -18,6 +18,7 @@ from src.pipelines.generation.utils.chart import (
     ChartSchemaPreprocessor,
     load_chart_theme,
 )
+from src.utils import trace_cost
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -109,10 +110,16 @@ def prompt(
 
 
 @observe(as_type="generation", capture_input=False)
+@trace_cost
 async def generate_chart_adjustment(
-    prompt: dict, image_url: str, generator: Any
+    prompt: dict,
+    image_url: str,
+    generator: Any,
+    generator_name: str,
 ) -> dict:
-    return await generator(prompt=prompt.get("prompt"), image_url=image_url)
+    return await generator(
+        prompt=prompt.get("prompt"), image_url=image_url
+    ), generator_name
 
 
 @observe(capture_input=False)
@@ -151,6 +158,7 @@ class ChartAdjustment(BasicPipeline):
                 system_prompt=chart_adjustment_system_prompt,
                 generation_kwargs=CHART_GENERATION_MODEL_KWARGS,
             ),
+            "generator_name": llm_provider.get_model(),
             "chart_data_preprocessor": ChartDataPreprocessor(),
             "chart_schema_preprocessor": ChartSchemaPreprocessor(),
             "post_processor": ChartGenerationPostProcessor(),

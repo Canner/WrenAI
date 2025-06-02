@@ -17,6 +17,7 @@ from src.pipelines.generation.utils.chart import (
     ChartGenerationPostProcessor,
     load_chart_theme,
 )
+from src.utils import trace_cost
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -89,8 +90,9 @@ def prompt(
 
 
 @observe(as_type="generation", capture_input=False)
-async def generate_chart(prompt: dict, generator: Any) -> dict:
-    return await generator(prompt=prompt.get("prompt"))
+@trace_cost
+async def generate_chart(prompt: dict, generator: Any, generator_name: str) -> dict:
+    return await generator(prompt=prompt.get("prompt")), generator_name
 
 
 @observe(capture_input=False)
@@ -129,6 +131,7 @@ class ChartGeneration(BasicPipeline):
                 system_prompt=chart_generation_system_prompt,
                 generation_kwargs=CHART_GENERATION_MODEL_KWARGS,
             ),
+            "generator_name": llm_provider.get_model(),
             "chart_data_preprocessor": ChartDataPreprocessor(),
             "post_processor": ChartGenerationPostProcessor(),
         }

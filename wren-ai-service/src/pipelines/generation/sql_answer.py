@@ -10,6 +10,7 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
+from src.utils import trace_cost
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -63,8 +64,13 @@ def prompt(
 
 
 @observe(as_type="generation", capture_input=False)
-async def generate_answer(prompt: dict, generator: Any, query_id: str) -> dict:
-    return await generator(prompt=prompt.get("prompt"), query_id=query_id)
+@trace_cost
+async def generate_answer(
+    prompt: dict, generator: Any, query_id: str, generator_name: str
+) -> dict:
+    return await generator(
+        prompt=prompt.get("prompt"), query_id=query_id
+    ), generator_name
 
 
 ## End of Pipeline
@@ -85,6 +91,7 @@ class SQLAnswer(BasicPipeline):
                 system_prompt=sql_to_answer_system_prompt,
                 streaming_callback=self._streaming_callback,
             ),
+            "generator_name": llm_provider.get_model(),
         }
 
         super().__init__(

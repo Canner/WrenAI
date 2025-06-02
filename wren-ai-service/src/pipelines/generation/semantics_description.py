@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
+from src.utils import trace_cost
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -65,8 +66,9 @@ def prompt(
 
 
 @observe(as_type="generation", capture_input=False)
-async def generate(prompt: dict, generator: Any) -> dict:
-    return await generator(prompt=prompt.get("prompt"))
+@trace_cost
+async def generate(prompt: dict, generator: Any, generator_name: str) -> dict:
+    return await generator(prompt=prompt.get("prompt")), generator_name
 
 
 @observe(capture_input=False)
@@ -214,6 +216,7 @@ class SemanticsDescription(BasicPipeline):
                 system_prompt=system_prompt,
                 generation_kwargs=SEMANTICS_DESCRIPTION_MODEL_KWARGS,
             ),
+            "generator_name": llm_provider.get_model(),
         }
         self._final = "output"
 
