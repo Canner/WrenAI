@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import sys
 from typing import Any
@@ -47,39 +46,30 @@ Let's think step by step.
 
 ## Start of Pipeline
 @observe(capture_input=False)
-def prompts(
-    sqls: list[str],
+def prompt(
+    sql: str,
     language: str,
     prompt_builder: PromptBuilder,
-) -> list[dict]:
-    return [
-        prompt_builder.run(
-            sql=sql,
-            language=language,
-        )
-        for sql in sqls
-    ]
+) -> dict:
+    return prompt_builder.run(
+        sql=sql,
+        language=language,
+    )
 
 
 @observe(as_type="generation", capture_input=False)
 @trace_cost
-async def generate_sql_questions(
-    prompts: list[dict], generator: Any, generator_name: str
-) -> list[dict]:
-    # use asyncio.gather to run all prompts in parallel
-    return await asyncio.gather(
-        *[generator(prompt=prompt.get("prompt")) for prompt in prompts]
-    ), generator_name
+async def generate_sql_question(
+    prompt: dict, generator: Any, generator_name: str
+) -> dict:
+    return await generator(prompt=prompt.get("prompt")), generator_name
 
 
 @observe(capture_input=False)
-async def post_process(
-    generate_sql_questions: list[dict],
-) -> list[dict]:
-    return [
-        orjson.loads(result.get("replies")[0])["question"]
-        for result in generate_sql_questions
-    ]
+def post_process(
+    generate_sql_question: dict,
+) -> str:
+    return orjson.loads(generate_sql_question.get("replies")[0])["question"]
 
 
 ## End of Pipeline
@@ -122,14 +112,14 @@ class SQLQuestion(BasicPipeline):
     @observe(name="Sql Question Generation")
     async def run(
         self,
-        sqls: list[str],
+        sql: str,
         configuration: Configuration = Configuration(),
     ):
         logger.info("Sql Question Generation pipeline is running...")
         return await self._pipe.execute(
             ["post_process"],
             inputs={
-                "sqls": sqls,
+                "sql": sql,
                 "language": configuration.language or "English",
                 **self._components,
             },
@@ -142,6 +132,6 @@ if __name__ == "__main__":
     dry_run_pipeline(
         SQLQuestion,
         "sql_question",
-        sqls=["SELECT * FROM table", "SELECT * FROM table2"],
+        sql="SELECT * FROM table",
         configuration=Configuration(),
     )

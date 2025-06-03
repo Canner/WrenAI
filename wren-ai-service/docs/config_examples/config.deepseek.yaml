@@ -55,7 +55,7 @@ endpoint: http://wren-ui:3000
 ---
 type: engine
 provider: wren_ibis
-endpoint: http://wren-ibis:8000
+endpoint: http://ibis-server:8000
 
 ---
 type: document_store
