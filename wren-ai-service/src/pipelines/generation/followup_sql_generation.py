@@ -20,6 +20,7 @@ from src.pipelines.generation.utils.sql import (
     sql_generation_system_prompt,
 )
 from src.pipelines.retrieval.sql_functions import SqlFunction
+from src.utils import trace_cost
 from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
 
@@ -110,13 +111,17 @@ def prompt(
 
 
 @observe(as_type="generation", capture_input=False)
+@trace_cost
 async def generate_sql_in_followup(
-    prompt: dict, generator: Any, histories: list[AskHistory]
+    prompt: dict,
+    generator: Any,
+    histories: list[AskHistory],
+    generator_name: str,
 ) -> dict:
     history_messages = construct_ask_history_messages(histories)
     return await generator(
         prompt=prompt.get("prompt"), history_messages=history_messages
-    )
+    ), generator_name
 
 
 @observe(capture_input=False)
@@ -149,6 +154,7 @@ class FollowUpSQLGeneration(BasicPipeline):
                 system_prompt=sql_generation_system_prompt,
                 generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
             ),
+            "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
                 template=text_to_sql_with_followup_user_prompt_template
             ),
