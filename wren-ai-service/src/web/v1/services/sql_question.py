@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Dict, Literal, Optional
 
@@ -47,6 +48,7 @@ class SqlQuestionResultResponse(BaseModel):
     questions: Optional[list[str]] = None
     trace_id: Optional[str] = None
 
+
 class SqlQuestionService:
     def __init__(
         self,
@@ -83,20 +85,23 @@ class SqlQuestionService:
                 trace_id=trace_id,
             )
 
-            sql_questions_result = (
-                await self._pipelines["sql_question_generation"].run(
-                    sqls=sql_question_request.sqls,
+            tasks = [
+                self._pipelines["sql_question_generation"].run(
+                    sql=sql,
                     configuration=sql_question_request.configurations,
                 )
-            )["post_process"]
+                for sql in sql_question_request.sqls
+            ]
+            sql_questions_results = await asyncio.gather(*tasks)
+            sql_questions = [res["post_process"] for res in sql_questions_results]
 
             self._sql_question_results[query_id] = SqlQuestionResultResponse(
                 status="succeeded",
-                questions=sql_questions_result,
+                questions=sql_questions,
                 trace_id=trace_id,
             )
 
-            results["sql_question_result"] = sql_questions_result
+            results["sql_question_result"] = sql_questions
             return results
         except Exception as e:
             logger.exception(f"sql question pipeline - OTHERS: {e}")

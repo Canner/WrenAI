@@ -94,7 +94,7 @@ class SqlCorrectionService:
 
             res = await self._pipelines["sql_correction"].run(
                 contexts=table_ddls,
-                invalid_generation_results=[_invalid],
+                invalid_generation_result=_invalid,
                 project_id=project_id,
             )
 
