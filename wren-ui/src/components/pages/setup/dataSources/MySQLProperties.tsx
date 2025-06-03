@@ -66,13 +66,6 @@ export default function MySQLProperties(props: Props) {
       <Form.Item
         label="Password"
         name="password"
-        required
-        rules={[
-          {
-            required: true,
-            message: ERROR_TEXTS.CONNECTION.PASSWORD.REQUIRED,
-          },
-        ]}
       >
         <Input.Password placeholder="input password" />
       </Form.Item>
