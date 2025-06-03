@@ -99,18 +99,18 @@ class SqlCorrectionService:
             )
 
             post_process = res["post_process"]
-            valid = post_process["valid_generation_results"]
-            invalid = post_process["invalid_generation_results"]
+            valid = post_process["valid_generation_result"]
+            invalid = post_process["invalid_generation_result"]
 
             if not valid:
-                error_message = invalid[0]["error"]
+                error_message = invalid["error"]
                 self._handle_exception(
                     event_id,
                     f"An error occurred during SQL correction: {error_message}",
                     trace_id=trace_id,
                 )
             else:
-                corrected = valid[0]["sql"]
+                corrected = valid["sql"]
                 self._cache[event_id] = self.Event(
                     event_id=event_id,
                     status="finished",
