@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -25,8 +24,8 @@ class SQLGenPostProcessor:
         self._engine = engine
 
     @component.output_types(
-        valid_generation_results=List[Optional[Dict[str, Any]]],
-        invalid_generation_results=List[Optional[Dict[str, Any]]],
+        valid_generation_result=Dict[str, Any],
+        invalid_generation_result=Dict[str, Any],
     )
     async def run(
         self,
@@ -35,98 +34,75 @@ class SQLGenPostProcessor:
         project_id: str | None = None,
     ) -> dict:
         try:
-            if isinstance(replies[0], dict):
-                cleaned_generation_result = []
-                for reply in replies:
-                    try:
-                        cleaned_generation_result.append(
-                            orjson.loads(clean_generation_result(reply["replies"][0]))[
-                                "sql"
-                            ]
-                        )
-                    except Exception as e:
-                        logger.exception(f"Error in SQLGenPostProcessor: {e}")
-            else:
-                cleaned_generation_result = orjson.loads(
-                    clean_generation_result(replies[0])
-                )["sql"]
+            cleaned_generation_result = clean_generation_result(replies[0])
 
-            if isinstance(cleaned_generation_result, str):
-                cleaned_generation_result = [cleaned_generation_result]
+            # test if cleaned_generation_result in string format is actually a dictionary with key 'sql'
+            if cleaned_generation_result.startswith("{"):
+                cleaned_generation_result = orjson.loads(cleaned_generation_result)[
+                    "sql"
+                ]
 
             (
-                valid_generation_results,
-                invalid_generation_results,
-            ) = await self._classify_invalid_generation_results(
+                valid_generation_result,
+                invalid_generation_result,
+            ) = await self._classify_generation_result(
                 cleaned_generation_result,
                 project_id=project_id,
                 timeout=timeout,
             )
 
             return {
-                "valid_generation_results": valid_generation_results,
-                "invalid_generation_results": invalid_generation_results,
+                "valid_generation_result": valid_generation_result,
+                "invalid_generation_result": invalid_generation_result,
             }
         except Exception as e:
             logger.exception(f"Error in SQLGenPostProcessor: {e}")
 
             return {
-                "valid_generation_results": [],
-                "invalid_generation_results": [],
+                "valid_generation_result": {},
+                "invalid_generation_result": {},
             }
 
-    async def _classify_invalid_generation_results(
+    async def _classify_generation_result(
         self,
-        generation_results: list[str],
+        generation_result: str,
         timeout: float,
         project_id: str | None = None,
-    ) -> List[Optional[Dict[str, str]]]:
-        valid_generation_results = []
-        invalid_generation_results = []
+    ) -> Dict[str, str]:
+        valid_generation_result = {}
+        invalid_generation_result = {}
 
-        async def _task(sql: str):
-            quoted_sql, error_message = add_quotes(sql)
+        quoted_sql, error_message = add_quotes(generation_result)
 
+        async with aiohttp.ClientSession() as session:
             if not error_message:
                 status, _, addition = await self._engine.execute_sql(
                     quoted_sql, session, project_id=project_id, timeout=timeout
                 )
 
                 if status:
-                    valid_generation_results.append(
-                        {
-                            "sql": quoted_sql,
-                            "correlation_id": addition.get("correlation_id", ""),
-                        }
-                    )
+                    valid_generation_result = {
+                        "sql": quoted_sql,
+                        "correlation_id": addition.get("correlation_id", ""),
+                    }
                 else:
                     error_message = addition.get("error_message", "")
-                    invalid_generation_results.append(
-                        {
-                            "sql": quoted_sql,
-                            "type": "TIME_OUT"
-                            if error_message.startswith("Request timed out")
-                            else "DRY_RUN",
-                            "error": error_message,
-                            "correlation_id": addition.get("correlation_id", ""),
-                        }
-                    )
-            else:
-                invalid_generation_results.append(
-                    {
-                        "sql": sql,
-                        "type": "ADD_QUOTES",
+                    invalid_generation_result = {
+                        "sql": quoted_sql,
+                        "type": "TIME_OUT"
+                        if error_message.startswith("Request timed out")
+                        else "DRY_RUN",
                         "error": error_message,
+                        "correlation_id": addition.get("correlation_id", ""),
                     }
-                )
+            else:
+                invalid_generation_result = {
+                    "sql": generation_result,
+                    "type": "ADD_QUOTES",
+                    "error": error_message,
+                }
 
-        async with aiohttp.ClientSession() as session:
-            tasks = [
-                _task(generation_result) for generation_result in generation_results
-            ]
-            await asyncio.gather(*tasks)
-
-        return valid_generation_results, invalid_generation_results
+        return valid_generation_result, invalid_generation_result
 
 
 sql_generation_reasoning_system_prompt = """

@@ -121,10 +121,10 @@ class QuestionRecommendation:
 
             post_process = generated_sql["post_process"]
 
-            if len(post_process["valid_generation_results"]) == 0:
+            if len(post_process["valid_generation_result"]) == 0:
                 return post_process
 
-            valid_sql = post_process["valid_generation_results"][0]["sql"]
+            valid_sql = post_process["valid_generation_result"]["sql"]
 
             # Partial update the resource
             current = self._cache[request_id]
