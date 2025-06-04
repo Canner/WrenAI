@@ -8,7 +8,11 @@ import {
   respondWith,
   handleApiError,
 } from '@/apollo/server/utils/apiUtils';
-import { ChartResult, ChartStatus } from '@/apollo/server/models/adaptor';
+import {
+  ChartResult,
+  ChartStatus,
+  WrenAILanguage,
+} from '@/apollo/server/models/adaptor';
 import { PreviewDataResponse } from '@server/services/queryService';
 import { transformToObjects } from '@server/utils/dataUtils';
 import { enhanceVegaSpec } from '@/utils/vegaSpecUtils';
@@ -122,6 +126,9 @@ export default async function handler(
       query: question,
       sql,
       projectId: project.id.toString(),
+      configurations: {
+        language: WrenAILanguage[project.language] || WrenAILanguage.EN,
+      },
     });
 
     if (!task || !task.queryId) {
