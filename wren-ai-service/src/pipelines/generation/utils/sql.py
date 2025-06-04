@@ -401,10 +401,6 @@ def construct_instructions(
     instructions: list[dict] | None = None,
 ):
     _instructions = []
-    if configuration and configuration.fiscal_year:
-        _instructions.append(
-            f"For calendar year related computation, it should be started from {configuration.fiscal_year.start} to {configuration.fiscal_year.end}"
-        )
     if instructions:
         _instructions += [
             instruction.get("instruction") for instruction in instructions
