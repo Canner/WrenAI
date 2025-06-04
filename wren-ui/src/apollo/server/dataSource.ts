@@ -123,9 +123,16 @@ const dataSource = {
         DataSourceName.MYSQL,
         connectionInfo,
       );
-      const { host, port, database, user, password } =
+      const { host, port, database, user, password, ssl } =
         decryptedConnectionInfo as MYSQL_CONNECTION_INFO;
-      return { host, port, database, user, password };
+      return {
+        host,
+        port,
+        database,
+        user,
+        password,
+        sslMode: ssl ? 'ENABLED' : 'DISABLED',
+      };
     },
   } as IDataSourceConnectionInfo<
     MYSQL_CONNECTION_INFO,
@@ -134,15 +141,27 @@ const dataSource = {
 
   // Oracle
   [DataSourceName.ORACLE]: {
-    sensitiveProps: ['password'],
+    sensitiveProps: ['password', 'dsn'],
     toIbisConnectionInfo(connectionInfo) {
       const decryptedConnectionInfo = decryptConnectionInfo(
         DataSourceName.ORACLE,
         connectionInfo,
       );
-      const { host, port, database, user, password } =
+      const { host, port, database, user, password, dsn } =
         decryptedConnectionInfo as ORACLE_CONNECTION_INFO;
-      return { host, port, database, user, password };
+      return Object.entries({
+        host,
+        port,
+        database,
+        user,
+        password,
+        dsn,
+      }).reduce((acc, [key, value]) => {
+        if (value !== undefined && value !== '') {
+          acc[key] = value;
+        }
+        return acc;
+      }, {});
     },
   } as IDataSourceConnectionInfo<
     ORACLE_CONNECTION_INFO,
