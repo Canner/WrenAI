@@ -1,4 +1,4 @@
-import { Form, Input } from 'antd';
+import { Form, Input, Switch } from 'antd';
 import { ERROR_TEXTS } from '@/utils/error';
 import { FORM_MODE } from '@/utils/enum';
 import { hostValidator } from '@/utils/validator';
@@ -81,6 +81,9 @@ export default function MySQLProperties(props: Props) {
         ]}
       >
         <Input placeholder="MySQL database name" disabled={isEditMode} />
+      </Form.Item>
+      <Form.Item label="Use SSL" name="ssl" valuePropName="checked">
+        <Switch />
       </Form.Item>
     </>
   );
