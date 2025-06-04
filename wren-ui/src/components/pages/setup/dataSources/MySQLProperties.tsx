@@ -63,10 +63,7 @@ export default function MySQLProperties(props: Props) {
       >
         <Input />
       </Form.Item>
-      <Form.Item
-        label="Password"
-        name="password"
-      >
+      <Form.Item label="Password" name="password">
         <Input.Password placeholder="input password" />
       </Form.Item>
       <Form.Item
