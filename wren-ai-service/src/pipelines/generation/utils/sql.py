@@ -12,7 +12,6 @@ from src.core.engine import (
     add_quotes,
     clean_generation_result,
 )
-from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
@@ -397,7 +396,6 @@ Learn about the usage of the schema structures and generate SQL based on them.
 
 
 def construct_instructions(
-    configuration: Configuration | None = Configuration(),
     instructions: list[dict] | None = None,
 ):
     _instructions = []
