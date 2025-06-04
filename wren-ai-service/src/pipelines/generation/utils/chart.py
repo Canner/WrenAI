@@ -122,8 +122,8 @@ class ChartGenerationPostProcessor:
                     }
                     chart_schema["height"] = 320
                     chart_schema["width"] = "container"
-                elif all(
-                    key not in chart_schema
+                elif any(
+                    key in chart_schema
                     for key in ("hconcat", "vconcat", "concat", "layer")
                 ):
                     chart_schema["height"] = {"step": 70}
