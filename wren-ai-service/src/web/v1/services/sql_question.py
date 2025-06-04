@@ -18,7 +18,7 @@ class SqlQuestionRequest(BaseModel):
     _query_id: str | None = None
     sqls: list[str]
     project_id: Optional[str] = None
-    configurations: Optional[Configuration] = Configuration()
+    configurations: Configuration = Configuration()
 
     @property
     def query_id(self) -> str:

@@ -21,7 +21,7 @@ class ChartRequest(BaseModel):
     thread_id: Optional[str] = None
     data: Optional[Dict[str, Any]] = None
     remove_data_from_chart_schema: Optional[bool] = True
-    configurations: Optional[Configuration] = Configuration()
+    configurations: Configuration = Configuration()
 
     @property
     def query_id(self) -> str:
