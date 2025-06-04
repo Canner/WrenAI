@@ -150,7 +150,7 @@ const dataSource = {
         password,
         dsn,
       }).reduce((acc, [key, value]) => {
-        if (value !== undefined || value !== '') {
+        if (value !== undefined && value !== '') {
           acc[key] = value;
         }
         return acc;
