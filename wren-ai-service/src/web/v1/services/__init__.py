@@ -21,15 +21,10 @@ class MetadataTraceable:
 
 
 class Configuration(BaseModel):
-    class FiscalYear(BaseModel):
-        start: str
-        end: str
-
     class Timezone(BaseModel):
         name: str = "UTC"
         utc_offset: str = ""  # Deprecated, will be removed in the future
 
-    fiscal_year: Optional[FiscalYear] = None
     language: Optional[str] = "English"
     timezone: Optional[Timezone] = Timezone()
 

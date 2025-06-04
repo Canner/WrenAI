@@ -94,8 +94,7 @@ def prompt(
         documents=documents,
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
-            configuration,
-            instructions,
+            instructions=instructions,
         ),
         calculated_field_instructions=calculated_field_instructions
         if has_calculated_field
