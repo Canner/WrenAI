@@ -33,11 +33,12 @@ export interface MYSQL_CONNECTION_INFO {
 }
 
 export interface ORACLE_CONNECTION_INFO {
-  host: string;
-  port: number;
   user: string;
   password: string;
-  database: string;
+  host?: string;
+  port?: number;
+  database?: string;
+  dsn?: string;
 }
 
 export interface MS_SQL_CONNECTION_INFO {
