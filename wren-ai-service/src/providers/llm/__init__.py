@@ -148,7 +148,7 @@ def build_message(completion: Any, choice: Any) -> ChatMessage:
             "model": completion.model,
             "index": choice.index,
             "finish_reason": choice.finish_reason,
-            "usage": dict(completion.usage),
+            "usage": dict(completion.usage) if hasattr(completion, "usage") else {},
         }
     )
     return chat_message
@@ -191,7 +191,7 @@ def connect_chunks(chunk: Any, chunks: List[StreamingChunk]) -> ChatMessage:
             "model": chunk.model,
             "index": 0,
             "finish_reason": chunk.choices[0].finish_reason,
-            "usage": chunk.usage,
+            "usage": dict(chunk.usage) if hasattr(chunk, "usage") else {},
         }
     )
     return complete_response
