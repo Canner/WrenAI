@@ -5,7 +5,7 @@ from typing import Dict, Literal, Optional
 import orjson
 from cachetools import TTLCache
 from langfuse.decorators import observe
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
@@ -62,7 +62,7 @@ class QuestionRecommendation:
         max_questions: int,
         max_categories: int,
         project_id: Optional[str] = None,
-        configuration: Configuration = Field(default_factory=Configuration),
+        configuration: Configuration = Configuration(),
     ):
         async def _document_retrieval() -> tuple[list[str], bool, bool]:
             retrieval_result = await self._pipelines["db_schema_retrieval"].run(
@@ -157,7 +157,7 @@ class QuestionRecommendation:
         max_questions: int = 5
         max_categories: int = 3
         regenerate: bool = False
-        configuration: Configuration = Field(default_factory=Configuration)
+        configuration: Configuration = Configuration()
 
     async def _recommend(self, request: dict, input: Request):
         resp = await self._pipelines["question_recommendation"].run(**request)

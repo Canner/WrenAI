@@ -5,7 +5,7 @@ from typing import Dict, Literal, Optional
 import orjson
 from cachetools import TTLCache
 from langfuse.decorators import observe
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
@@ -55,7 +55,7 @@ class SemanticsDescription:
         selected_models: list[str]
         user_prompt: str
         mdl: str
-        configuration: Configuration = Field(default_factory=Configuration)
+        configuration: Configuration = Configuration()
         project_id: Optional[str] = None  # this is for tracing purpose
 
     def _chunking(

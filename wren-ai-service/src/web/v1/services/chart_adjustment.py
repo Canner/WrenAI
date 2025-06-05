@@ -3,7 +3,7 @@ from typing import Any, Dict, Literal, Optional
 
 from cachetools import TTLCache
 from langfuse.decorators import observe
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
@@ -23,7 +23,7 @@ class ChartAdjustmentRequest(BaseModel):
     chart_schema: dict
     project_id: Optional[str] = None
     thread_id: Optional[str] = None
-    configurations: Configuration = Field(default_factory=Configuration)
+    configurations: Configuration = Configuration()
     remove_data_from_chart_schema: bool = True
 
     @property
