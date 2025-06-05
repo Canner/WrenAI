@@ -121,8 +121,9 @@ class AsyncDocumentEmbedder:
                     dict(response.usage) if hasattr(response, "usage") else {}
                 )
             else:
-                meta["usage"]["prompt_tokens"] += response.usage.prompt_tokens
-                meta["usage"]["total_tokens"] += response.usage.total_tokens
+                if hasattr(response, "usage"):
+                    meta["usage"]["prompt_tokens"] += response.usage.prompt_tokens
+                    meta["usage"]["total_tokens"] += response.usage.total_tokens
 
         return all_embeddings, meta
 
