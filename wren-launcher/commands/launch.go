@@ -267,7 +267,7 @@ func Launch() {
 		}
 
 		// Build and start the Streamlit UI container
-		err = utils.RunStreamlitUIContainer()
+		err = utils.RunStreamlitUIContainer(streamlitPort)
 		if err != nil {
 			pterm.Error.Println("❌ Failed to start Streamlit UI:", err)
 			return
@@ -277,7 +277,12 @@ func Launch() {
 
 		// Wait for user to complete configuration in the UI
 		pterm.Info.Println("⌛ Waiting for user to finish UI configuration...")
+		timeoutTime := time.Now().Add(60 * time.Minute) // 60 minute timeout
 		for {
+			if time.Now().After(timeoutTime) {
+				pterm.Warning.Println("⚠️ Configuration timeout reached. Proceeding without custom setup.")
+				break
+			}
 			if utils.IsCustomConfigReady() {
 				pterm.Info.Println("✅ Detected config.done. Proceeding...")
 				break

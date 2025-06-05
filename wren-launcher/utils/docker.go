@@ -573,7 +573,7 @@ func ensureFileExists(filePath string, defaultContent []byte) error {
 // RunStreamlitUIContainer builds and runs the Streamlit UI container.
 // It ensures that config.yaml, .env, and config.done are mounted,
 // and initializes config.done with 'false' for setup flow control.
-func RunStreamlitUIContainer() error {
+func RunStreamlitUIContainer(port int) error {
 
 	// Build the Docker image for the Streamlit UI
 	if err := buildStreamlitImage(); err != nil {
@@ -598,15 +598,22 @@ func RunStreamlitUIContainer() error {
 	_ = ensureFileExists(envPath, []byte("# Put your API keys here\n"))
 
 	// run docker and mount volume
-	if err := runStreamlitContainer(configPath, envPath, donePath); err != nil {
+	if err := runStreamlitContainer(configPath, envPath, donePath, port); err != nil {
 		return err
 	}
 
 	return nil
 }
 
+// buildStreamlitImage builds the Streamlit UI Docker image.
 func buildStreamlitImage() error {
-	cmd := exec.Command("docker", "build", "-t", "wrenai-providers-setup", "../wren-ai-service/tools/providers-setup")
+	// Get the absolute path relative to the executable or use a configuration
+	buildPath := "../wren-ai-service/tools/providers-setup"
+	// Verify the path exists before attempting to build
+	if _, err := os.Stat(buildPath); os.IsNotExist(err) {
+		return fmt.Errorf("build path does not exist: %s", buildPath)
+	}
+	cmd := exec.Command("docker", "build", "-t", "wrenai-providers-setup", buildPath)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("build failed: %v\n%s", err, output)
@@ -635,9 +642,9 @@ func getMountPaths(wrenDir string) (string, string, string) {
 // runStreamlitContainer starts the Streamlit UI Docker container with the given bind-mount paths.
 // It maps port 8501 and runs the container in detached mode.
 // Returns an error if the container fails to start.
-func runStreamlitContainer(configPath, envPath, donePath string) error {
+func runStreamlitContainer(configPath, envPath, donePath string, port int) error {
 	cmd := exec.Command("docker", "run", "--rm", "-d",
-		"-p", "8501:8501",
+		"-p", fmt.Sprintf("%d:8501", port),
 		"--name", "wrenai-providers-setup",
 		"-v", configPath+":/app/data/config.yaml",
 		"-v", envPath+":/app/data/.env",

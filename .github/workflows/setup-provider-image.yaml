@@ -8,9 +8,9 @@ on:
         type: string
 
 
-# permissions:
-#   contents: read
-#   packages: write
+permissions:
+  contents: read
+  packages: write
 
 env:
   REGISTRY: ghcr.io
@@ -59,7 +59,7 @@ jobs:
 
       - name: Prepare platform env
         run: |
-          echo "PLATFORM_PAIR=${{ matrix.arch.platform // '/' '-'}}" >> "$GITHUB_ENV"
+          echo "PLATFORM_PAIR=$(echo '${{ matrix.arch.platform }}' | tr '/' '-')" >> "$GITHUB_ENV"
 
       - name: Build and push by digest
         id: build
