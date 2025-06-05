@@ -55,7 +55,7 @@ class SemanticsDescription:
         selected_models: list[str]
         user_prompt: str
         mdl: str
-        configuration: Optional[Configuration] = Configuration()
+        configuration: Configuration = Configuration()
         project_id: Optional[str] = None  # this is for tracing purpose
 
     def _chunking(

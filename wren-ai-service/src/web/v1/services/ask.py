@@ -29,7 +29,7 @@ class AskRequest(BaseModel):
     mdl_hash: Optional[str] = Field(validation_alias=AliasChoices("mdl_hash", "id"))
     thread_id: Optional[str] = None
     histories: Optional[list[AskHistory]] = Field(default_factory=list)
-    configurations: Optional[Configuration] = Configuration()
+    configurations: Configuration = Configuration()
     ignore_sql_generation_reasoning: Optional[bool] = False
     enable_column_pruning: Optional[bool] = False
 
@@ -121,7 +121,7 @@ class AskFeedbackRequest(BaseModel):
     sql_generation_reasoning: str
     sql: str
     project_id: Optional[str] = None
-    configurations: Optional[Configuration] = Configuration()
+    configurations: Configuration = Configuration()
 
     @property
     def query_id(self) -> str:

@@ -32,7 +32,7 @@ class ChartAdjustmentRequest(BaseModel):
     chart_schema: dict
     project_id: Optional[str] = None
     thread_id: Optional[str] = None
-    configurations: Optional[Configuration] = Configuration()
+    configurations: Configuration = Configuration()
 
     @property
     def query_id(self) -> str:
@@ -90,6 +90,7 @@ class ChartAdjustmentResultResponse(BaseModel):
     response: Optional[ChartAdjustmentResult] = None
     error: Optional[ChartAdjustmentError] = None
     trace_id: Optional[str] = None
+
 
 class ChartAdjustmentService:
     def __init__(

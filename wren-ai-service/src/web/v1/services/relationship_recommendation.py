@@ -18,7 +18,7 @@ class RelationshipRecommendation:
         id: str
         mdl: str
         project_id: Optional[str] = None  # this is for tracing purpose
-        configuration: Optional[Configuration] = Configuration()
+        configuration: Configuration = Configuration()
 
     class Resource(BaseModel, MetadataTraceable):
         class Error(BaseModel):
