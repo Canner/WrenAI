@@ -1,5 +1,6 @@
 import streamlit as st
 import uuid
+import ast
 from session_state import ConfigState
 from config_loader import load_selected_example_yaml, apply_config_blocks
 from dry_run_test import llm_completion_test, llm_embedding_test
@@ -28,6 +29,7 @@ def render_import_yaml():
             try:
                 blocks = list(yaml.safe_load_all(uploaded_file))
                 apply_config_blocks(blocks)
+                
             except Exception as e:
                 st.error(f"Failed to import YAML file: {e}")
 
@@ -431,7 +433,7 @@ def save_llm_model(form, form_id):
     for p in form["kwargs"]:
         if p["key"]:
             try:
-                kwargs_dict[p["key"]] = eval(p["value"])
+                kwargs_dict[p["key"]] = ast.literal_eval(p["value"])
             except Exception:
                 kwargs_dict[p["key"]] = p["value"]
 

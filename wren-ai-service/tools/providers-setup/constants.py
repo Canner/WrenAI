@@ -79,7 +79,7 @@ def get_config_path():
 # Path to the .env file
 def get_env_path():
     docker_path = volume_app_data / ".env"
-    local_path = Path.home() / ".wrenAI" / ".env"
+    local_path = Path.home() / ".wrenai" / ".env"
 
     if docker_path.exists():
         return docker_path

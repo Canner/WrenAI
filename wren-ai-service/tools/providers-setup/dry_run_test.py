@@ -42,7 +42,10 @@ def llm_embedding_test():
     save_api_key()
     try:
         embedder_block = st.session_state[ConfigState.EMBEDDER_KEY]
-        embedding_model_name = embedder_block.get("models", [])[0].get("model")
+        models = embedder_block.get("models", [])
+        if not models:
+            return False, "No embedding models configured"
+        embedding_model_name = models[0].get("model")
 
         response_embedding = embedding(
             model=embedding_model_name,
@@ -68,5 +71,7 @@ def save_api_key():
     Set all saved API keys from session state into environment variables.
     Enables external libraries like LiteLLM to access required credentials.
     """
-    for service, api_key in st.session_state[ConfigState.API_KEY].items():
-        os.environ[service] = api_key
+    api_keys = st.session_state.get(ConfigState.API_KEY, {})
+    for service, api_key in api_keys.items():
+        if api_key:  # Only set non-empty API keys
+            os.environ[service] = api_key
