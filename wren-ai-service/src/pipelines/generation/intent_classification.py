@@ -15,6 +15,7 @@ from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.pipelines.common import build_table_ddl
 from src.pipelines.generation.utils.sql import construct_instructions
+from src.utils import trace_cost
 from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
 
@@ -27,11 +28,12 @@ You are an expert detective specializing in intent classification. Combine the u
 
 ### Instructions ###
 - **Follow the user's previous questions:** If there are previous questions, try to understand the user's current question as following the previous questions.
-- **Consider Both Inputs:** Combine the user's current question and their previous questions together to identify the user's true intent.
+- **Consider Context of Inputs:** Combine the user's current question, their previous questions, and the user's instructions together to identify the user's true intent.
 - **Rephrase Question":** Rewrite follow-up questions into full standalone questions using prior conversation context."
 - **Concise Reasoning:** The reasoning must be clear, concise, and limited to 20 words.
 - **Language Consistency:** Use the same language as specified in the user's output language for the rephrased question and reasoning.
 - **Vague Queries:** If the question is vague or does not related to a table or property from the schema, classify it as `MISLEADING_QUERY`.
+- **Time-related Queries:** Don't rephrase time-related information in the user's question.
 
 ### Intent Definitions ###
 
@@ -120,8 +122,10 @@ SQL:
 {% endif %}
 
 {% if instructions %}
-### INSTRUCTIONS ###
-{{ instructions }}
+### USER INSTRUCTIONS ###
+{% for instruction in instructions %}
+{{ loop.index }}. {{ instruction }}
+{% endfor %}
 {% endif %}
 
 ### USER GUIDE ###
@@ -141,7 +145,6 @@ SQL:
 {% endif %}
 
 User's current question: {{query}}
-Current Time: {{ current_time }}
 Output Language: {{ language }}
 
 Let's think step by step
@@ -271,16 +274,15 @@ def prompt(
         sql_samples=sql_samples,
         instructions=construct_instructions(
             instructions=instructions,
-            configuration=configuration,
         ),
-        current_time=configuration.show_current_time(),
         docs=wren_ai_docs,
     )
 
 
 @observe(as_type="generation", capture_input=False)
-async def classify_intent(prompt: dict, generator: Any) -> dict:
-    return await generator(prompt=prompt.get("prompt"))
+@trace_cost
+async def classify_intent(prompt: dict, generator: Any, generator_name: str) -> dict:
+    return await generator(prompt=prompt.get("prompt")), generator_name
 
 
 @observe(capture_input=False)
@@ -347,6 +349,7 @@ class IntentClassification(BasicPipeline):
                 system_prompt=intent_classification_system_prompt,
                 generation_kwargs=INTENT_CLASSIFICAION_MODEL_KWARGS,
             ),
+            "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
                 template=intent_classification_user_prompt_template
             ),

@@ -1,4 +1,4 @@
-import { Form, Input, Switch } from 'antd';
+import { Form, Input } from 'antd';
 import { ERROR_TEXTS } from '@/utils/error';
 import { FORM_MODE } from '@/utils/enum';
 import { hostValidator } from '@/utils/validator';
@@ -7,7 +7,7 @@ interface Props {
   mode?: FORM_MODE;
 }
 
-export default function MySQLProperties(props: Props) {
+export default function OracleProperties(props: Props) {
   const { mode } = props;
   const isEditMode = mode === FORM_MODE.EDIT;
   return (
@@ -28,11 +28,15 @@ export default function MySQLProperties(props: Props) {
       <Form.Item
         label="Host"
         name="host"
-        required
         rules={[
           {
-            required: true,
-            validator: hostValidator,
+            required: false,
+            validator: (_, value) => {
+              if (value) {
+                return hostValidator(_, value);
+              }
+              return Promise.resolve();
+            },
           },
         ]}
       >
@@ -41,15 +45,13 @@ export default function MySQLProperties(props: Props) {
       <Form.Item
         label="Port"
         name="port"
-        required
         rules={[
           {
-            required: true,
             message: ERROR_TEXTS.CONNECTION.PORT.REQUIRED,
           },
         ]}
       >
-        <Input placeholder="3306" disabled={isEditMode} />
+        <Input placeholder="1521" disabled={isEditMode} />
       </Form.Item>
       <Form.Item
         label="Username"
@@ -63,24 +65,36 @@ export default function MySQLProperties(props: Props) {
       >
         <Input />
       </Form.Item>
-      <Form.Item label="Password" name="password">
+      <Form.Item
+        label="Password"
+        name="password"
+        required
+        rules={[
+          {
+            required: true,
+            message: ERROR_TEXTS.CONNECTION.PASSWORD.REQUIRED,
+          },
+        ]}
+      >
         <Input.Password placeholder="input password" />
       </Form.Item>
       <Form.Item
         label="Database name"
         name="database"
-        required
         rules={[
           {
-            required: true,
             message: ERROR_TEXTS.CONNECTION.DATABASE.REQUIRED,
           },
         ]}
       >
-        <Input placeholder="MySQL database name" disabled={isEditMode} />
+        <Input placeholder="Oracle database name" disabled={isEditMode} />
       </Form.Item>
-      <Form.Item label="Use SSL" name="ssl" valuePropName="checked">
-        <Switch />
+      <Form.Item
+        label="DSN"
+        name="dsn"
+        tooltip="Oracle Data Source Name (DSN) - Alternative to host/port/database configuration"
+      >
+        <Input placeholder="(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=host)(PORT=port))(CONNECT_DATA=(SERVICE_NAME=service)))" />
       </Form.Item>
     </>
   );

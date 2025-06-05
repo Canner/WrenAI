@@ -30,6 +30,16 @@ export interface MYSQL_CONNECTION_INFO {
   user: string;
   password: string;
   database: string;
+  ssl: boolean;
+}
+
+export interface ORACLE_CONNECTION_INFO {
+  user: string;
+  password: string;
+  host?: string;
+  port?: number;
+  database?: string;
+  dsn?: string;
 }
 
 export interface MS_SQL_CONNECTION_INFO {
@@ -77,6 +87,7 @@ export type WREN_AI_CONNECTION_INFO =
   | BIG_QUERY_CONNECTION_INFO
   | POSTGRES_CONNECTION_INFO
   | MYSQL_CONNECTION_INFO
+  | ORACLE_CONNECTION_INFO
   | DUCKDB_CONNECTION_INFO
   | MS_SQL_CONNECTION_INFO
   | CLICK_HOUSE_CONNECTION_INFO

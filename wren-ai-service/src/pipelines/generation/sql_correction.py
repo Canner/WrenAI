@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import sys
 from typing import Any, Dict, List, Optional
@@ -17,6 +16,7 @@ from src.pipelines.generation.utils.sql import (
     TEXT_TO_SQL_RULES,
     SQLGenPostProcessor,
 )
+from src.utils import trace_cost
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -55,39 +55,34 @@ Let's think step by step.
 
 ## Start of Pipeline
 @observe(capture_input=False)
-def prompts(
+def prompt(
     documents: List[Document],
-    invalid_generation_results: List[Dict],
+    invalid_generation_result: Dict,
     prompt_builder: PromptBuilder,
-) -> list[dict]:
-    return [
-        prompt_builder.run(
-            documents=documents,
-            invalid_generation_result=invalid_generation_result,
-        )
-        for invalid_generation_result in invalid_generation_results
-    ]
+) -> dict:
+    return prompt_builder.run(
+        documents=documents,
+        invalid_generation_result=invalid_generation_result,
+    )
 
 
 @observe(as_type="generation", capture_input=False)
-async def generate_sql_corrections(prompts: list[dict], generator: Any) -> list[dict]:
-    tasks = []
-    for prompt in prompts:
-        task = asyncio.ensure_future(generator(prompt=prompt.get("prompt")))
-        tasks.append(task)
-
-    return await asyncio.gather(*tasks)
+@trace_cost
+async def generate_sql_correction(
+    prompt: dict, generator: Any, generator_name: str
+) -> dict:
+    return await generator(prompt=prompt.get("prompt")), generator_name
 
 
 @observe(capture_input=False)
 async def post_process(
-    generate_sql_corrections: list[dict],
+    generate_sql_correction: dict,
     post_processor: SQLGenPostProcessor,
     engine_timeout: float,
     project_id: str | None = None,
-) -> list[dict]:
+) -> dict:
     return await post_processor.run(
-        generate_sql_corrections,
+        generate_sql_correction.get("replies"),
         timeout=engine_timeout,
         project_id=project_id,
     )
@@ -109,6 +104,7 @@ class SQLCorrection(BasicPipeline):
                 system_prompt=sql_correction_system_prompt,
                 generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
             ),
+            "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
                 template=sql_correction_user_prompt_template
             ),
@@ -127,14 +123,14 @@ class SQLCorrection(BasicPipeline):
     async def run(
         self,
         contexts: List[Document],
-        invalid_generation_results: List[Dict[str, str]],
+        invalid_generation_result: Dict[str, str],
         project_id: str | None = None,
     ):
         logger.info("SQLCorrection pipeline is running...")
         return await self._pipe.execute(
             ["post_process"],
             inputs={
-                "invalid_generation_results": invalid_generation_results,
+                "invalid_generation_result": invalid_generation_result,
                 "documents": contexts,
                 "project_id": project_id,
                 **self._components,
@@ -149,6 +145,6 @@ if __name__ == "__main__":
     dry_run_pipeline(
         SQLCorrection,
         "sql_correction",
-        invalid_generation_results=[],
+        invalid_generation_result={},
         contexts=[],
     )

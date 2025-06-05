@@ -67,7 +67,7 @@ Note: The actual generation is performed in the background using FastAPI's Backg
 class PostRequest(BaseModel):
     mdl: str
     project_id: Optional[str] = None
-    configuration: Optional[Configuration] = Configuration()
+    configuration: Configuration = Configuration()
 
 
 class PostResponse(BaseModel):
@@ -108,6 +108,7 @@ class GetResponse(BaseModel):
     response: Optional[dict]
     error: Optional[dict]
     trace_id: Optional[str] = None
+
 
 @router.get(
     "/relationship-recommendations/{id}",

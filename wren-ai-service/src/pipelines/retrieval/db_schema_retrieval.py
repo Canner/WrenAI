@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.pipelines.common import build_table_ddl
+from src.utils import trace_cost
 from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
@@ -230,6 +231,7 @@ def check_using_db_schemas_without_pruning(
     dbschema_retrieval: list[Document],
     encoding: tiktoken.Encoding,
     enable_column_pruning: bool,
+    context_window_size: int,
 ) -> dict:
     retrieval_results = []
     has_calculated_field = False
@@ -269,7 +271,7 @@ def check_using_db_schemas_without_pruning(
         retrieval_result["table_ddl"] for retrieval_result in retrieval_results
     ]
     _token_count = len(encoding.encode(" ".join(table_ddls)))
-    if _token_count > 100_000 or enable_column_pruning:
+    if _token_count > context_window_size or enable_column_pruning:
         return {
             "db_schemas": [],
             "tokens": _token_count,
@@ -314,13 +316,16 @@ def prompt(
 
 
 @observe(as_type="generation", capture_input=False)
+@trace_cost
 async def filter_columns_in_tables(
-    prompt: dict, table_columns_selection_generator: Any
+    prompt: dict, table_columns_selection_generator: Any, generator_name: str
 ) -> dict:
     if prompt:
-        return await table_columns_selection_generator(prompt=prompt.get("prompt"))
+        return await table_columns_selection_generator(
+            prompt=prompt.get("prompt")
+        ), generator_name
     else:
-        return {}
+        return {}, generator_name
 
 
 @observe()
@@ -451,6 +456,7 @@ class DbSchemaRetrieval(BasicPipeline):
                 system_prompt=table_columns_selection_system_prompt,
                 generation_kwargs=RETRIEVAL_MODEL_KWARGS,
             ),
+            "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
                 template=table_columns_selection_user_prompt_template
             ),
@@ -465,6 +471,7 @@ class DbSchemaRetrieval(BasicPipeline):
 
         self._configs = {
             "encoding": _encoding,
+            "context_window_size": llm_provider.get_context_window_size(),
         }
 
         super().__init__(

@@ -14,9 +14,12 @@ from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     TEXT_TO_SQL_RULES,
     SQLGenPostProcessor,
+    calculated_field_instructions,
     construct_instructions,
+    metric_instructions,
 )
 from src.pipelines.retrieval.sql_functions import SqlFunction
+from src.utils import trace_cost
 from src.web.v1.services import Configuration
 
 logger = logging.getLogger("wren-ai-service")
@@ -45,9 +48,12 @@ sql_regeneration_user_prompt_template = """
     {{ document }}
 {% endfor %}
 
-{% if instructions %}
-### INSTRUCTIONS ###
-{{ instructions }}
+{% if calculated_field_instructions %}
+{{ calculated_field_instructions }}
+{% endif %}
+
+{% if metric_instructions %}
+{{ metric_instructions }}
 {% endif %}
 
 {% if sql_functions %}
@@ -64,6 +70,13 @@ Question:
 {{sample.question}}
 SQL:
 {{sample.sql}}
+{% endfor %}
+{% endif %}
+
+{% if instructions %}
+### USER INSTRUCTIONS ###
+{% for instruction in instructions %}
+{{ loop.index }}. {{ instruction }}
 {% endfor %}
 {% endif %}
 
@@ -94,23 +107,25 @@ def prompt(
         documents=documents,
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
-            configuration,
-            has_calculated_field,
-            has_metric,
-            instructions,
+            instructions=instructions,
         ),
+        calculated_field_instructions=calculated_field_instructions
+        if has_calculated_field
+        else "",
+        metric_instructions=metric_instructions if has_metric else "",
         sql_samples=sql_samples,
-        current_time=configuration.show_current_time(),
         sql_functions=sql_functions,
     )
 
 
 @observe(as_type="generation", capture_input=False)
+@trace_cost
 async def regenerate_sql(
     prompt: dict,
     generator: Any,
+    generator_name: str,
 ) -> dict:
-    return await generator(prompt=prompt.get("prompt"))
+    return await generator(prompt=prompt.get("prompt")), generator_name
 
 
 @observe(capture_input=False)
@@ -143,6 +158,7 @@ class SQLRegeneration(BasicPipeline):
                 system_prompt=sql_regeneration_system_prompt,
                 generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
             ),
+            "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
                 template=sql_regeneration_user_prompt_template
             ),

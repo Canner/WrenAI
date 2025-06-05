@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -13,7 +12,6 @@ from src.core.engine import (
     add_quotes,
     clean_generation_result,
 )
-from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
@@ -25,8 +23,8 @@ class SQLGenPostProcessor:
         self._engine = engine
 
     @component.output_types(
-        valid_generation_results=List[Optional[Dict[str, Any]]],
-        invalid_generation_results=List[Optional[Dict[str, Any]]],
+        valid_generation_result=Dict[str, Any],
+        invalid_generation_result=Dict[str, Any],
     )
     async def run(
         self,
@@ -35,98 +33,99 @@ class SQLGenPostProcessor:
         project_id: str | None = None,
     ) -> dict:
         try:
-            if isinstance(replies[0], dict):
-                cleaned_generation_result = []
-                for reply in replies:
-                    try:
-                        cleaned_generation_result.append(
-                            orjson.loads(clean_generation_result(reply["replies"][0]))[
-                                "sql"
-                            ]
-                        )
-                    except Exception as e:
-                        logger.exception(f"Error in SQLGenPostProcessor: {e}")
-            else:
-                cleaned_generation_result = orjson.loads(
-                    clean_generation_result(replies[0])
-                )["sql"]
+            cleaned_generation_result = clean_generation_result(replies[0])
 
-            if isinstance(cleaned_generation_result, str):
-                cleaned_generation_result = [cleaned_generation_result]
+            # test if cleaned_generation_result in string format is actually a dictionary with key 'sql'
+            if cleaned_generation_result.startswith("{"):
+                cleaned_generation_result = orjson.loads(cleaned_generation_result)[
+                    "sql"
+                ]
 
             (
-                valid_generation_results,
-                invalid_generation_results,
-            ) = await self._classify_invalid_generation_results(
+                valid_generation_result,
+                invalid_generation_result,
+            ) = await self._classify_generation_result(
                 cleaned_generation_result,
                 project_id=project_id,
                 timeout=timeout,
             )
 
             return {
-                "valid_generation_results": valid_generation_results,
-                "invalid_generation_results": invalid_generation_results,
+                "valid_generation_result": valid_generation_result,
+                "invalid_generation_result": invalid_generation_result,
             }
         except Exception as e:
             logger.exception(f"Error in SQLGenPostProcessor: {e}")
 
             return {
-                "valid_generation_results": [],
-                "invalid_generation_results": [],
+                "valid_generation_result": {},
+                "invalid_generation_result": {},
             }
 
-    async def _classify_invalid_generation_results(
+    async def _classify_generation_result(
         self,
-        generation_results: list[str],
+        generation_result: str,
         timeout: float,
         project_id: str | None = None,
-    ) -> List[Optional[Dict[str, str]]]:
-        valid_generation_results = []
-        invalid_generation_results = []
+    ) -> Dict[str, str]:
+        valid_generation_result = {}
+        invalid_generation_result = {}
 
-        async def _task(sql: str):
-            quoted_sql, error_message = add_quotes(sql)
+        quoted_sql, error_message = add_quotes(generation_result)
 
+        async with aiohttp.ClientSession() as session:
             if not error_message:
                 status, _, addition = await self._engine.execute_sql(
                     quoted_sql, session, project_id=project_id, timeout=timeout
                 )
 
                 if status:
-                    valid_generation_results.append(
-                        {
-                            "sql": quoted_sql,
-                            "correlation_id": addition.get("correlation_id", ""),
-                        }
-                    )
+                    valid_generation_result = {
+                        "sql": quoted_sql,
+                        "correlation_id": addition.get("correlation_id", ""),
+                    }
                 else:
                     error_message = addition.get("error_message", "")
-                    invalid_generation_results.append(
-                        {
-                            "sql": quoted_sql,
-                            "type": "TIME_OUT"
-                            if error_message.startswith("Request timed out")
-                            else "DRY_RUN",
-                            "error": error_message,
-                            "correlation_id": addition.get("correlation_id", ""),
-                        }
-                    )
-            else:
-                invalid_generation_results.append(
-                    {
-                        "sql": sql,
-                        "type": "ADD_QUOTES",
+                    invalid_generation_result = {
+                        "sql": quoted_sql,
+                        "type": "TIME_OUT"
+                        if error_message.startswith("Request timed out")
+                        else "DRY_RUN",
                         "error": error_message,
+                        "correlation_id": addition.get("correlation_id", ""),
                     }
-                )
+            else:
+                invalid_generation_result = {
+                    "sql": generation_result,
+                    "type": "ADD_QUOTES",
+                    "error": error_message,
+                }
 
-        async with aiohttp.ClientSession() as session:
-            tasks = [
-                _task(generation_result) for generation_result in generation_results
-            ]
-            await asyncio.gather(*tasks)
+        return valid_generation_result, invalid_generation_result
 
-        return valid_generation_results, invalid_generation_results
+
+sql_generation_reasoning_system_prompt = """
+### TASK ###
+You are a helpful data analyst who is great at thinking deeply and reasoning about the user's question and the database schema, and you provide a step-by-step reasoning plan in order to answer the user's question.
+
+### INSTRUCTIONS ###
+1. Think deeply and reason about the user's question, the database schema, and the user's query history if provided.
+2. Explicitly state the following information in the reasoning plan: 
+if the user puts any specific timeframe(e.g. YYYY-MM-DD) in the user's question, you will put the absolute time frame in the SQL query; 
+Otherwise, you will put the relative timeframe in the SQL query. 
+3. If USER INSTRUCTIONS section is provided, make sure to consider them in the reasoning plan.
+4. If SQL SAMPLES section is provided, make sure to consider them in the reasoning plan.
+5. Give a step by step reasoning plan in order to answer user's question.
+6. The reasoning plan should be in the language same as the language user provided in the input.
+7. Don't include SQL in the reasoning plan.
+8. Each step in the reasoning plan must start with a number, a title(in bold format in markdown), and a reasoning for the step.
+9. Do not include ```markdown or ``` in the answer.
+10. A table name in the reasoning plan must be in this format: `table: <table_name>`.
+11. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
+
+### FINAL ANSWER FORMAT ###
+The final answer must be a reasoning plan in plain Markdown string format
+"""
 
 
 TEXT_TO_SQL_RULES = """
@@ -174,6 +173,7 @@ TEXT_TO_SQL_RULES = """
 - DON'T USE "FILTER(WHERE <expression>)" clause in the generated SQL query.
 - DON'T USE "EXTRACT(EPOCH FROM <expression>)" clause in the generated SQL query.
 - DON'T USE INTERVAL or generate INTERVAL-like expression in the generated SQL query.
+- Aggregate functions are not allowed in the WHERE clause. Instead, they belong in the HAVING clause, which is used to filter after aggregation.
 - ONLY USE JSON_QUERY for querying fields if "json_type":"JSON" is identified in the columns comment, NOT the deprecated JSON_EXTRACT_SCALAR function.
     - DON'T USE CAST for JSON fields, ONLY USE the following funtions:
       - LAX_BOOL for boolean fields
@@ -216,7 +216,7 @@ Given user's question, database schema, etc., you should think deeply and carefu
 
 ### GENERAL RULES ###
 
-1. If INSTRUCTIONS section is provided, please follow the instructions strictly.
+1. If USER INSTRUCTIONS section is provided, please follow the instructions strictly.
 2. If SQL FUNCTIONS section is provided, please choose the appropriate functions from the list and use it in the SQL query.
 3. If SQL SAMPLES section is provided, please refer to the samples and learn the usage of the schema structures and how SQL is written based on them.
 4. If REASONING PLAN section is provided, please follow the plan strictly.
@@ -396,23 +396,13 @@ Learn about the usage of the schema structures and generate SQL based on them.
 
 
 def construct_instructions(
-    configuration: Configuration | None = Configuration(),
-    has_calculated_field: bool = False,
-    has_metric: bool = False,
     instructions: list[dict] | None = None,
 ):
-    _instructions = ""
-    if configuration:
-        if configuration.fiscal_year:
-            _instructions += f"\n- For calendar year related computation, it should be started from {configuration.fiscal_year.start} to {configuration.fiscal_year.end}\n\n"
-    if has_calculated_field:
-        _instructions += calculated_field_instructions
-    if has_metric:
-        _instructions += metric_instructions
+    _instructions = []
     if instructions:
-        _instructions += "\n\n".join(
-            [f"{instruction.get('instruction')}\n\n" for instruction in instructions]
-        )
+        _instructions += [
+            instruction.get("instruction") for instruction in instructions
+        ]
 
     return _instructions
 

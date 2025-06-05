@@ -62,7 +62,7 @@ class QuestionRecommendation:
         max_questions: int,
         max_categories: int,
         project_id: Optional[str] = None,
-        configuration: Optional[Configuration] = Configuration(),
+        configuration: Configuration = Configuration(),
     ):
         async def _document_retrieval() -> tuple[list[str], bool, bool]:
             retrieval_result = await self._pipelines["db_schema_retrieval"].run(
@@ -121,10 +121,10 @@ class QuestionRecommendation:
 
             post_process = generated_sql["post_process"]
 
-            if len(post_process["valid_generation_results"]) == 0:
+            if len(post_process["valid_generation_result"]) == 0:
                 return post_process
 
-            valid_sql = post_process["valid_generation_results"][0]["sql"]
+            valid_sql = post_process["valid_generation_result"]["sql"]
 
             # Partial update the resource
             current = self._cache[request_id]
@@ -157,7 +157,7 @@ class QuestionRecommendation:
         max_questions: Optional[int] = 5
         max_categories: Optional[int] = 3
         regenerate: Optional[bool] = False
-        configuration: Optional[Configuration] = Configuration()
+        configuration: Configuration = Configuration()
 
     async def _recommend(self, request: dict, input: Request):
         resp = await self._pipelines["question_recommendation"].run(**request)
@@ -189,7 +189,6 @@ class QuestionRecommendation:
                 "mdl": orjson.loads(input.mdl),
                 "previous_questions": input.previous_questions,
                 "language": input.configuration.language,
-                "current_date": input.configuration.show_current_time(),
                 "max_questions": input.max_questions,
                 "max_categories": input.max_categories,
             }
@@ -226,14 +225,14 @@ class QuestionRecommendation:
 
         except orjson.JSONDecodeError as e:
             self._handle_exception(
-                input,
+                input.event_id,
                 f"Failed to parse MDL: {str(e)}",
                 code="MDL_PARSE_ERROR",
                 trace_id=trace_id,
             )
         except Exception as e:
             self._handle_exception(
-                input,
+                input.event_id,
                 f"An error occurred during question recommendation generation: {str(e)}",
                 trace_id=trace_id,
             )

@@ -8,24 +8,64 @@
 type: llm
 provider: litellm_llm
 models:
-  # put LM_STUDIO_API_KEY=<random_string> in ~/.wrenai/.env
-  - api_base: http://host.docker.internal:1234/v1
-    model: openai/phi-4 # openai/<lm_studio_model_name>
+  # put OPENROUTER_API_KEY=<your_api_key> in ~/.wrenai/.env
+  # Qwen3 models support thinking and non-thinking modes
+  # Use /think and /no_think in prompts to control reasoning behavior
+  - api_base: https://openrouter.ai/api/v1
+    model: openrouter/qwen/qwen3-30b-a3b
     alias: default
     timeout: 600
     kwargs:
       n: 1
-      temperature: 0
+      temperature: 0.6  # Recommended for thinking mode
+      top_p: 0.95
+      top_k: 20
+      response_format:
+        type: text
+  - api_base: https://openrouter.ai/api/v1
+    model: openrouter/qwen/qwen3-30b-a3b
+    alias: qwen3-thinking
+    timeout: 600
+    kwargs:
+      n: 1
+      temperature: 0.6  # Optimized for thinking mode
+      top_p: 0.95
+      top_k: 20
+      response_format:
+        type: text
+  - api_base: https://openrouter.ai/api/v1
+    model: openrouter/qwen/qwen3-30b-a3b
+    alias: qwen3-fast
+    timeout: 600
+    kwargs:
+      n: 1
+      temperature: 0.7  # Optimized for non-thinking mode
+      top_p: 0.8
+      top_k: 20
+      response_format:
+        type: text
+  - api_base: https://openrouter.ai/api/v1
+    model: openrouter/qwen/qwen3-32b
+    alias: qwen3-32b
+    timeout: 600
+    kwargs:
+      n: 1
+      temperature: 0.6
+      top_p: 0.95
+      top_k: 20
+      response_format:
+        type: json_object
 
 ---
 type: embedder
 provider: litellm_embedder
 models:
-  # put LM_STUDIO_API_KEY=<random_string> in ~/.wrenai/.env
-  - model: openai/text-embedding-nomic-embed-text-v1.5 # put your lm_studio embedder model name here, openai/<lm_studio_model_name>
+  # define OPENAI_API_KEY=<api_key> in ~/.wrenai/.env if you are using openai embedding model
+  # please refer to LiteLLM documentation for more details: https://docs.litellm.ai/docs/providers
+  - model: text-embedding-3-large  # put your embedding model name here, if it is not openai embedding model, should be <provider>/<model_name>
     alias: default
-    api_base: http://host.docker.internal:1234/v1
-    timeout: 600
+    api_base: https://api.openai.com/v1  # change this according to your embedding model
+    timeout: 120
 
 ---
 type: engine
@@ -41,7 +81,7 @@ endpoint: http://ibis-server:8000
 type: document_store
 provider: qdrant
 location: http://qdrant:6333
-embedding_model_dim: 768 # put your embedding model dimension here
+embedding_model_dim: 3072 # put your embedding model dimension here
 timeout: 120
 recreate_index: true
 
@@ -77,7 +117,7 @@ pipes:
     llm: litellm_llm.default
     engine: wren_ui
   - name: sql_answer
-    llm: litellm_llm.default
+    llm: litellm_llm.qwen3-fast
   - name: semantics_description
     llm: litellm_llm.default
   - name: relationship_recommendation
@@ -103,7 +143,7 @@ pipes:
   - name: misleading_assistance
     llm: litellm_llm.default
   - name: data_assistance
-    llm: litellm_llm.default
+    llm: litellm_llm.qwen3-fast
   - name: sql_pairs_indexing
     document_store: qdrant
     embedder: litellm_embedder.default
@@ -120,9 +160,9 @@ pipes:
   - name: sql_question_generation
     llm: litellm_llm.default
   - name: sql_generation_reasoning
-    llm: litellm_llm.default
+    llm: litellm_llm.qwen3-thinking
   - name: followup_sql_generation_reasoning
-    llm: litellm_llm.default
+    llm: litellm_llm.qwen3-thinking
   - name: sql_regeneration
     llm: litellm_llm.default
     engine: wren_ui
