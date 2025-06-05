@@ -368,18 +368,30 @@ def render_pipeline_config():
         with st.expander(f"🔧 Pipeline: {pipe_name}", expanded=False):
             for key, value in pipe.items():
                 if key == "llm":
-                    selected_llm = st.selectbox(
-                        "LLM Model",
-                        options=pipeline_llm_options,
-                        index=pipeline_llm_options.index(value) if value in pipeline_llm_options else 0,
-                        key=f"llm_{original_idx}"
-                    )
-                else:
-                    st.markdown(f"**{key}:** `{value}`")
+for key, value in pipe.items():
+    if key == "llm":
+        # Ensure we have a default value
+        default_index = 0
+        if value in pipeline_llm_options:
+            default_index = pipeline_llm_options.index(value)
 
-            if st.button("💾  Save this llm", key=f"save_{pipe_name}_{original_idx}"):
-                # ✅ use original index to update llm
-                st.session_state[ConfigState.PIPELINE_KEY]["pipes"][original_idx]["llm"] = selected_llm
+        selected_llm = st.selectbox(
+            "LLM Model",
+            options=pipeline_llm_options,
+            index=default_index,
+            key=f"llm_{original_idx}"
+        )
+    else:
+        st.markdown(f"**{key}:** `{value}`")
+
+if st.button("💾  Save this llm", key=f"save_{pipe_name}_{original_idx}"):
+    # Only proceed if we have a selected LLM
+    if 'selected_llm' in locals():
+        # ✅ use original index to update llm
+        st.session_state[ConfigState.PIPELINE_KEY]["pipes"][original_idx]["llm"] = selected_llm
+        st.success(f"✅ Updated pipeline `{pipe_name}` LLM to `{selected_llm}`")
+    else:
+        st.error("No LLM selected for this pipeline.")
                 st.success(f"✅ Updated pipeline `{pipe_name}` LLM to `{selected_llm}`")
 
 
