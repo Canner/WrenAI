@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
-from src.web.v1.services import MetadataTraceable
+from src.web.v1.services import BaseRequest, MetadataTraceable
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -24,6 +24,7 @@ class SqlCorrectionService:
         error: Optional["SqlCorrectionService.Error"] = None
         invalid_sql: Optional[str] = None
         trace_id: Optional[str] = None
+        request_from: Literal["ui", "api"] = "ui"
 
     def __init__(
         self,
@@ -41,6 +42,7 @@ class SqlCorrectionService:
         code: str = "OTHERS",
         invalid_sql: Optional[str] = None,
         trace_id: Optional[str] = None,
+        request_from: Literal["ui", "api"] = "ui",
     ):
         self._cache[event_id] = self.Event(
             event_id=event_id,
@@ -48,14 +50,14 @@ class SqlCorrectionService:
             error=self.Error(code=code, message=error_message),
             trace_id=trace_id,
             invalid_sql=invalid_sql,
+            request_from=request_from,
         )
         logger.error(error_message)
 
-    class CorrectionRequest(BaseModel):
+    class CorrectionRequest(BaseRequest):
         event_id: str
         sql: str
         error: str
-        project_id: Optional[str] = None
 
     @observe(name="SQL Correction")
     @trace_metadata
@@ -112,6 +114,7 @@ class SqlCorrectionService:
                     f"An error occurred during SQL correction: {error_message}",
                     trace_id=trace_id,
                     invalid_sql=invalid["sql"],
+                    request_from=request.request_from,
                 )
             else:
                 corrected = valid["sql"]
@@ -120,6 +123,7 @@ class SqlCorrectionService:
                     status="finished",
                     trace_id=trace_id,
                     response=corrected,
+                    request_from=request.request_from,
                 )
 
         except Exception as e:
@@ -127,6 +131,7 @@ class SqlCorrectionService:
                 event_id,
                 f"An error occurred during SQL correction: {str(e)}",
                 trace_id=trace_id,
+                request_from=request.request_from,
             )
 
         return self._cache[event_id].with_metadata()

@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
-from src.web.v1.services import Configuration, MetadataTraceable
+from src.web.v1.services import BaseRequest, Configuration, MetadataTraceable
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -25,6 +25,7 @@ class QuestionRecommendation:
         response: Optional[dict] = {"questions": {}}
         error: Optional["QuestionRecommendation.Error"] = None
         trace_id: Optional[str] = None
+        request_from: Literal["ui", "api"] = "ui"
 
     def __init__(
         self,
@@ -45,12 +46,14 @@ class QuestionRecommendation:
         error_message: str,
         code: str = "OTHERS",
         trace_id: Optional[str] = None,
+        request_from: Literal["ui", "api"] = "ui",
     ):
         self._cache[event_id] = self.Event(
             event_id=event_id,
             status="failed",
             error=self.Error(code=code, message=error_message),
             trace_id=trace_id,
+            request_from=request_from,
         )
         logger.error(error_message)
 
@@ -149,15 +152,13 @@ class QuestionRecommendation:
         except Exception as e:
             logger.error(f"Request {request_id}: Error validating question: {str(e)}")
 
-    class Request(BaseModel):
+    class Request(BaseRequest):
         event_id: str
         mdl: str
         previous_questions: list[str] = []
-        project_id: Optional[str] = None
         max_questions: Optional[int] = 5
         max_categories: Optional[int] = 3
         regenerate: Optional[bool] = False
-        configuration: Configuration = Configuration()
 
     async def _recommend(self, request: dict, input: Request):
         resp = await self._pipelines["question_recommendation"].run(**request)
@@ -169,7 +170,7 @@ class QuestionRecommendation:
                 input.max_questions,
                 input.max_categories,
                 input.project_id,
-                input.configuration,
+                input.configurations,
             )
             for question in questions
         ]
@@ -188,7 +189,7 @@ class QuestionRecommendation:
             request = {
                 "mdl": orjson.loads(input.mdl),
                 "previous_questions": input.previous_questions,
-                "language": input.configuration.language,
+                "language": input.configurations.language,
                 "max_questions": input.max_questions,
                 "max_categories": input.max_categories,
             }
@@ -222,6 +223,7 @@ class QuestionRecommendation:
             )
 
             self._cache[input.event_id].status = "finished"
+            self._cache[input.event_id].request_from = input.request_from
 
         except orjson.JSONDecodeError as e:
             self._handle_exception(
@@ -229,12 +231,14 @@ class QuestionRecommendation:
                 f"Failed to parse MDL: {str(e)}",
                 code="MDL_PARSE_ERROR",
                 trace_id=trace_id,
+                request_from=input.request_from,
             )
         except Exception as e:
             self._handle_exception(
                 input.event_id,
                 f"An error occurred during question recommendation generation: {str(e)}",
                 trace_id=trace_id,
+                request_from=input.request_from,
             )
 
         return self._cache[input.event_id].with_metadata()

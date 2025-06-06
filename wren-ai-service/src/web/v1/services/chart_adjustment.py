@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
-from src.web.v1.services import Configuration
+from src.web.v1.services import BaseRequest
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -24,23 +24,11 @@ class ChartAdjustmentOption(BaseModel):
     theta: Optional[str] = None
 
 
-class ChartAdjustmentRequest(BaseModel):
-    _query_id: str | None = None
+class ChartAdjustmentRequest(BaseRequest):
     query: str
     sql: str
     adjustment_option: ChartAdjustmentOption
     chart_schema: dict
-    project_id: Optional[str] = None
-    thread_id: Optional[str] = None
-    configurations: Configuration = Configuration()
-
-    @property
-    def query_id(self) -> str:
-        return self._query_id
-
-    @query_id.setter
-    def query_id(self, query_id: str):
-        self._query_id = query_id
 
 
 class ChartAdjustmentResponse(BaseModel):
@@ -48,17 +36,8 @@ class ChartAdjustmentResponse(BaseModel):
 
 
 # PATCH /v1/chart-adjustments/{query_id}
-class StopChartAdjustmentRequest(BaseModel):
-    _query_id: str | None = None
+class StopChartAdjustmentRequest(BaseRequest):
     status: Literal["stopped"]
-
-    @property
-    def query_id(self) -> str:
-        return self._query_id
-
-    @query_id.setter
-    def query_id(self, query_id: str):
-        self._query_id = query_id
 
 
 class StopChartAdjustmentResponse(BaseModel):
@@ -125,6 +104,7 @@ class ChartAdjustmentService:
             "metadata": {
                 "error_type": "",
                 "error_message": "",
+                "request_from": chart_adjustment_request.request_from,
             },
         }
 

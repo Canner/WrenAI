@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Literal, Optional
 
 import orjson
 from pydantic import BaseModel
@@ -17,6 +17,7 @@ class MetadataTraceable:
         return {
             "error_type": self.error and self.error.code,
             "error_message": self.error and self.error.message,
+            "request_from": self.request_from,
         }
 
 
@@ -40,6 +41,23 @@ class SSEEvent(BaseModel):
 
     def serialize(self):
         return f"data: {orjson.dumps(self.data.to_dict()).decode()}\n\n"
+
+
+# for POST, PATCH, UPDATE, DELETE requests
+class BaseRequest(BaseModel):
+    _query_id: str | None = None
+    project_id: Optional[str] = None
+    thread_id: Optional[str] = None
+    configurations: Configuration = Configuration()
+    request_from: Literal["ui", "api"] = "ui"
+
+    @property
+    def query_id(self) -> str:
+        return self._query_id
+
+    @query_id.setter
+    def query_id(self, query_id: str):
+        self._query_id = query_id
 
 
 # Put the services imports here to avoid circular imports and make them accessible directly to the rest of packages
