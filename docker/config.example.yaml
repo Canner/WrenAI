@@ -24,6 +24,26 @@ models:
       n: 1
       seed: 0
       temperature: 0
+  # Bedrock llm config
+  - model: bedrock/us.anthropic.claude-3-7-sonnet-20250219-v1:0  # Inference profile ID
+    api_base: https://bedrock-runtime.<region-name>.amazonaws.com
+    alias: bedrock_claude
+    kwargs:
+      temperature: 0.1
+      aws_region_name: <region-name>
+      aws_bedrock_runtime_endpoint: https://bedrock-runtime.<region-name>.amazonaws.com
+
+      # to authenticate via iam role
+      aws_role_name: <iam-role-arm>
+
+      ##  other available configs
+      # aws_access_key_id: <access-key-id>
+      # aws_secret_access_key: <secret-access-key>
+      # aws_session_token: <session-token>
+      # aws_session_name: <session-name>
+      # aws_profile_name: <profile-name>
+      # aws_web_identity_token: <web-identity-token>
+      # aws_sts_endpoint: <sts-endpoint>
 
 ---
 type: embedder
@@ -32,6 +52,17 @@ models:
   - model: text-embedding-3-large
     alias: default
     timeout: 120
+
+  # Bedrock embedder config
+  - model: bedrock/amazon.titan-embed-text-v2:0
+    api_base: https://bedrock-runtime.<region-name>.amazonaws.com
+    timeout: 600
+    alias: bedrock_titan
+    kwargs:
+      temperature: 0.1
+      aws_region_name: <region-name>
+      aws_role_name: <iam-role-arm>
+      aws_bedrock_runtime_endpoint: https://bedrock-runtime.<region-name>.amazonaws.com
 
 ---
 type: engine
