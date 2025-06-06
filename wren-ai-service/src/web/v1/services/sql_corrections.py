@@ -22,6 +22,7 @@ class SqlCorrectionService:
         status: Literal["correcting", "finished", "failed"] = "correcting"
         response: Optional[str] = None
         error: Optional["SqlCorrectionService.Error"] = None
+        invalid_sql: Optional[str] = None
         trace_id: Optional[str] = None
 
     def __init__(
@@ -38,6 +39,7 @@ class SqlCorrectionService:
         event_id: str,
         error_message: str,
         code: str = "OTHERS",
+        invalid_sql: Optional[str] = None,
         trace_id: Optional[str] = None,
     ):
         self._cache[event_id] = self.Event(
@@ -45,6 +47,7 @@ class SqlCorrectionService:
             status="failed",
             error=self.Error(code=code, message=error_message),
             trace_id=trace_id,
+            invalid_sql=invalid_sql,
         )
         logger.error(error_message)
 
@@ -108,6 +111,7 @@ class SqlCorrectionService:
                     event_id,
                     f"An error occurred during SQL correction: {error_message}",
                     trace_id=trace_id,
+                    invalid_sql=invalid["sql"],
                 )
             else:
                 corrected = valid["sql"]
