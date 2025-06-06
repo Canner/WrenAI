@@ -18,7 +18,7 @@ models:
       aws_bedrock_runtime_endpoint: https://bedrock-runtime.<region-name>.amazonaws.com
 
       # to authenticate via iam role
-      aws_role_name: <iam-role-arm>
+      aws_role_name: <iam-role-arn>
 
       ##  other available configs
       # aws_access_key_id: <access-key-id>
@@ -40,7 +40,7 @@ models:
     kwargs:
       temperature: 0.1
       aws_region_name: <region-name>
-      aws_role_name: <iam-role-arm>
+      aws_role_name: <iam-role-arn>
       aws_bedrock_runtime_endpoint: https://bedrock-runtime.<region-name>.amazonaws.com
 
 ---
