@@ -62,10 +62,8 @@ class SqlAnswerService:
         trace_id = kwargs.get("trace_id")
         results = {
             "metadata": {
-                "error": {
-                    "type": "",
-                    "message": "",
-                },
+                "error_type": "",
+                "error_message": "",
                 "request_from": sql_answer_request.request_from,
             },
         }
