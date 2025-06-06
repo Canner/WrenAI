@@ -24,9 +24,9 @@ class AskRequest(BaseRequest):
     # don't recommend to use id as a field name, but it's used in the older version of API spec
     # so we need to support as a choice, and will remove it in the future
     mdl_hash: Optional[str] = Field(validation_alias=AliasChoices("mdl_hash", "id"))
-    histories: Optional[list[AskHistory]] = Field(default_factory=list)
-    ignore_sql_generation_reasoning: Optional[bool] = False
-    enable_column_pruning: Optional[bool] = False
+    histories: list[AskHistory] = Field(default_factory=list)
+    ignore_sql_generation_reasoning: bool = False
+    enable_column_pruning: bool = False
 
 
 class AskResponse(BaseModel):
