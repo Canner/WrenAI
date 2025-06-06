@@ -25,7 +25,7 @@ models:
       seed: 0
       temperature: 0
   # Bedrock llm config
-  - model: bedrock/us.anthropic.claude-3-7-sonnet-20250219-v1:0  # Inference profile ID
+  - model: bedrock/us.anthropic.claude-3-7-sonnet-20250219-v1:0  # Inference profile ID, us. -> us-east-1
     api_base: https://bedrock-runtime.<region-name>.amazonaws.com
     alias: bedrock_claude
     kwargs:
