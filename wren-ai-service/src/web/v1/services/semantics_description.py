@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
-from src.web.v1.services import Configuration, MetadataTraceable
+from src.web.v1.services import BaseRequest, MetadataTraceable
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -25,6 +25,7 @@ class SemanticsDescription:
         response: Optional[dict] = None
         error: Optional[Error] = None
         trace_id: Optional[str] = None
+        request_from: Literal["ui", "api"] = "ui"
 
     def __init__(
         self,
@@ -41,29 +42,29 @@ class SemanticsDescription:
         error_message: str,
         code: str = "OTHERS",
         trace_id: Optional[str] = None,
+        request_from: Literal["ui", "api"] = "ui",
     ):
         self[id] = self.Resource(
             id=id,
             status="failed",
             error=self.Resource.Error(code=code, message=error_message),
             trace_id=trace_id,
+            request_from=request_from,
         )
         logger.error(error_message)
 
-    class GenerateRequest(BaseModel):
+    class GenerateRequest(BaseRequest):
         id: str
         selected_models: list[str]
         user_prompt: str
         mdl: str
-        configuration: Configuration = Configuration()
-        project_id: Optional[str] = None  # this is for tracing purpose
 
     def _chunking(
         self, mdl_dict: dict, request: GenerateRequest, chunk_size: int = 50
     ) -> list[dict]:
         template = {
             "user_prompt": request.user_prompt,
-            "language": request.configuration.language,
+            "language": request.configurations.language,
         }
 
         chunks = [
@@ -115,18 +116,21 @@ class SemanticsDescription:
 
             self[request.id].status = "finished"
             self[request.id].trace_id = trace_id
+            self[request.id].request_from = request.request_from
         except orjson.JSONDecodeError as e:
             self._handle_exception(
                 request.id,
                 f"Failed to parse MDL: {str(e)}",
                 code="MDL_PARSE_ERROR",
                 trace_id=trace_id,
+                request_from=request.request_from,
             )
         except Exception as e:
             self._handle_exception(
                 request.id,
                 f"An error occurred during semantics description generation: {str(e)}",
                 trace_id=trace_id,
+                request_from=request.request_from,
             )
 
         return self[request.id].with_metadata()

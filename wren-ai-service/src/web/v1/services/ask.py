@@ -8,7 +8,7 @@ from pydantic import AliasChoices, BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
-from src.web.v1.services import Configuration, SSEEvent
+from src.web.v1.services import BaseRequest, SSEEvent
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -19,27 +19,14 @@ class AskHistory(BaseModel):
 
 
 # POST /v1/asks
-class AskRequest(BaseModel):
-    _query_id: str | None = None
+class AskRequest(BaseRequest):
     query: str
-    # for identifying which collection to access from vectordb
-    project_id: Optional[str] = None
     # don't recommend to use id as a field name, but it's used in the older version of API spec
     # so we need to support as a choice, and will remove it in the future
     mdl_hash: Optional[str] = Field(validation_alias=AliasChoices("mdl_hash", "id"))
-    thread_id: Optional[str] = None
     histories: Optional[list[AskHistory]] = Field(default_factory=list)
-    configurations: Configuration = Configuration()
     ignore_sql_generation_reasoning: Optional[bool] = False
     enable_column_pruning: Optional[bool] = False
-
-    @property
-    def query_id(self) -> str:
-        return self._query_id
-
-    @query_id.setter
-    def query_id(self, query_id: str):
-        self._query_id = query_id
 
 
 class AskResponse(BaseModel):
@@ -47,17 +34,8 @@ class AskResponse(BaseModel):
 
 
 # PATCH /v1/asks/{query_id}
-class StopAskRequest(BaseModel):
-    _query_id: str | None = None
+class StopAskRequest(BaseRequest):
     status: Literal["stopped"]
-
-    @property
-    def query_id(self) -> str:
-        return self._query_id
-
-    @query_id.setter
-    def query_id(self, query_id: str):
-        self._query_id = query_id
 
 
 class StopAskResponse(BaseModel):
@@ -114,22 +92,11 @@ class AskResultResponse(_AskResultResponse):
 
 
 # POST /v1/ask-feedbacks
-class AskFeedbackRequest(BaseModel):
-    _query_id: str | None = None
+class AskFeedbackRequest(BaseRequest):
     question: str
     tables: List[str]
     sql_generation_reasoning: str
     sql: str
-    project_id: Optional[str] = None
-    configurations: Configuration = Configuration()
-
-    @property
-    def query_id(self) -> str:
-        return self._query_id
-
-    @query_id.setter
-    def query_id(self, query_id: str):
-        self._query_id = query_id
 
 
 class AskFeedbackResponse(BaseModel):
@@ -137,17 +104,8 @@ class AskFeedbackResponse(BaseModel):
 
 
 # PATCH /v1/ask-feedbacks/{query_id}
-class StopAskFeedbackRequest(BaseModel):
-    _query_id: str | None = None
+class StopAskFeedbackRequest(BaseRequest):
     status: Literal["stopped"]
-
-    @property
-    def query_id(self) -> str:
-        return self._query_id
-
-    @query_id.setter
-    def query_id(self, query_id: str):
-        self._query_id = query_id
 
 
 class StopAskFeedbackResponse(BaseModel):
@@ -223,6 +181,7 @@ class AskService:
                 "type": "",
                 "error_type": "",
                 "error_message": "",
+                "request_from": ask_request.request_from,
             },
         }
 
@@ -735,6 +694,7 @@ class AskService:
             "metadata": {
                 "error_type": "",
                 "error_message": "",
+                "request_from": ask_feedback_request.request_from,
             },
         }
 

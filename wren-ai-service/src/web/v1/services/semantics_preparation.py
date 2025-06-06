@@ -8,17 +8,17 @@ from pydantic import AliasChoices, BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
+from src.web.v1.services import BaseRequest
 
 logger = logging.getLogger("wren-ai-service")
 
 
 # POST /v1/semantics-preparations
-class SemanticsPreparationRequest(BaseModel):
+class SemanticsPreparationRequest(BaseRequest):
     mdl: str
     # don't recommend to use id as a field name, but it's used in the API spec
     # so we need to support as a choice, and will remove it in the future
     mdl_hash: str = Field(validation_alias=AliasChoices("mdl_hash", "id"))
-    project_id: Optional[str] = None
 
 
 class SemanticsPreparationResponse(BaseModel):
@@ -66,6 +66,7 @@ class SemanticsPreparationService:
             "metadata": {
                 "error_type": "",
                 "error_message": "",
+                "request_from": prepare_semantics_request.request_from,
             },
         }
 
@@ -90,22 +91,22 @@ class SemanticsPreparationService:
 
             await asyncio.gather(*tasks)
 
-            self._prepare_semantics_statuses[prepare_semantics_request.mdl_hash] = (
-                SemanticsPreparationStatusResponse(
-                    status="finished",
-                )
+            self._prepare_semantics_statuses[
+                prepare_semantics_request.mdl_hash
+            ] = SemanticsPreparationStatusResponse(
+                status="finished",
             )
         except Exception as e:
             logger.exception(f"Failed to prepare semantics: {e}")
 
-            self._prepare_semantics_statuses[prepare_semantics_request.mdl_hash] = (
-                SemanticsPreparationStatusResponse(
-                    status="failed",
-                    error=SemanticsPreparationStatusResponse.SemanticsPreparationError(
-                        code="OTHERS",
-                        message=f"Failed to prepare semantics: {e}",
-                    ),
-                )
+            self._prepare_semantics_statuses[
+                prepare_semantics_request.mdl_hash
+            ] = SemanticsPreparationStatusResponse(
+                status="failed",
+                error=SemanticsPreparationStatusResponse.SemanticsPreparationError(
+                    code="OTHERS",
+                    message=f"Failed to prepare semantics: {e}",
+                ),
             )
 
             results["metadata"]["error_type"] = "INDEXING_FAILED"
