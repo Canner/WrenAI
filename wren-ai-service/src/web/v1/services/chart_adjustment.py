@@ -16,10 +16,10 @@ logger = logging.getLogger("wren-ai-service")
 class ChartAdjustmentRequest(BaseRequest):
     query: str
     sql: str
+    chart_schema: dict
     adjustment_command: str
     data: Optional[Dict[str, Any]] = None
     image_url: Optional[str] = None
-    chart_schema: dict
     remove_data_from_chart_schema: bool = True
 
 
