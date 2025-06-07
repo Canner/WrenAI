@@ -150,8 +150,8 @@ class Instructions(BasicPipeline):
         self,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
-        similarity_threshold: Optional[float] = 0.7,
-        top_k: Optional[int] = 10,
+        similarity_threshold: float = 0.7,
+        top_k: int = 10,
         **kwargs,
     ) -> None:
         store = document_store_provider.get_store(dataset_name="instructions")
