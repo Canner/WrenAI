@@ -70,7 +70,7 @@ class AsyncTextEmbedder:
 
         meta = {
             "model": response.model,
-            "usage": dict(response.usage) if response.usage else {},
+            "usage": dict(response.usage) if hasattr(response, "usage") else {},
         }
 
         return {"embedding": response.data[0]["embedding"], "meta": meta}
@@ -117,10 +117,13 @@ class AsyncDocumentEmbedder:
             if "model" not in meta:
                 meta["model"] = response.model
             if "usage" not in meta:
-                meta["usage"] = dict(response.usage) if response.usage else {}
+                meta["usage"] = (
+                    dict(response.usage) if hasattr(response, "usage") else {}
+                )
             else:
-                meta["usage"]["prompt_tokens"] += response.usage.prompt_tokens
-                meta["usage"]["total_tokens"] += response.usage.total_tokens
+                if hasattr(response, "usage"):
+                    meta["usage"]["prompt_tokens"] += response.usage.prompt_tokens
+                    meta["usage"]["total_tokens"] += response.usage.total_tokens
 
         return all_embeddings, meta
 

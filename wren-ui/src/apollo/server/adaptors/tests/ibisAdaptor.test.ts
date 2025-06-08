@@ -47,6 +47,7 @@ describe('IbisAdaptor', () => {
     database: 'my-database',
     user: 'my-user',
     password: 'my-password',
+    ssl: false,
   };
 
   const mockPostgresConnectionInfo: POSTGRES_CONNECTION_INFO = {

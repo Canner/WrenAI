@@ -77,7 +77,6 @@ def prompt(
         histories=histories,
         sql_samples=sql_samples,
         instructions=construct_instructions(
-            configuration=configuration,
             instructions=instructions,
         ),
         language=configuration.language,

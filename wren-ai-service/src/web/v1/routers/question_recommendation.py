@@ -78,7 +78,7 @@ class PostRequest(BaseModel):
     max_questions: Optional[int] = 5
     max_categories: Optional[int] = 3
     regenerate: Optional[bool] = False
-    configuration: Optional[Configuration] = Configuration()
+    configuration: Configuration = Configuration()
 
 
 class PostResponse(BaseModel):

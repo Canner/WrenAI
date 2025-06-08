@@ -90,7 +90,7 @@ class PostRequest(BaseModel):
     user_prompt: str
     mdl: str
     project_id: Optional[str] = None
-    configuration: Optional[Configuration] = Configuration()
+    configuration: Configuration = Configuration()
 
 
 class PostResponse(BaseModel):

@@ -12,7 +12,6 @@ from src.core.engine import (
     add_quotes,
     clean_generation_result,
 )
-from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
@@ -397,14 +396,9 @@ Learn about the usage of the schema structures and generate SQL based on them.
 
 
 def construct_instructions(
-    configuration: Configuration | None = Configuration(),
     instructions: list[dict] | None = None,
 ):
     _instructions = []
-    if configuration and configuration.fiscal_year:
-        _instructions.append(
-            f"For calendar year related computation, it should be started from {configuration.fiscal_year.start} to {configuration.fiscal_year.end}"
-        )
     if instructions:
         _instructions += [
             instruction.get("instruction") for instruction in instructions

@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from src.core.pipeline import BasicPipeline
 from src.pipelines.indexing.sql_pairs import SqlPair
 from src.utils import trace_metadata
-from src.web.v1.services import MetadataTraceable
+from src.web.v1.services import BaseRequest, MetadataTraceable
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -23,6 +23,7 @@ class SqlPairsService:
         status: Literal["indexing", "deleting", "finished", "failed"] = "indexing"
         error: Optional[Error] = None
         trace_id: Optional[str] = None
+        request_from: Literal["ui", "api"] = "ui"
 
     def __init__(
         self,
@@ -39,19 +40,20 @@ class SqlPairsService:
         error_message: str,
         code: str = "OTHERS",
         trace_id: Optional[str] = None,
+        request_from: Literal["ui", "api"] = "ui",
     ):
         self._cache[id] = self.Event(
             id=id,
             status="failed",
             error=self.Event.Error(code=code, message=error_message),
             trace_id=trace_id,
+            request_from=request_from,
         )
         logger.error(error_message)
 
-    class IndexRequest(BaseModel):
+    class IndexRequest(BaseRequest):
         id: str
         sql_pairs: List[SqlPair]
-        project_id: Optional[str] = None
 
     @observe(name="Prepare SQL Pairs")
     @trace_metadata
@@ -79,6 +81,7 @@ class SqlPairsService:
                 id=request.id,
                 status="finished",
                 trace_id=trace_id,
+                request_from=request.request_from,
             )
 
         except Exception as e:
@@ -86,14 +89,14 @@ class SqlPairsService:
                 request.id,
                 f"An error occurred during SQL pairs indexing: {str(e)}",
                 trace_id=trace_id,
+                request_from=request.request_from,
             )
 
         return self._cache[request.id].with_metadata()
 
-    class DeleteRequest(BaseModel):
+    class DeleteRequest(BaseRequest):
         id: str
         sql_pair_ids: List[str]
-        project_id: Optional[str] = None
 
     @observe(name="Delete SQL Pairs")
     @trace_metadata
@@ -110,11 +113,16 @@ class SqlPairsService:
                 sql_pairs=sql_pairs, project_id=request.project_id
             )
 
-            self._cache[request.id] = self.Event(id=request.id, status="finished")
+            self._cache[request.id] = self.Event(
+                id=request.id,
+                status="finished",
+                request_from=request.request_from,
+            )
         except Exception as e:
             self._handle_exception(
                 request.id,
                 f"Failed to delete SQL pairs: {e}",
+                request_from=request.request_from,
             )
 
         return self._cache[request.id].with_metadata()
