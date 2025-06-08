@@ -1,4 +1,4 @@
-import { Form, Input, Switch } from 'antd';
+import { Form, Input } from 'antd';
 import { ERROR_TEXTS } from '@/utils/error';
 import { FORM_MODE } from '@/utils/enum';
 import { hostValidator } from '@/utils/validator';
@@ -28,11 +28,15 @@ export default function OracleProperties(props: Props) {
       <Form.Item
         label="Host"
         name="host"
-        required
         rules={[
           {
-            required: true,
-            validator: hostValidator,
+            required: false,
+            validator: (_, value) => {
+              if (value) {
+                return hostValidator(_, value);
+              }
+              return Promise.resolve();
+            },
           },
         ]}
       >
@@ -41,10 +45,8 @@ export default function OracleProperties(props: Props) {
       <Form.Item
         label="Port"
         name="port"
-        required
         rules={[
           {
-            required: true,
             message: ERROR_TEXTS.CONNECTION.PORT.REQUIRED,
           },
         ]}
@@ -79,15 +81,20 @@ export default function OracleProperties(props: Props) {
       <Form.Item
         label="Database name"
         name="database"
-        required
         rules={[
           {
-            required: true,
             message: ERROR_TEXTS.CONNECTION.DATABASE.REQUIRED,
           },
         ]}
       >
         <Input placeholder="Oracle database name" disabled={isEditMode} />
+      </Form.Item>
+      <Form.Item
+        label="DSN"
+        name="dsn"
+        tooltip="Oracle Data Source Name (DSN) - Alternative to host/port/database configuration"
+      >
+        <Input placeholder="(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=host)(PORT=port))(CONNECT_DATA=(SERVICE_NAME=service)))" />
       </Form.Item>
     </>
   );
