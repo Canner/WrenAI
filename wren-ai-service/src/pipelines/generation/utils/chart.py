@@ -126,11 +126,23 @@ class ChartGenerationPostProcessor:
                     key in chart_schema
                     for key in ("hconcat", "vconcat", "concat", "layer")
                 ):
-                    chart_schema["height"] = {"step": 70}
-                    chart_schema["width"] = {"step": 70}
+                    chart_schema["height"] = {
+                        "step": 70,
+                        **chart_schema.get("height", {}),
+                    }
+                    chart_schema["width"] = {
+                        "step": 70,
+                        **chart_schema.get("width", {}),
+                    }
                 else:
-                    chart_schema["height"] = {"step": 35}
-                    chart_schema["width"] = {"step": 35}
+                    chart_schema["height"] = {
+                        "step": 35,
+                        **chart_schema.get("height", {}),
+                    }
+                    chart_schema["width"] = {
+                        "step": 35,
+                        **chart_schema.get("width", {}),
+                    }
 
                 # axis label angle
                 if "encoding" in chart_schema:
