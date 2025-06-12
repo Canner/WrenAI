@@ -39,7 +39,7 @@ class LitellmLLMProvider(LLMProvider):
         self._api_key = os.getenv(api_key_name) if api_key_name else None
         self._api_base = remove_trailing_slash(api_base) if api_base else None
         self._api_version = api_version
-        self._model_kwargs = kwargs
+        self._model_kwargs = kwargs or {}
         self._timeout = timeout
         self._context_window_size = context_window_size
         # build a dynamic list of all fallback model names (beyond the first)
@@ -49,7 +49,7 @@ class LitellmLLMProvider(LLMProvider):
             else []
         )
         self._router = Router(
-            model_list=fallback_model_list,
+            model_list=fallback_model_list or [],
             fallbacks=fallbacks,
         )
 
@@ -59,7 +59,10 @@ class LitellmLLMProvider(LLMProvider):
         generation_kwargs: Optional[Dict[str, Any]] = None,
         streaming_callback: Optional[Callable[[StreamingChunk], None]] = None,
     ):
-        combined_generation_kwargs = {**(generation_kwargs or {}), **self._model_kwargs}
+        combined_generation_kwargs = {
+            **(generation_kwargs or {}), 
+            **(self._model_kwargs or {}),
+        }
 
         async def _run(
             prompt: str,
