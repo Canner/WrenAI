@@ -5,7 +5,7 @@ from haystack.components.generators.openai_utils import (
     _convert_message_to_openai_format,
 )
 from haystack.dataclasses import ChatMessage, StreamingChunk
-from litellm import acompletion
+from litellm import acompletion, Router
 from litellm.types.utils import ModelResponse
 
 from src.core.provider import LLMProvider
@@ -32,6 +32,7 @@ class LitellmLLMProvider(LLMProvider):
         kwargs: Optional[Dict[str, Any]] = None,
         timeout: float = 120.0,
         context_window_size: int = 100000,
+        fallback_model_list: Optional[List[Dict[str, Any]]] = None,
         **_,
     ):
         self._model = model
@@ -41,6 +42,11 @@ class LitellmLLMProvider(LLMProvider):
         self._model_kwargs = kwargs
         self._timeout = timeout
         self._context_window_size = context_window_size
+        # self._fallback_model_list = fallback_model_list or []
+        self._router = Router(
+            model_list=fallback_model_list,
+            fallbacks=[{model: [fallback_model_list[1]["model_name"]]}] if fallback_model_list else [],
+        )
 
     def get_generator(
         self,
@@ -77,15 +83,21 @@ class LitellmLLMProvider(LLMProvider):
                 **(generation_kwargs or {}),
             }
 
-            completion: Union[ModelResponse] = await acompletion(
+            # completion: Union[ModelResponse] = await acompletion(
+            #     model=self._model,
+            #     api_key=self._api_key,
+            #     api_base=self._api_base,
+            #     api_version=self._api_version,
+            #     timeout=self._timeout,
+            #     messages=openai_formatted_messages,
+            #     stream=streaming_callback is not None,
+            #     **generation_kwargs,
+            # )
+            completion = await self._router.acompletion(
                 model=self._model,
-                api_key=self._api_key,
-                api_base=self._api_base,
-                api_version=self._api_version,
-                timeout=self._timeout,
                 messages=openai_formatted_messages,
                 stream=streaming_callback is not None,
-                **generation_kwargs,
+                **generation_kwargs
             )
 
             completions: List[ChatMessage] = []

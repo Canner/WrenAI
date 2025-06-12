@@ -69,6 +69,8 @@ def llm_processor(entry: dict) -> dict:
     """
     others = {k: v for k, v in entry.items() if k not in ["type", "provider", "models"]}
     returned = {}
+    all_models = {m.get("alias", m["model"]): m for m in entry.get("models", [])}
+
     for model in entry.get("models", []):
         model_name = f"{entry.get('provider')}.{model.get('alias', model.get('model'))}"
         model_additional_params = {
@@ -76,11 +78,30 @@ def llm_processor(entry: dict) -> dict:
             for k, v in model.items()
             if k not in ["model", "kwargs", "alias", "context_window_size"]
         }
+
+        fallback_model_names = [model["model"]] + model.get("fallbacks", [])
+        fallback_model_list = []
+        for fb_model in fallback_model_names:
+            fb_config = all_models.get(fb_model)
+            if fb_config:
+                fb_kwargs = fb_config.get("kwargs", {})
+                fb_params = {
+                    "model": fb_config["model"],
+                    **( {"api_base": fb_config["api_base"]} if "api_base" in fb_config else {} ),
+                    **fb_kwargs,
+                }
+                fallback_model_list.append({
+                    "model_name": fb_config["model"],
+                    "litellm_params": fb_params
+                })
+        
         returned[model_name] = {
             "provider": entry["provider"],
             "model": model["model"],
             "kwargs": model["kwargs"],
             "context_window_size": model.get("context_window_size", 100000),
+            # "fallbacks": model.get("fallbacks", []),
+            "fallback_model_list": fallback_model_list,
             **model_additional_params,
             **others,
         }
