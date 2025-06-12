@@ -5,8 +5,7 @@ from haystack.components.generators.openai_utils import (
     _convert_message_to_openai_format,
 )
 from haystack.dataclasses import ChatMessage, StreamingChunk
--from litellm import acompletion, Router
-+from litellm import Router
+from litellm import Router
 from litellm.types.utils import ModelResponse
 
 from src.core.provider import LLMProvider
