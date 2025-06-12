@@ -43,10 +43,9 @@ class LitellmLLMProvider(LLMProvider):
         self._model_kwargs = kwargs
         self._timeout = timeout
         self._context_window_size = context_window_size
-        # self._fallback_model_list = fallback_model_list or []
         self._router = Router(
             model_list=fallback_model_list,
-            fallbacks=[{model: [fallback_model_list[1]["model_name"]]}] if fallback_model_list else [],
+            fallbacks=[{self._model: [fallback_model_list[1]["model_name"]]}] if fallback_model_list and len(fallback_model_list) > 1 else [],
         )
 
     def get_generator(
