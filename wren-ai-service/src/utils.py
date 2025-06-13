@@ -164,7 +164,7 @@ def trace_metadata(func):
 def trace_cost(func):
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
-        result, generator_name = await func(*args, **kwargs)
+        result, _ = await func(*args, **kwargs)
 
         if isinstance(result, dict):
             if meta := result.get("meta", []):

@@ -94,16 +94,6 @@ class LitellmLLMProvider(LLMProvider):
                 **(generation_kwargs or {}),
             }
 
-            # completion: Union[ModelResponse] = await acompletion(
-            #     model=self._model,
-            #     api_key=self._api_key,
-            #     api_base=self._api_base,
-            #     api_version=self._api_version,
-            #     timeout=self._timeout,
-            #     messages=openai_formatted_messages,
-            #     stream=streaming_callback is not None,
-            #     **generation_kwargs,
-            # )
             completion = await self._router.acompletion(
                 model=self._model,
                 messages=openai_formatted_messages,
