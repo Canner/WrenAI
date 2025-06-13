@@ -1,12 +1,11 @@
 import os
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional
 
 from haystack.components.generators.openai_utils import (
     _convert_message_to_openai_format,
 )
 from haystack.dataclasses import ChatMessage, StreamingChunk
 from litellm import Router
-from litellm.types.utils import ModelResponse
 
 from src.core.provider import LLMProvider
 from src.providers.llm import (
@@ -33,6 +32,7 @@ class LitellmLLMProvider(LLMProvider):
         timeout: float = 120.0,
         context_window_size: int = 100000,
         fallback_model_list: Optional[List[Dict[str, Any]]] = None,
+        fallback_testing: bool = True,
         **_,
     ):
         self._model = model
@@ -52,6 +52,9 @@ class LitellmLLMProvider(LLMProvider):
             model_list=fallback_model_list or [],
             fallbacks=fallbacks,
         )
+        self._enable_fallback_testing = (
+            fallback_testing and len(fallback_model_list) > 1
+        )
 
     def get_generator(
         self,
@@ -60,7 +63,7 @@ class LitellmLLMProvider(LLMProvider):
         streaming_callback: Optional[Callable[[StreamingChunk], None]] = None,
     ):
         combined_generation_kwargs = {
-            **(generation_kwargs or {}), 
+            **(generation_kwargs or {}),
             **(self._model_kwargs or {}),
         }
 
@@ -105,7 +108,8 @@ class LitellmLLMProvider(LLMProvider):
                 model=self._model,
                 messages=openai_formatted_messages,
                 stream=streaming_callback is not None,
-                **generation_kwargs
+                mock_testing_fallbacks=self._enable_fallback_testing,
+                **generation_kwargs,
             )
 
             completions: List[ChatMessage] = []

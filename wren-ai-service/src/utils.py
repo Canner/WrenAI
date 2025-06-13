@@ -169,7 +169,7 @@ def trace_cost(func):
         if isinstance(result, dict):
             if meta := result.get("meta", []):
                 langfuse_context.update_current_observation(
-                    model=generator_name,
+                    model=meta[0].get("model"),
                     usage_details=meta[0].get("usage", {}),
                 )
 
