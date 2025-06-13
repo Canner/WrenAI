@@ -164,12 +164,12 @@ def trace_metadata(func):
 def trace_cost(func):
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
-        result, generator_name = await func(*args, **kwargs)
+        result = await func(*args, **kwargs)
 
         if isinstance(result, dict):
             if meta := result.get("meta", []):
                 langfuse_context.update_current_observation(
-                    model=generator_name,
+                    model=meta[0].get("model"),
                     usage_details=meta[0].get("usage", {}),
                 )
 

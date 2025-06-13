@@ -67,8 +67,26 @@ def llm_processor(entry: dict) -> dict:
     Note:
         The function does not handle the `api_key` field. It is to be handled by the provider itself.
     """
+    def build_fallback_params(all_models: dict) -> dict:
+        result = {}
+        for model_name, model in all_models.items():
+            result[model_name] = {
+                "model_name": model_name,
+                "litellm_params": {
+                    "model": model["model"],
+                    **({"api_base": model["api_base"]} if "api_base" in model else {}),
+                    **({"api_version": model["api_version"]} if "api_version" in model else {}),
+                    "timeout": model.get("timeout", 120.0),
+                    **model.get("kwargs", {})
+                }
+            }
+        return result
+    
     others = {k: v for k, v in entry.items() if k not in ["type", "provider", "models"]}
     returned = {}
+    all_models = {m["model"]: m for m in entry.get("models", [])}
+    fallback_model_params = build_fallback_params(all_models)
+
     for model in entry.get("models", []):
         model_name = f"{entry.get('provider')}.{model.get('alias', model.get('model'))}"
         model_additional_params = {
@@ -76,11 +94,20 @@ def llm_processor(entry: dict) -> dict:
             for k, v in model.items()
             if k not in ["model", "kwargs", "alias", "context_window_size"]
         }
+
+        fallback_model_names = [model["model"]] + model.get("fallbacks", [])
+        fallback_model_list = [
+            fallback_model_params[m]
+            for m in fallback_model_names
+            if m in fallback_model_params
+        ]
+        
         returned[model_name] = {
             "provider": entry["provider"],
             "model": model["model"],
             "kwargs": model["kwargs"],
             "context_window_size": model.get("context_window_size", 100000),
+            "fallback_model_list": fallback_model_list,
             **model_additional_params,
             **others,
         }
