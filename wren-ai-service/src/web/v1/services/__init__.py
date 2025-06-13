@@ -26,8 +26,8 @@ class Configuration(BaseModel):
         name: str = "UTC"
         utc_offset: str = ""  # Deprecated, will be removed in the future
 
-    language: Optional[str] = "English"
-    timezone: Optional[Timezone] = Timezone()
+    language: str = "English"
+    timezone: Timezone = Timezone()
 
 
 class SSEEvent(BaseModel):

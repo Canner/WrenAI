@@ -321,9 +321,7 @@ async def filter_columns_in_tables(
     prompt: dict, table_columns_selection_generator: Any
 ) -> dict:
     if prompt:
-        return await table_columns_selection_generator(
-            prompt=prompt.get("prompt")
-        )
+        return await table_columns_selection_generator(prompt=prompt.get("prompt"))
     else:
         return {}
 
@@ -438,8 +436,8 @@ class DbSchemaRetrieval(BasicPipeline):
         llm_provider: LLMProvider,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
-        table_retrieval_size: Optional[int] = 10,
-        table_column_retrieval_size: Optional[int] = 100,
+        table_retrieval_size: int = 10,
+        table_column_retrieval_size: int = 100,
         **kwargs,
     ):
         self._components = {

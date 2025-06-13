@@ -66,7 +66,7 @@ class SQLExecutor(BasicPipeline):
     def __init__(
         self,
         engine: Engine,
-        engine_timeout: Optional[float] = 30.0,
+        engine_timeout: float = 30.0,
         **kwargs,
     ):
         self._components = {

@@ -122,7 +122,7 @@ class HistoricalQuestionRetrieval(BasicPipeline):
         self,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
-        historical_question_retrieval_similarity_threshold: Optional[float] = 0.9,
+        historical_question_retrieval_similarity_threshold: float = 0.9,
         **kwargs,
     ) -> None:
         view_questions_store = document_store_provider.get_store(
