@@ -43,8 +43,8 @@ def prompt(
 
 @observe(as_type="generation", capture_input=False)
 @trace_cost
-async def generate(prompt: dict, generator: Any, generator_name: str) -> dict:
-    return await generator(prompt=prompt.get("prompt")), generator_name
+async def generate(prompt: dict, generator: Any) -> dict:
+    return await generator(prompt=prompt.get("prompt"))
 
 
 @observe(capture_input=False)
@@ -237,7 +237,6 @@ class QuestionRecommendation(BasicPipeline):
                 system_prompt=system_prompt,
                 generation_kwargs=QUESTION_RECOMMENDATION_MODEL_KWARGS,
             ),
-            "generator_name": llm_provider.get_model(),
         }
 
         self._final = "normalized"

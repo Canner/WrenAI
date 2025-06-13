@@ -281,8 +281,8 @@ def prompt(
 
 @observe(as_type="generation", capture_input=False)
 @trace_cost
-async def classify_intent(prompt: dict, generator: Any, generator_name: str) -> dict:
-    return await generator(prompt=prompt.get("prompt")), generator_name
+async def classify_intent(prompt: dict, generator: Any) -> dict:
+    return await generator(prompt=prompt.get("prompt"))
 
 
 @observe(capture_input=False)
@@ -349,7 +349,6 @@ class IntentClassification(BasicPipeline):
                 system_prompt=intent_classification_system_prompt,
                 generation_kwargs=INTENT_CLASSIFICAION_MODEL_KWARGS,
             ),
-            "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
                 template=intent_classification_user_prompt_template
             ),

@@ -32,10 +32,11 @@ class LitellmLLMProvider(LLMProvider):
         timeout: float = 120.0,
         context_window_size: int = 100000,
         fallback_model_list: Optional[List[Dict[str, Any]]] = None,
-        fallback_testing: bool = True,
+        fallback_testing: bool = False,
         **_,
     ):
         self._model = model
+        # TODO: remove this in the future, as it is not used in litellm
         self._api_key = os.getenv(api_key_name) if api_key_name else None
         self._api_base = remove_trailing_slash(api_base) if api_base else None
         self._api_version = api_version
