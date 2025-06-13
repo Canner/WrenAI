@@ -113,9 +113,8 @@ def prompt(
 async def generate_chart_adjustment(
     prompt: dict,
     generator: Any,
-    generator_name: str,
 ) -> dict:
-    return await generator(prompt=prompt.get("prompt")), generator_name
+    return await generator(prompt=prompt.get("prompt"))
 
 
 @observe(capture_input=False)
@@ -158,7 +157,6 @@ class ChartAdjustment(BasicPipeline):
                 system_prompt=chart_adjustment_system_prompt,
                 generation_kwargs=CHART_ADJUSTMENT_MODEL_KWARGS,
             ),
-            "generator_name": llm_provider.get_model(),
             "chart_data_preprocessor": ChartDataPreprocessor(),
             "post_processor": ChartGenerationPostProcessor(),
         }
