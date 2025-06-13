@@ -91,8 +91,8 @@ def prompt(
 
 @observe(as_type="generation", capture_input=False)
 @trace_cost
-async def generate_chart(prompt: dict, generator: Any, generator_name: str) -> dict:
-    return await generator(prompt=prompt.get("prompt")), generator_name
+async def generate_chart(prompt: dict, generator: Any) -> dict:
+    return await generator(prompt=prompt.get("prompt"))
 
 
 @observe(capture_input=False)
@@ -131,7 +131,6 @@ class ChartGeneration(BasicPipeline):
                 system_prompt=chart_generation_system_prompt,
                 generation_kwargs=CHART_GENERATION_MODEL_KWARGS,
             ),
-            "generator_name": llm_provider.get_model(),
             "chart_data_preprocessor": ChartDataPreprocessor(),
             "post_processor": ChartGenerationPostProcessor(),
         }
