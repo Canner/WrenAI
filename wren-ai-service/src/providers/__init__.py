@@ -67,6 +67,7 @@ def llm_processor(entry: dict) -> dict:
     Note:
         The function does not handle the `api_key` field. It is to be handled by the provider itself.
     """
+
     def build_fallback_params(all_models: dict) -> dict:
         result = {}
         for model_name, model in all_models.items():
@@ -75,13 +76,17 @@ def llm_processor(entry: dict) -> dict:
                 "litellm_params": {
                     "model": model["model"],
                     **({"api_base": model["api_base"]} if "api_base" in model else {}),
-                    **({"api_version": model["api_version"]} if "api_version" in model else {}),
+                    **(
+                        {"api_version": model["api_version"]}
+                        if "api_version" in model
+                        else {}
+                    ),
                     "timeout": model.get("timeout", 120.0),
-                    **model.get("kwargs", {})
-                }
+                    **model.get("kwargs", {}),
+                },
             }
         return result
-    
+
     others = {k: v for k, v in entry.items() if k not in ["type", "provider", "models"]}
     returned = {}
     all_models = {m["model"]: m for m in entry.get("models", [])}
@@ -101,7 +106,7 @@ def llm_processor(entry: dict) -> dict:
             for m in fallback_model_names
             if m in fallback_model_params
         ]
-        
+
         returned[model_name] = {
             "provider": entry["provider"],
             "model": model["model"],

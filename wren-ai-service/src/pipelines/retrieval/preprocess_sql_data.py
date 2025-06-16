@@ -49,7 +49,7 @@ def preprocess(
     _token_count = len(encoding.encode(str(sql_data)))
     num_rows_used_in_llm = len(sql_data.get("data", []))
     iteration = 0
-    
+
     while _token_count > context_window_size:
         if iteration > 1000:
             """

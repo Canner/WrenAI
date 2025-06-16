@@ -68,9 +68,7 @@ def prompt(
 
 @observe(as_type="generation", capture_input=False)
 @trace_cost
-async def generate_sql_correction(
-    prompt: dict, generator: Any
-) -> dict:
+async def generate_sql_correction(prompt: dict, generator: Any) -> dict:
     return await generator(prompt=prompt.get("prompt"))
 
 

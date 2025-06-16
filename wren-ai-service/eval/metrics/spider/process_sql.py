@@ -321,7 +321,7 @@ def parse_value(toks, start_idx, tables_with_alias, schema, default_tables=None)
         try:
             val = float(toks[idx])
             idx += 1
-        except:
+        except Exception:
             end_idx = idx
             while (
                 end_idx < len_
@@ -557,7 +557,7 @@ def parse_limit(toks, start_idx):
     if idx < len_ and toks[idx] == "limit":
         idx += 2
         # make limit value can work, cannot assume put 1 as a fake limit number
-        if type(toks[idx - 1]) != int:
+        if not isinstance(toks[idx - 1], int):
             return idx, 1
 
         return idx, int(toks[idx - 1])

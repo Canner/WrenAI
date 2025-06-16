@@ -70,9 +70,7 @@ def prompt(
 
 @observe(as_type="generation", capture_input=False)
 @trace_cost
-async def data_assistance(
-    prompt: dict, generator: Any, query_id: str
-) -> dict:
+async def data_assistance(prompt: dict, generator: Any, query_id: str) -> dict:
     return await generator(
         prompt=prompt.get("prompt"),
         query_id=query_id,
