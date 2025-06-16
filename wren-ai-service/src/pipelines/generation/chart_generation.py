@@ -84,6 +84,7 @@ def prompt(
 async def generate_chart(prompt: dict, generator: Any) -> dict:
     return await generator(prompt=prompt.get("prompt"))
 
+
 @observe(capture_input=False)
 def post_process(
     generate_chart: dict,
