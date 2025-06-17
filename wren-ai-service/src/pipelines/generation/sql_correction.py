@@ -74,6 +74,7 @@ async def generate_sql_correction(
     return await generator(prompt=prompt.get("prompt")), generator_name
 
 
+
 @observe(capture_input=False)
 async def post_process(
     generate_sql_correction: dict,
