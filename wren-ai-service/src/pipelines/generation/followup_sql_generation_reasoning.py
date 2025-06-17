@@ -90,7 +90,7 @@ async def generate_sql_reasoning(
     generator: Any,
     query_id: str,
     generator_name: str,
-) -> dict:
+) -> tuple[dict, str]:
     return await generator(
         prompt=prompt.get("prompt"),
         query_id=query_id,

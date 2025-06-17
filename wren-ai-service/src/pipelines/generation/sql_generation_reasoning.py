@@ -76,7 +76,7 @@ def prompt(
 @trace_cost
 async def generate_sql_reasoning(
     prompt: dict, generator: Any, query_id: str, generator_name: str
-) -> dict:
+) -> tuple[dict, str]:
     return await generator(
         prompt=prompt.get("prompt"), query_id=query_id
     ), generator_name

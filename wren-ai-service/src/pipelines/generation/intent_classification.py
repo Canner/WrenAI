@@ -281,7 +281,9 @@ def prompt(
 
 @observe(as_type="generation", capture_input=False)
 @trace_cost
-async def classify_intent(prompt: dict, generator: Any, generator_name: str) -> dict:
+async def classify_intent(
+    prompt: dict, generator: Any, generator_name: str
+) -> tuple[dict, str]:
     return await generator(prompt=prompt.get("prompt")), generator_name
 
 

@@ -113,7 +113,7 @@ def prompt(
 @trace_cost
 async def generate_sql_in_followup(
     prompt: dict, generator: Any, histories: list[AskHistory], generator_name: str
-) -> dict:
+) -> tuple[dict, str]:
     history_messages = construct_ask_history_messages(histories)
     return await generator(
         prompt=prompt.get("prompt"), history_messages=history_messages
