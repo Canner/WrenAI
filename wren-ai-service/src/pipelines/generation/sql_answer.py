@@ -65,8 +65,13 @@ def prompt(
 
 @observe(as_type="generation", capture_input=False)
 @trace_cost
-async def generate_answer(prompt: dict, generator: Any, query_id: str) -> dict:
-    return await generator(prompt=prompt.get("prompt"), query_id=query_id)
+async def generate_answer(
+    prompt: dict, generator: Any, query_id: str, generator_name: str
+) -> dict:
+    return await generator(
+        prompt=prompt.get("prompt"), query_id=query_id
+    ), generator_name
+
 
 
 ## End of Pipeline
@@ -87,6 +92,7 @@ class SQLAnswer(BasicPipeline):
                 system_prompt=sql_to_answer_system_prompt,
                 streaming_callback=self._streaming_callback,
             ),
+            "generator_name": llm_provider.get_model(),
         }
 
         super().__init__(

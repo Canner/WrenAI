@@ -164,13 +164,17 @@ def trace_metadata(func):
 def trace_cost(func):
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
-        result = await func(*args, **kwargs)
+        result, generator_name = await func(*args, **kwargs)
 
         if isinstance(result, dict):
             if meta := result.get("meta", []):
+                model = meta[0].get("model")
                 langfuse_context.update_current_observation(
-                    model=meta[0].get("model"),
+                    model=model,
                     usage_details=meta[0].get("usage", {}),
+                )
+                langfuse_context.update_current_trace(
+                    metadata={"fallback_is_triggered": model != generator_name}
                 )
 
         return result
