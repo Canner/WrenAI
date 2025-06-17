@@ -1,6 +1,6 @@
 import logging
 import sys
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
@@ -70,9 +70,8 @@ def prompt(
 @trace_cost
 async def generate_sql_correction(
     prompt: dict, generator: Any, generator_name: str
-) -> Tuple[dict, str]:
+) -> dict:
     return await generator(prompt=prompt.get("prompt")), generator_name
-
 
 
 @observe(capture_input=False)

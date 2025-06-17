@@ -65,9 +65,7 @@ def prompt(
 
 @observe(as_type="generation", capture_input=False)
 @trace_cost
-async def extract_sql_tables(
-    prompt: dict, generator: Any, generator_name: str
-) -> tuple[dict, str]:
+async def extract_sql_tables(prompt: dict, generator: Any, generator_name: str) -> dict:
     return await generator(prompt=prompt.get("prompt")), generator_name
 
 

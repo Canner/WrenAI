@@ -319,7 +319,7 @@ def prompt(
 @trace_cost
 async def filter_columns_in_tables(
     prompt: dict, table_columns_selection_generator: Any, generator_name: str
-) -> tuple[dict, str]:
+) -> dict:
     if prompt:
         return await table_columns_selection_generator(
             prompt=prompt.get("prompt")

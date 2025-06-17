@@ -62,11 +62,10 @@ def prompt(
 @trace_cost
 async def user_guide_assistance(
     prompt: dict, generator: Any, query_id: str, generator_name: str
-) -> tuple[dict, str]:
+) -> dict:
     return await generator(
         prompt=prompt.get("prompt"), query_id=query_id
     ), generator_name
-
 
 
 ## End of Pipeline

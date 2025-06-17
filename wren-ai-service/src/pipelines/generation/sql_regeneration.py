@@ -124,7 +124,7 @@ async def regenerate_sql(
     prompt: dict,
     generator: Any,
     generator_name: str,
-) -> tuple[dict, str]:
+) -> dict:
     return await generator(prompt=prompt.get("prompt")), generator_name
 
 

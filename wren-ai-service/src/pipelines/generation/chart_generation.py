@@ -81,11 +81,8 @@ def prompt(
 
 @observe(as_type="generation", capture_input=False)
 @trace_cost
-async def generate_chart(
-    prompt: dict, generator: Any, generator_name: str
-) -> tuple[dict, str]:
+async def generate_chart(prompt: dict, generator: Any, generator_name: str) -> dict:
     return await generator(prompt=prompt.get("prompt")), generator_name
-
 
 
 @observe(capture_input=False)

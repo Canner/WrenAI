@@ -61,9 +61,8 @@ def prompt(
 @trace_cost
 async def generate_sql_question(
     prompt: dict, generator: Any, generator_name: str
-) -> tuple[dict, str]:
+) -> dict:
     return await generator(prompt=prompt.get("prompt")), generator_name
-
 
 
 @observe(capture_input=False)
