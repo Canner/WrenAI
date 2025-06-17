@@ -168,17 +168,14 @@ def trace_cost(func):
 
         if isinstance(result, dict):
             if meta := result.get("meta", []):
-                fallback_metadata = {}
                 model = meta[0].get("model")
-                fallback_metadata["fallback_check"] = {
-                    "llm_model": model,
-                    "enable_fallback": model != generator_name,
-                }
                 langfuse_context.update_current_observation(
                     model=model,
                     usage_details=meta[0].get("usage", {}),
                 )
-                langfuse_context.update_current_trace(metadata=fallback_metadata)
+                langfuse_context.update_current_trace(
+                    metadata={"fallback_is_triggered": model != generator_name}
+                )
 
         return result
 
