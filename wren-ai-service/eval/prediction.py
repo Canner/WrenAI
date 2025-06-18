@@ -16,7 +16,12 @@ import eval.pipelines as pipelines
 import src.providers as provider
 import src.utils as utils
 from eval import EvalSettings
-from eval.utils import parse_toml, replace_wren_engine_env_variables
+from eval.utils import (
+    load_eval_data_db_to_postgres,
+    parse_db_name,
+    parse_toml,
+    replace_wren_engine_env_variables,
+)
 
 
 def generate_meta(
@@ -70,13 +75,6 @@ def write_prediction(
 
 def obtain_commit_hash() -> str:
     repo = Repo(search_parent_directories=True)
-
-    if repo.untracked_files:
-        raise Exception("There are untracked files in the repository.")
-
-    if repo.index.diff(None):
-        raise Exception("There are uncommitted changes in the repository.")
-
     branch = repo.active_branch
     return f"{repo.head.commit}@{branch.name}"
 
@@ -107,17 +105,26 @@ if __name__ == "__main__":
     settings = EvalSettings()
     # todo: refactor this
     _mdl = base64.b64encode(orjson.dumps(dataset["mdl"])).decode("utf-8")
-    if "spider_" in path:
-        settings.datasource = "duckdb"
-        settings.db_path_for_duckdb = "etc/spider1.0/database"
+    if "spider_" in path or "bird_" in path:
+        db_name = parse_db_name(path)
+        if "spider_" in path:
+            settings.eval_data_db_path = "etc/spider1.0/database"
+        elif "bird_" in path:
+            settings.eval_data_db_path = "etc/bird/minidev/MINIDEV/dev_databases"
+            load_eval_data_db_to_postgres(db_name, settings.eval_data_db_path)
+
+        settings.datasource = "postgres"
+        _connection_info = base64.b64encode(
+            orjson.dumps(settings.postgres_info)
+        ).decode("utf-8")
         replace_wren_engine_env_variables(
-            "wren_engine", {"manifest": _mdl}, settings.config_path
-        )
-    elif "bird_" in path:
-        settings.datasource = "duckdb"
-        settings.db_path_for_duckdb = "etc/bird/minidev/MINIDEV/dev_databases"
-        replace_wren_engine_env_variables(
-            "wren_engine", {"manifest": _mdl}, settings.config_path
+            "wren_ibis",
+            {
+                "manifest": _mdl,
+                "source": settings.datasource,
+                "connection_info": _connection_info,
+            },
+            settings.config_path,
         )
     else:
         _connection_info = base64.b64encode(

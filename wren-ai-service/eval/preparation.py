@@ -20,13 +20,11 @@ from eval.utils import (
     get_documents_given_contexts,
     get_eval_dataset_in_toml_string,
     get_next_few_items_circular,
-    prepare_duckdb_init_sql,
-    prepare_duckdb_session_sql,
 )
 
 SPIDER_DESTINATION_PATH = Path("./tools/dev/etc/spider1.0")
 BIRD_DESTINATION_PATH = Path("./tools/dev/etc/bird")
-WREN_ENGINE_API_URL = "http://localhost:8080"
+WREN_IBIS_API_URL = "http://localhost:8000"
 EVAL_DATASET_DESTINATION_PATH = Path("./eval/dataset")
 
 
@@ -141,7 +139,7 @@ def build_mdl_models(database, tables_info, database_info={}):
 
         return [
             {
-                "name": column["column_name"],
+                "name": column["column_name"].lower(),
                 "type": column["column_type"],
                 "notNull": False,
                 "properties": {
@@ -155,16 +153,16 @@ def build_mdl_models(database, tables_info, database_info={}):
 
     return [
         {
-            "name": table,
+            "name": table.lower(),
             "properties": {},
             "tableReference": {
                 "catalog": database,
                 "schema": "main",
-                "table": table,
+                "table": table.lower(),
             },
             "primaryKey": tables_info["column_names_original"][
                 primary_key_column_index
-            ][-1]
+            ][-1].lower()
             if primary_key_column_index
             else "",
             "columns": _build_mdl_columns(
@@ -199,10 +197,10 @@ def build_mdl_relationships(tables_info):
 
         relationships.append(
             {
-                "name": f"{first_foreign_key_table}_{first_column_name}_{second_foreign_key_table}_{second_column_name}",
+                "name": f"{first_foreign_key_table.lower()}_{first_column_name.lower()}_{second_foreign_key_table.lower()}_{second_column_name.lower()}",
                 "models": [first_foreign_key_table, second_foreign_key_table],
                 "joinType": "MANY_TO_MANY",
-                "condition": f"{first_foreign_key_table}.{first_column_name} = {second_foreign_key_table}.{second_column_name}",
+                "condition": f"{first_foreign_key_table.lower()}.{first_column_name.lower()} = {second_foreign_key_table.lower()}.{second_column_name.lower()}",
             }
         )
 
@@ -236,7 +234,7 @@ def build_mdl_by_db_using_spider(destination_path: Path):
             mdl_by_db[database] = {
                 "catalog": database,
                 "schema": "main",
-                "dataSource": "local_file",
+                "dataSource": "postgres",
                 "models": build_mdl_models(database, tables_info),
                 "relationships": build_mdl_relationships(tables_info),
                 "views": [],
@@ -320,7 +318,7 @@ def build_mdl_by_db_using_bird(destination_path: Path):
             mdl_by_db[database] = {
                 "catalog": database,
                 "schema": "main",
-                "dataSource": "local_file",
+                "dataSource": "postgres",
                 "models": build_mdl_models(
                     database, tables_info, database_infos.get(database, {})
                 ),
@@ -406,26 +404,21 @@ if __name__ == "__main__":
         )
 
     print("Creating eval dataset...")
-    # create duckdb connection in wren engine
-    # https://duckdb.org/docs/guides/database_integration/sqlite.html
-    prepare_duckdb_session_sql(WREN_ENGINE_API_URL)
     questions_size = 0
     if args.dataset == "spider1.0":
-        duckdb_init_path = "etc/spider1.0/database"
+        eval_data_db_path = "etc/spider1.0/database"
     elif args.dataset == "bird":
-        duckdb_init_path = "etc/bird/minidev/MINIDEV/dev_databases"
+        eval_data_db_path = "etc/bird/minidev/MINIDEV/dev_databases"
     for db, values in sorted(mdl_and_ground_truths_by_db.items()):
         candidate_eval_dataset = []
 
         print(f"Database: {db}")
-        prepare_duckdb_init_sql(WREN_ENGINE_API_URL, db, duckdb_init_path)
-
         for i, ground_truth in enumerate(values["ground_truth"]):
             context = asyncio.run(
                 get_contexts_from_sql(
                     ground_truth["sql"],
                     values["mdl"],
-                    WREN_ENGINE_API_URL,
+                    WREN_IBIS_API_URL,
                 )
             )
 

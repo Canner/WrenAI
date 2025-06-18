@@ -13,12 +13,19 @@ class EvalSettings(Settings):
     allow_sql_samples: bool = True
     allow_instructions: bool = True
     allow_sql_functions: bool = True
-    db_path_for_duckdb: str = ""
+    eval_data_db_path: str = ""
 
     # BigQuery
     bigquery_project_id: str = Field(default="")
     bigquery_dataset_id: str = Field(default="")
     bigquery_credentials: SecretStr = Field(default="")
+
+    # Postgres
+    postgres_host: str = Field(default="postgres")
+    postgres_port: str = Field(default="5432")
+    postgres_user: str = Field(default="postgres")
+    postgres_password: SecretStr = Field(default="postgres")
+    postgres_database: str = Field(default="test")
 
     @property
     def langfuse_url(self) -> str:
@@ -35,4 +42,14 @@ class EvalSettings(Settings):
             "project_id": self.bigquery_project_id,
             "dataset_id": self.bigquery_dataset_id,
             "credentials": self.bigquery_credentials.get_secret_value(),
+        }
+
+    @property
+    def postgres_info(self) -> dict:
+        return {
+            "host": self.postgres_host,
+            "port": self.postgres_port,
+            "user": self.postgres_user,
+            "password": self.postgres_password.get_secret_value(),
+            "database": self.postgres_database,
         }

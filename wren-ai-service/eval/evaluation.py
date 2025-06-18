@@ -44,7 +44,10 @@ def formatter(prediction: dict, meta: dict) -> dict:
 
     return {
         "input": prediction["input"],
-        "actual_output": prediction.get("actual_output", {}).get("sql", ""),
+        "actual_output": prediction.get("actual_output", {})
+        .get("post_process", {})
+        .get("valid_generation_result", {})
+        .get("sql", ""),
         "expected_output": prediction["expected_output"],
         "retrieval_context": retrieval_context,
         "context": context,
@@ -93,8 +96,8 @@ class Evaluator:
 
     def eval(self, meta: dict, predictions: list) -> None:
         for prediction in predictions:
-            if prediction.get("type") != "shallow":
-                continue
+            # if prediction.get("type") != "shallow":
+            #     continue
 
             try:
                 test_case = LLMTestCase(**formatter(prediction, meta))

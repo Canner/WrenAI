@@ -1,5 +1,6 @@
 import base64
 import os
+import re
 import uuid
 from copy import deepcopy
 from datetime import datetime
@@ -7,6 +8,7 @@ from typing import Any, Dict, List, Literal, Optional, Tuple, get_args
 
 import aiohttp
 import orjson
+import psycopg2
 import requests
 import sqlglot
 import tomlkit
@@ -15,6 +17,8 @@ from dotenv import load_dotenv
 from openai import AsyncClient
 from tomlkit import parse
 
+import docker
+from eval import EvalSettings
 from src.providers.engine.wren import WrenEngine
 
 load_dotenv(".env", override=True)
@@ -189,6 +193,18 @@ async def get_contexts_from_sql(
 def parse_toml(path: str) -> Dict[str, Any]:
     with open(path) as file:
         return parse(file.read())
+
+
+def parse_db_name(path: str) -> str:
+    match = re.search(
+        r"bird_(.+?)_eval_dataset\.toml|spider_(.+?)_eval_dataset\.toml", path
+    )
+    if match:
+        return match.group(1)
+    else:
+        raise ValueError(
+            f"Invalid path format: {path}. Expected format: bird_<db_name>_eval_dataset.toml or spider_<db_name>_eval_dataset.toml"
+        )
 
 
 TRACE_TYPES = Literal["execution", "shallow", "summary"]
@@ -554,6 +570,37 @@ def prepare_duckdb_init_sql(api_endpoint: str, db: str, path: str):
     )
 
     assert response.status_code == 200, response.text
+
+
+def load_eval_data_db_to_postgres(db: str, path: str):
+    abs_path = os.path.abspath(f"tools/dev/{path}")
+    postgres_info = EvalSettings().postgres_info
+
+    conn = psycopg2.connect(
+        host="localhost",
+        port=postgres_info["port"],
+        database=postgres_info["database"],
+        user=postgres_info["user"],
+        password=postgres_info["password"],
+    )
+
+    # delete all tables in the database
+    cursor = conn.cursor()
+    cursor.execute("DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;")
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    # load the eval data db to the postgres
+    docker_client = docker.from_env()
+    docker_client.containers.run(
+        "dimitri/pgloader:latest",
+        name="pgloader",
+        volumes={abs_path: {"bind": "/data", "mode": "ro"}},
+        command=f'pgloader sqlite:///data/{db}/{db}.sqlite pgsql://{postgres_info["user"]}:{postgres_info["password"]}@{postgres_info["host"]}:{postgres_info["port"]}/{postgres_info["database"]}',
+        network="wren_wren",
+        remove=True,
+    )
 
 
 def get_next_few_items_circular(items: list, i: int, few: int = 5):
