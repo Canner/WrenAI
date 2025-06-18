@@ -492,6 +492,8 @@ export class MDLBuilder implements IMDLBuilder {
       return;
     }
     switch (type) {
+      case DataSourceName.ATHENA:
+        return WrenEngineDataSourceType.ATHENA;
       case DataSourceName.BIG_QUERY:
         return WrenEngineDataSourceType.BIGQUERY;
       case DataSourceName.DUCKDB:

@@ -66,13 +66,13 @@ export interface IbisSnowflakeConnectionInfo {
   schema: string;
 }
 
-export type IbisConnectionInfo =
-  | UrlBasedConnectionInfo
-  | HostBasedConnectionInfo
-  | IbisPostgresConnectionInfo
-  | IbisBigQueryConnectionInfo
-  | IbisTrinoConnectionInfo
-  | IbisSnowflakeConnectionInfo;
+export interface IbisAthenaConnectionInfo {
+  aws_access_key_id: string;
+  aws_secret_access_key: string;
+  region_name: string;
+  s3_staging_dir: string;
+  schema_name: string;
+}
 
 export enum SupportedDataSource {
   POSTGRES = 'POSTGRES',
@@ -83,6 +83,7 @@ export enum SupportedDataSource {
   MSSQL = 'MSSQL',
   CLICK_HOUSE = 'CLICK_HOUSE',
   TRINO = 'TRINO',
+  ATHENA = 'ATHENA',
 }
 
 const dataSourceUrlMap: Record<SupportedDataSource, string> = {
@@ -94,6 +95,7 @@ const dataSourceUrlMap: Record<SupportedDataSource, string> = {
   [SupportedDataSource.MSSQL]: 'mssql',
   [SupportedDataSource.CLICK_HOUSE]: 'clickhouse',
   [SupportedDataSource.TRINO]: 'trino',
+  [SupportedDataSource.ATHENA]: 'athena',
 };
 
 export interface TableResponse {
