@@ -15,7 +15,7 @@ from src.core.pipeline import PipelineComponent
 
 sys.path.append(f"{Path().parent.resolve()}")
 
-from eval import EvalSettings
+from eval import WREN_ENGINE_API_URL, EvalSettings
 from eval.metrics import (
     AccuracyMetric,
     AnswerRelevancyMetric,
@@ -197,9 +197,12 @@ class RetrievalPipeline(Eval):
 
     @staticmethod
     def metrics(engine_info: dict) -> dict:
+        wren_engine_info = engine_info.copy()
+        wren_engine_info["api_endpoint"] = WREN_ENGINE_API_URL
+
         return {
             "metrics": [
-                ContextualRecallMetric(engine_info=engine_info),
+                ContextualRecallMetric(engine_info=wren_engine_info),
                 ContextualRelevancyMetric(),
                 ContextualPrecisionMetric(),
             ]
@@ -282,14 +285,17 @@ class GenerationPipeline(Eval):
         enable_semantics_comparison: bool,
         component: PipelineComponent,
     ) -> dict:
+        wren_engine_info = engine_info.copy()
+        wren_engine_info["api_endpoint"] = WREN_ENGINE_API_URL
+
         return {
             "metrics": [
                 AccuracyMetric(
                     engine_info=engine_info,
                     enable_semantics_comparison=enable_semantics_comparison,
                 ),
-                AnswerRelevancyMetric(engine_info=engine_info),
-                FaithfulnessMetric(engine_info=engine_info),
+                AnswerRelevancyMetric(engine_info=wren_engine_info),
+                FaithfulnessMetric(engine_info=wren_engine_info),
                 ExactMatchAccuracy(),
                 ExecutionAccuracy(),
                 QuestionToReasoningJudge(**component),
@@ -410,15 +416,18 @@ class AskPipeline(Eval):
         enable_semantics_comparison: bool,
         component: PipelineComponent,
     ) -> dict:
+        wren_engine_info = engine_info.copy()
+        wren_engine_info["api_endpoint"] = WREN_ENGINE_API_URL
+
         return {
             "metrics": [
                 AccuracyMetric(
                     engine_info=engine_info,
                     enable_semantics_comparison=enable_semantics_comparison,
                 ),
-                AnswerRelevancyMetric(engine_info=engine_info),
-                FaithfulnessMetric(engine_info=engine_info),
-                ContextualRecallMetric(engine_info=engine_info),
+                AnswerRelevancyMetric(engine_info=wren_engine_info),
+                FaithfulnessMetric(engine_info=wren_engine_info),
+                ContextualRecallMetric(engine_info=wren_engine_info),
                 ContextualRelevancyMetric(),
                 ContextualPrecisionMetric(),
                 ExactMatchAccuracy(),

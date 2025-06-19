@@ -11,14 +11,13 @@ class FaithfulnessMetric(BaseMetric):
         self.threshold = 0
         self.score = 0
         self.engine_info = engine_info
-        self.mdl_json = engine_info["mdl_json"]
 
     def measure(self, test_case: LLMTestCase):
         return asyncio.run(self.a_measure(test_case))
 
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs):
         actual_units = await get_contexts_from_sql(
-            sql=test_case.actual_output, mdl_json=self.mdl_json
+            sql=test_case.actual_output, **self.engine_info
         )
         intersection = set(actual_units) & set(test_case.retrieval_context)
         self.score = len(intersection) / len(actual_units)
