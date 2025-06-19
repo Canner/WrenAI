@@ -45,11 +45,12 @@ pandas = "^2.2.2"
 matplotlib = "^3.9.2"
 sseclient-py = "^1.8.0"
 dspy-ai = "^2.5.26"
-requests = "^2.32.2"
+requests = "^2.32.4"
 extra-streamlit-components = "^0.1.71"
 deepeval = "^1.0.6"
 tomlkit = "^0.13.0"
 nltk = "^3.9.1"
+psycopg2 = "^2.9.10"
 
 [tool.poetry.group.eval.dependencies]
 gitpython = "^3.1.43"
@@ -60,8 +61,6 @@ itables = "^2.2.1"
 gdown = "^5.2.0"
 streamlit-tags = "^1.2.8"
 docker = "^7.1.0"
-psycopg2-binary = "^2.9.9"
-psycopg2 = "^2.9.10"
 
 [tool.poetry.group.test.dependencies]
 locust = "^2.32.0"
