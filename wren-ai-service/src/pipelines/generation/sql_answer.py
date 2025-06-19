@@ -29,6 +29,7 @@ Please answer the user's question in concise and clear manner in Markdown format
 5. If answer is in list format, only list top few examples, and tell users there are more results omitted.
 6. Answer must be in the same language user specified.
 7. Do not include ```markdown or ``` in the answer.
+8. If the user provides a custom instruction, it should be followed strictly and you should use it to change the style of response.
 
 ### OUTPUT FORMAT
 
@@ -41,6 +42,7 @@ User's question: {{ query }}
 SQL: {{ sql }}
 Data: {{ sql_data }}
 Language: {{ language }}
+Custom Instruction: {{ custom_instruction }}
 
 Please think step by step and answer the user's question.
 """
@@ -53,6 +55,7 @@ def prompt(
     sql: str,
     sql_data: dict,
     language: str,
+    custom_instruction: str,
     prompt_builder: PromptBuilder,
 ) -> dict:
     return prompt_builder.run(
@@ -60,6 +63,7 @@ def prompt(
         sql=sql,
         sql_data=sql_data,
         language=language,
+        custom_instruction=custom_instruction,
     )
 
 
@@ -71,7 +75,6 @@ async def generate_answer(
     return await generator(
         prompt=prompt.get("prompt"), query_id=query_id
     ), generator_name
-
 
 
 ## End of Pipeline
@@ -142,6 +145,7 @@ class SQLAnswer(BasicPipeline):
         sql_data: dict,
         language: str,
         query_id: Optional[str] = None,
+        custom_instruction: Optional[str] = None,
     ) -> dict:
         logger.info("Sql_Answer Generation pipeline is running...")
         return await self._pipe.execute(
@@ -152,6 +156,7 @@ class SQLAnswer(BasicPipeline):
                 "sql_data": sql_data,
                 "language": language,
                 "query_id": query_id,
+                "custom_instruction": custom_instruction or "",
                 **self._components,
             },
         )
