@@ -31,7 +31,6 @@ from eval.metrics import (
 )
 from eval.utils import (
     engine_config,
-    get_contexts_from_sql,
     trace_metadata,
 )
 from src.pipelines import generation, indexing, retrieval
@@ -125,12 +124,6 @@ class Eval:
     def _process(self, prediction: dict, **_) -> dict:
         ...
 
-    async def _flat(self, prediction: dict, **_) -> dict:
-        """
-        No operation function to be overridden by subclasses if needed.
-        """
-        return prediction
-
     @observe(name="Prediction Process", capture_input=False)
     async def process(self, params: dict) -> dict:
         prediction = {
@@ -159,33 +152,6 @@ class Eval:
         returned["elapsed_time"] = (datetime.now() - start_time).total_seconds()
 
         return returned
-
-    @observe(capture_input=False)
-    async def flat(self, prediction: dict, **kwargs) -> dict:
-        """
-        This method changes the trace type to 'shallow' to handle cases where a trace has multiple actual outputs.
-        The flattening mechanism was historically used to get individual scores for evaluation when a single trace
-        produced multiple outputs. While currently maintained for backwards compatibility, this functionality may
-        be removed in the future if no longer needed.
-        """
-        prediction["source_trace_id"] = prediction["trace_id"]
-        prediction["source_trace_url"] = prediction["trace_url"]
-        prediction["trace_id"] = langfuse_context.get_current_trace_id()
-        prediction["trace_url"] = langfuse_context.get_current_trace_url()
-        prediction["type"] = "shallow"
-
-        langfuse_context.update_current_trace(
-            name=f"Prediction Process - Shallow Trace for {prediction['input']} ",
-            session_id=self._meta.get("session_id"),
-            user_id=self._meta.get("user_id"),
-            metadata={
-                **trace_metadata(self._meta, type=prediction["type"]),
-                "source_trace_id": prediction["source_trace_id"],
-                "source_trace_url": prediction["source_trace_url"],
-            },
-        )
-
-        return await self._flat(prediction, **kwargs)
 
 
 class RetrievalPipeline(Eval):
@@ -227,7 +193,7 @@ class RetrievalPipeline(Eval):
     async def __call__(self, params: dict, **_):
         prediction = await self.process(params)
 
-        return [prediction, await self.flat(prediction.copy())]
+        return [prediction]
 
     @staticmethod
     def metrics(engine_info: dict) -> dict:
@@ -263,16 +229,8 @@ class GenerationPipeline(Eval):
         self._allow_instructions = settings.allow_instructions
         self._allow_sql_functions = settings.allow_sql_functions
         self._engine_info = engine_config(
-            mdl, pipe_components, settings.db_path_for_duckdb
+            mdl, pipe_components, settings.eval_data_db_path
         )
-
-    async def _flat(self, prediction: dict, actual: str) -> dict:
-        prediction["actual_output"] = actual
-        prediction["actual_output_units"] = await get_contexts_from_sql(
-            sql=actual["sql"], **self._engine_info
-        )
-
-        return prediction
 
     def _get_instructions(self, params: dict) -> list:
         if self._allow_instructions:
@@ -316,17 +274,7 @@ class GenerationPipeline(Eval):
         return params
 
     async def __call__(self, params: dict, **_):
-        prediction = await self.process(params)
-        valid_outputs = (
-            prediction["actual_output"]
-            .get("post_process", {})
-            .get("valid_generation_results", [])
-        )
-
-        return [prediction] + [
-            await self.flat(prediction.copy(), actual=actual)
-            for actual in valid_outputs
-        ]
+        return [await self.process(params)]
 
     @staticmethod
     def metrics(
@@ -342,7 +290,6 @@ class GenerationPipeline(Eval):
                 ),
                 AnswerRelevancyMetric(engine_info=engine_info),
                 FaithfulnessMetric(engine_info=engine_info),
-                # this is for spider dataset, rn we temporarily disable it
                 ExactMatchAccuracy(),
                 ExecutionAccuracy(),
                 QuestionToReasoningJudge(**component),
@@ -392,15 +339,8 @@ class AskPipeline(Eval):
         self._allow_sql_generation_reasoning = settings.allow_sql_generation_reasoning
         self._allow_sql_functions = settings.allow_sql_functions
         self._engine_info = engine_config(
-            mdl, pipe_components, settings.db_path_for_duckdb
+            mdl, pipe_components, settings.eval_data_db_path
         )
-
-    async def _flat(self, prediction: dict, actual: str) -> dict:
-        prediction["actual_output"] = actual
-        prediction["actual_output_units"] = await get_contexts_from_sql(
-            sql=actual["sql"], **self._engine_info
-        )
-        return prediction
 
     def _get_instructions(self, params: dict) -> list:
         if self._allow_instructions:
@@ -462,17 +402,7 @@ class AskPipeline(Eval):
         return params
 
     async def __call__(self, params: dict, **_):
-        prediction = await self.process(params)
-        valid_outputs = (
-            prediction["actual_output"]
-            .get("post_process", {})
-            .get("valid_generation_results", [])
-        )
-
-        return [prediction] + [
-            await self.flat(prediction.copy(), actual=actual)
-            for actual in valid_outputs
-        ]
+        return [await self.process(params)]
 
     @staticmethod
     def metrics(
@@ -491,7 +421,6 @@ class AskPipeline(Eval):
                 ContextualRecallMetric(engine_info=engine_info),
                 ContextualRelevancyMetric(),
                 ContextualPrecisionMetric(),
-                # this is for spider dataset, rn we temporarily disable it
                 ExactMatchAccuracy(),
                 ExecutionAccuracy(),
                 QuestionToReasoningJudge(**component),
@@ -537,7 +466,7 @@ def metrics_initiator(
     engine_info = engine_config(
         dataset["mdl"],
         pipe_components,
-        settings.db_path_for_duckdb,
+        settings.eval_data_db_path,
     )
     component = pipe_components["evaluation"]
     match pipeline:

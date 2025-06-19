@@ -296,9 +296,6 @@ def prompt(
     histories: list[AskHistory],
 ) -> dict:
     if not check_using_db_schemas_without_pruning["db_schemas"]:
-        logger.info(
-            "db_schemas token count is greater than 100,000, so we will prune columns"
-        )
         db_schemas = [
             build_table_ddl(construct_db_schema)[0]
             for construct_db_schema in construct_db_schemas

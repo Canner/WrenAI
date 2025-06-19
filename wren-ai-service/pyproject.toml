@@ -59,6 +59,9 @@ ipykernel = "^6.29.5"
 itables = "^2.2.1"
 gdown = "^5.2.0"
 streamlit-tags = "^1.2.8"
+docker = "^7.1.0"
+psycopg2-binary = "^2.9.9"
+psycopg2 = "^2.9.10"
 
 [tool.poetry.group.test.dependencies]
 locust = "^2.32.0"
