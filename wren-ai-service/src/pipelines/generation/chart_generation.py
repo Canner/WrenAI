@@ -27,6 +27,7 @@ You are a data analyst great at visualizing data using vega-lite! Given the user
 Besides, you need to give a concise and easy-to-understand reasoning to describe why you provide such vega-lite schema based on the question, SQL, sample data and sample column values.
 
 {chart_generation_instructions}
+- If the user provides a custom instruction, it should be followed strictly and you should use it to change the style of response for reasoning.
 
 ### OUTPUT FORMAT ###
 
@@ -46,6 +47,7 @@ SQL: {{ sql }}
 Sample Data: {{ sample_data }}
 Sample Column Values: {{ sample_column_values }}
 Language: {{ language }}
+Custom Instruction: {{ custom_instruction }}
 
 Please think step by step
 """
@@ -65,6 +67,7 @@ def prompt(
     sql: str,
     preprocess_data: dict,
     language: str,
+    custom_instruction: str,
     prompt_builder: PromptBuilder,
 ) -> dict:
     sample_data = preprocess_data.get("sample_data")
@@ -76,6 +79,7 @@ def prompt(
         sample_data=sample_data,
         sample_column_values=sample_column_values,
         language=language,
+        custom_instruction=custom_instruction,
     )
 
 
@@ -151,6 +155,7 @@ class ChartGeneration(BasicPipeline):
         data: dict,
         language: str,
         remove_data_from_chart_schema: Optional[bool] = True,
+        custom_instruction: Optional[str] = None,
     ) -> dict:
         logger.info("Chart Generation pipeline is running...")
         return await self._pipe.execute(
@@ -161,6 +166,7 @@ class ChartGeneration(BasicPipeline):
                 "data": data,
                 "language": language,
                 "remove_data_from_chart_schema": remove_data_from_chart_schema,
+                "custom_instruction": custom_instruction or "",
                 **self._components,
                 **self._configs,
             },
