@@ -102,6 +102,11 @@ export const DATA_SOURCE_OPTIONS = {
     guide: 'https://docs.getwren.ai/oss/guide/connect/snowflake',
     disabled: false,
   },
+  [DATA_SOURCES.ATHENA]: {
+    ...getDataSourceConfig(DATA_SOURCES.ATHENA),
+    guide: 'https://docs.getwren.ai/oss/guide/connect/athena',
+    disabled: false,
+  },
 } as { [key: string]: ButtonOption };
 
 export const TEMPLATE_OPTIONS = {
