@@ -1,0 +1,133 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wren-ai.fullname" . }}-ui
+  labels:
+    {{- include "wren-ai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ui
+spec:
+  replicas: {{ default 1 .Values.ui.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "wren-ai.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: ui
+  template:
+    metadata:
+      labels:
+        {{- include "wren-ai.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: ui
+    spec:
+      {{- with .Values.ui.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.ui.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.ui.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: wren-ui
+          image: "{{ .Values.ui.image.repository }}:{{ .Values.ui.image.tag | default .Values.global.versions.ui }}"
+          imagePullPolicy: {{ .Values.ui.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.ui.service.port }}
+              protocol: TCP
+          env:
+            - name: DB_TYPE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "wren-ai.fullname" . }}-config
+                  key: WREN_UI_DB_TYPE
+            - name: WREN_ENGINE_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "wren-ai.fullname" . }}-config
+                  key: WREN_ENGINE_ENDPOINT
+            - name: WREN_AI_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "wren-ai.fullname" . }}-config
+                  key: WREN_AI_ENDPOINT
+            - name: GENERATION_MODEL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "wren-ai.fullname" . }}-config
+                  key: GENERATION_MODEL
+            - name: PG_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ if .Values.secrets.useExistingSecret }}{{ .Values.secrets.existingSecretName }}{{ else }}{{ include "wren-ai.fullname" . }}-secret{{ end }}
+                  key: PG_URL
+            - name: WREN_ENGINE_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "wren-ai.fullname" . }}-config
+                  key: WREN_ENGINE_PORT
+            - name: WREN_AI_SERVICE_VERSION
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "wren-ai.fullname" . }}-config
+                  key: WREN_AI_SERVICE_VERSION
+            - name: WREN_UI_VERSION
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "wren-ai.fullname" . }}-config
+                  key: WREN_UI_VERSION
+            - name: WREN_ENGINE_VERSION
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "wren-ai.fullname" . }}-config
+                  key: WREN_ENGINE_VERSION
+            - name: USER_UUID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ if .Values.secrets.useExistingSecret }}{{ .Values.secrets.existingSecretName }}{{ else }}{{ include "wren-ai.fullname" . }}-secret{{ end }}
+                  key: USER_UUID
+            - name: POSTHOG_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ if .Values.secrets.useExistingSecret }}{{ .Values.secrets.existingSecretName }}{{ else }}{{ include "wren-ai.fullname" . }}-secret{{ end }}
+                  key: POSTHOG_API_KEY
+            - name: POSTHOG_HOST
+              value: {{ .Values.config.telemetry.posthogHost | quote }}
+            - name: TELEMETRY_ENABLED
+              valueFrom: 
+                configMapKeyRef:
+                  name: {{ include "wren-ai.fullname" . }}-config
+                  key: TELEMETRY_ENABLED
+            - name: NEXT_PUBLIC_USER_UUID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ if .Values.secrets.useExistingSecret }}{{ .Values.secrets.existingSecretName }}{{ else }}{{ include "wren-ai.fullname" . }}-secret{{ end }}
+                  key: USER_UUID
+            - name: NEXT_PUBLIC_POSTHOG_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ if .Values.secrets.useExistingSecret }}{{ .Values.secrets.existingSecretName }}{{ else }}{{ include "wren-ai.fullname" . }}-secret{{ end }}
+                  key: POSTHOG_API_KEY
+            - name: NEXT_PUBLIC_POSTHOG_HOST
+              value: {{ .Values.config.telemetry.posthogHost | quote }}
+            - name: NEXT_PUBLIC_TELEMETRY_ENABLED
+              valueFrom: 
+                configMapKeyRef:
+                  name: {{ include "wren-ai.fullname" . }}-config
+                  key: TELEMETRY_ENABLED
+            - name: WREN_PRODUCT_VERSION
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "wren-ai.fullname" . }}-config
+                  key: WREN_PRODUCT_VERSION
+            - name: IBIS_SERVER_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "wren-ai.fullname" . }}-config
+                  key: IBIS_SERVER_ENDPOINT
+          {{- with .Values.ui.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}

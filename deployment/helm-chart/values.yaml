@@ -1,0 +1,368 @@
+# Default values for WrenAi
+# This is a YAML-formatted file.
+
+# Global configuration
+global:
+  # Version configurations
+  versions:
+    engine: "0.15.13"
+    engineBootstrap: "0.1.5"
+    aiService: "0.22.4"
+    ui: "0.27.4"
+    ibisServer: "0.15.13"
+    product: "0.22.2"
+
+secrets:
+  # Option 1: Use existing secret (recommended for production)
+  useExistingSecret: false
+  existingSecretName: "wren-secret"
+  
+  # Option 2: Create secret from values (for development/testing)
+  # Set useExistingSecret to false and provide values below
+  createFromValues: true
+  values:
+    # Required for Postgres and AI Service - Provide Either OpenAI API Key or Gemini API Key
+    #OPENAI_API_KEY: "dummy"
+    GEMINI_API_KEY: "dummy"
+    
+    # Required for Postgres
+    PG_USERNAME: "dummy"
+    PG_PASSWORD: "dummy"
+    PG_ADMIN_PASSWORD: "dummy"
+    # postgres://<username>:<password>@host:5432/<database-name> if postgresql.enabled is true, host will be Release.Name-postgresql
+    PG_URL: "postgres://dummy:dummy@wren-postgresql:5432/dummy"
+    
+    # Required for Langfuse (if enabled)
+    LANGFUSE_PUBLIC_KEY: "dummy"
+    LANGFUSE_SECRET_KEY: "dummy"
+    
+    # Required for Telemetry (if enabled)
+    POSTHOG_API_KEY: "dummy"
+    USER_UUID: "dummy"
+
+
+# Main configuration
+config:
+  # Service ports
+  ports:
+    engine: 8080
+    aiService: 5555
+    ui: 3000
+    ibisServer: 8000
+    qdrant: 6333 
+
+  # Service endpoints
+  endpoints:
+    ui: "http://wren-ui-svc:3000"
+    engine: "http://wren-engine-svc:8080"
+    aiService: "http://wren-ai-service-svc:5555"
+    ibisServer: "http://wren-ibis-server-svc:8000"
+
+  # Database configuration
+  database:
+    type: "pg"  # postgres
+    engineDataPath: "/app/data"
+
+  # Document store
+  documentStore:
+    # If qdrant.enabled is true, qdrantHost defaults to {{ Release.Name }}-qdrant
+    qdrantHost: ""
+
+  # Telemetry
+  telemetry:
+    enabled: false
+    posthogHost: "https://app.posthog.com"
+    generationModel: "gpt-4o-mini"
+
+  # Logging
+  logging:
+    level: "INFO"
+
+# Engine specific configuration
+engine:
+  replicaCount: 1
+  
+  image:
+    repository: ghcr.io/canner/wren-engine
+    tag: "" #Use global.versions.engine
+    pullPolicy: IfNotPresent
+
+  bootstrap:
+    image:
+      repository: ghcr.io/canner/wren-bootstrap
+      tag: "" #Use global.versions.engineBootstrap
+      pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP
+    ports:
+      engine: 8080
+      sql: 7432
+
+  persistence:
+    enabled: true
+    storageClass: standard-rwo
+    accessMode: ReadWriteOnce
+    size: 8Gi
+
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# UI specific configuration
+ui:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/canner/wren-ui
+    tag: "" #Use global.versions.ui
+    pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP
+    port: 3000
+
+  ingress:
+    enabled: true
+    ingressClassName: internal-nginx-gateway
+    port: 80
+    host: "wrenai-stage.growwinfra.in"
+    tlsSecretName: "growwinfra-ssl-certs"
+    ingressPathType: "ImplementationSpecific"
+    ingressAnnotations:
+      nginx.ingress.kubernetes.io/use-regex: "true"
+      nginx.ingress.kubernetes.io/proxy-body-size: 128m
+  
+
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Ibis Server specific configuration
+ibisServer:
+  replicaCount: 1
+  
+  image:
+    repository: ghcr.io/canner/wren-engine-ibis
+    tag: "" #Use global.versions.ibisServer
+    pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP
+    port: 8000
+
+  resources: {}
+    # limits:
+    #   cpu: 500m
+    #   memory: 512Mi
+    # requests:
+    #   cpu: 250m
+    #   memory: 256Mi
+  
+  # Node selector
+  nodeSelector: {}
+
+  # Tolerations
+  tolerations: []
+
+  # Affinity
+  affinity: {}
+
+# AI Service specific configuration
+aiService:
+  # Deployment configuration
+  replicaCount: 1
+  
+  image:
+    repository: ghcr.io/canner/wren-ai-service
+    tag: "" #Use global.versions.aiService
+    pullPolicy: IfNotPresent
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 5555
+
+  # Environment variables
+  env:
+    pythonUnbuffered: "1"
+    configPath: "/app/data/config.yaml"
+
+  # Resources
+  resources: {}
+    # limits:
+    #   cpu: 500m
+    #   memory: 512Mi
+    # requests:
+    #   cpu: 250m
+    #   memory: 256Mi
+
+  # Node selector
+  nodeSelector: {}
+
+  # Tolerations
+  tolerations: []
+
+  # Affinity
+  affinity: {}
+
+# AI Service Pipeline Configuration
+pipeline:
+  # LLM Configuration
+  llm:
+    type: "llm"
+    provider: "litellm_llm"
+    timeout: 120
+    models:
+      - model: gemini/gemini-2.0-flash
+        alias: default
+        timeout: 120
+        kwargs:
+          n: 1
+          temperature: 0
+      - model: gemini/gemini-2.0-flash
+        alias: gemini-llm-for-chart
+        timeout: 120
+        kwargs:
+          n: 1
+          temperature: 0
+          response_format:
+            type: json_object
+
+  # Embedder Configuration
+  embedder:
+    type: "embedder"
+    provider: "litellm_embedder"
+    models:
+      - model: "gemini/text-embedding-004"
+        alias: "default"
+        timeout: 120
+
+  # Document Store Configuration
+  documentStore:
+    type: "document_store"
+    provider: "qdrant"
+    # If qdrant.enabled is true, location defaults to http://{{ Release.Name }}-qdrant:6333
+    location: "" 
+    embeddingModelDim: 768 
+    timeout: 120
+
+  # Settings
+  settings:
+    docEndpoint: "https://docs.getwren.ai"
+    isOss: true
+    engineTimeout: 30
+    columnIndexingBatchSize: 50
+    tableRetrievalSize: 10
+    tableColumnRetrievalSize: 100
+    allowIntentClassification: true
+    allowSqlGenerationReasoning: true
+    allowSqlFunctionsRetrieval: true
+    enableColumnPruning: false
+    maxSqlCorrectionRetries: 3
+    queryCacheMaxsize: 1000
+    queryCacheTtl: 3600
+    langfuseHost: "https://cloud.langfuse.com"
+    langfuseEnable: true
+    loggingLevel: "DEBUG"
+    development: false
+    historicalQuestionRetrievalSimilarityThreshold: 0.9
+    sqlPairsSimilarityThreshold: 0.7
+    sqlPairsRetrievalMaxSize: 10
+    instructionsSimilarityThreshold: 0.7
+    instructionsTopK: 10
+
+# postgresql value options available at https://github.com/bitnami/charts/blob/main/bitnami/postgresql/values.yaml
+
+postgresql:
+  enabled: true
+  auth:
+    # Use existing secret or create secret from values; name will pe {{ Release.Name }}-secret
+    existingSecret: "wren-secret"
+    secretKeys:
+      adminPasswordKey: "PG_ADMIN_PASSWORD"
+      userPasswordKey: "PG_PASSWORD"
+    # populate username in value of PG_USERNAME key in secret as well
+    username: "dummy" 
+    database: "dummy"
+  primary:
+    persistence:
+      enabled: true
+      size: 8Gi
+      storageClass: ""
+    
+    resources: {}
+      # limits:
+      #   memory: "512Mi"
+      #   cpu: "500m"
+      # requests:
+      #   memory: "256Mi"
+      #   cpu: "250m"
+  
+  service:
+    type: ClusterIP
+    ports:
+      postgresql: 5432
+  metrics:
+    enabled: false
+
+# qdrant value options available at https://github.com/qdrant/qdrant-helm/blob/main/charts/qdrant/values.yaml
+
+qdrant:
+  enabled: true
+  replicaCount: 1
+
+  image:
+    repository: docker.io/qdrant/qdrant
+    pullPolicy: IfNotPresent
+    tag: "v1.11.0"
+    useUnprivilegedImage: false
+
+  imagePullSecrets: []
+  nameOverride: ""
+  fullnameOverride: ""
+  args: ["./config/initialize.sh"]
+  env: {}
+    # - name: QDRANT_ALLOW_RECOVERY_MODE
+    #   value: true
+
+  ingress:
+    enabled: false
+    ingressClassName: "nginx"
+    additionalLabels: {}
+    annotations:
+      # Dependancy: https://kubernetes-sigs.github.io/external-dns
+      #external-dns.alpha.kubernetes.io/filter: 'include'
+      #external-dns.alpha.kubernetes.io/cloudflare-proxied: 'true'
+      external-dns.alpha.kubernetes.io/target: ingress1.myhost.net
+    hosts:
+      - host: qdrant-ai.myhost.net
+        paths:
+          - path: /
+            pathType: Prefix
+            servicePort: 6333
+    tls:
+      - hosts:
+         - qdrant-ai.myhost.net
+        secretName: qdrant-ai.myhost.net-tls
+
+  resources: {}
+    # limits:
+    #   memory: "512Mi"
+    #   cpu: "500m"
+    # requests:
+    #   memory: "256Mi"
+    #   cpu: "250m"
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  topologySpreadConstraints: []
+
+  persistence:
+    accessModes: ["ReadWriteOnce"]
+    size: 20Gi
+    annotations: {}
+    storageClassName: standard-rwo

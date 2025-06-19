@@ -1,0 +1,214 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "wren-ai.fullname" . }}-config
+  labels:
+    {{- include "wren-ai.labels" . | nindent 4 }}
+data:
+  # Wren Engine Service Port
+  WREN_ENGINE_PORT: {{ .Values.config.ports.engine | quote }}
+  # Wren AI Service Port
+  WREN_AI_SERVICE_PORT: {{ .Values.config.ports.aiService | quote }}
+
+  WREN_UI_ENDPOINT: "http://{{ include "wren-ai.fullname" . }}-ui-svc:{{ .Values.config.ports.ui }}"
+
+  # Release version used by wren ui
+  WREN_PRODUCT_VERSION: {{ .Values.global.versions.product | quote }}
+  WREN_ENGINE_VERSION: {{ .Values.global.versions.engine | quote }}
+  WREN_AI_SERVICE_VERSION: {{ .Values.global.versions.aiService | quote }}
+  WREN_UI_VERSION: {{ .Values.global.versions.ui | quote }}
+  IBIS_SERVER_VERSION:  {{ .Values.global.versions.ibisServer | quote }}
+
+  # Document store related
+  QDRANT_HOST: {{ default (printf "%s-qdrant" .Release.Name) .Values.config.documentStore.qdrantHost | quote }}
+  # Telemetry
+  POSTHOG_HOST: {{ .Values.config.telemetry.posthogHost | quote }}
+  TELEMETRY_ENABLED: {{ .Values.config.telemetry.enabled | quote }}
+  GENERATION_MODEL: {{ .Values.config.telemetry.generationModel | quote }}
+
+  # service endpoints of AI service & engine service
+  WREN_ENGINE_ENDPOINT: "http://{{ include "wren-ai.fullname" . }}-engine-svc:{{ .Values.config.ports.engine }}"
+  WREN_AI_ENDPOINT: "http://{{ include "wren-ai.fullname" . }}-ai-service-svc:{{ .Values.config.ports.aiService }}"
+
+  # "pg" for postgres as UI application database
+  WREN_UI_DB_TYPE: {{ .Values.config.database.type }}
+
+  # For bootstrap
+  WREN_ENGINE_DATA_PATH: {{ .Values.config.database.engineDataPath | quote }}
+
+  # DEBUG, INFO
+  LOGGING_LEVEL: {{ .Values.config.logging.level }}
+
+  IBIS_SERVER_ENDPOINT: "http://{{ include "wren-ai.fullname" . }}-ibis-server-svc:{{ .Values.config.ports.ibisServer }}"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "wren-ai.fullname" . }}-ai-service-config
+  labels:
+    {{- include "wren-ai.labels" . | nindent 4 }}
+  namespace: {{ .Values.global.namespace | quote }}
+data:
+  config.yaml: |
+    type: {{ .Values.pipeline.llm.type }}
+    provider: {{ .Values.pipeline.llm.provider }}
+    timeout: {{ .Values.pipeline.llm.timeout }}
+    models:
+    {{- range .Values.pipeline.llm.models }}
+    - {{- if .alias }}
+      alias: {{ .alias }}
+      {{- end }}
+      model: {{ .model }}
+      context_window_size: {{ .contextWindowSize }}
+      kwargs:
+        max_tokens: {{ .kwargs.maxTokens }}
+        n: {{ .kwargs.n }}
+        seed: {{ .kwargs.seed }}
+        temperature: {{ .kwargs.temperature }}
+    {{- end }}
+
+    ---
+    type: {{ .Values.pipeline.embedder.type }}
+    provider: {{ .Values.pipeline.embedder.provider }}
+    models:
+    {{- range .Values.pipeline.embedder.models }}
+    - model: {{ .model }}
+      {{- if .alias }}
+      alias: {{ .alias }}
+      {{- end }}
+      timeout: {{ .timeout }}
+    {{- end }}
+
+    ---
+    type: engine
+    provider: wren_ui
+    endpoint: "http://{{ include "wren-ai.fullname" . }}-ui-svc:{{ .Values.config.ports.ui }}"
+
+    ---
+    type: engine
+    provider: wren_ibis
+    endpoint: "http://{{ include "wren-ai.fullname" . }}-ibis-server-svc:{{ .Values.config.ports.ibisServer }}"
+
+    ---
+    type: {{ .Values.pipeline.documentStore.type }}
+    provider: {{ .Values.pipeline.documentStore.provider }}
+    location: {{ default (printf "http://%s-qdrant:%d" .Release.Name (int .Values.config.ports.qdrant) ) .Values.pipeline.documentStore.location | quote }}
+    embedding_model_dim: {{ .Values.pipeline.documentStore.embeddingModelDim }}
+    timeout: {{ .Values.pipeline.documentStore.timeout }}
+
+    ---
+    type: pipeline
+    pipes:
+      - name: db_schema_indexing
+        embedder: litellm_embedder.default
+        document_store: qdrant
+      - name: historical_question_indexing
+        embedder: litellm_embedder.default
+        document_store: qdrant
+      - name: table_description_indexing
+        embedder: litellm_embedder.default
+        document_store: qdrant
+      - name: db_schema_retrieval
+        llm: litellm_llm.default
+        embedder: litellm_embedder.default
+        document_store: qdrant
+      - name: historical_question_retrieval
+        embedder: litellm_embedder.default
+        document_store: qdrant
+      - name: sql_generation
+        llm: litellm_llm.default
+        engine: wren_ui
+      - name: sql_correction
+        llm: litellm_llm.default
+        engine: wren_ui
+      - name: followup_sql_generation
+        llm: litellm_llm.default
+        engine: wren_ui
+      - name: sql_answer
+        llm: litellm_llm.default
+      - name: semantics_description
+        llm: litellm_llm.default
+      - name: relationship_recommendation
+        llm: litellm_llm.default
+        engine: wren_ui
+      - name: question_recommendation
+        llm: litellm_llm.default
+      - name: question_recommendation_db_schema_retrieval
+        llm: litellm_llm.default
+        embedder: litellm_embedder.default
+        document_store: qdrant
+      - name: question_recommendation_sql_generation
+        llm: litellm_llm.default
+        engine: wren_ui
+      - name: intent_classification
+        llm: litellm_llm.default
+        embedder: litellm_embedder.default
+        document_store: qdrant
+      - name: misleading_assistance
+        llm: litellm_llm.default
+      - name: data_assistance
+        llm: litellm_llm.default
+      - name: sql_pairs_indexing
+        document_store: qdrant
+        embedder: litellm_embedder.default
+      - name: sql_pairs_retrieval
+        document_store: qdrant
+        embedder: litellm_embedder.default
+        llm: litellm_llm.default
+      - name: preprocess_sql_data
+        llm: litellm_llm.default
+      - name: sql_executor
+        engine: wren_ui
+      - name: chart_generation
+        llm: litellm_llm.default
+      - name: chart_adjustment
+        llm: litellm_llm.default
+      - name: user_guide_assistance
+        llm: litellm_llm.default
+      - name: sql_question_generation
+        llm: litellm_llm.default
+      - name: sql_generation_reasoning
+        llm: litellm_llm.default
+      - name: followup_sql_generation_reasoning
+        llm: litellm_llm.default
+      - name: sql_regeneration
+        llm: litellm_llm.default
+        engine: wren_ui
+      - name: instructions_indexing
+        embedder: litellm_embedder.default
+        document_store: qdrant
+      - name: instructions_retrieval
+        embedder: litellm_embedder.default
+        document_store: qdrant
+      - name: sql_functions_retrieval
+        engine: wren_ibis
+        document_store: qdrant
+      - name: project_meta_indexing
+        document_store: qdrant
+      - name: sql_tables_extraction
+        llm: litellm_llm.default
+
+    ---
+    settings:
+      doc_endpoint: {{ .Values.pipeline.settings.docEndpoint }}
+      is_oss: {{ .Values.pipeline.settings.isOss }}
+      engine_timeout: {{ .Values.pipeline.settings.engineTimeout }}
+      column_indexing_batch_size: {{ .Values.pipeline.settings.columnIndexingBatchSize }}
+      table_retrieval_size: {{ .Values.pipeline.settings.tableRetrievalSize }}
+      table_column_retrieval_size: {{ .Values.pipeline.settings.tableColumnRetrievalSize }}
+      allow_intent_classification: {{ .Values.pipeline.settings.allowIntentClassification }}
+      allow_sql_generation_reasoning: {{ .Values.pipeline.settings.allowSqlGenerationReasoning }}
+      allow_sql_functions_retrieval: {{ .Values.pipeline.settings.allowSqlFunctionsRetrieval }}
+      enable_column_pruning: {{ .Values.pipeline.settings.enableColumnPruning }}
+      max_sql_correction_retries: {{ .Values.pipeline.settings.maxSqlCorrectionRetries }}
+      query_cache_maxsize: {{ .Values.pipeline.settings.queryCacheMaxsize }}
+      query_cache_ttl: {{ .Values.pipeline.settings.queryCacheTtl }}
+      langfuse_host: {{ .Values.pipeline.settings.langfuseHost }}
+      langfuse_enable: {{ .Values.pipeline.settings.langfuseEnable }}
+      logging_level: {{ .Values.pipeline.settings.loggingLevel }}
+      development: {{ .Values.pipeline.settings.development }}
+      historical_question_retrieval_similarity_threshold: {{ .Values.pipeline.settings.historicalQuestionRetrievalSimilarityThreshold }}
+      sql_pairs_similarity_threshold: {{ .Values.pipeline.settings.sqlPairsSimilarityThreshold }}
+      sql_pairs_retrieval_max_size: {{ .Values.pipeline.settings.sqlPairsRetrievalMaxSize }}
+      instructions_similarity_threshold: {{ .Values.pipeline.settings.instructionsSimilarityThreshold }}
+      instructions_top_k: {{ .Values.pipeline.settings.instructionsTopK }}
