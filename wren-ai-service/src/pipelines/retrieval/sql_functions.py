@@ -12,6 +12,7 @@ from langfuse.decorators import observe
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider
+from src.pipelines.common import retrieve_metadata
 from src.providers.engine.wren import WrenIbis
 
 logger = logging.getLogger("wren-ai-service")
@@ -122,27 +123,6 @@ class SqlFunctions(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    @observe(capture_input=False)
-    async def _retrieve_metadata(self, project_id: str) -> dict[str, Any]:
-        filters = None
-        if project_id:
-            filters = {
-                "operator": "AND",
-                "conditions": [
-                    {"field": "project_id", "operator": "==", "value": project_id},
-                ],
-            }
-
-        result = await self._retriever.run(query_embedding=[], filters=filters)
-        documents = result["documents"]
-
-        # only one document for a project, thus we can return the first one
-        if documents:
-            doc = documents[0]
-            return doc.meta
-        else:
-            return {}
-
     @observe(name="SQL Functions Retrieval")
     async def run(
         self,
@@ -152,7 +132,7 @@ class SqlFunctions(BasicPipeline):
             f"Project ID: {project_id} SQL Functions Retrieval pipeline is running..."
         )
 
-        metadata = await self._retrieve_metadata(project_id or "")
+        metadata = await retrieve_metadata(project_id or "", self._retriever)
         _data_source = metadata.get("data_source", "local_file")
 
         if _data_source in self._cache:

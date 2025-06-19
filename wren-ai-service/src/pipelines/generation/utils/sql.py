@@ -31,6 +31,8 @@ class SQLGenPostProcessor:
         replies: List[str] | List[List[str]],
         timeout: Optional[float] = 30.0,
         project_id: str | None = None,
+        use_dry_plan: bool = False,
+        data_source: str = "",
     ) -> dict:
         try:
             cleaned_generation_result = clean_generation_result(replies[0])
@@ -48,6 +50,8 @@ class SQLGenPostProcessor:
                 cleaned_generation_result,
                 project_id=project_id,
                 timeout=timeout,
+                use_dry_plan=use_dry_plan,
+                data_source=data_source,
             )
 
             return {
@@ -67,6 +71,8 @@ class SQLGenPostProcessor:
         generation_result: str,
         timeout: float,
         project_id: str | None = None,
+        use_dry_plan: bool = False,
+        data_source: str = "",
     ) -> Dict[str, str]:
         valid_generation_result = {}
         invalid_generation_result = {}
@@ -75,25 +81,46 @@ class SQLGenPostProcessor:
 
         async with aiohttp.ClientSession() as session:
             if not error_message:
-                status, _, addition = await self._engine.execute_sql(
-                    quoted_sql, session, project_id=project_id, timeout=timeout
-                )
+                if use_dry_plan:
+                    dry_plan_result, error_message = await self._engine.dry_plan(
+                        session, quoted_sql, data_source, timeout=timeout
+                    )
 
-                if status:
-                    valid_generation_result = {
-                        "sql": quoted_sql,
-                        "correlation_id": addition.get("correlation_id", ""),
-                    }
+                    if dry_plan_result:
+                        valid_generation_result = {
+                            "sql": quoted_sql,
+                            "correlation_id": "",
+                        }
+                    else:
+                        invalid_generation_result = {
+                            "sql": quoted_sql,
+                            "type": "TIME_OUT"
+                            if error_message.startswith("Request timed out")
+                            else "DRY_PLAN",
+                            "error": error_message,
+                            "correlation_id": "",
+                        }
+
                 else:
-                    error_message = addition.get("error_message", "")
-                    invalid_generation_result = {
-                        "sql": quoted_sql,
-                        "type": "TIME_OUT"
-                        if error_message.startswith("Request timed out")
-                        else "DRY_RUN",
-                        "error": error_message,
-                        "correlation_id": addition.get("correlation_id", ""),
-                    }
+                    status, _, addition = await self._engine.execute_sql(
+                        quoted_sql, session, project_id=project_id, timeout=timeout
+                    )
+
+                    if status:
+                        valid_generation_result = {
+                            "sql": quoted_sql,
+                            "correlation_id": addition.get("correlation_id", ""),
+                        }
+                    else:
+                        error_message = addition.get("error_message", "")
+                        invalid_generation_result = {
+                            "sql": quoted_sql,
+                            "type": "TIME_OUT"
+                            if error_message.startswith("Request timed out")
+                            else "DRY_RUN",
+                            "error": error_message,
+                            "correlation_id": addition.get("correlation_id", ""),
+                        }
             else:
                 invalid_generation_result = {
                     "sql": generation_result,
