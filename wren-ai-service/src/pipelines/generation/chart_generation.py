@@ -1,6 +1,6 @@
 import logging
 import sys
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
@@ -32,6 +32,7 @@ Besides, you need to give a concise and easy-to-understand reasoning to describe
 
 {CHART_GENERATION_GENERAL_INSTRUCTIONS}
 - The language of the reasoning should be the same as the language provided by the user.
+- If the user provides a custom instruction, it should be followed strictly and you should use it to change the style of response for reasoning.
 
 ### VEGA-LITE SCHEMA EXAMPLES ###
 
@@ -55,6 +56,7 @@ SQL: {{ sql }}
 Sample Data: {{ sample_data }}
 Sample Column Values: {{ sample_column_values }}
 Language: {{ language }}
+Custom Instruction: {{ custom_instruction }}
 
 Please think step by step
 """
@@ -75,6 +77,7 @@ def prompt(
     sql: str,
     preprocess_data: dict,
     language: str,
+    custom_instruction: str,
     prompt_builder: PromptBuilder,
 ) -> dict:
     sample_data = preprocess_data.get("sample_data")
@@ -86,13 +89,14 @@ def prompt(
         sample_data=sample_data,
         sample_column_values=sample_column_values,
         language=language,
+        custom_instruction=custom_instruction,
     )
 
 
 @observe(as_type="generation", capture_input=False)
 @trace_cost
-async def generate_chart(prompt: dict, generator: Any) -> dict:
-    return await generator(prompt=prompt.get("prompt"))
+async def generate_chart(prompt: dict, generator: Any, generator_name: str) -> dict:
+    return await generator(prompt=prompt.get("prompt")), generator_name
 
 
 @observe(capture_input=False)
@@ -131,6 +135,7 @@ class ChartGeneration(BasicPipeline):
                 system_prompt=chart_generation_system_prompt,
                 generation_kwargs=CHART_GENERATION_MODEL_KWARGS,
             ),
+            "generator_name": llm_provider.get_model(),
             "chart_data_preprocessor": ChartDataPreprocessor(),
             "post_processor": ChartGenerationPostProcessor(),
         }
@@ -151,6 +156,7 @@ class ChartGeneration(BasicPipeline):
         data: dict,
         language: str,
         data_provided: bool = False,
+        custom_instruction: Optional[str] = None,
     ) -> dict:
         logger.info("Chart Generation pipeline is running...")
         return await self._pipe.execute(
@@ -161,6 +167,7 @@ class ChartGeneration(BasicPipeline):
                 "data": data,
                 "language": language,
                 "data_provided": data_provided,
+                "custom_instruction": custom_instruction or "",
                 **self._components,
                 **self._configs,
             },

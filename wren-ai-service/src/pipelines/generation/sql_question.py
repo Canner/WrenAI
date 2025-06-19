@@ -60,9 +60,9 @@ def prompt(
 @observe(as_type="generation", capture_input=False)
 @trace_cost
 async def generate_sql_question(
-    prompt: dict, generator: Any
+    prompt: dict, generator: Any, generator_name: str
 ) -> dict:
-    return await generator(prompt=prompt.get("prompt"))
+    return await generator(prompt=prompt.get("prompt")), generator_name
 
 
 @observe(capture_input=False)
@@ -101,6 +101,7 @@ class SQLQuestion(BasicPipeline):
                 system_prompt=sql_question_system_prompt,
                 generation_kwargs=SQL_QUESTION_MODEL_KWARGS,
             ),
+            "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(template=sql_question_user_prompt_template),
         }
 

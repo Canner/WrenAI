@@ -39,7 +39,7 @@ def _get_connection_info(data_source: str):
     elif data_source == "postgres":
         return {
             "host": os.getenv("postgres.host"),
-            "port": int(os.getenv("postgres.port")),
+            "port": os.getenv("postgres.port"),
             "database": os.getenv("postgres.database"),
             "user": os.getenv("postgres.user"),
             "password": os.getenv("postgres.password"),
@@ -79,6 +79,7 @@ def get_data_from_wren_engine(
     else:
         quoted_sql, no_error = add_quotes(sql)
         assert no_error, f"Error in adding quotes to SQL: {sql}"
+
         response = requests.post(
             f"{WREN_IBIS_API_URL}/v3/connector/{dataset_type}/query?limit={limit}",
             json={
@@ -191,9 +192,7 @@ def rerun_wren_engine(mdl_json: Dict, dataset_type: str, dataset: Optional[str] 
             {
                 "manifest": MANIFEST,
                 "source": SOURCE,
-                "connection_info": WREN_IBIS_CONNECTION_INFO
-                if dataset_type != "duckdb"
-                else "",
+                "connection_info": WREN_IBIS_CONNECTION_INFO,
             },
         )
 
@@ -217,7 +216,7 @@ def main():
         "--data-source",
         type=str,
         default="bigquery",
-        choices=["bigquery", "duckdb"],
+        choices=["bigquery", "duckdb", "postgres"],
         help="Data source (default: bigquery)",
     )
 

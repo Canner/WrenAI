@@ -75,11 +75,12 @@ def prompt(
 @observe(as_type="generation", capture_input=False)
 @trace_cost
 async def generate_sql_reasoning(
-    prompt: dict, generator: Any, query_id: str
+    prompt: dict, generator: Any, query_id: str, generator_name: str
 ) -> dict:
     return await generator(
         prompt=prompt.get("prompt"), query_id=query_id
-    )
+    ), generator_name
+
 
 @observe()
 def post_process(
@@ -103,6 +104,7 @@ class SQLGenerationReasoning(BasicPipeline):
                 system_prompt=sql_generation_reasoning_system_prompt,
                 streaming_callback=self._streaming_callback,
             ),
+            "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
                 template=sql_generation_reasoning_user_prompt_template
             ),

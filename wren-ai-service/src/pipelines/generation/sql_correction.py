@@ -68,8 +68,10 @@ def prompt(
 
 @observe(as_type="generation", capture_input=False)
 @trace_cost
-async def generate_sql_correction(prompt: dict, generator: Any) -> dict:
-    return await generator(prompt=prompt.get("prompt"))
+async def generate_sql_correction(
+    prompt: dict, generator: Any, generator_name: str
+) -> dict:
+    return await generator(prompt=prompt.get("prompt")), generator_name
 
 
 @observe(capture_input=False)
@@ -102,6 +104,7 @@ class SQLCorrection(BasicPipeline):
                 system_prompt=sql_correction_system_prompt,
                 generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
             ),
+            "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
                 template=sql_correction_user_prompt_template
             ),

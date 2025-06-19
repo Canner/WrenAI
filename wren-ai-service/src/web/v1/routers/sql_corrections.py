@@ -102,6 +102,7 @@ class GetResponse(BaseModel):
     response: Optional[str] = None
     error: Optional[dict] = None
     trace_id: Optional[str] = None
+    invalid_sql: Optional[str] = None
 
 
 @router.get("/sql-corrections/{event_id}")

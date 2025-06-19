@@ -110,8 +110,9 @@ def prompt(
 async def generate_sql(
     prompt: dict,
     generator: Any,
+    generator_name: str,
 ) -> dict:
-    return await generator(prompt=prompt.get("prompt"))
+    return await generator(prompt=prompt.get("prompt")), generator_name
 
 
 @observe(capture_input=False)
@@ -144,6 +145,7 @@ class SQLGeneration(BasicPipeline):
                 system_prompt=sql_generation_system_prompt,
                 generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
             ),
+            "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
                 template=sql_generation_user_prompt_template
             ),

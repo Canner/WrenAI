@@ -61,11 +61,11 @@ def prompt(
 @observe(as_type="generation", capture_input=False)
 @trace_cost
 async def user_guide_assistance(
-    prompt: dict, generator: Any, query_id: str
+    prompt: dict, generator: Any, query_id: str, generator_name: str
 ) -> dict:
     return await generator(
         prompt=prompt.get("prompt"), query_id=query_id
-    )
+    ), generator_name
 
 
 ## End of Pipeline
@@ -84,6 +84,7 @@ class UserGuideAssistance(BasicPipeline):
                 system_prompt=user_guide_assistance_system_prompt,
                 streaming_callback=self._streaming_callback,
             ),
+            "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
                 template=user_guide_assistance_user_prompt_template
             ),

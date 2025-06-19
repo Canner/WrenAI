@@ -296,9 +296,6 @@ def prompt(
     histories: list[AskHistory],
 ) -> dict:
     if not check_using_db_schemas_without_pruning["db_schemas"]:
-        logger.info(
-            "db_schemas token count is greater than 100,000, so we will prune columns"
-        )
         db_schemas = [
             build_table_ddl(construct_db_schema)[0]
             for construct_db_schema in construct_db_schemas
@@ -318,12 +315,14 @@ def prompt(
 @observe(as_type="generation", capture_input=False)
 @trace_cost
 async def filter_columns_in_tables(
-    prompt: dict, table_columns_selection_generator: Any
+    prompt: dict, table_columns_selection_generator: Any, generator_name: str
 ) -> dict:
     if prompt:
-        return await table_columns_selection_generator(prompt=prompt.get("prompt"))
+        return await table_columns_selection_generator(
+            prompt=prompt.get("prompt")
+        ), generator_name
     else:
-        return {}
+        return {}, generator_name
 
 
 @observe()
@@ -454,6 +453,7 @@ class DbSchemaRetrieval(BasicPipeline):
                 system_prompt=table_columns_selection_system_prompt,
                 generation_kwargs=RETRIEVAL_MODEL_KWARGS,
             ),
+            "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
                 template=table_columns_selection_user_prompt_template
             ),
