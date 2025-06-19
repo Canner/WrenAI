@@ -176,11 +176,6 @@ class LitellmEmbedderProvider(EmbedderProvider):
             del kwargs["provider"]
         self._kwargs = kwargs
 
-        logger.info(
-            f"Initializing LitellmEmbedder provider with API base: {self._api_base}"
-        )
-        logger.info(f"Using Embedding Model: {self._embedding_model}")
-
     def get_text_embedder(self):
         return AsyncTextEmbedder(
             api_key=self._api_key,

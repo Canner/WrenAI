@@ -21,7 +21,6 @@ class WrenUI(Engine):
         **_,
     ):
         self._endpoint = endpoint
-        logger.info("Using Engine: wren_ui")
 
     async def execute_sql(
         self,
@@ -104,7 +103,6 @@ class WrenIbis(Engine):
         self._connection_info = (
             orjson.loads(base64.b64decode(connection_info)) if connection_info else {}
         )
-        logger.info("Using Engine: wren_ibis")
 
     async def execute_sql(
         self,
@@ -221,7 +219,6 @@ class WrenEngine(Engine):
     ):
         self._endpoint = endpoint
         self._manifest = manifest
-        logger.info("Using Engine: wren_engine")
 
     async def execute_sql(
         self,
