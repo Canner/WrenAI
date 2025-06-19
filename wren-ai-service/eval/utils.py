@@ -18,7 +18,7 @@ from openai import AsyncClient
 from tomlkit import parse
 
 import docker
-from eval import EvalSettings
+from eval import WREN_ENGINE_API_URL, EvalSettings
 from src.providers.engine.wren import WrenEngine
 
 load_dotenv(".env", override=True)
@@ -90,7 +90,7 @@ async def get_data_from_wren_engine(
 async def get_contexts_from_sql(
     sql: str,
     mdl_json: dict,
-    api_endpoint: str,
+    api_endpoint: str = WREN_ENGINE_API_URL,
     timeout: float = 300,
     **kwargs,
 ) -> list[str]:
@@ -597,7 +597,7 @@ def load_eval_data_db_to_postgres(db: str, path: str):
         "dimitri/pgloader:latest",
         name="pgloader",
         volumes={abs_path: {"bind": "/data", "mode": "ro"}},
-        command=f'pgloader sqlite:///data/{db}/{db}.sqlite pgsql://{postgres_info["user"]}:{postgres_info["password"]}@{postgres_info["host"]}:{postgres_info["port"]}/{postgres_info["database"]}',
+        command=f'pgloader --with "quote identifiers" sqlite:///data/{db}/{db}.sqlite pgsql://{postgres_info["user"]}:{postgres_info["password"]}@{postgres_info["host"]}:{postgres_info["port"]}/{postgres_info["database"]}',
         network="wren_wren",
         remove=True,
     )

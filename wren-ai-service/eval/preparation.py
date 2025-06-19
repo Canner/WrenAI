@@ -15,17 +15,18 @@ import gdown
 import orjson
 import pandas as pd
 
+from eval import (
+    BIRD_DESTINATION_PATH,
+    EVAL_DATASET_DESTINATION_PATH,
+    SPIDER_DESTINATION_PATH,
+    WREN_ENGINE_API_URL,
+)
 from eval.utils import (
     get_contexts_from_sql,
     get_documents_given_contexts,
     get_eval_dataset_in_toml_string,
     get_next_few_items_circular,
 )
-
-SPIDER_DESTINATION_PATH = Path("./tools/dev/etc/spider1.0")
-BIRD_DESTINATION_PATH = Path("./tools/dev/etc/bird")
-WREN_IBIS_API_URL = "http://localhost:8000"
-EVAL_DATASET_DESTINATION_PATH = Path("./eval/dataset")
 
 
 def download_spider_data(destination_path: Path):
@@ -137,9 +138,10 @@ def build_mdl_models(database, tables_info, database_info={}):
                         "column_description", ""
                     ).strip()
 
+        # dealing with some edge cases
         return [
             {
-                "name": column["column_name"].lower(),
+                "name": column["column_name"],
                 "type": column["column_type"],
                 "notNull": False,
                 "properties": {
@@ -153,18 +155,18 @@ def build_mdl_models(database, tables_info, database_info={}):
 
     return [
         {
-            "name": table.lower(),
+            "name": table,
             "properties": {},
             "tableReference": {
                 "catalog": database,
                 "schema": "main",
-                "table": table.lower(),
+                "table": table,
             },
-            "primaryKey": tables_info["column_names_original"][
-                primary_key_column_index
-            ][-1].lower()
-            if primary_key_column_index
-            else "",
+            "primaryKey": (
+                tables_info["column_names_original"][primary_key_column_index][-1]
+                if primary_key_column_index
+                else "",
+            ),
             "columns": _build_mdl_columns(
                 tables_info, i, database_info.get(table, None)
             ),
@@ -197,10 +199,10 @@ def build_mdl_relationships(tables_info):
 
         relationships.append(
             {
-                "name": f"{first_foreign_key_table.lower()}_{first_column_name.lower()}_{second_foreign_key_table.lower()}_{second_column_name.lower()}",
+                "name": f"{first_foreign_key_table}_{first_column_name}_{second_foreign_key_table}_{second_column_name}",
                 "models": [first_foreign_key_table, second_foreign_key_table],
                 "joinType": "MANY_TO_MANY",
-                "condition": f"{first_foreign_key_table.lower()}.{first_column_name.lower()} = {second_foreign_key_table.lower()}.{second_column_name.lower()}",
+                "condition": f"{first_foreign_key_table}.{first_column_name} = {second_foreign_key_table}.{second_column_name}",
             }
         )
 
@@ -245,16 +247,6 @@ def build_mdl_by_db_using_spider(destination_path: Path):
 
 
 def build_question_sql_pairs_by_db_using_spider(destination_path: Path):
-    def _get_ground_truths_by_db(path: Path, key: str):
-        with open(path, "rb") as f:
-            json_data = orjson.loads(f.read())
-
-        results = defaultdict(list)
-        for item in json_data:
-            results[item[key]].append(item)
-
-        return results
-
     # get all database names in the spider testsuite
     database_names = get_database_names(destination_path / "database")
 
@@ -418,7 +410,7 @@ if __name__ == "__main__":
                 get_contexts_from_sql(
                     ground_truth["sql"],
                     values["mdl"],
-                    WREN_IBIS_API_URL,
+                    WREN_ENGINE_API_URL,
                 )
             )
 

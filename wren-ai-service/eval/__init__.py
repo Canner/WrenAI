@@ -1,6 +1,13 @@
+from pathlib import Path
+
 from pydantic import Field, SecretStr
 
 from src.config import Settings
+
+SPIDER_DESTINATION_PATH = Path("./tools/dev/etc/spider1.0")
+BIRD_DESTINATION_PATH = Path("./tools/dev/etc/bird")
+WREN_ENGINE_API_URL = "http://localhost:8080"
+EVAL_DATASET_DESTINATION_PATH = Path("./eval/dataset")
 
 
 class EvalSettings(Settings):
