@@ -9,6 +9,7 @@ import ClickHouseProperties from '@/components/pages/setup/dataSources/ClickHous
 import TrinoProperties from '@/components/pages/setup/dataSources/TrinoProperties';
 import SnowflakeProperties from '@/components/pages/setup/dataSources/SnowflakeProperties';
 import AthenaProperties from '@/components/pages/setup/dataSources/AthenaProperties';
+import RedshiftProperties from '@/components/pages/setup/dataSources/RedshiftProperties';
 
 export const getDataSourceImage = (dataSource: DATA_SOURCES | string) => {
   switch (dataSource) {
@@ -32,6 +33,8 @@ export const getDataSourceImage = (dataSource: DATA_SOURCES | string) => {
       return '/images/dataSource/snowflake.svg';
     case DATA_SOURCES.ATHENA:
       return '/images/dataSource/athena.svg';
+    case DATA_SOURCES.REDSHIFT:
+      return '/images/dataSource/redshift.svg';
     default:
       return null;
   }
@@ -59,6 +62,8 @@ export const getDataSourceName = (dataSource: DATA_SOURCES | string) => {
       return 'Snowflake';
     case DATA_SOURCES.ATHENA:
       return 'Athena (Trino)';
+    case DATA_SOURCES.REDSHIFT:
+      return 'Redshift';
     default:
       return '';
   }
@@ -86,6 +91,8 @@ export const getDataSourceProperties = (dataSource: DATA_SOURCES | string) => {
       return SnowflakeProperties;
     case DATA_SOURCES.ATHENA:
       return AthenaProperties;
+    case DATA_SOURCES.REDSHIFT:
+      return RedshiftProperties;
     default:
       return null;
   }
