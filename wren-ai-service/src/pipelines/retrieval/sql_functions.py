@@ -1,12 +1,11 @@
 import logging
 import sys
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 import aiohttp
 from cachetools import TTLCache
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
-from hamilton.function_modifiers import extract_fields
 from langfuse.decorators import observe
 
 from src.core.engine import Engine
@@ -58,40 +57,33 @@ class SqlFunction:
 
 ## Start of Pipeline
 @observe(capture_input=False)
-@extract_fields(dict(func_list=List[dict]))
 async def get_functions(
     engine: WrenIbis,
     data_source: str,
     engine_timeout: float = 30.0,
-) -> Dict[str, Any]:
+) -> List[SqlFunction]:
     async with aiohttp.ClientSession() as session:
         func_list = await engine.get_func_list(
             session=session,
             data_source=data_source,
             timeout=engine_timeout,
         )
-        return {"func_list": func_list}
 
-
-@observe(capture_input=False)
-def sql_functions(
-    func_list: List[dict],
-) -> List[SqlFunction]:
-    return [
-        SqlFunction(definition=func)
-        for func in func_list
-        if not SqlFunction.empty(func)
-    ]
+        return [
+            SqlFunction(definition=func)
+            for func in func_list
+            if not SqlFunction.empty(func)
+        ]
 
 
 @observe(capture_input=False)
 def cache(
     data_source: str,
-    sql_functions: List[SqlFunction],
+    get_functions: List[SqlFunction],
     ttl_cache: TTLCache,
 ) -> List[SqlFunction]:
-    ttl_cache[data_source] = sql_functions
-    return sql_functions
+    ttl_cache[data_source] = get_functions
+    return get_functions
 
 
 ## End of Pipeline
