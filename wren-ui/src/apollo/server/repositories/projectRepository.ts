@@ -83,7 +83,17 @@ export interface DUCKDB_CONNECTION_INFO {
   configurations: Record<string, any>;
 }
 
+export interface ATHENA_CONNECTION_INFO {
+  database: string;
+  schema: string;
+  s3StagingDir: string;
+  awsRegion: string;
+  awsAccessKey: string;
+  awsSecretKey: string;
+}
+
 export type WREN_AI_CONNECTION_INFO =
+  | ATHENA_CONNECTION_INFO
   | BIG_QUERY_CONNECTION_INFO
   | POSTGRES_CONNECTION_INFO
   | MYSQL_CONNECTION_INFO

@@ -37,7 +37,6 @@ def import_mods(package_name=PROVIDERS_PATH):
     for _, name, _ in pkgutil.walk_packages(package.__path__, package.__name__ + "."):
         # Import each submodule
         importlib.import_module(name)
-        logger.info(f"Imported Provider: {name}")
 
 
 def provider(name: str):
@@ -61,7 +60,6 @@ def provider(name: str):
     """
 
     def wrapper(cls):
-        logger.info(f"Registering provider: {name}")
         PROVIDERS[name] = cls
         return cls
 
@@ -88,5 +86,4 @@ def get_provider(name: str):
     Raises:
         KeyError: If a provider with the given name is not found in the dictionary of registered providers.
     """
-    logger.info(f"Getting provider: {name} from {PROVIDERS}")
     return PROVIDERS[name]

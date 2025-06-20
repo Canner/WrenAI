@@ -10,7 +10,8 @@ from langfuse.decorators import observe
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
-from src.core.provider import LLMProvider
+from src.core.provider import DocumentStoreProvider, LLMProvider
+from src.pipelines.common import retrieve_metadata
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     TEXT_TO_SQL_RULES,
@@ -80,11 +81,15 @@ async def post_process(
     post_processor: SQLGenPostProcessor,
     engine_timeout: float,
     project_id: str | None = None,
+    use_dry_plan: bool = False,
+    data_source: str = "",
 ) -> dict:
     return await post_processor.run(
         generate_sql_correction.get("replies"),
         timeout=engine_timeout,
         project_id=project_id,
+        use_dry_plan=use_dry_plan,
+        data_source=data_source,
     )
 
 
@@ -95,10 +100,15 @@ class SQLCorrection(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
+        document_store_provider: DocumentStoreProvider,
         engine: Engine,
         engine_timeout: float = 30.0,
         **kwargs,
     ):
+        self._retriever = document_store_provider.get_retriever(
+            document_store_provider.get_store("project_meta")
+        )
+
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=sql_correction_system_prompt,
@@ -125,14 +135,20 @@ class SQLCorrection(BasicPipeline):
         contexts: List[Document],
         invalid_generation_result: Dict[str, str],
         project_id: str | None = None,
+        use_dry_plan: bool = False,
     ):
         logger.info("SQLCorrection pipeline is running...")
+
+        metadata = await retrieve_metadata(project_id or "", self._retriever)
+
         return await self._pipe.execute(
             ["post_process"],
             inputs={
                 "invalid_generation_result": invalid_generation_result,
                 "documents": contexts,
                 "project_id": project_id,
+                "use_dry_plan": use_dry_plan,
+                "data_source": metadata.get("data_source", "local_file"),
                 **self._components,
                 **self._configs,
             },

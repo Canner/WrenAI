@@ -29,6 +29,7 @@ def picked_models(mdl: dict, selected_models: list[str]) -> list[dict]:
                 "type": column["type"],
                 "properties": {
                     "description": column["properties"].get("description", ""),
+                    "alias": column["properties"].get("displayName", ""),
                 },
             }
             for column in columns
@@ -41,6 +42,7 @@ def picked_models(mdl: dict, selected_models: list[str]) -> list[dict]:
             "columns": column_formatter(model["columns"]),
             "properties": {
                 "description": model["properties"].get("description", ""),
+                "alias": model["properties"].get("displayName", ""),
             },
         }
 

@@ -49,7 +49,7 @@ class BaseRequest(BaseModel):
     project_id: Optional[str] = None
     thread_id: Optional[str] = None
     configurations: Configuration = Configuration()
-    request_from: Literal["ui", "api"] = "ui"
+    request_from: Literal["ui", "api", "slack"] = "ui"
 
     @property
     def query_id(self) -> str:

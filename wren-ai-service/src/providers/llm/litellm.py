@@ -1,7 +1,7 @@
 import os
 from typing import Any, Callable, Dict, List, Optional
 
-from litellm import Router
+from litellm import Router, acompletion
 
 from src.core.provider import LLMProvider
 from src.providers.llm import (
@@ -43,18 +43,19 @@ class LitellmLLMProvider(LLMProvider):
         self._timeout = timeout
         self._context_window_size = context_window_size
         # build a dynamic list of all fallback model names (beyond the first)
+        self._has_fallbacks = (
+            fallback_model_list is not None and len(fallback_model_list) > 1
+        )
         fallbacks = (
             [{self._model: [m["model_name"] for m in fallback_model_list[1:]]}]
-            if len(fallback_model_list) > 1
+            if self._has_fallbacks
             else []
         )
         self._router = Router(
             model_list=fallback_model_list or [],
             fallbacks=fallbacks,
         )
-        self._enable_fallback_testing = (
-            fallback_testing and len(fallback_model_list) > 1
-        )
+        self._enable_fallback_testing = fallback_testing and self._has_fallbacks
 
     def get_generator(
         self,
@@ -95,13 +96,25 @@ class LitellmLLMProvider(LLMProvider):
                 **(generation_kwargs or {}),
             }
 
-            completion = await self._router.acompletion(
-                model=self._model,
-                messages=openai_formatted_messages,
-                stream=streaming_callback is not None,
-                mock_testing_fallbacks=self._enable_fallback_testing,
-                **generation_kwargs,
-            )
+            if self._has_fallbacks:
+                completion = await self._router.acompletion(
+                    model=self._model,
+                    messages=openai_formatted_messages,
+                    stream=streaming_callback is not None,
+                    mock_testing_fallbacks=self._enable_fallback_testing,
+                    **generation_kwargs,
+                )
+            else:
+                completion = await acompletion(
+                    model=self._model,
+                    api_key=self._api_key,
+                    api_base=self._api_base,
+                    api_version=self._api_version,
+                    timeout=self._timeout,
+                    messages=openai_formatted_messages,
+                    stream=streaming_callback is not None,
+                    **generation_kwargs,
+                )
 
             completions: List[ChatMessage] = []
             if streaming_callback is not None:

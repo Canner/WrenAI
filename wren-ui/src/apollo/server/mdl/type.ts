@@ -84,6 +84,7 @@ export interface TableReference {
 }
 
 export enum WrenEngineDataSourceType {
+  ATHENA = 'ATHENA',
   BIGQUERY = 'BIGQUERY',
   CANNER = 'CANNER',
   CLICKHOUSE = 'CLICKHOUSE',

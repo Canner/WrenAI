@@ -294,9 +294,9 @@ export type DashboardSchedule = {
   __typename?: 'DashboardSchedule';
   cron?: Maybe<Scalars['String']>;
   day?: Maybe<CacheScheduleDayEnum>;
-  frequency: ScheduleFrequencyEnum;
-  hour: Scalars['Int'];
-  minute: Scalars['Int'];
+  frequency?: Maybe<ScheduleFrequencyEnum>;
+  hour?: Maybe<Scalars['Int']>;
+  minute?: Maybe<Scalars['Int']>;
   timezone?: Maybe<Scalars['String']>;
 };
 
@@ -313,12 +313,13 @@ export type DataSourceInput = {
 };
 
 export enum DataSourceName {
+  ATHENA = 'ATHENA',
   BIG_QUERY = 'BIG_QUERY',
   CLICK_HOUSE = 'CLICK_HOUSE',
   DUCKDB = 'DUCKDB',
   MSSQL = 'MSSQL',
-  ORACLE = 'ORACLE',
   MYSQL = 'MYSQL',
+  ORACLE = 'ORACLE',
   POSTGRES = 'POSTGRES',
   SNOWFLAKE = 'SNOWFLAKE',
   TRINO = 'TRINO'
@@ -384,7 +385,7 @@ export type DetailedDashboard = {
   items: Array<DashboardItem>;
   name: Scalars['String'];
   nextScheduledAt?: Maybe<Scalars['String']>;
-  schedule: DashboardSchedule;
+  schedule?: Maybe<DashboardSchedule>;
 };
 
 export type DetailedModel = {
