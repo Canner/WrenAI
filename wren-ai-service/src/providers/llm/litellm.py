@@ -44,7 +44,9 @@ class LitellmLLMProvider(LLMProvider):
         self._timeout = timeout
         self._context_window_size = context_window_size
         # build a dynamic list of all fallback model names (beyond the first)
-        self._has_fallbacks = len(fallback_model_list) > 1
+        self._has_fallbacks = (
+            fallback_model_list is not None and len(fallback_model_list) > 1
+        )
         fallbacks = (
             [{self._model: [m["model_name"] for m in fallback_model_list[1:]]}]
             if self._has_fallbacks
