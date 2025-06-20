@@ -80,6 +80,11 @@ export const transformFormToProperties = (
       properties?.password === PASSWORD_PLACEHOLDER
         ? undefined
         : properties?.password,
+
+    awsSecretKey:
+      properties?.awsSecretKey === PASSWORD_PLACEHOLDER
+        ? undefined
+        : properties?.awsSecretKey,
   };
 };
 
@@ -109,7 +114,9 @@ export const transformPropertiesToForm = (
         ? {
             password: properties?.password || PASSWORD_PLACEHOLDER,
           }
-        : {}),
+        : {
+            awsSecretKey: properties?.awsSecretKey || PASSWORD_PLACEHOLDER,
+          }),
     };
   }
 
