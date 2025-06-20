@@ -148,7 +148,7 @@ class ChartGenerationPostProcessor:
                 if "encoding" in chart_schema:
                     if "x" in chart_schema["encoding"]:
                         if "axis" in chart_schema["encoding"]["x"]:
-                            chart_schema["encoding"]["x"]["axis"]["labelAngle"] = -45
+                            chart_schema["encoding"]["x"]["axis"]["labelAngle"] = -40
                     if "y" in chart_schema["encoding"]:
                         if "axis" in chart_schema["encoding"]["y"]:
                             chart_schema["encoding"]["y"]["axis"]["labelAngle"] = 0
@@ -234,6 +234,8 @@ Sample schema:
 When to use:
 - Use when you want to compare the values of different categories.
 - Ideal for comparing values across categories, such as sales by product or revenue by region.
+What to pay attention to:
+- The order of the bars should be sorted descendingly by the value of the y-axis.
 Sample schema:
 {
     "mark": {"type": "bar", "tooltip": True},
@@ -366,18 +368,21 @@ Sample schema:
 When to use:
 - Use when you want to compare the values of different categories each by itself and the values of the categories are related.
 - Ideal for comparing values across categories, such as sales by product or revenue by region.
+What to pay attention to:
+- Make sure the x-axis is discrete. For example, if the x-axis is a date(the encoding type is temporal), please set "timeUnit" to make it discrete.
 Sample schema:
 {
     "mark": {"type": "bar", "tooltip": True},
     "encoding": {
         "x": {
-            "field":"quarter",
-            "type":"ordinal",
+            "field":"week_start",
+            "type":"temporal",
+            "timeUnit": "week",
             "axis": {
-                "title":"Quarter"
+                "title":"Week Start"
             }
         },
-        "xOffset": {"field": "quarter"},
+        "xOffset": {"field": "Region"},
         "y": {
             "field":"Profit",
             "type":"quantitative",
