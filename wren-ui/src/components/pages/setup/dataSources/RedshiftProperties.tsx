@@ -182,16 +182,18 @@ export default function RedshiftProperties(props: Props) {
   ) as REDSHIFT_AUTH_METHOD;
 
   useEffect(() => {
-    if (isEditMode) {
-      if (redshiftType && initialRedshiftTypeRef.current === null) {
-        initialRedshiftTypeRef.current = redshiftType;
-      }
-    } else {
+    if (!isEditMode) {
       form.setFieldsValue({
         redshiftType: REDSHIFT_AUTH_METHOD.redshift,
       });
     }
-  }, [isEditMode, form, redshiftType]);
+  }, [isEditMode, form]);
+
+  useEffect(() => {
+    if (isEditMode && redshiftType && initialRedshiftTypeRef.current === null) {
+      initialRedshiftTypeRef.current = redshiftType;
+    }
+  }, [isEditMode, redshiftType]);
 
   const getIsEditModeForComponent = (componentType: REDSHIFT_AUTH_METHOD) => {
     if (!isEditMode) return false;
