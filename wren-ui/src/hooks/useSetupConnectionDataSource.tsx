@@ -1,6 +1,6 @@
 import { useRouter } from 'next/router';
 import { useState, useCallback } from 'react';
-import { Path } from '@/utils/enum';
+import { Path, REDSHIFT_AUTH_METHOD } from '@/utils/enum';
 import { useSaveDataSourceMutation } from '@/apollo/client/graphql/dataSource.generated';
 import { DataSourceName } from '@/apollo/client/graphql/__types__';
 
@@ -101,6 +101,15 @@ export const transformPropertiesToForm = (
         ? configurations
         : [{ key: '', value: '' }],
       extensions: extensions.length ? extensions : [''],
+    };
+  } else if (dataSourceType === DataSourceName.REDSHIFT) {
+    return {
+      ...properties,
+      ...(properties?.redshiftType === REDSHIFT_AUTH_METHOD.redshift
+        ? {
+            password: properties?.password || PASSWORD_PLACEHOLDER,
+          }
+        : {}),
     };
   }
 

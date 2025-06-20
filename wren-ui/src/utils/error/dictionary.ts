@@ -61,6 +61,9 @@ export const ERROR_TEXTS = {
     AWS_SECRET_KEY: {
       REQUIRED: 'Please input AWS secret access key.',
     },
+    CLUSTER_IDENTIFIER: {
+      REQUIRED: 'Please input cluster identifier.',
+    },
   },
   ADD_RELATION: {
     FROM_FIELD: {
