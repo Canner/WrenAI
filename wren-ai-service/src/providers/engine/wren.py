@@ -21,7 +21,6 @@ class WrenUI(Engine):
         **_,
     ):
         self._endpoint = endpoint
-        logger.info("Using Engine: wren_ui")
 
     async def execute_sql(
         self,
@@ -104,7 +103,6 @@ class WrenIbis(Engine):
         self._connection_info = (
             orjson.loads(base64.b64decode(connection_info)) if connection_info else {}
         )
-        logger.info("Using Engine: wren_ibis")
 
     async def execute_sql(
         self,
@@ -156,6 +154,38 @@ class WrenIbis(Engine):
         except asyncio.TimeoutError:
             return False, None, f"Request timed out: {timeout} seconds"
 
+    async def dry_plan(
+        self,
+        session: aiohttp.ClientSession,
+        sql: str,
+        data_source: str,
+        timeout: float = 30.0,
+        **kwargs,
+    ) -> Tuple[bool, str]:
+        api_endpoint = f"{self._endpoint}/v3/connector/{data_source}/dry-plan"
+        try:
+            async with session.post(
+                api_endpoint,
+                json={
+                    "sql": sql,
+                    "manifestStr": self._manifest,
+                    "connectionInfo": self._connection_info,
+                },
+                timeout=aiohttp.ClientTimeout(total=timeout),
+            ) as response:
+                res = await response.text()
+
+                if response.status != 200:
+                    raise Exception(f"Request failed with message: {res}")
+
+                return True, ""
+        except asyncio.TimeoutError:
+            logger.error(f"Request timed out: {timeout} seconds")
+            return False, f"Request timed out: {timeout} seconds"
+        except Exception as e:
+            logger.exception(f"Unexpected error during dry_plan: {str(e)}")
+            return False, f"Unexpected error during dry_plan: {str(e)}"
+
     async def get_func_list(
         self,
         session: aiohttp.ClientSession,
@@ -189,7 +219,6 @@ class WrenEngine(Engine):
     ):
         self._endpoint = endpoint
         self._manifest = manifest
-        logger.info("Using Engine: wren_engine")
 
     async def execute_sql(
         self,

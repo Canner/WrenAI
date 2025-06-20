@@ -58,6 +58,7 @@ class SqlCorrectionService:
         event_id: str
         sql: str
         error: str
+        use_dry_plan: bool = False
 
     @observe(name="SQL Correction")
     @trace_metadata
@@ -72,6 +73,7 @@ class SqlCorrectionService:
         sql = request.sql
         error = request.error
         project_id = request.project_id
+        use_dry_plan = request.use_dry_plan
 
         try:
             _invalid = {
@@ -101,6 +103,7 @@ class SqlCorrectionService:
                 contexts=table_ddls,
                 invalid_generation_result=_invalid,
                 project_id=project_id,
+                use_dry_plan=use_dry_plan,
             )
 
             post_process = res["post_process"]

@@ -67,6 +67,7 @@ class PostRequest(BaseModel):
     sql: str
     error: str
     project_id: Optional[str] = None
+    use_dry_plan: bool = False
 
 
 class PostResponse(BaseModel):
