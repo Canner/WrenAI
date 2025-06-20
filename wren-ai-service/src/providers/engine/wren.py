@@ -169,7 +169,6 @@ class WrenIbis(Engine):
                 json={
                     "sql": sql,
                     "manifestStr": self._manifest,
-                    "connectionInfo": self._connection_info,
                 },
                 timeout=aiohttp.ClientTimeout(total=timeout),
             ) as response:
