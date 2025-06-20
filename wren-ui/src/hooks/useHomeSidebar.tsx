@@ -6,9 +6,11 @@ import {
   useThreadsQuery,
   useUpdateThreadMutation,
 } from '@/apollo/client/graphql/home.generated';
+import useEmbdeded from '@/hooks/useEmbedded';
 
 export default function useHomeSidebar() {
   const router = useRouter();
+  const { isEmbedded } = useEmbdeded();
   const { data, refetch } = useThreadsQuery({
     fetchPolicy: 'cache-and-network',
   });
@@ -25,7 +27,8 @@ export default function useHomeSidebar() {
   );
 
   const onSelect = (selectKeys: string[]) => {
-    router.push(`${Path.Home}/${selectKeys[0]}`);
+    const path = `${Path.Home}/${selectKeys[0]}` + (isEmbedded ? '?embedded=true' : '');
+    router.push(path)
   };
 
   const onRename = async (id: string, newName: string) => {

@@ -112,17 +112,9 @@ export default function ViewSQLTabContent(props: AnswerResultProps) {
         className="mb-3 adm-alert-info"
         message={
           <>
-            You’re viewing Wren SQL by default. If you want to run this query on
+            You’re viewing the compiled SQL by default. If you want to run this query on
             your own database, click “Show original SQL” to get the exact
             syntax.
-            <Typography.Link
-              className="underline ml-1"
-              href="https://docs.getwren.ai/oss/guide/home/wren_sql"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learn more about Wren SQL
-            </Typography.Link>
           </>
         }
         type="info"

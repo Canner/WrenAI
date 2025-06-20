@@ -10,12 +10,13 @@ import SidebarTree, {
   useSidebarTreeState,
 } from './SidebarTree';
 import ThreadTree, { ThreadData } from './home/ThreadTree';
+import useIsEmbedded from '@/hooks/useEmbedded';
 
 export interface Props {
   data: {
     threads: ThreadData[];
   };
-  onSelect: (selectKeys) => void;
+  onSelect: (selectKeys: any[]) => void;
   onDelete: (id: string) => Promise<void>;
   onRename: (id: string, newName: string) => Promise<void>;
 }
@@ -65,17 +66,21 @@ export default function Home(props: Props) {
     onSelect(selectedKeys);
   };
 
+  const { isEmbedded } = useIsEmbedded();
+
   return (
     <>
-      <StyledTreeNodeLink
-        className={clsx({
-          'adm-treeNode--selected': router.pathname === Path.HomeDashboard,
-        })}
-        href={Path.HomeDashboard}
-      >
-        <FundViewOutlined className="mr-2" />
-        <span className="text-medium">Dashboard</span>
-      </StyledTreeNodeLink>
+      {!isEmbedded &&
+        <StyledTreeNodeLink
+          className={clsx({
+            'adm-treeNode--selected': router.pathname === Path.HomeDashboard,
+          })}
+          href={Path.HomeDashboard}
+        >
+          <FundViewOutlined className="mr-2" />
+          <span className="text-medium">Dashboard</span>
+        </StyledTreeNodeLink>
+    }
       <ThreadTree
         threads={threads}
         selectedKeys={treeSelectedKeys}

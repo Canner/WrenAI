@@ -12,6 +12,7 @@ import {
   GroupActionButton,
 } from '@/components/sidebar/utils';
 import TreeTitle from './TreeTitle';
+import useEmbdeded from '@/hooks/useEmbedded';
 
 const StyledSidebarTree = styled(SidebarTree)`
   ${sidebarCommonStyle}
@@ -49,6 +50,7 @@ interface Props {
 export default function ThreadTree(props: Props) {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const { isEmbedded } = useEmbdeded();
   const {
     threads = [],
     selectedKeys,
@@ -67,7 +69,7 @@ export default function ThreadTree(props: Props) {
           <GroupActionButton
             size="small"
             icon={<PlusOutlined />}
-            onClick={() => router.push(Path.Home)}
+            onClick={() => router.push(Path.Home + (isEmbedded ? '?embedded=true' : ''))}
           >
             New
           </GroupActionButton>

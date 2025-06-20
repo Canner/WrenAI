@@ -13,6 +13,7 @@ import { message } from 'antd';
 import { Path } from '@/utils/enum';
 import useHomeSidebar from '@/hooks/useHomeSidebar';
 import SiderLayout from '@/components/layouts/SiderLayout';
+import EmbeddedLayout from '@/components/layouts/EmbeddedLayout';
 import Prompt from '@/components/pages/home/prompt';
 import useAskPrompt, {
   getIsFinished,
@@ -48,6 +49,7 @@ import {
   CreateSqlPairInput,
 } from '@/apollo/client/graphql/__types__';
 import { useCreateSqlPairMutation } from '@/apollo/client/graphql/sqlPairs.generated';
+import useEmbdeded from '@/hooks/useEmbedded';
 
 const getThreadResponseIsFinished = (threadResponse: ThreadResponse) => {
   const { answerDetail, breakdownDetail, chartDetail } = threadResponse || {};
@@ -322,8 +324,10 @@ export default function HomeThread() {
     onOpenAdjustSQLModal: adjustSqlModal.openModal,
   };
 
+  const { DynamicLayout } = useEmbdeded();
+
   return (
-    <SiderLayout loading={false} sidebar={homeSidebar}>
+    <DynamicLayout loading={false} sidebar={homeSidebar}>
       <PromptThreadProvider value={providerValue}>
         <PromptThread />
       </PromptThreadProvider>
@@ -373,6 +377,6 @@ export default function HomeThread() {
           await adjustAnswer.onAdjustSQL(values.responseId, values.sql)
         }
       />
-    </SiderLayout>
+    </DynamicLayout>
   );
 }

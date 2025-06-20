@@ -321,40 +321,7 @@ export default function AnswerResult(props: Props) {
               <ChartAnswer {...props} />
             </Tabs.TabPane>
           </StyledTabs>
-          <div className="mt-2 d-flex align-center">
-            <Tooltip
-              overlayInnerStyle={{ width: 'max-content' }}
-              placement="topLeft"
-              title={knowledgeTooltip}
-            >
-              <Button
-                type="link"
-                size="small"
-                className="mr-2"
-                onClick={() =>
-                  onOpenSaveToKnowledgeModal(
-                    {
-                      question:
-                        threadResponse?.askingTask?.rephrasedQuestion ||
-                        question,
-                      sql,
-                    },
-                    { isCreateMode: true },
-                  )
-                }
-                data-guideid="save-to-knowledge"
-              >
-                <div className="d-flex align-center">
-                  <RobotSVG className="mr-2" />
-                  Save to knowledge
-                </div>
-              </Button>
-            </Tooltip>
-            <ViewBlock
-              view={view}
-              onClick={() => onOpenSaveAsViewModal({ sql, responseId: id })}
-            />
-          </div>
+
           {renderRecommendedQuestions(
             isLastThreadResponse,
             recommendedQuestionProps,
