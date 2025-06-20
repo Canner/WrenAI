@@ -5,8 +5,10 @@ import {
   UrlBasedConnectionInfo,
   IbisSnowflakeConnectionInfo,
   IbisTrinoConnectionInfo,
+  IbisAthenaConnectionInfo,
 } from './adaptors/ibisAdaptor';
 import {
+  ATHENA_CONNECTION_INFO,
   BIG_QUERY_CONNECTION_INFO,
   DUCKDB_CONNECTION_INFO,
   MYSQL_CONNECTION_INFO,
@@ -64,6 +66,30 @@ interface IDataSourceConnectionInfo<C, I> {
 }
 
 const dataSource = {
+  // Athena
+  [DataSourceName.ATHENA]: {
+    sensitiveProps: ['awsSecretKey'],
+    toIbisConnectionInfo(connectionInfo) {
+      const decryptedConnectionInfo = decryptConnectionInfo(
+        DataSourceName.ATHENA,
+        connectionInfo,
+      );
+      const { awsAccessKey, awsRegion, awsSecretKey, s3StagingDir, schema } =
+        decryptedConnectionInfo as ATHENA_CONNECTION_INFO;
+      const res: IbisAthenaConnectionInfo = {
+        aws_access_key_id: awsAccessKey,
+        aws_secret_access_key: awsSecretKey,
+        region_name: awsRegion,
+        s3_staging_dir: s3StagingDir,
+        schema_name: schema,
+      };
+      return res;
+    },
+  } as IDataSourceConnectionInfo<
+    ATHENA_CONNECTION_INFO,
+    IbisAthenaConnectionInfo
+  >,
+
   // BigQuery
   [DataSourceName.BIG_QUERY]: {
     sensitiveProps: ['credentials'],

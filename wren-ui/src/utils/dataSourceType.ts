@@ -8,6 +8,7 @@ import SQLServerProperties from '@/components/pages/setup/dataSources/SQLServerP
 import ClickHouseProperties from '@/components/pages/setup/dataSources/ClickHouseProperties';
 import TrinoProperties from '@/components/pages/setup/dataSources/TrinoProperties';
 import SnowflakeProperties from '@/components/pages/setup/dataSources/SnowflakeProperties';
+import AthenaProperties from '@/components/pages/setup/dataSources/AthenaProperties';
 
 export const getDataSourceImage = (dataSource: DATA_SOURCES | string) => {
   switch (dataSource) {
@@ -29,6 +30,8 @@ export const getDataSourceImage = (dataSource: DATA_SOURCES | string) => {
       return '/images/dataSource/trino.svg';
     case DATA_SOURCES.SNOWFLAKE:
       return '/images/dataSource/snowflake.svg';
+    case DATA_SOURCES.ATHENA:
+      return '/images/dataSource/athena.svg';
     default:
       return null;
   }
@@ -54,6 +57,8 @@ export const getDataSourceName = (dataSource: DATA_SOURCES | string) => {
       return 'Trino';
     case DATA_SOURCES.SNOWFLAKE:
       return 'Snowflake';
+    case DATA_SOURCES.ATHENA:
+      return 'Athena (Trino)';
     default:
       return '';
   }
@@ -79,6 +84,8 @@ export const getDataSourceProperties = (dataSource: DATA_SOURCES | string) => {
       return TrinoProperties;
     case DATA_SOURCES.SNOWFLAKE:
       return SnowflakeProperties;
+    case DATA_SOURCES.ATHENA:
+      return AthenaProperties;
     default:
       return null;
   }

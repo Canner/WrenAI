@@ -45,6 +45,7 @@ export const typeDefs = gql`
   }
 
   enum DataSourceName {
+    ATHENA
     BIG_QUERY
     DUCKDB
     POSTGRES
