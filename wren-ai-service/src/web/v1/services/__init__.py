@@ -1,7 +1,7 @@
 from typing import Literal, Optional
 
 import orjson
-from pydantic import BaseModel
+from pydantic import AliasChoices, BaseModel, Field
 
 
 class MetadataTraceable:
@@ -48,7 +48,10 @@ class BaseRequest(BaseModel):
     _query_id: str | None = None
     project_id: Optional[str] = None
     thread_id: Optional[str] = None
-    configurations: Configuration = Configuration()
+    configurations: Configuration = Field(
+        default_factory=Configuration,
+        alias=AliasChoices("configurations", "configuration"),  # accept both keys
+    )
     request_from: Literal["ui", "api", "slack"] = "ui"
 
     @property
