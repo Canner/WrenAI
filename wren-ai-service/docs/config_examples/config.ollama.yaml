@@ -20,9 +20,11 @@ models:
 type: embedder
 provider: litellm_embedder
 models:
-  - model: ollama/nomic-embed-text # put your ollama embedder model name here, ollama/<ollama_model_name>
+  # at the moment, we are invoking ollama embedding model through ollama's openai compatible endpoint
+  # since there is issue invoking ollama embedding model through ollama/<ollama_model_name> using litellm: https://github.com/BerriAI/litellm/issues/7572
+  - model: openai/nomic-embed-text # put your ollama embedder model name here, openai/<ollama_model_name>
     alias: default
-    api_base: http://host.docker.internal:11434 # if you are using mac/windows, don't change this; if you are using linux, please search "Run Ollama in docker container" in this page: https://docs.getwren.ai/oss/ai_service/guide/custom_llm#running-wren-ai-with-your-custom-llm-embedder
+    api_base: http://host.docker.internal:11434/v1 # if you are using mac/windows, don't change this; if you are using linux, please search "Run Ollama in docker container" in this page: https://docs.getwren.ai/oss/ai_service/guide/custom_llm#running-wren-ai-with-your-custom-llm-embedder
     timeout: 600
 
 ---
