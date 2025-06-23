@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 from haystack import Document, component
 
@@ -57,6 +57,27 @@ def dry_run_pipeline(
     async_validate(lambda: getattr(pipeline, method)(**kwargs))
 
     langfuse_context.flush()
+
+
+async def retrieve_metadata(project_id: str, retriever) -> dict[str, Any]:
+    filters = None
+    if project_id:
+        filters = {
+            "operator": "AND",
+            "conditions": [
+                {"field": "project_id", "operator": "==", "value": project_id},
+            ],
+        }
+
+    result = await retriever.run(query_embedding=[], filters=filters)
+    documents = result["documents"]
+
+    # only one document for a project, thus we can return the first one
+    if documents:
+        doc = documents[0]
+        return doc.meta
+    else:
+        return {}
 
 
 @component

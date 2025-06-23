@@ -55,6 +55,12 @@ export const typeDefs = gql`
     CLICK_HOUSE
     TRINO
     SNOWFLAKE
+    REDSHIFT
+  }
+
+  enum RedshiftConnectionType {
+    redshift
+    redshift_iam
   }
 
   enum ExpressionName {

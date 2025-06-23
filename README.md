@@ -77,6 +77,8 @@ Using Wren AI is super simple, you can set it up within 3 minutes, and start to 
 ## 🔌 Data Sources
 
 If your data source is not listed here, vote for it in our [GitHub discussion thread](https://github.com/Canner/WrenAI/discussions/327). It will be a valuable input for us to decide on the next supported data sources.
+- Athena (Trino)
+- Redshift
 - BigQuery
 - DuckDB
 - PostgreSQL

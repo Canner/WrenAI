@@ -12,7 +12,6 @@ logger = logging.getLogger("wren-ai-service")
 def provider_factory(
     config: dict = {},
 ) -> LLMProvider | EmbedderProvider | DocumentStoreProvider | Engine:
-    logger.info(f"initializing provider: {config.get('provider')}")
     return loader.get_provider(config.get("provider"))(**config)
 
 

@@ -132,7 +132,6 @@ def load_helpers(package_path: str = "src.pipelines.indexing.utils"):
         These will be added to their respective global dictionaries.
     """
     package = importlib.import_module(package_path)
-    logger.info(f"Loading Helpers for DB Schema Indexing Pipeline: {package_path}")
 
     for _, name, _ in pkgutil.walk_packages(package.__path__, package.__name__ + "."):
         if name in sys.modules:

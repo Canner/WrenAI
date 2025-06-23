@@ -11,6 +11,7 @@ export interface Props {
   error?: Error & {
     invalidSql?: string;
     fixStatement?: (sql: string) => Promise<void>;
+    fixStatementLoading?: boolean;
   };
 }
 
@@ -47,6 +48,7 @@ export default function ErrorBoundary({ children, error }: Props) {
               </Button>
               <FixSQLModal
                 {...fixItModal.state}
+                loading={error.fixStatementLoading}
                 onClose={fixItModal.closeModal}
                 onSubmit={async (sql: string) => {
                   await error.fixStatement(sql);
