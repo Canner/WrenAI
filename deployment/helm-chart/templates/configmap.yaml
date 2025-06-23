@@ -60,9 +60,12 @@ data:
       {{- end }}
       model: {{ .model }}
       context_window_size: {{ .contextWindowSize }}
+      {{- if .timeout }}
+      timeout: {{ .timeout }}
+      {{- end }}
       kwargs:
         max_tokens: {{ .kwargs.maxTokens }}
-        n: {{ .kwargs.n }}
+        n: {{ .kwargs.num_responses }}
         seed: {{ .kwargs.seed }}
         temperature: {{ .kwargs.temperature }}
     {{- end }}
