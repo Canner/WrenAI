@@ -6,6 +6,7 @@ export enum ApiType {
   GENERATE_SQL = 'GENERATE_SQL',
   RUN_SQL = 'RUN_SQL',
   GENERATE_VEGA_CHART = 'GENERATE_VEGA_CHART',
+  GENERATE_SUMMARY = 'GENERATE_SUMMARY',
 }
 
 export interface ApiHistory {
