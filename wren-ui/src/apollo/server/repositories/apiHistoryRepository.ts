@@ -7,6 +7,7 @@ export enum ApiType {
   RUN_SQL = 'RUN_SQL',
   GENERATE_VEGA_CHART = 'GENERATE_VEGA_CHART',
   GENERATE_SUMMARY = 'GENERATE_SUMMARY',
+  ASK = 'ASK',
 }
 
 export interface ApiHistory {

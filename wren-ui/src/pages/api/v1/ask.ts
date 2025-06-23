@@ -8,25 +8,33 @@ import {
   respondWith,
   handleApiError,
   MAX_WAIT_TIME,
+  isAskResultFinished,
+  validateAskResult,
   validateSummaryResult,
+  transformHistoryInput,
 } from '@/apollo/server/utils/apiUtils';
 import {
+  AskResult,
+  WrenAILanguage,
   TextBasedAnswerInput,
   TextBasedAnswerResult,
   TextBasedAnswerStatus,
-  WrenAILanguage,
 } from '@/apollo/server/models/adaptor';
 import { getLogger } from '@server/utils';
 
-const logger = getLogger('API_GENERATE_SUMMARY');
+const logger = getLogger('API_ASK');
 logger.level = 'debug';
 
-const { projectService, wrenAIAdaptor, deployService, queryService } =
-  components;
+const {
+  apiHistoryRepository,
+  projectService,
+  deployService,
+  wrenAIAdaptor,
+  queryService,
+} = components;
 
-interface GenerateSummaryRequest {
+interface AskRequest {
   question: string;
-  sql: string;
   sampleSize?: number;
   language?: string;
   threadId?: string;
@@ -36,8 +44,7 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
-  const { question, sql, sampleSize, language, threadId } =
-    req.body as GenerateSummaryRequest;
+  const { question, sampleSize, language, threadId } = req.body as AskRequest;
   const startTime = Date.now();
   let project;
 
@@ -54,10 +61,6 @@ export default async function handler(
       throw new ApiError('Question is required', 400);
     }
 
-    if (!sql) {
-      throw new ApiError('SQL is required', 400);
-    }
-
     // Get current project's last deployment
     const lastDeploy = await deployService.getLastDeployment(project.id);
     if (!lastDeploy) {
@@ -71,7 +74,52 @@ export default async function handler(
     // Create a new thread if it's a new question
     const newThreadId = threadId || uuidv4();
 
-    // Get the data from the SQL
+    // Get conversation history if threadId is provided
+    const histories = threadId
+      ? await apiHistoryRepository.findAllBy({ threadId })
+      : undefined;
+
+    // Step 1: Generate SQL
+    const askTask = await wrenAIAdaptor.ask({
+      query: question,
+      deployId: lastDeploy.hash,
+      histories: transformHistoryInput(histories) as any,
+      configurations: {
+        language:
+          language || WrenAILanguage[project.language] || WrenAILanguage.EN,
+      },
+    });
+
+    // Poll for the SQL generation result
+    const deadline = Date.now() + MAX_WAIT_TIME;
+    let askResult: AskResult;
+    while (true) {
+      askResult = await wrenAIAdaptor.getAskResult(askTask.queryId);
+      if (isAskResultFinished(askResult)) {
+        break;
+      }
+
+      if (Date.now() > deadline) {
+        throw new ApiError(
+          'Timeout waiting for SQL generation',
+          500,
+          Errors.GeneralErrorCodes.POLLING_TIMEOUT,
+        );
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 1000)); // Poll every second
+    }
+
+    // Validate the AI result
+    validateAskResult(askResult, askTask.queryId);
+
+    // Get the generated SQL
+    const sql = askResult.response?.[0]?.sql;
+    if (!sql) {
+      throw new ApiError('No SQL generated', 400);
+    }
+
+    // Step 2: Execute SQL to get data
     let sqlData;
     try {
       const queryResult = await queryService.preview(sql, {
@@ -89,7 +137,7 @@ export default async function handler(
       );
     }
 
-    // Create text-based answer input for summary generation
+    // Step 3: Generate summary using text-based answer
     const textBasedAnswerInput: TextBasedAnswerInput = {
       query: question,
       sql,
@@ -102,21 +150,22 @@ export default async function handler(
     };
 
     // Start the summary generation task
-    const task =
+    const summaryTask =
       await wrenAIAdaptor.createTextBasedAnswer(textBasedAnswerInput);
 
-    if (!task || !task.queryId) {
+    if (!summaryTask || !summaryTask.queryId) {
       throw new ApiError('Failed to start summary generation task', 500);
     }
 
-    // Poll for the result
-    const deadline = Date.now() + MAX_WAIT_TIME;
-    let result: TextBasedAnswerResult;
+    // Poll for the summary result
+    let summaryResult: TextBasedAnswerResult;
     while (true) {
-      result = await wrenAIAdaptor.getTextBasedAnswerResult(task.queryId);
+      summaryResult = await wrenAIAdaptor.getTextBasedAnswerResult(
+        summaryTask.queryId,
+      );
       if (
-        result.status === TextBasedAnswerStatus.SUCCEEDED ||
-        result.status === TextBasedAnswerStatus.FAILED
+        summaryResult.status === TextBasedAnswerStatus.SUCCEEDED ||
+        summaryResult.status === TextBasedAnswerStatus.FAILED
       ) {
         break;
       }
@@ -133,12 +182,14 @@ export default async function handler(
     }
 
     // Validate the summary result
-    validateSummaryResult(result);
+    validateSummaryResult(summaryResult);
 
-    // Stream the content to get the summary
+    // Step 4: Stream the content to get the summary
     let summary = '';
-    if (result.status === TextBasedAnswerStatus.SUCCEEDED) {
-      const stream = await wrenAIAdaptor.streamTextBasedAnswer(task.queryId);
+    if (summaryResult.status === TextBasedAnswerStatus.SUCCEEDED) {
+      const stream = await wrenAIAdaptor.streamTextBasedAnswer(
+        summaryTask.queryId,
+      );
 
       // Collect the streamed content
       const streamPromise = new Promise<void>((resolve, reject) => {
@@ -168,16 +219,17 @@ export default async function handler(
       await streamPromise;
     }
 
-    // Return the summary with ID and threadId
+    // Return the combined result
     await respondWith({
       res,
       statusCode: 200,
       responsePayload: {
+        sql,
         summary,
         threadId: newThreadId,
       },
       projectId: project.id,
-      apiType: ApiType.GENERATE_SUMMARY,
+      apiType: ApiType.ASK,
       startTime,
       requestPayload: req.body,
       threadId: newThreadId,
@@ -188,7 +240,7 @@ export default async function handler(
       error,
       res,
       projectId: project?.id,
-      apiType: ApiType.GENERATE_SUMMARY,
+      apiType: ApiType.ASK,
       requestPayload: req.body,
       threadId,
       headers: req.headers as Record<string, string>,

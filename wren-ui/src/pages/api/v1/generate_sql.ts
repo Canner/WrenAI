@@ -1,13 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
-import { ApiType, ApiHistory } from '@server/repositories/apiHistoryRepository';
-import {
-  AskResult,
-  AskResultStatus,
-  AskResultType,
-  WrenAILanguage,
-  WrenAIError,
-} from '@/apollo/server/models/adaptor';
+import { ApiType } from '@server/repositories/apiHistoryRepository';
+import { AskResult, WrenAILanguage } from '@/apollo/server/models/adaptor';
 import * as Errors from '@/apollo/server/utils/error';
 import { getLogger } from '@server/utils';
 import { v4 as uuidv4 } from 'uuid';
@@ -15,6 +9,10 @@ import {
   ApiError,
   respondWith,
   handleApiError,
+  MAX_WAIT_TIME,
+  isAskResultFinished,
+  validateAskResult,
+  transformHistoryInput,
 } from '@/apollo/server/utils/apiUtils';
 import { DataSourceName } from '@server/types';
 
@@ -36,75 +34,6 @@ interface GenerateSqlRequest {
   language?: string;
   returnSqlDialect?: boolean;
 }
-
-const MAX_WAIT_TIME = 1000 * 60 * 3; // 3 minutes
-
-const isAskResultFinished = (result: AskResult) => {
-  return (
-    result.status === AskResultStatus.FINISHED ||
-    result.status === AskResultStatus.FAILED ||
-    result.status === AskResultStatus.STOPPED ||
-    result.error
-  );
-};
-
-/**
- * Validates the AI result and throws appropriate errors for different failure cases
- * @param result The AI result to validate
- * @param taskQueryId The query ID of the task (used for explanation queries)
- * @throws ApiError if result contains errors or is of an invalid type
- */
-const validateAskResult = (result: AskResult, taskQueryId: string): void => {
-  // Check for error in result
-  if (result.error) {
-    const errorMessage =
-      (result.error as WrenAIError).message || 'Unknown error';
-    const additionalData: Record<string, any> = {};
-
-    // Include invalid SQL if available
-    if (result.invalidSql) {
-      additionalData.invalidSql = result.invalidSql;
-    }
-
-    throw new ApiError(errorMessage, 400, result.error.code, additionalData);
-  }
-
-  // Check for misleading query type
-  if (result.type === AskResultType.MISLEADING_QUERY) {
-    throw new ApiError(
-      result.intentReasoning ||
-        Errors.errorMessages[Errors.GeneralErrorCodes.NON_SQL_QUERY],
-      400,
-      Errors.GeneralErrorCodes.NON_SQL_QUERY,
-    );
-  }
-
-  // Check for general type response
-  if (result.type === AskResultType.GENERAL) {
-    throw new ApiError(
-      result.intentReasoning ||
-        Errors.errorMessages[Errors.GeneralErrorCodes.NON_SQL_QUERY],
-      400,
-      Errors.GeneralErrorCodes.NON_SQL_QUERY,
-      { explanationQueryId: taskQueryId },
-    );
-  }
-};
-
-const transformHistoryInput = (histories: ApiHistory[]) => {
-  if (!histories) {
-    return [];
-  }
-  return histories
-    .filter(
-      (history) =>
-        history.responsePayload?.sql && history.requestPayload?.question,
-    )
-    .map((history) => ({
-      question: history.requestPayload?.question,
-      sql: history.responsePayload?.sql,
-    }));
-};
 
 export default async function handler(
   req: NextApiRequest,
