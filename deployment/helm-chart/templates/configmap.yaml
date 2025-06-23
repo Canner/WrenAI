@@ -68,6 +68,10 @@ data:
         n: {{ .kwargs.num_responses }}
         seed: {{ .kwargs.seed }}
         temperature: {{ .kwargs.temperature }}
+        {{- if (.kwargs).response_format }}
+        response_format:
+        {{ .kwargs.response_format | toYaml | indent 2 }}
+        {{- end }}
     {{- end }}
 
     ---
