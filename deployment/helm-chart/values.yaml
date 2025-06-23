@@ -219,13 +219,13 @@ pipeline:
         alias: default
         timeout: 120
         kwargs:
-          n: 1
+          num_responses: 1
           temperature: 0
       - model: gemini/gemini-2.0-flash
         alias: gemini-llm-for-chart
         timeout: 120
         kwargs:
-          n: 1
+          num_responses: 1
           temperature: 0
           response_format:
             type: json_object
