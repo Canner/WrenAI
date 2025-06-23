@@ -47,7 +47,6 @@ metadata:
   name: {{ include "wren-ai.fullname" . }}-ai-service-config
   labels:
     {{- include "wren-ai.labels" . | nindent 4 }}
-  namespace: {{ .Values.global.namespace | quote }}
 data:
   config.yaml: |
     type: {{ .Values.pipeline.llm.type }}
