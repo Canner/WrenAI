@@ -111,13 +111,14 @@ export default function HomeThread() {
       });
     },
   });
-  const [updateThreadResponse] = useUpdateThreadResponseMutation({
-    onCompleted: (data) => {
-      message.success('Successfully updated the SQL statement');
-      // trigger generate answer after sql statement updated
-      onGenerateThreadResponseAnswer(data.updateThreadResponse.id);
-    },
-  });
+  const [updateThreadResponse, { loading: threadResponseUpdating }] =
+    useUpdateThreadResponseMutation({
+      onCompleted: (data) => {
+        message.success('Successfully updated the SQL statement');
+        // trigger generate answer after sql statement updated
+        onGenerateThreadResponseAnswer(data.updateThreadResponse.id);
+      },
+    });
   const [fetchThreadResponse, threadResponseResult] =
     useThreadResponseLazyQuery({
       pollInterval: 1000,
@@ -308,6 +309,7 @@ export default function HomeThread() {
       onStopAdjustTask: adjustAnswer.onStop,
       onReRunAdjustTask: adjustAnswer.onReRun,
       onFixSQLStatement,
+      fixStatementLoading: threadResponseUpdating,
     },
     onOpenSaveAsViewModal: saveAsViewModal.openModal,
     onSelectRecommendedQuestion: onCreateResponse,

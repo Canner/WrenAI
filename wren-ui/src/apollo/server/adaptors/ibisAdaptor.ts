@@ -74,6 +74,34 @@ export interface IbisAthenaConnectionInfo {
   schema_name: string;
 }
 
+export enum IbisRedshiftConnectionType {
+  REDSHIFT = 'redshift',
+  REDSHIFT_IAM = 'redshift_iam',
+}
+
+interface IbisRedshiftPasswordAuth {
+  host: string;
+  port: number;
+  database: string;
+  user: string;
+  password: string;
+  redshift_type: IbisRedshiftConnectionType;
+}
+
+interface IbisRedshiftIAMAuth {
+  cluster_identifier: string;
+  user: string;
+  database: string;
+  region: string;
+  access_key_id: string;
+  access_key_secret: string;
+  redshift_type: IbisRedshiftConnectionType;
+}
+
+export type IbisRedshiftConnectionInfo =
+  | IbisRedshiftPasswordAuth
+  | IbisRedshiftIAMAuth;
+
 export enum SupportedDataSource {
   POSTGRES = 'POSTGRES',
   BIG_QUERY = 'BIG_QUERY',
@@ -84,6 +112,7 @@ export enum SupportedDataSource {
   CLICK_HOUSE = 'CLICK_HOUSE',
   TRINO = 'TRINO',
   ATHENA = 'ATHENA',
+  REDSHIFT = 'REDSHIFT',
 }
 
 const dataSourceUrlMap: Record<SupportedDataSource, string> = {
@@ -96,6 +125,7 @@ const dataSourceUrlMap: Record<SupportedDataSource, string> = {
   [SupportedDataSource.CLICK_HOUSE]: 'clickhouse',
   [SupportedDataSource.TRINO]: 'trino',
   [SupportedDataSource.ATHENA]: 'athena',
+  [SupportedDataSource.REDSHIFT]: 'redshift',
 };
 
 export interface TableResponse {

@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
+from src.utils import trace_cost
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -65,15 +66,19 @@ def prompt(
 
 
 @observe(as_type="generation", capture_input=False)
+@trace_cost
 async def validate_chart(
-    prompt: dict, preprocess_chart_schema: str | None, generator: Any
+    prompt: dict,
+    preprocess_chart_schema: str | None,
+    generator: Any,
+    generator_name: str,
 ) -> dict:
     if preprocess_chart_schema is None:
-        return {"replies": ['{"valid": false}']}
+        return {"replies": ['{"valid": false}']}, generator_name
 
     return await generator(
         prompt=prompt.get("prompt"), image_url=preprocess_chart_schema
-    )
+    ), generator_name
 
 
 @observe(capture_input=False)
@@ -115,6 +120,7 @@ class ChartValidation(BasicPipeline):
                 system_prompt=chart_validation_system_prompt,
                 generation_kwargs=CHART_VALIDATION_MODEL_KWARGS,
             ),
+            "generator_name": llm_provider.get_model(),
         }
 
         super().__init__(

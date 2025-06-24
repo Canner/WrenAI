@@ -107,6 +107,11 @@ export const DATA_SOURCE_OPTIONS = {
     guide: 'https://docs.getwren.ai/oss/guide/connect/athena',
     disabled: false,
   },
+  [DATA_SOURCES.REDSHIFT]: {
+    ...getDataSourceConfig(DATA_SOURCES.REDSHIFT),
+    guide: 'https://docs.getwren.ai/oss/guide/connect/redshift',
+    disabled: false,
+  },
 } as { [key: string]: ButtonOption };
 
 export const TEMPLATE_OPTIONS = {

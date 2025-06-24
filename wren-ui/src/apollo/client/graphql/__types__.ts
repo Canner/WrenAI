@@ -321,6 +321,7 @@ export enum DataSourceName {
   MYSQL = 'MYSQL',
   ORACLE = 'ORACLE',
   POSTGRES = 'POSTGRES',
+  REDSHIFT = 'REDSHIFT',
   SNOWFLAKE = 'SNOWFLAKE',
   TRINO = 'TRINO'
 }
@@ -1220,6 +1221,11 @@ export enum RecommendedQuestionsTaskStatus {
   FINISHED = 'FINISHED',
   GENERATING = 'GENERATING',
   NOT_STARTED = 'NOT_STARTED'
+}
+
+export enum RedshiftConnectionType {
+  redshift = 'redshift',
+  redshift_iam = 'redshift_iam'
 }
 
 export type Relation = {
