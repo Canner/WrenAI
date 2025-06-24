@@ -26,7 +26,7 @@ load_dotenv(".env", override=True)
 
 def add_quotes(sql: str) -> Tuple[str, bool]:
     try:
-        quoted_sql = sqlglot.transpile(sql, read="trino", identify=True)[0]
+        quoted_sql = sqlglot.transpile(sql, read=None, identify=True)[0]
         return quoted_sql, True
     except Exception as e:
         print(f"Error in adding quotes to SQL: {sql}")
