@@ -9,6 +9,11 @@ export const typeDefs = gql`
     RUN_SQL
     GENERATE_VEGA_CHART
     GENERATE_SUMMARY
+    ASK
+    GET_INSTRUCTIONS
+    CREATE_INSTRUCTION
+    UPDATE_INSTRUCTION
+    DELETE_INSTRUCTION
   }
 
   input ApiHistoryFilterInput {

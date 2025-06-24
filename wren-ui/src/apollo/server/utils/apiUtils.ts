@@ -108,6 +108,37 @@ export const transformHistoryInput = (histories: ApiHistory[]) => {
 };
 
 /**
+ * Validates SQL syntax and compatibility with the project's manifest.
+ * Throws an ApiError if the SQL is invalid or cannot be previewed.
+ * @param sql The SQL string to validate
+ * @param project The project object (must have id)
+ * @param deployService The deployment service instance
+ * @param queryService The query service instance
+ */
+export const validateSql = async (
+  sql: string,
+  project: any,
+  deployService: any,
+  queryService: any,
+) => {
+  const lastDeployment = await deployService.getLastDeployment(project.id);
+  const manifest = lastDeployment.manifest;
+  try {
+    await queryService.preview(sql, {
+      manifest,
+      project,
+      dryRun: true,
+    });
+  } catch (err: any) {
+    throw new ApiError(
+      err.message || 'Invalid SQL',
+      400,
+      Errors.GeneralErrorCodes.INVALID_SQL_ERROR,
+    );
+  }
+};
+
+/**
  * Common error class for API endpoints
  */
 export class ApiError extends Error {
@@ -170,6 +201,45 @@ export const respondWith = async ({
     id: responseId,
     ...responsePayload,
   });
+};
+
+/**
+ * Simple response handler for API endpoints that don't need responseId or threadId
+ * Used for simple CRUD operations like instructions
+ */
+export const respondWithSimple = async ({
+  res,
+  statusCode,
+  responsePayload,
+  projectId,
+  apiType,
+  headers,
+  requestPayload,
+  startTime,
+}: {
+  res: NextApiResponse;
+  statusCode: number;
+  responsePayload: any;
+  projectId: number;
+  apiType: ApiType;
+  startTime: number;
+  requestPayload?: Record<string, any>;
+  headers?: Record<string, string>;
+}) => {
+  const durationMs = startTime ? Date.now() - startTime : undefined;
+  const responseId = uuidv4();
+  await apiHistoryRepository.createOne({
+    id: responseId,
+    projectId,
+    apiType,
+    headers,
+    requestPayload,
+    responsePayload,
+    statusCode,
+    durationMs,
+  });
+
+  return res.status(statusCode).json(responsePayload);
 };
 
 /**
