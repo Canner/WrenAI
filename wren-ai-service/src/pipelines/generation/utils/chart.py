@@ -128,20 +128,16 @@ class ChartGenerationPostProcessor:
                 ):
                     chart_schema["height"] = {
                         "step": 70,
-                        **chart_schema.get("height", {}),
                     }
                     chart_schema["width"] = {
                         "step": 70,
-                        **chart_schema.get("width", {}),
                     }
                 else:
                     chart_schema["height"] = {
                         "step": 35,
-                        **chart_schema.get("height", {}),
                     }
                     chart_schema["width"] = {
                         "step": 35,
-                        **chart_schema.get("width", {}),
                     }
 
                 # axis label angle
