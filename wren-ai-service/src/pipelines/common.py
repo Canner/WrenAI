@@ -5,6 +5,29 @@ from haystack import Document, component
 from src.core.pipeline import BasicPipeline
 
 
+def get_engine_supported_data_type(data_type: str) -> str:
+    """
+    This function makes sure downstream ai pipeline get column data types in a format that is supported by the data engine.
+    """
+    match data_type.upper():
+        case "BPCHAR" | "NAME" | "UUID" | "INET":
+            return "VARCHAR"
+        case "OID":
+            return "INT"
+        case "BIGNUMERIC":
+            return "NUMERIC"
+        case "BYTES":
+            return "BYTEA"
+        case "DATETIME":
+            return "TIMESTAMP"
+        case "FLOAT64":
+            return "DOUBLE"
+        case "INT64":
+            return "BIGINT"
+        case _:
+            return data_type.upper()
+
+
 def build_table_ddl(
     content: dict, columns: Optional[set[str]] = None, tables: Optional[set[str]] = None
 ) -> Tuple[str, bool]:
@@ -16,9 +39,7 @@ def build_table_ddl(
             if not columns or (columns and column["name"] in columns):
                 if "This column is a Calculated Field" in column["comment"]:
                     has_calculated_field = True
-                column_ddl = (
-                    f"{column['comment']}{column['name']} {column['data_type']}"
-                )
+                column_ddl = f"{column['comment']}{column['name']} {get_engine_supported_data_type(column['data_type'])}"
                 if column["is_primary_key"]:
                     column_ddl += " PRIMARY KEY"
                 columns_ddl.append(column_ddl)
