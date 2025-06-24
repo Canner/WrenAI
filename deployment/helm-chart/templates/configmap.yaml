@@ -40,6 +40,9 @@ data:
   LOGGING_LEVEL: {{ .Values.config.logging.level }}
 
   IBIS_SERVER_ENDPOINT: "http://{{ include "wren-ai.fullname" . }}-ibis-server-svc:{{ .Values.config.ports.ibisServer }}"
+
+  # Python Unbuffered
+  PYTHONUNBUFFERED: {{ .Values.aiService.env.pythonUnbuffered | default "1" | quote }}
 ---
 apiVersion: v1
 kind: ConfigMap

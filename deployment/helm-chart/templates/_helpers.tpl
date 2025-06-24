@@ -49,3 +49,14 @@ Selector labels
 app.kubernetes.io/name: {{ include "wren-ai.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
+
+{{/*
+Return the secret name, using existingSecretName if specified, else default to <fullname>-secret
+*/}}
+{{- define "wren-ai.secretName" -}}
+{{- if .Values.secrets.useExistingSecret -}}
+{{- .Values.secrets.existingSecretName -}}
+{{- else -}}
+{{- include "wren-ai.fullname" . }}-secret
+{{- end -}}
+{{- end -}}

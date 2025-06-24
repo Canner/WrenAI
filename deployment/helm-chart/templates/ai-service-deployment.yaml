@@ -1,3 +1,4 @@
+{{- $secretName := include "wren-ai.secretName" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -44,26 +45,26 @@ spec:
             - name: OPENAI_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "wren-ai.fullname" . }}-secret
+                  name: {{ $secretName }}
                   key: OPENAI_API_KEY
               {{- else if .Values.secrets.values.GEMINI_API_KEY }}
             - name: GEMINI_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "wren-ai.fullname" . }}-secret
+                  name: {{ $secretName }}
                   key: GEMINI_API_KEY
               {{- end }}
             {{- else }}
             - name: OPENAI_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.secrets.existingSecretName }}
+                  name: {{ $secretName }}
                   key: OPENAI_API_KEY
                   optional: true
             - name: GEMINI_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.secrets.existingSecretName }}
+                  name: {{ $secretName }}
                   key: GEMINI_API_KEY
                   optional: true
             {{- end }}
@@ -79,12 +80,12 @@ spec:
             - name: LANGFUSE_PUBLIC_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ if .Values.secrets.useExistingSecret }}{{ .Values.secrets.existingSecretName }}{{ else }}{{ include "wren-ai.fullname" . }}-secret{{ end }}
+                  name: {{ $secretName }}
                   key: LANGFUSE_PUBLIC_KEY
             - name: LANGFUSE_SECRET_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ if .Values.secrets.useExistingSecret }}{{ .Values.secrets.existingSecretName }}{{ else }}{{ include "wren-ai.fullname" . }}-secret{{ end }}
+                  name: {{ $secretName }}
                   key: LANGFUSE_SECRET_KEY
             - name: LANGFUSE_HOST
               value: {{ .Values.pipeline.settings.langfuseHost | quote }}
@@ -95,7 +96,7 @@ spec:
             - name: POSTHOG_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ if .Values.secrets.useExistingSecret }}{{ .Values.secrets.existingSecretName }}{{ else }}{{ include "wren-ai.fullname" . }}-secret{{ end }}
+                  name: {{ $secretName }}
                   key: POSTHOG_API_KEY
             - name: POSTHOG_HOST
               value: {{ .Values.config.telemetry.posthogHost | quote }}

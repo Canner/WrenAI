@@ -1,3 +1,4 @@
+{{- $secretName := include "wren-ai.secretName" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -61,7 +62,7 @@ spec:
             - name: PG_URL
               valueFrom:
                 secretKeyRef:
-                  name: {{ if .Values.secrets.useExistingSecret }}{{ .Values.secrets.existingSecretName }}{{ else }}{{ include "wren-ai.fullname" . }}-secret{{ end }}
+                  name: {{ $secretName }}
                   key: PG_URL
             - name: WREN_ENGINE_PORT
               valueFrom:
@@ -86,12 +87,12 @@ spec:
             - name: USER_UUID
               valueFrom:
                 secretKeyRef:
-                  name: {{ if .Values.secrets.useExistingSecret }}{{ .Values.secrets.existingSecretName }}{{ else }}{{ include "wren-ai.fullname" . }}-secret{{ end }}
+                  name: {{ $secretName }}
                   key: USER_UUID
             - name: POSTHOG_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ if .Values.secrets.useExistingSecret }}{{ .Values.secrets.existingSecretName }}{{ else }}{{ include "wren-ai.fullname" . }}-secret{{ end }}
+                  name: {{ $secretName }}
                   key: POSTHOG_API_KEY
             - name: POSTHOG_HOST
               value: {{ .Values.config.telemetry.posthogHost | quote }}
@@ -103,12 +104,12 @@ spec:
             - name: NEXT_PUBLIC_USER_UUID
               valueFrom:
                 secretKeyRef:
-                  name: {{ if .Values.secrets.useExistingSecret }}{{ .Values.secrets.existingSecretName }}{{ else }}{{ include "wren-ai.fullname" . }}-secret{{ end }}
+                  name: {{ $secretName }}
                   key: USER_UUID
             - name: NEXT_PUBLIC_POSTHOG_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ if .Values.secrets.useExistingSecret }}{{ .Values.secrets.existingSecretName }}{{ else }}{{ include "wren-ai.fullname" . }}-secret{{ end }}
+                  name: {{ $secretName }}
                   key: POSTHOG_API_KEY
             - name: NEXT_PUBLIC_POSTHOG_HOST
               value: {{ .Values.config.telemetry.posthogHost | quote }}

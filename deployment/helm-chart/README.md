@@ -32,14 +32,14 @@ kubectl create namespace wren
 # MODIFY/GENERATE values of secret and apply kubectl command to create secret (recommended for production)
 
 # Generate secure passwords
-OPENAI_API_KEY=UkVRVUlSRUQ6IHNrLXByb2otYWxsLWFjY2Vzcy1wbGFjZWhvbGRlci00LXdyZW4tYWktc2VydmljZS1kZXBsb3ltZW50
+OPENAI_API_KEY=<Paste OPENAI_API_KEY here>
 PG_USERNAME=wrenai
 PG_PASSWORD=$(openssl rand -base64 32)
 PG_ADMIN_PASSWORD=$(openssl rand -base64 32)
 PG_URL=postgres://wrenai-user:wrenai-pass@wren-postgresql:5432/wrenai
-LANGFUSE_PUBLIC_KEY=VUlSYWxsLWFjRUQ6IHNrLtdmljZS1kZXBYWxsLWFktc2VydmljZS13ltZW50
-LANGFUSE_SECRET_KEY=UQ6IHNrLsLWFjtYWxsLWFdmljZS1kZXBktVUlSRUQ6IHNrLXByHNYWxsLWFj
-POSTHOG_API_KEY=YWxsLWZS1kZXBYWxsLWFkHNrLXByb2oYWxsLWFjtc2VydmljZS1kZXHNrLXByb2o
+LANGFUSE_PUBLIC_KEY=<Paste LANGFUSE_PUBLIC_KEY here>
+LANGFUSE_SECRET_KEY=<Paste LANGFUSE_SECRET_KEY here>
+POSTHOG_API_KEY=<Paste POSTHOG_API_KEY here>
 USER_UUID=$(openssl rand -base64 32)
 
 kubectl create secret generic wrenai-secrets \

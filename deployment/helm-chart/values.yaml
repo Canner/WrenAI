@@ -14,12 +14,13 @@ global:
 
 secrets:
   # Option 1: Use existing secret (recommended for production)
-  useExistingSecret: false
+  useExistingSecret: true
+  annotations: {}
   existingSecretName: "wren-secret"
   
   # Option 2: Create secret from values (for development/testing)
   # Set useExistingSecret to false and provide values below
-  createFromValues: true
+  createFromValues: false
   values:
     # Required for Postgres and AI Service - Provide Either OpenAI API Key or Gemini API Key
     #OPENAI_API_KEY: "dummy"
@@ -278,7 +279,7 @@ pipeline:
 postgresql:
   enabled: true
   auth:
-    # Use existing secret or create secret from values; name will pe {{ Release.Name }}-secret
+    # Use existing secret or create secret from values; name will be {{ Release.Name }}-secret
     existingSecret: "wren-secret"
     secretKeys:
       adminPasswordKey: "PG_ADMIN_PASSWORD"
