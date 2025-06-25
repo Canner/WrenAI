@@ -27,7 +27,7 @@ services:
     ports:
       - ${IBIS_SERVER_PORT}:${IBIS_SERVER_PORT}
     environment:
-      WREN_ENGINE_ENDPOINT: http://engine:${WREN_ENGINE_PORT}
+      WREN_ENGINE_ENDPOINT: http://wren-engine:${WREN_ENGINE_PORT}
       LOG_LEVEL: DEBUG
     networks:
       - wren
