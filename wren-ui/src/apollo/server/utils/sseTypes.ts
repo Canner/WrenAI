@@ -26,6 +26,7 @@ export enum StateType {
 
 export enum ContentBlockContentType {
   SUMMARY_GENERATION = 'summary_generation',
+  EXPLANATION = 'explanation',
 }
 
 // Interfaces for request and events

@@ -7,7 +7,6 @@ import {
   ApiError,
   MAX_WAIT_TIME,
   isAskResultFinished,
-  validateAskResult,
   validateSummaryResult,
   transformHistoryInput,
 } from '@/apollo/server/utils/apiUtils';
@@ -18,6 +17,8 @@ import {
   TextBasedAnswerInput,
   TextBasedAnswerResult,
   TextBasedAnswerStatus,
+  WrenAIError,
+  AskResultType,
 } from '@/apollo/server/models/adaptor';
 import { getLogger } from '@server/utils';
 import {
@@ -188,6 +189,16 @@ const getSqlGenerationState = (status: AskResultStatus): StateType => {
   }
 };
 
+const endStream = (
+  res: NextApiResponse,
+  threadId: string,
+  startTime: number,
+) => {
+  // Send message stop event
+  sendMessageStop(res, threadId || uuidv4(), Date.now() - startTime);
+  res.end();
+};
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
@@ -222,13 +233,11 @@ export default async function handler(
     // Get current project's last deployment
     const lastDeploy = await deployService.getLastDeployment(project.id);
     if (!lastDeploy) {
-      sendError(
-        res,
+      throw new ApiError(
         'No deployment found, please deploy your project first',
+        400,
         Errors.GeneralErrorCodes.NO_DEPLOYMENT_FOUND,
       );
-      res.end();
-      return;
     }
 
     // Create a new thread if it's a new question
@@ -289,9 +298,11 @@ export default async function handler(
 
       // Check if we've exceeded the maximum wait time
       if (Date.now() > deadline) {
-        sendError(res, 'Request timeout', 'TIMEOUT');
-        res.end();
-        return;
+        throw new ApiError(
+          'Request timeout',
+          400,
+          Errors.GeneralErrorCodes.POLLING_TIMEOUT,
+        );
       }
 
       // Wait before polling again
@@ -299,14 +310,98 @@ export default async function handler(
     }
 
     // Validate the ask result
-    validateAskResult(askResult, askTask.queryId);
+    // Check for error in result
+    if (askResult.error) {
+      const errorMessage =
+        (askResult.error as WrenAIError).message || 'Unknown error';
+      const additionalData: Record<string, any> = {};
+
+      // Include invalid SQL if available
+      if (askResult.invalidSql) {
+        additionalData.invalidSql = askResult.invalidSql;
+      }
+
+      throw new ApiError(
+        errorMessage,
+        400,
+        askResult.error.code,
+        additionalData,
+      );
+    }
+
+    // Check for general type response
+    // Stream the content to client
+    if (askResult.type === AskResultType.GENERAL) {
+      // Send content block start for explanation
+      sendContentBlockStart(res, ContentBlockContentType.EXPLANATION);
+
+      const stream = await wrenAIAdaptor.getAskStreamingResult(askTask.queryId);
+
+      // Stream the content in real-time
+      const streamPromise = new Promise<void>((resolve, reject) => {
+        stream.on('data', (chunk) => {
+          const chunkString = chunk.toString('utf-8');
+          const match = chunkString.match(/data: {"message":"([\s\S]*?)"}/);
+          if (match && match[1]) {
+            // Send incremental content updates
+            sendContentBlockDelta(res, match[1]);
+          }
+        });
+
+        stream.on('end', () => {
+          resolve();
+        });
+
+        stream.on('error', (error) => {
+          reject(error);
+        });
+
+        // Handle client disconnect
+        req.on('close', () => {
+          stream.destroy();
+          reject(new Error('Client disconnected'));
+        });
+      });
+
+      try {
+        await streamPromise;
+        // Send content block stop
+        sendContentBlockStop(res);
+      } catch (_streamError) {
+        throw new ApiError(
+          'Error streaming explanation content',
+          400,
+          Errors.GeneralErrorCodes.INTERNAL_SERVER_ERROR,
+        );
+      }
+
+      // Log the API call and end the stream
+      await apiHistoryRepository.createOne({
+        id: uuidv4(),
+        projectId: project.id,
+        apiType: ApiType.ASK,
+        threadId: newThreadId,
+        requestPayload: { question, sampleSize, language },
+        responsePayload: {
+          type: 'general',
+          explanation: 'Streamed explanation',
+        },
+        statusCode: 200,
+        durationMs: Date.now() - startTime,
+      });
+
+      endStream(res, newThreadId, startTime);
+      return;
+    }
 
     // Get the generated SQL
     const sql = askResult.response?.[0]?.sql;
     if (!sql) {
-      sendError(res, 'No SQL generated');
-      res.end();
-      return;
+      throw new ApiError(
+        'No SQL generated',
+        400,
+        Errors.GeneralErrorCodes.INTERNAL_SERVER_ERROR,
+      );
     }
 
     // Send SQL generation end with the SQL content
@@ -325,13 +420,11 @@ export default async function handler(
       sqlData = queryResult;
       sendStateUpdate(res, StateType.SQL_EXECUTION_END);
     } catch (queryError) {
-      sendError(
-        res,
+      throw new ApiError(
         `SQL execution failed: ${queryError.message || 'Unknown error'}`,
-        'SQL_EXECUTION_ERROR',
+        400,
+        Errors.GeneralErrorCodes.SQL_EXECUTION_ERROR,
       );
-      res.end();
-      return;
     }
 
     // Step 3: Generate summary using text-based answer
@@ -351,9 +444,11 @@ export default async function handler(
       await wrenAIAdaptor.createTextBasedAnswer(textBasedAnswerInput);
 
     if (!summaryTask || !summaryTask.queryId) {
-      sendError(res, 'Failed to start summary generation task');
-      res.end();
-      return;
+      throw new ApiError(
+        'Failed to start summary generation task',
+        400,
+        Errors.GeneralErrorCodes.INTERNAL_SERVER_ERROR,
+      );
     }
 
     // Poll for the summary generation result
@@ -374,9 +469,11 @@ export default async function handler(
 
       // Check if we've exceeded the maximum wait time
       if (Date.now() > summaryDeadline) {
-        sendError(res, 'Summary generation timeout', 'TIMEOUT');
-        res.end();
-        return;
+        throw new ApiError(
+          'Summary generation timeout',
+          400,
+          Errors.GeneralErrorCodes.POLLING_TIMEOUT,
+        );
       }
 
       // Wait before polling again
@@ -428,14 +525,13 @@ export default async function handler(
         // Send content block stop
         sendContentBlockStop(res);
       } catch (_streamError) {
-        sendError(res, 'Error streaming summary content');
-        res.end();
-        return;
+        throw new ApiError(
+          'Error streaming summary content',
+          400,
+          Errors.GeneralErrorCodes.INTERNAL_SERVER_ERROR,
+        );
       }
     }
-
-    // Send message end event
-    sendMessageStop(res, newThreadId, Date.now() - startTime);
 
     // Log the API call
     await apiHistoryRepository.createOne({
@@ -449,12 +545,9 @@ export default async function handler(
       durationMs: Date.now() - startTime,
     });
 
-    res.end();
+    endStream(res, newThreadId, startTime);
   } catch (error) {
     logger.error('Error in async ask API:', error);
-
-    // Send message end event even on error
-    sendMessageStop(res, threadId || uuidv4(), Date.now() - startTime);
 
     // Log the error
     await apiHistoryRepository.createOne({
@@ -474,6 +567,6 @@ export default async function handler(
       res,
       error instanceof Error ? error.message : 'Internal server error',
     );
-    res.end();
+    endStream(res, threadId || uuidv4(), startTime);
   }
 }
