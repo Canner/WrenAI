@@ -36,7 +36,11 @@ def build_table_ddl(
 
     for column in content["columns"]:
         if column["type"] == "COLUMN":
-            if not columns or (columns and column["name"] in columns):
+            if (
+                (not columns or (columns and column["name"] in columns))
+                and column["data_type"].lower()
+                != "unknown"  # quick fix: filtering out UNKNOWN column type
+            ):
                 if "This column is a Calculated Field" in column["comment"]:
                     has_calculated_field = True
                 column_ddl = f"{column['comment']}{column['name']} {get_engine_supported_data_type(column['data_type'])}"

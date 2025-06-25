@@ -99,6 +99,8 @@ def _build_metric_ddl(content: dict) -> str:
     columns_ddl = [
         f"{column['comment']}{column['name']} {get_engine_supported_data_type(column['data_type'])}"
         for column in content["columns"]
+        if column["data_type"].lower()
+        != "unknown"  # quick fix: filtering out UNKNOWN column type
     ]
 
     return (
