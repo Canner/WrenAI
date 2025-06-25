@@ -42,7 +42,7 @@ Please check the chart image and decide if the content of the chart is empty or 
 
 ## Start of Pipeline
 @observe()
-async def preprocess_chart_schema(chart_schema: dict) -> str | None:
+async def preprocess_chart_schema(chart_schema: dict) -> dict:
     try:
         # Convert Vega-Lite to PNG in a separate thread since it's CPU-bound
         png_bytes = await asyncio.to_thread(
@@ -52,10 +52,10 @@ async def preprocess_chart_schema(chart_schema: dict) -> str | None:
         b64_str = base64.b64encode(png_bytes).decode("utf-8")
         # Prepend the data URL header
         data_url = f"data:image/png;base64,{b64_str}"
-        return data_url
+        return {"data_url": data_url, "error_message": None}
     except Exception as e:
         logger.error(f"Error converting Vega-Lite to PNG: {e}")
-        return None
+        return {"data_url": None, "error_message": str(e)}
 
 
 @observe(capture_input=False)
@@ -69,15 +69,19 @@ def prompt(
 @trace_cost
 async def validate_chart(
     prompt: dict,
-    preprocess_chart_schema: str | None,
+    preprocess_chart_schema: dict,
     generator: Any,
     generator_name: str,
 ) -> dict:
-    if preprocess_chart_schema is None:
-        return {"replies": ['{"valid": false}']}, generator_name
+    if preprocess_chart_schema.get("error_message"):
+        error_data = {
+            "valid": False,
+            "error_message": preprocess_chart_schema["error_message"],
+        }
+        return {"replies": [orjson.dumps(error_data).decode()]}, generator_name
 
     return await generator(
-        prompt=prompt.get("prompt"), image_url=preprocess_chart_schema
+        prompt=prompt.get("prompt"), image_url=preprocess_chart_schema.get("data_url")
     ), generator_name
 
 

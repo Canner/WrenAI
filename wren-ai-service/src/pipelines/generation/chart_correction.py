@@ -51,6 +51,7 @@ Question: {{ query }}
 SQL: {{ sql }}
 Chart Schema: {{ chart_schema }}
 Language: {{ language }}
+Error Message: {{ error_message }}
 
 Please think step by step
 """
@@ -71,6 +72,7 @@ def prompt(
     sql: str,
     preprocess_chart_schema: dict,
     language: str,
+    error_message: str | None,
     prompt_builder: PromptBuilder,
 ) -> dict:
     return prompt_builder.run(
@@ -78,6 +80,7 @@ def prompt(
         sql=sql,
         chart_schema=preprocess_chart_schema,
         language=language,
+        error_message=error_message,
     )
 
 
@@ -138,6 +141,7 @@ class ChartCorrection(BasicPipeline):
         sql: str,
         chart_schema: dict,
         language: str,
+        error_message: str | None,
     ) -> dict:
         logger.info("Chart Correction pipeline is running...")
         return await self._pipe.execute(
@@ -148,6 +152,7 @@ class ChartCorrection(BasicPipeline):
                 "chart_schema": chart_schema,
                 "sample_data": chart_schema.get("data", {}).get("values", []),
                 "language": language,
+                "error_message": error_message,
                 **self._components,
                 **self._configs,
             },

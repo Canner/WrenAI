@@ -156,7 +156,8 @@ class ChartService:
                         chart_schema=chart_schema,
                     )
 
-                    if chart_validation_result["post_process"].get("valid", False):
+                    replies = chart_validation_result["post_process"]
+                    if replies.get("valid", False):
                         if remove_data_from_chart_schema:
                             if (
                                 "data" in chart_result["chart_schema"]
@@ -193,6 +194,7 @@ class ChartService:
                             sql=chart_request.sql,
                             chart_schema=chart_schema,
                             language=chart_request.configurations.language,
+                            error_message=replies.get("error_message", None),
                         )
                         chart_result = chart_correction_result["post_process"][
                             "results"
