@@ -20,6 +20,20 @@ import {
   TextBasedAnswerStatus,
 } from '@/apollo/server/models/adaptor';
 import { getLogger } from '@server/utils';
+import {
+  EventType,
+  StateType,
+  ContentBlockContentType,
+  AsyncAskRequest,
+  StreamEvent,
+  StateEvent,
+  ErrorEvent,
+  MessageStartEvent,
+  MessageStopEvent,
+  ContentBlockStartEvent,
+  ContentBlockDeltaEvent,
+  ContentBlockStopEvent,
+} from '@/apollo/server/utils';
 
 const logger = getLogger('API_ASYNC_ASK');
 logger.level = 'debug';
@@ -32,19 +46,6 @@ const {
   queryService,
 } = components;
 
-interface AsyncAskRequest {
-  question: string;
-  sampleSize?: number;
-  language?: string;
-  threadId?: string;
-}
-
-interface StreamEvent {
-  type: 'state' | 'content' | 'error' | 'complete';
-  data: any;
-  timestamp: number;
-}
-
 /**
  * Send SSE event to client
  */
@@ -54,59 +55,137 @@ const sendSSEEvent = (res: NextApiResponse, event: StreamEvent) => {
 };
 
 /**
+ * Send message start event to client
+ */
+const sendMessageStart = (res: NextApiResponse) => {
+  const messageStartEvent: MessageStartEvent = {
+    type: EventType.MESSAGE_START,
+    timestamp: Date.now(),
+  };
+  sendSSEEvent(res, messageStartEvent);
+};
+
+/**
+ * Send message stop event to client
+ */
+const sendMessageStop = (
+  res: NextApiResponse,
+  threadId: string,
+  duration: number,
+) => {
+  const messageStopEvent: MessageStopEvent = {
+    type: EventType.MESSAGE_STOP,
+    data: {
+      threadId,
+      duration,
+    },
+    timestamp: Date.now(),
+  };
+  sendSSEEvent(res, messageStopEvent);
+};
+
+/**
  * Send state update to client
  */
 const sendStateUpdate = (
   res: NextApiResponse,
-  state: string,
-  message?: string,
+  state: StateType,
   data?: any,
 ) => {
-  sendSSEEvent(res, {
-    type: 'state',
+  const stateEvent: StateEvent = {
+    type: EventType.STATE,
     data: {
       state,
-      message,
-      data,
+      ...data,
     },
     timestamp: Date.now(),
-  });
+  };
+  sendSSEEvent(res, stateEvent);
 };
 
 /**
- * Send content update to client
+ * Send content block start event to client
  */
-const sendContentUpdate = (res: NextApiResponse, content: any) => {
-  sendSSEEvent(res, {
-    type: 'content',
-    data: content,
+const sendContentBlockStart = (
+  res: NextApiResponse,
+  name: ContentBlockContentType,
+) => {
+  const contentBlockStartEvent: ContentBlockStartEvent = {
+    type: EventType.CONTENT_BLOCK_START,
+    content_block: {
+      type: 'text',
+      name,
+    },
     timestamp: Date.now(),
-  });
+  };
+  sendSSEEvent(res, contentBlockStartEvent);
+};
+
+/**
+ * Send content block delta event to client
+ */
+const sendContentBlockDelta = (res: NextApiResponse, text: string) => {
+  const contentBlockDeltaEvent: ContentBlockDeltaEvent = {
+    type: EventType.CONTENT_BLOCK_DELTA,
+    delta: {
+      type: 'text_delta',
+      text,
+    },
+    timestamp: Date.now(),
+  };
+  sendSSEEvent(res, contentBlockDeltaEvent);
+};
+
+/**
+ * Send content block stop event to client
+ */
+const sendContentBlockStop = (res: NextApiResponse) => {
+  const contentBlockStopEvent: ContentBlockStopEvent = {
+    type: EventType.CONTENT_BLOCK_STOP,
+    timestamp: Date.now(),
+  };
+  sendSSEEvent(res, contentBlockStopEvent);
 };
 
 /**
  * Send error to client
  */
 const sendError = (res: NextApiResponse, error: string, code?: string) => {
-  sendSSEEvent(res, {
-    type: 'error',
+  const errorEvent: ErrorEvent = {
+    type: EventType.ERROR,
     data: {
       error,
       code,
     },
     timestamp: Date.now(),
-  });
+  };
+  sendSSEEvent(res, errorEvent);
 };
 
 /**
- * Send completion event to client
+ * Transform AskResultStatus to descriptive SQL generation state
  */
-const sendComplete = (res: NextApiResponse, result: any) => {
-  sendSSEEvent(res, {
-    type: 'complete',
-    data: result,
-    timestamp: Date.now(),
-  });
+const getSqlGenerationState = (status: AskResultStatus): StateType => {
+  switch (status) {
+    case AskResultStatus.UNDERSTANDING:
+      return StateType.SQL_GENERATION_UNDERSTANDING;
+    case AskResultStatus.SEARCHING:
+      return StateType.SQL_GENERATION_SEARCHING;
+    case AskResultStatus.PLANNING:
+      return StateType.SQL_GENERATION_PLANNING;
+    case AskResultStatus.GENERATING:
+      return StateType.SQL_GENERATION_GENERATING;
+    case AskResultStatus.CORRECTING:
+      return StateType.SQL_GENERATION_CORRECTING;
+    case AskResultStatus.FINISHED:
+      return StateType.SQL_GENERATION_FINISHED;
+    case AskResultStatus.FAILED:
+      return StateType.SQL_GENERATION_FAILED;
+    case AskResultStatus.STOPPED:
+      return StateType.SQL_GENERATION_STOPPED;
+    default:
+      return StateType.SQL_GENERATION_UNDERSTANDING;
+  }
 };
 
 export default async function handler(
@@ -137,11 +216,10 @@ export default async function handler(
     res.setHeader('Connection', 'keep-alive');
     res.flushHeaders();
 
-    // Send initial connection event
-    sendStateUpdate(res, 'connected', 'Stream connected successfully');
+    // Send message start event
+    sendMessageStart(res);
 
     // Get current project's last deployment
-    sendStateUpdate(res, 'validating', 'Validating project deployment');
     const lastDeploy = await deployService.getLastDeployment(project.id);
     if (!lastDeploy) {
       sendError(
@@ -155,9 +233,6 @@ export default async function handler(
 
     // Create a new thread if it's a new question
     const newThreadId = threadId || uuidv4();
-    sendStateUpdate(res, 'preparing', 'Preparing conversation context', {
-      threadId: newThreadId,
-    });
 
     // Get conversation history if threadId is provided
     const histories = threadId
@@ -165,7 +240,12 @@ export default async function handler(
       : undefined;
 
     // Step 1: Generate SQL
-    sendStateUpdate(res, 'generating_sql', 'Generating SQL query');
+    sendStateUpdate(res, StateType.SQL_GENERATION_START, {
+      question,
+      threadId: newThreadId,
+      language:
+        language || WrenAILanguage[project.language] || WrenAILanguage.EN,
+    });
     const askTask = await wrenAIAdaptor.ask({
       query: question,
       deployId: lastDeploy.hash,
@@ -187,9 +267,8 @@ export default async function handler(
 
       // Send status change updates when AskResultStatus changes
       if (askResult.status !== previousStatus) {
-        const statusMessage = getStatusMessage(askResult.status);
-        sendStateUpdate(res, 'ask_status_change', statusMessage, {
-          status: askResult.status,
+        const sqlGenerationState = getSqlGenerationState(askResult.status);
+        sendStateUpdate(res, sqlGenerationState, {
           pollCount: pollCount + 1,
           rephrasedQuestion: askResult.rephrasedQuestion,
           intentReasoning: askResult.intentReasoning,
@@ -201,32 +280,26 @@ export default async function handler(
         previousStatus = askResult.status;
       }
 
+      pollCount++;
+
+      // Check if the result is finished
       if (isAskResultFinished(askResult)) {
         break;
       }
 
+      // Check if we've exceeded the maximum wait time
       if (Date.now() > deadline) {
-        sendError(
-          res,
-          'Timeout waiting for SQL generation',
-          Errors.GeneralErrorCodes.POLLING_TIMEOUT,
-        );
+        sendError(res, 'Request timeout', 'TIMEOUT');
         res.end();
         return;
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // Poll every second
-      pollCount++;
+      // Wait before polling again
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
 
-    // Validate the AI result
-    try {
-      validateAskResult(askResult, askTask.queryId);
-    } catch (error) {
-      sendError(res, error.message, error.code);
-      res.end();
-      return;
-    }
+    // Validate the ask result
+    validateAskResult(askResult, askTask.queryId);
 
     // Get the generated SQL
     const sql = askResult.response?.[0]?.sql;
@@ -236,12 +309,11 @@ export default async function handler(
       return;
     }
 
-    // Send SQL generation complete
-    sendStateUpdate(res, 'sql_generated', 'SQL query generated successfully');
-    sendContentUpdate(res, { sql });
+    // Send SQL generation end with the SQL content
+    sendStateUpdate(res, StateType.SQL_GENERATION_END, { sql });
 
     // Step 2: Execute SQL to get data
-    sendStateUpdate(res, 'executing_sql', 'Executing SQL query to fetch data');
+    sendStateUpdate(res, StateType.SQL_EXECUTION_START, { sql });
     let sqlData;
     try {
       const queryResult = await queryService.preview(sql, {
@@ -251,19 +323,18 @@ export default async function handler(
         modelingOnly: false,
       });
       sqlData = queryResult;
-      sendStateUpdate(res, 'sql_executed', 'SQL query executed successfully');
+      sendStateUpdate(res, StateType.SQL_EXECUTION_END);
     } catch (queryError) {
       sendError(
         res,
-        queryError.message || 'Error executing SQL query',
-        Errors.GeneralErrorCodes.INVALID_SQL_ERROR,
+        `SQL execution failed: ${queryError.message || 'Unknown error'}`,
+        'SQL_EXECUTION_ERROR',
       );
       res.end();
       return;
     }
 
     // Step 3: Generate summary using text-based answer
-    sendStateUpdate(res, 'generating_summary', 'Generating summary from data');
     const textBasedAnswerInput: TextBasedAnswerInput = {
       query: question,
       sql,
@@ -285,27 +356,14 @@ export default async function handler(
       return;
     }
 
-    // Poll for the summary result
+    // Poll for the summary generation result
+    const summaryDeadline = Date.now() + MAX_WAIT_TIME;
     let summaryResult: TextBasedAnswerResult;
-    pollCount = 0;
 
     while (true) {
       summaryResult = await wrenAIAdaptor.getTextBasedAnswerResult(
         summaryTask.queryId,
       );
-
-      // Send polling status updates
-      if (pollCount % 3 === 0) {
-        // Send update every 3 polls
-        sendStateUpdate(
-          res,
-          'polling_summary',
-          'Waiting for summary generation',
-          {
-            pollCount: Math.floor(pollCount / 3) + 1,
-          },
-        );
-      }
 
       if (
         summaryResult.status === TextBasedAnswerStatus.SUCCEEDED ||
@@ -314,33 +372,25 @@ export default async function handler(
         break;
       }
 
-      if (Date.now() > deadline) {
-        sendError(
-          res,
-          'Timeout waiting for summary generation',
-          Errors.GeneralErrorCodes.POLLING_TIMEOUT,
-        );
+      // Check if we've exceeded the maximum wait time
+      if (Date.now() > summaryDeadline) {
+        sendError(res, 'Summary generation timeout', 'TIMEOUT');
         res.end();
         return;
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // Poll every second
-      pollCount++;
+      // Wait before polling again
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
 
     // Validate the summary result
-    try {
-      validateSummaryResult(summaryResult);
-    } catch (error) {
-      sendError(res, error.message, error.code);
-      res.end();
-      return;
-    }
+    validateSummaryResult(summaryResult);
 
     // Step 4: Stream the content to get the summary
     let summary = '';
     if (summaryResult.status === TextBasedAnswerStatus.SUCCEEDED) {
-      sendStateUpdate(res, 'streaming_summary', 'Streaming summary content');
+      // Send content block start
+      sendContentBlockStart(res, ContentBlockContentType.SUMMARY_GENERATION);
 
       const stream = await wrenAIAdaptor.streamTextBasedAnswer(
         summaryTask.queryId,
@@ -354,10 +404,7 @@ export default async function handler(
           if (match && match[1]) {
             summary += match[1];
             // Send incremental content updates
-            sendContentUpdate(res, {
-              summary: match[1],
-              summaryComplete: false,
-            });
+            sendContentBlockDelta(res, match[1]);
           }
         });
 
@@ -378,11 +425,8 @@ export default async function handler(
 
       try {
         await streamPromise;
-        sendStateUpdate(
-          res,
-          'summary_complete',
-          'Summary generation completed',
-        );
+        // Send content block stop
+        sendContentBlockStop(res);
       } catch (_streamError) {
         sendError(res, 'Error streaming summary content');
         res.end();
@@ -390,23 +434,17 @@ export default async function handler(
       }
     }
 
-    // Send final completion event
-    const finalResult = {
-      sql,
-      summary,
-      threadId: newThreadId,
-    };
-
-    sendComplete(res, finalResult);
+    // Send message end event
+    sendMessageStop(res, newThreadId, Date.now() - startTime);
 
     // Log the API call
     await apiHistoryRepository.createOne({
+      id: uuidv4(),
       projectId: project.id,
       apiType: ApiType.ASK,
       threadId: newThreadId,
-      headers: req.headers as Record<string, string>,
-      requestPayload: req.body,
-      responsePayload: finalResult,
+      requestPayload: { question, sampleSize, language },
+      responsePayload: { sql, summary },
       statusCode: 200,
       durationMs: Date.now() - startTime,
     });
@@ -415,51 +453,27 @@ export default async function handler(
   } catch (error) {
     logger.error('Error in async ask API:', error);
 
-    // Send error event to client
-    const errorMessage =
-      error instanceof ApiError ? error.message : 'Internal server error';
-    const errorCode = error instanceof ApiError ? error.code : undefined;
-
-    sendError(res, errorMessage, errorCode);
+    // Send message end event even on error
+    sendMessageStop(res, threadId || uuidv4(), Date.now() - startTime);
 
     // Log the error
     await apiHistoryRepository.createOne({
+      id: uuidv4(),
       projectId: project?.id || 0,
       apiType: ApiType.ASK,
-      threadId,
-      headers: req.headers as Record<string, string>,
-      requestPayload: req.body,
-      responsePayload: { error: errorMessage },
-      statusCode: error instanceof ApiError ? error.statusCode : 500,
+      threadId: threadId || uuidv4(),
+      requestPayload: { question, sampleSize, language },
+      responsePayload: {
+        error: error instanceof Error ? error.message : String(error),
+      },
+      statusCode: 500,
       durationMs: Date.now() - startTime,
     });
 
+    sendError(
+      res,
+      error instanceof Error ? error.message : 'Internal server error',
+    );
     res.end();
   }
 }
-
-/**
- * Get human-readable message for AskResultStatus
- */
-const getStatusMessage = (status: AskResultStatus): string => {
-  switch (status) {
-    case AskResultStatus.UNDERSTANDING:
-      return 'Understanding your question';
-    case AskResultStatus.SEARCHING:
-      return 'Searching for relevant data';
-    case AskResultStatus.PLANNING:
-      return 'Planning the SQL generation approach';
-    case AskResultStatus.GENERATING:
-      return 'Generating SQL query';
-    case AskResultStatus.CORRECTING:
-      return 'Correcting and improving SQL';
-    case AskResultStatus.FINISHED:
-      return 'SQL generation completed';
-    case AskResultStatus.FAILED:
-      return 'SQL generation failed';
-    case AskResultStatus.STOPPED:
-      return 'SQL generation stopped';
-    default:
-      return 'Processing your request';
-  }
-};
