@@ -1110,7 +1110,8 @@ export enum ProjectLanguage {
   PT = 'PT',
   RU = 'RU',
   ZH_CN = 'ZH_CN',
-  ZH_TW = 'ZH_TW'
+  ZH_TW = 'ZH_TW',
+  AR = 'AR',
 }
 
 export type Query = {
