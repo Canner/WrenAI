@@ -22,6 +22,7 @@ export enum ApiType {
   CREATE_SQL_PAIR = 'CREATE_SQL_PAIR',
   UPDATE_SQL_PAIR = 'UPDATE_SQL_PAIR',
   DELETE_SQL_PAIR = 'DELETE_SQL_PAIR',
+  GET_MODELS = 'GET_MODELS',
 }
 
 export interface ApiHistory {
