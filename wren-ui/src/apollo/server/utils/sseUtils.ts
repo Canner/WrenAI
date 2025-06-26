@@ -74,12 +74,14 @@ export const sendError = (
   res: NextApiResponse,
   error: string,
   code?: string,
+  additionalData?: Record<string, any>,
 ) => {
   const errorEvent: ErrorEvent = {
     type: EventType.ERROR,
     data: {
       error,
       code,
+      ...additionalData,
     },
     timestamp: Date.now(),
   };

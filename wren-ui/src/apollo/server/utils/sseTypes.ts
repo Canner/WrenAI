@@ -19,7 +19,7 @@ export enum StateType {
   SQL_GENERATION_FINISHED = 'sql_generation_finished',
   SQL_GENERATION_FAILED = 'sql_generation_failed',
   SQL_GENERATION_STOPPED = 'sql_generation_stopped',
-  SQL_GENERATION_END = 'sql_generation_end',
+  SQL_GENERATION_SUCCESS = 'sql_generation_success',
   SQL_EXECUTION_START = 'sql_execution_start',
   SQL_EXECUTION_END = 'sql_execution_end',
 }

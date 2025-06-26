@@ -126,7 +126,7 @@ export default async function handler(
       throw new ApiError(
         errorMessage,
         400,
-        askResult.error.code,
+        askResult.error?.code || Errors.GeneralErrorCodes.INTERNAL_SERVER_ERROR,
         additionalData,
       );
     }

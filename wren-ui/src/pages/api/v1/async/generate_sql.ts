@@ -155,8 +155,8 @@ export default async function handler(
       );
     }
 
-    // Send SQL generation end with the SQL content
-    sendStateUpdate(res, StateType.SQL_GENERATION_END, { sql });
+    // Send SQL generation success with the SQL content
+    sendStateUpdate(res, StateType.SQL_GENERATION_SUCCESS, { sql });
 
     // Log the API call
     await apiHistoryRepository.createOne({
@@ -193,6 +193,8 @@ export default async function handler(
     sendError(
       res,
       error instanceof Error ? error.message : 'Internal server error',
+      error.code || Errors.GeneralErrorCodes.INTERNAL_SERVER_ERROR,
+      error.additionalData,
     );
     endStream(res, threadId || uuidv4(), startTime);
   }

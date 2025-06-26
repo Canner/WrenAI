@@ -231,12 +231,14 @@ export default async function handler(
       const stream = await wrenAIAdaptor.getAskStreamingResult(askTask.queryId);
 
       // Stream the content in real-time
+      let explanation = '';
       const streamPromise = new Promise<void>((resolve, reject) => {
         stream.on('data', (chunk) => {
           const chunkString = chunk.toString('utf-8');
           const match = chunkString.match(/data: {"message":"([\s\S]*?)"}/);
           if (match && match[1]) {
             // Send incremental content updates
+            explanation += match[1];
             sendContentBlockDelta(res, match[1]);
           }
         });
@@ -277,8 +279,7 @@ export default async function handler(
         headers: req.headers as Record<string, string>,
         requestPayload: { question, sampleSize, language },
         responsePayload: {
-          type: 'general',
-          explanation: 'Streamed explanation',
+          explanation,
         },
         statusCode: 200,
         durationMs: Date.now() - startTime,
@@ -298,8 +299,8 @@ export default async function handler(
       );
     }
 
-    // Send SQL generation end with the SQL content
-    sendStateUpdate(res, StateType.SQL_GENERATION_END, { sql });
+    // Send SQL generation success with the SQL content
+    sendStateUpdate(res, StateType.SQL_GENERATION_SUCCESS, { sql });
 
     // Step 2: Execute SQL to get data
     sendStateUpdate(res, StateType.SQL_EXECUTION_START, { sql });
@@ -435,7 +436,10 @@ export default async function handler(
       threadId: newThreadId,
       headers: req.headers as Record<string, string>,
       requestPayload: { question, sampleSize, language },
-      responsePayload: { sql, summary },
+      responsePayload: {
+        sql,
+        summary,
+      },
       statusCode: 200,
       durationMs: Date.now() - startTime,
     });
@@ -462,6 +466,8 @@ export default async function handler(
     sendError(
       res,
       error instanceof Error ? error.message : 'Internal server error',
+      error.code || Errors.GeneralErrorCodes.INTERNAL_SERVER_ERROR,
+      error.additionalData,
     );
     endStream(res, threadId || uuidv4(), startTime);
   }
