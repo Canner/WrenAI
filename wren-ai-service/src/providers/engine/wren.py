@@ -160,12 +160,16 @@ class WrenIbis(Engine):
         sql: str,
         data_source: str,
         timeout: float = 30.0,
+        allow_fallback: bool = True,
         **kwargs,
     ) -> Tuple[bool, str]:
         api_endpoint = f"{self._endpoint}/v3/connector/{data_source}/dry-plan"
         try:
             async with session.post(
                 api_endpoint,
+                headers={
+                    "x-wren-fallback_disable": "false" if allow_fallback else "true",
+                },
                 json={
                     "sql": sql,
                     "manifestStr": self._manifest,

@@ -32,6 +32,7 @@ class SQLGenPostProcessor:
         timeout: float = 30.0,
         project_id: str | None = None,
         use_dry_plan: bool = False,
+        allow_dry_plan_fallback: bool = True,
         data_source: str = "",
     ) -> dict:
         try:
@@ -51,6 +52,7 @@ class SQLGenPostProcessor:
                 project_id=project_id,
                 timeout=timeout,
                 use_dry_plan=use_dry_plan,
+                allow_dry_plan_fallback=allow_dry_plan_fallback,
                 data_source=data_source,
             )
 
@@ -72,6 +74,7 @@ class SQLGenPostProcessor:
         timeout: float,
         project_id: str | None = None,
         use_dry_plan: bool = False,
+        allow_dry_plan_fallback: bool = True,
         data_source: str = "",
     ) -> Dict[str, str]:
         valid_generation_result = {}
@@ -83,7 +86,11 @@ class SQLGenPostProcessor:
             if not error_message:
                 if use_dry_plan:
                     dry_plan_result, error_message = await self._engine.dry_plan(
-                        session, quoted_sql, data_source, timeout=timeout
+                        session,
+                        quoted_sql,
+                        data_source,
+                        timeout=timeout,
+                        allow_fallback=allow_dry_plan_fallback,
                     )
 
                     if dry_plan_result:
