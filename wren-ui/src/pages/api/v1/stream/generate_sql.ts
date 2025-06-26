@@ -26,7 +26,7 @@ import {
   endStream,
 } from '@/apollo/server/utils';
 
-const logger = getLogger('API_ASYNC_GENERATE_SQL');
+const logger = getLogger('API_STREAM_GENERATE_SQL');
 logger.level = 'debug';
 
 const { apiHistoryRepository, projectService, deployService, wrenAIAdaptor } =
@@ -162,7 +162,7 @@ export default async function handler(
     await apiHistoryRepository.createOne({
       id: uuidv4(),
       projectId: project.id,
-      apiType: ApiType.ASYNC_GENERATE_SQL,
+      apiType: ApiType.STREAM_GENERATE_SQL,
       threadId: newThreadId,
       headers: req.headers as Record<string, string>,
       requestPayload: { question, language },
@@ -173,13 +173,13 @@ export default async function handler(
 
     endStream(res, newThreadId, startTime);
   } catch (error) {
-    logger.error('Error in async generate SQL API:', error);
+    logger.error('Error in stream generate SQL API:', error);
 
     // Log the error
     await apiHistoryRepository.createOne({
       id: uuidv4(),
       projectId: project?.id || 0,
-      apiType: ApiType.ASYNC_GENERATE_SQL,
+      apiType: ApiType.STREAM_GENERATE_SQL,
       threadId: threadId || uuidv4(),
       headers: req.headers as Record<string, string>,
       requestPayload: { question, language },

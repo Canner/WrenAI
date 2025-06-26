@@ -100,8 +100,8 @@ export const transformHistoryInput = (histories: ApiHistory[]) => {
   const validApiTypes = [
     ApiType.GENERATE_SQL,
     ApiType.ASK,
-    ApiType.ASYNC_GENERATE_SQL,
-    ApiType.ASYNC_ASK,
+    ApiType.STREAM_GENERATE_SQL,
+    ApiType.STREAM_ASK,
   ];
 
   return histories

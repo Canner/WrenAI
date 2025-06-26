@@ -19,8 +19,8 @@ export const typeDefs = gql`
     DELETE_SQL_PAIR
     GET_SQL_PAIRS
     GET_MODELS
-    ASYNC_ASK
-    ASYNC_GENERATE_SQL
+    STREAM_ASK
+    STREAM_GENERATE_SQL
   }
 
   input ApiHistoryFilterInput {
