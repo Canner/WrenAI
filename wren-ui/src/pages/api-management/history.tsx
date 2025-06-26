@@ -70,8 +70,12 @@ export default function APIHistory() {
       width: 100,
       render: (status: number) => {
         const icon =
-          status === 200 ? <CheckCircleOutlined /> : <CloseCircleOutlined />;
-        const color = status === 200 ? 'success' : 'error';
+          status >= 200 && status < 300 ? (
+            <CheckCircleOutlined />
+          ) : (
+            <CloseCircleOutlined />
+          );
+        const color = status >= 200 && status < 300 ? 'success' : 'error';
         return (
           <Tag icon={icon} color={color}>
             {status}
