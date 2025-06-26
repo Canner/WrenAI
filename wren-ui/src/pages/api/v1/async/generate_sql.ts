@@ -162,8 +162,9 @@ export default async function handler(
     await apiHistoryRepository.createOne({
       id: uuidv4(),
       projectId: project.id,
-      apiType: ApiType.GENERATE_SQL,
+      apiType: ApiType.ASYNC_GENERATE_SQL,
       threadId: newThreadId,
+      headers: req.headers as Record<string, string>,
       requestPayload: { question, language },
       responsePayload: { sql },
       statusCode: 200,
@@ -178,8 +179,9 @@ export default async function handler(
     await apiHistoryRepository.createOne({
       id: uuidv4(),
       projectId: project?.id || 0,
-      apiType: ApiType.GENERATE_SQL,
+      apiType: ApiType.ASYNC_GENERATE_SQL,
       threadId: threadId || uuidv4(),
+      headers: req.headers as Record<string, string>,
       requestPayload: { question, language },
       responsePayload: {
         error: error instanceof Error ? error.message : String(error),

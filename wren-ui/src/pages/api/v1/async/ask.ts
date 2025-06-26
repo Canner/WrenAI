@@ -272,8 +272,9 @@ export default async function handler(
       await apiHistoryRepository.createOne({
         id: uuidv4(),
         projectId: project.id,
-        apiType: ApiType.ASK,
+        apiType: ApiType.ASYNC_ASK,
         threadId: newThreadId,
+        headers: req.headers as Record<string, string>,
         requestPayload: { question, sampleSize, language },
         responsePayload: {
           type: 'general',
@@ -430,8 +431,9 @@ export default async function handler(
     await apiHistoryRepository.createOne({
       id: uuidv4(),
       projectId: project.id,
-      apiType: ApiType.ASK,
+      apiType: ApiType.ASYNC_ASK,
       threadId: newThreadId,
+      headers: req.headers as Record<string, string>,
       requestPayload: { question, sampleSize, language },
       responsePayload: { sql, summary },
       statusCode: 200,
@@ -446,8 +448,9 @@ export default async function handler(
     await apiHistoryRepository.createOne({
       id: uuidv4(),
       projectId: project?.id || 0,
-      apiType: ApiType.ASK,
+      apiType: ApiType.ASYNC_ASK,
       threadId: threadId || uuidv4(),
+      headers: req.headers as Record<string, string>,
       requestPayload: { question, sampleSize, language },
       responsePayload: {
         error: error instanceof Error ? error.message : String(error),

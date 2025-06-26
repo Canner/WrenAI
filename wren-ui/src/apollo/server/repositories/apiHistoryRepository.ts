@@ -23,6 +23,8 @@ export enum ApiType {
   UPDATE_SQL_PAIR = 'UPDATE_SQL_PAIR',
   DELETE_SQL_PAIR = 'DELETE_SQL_PAIR',
   GET_MODELS = 'GET_MODELS',
+  ASYNC_ASK = 'ASYNC_ASK',
+  ASYNC_GENERATE_SQL = 'ASYNC_GENERATE_SQL',
 }
 
 export interface ApiHistory {

@@ -77,9 +77,22 @@ export type ApiHistoryResponse = {
 };
 
 export enum ApiType {
+  ASK = 'ASK',
+  ASYNC_ASK = 'ASYNC_ASK',
+  ASYNC_GENERATE_SQL = 'ASYNC_GENERATE_SQL',
+  CREATE_INSTRUCTION = 'CREATE_INSTRUCTION',
+  CREATE_SQL_PAIR = 'CREATE_SQL_PAIR',
+  DELETE_INSTRUCTION = 'DELETE_INSTRUCTION',
+  DELETE_SQL_PAIR = 'DELETE_SQL_PAIR',
   GENERATE_SQL = 'GENERATE_SQL',
+  GENERATE_SUMMARY = 'GENERATE_SUMMARY',
   GENERATE_VEGA_CHART = 'GENERATE_VEGA_CHART',
-  RUN_SQL = 'RUN_SQL'
+  GET_INSTRUCTIONS = 'GET_INSTRUCTIONS',
+  GET_MODELS = 'GET_MODELS',
+  GET_SQL_PAIRS = 'GET_SQL_PAIRS',
+  RUN_SQL = 'RUN_SQL',
+  UPDATE_INSTRUCTION = 'UPDATE_INSTRUCTION',
+  UPDATE_SQL_PAIR = 'UPDATE_SQL_PAIR'
 }
 
 export type AskingTask = {
@@ -294,9 +307,9 @@ export type DashboardSchedule = {
   __typename?: 'DashboardSchedule';
   cron?: Maybe<Scalars['String']>;
   day?: Maybe<CacheScheduleDayEnum>;
-  frequency: ScheduleFrequencyEnum;
-  hour: Scalars['Int'];
-  minute: Scalars['Int'];
+  frequency?: Maybe<ScheduleFrequencyEnum>;
+  hour?: Maybe<Scalars['Int']>;
+  minute?: Maybe<Scalars['Int']>;
   timezone?: Maybe<Scalars['String']>;
 };
 
@@ -317,8 +330,8 @@ export enum DataSourceName {
   CLICK_HOUSE = 'CLICK_HOUSE',
   DUCKDB = 'DUCKDB',
   MSSQL = 'MSSQL',
-  ORACLE = 'ORACLE',
   MYSQL = 'MYSQL',
+  ORACLE = 'ORACLE',
   POSTGRES = 'POSTGRES',
   SNOWFLAKE = 'SNOWFLAKE',
   TRINO = 'TRINO'
@@ -384,7 +397,7 @@ export type DetailedDashboard = {
   items: Array<DashboardItem>;
   name: Scalars['String'];
   nextScheduledAt?: Maybe<Scalars['String']>;
-  schedule: DashboardSchedule;
+  schedule?: Maybe<DashboardSchedule>;
 };
 
 export type DetailedModel = {

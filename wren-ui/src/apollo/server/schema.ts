@@ -14,6 +14,13 @@ export const typeDefs = gql`
     CREATE_INSTRUCTION
     UPDATE_INSTRUCTION
     DELETE_INSTRUCTION
+    CREATE_SQL_PAIR
+    UPDATE_SQL_PAIR
+    DELETE_SQL_PAIR
+    GET_SQL_PAIRS
+    GET_MODELS
+    ASYNC_ASK
+    ASYNC_GENERATE_SQL
   }
 
   input ApiHistoryFilterInput {

@@ -99,7 +99,9 @@ export default function APIHistory() {
           );
         }
         return (
-          <div className="gray-8">{payload.question || payload.sql || '-'}</div>
+          <div className="gray-8">
+            {payload?.question || payload?.sql || '-'}
+          </div>
         );
       },
     },
