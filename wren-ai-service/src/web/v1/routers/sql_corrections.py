@@ -68,6 +68,7 @@ class PostRequest(BaseModel):
     error: str
     project_id: Optional[str] = None
     use_dry_plan: bool = False
+    allow_dry_plan_fallback: bool = True
 
 
 class PostResponse(BaseModel):
