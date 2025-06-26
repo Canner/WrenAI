@@ -9,7 +9,6 @@ import {
   handleApiError,
   MAX_WAIT_TIME,
   isAskResultFinished,
-  validateAskResult,
   validateSummaryResult,
   transformHistoryInput,
 } from '@/apollo/server/utils/apiUtils';
@@ -19,6 +18,8 @@ import {
   TextBasedAnswerInput,
   TextBasedAnswerResult,
   TextBasedAnswerStatus,
+  AskResultType,
+  WrenAIError,
 } from '@/apollo/server/models/adaptor';
 import { getLogger } from '@server/utils';
 
@@ -111,7 +112,76 @@ export default async function handler(
     }
 
     // Validate the AI result
-    validateAskResult(askResult, askTask.queryId);
+    // Check for error in result
+    if (askResult.error) {
+      const errorMessage =
+        (askResult.error as WrenAIError).message || 'Unknown error';
+      const additionalData: Record<string, any> = {};
+
+      // Include invalid SQL if available
+      if (askResult.invalidSql) {
+        additionalData.invalidSql = askResult.invalidSql;
+      }
+
+      throw new ApiError(
+        errorMessage,
+        400,
+        askResult.error.code,
+        additionalData,
+      );
+    }
+
+    // Check for general type response (explanation streaming)
+    if (askResult.type === AskResultType.GENERAL) {
+      // Stream the explanation content
+      let explanation = '';
+      const stream = await wrenAIAdaptor.getAskStreamingResult(askTask.queryId);
+
+      // Collect the streamed content
+      const streamPromise = new Promise<void>((resolve, reject) => {
+        stream.on('data', (chunk) => {
+          const chunkString = chunk.toString('utf-8');
+          const match = chunkString.match(/data: {"message":"([\s\S]*?)"}/);
+          if (match && match[1]) {
+            explanation += match[1];
+          }
+        });
+
+        stream.on('end', () => {
+          resolve();
+        });
+
+        stream.on('error', (error) => {
+          reject(error);
+        });
+
+        // Handle client disconnect
+        req.on('close', () => {
+          stream.destroy();
+          reject(new Error('Client disconnected'));
+        });
+      });
+
+      await streamPromise;
+
+      // Return the explanation result
+      await respondWith({
+        res,
+        statusCode: 200,
+        responsePayload: {
+          type: 'NON_SQL_QUERY',
+          explanation,
+          threadId: newThreadId,
+        },
+        projectId: project.id,
+        apiType: ApiType.ASK,
+        startTime,
+        requestPayload: req.body,
+        threadId: newThreadId,
+        headers: req.headers as Record<string, string>,
+      });
+      return;
+    }
 
     // Get the generated SQL
     const sql = askResult.response?.[0]?.sql;
