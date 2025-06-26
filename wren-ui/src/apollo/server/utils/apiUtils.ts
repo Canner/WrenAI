@@ -96,10 +96,20 @@ export const transformHistoryInput = (histories: ApiHistory[]) => {
   if (!histories) {
     return [];
   }
+
+  const validApiTypes = [
+    ApiType.GENERATE_SQL,
+    ApiType.ASK,
+    ApiType.ASYNC_GENERATE_SQL,
+    ApiType.ASYNC_ASK,
+  ];
+
   return histories
     .filter(
       (history) =>
-        history.responsePayload?.sql && history.requestPayload?.question,
+        validApiTypes.includes(history.apiType) &&
+        history.responsePayload?.sql &&
+        history.requestPayload?.question,
     )
     .map((history) => ({
       question: history.requestPayload?.question,
