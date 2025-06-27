@@ -9,7 +9,7 @@
 type: llm
 provider: litellm_llm
 models:
-  # put AZURE_API_KEY=<your_api_key> in ~/.wrenai/.env
+  # put AZURE_OPENAI_API_KEY=<your_api_key> in ~/.wrenai/.env
   - model: azure/gpt-4  # Your Azure deployment name, put 'azure/' before deployment name
     alias: default
     api_base: https://endpoint.openai.azure.com  # Replace with your custom Azure endpoint
@@ -25,7 +25,7 @@ models:
 type: embedder
 provider: litellm_embedder
 models:
-  # put AZURE_API_KEY=<your_api_key> in ~/.wrenai/.env
+  # put AZURE_OPENAI_API_KEY=<your_api_key> in ~/.wrenai/.env
   - model: azure/text-embedding-ada-002  # Your Azure deployment name, put 'azure/' before deployment name
     alias: default
     api_base: https://endpoint.openai.azure.com  # Replace with your custom Azure endpoint
