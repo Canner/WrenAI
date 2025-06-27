@@ -147,6 +147,12 @@ export class ApiHistoryResolver {
     },
     responsePayload: (apiHistory: ApiHistory) => {
       if (!apiHistory.responsePayload) return null;
+
+      // If the response payload is an array, return it as is
+      if (Array.isArray(apiHistory.responsePayload))
+        return apiHistory.responsePayload;
+
+      // Otherwise, sanitize the response payload
       return sanitizeResponsePayload(
         apiHistory.responsePayload,
         apiHistory.apiType,
