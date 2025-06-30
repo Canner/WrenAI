@@ -80,10 +80,10 @@ async def post_process(
     generate_sql_correction: dict,
     post_processor: SQLGenPostProcessor,
     engine_timeout: float,
+    data_source: str,
     project_id: str | None = None,
     use_dry_plan: bool = False,
     allow_dry_plan_fallback: bool = True,
-    data_source: str = "",
 ) -> dict:
     return await post_processor.run(
         generate_sql_correction.get("replies"),
@@ -142,7 +142,10 @@ class SQLCorrection(BasicPipeline):
     ):
         logger.info("SQLCorrection pipeline is running...")
 
-        metadata = await retrieve_metadata(project_id or "", self._retriever)
+        if use_dry_plan:
+            metadata = await retrieve_metadata(project_id or "", self._retriever)
+        else:
+            metadata = {}
 
         return await self._pipe.execute(
             ["post_process"],
