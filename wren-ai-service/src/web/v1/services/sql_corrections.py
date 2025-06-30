@@ -1,5 +1,5 @@
 import logging
-from typing import Literal, Optional
+from typing import List, Literal, Optional
 
 from cachetools import TTLCache
 from langfuse.decorators import observe
@@ -58,6 +58,7 @@ class SqlCorrectionService:
         event_id: str
         sql: str
         error: str
+        retrieved_tables: Optional[List[str]] = None
         use_dry_plan: bool = False
         allow_dry_plan_fallback: bool = True
 
@@ -74,6 +75,7 @@ class SqlCorrectionService:
         sql = request.sql
         error = request.error
         project_id = request.project_id
+        retrieved_tables = request.retrieved_tables
         use_dry_plan = request.use_dry_plan
         allow_dry_plan_fallback = request.allow_dry_plan_fallback
 
@@ -83,17 +85,18 @@ class SqlCorrectionService:
                 "error": error,
             }
 
-            tables = (
-                await self._pipelines["sql_tables_extraction"].run(
-                    sql=sql,
-                )
-            )["post_process"]
+            if not retrieved_tables:
+                retrieved_tables = (
+                    await self._pipelines["sql_tables_extraction"].run(
+                        sql=sql,
+                    )
+                )["post_process"]
 
             documents = (
                 (
                     await self._pipelines["db_schema_retrieval"].run(
                         project_id=project_id,
-                        tables=tables,
+                        tables=retrieved_tables,
                     )
                 )
                 .get("construct_retrieval_results", {})

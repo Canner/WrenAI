@@ -1,6 +1,6 @@
 import uuid
 from dataclasses import asdict
-from typing import Literal, Optional
+from typing import List, Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends
 from pydantic import BaseModel
@@ -67,6 +67,7 @@ class PostRequest(BaseModel):
     sql: str
     error: str
     project_id: Optional[str] = None
+    retrieved_tables: Optional[List[str]] = None
     use_dry_plan: bool = False
     allow_dry_plan_fallback: bool = True
 
