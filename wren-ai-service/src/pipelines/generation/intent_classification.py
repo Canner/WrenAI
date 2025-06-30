@@ -331,8 +331,8 @@ class IntentClassification(BasicPipeline):
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
         wren_ai_docs: list[dict],
-        table_retrieval_size: Optional[int] = 50,
-        table_column_retrieval_size: Optional[int] = 100,
+        table_retrieval_size: int = 50,
+        table_column_retrieval_size: int = 100,
         **kwargs,
     ):
         self._components = {

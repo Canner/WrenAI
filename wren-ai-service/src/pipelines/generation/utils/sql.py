@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiohttp
 import orjson
@@ -29,7 +29,7 @@ class SQLGenPostProcessor:
     async def run(
         self,
         replies: List[str] | List[List[str]],
-        timeout: Optional[float] = 30.0,
+        timeout: float = 30.0,
         project_id: str | None = None,
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
