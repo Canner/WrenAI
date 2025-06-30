@@ -165,7 +165,7 @@ class LitellmEmbedderProvider(EmbedderProvider):
             str
         ] = None,  # e.g. EMBEDDER_OPENAI_API_KEY, EMBEDDER_ANTHROPIC_API_KEY, etc.
         api_base: Optional[str] = None,
-        timeout: Optional[float] = 120.0,
+        timeout: float = 120.0,
         **kwargs,
     ):
         self._api_key = os.getenv(api_key_name) if api_key_name else None

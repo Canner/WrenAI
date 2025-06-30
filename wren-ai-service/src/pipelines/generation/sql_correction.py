@@ -1,6 +1,6 @@
 import logging
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
@@ -104,7 +104,7 @@ class SQLCorrection(BasicPipeline):
         llm_provider: LLMProvider,
         document_store_provider: DocumentStoreProvider,
         engine: Engine,
-        engine_timeout: Optional[float] = 30.0,
+        engine_timeout: float = 30.0,
         **kwargs,
     ):
         self._retriever = document_store_provider.get_retriever(
