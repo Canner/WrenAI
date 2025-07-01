@@ -4,12 +4,10 @@ models:
 - model: gpt-4.1-nano-2025-04-14
   alias: default
   kwargs:
-    {
-      "temperature": 0,
-      "n": 1,
-      "max_tokens": 4096,
-      "response_format": { "type": "json_object" },
-    }
+    max_tokens: 4096
+    n: 1
+    seed: 0
+    temperature: 0
   timeout: 120
 
 ---
@@ -18,7 +16,6 @@ provider: litellm_embedder
 models:
 - model: text-embedding-3-large
   alias: default
-  dimension: 3072
   timeout: 120
 
 ---
