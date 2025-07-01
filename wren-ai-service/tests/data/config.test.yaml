@@ -51,6 +51,7 @@ pipes:
   - name: sql_correction
     llm: openai_llm.gpt-4o-mini
     engine: wren_ui
+    document_store: qdrant
   - name: followup_sql_generation
     llm: openai_llm.gpt-4o-mini
     engine: wren_ui
