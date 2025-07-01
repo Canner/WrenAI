@@ -243,6 +243,14 @@ TEXT_TO_SQL_RULES = """
 - DON'T USE LAX_BOOL, LAX_FLOAT64, LAX_INT64, LAX_STRING when "json_type":"".
 """
 
+
+SQL_CORRECTION_EXAMPLES = """
+### SQL CORRECTION EXAMPLES ###
+- Original SQL: `SELECT 1 AS col ORDER BY col LIMIT 1 UNION ALL SELECT 2 AS col ORDER BY col LIMIT 1`
+  Error Message: io.trino.sql.parser.ParsingException: line 1:38: mismatched input 'UNION'. Expecting: '::', <EOF>
+  Corrected SQL: `(SELECT 1 AS col ORDER BY col LIMIT 1) UNION ALL (SELECT 2 AS col ORDER BY col LIMIT 1)`
+"""
+
 sql_generation_system_prompt = f"""
 You are a helpful assistant that converts natural language queries into ANSI SQL queries.
 
