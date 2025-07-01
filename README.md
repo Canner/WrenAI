@@ -37,7 +37,7 @@
 > Wren AI is your GenBI Agent, that you can query any database with natural language → get accurate SQL(Text-to-SQL), charts(Text-to-Charts) & AI-generated insights in seconds. ⚡️
 
 <p align="center">
-  <img src="./misc/wren_workflow.png">
+  <img src="./misc/workflow.png">
 </p>
 
 ### 😍 Demos
@@ -124,7 +124,7 @@ Visit [Wren AI documentation](https://docs.getwren.ai/oss/overview/introduction?
 
 ## ⭐️ Community
 
-- Join 1.3 k+ developers in our [Discord](https://discord.gg/5DvshJqG8Z) for real-time help and roadmap previews.
+- Join 1.3k+ developers in our [Discord](https://discord.gg/5DvshJqG8Z) for real-time help and roadmap previews.
 - If there are any issues, please visit [GitHub Issues](https://github.com/Canner/WrenAI/issues).
 - Explore our [public roadmap](https://wrenai.notion.site/) to stay updated on upcoming features and improvements!
 
