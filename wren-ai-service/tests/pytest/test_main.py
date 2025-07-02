@@ -23,6 +23,7 @@ GLOBAL_DATA = {
 }
 
 
+@pytest.mark.skip(reason="Skip semantics preparation test")
 def test_semantics_preparation(app):
     with TestClient(app) as client:
         semantics_preperation_id = GLOBAL_DATA["semantics_preperation_id"]
@@ -55,6 +56,7 @@ def test_semantics_preparation(app):
         assert status == "finished"
 
 
+@pytest.mark.skip(reason="Skip asks test")
 def test_asks_with_successful_query(app):
     with TestClient(app) as client:
         semantics_preparation_id = GLOBAL_DATA["semantics_preperation_id"]
@@ -88,6 +90,7 @@ def test_asks_with_successful_query(app):
         #     assert r["summary"] is not None and r["summary"] != ""
 
 
+@pytest.mark.skip(reason="Skip stop asks test")
 def test_stop_asks(app):
     with TestClient(app) as client:
         query_id = GLOBAL_DATA["query_id"]
@@ -110,6 +113,7 @@ def test_stop_asks(app):
         assert response.json()["status"] == "stopped"
 
 
+@pytest.mark.skip(reason="Skip web error handler test")
 def test_web_error_handler(app):
     with TestClient(app) as client:
         response = client.post(

@@ -1,6 +1,8 @@
 import os
 from typing import Any, Callable, Dict, List, Optional
 
+import backoff
+import openai
 from litellm import Router, acompletion
 
 from src.core.provider import LLMProvider
@@ -68,6 +70,7 @@ class LitellmLLMProvider(LLMProvider):
             **(self._model_kwargs or {}),
         }
 
+        @backoff.on_exception(backoff.expo, openai.APIError, max_time=60.0, max_tries=3)
         async def _run(
             prompt: str,
             image_url: Optional[str] = None,

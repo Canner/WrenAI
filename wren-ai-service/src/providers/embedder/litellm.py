@@ -128,7 +128,7 @@ class AsyncDocumentEmbedder:
         return all_embeddings, meta
 
     @component.output_types(documents=List[Document], meta=Dict[str, Any])
-    @backoff.on_exception(backoff.expo, openai.RateLimitError, max_time=60, max_tries=3)
+    @backoff.on_exception(backoff.expo, openai.APIError, max_time=60.0, max_tries=3)
     async def run(
         self, documents: List[Document], batch_size: int = 32, progress_bar: bool = True
     ):

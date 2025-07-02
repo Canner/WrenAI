@@ -194,7 +194,7 @@ class SqlPairs(BasicPipeline):
         self,
         mdl_str: str,
         project_id: str = "",
-        external_pairs: Dict[str, Any] = {},
+        external_pairs: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         logger.info(
             f"Project ID: {project_id} SQL Pairs Indexing pipeline is running..."
@@ -205,7 +205,7 @@ class SqlPairs(BasicPipeline):
             "project_id": project_id,
             "external_pairs": {
                 **self._external_pairs,
-                **external_pairs,
+                **(external_pairs or {}),
             },
             **self._components,
         }
