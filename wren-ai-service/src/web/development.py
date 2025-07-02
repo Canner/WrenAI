@@ -4,8 +4,6 @@ from typing import Any, Dict, get_type_hints
 
 from fastapi import APIRouter, HTTPException
 
-from src.__main__ import app
-
 logger = logging.getLogger("wren-ai-service")
 router = APIRouter()
 
@@ -50,6 +48,8 @@ def _extract_run_method_params(pipeline_instance) -> Dict[str, str]:
 
 @router.get("/pipelines")
 async def get_pipelines() -> dict:
+    from src.__main__ import app
+
     service_container = app.state.service_container
     pipeline_params = {}
 
@@ -66,6 +66,8 @@ async def get_pipelines() -> dict:
 
 @router.post("/pipelines/{pipeline_name}")
 async def run_pipeline(pipeline_name: str, request_body: Dict[str, Any]) -> dict:
+    from src.__main__ import app
+
     service_container = app.state.service_container
     pipe_components = {}
 
