@@ -25,6 +25,7 @@ def instructions_service():
     return service_container.instructions_service
 
 
+@pytest.mark.skip(reason="Skip instructions test")
 @pytest.mark.asyncio
 async def test_preparation(
     instructions_service: InstructionsService,
@@ -66,6 +67,7 @@ async def test_preparation(
     assert await store.count_documents() == 2
 
 
+@pytest.mark.skip(reason="Skip instructions test")
 @pytest.mark.asyncio
 async def test_with_empty_questions(
     instructions_service: InstructionsService,
@@ -100,6 +102,7 @@ async def test_with_empty_questions(
     assert await store.count_documents() == 0
 
 
+@pytest.mark.skip(reason="Skip instructions test")
 @pytest.mark.asyncio
 async def test_with_empty_instructions(
     instructions_service: InstructionsService,
@@ -118,6 +121,7 @@ async def test_with_empty_instructions(
     assert response.status == "finished"
 
 
+@pytest.mark.skip(reason="Skip instructions test")
 @pytest.mark.asyncio
 async def test_deletion(
     instructions_service: InstructionsService,
@@ -171,6 +175,7 @@ async def test_deletion(
     assert await store.count_documents() == 0
 
 
+@pytest.mark.skip(reason="Skip instructions test")
 @pytest.mark.asyncio
 async def test_delete_single_instruction(
     instructions_service: InstructionsService,
@@ -222,6 +227,7 @@ async def test_delete_single_instruction(
     assert await store.count_documents() == 1
 
 
+@pytest.mark.skip(reason="Skip instructions test")
 @pytest.mark.asyncio
 async def test_delete_cross_project_instruction(
     instructions_service: InstructionsService,

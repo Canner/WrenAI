@@ -1,6 +1,6 @@
 import logging
 import sys
-from typing import Any, Optional
+from typing import Any
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
@@ -9,7 +9,8 @@ from langfuse.decorators import observe
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
-from src.core.provider import LLMProvider
+from src.core.provider import DocumentStoreProvider, LLMProvider
+from src.pipelines.common import retrieve_metadata
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
@@ -120,12 +121,18 @@ async def post_process(
     generate_sql: dict,
     post_processor: SQLGenPostProcessor,
     engine_timeout: float,
+    data_source: str,
     project_id: str | None = None,
+    use_dry_plan: bool = False,
+    allow_dry_plan_fallback: bool = True,
 ) -> dict:
     return await post_processor.run(
         generate_sql.get("replies"),
         timeout=engine_timeout,
         project_id=project_id,
+        use_dry_plan=use_dry_plan,
+        data_source=data_source,
+        allow_dry_plan_fallback=allow_dry_plan_fallback,
     )
 
 
@@ -136,10 +143,15 @@ class SQLGeneration(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
+        document_store_provider: DocumentStoreProvider,
         engine: Engine,
-        engine_timeout: Optional[float] = 30.0,
+        engine_timeout: float = 30.0,
         **kwargs,
     ):
+        self._retriever = document_store_provider.get_retriever(
+            document_store_provider.get_store("project_meta")
+        )
+
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=sql_generation_system_prompt,
@@ -173,8 +185,16 @@ class SQLGeneration(BasicPipeline):
         has_calculated_field: bool = False,
         has_metric: bool = False,
         sql_functions: list[SqlFunction] | None = None,
+        use_dry_plan: bool = False,
+        allow_dry_plan_fallback: bool = True,
     ):
         logger.info("SQL Generation pipeline is running...")
+
+        if use_dry_plan:
+            metadata = await retrieve_metadata(project_id or "", self._retriever)
+        else:
+            metadata = {}
+
         return await self._pipe.execute(
             ["post_process"],
             inputs={
@@ -188,6 +208,9 @@ class SQLGeneration(BasicPipeline):
                 "has_calculated_field": has_calculated_field,
                 "has_metric": has_metric,
                 "sql_functions": sql_functions,
+                "use_dry_plan": use_dry_plan,
+                "allow_dry_plan_fallback": allow_dry_plan_fallback,
+                "data_source": metadata.get("data_source", "local_file"),
                 **self._components,
                 **self._configs,
             },

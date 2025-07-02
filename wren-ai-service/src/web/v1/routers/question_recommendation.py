@@ -75,9 +75,9 @@ class PostRequest(BaseModel):
     mdl: str
     previous_questions: list[str] = []
     project_id: Optional[str] = None
-    max_questions: Optional[int] = 5
-    max_categories: Optional[int] = 3
-    regenerate: Optional[bool] = False
+    max_questions: int = 5
+    max_categories: int = 3
+    regenerate: bool = False
     configuration: Configuration = Configuration()
 
 
