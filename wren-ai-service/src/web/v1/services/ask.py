@@ -87,7 +87,7 @@ class _AskResultResponse(BaseModel):
 
 
 class AskResultResponse(_AskResultResponse):
-    is_followup: Optional[bool] = Field(False, exclude=True)
+    is_followup: bool = Field(False, exclude=True)
     general_type: Optional[
         Literal["MISLEADING_QUERY", "DATA_ASSISTANCE", "USER_GUIDE"]
     ] = Field(None, exclude=True)

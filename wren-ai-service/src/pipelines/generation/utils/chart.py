@@ -1,247 +1,33 @@
 import logging
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Dict, Optional
 
 import orjson
 import pandas as pd
 from haystack import component
-from jsonschema import validate
 from jsonschema.exceptions import ValidationError
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 logger = logging.getLogger("wren-ai-service")
 
 
-chart_generation_instructions = """
-### INSTRUCTIONS ###
+def load_chart_theme() -> Dict[str, Any]:
+    try:
+        with open("src/pipelines/generation/utils/chart_theme.json", "r") as f:
+            return orjson.loads(f.read())
+    except (FileNotFoundError, IOError) as e:
+        logger.error(f"Failed to load custom theme: {e}")
+        return {}
+    except orjson.JSONDecodeError as e:
+        logger.error(f"Failed to parse custom theme: {e}")
+        return {}
 
-- Chart types: Bar chart, Line chart, Multi line chart, Area chart, Pie chart, Stacked bar chart, Grouped bar chart
-- You can only use the chart types provided in the instructions
-- Generated chart should answer the user's question and based on the semantics of the SQL query, and the sample data, sample column values are used to help you generate the suitable chart type
-- If the sample data is not suitable for visualization, you must return an empty string for the schema and chart type
-- If the sample data is empty, you must return an empty string for the schema and chart type
-- The language for the chart and reasoning must be the same language provided by the user
-- Please use the current time provided by the user to generate the chart
-- In order to generate the grouped bar chart, you need to follow the given instructions:
-    - Disable Stacking: Add "stack": null to the y-encoding.
-    - Use xOffset for subcategories to group bars.
-    - Don't use "transform" section.
-- In order to generate the pie chart, you need to follow the given instructions:
-    - Add {"type": "arc"} to the mark section.
-    - Add "theta" encoding to the encoding section.
-    - Add "color" encoding to the encoding section.
-    - Don't add "innerRadius" to the mark section.
-- If the x-axis of the chart is a temporal field, the time unit should be the same as the question user asked.
-    - For yearly question, the time unit should be "year".
-    - For monthly question, the time unit should be "yearmonth".
-    - For weekly question, the time unit should be "yearmonthdate".
-    - For daily question, the time unit should be "yearmonthdate".
-    - Default time unit is "yearmonth".
-- For each axis, generate the corresponding human-readable title based on the language provided by the user.
-- Make sure all of the fields(x, y, xOffset, color, etc.) in the encoding section of the chart schema are present in the column names of the data.
 
-### GUIDELINES TO PLOT CHART ###
-
-1. Understanding Your Data Types
-- Nominal (Categorical): Names or labels without a specific order (e.g., types of fruits, countries).
-- Ordinal: Categorical data with a meaningful order but no fixed intervals (e.g., rankings, satisfaction levels).
-- Quantitative: Numerical values representing counts or measurements (e.g., sales figures, temperatures).
-- Temporal: Date or time data (e.g., timestamps, dates).
-2. Chart Types and When to Use Them
-- Bar Chart
-    - Use When: Comparing quantities across different categories.
-    - Data Requirements:
-        - One categorical variable (x-axis).
-        - One quantitative variable (y-axis).
-    - Example: Comparing sales numbers for different product categories.
-- Grouped Bar Chart
-    - Use When: Comparing sub-categories within main categories.
-    - Data Requirements:
-        - Two categorical variables (x-axis grouped by one, color-coded by another).
-        - One quantitative variable (y-axis).
-        - Example: Sales numbers for different products across various regions.
-- Line Chart
-    - Use When: Displaying trends over continuous data, especially time.
-    - Data Requirements:
-        - One temporal or ordinal variable (x-axis).
-        - One quantitative variable (y-axis).
-    - Example: Tracking monthly revenue over a year.
-- Multi Line Chart
-    - Use When: Displaying trends over continuous data, especially time.
-    - Data Requirements:
-        - One temporal or ordinal variable (x-axis).
-        - Two or more quantitative variables (y-axis and color).
-    - Implementation Notes:
-        - Uses `transform` with `fold` to combine multiple metrics into a single series
-        - The folded metrics are distinguished using the color encoding
-    - Example: Tracking monthly click rate and read rate over a year.
-- Area Chart
-    - Use When: Similar to line charts but emphasizing the volume of change over time.
-    - Data Requirements:
-        - Same as Line Chart.
-    - Example: Visualizing cumulative rainfall over months.
-- Pie Chart
-    - Use When: Showing parts of a whole as percentages.
-    - Data Requirements:
-        - One categorical variable.
-        - One quantitative variable representing proportions.
-    - Example: Market share distribution among companies.
-- Stacked Bar Chart
-    - Use When: Showing composition and comparison across categories.
-    - Data Requirements: Same as grouped bar chart.
-    - Example: Sales by region and product type.
-- Guidelines for Selecting Chart Types
-    - Comparing Categories:
-        - Bar Chart: Best for simple comparisons across categories.
-        - Grouped Bar Chart: Use when you have sub-categories.
-        - Stacked Bar Chart: Use to show composition within categories.
-    - Showing Trends Over Time:
-        - Line Chart: Ideal for continuous data over time.
-        - Area Chart: Use when you want to emphasize volume or total value over time.
-    - Displaying Proportions:
-        - Pie Chart: Use for simple compositions at a single point in time.
-        - Stacked Bar Chart (100%): Use for comparing compositions across multiple categories.
-    
-### EXAMPLES ###
-
-1. Bar Chart
-- Sample Data:
- [
-    {"Region": "North", "Sales": 100},
-    {"Region": "South", "Sales": 200},
-    {"Region": "East", "Sales": 300},
-    {"Region": "West", "Sales": 400}
-]
-- Chart Schema:
-{
-    "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>,
-    "mark": {"type": "bar"},
-    "encoding": {
-        "x": {"field": "Region", "type": "nominal", "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>},
-        "y": {"field": "Sales", "type": "quantitative", "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>},
-        "color": {"field": "Region", "type": "nominal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"}
-    }
-}
-2. Line Chart
-- Sample Data:
-[
-    {"Date": "2022-01-01", "Sales": 100},
-    {"Date": "2022-01-02", "Sales": 200},
-    {"Date": "2022-01-03", "Sales": 300},
-    {"Date": "2022-01-04", "Sales": 400}
-]
-- Chart Schema:
-{
-    "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>,
-    "mark": {"type": "line"},
-    "encoding": {
-        "x": {"field": "Date", "type": "temporal", "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>},
-        "y": {"field": "Sales", "type": "quantitative", "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>}
-    }
-}
-3. Pie Chart
-- Sample Data:
-[
-    {"Company": "Company A", "Market Share": 0.4},
-    {"Company": "Company B", "Market Share": 0.3},
-    {"Company": "Company C", "Market Share": 0.2},
-    {"Company": "Company D", "Market Share": 0.1}
-]
-- Chart Schema:
-{
-    "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>,
-    "mark": {"type": "arc"},
-    "encoding": {
-        "theta": {"field": "Market Share", "type": "quantitative"},
-        "color": {"field": "Company", "type": "nominal", "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>}
-    }
-}
-4. Area Chart
-- Sample Data:
-[
-    {"Date": "2022-01-01", "Sales": 100},
-    {"Date": "2022-01-02", "Sales": 200},
-    {"Date": "2022-01-03", "Sales": 300},
-    {"Date": "2022-01-04", "Sales": 400}
-]
-- Chart Schema:
-{
-    "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>",
-    "mark": {"type": "area"},
-    "encoding": {
-        "x": {"field": "Date", "type": "temporal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"},
-        "y": {"field": "Sales", "type": "quantitative", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"}
-    }
-}
-5. Stacked Bar Chart
-- Sample Data:
-[
-    {"Region": "North", "Product": "A", "Sales": 100},
-    {"Region": "North", "Product": "B", "Sales": 150},
-    {"Region": "South", "Product": "A", "Sales": 200},
-    {"Region": "South", "Product": "B", "Sales": 250},
-    {"Region": "East", "Product": "A", "Sales": 300},
-    {"Region": "East", "Product": "B", "Sales": 350},
-    {"Region": "West", "Product": "A", "Sales": 400},
-    {"Region": "West", "Product": "B", "Sales": 450}
-]
-- Chart Schema:
-{
-    "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>",
-    "mark": {"type": "bar"},
-    "encoding": {
-        "x": {"field": "Region", "type": "nominal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"},
-        "y": {"field": "Sales", "type": "quantitative", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>", "stack": "zero"},
-        "color": {"field": "Product", "type": "nominal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"}
-    }
-}
-6. Grouped Bar Chart
-- Sample Data:
-[
-    {"Region": "North", "Product": "A", "Sales": 100},
-    {"Region": "North", "Product": "B", "Sales": 150},
-    {"Region": "South", "Product": "A", "Sales": 200},
-    {"Region": "South", "Product": "B", "Sales": 250},
-    {"Region": "East", "Product": "A", "Sales": 300},
-    {"Region": "East", "Product": "B", "Sales": 350},
-    {"Region": "West", "Product": "A", "Sales": 400},
-    {"Region": "West", "Product": "B", "Sales": 450}
-]
-- Chart Schema:
-{
-    "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>",
-    "mark": {"type": "bar"},
-    "encoding": {
-        "x": {"field": "Region", "type": "nominal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"},
-        "y": {"field": "Sales", "type": "quantitative", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"},
-        "xOffset": {"field": "Product", "type": "nominal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"},
-        "color": {"field": "Product", "type": "nominal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"}
-    }
-}
-7. Multi Line Chart
-- Sample Data:
-[
-    {"Date": "2022-01-01", "readCount": 100, "clickCount": 10},
-    {"Date": "2022-01-02", "readCount": 200, "clickCount": 30},
-    {"Date": "2022-01-03", "readCount": 300, "clickCount": 20},
-    {"Date": "2022-01-04", "readCount": 400, "clickCount": 40}
-]
-- Chart Schema:
-{
-    "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>,
-    "mark": {"type": "line"},
-    "transform": [
-        {
-        "fold": ["readCount", "clickCount"],
-        "as": ["Metric", "Value"]
-        }
-    ],
-    "encoding": {
-        "x": {"field": "Date", "type": "temporal", "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>},
-        "y": {"field": "Value", "type": "quantitative", "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>},
-        "color": {"field": "Metric", "type": "nominal", "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>}
-    }
-}
-"""
+def safe_str(x):
+    try:
+        hash(x)
+        return x
+    except TypeError:
+        return str(x)
 
 
 @component
@@ -260,9 +46,10 @@ class ChartDataPreprocessor:
             column.get("name", "") if isinstance(column, dict) else column
             for column in data.get("columns", [])
         ]
-        data = data.get("data", [])
+        raw_rows = data.get("data", [])
+        cleaned_rows = [[safe_str(cell) for cell in row] for row in raw_rows]
 
-        df = pd.DataFrame(data, columns=columns)
+        df = pd.DataFrame(cleaned_rows, columns=columns)
         sample_column_values = {
             col: list(df[col].unique())[:sample_column_size] for col in df.columns
         }
@@ -273,9 +60,20 @@ class ChartDataPreprocessor:
             sample_data = df.to_dict(orient="records")
 
         return {
+            "raw_data": df.to_dict(orient="records"),
             "sample_data": sample_data,
             "sample_column_values": sample_column_values,
         }
+
+
+@component
+class ChartSchemaPreprocessor:
+    @component.output_types(
+        chart_schema=dict[str, Any],
+    )
+    def run(self, chart_schema: dict[str, Any]):
+        chart_schema.pop("config", None)
+        return chart_schema
 
 
 @component
@@ -285,15 +83,13 @@ class ChartGenerationPostProcessor:
     )
     def run(
         self,
-        replies: str,
-        vega_schema: Dict[str, Any],
+        replies: list[str],
         sample_data: list[dict],
-        remove_data_from_chart_schema: Optional[bool] = True,
+        chart_theme: Optional[dict[str, Any]] = None,
     ):
         try:
             generation_result = orjson.loads(replies[0])
             reasoning = generation_result.get("reasoning", "")
-            chart_type = generation_result.get("chart_type", "")
             if chart_schema := generation_result.get("chart_schema", {}):
                 # sometimes the chart_schema is still in string format
                 if isinstance(chart_schema, str):
@@ -304,16 +100,84 @@ class ChartGenerationPostProcessor:
                 ] = "https://vega.github.io/schema/vega-lite/v5.json"
                 chart_schema["data"] = {"values": sample_data}
 
-                validate(chart_schema, schema=vega_schema)
+                # tooltip
+                if "mark" in chart_schema:
+                    if isinstance(chart_schema["mark"], str):
+                        chart_schema["mark"] = {
+                            "type": chart_schema["mark"],
+                            "tooltip": True,
+                        }
+                    else:
+                        chart_schema["mark"]["tooltip"] = True
 
-                if remove_data_from_chart_schema:
-                    chart_schema["data"]["values"] = []
+                # setting height and width
+                if (
+                    "mark" in chart_schema
+                    and chart_schema["mark"]["type"] in ["arc", "text"]
+                ) or "projection" in chart_schema:
+                    chart_schema["autosize"] = {
+                        "type": "fit",
+                        "contains": "padding",
+                        "resize": True,
+                    }
+                    chart_schema["height"] = 320
+                    chart_schema["width"] = "container"
+                elif any(
+                    key in chart_schema
+                    for key in ("hconcat", "vconcat", "concat", "layer")
+                ):
+                    chart_schema["height"] = {
+                        "step": 70,
+                        **(
+                            chart_schema["height"]
+                            if isinstance(chart_schema.get("height"), dict)
+                            else {}
+                        ),
+                    }
+                    chart_schema["width"] = {
+                        "step": 70,
+                        **(
+                            chart_schema["width"]
+                            if isinstance(chart_schema.get("width"), dict)
+                            else {}
+                        ),
+                    }
+                else:
+                    chart_schema["height"] = {
+                        "step": 35,
+                        **(
+                            chart_schema["height"]
+                            if isinstance(chart_schema.get("height"), dict)
+                            else {}
+                        ),
+                    }
+                    chart_schema["width"] = {
+                        "step": 35,
+                        **(
+                            chart_schema["width"]
+                            if isinstance(chart_schema.get("width"), dict)
+                            else {}
+                        ),
+                    }
+
+                # axis label angle
+                if "encoding" in chart_schema:
+                    if "x" in chart_schema["encoding"]:
+                        if "axis" in chart_schema["encoding"]["x"]:
+                            chart_schema["encoding"]["x"]["axis"]["labelAngle"] = -40
+                    if "y" in chart_schema["encoding"]:
+                        if "axis" in chart_schema["encoding"]["y"]:
+                            chart_schema["encoding"]["y"]["axis"]["labelAngle"] = 0
+
+                if chart_theme:
+                    if "config" not in chart_schema:
+                        chart_schema["config"] = {}
+                    chart_schema["config"].update(chart_theme)
 
                 return {
                     "results": {
                         "chart_schema": chart_schema,
                         "reasoning": reasoning,
-                        "chart_type": chart_type,
                     }
                 }
 
@@ -321,7 +185,6 @@ class ChartGenerationPostProcessor:
                 "results": {
                     "chart_schema": {},
                     "reasoning": reasoning,
-                    "chart_type": chart_type,
                 }
             }
         except ValidationError as e:
@@ -331,7 +194,6 @@ class ChartGenerationPostProcessor:
                 "results": {
                     "chart_schema": {},
                     "reasoning": "",
-                    "chart_type": "",
                 }
             }
         except Exception as e:
@@ -341,140 +203,894 @@ class ChartGenerationPostProcessor:
                 "results": {
                     "chart_schema": {},
                     "reasoning": "",
-                    "chart_type": "",
                 }
             }
 
 
-class ChartSchema(BaseModel):
-    class ChartType(BaseModel):
-        type: Literal["bar", "line", "area", "arc"]
+CHART_GENERATION_GENERAL_INSTRUCTIONS = """
+- Please generate the vega-lite schema using the v5 specification.
+- Please omit the "data" field while generating the vega-lite schema.
+- Please omit the "$schema" field while generating the vega-lite schema.
+- Please omit the "description" field while generating the vega-lite schema.
+- Please remember to add the "title" field to the vega-lite schema.
+- Please remember to add the legend to the vega-lite schema.
+- Please remember to add the "tooltip" field to the vega-lite schema.
+- Please think hard and consider each example in SAMPLE_VEGA_LITE_SCHEMA_EXAMPLES first to generate the most appropriate vega-lite schema based on the sample data and the user's request.
+- The language of the "title" field should be the same as the language provided by the user.
+- If the sample data is empty, return an empty string as the value of the "chart_schema" field and explain the reason in the "reasoning" field.
+- If there is only one column in the sample data and the column is not a number, return an empty string as the value of the "chart_schema" field and explain the reason in the "reasoning" field.
+- If there is only one column in the sample data and the column is a number, chart type should be "text", the font size should be 60, width should be 300, height should be 100.
+- If user is asking for a chart showing proportion/percentage by a certain column, chart type should be "donut chart".
+- For horizontal bar charts, the order of the bars should be sorted descendingly by the value of the y-axis.
+- We don't support "table" chart type, please leave the vega-lite schema empty string and explain the reason in the "reasoning" field.
+"""
 
-    class ChartEncoding(BaseModel):
-        field: str
-        type: Literal["ordinal", "quantitative", "nominal"]
-        title: str
+SAMPLE_VEGA_LITE_SCHEMA_EXAMPLES = """
+Following are some examples of vega-lite schema only including "key fields":
 
-    title: str
-    mark: ChartType
-    encoding: ChartEncoding
+**Single value chart**
+When to use:
+- Use when you want to show a single value.
+- Ideal for showing a single value, such as a total, average, or count.
+Sample schema:
+{
+    "mark": {"type": "text", "tooltip": True},
+    "encoding": {
+        "text": {
+            "field": "max_order_amount",
+            "type": "quantitative"
+        },
+        "size": {
+            "value": 60
+        }
+    }
+}
 
+**Vertical bar chart**
+When to use:
+- Use when you want to compare the values of different categories.
+- Ideal for comparing values across categories, such as sales by product or revenue by region.
+What to pay attention to:
+- The order of the bars should be sorted descendingly by the value of the y-axis.
+Sample schema:
+{
+    "mark": {"type": "bar", "tooltip": True},
+    "encoding": {
+        "x": {
+            "field":"plan_type",
+            "type":"nominal",
+            "axis":{
+                "title":"Plan Type"
+            }
+        },
+        "y": {
+            "field":"registrations",
+            "type":"quantitative",
+            "axis":{
+                "title":"Registrations"
+            }
+        },
+        "color": {
+            "field":"plan_type",
+            "type":"nominal",
+            "legend": {
+                "title":"Plan Type"
+            }
+        }
+    }
+}
 
-class TemporalChartEncoding(ChartSchema.ChartEncoding):
-    type: Literal["temporal"] = Field(default="temporal")
-    timeUnit: str = Field(default="yearmonth")
+**Horizontal bar chart**
+When to use:
+- Use when you want to compare the values of different categories and each categorical value is long or there are more than 10 categories.
+- Ideal for comparing values across categories, such as sales by product or revenue by region.
+Sample schema:
+{
+    "mark": {"type": "bar", "tooltip": True},
+    "encoding": {
+        "y": {
+            "field":"tutorial_title",
+            "type":"nominal",
+            "axis":{
+                "title":"Tutorial Title"
+            }
+        },
+        "x": {
+            "field":"total_view_time",
+            "type":"quantitative",
+            "axis":{
+                "title":"Total View Time (Minutes)"
+            }
+        },
+        "color": {
+            "field":"tutorial_title",
+            "type":"nominal",
+            "legend": {
+                "title":"Tutorial Title"
+            }
+        }
+        }
+}
 
+**Area chart**
+When to use:
+- Use when you want to show how values develop over time.
+- Ideal when the total is as important as its parts.
+- Ideal when there are big differences between your values.
+- Ideal when you're showing multiple series over time.
+- Ideal when you have many data points.
+Sample schema:
+{
+    "mark": {"type": "area", "tooltip": True},
+    "encoding": {
+        "x": {
+            "field":"month",
+            "type":"temporal",
+            "axis":{
+                "title":"Month",
+                "format":"%b"
+            }
+        },
+        "y": {
+            "field":"Revenue",
+            "type":"quantitative",
+            "axis":{
+                "title":"Revenue"
+            }
+        },
+        "color": {
+            "field":"Category",
+            "type":"nominal",
+            "legend": {
+                "title":"Product Category"
+            }
+        }
+    }
+}
 
-class LineChartSchema(ChartSchema):
-    class LineChartMark(BaseModel):
-        type: Literal["line"] = Field(default="line")
+**Stacked bar chart**
+When to use:
+- Use when you want to compare the values of different categories aggregated together and the values of the categories are related.
+- Ideal for comparing values across categories, such as sales by product or revenue by region.
+Sample schema:
+{
+    "mark": {"type": "bar", "tooltip": True},
+    "encoding": {
+        "x": {
+            "field":"quarter",
+            "type":"ordinal",
+            "axis": {
+                "title":"Quarter"
+            }
+        },
+        "y": {
+            "field":"Profit",
+            "type":"quantitative",
+            "axis": {
+                "title":"Profit"
+            }
+        },
+        "color": {
+            "field":"Region",
+            "type":"nominal",
+            "legend": {
+                "title":"Region"
+            }
+        }
+    }
+}
 
-    class LineChartEncoding(BaseModel):
-        x: TemporalChartEncoding | ChartSchema.ChartEncoding
-        y: ChartSchema.ChartEncoding
-        color: ChartSchema.ChartEncoding
+**Grouped bar chart**
+When to use:
+- Use when you want to compare the values of different categories each by itself and the values of the categories are related.
+- Ideal for comparing values across categories, such as sales by product or revenue by region.
+What to pay attention to:
+- Make sure the x-axis is discrete. For example, if the x-axis is a date(the encoding type is temporal), please set "timeUnit" to make it discrete.
+Sample schema:
+{
+    "mark": {"type": "bar", "tooltip": True},
+    "encoding": {
+        "x": {
+            "field":"week_start",
+            "type":"temporal",
+            "timeUnit": "week",
+            "axis": {
+                "title":"Week Start"
+            }
+        },
+        "xOffset": {"field": "Region"},
+        "y": {
+            "field":"Profit",
+            "type":"quantitative",
+            "axis": {
+                "title":"Profit"
+            }
+        },
+        "color": {
+            "field":"Region",
+            "type":"nominal",
+            "legend": {
+                "title":"Region"
+            }
+        }
+    }
+}
 
-    mark: LineChartMark
-    encoding: LineChartEncoding
+**Line chart**
+When to use:
+- Use when you want to show the trend of a numeric variable over time.
+- Ideal for showing the trend of a numeric variable over time.
+- Ideal when you have small changes between your values.
+- Ideal when you have lots of x-axis values.
+Sample schema:
+{
+    "mark": {"type": "line", "tooltip": True},
+    "encoding": {
+        "x": {
+            "field":"month",
+            "type":"temporal",
+            "axis":{
+                "title":"Month",
+                "format":"%b"
+            }
+        },
+        "y": {
+            "field":"avg_duration",
+            "type":"quantitative",
+            "axis":{
+                "title":"Average Session Duration (minutes)"
+            }
+        }
+    }
+}
 
+**Scatter plot with color**
+When to use:
+- Use when you need to explore or show the relationship between two (or three, with color/size) quantitative variables.
+- Ideal for spotting correlations, clusters, trends, and outliers (e.g. height vs. weight, advertising spend vs. sales).
+Sample schema:
+{
+  "mark": {"type": "point", "tooltip": True},
+  "encoding": {
+    "x": {
+      "field": "Horsepower",
+      "type": "quantitative",
+      "axis": {"title": "Horsepower"}
+    },
+    "y": {
+      "field": "Miles_per_Gallon",
+      "type": "quantitative",
+      "axis": {"title": "Miles per Gallon"}
+    },
+    "color": {
+      "field": "Origin",
+      "type": "nominal",
+      "legend": {"title": "Origin"}
+    }
+  }
+}
 
-class MultiLineChartSchema(ChartSchema):
-    class MultiLineChartMark(BaseModel):
-        type: Literal["line"] = Field(default="line")
+**Stacked histogram**
+When to use:
+- Use when you want to compare the distribution of a numeric variable across two or more categories.
+- Ideal for seeing both overall frequency and how groups (e.g. genders, segments) contribute within each bin.
+Sample schema:
+{
+  "mark": {"type": "bar", "tooltip": True},
+  "encoding": {
+    "x": {
+      "field": "weight",
+      "type": "quantitative",
+      "bin": { "maxbins": 30 },
+      "axis": {
+        "title": "weight →"
+      }
+    },
+    "y": {
+      "aggregate": "count",
+      "type": "quantitative",
+      "stack": "zero",
+      "axis": {
+        "title": "Frequency"
+      }
+    },
+    "color": {
+      "field": "gender",
+      "type": "nominal",
+      "scale": {
+        "domain": ["female", "male"],
+        "range": ["steelblue", "gold"]
+      },
+      "legend": {
+        "title": ""
+      }
+    }
+  }
+}
 
-    class MultiLineChartTransform(BaseModel):
-        fold: list[str]
-        as_: list[str] = Field(alias="as")
+**Layered Plot with Dual-Axis**
+When to use:
+- Use when you have two related metrics with very different scales but want to show them on the same domain (e.g. time).
+- Ideal for contrasting trends—like overlaying revenue (in millions) and number of transactions (in thousands) over months—while cautioning that dual axes can be misleading if over-interpreted.
+Sample schema:
+{
+  "encoding": {
+    "x": {
+      "timeUnit": "month",
+      "field": "date",
+      "axis": {"format": "%b", "title": null}
+    }
+  },
+  "layer": [
+    {
+      "mark": {"opacity": 0.3, "type": "area", "color": "#85C5A6", "tooltip": True},
+      "encoding": {
+        "y": {
+          "aggregate": "average",
+          "field": "temp_max",
+          "scale": {"domain": [0, 30]},
+          "title": "Avg. Temperature (°C)",
+          "axis": {"titleColor": "#85C5A6"}
+        },
+        "y2": {
+          "aggregate": "average",
+          "field": "temp_min"
+        }
+      }
+    },
+    {
+      "mark": {"stroke": "#85A9C5", "type": "line", "interpolate": "monotone", "tooltip": True},
+      "encoding": {
+        "y": {
+          "aggregate": "average",
+          "field": "precipitation",
+          "title": "Precipitation (inches)",
+          "axis": {"titleColor":"#85A9C5"}
+        }
+      }
+    }
+  ],
+  "resolve": {
+    "scale": {
+      "y": "independent"
+    },
+    "legend": {
+      "color": "shared"
+    }
+  }
+}
 
-    class MultiLineChartEncoding(BaseModel):
-        x: TemporalChartEncoding | ChartSchema.ChartEncoding
-        y: ChartSchema.ChartEncoding
-        color: ChartSchema.ChartEncoding
+**Heatmap**
+When to use:
+- Use when you need to visualize magnitude or density across two categorical (or binned) dimensions.
+- Ideal for correlation matrices, frequency tables (e.g. hour-of-day x day-of-week traffic), or any scenario where color intensity encodes value.
+Sample schema:
+{
+  "mark": {"type": "rect", "tooltip": True},
+  "encoding": {
+    "x": {
+      "field": "orders_order_date_week",
+      "type": "temporal"
+    },
+    "y": {
+      "field": "orders_status",
+      "type": "nominal"
+    },
+    "color": {
+      "field": "orders_total_order_amount",
+      "type": "quantitative",
+      "aggregate": "sum",
+      "scale": {
+        "scheme": "reds"
+      }
+    },
+    "tooltip": [
+      {
+        "field": "orders_total_order_amount",
+        "type": "quantitative",
+        "aggregate": "sum"
+      }
+    ]
+  }
+}
 
-    mark: MultiLineChartMark
-    transform: list[MultiLineChartTransform]
-    encoding: MultiLineChartEncoding
+**Bubble plot**
+When to use:
+- Use when you want to extend a scatter plot by encoding a third quantitative variable in bubble size (and possibly a fourth in color).
+- Ideal for three-dimensional comparisons—like plotting companies by revenue (x), profit margin (y), and market cap (bubble size).
+Sample schema:
+{
+  "mark": {"type": "point", "tooltip": True},
+  "encoding": {
+    "x": {
+      "field": "orders_order_date_week",
+      "type": "temporal"
+    },
+    "y": {
+      "field": "orders_total_order_amount",
+      "type": "quantitative"
+    },
+    "size": {
+      "field": "customers_unique_customer_count",
+      "type": "quantitative"
+    }
+  }
+}
 
+**Funnel chart**
+When to use: 
+- Use when you need to show a process that progresses through discrete stages with drop-offs at each step.
+- Ideal for conversion analysis—e.g. website visits → product views → add-to-cart → purchases.
+Sample schema:
+{
+  "config": {
+    "view": {
+      "strokeWidth": 0
+    }
+  },
+  "transform": [
+    {
+      "calculate": "datum.orders_total_order_amount + ' ' + datum.orders_status",
+      "as": "label"
+    },
+    {
+      "window": [
+        {
+          "op": "lag",
+          "field": "orders_total_order_amount",
+          "as": "previous_value"
+        }
+      ],
+      "frame": [
+        1,
+        0
+      ]
+    },
+    {
+      "calculate": "datum.previous_value ? (datum.orders_total_order_amount / datum.previous_value) * 100 : null",
+      "as": "percent_of_previous"
+    },
+    {
+      "calculate": "isValid(datum.percent_of_previous) ? '↓ ' + format(datum.percent_of_previous, '.1f') + '%' : 'N/A'",
+      "as": "change_label"
+    }
+  ],
+  "layer": [
+    {
+      "mark": {
+        "type": "bar",
+        "color": "#40817c",
+        "tooltip": True
+      },
+      "encoding": {
+        "x": {
+          "field": "orders_total_order_amount",
+          "type": "quantitative",
+          "stack": "center",
+          "axis": null
+        },
+        "y": {
+          "field": "orders_status",
+          "type": "nominal",
+          "axis": null,
+          "sort": null,
+          "scale": {
+            "padding": 0.3
+          }
+        },
+        "color": {
+          "field": "orders_status",
+          "scale": {
+            "range": [
+              "#bde4e2",
+              "#a2d0ce",
+              "#87bcb9",
+              "#6ea8a5",
+              "#569490",
+              "#40817c"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "mark": {
+        "type": "text",
+        "color": "black",
+        "tooltip": True
+      },
+      "encoding": {
+        "y": {
+          "field": "orders_status",
+          "type": "nominal",
+          "axis": null,
+          "sort": null
+        },
+        "text": {
+          "field": "label"
+        }
+      }
+    },
+    {
+      "mark": {
+        "type": "text",
+        "color": "black",
+        "tooltip": True
+      },
+      "encoding": {
+        "y": {
+          "field": "orders_status",
+          "type": "nominal",
+          "axis": null,
+          "sort": null
+        },
+        "yOffset": {
+          "value": -12
+        },
+        "text": {
+          "condition": {
+            "test": "datum.change_label !== 'N/A'",
+            "field": "change_label"
+          },
+          "value": ""
+        }
+      }
+    }
+  ]
+}
 
-class BarChartSchema(ChartSchema):
-    class BarChartMark(BaseModel):
-        type: Literal["bar"] = Field(default="bar")
+**Map chart**
+When to use:
+- Use when your data has a geographic component and you want to reveal spatial patterns.
+- Ideal for choropleth maps (e.g. population density, election results by region) or symbol maps (e.g. store locations sized by sales).
+Sample schema:
+{
+  "projection": {
+    "type": "mercator",
+    "scale": 100, // Change scale to zoom into the map
+    "center": [
+      10,
+      50
+    ]
+  },
+  "layer": [
+    {
+      "data": {
+        "url": "https://vega.github.io/vega-lite/data/world-110m.json",
+        "format": {
+          "type": "topojson",
+          "feature": "countries"
+        }
+      },
+      "mark": {
+        "fill": "lightgray",
+        "type": "geoshape",
+        "stroke": "white",
+        "tooltip": True
+      }
+    },
+    {
+      "mark": {"type": "circle", "tooltip": True},
+      "encoding": {
+        "size": {
+          "type": "quantitative",
+          "field": "orders_total_order_amount",
+          "legend": {
+            "title": "Total Order Amount"
+          }
+        },
+        "color": {
+          "field": "orders_status",
+          "type": "nominal",
+          "legend": {
+            "title": "Order Status"
+          }
+        },
+        "tooltip": [
+          {
+            "type": "ordinal",
+            "field": "orders_status",
+            "title": "Status"
+          },
+          {
+            "type": "quantitative",
+            "field": "orders_total_order_amount",
+            "title": "Total Order Amount"
+          }         
+        ],
+        "latitude": {
+          "type": "quantitative",
+          "field": "latitude"
+        },
+        "longitude": {
+          "type": "quantitative",
+          "field": "longitude"
+        }
+      }
+    }
+  ]
+}
 
-    class BarChartEncoding(BaseModel):
-        x: TemporalChartEncoding | ChartSchema.ChartEncoding
-        y: ChartSchema.ChartEncoding
-        color: ChartSchema.ChartEncoding
+**Box plot with raw data(single quantitative field)**
+When to use:
+- Use when you want to visualize the distribution of a numeric variable across categories.
+- Ideal for comparing the spread and central tendency of data across different groups.
+Sample schema:
+{
+  "mark": {"type": "boxplot", "tooltip": True},
+  "encoding": {
+    "x": {"field": "Species", "type": "nominal"},
+    "color": {"field": "Species", "type": "nominal", "legend": null},
+    "y": {
+      "field": "Body Mass (g)",
+      "type": "quantitative",
+      "scale": {"zero": false}
+    }
+  }
+}
 
-    mark: BarChartMark
-    encoding: BarChartEncoding
+**Box plot with pre-aggregated data(min, Q1, median, Q3, max, etc.)**
+When to use:
+- Use when you want to visualize the distribution of a numeric variable across categories.
+- Ideal for comparing the spread and central tendency of data across different groups.
+Sample schema:
+{
+  "encoding": {"y": {"field": "Species", "type": "nominal", "title": null}},
+  "layer": [
+    {
+      "mark": {"type": "rule", "tooltip": True},
+      "encoding": {
+        "x": {"field": "lower", "type": "quantitative","scale": {"zero": false}, "title": null},
+        "x2": {"field": "upper"}
+      }
+    },
+    {
+      "mark": {"type": "bar", "size": 14, "tooltip": True},
+      "encoding": {
+        "x": {"field": "q1", "type": "quantitative"},
+        "x2": {"field": "q3"},
+        "color": {"field": "Species", "type": "nominal", "legend": null}
+      }
+    },
+    {
+      "mark": {"type": "tick", "color": "white", "size": 14, "tooltip": True},
+      "encoding": {
+        "x": {"field": "median", "type": "quantitative"}
+      }
+    },
+    {
+      "transform": [{"flatten": ["outliers"]}],
+      "mark": {"type": "point", "style": "boxplot-outliers", "tooltip": True},
+      "encoding": {
+        "x": {"field": "outliers", "type": "quantitative"}
+      }
+    }
+  ]
+}
 
+**Population pyramid**
+When to use:
+- Use it for demographic analysis, comparative cohort studies, monitoring population change, policy and resource planning
+- Ideal for two complementary groups, ordered, exhaustive cohorts, sufficient sample size, desire for shape-based insights, clear labeling and axis scaling
+Sample schema:
+{
+  "spacing": 0,
+  "hconcat": [{
+    "transform": [{
+      "filter": {"field": "gender", "equal": "Female"}
+    }],
+    "title": "Female",
+    "mark": {"type": "bar", "tooltip": True},
+    "encoding": {
+      "y": {
+        "field": "age", "axis": null, "sort": "descending"
+      },
+      "x": {
+        "aggregate": "sum", "field": "people",
+        "title": "population",
+        "axis": {"format": "s"},
+        "sort": "descending"
+      },
+      "color": {
+        "field": "gender",
+        "scale": {"range": ["#675193", "#ca8861"]},
+        "legend": null
+      }
+    }
+  }, {
+    "width": 20,
+    "view": {"stroke": null},
+    "mark": {
+      "type": "text",
+      "align": "center",
+      "tooltip": True
+    },
+    "encoding": {
+      "y": {"field": "age", "type": "ordinal", "axis": null, "sort": "descending"},
+      "text": {"field": "age", "type": "quantitative"}
+    }
+  }, {
+    "transform": [{
+      "filter": {"field": "gender", "equal": "Male"}
+    }],
+    "title": "Male",
+    "mark": {"type": "bar", "tooltip": True},
+    "encoding": {
+      "y": {
+        "field": "age", "title": null,
+        "axis": null, "sort": "descending"
+      },
+      "x": {
+        "aggregate": "sum", "field": "people",
+        "title": "population",
+        "axis": {"format": "s"}
+      },
+      "color": {
+        "field": "gender",
+        "legend": null
+      }
+    }
+  }],
+  "config": {
+    "view": {"stroke": null},
+    "axis": {"grid": false}
+  }
+}
 
-class GroupedBarChartSchema(ChartSchema):
-    class GroupedBarChartMark(BaseModel):
-        type: Literal["bar"] = Field(default="bar")
-
-    class GroupedBarChartEncoding(BaseModel):
-        x: TemporalChartEncoding | ChartSchema.ChartEncoding
-        y: ChartSchema.ChartEncoding
-        xOffset: ChartSchema.ChartEncoding
-        color: ChartSchema.ChartEncoding
-
-    mark: GroupedBarChartMark
-    encoding: GroupedBarChartEncoding
-
-
-class StackedBarChartYEncoding(ChartSchema.ChartEncoding):
-    stack: Literal["zero"] = Field(default="zero")
-
-
-class StackedBarChartSchema(ChartSchema):
-    class StackedBarChartMark(BaseModel):
-        type: Literal["bar"] = Field(default="bar")
-
-    class StackedBarChartEncoding(BaseModel):
-        x: TemporalChartEncoding | ChartSchema.ChartEncoding
-        y: StackedBarChartYEncoding
-        color: ChartSchema.ChartEncoding
-
-    mark: StackedBarChartMark
-    encoding: StackedBarChartEncoding
-
-
-class PieChartSchema(ChartSchema):
-    class PieChartMark(BaseModel):
-        type: Literal["arc"] = Field(default="arc")
-
-    class PieChartEncoding(BaseModel):
-        theta: ChartSchema.ChartEncoding
-        color: ChartSchema.ChartEncoding
-
-    mark: PieChartMark
-    encoding: PieChartEncoding
-
-
-class AreaChartSchema(ChartSchema):
-    class AreaChartMark(BaseModel):
-        type: Literal["area"] = Field(default="area")
-
-    class AreaChartEncoding(BaseModel):
-        x: TemporalChartEncoding | ChartSchema.ChartEncoding
-        y: ChartSchema.ChartEncoding
-
-    mark: AreaChartMark
-    encoding: AreaChartEncoding
+**Candlestick chart**
+When to use:
+- Use when you want to visualize the price movement of a security over time.
+- Ideal for financial analysis, technical analysis, and trend identification.
+Sample schema:
+{
+    "vconcat": [
+        {
+            "title": "Daily OHLC Candlestick Chart with Trading Signals (June 1 - July 31, 2009)",
+            "width": 700,
+            "height": 300,
+            "layer": [
+                {
+                    "mark": {
+                        "type": "rule",
+                        "tooltip": True
+                    },
+                    "encoding": {
+                        "x": {
+                            "field": "date",
+                            "type": "temporal",
+                            "axis": {
+                                "title": "Date"
+                            }
+                        },
+                        "y": {
+                            "field": "low",
+                            "type": "quantitative",
+                            "axis": {
+                                "title": "Price"
+                            }
+                        },
+                        "y2": {
+                            "field": "high",
+                            "type": "quantitative"
+                        },
+                        "color": {
+                            "field": "signal",
+                            "type": "nominal",
+                            "legend": {
+                                "title": "Signal"
+                            },
+                            "scale": {
+                                "domain": [
+                                    "long",
+                                    "short",
+                                    "neutral"
+                                ],
+                                "range": [
+                                    "#2ca02c",
+                                    "#d62728",
+                                    "#7f7f7f"
+                                ]
+                            }
+                        }
+                    }
+                },
+                {
+                    "mark": {
+                        "type": "bar",
+                        "size": 8,
+                        "tooltip": True
+                    },
+                    "encoding": {
+                        "x": {
+                            "field": "date",
+                            "type": "temporal"
+                        },
+                        "y": {
+                            "field": "open",
+                            "type": "quantitative"
+                        },
+                        "y2": {
+                            "field": "close",
+                            "type": "quantitative"
+                        },
+                        "color": {
+                            "field": "signal",
+                            "type": "nominal",
+                            "legend": null,
+                            "scale": {
+                                "domain": [
+                                    "long",
+                                    "short",
+                                    "neutral"
+                                ],
+                                "range": [
+                                    "#2ca02c",
+                                    "#d62728",
+                                    "#7f7f7f"
+                                ]
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "title": "Daily Return (%) by Trading Signal (June 1 - July 31, 2009)",
+            "width": 700,
+            "height": 120,
+            "mark": {"type": "bar", "tooltip": True},
+            "encoding": {
+                "x": {
+                    "field": "date",
+                    "type": "temporal",
+                    "axis": {
+                        "title": "Date"
+                    }
+                },
+                "y": {
+                    "field": "ret",
+                    "type": "quantitative",
+                    "axis": {
+                        "title": "Return (%)"
+                    }
+                },
+                "color": {
+                    "field": "signal",
+                    "type": "nominal",
+                    "legend": {
+                        "title": "Signal"
+                    },
+                    "scale": {
+                        "domain": [
+                            "long",
+                            "short",
+                            "neutral"
+                        ],
+                        "range": [
+                            "#2ca02c",
+                            "#d62728",
+                            "#7f7f7f"
+                        ]
+                    }
+                }
+            }
+        }
+    ]
+}
+"""
 
 
 class ChartGenerationResults(BaseModel):
     reasoning: str
-    chart_type: Literal[
-        "line", "multi_line", "bar", "pie", "grouped_bar", "stacked_bar", "area", ""
-    ]  # empty string for no chart
-    chart_schema: (
-        LineChartSchema
-        | MultiLineChartSchema
-        | BarChartSchema
-        | PieChartSchema
-        | GroupedBarChartSchema
-        | StackedBarChartSchema
-        | AreaChartSchema
-    )
+    chart_schema: dict
+
+
+CHART_GENERATION_MODEL_KWARGS = {
+    "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "chart_generation_results",
+            "schema": ChartGenerationResults.model_json_schema(),
+        },
+    }
+}
