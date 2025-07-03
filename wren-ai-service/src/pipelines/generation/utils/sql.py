@@ -206,6 +206,7 @@ TEXT_TO_SQL_RULES = """
 - DON'T USE '.' in column/table alias, replace '.' with '_' in column/table alias.
 - DON'T USE "FILTER(WHERE <expression>)" clause in the generated SQL query.
 - DON'T USE "EXTRACT(EPOCH FROM <expression>)" clause in the generated SQL query.
+- DON'T USE "EXTRACT()" function with INTERVAL data types as arguments
 - DON'T USE INTERVAL or generate INTERVAL-like expression in the generated SQL query.
 - Aggregate functions are not allowed in the WHERE clause. Instead, they belong in the HAVING clause, which is used to filter after aggregation.
 - ONLY USE JSON_QUERY for querying fields if "json_type":"JSON" is identified in the columns comment, NOT the deprecated JSON_EXTRACT_SCALAR function.
@@ -464,9 +465,21 @@ SQL_GENERATION_MODEL_KWARGS = {
 }
 
 
-def construct_ask_history_messages(histories: list[AskHistory]) -> list[ChatMessage]:
+def construct_ask_history_messages(
+    histories: list[AskHistory] | list[dict],
+) -> list[ChatMessage]:
     messages = []
     for history in histories:
-        messages.append(ChatMessage.from_user(history.question))
-        messages.append(ChatMessage.from_assistant(history.sql))
+        messages.append(
+            ChatMessage.from_user(
+                history.question
+                if hasattr(history, "question")
+                else history["question"]
+            )
+        )
+        messages.append(
+            ChatMessage.from_assistant(
+                history.sql if hasattr(history, "sql") else history["sql"]
+            )
+        )
     return messages
