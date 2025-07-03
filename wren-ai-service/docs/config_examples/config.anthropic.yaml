@@ -92,6 +92,7 @@ pipes:
   - name: question_recommendation_sql_generation
     llm: litellm_llm.default
     engine: wren_ui
+    document_store: qdrant
   - name: intent_classification
     llm: litellm_llm.default
     embedder: litellm_embedder.default
