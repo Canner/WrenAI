@@ -25,7 +25,6 @@ def sql_pairs_service():
     return service_container.sql_pairs_service
 
 
-@pytest.mark.skip(reason="Skip sql pairs test")
 @pytest.mark.asyncio
 async def test_preparation(
     sql_pairs_service: SqlPairsService,
@@ -57,7 +56,6 @@ async def test_preparation(
     assert await store.count_documents() == 2
 
 
-@pytest.mark.skip(reason="Skip sql pairs test")
 @pytest.mark.asyncio
 async def test_with_empty_question(
     sql_pairs_service: SqlPairsService,
@@ -88,7 +86,6 @@ async def test_with_empty_question(
     assert await store.count_documents() == 0
 
 
-@pytest.mark.skip(reason="Skip sql pairs test")
 @pytest.mark.asyncio
 async def test_with_empty_sql_pairs(
     sql_pairs_service: SqlPairsService,
@@ -107,7 +104,6 @@ async def test_with_empty_sql_pairs(
     assert response.status == "finished"
 
 
-@pytest.mark.skip(reason="Skip sql pairs test")
 @pytest.mark.asyncio
 async def test_deletion(
     sql_pairs_service: SqlPairsService,
@@ -151,7 +147,6 @@ async def test_deletion(
     assert await store.count_documents() == 0
 
 
-@pytest.mark.skip(reason="Skip sql pairs test")
 @pytest.mark.asyncio
 async def test_delete_single_sql_pair(
     sql_pairs_service: SqlPairsService,
@@ -193,7 +188,6 @@ async def test_delete_single_sql_pair(
     assert await store.count_documents() == 1
 
 
-@pytest.mark.skip(reason="Skip sql pairs test")
 @pytest.mark.asyncio
 async def test_delete_cross_project_sql_pair(
     sql_pairs_service: SqlPairsService,
