@@ -37,10 +37,10 @@
 > Wren AI is your GenBI Agent, that you can query any database with natural language → get accurate SQL(Text-to-SQL), charts(Text-to-Charts) & AI-generated insights in seconds. ⚡️
 
 <p align="center">
-  <img src="./misc/wren_workflow.png">
+  <img src="./misc/workflow.png">
 </p>
 
-### 😍 Demos
+## 😍 Demos
 
 https://github.com/user-attachments/assets/f9c1cb34-5a95-4580-8890-ec9644da4160
 
@@ -53,7 +53,7 @@ https://github.com/user-attachments/assets/f9c1cb34-5a95-4580-8890-ec9644da4160
 | **Talk to Your Data** | Ask in any language → precise SQL & answers | Slash the SQL learning curve﻿ |
 | **GenBI Insights** | AI-written summaries, charts & reports | Decision-ready context in one click﻿ |
 | **Semantic Layer** | MDL models encode schema, metrics, joins | Keeps LLM outputs accurate & governed﻿ |
-| **Embed via API**  | Generate queries & charts inside your apps | Build custom agents, SaaS features, chatbots﻿ |
+| **Embed via API**  | Generate queries & charts inside your apps | Build custom agents, SaaS features, chatbots﻿ ([Streamlit Live Demo](https://huggingface.co/spaces/getWrenAI/wrenai-cloud-api-demo)) |
 
 🤩 [Learn more about GenBI](https://getwren.ai/genbi?utm_source=github&utm_medium=content&utm_campaign=readme)
 
@@ -124,7 +124,7 @@ Visit [Wren AI documentation](https://docs.getwren.ai/oss/overview/introduction?
 
 ## ⭐️ Community
 
-- Join 1.3 k+ developers in our [Discord](https://discord.gg/5DvshJqG8Z) for real-time help and roadmap previews.
+- Join 1.3k+ developers in our [Discord](https://discord.gg/5DvshJqG8Z) for real-time help and roadmap previews.
 - If there are any issues, please visit [GitHub Issues](https://github.com/Canner/WrenAI/issues).
 - Explore our [public roadmap](https://wrenai.notion.site/) to stay updated on upcoming features and improvements!
 

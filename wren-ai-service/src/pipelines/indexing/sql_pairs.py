@@ -28,7 +28,7 @@ class SqlPair(BaseModel):
 @component
 class SqlPairsConverter:
     @component.output_types(documents=List[Document])
-    def run(self, sql_pairs: List[SqlPair], project_id: Optional[str] = ""):
+    def run(self, sql_pairs: List[SqlPair], project_id: str = ""):
         logger.info(f"Project ID: {project_id} Converting SQL pairs to documents...")
 
         addition = {"project_id": project_id} if project_id else {}
@@ -108,7 +108,7 @@ def sql_pairs(
 def to_documents(
     sql_pairs: List[SqlPair],
     document_converter: SqlPairsConverter,
-    project_id: Optional[str] = "",
+    project_id: str = "",
 ) -> Dict[str, Any]:
     return document_converter.run(sql_pairs=sql_pairs, project_id=project_id)
 
@@ -126,7 +126,7 @@ async def clean(
     cleaner: SqlPairsCleaner,
     sql_pairs: List[SqlPair],
     embedding: Dict[str, Any] = {},
-    project_id: Optional[str] = "",
+    project_id: str = "",
     delete_all: bool = False,
 ) -> Dict[str, Any]:
     sql_pair_ids = [sql_pair.id for sql_pair in sql_pairs]
@@ -168,7 +168,7 @@ class SqlPairs(BasicPipeline):
         self,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
-        sql_pairs_path: Optional[str] = "sql_pairs.json",
+        sql_pairs_path: str = "sql_pairs.json",
         **kwargs,
     ) -> None:
         store = document_store_provider.get_store(dataset_name="sql_pairs")
@@ -193,8 +193,8 @@ class SqlPairs(BasicPipeline):
     async def run(
         self,
         mdl_str: str,
-        project_id: Optional[str] = "",
-        external_pairs: Optional[Dict[str, Any]] = {},
+        project_id: str = "",
+        external_pairs: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         logger.info(
             f"Project ID: {project_id} SQL Pairs Indexing pipeline is running..."
@@ -205,7 +205,7 @@ class SqlPairs(BasicPipeline):
             "project_id": project_id,
             "external_pairs": {
                 **self._external_pairs,
-                **external_pairs,
+                **(external_pairs or {}),
             },
             **self._components,
         }

@@ -57,6 +57,9 @@ export enum GeneralErrorCodes {
   // vega schema error
   FAILED_TO_GENERATE_VEGA_SCHEMA = 'FAILED_TO_GENERATE_VEGA_SCHEMA',
   POLLING_TIMEOUT = 'POLLING_TIMEOUT',
+
+  // sql execution error
+  SQL_EXECUTION_ERROR = 'SQL_EXECUTION_ERROR',
 }
 
 export const errorMessages = {
@@ -122,6 +125,9 @@ export const errorMessages = {
   [GeneralErrorCodes.FAILED_TO_GENERATE_VEGA_SCHEMA]:
     'Failed to generate Vega spec',
   [GeneralErrorCodes.POLLING_TIMEOUT]: 'Polling timeout',
+
+  // sql execution error
+  [GeneralErrorCodes.SQL_EXECUTION_ERROR]: 'SQL execution error',
 };
 
 export const shortMessages = {
@@ -154,6 +160,7 @@ export const shortMessages = {
   [GeneralErrorCodes.FAILED_TO_GENERATE_VEGA_SCHEMA]:
     'Failed to generate Vega spec',
   [GeneralErrorCodes.POLLING_TIMEOUT]: 'Polling timeout',
+  [GeneralErrorCodes.SQL_EXECUTION_ERROR]: 'SQL execution error',
 };
 
 export const create = (

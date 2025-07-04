@@ -22,7 +22,7 @@ class QuestionRecommendation:
     class Event(BaseModel, MetadataTraceable):
         event_id: str
         status: Literal["generating", "finished", "failed"] = "generating"
-        response: Optional[dict] = {"questions": {}}
+        response: dict = {"questions": {}}
         error: Optional["QuestionRecommendation.Error"] = None
         trace_id: Optional[str] = None
         request_from: Literal["ui", "api"] = "ui"
@@ -156,9 +156,9 @@ class QuestionRecommendation:
         event_id: str
         mdl: str
         previous_questions: list[str] = []
-        max_questions: Optional[int] = 5
-        max_categories: Optional[int] = 3
-        regenerate: Optional[bool] = False
+        max_questions: int = 5
+        max_categories: int = 3
+        regenerate: bool = False
 
     async def _recommend(self, request: dict, input: Request):
         resp = await self._pipelines["question_recommendation"].run(**request)

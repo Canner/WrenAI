@@ -1,6 +1,6 @@
 import logging
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
@@ -13,6 +13,7 @@ from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.pipelines.common import retrieve_metadata
 from src.pipelines.generation.utils.sql import (
+    SQL_CORRECTION_EXAMPLES,
     SQL_GENERATION_MODEL_KWARGS,
     TEXT_TO_SQL_RULES,
     SQLGenPostProcessor,
@@ -28,7 +29,14 @@ You are an ANSI SQL expert with exceptional logical thinking skills and debuggin
 
 Now you are given syntactically incorrect ANSI SQL query and related error message, please generate the syntactically correct ANSI SQL query without changing original semantics.
 
+### SQL CORRECTION INSTRUCTIONS ###
+
+1. Make sure you follow the SQL Rules strictly.
+2. Make sure you check the SQL CORRECTION EXAMPLES for reference.
+
 {TEXT_TO_SQL_RULES}
+
+{SQL_CORRECTION_EXAMPLES}
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a corrected SQL query in JSON format:
@@ -80,9 +88,10 @@ async def post_process(
     generate_sql_correction: dict,
     post_processor: SQLGenPostProcessor,
     engine_timeout: float,
+    data_source: str,
     project_id: str | None = None,
     use_dry_plan: bool = False,
-    data_source: str = "",
+    allow_dry_plan_fallback: bool = True,
 ) -> dict:
     return await post_processor.run(
         generate_sql_correction.get("replies"),
@@ -90,6 +99,7 @@ async def post_process(
         project_id=project_id,
         use_dry_plan=use_dry_plan,
         data_source=data_source,
+        allow_dry_plan_fallback=allow_dry_plan_fallback,
     )
 
 
@@ -102,7 +112,7 @@ class SQLCorrection(BasicPipeline):
         llm_provider: LLMProvider,
         document_store_provider: DocumentStoreProvider,
         engine: Engine,
-        engine_timeout: Optional[float] = 30.0,
+        engine_timeout: float = 30.0,
         **kwargs,
     ):
         self._retriever = document_store_provider.get_retriever(
@@ -136,10 +146,14 @@ class SQLCorrection(BasicPipeline):
         invalid_generation_result: Dict[str, str],
         project_id: str | None = None,
         use_dry_plan: bool = False,
+        allow_dry_plan_fallback: bool = True,
     ):
         logger.info("SQLCorrection pipeline is running...")
 
-        metadata = await retrieve_metadata(project_id or "", self._retriever)
+        if use_dry_plan:
+            metadata = await retrieve_metadata(project_id or "", self._retriever)
+        else:
+            metadata = {}
 
         return await self._pipe.execute(
             ["post_process"],
@@ -148,6 +162,7 @@ class SQLCorrection(BasicPipeline):
                 "documents": contexts,
                 "project_id": project_id,
                 "use_dry_plan": use_dry_plan,
+                "allow_dry_plan_fallback": allow_dry_plan_fallback,
                 "data_source": metadata.get("data_source", "local_file"),
                 **self._components,
                 **self._configs,

@@ -1,7 +1,7 @@
 import logging
 import sys
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 import orjson
 from hamilton import base
@@ -187,7 +187,7 @@ class RelationshipRecommendation(BasicPipeline):
         self,
         llm_provider: LLMProvider,
         engine: Engine,
-        engine_timeout: Optional[float] = 30.0,
+        engine_timeout: float = 30.0,
         **_,
     ):
         self._components = {

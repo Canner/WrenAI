@@ -17,7 +17,7 @@ class ChartRequest(BaseRequest):
     query: str
     sql: str
     data: Optional[Dict[str, Any]] = None
-    remove_data_from_chart_schema: Optional[bool] = True
+    remove_data_from_chart_schema: bool = True
     custom_instruction: Optional[str] = None
 
 

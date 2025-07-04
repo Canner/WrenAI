@@ -68,6 +68,7 @@ pipes:
   - name: sql_generation
     llm: litellm_llm.default
     engine: wren_ui
+    document_store: qdrant
   - name: sql_correction
     llm: litellm_llm.default
     engine: wren_ui
@@ -75,6 +76,7 @@ pipes:
   - name: followup_sql_generation
     llm: litellm_llm.default
     engine: wren_ui
+    document_store: qdrant
   - name: sql_answer
     llm: litellm_llm.default
   - name: semantics_description
@@ -91,6 +93,7 @@ pipes:
   - name: question_recommendation_sql_generation
     llm: litellm_llm.default
     engine: wren_ui
+    document_store: qdrant
   - name: intent_classification
     llm: litellm_llm.default
     embedder: litellm_embedder.default

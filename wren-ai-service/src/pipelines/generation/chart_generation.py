@@ -154,7 +154,7 @@ class ChartGeneration(BasicPipeline):
         sql: str,
         data: dict,
         language: str,
-        remove_data_from_chart_schema: Optional[bool] = True,
+        remove_data_from_chart_schema: bool = True,
         custom_instruction: Optional[str] = None,
     ) -> dict:
         logger.info("Chart Generation pipeline is running...")
