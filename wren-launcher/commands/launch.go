@@ -129,7 +129,7 @@ func askForDbtProjectPath() (string, error) {
 	fmt.Println("Press Enter to ignore this step if you don't have a dbt project to convert.")
 
 	prompt := promptui.Prompt{
-		Label:   "Dbt project path (leave empty to skip)",
+		Label:   "dbt project path (leave empty to skip)",
 		Default: "",
 	}
 
@@ -150,7 +150,7 @@ func askForDbtProfileName() (string, error) {
 	fmt.Println("Press Enter to use the default profile.")
 
 	prompt := promptui.Prompt{
-		Label:   "Dbt profile name (leave empty to use default)",
+		Label:   "dbt profile name (leave empty to use default)",
 		Default: "",
 	}
 
@@ -171,7 +171,7 @@ func askForDbtTarget() (string, error) {
 	fmt.Println("Press Enter to use the default target.")
 
 	prompt := promptui.Prompt{
-		Label:   "Dbt target (leave empty to use default)",
+		Label:   "dbt target (leave empty to use default)",
 		Default: "",
 	}
 

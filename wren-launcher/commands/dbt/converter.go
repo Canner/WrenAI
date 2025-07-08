@@ -4,11 +4,242 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/pterm/pterm"
 )
+
+// ConvertOptions holds the options for dbt project conversion
+type ConvertOptions struct {
+	ProjectPath     string
+	OutputDir       string
+	ProfileName     string
+	Target          string
+	RequireCatalog  bool // if true, missing catalog.json is an error; if false, it's a warning
+	UsedByContainer bool // if true, used by container, no need to print usage info
+}
+
+// ConvertResult holds the result of dbt project conversion
+type ConvertResult struct {
+	LocalStoragePath    string
+	DataSourceGenerated bool
+	ModelsCount         int
+}
+
+// ConvertDbtProjectCore contains the core logic for converting dbt projects
+// This function is used by both DbtAutoConvert and processDbtProject
+func ConvertDbtProjectCore(opts ConvertOptions) (*ConvertResult, error) {
+	// Validate dbt project
+	if !IsDbtProjectValid(opts.ProjectPath) {
+		return nil, fmt.Errorf("invalid dbt project path: %s", opts.ProjectPath)
+	}
+
+	// Create output directory if it doesn't exist
+	if err := os.MkdirAll(opts.OutputDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create output directory: %w", err)
+	}
+
+	pterm.Info.Printf("Processing dbt project at: %s\n", opts.ProjectPath)
+	pterm.Info.Printf("Output directory: %s\n", opts.OutputDir)
+
+	// Search for profiles.yml
+	profilesPath, err := FindProfilesFile(opts.ProjectPath)
+	if err != nil {
+		pterm.Warning.Printf("Warning: Could not find profiles.yml: %v\n", err)
+		pterm.Info.Println("Skipping data source conversion...")
+	}
+
+	// Search for catalog.json and manifest.json in target directory
+	targetDir := filepath.Join(opts.ProjectPath, "target")
+	catalogPath := filepath.Join(targetDir, "catalog.json")
+	manifestPath := filepath.Join(targetDir, "manifest.json")
+
+	if !FileExists(catalogPath) {
+		if opts.RequireCatalog {
+			return nil, fmt.Errorf("catalog.json not found at: %s. Hint: Run 'dbt docs generate' to create catalog.json", catalogPath)
+		} else {
+			pterm.Warning.Printf("Warning: catalog.json not found at: %s\n", catalogPath)
+			pterm.Info.Println("Hint: Run 'dbt docs generate' to create catalog.json")
+			return &ConvertResult{LocalStoragePath: "."}, nil
+		}
+	}
+
+	// Check for manifest.json (optional but recommended for descriptions)
+	var manifestPathForConversion string
+	if FileExists(manifestPath) {
+		pterm.Info.Printf("Found manifest.json at: %s\n", manifestPath)
+		manifestPathForConversion = manifestPath
+	} else {
+		pterm.Warning.Printf("Warning: manifest.json not found at: %s\n", manifestPath)
+		pterm.Info.Println("Model and column descriptions will not be included")
+	}
+
+	// Convert profiles.yml to WrenDataSource (if profiles found)
+	var dataSourceGenerated bool
+	var ds DataSource
+	localStoragePath := "." // default value
+
+	if profilesPath != "" {
+		pterm.Info.Printf("Found profiles.yml at: %s\n", profilesPath)
+
+		// Analyze profiles
+		profiles, err := AnalyzeDbtProfiles(profilesPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to analyze profiles: %w", err)
+		}
+
+		// Display available profiles if no specific profile is requested
+		if opts.ProfileName == "" {
+			pterm.Info.Println("Available profiles:")
+			for name := range profiles.Profiles {
+				pterm.Info.Printf("  - %s\n", name)
+			}
+			pterm.Info.Println("Using first available profile (specify --profile to select a specific one)")
+		}
+
+		// Get active data sources
+		dataSources, err := GetActiveDataSources(profiles, opts.ProjectPath, opts.ProfileName, opts.Target)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get data sources: %w", err)
+		}
+
+		if len(dataSources) == 0 {
+			pterm.Warning.Println("Warning: No active data sources found")
+			dataSourceGenerated = false
+		} else {
+			// Use the first data source
+			ds = dataSources[0]
+
+			// Check if the first data source is duckdb (local file)
+			if localFileDS, ok := dataSources[0].(*WrenLocalFileDataSource); ok {
+				localStoragePath = localFileDS.Url
+				pterm.Info.Printf("Found DuckDB data source, using local storage path: %s\n", localStoragePath)
+			}
+
+			// Create WrenDataSource JSON
+			var wrenDataSource map[string]interface{}
+
+			switch typedDS := ds.(type) {
+			case *WrenPostgresDataSource:
+				var host string
+				if opts.UsedByContainer {
+					host = handleLocalhostForContainer(typedDS.Host)
+				} else {
+					host = typedDS.Host
+				}
+				wrenDataSource = map[string]interface{}{
+					"type": "postgres",
+					"properties": map[string]interface{}{
+						"host":     host,
+						"port":     typedDS.Port,
+						"database": typedDS.Database,
+						"user":     typedDS.User,
+						"password": typedDS.Password,
+					},
+				}
+			case *WrenLocalFileDataSource:
+				var url string
+				if opts.UsedByContainer {
+					// For container usage, the file path will be mounted to the following path
+					url = "/usr/src/app/data"
+				} else {
+					url = typedDS.Url
+				}
+				wrenDataSource = map[string]interface{}{
+					"type": "local_file",
+					"properties": map[string]interface{}{
+						"url":    url,
+						"format": typedDS.Format,
+					},
+				}
+			default:
+				pterm.Warning.Printf("Warning: Unsupported data source type: %s\n", ds.GetType())
+				wrenDataSource = map[string]interface{}{
+					"type":       ds.GetType(),
+					"properties": map[string]interface{}{},
+				}
+			}
+
+			// Write WrenDataSource JSON
+			dataSourcePath := filepath.Join(opts.OutputDir, "wren-datasource.json")
+			dataSourceJSON, err := json.MarshalIndent(wrenDataSource, "", "  ")
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal data source JSON: %w", err)
+			}
+
+			if err := os.WriteFile(dataSourcePath, dataSourceJSON, 0644); err != nil {
+				return nil, fmt.Errorf("failed to write data source file: %w", err)
+			}
+
+			pterm.Success.Printf("✓ WrenDataSource saved to: %s\n", dataSourcePath)
+			dataSourceGenerated = true
+		}
+	}
+
+	// Convert catalog.json to Wren MDL
+	pterm.Info.Printf("Converting catalog.json from: %s\n", catalogPath)
+
+	// Create a default data source if none was found
+	if ds == nil {
+		ds = &DefaultDataSource{}
+	}
+
+	manifest, err := ConvertDbtCatalogToWrenMDL(catalogPath, ds, manifestPathForConversion)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert catalog: %w", err)
+	}
+
+	// Write Wren MDL JSON
+	mdlPath := filepath.Join(opts.OutputDir, "wren-mdl.json")
+	mdlJSON, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal MDL JSON: %w", err)
+	}
+
+	if err := os.WriteFile(mdlPath, mdlJSON, 0644); err != nil {
+		return nil, fmt.Errorf("failed to write MDL file: %w", err)
+	}
+
+	pterm.Success.Printf("✓ Wren MDL saved to: %s\n", mdlPath)
+
+	// Summary
+	pterm.Success.Println("\n🎉 Conversion completed successfully!")
+	pterm.Info.Printf("Models converted: %d\n", len(manifest.Models))
+
+	if dataSourceGenerated {
+		pterm.Info.Println("Generated files:")
+		pterm.Info.Printf("  - WrenDataSource: %s\n", filepath.Join(opts.OutputDir, "wren-datasource.json"))
+		pterm.Info.Printf("  - Wren MDL: %s\n", filepath.Join(opts.OutputDir, "wren-mdl.json"))
+	} else {
+		pterm.Info.Println("Generated files:")
+		pterm.Info.Printf("  - Wren MDL: %s\n", filepath.Join(opts.OutputDir, "wren-mdl.json"))
+		if profilesPath != "" {
+			pterm.Warning.Println("  - WrenDataSource: Not generated (no compatible data sources found)")
+		} else {
+			pterm.Warning.Println("  - WrenDataSource: Not generated (profiles.yml not found)")
+		}
+	}
+
+	return &ConvertResult{
+		LocalStoragePath:    localStoragePath,
+		DataSourceGenerated: dataSourceGenerated,
+		ModelsCount:         len(manifest.Models),
+	}, nil
+}
+
+func handleLocalhostForContainer(host string) string {
+	// If the host is localhost, we need to handle it for container usage
+	if host == "localhost" || host == "127.0.0.1" {
+		// For container usage, we can use the host network or a specific IP.
+		// "host.docker.internal" is a special DNS name that resolves to the internal IP address of the host.
+		// It's supported on Docker Desktop for Mac and Windows, and in Docker Engine 20.10+ for Linux.
+		// This makes it a reliable default for accessing host services from within a container.
+		return "host.docker.internal"
+	}
+	return host
+}
 
 // ConvertDbtCatalogToWrenMDL converts dbt catalog.json to Wren MDL format
 func ConvertDbtCatalogToWrenMDL(catalogPath string, data_source DataSource, manifestPath string) (*WrenMDLManifest, error) {
