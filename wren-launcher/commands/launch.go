@@ -129,7 +129,49 @@ func askForDbtProjectPath() (string, error) {
 	fmt.Println("Press Enter to ignore this step if you don't have a dbt project to convert.")
 
 	prompt := promptui.Prompt{
-		Label:   "Dbt project path",
+		Label:   "Dbt project path (leave empty to skip)",
+		Default: "",
+	}
+
+	result, err := prompt.Run()
+
+	if err != nil {
+		fmt.Printf("Prompt failed %v\n", err)
+		return "", err
+	}
+
+	return result, nil
+}
+
+func askForDbtProfileName() (string, error) {
+	// let users know we're asking for a dbt profile name
+	fmt.Println("Please provide the dbt profile name you want to use")
+	fmt.Println("This should be the profile name defined in your profiles.yml file")
+	fmt.Println("Press Enter to use the default profile.")
+
+	prompt := promptui.Prompt{
+		Label:   "Dbt profile name (leave empty to use default)",
+		Default: "",
+	}
+
+	result, err := prompt.Run()
+
+	if err != nil {
+		fmt.Printf("Prompt failed %v\n", err)
+		return "", err
+	}
+
+	return result, nil
+}
+
+func askForDbtTarget() (string, error) {
+	// let users know we're asking for a dbt target
+	fmt.Println("Please provide the dbt target you want to use")
+	fmt.Println("This should be the target name defined in your profiles.yml file")
+	fmt.Println("Press Enter to use the default target.")
+
+	prompt := promptui.Prompt{
+		Label:   "Dbt target (leave empty to use default)",
 		Default: "",
 	}
 
@@ -422,6 +464,26 @@ func validateOpenaiApiKey(apiKey string) bool {
 	return false
 }
 
+func getDbtProfileAndTarget() (string, string, error) {
+	// ask for profile name and target
+	profileName, err := askForDbtProfileName()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get dbt profile name: %w", err)
+	}
+
+	// if profile name is empty, doesn't ask for target
+	var target string
+	if profileName == "" {
+		target = "" // use default target
+	} else {
+		target, err = askForDbtTarget()
+		if err != nil {
+			return "", "", fmt.Errorf("failed to get dbt target: %w", err)
+		}
+	}
+	return profileName, target, nil
+}
+
 func processDbtProject(projectDir string) (string, error) {
 	// ask for dbt project path
 	dbtProjectPath, err := askForDbtProjectPath()
@@ -442,8 +504,13 @@ func processDbtProject(projectDir string) (string, error) {
 		return "", fmt.Errorf("failed to create target directory: %w", err)
 	}
 
+	profileName, target, err := getDbtProfileAndTarget()
+	if err != nil {
+		return "", err
+	}
+
 	// Use the core conversion function from dbt package
-	result, err := DbtConvertProject(dbtProjectPath, targetDir, "", "")
+	result, err := DbtConvertProject(dbtProjectPath, targetDir, profileName, target, true)
 	if err != nil {
 		return "", fmt.Errorf("failed to convert dbt project: %w", err)
 	}

@@ -13,11 +13,12 @@ import (
 
 // ConvertOptions holds the options for dbt project conversion
 type ConvertOptions struct {
-	ProjectPath    string
-	OutputDir      string
-	ProfileName    string
-	Target         string
-	RequireCatalog bool // if true, missing catalog.json is an error; if false, it's a warning
+	ProjectPath     string
+	OutputDir       string
+	ProfileName     string
+	Target          string
+	RequireCatalog  bool // if true, missing catalog.json is an error; if false, it's a warning
+	UsedByContainer bool // if true, used by container, no need to print usage info
 }
 
 // ConvertResult holds the result of dbt project conversion
@@ -169,10 +170,16 @@ func convertDbtProjectCore(opts ConvertOptions) (*ConvertResult, error) {
 
 			switch typedDS := ds.(type) {
 			case *dbt.WrenPostgresDataSource:
+				var host string
+				if opts.UsedByContainer {
+					host = handleLocalhostForContainer(typedDS.Host)
+				} else {
+					host = typedDS.Host
+				}
 				wrenDataSource = map[string]interface{}{
 					"type": "postgres",
 					"properties": map[string]interface{}{
-						"host":     typedDS.Host,
+						"host":     host,
 						"port":     typedDS.Port,
 						"database": typedDS.Database,
 						"user":     typedDS.User,
@@ -180,10 +187,17 @@ func convertDbtProjectCore(opts ConvertOptions) (*ConvertResult, error) {
 					},
 				}
 			case *dbt.WrenLocalFileDataSource:
+				var url string
+				if opts.UsedByContainer {
+					// For container usage, the file path will be mounted to the following path
+					url = "/usr/src/app/data"
+				} else {
+					url = typedDS.Url
+				}
 				wrenDataSource = map[string]interface{}{
 					"type": "local_file",
 					"properties": map[string]interface{}{
-						"url":    typedDS.Url,
+						"url":    url,
 						"format": typedDS.Format,
 					},
 				}
@@ -262,15 +276,28 @@ func convertDbtProjectCore(opts ConvertOptions) (*ConvertResult, error) {
 	}, nil
 }
 
+func handleLocalhostForContainer(host string) string {
+	// If the host is localhost, we need to handle it for container usage
+	if host == "localhost" || host == "127.0.0.1" {
+		// For container usage, we can use the host network or a specific IP.
+		// "host.docker.internal" is a special DNS name that resolves to the internal IP address of the host.
+		// It's supported on Docker Desktop for Mac and Windows, and in Docker Engine 20.10+ for Linux.
+		// This makes it a reliable default for accessing host services from within a container.
+		return "host.docker.internal"
+	}
+	return host
+}
+
 // DbtConvertProject is a public wrapper function for processDbtProject to use
 // It converts a dbt project without requiring catalog.json to exist
-func DbtConvertProject(projectPath, outputDir, profileName, target string) (*ConvertResult, error) {
+func DbtConvertProject(projectPath, outputDir, profileName, target string, usedByContainer bool) (*ConvertResult, error) {
 	convertOpts := ConvertOptions{
-		ProjectPath:    projectPath,
-		OutputDir:      outputDir,
-		ProfileName:    profileName,
-		Target:         target,
-		RequireCatalog: false, // Allow processDbtProject to continue without catalog.json
+		ProjectPath:     projectPath,
+		OutputDir:       outputDir,
+		ProfileName:     profileName,
+		Target:          target,
+		RequireCatalog:  false, // Allow processDbtProject to continue without catalog.json
+		UsedByContainer: usedByContainer,
 	}
 
 	return convertDbtProjectCore(convertOpts)
