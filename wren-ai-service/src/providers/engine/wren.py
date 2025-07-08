@@ -65,7 +65,6 @@ class WrenUI(Engine):
 
                     data = res_data.get("data", []) if res_data else []
                     if len(data) > 0:
-                        print(f"len(data): {len(data)}")
                         return (
                             True,
                             res,
