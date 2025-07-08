@@ -121,6 +121,27 @@ func askForGenerationModel() (string, error) {
 	return result, nil
 }
 
+func askForLocalStorage() (string, error) {
+	// let users know we're asking for a local storage path
+	fmt.Println("Please provide the local storage path you want to use")
+	fmt.Println("This is where Wren AI will access your file or database data.")
+	fmt.Println("Press Enter to ignore this step if you don't have any local data to use.")
+
+	prompt := promptui.Prompt{
+		Label:   "Local storage path",
+		Default: ".",
+	}
+
+	result, err := prompt.Run()
+
+	if err != nil {
+		fmt.Printf("Prompt failed %v\n", err)
+		return "", err
+	}
+
+	return result, nil
+}
+
 func Launch() {
 	// recover from panic
 	defer func() {
@@ -232,6 +253,13 @@ func Launch() {
 	uiPort := utils.FindAvailablePort(3000)
 	aiPort := utils.FindAvailablePort(5555)
 
+	// set the local storage path
+	localStorage, err := askForLocalStorage()
+	if err != nil {
+		pterm.Error.Println("Failed to get local storage path")
+		panic(err)
+	}
+
 	err = utils.PrepareDockerFiles(
 		openaiApiKey,
 		openaiGenerationModel,
@@ -241,6 +269,7 @@ func Launch() {
 		telemetryEnabled,
 		llmProvider,
 		platform,
+		localStorage,
 	)
 	if err != nil {
 		panic(err)

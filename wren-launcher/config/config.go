@@ -40,9 +40,9 @@ func GetPlatform() string {
 		}
 		return "linux/amd64"
 	case "windows":
-		return "linux/amd64"  // Windows typically uses amd64
+		return "linux/amd64" // Windows typically uses amd64
 	default:
-		return "linux/amd64"  // Default to amd64 for unknown platforms
+		return "linux/amd64" // Default to amd64 for unknown platforms
 	}
 }
 
