@@ -66,14 +66,25 @@ func DbtAutoConvert() {
 		pterm.Info.Println("Skipping data source conversion...")
 	}
 
-	// 2. Search for catalog.json in target directory
+	// 2. Search for catalog.json and manifest.json in target directory
 	targetDir := filepath.Join(opts.ProjectPath, "target")
 	catalogPath := filepath.Join(targetDir, "catalog.json")
+	manifestPath := filepath.Join(targetDir, "manifest.json")
 
 	if !dbt.FileExists(catalogPath) {
 		pterm.Error.Printf("Error: catalog.json not found at: %s\n", catalogPath)
 		pterm.Info.Println("Hint: Run 'dbt docs generate' to create catalog.json")
 		os.Exit(1)
+	}
+
+	// Check for manifest.json (optional but recommended for descriptions)
+	var manifestExists bool
+	if dbt.FileExists(manifestPath) {
+		pterm.Info.Printf("Found manifest.json at: %s\n", manifestPath)
+		manifestExists = true
+	} else {
+		pterm.Warning.Printf("Warning: manifest.json not found at: %s\n", manifestPath)
+		pterm.Info.Println("Model and column descriptions will not be included")
 	}
 	// 3. Convert profiles.yml to WrenDataSource (if profiles found)
 	var dataSourceGenerated bool
@@ -164,7 +175,17 @@ func DbtAutoConvert() {
 	// 4. Convert catalog.json to Wren MDL
 	pterm.Info.Printf("Converting catalog.json from: %s\n", catalogPath)
 
-	manifest, err := dbt.ConvertDbtCatalogToWrenMDL(catalogPath, ds)
+	var manifestPathForConversion string
+	if manifestExists {
+		manifestPathForConversion = manifestPath
+	}
+
+	// Create a default data source if none was found
+	if ds == nil {
+		ds = &dbt.DefaultDataSource{}
+	}
+
+	manifest, err := dbt.ConvertDbtCatalogToWrenMDL(catalogPath, ds, manifestPathForConversion)
 	if err != nil {
 		pterm.Error.Printf("Error: Failed to convert catalog: %v\n", err)
 		os.Exit(1)

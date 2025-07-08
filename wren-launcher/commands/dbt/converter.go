@@ -11,7 +11,7 @@ import (
 )
 
 // ConvertDbtCatalogToWrenMDL converts dbt catalog.json to Wren MDL format
-func ConvertDbtCatalogToWrenMDL(catalogPath string, data_source DataSource) (*WrenMDLManifest, error) {
+func ConvertDbtCatalogToWrenMDL(catalogPath string, data_source DataSource, manifestPath string) (*WrenMDLManifest, error) {
 	// Read and parse the catalog.json file
 	data, err := os.ReadFile(catalogPath)
 	if err != nil {
@@ -21,6 +21,20 @@ func ConvertDbtCatalogToWrenMDL(catalogPath string, data_source DataSource) (*Wr
 	var catalogData map[string]interface{}
 	if err := json.Unmarshal(data, &catalogData); err != nil {
 		return nil, fmt.Errorf("failed to parse catalog JSON: %w", err)
+	}
+
+	// Parse manifest.json for descriptions (optional)
+	var manifestData map[string]interface{}
+	if manifestPath != "" {
+		pterm.Info.Printf("Reading manifest.json for descriptions from: %s\n", manifestPath)
+		manifestBytes, err := os.ReadFile(manifestPath)
+		if err != nil {
+			pterm.Warning.Printf("Warning: Failed to read manifest file %s: %v\n", manifestPath, err)
+		} else {
+			if err := json.Unmarshal(manifestBytes, &manifestData); err != nil {
+				pterm.Warning.Printf("Warning: Failed to parse manifest JSON: %v\n", err)
+			}
+		}
 	}
 
 	// Extract nodes
@@ -60,7 +74,7 @@ func ConvertDbtCatalogToWrenMDL(catalogPath string, data_source DataSource) (*Wr
 			continue
 		}
 
-		model, err := convertDbtNodeToWrenModel(nodeKey, nodeMap, data_source)
+		model, err := convertDbtNodeToWrenModel(nodeKey, nodeMap, data_source, manifestData)
 		if err != nil {
 			pterm.Warning.Printf("Warning: Failed to convert model %s: %v\n", nodeKey, err)
 			continue
@@ -73,7 +87,7 @@ func ConvertDbtCatalogToWrenMDL(catalogPath string, data_source DataSource) (*Wr
 }
 
 // convertDbtNodeToWrenModel converts a single dbt node to Wren model
-func convertDbtNodeToWrenModel(nodeKey string, nodeData map[string]interface{}, data_source DataSource) (*WrenModel, error) {
+func convertDbtNodeToWrenModel(nodeKey string, nodeData map[string]interface{}, data_source DataSource, manifestData map[string]interface{}) (*WrenModel, error) {
 	// Extract model name from node key (e.g., "model.jaffle_shop.customers" -> "customers")
 	parts := strings.Split(nodeKey, ".")
 	if len(parts) < 3 {
@@ -104,6 +118,32 @@ func convertDbtNodeToWrenModel(nodeKey string, nodeData map[string]interface{}, 
 		tableRef.Schema = schema
 	}
 
+	// Extract descriptions from manifest.json if available
+	var modelDescription string
+	var columnDescriptions map[string]string
+
+	if manifestData != nil {
+		if nodes, ok := manifestData["nodes"].(map[string]interface{}); ok {
+			if manifestNode, ok := nodes[nodeKey].(map[string]interface{}); ok {
+				// Extract model description
+				modelDescription = getStringFromMap(manifestNode, "description", "")
+
+				// Extract column descriptions
+				if manifestColumns, ok := manifestNode["columns"].(map[string]interface{}); ok {
+					columnDescriptions = make(map[string]string)
+					for colName, colData := range manifestColumns {
+						if colMap, ok := colData.(map[string]interface{}); ok {
+							description := getStringFromMap(colMap, "description", "")
+							if description != "" {
+								columnDescriptions[colName] = description
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
 	// Convert columns
 	columnsValue, exists := nodeData["columns"]
 	if !exists {
@@ -127,12 +167,21 @@ func convertDbtNodeToWrenModel(nodeKey string, nodeData map[string]interface{}, 
 			Type: data_source.MapType(getStringFromMap(colMap, "type", "")),
 		}
 
+		// Initialize properties map if needed
+		if column.Properties == nil {
+			column.Properties = make(map[string]string)
+		}
+
+		// Set description from manifest if available
+		if columnDescriptions != nil {
+			if description, exists := columnDescriptions[column.Name]; exists && description != "" {
+				column.Properties["description"] = description
+			}
+		}
+
 		// Set notNull based on comment or other indicators
 		// This is a basic implementation - you might need more sophisticated logic
 		if comment := getStringFromMap(colMap, "comment", ""); comment != "" {
-			if column.Properties == nil {
-				column.Properties = make(map[string]string)
-			}
 			column.Properties["comment"] = comment
 		}
 
@@ -149,6 +198,14 @@ func convertDbtNodeToWrenModel(nodeKey string, nodeData map[string]interface{}, 
 		Name:           modelName,
 		TableReference: tableRef,
 		Columns:        wrenColumns,
+	}
+
+	// Set model description from manifest if available
+	if modelDescription != "" {
+		if model.Properties == nil {
+			model.Properties = make(map[string]string)
+		}
+		model.Properties["description"] = modelDescription
 	}
 
 	return model, nil

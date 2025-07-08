@@ -282,3 +282,34 @@ func ValidateAllDataSources(profiles *DbtProfiles) error {
 
 	return nil
 }
+
+// DefaultDataSource is a default data source when no profiles.yml is found
+type DefaultDataSource struct{}
+
+// GetType implements DataSource interface
+func (d *DefaultDataSource) GetType() string {
+	return "default"
+}
+
+// Validate implements DataSource interface
+func (d *DefaultDataSource) Validate() error {
+	return nil
+}
+
+func (d *DefaultDataSource) MapType(sourceType string) string {
+	// Default type mapping
+	switch strings.ToLower(sourceType) {
+	case "integer", "int", "bigint", "int64":
+		return "integer"
+	case "varchar", "text", "string", "char":
+		return "string"
+	case "timestamp", "datetime", "date":
+		return "timestamp"
+	case "double", "float", "decimal", "numeric":
+		return "double"
+	case "boolean", "bool":
+		return "boolean"
+	default:
+		return "string"
+	}
+}
