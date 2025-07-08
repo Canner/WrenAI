@@ -34,6 +34,7 @@ class SQLGenPostProcessor:
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
         data_source: str = "",
+        allow_data_preview: bool = False,
     ) -> dict:
         try:
             cleaned_generation_result = clean_generation_result(replies[0])
@@ -54,6 +55,7 @@ class SQLGenPostProcessor:
                 use_dry_plan=use_dry_plan,
                 allow_dry_plan_fallback=allow_dry_plan_fallback,
                 data_source=data_source,
+                allow_data_preview=allow_data_preview,
             )
 
             return {
@@ -76,6 +78,7 @@ class SQLGenPostProcessor:
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
         data_source: str = "",
+        allow_data_preview: bool = False,
     ) -> Dict[str, str]:
         valid_generation_result = {}
         invalid_generation_result = {}
@@ -107,10 +110,13 @@ class SQLGenPostProcessor:
                             "error": error_message,
                             "correlation_id": "",
                         }
-
                 else:
                     status, _, addition = await self._engine.execute_sql(
-                        quoted_sql, session, project_id=project_id, timeout=timeout
+                        quoted_sql,
+                        session,
+                        project_id=project_id,
+                        timeout=timeout,
+                        dry_run=not allow_data_preview,
                     )
 
                     if status:

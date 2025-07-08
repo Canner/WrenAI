@@ -51,18 +51,38 @@ class WrenUI(Engine):
                 },
                 timeout=aiohttp.ClientTimeout(total=timeout),
             ) as response:
-                res = await response.json()
-                if data := res.get("data"):
-                    data = data.get("previewSql", {}) if data else {}
+                res_json = await response.json()
+                if res_data := res_json.get("data"):
+                    res = res_data.get("previewSql", {}) if res_data else {}
+                    if dry_run:
+                        return (
+                            True,
+                            res,
+                            {
+                                "correlation_id": res.get("correlationId"),
+                            },
+                        )
+
+                    data = res_data.get("data", []) if res_data else []
+                    if len(data) > 0:
+                        print(f"len(data): {len(data)}")
+                        return (
+                            True,
+                            res,
+                            {
+                                "correlation_id": res.get("correlationId"),
+                            },
+                        )
+
                     return (
-                        True,
-                        data,
+                        False,
+                        res,
                         {
                             "correlation_id": res.get("correlationId"),
                         },
                     )
 
-                error_message = res.get("errors", [{}])[0].get(
+                error_message = res_json.get("errors", [{}])[0].get(
                     "message", "Unknown error"
                 )
                 logger.error(f"Error executing SQL: {error_message}")
@@ -73,7 +93,7 @@ class WrenUI(Engine):
                     {
                         "error_message": error_message,
                         "correlation_id": (
-                            res.get("extensions", {})
+                            res_json.get("extensions", {})
                             .get("other", {})
                             .get("correlationId")
                         ),
