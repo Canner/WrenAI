@@ -7,6 +7,7 @@ type WrenMDLManifest struct {
 	Models        []WrenModel    `json:"models"`
 	Relationships []Relationship `json:"relationships"`
 	Views         []View         `json:"views"`
+	DataSources   string         `json:"dataSources,omitempty"`
 }
 
 // WrenModel represents a model in the Wren MDL format

@@ -55,6 +55,7 @@ func ConvertDbtCatalogToWrenMDL(catalogPath string, data_source DataSource, mani
 		Models:        []WrenModel{},
 		Relationships: []Relationship{},
 		Views:         []View{},
+		DataSources:   data_source.GetType(), // Default data source name
 	}
 
 	// Convert each dbt model to Wren model
