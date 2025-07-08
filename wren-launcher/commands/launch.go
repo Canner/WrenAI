@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -121,15 +122,15 @@ func askForGenerationModel() (string, error) {
 	return result, nil
 }
 
-func askForLocalStorage() (string, error) {
-	// let users know we're asking for a local storage path
-	fmt.Println("Please provide the local storage path you want to use")
-	fmt.Println("This is where Wren AI will access your file or database data.")
-	fmt.Println("Press Enter to ignore this step if you don't have any local data to use.")
+func askForDbtProjectPath() (string, error) {
+	// let users know we're asking for a dbt project path
+	fmt.Println("Please provide the dbt project path you want to convert")
+	fmt.Println("This should be the root directory of your dbt project containing dbt_project.yml")
+	fmt.Println("Press Enter to ignore this step if you don't have a dbt project to convert.")
 
 	prompt := promptui.Prompt{
-		Label:   "Local storage path",
-		Default: ".",
+		Label:   "Dbt project path",
+		Default: "",
 	}
 
 	result, err := prompt.Run()
@@ -253,10 +254,10 @@ func Launch() {
 	uiPort := utils.FindAvailablePort(3000)
 	aiPort := utils.FindAvailablePort(5555)
 
-	// set the local storage path
-	localStorage, err := askForLocalStorage()
+	// process dbt project conversion
+	localStorage, err := processDbtProject(projectDir)
 	if err != nil {
-		pterm.Error.Println("Failed to get local storage path")
+		pterm.Error.Println("Failed to process dbt project:", err)
 		panic(err)
 	}
 
@@ -419,4 +420,35 @@ func validateOpenaiApiKey(apiKey string) bool {
 
 	pterm.Info.Println("Valid API key, Response:", resp.Choices[0].Message.Content)
 	return false
+}
+
+func processDbtProject(projectDir string) (string, error) {
+	// ask for dbt project path
+	dbtProjectPath, err := askForDbtProjectPath()
+	if err != nil {
+		return "", fmt.Errorf("failed to get dbt project path: %w", err)
+	}
+
+	// if user provides empty path, skip dbt conversion
+	if strings.TrimSpace(dbtProjectPath) == "" {
+		pterm.Info.Println("Skipping dbt project conversion")
+		return ".", nil // return default local storage path
+	}
+
+	// create target directory in project dir
+	targetDir := filepath.Join(projectDir, "target")
+	err = os.MkdirAll(targetDir, 0755)
+	if err != nil {
+		return "", fmt.Errorf("failed to create target directory: %w", err)
+	}
+
+	// Use the core conversion function from dbt package
+	result, err := DbtConvertProject(dbtProjectPath, targetDir, "", "")
+	if err != nil {
+		return "", fmt.Errorf("failed to convert dbt project: %w", err)
+	}
+
+	pterm.Info.Printf("Successfully processed dbt project to target directory: %s\n", targetDir)
+
+	return result.LocalStoragePath, nil
 }
