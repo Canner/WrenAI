@@ -124,7 +124,7 @@ func DbtAutoConvert() {
 
 			// For simplicity, we'll use the first data source
 			// In a more sophisticated implementation, you might want to handle multiple data sources
-			ds := dataSources[0]
+			ds = dataSources[0]
 
 			switch typedDS := ds.(type) {
 			case *dbt.WrenPostgresDataSource:
