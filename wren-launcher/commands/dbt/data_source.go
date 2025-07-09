@@ -40,12 +40,12 @@ func FromDbtProfiles(profiles *DbtProfiles) ([]DataSource, error) {
 }
 
 // convertConnectionToDataSource converts connection to corresponding DataSource based on connection type
-func convertConnectionToDataSource(conn DbtConnection, dbt_home_path, profileName, outputName string) (DataSource, error) {
+func convertConnectionToDataSource(conn DbtConnection, dbtHomePath, profileName, outputName string) (DataSource, error) {
 	switch strings.ToLower(conn.Type) {
 	case "postgres", "postgresql":
 		return convertToPostgresDataSource(conn)
 	case "duckdb":
-		return convertToLocalFileDataSource(conn, dbt_home_path)
+		return convertToLocalFileDataSource(conn, dbtHomePath)
 	default:
 		// For unsupported database types, we can choose to ignore or return error
 		// Here we choose to return nil and log a warning
@@ -73,7 +73,7 @@ func convertToPostgresDataSource(conn DbtConnection) (*WrenPostgresDataSource, e
 }
 
 // convertToLocalFileDataSource converts to local file data source
-func convertToLocalFileDataSource(conn DbtConnection, dbt_home string) (*WrenLocalFileDataSource, error) {
+func convertToLocalFileDataSource(conn DbtConnection, dbtHome string) (*WrenLocalFileDataSource, error) {
 	// For file types, we need to get URL and format info from Additional fields
 	// or use some conventional field names
 
@@ -85,8 +85,8 @@ func convertToLocalFileDataSource(conn DbtConnection, dbt_home string) (*WrenLoc
 			url = filepath.Dir(conn.Path)
 		} else {
 			relativeDir := filepath.Dir(conn.Path)
-			if dbt_home != "" {
-				url = filepath.Join(dbt_home, relativeDir)
+			if dbtHome != "" {
+				url = filepath.Join(dbtHome, relativeDir)
 			} else {
 				url = relativeDir
 			}
@@ -97,8 +97,8 @@ func convertToLocalFileDataSource(conn DbtConnection, dbt_home string) (*WrenLoc
 				url = filepath.Dir(fileStr)
 			} else {
 				relativeDir := filepath.Dir(fileStr)
-				if dbt_home != "" {
-					url = filepath.Join(dbt_home, relativeDir)
+				if dbtHome != "" {
+					url = filepath.Join(dbtHome, relativeDir)
 				} else {
 					url = relativeDir
 				}
@@ -201,7 +201,7 @@ func (ds *WrenPostgresDataSource) MapType(sourceType string) string {
 // GetActiveDataSources gets active data sources based on specified profile and target
 // If profileName is empty, it will use the first found profile
 // If targetName is empty, it will use the profile's default target
-func GetActiveDataSources(profiles *DbtProfiles, dbt_home_path, profileName, targetName string) ([]DataSource, error) {
+func GetActiveDataSources(profiles *DbtProfiles, dbtHomePath, profileName, targetName string) ([]DataSource, error) {
 	if profiles == nil {
 		return nil, fmt.Errorf("profiles cannot be nil")
 	}
@@ -229,7 +229,7 @@ func GetActiveDataSources(profiles *DbtProfiles, dbt_home_path, profileName, tar
 		return nil, fmt.Errorf("target '%s' not found in profile '%s'", targetName, profileName)
 	}
 
-	dataSource, err := convertConnectionToDataSource(connection, dbt_home_path, profileName, targetName)
+	dataSource, err := convertConnectionToDataSource(connection, dbtHomePath, profileName, targetName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert connection %s.%s: %w", profileName, targetName, err)
 	}

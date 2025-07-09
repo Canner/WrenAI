@@ -146,7 +146,7 @@ func parseConnection(connectionMap map[string]interface{}) (*DbtConnection, erro
 		"type": true, "host": true, "port": true, "user": true, "password": true,
 		"database": true, "schema": true, "project": true, "dataset": true,
 		"keyfile": true, "account": true, "warehouse": true, "role": true,
-		"keepalive": true, "search_path": true, "sslmode": true,
+		"keepalive": true, "search_path": true, "sslmode": true, "path": true,
 	}
 
 	for key, value := range connectionMap {

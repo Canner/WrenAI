@@ -99,7 +99,7 @@ func TestFromDbtProfiles_LocalFile(t *testing.T) {
 		t.Errorf("Expected url '/abs_path', got '%s'", ds.Url)
 	}
 	if ds.Format != "duckdb" {
-		t.Errorf("Expected format 'csv', got '%s'", ds.Format)
+		t.Errorf("Expected format 'duckdb', got '%s'", ds.Format)
 	}
 
 	// Test validation

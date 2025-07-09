@@ -53,12 +53,12 @@ Add a new `case` to the `switch` statement that matches the `type` field from th
 ```go
 // in data_source.go
 
-func convertConnectionToDataSource(conn DbtConnection, dbt_home_path, profileName, outputName string) (DataSource, error) {
+func convertConnectionToDataSource(conn DbtConnection, dbtHomePath, profileName, outputName string) (DataSource, error) {
 	switch strings.ToLower(conn.Type) {
 	case "postgres", "postgresql":
 		return convertToPostgresDataSource(conn)
 	case "duckdb":
-		return convertToLocalFileDataSource(conn, dbt_home_path)
+		return convertToLocalFileDataSource(conn, dbtHomePath)
     // Add your new case here
 	case "snowflake":
 		return convertToSnowflakeDataSource(conn) // Implement this function
