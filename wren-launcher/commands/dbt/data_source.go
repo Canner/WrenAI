@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	"github.com/pterm/pterm"
 )
 
 // DataSource is a common interface for all data source types
@@ -49,7 +51,7 @@ func convertConnectionToDataSource(conn DbtConnection, dbtHomePath, profileName,
 	default:
 		// For unsupported database types, we can choose to ignore or return error
 		// Here we choose to return nil and log a warning
-		fmt.Printf("Warning: Unsupported database type '%s' for %s.%s\n", conn.Type, profileName, outputName)
+		pterm.Warning.Printf("Unsupported database type '%s' for %s.%s\n", conn.Type, profileName, outputName)
 		return nil, nil
 	}
 }
