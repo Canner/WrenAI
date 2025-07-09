@@ -36,7 +36,7 @@ var generationModelToModelName = map[string]string{
 	"gpt-4.1-nano": "gpt-4.1-nano-2025-04-14",
 }
 
-func replaceEnvFileContent(content string, projectDir string, openaiApiKey string, openAIGenerationModel string, hostPort int, aiPort int, userUUID string, telemetryEnabled bool, platform string, local_storage string) string {
+func replaceEnvFileContent(content string, projectDir string, openaiApiKey string, openAIGenerationModel string, hostPort int, aiPort int, userUUID string, telemetryEnabled bool, platform string, localStorage string) string {
 	// replace PLATFORM
 	reg := regexp.MustCompile(`PLATFORM=(.*)`)
 	str := reg.ReplaceAllString(content, "PLATFORM="+platform)
@@ -79,11 +79,11 @@ func replaceEnvFileContent(content string, projectDir string, openaiApiKey strin
 	str = reg.ReplaceAllString(str, "EXPERIMENTAL_ENGINE_RUST_VERSION="+fmt.Sprintf("%t", config.IsExperimentalEngineRustVersion()))
 
 	// replace LOCAL_STORAGE
-	if local_storage == "" {
-		local_storage = "."
+	if localStorage == "" {
+		localStorage = "."
 	}
 	reg = regexp.MustCompile(`LOCAL_STORAGE=(.*)`)
-	str = reg.ReplaceAllString(str, "LOCAL_STORAGE="+local_storage)
+	str = reg.ReplaceAllString(str, "LOCAL_STORAGE="+localStorage)
 
 	return str
 }
@@ -240,7 +240,7 @@ func mergeEnvContent(newEnvFile string, envFileContent string) (string, error) {
 	return envFileContent, nil
 }
 
-func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostPort int, aiPort int, projectDir string, telemetryEnabled bool, llmProvider string, platform string, local_storage string) error {
+func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostPort int, aiPort int, projectDir string, telemetryEnabled bool, llmProvider string, platform string, localStorage string) error {
 	// download docker-compose file
 	composeFile := path.Join(projectDir, "docker-compose.yaml")
 	pterm.Info.Println("Downloading docker-compose file to", composeFile)
@@ -280,7 +280,7 @@ func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostP
 			userUUID,
 			telemetryEnabled,
 			platform,
-			local_storage,
+			localStorage,
 		)
 		newEnvFile := getEnvFilePath(projectDir)
 

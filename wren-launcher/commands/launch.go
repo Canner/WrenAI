@@ -296,12 +296,17 @@ func Launch() {
 	uiPort := utils.FindAvailablePort(3000)
 	aiPort := utils.FindAvailablePort(5555)
 
-	// process dbt project conversion
-	localStorage, err := processDbtProject(projectDir)
-	if err != nil {
-		pterm.Error.Println("Failed to process dbt project:", err)
-		panic(err)
+	var localStorage string
+	if config.IsDbtEnabled() {
+		localStorage, err = processDbtProject(projectDir)
+		if err != nil {
+			pterm.Error.Println("Failed to process dbt project:", err)
+			panic(err)
+		}
+	} else {
+		localStorage = ""
 	}
+	// process dbt project conversion
 
 	err = utils.PrepareDockerFiles(
 		openaiApiKey,
