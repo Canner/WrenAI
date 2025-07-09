@@ -77,32 +77,25 @@ func convertToLocalFileDataSource(conn DbtConnection, dbtHome string) (*WrenLoca
 	// For file types, we need to get URL and format info from Additional fields
 	// or use some conventional field names
 
+	resolvePath := func(path string) string {
+		if filepath.IsAbs(path) {
+			return filepath.Dir(path)
+		}
+		relativeDir := filepath.Dir(path)
+		if dbtHome != "" {
+			return filepath.Join(dbtHome, relativeDir)
+		}
+		return relativeDir
+	}
+
 	var url, format string
 
 	// Try to get file path from different fields
 	if conn.Path != "" {
-		if filepath.IsAbs(conn.Path) {
-			url = filepath.Dir(conn.Path)
-		} else {
-			relativeDir := filepath.Dir(conn.Path)
-			if dbtHome != "" {
-				url = filepath.Join(dbtHome, relativeDir)
-			} else {
-				url = relativeDir
-			}
-		}
+		url = resolvePath(conn.Path)
 	} else if file, exists := conn.Additional["file"]; exists {
 		if fileStr, ok := file.(string); ok {
-			if filepath.IsAbs(fileStr) {
-				url = filepath.Dir(fileStr)
-			} else {
-				relativeDir := filepath.Dir(fileStr)
-				if dbtHome != "" {
-					url = filepath.Join(dbtHome, relativeDir)
-				} else {
-					url = relativeDir
-				}
-			}
+			url = resolvePath(fileStr)
 		}
 	}
 
