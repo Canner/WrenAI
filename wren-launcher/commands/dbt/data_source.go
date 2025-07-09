@@ -295,7 +295,7 @@ func (d *DefaultDataSource) MapType(sourceType string) string {
 	case "integer", "int", "bigint", "int64":
 		return "integer"
 	case "varchar", "text", "string", "char":
-		return "string"
+		return "varchar"
 	case "timestamp", "datetime", "date":
 		return "timestamp"
 	case "double", "float", "decimal", "numeric":
@@ -303,6 +303,6 @@ func (d *DefaultDataSource) MapType(sourceType string) string {
 	case "boolean", "bool":
 		return "boolean"
 	default:
-		return "string"
+		return strings.ToLower(sourceType)
 	}
 }
