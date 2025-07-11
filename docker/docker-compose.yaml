@@ -41,6 +41,8 @@ services:
       - ${IBIS_SERVER_PORT}
     environment:
       WREN_ENGINE_ENDPOINT: http://wren-engine:${WREN_ENGINE_PORT}
+    volumes:
+      - ${LOCAL_STORAGE:-.}:/usr/src/app/data
     networks:
       - wren
 
