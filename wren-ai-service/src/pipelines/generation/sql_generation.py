@@ -125,6 +125,7 @@ async def post_process(
     project_id: str | None = None,
     use_dry_plan: bool = False,
     allow_dry_plan_fallback: bool = True,
+    allow_data_preview: bool = False,
 ) -> dict:
     return await post_processor.run(
         generate_sql.get("replies"),
@@ -133,6 +134,7 @@ async def post_process(
         use_dry_plan=use_dry_plan,
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,
+        allow_data_preview=allow_data_preview,
     )
 
 
@@ -187,6 +189,7 @@ class SQLGeneration(BasicPipeline):
         sql_functions: list[SqlFunction] | None = None,
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
+        allow_data_preview: bool = False,
     ):
         logger.info("SQL Generation pipeline is running...")
 
@@ -211,6 +214,7 @@ class SQLGeneration(BasicPipeline):
                 "use_dry_plan": use_dry_plan,
                 "allow_dry_plan_fallback": allow_dry_plan_fallback,
                 "data_source": metadata.get("data_source", "local_file"),
+                "allow_data_preview": allow_data_preview,
                 **self._components,
                 **self._configs,
             },

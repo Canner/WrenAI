@@ -78,6 +78,7 @@ class PostRequest(BaseModel):
     max_questions: int = 5
     max_categories: int = 3
     regenerate: bool = False
+    allow_data_preview: bool = True
     configuration: Configuration = Configuration()
 
 

@@ -66,6 +66,7 @@ class QuestionRecommendation:
         max_categories: int,
         project_id: Optional[str] = None,
         configuration: Configuration = Configuration(),
+        allow_data_preview: bool = True,
     ):
         async def _document_retrieval() -> tuple[list[str], bool, bool]:
             retrieval_result = await self._pipelines["db_schema_retrieval"].run(
@@ -120,6 +121,7 @@ class QuestionRecommendation:
                 has_calculated_field=has_calculated_field,
                 has_metric=has_metric,
                 sql_functions=sql_functions,
+                allow_data_preview=allow_data_preview,
             )
 
             post_process = generated_sql["post_process"]
@@ -159,6 +161,7 @@ class QuestionRecommendation:
         max_questions: int = 5
         max_categories: int = 3
         regenerate: bool = False
+        allow_data_preview: bool = True
 
     async def _recommend(self, request: dict, input: Request):
         resp = await self._pipelines["question_recommendation"].run(**request)
@@ -171,6 +174,7 @@ class QuestionRecommendation:
                 input.max_categories,
                 input.project_id,
                 input.configurations,
+                input.allow_data_preview,
             )
             for question in questions
         ]
