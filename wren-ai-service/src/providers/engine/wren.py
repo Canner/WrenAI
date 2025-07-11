@@ -59,7 +59,7 @@ class WrenUI(Engine):
                             True,
                             res,
                             {
-                                "correlation_id": res.get("correlationId", ""),
+                                "correlation_id": res_json.get("correlationId", ""),
                             },
                         )
 
@@ -69,7 +69,7 @@ class WrenUI(Engine):
                             True,
                             res,
                             {
-                                "correlation_id": res.get("correlationId", ""),
+                                "correlation_id": res_json.get("correlationId", ""),
                             },
                         )
 
@@ -77,7 +77,7 @@ class WrenUI(Engine):
                         False,
                         res,
                         {
-                            "correlation_id": res.get("correlationId", ""),
+                            "correlation_id": res_json.get("correlationId", ""),
                         },
                     )
 
