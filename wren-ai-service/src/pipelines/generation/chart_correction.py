@@ -1,6 +1,6 @@
 import logging
 import sys
-from typing import Any, Dict, Optional
+from typing import Any
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
@@ -13,8 +13,8 @@ from src.pipelines.generation.utils.chart import (
     CHART_GENERATION_GENERAL_INSTRUCTIONS,
     CHART_GENERATION_MODEL_KWARGS,
     SAMPLE_VEGA_LITE_SCHEMA_EXAMPLES,
-    ChartDataPreprocessor,
     ChartGenerationPostProcessor,
+    ChartSchemaPreprocessor,
     load_chart_theme,
 )
 from src.utils import trace_cost
@@ -22,17 +22,14 @@ from src.utils import trace_cost
 logger = logging.getLogger("wren-ai-service")
 
 
-chart_generation_system_prompt = f"""
+chart_correction_system_prompt = f"""
 ### TASK ###
-
-You are a data analyst great at generating data visualization using vega-lite! Given the user's question, SQL, sample data and sample column values, you need to think about the best chart type and generate correspondingvega-lite schema in JSON format.
-Besides, you need to give a concise and easy-to-understand reasoning to describe why you provide such vega-lite schema based on the question, SQL, sample data and sample column values.
+You are a vega-lite chart expert. You are given a chart schema, a query, and a SQL. You need to correct the chart schema to make it more accurate.
 
 ### INSTRUCTIONS ###
 
 {CHART_GENERATION_GENERAL_INSTRUCTIONS}
-- The language of the reasoning should be the same as the language provided by the user.
-- If the user provides a custom instruction, it should be followed strictly and you should use it to change the style of response for reasoning.
+- The content of the chart schema should be compatible to the SQL query that fulfills the user's query.
 
 ### VEGA-LITE SCHEMA EXAMPLES ###
 
@@ -40,23 +37,21 @@ Besides, you need to give a concise and easy-to-understand reasoning to describe
 
 ### OUTPUT FORMAT ###
 
-Please provide your chain of thought reasoning, and the vega-lite schema in JSON format.
+Please provide the vega-lite schema in JSON format.
 
 {{
-    "reasoning": <REASON_TO_CHOOSE_THE_SCHEMA_IN_STRING_FORMATTED_IN_LANGUAGE_PROVIDED_BY_USER>,
     "chart_schema": <VEGA_LITE_JSON_SCHEMA>
 }}
 """
 
 
-chart_generation_user_prompt_template = """
+chart_correction_user_prompt_template = """
 ### INPUT ###
 Question: {{ query }}
 SQL: {{ sql }}
-Sample Data: {{ sample_data }}
-Sample Column Values: {{ sample_column_values }}
+Chart Schema: {{ chart_schema }}
 Language: {{ language }}
-Custom Instruction: {{ custom_instruction }}
+Error Message: {{ error_message }}
 
 Please think step by step
 """
@@ -64,56 +59,47 @@ Please think step by step
 
 ## Start of Pipeline
 @observe(capture_input=False)
-def preprocess_data(
-    data: Dict[str, Any],
-    chart_data_preprocessor: ChartDataPreprocessor,
+def preprocess_chart_schema(
+    chart_schema: dict,
+    chart_schema_preprocessor: ChartSchemaPreprocessor,
 ) -> dict:
-    return chart_data_preprocessor.run(data)
+    return chart_schema_preprocessor.run(chart_schema)
 
 
 @observe(capture_input=False)
 def prompt(
     query: str,
     sql: str,
-    preprocess_data: dict,
+    preprocess_chart_schema: dict,
     language: str,
-    custom_instruction: str,
+    error_message: str | None,
     prompt_builder: PromptBuilder,
 ) -> dict:
-    sample_data = preprocess_data.get("sample_data")
-    sample_column_values = preprocess_data.get("sample_column_values")
-
     return prompt_builder.run(
         query=query,
         sql=sql,
-        sample_data=sample_data,
-        sample_column_values=sample_column_values,
+        chart_schema=preprocess_chart_schema,
         language=language,
-        custom_instruction=custom_instruction,
+        error_message=error_message,
     )
 
 
 @observe(as_type="generation", capture_input=False)
 @trace_cost
-async def generate_chart(prompt: dict, generator: Any, generator_name: str) -> dict:
+async def correct_chart(prompt: dict, generator: Any, generator_name: str) -> dict:
     return await generator(prompt=prompt.get("prompt")), generator_name
 
 
 @observe(capture_input=False)
 def post_process(
-    generate_chart: dict,
-    preprocess_data: dict,
-    data_provided: bool,
+    correct_chart: dict,
     chart_theme: dict[str, Any],
+    sample_data: list[dict],
     post_processor: ChartGenerationPostProcessor,
 ) -> dict:
     return post_processor.run(
-        generate_chart.get("replies"),
-        (
-            preprocess_data["raw_data"]
-            if data_provided
-            else preprocess_data["sample_data"]
-        ),
+        correct_chart.get("replies"),
+        sample_data,
         chart_theme=chart_theme,
     )
 
@@ -121,7 +107,7 @@ def post_process(
 ## End of Pipeline
 
 
-class ChartGeneration(BasicPipeline):
+class ChartCorrection(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
@@ -129,14 +115,14 @@ class ChartGeneration(BasicPipeline):
     ):
         self._components = {
             "prompt_builder": PromptBuilder(
-                template=chart_generation_user_prompt_template
+                template=chart_correction_user_prompt_template
             ),
             "generator": llm_provider.get_generator(
-                system_prompt=chart_generation_system_prompt,
+                system_prompt=chart_correction_system_prompt,
                 generation_kwargs=CHART_GENERATION_MODEL_KWARGS,
             ),
             "generator_name": llm_provider.get_model(),
-            "chart_data_preprocessor": ChartDataPreprocessor(),
+            "chart_schema_preprocessor": ChartSchemaPreprocessor(),
             "post_processor": ChartGenerationPostProcessor(),
         }
 
@@ -148,26 +134,25 @@ class ChartGeneration(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-    @observe(name="Chart Generation")
+    @observe(name="Chart Correction")
     async def run(
         self,
         query: str,
         sql: str,
-        data: dict,
+        chart_schema: dict,
         language: str,
-        data_provided: bool = False,
-        custom_instruction: Optional[str] = None,
+        error_message: str | None,
     ) -> dict:
-        logger.info("Chart Generation pipeline is running...")
+        logger.info("Chart Correction pipeline is running...")
         return await self._pipe.execute(
             ["post_process"],
             inputs={
                 "query": query,
                 "sql": sql,
-                "data": data,
+                "chart_schema": chart_schema,
+                "sample_data": chart_schema.get("data", {}).get("values", []),
                 "language": language,
-                "data_provided": data_provided,
-                "custom_instruction": custom_instruction or "",
+                "error_message": error_message,
                 **self._components,
                 **self._configs,
             },
@@ -178,10 +163,9 @@ if __name__ == "__main__":
     from src.pipelines.common import dry_run_pipeline
 
     dry_run_pipeline(
-        ChartGeneration,
-        "chart_generation",
-        query="show me the dataset",
+        ChartCorrection,
+        "chart_correction",
+        query="",
         sql="",
-        data={},
-        language="English",
+        chart_schema={},
     )
