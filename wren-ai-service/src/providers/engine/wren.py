@@ -59,17 +59,17 @@ class WrenUI(Engine):
                             True,
                             res,
                             {
-                                "correlation_id": res_data.get("correlationId"),
+                                "correlation_id": res.get("correlationId", ""),
                             },
                         )
 
-                    data = res_data.get("data", []) if res_data else []
+                    data = res.get("data", []) if res else []
                     if len(data) > 0:
                         return (
                             True,
                             res,
                             {
-                                "correlation_id": res_data.get("correlationId"),
+                                "correlation_id": res.get("correlationId", ""),
                             },
                         )
 
@@ -77,7 +77,7 @@ class WrenUI(Engine):
                         False,
                         res,
                         {
-                            "correlation_id": res_data.get("correlationId"),
+                            "correlation_id": res.get("correlationId", ""),
                         },
                     )
 
