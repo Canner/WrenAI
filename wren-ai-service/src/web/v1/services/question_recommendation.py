@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
-from src.web.v1.services import BaseRequest, Configuration, MetadataTraceable
+from src.web.v1.services import BaseRequest, MetadataTraceable
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -65,7 +65,6 @@ class QuestionRecommendation:
         max_questions: int,
         max_categories: int,
         project_id: Optional[str] = None,
-        configuration: Configuration = Configuration(),
         allow_data_preview: bool = True,
     ):
         async def _document_retrieval() -> tuple[list[str], bool, bool]:
@@ -172,7 +171,6 @@ class QuestionRecommendation:
                 input.max_questions,
                 input.max_categories,
                 input.project_id,
-                input.configurations,
                 input.allow_data_preview,
             )
             for question in questions
