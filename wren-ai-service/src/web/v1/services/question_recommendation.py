@@ -115,7 +115,6 @@ class QuestionRecommendation:
                 query=candidate["question"],
                 contexts=table_ddls,
                 project_id=project_id,
-                configuration=configuration,
                 sql_samples=sql_samples,
                 instructions=instructions,
                 has_calculated_field=has_calculated_field,
