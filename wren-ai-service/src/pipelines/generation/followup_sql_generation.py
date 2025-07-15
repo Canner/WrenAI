@@ -22,7 +22,6 @@ from src.pipelines.generation.utils.sql import (
 )
 from src.pipelines.retrieval.sql_functions import SqlFunction
 from src.utils import trace_cost
-from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
@@ -86,7 +85,6 @@ def prompt(
     query: str,
     documents: list[str],
     sql_generation_reasoning: str,
-    configuration: Configuration,
     prompt_builder: PromptBuilder,
     sql_samples: list[dict] | None = None,
     instructions: list[dict] | None = None,
@@ -184,7 +182,6 @@ class FollowUpSQLGeneration(BasicPipeline):
         contexts: list[str],
         sql_generation_reasoning: str,
         histories: list[AskHistory],
-        configuration: Configuration = Configuration(),
         sql_samples: list[dict] | None = None,
         instructions: list[dict] | None = None,
         project_id: str | None = None,
@@ -209,7 +206,6 @@ class FollowUpSQLGeneration(BasicPipeline):
                 "sql_generation_reasoning": sql_generation_reasoning,
                 "histories": histories,
                 "project_id": project_id,
-                "configuration": configuration,
                 "sql_samples": sql_samples,
                 "instructions": instructions,
                 "has_calculated_field": has_calculated_field,
