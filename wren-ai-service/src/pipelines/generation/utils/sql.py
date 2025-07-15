@@ -247,6 +247,7 @@ TEXT_TO_SQL_RULES = """
 - DON'T USE "EXTRACT()" function with INTERVAL data types as arguments
 - DON'T USE INTERVAL or generate INTERVAL-like expression in the generated SQL query.
 - Aggregate functions are not allowed in the WHERE clause. Instead, they belong in the HAVING clause, which is used to filter after aggregation.
+- You can only add "ORDER BY" and "LIMIT" to the final "UNION" result.
 - ONLY USE JSON_QUERY for querying fields if "json_type":"JSON" is identified in the columns comment, NOT the deprecated JSON_EXTRACT_SCALAR function.
     - DON'T USE CAST for JSON fields, ONLY USE the following funtions:
       - LAX_BOOL for boolean fields
@@ -280,14 +281,6 @@ TEXT_TO_SQL_RULES = """
       - For Example: `SELECT p.column_1, j.column_2 FROM parent_table AS p, join_table AS j JOIN UNNEST(p.array_column) AS unnested(array_item) ON j.id = array_item.id`
 - DON'T USE JSON_QUERY and JSON_QUERY_ARRAY when "json_type":"".
 - DON'T USE LAX_BOOL, LAX_FLOAT64, LAX_INT64, LAX_STRING when "json_type":"".
-"""
-
-
-SQL_CORRECTION_EXAMPLES = """
-### SQL CORRECTION EXAMPLES ###
-- Original SQL: `SELECT 1 AS col ORDER BY col LIMIT 1 UNION ALL SELECT 2 AS col ORDER BY col LIMIT 1`
-  Error Message: io.trino.sql.parser.ParsingException: line 1:38: mismatched input 'UNION'. Expecting: '::', <EOF>
-  Corrected SQL: `(SELECT 1 AS col ORDER BY col LIMIT 1) UNION ALL (SELECT 2 AS col ORDER BY col LIMIT 1)`
 """
 
 sql_generation_system_prompt = f"""
