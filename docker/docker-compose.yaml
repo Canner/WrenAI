@@ -56,11 +56,12 @@ services:
       # sometimes the console won't show print messages,
       # using PYTHONUNBUFFERED: 1 can fix this
       PYTHONUNBUFFERED: 1
-      CONFIG_PATH: /app/data/config.yaml
+      CONFIG_PATH: /app/config.yaml
     env_file:
       - ${PROJECT_DIR}/.env
     volumes:
-      - ${PROJECT_DIR}/config.yaml:/app/data/config.yaml
+      - ${PROJECT_DIR}/config.yaml:/app/config.yaml:ro
+      - ${PROJECT_DIR}/data:/app/data:ro
     networks:
       - wren
     depends_on:
