@@ -160,15 +160,3 @@ class MisleadingAssistance(BasicPipeline):
                 **self._components,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        MisleadingAssistance,
-        "misleading_assistance",
-        query="hi",
-        db_schemas=[],
-        language="English",
-    )

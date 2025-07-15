@@ -124,14 +124,3 @@ class SQLQuestion(BasicPipeline):
                 **self._components,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        SQLQuestion,
-        "sql_question",
-        sql="SELECT * FROM table",
-        configuration=Configuration(),
-    )

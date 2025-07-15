@@ -215,14 +215,3 @@ class SQLGeneration(BasicPipeline):
                 **self._configs,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        SQLGeneration,
-        "sql_generation",
-        query="this is a test query",
-        contexts=[],
-    )

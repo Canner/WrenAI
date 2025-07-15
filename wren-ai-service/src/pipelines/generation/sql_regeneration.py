@@ -201,14 +201,3 @@ class SQLRegeneration(BasicPipeline):
                 **self._configs,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        SQLRegeneration,
-        "sql_regeneration",
-        sql_generation_reasoning="this is a test query",
-        sql="select * from users",
-    )

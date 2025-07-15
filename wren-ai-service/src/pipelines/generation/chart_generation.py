@@ -171,16 +171,3 @@ class ChartGeneration(BasicPipeline):
                 **self._configs,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        ChartGeneration,
-        "chart_generation",
-        query="show me the dataset",
-        sql="",
-        data={},
-        language="English",
-    )

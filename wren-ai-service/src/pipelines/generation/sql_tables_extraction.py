@@ -128,13 +128,3 @@ class SQLTablesExtraction(BasicPipeline):
                 **self._components,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        SQLTablesExtraction,
-        "sql_tables_extraction",
-        sql="SELECT * FROM table",
-    )

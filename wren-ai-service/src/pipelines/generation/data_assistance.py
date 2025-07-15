@@ -160,15 +160,3 @@ class DataAssistance(BasicPipeline):
                 **self._components,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        DataAssistance,
-        "data_assistance",
-        query="show me the dataset",
-        db_schemas=[],
-        language="English",
-    )

@@ -187,15 +187,3 @@ class FollowUpSQLGenerationReasoning(BasicPipeline):
                 **self._components,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        FollowUpSQLGenerationReasoning,
-        "followup_sql_generation_reasoning",
-        query="this is a test query",
-        histories=[],
-        contexts=[],
-    )

@@ -397,13 +397,3 @@ class IntentClassification(BasicPipeline):
                 **self._configs,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        IntentClassification,
-        "intent_classification",
-        query="show me the dataset",
-    )

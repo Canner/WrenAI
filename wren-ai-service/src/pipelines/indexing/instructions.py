@@ -176,19 +176,3 @@ class Instructions(BasicPipeline):
             project_id=project_id,
             delete_all=delete_all,
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        Instructions,
-        "instructions_indexing",
-        instructions=[
-            Instruction(
-                id="1",
-                instruction="France is in the table of customers and the column is country",
-                question="What is the capital of France?",
-            )
-        ],
-    )

@@ -154,13 +154,3 @@ class SqlPairsRetrieval(BasicPipeline):
                 **self._configs,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        SqlPairsRetrieval,
-        "sql_pairs_retrieval",
-        query="this is a test query",
-    )

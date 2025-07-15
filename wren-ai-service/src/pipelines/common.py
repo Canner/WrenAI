@@ -2,8 +2,6 @@ from typing import Any, List, Optional, Tuple
 
 from haystack import Document, component
 
-from src.core.pipeline import BasicPipeline
-
 
 def get_engine_supported_data_type(data_type: str) -> str:
     """
@@ -56,32 +54,6 @@ def build_table_ddl(
         + ",\n  ".join(columns_ddl)
         + "\n);"
     ), has_calculated_field
-
-
-def dry_run_pipeline(
-    pipeline_cls: BasicPipeline,
-    pipeline_name: str,
-    method: str = "run",
-    **kwargs,
-):
-    from langfuse.decorators import langfuse_context
-
-    from src.config import settings
-    from src.core.pipeline import async_validate
-    from src.providers import generate_components
-    from src.utils import init_langfuse, setup_custom_logger
-
-    setup_custom_logger(
-        "wren-ai-service", level_str=settings.logging_level, is_dev=True
-    )
-
-    pipe_components = generate_components(settings.components)
-    pipeline = pipeline_cls(**pipe_components[pipeline_name])
-    init_langfuse(settings)
-
-    async_validate(lambda: getattr(pipeline, method)(**kwargs))
-
-    langfuse_context.flush()
 
 
 async def retrieve_metadata(project_id: str, retriever) -> dict[str, Any]:
