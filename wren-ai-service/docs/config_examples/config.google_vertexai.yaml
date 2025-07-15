@@ -36,7 +36,7 @@ provider: litellm_embedder
 models:
   # put VERTEXAI_LOCATION=<your project location> in ~/.wrenai/.env
   # put VERTEXAI_PROJECT=<your project id> in ~/.wrenai/.env
-  # put GOOGLE_APPLICATION_CREDENTIALS=<json_file_name> in ~/.wrenai.env
+  # put GOOGLE_APPLICATION_CREDENTIALS=/app/data/<json_file_name> in ~/.wrenai.env
   - model: vertex_ai/text-embedding-004 # vertex_ai/<gemini_model_name>
     alias: default
     timeout: 120
