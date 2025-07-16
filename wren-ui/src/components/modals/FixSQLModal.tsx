@@ -18,7 +18,9 @@ export function FixSQLModal(props: Props) {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [form] = Form.useForm();
 
-  const [previewSqlMutation, previewSqlResult] = usePreviewSqlMutation();
+  const [previewSqlMutation, previewSqlResult] = usePreviewSqlMutation({
+    onError: (error) => console.error(error),
+  });
   const error = useMemo(() => {
     if (!previewSqlResult.error) return null;
     const graphQLError = parseGraphQLError(previewSqlResult.error);

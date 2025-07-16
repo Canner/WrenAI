@@ -16,7 +16,9 @@ export default function useSetupModels() {
     onError: (error) => console.error(error),
   });
 
-  const [saveTablesMutation, { loading: submitting }] = useSaveTablesMutation();
+  const [saveTablesMutation, { loading: submitting }] = useSaveTablesMutation({
+    onError: (error) => console.error(error),
+  });
 
   const submitModels = async (tables: string[]) => {
     await saveTablesMutation({

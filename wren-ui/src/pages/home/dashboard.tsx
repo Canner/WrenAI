@@ -74,6 +74,7 @@ export default function Dashboard() {
     },
   });
   const [deleteDashboardItem] = useDeleteDashboardItemMutation({
+    onError: (error) => console.error(error),
     onCompleted: (_, query) => {
       message.success('Successfully deleted dashboard item.');
       onRemoveDashboardItemFromQueryCache(query.variables.where.id);
