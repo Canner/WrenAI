@@ -182,6 +182,7 @@ class SQLRegeneration(BasicPipeline):
         project_id: str | None = None,
         has_calculated_field: bool = False,
         has_metric: bool = False,
+        has_json_field: bool = False,
         sql_functions: list[SqlFunction] | None = None,
     ):
         logger.info("SQL Regeneration pipeline is running...")
@@ -196,6 +197,7 @@ class SQLRegeneration(BasicPipeline):
                 "project_id": project_id,
                 "has_calculated_field": has_calculated_field,
                 "has_metric": has_metric,
+                "has_json_field": has_json_field,
                 "sql_functions": sql_functions,
                 **self._components,
                 **self._configs,

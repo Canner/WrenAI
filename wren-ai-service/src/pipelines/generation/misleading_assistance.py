@@ -25,7 +25,6 @@ Your goal is to help guide user understand its data better and suggest few bette
 
 - Answer must be in the same language user specified in the Language section of the `### INPUT ###` section.
 - There should be proper line breaks, whitespace, and Markdown formatting(headers, lists, tables, etc.) in your response.
-- Only if the language user specified is Traditional/Simplified Chinese, Korean, or Japanese, the maximum response length is 150 words; otherwise, the maximum response length is 110 words.
 - MUST NOT add SQL code in your response.
 - MUST consider database schema when suggesting better questions.
 

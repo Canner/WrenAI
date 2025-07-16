@@ -238,17 +238,21 @@ def check_using_db_schemas_without_pruning(
     retrieval_results = []
     has_calculated_field = False
     has_metric = False
+    has_json_field = False
 
     for table_schema in construct_db_schemas:
         if table_schema["type"] == "TABLE":
-            ddl, _has_calculated_field = build_table_ddl(table_schema)
+            ddl, _has_calculated_field, _has_json_field = build_table_ddl(table_schema)
             retrieval_results.append(
                 {
                     "table_name": table_schema["name"],
                     "table_ddl": ddl,
                 }
             )
-            has_calculated_field = has_calculated_field or _has_calculated_field
+            if _has_calculated_field:
+                has_calculated_field = True
+            if _has_json_field:
+                has_json_field = True
 
     for document in dbschema_retrieval:
         content = ast.literal_eval(document.content)
@@ -279,6 +283,7 @@ def check_using_db_schemas_without_pruning(
             "tokens": _token_count,
             "has_calculated_field": has_calculated_field,
             "has_metric": has_metric,
+            "has_json_field": has_json_field,
         }
 
     return {
@@ -286,6 +291,7 @@ def check_using_db_schemas_without_pruning(
         "tokens": _token_count,
         "has_calculated_field": has_calculated_field,
         "has_metric": has_metric,
+        "has_json_field": has_json_field,
     }
 
 
@@ -349,17 +355,22 @@ def construct_retrieval_results(
         retrieval_results = []
         has_calculated_field = False
         has_metric = False
+        has_json_field = False
 
         for table_schema in construct_db_schemas:
             if table_schema["type"] == "TABLE" and table_schema["name"] in tables:
-                ddl, _has_calculated_field = build_table_ddl(
+                ddl, _has_calculated_field, _has_json_field = build_table_ddl(
                     table_schema,
                     columns=set(
                         columns_and_tables_needed[table_schema["name"]]["columns"]
                     ),
                     tables=tables,
                 )
-                has_calculated_field = has_calculated_field or _has_calculated_field
+                if _has_calculated_field:
+                    has_calculated_field = True
+                if _has_json_field:
+                    has_json_field = True
+
                 retrieval_results.append(
                     {
                         "table_name": table_schema["name"],
@@ -391,6 +402,7 @@ def construct_retrieval_results(
             "retrieval_results": retrieval_results,
             "has_calculated_field": has_calculated_field,
             "has_metric": has_metric,
+            "has_json_field": has_json_field,
         }
     else:
         retrieval_results = check_using_db_schemas_without_pruning["db_schemas"]
@@ -401,6 +413,7 @@ def construct_retrieval_results(
                 "has_calculated_field"
             ],
             "has_metric": check_using_db_schemas_without_pruning["has_metric"],
+            "has_json_field": check_using_db_schemas_without_pruning["has_json_field"],
         }
 
 

@@ -259,7 +259,7 @@ def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[str]:
     db_schemas_in_ddl = []
     for table_schema in list(db_schemas.values()):
         if table_schema["type"] == "TABLE":
-            ddl, _ = build_table_ddl(table_schema)
+            ddl, _, _ = build_table_ddl(table_schema)
             db_schemas_in_ddl.append(ddl)
 
     return db_schemas_in_ddl

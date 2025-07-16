@@ -28,9 +28,10 @@ def get_engine_supported_data_type(data_type: str) -> str:
 
 def build_table_ddl(
     content: dict, columns: Optional[set[str]] = None, tables: Optional[set[str]] = None
-) -> Tuple[str, bool]:
+) -> Tuple[str, bool, bool]:
     columns_ddl = []
     has_calculated_field = False
+    has_json_field = False
 
     for column in content["columns"]:
         if column["type"] == "COLUMN":
@@ -41,6 +42,8 @@ def build_table_ddl(
             ):
                 if "This column is a Calculated Field" in column["comment"]:
                     has_calculated_field = True
+                if column["data_type"].lower() == "json":
+                    has_json_field = True
                 column_ddl = f"{column['comment']}{column['name']} {get_engine_supported_data_type(column['data_type'])}"
                 if column["is_primary_key"]:
                     column_ddl += " PRIMARY KEY"
@@ -50,10 +53,14 @@ def build_table_ddl(
                 columns_ddl.append(f"{column['comment']}{column['constraint']}")
 
     return (
-        f"{content['comment']}CREATE TABLE {content['name']} (\n  "
-        + ",\n  ".join(columns_ddl)
-        + "\n);"
-    ), has_calculated_field
+        (
+            f"{content['comment']}CREATE TABLE {content['name']} (\n  "
+            + ",\n  ".join(columns_ddl)
+            + "\n);"
+        ),
+        has_calculated_field,
+        has_json_field,
+    )
 
 
 async def retrieve_metadata(project_id: str, retriever) -> dict[str, Any]:
