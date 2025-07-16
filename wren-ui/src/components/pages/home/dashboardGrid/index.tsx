@@ -385,6 +385,7 @@ const PinnedItem = forwardRef(
                 hideActions
                 hideTitle
                 hideLegend={isHideLegend}
+                isPinned
               />
             </LoadingWrapper>
           </div>
