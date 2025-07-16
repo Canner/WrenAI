@@ -259,7 +259,7 @@ def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[str]:
     db_schemas_in_ddl = []
     for table_schema in list(db_schemas.values()):
         if table_schema["type"] == "TABLE":
-            ddl, _ = build_table_ddl(table_schema)
+            ddl, _, _ = build_table_ddl(table_schema)
             db_schemas_in_ddl.append(ddl)
 
     return db_schemas_in_ddl
@@ -397,13 +397,3 @@ class IntentClassification(BasicPipeline):
                 **self._configs,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        IntentClassification,
-        "intent_classification",
-        query="show me the dataset",
-    )

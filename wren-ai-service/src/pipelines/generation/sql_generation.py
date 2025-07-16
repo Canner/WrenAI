@@ -16,12 +16,12 @@ from src.pipelines.generation.utils.sql import (
     SQLGenPostProcessor,
     calculated_field_instructions,
     construct_instructions,
+    json_field_instructions,
     metric_instructions,
     sql_generation_system_prompt,
 )
 from src.pipelines.retrieval.sql_functions import SqlFunction
 from src.utils import trace_cost
-from src.web.v1.services import Configuration
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -38,6 +38,10 @@ sql_generation_user_prompt_template = """
 
 {% if metric_instructions %}
 {{ metric_instructions }}
+{% endif %}
+
+{% if json_field_instructions %}
+{{ json_field_instructions }}
 {% endif %}
 
 {% if sql_functions %}
@@ -83,11 +87,11 @@ def prompt(
     documents: list[str],
     prompt_builder: PromptBuilder,
     sql_generation_reasoning: str | None = None,
-    configuration: Configuration | None = None,
     sql_samples: list[dict] | None = None,
     instructions: list[dict] | None = None,
     has_calculated_field: bool = False,
     has_metric: bool = False,
+    has_json_field: bool = False,
     sql_functions: list[SqlFunction] | None = None,
 ) -> dict:
     return prompt_builder.run(
@@ -97,10 +101,11 @@ def prompt(
         instructions=construct_instructions(
             instructions=instructions,
         ),
-        calculated_field_instructions=calculated_field_instructions
-        if has_calculated_field
-        else "",
-        metric_instructions=metric_instructions if has_metric else "",
+        calculated_field_instructions=(
+            calculated_field_instructions if has_calculated_field else ""
+        ),
+        metric_instructions=(metric_instructions if has_metric else ""),
+        json_field_instructions=(json_field_instructions if has_json_field else ""),
         sql_samples=sql_samples,
         sql_functions=sql_functions,
     )
@@ -180,12 +185,12 @@ class SQLGeneration(BasicPipeline):
         query: str,
         contexts: list[str],
         sql_generation_reasoning: str | None = None,
-        configuration: Configuration = Configuration(),
         sql_samples: list[dict] | None = None,
         instructions: list[dict] | None = None,
         project_id: str | None = None,
         has_calculated_field: bool = False,
         has_metric: bool = False,
+        has_json_field: bool = False,
         sql_functions: list[SqlFunction] | None = None,
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
@@ -207,9 +212,9 @@ class SQLGeneration(BasicPipeline):
                 "sql_samples": sql_samples,
                 "instructions": instructions,
                 "project_id": project_id,
-                "configuration": configuration,
                 "has_calculated_field": has_calculated_field,
                 "has_metric": has_metric,
+                "has_json_field": has_json_field,
                 "sql_functions": sql_functions,
                 "use_dry_plan": use_dry_plan,
                 "allow_dry_plan_fallback": allow_dry_plan_fallback,
@@ -219,14 +224,3 @@ class SQLGeneration(BasicPipeline):
                 **self._configs,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        SQLGeneration,
-        "sql_generation",
-        query="this is a test query",
-        contexts=[],
-    )

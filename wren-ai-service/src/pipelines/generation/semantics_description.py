@@ -245,16 +245,3 @@ class SemanticsDescription(BasicPipeline):
                 **self._components,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        SemanticsDescription,
-        "semantics_description",
-        user_prompt="Track student enrollments, grades, and GPA calculations to monitor academic performance and identify areas for student support",
-        selected_models=[],
-        mdl={},
-        language="en",
-    )

@@ -13,7 +13,6 @@ from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.pipelines.common import retrieve_metadata
 from src.pipelines.generation.utils.sql import (
-    SQL_CORRECTION_EXAMPLES,
     SQL_GENERATION_MODEL_KWARGS,
     TEXT_TO_SQL_RULES,
     SQLGenPostProcessor,
@@ -35,8 +34,6 @@ Now you are given syntactically incorrect ANSI SQL query and related error messa
 2. Make sure you check the SQL CORRECTION EXAMPLES for reference.
 
 {TEXT_TO_SQL_RULES}
-
-{SQL_CORRECTION_EXAMPLES}
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a corrected SQL query in JSON format:
@@ -168,14 +165,3 @@ class SQLCorrection(BasicPipeline):
                 **self._configs,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        SQLCorrection,
-        "sql_correction",
-        invalid_generation_result={},
-        contexts=[],
-    )

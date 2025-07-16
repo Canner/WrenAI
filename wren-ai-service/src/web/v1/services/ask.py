@@ -482,6 +482,7 @@ class AskService:
                     "has_calculated_field", False
                 )
                 has_metric = _retrieval_result.get("has_metric", False)
+                has_json_field = _retrieval_result.get("has_json_field", False)
 
                 if histories:
                     text_to_sql_generation_results = await self._pipelines[
@@ -492,11 +493,11 @@ class AskService:
                         sql_generation_reasoning=sql_generation_reasoning,
                         histories=histories,
                         project_id=ask_request.project_id,
-                        configuration=ask_request.configurations,
                         sql_samples=sql_samples,
                         instructions=instructions,
                         has_calculated_field=has_calculated_field,
                         has_metric=has_metric,
+                        has_json_field=has_json_field,
                         sql_functions=sql_functions,
                         use_dry_plan=use_dry_plan,
                         allow_dry_plan_fallback=allow_dry_plan_fallback,
@@ -509,11 +510,11 @@ class AskService:
                         contexts=table_ddls,
                         sql_generation_reasoning=sql_generation_reasoning,
                         project_id=ask_request.project_id,
-                        configuration=ask_request.configurations,
                         sql_samples=sql_samples,
                         instructions=instructions,
                         has_calculated_field=has_calculated_field,
                         has_metric=has_metric,
+                        has_json_field=has_json_field,
                         sql_functions=sql_functions,
                         use_dry_plan=use_dry_plan,
                         allow_dry_plan_fallback=allow_dry_plan_fallback,
@@ -756,6 +757,7 @@ class AskService:
                     "has_calculated_field", False
                 )
                 has_metric = _retrieval_result.get("has_metric", False)
+                has_json_field = _retrieval_result.get("has_json_field", False)
                 documents = _retrieval_result.get("retrieval_results", [])
                 table_ddls = [document.get("table_ddl") for document in documents]
                 sql_samples = sql_samples_task["formatted_output"].get("documents", [])
@@ -776,11 +778,11 @@ class AskService:
                     sql_generation_reasoning=ask_feedback_request.sql_generation_reasoning,
                     sql=ask_feedback_request.sql,
                     project_id=ask_feedback_request.project_id,
-                    configuration=ask_feedback_request.configurations,
                     sql_samples=sql_samples,
                     instructions=instructions,
                     has_calculated_field=has_calculated_field,
                     has_metric=has_metric,
+                    has_json_field=has_json_field,
                     sql_functions=sql_functions,
                 )
 

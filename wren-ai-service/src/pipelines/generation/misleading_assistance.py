@@ -25,9 +25,9 @@ Your goal is to help guide user understand its data better and suggest few bette
 
 - Answer must be in the same language user specified in the Language section of the `### INPUT ###` section.
 - There should be proper line breaks, whitespace, and Markdown formatting(headers, lists, tables, etc.) in your response.
-- Only if the language user specified is Traditional/Simplified Chinese, Korean, or Japanese, the maximum response length is 150 words; otherwise, the maximum response length is 110 words.
 - MUST NOT add SQL code in your response.
 - MUST consider database schema when suggesting better questions.
+- The maximum response length is 100 words.
 
 ### OUTPUT FORMAT ###
 Please provide your response in proper Markdown format without ```markdown``` tags.
@@ -160,15 +160,3 @@ class MisleadingAssistance(BasicPipeline):
                 **self._components,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        MisleadingAssistance,
-        "misleading_assistance",
-        query="hi",
-        db_schemas=[],
-        language="English",
-    )

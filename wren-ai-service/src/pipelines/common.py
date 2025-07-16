@@ -2,8 +2,6 @@ from typing import Any, List, Optional, Tuple
 
 from haystack import Document, component
 
-from src.core.pipeline import BasicPipeline
-
 
 def get_engine_supported_data_type(data_type: str) -> str:
     """
@@ -30,9 +28,10 @@ def get_engine_supported_data_type(data_type: str) -> str:
 
 def build_table_ddl(
     content: dict, columns: Optional[set[str]] = None, tables: Optional[set[str]] = None
-) -> Tuple[str, bool]:
+) -> Tuple[str, bool, bool]:
     columns_ddl = []
     has_calculated_field = False
+    has_json_field = False
 
     for column in content["columns"]:
         if column["type"] == "COLUMN":
@@ -43,6 +42,8 @@ def build_table_ddl(
             ):
                 if "This column is a Calculated Field" in column["comment"]:
                     has_calculated_field = True
+                if column["data_type"].lower() == "json":
+                    has_json_field = True
                 column_ddl = f"{column['comment']}{column['name']} {get_engine_supported_data_type(column['data_type'])}"
                 if column["is_primary_key"]:
                     column_ddl += " PRIMARY KEY"
@@ -52,36 +53,14 @@ def build_table_ddl(
                 columns_ddl.append(f"{column['comment']}{column['constraint']}")
 
     return (
-        f"{content['comment']}CREATE TABLE {content['name']} (\n  "
-        + ",\n  ".join(columns_ddl)
-        + "\n);"
-    ), has_calculated_field
-
-
-def dry_run_pipeline(
-    pipeline_cls: BasicPipeline,
-    pipeline_name: str,
-    method: str = "run",
-    **kwargs,
-):
-    from langfuse.decorators import langfuse_context
-
-    from src.config import settings
-    from src.core.pipeline import async_validate
-    from src.providers import generate_components
-    from src.utils import init_langfuse, setup_custom_logger
-
-    setup_custom_logger(
-        "wren-ai-service", level_str=settings.logging_level, is_dev=True
+        (
+            f"{content['comment']}CREATE TABLE {content['name']} (\n  "
+            + ",\n  ".join(columns_ddl)
+            + "\n);"
+        ),
+        has_calculated_field,
+        has_json_field,
     )
-
-    pipe_components = generate_components(settings.components)
-    pipeline = pipeline_cls(**pipe_components[pipeline_name])
-    init_langfuse(settings)
-
-    async_validate(lambda: getattr(pipeline, method)(**kwargs))
-
-    langfuse_context.flush()
 
 
 async def retrieve_metadata(project_id: str, retriever) -> dict[str, Any]:

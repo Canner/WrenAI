@@ -139,13 +139,3 @@ class SqlFunctions(BasicPipeline):
         }
         result = await self._pipe.execute(["cache"], inputs=input)
         return result["cache"]
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        SqlFunctions,
-        "sql_functions_retrieval",
-        project_id="test",
-    )
