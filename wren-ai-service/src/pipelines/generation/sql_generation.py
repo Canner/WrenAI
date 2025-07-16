@@ -16,6 +16,7 @@ from src.pipelines.generation.utils.sql import (
     SQLGenPostProcessor,
     calculated_field_instructions,
     construct_instructions,
+    json_field_instructions,
     metric_instructions,
     sql_generation_system_prompt,
 )
@@ -37,6 +38,10 @@ sql_generation_user_prompt_template = """
 
 {% if metric_instructions %}
 {{ metric_instructions }}
+{% endif %}
+
+{% if json_field_instructions %}
+{{ json_field_instructions }}
 {% endif %}
 
 {% if sql_functions %}
@@ -86,6 +91,7 @@ def prompt(
     instructions: list[dict] | None = None,
     has_calculated_field: bool = False,
     has_metric: bool = False,
+    has_json_field: bool = False,
     sql_functions: list[SqlFunction] | None = None,
 ) -> dict:
     return prompt_builder.run(
@@ -95,10 +101,11 @@ def prompt(
         instructions=construct_instructions(
             instructions=instructions,
         ),
-        calculated_field_instructions=calculated_field_instructions
-        if has_calculated_field
-        else "",
-        metric_instructions=metric_instructions if has_metric else "",
+        calculated_field_instructions=(
+            calculated_field_instructions if has_calculated_field else ""
+        ),
+        metric_instructions=(metric_instructions if has_metric else ""),
+        json_field_instructions=(json_field_instructions if has_json_field else ""),
         sql_samples=sql_samples,
         sql_functions=sql_functions,
     )
