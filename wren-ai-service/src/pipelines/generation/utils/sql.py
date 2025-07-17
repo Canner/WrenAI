@@ -184,16 +184,17 @@ You are a helpful data analyst who is great at thinking deeply and reasoning abo
 1. Think deeply and reason about the user's question, the database schema, and the user's query history if provided.
 2. Explicitly state the following information in the reasoning plan: 
 if the user puts any specific timeframe(e.g. YYYY-MM-DD) in the user's question, you will put the absolute time frame in the SQL query; 
-Otherwise, you will put the relative timeframe in the SQL query. 
-3. If USER INSTRUCTIONS section is provided, make sure to consider them in the reasoning plan.
-4. If SQL SAMPLES section is provided, make sure to consider them in the reasoning plan.
-5. Give a step by step reasoning plan in order to answer user's question.
-6. The reasoning plan should be in the language same as the language user provided in the input.
-7. Don't include SQL in the reasoning plan.
-8. Each step in the reasoning plan must start with a number, a title(in bold format in markdown), and a reasoning for the step.
-9. Do not include ```markdown or ``` in the answer.
-10. A table name in the reasoning plan must be in this format: `table: <table_name>`.
-11. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
+Otherwise, you will put the relative timeframe in the SQL query.
+3. For the ranking problem, you should use the ranking function, `DENSE_RANK()` to rank the results and then use `WHERE` clause to filter the results.
+4. If USER INSTRUCTIONS section is provided, make sure to consider them in the reasoning plan.
+5. If SQL SAMPLES section is provided, make sure to consider them in the reasoning plan.
+6. Give a step by step reasoning plan in order to answer user's question.
+7. The reasoning plan should be in the language same as the language user provided in the input.
+8. Don't include SQL in the reasoning plan.
+9. Each step in the reasoning plan must start with a number, a title(in bold format in markdown), and a reasoning for the step.
+10. Do not include ```markdown or ``` in the answer.
+11. A table name in the reasoning plan must be in this format: `table: <table_name>`.
+12. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
@@ -248,6 +249,7 @@ TEXT_TO_SQL_RULES = """
 - DON'T USE INTERVAL or generate INTERVAL-like expression in the generated SQL query.
 - Aggregate functions are not allowed in the WHERE clause. Instead, they belong in the HAVING clause, which is used to filter after aggregation.
 - You can only add "ORDER BY" and "LIMIT" to the final "UNION" result.
+- For the ranking problem, use `DENSE_RANK()` to rank the results and then use `WHERE` clause to filter the results.
 """
 
 sql_generation_system_prompt = f"""
@@ -257,10 +259,10 @@ Given user's question, database schema, etc., you should think deeply and carefu
 
 ### GENERAL RULES ###
 
-1. If USER INSTRUCTIONS section is provided, please follow the instructions strictly.
-2. If SQL FUNCTIONS section is provided, please choose the appropriate functions from the list and use it in the SQL query.
-3. If SQL SAMPLES section is provided, please refer to the samples and learn the usage of the schema structures and how SQL is written based on them.
-4. If REASONING PLAN section is provided, please follow the plan strictly.
+1. If USER INSTRUCTIONS is provided, please follow the instructions strictly to generate the SQL query.
+2. If SQL FUNCTIONS is provided, please choose the appropriate functions from the list and use it in the SQL query.
+3. If SQL SAMPLES is provided, please refer to the samples and learn the usage of the schema structures and how SQL is written based on them.
+4. If REASONING PLAN is provided, please follow the plan step by step strictly to generate the SQL query.
 
 {TEXT_TO_SQL_RULES}
 
