@@ -84,9 +84,8 @@ export default function QuestionSQLPairModal(props: Props) {
   const [generatingQuestion, setGeneratingQuestion] = useState<boolean>(false);
   const [showPreview, setShowPreview] = useState<boolean>(false);
 
-  const [previewSqlMutation, previewSqlResult] = usePreviewSqlMutation({
-    onError: (error) => console.error(error),
-  });
+  // Handle errors via try/catch blocks rather than onError callback
+  const [previewSqlMutation, previewSqlResult] = usePreviewSqlMutation();
 
   const [generateQuestionMutation] = useGenerateQuestionMutation({
     onError: (error) => console.error(error),

@@ -38,10 +38,10 @@ export default function ImportDataSourceSQLModal(props: Props) {
   const { visible, defaultValue, onSubmit, onClose } = props;
   const name = getDataSourceName(defaultValue?.dataSource) || 'data source';
 
+  // Handle errors via try/catch blocks rather than onError callback
   const [substituteDialectSQL, modelSubstitudeResult] =
-    useModelSubstituteMutation({
-      onError: (error) => console.error(error),
-    });
+    useModelSubstituteMutation();
+
   const error = useMemo(
     () =>
       modelSubstitudeResult.error
