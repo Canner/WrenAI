@@ -195,6 +195,7 @@ Otherwise, you will put the relative timeframe in the SQL query.
 10. Do not include ```markdown or ``` in the answer.
 11. A table name in the reasoning plan must be in this format: `table: <table_name>`.
 12. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
+13. ALWAYS SHOWING the last step stating that the SQL query should be generated step by step strictly based on the reasoning plan.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
@@ -259,10 +260,10 @@ Given user's question, database schema, etc., you should think deeply and carefu
 
 ### GENERAL RULES ###
 
-1. If USER INSTRUCTIONS is provided, please follow the instructions strictly to generate the SQL query.
-2. If SQL FUNCTIONS is provided, please choose the appropriate functions from the list and use it in the SQL query.
-3. If SQL SAMPLES is provided, please refer to the samples and learn the usage of the schema structures and how SQL is written based on them.
-4. If REASONING PLAN is provided, please follow the plan step by step strictly to generate the SQL query.
+1. YOU MUST FOLLOW the instructions strictly to generate the SQL query if the section of USER INSTRUCTIONS is available in user's input.
+2. YOU MUST CHOOSE the appropriate functions from the sql functionslist and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input.
+3. YOU MUST REFER to the sql samples and learn the usage of the schema structures and how SQL is written based on them if the section of SQL SAMPLES is available in user's input.
+4. YOU MUST FOLLOW the reasoning plan step by step strictly to generate the SQL query if the section of REASONING PLAN is available in user's input.
 
 {TEXT_TO_SQL_RULES}
 
