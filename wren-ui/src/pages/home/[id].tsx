@@ -98,6 +98,7 @@ export default function HomeThread() {
     onError: () => router.push(Path.Home),
   });
   const [createThreadResponse] = useCreateThreadResponseMutation({
+    onError: (error) => console.error(error),
     onCompleted(next) {
       const nextResponse = next.createThreadResponse;
       updateThreadQuery((prev) => {
@@ -113,6 +114,7 @@ export default function HomeThread() {
   });
   const [updateThreadResponse, { loading: threadResponseUpdating }] =
     useUpdateThreadResponseMutation({
+      onError: (error) => console.error(error),
       onCompleted: (data) => {
         message.success('Successfully updated the SQL statement');
         // trigger generate answer after sql statement updated
@@ -137,7 +139,9 @@ export default function HomeThread() {
     });
 
   const [generateThreadRecommendationQuestions] =
-    useGenerateThreadRecommendationQuestionsMutation();
+    useGenerateThreadRecommendationQuestionsMutation({
+      onError: (error) => console.error(error),
+    });
 
   const [
     fetchThreadRecommendationQuestions,
@@ -147,11 +151,16 @@ export default function HomeThread() {
   });
 
   const [generateThreadResponseAnswer] =
-    useGenerateThreadResponseAnswerMutation();
+    useGenerateThreadResponseAnswerMutation({
+      onError: (error) => console.error(error),
+    });
 
-  const [generateThreadResponseChart] =
-    useGenerateThreadResponseChartMutation();
-  const [adjustThreadResponseChart] = useAdjustThreadResponseChartMutation();
+  const [generateThreadResponseChart] = useGenerateThreadResponseChartMutation({
+    onError: (error) => console.error(error),
+  });
+  const [adjustThreadResponseChart] = useAdjustThreadResponseChartMutation({
+    onError: (error) => console.error(error),
+  });
 
   const [createSqlPairMutation, { loading: createSqlPairLoading }] =
     useCreateSqlPairMutation({

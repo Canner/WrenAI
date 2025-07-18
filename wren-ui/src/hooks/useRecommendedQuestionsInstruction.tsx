@@ -49,7 +49,9 @@ export default function useRecommendedQuestionsInstruction() {
     });
 
   const [generateProjectRecommendationQuestions] =
-    useGenerateProjectRecommendationQuestionsMutation();
+    useGenerateProjectRecommendationQuestionsMutation({
+      onError: (error) => console.error(error),
+    });
 
   const recommendedQuestionsTask = useMemo(
     () =>

@@ -12,8 +12,12 @@ export default function useHomeSidebar() {
   const { data, refetch } = useThreadsQuery({
     fetchPolicy: 'cache-and-network',
   });
-  const [updateThread] = useUpdateThreadMutation();
-  const [deleteThread] = useDeleteThreadMutation();
+  const [updateThread] = useUpdateThreadMutation({
+    onError: (error) => console.error(error),
+  });
+  const [deleteThread] = useDeleteThreadMutation({
+    onError: (error) => console.error(error),
+  });
 
   const threads = useMemo(
     () =>

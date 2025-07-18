@@ -28,7 +28,9 @@ export default function AdjustSQLModal(props: Props) {
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [showPreview, setShowPreview] = useState<boolean>(false);
 
-  const [previewSqlMutation, previewSqlResult] = usePreviewSqlMutation();
+  const [previewSqlMutation, previewSqlResult] = usePreviewSqlMutation({
+    onError: (error) => console.error(error),
+  });
 
   const sqlValue = Form.useWatch('sql', form);
 
