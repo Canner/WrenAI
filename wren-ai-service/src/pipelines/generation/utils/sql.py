@@ -195,6 +195,7 @@ Otherwise, you will put the relative timeframe in the SQL query.
 10. Do not include ```markdown or ``` in the answer.
 11. A table name in the reasoning plan must be in this format: `table: <table_name>`.
 12. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
+13. ALWAYS SHOWING the last step stating that the SQL query should be generated step by step strictly based on the reasoning plan.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
