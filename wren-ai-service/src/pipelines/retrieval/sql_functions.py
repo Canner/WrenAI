@@ -28,14 +28,6 @@ class SqlFunction:
                 definition.get("description", ""),
             )
 
-        def _param_expr(param_type: str, index: int) -> str:
-            if param_type == "any":
-                return "any"
-
-            param_type = param_type.strip()
-            param_name = f"${index}"
-            return f"{param_name}: {param_type}"
-
         name, function_type, description = _extract()
 
         self._expr = f"type: {function_type}, name: {name}, description: {description}"
