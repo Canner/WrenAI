@@ -195,7 +195,8 @@ Otherwise, you will put the relative timeframe in the SQL query.
 10. Do not include ```markdown or ``` in the answer.
 11. A table name in the reasoning plan must be in this format: `table: <table_name>`.
 12. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
-13. ALWAYS SHOWING the last step stating that the SQL query should be generated step by step strictly based on the reasoning plan.
+13. ALWAYS SHOWING the last step stating that "the SQL query must be generated strictly based on the reasoning plan, no exception!".
+14. ONLY SHOWING the reasoning plan in bullet points.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
@@ -211,6 +212,7 @@ TEXT_TO_SQL_RULES = """
 - DON'T INCLUDE comments in the generated SQL query.
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
 - ALWAYS QUALIFY column names with their table name or table alias to avoid ambiguity (e.g., orders.OrderId, o.OrderId)
+- PREFER USING CTEs over subqueries.
 - YOU MUST USE "lower(<table_name>.<column_name>) like lower(<value>)" function or "lower(<table_name>.<column_name>) = lower(<value>)" function for case-insensitive comparison!
     - Use "lower(<table_name>.<column_name>) LIKE lower(<value>)" when:
         - The user requests a pattern or partial match.
