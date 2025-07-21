@@ -42,7 +42,7 @@ async def recommend(
         id=id,
         mdl=request.mdl,
         project_id=request.project_id,
-        configuration=request.configuration,
+        configuration=request.configurations,
     )
 
     background_tasks.add_task(
