@@ -18,20 +18,6 @@ from src.web.v1.services.sql_question import (
 
 router = APIRouter()
 
-"""
-SQL Questions Router
-
-This router handles SQL question-related endpoints:
-
-POST /sql-questions
-    Accepts a SQL query and initiates asynchronous processing
-    Returns a query ID for tracking the request
-
-GET /sql-questions/{query_id}
-    Retrieves the processing status and results for a given query ID
-    Returns the current status (generating/succeeded/failed), questions, and any error details
-"""
-
 
 @router.post("/sql-questions")
 async def sql_question(
