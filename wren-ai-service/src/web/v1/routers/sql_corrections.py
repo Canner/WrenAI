@@ -11,62 +11,14 @@ from src.globals import (
     get_service_container,
     get_service_metadata,
 )
-from src.web.v1.services import SqlCorrectionService
+from src.web.v1.services import BaseRequest, SqlCorrectionService
 
 router = APIRouter()
 
 
-"""
-SQL Correction Router
-
-This router handles endpoints related to correcting invalid SQL queries.
-
-Endpoints:
-1. POST /sql-corrections
-   - Initiates SQL correction process for invalid SQL queries
-   - Request body: PostRequest
-     {
-       "sql": "SELECT * FROM table",        # Invalid SQL statement
-       "error": "Error message"             # Error message
-       "project_id": "project-id"              # Optional project ID
-     }
-   - Response: PostResponse
-     {
-       "event_id": "unique-uuid"               # Unique identifier for tracking correction
-     }
-
-2. GET /sql-corrections/{event_id}
-   - Retrieves status and results of SQL correction process
-   - Path parameter: event_id (str)
-   - Response: GetResponse
-     {
-       "event_id": "unique-uuid",              # Unique identifier
-       "status": "correcting" | "finished" | "failed",
-       "response": "corrected-sql",            # Correction results (when status is "finished")
-       "error": {                              # Present only if status is "failed"
-         "code": "OTHERS",
-         "message": "Error description"
-       },
-       "trace_id": "trace-id"                  # Optional trace ID for debugging
-     }
-
-The SQL correction is an asynchronous process. The POST endpoint initiates the operation
-and returns immediately with an event_id. The GET endpoint can then be used to check the
-status and retrieve the results.
-
-Usage:
-1. Send a POST request to start the correction process
-2. Use the returned event_id to poll the GET endpoint until status is "finished" or "failed"
-
-Note: The actual processing is performed in the background using FastAPI's BackgroundTasks.
-Results are cached with a TTL defined in the service configuration.
-"""
-
-
-class PostRequest(BaseModel):
+class PostRequest(BaseRequest):
     sql: str
     error: str
-    project_id: Optional[str] = None
     retrieved_tables: Optional[List[str]] = None
     use_dry_plan: bool = False
     allow_dry_plan_fallback: bool = True

@@ -27,64 +27,6 @@ from src.web.v1.services.ask import (
 
 router = APIRouter()
 
-"""
-Ask Router
-
-This router manages the endpoints related to submitting, stopping, and retrieving the results of SQL queries.
-
-Endpoints:
-1. **POST /asks**
-   - Submits a new query for processing.
-   - **Request Body**:
-     - `query`: The natural language query to be processed.
-     - `project_id`: (Optional) Identifier for the project to fetch relevant data.
-     - `mdl_hash`: (Optional) Hash or ID related to the model to be used for the query.
-     - `thread_id`: (Optional) Thread identifier for the query.
-     - `history`: (Optional) Query history (SQL steps).
-     - `configurations`: (Optional) Configuration such as fiscal year.
-   - **Response**:
-     - `query_id`: A unique identifier (UUID) for tracking the query.
-
-2. **PATCH /asks/{query_id}**
-   - Stops an ongoing query.
-   - **Path Parameter**:
-     - `query_id`: The unique identifier of the query to be stopped.
-   - **Request Body**:
-     - `status`: Must be set to `"stopped"`.
-   - **Response**:
-     - `query_id`: The unique identifier of the stopped query.
-
-3. **GET /asks/{query_id}/result**
-   - Retrieves the status and result of a submitted query.
-   - **Path Parameter**:
-     - `query_id`: The unique identifier of the query.
-   - **Response**:
-     - `status`: The current status of the query (`"understanding"`, `"searching"`, `"generating"`, `"correcting"`, `"finished"`, `"failed"`, or `"stopped"`).
-     - `type`: The type of result (`"MISLEADING_QUERY"`, `"GENERAL"`, or `"TEXT_TO_SQL"`).
-     - `response`: (Optional) A list of SQL results, each containing:
-       - `sql`: The generated SQL statement.
-       - `type`: The type of result (`"llm"` or `"view"`).
-       - `viewId`: (Optional) The ID of the view, if applicable.
-     - `error`: (Optional) Error information if the query failed, including:
-       - `code`: The error code (e.g., `"NO_RELEVANT_DATA"`, `"NO_RELEVANT_SQL"`, `"OTHERS"`).
-       - `message`: A detailed error message.
-
-4. **GET /asks/{query_id}/streaming-result**
-   - Retrieves the streaming result of a submitted query.
-   - **Path Parameter**:
-     - `query_id`: The unique identifier of the query.
-   - **Response**:
-     - Streaming response with the query result.
-
-Process:
-1. Use the POST endpoint to submit a new query. This returns a `query_id` to track the query.
-2. To stop an ongoing query, use the PATCH endpoint with the `query_id`.
-3. Use the GET endpoint to check the query status or retrieve the result once the query is processed.
-4. Use the GET endpoint to retrieve the streaming result if the query generates a "GENERAL" type result from the `/asks/{query_id}/result` endpoint.
-
-Note: The query processing is asynchronous, and status updates can be polled via the GET endpoint.
-"""
-
 
 @router.post("/asks")
 async def ask(
