@@ -11,7 +11,7 @@ from langfuse.decorators import observe
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, LLMProvider
-from src.pipelines.common import retrieve_metadata
+from src.pipelines.common import clean_up_new_lines, retrieve_metadata
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     TEXT_TO_SQL_RULES,
@@ -66,10 +66,11 @@ def prompt(
     invalid_generation_result: Dict,
     prompt_builder: PromptBuilder,
 ) -> dict:
-    return prompt_builder.run(
+    _prompt = prompt_builder.run(
         documents=documents,
         invalid_generation_result=invalid_generation_result,
     )
+    return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
 
 @observe(as_type="generation", capture_input=False)

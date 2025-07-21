@@ -1,3 +1,4 @@
+import re
 from typing import Any, List, Optional, Tuple
 
 from haystack import Document, component
@@ -102,3 +103,10 @@ class ScoreFilter:
                 reverse=True,
             )[:max_size]
         }
+
+
+MULTIPLE_NEW_LINE_REGEX = re.compile(r"\n{3,}")
+
+
+def clean_up_new_lines(text: str) -> str:
+    return MULTIPLE_NEW_LINE_REGEX.sub("\n\n\n", text)
