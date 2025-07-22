@@ -10,7 +10,9 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
+from src.pipelines.common import clean_up_new_lines
 from src.utils import trace_cost
+from src.web.v1.services import Configuration
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -40,8 +42,12 @@ sql_to_answer_user_prompt_template = """
 ### Input
 User's question: {{ query }}
 SQL: {{ sql }}
-Data: {{ sql_data }}
+Data: 
+columns: {{ sql_data.columns }}
+rows: {{ sql_data.data }}
 Language: {{ language }}
+Current Time: {{ current_time }}
+
 Custom Instruction: {{ custom_instruction }}
 
 Please think step by step and answer the user's question.
@@ -55,16 +61,19 @@ def prompt(
     sql: str,
     sql_data: dict,
     language: str,
+    current_time: str,
     custom_instruction: str,
     prompt_builder: PromptBuilder,
 ) -> dict:
-    return prompt_builder.run(
+    _prompt = prompt_builder.run(
         query=query,
         sql=sql,
         sql_data=sql_data,
         language=language,
+        current_time=current_time,
         custom_instruction=custom_instruction,
     )
+    return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
 
 @observe(as_type="generation", capture_input=False)
@@ -144,6 +153,7 @@ class SQLAnswer(BasicPipeline):
         sql: str,
         sql_data: dict,
         language: str,
+        current_time: str = Configuration().show_current_time(),
         query_id: Optional[str] = None,
         custom_instruction: Optional[str] = None,
     ) -> dict:
@@ -155,6 +165,7 @@ class SQLAnswer(BasicPipeline):
                 "sql": sql,
                 "sql_data": sql_data,
                 "language": language,
+                "current_time": current_time,
                 "query_id": query_id,
                 "custom_instruction": custom_instruction or "",
                 **self._components,

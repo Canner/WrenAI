@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
+from src.pipelines.common import clean_up_new_lines
 from src.utils import trace_cost
 
 logger = logging.getLogger("wren-ai-service")
@@ -60,7 +61,8 @@ def prompt(
     sql: str,
     prompt_builder: PromptBuilder,
 ) -> dict:
-    return prompt_builder.run(sql=sql)
+    _prompt = prompt_builder.run(sql=sql)
+    return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
 
 @observe(as_type="generation", capture_input=False)

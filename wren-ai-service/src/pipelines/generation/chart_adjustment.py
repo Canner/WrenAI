@@ -10,6 +10,7 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
+from src.pipelines.common import clean_up_new_lines
 from src.pipelines.generation.utils.chart import (
     ChartDataPreprocessor,
     ChartGenerationPostProcessor,
@@ -97,7 +98,7 @@ def prompt(
     sample_data = preprocess_data.get("sample_data")
     sample_column_values = preprocess_data.get("sample_column_values")
 
-    return prompt_builder.run(
+    _prompt = prompt_builder.run(
         query=query,
         sql=sql,
         adjustment_option=adjustment_option,
@@ -106,6 +107,7 @@ def prompt(
         sample_column_values=sample_column_values,
         language=language,
     )
+    return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
 
 @observe(as_type="generation", capture_input=False)

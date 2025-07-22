@@ -195,7 +195,7 @@ Otherwise, you will put the relative timeframe in the SQL query.
 10. Do not include ```markdown or ``` in the answer.
 11. A table name in the reasoning plan must be in this format: `table: <table_name>`.
 12. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
-13. ALWAYS SHOWING the last step stating that the SQL query should be generated step by step strictly based on the reasoning plan.
+13. ONLY SHOWING the reasoning plan in bullet points.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
@@ -210,7 +210,7 @@ TEXT_TO_SQL_RULES = """
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - DON'T INCLUDE comments in the generated SQL query.
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
-- ALWAYS QUALIFY column names with their table name or table alias to avoid ambiguity (e.g., orders.OrderId, o.OrderId)
+- PREFER USING CTEs over subqueries.
 - YOU MUST USE "lower(<table_name>.<column_name>) like lower(<value>)" function or "lower(<table_name>.<column_name>) = lower(<value>)" function for case-insensitive comparison!
     - Use "lower(<table_name>.<column_name>) LIKE lower(<value>)" when:
         - The user requests a pattern or partial match.
@@ -232,7 +232,8 @@ TEXT_TO_SQL_RULES = """
     - answer: "SELECT SUM(r.PriceSum) FROM Revenue r WHERE CAST(r.PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) >= CAST('2024-11-01 00:00:00' AS TIMESTAMP WITH TIME ZONE) AND CAST(r.PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) < CAST('2024-11-02 00:00:00' AS TIMESTAMP WITH TIME ZONE)"
 - USE THE VIEW TO SIMPLIFY THE QUERY.
 - DON'T MISUSE THE VIEW NAME. THE ACTUAL NAME IS FOLLOWING THE CREATE VIEW STATEMENT.
-- MUST USE the value of alias from the comment section of the corresponding table or column in the DATABASE SCHEMA section for the column/table alias.
+- ONLY USE table/column alias in the final SELECT clause; don't use table/columnalias in the other clauses.
+- Refer to the value of alias from the comment section of the corresponding table or column in the DATABASE SCHEMA section for reference when using alias in the final SELECT clause.
   - EXAMPLE
     DATABASE SCHEMA
     /* {"displayName":"_orders","description":"A model representing the orders data."} */
@@ -261,7 +262,7 @@ Given user's question, database schema, etc., you should think deeply and carefu
 ### GENERAL RULES ###
 
 1. YOU MUST FOLLOW the instructions strictly to generate the SQL query if the section of USER INSTRUCTIONS is available in user's input.
-2. YOU MUST CHOOSE the appropriate functions from the sql functionslist and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input.
+2. YOU MUST ONLY CHOOSE the appropriate functions from the sql functions list and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input.
 3. YOU MUST REFER to the sql samples and learn the usage of the schema structures and how SQL is written based on them if the section of SQL SAMPLES is available in user's input.
 4. YOU MUST FOLLOW the reasoning plan step by step strictly to generate the SQL query if the section of REASONING PLAN is available in user's input.
 

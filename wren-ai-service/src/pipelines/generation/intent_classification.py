@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
-from src.pipelines.common import build_table_ddl
+from src.pipelines.common import build_table_ddl, clean_up_new_lines
 from src.pipelines.generation.utils.sql import construct_instructions
 from src.utils import trace_cost
 from src.web.v1.services import Configuration
@@ -276,7 +276,7 @@ def prompt(
     instructions: Optional[list[dict]] = None,
     configuration: Configuration | None = None,
 ) -> dict:
-    return prompt_builder.run(
+    _prompt = prompt_builder.run(
         query=query,
         language=configuration.language,
         db_schemas=construct_db_schemas,
@@ -287,6 +287,7 @@ def prompt(
         ),
         docs=wren_ai_docs,
     )
+    return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
 
 @observe(as_type="generation", capture_input=False)

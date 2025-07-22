@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
+from src.pipelines.common import clean_up_new_lines
 from src.utils import trace_cost
 
 logger = logging.getLogger("wren-ai-service")
@@ -32,13 +33,14 @@ def prompt(
     contextually relevant questions that build on previous questions.
     """
 
-    return prompt_builder.run(
+    _prompt = prompt_builder.run(
         models=[] if previous_questions else mdl.get("models", []),
         previous_questions=previous_questions,
         language=language,
         max_questions=max_questions,
         max_categories=max_categories,
     )
+    return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
 
 @observe(as_type="generation", capture_input=False)

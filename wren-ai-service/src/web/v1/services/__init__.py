@@ -1,6 +1,8 @@
+from datetime import datetime
 from typing import Literal, Optional
 
 import orjson
+import pytz
 from pydantic import AliasChoices, BaseModel, Field
 
 
@@ -25,6 +27,15 @@ class Configuration(BaseModel):
     class Timezone(BaseModel):
         name: str = "UTC"
         utc_offset: str = ""  # Deprecated, will be removed in the future
+
+    def show_current_time(self):
+        # Get the current time in the specified timezone
+        tz = pytz.timezone(
+            self.timezone.name
+        )  # Assuming timezone.name contains the timezone string
+        current_time = datetime.now(tz)
+
+        return f"{current_time.strftime('%Y-%m-%d %A %H:%M:%S')}"  # YYYY-MM-DD weekday_name HH:MM:SS, ex: 2024-10-23 Wednesday 12:00:00
 
     language: str = "English"
     timezone: Timezone = Timezone()
