@@ -44,9 +44,10 @@ SQL:
 {% endfor %}
 {% endif %}
 
-### QUESTION ###
+### INPUTS ###
 User's Question: {{ query }}
 Language: {{ language }}
+Current Time: {{ current_time }}
 
 Let's think step by step.
 """
@@ -70,6 +71,7 @@ def prompt(
             instructions=instructions,
         ),
         language=configuration.language,
+        current_time=configuration.show_current_time(),
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
