@@ -39,7 +39,7 @@ Please provide your response in proper Markdown stringformat.
 """
 
 sql_to_answer_user_prompt_template = """
-### Input
+### Inputs ###
 User's question: {{ query }}
 SQL: {{ sql }}
 Data: 
