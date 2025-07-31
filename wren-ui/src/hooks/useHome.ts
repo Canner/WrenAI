@@ -1,5 +1,6 @@
 import { ComponentRef, useMemo, useRef } from 'react';
 import { useRouter } from 'next/router';
+import Prompt from '@/components/pages/home/prompt';
 import { useSuggestedQuestionsQuery, useCreateThreadMutation, useThreadLazyQuery } from '@/apollo/client/graphql/home.generated';
 import { useGetSettingsQuery } from '@/apollo/client/graphql/settings.generated';
 import { CreateThreadInput } from '@/apollo/client/graphql/__types__';
