@@ -29,6 +29,7 @@ class AskRequest(BaseRequest):
     enable_column_pruning: bool = False
     use_dry_plan: bool = False
     allow_dry_plan_fallback: bool = True
+    timeout: float = Field(default=30.0, description="Timeout for the ask query in seconds.")
 
 
 class AskResponse(BaseModel):
@@ -172,6 +173,24 @@ class AskService:
     @observe(name="Ask Question")
     @trace_metadata
     async def ask(
+        self,
+        ask_request: AskRequest,
+        **kwargs,
+    ):
+        try:
+            await asyncio.wait_for(self._ask(ask_request, **kwargs), timeout=ask_request.timeout)
+        except asyncio.TimeoutError:
+            logger.warning(f"ask pipeline - TIMEOUT: {ask_request.query_id}")
+            self._ask_results[ask_request.query_id] = AskResultResponse(
+                status="failed",
+                error=AskError(
+                    code="OTHERS",
+                    message="Query timed out",
+                ),
+                trace_id=kwargs.get("trace_id"),
+            )
+
+    async def _ask(
         self,
         ask_request: AskRequest,
         **kwargs,
