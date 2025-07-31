@@ -257,6 +257,7 @@ class AskService:
                         self._pipelines["instructions_retrieval"].run(
                             query=user_query,
                             project_id=ask_request.project_id,
+                            scope="sql",
                         ),
                     )
 
@@ -737,6 +738,7 @@ class AskService:
                     self._pipelines["instructions_retrieval"].run(
                         query=ask_feedback_request.question,
                         project_id=ask_feedback_request.project_id,
+                        scope="sql",
                     ),
                 )
 

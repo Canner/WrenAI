@@ -63,7 +63,7 @@ class BaseRequest(BaseModel):
         default_factory=Configuration,
         alias=AliasChoices("configurations", "configuration"),  # accept both keys
     )
-    request_from: Literal["ui", "api", "slack"] = "ui"
+    request_from: Literal["ui", "api"] = "ui"
 
     @property
     def query_id(self) -> str:
