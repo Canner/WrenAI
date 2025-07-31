@@ -145,6 +145,7 @@ class AskService:
         enable_column_pruning: bool = False,
         max_sql_correction_retries: int = 3,
         max_histories: int = 5,
+        max_ask_timeout: int = 300,
         maxsize: int = 1_000_000,
         ttl: int = 120,
     ):
@@ -161,6 +162,7 @@ class AskService:
         self._enable_column_pruning = enable_column_pruning
         self._max_histories = max_histories
         self._max_sql_correction_retries = max_sql_correction_retries
+        self._max_ask_timeout = max_ask_timeout
 
     def _is_stopped(self, query_id: str, container: dict):
         if (
@@ -177,8 +179,9 @@ class AskService:
         ask_request: AskRequest,
         **kwargs,
     ):
+        timeout = min(ask_request.timeout, self._max_ask_timeout)
         try:
-            await asyncio.wait_for(self._ask(ask_request, **kwargs), timeout=ask_request.timeout)
+            await asyncio.wait_for(self._ask(ask_request, **kwargs), timeout=timeout)
         except asyncio.TimeoutError:
             logger.warning(f"ask pipeline - TIMEOUT: {ask_request.query_id}")
             self._ask_results[ask_request.query_id] = AskResultResponse(
