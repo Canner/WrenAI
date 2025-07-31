@@ -117,13 +117,13 @@ def filtered_documents(
     if not retrieval:
         return {}
 
-    documents = scope_filter.run(
+    res = scope_filter.run(
         documents=retrieval.get("documents"),
         scope=scope,
     )
 
     return score_filter.run(
-        documents=documents,
+        documents=res.get("documents"),
         score=similarity_threshold,
         max_size=top_k,
     )
@@ -152,17 +152,17 @@ async def default_instructions(
             {"field": "project_id", "operator": "==", "value": project_id}
         )
 
-    res = await retriever.run(
+    _res = await retriever.run(
         query_embedding=None,
         filters=filters,
     )
 
-    documents = scope_filter.run(
-        documents=res.get("documents"),
+    res = scope_filter.run(
+        documents=_res.get("documents"),
         scope=scope,
     )
 
-    return dict(documents=documents)
+    return dict(documents=res.get("documents"))
 
 
 @observe(capture_input=False)
