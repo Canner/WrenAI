@@ -8,7 +8,7 @@ type DbtProfiles struct {
 
 // DbtProfile represents a single profile in profiles.yml
 type DbtProfile struct {
-	Target  string                   `yaml:"target" json:"target"`
+	Target  string                 `yaml:"target" json:"target"`
 	Outputs map[string]DbtConnection `yaml:"outputs" json:"outputs"`
 }
 
@@ -26,13 +26,14 @@ type DbtConnection struct {
 	Project   string `yaml:"project,omitempty" json:"project,omitempty"`     // BigQuery
 	Dataset   string `yaml:"dataset,omitempty" json:"dataset,omitempty"`     // BigQuery
 	Keyfile   string `yaml:"keyfile,omitempty" json:"keyfile,omitempty"`     // BigQuery
+	Method    string `yaml:"method,omitempty" json:"method,omitempty"`       // BigQuery
 	Account   string `yaml:"account,omitempty" json:"account,omitempty"`     // Snowflake
 	Warehouse string `yaml:"warehouse,omitempty" json:"warehouse,omitempty"` // Snowflake
 	Role      string `yaml:"role,omitempty" json:"role,omitempty"`           // Snowflake
 	KeepAlive bool   `yaml:"keepalive,omitempty" json:"keepalive,omitempty"` // Postgres
 
 	SearchPath string `yaml:"search_path,omitempty" json:"search_path,omitempty"` // Postgres
-	SSLMode    string `yaml:"sslmode,omitempty" json:"sslmode,omitempty"`         // Postgres
+	SSLMode    string `yaml:"sslmode,omitempty" json:"sslmode,omitempty"`       // Postgres
 
 	SslDisable bool `yaml:"ssl_disable,omitempty" json:"ssl_disable,omitempty"` // MySQL
 
