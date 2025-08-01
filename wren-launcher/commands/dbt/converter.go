@@ -154,6 +154,17 @@ func ConvertDbtProjectCore(opts ConvertOptions) (*ConvertResult, error) {
 						"format": typedDS.Format,
 					},
 				}
+			case *WrenBigQueryDataSource:
+				wrenDataSource = map[string]interface{}{
+					"type": "bigquery",
+					"properties": map[string]interface{}{
+						"project":      typedDS.Project,
+						"dataset":      typedDS.Dataset,
+						"method":       typedDS.Method,
+						"keyfile":      typedDS.Keyfile,
+						"keyfile_json": typedDS.KeyfileJSON,
+					},
+				}
 			case *WrenMysqlDataSource:
 				wrenDataSource = map[string]interface{}{
 					"type": "mysql",
