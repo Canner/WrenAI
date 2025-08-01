@@ -1,7 +1,7 @@
 import logging
 import sys
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
@@ -23,6 +23,7 @@ class Instruction(BaseModel):
     question: str = ""
     # This is used to identify the default instruction needed to be retrieved for the project
     is_default: bool = False
+    scope: Literal["sql", "answer", "chart"] = "sql"
 
 
 @component
@@ -41,6 +42,7 @@ class InstructionsConverter:
                         "instruction_id": instruction.id,
                         "instruction": instruction.instruction,
                         "is_default": instruction.is_default,
+                        "scope": instruction.scope,
                         **addition,
                     },
                     content="this is a global instruction, so no question is provided"
