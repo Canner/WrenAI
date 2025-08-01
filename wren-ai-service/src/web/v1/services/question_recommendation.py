@@ -92,6 +92,7 @@ class QuestionRecommendation:
             result = await self._pipelines["instructions_retrieval"].run(
                 query=candidate["question"],
                 project_id=project_id,
+                scope="sql",
             )
             instructions = result["formatted_output"].get("instructions", [])
             return instructions
