@@ -519,3 +519,172 @@ func TestValidateAllDataSources(t *testing.T) {
 		t.Error("ValidateAllDataSources should fail for invalid profiles")
 	}
 }
+
+func TestFromDbtProfiles_BigQuery(t *testing.T) {
+	t.Run("service-account", func(t *testing.T) {
+		profiles := &DbtProfiles{
+			Profiles: map[string]DbtProfile{
+				"test_profile": {
+					Target: "dev",
+					Outputs: map[string]DbtConnection{
+						"dev": {
+							Type:    "bigquery",
+							Method:  "service-account",
+							Project: "test-project",
+							Dataset: "test-dataset",
+							Keyfile: "/path/to/key.json",
+						},
+					},
+				},
+			},
+		}
+
+		dataSources, err := FromDbtProfiles(profiles)
+		if err != nil {
+			t.Fatalf("FromDbtProfiles failed: %v", err)
+		}
+
+		if len(dataSources) != 1 {
+			t.Fatalf("Expected 1 data source, got %d", len(dataSources))
+		}
+
+		ds, ok := dataSources[0].(*WrenBigQueryDataSource)
+		if !ok {
+			t.Fatalf("Expected WrenBigQueryDataSource, got %T", dataSources[0])
+		}
+
+		if ds.Project != "test-project" {
+			t.Errorf("Expected project 'test-project', got '%s'", ds.Project)
+		}
+
+		if ds.Method != "service-account" {
+			t.Errorf("Expected method 'service-account', got '%s'", ds.Method)
+		}
+
+		if ds.Keyfile != "/path/to/key.json" {
+			t.Errorf("Expected keyfile '/path/to/key.json', got '%s'", ds.Keyfile)
+		}
+	})
+
+	t.Run("service-account-json", func(t *testing.T) {
+		keyfileContent := `{"type": "service_account"}`
+		profiles := &DbtProfiles{
+			Profiles: map[string]DbtProfile{
+				"test_profile": {
+					Target: "dev",
+					Outputs: map[string]DbtConnection{
+						"dev": {
+							Type:    "bigquery",
+							Method:  "service-account-json",
+							Project: "test-project",
+							Dataset: "test-dataset",
+							Additional: map[string]interface{}{
+								"keyfile_json": keyfileContent,
+							},
+						},
+					},
+				},
+			},
+		}
+
+		dataSources, err := FromDbtProfiles(profiles)
+		if err != nil {
+			t.Fatalf("FromDbtProfiles failed: %v", err)
+		}
+
+		if len(dataSources) != 1 {
+			t.Fatalf("Expected 1 data source, got %d", len(dataSources))
+		}
+
+		ds, ok := dataSources[0].(*WrenBigQueryDataSource)
+		if !ok {
+			t.Fatalf("Expected WrenBigQueryDataSource, got %T", dataSources[0])
+		}
+
+		if ds.Project != "test-project" {
+			t.Errorf("Expected project 'test-project', got '%s'", ds.Project)
+		}
+
+		if ds.Method != "service-account-json" {
+			t.Errorf("Expected method 'service-account-json', got '%s'", ds.Method)
+		}
+
+		if ds.KeyfileJSON != keyfileContent {
+			t.Errorf("Expected keyfile_json content, got '%s'", ds.KeyfileJSON)
+		}
+	})
+}
+
+func TestBigQueryDataSourceValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		ds      *WrenBigQueryDataSource
+		wantErr bool
+	}{
+		{
+			name: "valid service-account",
+			ds: &WrenBigQueryDataSource{
+				Project: "test-project",
+				Dataset: "test-dataset",
+				Method:  "service-account",
+				Keyfile: "/path/to/key.json",
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid service-account-json",
+			ds: &WrenBigQueryDataSource{
+				Project:     "test-project",
+				Dataset:     "test-dataset",
+				Method:      "service-account-json",
+				KeyfileJSON: `{"type": "service_account"}`,
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid - missing project",
+			ds: &WrenBigQueryDataSource{
+				Dataset: "test-dataset",
+				Method:  "service-account",
+				Keyfile: "/path/to/key.json",
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid - missing dataset",
+			ds: &WrenBigQueryDataSource{
+				Project: "test-project",
+				Method:  "service-account",
+				Keyfile: "/path/to/key.json",
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid - unsupported oauth",
+			ds: &WrenBigQueryDataSource{
+				Project: "test-project",
+				Dataset: "test-dataset",
+				Method:  "oauth",
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid - missing keyfile for service-account",
+			ds: &WrenBigQueryDataSource{
+				Project: "test-project",
+				Dataset: "test-dataset",
+				Method:  "service-account",
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.ds.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
