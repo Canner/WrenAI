@@ -81,6 +81,8 @@ func convertConnectionToDataSource(conn DbtConnection, dbtHomePath, profileName,
 		return convertToLocalFileDataSource(conn, dbtHomePath)
 	case "mysql":
 		return convertToMysqlDataSource(conn)
+	case "bigquery":
+		return convertToBigQueryDataSource(conn)
 	default:
 		// For unsupported database types, we can choose to ignore or return error
 		// Here we choose to return nil and log a warning
@@ -175,6 +177,29 @@ func convertToMysqlDataSource(conn DbtConnection) (*WrenMysqlDataSource, error) 
 		SslMode:  sslMode,
 	}
 
+	return ds, nil
+}
+
+// convertToBigQueryDataSource converts to BigQuery data source
+func convertToBigQueryDataSource(conn DbtConnection) (*WrenBigQueryDataSource, error) {
+	// We need to extract the keyfile content, which might be in the 'Additional' map
+	var keyfileJSON string
+	if kfj, exists := conn.Additional["keyfile_json"]; exists {
+		if kfjStr, ok := kfj.(string); ok {
+			keyfileJSON = kfjStr
+		}
+	}
+
+	ds := &WrenBigQueryDataSource{
+		Project:     conn.Project,
+		Dataset:     conn.Dataset,
+		Location:    conn.Location,
+		Threads:     conn.Threads,
+		Method:      conn.Method,
+		Keyfile:     conn.Keyfile,
+		KeyfileJSON: keyfileJSON,
+		Priority:    conn.Priority,
+	}
 	return ds, nil
 }
 
@@ -339,6 +364,57 @@ func (ds *WrenMysqlDataSource) MapType(sourceType string) string {
 		// Return the original type if no mapping is found
 		return strings.ToLower(sourceType)
 	}
+}
+
+type WrenBigQueryDataSource struct {
+	Project     string `json:"project"`
+	Dataset     string `json:"dataset"`
+	Location    string `json:"location,omitempty"`
+	Threads     int    `json:"threads,omitempty"`
+	Method      string `json:"method"`
+	Keyfile     string `json:"keyfile,omitempty"`
+	KeyfileJSON string `json:"keyfile_json,omitempty"`
+	Priority    string `json:"priority,omitempty"`
+}
+
+// GetType implements DataSource interface
+func (ds *WrenBigQueryDataSource) GetType() string {
+	return "bigquery"
+}
+
+// Validate implements DataSource interface
+func (ds *WrenBigQueryDataSource) Validate() error {
+	if ds.Project == "" {
+		return fmt.Errorf("project cannot be empty")
+	}
+	if ds.Dataset == "" {
+		return fmt.Errorf("dataset cannot be empty")
+	}
+
+	// Validate based on the authentication method
+	switch ds.Method {
+	case "service-account":
+		if ds.Keyfile == "" {
+			return fmt.Errorf("keyfile cannot be empty for method 'service-account'")
+		}
+	case "service-account-json":
+		if ds.KeyfileJSON == "" {
+			return fmt.Errorf("keyfile_json cannot be empty for method 'service-account-json'")
+		}
+	case "oauth":
+		return fmt.Errorf("authentication method 'oauth' is not supported; please use a service account method")
+	default:
+		return fmt.Errorf("unsupported or missing authentication method: '%s'", ds.Method)
+	}
+
+	return nil
+}
+
+// MapType implements DataSource interface
+func (ds *WrenBigQueryDataSource) MapType(sourceType string) string {
+	// Add BigQuery specific type mappings here if needed
+	// For now, we can use the default mapping logic
+	return sourceType
 }
 
 // GetActiveDataSources gets active data sources based on specified profile and target
