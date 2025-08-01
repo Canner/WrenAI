@@ -55,6 +55,7 @@ class Settings(BaseSettings):
         so we set it to 1_000_000, which is a large number
         """,
     )
+    max_ask_timeout: int = Field(default=300, description="Maximum timeout for the ask query in seconds.")
 
     # user guide config
     is_oss: bool = Field(default=True)
