@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pterm/pterm"
+	"github.com.com/pterm/pterm"
 )
 
 // Constants for data types
@@ -401,8 +401,8 @@ func (ds *WrenBigQueryDataSource) Validate() error {
 		if ds.KeyfileJSON == "" {
 			return fmt.Errorf("keyfile_json cannot be empty for method 'service-account-json'")
 		}
-	case "oauth":
-		return fmt.Errorf("authentication method 'oauth' is not supported; please use a service account method")
+	case "oauth", "oauth-secrets":
+		return fmt.Errorf("authentication method '%s' is not supported; please use a service account method", ds.Method)
 	default:
 		return fmt.Errorf("unsupported or missing authentication method: '%s'", ds.Method)
 	}
