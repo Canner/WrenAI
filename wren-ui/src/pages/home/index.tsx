@@ -87,50 +87,19 @@ function RecommendedQuestionsInstruction(props) {
   );
 }
 
+import { useHome } from '@/hooks/useHome';
+
 export default function Home() {
-  const $prompt = useRef<ComponentRef<typeof Prompt>>(null);
-  const router = useRouter();
-  const homeSidebar = useHomeSidebar();
-  const askPrompt = useAskPrompt();
-
-  const { data: suggestedQuestionsData } = useSuggestedQuestionsQuery({
-    fetchPolicy: 'cache-and-network',
-  });
-  const [createThread, { loading: threadCreating }] = useCreateThreadMutation({
-    onError: (error) => console.error(error),
-    onCompleted: () => homeSidebar.refetch(),
-  });
-  const [preloadThread] = useThreadLazyQuery({
-    fetchPolicy: 'cache-and-network',
-  });
-
-  const { data: settingsResult } = useGetSettingsQuery();
-  const settings = settingsResult?.settings;
-  const isSampleDataset = useMemo(
-    () => Boolean(settings?.dataSource?.sampleDataset),
-    [settings],
-  );
-
-  const sampleQuestions = useMemo(
-    () => suggestedQuestionsData?.suggestedQuestions.questions || [],
-    [suggestedQuestionsData],
-  );
-
-  const onSelectQuestion = async ({ question }) => {
-    $prompt.current.submit(question);
-  };
-
-  const onCreateResponse = async (payload: CreateThreadInput) => {
-    try {
-      askPrompt.onStopPolling();
-      const response = await createThread({ variables: { data: payload } });
-      const threadId = response.data.createThread.id;
-      await preloadThread({ variables: { threadId } });
-      router.push(Path.Home + `/${threadId}`);
-    } catch (error) {
-      console.error(error);
-    }
-  };
+  const {
+    $prompt,
+    homeSidebar,
+    askPrompt,
+    isSampleDataset,
+    sampleQuestions,
+    onSelectQuestion,
+    onCreateResponse,
+    threadCreating,
+  } = useHome();
 
   return (
     <SiderLayout loading={false} sidebar={homeSidebar}>
