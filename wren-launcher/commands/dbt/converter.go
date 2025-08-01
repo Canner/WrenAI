@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.comcom/pterm/pterm"
+	"github.com/pterm/pterm"
 )
 
 // ConvertOptions holds the options for dbt project conversion
@@ -160,12 +160,9 @@ func ConvertDbtProjectCore(opts ConvertOptions) (*ConvertResult, error) {
 					"properties": map[string]interface{}{
 						"project":      typedDS.Project,
 						"dataset":      typedDS.Dataset,
-						"location":     typedDS.Location,
 						"method":       typedDS.Method,
 						"keyfile":      typedDS.Keyfile,
 						"keyfile_json": typedDS.KeyfileJSON,
-						"priority":     typedDS.Priority,
-						"threads":      typedDS.Threads,
 					},
 				}
 			default:
