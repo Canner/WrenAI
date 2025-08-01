@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/pterm/pterm"
+	"github.comcom/pterm/pterm"
 )
 
 // ConvertOptions holds the options for dbt project conversion
@@ -152,6 +152,20 @@ func ConvertDbtProjectCore(opts ConvertOptions) (*ConvertResult, error) {
 					"properties": map[string]interface{}{
 						"url":    url,
 						"format": typedDS.Format,
+					},
+				}
+			case *WrenBigQueryDataSource:
+				wrenDataSource = map[string]interface{}{
+					"type": "bigquery",
+					"properties": map[string]interface{}{
+						"project":      typedDS.Project,
+						"dataset":      typedDS.Dataset,
+						"location":     typedDS.Location,
+						"method":       typedDS.Method,
+						"keyfile":      typedDS.Keyfile,
+						"keyfile_json": typedDS.KeyfileJSON,
+						"priority":     typedDS.Priority,
+						"threads":      typedDS.Threads,
 					},
 				}
 			default:
