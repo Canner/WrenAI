@@ -20,6 +20,7 @@ class InstructionsService:
         questions: List[str]
         # This is used to identify the default instruction needed to be retrieved for the project
         is_default: bool = False
+        scope: Literal["sql", "answer", "chart"] = "sql"
 
     class Error(BaseModel):
         code: Literal["OTHERS"]
@@ -85,6 +86,7 @@ class InstructionsService:
                             instruction=instruction.instruction,
                             question="",
                             is_default=True,
+                            scope=instruction.scope,
                         )
                     )
                 else:
@@ -95,6 +97,7 @@ class InstructionsService:
                                 instruction=instruction.instruction,
                                 question=question,
                                 is_default=False,
+                                scope=instruction.scope,
                             )
                         )
 
