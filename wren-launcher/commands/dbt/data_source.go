@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com.com/pterm/pterm"
+	"github.com/pterm/pterm"
 )
 
 // DataSource is a common interface for all data source types
@@ -129,12 +129,9 @@ func convertToBigQueryDataSource(conn DbtConnection) (*WrenBigQueryDataSource, e
 	ds := &WrenBigQueryDataSource{
 		Project:     conn.Project,
 		Dataset:     conn.Dataset,
-		Location:    conn.Location,
-		Threads:     conn.Threads,
 		Method:      conn.Method,
 		Keyfile:     conn.Keyfile,
 		KeyfileJSON: keyfileJSON,
-		Priority:    conn.Priority,
 	}
 	return ds, nil
 }
@@ -221,12 +218,9 @@ func (ds *WrenPostgresDataSource) MapType(sourceType string) string {
 type WrenBigQueryDataSource struct {
 	Project     string `json:"project"`
 	Dataset     string `json:"dataset"`
-	Location    string `json:"location,omitempty"`
-	Threads     int    `json:"threads,omitempty"`
 	Method      string `json:"method"`
 	Keyfile     string `json:"keyfile,omitempty"`
 	KeyfileJSON string `json:"keyfile_json,omitempty"`
-	Priority    string `json:"priority,omitempty"`
 }
 
 // GetType implements DataSource interface
