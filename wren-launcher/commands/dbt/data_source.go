@@ -1,6 +1,7 @@
 package dbt
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -395,6 +396,11 @@ func (ds *WrenBigQueryDataSource) Validate() error {
 		if ds.KeyfileJSON == "" {
 			return fmt.Errorf("keyfile_json cannot be empty for method 'service-account-json'")
 		}
+		// Validate that keyfile_json is valid JSON
+		var js map[string]interface{}
+		if json.Unmarshal([]byte(ds.KeyfileJSON), &js) != nil {
+			return fmt.Errorf("keyfile_json is not valid JSON")
+		}
 	case "oauth", "oauth-secrets":
 		return fmt.Errorf("authentication method '%s' is not supported; please use a service account method", ds.Method)
 	default:
@@ -406,9 +412,28 @@ func (ds *WrenBigQueryDataSource) Validate() error {
 
 // MapType implements DataSource interface
 func (ds *WrenBigQueryDataSource) MapType(sourceType string) string {
-	// Add BigQuery specific type mappings here if needed
-	// For now, we can use the default mapping logic
-	return sourceType
+	switch strings.ToUpper(sourceType) {
+	case "INT64", "INTEGER":
+		return "integer"
+	case "FLOAT64", "FLOAT":
+		return "double"
+	case "STRING":
+		return "varchar"
+	case "BOOL", "BOOLEAN":
+		return "boolean"
+	case "DATE":
+		return "date"
+	case "TIMESTAMP", "DATETIME":
+		return "timestamp"
+	case "NUMERIC", "DECIMAL", "BIGNUMERIC":
+		return "double"
+	case "BYTES":
+		return "varchar"
+	case "JSON":
+		return "varchar"
+	default:
+		return strings.ToLower(sourceType)
+	}
 }
 
 // GetActiveDataSources gets active data sources based on specified profile and target

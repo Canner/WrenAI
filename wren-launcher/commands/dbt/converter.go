@@ -170,14 +170,14 @@ func ConvertDbtProjectCore(opts ConvertOptions) (*ConvertResult, error) {
 					},
 				}
 			case *WrenBigQueryDataSource:
+				// SECURITY FIX: Omit keyfile_json from output for security.
 				wrenDataSource = map[string]interface{}{
 					"type": "bigquery",
 					"properties": map[string]interface{}{
-						"project":      typedDS.Project,
-						"dataset":      typedDS.Dataset,
-						"method":       typedDS.Method,
-						"keyfile":      typedDS.Keyfile,
-						"keyfile_json": typedDS.KeyfileJSON,
+						"project": typedDS.Project,
+						"dataset": typedDS.Dataset,
+						"method":  typedDS.Method,
+						"keyfile": typedDS.Keyfile, // Path reference is safe
 					},
 				}
 			case *WrenMysqlDataSource:
@@ -413,7 +413,11 @@ func ConvertDbtCatalogToWrenMDL(catalogPath string, dataSource DataSource, manif
 		if semanticModels, ok := semanticManifestData["semantic_models"].([]interface{}); ok {
 			for _, sm := range semanticModels {
 				if smMap, ok := sm.(map[string]interface{}); ok {
-					modelName := getStringFromMap(smMap, "name", "")
+					var modelName string
+					if nr, ok := smMap["node_relation"].(map[string]interface{}); ok {
+						modelName = getStringFromMap(nr, "alias", "")
+					}
+
 					if entities, ok := smMap["entities"].([]interface{}); ok {
 						for _, entity := range entities {
 							if entityMap, ok := entity.(map[string]interface{}); ok {
@@ -587,8 +591,12 @@ func createOrLinkEnum(modelName, columnName, columnKey string, values []interfac
 	enumName, exists := enumValueToNameMap[valueKey]
 	if !exists {
 		enumName = fmt.Sprintf("%s_%s_Enum", modelName, columnName)
-		// Sanitize enum name
-		enumName = strings.ReplaceAll(enumName, ".", "_")
+		// Sanitize enum name to be a valid identifier
+		re := regexp.MustCompile(`[^a-zA-Z0-9_]`)
+		enumName = re.ReplaceAllString(enumName, "_")
+		if len(enumName) > 0 && enumName[0] >= '0' && enumName[0] <= '9' {
+			enumName = "_" + enumName
+		}
 		*allEnums = append(*allEnums, EnumDefinition{
 			Name:   enumName,
 			Values: strValues,
@@ -647,9 +655,10 @@ func processColumnForTests(nodeKey, modelName, columnName string, colMap map[str
 // convertDbtMetricsToWrenMetrics converts dbt metrics from semantic manifest to Wren MDL format
 func convertDbtMetricsToWrenMetrics(semanticData map[string]interface{}) []Metric {
 	var wrenMetrics []Metric
-	measureLookup := make(map[string]map[string]interface{}) // modelName -> measureName -> measureData
+	measureToModelMap := make(map[string]string)
+	measureDataLookup := make(map[string]map[string]interface{}) // measureName -> measureData
 
-	// First, build a lookup table for all measures
+	// First, build lookup tables for all measures
 	if semanticModels, ok := semanticData["semantic_models"].([]interface{}); ok {
 		for _, sm := range semanticModels {
 			if smMap, ok := sm.(map[string]interface{}); ok {
@@ -657,13 +666,13 @@ func convertDbtMetricsToWrenMetrics(semanticData map[string]interface{}) []Metri
 				if modelName == "" {
 					continue
 				}
-				measureLookup[modelName] = make(map[string]interface{})
 				if measures, ok := smMap["measures"].([]interface{}); ok {
 					for _, m := range measures {
 						if measureMap, ok := m.(map[string]interface{}); ok {
 							measureName := getStringFromMap(measureMap, "name", "")
 							if measureName != "" {
-								measureLookup[modelName][measureName] = measureMap
+								measureToModelMap[measureName] = modelName
+								measureDataLookup[measureName] = measureMap
 							}
 						}
 					}
@@ -695,19 +704,17 @@ func convertDbtMetricsToWrenMetrics(semanticData map[string]interface{}) []Metri
 				if inputMeasuresValue, ok := typeParams["input_measures"]; ok {
 					if inputMeasuresList, ok := inputMeasuresValue.([]interface{}); ok && len(inputMeasuresList) > 0 {
 						// Find the model this metric is based on
-						for model, measures := range measureLookup {
-							for _, inputMeasure := range inputMeasuresList {
-								if imMap, ok := inputMeasure.(map[string]interface{}); ok {
-									imName := getStringFromMap(imMap, "name", "")
-									if _, exists := measures[imName]; exists {
-										baseModel = model
-										break
-									}
+						for _, inputMeasure := range inputMeasuresList {
+							if imMap, ok := inputMeasure.(map[string]interface{}); ok {
+								imName := getStringFromMap(imMap, "name", "")
+								if model, exists := measureToModelMap[imName]; exists {
+									baseModel = model
+									break // Assume all measures for a metric come from the same model
 								}
 							}
-							if baseModel != "" {
-								break
-							}
+						}
+						if baseModel == "" {
+							pterm.Warning.Printf("Could not find a parent model for metric '%s'\n", metricName)
 						}
 					}
 				}
@@ -740,7 +747,7 @@ func convertDbtMetricsToWrenMetrics(semanticData map[string]interface{}) []Metri
 				case "simple":
 					if measure, ok := typeParams["measure"].(map[string]interface{}); ok {
 						measureName := getStringFromMap(measure, "name", "")
-						if measureData, ok := measureLookup[baseModel][measureName].(map[string]interface{}); ok {
+						if measureData, ok := measureDataLookup[measureName]; ok {
 							agg := getStringFromMap(measureData, "agg", "sum")
 							expr := getStringFromMap(measureData, "expr", measureName)
 							wrenMetric.Aggregation = fmt.Sprintf("%s(%s)", strings.ToUpper(agg), expr)
@@ -847,9 +854,10 @@ func convertDbtNodeToWrenModel(nodeKey string, nodeData map[string]interface{}, 
 		columnKey := fmt.Sprintf("%s.%s", nodeKey, columnName)
 
 		column := WrenColumn{
-			Name:    columnName,
-			Type:    dataSource.MapType(getStringFromMap(colMap, "type", "")),
-			NotNull: columnToNotNullMap[columnKey], // Will be false if not found
+			Name:        columnName,
+			DisplayName: getStringFromMap(getMapFromMap(colMap, "meta", nil), "label", ""),
+			Type:        dataSource.MapType(getStringFromMap(colMap, "type", "")),
+			NotNull:     columnToNotNullMap[columnKey], // Will be false if not found
 		}
 
 		// Check for and assign enum
@@ -907,8 +915,21 @@ func convertDbtNodeToWrenModel(nodeKey string, nodeData map[string]interface{}, 
 
 // getStringFromMap safely extracts a string value from a map
 func getStringFromMap(m map[string]interface{}, key, defaultValue string) string {
+	if m == nil {
+		return defaultValue
+	}
 	if value, exists := m[key]; exists {
 		if str, ok := value.(string); ok {
+			return str
+		}
+	}
+	return defaultValue
+}
+
+// getMapFromMap safely extracts a map value from a map
+func getMapFromMap(m map[string]interface{}, key string, defaultValue map[string]interface{}) map[string]interface{} {
+	if value, exists := m[key]; exists {
+		if str, ok := value.(map[string]interface{}); ok {
 			return str
 		}
 	}
@@ -928,7 +949,8 @@ func getModelNameFromNodeKey(nodeKey string) string {
 // parseRef extracts the model name from a dbt ref string.
 // e.g., "ref('stg_orders')"
 func parseRef(refStr string) string {
-	re := regexp.MustCompile(`ref\(['"]([^'"]+)['"]\)`)
+	// Handle ref() with optional spaces and both quote types
+	re := regexp.MustCompile(`ref\s*\(\s*['"]([^'"]+)['"]\s*\)`)
 	matches := re.FindStringSubmatch(refStr)
 	if len(matches) > 1 {
 		return matches[1]

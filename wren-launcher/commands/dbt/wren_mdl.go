@@ -4,7 +4,7 @@ package dbt
 type WrenMDLManifest struct {
 	Catalog         string            `json:"catalog"`
 	Schema          string            `json:"schema"`
-	EnumDefinitions []EnumDefinition  `json:"enumDefinitions,omitempty"` // Added EnumDefinitions
+	EnumDefinitions []EnumDefinition  `json:"enumDefinitions,omitempty"`
 	Models          []WrenModel       `json:"models"`
 	Relationships   []Relationship    `json:"relationships"`
 	Metrics         []Metric          `json:"metrics,omitempty"`
@@ -39,8 +39,9 @@ type TableReference struct {
 // WrenColumn represents a column in the Wren MDL format
 type WrenColumn struct {
 	Name         string            `json:"name"`
+	DisplayName  string            `json:"displayName,omitempty"`
 	Type         string            `json:"type"`
-	Enum         string            `json:"enum,omitempty"` // Added Enum field
+	Enum         string            `json:"enum,omitempty"`
 	Relationship string            `json:"relationship,omitempty"`
 	IsCalculated bool              `json:"isCalculated,omitempty"`
 	NotNull      bool              `json:"notNull,omitempty"`
