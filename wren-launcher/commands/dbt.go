@@ -12,10 +12,11 @@ import (
 // then converts them to WrenDataSource and Wren MDL format
 func DbtAutoConvert() {
 	var opts struct {
-		ProjectPath string
-		OutputDir   string
-		ProfileName string
-		Target      string
+		ProjectPath          string
+		OutputDir            string
+		ProfileName          string
+		Target               string
+		IncludeStagingModels bool
 	}
 
 	// Define command line flags
@@ -23,6 +24,7 @@ func DbtAutoConvert() {
 	flag.StringVar(&opts.OutputDir, "output", "", "Output directory for generated JSON files")
 	flag.StringVar(&opts.ProfileName, "profile", "", "Specific profile name to use (optional, uses first found if not provided)")
 	flag.StringVar(&opts.Target, "target", "", "Specific target to use (optional, uses profile default if not provided)")
+	flag.BoolVar(&opts.IncludeStagingModels, "include-staging-models", false, "If set, staging models will be included during conversion")
 	flag.Parse()
 
 	// Validate required parameters
@@ -40,11 +42,12 @@ func DbtAutoConvert() {
 
 	// ConvertOptions struct for core conversion logic
 	convertOpts := dbt.ConvertOptions{
-		ProjectPath:    opts.ProjectPath,
-		OutputDir:      opts.OutputDir,
-		ProfileName:    opts.ProfileName,
-		Target:         opts.Target,
-		RequireCatalog: true, // DbtAutoConvert requires catalog.json to exist
+		ProjectPath:          opts.ProjectPath,
+		OutputDir:            opts.OutputDir,
+		ProfileName:          opts.ProfileName,
+		Target:               opts.Target,
+		RequireCatalog:       true, // DbtAutoConvert requires catalog.json to exist
+		IncludeStagingModels: opts.IncludeStagingModels,
 	}
 
 	// Call the core conversion logic
@@ -57,14 +60,15 @@ func DbtAutoConvert() {
 
 // DbtConvertProject is a public wrapper function for processDbtProject to use
 // It converts a dbt project without requiring catalog.json to exist
-func DbtConvertProject(projectPath, outputDir, profileName, target string, usedByContainer bool) (*dbt.ConvertResult, error) {
+func DbtConvertProject(projectPath, outputDir, profileName, target string, usedByContainer bool, IncludeStagingModels bool) (*dbt.ConvertResult, error) {
 	convertOpts := dbt.ConvertOptions{
-		ProjectPath:     projectPath,
-		OutputDir:       outputDir,
-		ProfileName:     profileName,
-		Target:          target,
-		RequireCatalog:  false, // Allow processDbtProject to continue without catalog.json
-		UsedByContainer: usedByContainer,
+		ProjectPath:          projectPath,
+		OutputDir:            outputDir,
+		ProfileName:          profileName,
+		Target:               target,
+		RequireCatalog:       false, // Allow processDbtProject to continue without catalog.json
+		UsedByContainer:      usedByContainer,
+		IncludeStagingModels: IncludeStagingModels,
 	}
 
 	return dbt.ConvertDbtProjectCore(convertOpts)

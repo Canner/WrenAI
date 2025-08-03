@@ -522,7 +522,7 @@ func processDbtProject(projectDir string) (string, error) {
 	}
 
 	// Use the core conversion function from dbt package
-	result, err := DbtConvertProject(dbtProjectPath, targetDir, profileName, target, true)
+	result, err := DbtConvertProject(dbtProjectPath, targetDir, profileName, target, true, false)
 	if err != nil {
 		return "", fmt.Errorf("failed to convert dbt project: %w", err)
 	}
