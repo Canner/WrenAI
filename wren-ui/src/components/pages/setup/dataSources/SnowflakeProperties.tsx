@@ -1,9 +1,10 @@
 import Link from 'next/link';
-import { useState } from 'react';
-import { Button, Form, Input, Radio, Upload } from 'antd';
+import { useEffect, useState } from 'react';
+import { Button, Form, Input, Radio, Upload, UploadProps } from 'antd';
 import UploadOutlined from '@ant-design/icons/UploadOutlined';
 import { ERROR_TEXTS } from '@/utils/error';
 import { FORM_MODE } from '@/utils/enum';
+import { readFileContent, extractPrivateKeyString } from '@/utils/file';
 
 const TAB_KEY = {
   PASSWORD_AUTHENTICATION: 'password_authentication',
@@ -13,6 +14,49 @@ const TAB_KEY = {
 interface Props {
   mode?: FORM_MODE;
 }
+
+const UploadPrivateKey = (props) => {
+  const { onChange, value } = props;
+  const [fileList, setFileList] = useState<UploadProps['fileList']>([]);
+
+  useEffect(() => {
+    if (!value) setFileList([]);
+  }, [value]);
+
+  const onUploadChange = async (info) => {
+    const { file, fileList } = info;
+    if (fileList.length) {
+      const uploadFile = fileList[0];
+
+      try {
+        const result = await readFileContent(file.originFileObj);
+        const extractedPrivateKey = extractPrivateKeyString(result);
+        onChange && onChange(extractedPrivateKey);
+
+        setFileList([uploadFile]);
+      } catch (error) {
+        console.error('Failed to handle file', error);
+      }
+    }
+  };
+
+  const onRemove = () => {
+    setFileList([]);
+    onChange && onChange(undefined);
+  };
+
+  return (
+    <Upload
+      accept=".pem,.key,.p8"
+      fileList={fileList}
+      onChange={onUploadChange}
+      onRemove={onRemove}
+      maxCount={1}
+    >
+      <Button icon={<UploadOutlined />}>Upload private key</Button>
+    </Upload>
+  );
+};
 
 export default function SnowflakeProperties(props: Props) {
   const { mode } = props;
@@ -142,7 +186,7 @@ export default function SnowflakeProperties(props: Props) {
         {tabKey === TAB_KEY.KEY_PAIR_AUTHENTICATION && (
           <Form.Item
             label="Private key file"
-            name="privateKeyFile"
+            name="privateKey"
             required
             rules={[
               {
@@ -156,9 +200,7 @@ export default function SnowflakeProperties(props: Props) {
               </div>
             }
           >
-            <Upload>
-              <Button icon={<UploadOutlined />}>Upload private key</Button>
-            </Upload>
+            <UploadPrivateKey />
           </Form.Item>
         )}
       </div>

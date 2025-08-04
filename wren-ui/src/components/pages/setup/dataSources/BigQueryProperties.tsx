@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Form, Input, Button, Upload } from 'antd';
+import { Form, Input, Button, Upload, UploadProps } from 'antd';
 import UploadOutlined from '@ant-design/icons/UploadOutlined';
-import { UploadFile } from 'antd/lib/upload/interface';
 import { ERROR_TEXTS } from '@/utils/error';
 import { FORM_MODE } from '@/utils/enum';
+import { readFileContent } from '@/utils/file';
 
 interface Props {
   mode?: FORM_MODE;
@@ -12,34 +12,25 @@ interface Props {
 const UploadCredentials = (props) => {
   const { onChange, value } = props;
 
-  const [fileList, setFileList] = useState<UploadFile[]>([]);
+  const [fileList, setFileList] = useState<UploadProps['fileList']>([]);
 
   useEffect(() => {
     if (!value) setFileList([]);
   }, [value]);
 
-  const convertFileToJSON = (file: any, callback: (value: JSON) => void) => {
-    const reader = new FileReader();
-    reader.onloadend = (_e) => {
-      const result = reader.result;
-
-      if (result) {
-        const fileContent: JSON = JSON.parse(String(result));
-        callback(fileContent);
-      }
-    };
-
-    reader.readAsText(file);
-  };
-
-  const onUploadChange = (info) => {
+  const onUploadChange = async (info) => {
     const { file, fileList } = info;
     if (fileList.length) {
       const uploadFile = fileList[0];
-      convertFileToJSON(file.originFileObj, (fileContent: JSON) => {
-        onChange && onChange(fileContent);
-      });
-      setFileList([uploadFile]);
+
+      try {
+        const result = await readFileContent(file.originFileObj);
+        const parsedJson = JSON.parse(result);
+        onChange && onChange(parsedJson);
+        setFileList([uploadFile]);
+      } catch (error) {
+        console.error('Failed to handle file', error);
+      }
     }
   };
 
