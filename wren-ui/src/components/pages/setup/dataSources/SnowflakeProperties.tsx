@@ -35,7 +35,6 @@ const UploadPrivateKey = (props: {
         const result = await readFileContent(file.originFileObj);
         const extractedPrivateKey = extractPrivateKeyString(result);
         onChange && onChange(extractedPrivateKey);
-
         setFileList([uploadFile]);
       } catch (error) {
         console.error('Failed to handle file', error);
@@ -128,6 +127,18 @@ export default function SnowflakeProperties(props: Props) {
         <Input />
       </Form.Item>
       <Form.Item
+        label="Warehouse"
+        name="warehouse"
+        extra={
+          <span className="gray-6">
+            Specifies the virtual warehouse for query execution. If blank, the
+            account's default warehouse is used (if configured).
+          </span>
+        }
+      >
+        <Input />
+      </Form.Item>
+      <Form.Item
         label="User"
         name="user"
         rules={[
@@ -139,7 +150,6 @@ export default function SnowflakeProperties(props: Props) {
       >
         <Input />
       </Form.Item>
-
       <Form.Item
         label={
           <div>
@@ -207,19 +217,6 @@ export default function SnowflakeProperties(props: Props) {
           </Form.Item>
         )}
       </div>
-
-      <Form.Item
-        label="Warehouse"
-        name="warehouse"
-        extra={
-          <span className="gray-6">
-            Specifies the virtual warehouse for query execution. If blank, the
-            account's default warehouse is used (if configured).
-          </span>
-        }
-      >
-        <Input />
-      </Form.Item>
     </>
   );
 }
