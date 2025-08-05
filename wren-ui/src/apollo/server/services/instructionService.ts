@@ -11,6 +11,7 @@ import * as Errors from '@server/utils/error';
 import { GeneralErrorCodes } from '@server/utils/error';
 export interface IInstructionService {
   getInstructions(projectId: number): Promise<Instruction[]>;
+  getInstruction(id: number): Promise<Instruction>;
   createInstruction(instruction: InstructionInput): Promise<Instruction>;
   createInstructions(instructions: InstructionInput[]): Promise<Instruction[]>;
   updateInstruction(instruction: UpdateInstructionInput): Promise<Instruction>;
@@ -30,8 +31,13 @@ export class InstructionService implements IInstructionService {
     this.instructionRepository = instructionRepository;
     this.wrenAIAdaptor = wrenAIAdaptor;
   }
+
   public async getInstructions(projectId: number): Promise<Instruction[]> {
     return this.instructionRepository.findAllBy({ projectId });
+  }
+
+  public async getInstruction(id: number): Promise<Instruction> {
+    return this.instructionRepository.findOneBy({ id });
   }
 
   public async createInstruction(

@@ -9,6 +9,7 @@ import {
   isEmpty,
 } from 'lodash';
 import { DataSourceName } from '@server/types';
+import { IbisRedshiftConnectionType } from '@server/adaptors/ibisAdaptor';
 
 export interface BIG_QUERY_CONNECTION_INFO {
   projectId: string;
@@ -83,7 +84,40 @@ export interface DUCKDB_CONNECTION_INFO {
   configurations: Record<string, any>;
 }
 
+export interface ATHENA_CONNECTION_INFO {
+  database: string;
+  schema: string;
+  s3StagingDir: string;
+  awsRegion: string;
+  awsAccessKey: string;
+  awsSecretKey: string;
+}
+
+export interface REDSHIFT_PASSWORD_AUTH {
+  host: string;
+  port: number;
+  user: string;
+  password: string;
+  database: string;
+  redshiftType: IbisRedshiftConnectionType;
+}
+
+export interface REDSHIFT_IAM_AUTH {
+  clusterIdentifier: string;
+  user: string;
+  database: string;
+  awsRegion: string;
+  awsAccessKey: string;
+  awsSecretKey: string;
+  redshiftType: IbisRedshiftConnectionType;
+}
+
+export type REDSHIFT_CONNECTION_INFO =
+  | REDSHIFT_PASSWORD_AUTH
+  | REDSHIFT_IAM_AUTH;
+
 export type WREN_AI_CONNECTION_INFO =
+  | ATHENA_CONNECTION_INFO
   | BIG_QUERY_CONNECTION_INFO
   | POSTGRES_CONNECTION_INFO
   | MYSQL_CONNECTION_INFO
@@ -92,7 +126,8 @@ export type WREN_AI_CONNECTION_INFO =
   | MS_SQL_CONNECTION_INFO
   | CLICK_HOUSE_CONNECTION_INFO
   | TRINO_CONNECTION_INFO
-  | SNOWFLAKE_CONNECTION_INFO;
+  | SNOWFLAKE_CONNECTION_INFO
+  | REDSHIFT_CONNECTION_INFO;
 
 export interface RecommendationQuestionResult {
   question: string;

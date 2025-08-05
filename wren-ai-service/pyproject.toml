@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "wren-ai-service"
-version = "0.23.3"
+version = "0.25.17"
 description = ""
 authors = ["dev@getwren.ai"]
 license = "AGPL-3.0"
@@ -26,14 +26,14 @@ ollama-haystack = "^0.0.6"
 langfuse = "^2.43.3"
 ollama = "^0.2.1"
 toml = "^0.10.2"
-sqlglot = "^25.18.0"
+sqlglot = {extras = ["rs"], version = "^25.18.0"}
 cachetools = "^5.5.0"
 pyyaml = "^6.0.2"
 pydantic-settings = "^2.5.2"
 google-auth = "^2.35.0"
 tiktoken = "^0.8.0"
 jsonschema = "^4.23.0"
-litellm = "^1.65.1"
+litellm = "^1.70.0"
 boto3 = "^1.35.90"
 qdrant-client = "==1.11.0"
 
@@ -45,11 +45,12 @@ pandas = "^2.2.2"
 matplotlib = "^3.9.2"
 sseclient-py = "^1.8.0"
 dspy-ai = "^2.5.26"
-requests = "^2.32.2"
+requests = "^2.32.4"
 extra-streamlit-components = "^0.1.71"
 deepeval = "^1.0.6"
 tomlkit = "^0.13.0"
 nltk = "^3.9.1"
+psycopg2 = "^2.9.10"
 
 [tool.poetry.group.eval.dependencies]
 gitpython = "^3.1.43"
@@ -59,6 +60,7 @@ ipykernel = "^6.29.5"
 itables = "^2.2.1"
 gdown = "^5.2.0"
 streamlit-tags = "^1.2.8"
+docker = "^7.1.0"
 
 [tool.poetry.group.test.dependencies]
 locust = "^2.32.0"

@@ -97,6 +97,7 @@ export default function Home() {
     fetchPolicy: 'cache-and-network',
   });
   const [createThread, { loading: threadCreating }] = useCreateThreadMutation({
+    onError: (error) => console.error(error),
     onCompleted: () => homeSidebar.refetch(),
   });
   const [preloadThread] = useThreadLazyQuery({

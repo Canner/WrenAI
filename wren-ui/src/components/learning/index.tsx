@@ -206,10 +206,12 @@ export default function SidebarSection(_props: Props) {
   const { data: learningRecordResult } = useLearningRecordQuery();
 
   const [saveLearningRecord] = useSaveLearningRecordMutation({
+    onError: (error) => console.error(error),
     refetchQueries: ['LearningRecord'],
   });
 
   const [updateCurrentProject] = useUpdateCurrentProjectMutation({
+    onError: (error) => console.error(error),
     refetchQueries: ['GetSettings'],
   });
 

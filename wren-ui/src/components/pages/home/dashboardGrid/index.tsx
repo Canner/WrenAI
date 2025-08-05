@@ -302,7 +302,9 @@ const PinnedItem = forwardRef(
       [item.id],
     );
 
-    const [previewItemSQL, previewItemSQLResult] = usePreviewItemSqlMutation();
+    const [previewItemSQL, previewItemSQLResult] = usePreviewItemSqlMutation({
+      onError: (error) => console.error(error),
+    });
     const previewItem = previewItemSQLResult.data?.previewItemSQL;
     const lastRefreshTime =
       previewItem?.cacheOverrodeAt || previewItem?.cacheCreatedAt;
@@ -383,6 +385,7 @@ const PinnedItem = forwardRef(
                 hideActions
                 hideTitle
                 hideLegend={isHideLegend}
+                isPinned
               />
             </LoadingWrapper>
           </div>

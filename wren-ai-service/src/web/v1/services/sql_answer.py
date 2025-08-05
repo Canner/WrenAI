@@ -18,6 +18,7 @@ class SqlAnswerRequest(BaseRequest):
     query: str
     sql: str
     sql_data: Dict
+    custom_instruction: Optional[str] = None
 
 
 class SqlAnswerResponse(BaseModel):
@@ -98,7 +99,9 @@ class SqlAnswerService:
                     sql=sql_answer_request.sql,
                     sql_data=preprocessed_sql_data.get("sql_data", {}),
                     language=sql_answer_request.configurations.language,
+                    current_time=sql_answer_request.configurations.show_current_time(),
                     query_id=query_id,
+                    custom_instruction=sql_answer_request.custom_instruction,
                 )
             )
 

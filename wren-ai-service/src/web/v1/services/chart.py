@@ -17,7 +17,8 @@ class ChartRequest(BaseRequest):
     query: str
     sql: str
     data: Optional[Dict[str, Any]] = None
-    remove_data_from_chart_schema: Optional[bool] = True
+    remove_data_from_chart_schema: bool = True
+    custom_instruction: Optional[str] = None
 
 
 class ChartResponse(BaseModel):
@@ -124,6 +125,7 @@ class ChartService:
                 data=sql_data,
                 language=chart_request.configurations.language,
                 remove_data_from_chart_schema=chart_request.remove_data_from_chart_schema,
+                custom_instruction=chart_request.custom_instruction,
             )
             chart_result = chart_generation_result["post_process"]["results"]
 

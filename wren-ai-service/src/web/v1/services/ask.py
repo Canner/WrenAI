@@ -25,8 +25,10 @@ class AskRequest(BaseRequest):
     # so we need to support as a choice, and will remove it in the future
     mdl_hash: Optional[str] = Field(validation_alias=AliasChoices("mdl_hash", "id"))
     histories: Optional[list[AskHistory]] = Field(default_factory=list)
-    ignore_sql_generation_reasoning: Optional[bool] = False
-    enable_column_pruning: Optional[bool] = False
+    ignore_sql_generation_reasoning: bool = False
+    enable_column_pruning: bool = False
+    use_dry_plan: bool = False
+    allow_dry_plan_fallback: bool = True
 
 
 class AskResponse(BaseModel):
@@ -78,7 +80,7 @@ class _AskResultResponse(BaseModel):
     invalid_sql: Optional[str] = None
     error: Optional[AskError] = None
     trace_id: Optional[str] = None
-    is_followup: Optional[bool] = False
+    is_followup: bool = False
     general_type: Optional[
         Literal["MISLEADING_QUERY", "DATA_ASSISTANCE", "USER_GUIDE"]
     ] = None
@@ -208,6 +210,8 @@ class AskService:
         allow_sql_functions_retrieval = self._allow_sql_functions_retrieval
         max_sql_correction_retries = self._max_sql_correction_retries
         current_sql_correction_retries = 0
+        use_dry_plan = ask_request.use_dry_plan
+        allow_dry_plan_fallback = ask_request.allow_dry_plan_fallback
 
         try:
             user_query = ask_request.query
@@ -253,6 +257,7 @@ class AskService:
                         self._pipelines["instructions_retrieval"].run(
                             query=user_query,
                             project_id=ask_request.project_id,
+                            scope="sql",
                         ),
                     )
 
@@ -478,6 +483,7 @@ class AskService:
                     "has_calculated_field", False
                 )
                 has_metric = _retrieval_result.get("has_metric", False)
+                has_json_field = _retrieval_result.get("has_json_field", False)
 
                 if histories:
                     text_to_sql_generation_results = await self._pipelines[
@@ -488,12 +494,14 @@ class AskService:
                         sql_generation_reasoning=sql_generation_reasoning,
                         histories=histories,
                         project_id=ask_request.project_id,
-                        configuration=ask_request.configurations,
                         sql_samples=sql_samples,
                         instructions=instructions,
                         has_calculated_field=has_calculated_field,
                         has_metric=has_metric,
+                        has_json_field=has_json_field,
                         sql_functions=sql_functions,
+                        use_dry_plan=use_dry_plan,
+                        allow_dry_plan_fallback=allow_dry_plan_fallback,
                     )
                 else:
                     text_to_sql_generation_results = await self._pipelines[
@@ -503,12 +511,14 @@ class AskService:
                         contexts=table_ddls,
                         sql_generation_reasoning=sql_generation_reasoning,
                         project_id=ask_request.project_id,
-                        configuration=ask_request.configurations,
                         sql_samples=sql_samples,
                         instructions=instructions,
                         has_calculated_field=has_calculated_field,
                         has_metric=has_metric,
+                        has_json_field=has_json_field,
                         sql_functions=sql_functions,
+                        use_dry_plan=use_dry_plan,
+                        allow_dry_plan_fallback=allow_dry_plan_fallback,
                     )
 
                 if sql_valid_result := text_to_sql_generation_results["post_process"][
@@ -550,6 +560,8 @@ class AskService:
                             contexts=table_ddls,
                             invalid_generation_result=failed_dry_run_result,
                             project_id=ask_request.project_id,
+                            use_dry_plan=use_dry_plan,
+                            allow_dry_plan_fallback=allow_dry_plan_fallback,
                         )
 
                         if valid_generation_result := sql_correction_results[
@@ -726,6 +738,7 @@ class AskService:
                     self._pipelines["instructions_retrieval"].run(
                         query=ask_feedback_request.question,
                         project_id=ask_feedback_request.project_id,
+                        scope="sql",
                     ),
                 )
 
@@ -746,6 +759,7 @@ class AskService:
                     "has_calculated_field", False
                 )
                 has_metric = _retrieval_result.get("has_metric", False)
+                has_json_field = _retrieval_result.get("has_json_field", False)
                 documents = _retrieval_result.get("retrieval_results", [])
                 table_ddls = [document.get("table_ddl") for document in documents]
                 sql_samples = sql_samples_task["formatted_output"].get("documents", [])
@@ -766,11 +780,11 @@ class AskService:
                     sql_generation_reasoning=ask_feedback_request.sql_generation_reasoning,
                     sql=ask_feedback_request.sql,
                     project_id=ask_feedback_request.project_id,
-                    configuration=ask_feedback_request.configurations,
                     sql_samples=sql_samples,
                     instructions=instructions,
                     has_calculated_field=has_calculated_field,
                     has_metric=has_metric,
+                    has_json_field=has_json_field,
                     sql_functions=sql_functions,
                 )
 

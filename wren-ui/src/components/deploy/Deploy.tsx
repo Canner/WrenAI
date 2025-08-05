@@ -42,6 +42,7 @@ export default function Deploy() {
 
   const [deployMutation, { data: deployResult, loading: deploying }] =
     useDeployMutation({
+      onError: (error) => console.error(error),
       onCompleted: (data) => {
         if (data.deploy?.status === 'FAILED') {
           console.error('Failed to deploy - ', data.deploy?.error);

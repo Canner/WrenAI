@@ -5,8 +5,12 @@ import {
   UrlBasedConnectionInfo,
   IbisSnowflakeConnectionInfo,
   IbisTrinoConnectionInfo,
+  IbisAthenaConnectionInfo,
+  IbisRedshiftConnectionType,
+  IbisRedshiftConnectionInfo,
 } from './adaptors/ibisAdaptor';
 import {
+  ATHENA_CONNECTION_INFO,
   BIG_QUERY_CONNECTION_INFO,
   DUCKDB_CONNECTION_INFO,
   MYSQL_CONNECTION_INFO,
@@ -17,6 +21,9 @@ import {
   TRINO_CONNECTION_INFO,
   SNOWFLAKE_CONNECTION_INFO,
   ORACLE_CONNECTION_INFO,
+  REDSHIFT_CONNECTION_INFO,
+  REDSHIFT_IAM_AUTH,
+  REDSHIFT_PASSWORD_AUTH,
 } from './repositories';
 import { DataSourceName } from './types';
 import { getConfig } from './config';
@@ -64,6 +71,30 @@ interface IDataSourceConnectionInfo<C, I> {
 }
 
 const dataSource = {
+  // Athena
+  [DataSourceName.ATHENA]: {
+    sensitiveProps: ['awsSecretKey'],
+    toIbisConnectionInfo(connectionInfo) {
+      const decryptedConnectionInfo = decryptConnectionInfo(
+        DataSourceName.ATHENA,
+        connectionInfo,
+      );
+      const { awsAccessKey, awsRegion, awsSecretKey, s3StagingDir, schema } =
+        decryptedConnectionInfo as ATHENA_CONNECTION_INFO;
+      const res: IbisAthenaConnectionInfo = {
+        aws_access_key_id: awsAccessKey,
+        aws_secret_access_key: awsSecretKey,
+        region_name: awsRegion,
+        s3_staging_dir: s3StagingDir,
+        schema_name: schema,
+      };
+      return res;
+    },
+  } as IDataSourceConnectionInfo<
+    ATHENA_CONNECTION_INFO,
+    IbisAthenaConnectionInfo
+  >,
+
   // BigQuery
   [DataSourceName.BIG_QUERY]: {
     sensitiveProps: ['credentials'],
@@ -307,6 +338,63 @@ const dataSource = {
       throw new Error('Not implemented');
     },
   } as IDataSourceConnectionInfo<DUCKDB_CONNECTION_INFO, unknown>,
+
+  // Redshift
+  [DataSourceName.REDSHIFT]: {
+    sensitiveProps: ['password', 'awsSecretKey'],
+    toIbisConnectionInfo(connectionInfo) {
+      const decryptedConnectionInfo = decryptConnectionInfo(
+        DataSourceName.REDSHIFT,
+        connectionInfo,
+      );
+
+      const { redshiftType } =
+        decryptedConnectionInfo as REDSHIFT_CONNECTION_INFO;
+
+      // using password authentication
+      if (redshiftType === IbisRedshiftConnectionType.REDSHIFT) {
+        const { host, port, database, user, password } =
+          decryptedConnectionInfo as REDSHIFT_PASSWORD_AUTH;
+        return {
+          redshift_type: redshiftType,
+          host,
+          port,
+          database,
+          user,
+          password,
+        };
+      }
+
+      // using IAM authentication
+      if (redshiftType === IbisRedshiftConnectionType.REDSHIFT_IAM) {
+        const {
+          clusterIdentifier,
+          user,
+          database,
+          awsRegion,
+          awsAccessKey,
+          awsSecretKey,
+        } = decryptedConnectionInfo as REDSHIFT_IAM_AUTH;
+
+        return {
+          redshift_type: redshiftType,
+          cluster_identifier: clusterIdentifier,
+          user,
+          database,
+          region: awsRegion,
+          access_key_id: awsAccessKey,
+          access_key_secret: awsSecretKey,
+        };
+      }
+
+      throw new Error(
+        'Invalid Redshift connection info: must use either password or IAM authentication',
+      );
+    },
+  } as IDataSourceConnectionInfo<
+    REDSHIFT_CONNECTION_INFO,
+    IbisRedshiftConnectionInfo
+  >,
 };
 
 function decryptConnectionInfo(

@@ -8,6 +8,8 @@ export enum DataSourceName {
   CLICK_HOUSE = 'CLICK_HOUSE',
   TRINO = 'TRINO',
   SNOWFLAKE = 'SNOWFLAKE',
+  ATHENA = 'ATHENA',
+  REDSHIFT = 'REDSHIFT',
 }
 
 export interface DataSource {

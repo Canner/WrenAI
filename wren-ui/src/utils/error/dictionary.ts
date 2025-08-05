@@ -49,6 +49,21 @@ export const ERROR_TEXTS = {
     ACCOUNT: {
       REQUIRED: 'Please input account.',
     },
+    S3_STAGING_DIR: {
+      REQUIRED: 'Please input S3 staging directory.',
+    },
+    AWS_REGION: {
+      REQUIRED: 'Please input AWS region.',
+    },
+    AWS_ACCESS_KEY: {
+      REQUIRED: 'Please input AWS access key ID.',
+    },
+    AWS_SECRET_KEY: {
+      REQUIRED: 'Please input AWS secret access key.',
+    },
+    CLUSTER_IDENTIFIER: {
+      REQUIRED: 'Please input cluster identifier.',
+    },
   },
   ADD_RELATION: {
     FROM_FIELD: {

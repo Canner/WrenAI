@@ -492,6 +492,8 @@ export class MDLBuilder implements IMDLBuilder {
       return;
     }
     switch (type) {
+      case DataSourceName.ATHENA:
+        return WrenEngineDataSourceType.ATHENA;
       case DataSourceName.BIG_QUERY:
         return WrenEngineDataSourceType.BIGQUERY;
       case DataSourceName.DUCKDB:
@@ -510,6 +512,8 @@ export class MDLBuilder implements IMDLBuilder {
         return WrenEngineDataSourceType.TRINO;
       case DataSourceName.SNOWFLAKE:
         return WrenEngineDataSourceType.SNOWFLAKE;
+      case DataSourceName.REDSHIFT:
+        return WrenEngineDataSourceType.REDSHIFT;
       default:
         throw new Error(
           `Unsupported data source type: ${type} found when building manifest`,

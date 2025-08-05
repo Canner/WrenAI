@@ -12,6 +12,7 @@ var openaiGenerationModel string
 var llmProvider string
 var experimentalEngineRustVersion bool
 var platform string
+var enableDbt bool
 
 // InitFlags initializes the flag
 func InitFlags() {
@@ -21,6 +22,7 @@ func InitFlags() {
 	flag.StringVar(&openaiGenerationModel, "openai-generation-model", "", "The OPENAI generation model, valid values are: gpt-4.1, gpt-4.1-mini, gpt-4.1-nano")
 	flag.BoolVar(&experimentalEngineRustVersion, "experimental-engine-rust-version", true, "Use the experimental Rust version of the Wren Engine")
 	flag.StringVar(&platform, "platform", GetPlatform(), "The platform to use, valid values are: linux/amd64, linux/arm64")
+	flag.BoolVar(&enableDbt, "enable-dbt", false, "Enable dbt support if set to true")
 }
 
 func IsExperimentalEngineRustVersion() bool {
@@ -40,9 +42,9 @@ func GetPlatform() string {
 		}
 		return "linux/amd64"
 	case "windows":
-		return "linux/amd64"  // Windows typically uses amd64
+		return "linux/amd64" // Windows typically uses amd64
 	default:
-		return "linux/amd64"  // Default to amd64 for unknown platforms
+		return "linux/amd64" // Default to amd64 for unknown platforms
 	}
 }
 
@@ -61,4 +63,8 @@ func GetOpenaiGenerationModel() string {
 
 func GetLLMProvider() string {
 	return llmProvider
+}
+
+func IsDbtEnabled() bool {
+	return enableDbt
 }

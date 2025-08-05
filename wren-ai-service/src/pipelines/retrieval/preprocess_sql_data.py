@@ -49,7 +49,7 @@ def preprocess(
     _token_count = len(encoding.encode(str(sql_data)))
     num_rows_used_in_llm = len(sql_data.get("data", []))
     iteration = 0
-    
+
     while _token_count > context_window_size:
         if iteration > 1000:
             """
@@ -108,9 +108,3 @@ class PreprocessSqlData(BasicPipeline):
                 **self._configs,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(PreprocessSqlData, "preprocess_sql_data", sql_data={})

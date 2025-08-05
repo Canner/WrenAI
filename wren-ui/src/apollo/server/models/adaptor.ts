@@ -41,6 +41,7 @@ export enum WrenAILanguage {
   JA = 'Japanese',
   KO = 'Korean',
   FA_IR = 'Persian',
+  AR = 'Arabic',
 }
 
 export interface DeployData {

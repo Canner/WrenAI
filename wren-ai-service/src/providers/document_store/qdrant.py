@@ -404,10 +404,6 @@ class QdrantProvider(DocumentStoreProvider):
         dataset_name: Optional[str] = None,
         recreate_index: bool = False,
     ):
-        logger.info(
-            f"Using Qdrant Document Store with Embedding Model Dimension: {self._embedding_model_dim}"
-        )
-
         return AsyncQdrantDocumentStore(
             location=self._location,
             api_key=self._api_key,

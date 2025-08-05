@@ -10,6 +10,7 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
+from src.pipelines.common import clean_up_new_lines
 from src.utils import trace_cost
 
 logger = logging.getLogger("wren-ai-service")
@@ -51,11 +52,12 @@ def prompt(
     wren_ai_docs: list[dict],
     prompt_builder: PromptBuilder,
 ) -> dict:
-    return prompt_builder.run(
+    _prompt = prompt_builder.run(
         query=query,
         language=language,
         docs=wren_ai_docs,
     )
+    return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
 
 @observe(as_type="generation", capture_input=False)
@@ -149,14 +151,3 @@ class UserGuideAssistance(BasicPipeline):
                 **self._configs,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        UserGuideAssistance,
-        "user_guide_assistance",
-        query="what can Wren AI do?",
-        language="en",
-    )

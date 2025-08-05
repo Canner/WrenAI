@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
-from src.pipelines.common import build_table_ddl
+from src.pipelines.common import build_table_ddl, clean_up_new_lines
 from src.pipelines.generation.utils.sql import construct_instructions
 from src.utils import trace_cost
 from src.web.v1.services import Configuration
@@ -28,11 +28,13 @@ You are an expert detective specializing in intent classification. Combine the u
 
 ### Instructions ###
 - **Follow the user's previous questions:** If there are previous questions, try to understand the user's current question as following the previous questions.
+- **Follow the user's instructions:** If there are instructions, strictly follow the instructions.
 - **Consider Context of Inputs:** Combine the user's current question, their previous questions, and the user's instructions together to identify the user's true intent.
-- **Rephrase Question":** Rewrite follow-up questions into full standalone questions using prior conversation context."
+- **Rephrase Question:** Rewrite follow-up questions into full standalone questions using prior conversation context.
 - **Concise Reasoning:** The reasoning must be clear, concise, and limited to 20 words.
 - **Language Consistency:** Use the same language as specified in the user's output language for the rephrased question and reasoning.
 - **Vague Queries:** If the question is vague or does not related to a table or property from the schema, classify it as `MISLEADING_QUERY`.
+- **Incomplete Queries:** If the question is related to the database schema but references unspecified values (e.g., "the following", "these", "those") without providing them, classify as `GENERAL`.
 - **Time-related Queries:** Don't rephrase time-related information in the user's question.
 
 ### Intent Definitions ###
@@ -42,8 +44,11 @@ You are an expert detective specializing in intent classification. Combine the u
 - The user's inputs are about modifying SQL from previous questions.
 - The user's inputs are related to the database schema and requires an SQL query.
 - The question (or related previous query) includes references to specific tables, columns, or data details.
+- The question includes **complete information** with specific tables, columns, or data values needed for execution.
+- The question provides **all necessary parameters** to generate executable SQL.
 
 **Requirements:**
+- Must have complete filter criteria, specific values, or clear references to previous context.
 - Include specific table and column names from the schema in your reasoning or modifying SQL from previous questions.
 - Reference phrases from the user's inputs that clearly relate to the schema.
 
@@ -56,15 +61,20 @@ You are an expert detective specializing in intent classification. Combine the u
 <GENERAL>
 **When to Use:**  
 - The user seeks general information about the database schema or its overall capabilities.
-- The combined queries do not provide enough detail to generate a specific SQL query.
+- The query references **missing information** (e.g., "the following items" without listing them).
+- The query contains **placeholder references** that cannot be resolved from context.
+- The query is **incomplete for SQL generation** despite mentioning database concepts.
 
 **Requirements:**  
-- Highlight phrases from the user's inputs that indicate a general inquiry not tied to specific schema details.
+- Incorporate phrases from the user's inputs that indicate incompleteness or lack of relevance to the database schema.
+- Identify missing parameters, unspecified references, or incomplete filter criteria.
 
-**Examples:**  
+**Examples:**
 - "What is the dataset about?"
 - "Tell me more about the database."
 - "How can I analyze customer behavior with this data?"
+- "Show me orders for these products" (without specifying which products)
+- "Filter by the criteria I mentioned" (without previous context defining criteria)
 </GENERAL>
 
 <USER_GUIDE>
@@ -87,7 +97,7 @@ You are an expert detective specializing in intent classification. Combine the u
 - It appears off-topic or is simply a casual conversation starter.
 
 **Requirements:**  
-- Incorporate phrases from the user's inputs that indicate the lack of relevance to the database schema.
+- Incorporate phrases from the user's inputs that indicate lack of relevance to the database schema.
 
 **Examples:**  
 - "How are you?"
@@ -249,7 +259,7 @@ def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[str]:
     db_schemas_in_ddl = []
     for table_schema in list(db_schemas.values()):
         if table_schema["type"] == "TABLE":
-            ddl, _ = build_table_ddl(table_schema)
+            ddl, _, _ = build_table_ddl(table_schema)
             db_schemas_in_ddl.append(ddl)
 
     return db_schemas_in_ddl
@@ -266,7 +276,7 @@ def prompt(
     instructions: Optional[list[dict]] = None,
     configuration: Configuration | None = None,
 ) -> dict:
-    return prompt_builder.run(
+    _prompt = prompt_builder.run(
         query=query,
         language=configuration.language,
         db_schemas=construct_db_schemas,
@@ -277,6 +287,7 @@ def prompt(
         ),
         docs=wren_ai_docs,
     )
+    return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
 
 @observe(as_type="generation", capture_input=False)
@@ -387,13 +398,3 @@ class IntentClassification(BasicPipeline):
                 **self._configs,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        IntentClassification,
-        "intent_classification",
-        query="show me the dataset",
-    )

@@ -231,9 +231,7 @@ async def test_concurrent_updates_no_race_condition(
     async def delayed_response(model_num, delay=0.1):
         await asyncio.sleep(delay)  # Add delay to increase chance of race condition
         return {
-            "output": {
-                f"model{model_num}": {"description": f"Description {model_num}"}
-            }
+            "output": {f"model{model_num}": {"description": f"Description {model_num}"}}
         }
 
     service._pipelines["semantics_description"].run.side_effect = [

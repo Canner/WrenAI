@@ -66,7 +66,7 @@ class SQLExecutor(BasicPipeline):
     def __init__(
         self,
         engine: Engine,
-        engine_timeout: Optional[float] = 30.0,
+        engine_timeout: float = 30.0,
         **kwargs,
     ):
         self._components = {
@@ -96,13 +96,3 @@ class SQLExecutor(BasicPipeline):
                 **self._configs,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        SQLExecutor,
-        "sql_executor",
-        sql="SELECT * FROM table",
-    )

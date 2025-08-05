@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
-from src.web.v1.services import BaseRequest, Configuration, MetadataTraceable
+from src.web.v1.services import BaseRequest, MetadataTraceable
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -22,7 +22,7 @@ class QuestionRecommendation:
     class Event(BaseModel, MetadataTraceable):
         event_id: str
         status: Literal["generating", "finished", "failed"] = "generating"
-        response: Optional[dict] = {"questions": {}}
+        response: dict = {"questions": {}}
         error: Optional["QuestionRecommendation.Error"] = None
         trace_id: Optional[str] = None
         request_from: Literal["ui", "api"] = "ui"
@@ -65,9 +65,9 @@ class QuestionRecommendation:
         max_questions: int,
         max_categories: int,
         project_id: Optional[str] = None,
-        configuration: Configuration = Configuration(),
+        allow_data_preview: bool = True,
     ):
-        async def _document_retrieval() -> tuple[list[str], bool, bool]:
+        async def _document_retrieval() -> tuple[list[str], bool, bool, bool]:
             retrieval_result = await self._pipelines["db_schema_retrieval"].run(
                 query=candidate["question"],
                 project_id=project_id,
@@ -77,7 +77,8 @@ class QuestionRecommendation:
             table_ddls = [document.get("table_ddl") for document in documents]
             has_calculated_field = _retrieval_result.get("has_calculated_field", False)
             has_metric = _retrieval_result.get("has_metric", False)
-            return table_ddls, has_calculated_field, has_metric
+            has_json_field = _retrieval_result.get("has_json_field", False)
+            return table_ddls, has_calculated_field, has_metric, has_json_field
 
         async def _sql_pairs_retrieval() -> list[dict]:
             sql_pairs_result = await self._pipelines["sql_pairs_retrieval"].run(
@@ -91,6 +92,7 @@ class QuestionRecommendation:
             result = await self._pipelines["instructions_retrieval"].run(
                 query=candidate["question"],
                 project_id=project_id,
+                scope="sql",
             )
             instructions = result["formatted_output"].get("instructions", [])
             return instructions
@@ -101,7 +103,7 @@ class QuestionRecommendation:
                 _sql_pairs_retrieval(),
                 _instructions_retrieval(),
             )
-            table_ddls, has_calculated_field, has_metric = _document
+            table_ddls, has_calculated_field, has_metric, has_json_field = _document
 
             if self._allow_sql_functions_retrieval:
                 sql_functions = await self._pipelines["sql_functions_retrieval"].run(
@@ -114,12 +116,13 @@ class QuestionRecommendation:
                 query=candidate["question"],
                 contexts=table_ddls,
                 project_id=project_id,
-                configuration=configuration,
                 sql_samples=sql_samples,
                 instructions=instructions,
                 has_calculated_field=has_calculated_field,
                 has_metric=has_metric,
+                has_json_field=has_json_field,
                 sql_functions=sql_functions,
+                allow_data_preview=allow_data_preview,
             )
 
             post_process = generated_sql["post_process"]
@@ -156,9 +159,10 @@ class QuestionRecommendation:
         event_id: str
         mdl: str
         previous_questions: list[str] = []
-        max_questions: Optional[int] = 5
-        max_categories: Optional[int] = 3
-        regenerate: Optional[bool] = False
+        max_questions: int = 5
+        max_categories: int = 3
+        regenerate: bool = False
+        allow_data_preview: bool = True
 
     async def _recommend(self, request: dict, input: Request):
         resp = await self._pipelines["question_recommendation"].run(**request)
@@ -170,7 +174,7 @@ class QuestionRecommendation:
                 input.max_questions,
                 input.max_categories,
                 input.project_id,
-                input.configurations,
+                input.allow_data_preview,
             )
             for question in questions
         ]
