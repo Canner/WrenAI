@@ -15,7 +15,10 @@ interface Props {
   mode?: FORM_MODE;
 }
 
-const UploadPrivateKey = (props) => {
+const UploadPrivateKey = (props: {
+  onChange?: (value: string) => void;
+  value?: string;
+}) => {
   const { onChange, value } = props;
   const [fileList, setFileList] = useState<UploadProps['fileList']>([]);
 
