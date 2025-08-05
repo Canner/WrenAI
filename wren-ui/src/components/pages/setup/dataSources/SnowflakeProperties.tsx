@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { Button, Form, Input, Radio, Upload, UploadProps } from 'antd';
+import { Button, Form, Input, Radio, Upload, UploadProps, message } from 'antd';
 import UploadOutlined from '@ant-design/icons/UploadOutlined';
 import { ERROR_TEXTS } from '@/utils/error';
 import { FORM_MODE } from '@/utils/enum';
@@ -38,6 +38,9 @@ const UploadPrivateKey = (props: {
         setFileList([uploadFile]);
       } catch (error) {
         console.error('Failed to handle file', error);
+        message.error(
+          'Failed to handle file. Please upload a valid private key file.',
+        );
       }
     }
   };

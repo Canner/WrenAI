@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Form, Input, Button, Upload, UploadProps } from 'antd';
+import { Form, Input, Button, Upload, UploadProps, message } from 'antd';
 import UploadOutlined from '@ant-design/icons/UploadOutlined';
 import { ERROR_TEXTS } from '@/utils/error';
 import { FORM_MODE } from '@/utils/enum';
@@ -33,6 +33,9 @@ const UploadCredentials = (props: {
         setFileList([uploadFile]);
       } catch (error) {
         console.error('Failed to handle file', error);
+        message.error(
+          'Failed to handle file. Please upload a valid credentials file.',
+        );
       }
     }
   };
