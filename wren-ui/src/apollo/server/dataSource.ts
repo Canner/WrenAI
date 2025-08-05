@@ -322,14 +322,22 @@ const dataSource = {
         DataSourceName.SNOWFLAKE,
         connectionInfo,
       );
-      const { user, password, account, database, schema, privateKey } =
-        decryptedConnectionInfo as SNOWFLAKE_CONNECTION_INFO;
+      const {
+        user,
+        password,
+        account,
+        database,
+        schema,
+        warehouse,
+        privateKey,
+      } = decryptedConnectionInfo as SNOWFLAKE_CONNECTION_INFO;
 
       return {
         user,
         account,
         database,
         schema,
+        warehouse: warehouse ?? undefined,
         password: password ?? undefined,
         private_key: privateKey ?? undefined,
       };

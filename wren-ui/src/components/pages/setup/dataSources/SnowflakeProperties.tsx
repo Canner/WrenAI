@@ -193,7 +193,7 @@ export default function SnowflakeProperties(props: Props) {
             required
             rules={[
               {
-                required: true,
+                required: !isEditMode,
                 message: ERROR_TEXTS.CONNECTION.PRIVATE_KEY_FILE.REQUIRED,
               },
             ]}
@@ -207,6 +207,19 @@ export default function SnowflakeProperties(props: Props) {
           </Form.Item>
         )}
       </div>
+
+      <Form.Item
+        label="Warehouse"
+        name="warehouse"
+        extra={
+          <span className="gray-6">
+            Specifies the virtual warehouse for query execution. If blank, the
+            account's default warehouse is used (if configured).
+          </span>
+        }
+      >
+        <Input />
+      </Form.Item>
     </>
   );
 }

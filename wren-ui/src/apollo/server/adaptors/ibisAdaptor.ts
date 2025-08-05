@@ -65,6 +65,7 @@ export interface IbisSnowflakeConnectionInfo {
   schema: string;
   password?: string;
   privateKey?: string;
+  warehouse?: string;
 }
 
 export interface IbisAthenaConnectionInfo {
