@@ -12,6 +12,7 @@ export const getLanguageText = (language: ProjectLanguage) =>
     [ProjectLanguage.RU]: 'Russian',
     [ProjectLanguage.JA]: 'Japanese',
     [ProjectLanguage.KO]: 'Korean',
+    [ProjectLanguage.IT]: 'Italian',
     [ProjectLanguage.FA_IR]: 'Persian',
     [ProjectLanguage.AR]: 'Arabic',
   })[language] || language;
