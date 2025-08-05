@@ -8,6 +8,19 @@ export const typeDefs = gql`
     GENERATE_SQL
     RUN_SQL
     GENERATE_VEGA_CHART
+    GENERATE_SUMMARY
+    ASK
+    GET_INSTRUCTIONS
+    CREATE_INSTRUCTION
+    UPDATE_INSTRUCTION
+    DELETE_INSTRUCTION
+    CREATE_SQL_PAIR
+    UPDATE_SQL_PAIR
+    DELETE_SQL_PAIR
+    GET_SQL_PAIRS
+    GET_MODELS
+    STREAM_ASK
+    STREAM_GENERATE_SQL
   }
 
   input ApiHistoryFilterInput {
@@ -45,14 +58,22 @@ export const typeDefs = gql`
   }
 
   enum DataSourceName {
+    ATHENA
     BIG_QUERY
     DUCKDB
     POSTGRES
     MYSQL
+    ORACLE
     MSSQL
     CLICK_HOUSE
     TRINO
     SNOWFLAKE
+    REDSHIFT
+  }
+
+  enum RedshiftConnectionType {
+    redshift
+    redshift_iam
   }
 
   enum ExpressionName {
@@ -107,6 +128,8 @@ export const typeDefs = gql`
     JA
     KO
     IT
+    FA_IR
+    AR
   }
 
   type DataSource {

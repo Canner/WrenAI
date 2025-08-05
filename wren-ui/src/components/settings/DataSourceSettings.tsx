@@ -10,7 +10,7 @@ import ButtonItem from '@/components/pages/setup/ButtonItem';
 import {
   transformFormToProperties,
   transformPropertiesToForm,
-} from '@/hooks/useSetupConnection';
+} from '@/hooks/useSetupConnectionDataSource';
 import { parseGraphQLError } from '@/utils/errorHandler';
 import {
   useStartSampleDatasetMutation,

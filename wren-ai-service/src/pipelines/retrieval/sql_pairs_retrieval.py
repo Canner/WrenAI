@@ -118,8 +118,8 @@ class SqlPairsRetrieval(BasicPipeline):
         self,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
-        sql_pairs_similarity_threshold: Optional[float] = 0.7,
-        sql_pairs_retrieval_max_size: Optional[int] = 10,
+        sql_pairs_similarity_threshold: float = 0.7,
+        sql_pairs_retrieval_max_size: int = 10,
         **kwargs,
     ) -> None:
         store = document_store_provider.get_store(dataset_name="sql_pairs")
@@ -154,13 +154,3 @@ class SqlPairsRetrieval(BasicPipeline):
                 **self._configs,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        SqlPairsRetrieval,
-        "sql_pairs_retrieval",
-        query="this is a test query",
-    )

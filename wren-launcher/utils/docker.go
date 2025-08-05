@@ -24,7 +24,7 @@ import (
 
 const (
 	// please change the version when the version is updated
-	WREN_PRODUCT_VERSION	string = "0.22.2"
+	WREN_PRODUCT_VERSION	string = "0.26.0"
 	DOCKER_COMPOSE_YAML_URL string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/docker-compose.yaml"
 	DOCKER_COMPOSE_ENV_URL  string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/.env.example"
 	AI_SERVICE_CONFIG_URL   string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/config.example.yaml"
@@ -36,7 +36,7 @@ var generationModelToModelName = map[string]string{
 	"gpt-4.1-nano": "gpt-4.1-nano-2025-04-14",
 }
 
-func replaceEnvFileContent(content string, projectDir string, openaiApiKey string, openAIGenerationModel string, hostPort int, aiPort int, userUUID string, telemetryEnabled bool, platform string) string {
+func replaceEnvFileContent(content string, projectDir string, openaiApiKey string, openAIGenerationModel string, hostPort int, aiPort int, userUUID string, telemetryEnabled bool, platform string, localStorage string) string {
 	// replace PLATFORM
 	reg := regexp.MustCompile(`PLATFORM=(.*)`)
 	str := reg.ReplaceAllString(content, "PLATFORM="+platform)
@@ -77,6 +77,13 @@ func replaceEnvFileContent(content string, projectDir string, openaiApiKey strin
 	// replace EXPERIMENTAL_ENGINE_RUST_VERSION
 	reg = regexp.MustCompile(`EXPERIMENTAL_ENGINE_RUST_VERSION=(.*)`)
 	str = reg.ReplaceAllString(str, "EXPERIMENTAL_ENGINE_RUST_VERSION="+fmt.Sprintf("%t", config.IsExperimentalEngineRustVersion()))
+
+	// replace LOCAL_STORAGE
+	if localStorage == "" {
+		localStorage = "."
+	}
+	reg = regexp.MustCompile(`LOCAL_STORAGE=(.*)`)
+	str = reg.ReplaceAllString(str, "LOCAL_STORAGE="+localStorage)
 
 	return str
 }
@@ -233,7 +240,7 @@ func mergeEnvContent(newEnvFile string, envFileContent string) (string, error) {
 	return envFileContent, nil
 }
 
-func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostPort int, aiPort int, projectDir string, telemetryEnabled bool, llmProvider string, platform string) error {
+func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostPort int, aiPort int, projectDir string, telemetryEnabled bool, llmProvider string, platform string, localStorage string) error {
 	// download docker-compose file
 	composeFile := path.Join(projectDir, "docker-compose.yaml")
 	pterm.Info.Println("Downloading docker-compose file to", composeFile)
@@ -273,6 +280,7 @@ func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostP
 			userUUID,
 			telemetryEnabled,
 			platform,
+			localStorage,
 		)
 		newEnvFile := getEnvFilePath(projectDir)
 

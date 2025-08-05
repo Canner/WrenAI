@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -112,6 +113,69 @@ func askForGenerationModel() (string, error) {
 	}
 
 	_, result, err := prompt.Run()
+
+	if err != nil {
+		fmt.Printf("Prompt failed %v\n", err)
+		return "", err
+	}
+
+	return result, nil
+}
+
+func askForDbtProjectPath() (string, error) {
+	// let users know we're asking for a dbt project path
+	fmt.Println("Please provide the dbt project path you want to convert")
+	fmt.Println("This should be the root directory of your dbt project containing dbt_project.yml")
+	fmt.Println("Press Enter to ignore this step if you don't have a dbt project to convert.")
+
+	prompt := promptui.Prompt{
+		Label:   "dbt project path (leave empty to skip)",
+		Default: "",
+	}
+
+	result, err := prompt.Run()
+
+	if err != nil {
+		fmt.Printf("Prompt failed %v\n", err)
+		return "", err
+	}
+
+	return result, nil
+}
+
+func askForDbtProfileName() (string, error) {
+	// let users know we're asking for a dbt profile name
+	fmt.Println("Please provide the dbt profile name you want to use")
+	fmt.Println("This should be the profile name defined in your profiles.yml file")
+	fmt.Println("Press Enter to use the default profile.")
+
+	prompt := promptui.Prompt{
+		Label:   "dbt profile name (leave empty to use default)",
+		Default: "",
+	}
+
+	result, err := prompt.Run()
+
+	if err != nil {
+		fmt.Printf("Prompt failed %v\n", err)
+		return "", err
+	}
+
+	return result, nil
+}
+
+func askForDbtTarget() (string, error) {
+	// let users know we're asking for a dbt target
+	fmt.Println("Please provide the dbt target you want to use")
+	fmt.Println("This should be the target name defined in your profiles.yml file")
+	fmt.Println("Press Enter to use the default target.")
+
+	prompt := promptui.Prompt{
+		Label:   "dbt target (leave empty to use default)",
+		Default: "",
+	}
+
+	result, err := prompt.Run()
 
 	if err != nil {
 		fmt.Printf("Prompt failed %v\n", err)
@@ -232,6 +296,18 @@ func Launch() {
 	uiPort := utils.FindAvailablePort(3000)
 	aiPort := utils.FindAvailablePort(5555)
 
+	var localStorage string
+	if config.IsDbtEnabled() {
+		localStorage, err = processDbtProject(projectDir)
+		if err != nil {
+			pterm.Error.Println("Failed to process dbt project:", err)
+			panic(err)
+		}
+	} else {
+		localStorage = ""
+	}
+	// process dbt project conversion
+
 	err = utils.PrepareDockerFiles(
 		openaiApiKey,
 		openaiGenerationModel,
@@ -241,6 +317,7 @@ func Launch() {
 		telemetryEnabled,
 		llmProvider,
 		platform,
+		localStorage,
 	)
 	if err != nil {
 		panic(err)
@@ -390,4 +467,60 @@ func validateOpenaiApiKey(apiKey string) bool {
 
 	pterm.Info.Println("Valid API key, Response:", resp.Choices[0].Message.Content)
 	return false
+}
+
+func getDbtProfileAndTarget() (string, string, error) {
+	// ask for profile name and target
+	profileName, err := askForDbtProfileName()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get dbt profile name: %w", err)
+	}
+
+	// if profile name is empty, doesn't ask for target
+	var target string
+	if profileName == "" {
+		target = "" // use default target
+	} else {
+		target, err = askForDbtTarget()
+		if err != nil {
+			return "", "", fmt.Errorf("failed to get dbt target: %w", err)
+		}
+	}
+	return profileName, target, nil
+}
+
+func processDbtProject(projectDir string) (string, error) {
+	// ask for dbt project path
+	dbtProjectPath, err := askForDbtProjectPath()
+	if err != nil {
+		return "", fmt.Errorf("failed to get dbt project path: %w", err)
+	}
+
+	// if user provides empty path, skip dbt conversion
+	if strings.TrimSpace(dbtProjectPath) == "" {
+		pterm.Info.Println("Skipping dbt project conversion")
+		return ".", nil // return default local storage path
+	}
+
+	// create target directory in project dir
+	targetDir := filepath.Join(projectDir, "target")
+	err = os.MkdirAll(targetDir, 0755)
+	if err != nil {
+		return "", fmt.Errorf("failed to create target directory: %w", err)
+	}
+
+	profileName, target, err := getDbtProfileAndTarget()
+	if err != nil {
+		return "", err
+	}
+
+	// Use the core conversion function from dbt package
+	result, err := DbtConvertProject(dbtProjectPath, targetDir, profileName, target, true)
+	if err != nil {
+		return "", fmt.Errorf("failed to convert dbt project: %w", err)
+	}
+
+	pterm.Info.Printf("Successfully processed dbt project to target directory: %s\n", targetDir)
+
+	return result.LocalStoragePath, nil
 }

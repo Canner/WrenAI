@@ -1,7 +1,7 @@
 import logging
 import sys
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 import orjson
 from hamilton import base
@@ -13,6 +13,8 @@ from pydantic import BaseModel
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
+from src.pipelines.common import clean_up_new_lines
+from src.utils import trace_cost
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -50,12 +52,14 @@ def prompt(
     prompt_builder: PromptBuilder,
     language: str,
 ) -> dict:
-    return prompt_builder.run(models=cleaned_models, language=language)
+    _prompt = prompt_builder.run(models=cleaned_models, language=language)
+    return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
 
 @observe(as_type="generation", capture_input=False)
-async def generate(prompt: dict, generator: Any) -> dict:
-    return await generator(prompt=prompt.get("prompt"))
+@trace_cost
+async def generate(prompt: dict, generator: Any, generator_name: str) -> dict:
+    return await generator(prompt=prompt.get("prompt")), generator_name
 
 
 @observe(capture_input=False)
@@ -185,7 +189,7 @@ class RelationshipRecommendation(BasicPipeline):
         self,
         llm_provider: LLMProvider,
         engine: Engine,
-        engine_timeout: Optional[float] = 30.0,
+        engine_timeout: float = 30.0,
         **_,
     ):
         self._components = {
@@ -194,6 +198,7 @@ class RelationshipRecommendation(BasicPipeline):
                 system_prompt=system_prompt,
                 generation_kwargs=RELATIONSHIP_RECOMMENDATION_MODEL_KWARGS,
             ),
+            "generator_name": llm_provider.get_model(),
             "engine": engine,
         }
 
@@ -223,14 +228,3 @@ class RelationshipRecommendation(BasicPipeline):
                 **self._configs,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        RelationshipRecommendation,
-        "relationship_recommendation",
-        mdl={},
-        language="English",
-    )

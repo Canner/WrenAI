@@ -77,6 +77,11 @@ export const DATA_SOURCE_OPTIONS = {
     guide: 'https://docs.getwren.ai/oss/guide/connect/mysql',
     disabled: false,
   },
+  [DATA_SOURCES.ORACLE]: {
+    ...getDataSourceConfig(DATA_SOURCES.ORACLE),
+    guide: 'https://docs.getwren.ai/oss/guide/connect/oracle',
+    disabled: false,
+  },
   [DATA_SOURCES.MSSQL]: {
     ...getDataSourceConfig(DATA_SOURCES.MSSQL),
     guide: 'https://docs.getwren.ai/oss/guide/connect/sqlserver',
@@ -95,6 +100,16 @@ export const DATA_SOURCE_OPTIONS = {
   [DATA_SOURCES.SNOWFLAKE]: {
     ...getDataSourceConfig(DATA_SOURCES.SNOWFLAKE),
     guide: 'https://docs.getwren.ai/oss/guide/connect/snowflake',
+    disabled: false,
+  },
+  [DATA_SOURCES.ATHENA]: {
+    ...getDataSourceConfig(DATA_SOURCES.ATHENA),
+    guide: 'https://docs.getwren.ai/oss/guide/connect/athena',
+    disabled: false,
+  },
+  [DATA_SOURCES.REDSHIFT]: {
+    ...getDataSourceConfig(DATA_SOURCES.REDSHIFT),
+    guide: 'https://docs.getwren.ai/oss/guide/connect/redshift',
     disabled: false,
   },
 } as { [key: string]: ButtonOption };

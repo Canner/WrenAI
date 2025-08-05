@@ -1,4 +1,10 @@
-import { camelCase, isPlainObject, mapKeys, mapValues } from 'lodash';
+import {
+  camelCase,
+  isPlainObject,
+  mapKeys,
+  mapValues,
+  snakeCase,
+} from 'lodash';
 import { BaseRepository, IBasicRepository } from './baseRepository';
 import { Knex } from 'knex';
 
@@ -6,6 +12,19 @@ export enum ApiType {
   GENERATE_SQL = 'GENERATE_SQL',
   RUN_SQL = 'RUN_SQL',
   GENERATE_VEGA_CHART = 'GENERATE_VEGA_CHART',
+  GENERATE_SUMMARY = 'GENERATE_SUMMARY',
+  ASK = 'ASK',
+  GET_INSTRUCTIONS = 'GET_INSTRUCTIONS',
+  CREATE_INSTRUCTION = 'CREATE_INSTRUCTION',
+  UPDATE_INSTRUCTION = 'UPDATE_INSTRUCTION',
+  DELETE_INSTRUCTION = 'DELETE_INSTRUCTION',
+  GET_SQL_PAIRS = 'GET_SQL_PAIRS',
+  CREATE_SQL_PAIR = 'CREATE_SQL_PAIR',
+  UPDATE_SQL_PAIR = 'UPDATE_SQL_PAIR',
+  DELETE_SQL_PAIR = 'DELETE_SQL_PAIR',
+  GET_MODELS = 'GET_MODELS',
+  STREAM_ASK = 'STREAM_ASK',
+  STREAM_GENERATE_SQL = 'STREAM_GENERATE_SQL',
 }
 
 export interface ApiHistory {
@@ -145,6 +164,20 @@ export class ApiHistoryRepository
       return value;
     }) as ApiHistory;
     return formattedData;
+  };
+
+  protected override transformToDBData = (data: any) => {
+    if (!isPlainObject(data)) {
+      throw new Error('Unexpected dbdata');
+    }
+    const transformedData = mapValues(data, (value, key) => {
+      if (this.jsonbColumns.includes(key)) {
+        return JSON.stringify(value);
+      } else {
+        return value;
+      }
+    });
+    return mapKeys(transformedData, (_value, key) => snakeCase(key));
   };
 
   /**

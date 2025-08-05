@@ -11,6 +11,8 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
+from src.pipelines.common import clean_up_new_lines
+from src.utils import trace_cost
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -59,12 +61,14 @@ def prompt(
     sql: str,
     prompt_builder: PromptBuilder,
 ) -> dict:
-    return prompt_builder.run(sql=sql)
+    _prompt = prompt_builder.run(sql=sql)
+    return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
 
 @observe(as_type="generation", capture_input=False)
-async def extract_sql_tables(prompt: dict, generator: Any) -> dict:
-    return await generator(prompt=prompt.get("prompt"))
+@trace_cost
+async def extract_sql_tables(prompt: dict, generator: Any, generator_name: str) -> dict:
+    return await generator(prompt=prompt.get("prompt")), generator_name
 
 
 @observe(capture_input=False)
@@ -103,6 +107,7 @@ class SQLTablesExtraction(BasicPipeline):
                 system_prompt=sql_tables_extraction_system_prompt,
                 generation_kwargs=SQL_TABLES_EXTRACTION_MODEL_KWARGS,
             ),
+            "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
                 template=sql_tables_extraction_user_prompt_template
             ),
@@ -125,13 +130,3 @@ class SQLTablesExtraction(BasicPipeline):
                 **self._components,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        SQLTablesExtraction,
-        "sql_tables_extraction",
-        sql="SELECT * FROM table",
-    )

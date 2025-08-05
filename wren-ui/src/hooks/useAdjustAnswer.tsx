@@ -60,10 +60,16 @@ const handleUpdateThreadCache = (
 };
 
 export default function useAdjustAnswer(threadId?: number) {
-  const [cancelAdjustmentTask] = useCancelAdjustmentTaskMutation();
-  const [rerunAdjustmentTask] = useRerunAdjustmentTaskMutation();
+  const [cancelAdjustmentTask] = useCancelAdjustmentTaskMutation({
+    onError: (error) => console.error(error),
+  });
+  const [rerunAdjustmentTask] = useRerunAdjustmentTaskMutation({
+    onError: (error) => console.error(error),
+  });
   const [adjustThreadResponse, adjustThreadResponseResult] =
-    useAdjustThreadResponseMutation();
+    useAdjustThreadResponseMutation({
+      onError: (error) => console.error(error),
+    });
   const [fetchThreadResponse, threadResponseResult] =
     useThreadResponseLazyQuery({
       pollInterval: 1000,

@@ -10,6 +10,8 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
+from src.pipelines.common import clean_up_new_lines
+from src.utils import trace_cost
 from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
@@ -22,11 +24,11 @@ Your goal is to help guide user understand its data better and suggest few bette
 
 ### INSTRUCTIONS ###
 
-- Answer must be in the same language user specified.
+- Answer must be in the same language user specified in the Language section of the `### INPUT ###` section.
 - There should be proper line breaks, whitespace, and Markdown formatting(headers, lists, tables, etc.) in your response.
-- If the language is Traditional/Simplified Chinese, Korean, or Japanese, the maximum response length is 150 words; otherwise, the maximum response length is 110 words.
 - MUST NOT add SQL code in your response.
 - MUST consider database schema when suggesting better questions.
+- The maximum response length is 100 words.
 
 ### OUTPUT FORMAT ###
 Please provide your response in proper Markdown format without ```markdown``` tags.
@@ -60,19 +62,23 @@ def prompt(
     )
     query = "\n".join(previous_query_summaries) + "\n" + query
 
-    return prompt_builder.run(
+    _prompt = prompt_builder.run(
         query=query,
         db_schemas=db_schemas,
         language=language,
     )
+    return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
 
 @observe(as_type="generation", capture_input=False)
-async def misleading_assistance(prompt: dict, generator: Any, query_id: str) -> dict:
+@trace_cost
+async def misleading_assistance(
+    prompt: dict, generator: Any, query_id: str, generator_name: str
+) -> dict:
     return await generator(
         prompt=prompt.get("prompt"),
         query_id=query_id,
-    )
+    ), generator_name
 
 
 ## End of Pipeline
@@ -90,6 +96,7 @@ class MisleadingAssistance(BasicPipeline):
                 system_prompt=misleading_assistance_system_prompt,
                 streaming_callback=self._streaming_callback,
             ),
+            "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
                 template=misleading_assistance_user_prompt_template
             ),
@@ -155,15 +162,3 @@ class MisleadingAssistance(BasicPipeline):
                 **self._components,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        MisleadingAssistance,
-        "misleading_assistance",
-        query="hi",
-        db_schemas=[],
-        language="English",
-    )

@@ -15,19 +15,18 @@ import gdown
 import orjson
 import pandas as pd
 
+from eval import (
+    BIRD_DESTINATION_PATH,
+    EVAL_DATASET_DESTINATION_PATH,
+    SPIDER_DESTINATION_PATH,
+    WREN_ENGINE_API_URL,
+)
 from eval.utils import (
     get_contexts_from_sql,
     get_documents_given_contexts,
     get_eval_dataset_in_toml_string,
     get_next_few_items_circular,
-    prepare_duckdb_init_sql,
-    prepare_duckdb_session_sql,
 )
-
-SPIDER_DESTINATION_PATH = Path("./tools/dev/etc/spider1.0")
-BIRD_DESTINATION_PATH = Path("./tools/dev/etc/bird")
-WREN_ENGINE_API_URL = "http://localhost:8080"
-EVAL_DATASET_DESTINATION_PATH = Path("./eval/dataset")
 
 
 def download_spider_data(destination_path: Path):
@@ -139,6 +138,7 @@ def build_mdl_models(database, tables_info, database_info={}):
                         "column_description", ""
                     ).strip()
 
+        # dealing with some edge cases
         return [
             {
                 "name": column["column_name"],
@@ -162,11 +162,11 @@ def build_mdl_models(database, tables_info, database_info={}):
                 "schema": "main",
                 "table": table,
             },
-            "primaryKey": tables_info["column_names_original"][
-                primary_key_column_index
-            ][-1]
-            if primary_key_column_index
-            else "",
+            "primaryKey": (
+                tables_info["column_names_original"][primary_key_column_index][-1]
+                if primary_key_column_index
+                else "",
+            ),
             "columns": _build_mdl_columns(
                 tables_info, i, database_info.get(table, None)
             ),
@@ -236,7 +236,7 @@ def build_mdl_by_db_using_spider(destination_path: Path):
             mdl_by_db[database] = {
                 "catalog": database,
                 "schema": "main",
-                "dataSource": "local_file",
+                "dataSource": "postgres",
                 "models": build_mdl_models(database, tables_info),
                 "relationships": build_mdl_relationships(tables_info),
                 "views": [],
@@ -247,16 +247,6 @@ def build_mdl_by_db_using_spider(destination_path: Path):
 
 
 def build_question_sql_pairs_by_db_using_spider(destination_path: Path):
-    def _get_ground_truths_by_db(path: Path, key: str):
-        with open(path, "rb") as f:
-            json_data = orjson.loads(f.read())
-
-        results = defaultdict(list)
-        for item in json_data:
-            results[item[key]].append(item)
-
-        return results
-
     # get all database names in the spider testsuite
     database_names = get_database_names(destination_path / "database")
 
@@ -320,7 +310,7 @@ def build_mdl_by_db_using_bird(destination_path: Path):
             mdl_by_db[database] = {
                 "catalog": database,
                 "schema": "main",
-                "dataSource": "local_file",
+                "dataSource": "postgres",
                 "models": build_mdl_models(
                     database, tables_info, database_infos.get(database, {})
                 ),
@@ -406,20 +396,15 @@ if __name__ == "__main__":
         )
 
     print("Creating eval dataset...")
-    # create duckdb connection in wren engine
-    # https://duckdb.org/docs/guides/database_integration/sqlite.html
-    prepare_duckdb_session_sql(WREN_ENGINE_API_URL)
     questions_size = 0
     if args.dataset == "spider1.0":
-        duckdb_init_path = "etc/spider1.0/database"
+        eval_data_db_path = "etc/spider1.0/database"
     elif args.dataset == "bird":
-        duckdb_init_path = "etc/bird/minidev/MINIDEV/dev_databases"
+        eval_data_db_path = "etc/bird/minidev/MINIDEV/dev_databases"
     for db, values in sorted(mdl_and_ground_truths_by_db.items()):
         candidate_eval_dataset = []
 
         print(f"Database: {db}")
-        prepare_duckdb_init_sql(WREN_ENGINE_API_URL, db, duckdb_init_path)
-
         for i, ground_truth in enumerate(values["ground_truth"]):
             context = asyncio.run(
                 get_contexts_from_sql(

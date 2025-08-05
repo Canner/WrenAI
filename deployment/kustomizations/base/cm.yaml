@@ -55,18 +55,21 @@ data:
     models:
     - alias: default
       model: gpt-4.1-nano-2025-04-14
+      context_window_size: 1000000
       kwargs:
         max_tokens: 4096
         n: 1
         seed: 0
         temperature: 0
     - model: gpt-4.1-mini-2025-04-14
+      context_window_size: 1000000
       kwargs:
         max_tokens: 4096
         n: 1
         seed: 0
         temperature: 0
     - model: gpt-4.1-2025-04-14
+      context_window_size: 1000000
       kwargs:
         max_tokens: 4096
         n: 1
@@ -120,12 +123,15 @@ data:
       - name: sql_generation
         llm: litellm_llm.default
         engine: wren_ui
+        document_store: qdrant
       - name: sql_correction
         llm: litellm_llm.default
         engine: wren_ui
+        document_store: qdrant
       - name: followup_sql_generation
         llm: litellm_llm.default
         engine: wren_ui
+        document_store: qdrant
       - name: sql_answer
         llm: litellm_llm.default
       - name: semantics_description
@@ -142,6 +148,7 @@ data:
       - name: question_recommendation_sql_generation
         llm: litellm_llm.default
         engine: wren_ui
+        document_store: qdrant
       - name: intent_classification
         llm: litellm_llm.default
         embedder: litellm_embedder.default

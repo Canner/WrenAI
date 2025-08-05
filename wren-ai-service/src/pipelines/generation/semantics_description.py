@@ -11,6 +11,8 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
+from src.pipelines.common import clean_up_new_lines
+from src.utils import trace_cost
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -28,6 +30,7 @@ def picked_models(mdl: dict, selected_models: list[str]) -> list[dict]:
                 "type": column["type"],
                 "properties": {
                     "description": column["properties"].get("description", ""),
+                    "alias": column["properties"].get("displayName", ""),
                 },
             }
             for column in columns
@@ -40,6 +43,7 @@ def picked_models(mdl: dict, selected_models: list[str]) -> list[dict]:
             "columns": column_formatter(model["columns"]),
             "properties": {
                 "description": model["properties"].get("description", ""),
+                "alias": model["properties"].get("displayName", ""),
             },
         }
 
@@ -57,16 +61,18 @@ def prompt(
     prompt_builder: PromptBuilder,
     language: str,
 ) -> dict:
-    return prompt_builder.run(
+    _prompt = prompt_builder.run(
         picked_models=picked_models,
         user_prompt=user_prompt,
         language=language,
     )
+    return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
 
 @observe(as_type="generation", capture_input=False)
-async def generate(prompt: dict, generator: Any) -> dict:
-    return await generator(prompt=prompt.get("prompt"))
+@trace_cost
+async def generate(prompt: dict, generator: Any, generator_name: str) -> dict:
+    return await generator(prompt=prompt.get("prompt")), generator_name
 
 
 @observe(capture_input=False)
@@ -214,6 +220,7 @@ class SemanticsDescription(BasicPipeline):
                 system_prompt=system_prompt,
                 generation_kwargs=SEMANTICS_DESCRIPTION_MODEL_KWARGS,
             ),
+            "generator_name": llm_provider.get_model(),
         }
         self._final = "output"
 
@@ -240,16 +247,3 @@ class SemanticsDescription(BasicPipeline):
                 **self._components,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        SemanticsDescription,
-        "semantics_description",
-        user_prompt="Track student enrollments, grades, and GPA calculations to monitor academic performance and identify areas for student support",
-        selected_models=[],
-        mdl={},
-        language="en",
-    )

@@ -10,6 +10,8 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
+from src.pipelines.common import clean_up_new_lines
+from src.utils import trace_cost
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -50,16 +52,22 @@ def prompt(
     wren_ai_docs: list[dict],
     prompt_builder: PromptBuilder,
 ) -> dict:
-    return prompt_builder.run(
+    _prompt = prompt_builder.run(
         query=query,
         language=language,
         docs=wren_ai_docs,
     )
+    return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
 
 @observe(as_type="generation", capture_input=False)
-async def user_guide_assistance(prompt: dict, generator: Any, query_id: str) -> dict:
-    return await generator(prompt=prompt.get("prompt"), query_id=query_id)
+@trace_cost
+async def user_guide_assistance(
+    prompt: dict, generator: Any, query_id: str, generator_name: str
+) -> dict:
+    return await generator(
+        prompt=prompt.get("prompt"), query_id=query_id
+    ), generator_name
 
 
 ## End of Pipeline
@@ -78,6 +86,7 @@ class UserGuideAssistance(BasicPipeline):
                 system_prompt=user_guide_assistance_system_prompt,
                 streaming_callback=self._streaming_callback,
             ),
+            "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
                 template=user_guide_assistance_user_prompt_template
             ),
@@ -142,14 +151,3 @@ class UserGuideAssistance(BasicPipeline):
                 **self._configs,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        UserGuideAssistance,
-        "user_guide_assistance",
-        query="what can Wren AI do?",
-        language="en",
-    )

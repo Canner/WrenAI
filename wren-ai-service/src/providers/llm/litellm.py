@@ -1,12 +1,13 @@
 import os
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional
 
+import backoff
+import openai
 from haystack.components.generators.openai_utils import (
     _convert_message_to_openai_format,
 )
 from haystack.dataclasses import ChatMessage, StreamingChunk
-from litellm import acompletion
-from litellm.types.utils import ModelResponse
+from litellm import Router, acompletion
 
 from src.core.provider import LLMProvider
 from src.providers.llm import (
@@ -16,7 +17,7 @@ from src.providers.llm import (
     connect_chunks,
 )
 from src.providers.loader import provider
-from src.utils import remove_trailing_slash, extract_braces_content
+from src.utils import extract_braces_content, remove_trailing_slash
 
 
 @provider("litellm_llm")
@@ -31,14 +32,33 @@ class LitellmLLMProvider(LLMProvider):
         api_version: Optional[str] = None,
         kwargs: Optional[Dict[str, Any]] = None,
         timeout: float = 120.0,
+        context_window_size: int = 100000,
+        fallback_model_list: Optional[List[Dict[str, Any]]] = None,
+        fallback_testing: bool = False,
         **_,
     ):
         self._model = model
+        # TODO: remove _api_key, _api_base, _api_version in the future, as it is not used in litellm
         self._api_key = os.getenv(api_key_name) if api_key_name else None
         self._api_base = remove_trailing_slash(api_base) if api_base else None
         self._api_version = api_version
-        self._model_kwargs = kwargs
+        self._model_kwargs = kwargs or {}
         self._timeout = timeout
+        self._context_window_size = context_window_size
+        # build a dynamic list of all fallback model names (beyond the first)
+        self._has_fallbacks = (
+            fallback_model_list is not None and len(fallback_model_list) > 1
+        )
+        fallbacks = (
+            [{self._model: [m["model_name"] for m in fallback_model_list[1:]]}]
+            if self._has_fallbacks
+            else []
+        )
+        self._router = Router(
+            model_list=fallback_model_list or [],
+            fallbacks=fallbacks,
+        )
+        self._enable_fallback_testing = fallback_testing and self._has_fallbacks
 
     def get_generator(
         self,
@@ -46,8 +66,12 @@ class LitellmLLMProvider(LLMProvider):
         generation_kwargs: Optional[Dict[str, Any]] = None,
         streaming_callback: Optional[Callable[[StreamingChunk], None]] = None,
     ):
-        combined_generation_kwargs = {**(generation_kwargs or {}), **self._model_kwargs}
+        combined_generation_kwargs = {
+            **(generation_kwargs or {}),
+            **(self._model_kwargs or {}),
+        }
 
+        @backoff.on_exception(backoff.expo, openai.APIError, max_time=60.0, max_tries=3)
         async def _run(
             prompt: str,
             history_messages: Optional[List[ChatMessage]] = None,
@@ -75,16 +99,25 @@ class LitellmLLMProvider(LLMProvider):
                 **(generation_kwargs or {}),
             }
 
-            completion: Union[ModelResponse] = await acompletion(
-                model=self._model,
-                api_key=self._api_key,
-                api_base=self._api_base,
-                api_version=self._api_version,
-                timeout=self._timeout,
-                messages=openai_formatted_messages,
-                stream=streaming_callback is not None,
-                **generation_kwargs,
-            )
+            if self._has_fallbacks:
+                completion = await self._router.acompletion(
+                    model=self._model,
+                    messages=openai_formatted_messages,
+                    stream=streaming_callback is not None,
+                    mock_testing_fallbacks=self._enable_fallback_testing,
+                    **generation_kwargs,
+                )
+            else:
+                completion = await acompletion(
+                    model=self._model,
+                    api_key=self._api_key,
+                    api_base=self._api_base,
+                    api_version=self._api_version,
+                    timeout=self._timeout,
+                    messages=openai_formatted_messages,
+                    stream=streaming_callback is not None,
+                    **generation_kwargs,
+                )
 
             completions: List[ChatMessage] = []
             if streaming_callback is not None:
@@ -113,7 +146,9 @@ class LitellmLLMProvider(LLMProvider):
                 check_finish_reason(response)
 
             return {
-                "replies": [extract_braces_content(message.content) for message in completions],
+                "replies": [
+                    extract_braces_content(message.content) for message in completions
+                ],
                 "meta": [message.meta for message in completions],
             }
 

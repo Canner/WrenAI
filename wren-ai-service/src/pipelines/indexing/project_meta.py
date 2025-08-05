@@ -104,14 +104,3 @@ class ProjectMeta(BasicPipeline):
     @observe(name="Clean Documents for Project Meta")
     async def clean(self, project_id: Optional[str] = None) -> None:
         await self._components["cleaner"].run(project_id=project_id)
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        ProjectMeta,
-        "project_meta_indexing",
-        mdl_str='{"data_source": "local_file"}',
-        project_id="test",
-    )

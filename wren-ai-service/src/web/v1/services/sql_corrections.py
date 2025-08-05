@@ -1,5 +1,5 @@
 import logging
-from typing import Literal, Optional
+from typing import List, Literal, Optional
 
 from cachetools import TTLCache
 from langfuse.decorators import observe
@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
-from src.web.v1.services import MetadataTraceable
+from src.web.v1.services import BaseRequest, MetadataTraceable
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -22,7 +22,9 @@ class SqlCorrectionService:
         status: Literal["correcting", "finished", "failed"] = "correcting"
         response: Optional[str] = None
         error: Optional["SqlCorrectionService.Error"] = None
+        invalid_sql: Optional[str] = None
         trace_id: Optional[str] = None
+        request_from: Literal["ui", "api"] = "ui"
 
     def __init__(
         self,
@@ -38,21 +40,27 @@ class SqlCorrectionService:
         event_id: str,
         error_message: str,
         code: str = "OTHERS",
+        invalid_sql: Optional[str] = None,
         trace_id: Optional[str] = None,
+        request_from: Literal["ui", "api"] = "ui",
     ):
         self._cache[event_id] = self.Event(
             event_id=event_id,
             status="failed",
             error=self.Error(code=code, message=error_message),
             trace_id=trace_id,
+            invalid_sql=invalid_sql,
+            request_from=request_from,
         )
         logger.error(error_message)
 
-    class CorrectionRequest(BaseModel):
+    class CorrectionRequest(BaseRequest):
         event_id: str
         sql: str
         error: str
-        project_id: Optional[str] = None
+        retrieved_tables: Optional[List[str]] = None
+        use_dry_plan: bool = False
+        allow_dry_plan_fallback: bool = True
 
     @observe(name="SQL Correction")
     @trace_metadata
@@ -67,6 +75,9 @@ class SqlCorrectionService:
         sql = request.sql
         error = request.error
         project_id = request.project_id
+        retrieved_tables = request.retrieved_tables
+        use_dry_plan = request.use_dry_plan
+        allow_dry_plan_fallback = request.allow_dry_plan_fallback
 
         try:
             _invalid = {
@@ -74,17 +85,18 @@ class SqlCorrectionService:
                 "error": error,
             }
 
-            tables = (
-                await self._pipelines["sql_tables_extraction"].run(
-                    sql=sql,
-                )
-            )["post_process"]
+            if not retrieved_tables:
+                retrieved_tables = (
+                    await self._pipelines["sql_tables_extraction"].run(
+                        sql=sql,
+                    )
+                )["post_process"]
 
             documents = (
                 (
                     await self._pipelines["db_schema_retrieval"].run(
                         project_id=project_id,
-                        tables=tables,
+                        tables=retrieved_tables,
                     )
                 )
                 .get("construct_retrieval_results", {})
@@ -94,28 +106,33 @@ class SqlCorrectionService:
 
             res = await self._pipelines["sql_correction"].run(
                 contexts=table_ddls,
-                invalid_generation_results=[_invalid],
+                invalid_generation_result=_invalid,
                 project_id=project_id,
+                use_dry_plan=use_dry_plan,
+                allow_dry_plan_fallback=allow_dry_plan_fallback,
             )
 
             post_process = res["post_process"]
-            valid = post_process["valid_generation_results"]
-            invalid = post_process["invalid_generation_results"]
+            valid = post_process["valid_generation_result"]
+            invalid = post_process["invalid_generation_result"]
 
             if not valid:
-                error_message = invalid[0]["error"]
+                error_message = invalid["error"]
                 self._handle_exception(
                     event_id,
                     f"An error occurred during SQL correction: {error_message}",
                     trace_id=trace_id,
+                    invalid_sql=invalid["sql"],
+                    request_from=request.request_from,
                 )
             else:
-                corrected = valid[0]["sql"]
+                corrected = valid["sql"]
                 self._cache[event_id] = self.Event(
                     event_id=event_id,
                     status="finished",
                     trace_id=trace_id,
                     response=corrected,
+                    request_from=request.request_from,
                 )
 
         except Exception as e:
@@ -123,6 +140,7 @@ class SqlCorrectionService:
                 event_id,
                 f"An error occurred during SQL correction: {str(e)}",
                 trace_id=trace_id,
+                request_from=request.request_from,
             )
 
         return self._cache[event_id].with_metadata()

@@ -77,9 +77,22 @@ export type ApiHistoryResponse = {
 };
 
 export enum ApiType {
+  ASK = 'ASK',
+  CREATE_INSTRUCTION = 'CREATE_INSTRUCTION',
+  CREATE_SQL_PAIR = 'CREATE_SQL_PAIR',
+  DELETE_INSTRUCTION = 'DELETE_INSTRUCTION',
+  DELETE_SQL_PAIR = 'DELETE_SQL_PAIR',
   GENERATE_SQL = 'GENERATE_SQL',
+  GENERATE_SUMMARY = 'GENERATE_SUMMARY',
   GENERATE_VEGA_CHART = 'GENERATE_VEGA_CHART',
-  RUN_SQL = 'RUN_SQL'
+  GET_INSTRUCTIONS = 'GET_INSTRUCTIONS',
+  GET_MODELS = 'GET_MODELS',
+  GET_SQL_PAIRS = 'GET_SQL_PAIRS',
+  RUN_SQL = 'RUN_SQL',
+  STREAM_ASK = 'STREAM_ASK',
+  STREAM_GENERATE_SQL = 'STREAM_GENERATE_SQL',
+  UPDATE_INSTRUCTION = 'UPDATE_INSTRUCTION',
+  UPDATE_SQL_PAIR = 'UPDATE_SQL_PAIR'
 }
 
 export type AskingTask = {
@@ -294,9 +307,9 @@ export type DashboardSchedule = {
   __typename?: 'DashboardSchedule';
   cron?: Maybe<Scalars['String']>;
   day?: Maybe<CacheScheduleDayEnum>;
-  frequency: ScheduleFrequencyEnum;
-  hour: Scalars['Int'];
-  minute: Scalars['Int'];
+  frequency?: Maybe<ScheduleFrequencyEnum>;
+  hour?: Maybe<Scalars['Int']>;
+  minute?: Maybe<Scalars['Int']>;
   timezone?: Maybe<Scalars['String']>;
 };
 
@@ -313,12 +326,15 @@ export type DataSourceInput = {
 };
 
 export enum DataSourceName {
+  ATHENA = 'ATHENA',
   BIG_QUERY = 'BIG_QUERY',
   CLICK_HOUSE = 'CLICK_HOUSE',
   DUCKDB = 'DUCKDB',
   MSSQL = 'MSSQL',
   MYSQL = 'MYSQL',
+  ORACLE = 'ORACLE',
   POSTGRES = 'POSTGRES',
+  REDSHIFT = 'REDSHIFT',
   SNOWFLAKE = 'SNOWFLAKE',
   TRINO = 'TRINO'
 }
@@ -383,7 +399,7 @@ export type DetailedDashboard = {
   items: Array<DashboardItem>;
   name: Scalars['String'];
   nextScheduledAt?: Maybe<Scalars['String']>;
-  schedule: DashboardSchedule;
+  schedule?: Maybe<DashboardSchedule>;
 };
 
 export type DetailedModel = {
@@ -1101,6 +1117,7 @@ export enum ProjectLanguage {
   DE = 'DE',
   EN = 'EN',
   ES = 'ES',
+  FA_IR = 'FA_IR',
   FR = 'FR',
   IT = 'IT',
   JA = 'JA',
@@ -1108,7 +1125,8 @@ export enum ProjectLanguage {
   PT = 'PT',
   RU = 'RU',
   ZH_CN = 'ZH_CN',
-  ZH_TW = 'ZH_TW'
+  ZH_TW = 'ZH_TW',
+  AR = 'AR',
 }
 
 export type Query = {
@@ -1219,6 +1237,11 @@ export enum RecommendedQuestionsTaskStatus {
   FINISHED = 'FINISHED',
   GENERATING = 'GENERATING',
   NOT_STARTED = 'NOT_STARTED'
+}
+
+export enum RedshiftConnectionType {
+  redshift = 'redshift',
+  redshift_iam = 'redshift_iam'
 }
 
 export type Relation = {

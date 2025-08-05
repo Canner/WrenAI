@@ -1,6 +1,6 @@
 import logging
 import sys
-from typing import Any, Optional
+from typing import Any
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
@@ -9,15 +9,19 @@ from langfuse.decorators import observe
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
-from src.core.provider import LLMProvider
+from src.core.provider import DocumentStoreProvider, LLMProvider
+from src.pipelines.common import clean_up_new_lines, retrieve_metadata
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
+    calculated_field_instructions,
     construct_instructions,
+    json_field_instructions,
+    metric_instructions,
     sql_generation_system_prompt,
 )
 from src.pipelines.retrieval.sql_functions import SqlFunction
-from src.web.v1.services import Configuration
+from src.utils import trace_cost
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -28,9 +32,16 @@ sql_generation_user_prompt_template = """
     {{ document }}
 {% endfor %}
 
-{% if instructions %}
-### INSTRUCTIONS ###
-{{ instructions }}
+{% if calculated_field_instructions %}
+{{ calculated_field_instructions }}
+{% endif %}
+
+{% if metric_instructions %}
+{{ metric_instructions }}
+{% endif %}
+
+{% if json_field_instructions %}
+{{ json_field_instructions }}
 {% endif %}
 
 {% if sql_functions %}
@@ -50,9 +61,15 @@ SQL:
 {% endfor %}
 {% endif %}
 
+{% if instructions %}
+### USER INSTRUCTIONS ###
+{% for instruction in instructions %}
+{{ loop.index }}. {{ instruction }}
+{% endfor %}
+{% endif %}
+
 ### QUESTION ###
 User's Question: {{ query }}
-Current Time: {{ current_time }}
 
 {% if sql_generation_reasoning %}
 ### REASONING PLAN ###
@@ -70,35 +87,39 @@ def prompt(
     documents: list[str],
     prompt_builder: PromptBuilder,
     sql_generation_reasoning: str | None = None,
-    configuration: Configuration | None = None,
     sql_samples: list[dict] | None = None,
     instructions: list[dict] | None = None,
     has_calculated_field: bool = False,
     has_metric: bool = False,
+    has_json_field: bool = False,
     sql_functions: list[SqlFunction] | None = None,
 ) -> dict:
-    return prompt_builder.run(
+    _prompt = prompt_builder.run(
         query=query,
         documents=documents,
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
-            configuration,
-            has_calculated_field,
-            has_metric,
-            instructions,
+            instructions=instructions,
         ),
+        calculated_field_instructions=(
+            calculated_field_instructions if has_calculated_field else ""
+        ),
+        metric_instructions=(metric_instructions if has_metric else ""),
+        json_field_instructions=(json_field_instructions if has_json_field else ""),
         sql_samples=sql_samples,
-        current_time=configuration.show_current_time(),
         sql_functions=sql_functions,
     )
+    return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
 
 @observe(as_type="generation", capture_input=False)
+@trace_cost
 async def generate_sql(
     prompt: dict,
     generator: Any,
+    generator_name: str,
 ) -> dict:
-    return await generator(prompt=prompt.get("prompt"))
+    return await generator(prompt=prompt.get("prompt")), generator_name
 
 
 @observe(capture_input=False)
@@ -106,12 +127,20 @@ async def post_process(
     generate_sql: dict,
     post_processor: SQLGenPostProcessor,
     engine_timeout: float,
+    data_source: str,
     project_id: str | None = None,
+    use_dry_plan: bool = False,
+    allow_dry_plan_fallback: bool = True,
+    allow_data_preview: bool = False,
 ) -> dict:
     return await post_processor.run(
         generate_sql.get("replies"),
         timeout=engine_timeout,
         project_id=project_id,
+        use_dry_plan=use_dry_plan,
+        data_source=data_source,
+        allow_dry_plan_fallback=allow_dry_plan_fallback,
+        allow_data_preview=allow_data_preview,
     )
 
 
@@ -122,15 +151,21 @@ class SQLGeneration(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
+        document_store_provider: DocumentStoreProvider,
         engine: Engine,
-        engine_timeout: Optional[float] = 30.0,
+        engine_timeout: float = 30.0,
         **kwargs,
     ):
+        self._retriever = document_store_provider.get_retriever(
+            document_store_provider.get_store("project_meta")
+        )
+
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=sql_generation_system_prompt,
                 generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
             ),
+            "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
                 template=sql_generation_user_prompt_template
             ),
@@ -151,15 +186,24 @@ class SQLGeneration(BasicPipeline):
         query: str,
         contexts: list[str],
         sql_generation_reasoning: str | None = None,
-        configuration: Configuration = Configuration(),
         sql_samples: list[dict] | None = None,
         instructions: list[dict] | None = None,
         project_id: str | None = None,
         has_calculated_field: bool = False,
         has_metric: bool = False,
+        has_json_field: bool = False,
         sql_functions: list[SqlFunction] | None = None,
+        use_dry_plan: bool = False,
+        allow_dry_plan_fallback: bool = True,
+        allow_data_preview: bool = False,
     ):
         logger.info("SQL Generation pipeline is running...")
+
+        if use_dry_plan:
+            metadata = await retrieve_metadata(project_id or "", self._retriever)
+        else:
+            metadata = {}
+
         return await self._pipe.execute(
             ["post_process"],
             inputs={
@@ -169,22 +213,15 @@ class SQLGeneration(BasicPipeline):
                 "sql_samples": sql_samples,
                 "instructions": instructions,
                 "project_id": project_id,
-                "configuration": configuration,
                 "has_calculated_field": has_calculated_field,
                 "has_metric": has_metric,
+                "has_json_field": has_json_field,
                 "sql_functions": sql_functions,
+                "use_dry_plan": use_dry_plan,
+                "allow_dry_plan_fallback": allow_dry_plan_fallback,
+                "data_source": metadata.get("data_source", "local_file"),
+                "allow_data_preview": allow_data_preview,
                 **self._components,
                 **self._configs,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        SQLGeneration,
-        "sql_generation",
-        query="this is a test query",
-        contexts=[],
-    )

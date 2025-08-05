@@ -8,17 +8,15 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
-from src.web.v1.services import Configuration, MetadataTraceable
+from src.web.v1.services import BaseRequest, MetadataTraceable
 
 logger = logging.getLogger("wren-ai-service")
 
 
 class RelationshipRecommendation:
-    class Input(BaseModel):
+    class Input(BaseRequest):
         id: str
         mdl: str
-        project_id: Optional[str] = None  # this is for tracing purpose
-        configuration: Optional[Configuration] = Configuration()
 
     class Resource(BaseModel, MetadataTraceable):
         class Error(BaseModel):
@@ -30,6 +28,7 @@ class RelationshipRecommendation:
         response: Optional[dict] = None
         error: Optional[Error] = None
         trace_id: Optional[str] = None
+        request_from: Literal["ui", "api"] = "ui"
 
     def __init__(
         self,
@@ -48,12 +47,14 @@ class RelationshipRecommendation:
         error_message: str,
         code: str = "OTHERS",
         trace_id: Optional[str] = None,
+        request_from: Literal["ui", "api"] = "ui",
     ):
         self._cache[input.id] = self.Resource(
             id=input.id,
             status="failed",
             error=self.Resource.Error(code=code, message=error_message),
             trace_id=trace_id,
+            request_from=request_from,
         )
         logger.error(error_message)
 
@@ -68,7 +69,7 @@ class RelationshipRecommendation:
 
             input = {
                 "mdl": mdl_dict,
-                "language": request.configuration.language,
+                "language": request.configurations.language,
             }
 
             resp = await self._pipelines["relationship_recommendation"].run(**input)
@@ -78,6 +79,7 @@ class RelationshipRecommendation:
                 status="finished",
                 response=resp.get("validated"),
                 trace_id=trace_id,
+                request_from=request.request_from,
             )
         except orjson.JSONDecodeError as e:
             self._handle_exception(
@@ -85,12 +87,14 @@ class RelationshipRecommendation:
                 f"Failed to parse MDL: {str(e)}",
                 code="MDL_PARSE_ERROR",
                 trace_id=trace_id,
+                request_from=request.request_from,
             )
         except Exception as e:
             self._handle_exception(
                 request,
                 f"An error occurred during relationship recommendation generation: {str(e)}",
                 trace_id=trace_id,
+                request_from=request.request_from,
             )
 
         return self._cache[request.id].with_metadata()

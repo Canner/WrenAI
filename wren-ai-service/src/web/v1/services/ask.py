@@ -8,7 +8,7 @@ from pydantic import AliasChoices, BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
-from src.web.v1.services import Configuration, SSEEvent
+from src.web.v1.services import BaseRequest, SSEEvent
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -19,27 +19,16 @@ class AskHistory(BaseModel):
 
 
 # POST /v1/asks
-class AskRequest(BaseModel):
-    _query_id: str | None = None
+class AskRequest(BaseRequest):
     query: str
-    # for identifying which collection to access from vectordb
-    project_id: Optional[str] = None
     # don't recommend to use id as a field name, but it's used in the older version of API spec
     # so we need to support as a choice, and will remove it in the future
     mdl_hash: Optional[str] = Field(validation_alias=AliasChoices("mdl_hash", "id"))
-    thread_id: Optional[str] = None
     histories: Optional[list[AskHistory]] = Field(default_factory=list)
-    configurations: Optional[Configuration] = Configuration()
-    ignore_sql_generation_reasoning: Optional[bool] = False
-    enable_column_pruning: Optional[bool] = False
-
-    @property
-    def query_id(self) -> str:
-        return self._query_id
-
-    @query_id.setter
-    def query_id(self, query_id: str):
-        self._query_id = query_id
+    ignore_sql_generation_reasoning: bool = False
+    enable_column_pruning: bool = False
+    use_dry_plan: bool = False
+    allow_dry_plan_fallback: bool = True
 
 
 class AskResponse(BaseModel):
@@ -47,17 +36,8 @@ class AskResponse(BaseModel):
 
 
 # PATCH /v1/asks/{query_id}
-class StopAskRequest(BaseModel):
-    _query_id: str | None = None
+class StopAskRequest(BaseRequest):
     status: Literal["stopped"]
-
-    @property
-    def query_id(self) -> str:
-        return self._query_id
-
-    @query_id.setter
-    def query_id(self, query_id: str):
-        self._query_id = query_id
 
 
 class StopAskResponse(BaseModel):
@@ -100,7 +80,7 @@ class _AskResultResponse(BaseModel):
     invalid_sql: Optional[str] = None
     error: Optional[AskError] = None
     trace_id: Optional[str] = None
-    is_followup: Optional[bool] = False
+    is_followup: bool = False
     general_type: Optional[
         Literal["MISLEADING_QUERY", "DATA_ASSISTANCE", "USER_GUIDE"]
     ] = None
@@ -114,22 +94,11 @@ class AskResultResponse(_AskResultResponse):
 
 
 # POST /v1/ask-feedbacks
-class AskFeedbackRequest(BaseModel):
-    _query_id: str | None = None
+class AskFeedbackRequest(BaseRequest):
     question: str
     tables: List[str]
     sql_generation_reasoning: str
     sql: str
-    project_id: Optional[str] = None
-    configurations: Optional[Configuration] = Configuration()
-
-    @property
-    def query_id(self) -> str:
-        return self._query_id
-
-    @query_id.setter
-    def query_id(self, query_id: str):
-        self._query_id = query_id
 
 
 class AskFeedbackResponse(BaseModel):
@@ -137,17 +106,8 @@ class AskFeedbackResponse(BaseModel):
 
 
 # PATCH /v1/ask-feedbacks/{query_id}
-class StopAskFeedbackRequest(BaseModel):
-    _query_id: str | None = None
+class StopAskFeedbackRequest(BaseRequest):
     status: Literal["stopped"]
-
-    @property
-    def query_id(self) -> str:
-        return self._query_id
-
-    @query_id.setter
-    def query_id(self, query_id: str):
-        self._query_id = query_id
 
 
 class StopAskFeedbackResponse(BaseModel):
@@ -223,6 +183,7 @@ class AskService:
                 "type": "",
                 "error_type": "",
                 "error_message": "",
+                "request_from": ask_request.request_from,
             },
         }
 
@@ -249,6 +210,8 @@ class AskService:
         allow_sql_functions_retrieval = self._allow_sql_functions_retrieval
         max_sql_correction_retries = self._max_sql_correction_retries
         current_sql_correction_retries = 0
+        use_dry_plan = ask_request.use_dry_plan
+        allow_dry_plan_fallback = ask_request.allow_dry_plan_fallback
 
         try:
             user_query = ask_request.query
@@ -294,6 +257,7 @@ class AskService:
                         self._pipelines["instructions_retrieval"].run(
                             query=user_query,
                             project_id=ask_request.project_id,
+                            scope="sql",
                         ),
                     )
 
@@ -519,6 +483,7 @@ class AskService:
                     "has_calculated_field", False
                 )
                 has_metric = _retrieval_result.get("has_metric", False)
+                has_json_field = _retrieval_result.get("has_json_field", False)
 
                 if histories:
                     text_to_sql_generation_results = await self._pipelines[
@@ -529,12 +494,14 @@ class AskService:
                         sql_generation_reasoning=sql_generation_reasoning,
                         histories=histories,
                         project_id=ask_request.project_id,
-                        configuration=ask_request.configurations,
                         sql_samples=sql_samples,
                         instructions=instructions,
                         has_calculated_field=has_calculated_field,
                         has_metric=has_metric,
+                        has_json_field=has_json_field,
                         sql_functions=sql_functions,
+                        use_dry_plan=use_dry_plan,
+                        allow_dry_plan_fallback=allow_dry_plan_fallback,
                     )
                 else:
                     text_to_sql_generation_results = await self._pipelines[
@@ -544,35 +511,35 @@ class AskService:
                         contexts=table_ddls,
                         sql_generation_reasoning=sql_generation_reasoning,
                         project_id=ask_request.project_id,
-                        configuration=ask_request.configurations,
                         sql_samples=sql_samples,
                         instructions=instructions,
                         has_calculated_field=has_calculated_field,
                         has_metric=has_metric,
+                        has_json_field=has_json_field,
                         sql_functions=sql_functions,
+                        use_dry_plan=use_dry_plan,
+                        allow_dry_plan_fallback=allow_dry_plan_fallback,
                     )
 
-                if sql_valid_results := text_to_sql_generation_results["post_process"][
-                    "valid_generation_results"
+                if sql_valid_result := text_to_sql_generation_results["post_process"][
+                    "valid_generation_result"
                 ]:
                     api_results = [
                         AskResult(
                             **{
-                                "sql": result.get("sql"),
+                                "sql": sql_valid_result.get("sql"),
                                 "type": "llm",
                             }
                         )
-                        for result in sql_valid_results
-                    ][:1]
-                elif failed_dry_run_results := text_to_sql_generation_results[
+                    ]
+                elif failed_dry_run_result := text_to_sql_generation_results[
                     "post_process"
-                ]["invalid_generation_results"]:
+                ]["invalid_generation_result"]:
                     while current_sql_correction_retries < max_sql_correction_retries:
-                        invalid = failed_dry_run_results[0]
-                        invalid_sql = invalid["sql"]
-                        error_message = invalid["error"]
+                        invalid_sql = failed_dry_run_result["sql"]
+                        error_message = failed_dry_run_result["error"]
 
-                        if invalid["type"] == "TIME_OUT":
+                        if failed_dry_run_result["type"] == "TIME_OUT":
                             break
 
                         current_sql_correction_retries += 1
@@ -591,13 +558,15 @@ class AskService:
                             "sql_correction"
                         ].run(
                             contexts=table_ddls,
-                            invalid_generation_results=failed_dry_run_results,
+                            invalid_generation_result=failed_dry_run_result,
                             project_id=ask_request.project_id,
+                            use_dry_plan=use_dry_plan,
+                            allow_dry_plan_fallback=allow_dry_plan_fallback,
                         )
 
-                        if valid_generation_results := sql_correction_results[
+                        if valid_generation_result := sql_correction_results[
                             "post_process"
-                        ]["valid_generation_results"]:
+                        ]["valid_generation_result"]:
                             api_results = [
                                 AskResult(
                                     **{
@@ -605,12 +574,11 @@ class AskService:
                                         "type": "llm",
                                     }
                                 )
-                                for valid_generation_result in valid_generation_results
-                            ][:1]
+                            ]
                             break
 
-                        failed_dry_run_results = sql_correction_results["post_process"][
-                            "invalid_generation_results"
+                        failed_dry_run_result = sql_correction_results["post_process"][
+                            "invalid_generation_result"
                         ]
 
             if api_results:
@@ -738,6 +706,7 @@ class AskService:
             "metadata": {
                 "error_type": "",
                 "error_message": "",
+                "request_from": ask_feedback_request.request_from,
             },
         }
 
@@ -769,6 +738,7 @@ class AskService:
                     self._pipelines["instructions_retrieval"].run(
                         query=ask_feedback_request.question,
                         project_id=ask_feedback_request.project_id,
+                        scope="sql",
                     ),
                 )
 
@@ -789,6 +759,7 @@ class AskService:
                     "has_calculated_field", False
                 )
                 has_metric = _retrieval_result.get("has_metric", False)
+                has_json_field = _retrieval_result.get("has_json_field", False)
                 documents = _retrieval_result.get("retrieval_results", [])
                 table_ddls = [document.get("table_ddl") for document in documents]
                 sql_samples = sql_samples_task["formatted_output"].get("documents", [])
@@ -809,30 +780,29 @@ class AskService:
                     sql_generation_reasoning=ask_feedback_request.sql_generation_reasoning,
                     sql=ask_feedback_request.sql,
                     project_id=ask_feedback_request.project_id,
-                    configuration=ask_feedback_request.configurations,
                     sql_samples=sql_samples,
                     instructions=instructions,
                     has_calculated_field=has_calculated_field,
                     has_metric=has_metric,
+                    has_json_field=has_json_field,
                     sql_functions=sql_functions,
                 )
 
-                if sql_valid_results := text_to_sql_generation_results["post_process"][
-                    "valid_generation_results"
+                if sql_valid_result := text_to_sql_generation_results["post_process"][
+                    "valid_generation_result"
                 ]:
                     api_results = [
                         AskResult(
                             **{
-                                "sql": result.get("sql"),
+                                "sql": sql_valid_result.get("sql"),
                                 "type": "llm",
                             }
                         )
-                        for result in sql_valid_results
-                    ][:1]
-                elif failed_dry_run_results := text_to_sql_generation_results[
+                    ]
+                elif failed_dry_run_result := text_to_sql_generation_results[
                     "post_process"
-                ]["invalid_generation_results"]:
-                    if failed_dry_run_results[0]["type"] != "TIME_OUT":
+                ]["invalid_generation_result"]:
+                    if failed_dry_run_result["type"] != "TIME_OUT":
                         self._ask_feedback_results[
                             query_id
                         ] = AskFeedbackResultResponse(
@@ -843,13 +813,13 @@ class AskService:
                             "sql_correction"
                         ].run(
                             contexts=[],
-                            invalid_generation_results=failed_dry_run_results,
+                            invalid_generation_result=failed_dry_run_result,
                             project_id=ask_feedback_request.project_id,
                         )
 
-                        if valid_generation_results := sql_correction_results[
+                        if valid_generation_result := sql_correction_results[
                             "post_process"
-                        ]["valid_generation_results"]:
+                        ]["valid_generation_result"]:
                             api_results = [
                                 AskResult(
                                     **{
@@ -857,18 +827,15 @@ class AskService:
                                         "type": "llm",
                                     }
                                 )
-                                for valid_generation_result in valid_generation_results
-                            ][:1]
-                        elif failed_dry_run_results := sql_correction_results[
+                            ]
+                        elif failed_dry_run_result := sql_correction_results[
                             "post_process"
-                        ]["invalid_generation_results"]:
-                            invalid = failed_dry_run_results[0]
-                            invalid_sql = invalid["sql"]
-                            error_message = invalid["error"]
+                        ]["invalid_generation_result"]:
+                            invalid_sql = failed_dry_run_result["sql"]
+                            error_message = failed_dry_run_result["error"]
                     else:
-                        invalid = failed_dry_run_results[0]
-                        invalid_sql = invalid["sql"]
-                        error_message = invalid["error"]
+                        invalid_sql = failed_dry_run_result["sql"]
+                        error_message = failed_dry_run_result["error"]
 
             if api_results:
                 if not self._is_stopped(query_id, self._ask_feedback_results):

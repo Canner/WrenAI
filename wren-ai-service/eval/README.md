@@ -61,12 +61,12 @@ Before starting the prediction and evaluation process, you need to configure the
 
 ### For Spider or Bird Datasets
 
-For the Spider or Bird datasets, a built-in datasource is used. This means that the data is stored locally and accessed through a specific path. You need to specify the `db_path_for_duckdb` in the `config.yaml` file. This path tells the system where to find the database files.
+For the Spider or Bird datasets, a built-in datasource is used. This means that the data is stored locally and accessed through a specific path. You need to specify the `eval_data_db_path` in the `config.yaml` file. This path tells the system where to find the database files.
 
 Here's an example of how to set this up in the `config.yaml` file:
 
 ```yaml
-db_path_for_duckdb: "etc/bird/minidev/MINIDEV/dev_databases"
+eval_data_db_path: "etc/bird/minidev/MINIDEV/dev_databases"
 ```
 
 ### Configuring BigQuery as a Datasource for Other custom MDLs

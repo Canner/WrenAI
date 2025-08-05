@@ -14,7 +14,12 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
-from src.pipelines.common import build_table_ddl
+from src.pipelines.common import (
+    build_table_ddl,
+    clean_up_new_lines,
+    get_engine_supported_data_type,
+)
+from src.utils import trace_cost
 from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
@@ -96,8 +101,10 @@ table_columns_selection_user_prompt_template = """
 
 def _build_metric_ddl(content: dict) -> str:
     columns_ddl = [
-        f"{column['comment']}{column['name']} {column['data_type']}"
+        f"{column['comment']}{column['name']} {get_engine_supported_data_type(column['data_type'])}"
         for column in content["columns"]
+        if column["data_type"].lower()
+        != "unknown"  # quick fix: filtering out UNKNOWN column type
     ]
 
     return (
@@ -230,21 +237,26 @@ def check_using_db_schemas_without_pruning(
     dbschema_retrieval: list[Document],
     encoding: tiktoken.Encoding,
     enable_column_pruning: bool,
+    context_window_size: int,
 ) -> dict:
     retrieval_results = []
     has_calculated_field = False
     has_metric = False
+    has_json_field = False
 
     for table_schema in construct_db_schemas:
         if table_schema["type"] == "TABLE":
-            ddl, _has_calculated_field = build_table_ddl(table_schema)
+            ddl, _has_calculated_field, _has_json_field = build_table_ddl(table_schema)
             retrieval_results.append(
                 {
                     "table_name": table_schema["name"],
                     "table_ddl": ddl,
                 }
             )
-            has_calculated_field = has_calculated_field or _has_calculated_field
+            if _has_calculated_field:
+                has_calculated_field = True
+            if _has_json_field:
+                has_json_field = True
 
     for document in dbschema_retrieval:
         content = ast.literal_eval(document.content)
@@ -269,12 +281,13 @@ def check_using_db_schemas_without_pruning(
         retrieval_result["table_ddl"] for retrieval_result in retrieval_results
     ]
     _token_count = len(encoding.encode(" ".join(table_ddls)))
-    if _token_count > 100_000 or enable_column_pruning:
+    if _token_count > context_window_size or enable_column_pruning:
         return {
             "db_schemas": [],
             "tokens": _token_count,
             "has_calculated_field": has_calculated_field,
             "has_metric": has_metric,
+            "has_json_field": has_json_field,
         }
 
     return {
@@ -282,6 +295,7 @@ def check_using_db_schemas_without_pruning(
         "tokens": _token_count,
         "has_calculated_field": has_calculated_field,
         "has_metric": has_metric,
+        "has_json_field": has_json_field,
     }
 
 
@@ -294,9 +308,6 @@ def prompt(
     histories: list[AskHistory],
 ) -> dict:
     if not check_using_db_schemas_without_pruning["db_schemas"]:
-        logger.info(
-            "db_schemas token count is greater than 100,000, so we will prune columns"
-        )
         db_schemas = [
             build_table_ddl(construct_db_schema)[0]
             for construct_db_schema in construct_db_schemas
@@ -308,19 +319,23 @@ def prompt(
 
         query = "\n".join(previous_query_summaries) + "\n" + query
 
-        return prompt_builder.run(question=query, db_schemas=db_schemas)
+        _prompt = prompt_builder.run(question=query, db_schemas=db_schemas)
+        return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
     else:
         return {}
 
 
 @observe(as_type="generation", capture_input=False)
+@trace_cost
 async def filter_columns_in_tables(
-    prompt: dict, table_columns_selection_generator: Any
+    prompt: dict, table_columns_selection_generator: Any, generator_name: str
 ) -> dict:
     if prompt:
-        return await table_columns_selection_generator(prompt=prompt.get("prompt"))
+        return await table_columns_selection_generator(
+            prompt=prompt.get("prompt")
+        ), generator_name
     else:
-        return {}
+        return {}, generator_name
 
 
 @observe()
@@ -345,17 +360,22 @@ def construct_retrieval_results(
         retrieval_results = []
         has_calculated_field = False
         has_metric = False
+        has_json_field = False
 
         for table_schema in construct_db_schemas:
             if table_schema["type"] == "TABLE" and table_schema["name"] in tables:
-                ddl, _has_calculated_field = build_table_ddl(
+                ddl, _has_calculated_field, _has_json_field = build_table_ddl(
                     table_schema,
                     columns=set(
                         columns_and_tables_needed[table_schema["name"]]["columns"]
                     ),
                     tables=tables,
                 )
-                has_calculated_field = has_calculated_field or _has_calculated_field
+                if _has_calculated_field:
+                    has_calculated_field = True
+                if _has_json_field:
+                    has_json_field = True
+
                 retrieval_results.append(
                     {
                         "table_name": table_schema["name"],
@@ -387,6 +407,7 @@ def construct_retrieval_results(
             "retrieval_results": retrieval_results,
             "has_calculated_field": has_calculated_field,
             "has_metric": has_metric,
+            "has_json_field": has_json_field,
         }
     else:
         retrieval_results = check_using_db_schemas_without_pruning["db_schemas"]
@@ -397,6 +418,7 @@ def construct_retrieval_results(
                 "has_calculated_field"
             ],
             "has_metric": check_using_db_schemas_without_pruning["has_metric"],
+            "has_json_field": check_using_db_schemas_without_pruning["has_json_field"],
         }
 
 
@@ -433,8 +455,8 @@ class DbSchemaRetrieval(BasicPipeline):
         llm_provider: LLMProvider,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
-        table_retrieval_size: Optional[int] = 10,
-        table_column_retrieval_size: Optional[int] = 100,
+        table_retrieval_size: int = 10,
+        table_column_retrieval_size: int = 100,
         **kwargs,
     ):
         self._components = {
@@ -451,6 +473,7 @@ class DbSchemaRetrieval(BasicPipeline):
                 system_prompt=table_columns_selection_system_prompt,
                 generation_kwargs=RETRIEVAL_MODEL_KWARGS,
             ),
+            "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
                 template=table_columns_selection_user_prompt_template
             ),
@@ -465,6 +488,7 @@ class DbSchemaRetrieval(BasicPipeline):
 
         self._configs = {
             "encoding": _encoding,
+            "context_window_size": llm_provider.get_context_window_size(),
         }
 
         super().__init__(
@@ -493,13 +517,3 @@ class DbSchemaRetrieval(BasicPipeline):
                 **self._configs,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        DbSchemaRetrieval,
-        "db_schema_retrieval",
-        query="this is a test query",
-    )

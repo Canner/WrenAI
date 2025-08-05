@@ -1,7 +1,7 @@
 import logging
 import sys
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
@@ -23,12 +23,13 @@ class Instruction(BaseModel):
     question: str = ""
     # This is used to identify the default instruction needed to be retrieved for the project
     is_default: bool = False
+    scope: Literal["sql", "answer", "chart"] = "sql"
 
 
 @component
 class InstructionsConverter:
     @component.output_types(documents=List[Document])
-    def run(self, instructions: list[Instruction], project_id: Optional[str] = ""):
+    def run(self, instructions: list[Instruction], project_id: str = ""):
         logger.info(f"Project ID: {project_id} Converting instructions to documents...")
 
         addition = {"project_id": project_id} if project_id else {}
@@ -41,6 +42,7 @@ class InstructionsConverter:
                         "instruction_id": instruction.id,
                         "instruction": instruction.instruction,
                         "is_default": instruction.is_default,
+                        "scope": instruction.scope,
                         **addition,
                     },
                     content="this is a global instruction, so no question is provided"
@@ -83,7 +85,7 @@ class InstructionsCleaner:
 def to_documents(
     instructions: List[Instruction],
     document_converter: InstructionsConverter,
-    project_id: Optional[str] = "",
+    project_id: str = "",
 ) -> Dict[str, Any]:
     return document_converter.run(instructions=instructions, project_id=project_id)
 
@@ -101,7 +103,7 @@ async def clean(
     cleaner: InstructionsCleaner,
     instructions: List[Instruction],
     embedding: Dict[str, Any] = {},
-    project_id: Optional[str] = "",
+    project_id: str = "",
     delete_all: bool = False,
 ) -> Dict[str, Any]:
     instruction_ids = [instruction.id for instruction in instructions]
@@ -149,7 +151,7 @@ class Instructions(BasicPipeline):
     async def run(
         self,
         instructions: list[Instruction],
-        project_id: Optional[str] = "",
+        project_id: str = "",
     ) -> Dict[str, Any]:
         logger.info(
             f"Project ID: {project_id} Instructions Indexing pipeline is running..."
@@ -176,19 +178,3 @@ class Instructions(BasicPipeline):
             project_id=project_id,
             delete_all=delete_all,
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        Instructions,
-        "instructions_indexing",
-        instructions=[
-            Instruction(
-                id="1",
-                instruction="France is in the table of customers and the column is country",
-                question="What is the capital of France?",
-            )
-        ],
-    )

@@ -84,15 +84,18 @@ export interface TableReference {
 }
 
 export enum WrenEngineDataSourceType {
+  ATHENA = 'ATHENA',
   BIGQUERY = 'BIGQUERY',
   CANNER = 'CANNER',
   CLICKHOUSE = 'CLICKHOUSE',
   MSSQL = 'MSSQL',
+  ORACLE = 'ORACLE',
   MYSQL = 'MYSQL',
   POSTGRES = 'POSTGRES',
   SNOWFLAKE = 'SNOWFLAKE',
   TRINO = 'TRINO',
   DUCKDB = 'DUCKDB',
+  REDSHIFT = 'REDSHIFT',
   // accepted by the wren engine, but not supported by the wren ui
   DATAFUSION = 'DATAFUSION',
 }

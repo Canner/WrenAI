@@ -10,12 +10,14 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
+from src.pipelines.common import clean_up_new_lines
 from src.pipelines.generation.utils.chart import (
     ChartDataPreprocessor,
     ChartGenerationPostProcessor,
     ChartGenerationResults,
     chart_generation_instructions,
 )
+from src.utils import trace_cost
 from src.web.v1.services.chart_adjustment import ChartAdjustmentOption
 
 logger = logging.getLogger("wren-ai-service")
@@ -96,7 +98,7 @@ def prompt(
     sample_data = preprocess_data.get("sample_data")
     sample_column_values = preprocess_data.get("sample_column_values")
 
-    return prompt_builder.run(
+    _prompt = prompt_builder.run(
         query=query,
         sql=sql,
         adjustment_option=adjustment_option,
@@ -105,11 +107,17 @@ def prompt(
         sample_column_values=sample_column_values,
         language=language,
     )
+    return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
 
 @observe(as_type="generation", capture_input=False)
-async def generate_chart_adjustment(prompt: dict, generator: Any) -> dict:
-    return await generator(prompt=prompt.get("prompt"))
+@trace_cost
+async def generate_chart_adjustment(
+    prompt: dict,
+    generator: Any,
+    generator_name: str,
+) -> dict:
+    return await generator(prompt=prompt.get("prompt")), generator_name
 
 
 @observe(capture_input=False)
@@ -152,6 +160,7 @@ class ChartAdjustment(BasicPipeline):
                 system_prompt=chart_adjustment_system_prompt,
                 generation_kwargs=CHART_ADJUSTMENT_MODEL_KWARGS,
             ),
+            "generator_name": llm_provider.get_model(),
             "chart_data_preprocessor": ChartDataPreprocessor(),
             "post_processor": ChartGenerationPostProcessor(),
         }
@@ -191,18 +200,3 @@ class ChartAdjustment(BasicPipeline):
                 **self._configs,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        ChartAdjustment,
-        "chart_adjustment",
-        query="show me the dataset",
-        sql="",
-        adjustment_option=ChartAdjustmentOption(),
-        chart_schema={},
-        # data={},
-        language="English",
-    )

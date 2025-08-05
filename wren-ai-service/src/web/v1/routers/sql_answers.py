@@ -19,51 +19,6 @@ from src.web.v1.services.sql_answer import (
 
 router = APIRouter()
 
-"""
-SQL Answers Router
-
-This router handles endpoints related to initiating SQL answer operations and retrieving their results.
-
-Endpoints:
-1. POST /sql-answers
-   - Initiates an SQL answer operation
-   - Request body: SqlAnswerRequest
-     {
-       "query": "user's question",
-       "sql": "SELECT * FROM table_name WHERE condition",      # Actual SQL statement
-       "sql_data": <dictionary>,                                   # Preprocessed SQL data
-       "project_id": "unique-project-id",                        # Optional project identifier for tracking
-       "thread_id": "unique-thread-id",                        # Optional thread identifier for tracking
-     }
-   - Response: SqlAnswerResponse
-     {
-       "query_id": "unique-uuid"                              # Unique identifier for the initiated SQL operation
-     }
-
-2. GET /sql-answers/{query_id}
-   - Retrieves the status and result of a SQL answer operation
-   - Path parameter: query_id (str)
-   - Response: SqlAnswerResultResponse
-     {
-       "query_id": "unique-uuid",                             # Unique identifier of the SQL answer operation
-       "status": "preprocessing" | "succeeded" | "failed",
-       "num_rows_used_in_llm": int | None,
-       "error": {                                             # Present only if status is "failed"
-         "code": "OTHERS",
-         "message": "Error description"
-       }
-     }
-
-3. **GET /sql-answers/{query_id}/streaming**
-   - Retrieves the streaming result of a SQL answer.
-   - **Path Parameter**:
-     - `query_id`: The unique identifier of the query.
-   - **Response**:
-     - Streaming response with the SQL answer.
-
-Note: The actual SQL processing is performed in the background using FastAPI's BackgroundTasks.
-"""
-
 
 @router.post("/sql-answers")
 async def sql_answer(

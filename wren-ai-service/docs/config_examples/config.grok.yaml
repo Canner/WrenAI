@@ -37,7 +37,7 @@ endpoint: http://wren-ui:3000
 ---
 type: engine
 provider: wren_ibis
-endpoint: http://wren-ibis:8000
+endpoint: http://ibis-server:8000
 
 ---
 type: document_store
@@ -72,12 +72,15 @@ pipes:
   - name: sql_generation
     llm: litellm_llm.default
     engine: wren_ui
+    document_store: qdrant
   - name: sql_correction
     llm: litellm_llm.default
     engine: wren_ui
+    document_store: qdrant
   - name: followup_sql_generation
     llm: litellm_llm.default
     engine: wren_ui
+    document_store: qdrant
   - name: sql_answer
     llm: litellm_llm.default
   - name: semantics_description
@@ -94,6 +97,7 @@ pipes:
   - name: question_recommendation_sql_generation
     llm: litellm_llm.default
     engine: wren_ui
+    document_store: qdrant
   - name: chart_generation
     llm: litellm_llm.default
   - name: chart_adjustment

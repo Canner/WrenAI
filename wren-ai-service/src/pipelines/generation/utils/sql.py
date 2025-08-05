@@ -1,6 +1,5 @@
-import asyncio
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiohttp
 import orjson
@@ -13,7 +12,6 @@ from src.core.engine import (
     add_quotes,
     clean_generation_result,
 )
-from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
@@ -25,84 +23,112 @@ class SQLGenPostProcessor:
         self._engine = engine
 
     @component.output_types(
-        valid_generation_results=List[Optional[Dict[str, Any]]],
-        invalid_generation_results=List[Optional[Dict[str, Any]]],
+        valid_generation_result=Dict[str, Any],
+        invalid_generation_result=Dict[str, Any],
     )
     async def run(
         self,
         replies: List[str] | List[List[str]],
-        timeout: Optional[float] = 30.0,
+        timeout: float = 30.0,
         project_id: str | None = None,
+        use_dry_plan: bool = False,
+        allow_dry_plan_fallback: bool = True,
+        data_source: str = "",
+        allow_data_preview: bool = False,
     ) -> dict:
         try:
-            if isinstance(replies[0], dict):
-                cleaned_generation_result = []
-                for reply in replies:
-                    try:
-                        cleaned_generation_result.append(
-                            orjson.loads(clean_generation_result(reply["replies"][0]))[
-                                "sql"
-                            ]
-                        )
-                    except Exception as e:
-                        logger.exception(f"Error in SQLGenPostProcessor: {e}")
-            else:
-                cleaned_generation_result = orjson.loads(
-                    clean_generation_result(replies[0])
-                )["sql"]
+            cleaned_generation_result = clean_generation_result(replies[0])
 
-            if isinstance(cleaned_generation_result, str):
-                cleaned_generation_result = [cleaned_generation_result]
+            # test if cleaned_generation_result in string format is actually a dictionary with key 'sql'
+            if cleaned_generation_result.startswith("{"):
+                cleaned_generation_result = orjson.loads(cleaned_generation_result)[
+                    "sql"
+                ]
 
             (
-                valid_generation_results,
-                invalid_generation_results,
-            ) = await self._classify_invalid_generation_results(
+                valid_generation_result,
+                invalid_generation_result,
+            ) = await self._classify_generation_result(
                 cleaned_generation_result,
                 project_id=project_id,
                 timeout=timeout,
+                use_dry_plan=use_dry_plan,
+                allow_dry_plan_fallback=allow_dry_plan_fallback,
+                data_source=data_source,
+                allow_data_preview=allow_data_preview,
             )
 
             return {
-                "valid_generation_results": valid_generation_results,
-                "invalid_generation_results": invalid_generation_results,
+                "valid_generation_result": valid_generation_result,
+                "invalid_generation_result": invalid_generation_result,
             }
         except Exception as e:
             logger.exception(f"Error in SQLGenPostProcessor: {e}")
 
             return {
-                "valid_generation_results": [],
-                "invalid_generation_results": [],
+                "valid_generation_result": {},
+                "invalid_generation_result": {},
             }
 
-    async def _classify_invalid_generation_results(
+    async def _classify_generation_result(
         self,
-        generation_results: list[str],
+        generation_result: str,
         timeout: float,
         project_id: str | None = None,
-    ) -> List[Optional[Dict[str, str]]]:
-        valid_generation_results = []
-        invalid_generation_results = []
+        use_dry_plan: bool = False,
+        allow_dry_plan_fallback: bool = True,
+        data_source: str = "",
+        allow_data_preview: bool = False,
+    ) -> Dict[str, str]:
+        valid_generation_result = {}
+        invalid_generation_result = {}
 
-        async def _task(sql: str):
-            quoted_sql, error_message = add_quotes(sql)
+        quoted_sql, error_message = add_quotes(generation_result)
+        use_dry_run = not allow_data_preview
 
+        async with aiohttp.ClientSession() as session:
             if not error_message:
-                status, _, addition = await self._engine.execute_sql(
-                    quoted_sql, session, project_id=project_id, timeout=timeout
-                )
+                if use_dry_plan:
+                    dry_plan_result, error_message = await self._engine.dry_plan(
+                        session,
+                        quoted_sql,
+                        data_source,
+                        timeout=timeout,
+                        allow_fallback=allow_dry_plan_fallback,
+                    )
 
-                if status:
-                    valid_generation_results.append(
-                        {
+                    if dry_plan_result:
+                        valid_generation_result = {
+                            "sql": quoted_sql,
+                            "correlation_id": "",
+                        }
+                    else:
+                        invalid_generation_result = {
+                            "sql": quoted_sql,
+                            "type": "TIME_OUT"
+                            if error_message.startswith("Request timed out")
+                            else "DRY_PLAN",
+                            "error": error_message,
+                            "correlation_id": "",
+                        }
+                elif use_dry_run:
+                    status, _, addition = await self._engine.execute_sql(
+                        quoted_sql,
+                        session,
+                        project_id=project_id,
+                        timeout=timeout,
+                        limit=1,
+                        dry_run=True,
+                    )
+
+                    if status:
+                        valid_generation_result = {
                             "sql": quoted_sql,
                             "correlation_id": addition.get("correlation_id", ""),
                         }
-                    )
-                else:
-                    error_message = addition.get("error_message", "")
-                    invalid_generation_results.append(
-                        {
+                    else:
+                        error_message = addition.get("error_message", "")
+                        invalid_generation_result = {
                             "sql": quoted_sql,
                             "type": "TIME_OUT"
                             if error_message.startswith("Request timed out")
@@ -110,23 +136,71 @@ class SQLGenPostProcessor:
                             "error": error_message,
                             "correlation_id": addition.get("correlation_id", ""),
                         }
+                else:
+                    status, _, addition = await self._engine.execute_sql(
+                        quoted_sql,
+                        session,
+                        project_id=project_id,
+                        timeout=timeout,
+                        limit=1,
+                        dry_run=False,
                     )
+
+                    if status:
+                        valid_generation_result = {
+                            "sql": quoted_sql,
+                            "correlation_id": addition.get("correlation_id", ""),
+                        }
+                    else:
+                        error_message = addition.get("error_message", "")
+                        preview_data_status = (
+                            "PREVIEW_EMPTY_DATA"
+                            if error_message == ""
+                            else "PREVIEW_FAILED"
+                        )
+                        invalid_generation_result = {
+                            "sql": quoted_sql,
+                            "type": "TIME_OUT"
+                            if error_message.startswith("Request timed out")
+                            else preview_data_status,
+                            "error": error_message,
+                            "correlation_id": addition.get("correlation_id", ""),
+                        }
             else:
-                invalid_generation_results.append(
-                    {
-                        "sql": sql,
-                        "type": "ADD_QUOTES",
-                        "error": error_message,
-                    }
-                )
+                invalid_generation_result = {
+                    "sql": generation_result,
+                    "type": "ADD_QUOTES",
+                    "error": error_message,
+                }
 
-        async with aiohttp.ClientSession() as session:
-            tasks = [
-                _task(generation_result) for generation_result in generation_results
-            ]
-            await asyncio.gather(*tasks)
+        return valid_generation_result, invalid_generation_result
 
-        return valid_generation_results, invalid_generation_results
+
+sql_generation_reasoning_system_prompt = """
+### TASK ###
+You are a helpful data analyst who is great at thinking deeply and reasoning about the user's question and the database schema, and you provide a step-by-step reasoning plan in order to answer the user's question.
+
+### INSTRUCTIONS ###
+1. Think deeply and reason about the user's question, the database schema, and the user's query history if provided.
+2. Explicitly state the following information in the reasoning plan: 
+if the user puts any specific timeframe(e.g. YYYY-MM-DD) in the user's question(excluding the value of the current time), you will put the absolute time frame in the SQL query; 
+otherwise, you will put the relative timeframe in the SQL query.
+3. For the ranking problem(e.g. "top x", "bottom x", "first x", "last x"), you must use the ranking function, `DENSE_RANK()` to rank the results and then use `WHERE` clause to filter the results.
+4. For the ranking problem(e.g. "top x", "bottom x", "first x", "last x"), you must add the ranking column to the final SELECT clause.
+5. If USER INSTRUCTIONS section is provided, make sure to consider them in the reasoning plan.
+6. If SQL SAMPLES section is provided, make sure to consider them in the reasoning plan.
+7. Give a step by step reasoning plan in order to answer user's question.
+8. The reasoning plan should be in the language same as the language user provided in the input.
+9. Don't include SQL in the reasoning plan.
+10. Each step in the reasoning plan must start with a number, a title(in bold format in markdown), and a reasoning for the step.
+11. Do not include ```markdown or ``` in the answer.
+12. A table name in the reasoning plan must be in this format: `table: <table_name>`.
+13. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
+14. ONLY SHOWING the reasoning plan in bullet points.
+
+### FINAL ANSWER FORMAT ###
+The final answer must be a reasoning plan in plain Markdown string format
+"""
 
 
 TEXT_TO_SQL_RULES = """
@@ -137,7 +211,7 @@ TEXT_TO_SQL_RULES = """
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - DON'T INCLUDE comments in the generated SQL query.
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
-- ALWAYS QUALIFY column names with their table name or table alias to avoid ambiguity (e.g., orders.OrderId, o.OrderId)
+- PREFER USING CTEs over subqueries.
 - YOU MUST USE "lower(<table_name>.<column_name>) like lower(<value>)" function or "lower(<table_name>.<column_name>) = lower(<value>)" function for case-insensitive comparison!
     - Use "lower(<table_name>.<column_name>) LIKE lower(<value>)" when:
         - The user requests a pattern or partial match.
@@ -159,7 +233,8 @@ TEXT_TO_SQL_RULES = """
     - answer: "SELECT SUM(r.PriceSum) FROM Revenue r WHERE CAST(r.PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) >= CAST('2024-11-01 00:00:00' AS TIMESTAMP WITH TIME ZONE) AND CAST(r.PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) < CAST('2024-11-02 00:00:00' AS TIMESTAMP WITH TIME ZONE)"
 - USE THE VIEW TO SIMPLIFY THE QUERY.
 - DON'T MISUSE THE VIEW NAME. THE ACTUAL NAME IS FOLLOWING THE CREATE VIEW STATEMENT.
-- MUST USE the value of alias from the comment section of the corresponding table or column in the DATABASE SCHEMA section for the column/table alias.
+- ONLY USE table/column alias in the final SELECT clause; don't use table/columnalias in the other clauses.
+- Refer to the value of alias from the comment section of the corresponding table or column in the DATABASE SCHEMA section for reference when using alias in the final SELECT clause.
   - EXAMPLE
     DATABASE SCHEMA
     /* {"displayName":"_orders","description":"A model representing the orders data."} */
@@ -173,40 +248,13 @@ TEXT_TO_SQL_RULES = """
 - DON'T USE '.' in column/table alias, replace '.' with '_' in column/table alias.
 - DON'T USE "FILTER(WHERE <expression>)" clause in the generated SQL query.
 - DON'T USE "EXTRACT(EPOCH FROM <expression>)" clause in the generated SQL query.
+- DON'T USE "EXTRACT()" function with INTERVAL data types as arguments
 - DON'T USE INTERVAL or generate INTERVAL-like expression in the generated SQL query.
-- ONLY USE JSON_QUERY for querying fields if "json_type":"JSON" is identified in the columns comment, NOT the deprecated JSON_EXTRACT_SCALAR function.
-    - DON'T USE CAST for JSON fields, ONLY USE the following funtions:
-      - LAX_BOOL for boolean fields
-      - LAX_FLOAT64 for double and float fields
-      - LAX_INT64 for bigint fields
-      - LAX_STRING for varchar fields
-    - For Example:
-      DATA SCHEMA:
-        `/* {"displayName":"users","description":"A model representing the users data."} */
-        CREATE TABLE users (
-            -- {"alias":"address","description":"A JSON object that represents address information of this user.","json_type":"JSON","json_fields":{"json_type":"JSON","address.json.city":{"name":"city","type":"varchar","path":"$.city","properties":{"displayName":"city","description":"City Name."}},"address.json.state":{"name":"state","type":"varchar","path":"$.state","properties":{"displayName":"state","description":"ISO code or name of the state, province or district."}},"address.json.postcode":{"name":"postcode","type":"varchar","path":"$.postcode","properties":{"displayName":"postcode","description":"Postal code."}},"address.json.country":{"name":"country","type":"varchar","path":"$.country","properties":{"displayName":"country","description":"ISO code of the country."}}}}
-            address JSON
-        )`
-      To get the city of address in user table use SQL:
-      `SELECT LAX_STRING(JSON_QUERY(u.address, '$.city')) FROM user as u`
-- ONLY USE JSON_QUERY_ARRAY for querying "json_type":"JSON_ARRAY" is identified in the comment of the column, NOT the deprecated JSON_EXTRACT_ARRAY.
-    - USE UNNEST to analysis each item individually in the ARRAY. YOU MUST SELECT FROM the parent table ahead of the UNNEST ARRAY.
-    - The alias of the UNNEST(ARRAY) should be in the format `unnest_table_alias(individual_item_alias)`
-      - For Example: `SELECT item FROM UNNEST(ARRAY[1,2,3]) as my_unnested_table(item)`
-    - If the items in the ARRAY are JSON objects, use JSON_QUERY to query the fields inside each JSON item.
-      - For Example:
-      DATA SCHEMA
-        `/* {"displayName":"my_table","description":"A test my_table"} */
-        CREATE TABLE my_table (
-            -- {"alias":"elements","description":"elements column","json_type":"JSON_ARRAY","json_fields":{"json_type":"JSON_ARRAY","elements.json_array.id":{"name":"id","type":"bigint","path":"$.id","properties":{"displayName":"id","description":"data ID."}},"elements.json_array.key":{"name":"key","type":"varchar","path":"$.key","properties":{"displayName":"key","description":"data Key."}},"elements.json_array.value":{"name":"value","type":"varchar","path":"$.value","properties":{"displayName":"value","description":"data Value."}}}}
-            elements JSON
-        )`
-        To get the number of elements in my_table table use SQL:
-        `SELECT LAX_INT64(JSON_QUERY(element, '$.number')) FROM my_table as t, UNNEST(JSON_QUERY_ARRAY(elements)) AS my_unnested_table(element) WHERE LAX_FLOAT64(JSON_QUERY(element, '$.value')) > 3.5`
-    - To JOIN ON the fields inside UNNEST(ARRAY), YOU MUST SELECT FROM the parent table ahead of the UNNEST syntax, and the alias of the UNNEST(ARRAY) SHOULD BE IN THE FORMAT unnest_table_alias(individual_item_alias)
-      - For Example: `SELECT p.column_1, j.column_2 FROM parent_table AS p, join_table AS j JOIN UNNEST(p.array_column) AS unnested(array_item) ON j.id = array_item.id`
-- DON'T USE JSON_QUERY and JSON_QUERY_ARRAY when "json_type":"".
-- DON'T USE LAX_BOOL, LAX_FLOAT64, LAX_INT64, LAX_STRING when "json_type":"".
+- DON'T USE "TO_CHAR" function in the generated SQL query.
+- Aggregate functions are not allowed in the WHERE clause. Instead, they belong in the HAVING clause, which is used to filter after aggregation.
+- You can only add "ORDER BY" and "LIMIT" to the final "UNION" result.
+- For the ranking problem, you must use the ranking function, `DENSE_RANK()` to rank the results and then use `WHERE` clause to filter the results.
+- For the ranking problem, you must add the ranking column to the final SELECT clause.
 """
 
 sql_generation_system_prompt = f"""
@@ -216,10 +264,10 @@ Given user's question, database schema, etc., you should think deeply and carefu
 
 ### GENERAL RULES ###
 
-1. If INSTRUCTIONS section is provided, please follow the instructions strictly.
-2. If SQL FUNCTIONS section is provided, please choose the appropriate functions from the list and use it in the SQL query.
-3. If SQL SAMPLES section is provided, please refer to the samples and learn the usage of the schema structures and how SQL is written based on them.
-4. If REASONING PLAN section is provided, please follow the plan strictly.
+1. YOU MUST FOLLOW the instructions strictly to generate the SQL query if the section of USER INSTRUCTIONS is available in user's input.
+2. YOU MUST ONLY CHOOSE the appropriate functions from the sql functions list and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input.
+3. YOU MUST REFER to the sql samples and learn the usage of the schema structures and how SQL is written based on them if the section of SQL SAMPLES is available in user's input.
+4. YOU MUST FOLLOW the reasoning plan step by step strictly to generate the SQL query if the section of REASONING PLAN is available in user's input.
 
 {TEXT_TO_SQL_RULES}
 
@@ -369,6 +417,43 @@ WHERE
   PurchaseTimestamp < DATE_TRUNC('month', CURRENT_DATE)
 """
 
+json_field_instructions = """
+#### Instructions for JSON related functions ####
+- ONLY USE JSON_QUERY for querying fields if "json_type":"JSON" is identified in the columns comment, NOT the deprecated JSON_EXTRACT_SCALAR function.
+    - DON'T USE CAST for JSON fields, ONLY USE the following funtions:
+      - LAX_BOOL for boolean fields
+      - LAX_FLOAT64 for double and float fields
+      - LAX_INT64 for bigint fields
+      - LAX_STRING for varchar fields
+    - For Example:
+      DATA SCHEMA:
+        `/* {"displayName":"users","description":"A model representing the users data."} */
+        CREATE TABLE users (
+            -- {"alias":"address","description":"A JSON object that represents address information of this user.","json_type":"JSON","json_fields":{"json_type":"JSON","address.json.city":{"name":"city","type":"varchar","path":"$.city","properties":{"displayName":"city","description":"City Name."}},"address.json.state":{"name":"state","type":"varchar","path":"$.state","properties":{"displayName":"state","description":"ISO code or name of the state, province or district."}},"address.json.postcode":{"name":"postcode","type":"varchar","path":"$.postcode","properties":{"displayName":"postcode","description":"Postal code."}},"address.json.country":{"name":"country","type":"varchar","path":"$.country","properties":{"displayName":"country","description":"ISO code of the country."}}}}
+            address JSON
+        )`
+      To get the city of address in user table use SQL:
+      `SELECT LAX_STRING(JSON_QUERY(u.address, '$.city')) FROM user as u`
+- ONLY USE JSON_QUERY_ARRAY for querying "json_type":"JSON_ARRAY" is identified in the comment of the column, NOT the deprecated JSON_EXTRACT_ARRAY.
+    - USE UNNEST to analysis each item individually in the ARRAY. YOU MUST SELECT FROM the parent table ahead of the UNNEST ARRAY.
+    - The alias of the UNNEST(ARRAY) should be in the format `unnest_table_alias(individual_item_alias)`
+      - For Example: `SELECT item FROM UNNEST(ARRAY[1,2,3]) as my_unnested_table(item)`
+    - If the items in the ARRAY are JSON objects, use JSON_QUERY to query the fields inside each JSON item.
+      - For Example:
+      DATA SCHEMA
+        `/* {"displayName":"my_table","description":"A test my_table"} */
+        CREATE TABLE my_table (
+            -- {"alias":"elements","description":"elements column","json_type":"JSON_ARRAY","json_fields":{"json_type":"JSON_ARRAY","elements.json_array.id":{"name":"id","type":"bigint","path":"$.id","properties":{"displayName":"id","description":"data ID."}},"elements.json_array.key":{"name":"key","type":"varchar","path":"$.key","properties":{"displayName":"key","description":"data Key."}},"elements.json_array.value":{"name":"value","type":"varchar","path":"$.value","properties":{"displayName":"value","description":"data Value."}}}}
+            elements JSON
+        )`
+        To get the number of elements in my_table table use SQL:
+        `SELECT LAX_INT64(JSON_QUERY(element, '$.number')) FROM my_table as t, UNNEST(JSON_QUERY_ARRAY(elements)) AS my_unnested_table(element) WHERE LAX_FLOAT64(JSON_QUERY(element, '$.value')) > 3.5`
+    - To JOIN ON the fields inside UNNEST(ARRAY), YOU MUST SELECT FROM the parent table ahead of the UNNEST syntax, and the alias of the UNNEST(ARRAY) SHOULD BE IN THE FORMAT unnest_table_alias(individual_item_alias)
+      - For Example: `SELECT p.column_1, j.column_2 FROM parent_table AS p, join_table AS j JOIN UNNEST(p.array_column) AS unnested(array_item) ON j.id = array_item.id`
+- DON'T USE JSON_QUERY and JSON_QUERY_ARRAY when "json_type":"".
+- DON'T USE LAX_BOOL, LAX_FLOAT64, LAX_INT64, LAX_STRING when "json_type":"".
+"""
+
 sql_samples_instructions = """
 #### Instructions for SQL Samples ####
 
@@ -396,23 +481,13 @@ Learn about the usage of the schema structures and generate SQL based on them.
 
 
 def construct_instructions(
-    configuration: Configuration | None = Configuration(),
-    has_calculated_field: bool = False,
-    has_metric: bool = False,
     instructions: list[dict] | None = None,
 ):
-    _instructions = ""
-    if configuration:
-        if configuration.fiscal_year:
-            _instructions += f"\n- For calendar year related computation, it should be started from {configuration.fiscal_year.start} to {configuration.fiscal_year.end}\n\n"
-    if has_calculated_field:
-        _instructions += calculated_field_instructions
-    if has_metric:
-        _instructions += metric_instructions
+    _instructions = []
     if instructions:
-        _instructions += "\n\n".join(
-            [f"{instruction.get('instruction')}\n\n" for instruction in instructions]
-        )
+        _instructions += [
+            instruction.get("instruction") for instruction in instructions
+        ]
 
     return _instructions
 
@@ -432,9 +507,21 @@ SQL_GENERATION_MODEL_KWARGS = {
 }
 
 
-def construct_ask_history_messages(histories: list[AskHistory]) -> list[ChatMessage]:
+def construct_ask_history_messages(
+    histories: list[AskHistory] | list[dict],
+) -> list[ChatMessage]:
     messages = []
     for history in histories:
-        messages.append(ChatMessage.from_user(history.question))
-        messages.append(ChatMessage.from_assistant(history.sql))
+        messages.append(
+            ChatMessage.from_user(
+                history.question
+                if hasattr(history, "question")
+                else history["question"]
+            )
+        )
+        messages.append(
+            ChatMessage.from_assistant(
+                history.sql if hasattr(history, "sql") else history["sql"]
+            )
+        )
     return messages
