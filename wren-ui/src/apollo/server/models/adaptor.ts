@@ -40,6 +40,7 @@ export enum WrenAILanguage {
   RU = 'Russian',
   JA = 'Japanese',
   KO = 'Korean',
+  FA_IR = 'Persian',
   AR = 'Arabic',
 }
 
