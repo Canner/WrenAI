@@ -29,6 +29,7 @@ class AskRequest(BaseRequest):
     enable_column_pruning: bool = False
     use_dry_plan: bool = False
     allow_dry_plan_fallback: bool = True
+    custom_instruction: Optional[str] = None
 
 
 class AskResponse(BaseModel):
@@ -299,6 +300,7 @@ class AskService:
                                     ),
                                     language=ask_request.configurations.language,
                                     query_id=ask_request.query_id,
+                                    custom_instruction=ask_request.custom_instruction,
                                 )
                             )
 
@@ -323,6 +325,7 @@ class AskService:
                                     ),
                                     language=ask_request.configurations.language,
                                     query_id=ask_request.query_id,
+                                    custom_instruction=ask_request.custom_instruction,
                                 )
                             )
 
@@ -343,6 +346,7 @@ class AskService:
                                     query=user_query,
                                     language=ask_request.configurations.language,
                                     query_id=ask_request.query_id,
+                                    custom_instruction=ask_request.custom_instruction,
                                 )
                             )
 
