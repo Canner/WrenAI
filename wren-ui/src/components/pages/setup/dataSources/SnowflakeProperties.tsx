@@ -163,7 +163,7 @@ export default function SnowflakeProperties(props: Props) {
               recommend switching to key pair authentication.{' '}
               <Link
                 className="gray-7 underline"
-                href="https://docs.canner.io/docs/snowflake-authentication"
+                href="https://www.snowflake.com/en/blog/blocking-single-factor-password-authentification"
                 target="_blank"
                 rel="noreferrer noopener"
               >
