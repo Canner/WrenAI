@@ -216,7 +216,7 @@ const GeneralAnswer = (props: Props) => {
         <div className="bg-gray-2 gray-6 py-2 px-3">
           <div className="d-flex align-center">
             <BrainSVG className="mr-2 adm-brain-svg" />
-            <span className="text-medium ">Analyzing Intent</span>
+            <span className="text-medium ">User Intent Recognized</span>
           </div>
           <div style={{ paddingLeft: 22 }}>{data.intentReasoning}</div>
         </div>
