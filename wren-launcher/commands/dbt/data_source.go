@@ -87,10 +87,17 @@ func convertConnectionToDataSource(conn DbtConnection, dbtHomePath, profileName,
 
 // convertToPostgresDataSource converts to PostgreSQL data source
 func convertToPostgresDataSource(conn DbtConnection) (*WrenPostgresDataSource, error) {
+	// For PostgreSQL, prefer dbname over database field
+	dbName := conn.DbName
+	if dbName == "" {
+		dbName = conn.Database
+	}
+
+	pterm.Info.Printf("Converting Postgres data source: %s:%d/%s\n", conn.Host, conn.Port, dbName)
 	ds := &WrenPostgresDataSource{
 		Host:     conn.Host,
 		Port:     conn.Port,
-		Database: conn.Database,
+		Database: dbName,
 		User:     conn.User,
 		Password: conn.Password,
 	}

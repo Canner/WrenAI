@@ -19,6 +19,7 @@ type DbtConnection struct {
 	Port     int    `yaml:"port,omitempty" json:"port,omitempty"`
 	User     string `yaml:"user,omitempty" json:"user,omitempty"`
 	Password string `yaml:"password,omitempty" json:"password,omitempty"`
+	DbName   string `yaml:"dbname,omitempty" json:"dbname,omitempty"` // Postgres
 	Database string `yaml:"database,omitempty" json:"database,omitempty"`
 	Schema   string `yaml:"schema,omitempty" json:"schema,omitempty"`
 	// Additional fields for different database types

@@ -118,6 +118,67 @@ func TestFromDbtProfiles_PostgresWithDbName(t *testing.T) {
 	validatePostgresDataSource(t, ds, "jaffle_shop")
 }
 
+func TestFromDbtProfiles_PostgresWithDbName(t *testing.T) {
+	// Test PostgreSQL connection conversion with dbname field (PostgreSQL specific)
+	profiles := &DbtProfiles{
+		Profiles: map[string]DbtProfile{
+			"test_profile": {
+				Target: "dev",
+				Outputs: map[string]DbtConnection{
+					"dev": {
+						Type:     "postgres",
+						Host:     "localhost",
+						Port:     5432,
+						DbName:   "jaffle_shop", // Using dbname instead of database
+						User:     "test_user",
+						Password: "test_pass",
+					},
+				},
+			},
+		},
+	}
+
+	dataSources, err := FromDbtProfiles(profiles)
+	if err != nil {
+		t.Fatalf("FromDbtProfiles failed: %v", err)
+	}
+
+	if len(dataSources) != 1 {
+		t.Fatalf("Expected 1 data source, got %d", len(dataSources))
+	}
+
+	ds, ok := dataSources[0].(*WrenPostgresDataSource)
+	if !ok {
+		t.Fatalf("Expected WrenPostgresDataSource, got %T", dataSources[0])
+	}
+
+	if ds.Host != "localhost" {
+		t.Errorf("Expected host 'localhost', got '%s'", ds.Host)
+	}
+	if ds.Port != 5432 {
+		t.Errorf("Expected port 5432, got %d", ds.Port)
+	}
+	if ds.Database != "jaffle_shop" {
+		t.Errorf("Expected database 'jaffle_shop', got '%s'", ds.Database)
+	}
+	if ds.User != "test_user" {
+		t.Errorf("Expected user 'test_user', got '%s'", ds.User)
+	}
+	if ds.Password != "test_pass" {
+		t.Errorf("Expected password 'test_pass', got '%s'", ds.Password)
+	}
+
+	// Test validation
+	if err := ds.Validate(); err != nil {
+		t.Errorf("Validation failed: %v", err)
+	}
+
+	// Test type
+	if ds.GetType() != "postgres" {
+		t.Errorf("Expected type 'postgres', got '%s'", ds.GetType())
+	}
+}
+
 func TestFromDbtProfiles_LocalFile(t *testing.T) {
 	// Test local file connection conversion
 	profiles := &DbtProfiles{
