@@ -34,6 +34,8 @@ type DbtConnection struct {
 	SearchPath string `yaml:"search_path,omitempty" json:"search_path,omitempty"` // Postgres
 	SSLMode    string `yaml:"sslmode,omitempty" json:"sslmode,omitempty"`         // Postgres
 
+	SslDisable bool `yaml:"ssl_disable,omitempty" json:"ssl_disable,omitempty"` // MySQL
+
 	Path string `yaml:"path,omitempty" json:"path,omitempty"` // DuckDB
 	// Flexible additional properties
 	Additional map[string]interface{} `yaml:",inline" json:"additional,omitempty"`
