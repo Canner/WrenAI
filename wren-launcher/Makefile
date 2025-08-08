@@ -1,5 +1,6 @@
 BINARY_NAME=wren-launcher
 
+# Build targets
 build:
 	env GOARCH=amd64 GOOS=darwin CGO_ENABLED=1 go build -o dist/${BINARY_NAME}-darwin main.go
 	env GOARCH=arm64 GOOS=darwin CGO_ENABLED=1 go build -o dist/${BINARY_NAME}-darwin-arm64 main.go
@@ -18,3 +19,50 @@ clean:
 	rm -rf dist
 
 rebuild: clean build
+
+# Code quality targets
+.PHONY: fmt
+fmt:
+	go fmt ./...
+
+.PHONY: imports
+imports:
+	$(shell go env GOPATH)/bin/goimports -w .
+
+.PHONY: vet
+vet:
+	go vet ./...
+
+.PHONY: lint
+lint:
+	golangci-lint run
+
+.PHONY: lint-fix
+lint-fix:
+	golangci-lint run --fix
+
+.PHONY: check
+check: fmt vet lint
+
+.PHONY: fix
+fix: fmt imports lint-fix
+
+.PHONY: test
+test:
+	go test ./...
+
+.PHONY: help
+help:
+	@echo "Available targets:"
+	@echo "  build      - Build binaries for all platforms"
+	@echo "  clean      - Clean build artifacts"
+	@echo "  rebuild    - Clean and build"
+	@echo "  fmt        - Format Go code"
+	@echo "  imports    - Fix imports"
+	@echo "  vet        - Run go vet"
+	@echo "  lint       - Run golangci-lint"
+	@echo "  lint-fix   - Run golangci-lint with auto-fix"
+	@echo "  check      - Run fmt, vet, and lint"
+	@echo "  fix        - Run fmt, imports, and lint-fix"
+	@echo "  test       - Run tests"
+	@echo "  help       - Show this help"
