@@ -27,8 +27,6 @@ defaults:
 
 jobs:
   lint-and-test:
-    # run this job only if the PR is labeled with "ci/launcher" or if it's a push to main
-    if: ${{ contains(github.event.pull_request.labels.*.name, 'ci/launcher') || github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -65,8 +63,6 @@ jobs:
         run: make check
 
   build-test:
-    # run this job only if the PR is labeled with "ci/launcher" or if it's a push to main
-    if: ${{ contains(github.event.pull_request.labels.*.name, 'ci/launcher') || github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     needs: lint-and-test
     steps:
@@ -97,8 +93,6 @@ jobs:
           retention-days: 7
 
   security-scan:
-    # run this job only if the PR is labeled with "ci/launcher" or if it's a push to main
-    if: ${{ contains(github.event.pull_request.labels.*.name, 'ci/launcher') || github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     needs: lint-and-test
     steps:
