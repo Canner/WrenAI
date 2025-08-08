@@ -41,8 +41,8 @@ func TestFromDbtProfiles_Postgres(t *testing.T) {
 	if ds.Host != "localhost" {
 		t.Errorf("Expected host 'localhost', got '%s'", ds.Host)
 	}
-	if ds.Port != 5432 {
-		t.Errorf("Expected port 5432, got %d", ds.Port)
+	if ds.Port != "5432" {
+		t.Errorf("Expected port 5432, got %s", ds.Port)
 	}
 	if ds.Database != "test_db" {
 		t.Errorf("Expected database 'test_db', got '%s'", ds.Database)
@@ -102,8 +102,8 @@ func TestFromDbtProfiles_PostgresWithDbName(t *testing.T) {
 	if ds.Host != "localhost" {
 		t.Errorf("Expected host 'localhost', got '%s'", ds.Host)
 	}
-	if ds.Port != 5432 {
-		t.Errorf("Expected port 5432, got %d", ds.Port)
+	if ds.Port != "5432" {
+		t.Errorf("Expected port 5432, got %s", ds.Port)
 	}
 	if ds.Database != "jaffle_shop" {
 		t.Errorf("Expected database 'jaffle_shop', got '%s'", ds.Database)
@@ -220,7 +220,7 @@ func TestPostgresDataSourceValidation(t *testing.T) {
 			name: "valid",
 			ds: &WrenPostgresDataSource{
 				Host:     "localhost",
-				Port:     5432,
+				Port:     "5432",
 				Database: "test",
 				User:     "user",
 			},
@@ -229,7 +229,7 @@ func TestPostgresDataSourceValidation(t *testing.T) {
 		{
 			name: "empty host",
 			ds: &WrenPostgresDataSource{
-				Port:     5432,
+				Port:     "5432",
 				Database: "test",
 				User:     "user",
 			},
@@ -239,7 +239,7 @@ func TestPostgresDataSourceValidation(t *testing.T) {
 			name: "empty database",
 			ds: &WrenPostgresDataSource{
 				Host: "localhost",
-				Port: 5432,
+				Port: "5432",
 				User: "user",
 			},
 			wantErr: true,
@@ -248,7 +248,64 @@ func TestPostgresDataSourceValidation(t *testing.T) {
 			name: "invalid port",
 			ds: &WrenPostgresDataSource{
 				Host:     "localhost",
-				Port:     0,
+				Port:     "",
+				Database: "test",
+				User:     "user",
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.ds.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestMysqlDataSourceValidation(t *testing.T) {
+	// Test MySQL data source validation
+	tests := []struct {
+		name    string
+		ds      *WrenMysqlDataSource
+		wantErr bool
+	}{
+		{
+			name: "valid",
+			ds: &WrenMysqlDataSource{
+				Host:     "localhost",
+				Port:     "3306",
+				Database: "test",
+				User:     "user",
+			},
+			wantErr: false,
+		},
+		{
+			name: "empty host",
+			ds: &WrenMysqlDataSource{
+				Port:     "3306",
+				Database: "test",
+				User:     "user",
+			},
+			wantErr: true,
+		},
+		{
+			name: "empty database",
+			ds: &WrenMysqlDataSource{
+				Host: "localhost",
+				Port: "3306",
+				User: "user",
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid port",
+			ds: &WrenMysqlDataSource{
+				Host:     "localhost",
+				Port:     "",
 				Database: "test",
 				User:     "user",
 			},

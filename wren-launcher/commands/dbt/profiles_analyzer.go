@@ -141,6 +141,7 @@ func parseConnection(connectionMap map[string]interface{}) (*DbtConnection, erro
 	connection.SearchPath = getString("search_path")
 	connection.SSLMode = getString("sslmode")
 	connection.Path = getString("path")
+	connection.SslDisable = getBool("ssl_disable") // MySQL specific
 
 	// Store any additional fields that weren't mapped
 	knownFields := map[string]bool{
