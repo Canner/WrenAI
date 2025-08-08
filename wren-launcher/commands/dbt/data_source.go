@@ -160,17 +160,18 @@ func convertToMysqlDataSource(conn DbtConnection) (*WrenMysqlDataSource, error) 
 	if conn.SslDisable {
 		sslMode = "DISABLED"
 	}
+	port := strconv.Itoa(conn.Port)
+	if conn.Port == 0 {
+		port = "3306"
+	}
+
 	ds := &WrenMysqlDataSource{
 		Host:     conn.Host,
-		Port:     strconv.Itoa(conn.Port),
+		Port:     port,
 		Database: conn.Database,
 		User:     conn.User,
 		Password: conn.Password,
 		SslMode:  sslMode,
-	}
-
-	if ds.Port == "" {
-		ds.Port = "3306" // Default MySQL port
 	}
 
 	return ds, nil
