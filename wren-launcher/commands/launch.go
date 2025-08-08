@@ -109,7 +109,7 @@ func askForGenerationModel() (string, error) {
 
 	prompt := promptui.Select{
 		Label: "Select an OpenAI's generation model",
-		Items: []string{"gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano"},
+		Items: []string{"gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "gpt-5", "gpt-5-mini", "gpt-5-nano"},
 	}
 
 	_, result, err := prompt.Run()
@@ -389,6 +389,9 @@ func getOpenaiGenerationModel() (string, bool) {
 			"gpt-4.1":      true,
 			"gpt-4.1-mini": true,
 			"gpt-4.1-nano": true,
+			"gpt-5":        true,
+			"gpt-5-mini":   true,
+			"gpt-5-nano":   true,
 		}
 		if !validModels[openaiGenerationModel] {
 			pterm.Error.Println("Invalid generation model", openaiGenerationModel)
