@@ -92,7 +92,7 @@ data:
       kwargs:
         max_tokens: 4096
         n: 1
-      seed: 0
+        seed: 0
     ---
     type: embedder
     provider: litellm_embedder
