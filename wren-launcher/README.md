@@ -6,6 +6,12 @@ go build main.go
 env GOOS=windows GOARCH=amd64 go build main.go
 ```
 
+## Code Quality
+```
+    make check
+    make test
+```
+
 ## How to update dependencies
 
 ```bash
