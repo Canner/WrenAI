@@ -12,7 +12,7 @@ import (
 // AnalyzeDbtProfiles reads and analyzes a dbt profiles.yml file
 func AnalyzeDbtProfiles(profilesPath string) (*DbtProfiles, error) {
 	// Read the profiles.yml file
-	data, err := os.ReadFile(profilesPath)
+	data, err := os.ReadFile(profilesPath) // #nosec G304 -- profilesPath is controlled by application
 	if err != nil {
 		return nil, fmt.Errorf("failed to read profiles file %s: %w", profilesPath, err)
 	}

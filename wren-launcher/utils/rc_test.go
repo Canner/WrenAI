@@ -10,7 +10,7 @@ func TestReadWriteRcFile(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error: %v", err)
 	}
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 
 	// create a WrenRC struct
 	w := WrenRC{dir}
@@ -31,12 +31,13 @@ func TestReadWriteRcFile(t *testing.T) {
 }
 
 // read the value of a non-existent key from the rc file
-func TestReadNonExistentKey(t *testing.T) {
+func TestSet(t *testing.T) {
+	// create a temp directory
 	dir, err := os.MkdirTemp("", "wrenrc")
 	if err != nil {
 		t.Errorf("Error: %v", err)
 	}
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 
 	// create a WrenRC struct
 	w := WrenRC{dir}
