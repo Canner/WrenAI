@@ -14,7 +14,7 @@ logger = logging.getLogger("wren-ai-service")
 
 
 class AskHistory(BaseModel):
-    sql: str
+    response: str = Field(alias=AliasChoices("response", "sql"))
     question: str
 
 
@@ -229,7 +229,7 @@ class AskService:
                     if self._allow_intent_classification:
                         last_sql_data = None
                         if histories:
-                            if last_sql := histories[-1].sql:
+                            if last_sql := histories[-1].response:
                                 last_sql_data = (
                                     await self._pipelines["sql_executor"].run(
                                         sql=last_sql,

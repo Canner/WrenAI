@@ -170,8 +170,8 @@ User's previous questions:
 {% for history in histories %}
 Question:
 {{ history.question }}
-SQL:
-{{ history.sql }}
+Response:
+{{ history.response }}
 {% endfor %}
 {% endif %}
 
