@@ -24,6 +24,24 @@ models:
       n: 1
       seed: 0
       temperature: 0
+  - model: gpt-5-nano-2025-08-07
+    context_window_size: 380000
+    kwargs:
+      max_completion_tokens: 4096
+      n: 1
+      seed: 0
+  - model: gpt-5-mini-2025-08-07
+    context_window_size: 380000
+    kwargs:
+      max_completion_tokens: 4096
+      n: 1
+      seed: 0
+  - model: gpt-5-2025-08-07
+    context_window_size: 380000
+    kwargs:
+      max_completion_tokens: 4096
+      n: 1
+      seed: 0
 
 ---
 type: embedder
