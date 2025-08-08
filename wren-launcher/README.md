@@ -20,7 +20,7 @@ make lint   # Run golangci-lint
 This project uses GitHub Actions for CI/CD. The workflow runs automatically on:
 
 - **Push to main branch**: Runs all checks and tests
-- **Pull Request with label `ci/wren-launcher`**: Runs all checks and tests when PR is labeled
+- **Pull Request with label `launcher`**: Runs all checks and tests when PR is labeled
 - **Manual trigger**: Can be triggered manually via GitHub Actions UI
 
 ### CI Jobs:
@@ -42,7 +42,7 @@ This project uses GitHub Actions for CI/CD. The workflow runs automatically on:
 
 ### Triggering CI on Pull Requests:
 
-To run CI on your pull request, add the label `ci/wren-launcher` to your PR.
+To run CI on your pull request, add the label `launcher` to your PR.
 
 ## How to update dependencies
 
