@@ -3,43 +3,23 @@ version: "2"
 
 run:
   timeout: 5m
-  tests: true
 
 linters:
   enable:
-    - errcheck      # Check for unchecked errors (enabled by default)
-    - govet         # Examine Go source code and report suspicious constructs (enabled by default)
-    - ineffassign   # Detect ineffectual assignments (enabled by default)
-    - staticcheck   # Static analysis checks (enabled by default)
-    - unused        # Check for unused constants, variables, functions and types (enabled by default)
-    - misspell      # Find commonly misspelled English words
-    - unconvert     # Remove unnecessary type conversions
-    - gosec         # Inspect source code for security problems
-    - dupl          # Code clone detection
-    - goconst       # Find repeated strings that could be replaced by a constant
-    - gocyclo       # Check cyclomatic complexity of functions
-    - bodyclose     # Check whether HTTP response body is closed successfully
-    - whitespace    # Check for unnecessary blank lines
-    - gocheckcompilerdirectives  # Check compiler directive comments
-
-linters-settings:
-  gocyclo:
-    min-complexity: 20
-  dupl:
-    threshold: 150
-  goconst:
-    min-len: 3
-    min-occurrences: 3
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - misspell
+    - unconvert
+    - gosec
+    - dupl
+    - goconst
+    - gocyclo
+    - bodyclose
+    - whitespace
 
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
-  exclude-dirs:
-    - vendor
-  exclude-rules:
-    # Relax some checks in test files
-    - path: _test\.go
-      linters:
-        - gocyclo
-        - dupl
-        - gosec
