@@ -8,6 +8,35 @@ import (
 	"github.com/pterm/pterm"
 )
 
+// Constants for data types
+const (
+	integerType   = "integer"
+	varcharType   = "varchar"
+	dateType      = "date"
+	timestampType = "timestamp"
+	doubleType    = "double"
+	booleanType   = "boolean"
+)
+
+// Constants for SQL data types
+const (
+	integerSQL   = "INTEGER"
+	intSQL       = "INT"
+	bigintSQL    = "BIGINT"
+	varcharSQL   = "VARCHAR"
+	textSQL      = "TEXT"
+	stringSQL    = "STRING"
+	dateSQL      = "DATE"
+	timestampSQL = "TIMESTAMP"
+	datetimeSQL  = "DATETIME"
+	doubleSQL    = "DOUBLE"
+	floatSQL     = "FLOAT"
+	numericSQL   = "NUMERIC"
+	decimalSQL   = "DECIMAL"
+	booleanSQL   = "BOOLEAN"
+	boolSQL      = "BOOL"
+)
+
 // DataSource is a common interface for all data source types
 type DataSource interface {
 	GetType() string
@@ -140,18 +169,18 @@ func (ds *WrenLocalFileDataSource) MapType(sourceType string) string {
 	sourceType = strings.ToUpper(sourceType)
 
 	switch sourceType {
-	case "INTEGER", "INT", "BIGINT":
-		return "integer"
-	case "VARCHAR", "TEXT", "STRING":
-		return "varchar"
-	case "DATE":
-		return "date"
-	case "TIMESTAMP", "DATETIME":
-		return "timestamp"
-	case "DOUBLE", "FLOAT", "NUMERIC", "DECIMAL":
-		return "double"
-	case "BOOLEAN", "BOOL":
-		return "boolean"
+	case integerSQL, intSQL, bigintSQL:
+		return integerType
+	case varcharSQL, textSQL, stringSQL:
+		return varcharType
+	case dateSQL:
+		return dateType
+	case timestampSQL, datetimeSQL:
+		return timestampType
+	case doubleSQL, floatSQL, numericSQL, decimalSQL:
+		return doubleType
+	case booleanSQL, boolSQL:
+		return booleanType
 	default:
 		// Return the original type if no mapping is found
 		return strings.ToLower(sourceType)
