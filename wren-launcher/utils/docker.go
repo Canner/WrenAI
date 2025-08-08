@@ -34,6 +34,9 @@ var generationModelToModelName = map[string]string{
 	"gpt-4.1":      "gpt-4.1-2025-04-14",
 	"gpt-4.1-mini": "gpt-4.1-mini-2025-04-14",
 	"gpt-4.1-nano": "gpt-4.1-nano-2025-04-14",
+	"gpt-5":        "gpt-5-2025-08-07",
+	"gpt-5-mini":   "gpt-5-mini-2025-08-07",
+	"gpt-5-nano":   "gpt-5-nano-2025-08-07",
 }
 
 func replaceEnvFileContent(content string, projectDir string, openaiApiKey string, openAIGenerationModel string, hostPort int, aiPort int, userUUID string, telemetryEnabled bool, platform string, localStorage string) string {
