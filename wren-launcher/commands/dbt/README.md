@@ -1,3 +1,17 @@
+# Requirement for DBT project
+This part outlines some requirements for the target dbt project:
+- Ensure the DBT project is qualified and generates the required files:
+  - `catalog.json`
+  - `manifest.json`
+  Execute the following commands:
+	```
+	dbt build
+	dbt docs generate
+	```
+- Prepare the profile of the dbt project for the connection info of your database.
+  - `profiles.yml`
+
+
 # How to Support a New Data Source
 
 This document outlines the steps required to add support for a new data source to the dbt project converter.
