@@ -112,7 +112,7 @@ jobs:
           cache-dependency-path: wren-launcher/go.sum
       - name: Run Gosec Security Scanner
         run: |
-          go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
           gosec ./...
       - name: Run Go mod audit
         run: |
