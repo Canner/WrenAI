@@ -7,7 +7,8 @@ from haystack.components.generators.openai_utils import (
     _convert_message_to_openai_format,
 )
 from haystack.dataclasses import ChatMessage, StreamingChunk
-from litellm import Router, acompletion
+from litellm import acompletion
+from litellm.router import Router
 
 from src.core.provider import LLMProvider
 from src.providers.llm import (
@@ -99,11 +100,16 @@ class LitellmLLMProvider(LLMProvider):
                 **(generation_kwargs or {}),
             }
 
+            allowed_params = (
+                ["reasoning_effort"] if self._model.startswith("gpt-5") else None
+            )
+
             if self._has_fallbacks:
                 completion = await self._router.acompletion(
                     model=self._model,
                     messages=openai_formatted_messages,
                     stream=streaming_callback is not None,
+                    allowed_openai_params=allowed_params,
                     mock_testing_fallbacks=self._enable_fallback_testing,
                     **generation_kwargs,
                 )
@@ -116,6 +122,7 @@ class LitellmLLMProvider(LLMProvider):
                     timeout=self._timeout,
                     messages=openai_formatted_messages,
                     stream=streaming_callback is not None,
+                    allowed_openai_params=allowed_params,
                     **generation_kwargs,
                 )
 
