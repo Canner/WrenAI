@@ -7,20 +7,20 @@ run:
 
 linters:
   enable:
-    - errcheck      # 檢查未處理的錯誤 (enabled by default)
-    - govet         # 檢查可疑的構造 (enabled by default)
-    - ineffassign   # 檢查未使用的賦值 (enabled by default)
-    - staticcheck   # 靜態分析檢查 (enabled by default)
-    - unused        # 檢查未使用的常量、變量、函數和類型 (enabled by default)
-    - misspell      # 找出拼寫錯誤的英文單詞
-    - unconvert     # 移除不必要的類型轉換
-    - gosec         # 檢查安全問題
-    - dupl          # 檢測重複代碼
-    - goconst       # 找出可替換為常量的重複字符串
-    - gocyclo       # 檢查函數的圈複雜度
-    - bodyclose     # 檢查 HTTP response body 是否正確關閉
-    - whitespace    # 檢查不必要的空行
-    - gocheckcompilerdirectives  # 檢查編譯器指令註釋
+    - errcheck      # Check for unchecked errors (enabled by default)
+    - govet         # Examine Go source code and report suspicious constructs (enabled by default)
+    - ineffassign   # Detect ineffectual assignments (enabled by default)
+    - staticcheck   # Static analysis checks (enabled by default)
+    - unused        # Check for unused constants, variables, functions and types (enabled by default)
+    - misspell      # Find commonly misspelled English words
+    - unconvert     # Remove unnecessary type conversions
+    - gosec         # Inspect source code for security problems
+    - dupl          # Code clone detection
+    - goconst       # Find repeated strings that could be replaced by a constant
+    - gocyclo       # Check cyclomatic complexity of functions
+    - bodyclose     # Check whether HTTP response body is closed successfully
+    - whitespace    # Check for unnecessary blank lines
+    - gocheckcompilerdirectives  # Check compiler directive comments
 
 linters-settings:
   gocyclo:
@@ -37,7 +37,7 @@ issues:
   exclude-dirs:
     - vendor
   exclude-rules:
-    # 在測試文件中放寬一些檢查
+    # Relax some checks in test files
     - path: _test\.go
       linters:
         - gocyclo
