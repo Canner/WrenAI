@@ -17,6 +17,7 @@ const (
 	timestampType = "timestamp"
 	doubleType    = "double"
 	booleanType   = "boolean"
+	postgresType  = "postgres"
 )
 
 // Constants for SQL data types
@@ -74,7 +75,7 @@ func FromDbtProfiles(profiles *DbtProfiles) ([]DataSource, error) {
 // convertConnectionToDataSource converts connection to corresponding DataSource based on connection type
 func convertConnectionToDataSource(conn DbtConnection, dbtHomePath, profileName, outputName string) (DataSource, error) {
 	switch strings.ToLower(conn.Type) {
-	case "postgres", "postgresql":
+	case postgresType, "postgresql":
 		return convertToPostgresDataSource(conn)
 	case "duckdb":
 		return convertToLocalFileDataSource(conn, dbtHomePath)
@@ -231,7 +232,7 @@ type WrenPostgresDataSource struct {
 
 // GetType implements DataSource interface
 func (ds *WrenPostgresDataSource) GetType() string {
-	return "postgres"
+	return postgresType
 }
 
 // Validate implements DataSource interface
@@ -309,7 +310,7 @@ func (ds *WrenMysqlDataSource) MapType(sourceType string) string {
 	case "CHAR":
 		return "char"
 	case "VARCHAR":
-		return "varchar"
+		return varcharType
 	case "TEXT", "TINYTEXT", "MEDIUMTEXT", "LONGTEXT", "ENUM", "SET":
 		return "text"
 	case "BIT", "TINYINT":
@@ -444,7 +445,7 @@ func (d *DefaultDataSource) MapType(sourceType string) string {
 	case "integer", "int", "bigint", "int64":
 		return "integer"
 	case "varchar", "text", "string", "char":
-		return "varchar"
+		return varcharType
 	case "timestamp", "datetime", "date":
 		return "timestamp"
 	case "double", "float", "decimal", "numeric":

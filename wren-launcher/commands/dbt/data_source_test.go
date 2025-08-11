@@ -21,7 +21,7 @@ func validatePostgresDataSource(t *testing.T, ds *WrenPostgresDataSource, expect
 		t.Errorf("Expected host '%s', got '%s'", testHost, ds.Host)
 	}
 	if ds.Port != "5432" {
-		t.Errorf("Expected port 5432, got %d", ds.Port)
+		t.Errorf("Expected port 5432, got %s", ds.Port)
 	}
 	if ds.Database != expectedDB {
 		t.Errorf("Expected database '%s', got '%s'", expectedDB, ds.Database)
