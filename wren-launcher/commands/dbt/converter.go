@@ -37,7 +37,7 @@ func ConvertDbtProjectCore(opts ConvertOptions) (*ConvertResult, error) {
 	}
 
 	// Create output directory if it doesn't exist
-	if err := os.MkdirAll(opts.OutputDir, 0755); err != nil {
+	if err := os.MkdirAll(opts.OutputDir, 0750); err != nil {
 		return nil, fmt.Errorf("failed to create output directory: %w", err)
 	}
 
@@ -169,7 +169,7 @@ func ConvertDbtProjectCore(opts ConvertOptions) (*ConvertResult, error) {
 				return nil, fmt.Errorf("failed to marshal data source JSON: %w", err)
 			}
 
-			if err := os.WriteFile(dataSourcePath, dataSourceJSON, 0644); err != nil {
+			if err := os.WriteFile(dataSourcePath, dataSourceJSON, 0600); err != nil {
 				return nil, fmt.Errorf("failed to write data source file: %w", err)
 			}
 
@@ -198,7 +198,7 @@ func ConvertDbtProjectCore(opts ConvertOptions) (*ConvertResult, error) {
 		return nil, fmt.Errorf("failed to marshal MDL JSON: %w", err)
 	}
 
-	if err := os.WriteFile(mdlPath, mdlJSON, 0644); err != nil {
+	if err := os.WriteFile(mdlPath, mdlJSON, 0600); err != nil {
 		return nil, fmt.Errorf("failed to write MDL file: %w", err)
 	}
 
@@ -244,7 +244,7 @@ func handleLocalhostForContainer(host string) string {
 // ConvertDbtCatalogToWrenMDL converts dbt catalog.json to Wren MDL format
 func ConvertDbtCatalogToWrenMDL(catalogPath string, data_source DataSource, manifestPath string) (*WrenMDLManifest, error) {
 	// Read and parse the catalog.json file
-	data, err := os.ReadFile(catalogPath)
+	data, err := os.ReadFile(catalogPath) // #nosec G304 -- catalogPath is controlled by application
 	if err != nil {
 		return nil, fmt.Errorf("failed to read catalog file %s: %w", catalogPath, err)
 	}
@@ -258,7 +258,7 @@ func ConvertDbtCatalogToWrenMDL(catalogPath string, data_source DataSource, mani
 	var manifestData map[string]interface{}
 	if manifestPath != "" {
 		pterm.Info.Printf("Reading manifest.json for descriptions from: %s\n", manifestPath)
-		manifestBytes, err := os.ReadFile(manifestPath)
+		manifestBytes, err := os.ReadFile(manifestPath) // #nosec G304 -- manifestPath is controlled by application
 		if err != nil {
 			pterm.Warning.Printf("Warning: Failed to read manifest file %s: %v\n", manifestPath, err)
 		} else {

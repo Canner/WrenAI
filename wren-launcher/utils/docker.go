@@ -16,7 +16,6 @@ import (
 	cmdCompose "github.com/docker/compose/v2/cmd/compose"
 	"github.com/docker/compose/v2/pkg/api"
 	"github.com/docker/compose/v2/pkg/compose"
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/google/uuid"
 	"github.com/pterm/pterm"
@@ -24,7 +23,7 @@ import (
 
 const (
 	// please change the version when the version is updated
-	WREN_PRODUCT_VERSION	string = "0.27.0"
+	WREN_PRODUCT_VERSION    string = "0.27.0-rc.2"
 	DOCKER_COMPOSE_YAML_URL string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/docker-compose.yaml"
 	DOCKER_COMPOSE_ENV_URL  string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/.env.example"
 	AI_SERVICE_CONFIG_URL   string = "https://raw.githubusercontent.com/Canner/WrenAI/" + WREN_PRODUCT_VERSION + "/docker/config.example.yaml"
@@ -92,20 +91,19 @@ func replaceEnvFileContent(content string, projectDir string, openaiApiKey strin
 }
 
 func downloadFile(filepath string, url string) error {
-
 	// Get the data
-	resp, err := http.Get(url)
+	resp, err := http.Get(url) // #nosec G107 -- URL is from trusted source constants
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Create the file
-	out, err := os.Create(filepath)
+	out, err := os.Create(filepath) // #nosec G304 -- filepath is controlled by application
 	if err != nil {
 		return err
 	}
-	defer out.Close()
+	defer func() { _ = out.Close() }()
 
 	// Write the body to file
 	_, err = io.Copy(out, resp.Body)
@@ -157,7 +155,7 @@ func PrepareConfigFileForOpenAI(projectDir string, generationModel string) error
 	}
 
 	// read the config.yaml file
-	content, err := os.ReadFile(configPath)
+	content, err := os.ReadFile(configPath) // #nosec G304 -- configPath is controlled by application
 	if err != nil {
 		return err
 	}
@@ -170,7 +168,7 @@ func PrepareConfigFileForOpenAI(projectDir string, generationModel string) error
 	}
 
 	// write back to config.yaml
-	err = os.WriteFile(configPath, []byte(config), 0644)
+	err = os.WriteFile(configPath, []byte(config), 0600)
 	if err != nil {
 		return err
 	}
@@ -185,7 +183,7 @@ func mergeEnvContent(newEnvFile string, envFileContent string) (string, error) {
 	}
 
 	// File exists, read existing content
-	existingContent, err := os.ReadFile(newEnvFile)
+	existingContent, err := os.ReadFile(newEnvFile) // #nosec G304 -- newEnvFile is controlled by application
 	if err != nil {
 		return "", err
 	}
@@ -267,7 +265,7 @@ func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostP
 		}
 
 		// read the file
-		envExampleFileContent, err := os.ReadFile(envExampleFile)
+		envExampleFileContent, err := os.ReadFile(envExampleFile) // #nosec G304 -- envExampleFile is controlled by application
 		if err != nil {
 			return err
 		}
@@ -294,7 +292,7 @@ func PrepareDockerFiles(openaiApiKey string, openaiGenerationModel string, hostP
 		}
 
 		// write the file
-		err = os.WriteFile(newEnvFile, []byte(envFileContent), 0644)
+		err = os.WriteFile(newEnvFile, []byte(envFileContent), 0600)
 		if err != nil {
 			return err
 		}
@@ -408,7 +406,7 @@ func RunDockerCompose(projectName string, projectDir string, llmProvider string)
 	return nil
 }
 
-func listProcess() ([]types.Container, error) {
+func listProcess() ([]container.Summary, error) {
 	ctx := context.Background()
 	dockerCli, err := command.NewDockerCli()
 	if err != nil {
@@ -432,35 +430,35 @@ func listProcess() ([]types.Container, error) {
 	return containers, nil
 }
 
-func findWrenUIContainer() (types.Container, error) {
+func findWrenUIContainer() (container.Summary, error) {
 	containers, err := listProcess()
 	if err != nil {
-		return types.Container{}, err
+		return container.Summary{}, err
 	}
 
-	for _, container := range containers {
+	for _, cont := range containers {
 		// return if com.docker.compose.project == wrenai && com.docker.compose.service=wren-ui
-		if container.Labels["com.docker.compose.project"] == "wrenai" && container.Labels["com.docker.compose.service"] == "wren-ui" {
-			return container, nil
+		if cont.Labels["com.docker.compose.project"] == "wrenai" && cont.Labels["com.docker.compose.service"] == "wren-ui" {
+			return cont, nil
 		}
 	}
 
-	return types.Container{}, fmt.Errorf("WrenUI container not found")
+	return container.Summary{}, fmt.Errorf("WrenUI container not found")
 }
 
-func findAIServiceContainer() (types.Container, error) {
+func findAIServiceContainer() (container.Summary, error) {
 	containers, err := listProcess()
 	if err != nil {
-		return types.Container{}, err
+		return container.Summary{}, err
 	}
 
-	for _, container := range containers {
-		if container.Labels["com.docker.compose.project"] == "wrenai" && container.Labels["com.docker.compose.service"] == "wren-ai-service" {
-			return container, nil
+	for _, cont := range containers {
+		if cont.Labels["com.docker.compose.project"] == "wrenai" && cont.Labels["com.docker.compose.service"] == "wren-ai-service" {
+			return cont, nil
 		}
 	}
 
-	return types.Container{}, fmt.Errorf("WrenAI service container not found")
+	return container.Summary{}, fmt.Errorf("WrenAI service container not found")
 }
 
 func IfPortUsedByWrenUI(port int) bool {
@@ -470,7 +468,7 @@ func IfPortUsedByWrenUI(port int) bool {
 	}
 
 	for _, containerPort := range container.Ports {
-		if containerPort.PublicPort == uint16(port) {
+		if port >= 0 && port <= 65535 && containerPort.PublicPort == uint16(port) {
 			return true
 		}
 	}
@@ -485,7 +483,7 @@ func IfPortUsedByAIService(port int) bool {
 	}
 
 	for _, containerPort := range container.Ports {
-		if containerPort.PublicPort == uint16(port) {
+		if port >= 0 && port <= 65535 && containerPort.PublicPort == uint16(port) {
 			return true
 		}
 	}
@@ -495,25 +493,25 @@ func IfPortUsedByAIService(port int) bool {
 
 func CheckUIServiceStarted(url string) error {
 	// check response from localhost:3000
-	resp, err := http.Get(url)
+	resp, err := http.Get(url) // #nosec G107 -- URL is validated by application logic
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("Wren AI is not started yet")
+		return fmt.Errorf("wren AI is not started yet")
 	}
 	return nil
 }
 
 func CheckAIServiceStarted(url string) error {
 	// health check
-	resp, err := http.Get(url)
+	resp, err := http.Get(url) // #nosec G107 -- URL is validated by application logic
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("AI service is not started yet")
