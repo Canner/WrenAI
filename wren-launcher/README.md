@@ -32,17 +32,13 @@ This project uses GitHub Actions for CI/CD. The workflow runs automatically on:
    - Unit tests
    - All quality checks
 
-2. **Build Test**: 
-   - Cross-platform build verification (Linux AMD64/ARM64, Darwin AMD64)
-   - Build artifact generation
-
-3. **Security Scan**: 
+2. **Security Scan**: 
    - Gosec security analysis
    - Go module verification
 
-### Triggering CI on Pull Requests:
+### Triggering CI on Pull Requests
 
-To run CI on your pull request, add the label `launcher` to your PR.
+To run CI on your pull request, add the label `ci/launcher` to your PR.
 
 ## How to update dependencies
 
