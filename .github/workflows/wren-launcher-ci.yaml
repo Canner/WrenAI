@@ -1,24 +1,17 @@
 name: Wren Launcher CI
 
 on:
-  push:
-    branches: [ main ]
-    paths:
-      - 'wren-launcher/**'
-      - '.github/workflows/wren-launcher-ci.yaml'
   pull_request:
     types: [synchronize, labeled]
     paths:
       - 'wren-launcher/**'
       - '.github/workflows/wren-launcher-ci.yaml'
-  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  # avoid mis-canceling the ci runs while other labels are added to the PR, so we add the label name as the condition
-  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.label.name == 'ci/launcher' && github.event.number || github.sha }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.number || github.sha }}
   cancel-in-progress: true
 
 defaults:

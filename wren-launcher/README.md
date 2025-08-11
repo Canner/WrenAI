@@ -36,10 +36,6 @@ This project uses GitHub Actions for CI/CD. The workflow runs automatically on:
    - Gosec security analysis
    - Go module verification
 
-### Triggering CI on Pull Requests
-
-To run CI on your pull request, add the label `ci/launcher` to your PR.
-
 ## How to update dependencies
 
 ```bash
