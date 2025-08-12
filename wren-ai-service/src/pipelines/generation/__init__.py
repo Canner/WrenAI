@@ -16,6 +16,7 @@ from .sql_generation_reasoning import SQLGenerationReasoning
 from .sql_question import SQLQuestion
 from .sql_regeneration import SQLRegeneration
 from .sql_tables_extraction import SQLTablesExtraction
+from .user_clarification_assistance import UserClarificationAssistance
 from .user_guide_assistance import UserGuideAssistance
 
 __all__ = [
@@ -38,4 +39,5 @@ __all__ = [
     "MisleadingAssistance",
     "SQLTablesExtraction",
     "DataExplorationAssistance",
+    "UserClarificationAssistance",
 ]
