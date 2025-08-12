@@ -98,17 +98,17 @@ func convertToPostgresDataSource(conn DbtConnection) (*WrenPostgresDataSource, e
 	}
 
 	pterm.Info.Printf("Converting Postgres data source: %s:%d/%s\n", conn.Host, conn.Port, dbName)
+	port := strconv.Itoa(conn.Port)
+	if conn.Port == 0 {
+		port = "5432"
+	}
+
 	ds := &WrenPostgresDataSource{
 		Host:     conn.Host,
-		Port:     strconv.Itoa(conn.Port),
+		Port:     port,
 		Database: dbName,
 		User:     conn.User,
 		Password: conn.Password,
-	}
-
-	// If no port is specified, use PostgreSQL default port
-	if ds.Port == "" {
-		ds.Port = "5432"
 	}
 
 	return ds, nil
