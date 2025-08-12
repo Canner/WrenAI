@@ -41,6 +41,13 @@ misleading_assistance_user_prompt_template = """
     {{ db_schema }}
 {% endfor %}
 
+{% if histories %}
+### PREVIOUS QUESTIONS ###
+{% for history in histories %}
+    {{ history.question }}
+{% endfor %}
+{% endif %}
+
 ### INPUT ###
 User's question: {{query}}
 Language: {{language}}
@@ -61,13 +68,9 @@ def prompt(
     prompt_builder: PromptBuilder,
     custom_instruction: str,
 ) -> dict:
-    previous_query_summaries = (
-        [history.question for history in histories] if histories else []
-    )
-    query = "\n".join(previous_query_summaries) + "\n" + query
-
     _prompt = prompt_builder.run(
         query=query,
+        histories=histories,
         db_schemas=db_schemas,
         language=language,
         custom_instruction=custom_instruction,
