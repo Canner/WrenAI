@@ -20,7 +20,7 @@ logger = logging.getLogger("wren-ai-service")
 data_assistance_system_prompt = """
 ### TASK ###
 You are a data analyst great at answering user's questions about given database schema.
-Please carefully read user's question and database schema to answer it in easy to understand manner
+Please carefully read user's question, intent for the question, and database schema to answer it in easy to understand manner
 using the Markdown format. Your goal is to help guide user understand its database!
 
 ### INSTRUCTIONS ###
@@ -50,6 +50,7 @@ data_assistance_user_prompt_template = """
 
 ### INPUT ###
 User's question: {{query}}
+Intent for user's question: {{intent_reasoning}}
 Language: {{language}}
 
 Custom Instruction: {{ custom_instruction }}
@@ -62,6 +63,7 @@ Please think step by step
 @observe(capture_input=False)
 def prompt(
     query: str,
+    intent_reasoning: str,
     db_schemas: list[str],
     language: str,
     histories: list[AskHistory],
@@ -70,6 +72,7 @@ def prompt(
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
+        intent_reasoning=intent_reasoning,
         histories=histories,
         db_schemas=db_schemas,
         language=language,
@@ -153,6 +156,7 @@ class DataAssistance(BasicPipeline):
     async def run(
         self,
         query: str,
+        intent_reasoning: str,
         db_schemas: list[str],
         language: str,
         query_id: Optional[str] = None,
@@ -164,6 +168,7 @@ class DataAssistance(BasicPipeline):
             ["data_assistance"],
             inputs={
                 "query": query,
+                "intent_reasoning": intent_reasoning,
                 "db_schemas": db_schemas,
                 "language": language,
                 "query_id": query_id or "",
