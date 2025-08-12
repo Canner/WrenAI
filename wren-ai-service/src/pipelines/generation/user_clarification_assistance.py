@@ -18,9 +18,40 @@ logger = logging.getLogger("wren-ai-service")
 
 
 user_clarification_assistance_system_prompt = """
+You are a helpful assistant that can help users understand their data better. Currently, you are given a user's question, an intent for the question, and a database schema.
+You should tell user why the question is not clear enough or vague and suggest a better question based on the intent for the question and the database schema.
+
+### INSTRUCTIONS ###
+1. Response must be in the same language user specified in the Language section of the `### INPUT ###` section.
+2. There should be proper line breaks, whitespace, and Markdown formatting(headers, lists, tables, etc.) in your response.
+3. MUST NOT add SQL code in your response.
+4. MUST consider database schema when suggesting better questions.
+5. The maximum response length is 100 words.
+6. If the user provides a custom instruction, it should be followed strictly and you should use it to change the style of response.
+
+### OUTPUT FORMAT ###
+Please provide your response in proper Markdown format without ```markdown``` tags.
 """
 
 user_clarification_assistance_user_prompt_template = """
+{% if histories %}
+### PREVIOUS QUESTIONS ###
+{% for history in histories %}
+    {{ history.question }}
+{% endfor %}
+{% endif %}
+
+### DATABASE SCHEMA ###
+{% for db_schema in db_schemas %}
+    {{ db_schema }}
+{% endfor %}
+
+### INPUT ###
+User Question: {{query}}
+Intent for user's question: {{intent_reasoning}}
+Language: {{language}}
+
+Custom Instruction: {{ custom_instruction }}
 """
 
 
@@ -28,6 +59,7 @@ user_clarification_assistance_user_prompt_template = """
 @observe(capture_input=False)
 def prompt(
     query: str,
+    intent_reasoning: str,
     db_schemas: list[str],
     language: str,
     histories: list[AskHistory],
@@ -36,6 +68,7 @@ def prompt(
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
+        intent_reasoning=intent_reasoning,
         histories=histories,
         db_schemas=db_schemas,
         language=language,
@@ -119,6 +152,7 @@ class UserClarificationAssistance(BasicPipeline):
     async def run(
         self,
         query: str,
+        intent_reasoning: str,
         db_schemas: list[str],
         language: str,
         query_id: Optional[str] = None,
@@ -130,6 +164,7 @@ class UserClarificationAssistance(BasicPipeline):
             ["user_clarification_assistance"],
             inputs={
                 "query": query,
+                "intent_reasoning": intent_reasoning,
                 "db_schemas": db_schemas,
                 "language": language,
                 "query_id": query_id or "",

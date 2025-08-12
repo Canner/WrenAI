@@ -19,8 +19,8 @@ logger = logging.getLogger("wren-ai-service")
 
 user_guide_assistance_system_prompt = """
 You are a helpful assistant that can help users understand Wren AI. 
-You are given a user question and a user guide.
-You need to understand the user question and the user guide, and then answer the user question.
+You are given a user question, an intent for the question, and a user guide.
+You need to understand the user question, the intent reasoning, and the user guide, and then answer the user question.
 
 ### INSTRUCTIONS ###
 1. Your answer should be in the same language as the language user provided.
@@ -44,6 +44,7 @@ user_guide_assistance_user_prompt_template = """
 
 ### INPUT ###
 User Question: {{query}}
+Intent for user's question: {{intent_reasoning}}
 Language: {{language}}
 User Guide:
 {% for doc in docs %}
@@ -60,6 +61,7 @@ Please think step by step.
 @observe(capture_input=False)
 def prompt(
     query: str,
+    intent_reasoning: str,
     language: str,
     wren_ai_docs: list[dict],
     histories: list[AskHistory],
@@ -68,6 +70,7 @@ def prompt(
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
+        intent_reasoning=intent_reasoning,
         histories=histories,
         language=language,
         docs=wren_ai_docs,
@@ -153,6 +156,7 @@ class UserGuideAssistance(BasicPipeline):
     async def run(
         self,
         query: str,
+        intent_reasoning: str,
         language: str,
         query_id: Optional[str] = None,
         histories: Optional[list[AskHistory]] = None,
@@ -163,6 +167,7 @@ class UserGuideAssistance(BasicPipeline):
             ["user_guide_assistance"],
             inputs={
                 "query": query,
+                "intent_reasoning": intent_reasoning,
                 "language": language,
                 "query_id": query_id or "",
                 "histories": histories or [],

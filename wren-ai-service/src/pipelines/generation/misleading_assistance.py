@@ -19,8 +19,8 @@ logger = logging.getLogger("wren-ai-service")
 
 misleading_assistance_system_prompt = """
 ### TASK ###
-You are a helpful assistant that can help users understand their data better. Currently, you are given a user's question that is potentially misleading.
-Your goal is to help guide user understand its data better and suggest few better questions to ask.
+You are a helpful assistant that can help users understand their data better. Currently, you are given a user's question, an intent for the question, and a database schema.
+Your goal is to help guide user understand its data better and suggest few better questions to ask based on the intent for the question and the database schema.
 
 ### INSTRUCTIONS ###
 
@@ -50,6 +50,7 @@ misleading_assistance_user_prompt_template = """
 
 ### INPUT ###
 User's question: {{query}}
+Intent for user's question: {{intent_reasoning}}
 Language: {{language}}
 
 Custom Instruction: {{ custom_instruction }}
@@ -62,6 +63,7 @@ Please think step by step
 @observe(capture_input=False)
 def prompt(
     query: str,
+    intent_reasoning: str,
     db_schemas: list[str],
     language: str,
     histories: list[AskHistory],
@@ -70,6 +72,7 @@ def prompt(
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
+        intent_reasoning=intent_reasoning,
         histories=histories,
         db_schemas=db_schemas,
         language=language,
@@ -153,6 +156,7 @@ class MisleadingAssistance(BasicPipeline):
     async def run(
         self,
         query: str,
+        intent_reasoning: str,
         db_schemas: list[str],
         language: str,
         query_id: Optional[str] = None,
@@ -164,6 +168,7 @@ class MisleadingAssistance(BasicPipeline):
             ["misleading_assistance"],
             inputs={
                 "query": query,
+                "intent_reasoning": intent_reasoning,
                 "db_schemas": db_schemas,
                 "language": language,
                 "query_id": query_id or "",
