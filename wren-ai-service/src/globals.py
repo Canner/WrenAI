@@ -128,6 +128,9 @@ def create_service_container(
                 "data_exploration_assistance": generation.DataExplorationAssistance(
                     **pipe_components["data_exploration_assistance"],
                 ),
+                "user_clarification_assistance": generation.UserClarificationAssistance(
+                    **pipe_components["user_clarification_assistance"],
+                ),
                 "db_schema_retrieval": _db_schema_retrieval_pipeline,
                 "historical_question": retrieval.HistoricalQuestionRetrieval(
                     **pipe_components["historical_question_retrieval"],
