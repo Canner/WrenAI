@@ -10,6 +10,9 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
+from src.pipelines.common import clean_up_new_lines
+from src.utils import trace_cost
+from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -32,10 +35,21 @@ Please provide your response in proper Markdown format without ```markdown``` ta
 """
 
 data_exploration_assistance_user_prompt_template = """
+{% if histories %}
+### PREVIOUS QUESTIONS ###
+{% for history in histories %}
+    {{ history.question }}
+{% endfor %}
+{% endif %}
+
+### INPUT ###
 User Question: {{query}}
 Language: {{language}}
 SQL Data:
 {{ sql_data }}
+
+Custom Instruction: {{ custom_instruction }}
+
 Please think step by step.
 """
 
@@ -44,18 +58,24 @@ Please think step by step.
 @observe(capture_input=False)
 def prompt(
     query: str,
+    histories: list[AskHistory],
     language: str,
     sql_data: dict,
     prompt_builder: PromptBuilder,
+    custom_instruction: str,
 ) -> dict:
-    return prompt_builder.run(
+    _prompt = prompt_builder.run(
         query=query,
         language=language,
         sql_data=sql_data,
+        histories=histories,
+        custom_instruction=custom_instruction,
     )
+    return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
 
 @observe(as_type="generation", capture_input=False)
+@trace_cost
 async def data_exploration_assistance(
     prompt: dict, generator: Any, query_id: str
 ) -> dict:
@@ -127,6 +147,8 @@ class DataExplorationAssistance(BasicPipeline):
         sql_data: dict,
         language: str,
         query_id: Optional[str] = None,
+        histories: Optional[list[AskHistory]] = None,
+        custom_instruction: Optional[str] = None,
     ):
         logger.info("Data Exploration Assistance pipeline is running...")
         return await self._pipe.execute(
@@ -136,6 +158,8 @@ class DataExplorationAssistance(BasicPipeline):
                 "language": language,
                 "query_id": query_id or "",
                 "sql_data": sql_data,
+                "histories": histories or [],
+                "custom_instruction": custom_instruction or "",
                 **self._components,
             },
         )

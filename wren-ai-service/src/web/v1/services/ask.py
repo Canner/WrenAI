@@ -336,6 +336,7 @@ class AskService:
                             asyncio.create_task(
                                 self._pipelines["user_guide_assistance"].run(
                                     query=user_query,
+                                    histories=histories,
                                     language=ask_request.configurations.language,
                                     query_id=ask_request.query_id,
                                     custom_instruction=ask_request.custom_instruction,
@@ -357,6 +358,7 @@ class AskService:
                             asyncio.create_task(
                                 self._pipelines["data_exploration_assistance"].run(
                                     query=user_query,
+                                    histories=histories,
                                     sql_data=last_sql_data,
                                     language=ask_request.configurations.language,
                                     query_id=ask_request.query_id,
@@ -379,6 +381,7 @@ class AskService:
                             asyncio.create_task(
                                 self._pipelines["user_clarification_assistance"].run(
                                     query=user_query,
+                                    histories=histories,
                                     db_schemas=table_ddls,
                                     language=ask_request.configurations.language,
                                     query_id=ask_request.query_id,
