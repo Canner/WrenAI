@@ -19,8 +19,9 @@ logger = logging.getLogger("wren-ai-service")
 
 data_exploration_assistance_system_prompt = """
 You are a great data analyst good at exploring data.
-You are given a user question and a sql data.
-You need to understand the user question and the sql data, and then answer the user question.
+You are given a user question, an intent for the question, and a sql data.
+You need to understand the user question, the intent for the question, and the sql data, and then answer the user question.
+
 ### INSTRUCTIONS ###
 1. Your answer should be in the same language as the language user provided.
 2. You must follow the sql data to answer the user question.
@@ -30,6 +31,7 @@ You need to understand the user question and the sql data, and then answer the u
 - provide insights and trends in the data
 - find out anomalies and outliers in the data
 5. You only need to use the skills required to answer the user question based on the user question and the sql data.
+
 ### OUTPUT FORMAT ###
 Please provide your response in proper Markdown format without ```markdown``` tags.
 """
@@ -44,6 +46,7 @@ data_exploration_assistance_user_prompt_template = """
 
 ### INPUT ###
 User Question: {{query}}
+Intent for user's question: {{intent_reasoning}}
 Language: {{language}}
 SQL Data:
 {{ sql_data }}
@@ -58,6 +61,7 @@ Please think step by step.
 @observe(capture_input=False)
 def prompt(
     query: str,
+    intent_reasoning: str,
     histories: list[AskHistory],
     language: str,
     sql_data: dict,
@@ -66,6 +70,7 @@ def prompt(
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
+        intent_reasoning=intent_reasoning,
         language=language,
         sql_data=sql_data,
         histories=histories,
@@ -144,6 +149,7 @@ class DataExplorationAssistance(BasicPipeline):
     async def run(
         self,
         query: str,
+        intent_reasoning: str,
         sql_data: dict,
         language: str,
         query_id: Optional[str] = None,
@@ -155,6 +161,7 @@ class DataExplorationAssistance(BasicPipeline):
             ["data_exploration_assistance"],
             inputs={
                 "query": query,
+                "intent_reasoning": intent_reasoning,
                 "language": language,
                 "query_id": query_id or "",
                 "sql_data": sql_data,
