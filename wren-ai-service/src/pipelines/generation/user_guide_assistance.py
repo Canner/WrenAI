@@ -12,6 +12,7 @@ from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.common import clean_up_new_lines
 from src.utils import trace_cost
+from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -34,6 +35,14 @@ Please provide your response in proper Markdown format without ```markdown``` ta
 """
 
 user_guide_assistance_user_prompt_template = """
+{% if histories %}
+### PREVIOUS QUESTIONS ###
+{% for history in histories %}
+    {{ history.question }}
+{% endfor %}
+{% endif %}
+
+### INPUT ###
 User Question: {{query}}
 Language: {{language}}
 User Guide:
@@ -53,11 +62,13 @@ def prompt(
     query: str,
     language: str,
     wren_ai_docs: list[dict],
+    histories: list[AskHistory],
     prompt_builder: PromptBuilder,
     custom_instruction: str,
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
+        histories=histories,
         language=language,
         docs=wren_ai_docs,
         custom_instruction=custom_instruction,
@@ -144,6 +155,7 @@ class UserGuideAssistance(BasicPipeline):
         query: str,
         language: str,
         query_id: Optional[str] = None,
+        histories: Optional[list[AskHistory]] = None,
         custom_instruction: Optional[str] = None,
     ):
         logger.info("User Guide Assistance pipeline is running...")
@@ -153,6 +165,7 @@ class UserGuideAssistance(BasicPipeline):
                 "query": query,
                 "language": language,
                 "query_id": query_id or "",
+                "histories": histories or [],
                 "custom_instruction": custom_instruction or "",
                 **self._components,
                 **self._configs,
