@@ -83,14 +83,26 @@ class _AskResultResponse(BaseModel):
     trace_id: Optional[str] = None
     is_followup: bool = False
     general_type: Optional[
-        Literal["MISLEADING_QUERY", "DATA_ASSISTANCE", "USER_GUIDE", "DATA_EXPLORATION"]
+        Literal[
+            "MISLEADING_QUERY",
+            "DATA_ASSISTANCE",
+            "USER_GUIDE",
+            "DATA_EXPLORATION",
+            "USER_CLARIFICATION",
+        ]
     ] = None
 
 
 class AskResultResponse(_AskResultResponse):
     is_followup: Optional[bool] = Field(False, exclude=True)
     general_type: Optional[
-        Literal["MISLEADING_QUERY", "DATA_ASSISTANCE", "USER_GUIDE", "DATA_EXPLORATION"]
+        Literal[
+            "MISLEADING_QUERY",
+            "DATA_ASSISTANCE",
+            "USER_GUIDE",
+            "DATA_EXPLORATION",
+            "USER_CLARIFICATION",
+        ]
     ] = Field(None, exclude=True)
 
 
@@ -206,7 +218,11 @@ class AskService:
                     sql_generation_reasoning = ""
                 else:
                     # Run both pipeline operations concurrently
-                    sql_samples_task, instructions_task = await asyncio.gather(
+                    (
+                        sql_samples_task,
+                        instructions_task,
+                        db_schema_retrieval_task,
+                    ) = await asyncio.gather(
                         self._pipelines["sql_pairs_retrieval"].run(
                             query=user_query,
                             project_id=ask_request.project_id,
@@ -215,6 +231,12 @@ class AskService:
                             query=user_query,
                             project_id=ask_request.project_id,
                             scope="sql",
+                        ),
+                        self._pipelines["db_schema_retrieval"].run(
+                            query=user_query,
+                            histories=histories,
+                            project_id=ask_request.project_id,
+                            enable_column_pruning=enable_column_pruning,
                         ),
                     )
 
@@ -225,6 +247,12 @@ class AskService:
                     instructions = instructions_task["formatted_output"].get(
                         "documents", []
                     )
+                    _retrieval_result = db_schema_retrieval_task.get(
+                        "construct_retrieval_results", {}
+                    )
+                    documents = _retrieval_result.get("retrieval_results", [])
+                    table_names = [document.get("table_name") for document in documents]
+                    table_ddls = [document.get("table_ddl") for document in documents]
 
                     if self._allow_intent_classification:
                         last_sql_data = None
@@ -240,6 +268,7 @@ class AskService:
                         intent_classification_result = (
                             await self._pipelines["intent_classification"].run(
                                 query=user_query,
+                                db_schemas=table_ddls,
                                 histories=histories,
                                 sql_samples=sql_samples,
                                 instructions=instructions,
@@ -367,19 +396,6 @@ class AskService:
                     trace_id=trace_id,
                     is_followup=True if histories else False,
                 )
-
-                retrieval_result = await self._pipelines["db_schema_retrieval"].run(
-                    query=user_query,
-                    histories=histories,
-                    project_id=ask_request.project_id,
-                    enable_column_pruning=enable_column_pruning,
-                )
-                _retrieval_result = retrieval_result.get(
-                    "construct_retrieval_results", {}
-                )
-                documents = _retrieval_result.get("retrieval_results", [])
-                table_names = [document.get("table_name") for document in documents]
-                table_ddls = [document.get("table_ddl") for document in documents]
 
                 if not documents:
                     logger.exception(f"ask pipeline - NO_RELEVANT_DATA: {user_query}")
