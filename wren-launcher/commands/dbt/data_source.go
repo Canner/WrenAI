@@ -14,13 +14,22 @@ import (
 
 // Constants for data types
 const (
-	integerType   = "integer"
-	varcharType   = "varchar"
-	dateType      = "date"
-	timestampType = "timestamp"
-	doubleType    = "double"
-	booleanType   = "boolean"
-	postgresType  = "postgres"
+	integerType     = "integer"
+	smallintType    = "smallint"
+	bigintType      = "bigint"
+	floatType       = "float"
+	decimalType     = "decimal"
+	varcharType     = "varchar"
+	charType        = "char"
+	textType        = "text"
+	dateType        = "date"
+	timestampType   = "timestamp"
+	timestamptzType = "timestamptz"
+	doubleType      = "double"
+	booleanType     = "boolean"
+	jsonType        = "json"
+	intervalType    = "interval"
+	postgresType    = "postgres"
 )
 
 // Constants for SQL data types
@@ -82,6 +91,8 @@ func convertConnectionToDataSource(conn DbtConnection, dbtHomePath, profileName,
 		return convertToPostgresDataSource(conn)
 	case "duckdb":
 		return convertToLocalFileDataSource(conn, dbtHomePath)
+	case "sqlserver":
+		return convertToMSSQLDataSource(conn)
 	case "mysql":
 		return convertToMysqlDataSource(conn)
 	case "bigquery":
@@ -115,6 +126,50 @@ func convertToPostgresDataSource(conn DbtConnection) (*WrenPostgresDataSource, e
 		Database: dbName,
 		User:     conn.User,
 		Password: conn.Password,
+	}
+	// If no port is specified, use PostgreSQL default port
+	if ds.Port == 0 {
+		ds.Port = 5432
+	}
+
+	return ds, nil
+}
+
+func convertToMSSQLDataSource(conn DbtConnection) (*WrenMSSQLDataSource, error) {
+	port := strconv.Itoa(conn.Port)
+	if conn.Port == 0 {
+		port = "1433"
+	}
+
+	ds := &WrenMSSQLDataSource{
+		Database:   conn.Database,
+		Host:       conn.Server,
+		Port:       port,
+		User:       conn.User,
+		Password:   conn.Password,
+		TdsVersion: "8.0",                           // the default tds version for Wren engine image
+		Driver:     "ODBC Driver 18 for SQL Server", // the driver used by Wren engine image
+		Kwargs:     map[string]interface{}{"TrustServerCertificate": "YES"},
+	}
+
+	return ds, nil
+}
+
+func convertToMSSQLDataSource(conn DbtConnection) (*WrenMSSQLDataSource, error) {
+	port := strconv.Itoa(conn.Port)
+	if conn.Port == 0 {
+		port = "1433"
+	}
+
+	ds := &WrenMSSQLDataSource{
+		Database:   conn.Database,
+		Host:       conn.Server,
+		Port:       port,
+		User:       conn.User,
+		Password:   conn.Password,
+		TdsVersion: "8.0",                           // the default tds version for Wren engine image
+		Driver:     "ODBC Driver 18 for SQL Server", // the driver used by Wren engine image
+		Kwargs:     map[string]interface{}{"TrustServerCertificate": "YES"},
 	}
 
 	return ds, nil
@@ -359,6 +414,85 @@ func (ds *WrenPostgresDataSource) Validate() error {
 func (ds *WrenPostgresDataSource) MapType(sourceType string) string {
 	// This method is not used in WrenPostgresDataSource, but required by DataSource interface
 	return sourceType
+}
+
+type WrenMSSQLDataSource struct {
+	Database   string                 `json:"database"`
+	Host       string                 `json:"host"`
+	Port       string                 `json:"port"`
+	User       string                 `json:"user"`
+	Password   string                 `json:"password"`
+	TdsVersion string                 `json:"tds_version"`
+	Driver     string                 `json:"driver"`
+	Kwargs     map[string]interface{} `json:"kwargs"`
+}
+
+func (ds *WrenMSSQLDataSource) GetType() string {
+	return "mssql"
+}
+
+func (ds *WrenMSSQLDataSource) Validate() error {
+	if ds.Host == "" {
+		return fmt.Errorf("host cannot be empty")
+	}
+	if ds.Database == "" {
+		return fmt.Errorf("database cannot be empty")
+	}
+	if ds.User == "" {
+		return fmt.Errorf("user cannot be empty")
+	}
+	if ds.Port == "" {
+		return fmt.Errorf("port must be specified")
+	}
+	port, err := strconv.Atoi(ds.Port)
+	if err != nil {
+		return fmt.Errorf("port must be a valid number")
+	}
+	if port <= 0 || port > 65535 {
+		return fmt.Errorf("port must be between 1 and 65535")
+	}
+	if ds.Password == "" {
+		return fmt.Errorf("password cannot be empty")
+	}
+	return nil
+}
+
+func (ds *WrenMSSQLDataSource) MapType(sourceType string) string {
+	// This method is not used in WrenMSSQLDataSource, but required by DataSource interface
+	switch strings.ToLower(sourceType) {
+	case "char", "nchar":
+		return charType
+	case varcharType, "nvarchar":
+		return varcharType
+	case "text", "ntext":
+		return textType
+	case "bit", "tinyint":
+		return booleanType
+	case "smallint":
+		return smallintType
+	case "int":
+		return integerType
+	case "bigint":
+		return bigintType
+	case booleanType:
+		return booleanType
+	case "float", "real":
+		return floatType
+	case "decimal", "numeric", "money", "smallmoney":
+		return decimalType
+	case "date":
+		return dateType
+	case "datetime", "datetime2", "smalldatetime":
+		return timestampType
+	case "time":
+		return intervalType
+	case "datetimeoffset":
+		return timestamptzType
+	case "json":
+		return jsonType
+	default:
+		return strings.ToLower(sourceType)
+	}
 }
 
 type WrenMysqlDataSource struct {
