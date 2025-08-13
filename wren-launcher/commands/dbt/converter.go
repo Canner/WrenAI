@@ -139,6 +139,26 @@ func ConvertDbtProjectCore(opts ConvertOptions) (*ConvertResult, error) {
 						"password": typedDS.Password,
 					},
 				}
+			case *WrenMSSQLDataSource:
+				var host string
+				if opts.UsedByContainer {
+					host = handleLocalhostForContainer(typedDS.Host)
+				} else {
+					host = typedDS.Host
+				}
+				wrenDataSource = map[string]interface{}{
+					"type": "mssql",
+					"properties": map[string]interface{}{
+						"host":        host,
+						"port":        typedDS.Port,
+						"database":    typedDS.Database,
+						"user":        typedDS.User,
+						"password":    typedDS.Password,
+						"tds_version": typedDS.TdsVersion,
+						"driver":      typedDS.Driver,
+						"kwargs":      typedDS.Kwargs,
+					},
+				}
 			case *WrenLocalFileDataSource:
 				var url string
 				if opts.UsedByContainer {
