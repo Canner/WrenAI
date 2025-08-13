@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 
 	"gopkg.in/yaml.v3"
 )
@@ -105,6 +106,12 @@ func parseConnection(connectionMap map[string]interface{}) (*DbtConnection, erro
 				return v
 			case float64:
 				return int(v)
+			case int64:
+				return int(v)
+			case string:
+				if i, err := strconv.Atoi(v); err == nil {
+					return i
+				}
 			}
 		}
 		return 0
