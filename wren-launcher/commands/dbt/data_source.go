@@ -135,9 +135,14 @@ func convertToMSSQLDataSource(conn DbtConnection) (*WrenMSSQLDataSource, error) 
 		port = "1433"
 	}
 
+	host := conn.Server
+	if host == "" {
+		host = conn.Host
+	}
+
 	ds := &WrenMSSQLDataSource{
 		Database:   conn.Database,
-		Host:       conn.Server,
+		Host:       host,
 		Port:       port,
 		User:       conn.User,
 		Password:   conn.Password,
