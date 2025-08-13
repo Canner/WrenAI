@@ -562,6 +562,7 @@ class AskService:
                             "sql_correction"
                         ].run(
                             contexts=table_ddls,
+                            instructions=instructions,
                             invalid_generation_result=failed_dry_run_result,
                             project_id=ask_request.project_id,
                             use_dry_plan=use_dry_plan,
