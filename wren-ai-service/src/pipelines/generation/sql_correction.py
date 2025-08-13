@@ -16,6 +16,7 @@ from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     TEXT_TO_SQL_RULES,
     SQLGenPostProcessor,
+    construct_instructions,
 )
 from src.utils import trace_cost
 
@@ -51,6 +52,13 @@ sql_correction_user_prompt_template = """
 {% endfor %}
 {% endif %}
 
+{% if instructions %}
+### USER INSTRUCTIONS ###
+{% for instruction in instructions %}
+{{ loop.index }}. {{ instruction }}
+{% endfor %}
+{% endif %}
+
 ### QUESTION ###
 SQL: {{ invalid_generation_result.sql }}
 Error Message: {{ invalid_generation_result.error }}
@@ -65,10 +73,14 @@ def prompt(
     documents: List[Document],
     invalid_generation_result: Dict,
     prompt_builder: PromptBuilder,
+    instructions: list[dict] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         documents=documents,
         invalid_generation_result=invalid_generation_result,
+        instructions=construct_instructions(
+            instructions=instructions,
+        ),
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
@@ -142,6 +154,7 @@ class SQLCorrection(BasicPipeline):
         self,
         contexts: List[Document],
         invalid_generation_result: Dict[str, str],
+        instructions: list[dict] | None = None,
         project_id: str | None = None,
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
@@ -158,6 +171,7 @@ class SQLCorrection(BasicPipeline):
             inputs={
                 "invalid_generation_result": invalid_generation_result,
                 "documents": contexts,
+                "instructions": instructions,
                 "project_id": project_id,
                 "use_dry_plan": use_dry_plan,
                 "allow_dry_plan_fallback": allow_dry_plan_fallback,
