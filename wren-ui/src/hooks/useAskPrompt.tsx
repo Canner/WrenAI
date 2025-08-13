@@ -160,10 +160,9 @@ const handleUpdateRerunAskingTaskCache = (
 export default function useAskPrompt(threadId?: number) {
   const [originalQuestion, setOriginalQuestion] = useState<string>('');
   const [threadQuestions, setThreadQuestions] = useState<string[]>([]);
+  // Handle errors via try/catch blocks rather than onError callback
   const [createAskingTask, createAskingTaskResult] =
-    useCreateAskingTaskMutation({
-      onError: (error) => console.error(error),
-    });
+    useCreateAskingTaskMutation();
   const [cancelAskingTask] = useCancelAskingTaskMutation({
     onError: (error) => console.error(error),
   });
