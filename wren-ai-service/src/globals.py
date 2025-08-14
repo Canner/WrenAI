@@ -125,6 +125,9 @@ def create_service_container(
                     **pipe_components["user_guide_assistance"],
                     wren_ai_docs=wren_ai_docs,
                 ),
+                "data_exploration_assistance": generation.DataExplorationAssistance(
+                    **pipe_components["data_exploration_assistance"],
+                ),
                 "db_schema_retrieval": _db_schema_retrieval_pipeline,
                 "historical_question": retrieval.HistoricalQuestionRetrieval(
                     **pipe_components["historical_question_retrieval"],
@@ -148,10 +151,6 @@ def create_service_container(
                 "sql_functions_retrieval": _sql_functions_retrieval_pipeline,
                 "sql_executor": retrieval.SQLExecutor(
                     **pipe_components["sql_executor"],
-                    engine_timeout=settings.engine_timeout,
-                ),
-                "data_exploration_assistance": generation.DataExplorationAssistance(
-                    **pipe_components["data_exploration_assistance"],
                 ),
             },
             allow_intent_classification=settings.allow_intent_classification,
