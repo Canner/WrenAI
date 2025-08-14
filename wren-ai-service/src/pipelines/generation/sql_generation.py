@@ -126,7 +126,6 @@ async def generate_sql(
 async def post_process(
     generate_sql: dict,
     post_processor: SQLGenPostProcessor,
-    engine_timeout: float,
     data_source: str,
     project_id: str | None = None,
     use_dry_plan: bool = False,
@@ -135,7 +134,6 @@ async def post_process(
 ) -> dict:
     return await post_processor.run(
         generate_sql.get("replies"),
-        timeout=engine_timeout,
         project_id=project_id,
         use_dry_plan=use_dry_plan,
         data_source=data_source,
@@ -153,7 +151,6 @@ class SQLGeneration(BasicPipeline):
         llm_provider: LLMProvider,
         document_store_provider: DocumentStoreProvider,
         engine: Engine,
-        engine_timeout: float = 30.0,
         **kwargs,
     ):
         self._retriever = document_store_provider.get_retriever(
@@ -170,10 +167,6 @@ class SQLGeneration(BasicPipeline):
                 template=sql_generation_user_prompt_template
             ),
             "post_processor": SQLGenPostProcessor(engine=engine),
-        }
-
-        self._configs = {
-            "engine_timeout": engine_timeout,
         }
 
         super().__init__(
@@ -222,6 +215,5 @@ class SQLGeneration(BasicPipeline):
                 "data_source": metadata.get("data_source", "local_file"),
                 "allow_data_preview": allow_data_preview,
                 **self._components,
-                **self._configs,
             },
         )

@@ -76,6 +76,7 @@ class BaseRequest(BaseModel):
 
 # Put the services imports here to avoid circular imports and make them accessible directly to the rest of packages
 from .ask import AskService  # noqa: E402
+from .ask_feedback import AskFeedbackService  # noqa: E402
 from .chart import ChartService  # noqa: E402
 from .chart_adjustment import ChartAdjustmentService  # noqa: E402
 from .instructions import InstructionsService  # noqa: E402
@@ -90,6 +91,7 @@ from .sql_question import SqlQuestionService  # noqa: E402
 
 __all__ = [
     "AskService",
+    "AskFeedbackService",
     "ChartService",
     "ChartAdjustmentService",
     "QuestionRecommendation",
