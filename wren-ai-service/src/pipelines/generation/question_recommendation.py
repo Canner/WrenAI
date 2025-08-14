@@ -17,76 +17,6 @@ from src.utils import trace_cost
 logger = logging.getLogger("wren-ai-service")
 
 
-## Start of Pipeline
-@observe(capture_input=False)
-def prompt(
-    mdl: dict,
-    previous_questions: list[str],
-    language: str,
-    max_questions: int,
-    max_categories: int,
-    prompt_builder: PromptBuilder,
-) -> dict:
-    """
-    If previous_questions is provided, the MDL is omitted to allow the LLM to focus on
-    generating recommendations based on the question history. This helps provide more
-    contextually relevant questions that build on previous questions.
-    """
-
-    _prompt = prompt_builder.run(
-        models=[] if previous_questions else mdl.get("models", []),
-        previous_questions=previous_questions,
-        language=language,
-        max_questions=max_questions,
-        max_categories=max_categories,
-    )
-    return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
-
-
-@observe(as_type="generation", capture_input=False)
-@trace_cost
-async def generate(prompt: dict, generator: Any, generator_name: str) -> dict:
-    return await generator(prompt=prompt.get("prompt")), generator_name
-
-
-@observe(capture_input=False)
-def normalized(generate: dict) -> dict:
-    def wrapper(text: str) -> list:
-        text = text.replace("\n", " ")
-        text = " ".join(text.split())
-        try:
-            text_list = orjson.loads(text.strip())
-            return text_list
-        except orjson.JSONDecodeError as e:
-            logger.error(f"Error decoding JSON: {e}")
-            return []  # Return an empty list if JSON decoding fails
-
-    reply = generate.get("replies")[0]  # Expecting only one reply
-    normalized = wrapper(reply)
-
-    return normalized
-
-
-## End of Pipeline
-class Question(BaseModel):
-    question: str
-    category: str
-
-
-class QuestionResult(BaseModel):
-    questions: list[Question]
-
-
-QUESTION_RECOMMENDATION_MODEL_KWARGS = {
-    "response_format": {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "question_recommendation",
-            "schema": QuestionResult.model_json_schema(),
-        },
-    }
-}
-
 system_prompt = """
 You are an expert in data analysis and SQL query generation. Given a data model specification, optionally a user's question, and a list of categories, your task is to generate insightful, specific questions that can be answered using the provided data model. Each question should be accompanied by a brief explanation of its relevance or importance.
 
@@ -225,6 +155,77 @@ Categories: {{categories}}
 
 Please generate {{max_questions}} insightful questions for each of the {{max_categories}} categories based on the provided data model. Both the questions and category names should be translated into {{language}}{% if user_question %} and be related to the user's question{% endif %}. The output format should maintain the structure but with localized text.
 """
+
+
+## Start of Pipeline
+@observe(capture_input=False)
+def prompt(
+    mdl: dict,
+    previous_questions: list[str],
+    language: str,
+    max_questions: int,
+    max_categories: int,
+    prompt_builder: PromptBuilder,
+) -> dict:
+    """
+    If previous_questions is provided, the MDL is omitted to allow the LLM to focus on
+    generating recommendations based on the question history. This helps provide more
+    contextually relevant questions that build on previous questions.
+    """
+
+    _prompt = prompt_builder.run(
+        models=[] if previous_questions else mdl.get("models", []),
+        previous_questions=previous_questions,
+        language=language,
+        max_questions=max_questions,
+        max_categories=max_categories,
+    )
+    return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
+
+
+@observe(as_type="generation", capture_input=False)
+@trace_cost
+async def generate(prompt: dict, generator: Any, generator_name: str) -> dict:
+    return await generator(prompt=prompt.get("prompt")), generator_name
+
+
+@observe(capture_input=False)
+def normalized(generate: dict) -> dict:
+    def wrapper(text: str) -> list:
+        text = text.replace("\n", " ")
+        text = " ".join(text.split())
+        try:
+            text_list = orjson.loads(text.strip())
+            return text_list
+        except orjson.JSONDecodeError as e:
+            logger.error(f"Error decoding JSON: {e}")
+            return []  # Return an empty list if JSON decoding fails
+
+    reply = generate.get("replies")[0]  # Expecting only one reply
+    normalized = wrapper(reply)
+
+    return normalized
+
+
+## End of Pipeline
+class Question(BaseModel):
+    question: str
+    category: str
+
+
+class QuestionResult(BaseModel):
+    questions: list[Question]
+
+
+QUESTION_RECOMMENDATION_MODEL_KWARGS = {
+    "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "question_recommendation",
+            "schema": QuestionResult.model_json_schema(),
+        },
+    }
+}
 
 
 class QuestionRecommendation(BasicPipeline):

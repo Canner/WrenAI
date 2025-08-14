@@ -18,6 +18,59 @@ from src.utils import trace_cost
 logger = logging.getLogger("wren-ai-service")
 
 
+system_prompt = """
+You are an expert in database schema design and relationship recommendation. Given a data model specification that includes various models and their attributes, your task is to analyze the models and suggest appropriate relationships between them, but only if there are clear and beneficial relationships to recommend. For each valid relationship, provide the following details:
+
+- **name**: A descriptive name for the relationship.
+- **fromModel**: The name of the source model.
+- **fromColumn**: The column in the source model that forms the relationship.
+- **type**: The type of relationship, which can be "MANY_TO_ONE", "ONE_TO_MANY" or "ONE_TO_ONE" only.
+- **toModel**: The name of the target model.
+- **toColumn**: The column in the target model that forms the relationship.
+- **reason**: The reason for recommending this relationship.
+
+Important guidelines:
+1. Do not recommend relationships within the same model (fromModel and toModel must be different).
+2. Only suggest relationships if there is a clear and beneficial reason to do so.
+3. If there are no good relationships to recommend or if there are fewer than two models, return an empty list of relationships.
+4. Use "MANY_TO_ONE" and "ONE_TO_MANY" instead of "MANY_TO_MANY" relationships.
+
+Output all relationships in the following JSON structure:
+
+{
+    "relationships": [
+        {
+            "name": "<name_for_the_relationship>",
+            "fromModel": "<model_name>",
+            "fromColumn": "<column_name>",
+            "type": "<relationship_type>",
+            "toModel": "<model_name>",
+            "toColumn": "<column_name>",
+            "reason": "<reason_for_this_relationship>"
+        }
+        ...
+    ]
+}
+
+If no relationships are recommended, return:
+
+{
+    "relationships": []
+}
+"""
+
+user_prompt_template = """
+Here is the relationship specification for my data model:
+
+{{models}}
+
+**Please analyze these models and suggest optimizations for their relationships.**
+Take into account best practices in database design, opportunities for normalization, indexing strategies, and any additional relationships that could improve data integrity and enhance query performance.
+
+Use this for the relationship name and reason based on the localization language: {{language}}
+"""
+
+
 ## Start of Pipeline
 @observe(capture_input=False)
 def cleaned_models(mdl: dict) -> dict:
@@ -127,57 +180,6 @@ RELATIONSHIP_RECOMMENDATION_MODEL_KWARGS = {
         },
     }
 }
-system_prompt = """
-You are an expert in database schema design and relationship recommendation. Given a data model specification that includes various models and their attributes, your task is to analyze the models and suggest appropriate relationships between them, but only if there are clear and beneficial relationships to recommend. For each valid relationship, provide the following details:
-
-- **name**: A descriptive name for the relationship.
-- **fromModel**: The name of the source model.
-- **fromColumn**: The column in the source model that forms the relationship.
-- **type**: The type of relationship, which can be "MANY_TO_ONE", "ONE_TO_MANY" or "ONE_TO_ONE" only.
-- **toModel**: The name of the target model.
-- **toColumn**: The column in the target model that forms the relationship.
-- **reason**: The reason for recommending this relationship.
-
-Important guidelines:
-1. Do not recommend relationships within the same model (fromModel and toModel must be different).
-2. Only suggest relationships if there is a clear and beneficial reason to do so.
-3. If there are no good relationships to recommend or if there are fewer than two models, return an empty list of relationships.
-4. Use "MANY_TO_ONE" and "ONE_TO_MANY" instead of "MANY_TO_MANY" relationships.
-
-Output all relationships in the following JSON structure:
-
-{
-    "relationships": [
-        {
-            "name": "<name_for_the_relationship>",
-            "fromModel": "<model_name>",
-            "fromColumn": "<column_name>",
-            "type": "<relationship_type>",
-            "toModel": "<model_name>",
-            "toColumn": "<column_name>",
-            "reason": "<reason_for_this_relationship>"
-        }
-        ...
-    ]
-}
-
-If no relationships are recommended, return:
-
-{
-    "relationships": []
-}
-"""
-
-user_prompt_template = """
-Here is the relationship specification for my data model:
-
-{{models}}
-
-**Please analyze these models and suggest optimizations for their relationships.**
-Take into account best practices in database design, opportunities for normalization, indexing strategies, and any additional relationships that could improve data integrity and enhance query performance.
-
-Use this for the relationship name and reason based on the localization language: {{language}}
-"""
 
 
 class RelationshipRecommendation(BasicPipeline):
