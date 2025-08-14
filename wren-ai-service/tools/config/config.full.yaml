@@ -117,7 +117,6 @@ pipes:
     llm: litellm_llm.default
   - name: relationship_recommendation
     llm: litellm_llm.default
-    engine: wren_ui
   - name: question_recommendation
     llm: litellm_llm.default
   - name: question_recommendation_db_schema_retrieval

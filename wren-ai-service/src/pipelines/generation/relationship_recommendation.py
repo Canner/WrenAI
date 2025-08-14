@@ -10,7 +10,6 @@ from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
 from pydantic import BaseModel
 
-from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.common import clean_up_new_lines
@@ -82,7 +81,7 @@ def normalized(generate: dict) -> dict:
 
 
 @observe(capture_input=False)
-def validated(normalized: dict, engine: Engine) -> dict:
+def validated(normalized: dict) -> dict:
     relationships = normalized.get("relationships", [])
 
     validated_relationships = [
@@ -90,9 +89,6 @@ def validated(normalized: dict, engine: Engine) -> dict:
         for relationship in relationships
         if RelationType.is_include(relationship.get("type"))
     ]
-
-    # todo: after wren-engine support function to validate the relationships, we will use that function to validate the relationships
-    # for now, we will just return the normalized relationships
 
     return {"relationships": validated_relationships}
 
@@ -188,8 +184,6 @@ class RelationshipRecommendation(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
-        engine: Engine,
-        engine_timeout: float = 30.0,
         **_,
     ):
         self._components = {
@@ -199,11 +193,6 @@ class RelationshipRecommendation(BasicPipeline):
                 generation_kwargs=RELATIONSHIP_RECOMMENDATION_MODEL_KWARGS,
             ),
             "generator_name": llm_provider.get_model(),
-            "engine": engine,
-        }
-
-        self._configs = {
-            "engine_timeout": engine_timeout,
         }
 
         self._final = "validated"
@@ -225,6 +214,5 @@ class RelationshipRecommendation(BasicPipeline):
                 "mdl": mdl,
                 "language": language,
                 **self._components,
-                **self._configs,
             },
         )

@@ -72,15 +72,12 @@ def create_service_container(
     )
     _sql_correction_pipeline = generation.SQLCorrection(
         **pipe_components["sql_correction"],
-        engine_timeout=settings.engine_timeout,
     )
     _sql_functions_retrieval_pipeline = retrieval.SqlFunctions(
         **pipe_components["sql_functions_retrieval"],
-        engine_timeout=settings.engine_timeout,
     )
     _sql_executor_pipeline = retrieval.SQLExecutor(
         **pipe_components["sql_executor"],
-        engine_timeout=settings.engine_timeout,
     )
 
     return ServiceContainer(
@@ -137,7 +134,6 @@ def create_service_container(
                 "instructions_retrieval": _instructions_retrieval_pipeline,
                 "sql_generation": generation.SQLGeneration(
                     **pipe_components["sql_generation"],
-                    engine_timeout=settings.engine_timeout,
                 ),
                 "sql_generation_reasoning": generation.SQLGenerationReasoning(
                     **pipe_components["sql_generation_reasoning"],
@@ -148,14 +144,8 @@ def create_service_container(
                 "sql_correction": _sql_correction_pipeline,
                 "followup_sql_generation": generation.FollowUpSQLGeneration(
                     **pipe_components["followup_sql_generation"],
-                    engine_timeout=settings.engine_timeout,
-                ),
-                "sql_regeneration": generation.SQLRegeneration(
-                    **pipe_components["sql_regeneration"],
-                    engine_timeout=settings.engine_timeout,
                 ),
                 "sql_functions_retrieval": _sql_functions_retrieval_pipeline,
-                "sql_executor": _sql_executor_pipeline,
             },
             allow_intent_classification=settings.allow_intent_classification,
             allow_sql_generation_reasoning=settings.allow_sql_generation_reasoning,
@@ -173,7 +163,6 @@ def create_service_container(
                 "sql_functions_retrieval": _sql_functions_retrieval_pipeline,
                 "sql_regeneration": generation.SQLRegeneration(
                     **pipe_components["sql_regeneration"],
-                    engine_timeout=settings.engine_timeout,
                 ),
                 "sql_correction": _sql_correction_pipeline,
             },
@@ -205,7 +194,6 @@ def create_service_container(
                 ),
                 "sql_answer": generation.SQLAnswer(
                     **pipe_components["sql_answer"],
-                    engine_timeout=settings.engine_timeout,
                 ),
             },
             **query_cache,
@@ -214,7 +202,6 @@ def create_service_container(
             pipelines={
                 "relationship_recommendation": generation.RelationshipRecommendation(
                     **pipe_components["relationship_recommendation"],
-                    engine_timeout=settings.engine_timeout,
                 )
             },
             **query_cache,
@@ -227,7 +214,6 @@ def create_service_container(
                 "db_schema_retrieval": _db_schema_retrieval_pipeline,
                 "sql_generation": generation.SQLGeneration(
                     **pipe_components["question_recommendation_sql_generation"],
-                    engine_timeout=settings.engine_timeout,
                 ),
                 "sql_pairs_retrieval": _sql_pair_retrieval_pipeline,
                 "instructions_retrieval": _instructions_retrieval_pipeline,
