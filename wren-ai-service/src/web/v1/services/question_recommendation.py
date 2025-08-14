@@ -164,17 +164,17 @@ class QuestionRecommendation:
         regenerate: bool = False
         allow_data_preview: bool = True
 
-    async def _recommend(self, request: dict, input: Request):
+    async def _recommend(self, request: dict):
         resp = await self._pipelines["question_recommendation"].run(**request)
         questions = resp.get("normalized", {}).get("questions", [])
         validation_tasks = [
             self._validate_question(
                 question,
-                input.event_id,
-                input.max_questions,
-                input.max_categories,
-                input.project_id,
-                input.allow_data_preview,
+                request["event_id"],
+                request["max_questions"],
+                request["max_categories"],
+                project_id=request["project_id"],
+                allow_data_preview=request["allow_data_preview"],
             )
             for question in questions
         ]
@@ -190,15 +190,27 @@ class QuestionRecommendation:
         trace_id = kwargs.get("trace_id")
 
         try:
+            mdl = orjson.loads(input.mdl)
+            retrieval_result = await self._pipelines["db_schema_retrieval"].run(
+                tables=[model["name"] for model in mdl["models"]],
+                project_id=input.project_id,
+            )
+            _retrieval_result = retrieval_result.get("construct_retrieval_results", {})
+            documents = _retrieval_result.get("retrieval_results", [])
+            table_ddls = [document.get("table_ddl") for document in documents]
+
             request = {
-                "mdl": orjson.loads(input.mdl),
+                "contexts": table_ddls,
                 "previous_questions": input.previous_questions,
                 "language": input.configurations.language,
                 "max_questions": input.max_questions,
                 "max_categories": input.max_categories,
+                "project_id": input.project_id,
+                "event_id": input.event_id,
+                "allow_data_preview": input.allow_data_preview,
             }
 
-            await self._recommend(request, input)
+            await self._recommend(request)
 
             resource = self._cache[input.event_id]
             resource.trace_id = trace_id
@@ -223,7 +235,6 @@ class QuestionRecommendation:
                     "categories": categories,
                     "max_categories": len(categories),
                 },
-                input,
             )
 
             self._cache[input.event_id].status = "finished"
