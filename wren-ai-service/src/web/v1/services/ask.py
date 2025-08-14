@@ -83,14 +83,14 @@ class _AskResultResponse(BaseModel):
     trace_id: Optional[str] = None
     is_followup: bool = False
     general_type: Optional[
-        Literal["MISLEADING_QUERY", "DATA_ASSISTANCE", "USER_GUIDE"]
+        Literal["MISLEADING_QUERY", "DATA_ASSISTANCE", "USER_GUIDE", "DATA_EXPLORATION"]
     ] = None
 
 
 class AskResultResponse(_AskResultResponse):
     is_followup: Optional[bool] = Field(False, exclude=True)
     general_type: Optional[
-        Literal["MISLEADING_QUERY", "DATA_ASSISTANCE", "USER_GUIDE"]
+        Literal["MISLEADING_QUERY", "DATA_ASSISTANCE", "USER_GUIDE", "DATA_EXPLORATION"]
     ] = Field(None, exclude=True)
 
 
@@ -227,6 +227,16 @@ class AskService:
                     )
 
                     if self._allow_intent_classification:
+                        last_sql_data = None
+                        if histories:
+                            if last_sql := histories[-1].sql:
+                                last_sql_data = (
+                                    await self._pipelines["sql_executor"].run(
+                                        sql=last_sql,
+                                        project_id=ask_request.project_id,
+                                    )
+                                )["execute_sql"]["results"]
+
                         intent_classification_result = (
                             await self._pipelines["intent_classification"].run(
                                 query=user_query,
@@ -235,6 +245,7 @@ class AskService:
                                 instructions=instructions,
                                 project_id=ask_request.project_id,
                                 configuration=ask_request.configurations,
+                                sql_data=last_sql_data,
                             )
                         ).get("post_process", {})
                         intent = intent_classification_result.get("intent")
@@ -314,6 +325,27 @@ class AskService:
                                 trace_id=trace_id,
                                 is_followup=True if histories else False,
                                 general_type="USER_GUIDE",
+                            )
+                            results["metadata"]["type"] = "GENERAL"
+                            return results
+                        elif intent == "DATA_EXPLORATION":
+                            asyncio.create_task(
+                                self._pipelines["data_exploration_assistance"].run(
+                                    query=user_query,
+                                    sql_data=last_sql_data,
+                                    language=ask_request.configurations.language,
+                                    query_id=ask_request.query_id,
+                                )
+                            )
+
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="finished",
+                                type="GENERAL",
+                                rephrased_question=rephrased_question,
+                                intent_reasoning=intent_reasoning,
+                                trace_id=trace_id,
+                                is_followup=True if histories else False,
+                                general_type="DATA_EXPLORATION",
                             )
                             results["metadata"]["type"] = "GENERAL"
                             return results
@@ -639,6 +671,8 @@ class AskService:
                     _pipeline_name = "data_assistance"
                 elif self._ask_results.get(query_id).general_type == "MISLEADING_QUERY":
                     _pipeline_name = "misleading_assistance"
+                elif self._ask_results.get(query_id).general_type == "DATA_EXPLORATION":
+                    _pipeline_name = "data_exploration_assistance"
             elif self._ask_results.get(query_id).status == "planning":
                 if self._ask_results.get(query_id).is_followup:
                     _pipeline_name = "followup_sql_generation_reasoning"
