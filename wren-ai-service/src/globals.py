@@ -146,6 +146,13 @@ def create_service_container(
                     **pipe_components["followup_sql_generation"],
                 ),
                 "sql_functions_retrieval": _sql_functions_retrieval_pipeline,
+                "sql_executor": retrieval.SQLExecutor(
+                    **pipe_components["sql_executor"],
+                    engine_timeout=settings.engine_timeout,
+                ),
+                "data_exploration_assistance": generation.DataExplorationAssistance(
+                    **pipe_components["data_exploration_assistance"],
+                ),
             },
             allow_intent_classification=settings.allow_intent_classification,
             allow_sql_generation_reasoning=settings.allow_sql_generation_reasoning,
