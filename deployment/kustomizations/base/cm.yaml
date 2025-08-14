@@ -160,10 +160,6 @@ data:
         llm: litellm_llm.default
       - name: question_recommendation
         llm: litellm_llm.default
-      - name: question_recommendation_db_schema_retrieval
-        llm: litellm_llm.default
-        embedder: litellm_embedder.default
-        document_store: qdrant
       - name: question_recommendation_sql_generation
         llm: litellm_llm.default
         engine: wren_ui
