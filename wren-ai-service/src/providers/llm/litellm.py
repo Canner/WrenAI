@@ -99,16 +99,16 @@ class LitellmLLMProvider(LLMProvider):
                 **(generation_kwargs or {}),
             }
 
-            allowed_params = (
-                ["reasoning_effort"] if self._model.startswith("gpt-5") else None
-            )
+            allowed_openai_params = generation_kwargs.get(
+                "allowed_openai_params", []
+            ) + (["reasoning_effort"] if self._model.startswith("gpt-5") else [])
 
             if self._has_fallbacks:
                 completion = await self._router.acompletion(
                     model=self._model,
                     messages=openai_formatted_messages,
                     stream=streaming_callback is not None,
-                    allowed_openai_params=allowed_params,
+                    allowed_openai_params=allowed_openai_params,
                     mock_testing_fallbacks=self._enable_fallback_testing,
                     **generation_kwargs,
                 )
@@ -121,7 +121,7 @@ class LitellmLLMProvider(LLMProvider):
                     timeout=self._timeout,
                     messages=openai_formatted_messages,
                     stream=streaming_callback is not None,
-                    allowed_openai_params=allowed_params,
+                    allowed_openai_params=allowed_openai_params,
                     **generation_kwargs,
                 )
 
