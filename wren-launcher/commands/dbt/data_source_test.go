@@ -20,8 +20,8 @@ func validatePostgresDataSource(t *testing.T, ds *WrenPostgresDataSource, expect
 	if ds.Host != testHost {
 		t.Errorf("Expected host '%s', got '%s'", testHost, ds.Host)
 	}
-	if ds.Port != 5432 {
-		t.Errorf("Expected port 5432, got %d", ds.Port)
+	if ds.Port != "5432" {
+		t.Errorf("Expected port 5432, got %s", ds.Port)
 	}
 	if ds.Database != expectedDB {
 		t.Errorf("Expected database '%s', got '%s'", expectedDB, ds.Database)
@@ -89,12 +89,12 @@ func TestFromDbtProfiles_PostgresWithDbName(t *testing.T) {
 				Target: "dev",
 				Outputs: map[string]DbtConnection{
 					"dev": {
-						Type:     pgType,
-						Host:     testHost,
+						Type:     "postgres",
+						Host:     "localhost",
 						Port:     5432,
-						Database: "jaffle_shop",
-						User:     testUser,
-						Password: testPassword,
+						DbName:   "jaffle_shop", // Using dbname instead of database
+						User:     "test_user",
+						Password: "test_pass",
 					},
 				},
 			},
@@ -115,7 +115,31 @@ func TestFromDbtProfiles_PostgresWithDbName(t *testing.T) {
 		t.Fatalf("Expected WrenPostgresDataSource, got %T", dataSources[0])
 	}
 
-	validatePostgresDataSource(t, ds, "jaffle_shop")
+	if ds.Host != "localhost" {
+		t.Errorf("Expected host 'localhost', got '%s'", ds.Host)
+	}
+	if ds.Port != "5432" {
+		t.Errorf("Expected port 5432, got %s", ds.Port)
+	}
+	if ds.Database != "jaffle_shop" {
+		t.Errorf("Expected database 'jaffle_shop', got '%s'", ds.Database)
+	}
+	if ds.User != "test_user" {
+		t.Errorf("Expected user 'test_user', got '%s'", ds.User)
+	}
+	if ds.Password != "test_pass" {
+		t.Errorf("Expected password 'test_pass', got '%s'", ds.Password)
+	}
+
+	// Test validation
+	if err := ds.Validate(); err != nil {
+		t.Errorf("Validation failed: %v", err)
+	}
+
+	// Test type
+	if ds.GetType() != "postgres" {
+		t.Errorf("Expected type 'postgres', got '%s'", ds.GetType())
+	}
 }
 
 func TestFromDbtProfiles_LocalFile(t *testing.T) {
@@ -231,7 +255,7 @@ func testDataSourceValidation(t *testing.T, testName string, validDS Validator, 
 func TestPostgresDataSourceValidation(t *testing.T) {
 	validDS := &WrenPostgresDataSource{
 		Host:     testHost,
-		Port:     5432,
+		Port:     "5432",
 		Database: "test",
 		User:     "user",
 	}
@@ -243,7 +267,7 @@ func TestPostgresDataSourceValidation(t *testing.T) {
 		{
 			"empty host",
 			&WrenPostgresDataSource{
-				Port:     5432,
+				Port:     "5432",
 				Database: "test",
 				User:     "user",
 			},
@@ -252,7 +276,7 @@ func TestPostgresDataSourceValidation(t *testing.T) {
 			"empty database",
 			&WrenPostgresDataSource{
 				Host: testHost,
-				Port: 5432,
+				Port: "5432",
 				User: "user",
 			},
 		},
@@ -260,7 +284,7 @@ func TestPostgresDataSourceValidation(t *testing.T) {
 			"invalid port",
 			&WrenPostgresDataSource{
 				Host:     testHost,
-				Port:     0,
+				Port:     "0",
 				Database: "test",
 				User:     "user",
 			},
@@ -268,6 +292,63 @@ func TestPostgresDataSourceValidation(t *testing.T) {
 	}
 
 	testDataSourceValidation(t, "postgres", validDS, invalidCases)
+}
+
+func TestMysqlDataSourceValidation(t *testing.T) {
+	// Test MySQL data source validation
+	tests := []struct {
+		name    string
+		ds      *WrenMysqlDataSource
+		wantErr bool
+	}{
+		{
+			name: "valid",
+			ds: &WrenMysqlDataSource{
+				Host:     "localhost",
+				Port:     "3306",
+				Database: "test",
+				User:     "user",
+			},
+			wantErr: false,
+		},
+		{
+			name: "empty host",
+			ds: &WrenMysqlDataSource{
+				Port:     "3306",
+				Database: "test",
+				User:     "user",
+			},
+			wantErr: true,
+		},
+		{
+			name: "empty database",
+			ds: &WrenMysqlDataSource{
+				Host: "localhost",
+				Port: "3306",
+				User: "user",
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid port",
+			ds: &WrenMysqlDataSource{
+				Host:     "localhost",
+				Port:     "",
+				Database: "test",
+				User:     "user",
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.ds.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
 }
 
 func TestGetActiveDataSources(t *testing.T) {
