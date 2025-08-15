@@ -134,13 +134,29 @@ def normalized(generate: dict) -> dict:
 
 
 @observe(capture_input=False)
-def validated(normalized: dict) -> dict:
-    relationships = normalized.get("relationships", [])
+def validated(normalized: dict, mdl: dict) -> dict:
+    model_columns = {
+        model["name"]: set(
+            [
+                column["name"]
+                for column in model.get("columns", [])
+                if not column.get("relationship")
+            ]
+        )
+        for model in mdl.get("models", [])
+    }
 
+    relationships = normalized.get("relationships", [])
     validated_relationships = [
         relationship
         for relationship in relationships
         if RelationType.is_include(relationship.get("type"))
+        and relationship.get("fromModel") in model_columns
+        and relationship.get("toModel") in model_columns
+        and relationship.get("fromColumn")
+        in model_columns.get(relationship.get("fromModel"))
+        and relationship.get("toColumn")
+        in model_columns.get(relationship.get("toModel"))
     ]
 
     return {"relationships": validated_relationships}
