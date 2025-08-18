@@ -123,7 +123,7 @@ class DDLChunker:
         models: List[Dict[str, Any]],
         relationships: List[Dict[str, Any]],
         column_batch_size: int,
-    ) -> List[str]:
+    ) -> List[Dict[str, str]]:
         def _model_command(model: Dict[str, Any]) -> dict:
             properties = model.get("properties", {})
 
@@ -228,7 +228,7 @@ class DDLChunker:
             + [_model_command(model)]
         ]
 
-    def _convert_views(self, views: List[Dict[str, Any]]) -> List[str]:
+    def _convert_views(self, views: List[Dict[str, Any]]) -> List[Dict[str, str]]:
         def _payload(view: Dict[str, Any]) -> dict:
             return {
                 "type": "VIEW",
@@ -243,7 +243,7 @@ class DDLChunker:
             {"name": view["name"], "payload": str(_payload(view))} for view in views
         ]
 
-    def _convert_metrics(self, metrics: List[Dict[str, Any]]) -> List[str]:
+    def _convert_metrics(self, metrics: List[Dict[str, Any]]) -> List[Dict[str, str]]:
         def _create_column(name: str, data_type: str, comment: str) -> dict:
             return {
                 "type": "COLUMN",

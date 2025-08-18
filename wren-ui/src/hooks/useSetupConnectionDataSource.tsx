@@ -71,6 +71,11 @@ export const transformFormToProperties = (
       configurations,
       extensions: properties.extensions.filter((i) => i),
     };
+  } else if (dataSourceType === DataSourceName.SNOWFLAKE) {
+    return {
+      ...properties,
+      ...getSnowflakeAuthentication(properties),
+    };
   }
 
   return {
@@ -93,7 +98,6 @@ export const transformPropertiesToForm = (
   dataSourceType: DataSourceName,
 ) => {
   if (dataSourceType === DataSourceName.BIG_QUERY) {
-    return { ...properties, credentials: undefined };
   } else if (dataSourceType === DataSourceName.DUCKDB) {
     const configurations = Object.entries(properties?.configurations || {}).map(
       ([key, value]) => ({ key, value }),
@@ -124,5 +128,23 @@ export const transformPropertiesToForm = (
     ...properties,
     // provide a password placeholder to UI
     password: properties?.password || PASSWORD_PLACEHOLDER,
+    privateKey: properties?.privateKey || undefined,
   };
 };
+
+function getSnowflakeAuthentication(properties: Record<string, any>) {
+  // Set password or private key to null if only one of them is provided
+  if (properties?.privateKey) {
+    return {
+      privateKey: properties?.privateKey,
+      password: null,
+    };
+  }
+  if (properties?.password && properties?.password !== PASSWORD_PLACEHOLDER) {
+    return {
+      password: properties?.password,
+      privateKey: null,
+    };
+  }
+  return {};
+}

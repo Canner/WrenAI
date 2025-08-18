@@ -316,15 +316,31 @@ const dataSource = {
 
   // Snowflake
   [DataSourceName.SNOWFLAKE]: {
-    sensitiveProps: ['password'],
+    sensitiveProps: ['password', 'privateKey'],
     toIbisConnectionInfo(connectionInfo) {
       const decryptedConnectionInfo = decryptConnectionInfo(
         DataSourceName.SNOWFLAKE,
         connectionInfo,
       );
-      const { user, password, account, database, schema } =
-        decryptedConnectionInfo as SNOWFLAKE_CONNECTION_INFO;
-      return { user, password, account, database, schema };
+      const {
+        user,
+        password,
+        account,
+        database,
+        schema,
+        warehouse,
+        privateKey,
+      } = decryptedConnectionInfo as SNOWFLAKE_CONNECTION_INFO;
+
+      return {
+        user,
+        account,
+        database,
+        schema,
+        warehouse: warehouse ?? undefined,
+        password: password ?? undefined,
+        private_key: privateKey ?? undefined,
+      };
     },
   } as IDataSourceConnectionInfo<
     SNOWFLAKE_CONNECTION_INFO,

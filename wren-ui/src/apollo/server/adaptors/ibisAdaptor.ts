@@ -60,10 +60,12 @@ export interface IbisTrinoConnectionInfo {
 
 export interface IbisSnowflakeConnectionInfo {
   user: string;
-  password: string;
   account: string;
   database: string;
   schema: string;
+  password?: string;
+  privateKey?: string;
+  warehouse?: string;
 }
 
 export interface IbisAthenaConnectionInfo {

@@ -29,7 +29,9 @@ func prepareProjectDir() string {
 	projectDir := path.Join(homedir, ".wrenai")
 
 	if _, err := os.Stat(projectDir); os.IsNotExist(err) {
-		os.Mkdir(projectDir, 0755)
+		if err := os.Mkdir(projectDir, 0750); err != nil {
+			return ""
+		}
 	}
 
 	return projectDir
@@ -109,7 +111,7 @@ func askForGenerationModel() (string, error) {
 
 	prompt := promptui.Select{
 		Label: "Select an OpenAI's generation model",
-		Items: []string{"gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano"},
+		Items: []string{"gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "gpt-5", "gpt-5-mini", "gpt-5-nano"},
 	}
 
 	_, result, err := prompt.Run()
@@ -190,7 +192,8 @@ func Launch() {
 	defer func() {
 		if r := recover(); r != nil {
 			pterm.Error.Println("An error occurred:", r)
-			fmt.Scanf("h")
+			var dummy string
+			_, _ = fmt.Scanf("%s", &dummy)
 		}
 	}()
 
@@ -370,10 +373,11 @@ func Launch() {
 
 	// open browser
 	pterm.Info.Println("Opening browser")
-	utils.Openbrowser(uiUrl)
+	_ = utils.Openbrowser(uiUrl)
 
 	pterm.Info.Println("You can now safely close this terminal window")
-	fmt.Scanf("h")
+	var dummy string
+	_, _ = fmt.Scanf("%s", &dummy)
 }
 
 func getOpenaiGenerationModel() (string, bool) {
@@ -389,6 +393,9 @@ func getOpenaiGenerationModel() (string, bool) {
 			"gpt-4.1":      true,
 			"gpt-4.1-mini": true,
 			"gpt-4.1-nano": true,
+			"gpt-5":        true,
+			"gpt-5-mini":   true,
+			"gpt-5-nano":   true,
 		}
 		if !validModels[openaiGenerationModel] {
 			pterm.Error.Println("Invalid generation model", openaiGenerationModel)
@@ -461,7 +468,7 @@ func validateOpenaiApiKey(apiKey string) bool {
 	// insufficient credit balance error
 	if err != nil {
 		pterm.Error.Println("Invalid API key", err)
-		fmt.Scanln()
+		_, _ = fmt.Scanln()
 		return true
 	}
 
@@ -504,7 +511,7 @@ func processDbtProject(projectDir string) (string, error) {
 
 	// create target directory in project dir
 	targetDir := filepath.Join(projectDir, "target")
-	err = os.MkdirAll(targetDir, 0755)
+	err = os.MkdirAll(targetDir, 0750)
 	if err != nil {
 		return "", fmt.Errorf("failed to create target directory: %w", err)
 	}

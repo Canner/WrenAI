@@ -33,6 +33,7 @@ const SENSITIVE_PROPERTY_NAME = new Set([
   'credentials',
   'password',
   'awsSecretKey',
+  'privateKey',
 ]);
 export interface ProjectData {
   displayName: string;

@@ -52,13 +52,11 @@ class SqlFunction:
 async def get_functions(
     engine: WrenIbis,
     data_source: str,
-    engine_timeout: float = 30.0,
 ) -> List[SqlFunction]:
     async with aiohttp.ClientSession() as session:
         func_list = await engine.get_func_list(
             session=session,
             data_source=data_source,
-            timeout=engine_timeout,
         )
 
         return [
@@ -86,7 +84,6 @@ class SqlFunctions(BasicPipeline):
         self,
         engine: Engine,
         document_store_provider: DocumentStoreProvider,
-        engine_timeout: float = 30.0,
         ttl: int = 60 * 60 * 24,
         **kwargs,
     ) -> None:
@@ -97,10 +94,6 @@ class SqlFunctions(BasicPipeline):
         self._components = {
             "engine": engine,
             "ttl_cache": self._cache,
-        }
-
-        self._configs = {
-            "engine_timeout": engine_timeout,
         }
 
         super().__init__(
@@ -127,7 +120,6 @@ class SqlFunctions(BasicPipeline):
             "data_source": _data_source,
             "project_id": project_id,
             **self._components,
-            **self._configs,
         }
         result = await self._pipe.execute(["cache"], inputs=input)
         return result["cache"]
