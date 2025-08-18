@@ -1,54 +1,76 @@
+# you should rename this file to config.yaml and put it in ~/.wrenai
+# please pay attention to the comments starting with # and adjust the config accordingly, steps:
+# 1. you need to get your Zhipu AI API key from https://open.bigmodel.cn/
+# 2. set your API key in environment variable
+# 3. fill in embedding model dimension in the document_store section
+# 4. you need to use the correct pipe definitions based on https://raw.githubusercontent.com/canner/WrenAI/<WRENAI_VERSION_NUMBER>/docker/config.example.yaml
+# 5. you need to fill in correct llm and embedding models in the pipe definitions
+
 type: llm
 provider: litellm_llm
-timeout: 120
 models:
-  - alias: default
-    model: gpt-4.1-nano-2025-04-14
-    context_window_size: 1000000
+  # GLM-4.5 with thinking disabled - Method 1: Using allowed_openai_params
+  - api_base: https://open.bigmodel.cn/api/paas/v4/
+    model: openai/glm-4.5
+    alias: default
+    timeout: 900
     kwargs:
-      max_tokens: 4096
       n: 1
-      seed: 0
-      temperature: 0
-  - model: gpt-4.1-mini-2025-04-14
-    context_window_size: 1000000
+      temperature: 0.1
+      top_p: 0.8
+      extra_body:
+        chat_template_kwargs:
+          enable_thinking: false
+      allowed_openai_params: ["extra_body"]  # Force LiteLLM to allow extra_body
+  # GLM-4.5 fast mode
+  - api_base: https://open.bigmodel.cn/api/paas/v4/
+    model: openai/glm-4.5
+    alias: glm45-fast
+    timeout: 900
     kwargs:
-      max_tokens: 4096
       n: 1
-      seed: 0
-      temperature: 0
-  - model: gpt-4.1-2025-04-14
-    context_window_size: 1000000
+      temperature: 0.1
+      top_p: 0.8
+      extra_body:
+        chat_template_kwargs:
+          enable_thinking: false
+      allowed_openai_params: ["extra_body"]
+  # GLM-4.5 with thinking enabled for complex tasks
+  - api_base: https://open.bigmodel.cn/api/paas/v4/
+    model: openai/glm-4.5
+    alias: glm45-thinking
+    timeout: 1200  # Longer timeout for thinking mode
     kwargs:
-      max_tokens: 4096
       n: 1
-      seed: 0
-      temperature: 0
-  - model: gpt-5-nano-2025-08-07
-    context_window_size: 380000
+      temperature: 0.3
+      top_p: 0.9
+      extra_body:
+        chat_template_kwargs:
+          enable_thinking: true
+      allowed_openai_params: ["extra_body"]
+  # GLM-4.5 for JSON responses with thinking disabled
+  - api_base: https://open.bigmodel.cn/api/paas/v4/
+    model: openai/glm-4.5
+    alias: glm45-json
+    timeout: 900
     kwargs:
-      max_completion_tokens: 4096
       n: 1
-      seed: 0
-      reasoning_effort: minimal
-  - model: gpt-5-mini-2025-08-07
-    context_window_size: 380000
-    kwargs:
-      max_completion_tokens: 4096
-      n: 1
-      seed: 0
-      reasoning_effort: minimal
-  - model: gpt-5-2025-08-07
-    context_window_size: 380000
-    kwargs:
-      max_completion_tokens: 4096
-      n: 1
-      seed: 0
-      reasoning_effort: minimal
+      temperature: 0.05
+      top_p: 0.7
+      response_format:
+        type: json_object
+      extra_body:
+        chat_template_kwargs:
+          enable_thinking: false
+      allowed_openai_params: ["extra_body"]
+
 ---
 type: embedder
 provider: litellm_embedder
 models:
+  # define OPENAI_API_KEY=<api_key> in ~/.wrenai/.env if you are using openai embedding model
+  # GLM series doesn't have dedicated embedding models yet, so we use OpenAI embedding
+  # please refer to LiteLLM documentation for more details: https://docs.litellm.ai/docs/providers
   - model: text-embedding-3-large
     alias: default
     timeout: 120
@@ -56,31 +78,25 @@ models:
 ---
 type: engine
 provider: wren_ui
-endpoint: http://localhost:3000
+endpoint: http://wren-ui:3000
 
 ---
 type: engine
 provider: wren_ibis
-endpoint: http://localhost:8000
-source: bigquery
-manifest: "" # base64 encoded string of the MDL
-connection_info: "" # base64 encoded string of the connection info
-
----
-type: engine
-provider: wren_engine
-endpoint: http://localhost:8080
-manifest: ""
+endpoint: http://ibis-server:8000
 
 ---
 type: document_store
 provider: qdrant
-location: http://localhost:6333
-embedding_model_dim: 3072
+location: http://qdrant:6333
+embedding_model_dim: 3072  # text-embedding-3-large dimension
 timeout: 120
-recreate_index: false
+recreate_index: true
 
 ---
+# please change the llm and embedder names to the ones you want to use
+# the format of llm and embedder should be <provider>.<model_name> such as litellm_llm.glm45-fast
+# the pipes may be not the latest version, please refer to the latest version: https://raw.githubusercontent.com/canner/WrenAI/<WRENAI_VERSION_NUMBER>/docker/config.example.yaml
 type: pipeline
 pipes:
   - name: db_schema_indexing
@@ -112,13 +128,18 @@ pipes:
     engine: wren_ui
     document_store: qdrant
   - name: sql_answer
-    llm: litellm_llm.default
+    llm: litellm_llm.glm45-fast
   - name: semantics_description
     llm: litellm_llm.default
   - name: relationship_recommendation
     llm: litellm_llm.default
+    engine: wren_ui
   - name: question_recommendation
     llm: litellm_llm.default
+  - name: question_recommendation_db_schema_retrieval
+    llm: litellm_llm.default
+    embedder: litellm_embedder.default
+    document_store: qdrant
   - name: question_recommendation_sql_generation
     llm: litellm_llm.default
     engine: wren_ui
@@ -134,7 +155,7 @@ pipes:
   - name: misleading_assistance
     llm: litellm_llm.default
   - name: data_assistance
-    llm: litellm_llm.default
+    llm: litellm_llm.glm45-fast
   - name: sql_pairs_indexing
     document_store: qdrant
     embedder: litellm_embedder.default
@@ -151,14 +172,12 @@ pipes:
   - name: sql_question_generation
     llm: litellm_llm.default
   - name: sql_generation_reasoning
-    llm: litellm_llm.default
+    llm: litellm_llm.glm45-thinking
   - name: followup_sql_generation_reasoning
-    llm: litellm_llm.default
+    llm: litellm_llm.glm45-thinking
   - name: sql_regeneration
     llm: litellm_llm.default
     engine: wren_ui
-  - name: evaluation
-    llm: litellm_llm.default
   - name: instructions_indexing
     embedder: litellm_embedder.default
     document_store: qdrant
@@ -175,25 +194,21 @@ pipes:
 
 ---
 settings:
-  host: 127.0.0.1
-  port: 5556
-  doc_endpoint: https://docs.getwren.ai
-  is_oss: true
   engine_timeout: 30
   column_indexing_batch_size: 50
   table_retrieval_size: 10
   table_column_retrieval_size: 100
-  query_cache_maxsize: 1000
   allow_intent_classification: true
   allow_sql_generation_reasoning: true
   allow_sql_functions_retrieval: true
   enable_column_pruning: false
   max_sql_correction_retries: 3
+  query_cache_maxsize: 1000
   query_cache_ttl: 3600
   langfuse_host: https://cloud.langfuse.com
   langfuse_enable: true
-  logging_level: INFO
-  development: false
+  logging_level: DEBUG
+  development: true
   historical_question_retrieval_similarity_threshold: 0.9
   sql_pairs_similarity_threshold: 0.7
   sql_pairs_retrieval_max_size: 10

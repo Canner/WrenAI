@@ -4,6 +4,46 @@ import (
 	"testing"
 )
 
+// Test constants
+const (
+	testHost     = "localhost"
+	testUser     = "test_user"
+	testPassword = "test_pass"
+	pgType       = "postgres"
+	duckdbType   = "duckdb"
+)
+
+// Helper function to validate PostgreSQL data source
+func validatePostgresDataSource(t *testing.T, ds *WrenPostgresDataSource, expectedDB string) {
+	t.Helper()
+
+	if ds.Host != testHost {
+		t.Errorf("Expected host '%s', got '%s'", testHost, ds.Host)
+	}
+	if ds.Port != 5432 {
+		t.Errorf("Expected port 5432, got %d", ds.Port)
+	}
+	if ds.Database != expectedDB {
+		t.Errorf("Expected database '%s', got '%s'", expectedDB, ds.Database)
+	}
+	if ds.User != testUser {
+		t.Errorf("Expected user '%s', got '%s'", testUser, ds.User)
+	}
+	if ds.Password != testPassword {
+		t.Errorf("Expected password '%s', got '%s'", testPassword, ds.Password)
+	}
+
+	// Test validation
+	if err := ds.Validate(); err != nil {
+		t.Errorf("Validation failed: %v", err)
+	}
+
+	// Test type
+	if ds.GetType() != pgType {
+		t.Errorf("Expected type '%s', got '%s'", pgType, ds.GetType())
+	}
+}
+
 func TestFromDbtProfiles_Postgres(t *testing.T) {
 	// Test PostgreSQL connection conversion
 	profiles := &DbtProfiles{
@@ -12,12 +52,12 @@ func TestFromDbtProfiles_Postgres(t *testing.T) {
 				Target: "dev",
 				Outputs: map[string]DbtConnection{
 					"dev": {
-						Type:     "postgres",
-						Host:     "localhost",
+						Type:     pgType,
+						Host:     testHost,
 						Port:     5432,
 						Database: "test_db",
-						User:     "test_user",
-						Password: "test_pass",
+						User:     testUser,
+						Password: testPassword,
 					},
 				},
 			},
@@ -38,31 +78,44 @@ func TestFromDbtProfiles_Postgres(t *testing.T) {
 		t.Fatalf("Expected WrenPostgresDataSource, got %T", dataSources[0])
 	}
 
-	if ds.Host != "localhost" {
-		t.Errorf("Expected host 'localhost', got '%s'", ds.Host)
-	}
-	if ds.Port != 5432 {
-		t.Errorf("Expected port 5432, got %d", ds.Port)
-	}
-	if ds.Database != "test_db" {
-		t.Errorf("Expected database 'test_db', got '%s'", ds.Database)
-	}
-	if ds.User != "test_user" {
-		t.Errorf("Expected user 'test_user', got '%s'", ds.User)
-	}
-	if ds.Password != "test_pass" {
-		t.Errorf("Expected password 'test_pass', got '%s'", ds.Password)
+	validatePostgresDataSource(t, ds, "test_db")
+}
+
+func TestFromDbtProfiles_PostgresWithDbName(t *testing.T) {
+	// Test PostgreSQL connection conversion with dbname field (PostgreSQL specific)
+	profiles := &DbtProfiles{
+		Profiles: map[string]DbtProfile{
+			"test_profile": {
+				Target: "dev",
+				Outputs: map[string]DbtConnection{
+					"dev": {
+						Type:     pgType,
+						Host:     testHost,
+						Port:     5432,
+						Database: "jaffle_shop",
+						User:     testUser,
+						Password: testPassword,
+					},
+				},
+			},
+		},
 	}
 
-	// Test validation
-	if err := ds.Validate(); err != nil {
-		t.Errorf("Validation failed: %v", err)
+	dataSources, err := FromDbtProfiles(profiles)
+	if err != nil {
+		t.Fatalf("FromDbtProfiles failed: %v", err)
 	}
 
-	// Test type
-	if ds.GetType() != "postgres" {
-		t.Errorf("Expected type 'postgres', got '%s'", ds.GetType())
+	if len(dataSources) != 1 {
+		t.Fatalf("Expected 1 data source, got %d", len(dataSources))
 	}
+
+	ds, ok := dataSources[0].(*WrenPostgresDataSource)
+	if !ok {
+		t.Fatalf("Expected WrenPostgresDataSource, got %T", dataSources[0])
+	}
+
+	validatePostgresDataSource(t, ds, "jaffle_shop")
 }
 
 func TestFromDbtProfiles_LocalFile(t *testing.T) {
@@ -73,7 +126,7 @@ func TestFromDbtProfiles_LocalFile(t *testing.T) {
 				Target: "dev",
 				Outputs: map[string]DbtConnection{
 					"dev": {
-						Type: "duckdb",
+						Type: duckdbType,
 						Path: "/abs_path/jaffle_shop.duckdb",
 					},
 				},
@@ -98,8 +151,8 @@ func TestFromDbtProfiles_LocalFile(t *testing.T) {
 	if ds.Url != "/abs_path" {
 		t.Errorf("Expected url '/abs_path', got '%s'", ds.Url)
 	}
-	if ds.Format != "duckdb" {
-		t.Errorf("Expected format 'duckdb', got '%s'", ds.Format)
+	if ds.Format != duckdbType {
+		t.Errorf("Expected format '%s', got '%s'", duckdbType, ds.Format)
 	}
 
 	// Test validation
@@ -148,61 +201,73 @@ func TestFromDbtProfiles_NilProfiles(t *testing.T) {
 	}
 }
 
+// Validator interface for data sources
+type Validator interface {
+	Validate() error
+}
+
+// Helper function to test data source validation
+func testDataSourceValidation(t *testing.T, testName string, validDS Validator, invalidDSCases []struct {
+	name string
+	ds   Validator
+}) {
+	t.Helper()
+
+	t.Run(testName+" valid", func(t *testing.T) {
+		if err := validDS.Validate(); err != nil {
+			t.Errorf("Valid data source validation failed: %v", err)
+		}
+	})
+
+	for _, tt := range invalidDSCases {
+		t.Run(testName+" "+tt.name, func(t *testing.T) {
+			if err := tt.ds.Validate(); err == nil {
+				t.Errorf("Expected validation error for %s, but got none", tt.name)
+			}
+		})
+	}
+}
+
 func TestPostgresDataSourceValidation(t *testing.T) {
-	// Test PostgreSQL data source validation
-	tests := []struct {
-		name    string
-		ds      *WrenPostgresDataSource
-		wantErr bool
+	validDS := &WrenPostgresDataSource{
+		Host:     testHost,
+		Port:     5432,
+		Database: "test",
+		User:     "user",
+	}
+
+	invalidCases := []struct {
+		name string
+		ds   Validator
 	}{
 		{
-			name: "valid",
-			ds: &WrenPostgresDataSource{
-				Host:     "localhost",
+			"empty host",
+			&WrenPostgresDataSource{
 				Port:     5432,
 				Database: "test",
 				User:     "user",
 			},
-			wantErr: false,
 		},
 		{
-			name: "empty host",
-			ds: &WrenPostgresDataSource{
-				Port:     5432,
-				Database: "test",
-				User:     "user",
-			},
-			wantErr: true,
-		},
-		{
-			name: "empty database",
-			ds: &WrenPostgresDataSource{
-				Host: "localhost",
+			"empty database",
+			&WrenPostgresDataSource{
+				Host: testHost,
 				Port: 5432,
 				User: "user",
 			},
-			wantErr: true,
 		},
 		{
-			name: "invalid port",
-			ds: &WrenPostgresDataSource{
-				Host:     "localhost",
+			"invalid port",
+			&WrenPostgresDataSource{
+				Host:     testHost,
 				Port:     0,
 				Database: "test",
 				User:     "user",
 			},
-			wantErr: true,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.ds.Validate()
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
+	testDataSourceValidation(t, "postgres", validDS, invalidCases)
 }
 
 func TestGetActiveDataSources(t *testing.T) {
@@ -285,7 +350,7 @@ func TestGetDataSourceByType(t *testing.T) {
 						User:     "user",
 					},
 					"file_dev": {
-						Type: "duckdb",
+						Type: duckdbType,
 						Path: "/data/test.csv",
 					},
 					"postgres_prod": {

@@ -29,7 +29,6 @@ class SQLGenPostProcessor:
     async def run(
         self,
         replies: List[str] | List[List[str]],
-        timeout: float = 30.0,
         project_id: str | None = None,
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
@@ -51,7 +50,6 @@ class SQLGenPostProcessor:
             ) = await self._classify_generation_result(
                 cleaned_generation_result,
                 project_id=project_id,
-                timeout=timeout,
                 use_dry_plan=use_dry_plan,
                 allow_dry_plan_fallback=allow_dry_plan_fallback,
                 data_source=data_source,
@@ -73,7 +71,6 @@ class SQLGenPostProcessor:
     async def _classify_generation_result(
         self,
         generation_result: str,
-        timeout: float,
         project_id: str | None = None,
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
@@ -93,7 +90,6 @@ class SQLGenPostProcessor:
                         session,
                         quoted_sql,
                         data_source,
-                        timeout=timeout,
                         allow_fallback=allow_dry_plan_fallback,
                     )
 
@@ -116,7 +112,6 @@ class SQLGenPostProcessor:
                         quoted_sql,
                         session,
                         project_id=project_id,
-                        timeout=timeout,
                         limit=1,
                         dry_run=True,
                     )
@@ -141,7 +136,6 @@ class SQLGenPostProcessor:
                         quoted_sql,
                         session,
                         project_id=project_id,
-                        timeout=timeout,
                         limit=1,
                         dry_run=False,
                     )

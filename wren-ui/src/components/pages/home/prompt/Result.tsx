@@ -4,6 +4,7 @@ import { Button } from 'antd';
 import styled from 'styled-components';
 import { PROCESS_STATE } from '@/utils/enum';
 import { attachLoading } from '@/utils/helper';
+import { BrainSVG } from '@/utils/svgs';
 import CloseOutlined from '@ant-design/icons/CloseOutlined';
 import StopOutlined from '@ant-design/icons/StopFilled';
 import LoadingOutlined from '@ant-design/icons/LoadingOutlined';
@@ -30,6 +31,11 @@ const StyledResult = styled.div`
   box-shadow:
     rgba(0, 0, 0, 0.1) 0px 10px 15px -3px,
     rgba(0, 0, 0, 0.05) 0px 4px 6px -2px;
+
+  .adm-brain-svg {
+    width: 14px;
+    height: 14px;
+  }
 `;
 
 interface Props {
@@ -207,10 +213,18 @@ const GeneralAnswer = (props: Props) => {
         </Button>
       </div>
       <div className="py-3">
+        <div className="bg-gray-2 gray-6 py-2 px-3">
+          <div className="d-flex align-center">
+            <BrainSVG className="mr-2 adm-brain-svg" />
+            <span className="text-medium ">User Intent Recognized</span>
+          </div>
+          <div style={{ paddingLeft: 22 }}>{data.intentReasoning}</div>
+        </div>
+
         <div
           ref={$wrapper}
           className="py-2 px-3"
-          style={{ maxHeight: 'calc(100vh - 420px)', overflowY: 'auto' }}
+          style={{ maxHeight: 'calc(100vh - 480px)', overflowY: 'auto' }}
         >
           <MarkdownBlock content={askingStreamTask} />
           {isDone && (

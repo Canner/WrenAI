@@ -5,6 +5,12 @@ import (
 	"runtime"
 )
 
+// Platform constants
+const (
+	platformLinuxAmd64 = "linux/amd64"
+	platformLinuxArm64 = "linux/arm64"
+)
+
 // private variable within the config package
 var disableTelemetry bool
 var openaiAPIKey string
@@ -33,18 +39,18 @@ func GetPlatform() string {
 	switch runtime.GOOS {
 	case "darwin":
 		if runtime.GOARCH == "arm64" {
-			return "linux/arm64"
+			return platformLinuxArm64
 		}
-		return "linux/amd64"
+		return platformLinuxAmd64
 	case "linux":
 		if runtime.GOARCH == "arm64" {
-			return "linux/arm64"
+			return platformLinuxArm64
 		}
-		return "linux/amd64"
+		return platformLinuxAmd64
 	case "windows":
-		return "linux/amd64" // Windows typically uses amd64
+		return platformLinuxAmd64 // Windows typically uses amd64
 	default:
-		return "linux/amd64" // Default to amd64 for unknown platforms
+		return platformLinuxAmd64 // Default to amd64 for unknown platforms
 	}
 }
 

@@ -17,6 +17,78 @@ from src.utils import trace_cost
 logger = logging.getLogger("wren-ai-service")
 
 
+system_prompt = """
+I have a data model represented in JSON format, with the following structure:
+
+```
+[
+    {'name': 'model', 'columns': [
+            {'name': 'column_1', 'type': 'type', 'properties': {}
+            },
+            {'name': 'column_2', 'type': 'type', 'properties': {}
+            },
+            {'name': 'column_3', 'type': 'type', 'properties': {}
+            }
+        ], 'properties': {}
+    }
+]
+```
+
+Your task is to update this JSON structure by adding a `description` field inside both the `properties` attribute of each `column` and the `model` itself.
+Each `description` should be derived from a user-provided input that explains the purpose or context of the `model` and its respective columns.
+Follow these steps:
+1. **For the `model`**: Prompt the user to provide a brief description of the model's overall purpose or its context. Insert this description in the `properties` field of the `model`.
+2. **For each `column`**: Ask the user to describe each column's role or significance. Each column's description should be added under its respective `properties` field in the format: `'description': 'user-provided text'`.
+3. Ensure that the output is a well-formatted JSON structure, preserving the input's original format and adding the appropriate `description` fields.
+
+### Output Format:
+
+```
+{
+    "models": [
+        {
+        "name": "model",
+        "columns": [
+            {
+                "name": "column_1",
+                "properties": {
+                    "description": "<description for column_1>"
+                }
+            },
+            {
+                "name": "column_2",
+                "properties": {
+                    "description": "<description for column_1>"
+                }
+            },
+            {
+                "name": "column_3",
+                "properties": {
+                    "description": "<description for column_1>"
+                }
+            }
+        ],
+        "properties": {
+                "description": "<description for model>"
+            }
+        }
+    ]
+}
+```
+
+Make sure that the descriptions are concise, informative, and contextually appropriate based on the input provided by the user.
+"""
+
+user_prompt_template = """
+### Input:
+User's prompt: {{ user_prompt }}
+Picked models: {{ picked_models }}
+Localization Language: {{ language }}
+
+Please provide a brief description for the model and each column based on the user's prompt.
+"""
+
+
 ## Start of Pipeline
 @observe(capture_input=False)
 def picked_models(mdl: dict, selected_models: list[str]) -> list[dict]:
@@ -139,77 +211,6 @@ SEMANTICS_DESCRIPTION_MODEL_KWARGS = {
         },
     }
 }
-
-system_prompt = """
-I have a data model represented in JSON format, with the following structure:
-
-```
-[
-    {'name': 'model', 'columns': [
-            {'name': 'column_1', 'type': 'type', 'properties': {}
-            },
-            {'name': 'column_2', 'type': 'type', 'properties': {}
-            },
-            {'name': 'column_3', 'type': 'type', 'properties': {}
-            }
-        ], 'properties': {}
-    }
-]
-```
-
-Your task is to update this JSON structure by adding a `description` field inside both the `properties` attribute of each `column` and the `model` itself.
-Each `description` should be derived from a user-provided input that explains the purpose or context of the `model` and its respective columns.
-Follow these steps:
-1. **For the `model`**: Prompt the user to provide a brief description of the model's overall purpose or its context. Insert this description in the `properties` field of the `model`.
-2. **For each `column`**: Ask the user to describe each column's role or significance. Each column's description should be added under its respective `properties` field in the format: `'description': 'user-provided text'`.
-3. Ensure that the output is a well-formatted JSON structure, preserving the input's original format and adding the appropriate `description` fields.
-
-### Output Format:
-
-```
-{
-    "models": [
-        {
-        "name": "model",
-        "columns": [
-            {
-                "name": "column_1",
-                "properties": {
-                    "description": "<description for column_1>"
-                }
-            },
-            {
-                "name": "column_2",
-                "properties": {
-                    "description": "<description for column_1>"
-                }
-            },
-            {
-                "name": "column_3",
-                "properties": {
-                    "description": "<description for column_1>"
-                }
-            }
-        ],
-        "properties": {
-                "description": "<description for model>"
-            }
-        }
-    ]
-}
-```
-
-Make sure that the descriptions are concise, informative, and contextually appropriate based on the input provided by the user.
-"""
-
-user_prompt_template = """
-### Input:
-User's prompt: {{ user_prompt }}
-Picked models: {{ picked_models }}
-Localization Language: {{ language }}
-
-Please provide a brief description for the model and each column based on the user's prompt.
-"""
 
 
 class SemanticsDescription(BasicPipeline):

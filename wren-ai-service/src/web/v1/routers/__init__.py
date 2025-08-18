@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from src.web.v1.routers import (
     ask,
+    ask_feedbacks,
     chart,
     chart_adjustment,
     instructions,
@@ -17,6 +18,7 @@ from src.web.v1.routers import (
 
 router = APIRouter()
 router.include_router(ask.router)
+router.include_router(ask_feedbacks.router)
 router.include_router(question_recommendation.router)
 router.include_router(relationship_recommendation.router)
 router.include_router(semantics_description.router)
