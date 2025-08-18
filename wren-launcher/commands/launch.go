@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.comcom/Canner/WrenAI/wren-launcher/config"
+	"github.com/Canner/WrenAI/wren-launcher/config"
 	utils "github.com/Canner/WrenAI/wren-launcher/utils"
 	"github.com/common-nighthawk/go-figure"
 	"github.com/manifoldco/promptui"
@@ -537,6 +537,7 @@ func processDbtProject(projectDir string) (string, error) {
 	includeStagingModels, err := askForIncludeStagingModels()
 	if err != nil {
 		pterm.Warning.Println("Could not get staging model preference, defaulting to 'No'.")
+        includeStagingModels = false
 	}
 
 	// Use the core conversion function from dbt package, passing the user's choice

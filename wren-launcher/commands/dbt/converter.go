@@ -512,7 +512,7 @@ func generateRelationships(manifestData map[string]interface{}) []Relationship {
 	seen := make(map[string]struct{}, len(relationships))
 	var unique []Relationship
 	for _, r := range relationships {
-		key := r.Name  "|"  r.JoinType  "|"  r.Condition
+		key := r.Name + "|" + r.JoinType + "|" + r.Condition
 		if _, ok := seen[key]; ok {
 			continue
 		}
@@ -521,7 +521,6 @@ func generateRelationships(manifestData map[string]interface{}) []Relationship {
 	}
 	return unique
  }
-}
 
 // parseTestsForRelationships is a helper function to extract relationship tests from a column or its fields.
 func parseTestsForRelationships(fromModelName, columnName string, colMap map[string]interface{}) []Relationship {
