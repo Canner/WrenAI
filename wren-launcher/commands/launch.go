@@ -187,7 +187,6 @@ func askForDbtTarget() (string, error) {
 	return result, nil
 }
 
-// *** NEW FUNCTION ADDED HERE ***
 func askForIncludeStagingModels() (bool, error) {
 	prompt := promptui.Select{
 		Label: "Include staging models (stg_*, staging_*)?",
@@ -534,7 +533,6 @@ func processDbtProject(projectDir string) (string, error) {
 		return "", err
 	}
 
-	// *** MODIFIED SECTION HERE ***
 	// Ask the user whether to include staging models
 	includeStagingModels, err := askForIncludeStagingModels()
 	if err != nil {
