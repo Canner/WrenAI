@@ -1,6 +1,7 @@
 package dbt
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -183,7 +184,7 @@ func convertToMysqlDataSource(conn DbtConnection) (*WrenMysqlDataSource, error) 
 
 // convertToBigQueryDataSource converts to BigQuery data source
 func convertToBigQueryDataSource(conn DbtConnection) (*WrenBigQueryDataSource, error) {
-	// We need to extract the keyfile content, which might be in the 'Additional' map
+	// Extract the keyfile content from the 'Additional' map
 	var keyfileJSON string
 	if kfj, exists := conn.Additional["keyfile_json"]; exists {
 		if kfjStr, ok := kfj.(string); ok {
@@ -191,12 +192,23 @@ func convertToBigQueryDataSource(conn DbtConnection) (*WrenBigQueryDataSource, e
 		}
 	}
 
+	if keyfileJSON == "" {
+		return nil, fmt.Errorf("keyfile_json not found or is empty in BigQuery connection details")
+	}
+
+	// Validate that keyfile_json is valid JSON
+	var js map[string]interface{}
+	if err := json.Unmarshal([]byte(keyfileJSON), &js); err != nil {
+		return nil, fmt.Errorf("keyfile_json is not valid JSON: %w", err)
+	}
+
+	// Base64 encode the keyfile JSON string for the credentials field
+	credentials := base64.StdEncoding.EncodeToString([]byte(keyfileJSON))
+
 	ds := &WrenBigQueryDataSource{
 		Project:     conn.Project,
 		Dataset:     conn.Dataset,
-		Method:      conn.Method,
-		Keyfile:     conn.Keyfile,
-		KeyfileJSON: keyfileJSON,
+		Credentials: credentials,
 	}
 	return ds, nil
 }
@@ -365,11 +377,9 @@ func (ds *WrenMysqlDataSource) MapType(sourceType string) string {
 }
 
 type WrenBigQueryDataSource struct {
-	Project     string `json:"project"`
-	Dataset     string `json:"dataset"`
-	Method      string `json:"method"`
-	Keyfile     string `json:"keyfile,omitempty"`
-	KeyfileJSON string `json:"keyfile_json,omitempty"`
+	Project     string `json:"project_id"`
+	Dataset     string `json:"dataset_id"`
+	Credentials string `json:"credentials"`
 }
 
 // GetType implements DataSource interface
@@ -380,33 +390,14 @@ func (ds *WrenBigQueryDataSource) GetType() string {
 // Validate implements DataSource interface
 func (ds *WrenBigQueryDataSource) Validate() error {
 	if ds.Project == "" {
-		return fmt.Errorf("project cannot be empty")
+		return fmt.Errorf("project_id cannot be empty")
 	}
 	if ds.Dataset == "" {
-		return fmt.Errorf("dataset cannot be empty")
+		return fmt.Errorf("dataset_id cannot be empty")
 	}
-
-	// Validate based on the authentication method
-	switch ds.Method {
-	case "service-account":
-		if ds.Keyfile == "" {
-			return fmt.Errorf("keyfile cannot be empty for method 'service-account'")
-		}
-	case "service-account-json":
-		if ds.KeyfileJSON == "" {
-			return fmt.Errorf("keyfile_json cannot be empty for method 'service-account-json'")
-		}
-		// Validate that keyfile_json is valid JSON
-		var js map[string]interface{}
-		if json.Unmarshal([]byte(ds.KeyfileJSON), &js) != nil {
-			return fmt.Errorf("keyfile_json is not valid JSON")
-		}
-	case "oauth", "oauth-secrets":
-		return fmt.Errorf("authentication method '%s' is not supported; please use a service account method", ds.Method)
-	default:
-		return fmt.Errorf("unsupported or missing authentication method: '%s'", ds.Method)
+	if ds.Credentials == "" {
+		return fmt.Errorf("credentials cannot be empty")
 	}
-
 	return nil
 }
 

@@ -170,14 +170,12 @@ func ConvertDbtProjectCore(opts ConvertOptions) (*ConvertResult, error) {
 					},
 				}
 			case *WrenBigQueryDataSource:
-				// SECURITY FIX: Omit keyfile_json from output for security.
 				wrenDataSource = map[string]interface{}{
 					"type": "bigquery",
 					"properties": map[string]interface{}{
-						"project": typedDS.Project,
-						"dataset": typedDS.Dataset,
-						"method":  typedDS.Method,
-						"keyfile": typedDS.Keyfile, // Path reference is safe
+						"project_id":  typedDS.Project,
+						"dataset_id":  typedDS.Dataset,
+						"credentials": typedDS.Credentials,
 					},
 				}
 			case *WrenMysqlDataSource:
