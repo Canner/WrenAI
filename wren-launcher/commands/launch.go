@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Canner/WrenAI/wren-launcher/config"
+	"github.comcom/Canner/WrenAI/wren-launcher/config"
 	utils "github.com/Canner/WrenAI/wren-launcher/utils"
 	"github.com/common-nighthawk/go-figure"
 	"github.com/manifoldco/promptui"
@@ -185,6 +185,19 @@ func askForDbtTarget() (string, error) {
 	}
 
 	return result, nil
+}
+
+// *** NEW FUNCTION ADDED HERE ***
+func askForIncludeStagingModels() (bool, error) {
+	prompt := promptui.Select{
+		Label: "Include staging models (stg_*, staging_*)?",
+		Items: []string{"No", "Yes"},
+	}
+	_, result, err := prompt.Run()
+	if err != nil {
+		return false, err
+	}
+	return result == "Yes", nil
 }
 
 func Launch() {
@@ -521,8 +534,15 @@ func processDbtProject(projectDir string) (string, error) {
 		return "", err
 	}
 
-	// Use the core conversion function from dbt package
-	result, err := DbtConvertProject(dbtProjectPath, targetDir, profileName, target, true, false)
+	// *** MODIFIED SECTION HERE ***
+	// Ask the user whether to include staging models
+	includeStagingModels, err := askForIncludeStagingModels()
+	if err != nil {
+		pterm.Warning.Println("Could not get staging model preference, defaulting to 'No'.")
+	}
+
+	// Use the core conversion function from dbt package, passing the user's choice
+	result, err := DbtConvertProject(dbtProjectPath, targetDir, profileName, target, true, includeStagingModels)
 	if err != nil {
 		return "", fmt.Errorf("failed to convert dbt project: %w", err)
 	}

@@ -442,8 +442,11 @@ func ConvertDbtCatalogToWrenMDL(catalogPath string, dataSource DataSource, manif
 		if !strings.HasPrefix(nodeKey, "model.") {
 			continue
 		}
-		if !includeStagingModels && (strings.Contains(nodeKey, ".stg_") || strings.Contains(nodeKey, ".staging_")) {
-			continue
+		if !includeStagingModels {
+			mn := getModelNameFromNodeKey(nodeKey)
+			if strings.HasPrefix(mn, "stg_") || strings.HasPrefix(mn, "staging_") {
+				continue
+			}
 		}
 		model, err := convertDbtNodeToWrenModel(nodeKey, nodeMap, dataSource, manifestData, columnToEnumNameMap, columnToNotNullMap, modelToPrimaryKeyMap)
 		if err != nil {
@@ -518,7 +521,18 @@ func generateRelationships(manifestData map[string]interface{}) []Relationship {
 			}
 		}
 	}
-	return relationships
+	seen := make(map[string]struct{}, len(relationships))
+	var unique []Relationship
+	for _, r := range relationships {
+		key := r.Name  "|"  r.JoinType  "|"  r.Condition
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		unique = append(unique, r)
+	}
+	return unique
+ }
 }
 
 // parseTestsForRelationships is a helper function to extract relationship tests from a column or its fields.
@@ -756,7 +770,15 @@ func convertDbtMetricsToWrenMetrics(semanticData map[string]interface{}) []Metri
 						if den, ok := typeParams["denominator"].(map[string]interface{}); ok {
 							numName := getStringFromMap(num, "name", "")
 							denName := getStringFromMap(den, "name", "")
-							wrenMetric.Aggregation = fmt.Sprintf("%s / %s", numName, denName)
+							if numData, ok := measureDataLookup[numName]; ok {
+								if denData, ok := measureDataLookup[denName]; ok {
+									numAgg := strings.ToUpper(getStringFromMap(numData, "agg", "sum"))
+									denAgg := strings.ToUpper(getStringFromMap(denData, "agg", "sum"))
+									numExpr := getStringFromMap(numData, "expr", numName)
+									denExpr := getStringFromMap(denData, "expr", denName)
+									wrenMetric.Aggregation = fmt.Sprintf("(%s(%s)) / (%s(%s))", numAgg, numExpr, denAgg, denExpr)
+								}
+							}
 						}
 					}
 				case "derived":
@@ -944,13 +966,16 @@ func getModelNameFromNodeKey(nodeKey string) string {
 	return ""
 }
 
+var refRegex = regexp.MustCompile(`ref\s*\(\s*['"]([^'"]+)['"]\s*\)`)
+
 // parseRef extracts the model name from a dbt ref string.
 // e.g., "ref('stg_orders')"
 func parseRef(refStr string) string {
-	// Handle ref() with optional spaces and both quote types
-	re := regexp.MustCompile(`ref\s*\(\s*['"]([^'"]+)['"]\s*\)`)
-	matches := re.FindStringSubmatch(refStr)
+	// Use the precompiled regex to find matches.
+	matches := refRegex.FindStringSubmatch(refStr)
 	if len(matches) > 1 {
+		// The first submatch (index 1) is the captured group,
+		// which is the model name we want.
 		return matches[1]
 	}
 	return ""
