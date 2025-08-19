@@ -22,9 +22,8 @@ from src.pipelines.generation.utils.sql import (
 )
 from src.pipelines.retrieval.sql_functions import SqlFunction
 from src.utils import trace_cost
-from src.web.v1.services import Configuration
-from src.web.v1.services import Configuration
-
+-from src.web.v1.services import Configuration
+ from src.web.v1.services import Configuration
 logger = logging.getLogger("wren-ai-service")
 
 
