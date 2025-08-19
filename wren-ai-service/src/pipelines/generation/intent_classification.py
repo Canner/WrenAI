@@ -156,6 +156,7 @@ SQL:
 
 User's current question: {{query}}
 Output Language: {{ language }}
+Current Time: {{ current_time }}
 
 Let's think step by step
 """
@@ -286,6 +287,7 @@ def prompt(
             instructions=instructions,
         ),
         docs=wren_ai_docs,
+        current_time=configuration.show_current_time(),
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
