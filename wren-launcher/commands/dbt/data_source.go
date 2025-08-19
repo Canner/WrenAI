@@ -4,7 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-    "os"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -85,7 +85,8 @@ func convertConnectionToDataSource(conn DbtConnection, dbtHomePath, profileName,
 	case "mysql":
 		return convertToMysqlDataSource(conn)
 	case "bigquery":
-		return convertToBigQueryDataSource(conn)
+		// Pass the dbtHomePath to the BigQuery converter
+		return convertToBigQueryDataSource(conn, dbtHomePath)
 	default:
 		// For unsupported database types, we can choose to ignore or return error
 		// Here we choose to return nil and log a warning
@@ -184,7 +185,7 @@ func convertToMysqlDataSource(conn DbtConnection) (*WrenMysqlDataSource, error) 
 }
 
 // convertToBigQueryDataSource converts to BigQuery data source
-func convertToBigQueryDataSource(conn DbtConnection) (*WrenBigQueryDataSource, error) {
+func convertToBigQueryDataSource(conn DbtConnection, dbtHomePath string) (*WrenBigQueryDataSource, error) {
 	method := strings.ToLower(strings.TrimSpace(conn.Method))
 	var credentials string
 
@@ -239,9 +240,17 @@ func convertToBigQueryDataSource(conn DbtConnection) (*WrenBigQueryDataSource, e
 				return nil, fmt.Errorf("bigquery: method 'service-account' requires 'keyfile' path")
 			}
 		} else {
-			b, err := os.ReadFile(keyfilePath)
+			// If keyfile path is not absolute, join it 
+			// with the dbt project's home directory path.
+			resolvedKeyfilePath := keyfilePath
+			if !filepath.IsAbs(keyfilePath) && dbtHomePath != "" {
+				resolvedKeyfilePath = filepath.Join(dbtHomePath, keyfilePath)
+			}
+
+			b, err := os.ReadFile(resolvedKeyfilePath)
 			if err != nil {
-				return nil, fmt.Errorf("failed to read keyfile '%s': %w", keyfilePath, err)
+				// Update the error message to show the path that was attempted
+				return nil, fmt.Errorf("failed to read keyfile '%s': %w", resolvedKeyfilePath, err)
 			}
 			enc, err := encodeJSON(b)
 			if err != nil {
