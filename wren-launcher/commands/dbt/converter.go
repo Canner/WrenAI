@@ -532,7 +532,7 @@ func generateRelationships(manifestData map[string]interface{}) []Relationship {
 		unique = append(unique, r)
 	}
 	return unique
- }
+}
 
 // parseTestsForRelationships is a helper function to extract relationship tests from a column or its fields.
 func parseTestsForRelationships(fromModelName, columnName string, colMap map[string]interface{}) []Relationship {

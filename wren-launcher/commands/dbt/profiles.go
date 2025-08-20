@@ -8,7 +8,7 @@ type DbtProfiles struct {
 
 // DbtProfile represents a single profile in profiles.yml
 type DbtProfile struct {
-	Target  string                 `yaml:"target" json:"target"`
+	Target  string                   `yaml:"target" json:"target"`
 	Outputs map[string]DbtConnection `yaml:"outputs" json:"outputs"`
 }
 
@@ -33,7 +33,7 @@ type DbtConnection struct {
 	KeepAlive bool   `yaml:"keepalive,omitempty" json:"keepalive,omitempty"` // Postgres
 
 	SearchPath string `yaml:"search_path,omitempty" json:"search_path,omitempty"` // Postgres
-	SSLMode    string `yaml:"sslmode,omitempty" json:"sslmode,omitempty"`       // Postgres
+	SSLMode    string `yaml:"sslmode,omitempty" json:"sslmode,omitempty"`         // Postgres
 
 	SslDisable bool `yaml:"ssl_disable,omitempty" json:"ssl_disable,omitempty"` // MySQL
 

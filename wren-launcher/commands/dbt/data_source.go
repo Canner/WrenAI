@@ -240,7 +240,7 @@ func convertToBigQueryDataSource(conn DbtConnection, dbtHomePath string) (*WrenB
 				return nil, fmt.Errorf("bigquery: method 'service-account' requires 'keyfile' path")
 			}
 		} else {
-			// If keyfile path is not absolute, join it 
+			// If keyfile path is not absolute, join it
 			// with the dbt project's home directory path.
 			resolvedKeyfilePath := keyfilePath
 			if !filepath.IsAbs(keyfilePath) && dbtHomePath != "" {
