@@ -2,14 +2,14 @@ package dbt
 
 // WrenMDLManifest represents the complete Wren MDL structure
 type WrenMDLManifest struct {
-	Catalog         string            `json:"catalog"`
-	Schema          string            `json:"schema"`
-	EnumDefinitions []EnumDefinition  `json:"enumDefinitions,omitempty"`
-	Models          []WrenModel       `json:"models"`
-	Relationships   []Relationship    `json:"relationships"`
-	Metrics         []Metric          `json:"metrics,omitempty"`
-	Views           []View            `json:"views"`
-	DataSources     string            `json:"dataSources,omitempty"`
+	Catalog         string           `json:"catalog"`
+	Schema          string           `json:"schema"`
+	EnumDefinitions []EnumDefinition `json:"enumDefinitions,omitempty"`
+	Models          []WrenModel      `json:"models"`
+	Relationships   []Relationship   `json:"relationships"`
+	Metrics         []Metric         `json:"metrics,omitempty"`
+	Views           []View           `json:"views"`
+	DataSources     string           `json:"dataSources,omitempty"`
 }
 
 // EnumDefinition represents a named list of values that can be used by columns.
