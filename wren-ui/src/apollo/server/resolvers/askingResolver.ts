@@ -15,7 +15,7 @@ import {
 import { reduce } from 'lodash';
 import { IContext } from '../types';
 import { getLogger } from '@server/utils';
-import { format } from 'sql-formatter';
+import { safeFormatSQL } from '@server/utils/sqlFormat';
 import {
   AskingDetailTaskInput,
   constructCteSql,
@@ -555,7 +555,9 @@ export class AskingResolver {
       error: adjustmentTask?.error,
       sql: adjustmentTask?.response?.[0]?.sql,
       traceId: adjustmentTask?.traceId,
-      invalidSql: adjustmentTask?.invalidSql,
+      invalidSql: adjustmentTask?.invalidSql
+        ? safeFormatSQL(adjustmentTask.invalidSql)
+        : null,
     };
   }
 
@@ -744,7 +746,9 @@ export class AskingResolver {
         error: adjustmentTask?.error,
         sql: adjustmentTask?.response?.[0]?.sql,
         traceId: adjustmentTask?.traceId,
-        invalidSql: adjustmentTask?.invalidSql,
+        invalidSql: adjustmentTask?.invalidSql
+          ? safeFormatSQL(adjustmentTask.invalidSql)
+          : null,
       };
     },
   });
@@ -812,7 +816,9 @@ export class AskingResolver {
       intentReasoning: askingTask.intentReasoning,
       sqlGenerationReasoning: askingTask.sqlGenerationReasoning,
       retrievedTables: askingTask.retrievedTables,
-      invalidSql: askingTask.invalidSql ? format(askingTask.invalidSql) : null,
+      invalidSql: askingTask.invalidSql
+        ? safeFormatSQL(askingTask.invalidSql)
+        : null,
       traceId: askingTask.traceId,
     };
   }
