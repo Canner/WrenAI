@@ -20,7 +20,7 @@ import {
 } from '../repositories/threadResponseRepository';
 import { getLogger } from '@server/utils';
 import { isEmpty, isNil } from 'lodash';
-import { format } from 'sql-formatter';
+import { safeFormatSQL } from '@server/utils/sqlFormat';
 import {
   PostHogTelemetry,
   TelemetryEvent,
@@ -975,7 +975,7 @@ export class AskingService implements IAskingService {
     const deployment = await this.deployService.getLastDeployment(project.id);
     const mdl = deployment.manifest;
     const steps = response?.breakdownDetail?.steps;
-    const sql = format(constructCteSql(steps, stepIndex));
+    const sql = safeFormatSQL(constructCteSql(steps, stepIndex));
     const eventName = TelemetryEvent.HOME_PREVIEW_ANSWER;
     try {
       const data = (await this.queryService.preview(sql, {

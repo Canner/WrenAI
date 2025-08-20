@@ -712,9 +712,9 @@ export class AskingResolver {
     sql: (parent: ThreadResponse, _args: any, _ctx: IContext) => {
       if (parent.breakdownDetail && parent.breakdownDetail.steps) {
         // construct sql from breakdownDetail
-        return format(constructCteSql(parent.breakdownDetail.steps));
+        return safeFormatSQL(constructCteSql(parent.breakdownDetail.steps));
       }
-      return parent.sql ? format(parent.sql) : null;
+      return parent.sql ? safeFormatSQL(parent.sql) : null;
     },
     askingTask: async (parent: ThreadResponse, _args: any, ctx: IContext) => {
       if (parent.adjustment) {
@@ -755,13 +755,13 @@ export class AskingResolver {
 
   public getDetailStepNestedResolver = () => ({
     sql: (parent: DetailStep, _args: any, _ctx: IContext) => {
-      return format(parent.sql);
+      return safeFormatSQL(parent.sql);
     },
   });
 
   public getResultCandidateNestedResolver = () => ({
     sql: (parent: any, _args: any, _ctx: IContext) => {
-      return format(parent.sql);
+      return safeFormatSQL(parent.sql);
     },
     view: async (parent: any, _args: any, ctx: IContext) => {
       const viewId = parent.view?.id;
