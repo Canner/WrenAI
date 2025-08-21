@@ -1,7 +1,10 @@
 package dbt
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -77,6 +80,9 @@ func convertConnectionToDataSource(conn DbtConnection, dbtHomePath, profileName,
 		return convertToPostgresDataSource(conn)
 	case "duckdb":
 		return convertToLocalFileDataSource(conn, dbtHomePath)
+	case "bigquery":
+		// Pass the dbtHomePath to the BigQuery converter
+		return convertToBigQueryDataSource(conn, dbtHomePath)
 	default:
 		// For unsupported database types, we can choose to ignore or return error
 		// Here we choose to return nil and log a warning
@@ -141,6 +147,96 @@ func convertToLocalFileDataSource(conn DbtConnection, dbtHome string) (*WrenLoca
 		Url:    url,
 		Format: format,
 	}, nil
+}
+
+// convertToBigQueryDataSource converts to BigQuery data source
+func convertToBigQueryDataSource(conn DbtConnection, dbtHomePath string) (*WrenBigQueryDataSource, error) {
+	method := strings.ToLower(strings.TrimSpace(conn.Method))
+	var credentials string
+
+	// Helper: validate JSON and base64 encode
+	encodeJSON := func(b []byte) (string, error) {
+		var js map[string]interface{}
+		if err := json.Unmarshal(b, &js); err != nil {
+			return "", fmt.Errorf("service account JSON is invalid: %w", err)
+		}
+		return base64.StdEncoding.EncodeToString(b), nil
+	}
+
+	switch method {
+	case "service-account-json":
+		// Extract inline JSON from Additional["keyfile_json"]
+		var keyfileJSON string
+		if kfj, exists := conn.Additional["keyfile_json"]; exists {
+			if kfjStr, ok := kfj.(string); ok {
+				keyfileJSON = kfjStr
+			}
+		}
+		if keyfileJSON == "" {
+			return nil, fmt.Errorf("bigquery: method 'service-account-json' requires 'keyfile_json'")
+		}
+		enc, err := encodeJSON([]byte(keyfileJSON))
+		if err != nil {
+			return nil, err
+		}
+		credentials = enc
+	case "service-account", "":
+		// Prefer structured field; fall back to Additional["keyfile"]
+		keyfilePath := strings.TrimSpace(conn.Keyfile)
+		if keyfilePath == "" {
+			if kf, ok := conn.Additional["keyfile"]; ok {
+				if kfStr, ok := kf.(string); ok {
+					keyfilePath = strings.TrimSpace(kfStr)
+				}
+			}
+		}
+		if keyfilePath == "" {
+			// If method was omitted (""), try as a fallback to inline json
+			if kfj, ok := conn.Additional["keyfile_json"]; ok {
+				if kfjStr, ok := kfj.(string); ok && kfjStr != "" {
+					enc, err := encodeJSON([]byte(kfjStr))
+					if err != nil {
+						return nil, err
+					}
+					credentials = enc
+				}
+			}
+			if credentials == "" {
+				return nil, fmt.Errorf("bigquery: method 'service-account' requires 'keyfile' path")
+			}
+		} else {
+			// If keyfile path is not absolute, join it
+			// with the dbt project's home directory path.
+			resolvedKeyfilePath := keyfilePath
+			if !filepath.IsAbs(keyfilePath) && dbtHomePath != "" {
+				resolvedKeyfilePath = filepath.Join(dbtHomePath, keyfilePath)
+			}
+
+			b, err := os.ReadFile(resolvedKeyfilePath)
+			if err != nil {
+				// Update the error message to show the path that was attempted
+				return nil, fmt.Errorf("failed to read keyfile '%s': %w", resolvedKeyfilePath, err)
+			}
+			enc, err := encodeJSON(b)
+			if err != nil {
+				return nil, err
+			}
+			credentials = enc
+		}
+	case "oauth":
+		pterm.Warning.Println("bigquery: oauth auth method is not supported; skipping data source")
+		return nil, nil
+	default:
+		pterm.Warning.Printf("bigquery: unsupported auth method '%s'; supported: service-account, service-account-json\n", method)
+		return nil, nil
+	}
+
+	ds := &WrenBigQueryDataSource{
+		Project:     conn.Project,
+		Dataset:     conn.Dataset,
+		Credentials: credentials,
+	}
+	return ds, nil
 }
 
 type WrenLocalFileDataSource struct {
@@ -220,6 +316,57 @@ func (ds *WrenPostgresDataSource) Validate() error {
 func (ds *WrenPostgresDataSource) MapType(sourceType string) string {
 	// This method is not used in WrenPostgresDataSource, but required by DataSource interface
 	return sourceType
+}
+
+type WrenBigQueryDataSource struct {
+	Project     string `json:"project_id"`
+	Dataset     string `json:"dataset_id"`
+	Credentials string `json:"credentials"`
+}
+
+// GetType implements DataSource interface
+func (ds *WrenBigQueryDataSource) GetType() string {
+	return "bigquery"
+}
+
+// Validate implements DataSource interface
+func (ds *WrenBigQueryDataSource) Validate() error {
+	if strings.TrimSpace(ds.Project) == "" {
+		return fmt.Errorf("project_id cannot be empty")
+	}
+	if strings.TrimSpace(ds.Dataset) == "" {
+		return fmt.Errorf("dataset_id cannot be empty")
+	}
+	if strings.TrimSpace(ds.Credentials) == "" {
+		return fmt.Errorf("credentials cannot be empty")
+	}
+	return nil
+}
+
+// MapType implements DataSource interface
+func (ds *WrenBigQueryDataSource) MapType(sourceType string) string {
+	switch strings.ToUpper(sourceType) {
+	case "INT64", "INTEGER":
+		return "integer"
+	case "FLOAT64", "FLOAT":
+		return "double"
+	case "STRING":
+		return "varchar"
+	case "BOOL", "BOOLEAN":
+		return "boolean"
+	case "DATE":
+		return "date"
+	case "TIMESTAMP", "DATETIME":
+		return "timestamp"
+	case "NUMERIC", "DECIMAL", "BIGNUMERIC":
+		return "double"
+	case "BYTES":
+		return "varchar"
+	case "JSON":
+		return "varchar"
+	default:
+		return strings.ToLower(sourceType)
+	}
 }
 
 // GetActiveDataSources gets active data sources based on specified profile and target
