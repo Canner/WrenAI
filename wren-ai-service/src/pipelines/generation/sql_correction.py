@@ -19,6 +19,7 @@ from src.pipelines.generation.utils.sql import (
     construct_instructions,
 )
 from src.utils import trace_cost
+from src.web.v1.services import Configuration
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -62,6 +63,7 @@ sql_correction_user_prompt_template = """
 ### QUESTION ###
 SQL: {{ invalid_generation_result.sql }}
 Error Message: {{ invalid_generation_result.error }}
+Current Time: {{ current_time }}
 
 Let's think step by step.
 """
@@ -73,11 +75,13 @@ def prompt(
     documents: List[Document],
     invalid_generation_result: Dict,
     prompt_builder: PromptBuilder,
+    configuration: Configuration = Configuration(),
     instructions: list[dict] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         documents=documents,
         invalid_generation_result=invalid_generation_result,
+        current_time=configuration.show_current_time(),
         instructions=construct_instructions(
             instructions=instructions,
         ),
