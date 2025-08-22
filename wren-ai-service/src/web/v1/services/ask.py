@@ -523,6 +523,7 @@ class AskService:
                             project_id=ask_request.project_id,
                             use_dry_plan=use_dry_plan,
                             allow_dry_plan_fallback=allow_dry_plan_fallback,
+                            sql_functions=sql_functions,
                         )
 
                         if valid_generation_result := sql_correction_results[
