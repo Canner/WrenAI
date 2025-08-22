@@ -1,4 +1,3 @@
-import ast
 import logging
 import sys
 from typing import Any, Literal, Optional
@@ -6,14 +5,13 @@ from typing import Any, Literal, Optional
 import orjson
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
-from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
-from src.pipelines.common import build_table_ddl, clean_up_new_lines
+from src.pipelines.common import clean_up_new_lines
 from src.pipelines.generation.utils.sql import construct_instructions
 from src.utils import trace_cost
 from src.web.v1.services import Configuration
@@ -24,7 +22,8 @@ logger = logging.getLogger("wren-ai-service")
 
 intent_classification_system_prompt = """
 ### Task ###
-You are an expert detective specializing in intent classification. Combine the user's current question and previous questions to determine their true intent based on the provided database schema. Classify the intent into one of these categories: `MISLEADING_QUERY`, `TEXT_TO_SQL`, `GENERAL`, or `USER_GUIDE`. Additionally, provide a concise reasoning (maximum 20 words) for your classification.
+You are an expert detective specializing in intent classification. Combine the user's current question and previous questions to determine their true intent based on the provided database schema or sql data if provided.
+Classify the intent into one of these categories: `MISLEADING_QUERY`, `TEXT_TO_SQL`, `DATA_EXPLORATION`, `GENERAL`, `USER_GUIDE`, or `USER_CLARIFICATION`. Additionally, provide a concise reasoning (maximum 20 words) for your classification.
 
 ### Instructions ###
 - **Follow the user's previous questions:** If there are previous questions, try to understand the user's current question as following the previous questions.
@@ -33,11 +32,25 @@ You are an expert detective specializing in intent classification. Combine the u
 - **Rephrase Question:** Rewrite follow-up questions into full standalone questions using prior conversation context.
 - **Concise Reasoning:** The reasoning must be clear, concise, and limited to 20 words.
 - **Language Consistency:** Use the same language as specified in the user's output language for the rephrased question and reasoning.
-- **Vague Queries:** If the question is vague or does not related to a table or property from the schema, classify it as `MISLEADING_QUERY`.
-- **Incomplete Queries:** If the question is related to the database schema but references unspecified values (e.g., "the following", "these", "those") without providing them, classify as `GENERAL`.
+- **Vague Queries:** If the question does not related to the database schema, classify it as `MISLEADING_QUERY`.
+- **User Clarification:** If the question is related to the database schema, but missing some details in order to answer the question, classify it as `USER_CLARIFICATION`.
+- **Incomplete Queries:** If the question is related to the database schema but references unspecified values (e.g., "the following", "these", "those") without providing them, classify as `USER_CLARIFICATION`.
 - **Time-related Queries:** Don't rephrase time-related information in the user's question.
 
 ### Intent Definitions ###
+
+<DATA_EXPLORATION>
+**When to Use:**
+- The user's question is about data exploration such as asking for data details, asking for explanation of the data, asking for insights, asking for recommendations, asking for comparison, etc.
+**Requirements:**
+- SQL DATA is provided and the user's question is about exploring the data.
+- The user's question can be answered by the SQL DATA.
+- The row size of the SQL DATA is less than 500.
+**Examples:**  
+- "Show me the part where the data appears abnormal"
+- "Please explain the data in the table"
+- "What's the trend of the data?"
+</DATA_EXPLORATION>
 
 <TEXT_TO_SQL>
 **When to Use:**  
@@ -51,6 +64,7 @@ You are an expert detective specializing in intent classification. Combine the u
 - Must have complete filter criteria, specific values, or clear references to previous context.
 - Include specific table and column names from the schema in your reasoning or modifying SQL from previous questions.
 - Reference phrases from the user's inputs that clearly relate to the schema.
+- The SQL DATA is not provided or SQL DATA cannot answer the user's question, and the user's question can be answered given the database schema.
 
 **Examples:**  
 - "What is the total sales for last quarter?"
@@ -58,9 +72,9 @@ You are an expert detective specializing in intent classification. Combine the u
 - "List the top 10 products by revenue."
 </TEXT_TO_SQL>
 
-<GENERAL>
-**When to Use:**  
-- The user seeks general information about the database schema or its overall capabilities.
+<USER_CLARIFICATION>
+**When to Use:**
+- The user's question is related to the database schema, but missing some details in order to answer the question.
 - The query references **missing information** (e.g., "the following items" without listing them).
 - The query contains **placeholder references** that cannot be resolved from context.
 - The query is **incomplete for SQL generation** despite mentioning database concepts.
@@ -70,11 +84,18 @@ You are an expert detective specializing in intent classification. Combine the u
 - Identify missing parameters, unspecified references, or incomplete filter criteria.
 
 **Examples:**
-- "What is the dataset about?"
-- "Tell me more about the database."
 - "How can I analyze customer behavior with this data?"
 - "Show me orders for these products" (without specifying which products)
 - "Filter by the criteria I mentioned" (without previous context defining criteria)
+</USER_CLARIFICATION>
+
+<GENERAL>
+**When to Use:**  
+- The user seeks general information about the database schema or its overall capabilities
+
+**Examples:**
+- "What is the dataset about?"
+- "Tell me more about the database."
 </GENERAL>
 
 <USER_GUIDE>
@@ -111,7 +132,7 @@ Return your response as a JSON object with the following structure:
 {
     "rephrased_question": "<rephrased question in full standalone question if there are previous questions, otherwise the original question>",
     "reasoning": "<brief chain-of-thought reasoning (max 20 words)>",
-    "results": "MISLEADING_QUERY" | "TEXT_TO_SQL" | "GENERAL" | "USER_GUIDE"
+    "results": "MISLEADING_QUERY" | "TEXT_TO_SQL" | "DATA_EXPLORATION" | "GENERAL" | "USER_GUIDE" | "USER_CLARIFICATION"
 }
 """
 
@@ -143,14 +164,20 @@ SQL:
 - {{doc.path}}: {{doc.content}}
 {% endfor %}
 
+{% if sql_data %}
+### SQL DATA ###
+{{ sql_data }}
+row size of SQL DATA: {{ sql_data_size }}
+{% endif %}
+
 ### INPUT ###
 {% if histories %}
 User's previous questions:
 {% for history in histories %}
 Question:
 {{ history.question }}
-SQL:
-{{ history.sql }}
+Response:
+{{ history.response }}
 {% endfor %}
 {% endif %}
 
@@ -162,130 +189,30 @@ Let's think step by step
 
 
 ## Start of Pipeline
-@observe(capture_input=False, capture_output=False)
-async def embedding(query: str, embedder: Any, histories: list[AskHistory]) -> dict:
-    previous_query_summaries = (
-        [history.question for history in histories] if histories else []
-    )
-
-    query = "\n".join(previous_query_summaries) + "\n" + query
-
-    return await embedder.run(query)
-
-
-@observe(capture_input=False)
-async def table_retrieval(
-    embedding: dict, project_id: str, table_retriever: Any
-) -> dict:
-    filters = {
-        "operator": "AND",
-        "conditions": [
-            {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
-        ],
-    }
-
-    if project_id:
-        filters["conditions"].append(
-            {"field": "project_id", "operator": "==", "value": project_id}
-        )
-
-    return await table_retriever.run(
-        query_embedding=embedding.get("embedding"),
-        filters=filters,
-    )
-
-
-@observe(capture_input=False)
-async def dbschema_retrieval(
-    table_retrieval: dict, embedding: dict, project_id: str, dbschema_retriever: Any
-) -> list[Document]:
-    tables = table_retrieval.get("documents", [])
-    table_names = []
-    for table in tables:
-        content = ast.literal_eval(table.content)
-        table_names.append(content["name"])
-
-    logger.info(f"dbschema_retrieval with table_names: {table_names}")
-
-    table_name_conditions = [
-        {"field": "name", "operator": "==", "value": table_name}
-        for table_name in table_names
-    ]
-
-    filters = {
-        "operator": "AND",
-        "conditions": [
-            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
-            {"operator": "OR", "conditions": table_name_conditions},
-        ],
-    }
-
-    if project_id:
-        filters["conditions"].append(
-            {"field": "project_id", "operator": "==", "value": project_id}
-        )
-
-    results = await dbschema_retriever.run(
-        query_embedding=embedding.get("embedding"), filters=filters
-    )
-    return results["documents"]
-
-
-@observe()
-def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[str]:
-    db_schemas = {}
-    for document in dbschema_retrieval:
-        content = ast.literal_eval(document.content)
-        if content["type"] == "TABLE":
-            if document.meta["name"] not in db_schemas:
-                db_schemas[document.meta["name"]] = content
-            else:
-                db_schemas[document.meta["name"]] = {
-                    **content,
-                    "columns": db_schemas[document.meta["name"]].get("columns", []),
-                }
-        elif content["type"] == "TABLE_COLUMNS":
-            if document.meta["name"] not in db_schemas:
-                db_schemas[document.meta["name"]] = {"columns": content["columns"]}
-            else:
-                if "columns" not in db_schemas[document.meta["name"]]:
-                    db_schemas[document.meta["name"]]["columns"] = content["columns"]
-                else:
-                    db_schemas[document.meta["name"]]["columns"] += content["columns"]
-
-    # remove incomplete schemas
-    db_schemas = {k: v for k, v in db_schemas.items() if "type" in v and "columns" in v}
-
-    db_schemas_in_ddl = []
-    for table_schema in list(db_schemas.values()):
-        if table_schema["type"] == "TABLE":
-            ddl, _, _ = build_table_ddl(table_schema)
-            db_schemas_in_ddl.append(ddl)
-
-    return db_schemas_in_ddl
-
-
 @observe(capture_input=False)
 def prompt(
     query: str,
     wren_ai_docs: list[dict],
-    construct_db_schemas: list[str],
+    db_schemas: list[str],
     histories: list[AskHistory],
     prompt_builder: PromptBuilder,
     sql_samples: Optional[list[dict]] = None,
     instructions: Optional[list[dict]] = None,
     configuration: Configuration | None = None,
+    sql_data: Optional[dict] = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
         language=configuration.language,
-        db_schemas=construct_db_schemas,
+        db_schemas=db_schemas,
         histories=histories,
         sql_samples=sql_samples,
         instructions=construct_instructions(
             instructions=instructions,
         ),
         docs=wren_ai_docs,
+        sql_data=sql_data,
+        sql_data_size=len(sql_data.get("data", [])),
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
@@ -297,21 +224,19 @@ async def classify_intent(prompt: dict, generator: Any, generator_name: str) -> 
 
 
 @observe(capture_input=False)
-def post_process(classify_intent: dict, construct_db_schemas: list[str]) -> dict:
+def post_process(classify_intent: dict) -> dict:
     try:
         results = orjson.loads(classify_intent.get("replies")[0])
         return {
             "rephrased_question": results["rephrased_question"],
             "intent": results["results"],
             "reasoning": results["reasoning"],
-            "db_schemas": construct_db_schemas,
         }
     except Exception:
         return {
             "rephrased_question": "",
             "intent": "TEXT_TO_SQL",
             "reasoning": "",
-            "db_schemas": construct_db_schemas,
         }
 
 
@@ -320,7 +245,14 @@ def post_process(classify_intent: dict, construct_db_schemas: list[str]) -> dict
 
 class IntentClassificationResult(BaseModel):
     rephrased_question: str
-    results: Literal["MISLEADING_QUERY", "TEXT_TO_SQL", "GENERAL", "USER_GUIDE"]
+    results: Literal[
+        "MISLEADING_QUERY",
+        "TEXT_TO_SQL",
+        "GENERAL",
+        "DATA_EXPLORATION",
+        "USER_GUIDE",
+        "USER_CLARIFICATION",
+    ]
     reasoning: str
 
 
@@ -378,22 +310,26 @@ class IntentClassification(BasicPipeline):
     async def run(
         self,
         query: str,
+        db_schemas: list[str],
         project_id: Optional[str] = None,
         histories: Optional[list[AskHistory]] = None,
         sql_samples: Optional[list[dict]] = None,
         instructions: Optional[list[dict]] = None,
         configuration: Configuration = Configuration(),
+        sql_data: Optional[dict] = None,
     ):
         logger.info("Intent Classification pipeline is running...")
         return await self._pipe.execute(
             ["post_process"],
             inputs={
                 "query": query,
+                "db_schemas": db_schemas,
                 "project_id": project_id or "",
                 "histories": histories or [],
                 "sql_samples": sql_samples or [],
                 "instructions": instructions or [],
                 "configuration": configuration,
+                "sql_data": sql_data or {},
                 **self._components,
                 **self._configs,
             },
