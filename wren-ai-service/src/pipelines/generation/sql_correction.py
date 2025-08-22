@@ -16,6 +16,7 @@ from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     TEXT_TO_SQL_RULES,
     SQLGenPostProcessor,
+    construct_instructions,
 )
 from src.utils import trace_cost
 from src.web.v1.services import Configuration
@@ -52,6 +53,13 @@ sql_correction_user_prompt_template = """
 {% endfor %}
 {% endif %}
 
+{% if instructions %}
+### USER INSTRUCTIONS ###
+{% for instruction in instructions %}
+{{ loop.index }}. {{ instruction }}
+{% endfor %}
+{% endif %}
+
 ### QUESTION ###
 SQL: {{ invalid_generation_result.sql }}
 Error Message: {{ invalid_generation_result.error }}
@@ -68,11 +76,15 @@ def prompt(
     invalid_generation_result: Dict,
     prompt_builder: PromptBuilder,
     configuration: Configuration = Configuration(),
+    instructions: list[dict] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         documents=documents,
         invalid_generation_result=invalid_generation_result,
         current_time=configuration.show_current_time(),
+        instructions=construct_instructions(
+            instructions=instructions,
+        ),
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
@@ -89,7 +101,6 @@ async def generate_sql_correction(
 async def post_process(
     generate_sql_correction: dict,
     post_processor: SQLGenPostProcessor,
-    engine_timeout: float,
     data_source: str,
     project_id: str | None = None,
     use_dry_plan: bool = False,
@@ -97,7 +108,6 @@ async def post_process(
 ) -> dict:
     return await post_processor.run(
         generate_sql_correction.get("replies"),
-        timeout=engine_timeout,
         project_id=project_id,
         use_dry_plan=use_dry_plan,
         data_source=data_source,
@@ -114,7 +124,6 @@ class SQLCorrection(BasicPipeline):
         llm_provider: LLMProvider,
         document_store_provider: DocumentStoreProvider,
         engine: Engine,
-        engine_timeout: float = 30.0,
         **kwargs,
     ):
         self._retriever = document_store_provider.get_retriever(
@@ -133,10 +142,6 @@ class SQLCorrection(BasicPipeline):
             "post_processor": SQLGenPostProcessor(engine=engine),
         }
 
-        self._configs = {
-            "engine_timeout": engine_timeout,
-        }
-
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
@@ -146,6 +151,7 @@ class SQLCorrection(BasicPipeline):
         self,
         contexts: List[Document],
         invalid_generation_result: Dict[str, str],
+        instructions: list[dict] | None = None,
         project_id: str | None = None,
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
@@ -162,11 +168,11 @@ class SQLCorrection(BasicPipeline):
             inputs={
                 "invalid_generation_result": invalid_generation_result,
                 "documents": contexts,
+                "instructions": instructions,
                 "project_id": project_id,
                 "use_dry_plan": use_dry_plan,
                 "allow_dry_plan_fallback": allow_dry_plan_fallback,
                 "data_source": metadata.get("data_source", "local_file"),
                 **self._components,
-                **self._configs,
             },
         )

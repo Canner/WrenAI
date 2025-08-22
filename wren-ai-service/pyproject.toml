@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "wren-ai-service"
-version = "0.27.1"
+version = "0.27.5"
 description = ""
 authors = ["dev@getwren.ai"]
 license = "AGPL-3.0"
@@ -33,7 +33,7 @@ pydantic-settings = "^2.5.2"
 google-auth = "^2.35.0"
 tiktoken = "^0.8.0"
 jsonschema = "^4.23.0"
-litellm = {extras = ["proxy"], version = "^1.75.2"}
+litellm = "^1.75.2"
 boto3 = "^1.34.34" # Litellm requires boto3 = 1.34.34
 qdrant-client = "==1.11.0"
 

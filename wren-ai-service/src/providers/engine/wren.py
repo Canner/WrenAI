@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional, Tuple
 import aiohttp
 import orjson
 
+from src.config import settings
 from src.core.engine import Engine, remove_limit_statement
 from src.providers.loader import provider
 
@@ -28,7 +29,7 @@ class WrenUI(Engine):
         session: aiohttp.ClientSession,
         project_id: str | None = None,
         dry_run: bool = True,
-        timeout: float = 30.0,
+        timeout: float = settings.engine_timeout,
         limit: int = 500,
         **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
@@ -128,7 +129,7 @@ class WrenIbis(Engine):
         sql: str,
         session: aiohttp.ClientSession,
         dry_run: bool = True,
-        timeout: float = 30.0,
+        timeout: float = settings.engine_timeout,
         limit: int = 500,
         **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
@@ -178,7 +179,7 @@ class WrenIbis(Engine):
         session: aiohttp.ClientSession,
         sql: str,
         data_source: str,
-        timeout: float = 30.0,
+        timeout: float = settings.engine_timeout,
         allow_fallback: bool = True,
         **kwargs,
     ) -> Tuple[bool, str]:
@@ -212,7 +213,7 @@ class WrenIbis(Engine):
         self,
         session: aiohttp.ClientSession,
         data_source: str,
-        timeout: float = 30.0,
+        timeout: float = settings.engine_timeout,
     ) -> list[str]:
         api_endpoint = f"{self._endpoint}/v3/connector/{data_source}/functions"
         try:
@@ -247,7 +248,7 @@ class WrenEngine(Engine):
         sql: str,
         session: aiohttp.ClientSession,
         dry_run: bool = True,
-        timeout: float = 30.0,
+        timeout: float = settings.engine_timeout,
         limit: int = 500,
         **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:

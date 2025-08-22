@@ -142,12 +142,10 @@ async def regenerate_sql(
 async def post_process(
     regenerate_sql: dict,
     post_processor: SQLGenPostProcessor,
-    engine_timeout: float,
     project_id: str | None = None,
 ) -> dict:
     return await post_processor.run(
         regenerate_sql.get("replies"),
-        timeout=engine_timeout,
         project_id=project_id,
     )
 
@@ -160,7 +158,6 @@ class SQLRegeneration(BasicPipeline):
         self,
         llm_provider: LLMProvider,
         engine: Engine,
-        engine_timeout: float = 30.0,
         **kwargs,
     ):
         self._components = {
@@ -173,10 +170,6 @@ class SQLRegeneration(BasicPipeline):
                 template=sql_regeneration_user_prompt_template
             ),
             "post_processor": SQLGenPostProcessor(engine=engine),
-        }
-
-        self._configs = {
-            "engine_timeout": engine_timeout,
         }
 
         super().__init__(
@@ -212,6 +205,5 @@ class SQLRegeneration(BasicPipeline):
                 "has_json_field": has_json_field,
                 "sql_functions": sql_functions,
                 **self._components,
-                **self._configs,
             },
         )
