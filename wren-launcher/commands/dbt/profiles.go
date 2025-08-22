@@ -19,6 +19,7 @@ type DbtConnection struct {
 	Port     int    `yaml:"port,omitempty" json:"port,omitempty"`
 	User     string `yaml:"user,omitempty" json:"user,omitempty"`
 	Password string `yaml:"password,omitempty" json:"password,omitempty"`
+	DbName   string `yaml:"dbname,omitempty" json:"dbname,omitempty"` // Postgres
 	Database string `yaml:"database,omitempty" json:"database,omitempty"`
 	Schema   string `yaml:"schema,omitempty" json:"schema,omitempty"`
 	// Additional fields for different database types
@@ -32,6 +33,8 @@ type DbtConnection struct {
 
 	SearchPath string `yaml:"search_path,omitempty" json:"search_path,omitempty"` // Postgres
 	SSLMode    string `yaml:"sslmode,omitempty" json:"sslmode,omitempty"`         // Postgres
+
+	SslDisable bool `yaml:"ssl_disable,omitempty" json:"ssl_disable,omitempty"` // MySQL
 
 	Path string `yaml:"path,omitempty" json:"path,omitempty"` // DuckDB
 	// Flexible additional properties
