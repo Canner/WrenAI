@@ -10,11 +10,11 @@ import aiohttp
 import orjson
 import psycopg2
 import requests
-import sqlglot
 import tomlkit
 import yaml
 from dotenv import load_dotenv
 from openai import AsyncClient
+from sqlglot import parse_one
 from tomlkit import parse
 
 import docker
@@ -26,7 +26,7 @@ load_dotenv(".env", override=True)
 
 def add_quotes(sql: str) -> Tuple[str, bool]:
     try:
-        quoted_sql = sqlglot.transpile(sql, read=None, identify=True)[0]
+        quoted_sql = parse_one(sql).sql(identify=True)
         return quoted_sql, True
     except Exception as e:
         print(f"Error in adding quotes to SQL: {sql}")
