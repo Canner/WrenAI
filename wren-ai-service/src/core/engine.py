@@ -49,6 +49,11 @@ def remove_limit_statement(sql: str) -> str:
     return modified_sql
 
 
+def squish_sql(sql: str) -> str:
+    # normalize line endings, then collapse all whitespace runs to a single space
+    return re.sub(r"\s+", " ", sql.replace("\r\n", "\n").replace("\r", "\n")).strip()
+
+
 def add_quotes(sql: str) -> Tuple[str, str]:
     def _quote_sql_identifiers_by_tokens(sql: str, quote_char: str = '"') -> str:
         """
@@ -143,6 +148,7 @@ def add_quotes(sql: str) -> Tuple[str, str]:
         return out
 
     try:
+        sql = squish_sql(sql)
         quoted_sql = _quote_sql_identifiers_by_tokens(sql)
     except Exception as e:
         logger.exception(f"Error in adding quotes to {sql}: {e}")
