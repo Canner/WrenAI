@@ -17,12 +17,12 @@ from openai import AsyncClient
 # add wren-ai-service to sys.path
 sys.path.append(f"{Path().parent.parent.resolve()}")
 from eval.utils import (
-    add_quotes,
     get_contexts_from_sql,
     get_data_from_wren_engine,
     get_ddl_commands,
     get_documents_given_contexts,
 )
+from src.core.engine import add_quotes
 from src.pipelines.indexing.db_schema import DDLChunker
 
 load_dotenv()

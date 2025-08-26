@@ -4,7 +4,7 @@ import re
 import uuid
 from copy import deepcopy
 from datetime import datetime
-from typing import Any, Dict, List, Literal, Optional, Tuple, get_args
+from typing import Any, Dict, List, Literal, Optional, get_args
 
 import aiohttp
 import orjson
@@ -14,24 +14,14 @@ import tomlkit
 import yaml
 from dotenv import load_dotenv
 from openai import AsyncClient
-from sqlglot import parse_one
 from tomlkit import parse
 
 import docker
 from eval import WREN_ENGINE_API_URL, EvalSettings
+from src.core.engine import add_quotes
 from src.providers.engine.wren import WrenEngine
 
 load_dotenv(".env", override=True)
-
-
-def add_quotes(sql: str) -> Tuple[str, bool]:
-    try:
-        quoted_sql = parse_one(sql).sql(identify=True)
-        return quoted_sql, True
-    except Exception as e:
-        print(f"Error in adding quotes to SQL: {sql}")
-        print(f"Error: {e}")
-        return sql, False
 
 
 async def get_data_from_wren_engine(
