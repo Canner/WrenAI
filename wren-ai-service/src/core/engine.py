@@ -61,8 +61,16 @@ def add_quotes(sql: str) -> Tuple[str, str]:
         """
 
         def is_ident(tok: Token):
-            # SQLGlot uses VAR for identifiers, not IDENTIFIER
-            return tok.token_type == TokenType.VAR
+            # SQLGlot uses VAR for identifiers, but also treats SQL keywords as identifiers in some contexts
+            return tok.token_type in (
+                TokenType.VAR,
+                TokenType.SCHEMA,
+                TokenType.TABLE,
+                TokenType.COLUMN,
+                TokenType.DATABASE,
+                TokenType.INDEX,
+                TokenType.VIEW,
+            )
 
         def is_already_quoted_text(text: str) -> bool:
             text = text.strip()
@@ -93,52 +101,36 @@ def add_quotes(sql: str) -> Tuple[str, str]:
                 i += 3  # Skip the entire wildcard pattern
                 continue
 
-            # Merge dotted chains: IDENT (DOT IDENT)*  (e.g., db.schema.table or t.col)
+            # Check if this is part of a dotted chain
             j = i
-            last_ident = t
+            chain_tokens = [t]  # Start with current identifier
+
+            # Collect all tokens in the dotted chain: IDENT (DOT IDENT)*
             while (
                 j + 2 < n
                 and toks[j + 1].token_type == TokenType.DOT
                 and is_ident(toks[j + 2])
             ):
+                chain_tokens.append(toks[j + 1])  # DOT
+                chain_tokens.append(toks[j + 2])  # IDENT
                 j += 2
-                last_ident = toks[j]
 
             # If the next token after the chain is '(', it's a function call -> skip
             if j + 1 < n and toks[j + 1].token_type == TokenType.L_PAREN:
                 i = j + 1
                 continue
 
-            # Build a replacement that preserves original spacing and punctuation inside the chain.
-            start_pos = t.start
-            end_pos_excl = last_ident.end + 1
-            piece_tokens = toks[i : j + 1]
+            # Process each identifier in the chain separately to ensure all are quoted
+            for k in range(
+                0, len(chain_tokens), 2
+            ):  # Process only identifiers (skip dots)
+                ident_token = chain_tokens[k]
+                token_text = sql[ident_token.start : ident_token.end + 1]
 
-            out_parts = []
-            cursor = start_pos
-            for pt in piece_tokens:
-                # Copy any text before this token (whitespace/comments between tokens)
-                if cursor < pt.start:
-                    out_parts.append(sql[cursor : pt.start])
+                if not is_already_quoted_text(token_text):
+                    replacement = f"{quote_char}{token_text}{quote_char}"
+                    edits.append((ident_token.start, ident_token.end + 1, replacement))
 
-                token_text = sql[pt.start : pt.end + 1]
-                if is_ident(pt):
-                    if is_already_quoted_text(token_text):
-                        out_parts.append(token_text)  # keep existing quoting style
-                    else:
-                        out_parts.append(f"{quote_char}{token_text}{quote_char}")
-                else:
-                    # DOT or other punctuation inside the chain
-                    out_parts.append(token_text)
-
-                cursor = pt.end + 1
-
-            # Copy trailing part within the chain range
-            if cursor < end_pos_excl:
-                out_parts.append(sql[cursor:end_pos_excl])
-
-            replacement = "".join(out_parts)
-            edits.append((start_pos, end_pos_excl, replacement))
             i = j + 1
 
         # Apply edits right-to-left to keep offsets valid
