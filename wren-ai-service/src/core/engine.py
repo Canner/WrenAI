@@ -4,6 +4,7 @@ from abc import ABCMeta, abstractmethod
 from typing import Any, Dict, Optional, Tuple
 
 import aiohttp
+import sqlparse
 from pydantic import BaseModel
 from sqlglot.tokens import Token, Tokenizer, TokenType
 
@@ -50,8 +51,17 @@ def remove_limit_statement(sql: str) -> str:
 
 
 def squish_sql(sql: str) -> str:
-    # normalize line endings, then collapse all whitespace runs to a single space
-    return re.sub(r"\s+", " ", sql.replace("\r\n", "\n").replace("\r", "\n")).strip()
+    return (
+        sqlparse.format(
+            sql,
+            strip_comments=False,
+            reindent=False,  # don't add newlines/indent
+            keyword_case=None,  # don't change case
+        )
+        .replace("\n", " ")
+        .replace("\r", " ")
+        .strip()
+    )
 
 
 def add_quotes(sql: str) -> Tuple[str, str]:
