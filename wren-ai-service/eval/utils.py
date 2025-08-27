@@ -33,8 +33,8 @@ async def get_data_from_wren_engine(
     timeout: float = 300,
     limit: Optional[int] = None,
 ):
-    quoted_sql, no_error = add_quotes(sql)
-    assert no_error, f"Error in quoting SQL: {sql}"
+    quoted_sql, error = add_quotes(sql)
+    assert not error, f"Error in quoting SQL: {sql}"
 
     if data_source == "duckdb":
         async with aiohttp.request(
