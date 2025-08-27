@@ -263,7 +263,7 @@ class TestAddQuotes:
         assert "'2023-01-01'" in result  # Date literals should remain unchanged
         assert '"users"' in result  # Table names should be quoted
         assert '"posts"' in result
-        assert "days_ago" in result  # Aliases should not be quoted
+        assert '"days_ago"' in result
 
     def test_add_quotes_window_functions_with_time(self):
         """Test window functions with time-based ordering and partitioning."""
@@ -286,8 +286,8 @@ class TestAddQuotes:
         assert '"event_time"' in result
         assert '"event_timestamp"' in result
         assert '"user_events"' in result
-        assert "rn" in result  # Aliases should not be quoted
-        assert "prev_time" in result
+        assert '"rn"' in result
+        assert '"prev_time"' in result
 
     def test_add_quotes_timezone_offset_literals(self):
         """Test timezone offset literals and TIMESTAMPTZ functions."""
@@ -346,8 +346,8 @@ class TestAddQuotes:
         assert '"user_timezone"' in result
         assert '"event_timestamp"' in result
         assert '"user_sessions"' in result
-        assert "local_time" in result  # Aliases should not be quoted
-        assert "tz_offset" in result
+        assert '"local_time"' in result
+        assert '"tz_offset"' in result
 
     def test_add_quotes_timezone_interval_operations(self):
         """Test timezone operations with intervals."""
@@ -420,10 +420,10 @@ class TestAddQuotes:
         assert '"user_tz"' in result
         assert '"updated_at"' in result
         assert '"user_activities"' in result
-        assert "hour_bucket" in result  # Aliases should not be quoted
-        assert "event_count" in result
-        assert "first_event" in result
-        assert "last_update" in result
+        assert '"hour_bucket"' in result
+        assert '"event_count"' in result
+        assert '"first_event"' in result
+        assert '"last_update"' in result
 
     def test_add_quotes_timezone_cte_with_conversions(self):
         """Test Common Table Expressions with timezone conversions."""
@@ -456,9 +456,6 @@ class TestAddQuotes:
         assert '"raw_events"' in result  # Tables should be quoted
         assert '"ta"."user_id"' in result  # Dotted references should be quoted
         assert '"ta"."local_event_time"' in result
-        assert (
-            "local_event_time" in result
-        )  # Aliases should not be quoted (when not prefixed)
         assert "unix_timestamp" in result
         assert "event_date" in result
         assert "utc_time" in result
