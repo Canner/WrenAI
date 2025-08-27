@@ -2,7 +2,6 @@ from src.core.engine import (
     add_quotes,
     clean_generation_result,
     remove_limit_statement,
-    squish_sql,
 )
 
 
@@ -117,8 +116,6 @@ class TestAddQuotes:
         assert error == ""
         assert '"name"' in result
         assert '"users"' in result
-        # Should not have excessive whitespace
-        assert "    " not in result
 
     def test_add_quotes_preserves_spacing_in_chains(self):
         """Test that spacing within dotted chains is preserved."""
@@ -206,25 +203,3 @@ class TestRemoveLimitStatement:
         result = remove_limit_statement(sql)
         assert "name = 'limit'" in result
         assert "LIMIT 10" not in result
-
-
-class TestSquishSql:
-    """Test cases for the squish_sql function."""
-
-    def test_squish_sql_normalizes_whitespace(self):
-        """Test normalizing whitespace."""
-        sql = "SELECT  *   \n\n  FROM   users"
-        result = squish_sql(sql)
-        assert result == "SELECT * FROM users"
-
-    def test_squish_sql_handles_line_endings(self):
-        """Test handling different line endings."""
-        sql = "SELECT *\r\nFROM users\rWHERE active = true"
-        result = squish_sql(sql)
-        assert result == "SELECT * FROM users WHERE active = true"
-
-    def test_squish_sql_strips_edges(self):
-        """Test stripping leading and trailing whitespace."""
-        sql = "   SELECT * FROM users   "
-        result = squish_sql(sql)
-        assert result == "SELECT * FROM users"
