@@ -3,30 +3,21 @@ import base64
 import json
 import os
 import time
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional
 
 import orjson
 import pandas as pd
 import requests
-import sqlglot
 import yaml
 from dotenv import load_dotenv
+
+from src.core.engine import add_quotes
 
 load_dotenv("tools/.env", override=True)
 
 WREN_ENGINE_API_URL = "http://localhost:8080"
 WREN_IBIS_API_URL = "http://localhost:8000"
 DATA_SOURCES = ["duckdb", "bigquery", "postgres"]
-
-
-def add_quotes(sql: str) -> Tuple[str, bool]:
-    try:
-        quoted_sql = sqlglot.transpile(sql, read=None, identify=True)[0]
-        return quoted_sql, True
-    except Exception as e:
-        print(f"Error in adding quotes to SQL: {sql}")
-        print(f"Error: {e}")
-        return sql, False
 
 
 def _get_connection_info(data_source: str):

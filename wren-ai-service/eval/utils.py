@@ -4,13 +4,12 @@ import re
 import uuid
 from copy import deepcopy
 from datetime import datetime
-from typing import Any, Dict, List, Literal, Optional, Tuple, get_args
+from typing import Any, Dict, List, Literal, Optional, get_args
 
 import aiohttp
 import orjson
 import psycopg2
 import requests
-import sqlglot
 import tomlkit
 import yaml
 from dotenv import load_dotenv
@@ -19,19 +18,10 @@ from tomlkit import parse
 
 import docker
 from eval import WREN_ENGINE_API_URL, EvalSettings
+from src.core.engine import add_quotes
 from src.providers.engine.wren import WrenEngine
 
 load_dotenv(".env", override=True)
-
-
-def add_quotes(sql: str) -> Tuple[str, bool]:
-    try:
-        quoted_sql = sqlglot.transpile(sql, read=None, identify=True)[0]
-        return quoted_sql, True
-    except Exception as e:
-        print(f"Error in adding quotes to SQL: {sql}")
-        print(f"Error: {e}")
-        return sql, False
 
 
 async def get_data_from_wren_engine(
@@ -43,8 +33,8 @@ async def get_data_from_wren_engine(
     timeout: float = 300,
     limit: Optional[int] = None,
 ):
-    quoted_sql, no_error = add_quotes(sql)
-    assert no_error, f"Error in quoting SQL: {sql}"
+    quoted_sql, error = add_quotes(sql)
+    assert not error, f"Error in quoting SQL: {sql}"
 
     if data_source == "duckdb":
         async with aiohttp.request(
