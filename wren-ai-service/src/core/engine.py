@@ -70,9 +70,97 @@ def add_quotes(sql: str) -> Tuple[str, str]:
         Add quotes around identifiers using SQLGlot's tokenizer positions.
         """
 
+        def is_sql_keyword(text: str) -> bool:
+            """Check if the text is a SQL keyword that should not be quoted."""
+            # Common SQL keywords that should never be quoted
+            sql_keywords = {
+                # Basic SQL keywords
+                "SELECT",
+                "FROM",
+                "WHERE",
+                "JOIN",
+                "LEFT",
+                "RIGHT",
+                "INNER",
+                "OUTER",
+                "ON",
+                "AND",
+                "OR",
+                "NOT",
+                "IN",
+                "EXISTS",
+                "BETWEEN",
+                "LIKE",
+                "IS",
+                "NULL",
+                "ORDER",
+                "BY",
+                "GROUP",
+                "HAVING",
+                "LIMIT",
+                "OFFSET",
+                "UNION",
+                "INTERSECT",
+                "EXCEPT",
+                "AS",
+                "DISTINCT",
+                "ALL",
+                "TOP",
+                "WITH",
+                "RECURSIVE",
+                # Data types
+                "INTEGER",
+                "INT",
+                "BIGINT",
+                "SMALLINT",
+                "DECIMAL",
+                "NUMERIC",
+                "FLOAT",
+                "REAL",
+                "DOUBLE",
+                "PRECISION",
+                "VARCHAR",
+                "CHAR",
+                "TEXT",
+                "BOOLEAN",
+                "BOOL",
+                "DATE",
+                "TIME",
+                "TIMESTAMP",
+                "TIMESTAMPTZ",
+                "INTERVAL",
+                "WITH",
+                "WITHOUT",
+                # Time/date keywords
+                "YEAR",
+                "MONTH",
+                "DAY",
+                "HOUR",
+                "MINUTE",
+                "SECOND",
+                "TIMEZONE",
+                "EPOCH",
+                "AT",
+                "ZONE",
+                "CURRENT_DATE",
+                "CURRENT_TIME",
+                "CURRENT_TIMESTAMP",
+                # Other common keywords
+                "CASE",
+                "WHEN",
+                "THEN",
+                "ELSE",
+                "END",
+                "DESC",
+                "ASC",
+                "TRUE",
+                "FALSE",
+            }
+            return text.upper() in sql_keywords
+
         def is_ident(tok: Token):
             # SQLGlot uses VAR for identifiers, but also treats SQL keywords as identifiers in some contexts
-            return tok.token_type in (
+            if tok.token_type not in (
                 TokenType.VAR,
                 TokenType.SCHEMA,
                 TokenType.TABLE,
@@ -80,7 +168,15 @@ def add_quotes(sql: str) -> Tuple[str, str]:
                 TokenType.DATABASE,
                 TokenType.INDEX,
                 TokenType.VIEW,
-            )
+            ):
+                return False
+
+            # Don't quote SQL keywords
+            token_text = sql[tok.start : tok.end + 1]
+            if is_sql_keyword(token_text):
+                return False
+
+            return True
 
         def is_already_quoted_text(text: str) -> bool:
             text = text.strip()
