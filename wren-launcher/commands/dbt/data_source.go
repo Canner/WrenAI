@@ -127,35 +127,6 @@ func convertToPostgresDataSource(conn DbtConnection) (*WrenPostgresDataSource, e
 		User:     conn.User,
 		Password: conn.Password,
 	}
-	// If no port is specified, use PostgreSQL default port
-	if ds.Port == 0 {
-		ds.Port = 5432
-	}
-
-	return ds, nil
-}
-
-func convertToMSSQLDataSource(conn DbtConnection) (*WrenMSSQLDataSource, error) {
-	port := strconv.Itoa(conn.Port)
-	if conn.Port == 0 {
-		port = "1433"
-	}
-
-	host := conn.Server
-	if host == "" {
-		host = conn.Host
-	}
-
-	ds := &WrenMSSQLDataSource{
-		Database:   conn.Database,
-		Host:       host,
-		Port:       port,
-		User:       conn.User,
-		Password:   conn.Password,
-		TdsVersion: "8.0",                           // the default tds version for Wren engine image
-		Driver:     "ODBC Driver 18 for SQL Server", // the driver used by Wren engine image
-		Kwargs:     map[string]interface{}{"TrustServerCertificate": "YES"},
-	}
 
 	return ds, nil
 }
@@ -465,11 +436,11 @@ func (ds *WrenMSSQLDataSource) Validate() error {
 func (ds *WrenMSSQLDataSource) MapType(sourceType string) string {
 	// This method is not used in WrenMSSQLDataSource, but required by DataSource interface
 	switch strings.ToLower(sourceType) {
-	case "char", "nchar":
+	case charType, "nchar":
 		return charType
 	case varcharType, "nvarchar":
 		return varcharType
-	case "text", "ntext":
+	case textType, "ntext":
 		return textType
 	case "bit", "tinyint":
 		return booleanType
