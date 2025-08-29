@@ -3,6 +3,7 @@ package dbt
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/pterm/pterm"
@@ -16,6 +17,7 @@ const (
 	timestampType = "timestamp"
 	doubleType    = "double"
 	booleanType   = "boolean"
+	postgresType  = "postgres"
 )
 
 // Constants for SQL data types
@@ -73,10 +75,12 @@ func FromDbtProfiles(profiles *DbtProfiles) ([]DataSource, error) {
 // convertConnectionToDataSource converts connection to corresponding DataSource based on connection type
 func convertConnectionToDataSource(conn DbtConnection, dbtHomePath, profileName, outputName string) (DataSource, error) {
 	switch strings.ToLower(conn.Type) {
-	case "postgres", "postgresql":
+	case postgresType, "postgresql":
 		return convertToPostgresDataSource(conn)
 	case "duckdb":
 		return convertToLocalFileDataSource(conn, dbtHomePath)
+	case "mysql":
+		return convertToMysqlDataSource(conn)
 	default:
 		// For unsupported database types, we can choose to ignore or return error
 		// Here we choose to return nil and log a warning
@@ -87,17 +91,24 @@ func convertConnectionToDataSource(conn DbtConnection, dbtHomePath, profileName,
 
 // convertToPostgresDataSource converts to PostgreSQL data source
 func convertToPostgresDataSource(conn DbtConnection) (*WrenPostgresDataSource, error) {
-	ds := &WrenPostgresDataSource{
-		Host:     conn.Host,
-		Port:     conn.Port,
-		Database: conn.Database,
-		User:     conn.User,
-		Password: conn.Password,
+	// For PostgreSQL, prefer dbname over database field
+	dbName := conn.DbName
+	if dbName == "" {
+		dbName = conn.Database
 	}
 
-	// If no port is specified, use PostgreSQL default port
-	if ds.Port == 0 {
-		ds.Port = 5432
+	pterm.Info.Printf("Converting Postgres data source: %s:%d/%s\n", conn.Host, conn.Port, dbName)
+	port := strconv.Itoa(conn.Port)
+	if conn.Port == 0 {
+		port = "5432"
+	}
+
+	ds := &WrenPostgresDataSource{
+		Host:     conn.Host,
+		Port:     port,
+		Database: dbName,
+		User:     conn.User,
+		Password: conn.Password,
 	}
 
 	return ds, nil
@@ -141,6 +152,30 @@ func convertToLocalFileDataSource(conn DbtConnection, dbtHome string) (*WrenLoca
 		Url:    url,
 		Format: format,
 	}, nil
+}
+
+func convertToMysqlDataSource(conn DbtConnection) (*WrenMysqlDataSource, error) {
+	pterm.Info.Printf("Converting MySQL data source: %s:%d/%s\n", conn.Host, conn.Port, conn.Database)
+
+	sslMode := "ENABLED" // Default SSL mode
+	if conn.SslDisable {
+		sslMode = "DISABLED"
+	}
+	port := strconv.Itoa(conn.Port)
+	if conn.Port == 0 {
+		port = "3306"
+	}
+
+	ds := &WrenMysqlDataSource{
+		Host:     conn.Host,
+		Port:     port,
+		Database: conn.Database,
+		User:     conn.User,
+		Password: conn.Password,
+		SslMode:  sslMode,
+	}
+
+	return ds, nil
 }
 
 type WrenLocalFileDataSource struct {
@@ -189,7 +224,7 @@ func (ds *WrenLocalFileDataSource) MapType(sourceType string) string {
 
 type WrenPostgresDataSource struct {
 	Host     string `json:"host"`
-	Port     int    `json:"port"`
+	Port     string `json:"port"`
 	Database string `json:"database"`
 	User     string `json:"user"`
 	Password string `json:"password"`
@@ -197,7 +232,7 @@ type WrenPostgresDataSource struct {
 
 // GetType implements DataSource interface
 func (ds *WrenPostgresDataSource) GetType() string {
-	return "postgres"
+	return postgresType
 }
 
 // Validate implements DataSource interface
@@ -211,7 +246,14 @@ func (ds *WrenPostgresDataSource) Validate() error {
 	if ds.User == "" {
 		return fmt.Errorf("user cannot be empty")
 	}
-	if ds.Port <= 0 || ds.Port > 65535 {
+	if ds.Port == "" {
+		return fmt.Errorf("port must be specified")
+	}
+	port, err := strconv.Atoi(ds.Port)
+	if err != nil {
+		return fmt.Errorf("port must be a valid number")
+	}
+	if port <= 0 || port > 65535 {
 		return fmt.Errorf("port must be between 1 and 65535")
 	}
 	return nil
@@ -220,6 +262,83 @@ func (ds *WrenPostgresDataSource) Validate() error {
 func (ds *WrenPostgresDataSource) MapType(sourceType string) string {
 	// This method is not used in WrenPostgresDataSource, but required by DataSource interface
 	return sourceType
+}
+
+type WrenMysqlDataSource struct {
+	Database string `json:"database"`
+	Host     string `json:"host"`
+	Password string `json:"password"`
+	Port     string `json:"port"`
+	User     string `json:"user"`
+	SslCA    string `json:"ssl_ca,omitempty"`   // Optional SSL CA file for MySQL
+	SslMode  string `json:"ssl_mode,omitempty"` // Optional SSL mode for MySQL
+}
+
+// GetType implements DataSource interface
+func (ds *WrenMysqlDataSource) GetType() string {
+	return "mysql"
+}
+
+// Validate implements DataSource interface
+func (ds *WrenMysqlDataSource) Validate() error {
+	if ds.Host == "" {
+		return fmt.Errorf("host cannot be empty")
+	}
+	if ds.Database == "" {
+		return fmt.Errorf("database cannot be empty")
+	}
+	if ds.User == "" {
+		return fmt.Errorf("user cannot be empty")
+	}
+	if ds.Port == "" {
+		return fmt.Errorf("port must be specified")
+	}
+	port, err := strconv.Atoi(ds.Port)
+	if err != nil {
+		return fmt.Errorf("port must be a valid number")
+	}
+	if port <= 0 || port > 65535 {
+		return fmt.Errorf("port must be between 1 and 65535")
+	}
+	return nil
+}
+
+func (ds *WrenMysqlDataSource) MapType(sourceType string) string {
+	// This method is not used in WrenMysqlDataSource, but required by DataSource interface
+	sourceType = strings.ToUpper(sourceType)
+	switch sourceType {
+	case "CHAR":
+		return "char"
+	case "VARCHAR":
+		return varcharType
+	case "TEXT", "TINYTEXT", "MEDIUMTEXT", "LONGTEXT", "ENUM", "SET":
+		return "text"
+	case "BIT", "TINYINT":
+		return "TINYINT"
+	case "SMALLINT":
+		return "SMALLINT"
+	case "MEDIUMINT", "INT", "INTEGER":
+		return "INTEGER"
+	case "BIGINT":
+		return "BIGINT"
+	case "FLOAT", "DOUBLE":
+		return "DOUBLE"
+	case "DECIMAL", "NUMERIC":
+		return "DECIMAL"
+	case "DATE":
+		return "DATE"
+	case "DATETIME":
+		return "DATETIME"
+	case "TIMESTAMP":
+		return "TIMESTAMPTZ"
+	case "BOOLEAN", "BOOL":
+		return "BOOLEAN"
+	case "JSON":
+		return "JSON"
+	default:
+		// Return the original type if no mapping is found
+		return strings.ToLower(sourceType)
+	}
 }
 
 // GetActiveDataSources gets active data sources based on specified profile and target
@@ -326,7 +445,7 @@ func (d *DefaultDataSource) MapType(sourceType string) string {
 	case "integer", "int", "bigint", "int64":
 		return "integer"
 	case "varchar", "text", "string", "char":
-		return "varchar"
+		return varcharType
 	case "timestamp", "datetime", "date":
 		return "timestamp"
 	case "double", "float", "decimal", "numeric":
