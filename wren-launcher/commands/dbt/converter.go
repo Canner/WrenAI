@@ -154,6 +154,18 @@ func ConvertDbtProjectCore(opts ConvertOptions) (*ConvertResult, error) {
 						"format": typedDS.Format,
 					},
 				}
+			case *WrenMysqlDataSource:
+				wrenDataSource = map[string]interface{}{
+					"type": "mysql",
+					"properties": map[string]interface{}{
+						"host":     typedDS.Host,
+						"port":     typedDS.Port,
+						"database": typedDS.Database,
+						"user":     typedDS.User,
+						"password": typedDS.Password,
+						"sslMode":  typedDS.SslMode,
+					},
+				}
 			default:
 				pterm.Warning.Printf("Warning: Unsupported data source type: %s\n", ds.GetType())
 				wrenDataSource = map[string]interface{}{

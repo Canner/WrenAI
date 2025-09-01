@@ -127,6 +127,7 @@ func parseConnection(connectionMap map[string]interface{}) (*DbtConnection, erro
 	connection.User = getString("user")
 	connection.Password = getString("password")
 	connection.Database = getString("database")
+	connection.DbName = getString("dbname") // PostgreSQL specific
 	connection.Schema = getString("schema")
 
 	// Extract database-specific fields
@@ -140,13 +141,14 @@ func parseConnection(connectionMap map[string]interface{}) (*DbtConnection, erro
 	connection.SearchPath = getString("search_path")
 	connection.SSLMode = getString("sslmode")
 	connection.Path = getString("path")
+	connection.SslDisable = getBool("ssl_disable") // MySQL specific
 
 	// Store any additional fields that weren't mapped
 	knownFields := map[string]bool{
 		"type": true, "host": true, "port": true, "user": true, "password": true,
-		"database": true, "schema": true, "project": true, "dataset": true,
+		"database": true, "dbname": true, "schema": true, "project": true, "dataset": true,
 		"keyfile": true, "account": true, "warehouse": true, "role": true,
-		"keepalive": true, "search_path": true, "sslmode": true, "path": true,
+		"keepalive": true, "search_path": true, "sslmode": true, "path": true, "ssl_disable": true,
 	}
 
 	for key, value := range connectionMap {
