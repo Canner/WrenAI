@@ -53,7 +53,7 @@ def add_quotes(sql: str) -> Tuple[str, str]:
     try:
         quoted_sql = sqlglot.transpile(
             sql,
-            read="trino",
+            read=None,
             identify=True,
             error_level=sqlglot.ErrorLevel.RAISE,
             unsupported_level=sqlglot.ErrorLevel.RAISE,
