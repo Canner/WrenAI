@@ -72,7 +72,41 @@ export class DataSourceMetadataService implements IDataSourceMetadataService {
       const tables = await this.wrenEngineAdaptor.listTables();
       return tables;
     }
-    return await this.ibisAdaptor.getTables(dataSource, connectionInfo);
+
+    const allTables = await this.ibisAdaptor.getTables(
+      dataSource,
+      connectionInfo,
+    );
+
+    // Filter tables by database/schema if database is specified in connectionInfo
+    const database = connectionInfo?.database;
+    if (database && allTables.length > 0) {
+      // For data sources that use database as schema name, filter tables by schema
+      return allTables.filter((table) => {
+        // Check if table name contains schema information
+        // Table names might be in format: schema.table or just table
+        const tableName = table.name;
+        const tableNameParts = tableName.split('.');
+
+        if (tableNameParts.length > 1) {
+          // If table name has schema prefix, check if it matches the database
+          const schemaName = tableNameParts[0];
+          return schemaName === database;
+        } else {
+          // If no schema prefix, check table properties for schema information
+          const tableSchema =
+            table.properties?.schema || table.properties?.database_name;
+          if (tableSchema) {
+            return tableSchema === database;
+          }
+          // If no schema information available, include the table
+          // (this maintains backward compatibility)
+          return true;
+        }
+      });
+    }
+
+    return allTables;
   }
 
   public async listConstraints(
