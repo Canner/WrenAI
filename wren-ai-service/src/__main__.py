@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse, RedirectResponse
@@ -9,11 +9,13 @@ from langfuse.decorators import langfuse_context
 
 from src.config import settings
 from src.globals import (
+    create_pipe_component_service_mapping,
     create_service_container,
     create_service_metadata,
 )
 from src.providers import generate_components
 from src.utils import (
+    SinglePipeComponentRequest,
     init_langfuse,
     setup_custom_logger,
 )
@@ -28,9 +30,13 @@ setup_custom_logger(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # startup events
-    pipe_components = generate_components(settings.components)
+    pipe_components, instantiated_providers = generate_components(settings.components)
     app.state.service_container = create_service_container(pipe_components, settings)
+    app.state.pipe_component_service_mapping = create_pipe_component_service_mapping(
+        app.state.service_container
+    )
     app.state.service_metadata = create_service_metadata(pipe_components)
+    app.state.instantiated_providers = instantiated_providers
     init_langfuse(settings)
 
     yield
@@ -84,6 +90,27 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/pipe_components")
+def get_pipe_components():
+    return sorted(list(app.state.pipe_component_service_mapping.keys()))
+
+
+@app.post("/pipe_components")
+def update_pipe_components(pipe_components_request: list[SinglePipeComponentRequest]):
+    try:
+        for payload in pipe_components_request:
+            for service in app.state.pipe_component_service_mapping[
+                payload.pipeline_name
+            ]:
+                service._pipelines[payload.pipeline_name].update_llm_provider(
+                    app.state.instantiated_providers["llm"][payload.llm_config]
+                )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error updating pipe components: {e}"
+        )
 
 
 if __name__ == "__main__":

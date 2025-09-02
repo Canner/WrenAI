@@ -392,4 +392,4 @@ def generate_components(configs: list[dict]) -> dict[str, PipelineComponent]:
     return {
         pipe_name: componentize(components, instantiated_providers)
         for pipe_name, components in config.pipelines.items()
-    }
+    }, instantiated_providers

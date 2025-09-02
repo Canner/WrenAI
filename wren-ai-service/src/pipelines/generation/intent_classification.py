@@ -346,25 +346,12 @@ class IntentClassification(BasicPipeline):
         table_column_retrieval_size: Optional[int] = 100,
         **kwargs,
     ):
-        self._components = {
-            "embedder": embedder_provider.get_text_embedder(),
-            "table_retriever": document_store_provider.get_retriever(
-                document_store_provider.get_store(dataset_name="table_descriptions"),
-                top_k=table_retrieval_size,
-            ),
-            "dbschema_retriever": document_store_provider.get_retriever(
-                document_store_provider.get_store(),
-                top_k=table_column_retrieval_size,
-            ),
-            "generator": llm_provider.get_generator(
-                system_prompt=intent_classification_system_prompt,
-                generation_kwargs=INTENT_CLASSIFICAION_MODEL_KWARGS,
-            ),
-            "generator_name": llm_provider.get_model(),
-            "prompt_builder": PromptBuilder(
-                template=intent_classification_user_prompt_template
-            ),
-        }
+        self._llm_provider = llm_provider
+        self._table_retrieval_size = table_retrieval_size
+        self._table_column_retrieval_size = table_column_retrieval_size
+        self._document_store_provider = document_store_provider
+        self._embedder_provider = embedder_provider
+        self._components = self._update_components()
 
         self._configs = {
             "wren_ai_docs": wren_ai_docs,
@@ -373,6 +360,29 @@ class IntentClassification(BasicPipeline):
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
+
+    def _update_components(self):
+        return {
+            "embedder": self._embedder_provider.get_text_embedder(),
+            "table_retriever": self._document_store_provider.get_retriever(
+                self._document_store_provider.get_store(
+                    dataset_name="table_descriptions"
+                ),
+                top_k=self._table_retrieval_size,
+            ),
+            "dbschema_retriever": self._document_store_provider.get_retriever(
+                self._document_store_provider.get_store(),
+                top_k=self._table_column_retrieval_size,
+            ),
+            "generator": self._llm_provider.get_generator(
+                system_prompt=intent_classification_system_prompt,
+                generation_kwargs=INTENT_CLASSIFICAION_MODEL_KWARGS,
+            ),
+            "generator_name": self._llm_provider.get_model(),
+            "prompt_builder": PromptBuilder(
+                template=intent_classification_user_prompt_template
+            ),
+        }
 
     @observe(name="Intent Classification")
     async def run(

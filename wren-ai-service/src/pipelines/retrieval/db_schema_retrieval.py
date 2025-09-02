@@ -459,41 +459,57 @@ class DbSchemaRetrieval(BasicPipeline):
         table_column_retrieval_size: int = 100,
         **kwargs,
     ):
-        self._components = {
-            "embedder": embedder_provider.get_text_embedder(),
-            "table_retriever": document_store_provider.get_retriever(
-                document_store_provider.get_store(dataset_name="table_descriptions"),
-                top_k=table_retrieval_size,
-            ),
-            "dbschema_retriever": document_store_provider.get_retriever(
-                document_store_provider.get_store(),
-                top_k=table_column_retrieval_size,
-            ),
-            "table_columns_selection_generator": llm_provider.get_generator(
-                system_prompt=table_columns_selection_system_prompt,
-                generation_kwargs=RETRIEVAL_MODEL_KWARGS,
-            ),
-            "generator_name": llm_provider.get_model(),
-            "prompt_builder": PromptBuilder(
-                template=table_columns_selection_user_prompt_template
-            ),
-        }
+        self._llm_provider = llm_provider
+        self._table_retrieval_size = table_retrieval_size
+        self._table_column_retrieval_size = table_column_retrieval_size
+        self._document_store_provider = document_store_provider
+        self._embedder_provider = embedder_provider
+        self._components = self._update_components()
+        self._configs = self._update_configs()
 
-        # for the first time, we need to load the encodings
-        _model = llm_provider.get_model()
+        super().__init__(
+            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
+        )
+
+    def _update_configs(self):
+        _model = self._llm_provider.get_model()
         if "gpt-4o" in _model or "gpt-4o-mini" in _model:
             _encoding = tiktoken.get_encoding("o200k_base")
         else:
             _encoding = tiktoken.get_encoding("cl100k_base")
 
-        self._configs = {
+        return {
             "encoding": _encoding,
-            "context_window_size": llm_provider.get_context_window_size(),
+            "context_window_size": self._llm_provider.get_context_window_size(),
         }
 
-        super().__init__(
-            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
+    def _update_components(self):
+        return {
+            "embedder": self._embedder_provider.get_text_embedder(),
+            "table_retriever": self._document_store_provider.get_retriever(
+                self._document_store_provider.get_store(
+                    dataset_name="table_descriptions"
+                ),
+                top_k=self._table_retrieval_size,
+            ),
+            "dbschema_retriever": self._document_store_provider.get_retriever(
+                self._document_store_provider.get_store(),
+                top_k=self._table_column_retrieval_size,
+            ),
+            "table_columns_selection_generator": self._llm_provider.get_generator(
+                system_prompt=table_columns_selection_system_prompt,
+                generation_kwargs=RETRIEVAL_MODEL_KWARGS,
+            ),
+            "generator_name": self._llm_provider.get_model(),
+            "prompt_builder": PromptBuilder(
+                template=table_columns_selection_user_prompt_template
+            ),
+        }
+
+    def update_llm_provider(self, llm_provider: LLMProvider):
+        self._llm_provider = llm_provider
+        self._components = self._update_components()
+        self._configs = self._update_configs()
 
     @observe(name="Ask Retrieval")
     async def run(

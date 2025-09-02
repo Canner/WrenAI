@@ -14,10 +14,19 @@ from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvid
 class BasicPipeline(metaclass=ABCMeta):
     def __init__(self, pipe: Pipeline | AsyncDriver | Driver):
         self._pipe = pipe
+        self._llm_provider = None
+        self._components = {}
 
     @abstractmethod
     def run(self, *args, **kwargs) -> Dict[str, Any]:
         ...
+
+    def _update_components(self) -> dict:
+        ...
+
+    def update_llm_provider(self, llm_provider: LLMProvider):
+        self._llm_provider = llm_provider
+        self._components = self._update_components()
 
 
 @dataclass

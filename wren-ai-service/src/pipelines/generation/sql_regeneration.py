@@ -157,21 +157,26 @@ class SQLRegeneration(BasicPipeline):
         engine: Engine,
         **kwargs,
     ):
-        self._components = {
-            "generator": llm_provider.get_generator(
-                system_prompt=sql_regeneration_system_prompt,
-                generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
-            ),
-            "generator_name": llm_provider.get_model(),
-            "prompt_builder": PromptBuilder(
-                template=sql_regeneration_user_prompt_template
-            ),
-            "post_processor": SQLGenPostProcessor(engine=engine),
-        }
+        self._llm_provider = llm_provider
+        self._engine = engine
+        self._components = self._update_components()
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
+
+    def _update_components(self):
+        return {
+            "generator": self._llm_provider.get_generator(
+                system_prompt=sql_regeneration_system_prompt,
+                generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
+            ),
+            "generator_name": self._llm_provider.get_model(),
+            "prompt_builder": PromptBuilder(
+                template=sql_regeneration_user_prompt_template
+            ),
+            "post_processor": SQLGenPostProcessor(engine=self._engine),
+        }
 
     @observe(name="SQL Regeneration")
     async def run(

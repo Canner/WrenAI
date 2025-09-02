@@ -96,20 +96,24 @@ class DataAssistance(BasicPipeline):
         **kwargs,
     ):
         self._user_queues = {}
-        self._components = {
-            "generator": llm_provider.get_generator(
-                system_prompt=data_assistance_system_prompt,
-                streaming_callback=self._streaming_callback,
-            ),
-            "generator_name": llm_provider.get_model(),
-            "prompt_builder": PromptBuilder(
-                template=data_assistance_user_prompt_template
-            ),
-        }
+        self._llm_provider = llm_provider
+        self._components = self._update_components()
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
+
+    def _update_components(self):
+        return {
+            "generator": self._llm_provider.get_generator(
+                system_prompt=data_assistance_system_prompt,
+                streaming_callback=self._streaming_callback,
+            ),
+            "generator_name": self._llm_provider.get_model(),
+            "prompt_builder": PromptBuilder(
+                template=data_assistance_user_prompt_template
+            ),
+        }
 
     def _streaming_callback(self, chunk, query_id):
         if query_id not in self._user_queues:
