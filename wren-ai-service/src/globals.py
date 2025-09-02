@@ -1,4 +1,5 @@
 import logging
+from collections import defaultdict
 from dataclasses import asdict, dataclass
 
 import toml
@@ -104,8 +105,8 @@ def create_service_container(
                 "table_description": indexing.TableDescription(
                     **pipe_components["table_description_indexing"],
                 ),
-                "sql_pairs": _sql_pair_indexing_pipeline,
-                "instructions": _instructions_indexing_pipeline,
+                "sql_pairs_indexing": _sql_pair_indexing_pipeline,
+                "instructions_indexing": _instructions_indexing_pipeline,
                 "project_meta": indexing.ProjectMeta(
                     **pipe_components["project_meta_indexing"],
                 ),
@@ -231,7 +232,7 @@ def create_service_container(
         ),
         sql_pairs_service=services.SqlPairsService(
             pipelines={
-                "sql_pairs": _sql_pair_indexing_pipeline,
+                "sql_pairs_indexing": _sql_pair_indexing_pipeline,
             },
             **query_cache,
         ),
@@ -260,6 +261,15 @@ def create_service_container(
             **query_cache,
         ),
     )
+
+
+def create_pipe_component_service_mapping(service_container: ServiceContainer):
+    _pipe_component_service_mapping = defaultdict(set)
+    for _, service in service_container.__dict__.items():
+        for pipe_name in service._pipelines.keys():
+            _pipe_component_service_mapping[pipe_name].add(service)
+
+    return _pipe_component_service_mapping
 
 
 # Create a dependency that will be used to access the ServiceContainer

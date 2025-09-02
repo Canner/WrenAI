@@ -82,18 +82,26 @@ class PreprocessSqlData(BasicPipeline):
         llm_provider: LLMProvider,
         **kwargs,
     ):
-        _model = llm_provider.get_model()
+        self._llm_provider = llm_provider
+        self._configs = self._update_configs()
+
+        super().__init__(Driver({}, sys.modules[__name__], adapter=base.DictResult()))
+
+    def _update_configs(self):
+        _model = self._llm_provider.get_model()
         if _model == "gpt-4o-mini" or _model == "gpt-4o":
             _encoding = tiktoken.get_encoding("o200k_base")
         else:
             _encoding = tiktoken.get_encoding("cl100k_base")
 
-        self._configs = {
+        return {
             "encoding": _encoding,
-            "context_window_size": llm_provider.get_context_window_size(),
+            "context_window_size": self._llm_provider.get_context_window_size(),
         }
 
-        super().__init__(Driver({}, sys.modules[__name__], adapter=base.DictResult()))
+    def update_llm_provider(self, llm_provider: LLMProvider):
+        self._llm_provider = llm_provider
+        self._configs = self._update_configs()
 
     @observe(name="Preprocess SQL Data")
     def run(

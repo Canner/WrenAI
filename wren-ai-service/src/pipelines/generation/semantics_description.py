@@ -218,19 +218,23 @@ SEMANTICS_DESCRIPTION_MODEL_KWARGS = {
 
 class SemanticsDescription(BasicPipeline):
     def __init__(self, llm_provider: LLMProvider, **_):
-        self._components = {
-            "prompt_builder": PromptBuilder(template=user_prompt_template),
-            "generator": llm_provider.get_generator(
-                system_prompt=system_prompt,
-                generation_kwargs=SEMANTICS_DESCRIPTION_MODEL_KWARGS,
-            ),
-            "generator_name": llm_provider.get_model(),
-        }
+        self._llm_provider = llm_provider
+        self._components = self._update_components()
         self._final = "output"
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
+
+    def _update_components(self):
+        return {
+            "prompt_builder": PromptBuilder(template=user_prompt_template),
+            "generator": self._llm_provider.get_generator(
+                system_prompt=system_prompt,
+                generation_kwargs=SEMANTICS_DESCRIPTION_MODEL_KWARGS,
+            ),
+            "generator_name": self._llm_provider.get_model(),
+        }
 
     @observe(name="Semantics Description Generation")
     async def run(

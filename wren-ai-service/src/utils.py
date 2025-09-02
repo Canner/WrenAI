@@ -7,6 +7,7 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 from langfuse.decorators import langfuse_context
+from pydantic import BaseModel
 
 from src.config import Settings
 
@@ -218,3 +219,8 @@ def extract_braces_content(resp: str) -> str:
     """
     match = re.search(r"```json\s*(\{.*?\})\s*```", resp, re.DOTALL)
     return match.group(1) if match else resp
+
+
+class SinglePipeComponentRequest(BaseModel):
+    pipeline_name: str
+    llm_config: str
