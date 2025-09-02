@@ -79,6 +79,9 @@ def create_service_container(
     _sql_executor_pipeline = retrieval.SQLExecutor(
         **pipe_components["sql_executor"],
     )
+    _sql_diagnosis_pipeline = generation.SQLDiagnosis(
+        **pipe_components["sql_diagnosis"],
+    )
 
     return ServiceContainer(
         semantics_description=services.SemanticsDescription(
@@ -146,6 +149,7 @@ def create_service_container(
                     **pipe_components["followup_sql_generation"],
                 ),
                 "sql_functions_retrieval": _sql_functions_retrieval_pipeline,
+                "sql_diagnosis": _sql_diagnosis_pipeline,
             },
             allow_intent_classification=settings.allow_intent_classification,
             allow_sql_generation_reasoning=settings.allow_sql_generation_reasoning,
@@ -165,6 +169,7 @@ def create_service_container(
                     **pipe_components["sql_regeneration"],
                 ),
                 "sql_correction": _sql_correction_pipeline,
+                "sql_diagnosis": _sql_diagnosis_pipeline,
             },
             allow_sql_functions_retrieval=settings.allow_sql_functions_retrieval,
             **query_cache,

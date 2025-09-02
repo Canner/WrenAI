@@ -496,12 +496,12 @@ class AskService:
                     "post_process"
                 ]["invalid_generation_result"]:
                     while current_sql_correction_retries < max_sql_correction_retries:
-                        invalid_sql = failed_dry_run_result["sql"]
-                        error_message = failed_dry_run_result["error"]
-
                         if failed_dry_run_result["type"] == "TIME_OUT":
                             break
 
+                        original_sql = failed_dry_run_result["original_sql"]
+                        invalid_sql = failed_dry_run_result["sql"]
+                        error_message = failed_dry_run_result["error"]
                         current_sql_correction_retries += 1
 
                         self._ask_results[query_id] = AskResultResponse(
@@ -514,12 +514,33 @@ class AskService:
                             trace_id=trace_id,
                             is_followup=True if histories else False,
                         )
+
+                        sql_diagnosis_results = await self._pipelines[
+                            "sql_diagnosis"
+                        ].run(
+                            contexts=table_ddls,
+                            original_sql=original_sql,
+                            invalid_sql=invalid_sql,
+                            error_message=error_message,
+                        )
+                        sql_diagnosis_reasoning = sql_diagnosis_results[
+                            "post_process"
+                        ].get("reasoning")
+                        is_sql_syntax_issue = sql_diagnosis_results["post_process"].get(
+                            "is_sql_syntax_issue"
+                        )
+                        if not is_sql_syntax_issue:
+                            break
+
                         sql_correction_results = await self._pipelines[
                             "sql_correction"
                         ].run(
                             contexts=table_ddls,
                             instructions=instructions,
-                            invalid_generation_result=failed_dry_run_result,
+                            invalid_generation_result={
+                                "sql": original_sql,
+                                "error": sql_diagnosis_reasoning,
+                            },
                             project_id=ask_request.project_id,
                             use_dry_plan=use_dry_plan,
                             allow_dry_plan_fallback=allow_dry_plan_fallback,

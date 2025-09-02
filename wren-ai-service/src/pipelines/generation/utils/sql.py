@@ -124,7 +124,8 @@ class SQLGenPostProcessor:
                     else:
                         error_message = addition.get("error_message", "")
                         invalid_generation_result = {
-                            "sql": quoted_sql,
+                            "sql": addition.get("error_sql", quoted_sql),
+                            "original_sql": quoted_sql,
                             "type": "TIME_OUT"
                             if error_message.startswith("Request timed out")
                             else "DRY_RUN",
@@ -153,7 +154,8 @@ class SQLGenPostProcessor:
                             else "PREVIEW_FAILED"
                         )
                         invalid_generation_result = {
-                            "sql": quoted_sql,
+                            "sql": addition.get("error_sql", quoted_sql),
+                            "original_sql": quoted_sql,
                             "type": "TIME_OUT"
                             if error_message.startswith("Request timed out")
                             else preview_data_status,
@@ -163,6 +165,7 @@ class SQLGenPostProcessor:
             else:
                 invalid_generation_result = {
                     "sql": generation_result,
+                    "original_sql": generation_result,
                     "type": "ADD_QUOTES",
                     "error": error_message,
                 }

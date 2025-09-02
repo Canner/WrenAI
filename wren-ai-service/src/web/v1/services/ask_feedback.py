@@ -187,36 +187,61 @@ class AskFeedbackService:
                     "post_process"
                 ]["invalid_generation_result"]:
                     if failed_dry_run_result["type"] != "TIME_OUT":
+                        original_sql = failed_dry_run_result["original_sql"]
+                        invalid_sql = failed_dry_run_result["sql"]
+                        error_message = failed_dry_run_result["error"]
+
                         self._ask_feedback_results[
                             query_id
                         ] = AskFeedbackResultResponse(
                             status="correcting",
                             trace_id=trace_id,
                         )
-                        sql_correction_results = await self._pipelines[
-                            "sql_correction"
-                        ].run(
-                            contexts=[],
-                            invalid_generation_result=failed_dry_run_result,
-                            project_id=ask_feedback_request.project_id,
-                        )
 
-                        if valid_generation_result := sql_correction_results[
+                        sql_diagnosis_results = await self._pipelines[
+                            "sql_diagnosis"
+                        ].run(
+                            contexts=table_ddls,
+                            original_sql=original_sql,
+                            invalid_sql=invalid_sql,
+                            error_message=error_message,
+                        )
+                        sql_diagnosis_reasoning = sql_diagnosis_results[
                             "post_process"
-                        ]["valid_generation_result"]:
-                            api_results = [
-                                AskResult(
-                                    **{
-                                        "sql": valid_generation_result.get("sql"),
-                                        "type": "llm",
-                                    }
-                                )
-                            ]
-                        elif failed_dry_run_result := sql_correction_results[
-                            "post_process"
-                        ]["invalid_generation_result"]:
-                            invalid_sql = failed_dry_run_result["sql"]
-                            error_message = failed_dry_run_result["error"]
+                        ].get("reasoning")
+                        is_sql_syntax_issue = sql_diagnosis_results["post_process"].get(
+                            "is_sql_syntax_issue"
+                        )
+                        if is_sql_syntax_issue:
+                            sql_correction_results = await self._pipelines[
+                                "sql_correction"
+                            ].run(
+                                contexts=table_ddls,
+                                instructions=instructions,
+                                invalid_generation_result={
+                                    "sql": original_sql,
+                                    "error": sql_diagnosis_reasoning,
+                                },
+                                project_id=ask_feedback_request.project_id,
+                                sql_functions=sql_functions,
+                            )
+
+                            if valid_generation_result := sql_correction_results[
+                                "post_process"
+                            ]["valid_generation_result"]:
+                                api_results = [
+                                    AskResult(
+                                        **{
+                                            "sql": valid_generation_result.get("sql"),
+                                            "type": "llm",
+                                        }
+                                    )
+                                ]
+                            elif failed_dry_run_result := sql_correction_results[
+                                "post_process"
+                            ]["invalid_generation_result"]:
+                                invalid_sql = failed_dry_run_result["sql"]
+                                error_message = failed_dry_run_result["error"]
                     else:
                         invalid_sql = failed_dry_run_result["sql"]
                         error_message = failed_dry_run_result["error"]
