@@ -98,6 +98,7 @@ class ChartService:
 
         try:
             query_id = chart_request.query_id
+            execute_sql_error_message = None
 
             if not chart_request.data:
                 self._chart_results[query_id] = ChartResultResponse(
@@ -113,21 +114,24 @@ class ChartService:
                 )["execute_sql"]
 
                 sql_data = execute_sql_result["results"]
-                error_message = execute_sql_result.get("error_message", None)
+                execute_sql_error_message = execute_sql_result.get(
+                    "error_message", None
+                )
             else:
                 sql_data = chart_request.data
+                execute_sql_error_message = None
 
-            if error_message:
+            if execute_sql_error_message:
                 self._chart_results[query_id] = ChartResultResponse(
                     status="failed",
                     error=ChartError(
                         code="OTHERS",
-                        message=error_message,
+                        message=execute_sql_error_message,
                     ),
                     trace_id=trace_id,
                 )
                 results["metadata"]["error_type"] = "OTHERS"
-                results["metadata"]["error_message"] = error_message
+                results["metadata"]["error_message"] = execute_sql_error_message
                 return results
 
             self._chart_results[query_id] = ChartResultResponse(

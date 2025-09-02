@@ -110,6 +110,7 @@ class ChartAdjustmentService:
 
         try:
             query_id = chart_adjustment_request.query_id
+            execute_sql_error_message = None
 
             self._chart_adjustment_results[query_id] = ChartAdjustmentResultResponse(
                 status="fetching",
@@ -124,20 +125,20 @@ class ChartAdjustmentService:
             )["execute_sql"]
 
             sql_data = execute_sql_result["results"]
-            error_message = execute_sql_result.get("error_message", None)
+            execute_sql_error_message = execute_sql_result.get("error_message", None)
 
-            if error_message:
+            if execute_sql_error_message:
                 self._chart_adjustment_results[
                     query_id
                 ] = ChartAdjustmentResultResponse(
                     status="failed",
                     error=ChartAdjustmentError(
                         code="OTHERS",
-                        message=error_message,
+                        message=execute_sql_error_message,
                     ),
                 )
                 results["metadata"]["error_type"] = "OTHERS"
-                results["metadata"]["error_message"] = error_message
+                results["metadata"]["error_message"] = execute_sql_error_message
                 return results
 
             self._chart_adjustment_results[query_id] = ChartAdjustmentResultResponse(
