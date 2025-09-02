@@ -108,7 +108,7 @@ class SQLGenPostProcessor:
                             "correlation_id": "",
                         }
                 elif use_dry_run:
-                    status, _, addition = await self._engine.execute_sql(
+                    has_data, _, addition = await self._engine.execute_sql(
                         quoted_sql,
                         session,
                         project_id=project_id,
@@ -116,7 +116,7 @@ class SQLGenPostProcessor:
                         dry_run=True,
                     )
 
-                    if status:
+                    if has_data:
                         valid_generation_result = {
                             "sql": quoted_sql,
                             "correlation_id": addition.get("correlation_id", ""),
@@ -132,7 +132,7 @@ class SQLGenPostProcessor:
                             "correlation_id": addition.get("correlation_id", ""),
                         }
                 else:
-                    status, _, addition = await self._engine.execute_sql(
+                    has_data, _, addition = await self._engine.execute_sql(
                         quoted_sql,
                         session,
                         project_id=project_id,
@@ -140,7 +140,7 @@ class SQLGenPostProcessor:
                         dry_run=False,
                     )
 
-                    if status:
+                    if has_data:
                         valid_generation_result = {
                             "sql": quoted_sql,
                             "correlation_id": addition.get("correlation_id", ""),

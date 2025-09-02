@@ -98,6 +98,7 @@ class ChartService:
 
         try:
             query_id = chart_request.query_id
+            execute_sql_error_message = None
 
             if not chart_request.data:
                 self._chart_results[query_id] = ChartResultResponse(
@@ -105,14 +106,33 @@ class ChartService:
                     trace_id=trace_id,
                 )
 
-                sql_data = (
+                execute_sql_result = (
                     await self._pipelines["sql_executor"].run(
                         sql=chart_request.sql,
                         project_id=chart_request.project_id,
                     )
-                )["execute_sql"]["results"]
+                )["execute_sql"]
+
+                sql_data = execute_sql_result["results"]
+                execute_sql_error_message = execute_sql_result.get(
+                    "error_message", None
+                )
             else:
                 sql_data = chart_request.data
+                execute_sql_error_message = None
+
+            if execute_sql_error_message:
+                self._chart_results[query_id] = ChartResultResponse(
+                    status="failed",
+                    error=ChartError(
+                        code="OTHERS",
+                        message=execute_sql_error_message,
+                    ),
+                    trace_id=trace_id,
+                )
+                results["metadata"]["error_type"] = "OTHERS"
+                results["metadata"]["error_message"] = execute_sql_error_message
+                return results
 
             self._chart_results[query_id] = ChartResultResponse(
                 status="generating",
