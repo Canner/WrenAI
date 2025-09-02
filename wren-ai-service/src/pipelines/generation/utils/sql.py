@@ -108,7 +108,7 @@ class SQLGenPostProcessor:
                             "correlation_id": "",
                         }
                 elif use_dry_run:
-                    status, _, addition = await self._engine.execute_sql(
+                    has_data, _, addition = await self._engine.execute_sql(
                         quoted_sql,
                         session,
                         project_id=project_id,
@@ -116,7 +116,7 @@ class SQLGenPostProcessor:
                         dry_run=True,
                     )
 
-                    if status:
+                    if has_data:
                         valid_generation_result = {
                             "sql": quoted_sql,
                             "correlation_id": addition.get("correlation_id", ""),
@@ -132,7 +132,7 @@ class SQLGenPostProcessor:
                             "correlation_id": addition.get("correlation_id", ""),
                         }
                 else:
-                    status, _, addition = await self._engine.execute_sql(
+                    has_data, _, addition = await self._engine.execute_sql(
                         quoted_sql,
                         session,
                         project_id=project_id,
@@ -140,7 +140,7 @@ class SQLGenPostProcessor:
                         dry_run=False,
                     )
 
-                    if status:
+                    if has_data:
                         valid_generation_result = {
                             "sql": quoted_sql,
                             "correlation_id": addition.get("correlation_id", ""),
@@ -231,7 +231,7 @@ TEXT_TO_SQL_RULES = """
 - Refer to the value of alias from the comment section of the corresponding table or column in the DATABASE SCHEMA section for reference when using alias in the final SELECT clause.
   - EXAMPLE
     DATABASE SCHEMA
-    /* {"displayName":"_orders","description":"A model representing the orders data."} */
+    /* {"alias":"_orders","description":"A model representing the orders data."} */
     CREATE TABLE orders (
       -- {"description":"A column that represents the timestamp when the order was approved.","alias":"_timestamp"}
       ApprovedTimestamp TIMESTAMP
@@ -421,9 +421,9 @@ json_field_instructions = """
       - LAX_STRING for varchar fields
     - For Example:
       DATA SCHEMA:
-        `/* {"displayName":"users","description":"A model representing the users data."} */
+        `/* {"alias":"users","description":"A model representing the users data."} */
         CREATE TABLE users (
-            -- {"alias":"address","description":"A JSON object that represents address information of this user.","json_type":"JSON","json_fields":{"json_type":"JSON","address.json.city":{"name":"city","type":"varchar","path":"$.city","properties":{"displayName":"city","description":"City Name."}},"address.json.state":{"name":"state","type":"varchar","path":"$.state","properties":{"displayName":"state","description":"ISO code or name of the state, province or district."}},"address.json.postcode":{"name":"postcode","type":"varchar","path":"$.postcode","properties":{"displayName":"postcode","description":"Postal code."}},"address.json.country":{"name":"country","type":"varchar","path":"$.country","properties":{"displayName":"country","description":"ISO code of the country."}}}}
+            -- {"alias":"address","description":"A JSON object that represents address information of this user.","json_type":"JSON","json_fields":{"json_type":"JSON","address.json.city":{"name":"city","type":"varchar","path":"$.city","properties":{"alias":"city","description":"City Name."}},"address.json.state":{"name":"state","type":"varchar","path":"$.state","properties":{"alias":"state","description":"ISO code or name of the state, province or district."}},"address.json.postcode":{"name":"postcode","type":"varchar","path":"$.postcode","properties":{"alias":"postcode","description":"Postal code."}},"address.json.country":{"name":"country","type":"varchar","path":"$.country","properties":{"alias":"country","description":"ISO code of the country."}}}}
             address JSON
         )`
       To get the city of address in user table use SQL:
@@ -435,9 +435,9 @@ json_field_instructions = """
     - If the items in the ARRAY are JSON objects, use JSON_QUERY to query the fields inside each JSON item.
       - For Example:
       DATA SCHEMA
-        `/* {"displayName":"my_table","description":"A test my_table"} */
+        `/* {"alias":"my_table","description":"A test my_table"} */
         CREATE TABLE my_table (
-            -- {"alias":"elements","description":"elements column","json_type":"JSON_ARRAY","json_fields":{"json_type":"JSON_ARRAY","elements.json_array.id":{"name":"id","type":"bigint","path":"$.id","properties":{"displayName":"id","description":"data ID."}},"elements.json_array.key":{"name":"key","type":"varchar","path":"$.key","properties":{"displayName":"key","description":"data Key."}},"elements.json_array.value":{"name":"value","type":"varchar","path":"$.value","properties":{"displayName":"value","description":"data Value."}}}}
+            -- {"alias":"elements","description":"elements column","json_type":"JSON_ARRAY","json_fields":{"json_type":"JSON_ARRAY","elements.json_array.id":{"name":"id","type":"bigint","path":"$.id","properties":{"alias":"id","description":"data ID."}},"elements.json_array.key":{"name":"key","type":"varchar","path":"$.key","properties":{"alias":"key","description":"data Key."}},"elements.json_array.value":{"name":"value","type":"varchar","path":"$.value","properties":{"alias":"value","description":"data Value."}}}}
             elements JSON
         )`
         To get the number of elements in my_table table use SQL:

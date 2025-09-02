@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.common import clean_up_new_lines
+from src.pipelines.indexing import clean_display_name
 from src.utils import trace_cost
 
 logger = logging.getLogger("wren-ai-service")
@@ -102,7 +103,9 @@ def picked_models(mdl: dict, selected_models: list[str]) -> list[dict]:
                 "type": column["type"],
                 "properties": {
                     "description": column["properties"].get("description", ""),
-                    "alias": column["properties"].get("displayName", ""),
+                    "alias": clean_display_name(
+                        column["properties"].get("displayName", "")
+                    ),
                 },
             }
             for column in columns
@@ -115,7 +118,7 @@ def picked_models(mdl: dict, selected_models: list[str]) -> list[dict]:
             "columns": column_formatter(model["columns"]),
             "properties": {
                 "description": model["properties"].get("description", ""),
-                "alias": model["properties"].get("displayName", ""),
+                "alias": clean_display_name(model["properties"].get("displayName", "")),
             },
         }
 

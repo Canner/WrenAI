@@ -8,6 +8,7 @@ from pytest_mock import MockFixture
 import src.utils as utils
 from src.core.pipeline import PipelineComponent
 from src.globals import ServiceMetadata, create_service_metadata
+from src.pipelines.indexing import clean_display_name
 
 
 def _mock(mocker: MockFixture) -> tuple:
@@ -83,3 +84,128 @@ def test_trace_metadata(service_metadata: ServiceMetadata, mocker: MockFixture):
             **service_metadata.pipes_metadata,
         },
     )
+
+
+def test_clean_display_name():
+    # Test empty and None cases
+    assert clean_display_name("") == ""
+
+    # Test simple valid names (should remain unchanged)
+    assert clean_display_name("valid_name") == "valid_name"
+    assert clean_display_name("ValidName") == "ValidName"
+    assert clean_display_name("valid123") == "valid123"
+
+    # Test prefix invalid characters - numbers and special chars
+    assert clean_display_name("123name") == "_123name"
+    assert clean_display_name("-name") == "_name"
+    assert clean_display_name("&name") == "_name"
+    assert clean_display_name("%name") == "_name"
+    assert clean_display_name("=name") == "_name"
+    assert clean_display_name("+name") == "_name"
+    assert clean_display_name("'name") == "_name"
+    assert clean_display_name('"name') == "_name"
+    assert clean_display_name("<name") == "_name"
+    assert clean_display_name(">name") == "_name"
+    assert clean_display_name("#name") == "_name"
+    assert clean_display_name("|name") == "_name"
+    assert clean_display_name("!name") == "_name"
+    assert clean_display_name("(name") == "_name"
+    assert clean_display_name(")name") == "_name"
+    assert clean_display_name("*name") == "_name"
+    assert clean_display_name(",name") == "_name"
+    assert clean_display_name("/name") == "_name"
+    assert clean_display_name(".name") == "_name"
+    assert clean_display_name(";name") == "_name"
+    assert clean_display_name("[name") == "_name"
+    assert clean_display_name("\\name") == "_name"
+    assert clean_display_name("]name") == "_name"
+    assert clean_display_name("^name") == "_name"
+    assert clean_display_name("{name") == "_name"
+    assert clean_display_name("}name") == "_name"
+    assert clean_display_name("~name") == "_name"
+
+    # Test middle invalid characters
+    assert clean_display_name("na-me") == "na_me"
+    assert clean_display_name("na&me") == "na_me"
+    assert clean_display_name("na%me") == "na_me"
+    assert clean_display_name("na=me") == "na_me"
+    assert clean_display_name("na+me") == "na_me"
+    assert clean_display_name("na'me") == "na_me"
+    assert clean_display_name('na"me') == "na_me"
+    assert clean_display_name("na<me") == "na_me"
+    assert clean_display_name("na>me") == "na_me"
+    assert clean_display_name("na#me") == "na_me"
+    assert clean_display_name("na|me") == "na_me"
+    assert clean_display_name("na!me") == "na_me"
+    assert clean_display_name("na(me") == "na_me"
+    assert clean_display_name("na)me") == "na_me"
+    assert clean_display_name("na/me") == "na_me"
+    assert clean_display_name("na.me") == "na_me"
+    assert clean_display_name("na?me") == "na_me"
+    assert clean_display_name("na[me") == "na_me"
+    assert clean_display_name("na\\me") == "na_me"
+    assert clean_display_name("na]me") == "na_me"
+    assert clean_display_name("na^me") == "na_me"
+    assert clean_display_name("na`me") == "na_me"
+    assert clean_display_name("na{me") == "na_me"
+    assert clean_display_name("na}me") == "na_me"
+    assert clean_display_name("na~me") == "na_me"
+
+    # Test suffix invalid characters
+    assert clean_display_name("name-") == "name_"
+    assert clean_display_name("name&") == "name_"
+    assert clean_display_name("name%") == "name_"
+    assert clean_display_name("name=") == "name_"
+    assert clean_display_name("name+") == "name_"
+    assert clean_display_name("name:") == "name_"
+    assert clean_display_name("name'") == "name_"
+    assert clean_display_name('name"') == "name_"
+    assert clean_display_name("name<") == "name_"
+    assert clean_display_name("name>") == "name_"
+    assert clean_display_name("name#") == "name_"
+    assert clean_display_name("name|") == "name_"
+    assert clean_display_name("name!") == "name_"
+    assert clean_display_name("name(") == "name_"
+    assert clean_display_name("name)") == "name_"
+    assert clean_display_name("name,") == "name_"
+    assert clean_display_name("name.") == "name_"
+    assert clean_display_name("name/") == "name_"
+    assert clean_display_name("name@") == "name_"
+    assert clean_display_name("name[") == "name_"
+    assert clean_display_name("name\\") == "name_"
+    assert clean_display_name("name]") == "name_"
+    assert clean_display_name("name^") == "name_"
+    assert clean_display_name("name{") == "name_"
+    assert clean_display_name("name}") == "name_"
+    assert clean_display_name("name~") == "name_"
+
+    # Test single character cases
+    assert clean_display_name("1") == "_"
+    assert clean_display_name("-") == "_"
+    assert clean_display_name(".") == "_"
+    assert clean_display_name("a") == "a"  # valid single character
+
+    # Test multiple consecutive underscores collapse
+    assert (
+        clean_display_name("na--me") == "na_me"
+    )  # middle chars become underscores, then collapsed
+    assert (
+        clean_display_name("na..me") == "na_me"
+    )  # dots become underscores, then collapsed
+
+    # Test complex cases with multiple invalid characters
+    assert clean_display_name("123-test.name@") == "_123_test_name_"
+    assert clean_display_name(".table.name.") == "_table_name_"
+    assert clean_display_name("!@#$%^&*()") == "_"
+
+    # Test underscore collapsing in complex scenarios
+    result = clean_display_name("!@#$%^&*()")
+    assert result == "_"  # All get replaced, then collapsed
+
+    # Test real-world examples
+    assert clean_display_name("user.email") == "user_email"
+    assert (
+        clean_display_name("order-total") == "order_total"
+    )  # prefix 'o' stays, '-' becomes '_'
+    assert clean_display_name("2023_sales") == "_2023_sales"
+    assert clean_display_name("product_name!") == "product_name_"
