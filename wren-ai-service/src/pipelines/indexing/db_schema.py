@@ -15,7 +15,12 @@ from tqdm import tqdm
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
-from src.pipelines.indexing import AsyncDocumentWriter, DocumentCleaner, MDLValidator
+from src.pipelines.indexing import (
+    AsyncDocumentWriter,
+    DocumentCleaner,
+    MDLValidator,
+    clean_display_name,
+)
 from src.pipelines.indexing.utils import helper
 
 logger = logging.getLogger("wren-ai-service")
@@ -128,7 +133,7 @@ class DDLChunker:
             properties = model.get("properties", {})
 
             model_properties = {
-                "alias": properties.get("displayName", ""),
+                "alias": clean_display_name(properties.get("displayName", "")),
                 "description": properties.get("description", ""),
             }
             comment = f"\n/* {str(model_properties)} */\n"
