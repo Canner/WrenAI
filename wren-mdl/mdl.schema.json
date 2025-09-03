@@ -175,12 +175,12 @@
             "minLength": 1
           },
           "refSql": {
-            "description": "the sql reference of the model",
+            "description": "(WIP) the sql reference of the model",
             "type": "string", 
             "minLength": 1
           },
           "baseObject": {
-            "description": "the base object of the model",
+            "description": "(WIP) the base object of the model",
             "type": "string",
             "minLength": 1
           },
@@ -213,11 +213,11 @@
             "type": "string"
           },
           "cached": {
-            "description": "whether the model is cached or not",
+            "description": "(WIP) whether the model is cached or not",
             "type": "boolean"
           },
           "refreshTime": {
-            "description": "the cache refresh time of the model",
+            "description": "(WIP) the cache refresh time of the model",
             "type": "string",
             "pattern": "^\\s*(\\d+(?:\\.\\d+)?)\\s*([a-zA-Z]+)\\s*$"
           },
@@ -308,10 +308,11 @@
       }
     },
     "metrics": {
-      "description": "the list of metrics",
+      "description": "(WIP) the list of metrics",
       "type": "array",
       "unevaluatedItems": false,
       "items": {
+        "description": "(WIP) the metric",
         "type": "object",
         "properties": {
           "name": {
@@ -425,10 +426,11 @@
       }
     },
     "enumDefinitions": {
-      "description": "the list of enum definitions",
+      "description": "(WIP) the list of enum definitions",
       "type": "array",
       "unevaluatedItems": false,
       "items": {
+        "description": "(WIP) the enum definition",
         "type": "object",
         "properties": {
           "name": {
