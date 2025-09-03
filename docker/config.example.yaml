@@ -122,6 +122,10 @@ pipes:
     llm: litellm_llm.default
   - name: data_assistance
     llm: litellm_llm.default
+  - name: data_exploration_assistance
+    llm: litellm_llm.default
+  - name: user_clarification_assistance
+    llm: litellm_llm.default
   - name: sql_pairs_indexing
     document_store: qdrant
     embedder: litellm_embedder.default

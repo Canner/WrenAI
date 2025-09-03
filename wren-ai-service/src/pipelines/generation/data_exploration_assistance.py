@@ -17,30 +17,26 @@ from src.web.v1.services.ask import AskHistory
 logger = logging.getLogger("wren-ai-service")
 
 
-data_assistance_system_prompt = """
-### TASK ###
-You are a data analyst great at answering user's questions about given database schema.
-Please carefully read user's question, intent for the question, and database schema to answer it in easy to understand manner
-using the Markdown format. Your goal is to help guide user understand its database!
+data_exploration_assistance_system_prompt = """
+You are a great data analyst good at exploring data.
+You are given a user question, an intent for the question, and a sql data.
+You need to understand the user question, the intent for the question, and the sql data, and then answer the user question.
 
 ### INSTRUCTIONS ###
-
-- Answer must be in the same language user specified.
-- There should be proper line breaks, whitespace, and Markdown formatting(headers, lists, tables, etc.) in your response.
-- If the language is Traditional/Simplified Chinese, Korean, or Japanese, the maximum response length is 150 words; otherwise, the maximum response length is 110 words.
-- MUST NOT add SQL code in your response.
-- If the user provides a custom instruction, it should be followed strictly and you should use it to change the style of response.
+1. Your answer should be in the same language as the language user provided.
+2. You must follow the sql data to answer the user question.
+3. You should provide your answer in Markdown format.
+4. You have the following skills:
+- explain the data in a easy to understand manner
+- provide insights and trends in the data
+- find out anomalies and outliers in the data
+5. You only need to use the skills required to answer the user question based on the user question and the sql data.
 
 ### OUTPUT FORMAT ###
 Please provide your response in proper Markdown format without ```markdown``` tags.
 """
 
-data_assistance_user_prompt_template = """
-### DATABASE SCHEMA ###
-{% for db_schema in db_schemas %}
-    {{ db_schema }}
-{% endfor %}
-
+data_exploration_assistance_user_prompt_template = """
 {% if histories %}
 ### PREVIOUS QUESTIONS ###
 {% for history in histories %}
@@ -49,13 +45,15 @@ data_assistance_user_prompt_template = """
 {% endif %}
 
 ### INPUT ###
-User's question: {{query}}
+User Question: {{query}}
 Intent for user's question: {{intent_reasoning}}
 Language: {{language}}
+SQL Data:
+{{ sql_data }}
 
 Custom Instruction: {{ custom_instruction }}
 
-Please think step by step
+Please think step by step.
 """
 
 
@@ -64,18 +62,18 @@ Please think step by step
 def prompt(
     query: str,
     intent_reasoning: str,
-    db_schemas: list[str],
-    language: str,
     histories: list[AskHistory],
+    language: str,
+    sql_data: dict,
     prompt_builder: PromptBuilder,
     custom_instruction: str,
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
         intent_reasoning=intent_reasoning,
-        histories=histories,
-        db_schemas=db_schemas,
         language=language,
+        sql_data=sql_data,
+        histories=histories,
         custom_instruction=custom_instruction,
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
@@ -83,19 +81,16 @@ def prompt(
 
 @observe(as_type="generation", capture_input=False)
 @trace_cost
-async def data_assistance(
-    prompt: dict, generator: Any, query_id: str, generator_name: str
+async def data_exploration_assistance(
+    prompt: dict, generator: Any, query_id: str
 ) -> dict:
-    return await generator(
-        prompt=prompt.get("prompt"),
-        query_id=query_id,
-    ), generator_name
+    return await generator(prompt=prompt.get("prompt"), query_id=query_id)
 
 
 ## End of Pipeline
 
 
-class DataAssistance(BasicPipeline):
+class DataExplorationAssistance(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
@@ -104,12 +99,11 @@ class DataAssistance(BasicPipeline):
         self._user_queues = {}
         self._components = {
             "generator": llm_provider.get_generator(
-                system_prompt=data_assistance_system_prompt,
+                system_prompt=data_exploration_assistance_system_prompt,
                 streaming_callback=self._streaming_callback,
             ),
-            "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
-                template=data_assistance_user_prompt_template
+                template=data_exploration_assistance_user_prompt_template
             ),
         }
 
@@ -132,9 +126,8 @@ class DataAssistance(BasicPipeline):
             return await self._user_queues[query_id].get()
 
         if query_id not in self._user_queues:
-            self._user_queues[
-                query_id
-            ] = asyncio.Queue()  # Ensure the user's queue exists
+            self._user_queues[query_id] = asyncio.Queue()
+
         while True:
             try:
                 # Wait for an item from the user's queue
@@ -152,26 +145,26 @@ class DataAssistance(BasicPipeline):
             except TimeoutError:
                 break
 
-    @observe(name="Data Assistance")
+    @observe(name="Data Exploration Assistance")
     async def run(
         self,
         query: str,
         intent_reasoning: str,
-        db_schemas: list[str],
+        sql_data: dict,
         language: str,
         query_id: Optional[str] = None,
         histories: Optional[list[AskHistory]] = None,
         custom_instruction: Optional[str] = None,
     ):
-        logger.info("Data Assistance pipeline is running...")
+        logger.info("Data Exploration Assistance pipeline is running...")
         return await self._pipe.execute(
-            ["data_assistance"],
+            ["data_exploration_assistance"],
             inputs={
                 "query": query,
                 "intent_reasoning": intent_reasoning,
-                "db_schemas": db_schemas,
                 "language": language,
                 "query_id": query_id or "",
+                "sql_data": sql_data,
                 "histories": histories or [],
                 "custom_instruction": custom_instruction or "",
                 **self._components,

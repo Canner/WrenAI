@@ -14,7 +14,8 @@ logger = logging.getLogger("wren-ai-service")
 
 
 class AskHistory(BaseModel):
-    sql: str
+    response: str = Field(alias=AliasChoices("response", "sql"))
+    type: Literal["text", "sql"] = "sql"
     question: str
 
 
@@ -83,14 +84,26 @@ class _AskResultResponse(BaseModel):
     trace_id: Optional[str] = None
     is_followup: bool = False
     general_type: Optional[
-        Literal["MISLEADING_QUERY", "DATA_ASSISTANCE", "USER_GUIDE"]
+        Literal[
+            "MISLEADING_QUERY",
+            "DATA_ASSISTANCE",
+            "USER_GUIDE",
+            "DATA_EXPLORATION",
+            "USER_CLARIFICATION",
+        ]
     ] = None
 
 
 class AskResultResponse(_AskResultResponse):
     is_followup: Optional[bool] = Field(False, exclude=True)
     general_type: Optional[
-        Literal["MISLEADING_QUERY", "DATA_ASSISTANCE", "USER_GUIDE"]
+        Literal[
+            "MISLEADING_QUERY",
+            "DATA_ASSISTANCE",
+            "USER_GUIDE",
+            "DATA_EXPLORATION",
+            "USER_CLARIFICATION",
+        ]
     ] = Field(None, exclude=True)
 
 
@@ -206,7 +219,11 @@ class AskService:
                     sql_generation_reasoning = ""
                 else:
                     # Run both pipeline operations concurrently
-                    sql_samples_task, instructions_task = await asyncio.gather(
+                    (
+                        sql_samples_task,
+                        instructions_task,
+                        db_schema_retrieval_task,
+                    ) = await asyncio.gather(
                         self._pipelines["sql_pairs_retrieval"].run(
                             query=user_query,
                             project_id=ask_request.project_id,
@@ -215,6 +232,12 @@ class AskService:
                             query=user_query,
                             project_id=ask_request.project_id,
                             scope="sql",
+                        ),
+                        self._pipelines["db_schema_retrieval"].run(
+                            query=user_query,
+                            histories=histories,
+                            project_id=ask_request.project_id,
+                            enable_column_pruning=enable_column_pruning,
                         ),
                     )
 
@@ -225,16 +248,36 @@ class AskService:
                     instructions = instructions_task["formatted_output"].get(
                         "documents", []
                     )
+                    _retrieval_result = db_schema_retrieval_task.get(
+                        "construct_retrieval_results", {}
+                    )
+                    documents = _retrieval_result.get("retrieval_results", [])
+                    table_names = [document.get("table_name") for document in documents]
+                    table_ddls = [document.get("table_ddl") for document in documents]
 
                     if self._allow_intent_classification:
+                        last_sql_data = None
+                        if histories:
+                            if (last_response := histories[-1].response) and histories[
+                                -1
+                            ].type == "sql":
+                                last_sql_data = (
+                                    await self._pipelines["sql_executor"].run(
+                                        sql=last_response,
+                                        project_id=ask_request.project_id,
+                                    )
+                                )["execute_sql"]["results"]
+
                         intent_classification_result = (
                             await self._pipelines["intent_classification"].run(
                                 query=user_query,
+                                db_schemas=table_ddls,
                                 histories=histories,
                                 sql_samples=sql_samples,
                                 instructions=instructions,
                                 project_id=ask_request.project_id,
                                 configuration=ask_request.configurations,
+                                sql_data=last_sql_data,
                             )
                         ).get("post_process", {})
                         intent = intent_classification_result.get("intent")
@@ -250,10 +293,9 @@ class AskService:
                             asyncio.create_task(
                                 self._pipelines["misleading_assistance"].run(
                                     query=user_query,
+                                    intent_reasoning=intent_reasoning,
                                     histories=histories,
-                                    db_schemas=intent_classification_result.get(
-                                        "db_schemas"
-                                    ),
+                                    db_schemas=table_ddls,
                                     language=ask_request.configurations.language,
                                     query_id=ask_request.query_id,
                                     custom_instruction=ask_request.custom_instruction,
@@ -275,10 +317,9 @@ class AskService:
                             asyncio.create_task(
                                 self._pipelines["data_assistance"].run(
                                     query=user_query,
+                                    intent_reasoning=intent_reasoning,
                                     histories=histories,
-                                    db_schemas=intent_classification_result.get(
-                                        "db_schemas"
-                                    ),
+                                    db_schemas=table_ddls,
                                     language=ask_request.configurations.language,
                                     query_id=ask_request.query_id,
                                     custom_instruction=ask_request.custom_instruction,
@@ -300,6 +341,8 @@ class AskService:
                             asyncio.create_task(
                                 self._pipelines["user_guide_assistance"].run(
                                     query=user_query,
+                                    intent_reasoning=intent_reasoning,
+                                    histories=histories,
                                     language=ask_request.configurations.language,
                                     query_id=ask_request.query_id,
                                     custom_instruction=ask_request.custom_instruction,
@@ -314,6 +357,54 @@ class AskService:
                                 trace_id=trace_id,
                                 is_followup=True if histories else False,
                                 general_type="USER_GUIDE",
+                            )
+                            results["metadata"]["type"] = "GENERAL"
+                            return results
+                        elif intent == "DATA_EXPLORATION":
+                            asyncio.create_task(
+                                self._pipelines["data_exploration_assistance"].run(
+                                    query=user_query,
+                                    intent_reasoning=intent_reasoning,
+                                    histories=histories,
+                                    sql_data=last_sql_data,
+                                    language=ask_request.configurations.language,
+                                    query_id=ask_request.query_id,
+                                    custom_instruction=ask_request.custom_instruction,
+                                )
+                            )
+
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="finished",
+                                type="GENERAL",
+                                rephrased_question=rephrased_question,
+                                intent_reasoning=intent_reasoning,
+                                trace_id=trace_id,
+                                is_followup=True if histories else False,
+                                general_type="DATA_EXPLORATION",
+                            )
+                            results["metadata"]["type"] = "GENERAL"
+                            return results
+                        elif intent == "USER_CLARIFICATION":
+                            asyncio.create_task(
+                                self._pipelines["user_clarification_assistance"].run(
+                                    query=user_query,
+                                    intent_reasoning=intent_reasoning,
+                                    histories=histories,
+                                    db_schemas=table_ddls,
+                                    language=ask_request.configurations.language,
+                                    query_id=ask_request.query_id,
+                                    custom_instruction=ask_request.custom_instruction,
+                                )
+                            )
+
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="finished",
+                                type="GENERAL",
+                                rephrased_question=rephrased_question,
+                                intent_reasoning=intent_reasoning,
+                                trace_id=trace_id,
+                                is_followup=True if histories else False,
+                                general_type="USER_CLARIFICATION",
                             )
                             results["metadata"]["type"] = "GENERAL"
                             return results
@@ -335,19 +426,6 @@ class AskService:
                     trace_id=trace_id,
                     is_followup=True if histories else False,
                 )
-
-                retrieval_result = await self._pipelines["db_schema_retrieval"].run(
-                    query=user_query,
-                    histories=histories,
-                    project_id=ask_request.project_id,
-                    enable_column_pruning=enable_column_pruning,
-                )
-                _retrieval_result = retrieval_result.get(
-                    "construct_retrieval_results", {}
-                )
-                documents = _retrieval_result.get("retrieval_results", [])
-                table_names = [document.get("table_name") for document in documents]
-                table_ddls = [document.get("table_ddl") for document in documents]
 
                 if not documents:
                     logger.exception(f"ask pipeline - NO_RELEVANT_DATA: {user_query}")
@@ -639,6 +717,12 @@ class AskService:
                     _pipeline_name = "data_assistance"
                 elif self._ask_results.get(query_id).general_type == "MISLEADING_QUERY":
                     _pipeline_name = "misleading_assistance"
+                elif self._ask_results.get(query_id).general_type == "DATA_EXPLORATION":
+                    _pipeline_name = "data_exploration_assistance"
+                elif (
+                    self._ask_results.get(query_id).general_type == "USER_CLARIFICATION"
+                ):
+                    _pipeline_name = "user_clarification_assistance"
             elif self._ask_results.get(query_id).status == "planning":
                 if self._ask_results.get(query_id).is_followup:
                     _pipeline_name = "followup_sql_generation_reasoning"

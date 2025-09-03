@@ -17,30 +17,23 @@ from src.web.v1.services.ask import AskHistory
 logger = logging.getLogger("wren-ai-service")
 
 
-data_assistance_system_prompt = """
-### TASK ###
-You are a data analyst great at answering user's questions about given database schema.
-Please carefully read user's question, intent for the question, and database schema to answer it in easy to understand manner
-using the Markdown format. Your goal is to help guide user understand its database!
+user_clarification_assistance_system_prompt = """
+You are a helpful assistant that can help users understand their data better. Currently, you are given a user's question, an intent for the question, and a database schema.
+You should tell user why the question is not clear enough or vague.
 
 ### INSTRUCTIONS ###
-
-- Answer must be in the same language user specified.
-- There should be proper line breaks, whitespace, and Markdown formatting(headers, lists, tables, etc.) in your response.
-- If the language is Traditional/Simplified Chinese, Korean, or Japanese, the maximum response length is 150 words; otherwise, the maximum response length is 110 words.
-- MUST NOT add SQL code in your response.
-- If the user provides a custom instruction, it should be followed strictly and you should use it to change the style of response.
+1. Response must be in the same language user specified in the Language section of the `### INPUT ###` section.
+2. There should be proper line breaks, whitespace, and Markdown formatting(headers, lists, tables, etc.) in your response.
+3. MUST NOT add SQL code in your response.
+4. MUST consider database schema when suggesting better questions.
+5. The maximum response length is 50 words.
+6. If the user provides a custom instruction, it should be followed strictly and you should use it to change the style of response.
 
 ### OUTPUT FORMAT ###
 Please provide your response in proper Markdown format without ```markdown``` tags.
 """
 
-data_assistance_user_prompt_template = """
-### DATABASE SCHEMA ###
-{% for db_schema in db_schemas %}
-    {{ db_schema }}
-{% endfor %}
-
+user_clarification_assistance_user_prompt_template = """
 {% if histories %}
 ### PREVIOUS QUESTIONS ###
 {% for history in histories %}
@@ -48,14 +41,17 @@ data_assistance_user_prompt_template = """
 {% endfor %}
 {% endif %}
 
+### DATABASE SCHEMA ###
+{% for db_schema in db_schemas %}
+    {{ db_schema }}
+{% endfor %}
+
 ### INPUT ###
-User's question: {{query}}
+User Question: {{query}}
 Intent for user's question: {{intent_reasoning}}
 Language: {{language}}
 
 Custom Instruction: {{ custom_instruction }}
-
-Please think step by step
 """
 
 
@@ -83,7 +79,7 @@ def prompt(
 
 @observe(as_type="generation", capture_input=False)
 @trace_cost
-async def data_assistance(
+async def user_clarification_assistance(
     prompt: dict, generator: Any, query_id: str, generator_name: str
 ) -> dict:
     return await generator(
@@ -95,7 +91,7 @@ async def data_assistance(
 ## End of Pipeline
 
 
-class DataAssistance(BasicPipeline):
+class UserClarificationAssistance(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
@@ -104,12 +100,12 @@ class DataAssistance(BasicPipeline):
         self._user_queues = {}
         self._components = {
             "generator": llm_provider.get_generator(
-                system_prompt=data_assistance_system_prompt,
+                system_prompt=user_clarification_assistance_system_prompt,
                 streaming_callback=self._streaming_callback,
             ),
             "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
-                template=data_assistance_user_prompt_template
+                template=user_clarification_assistance_user_prompt_template
             ),
         }
 
@@ -152,7 +148,7 @@ class DataAssistance(BasicPipeline):
             except TimeoutError:
                 break
 
-    @observe(name="Data Assistance")
+    @observe(name="User Clarification Assistance")
     async def run(
         self,
         query: str,
@@ -163,9 +159,9 @@ class DataAssistance(BasicPipeline):
         histories: Optional[list[AskHistory]] = None,
         custom_instruction: Optional[str] = None,
     ):
-        logger.info("Data Assistance pipeline is running...")
+        logger.info("User Clarification Assistance pipeline is running...")
         return await self._pipe.execute(
-            ["data_assistance"],
+            ["user_clarification_assistance"],
             inputs={
                 "query": query,
                 "intent_reasoning": intent_reasoning,

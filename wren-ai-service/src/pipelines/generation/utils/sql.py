@@ -515,7 +515,9 @@ def construct_ask_history_messages(
         )
         messages.append(
             ChatMessage.from_assistant(
-                history.sql if hasattr(history, "sql") else history["sql"]
+                history.response
+                if hasattr(history, "response")
+                else history["response"]
             )
         )
     return messages
