@@ -10,6 +10,7 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
+from src.pipelines.common import clean_up_new_lines
 from src.utils import trace_cost
 
 logger = logging.getLogger("wren-ai-service")
@@ -26,6 +27,7 @@ You need to understand the user question and the user guide, and then answer the
 3. If you think you cannot answer the user question given the user guide, please kindly respond user that you don't find relevant answer in the user guide.
 4. You should add citations to the user guide(document url) in your answer.
 5. You should provide your answer in Markdown format.
+6. If the user provides a custom instruction, it should be followed strictly and you should use it to change the style of response.
 
 ### OUTPUT FORMAT ###
 Please provide your response in proper Markdown format without ```markdown``` tags.
@@ -39,6 +41,8 @@ User Guide:
 - {{doc.path}}: {{doc.content}}
 {% endfor %}
 
+Custom Instruction: {{ custom_instruction }}
+
 Please think step by step.
 """
 
@@ -50,12 +54,15 @@ def prompt(
     language: str,
     wren_ai_docs: list[dict],
     prompt_builder: PromptBuilder,
+    custom_instruction: str,
 ) -> dict:
-    return prompt_builder.run(
+    _prompt = prompt_builder.run(
         query=query,
         language=language,
         docs=wren_ai_docs,
+        custom_instruction=custom_instruction,
     )
+    return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
 
 @observe(as_type="generation", capture_input=False)
@@ -137,6 +144,7 @@ class UserGuideAssistance(BasicPipeline):
         query: str,
         language: str,
         query_id: Optional[str] = None,
+        custom_instruction: Optional[str] = None,
     ):
         logger.info("User Guide Assistance pipeline is running...")
         return await self._pipe.execute(
@@ -145,18 +153,8 @@ class UserGuideAssistance(BasicPipeline):
                 "query": query,
                 "language": language,
                 "query_id": query_id or "",
+                "custom_instruction": custom_instruction or "",
                 **self._components,
                 **self._configs,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        UserGuideAssistance,
-        "user_guide_assistance",
-        query="what can Wren AI do?",
-        language="en",
-    )

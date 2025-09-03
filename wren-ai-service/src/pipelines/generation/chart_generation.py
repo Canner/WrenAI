@@ -10,6 +10,7 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
+from src.pipelines.common import clean_up_new_lines
 from src.pipelines.generation.utils.chart import (
     ChartDataPreprocessor,
     ChartGenerationPostProcessor,
@@ -27,6 +28,7 @@ You are a data analyst great at visualizing data using vega-lite! Given the user
 Besides, you need to give a concise and easy-to-understand reasoning to describe why you provide such vega-lite schema based on the question, SQL, sample data and sample column values.
 
 {chart_generation_instructions}
+- If the user provides a custom instruction, it should be followed strictly and you should use it to change the style of response for reasoning.
 
 ### OUTPUT FORMAT ###
 
@@ -46,6 +48,7 @@ SQL: {{ sql }}
 Sample Data: {{ sample_data }}
 Sample Column Values: {{ sample_column_values }}
 Language: {{ language }}
+Custom Instruction: {{ custom_instruction }}
 
 Please think step by step
 """
@@ -65,18 +68,21 @@ def prompt(
     sql: str,
     preprocess_data: dict,
     language: str,
+    custom_instruction: str,
     prompt_builder: PromptBuilder,
 ) -> dict:
     sample_data = preprocess_data.get("sample_data")
     sample_column_values = preprocess_data.get("sample_column_values")
 
-    return prompt_builder.run(
+    _prompt = prompt_builder.run(
         query=query,
         sql=sql,
         sample_data=sample_data,
         sample_column_values=sample_column_values,
         language=language,
+        custom_instruction=custom_instruction,
     )
+    return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
 
 @observe(as_type="generation", capture_input=False)
@@ -150,7 +156,8 @@ class ChartGeneration(BasicPipeline):
         sql: str,
         data: dict,
         language: str,
-        remove_data_from_chart_schema: Optional[bool] = True,
+        remove_data_from_chart_schema: bool = True,
+        custom_instruction: Optional[str] = None,
     ) -> dict:
         logger.info("Chart Generation pipeline is running...")
         return await self._pipe.execute(
@@ -161,20 +168,8 @@ class ChartGeneration(BasicPipeline):
                 "data": data,
                 "language": language,
                 "remove_data_from_chart_schema": remove_data_from_chart_schema,
+                "custom_instruction": custom_instruction or "",
                 **self._components,
                 **self._configs,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        ChartGeneration,
-        "chart_generation",
-        query="show me the dataset",
-        sql="",
-        data={},
-        language="English",
-    )

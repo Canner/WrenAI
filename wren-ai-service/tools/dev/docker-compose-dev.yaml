@@ -27,7 +27,7 @@ services:
     ports:
       - ${IBIS_SERVER_PORT}:${IBIS_SERVER_PORT}
     environment:
-      WREN_ENGINE_ENDPOINT: http://engine:${WREN_ENGINE_PORT}
+      WREN_ENGINE_ENDPOINT: http://wren-engine:${WREN_ENGINE_PORT}
       LOG_LEVEL: DEBUG
     networks:
       - wren
@@ -79,3 +79,18 @@ services:
     depends_on:
       - wren-engine
       - ibis-server
+
+  postgres:
+    image: postgres:14-alpine
+    platform: ${PLATFORM}
+    ports:
+      - 5432:5432
+    volumes:
+      - data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=test
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    networks:
+      - wren

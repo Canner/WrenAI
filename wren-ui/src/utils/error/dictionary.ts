@@ -31,6 +31,9 @@ export const ERROR_TEXTS = {
     PORT: {
       REQUIRED: 'Please input port.',
     },
+    USER: {
+      REQUIRED: 'Please input user.',
+    },
     USERNAME: {
       REQUIRED: 'Please input username.',
     },
@@ -48,6 +51,24 @@ export const ERROR_TEXTS = {
     },
     ACCOUNT: {
       REQUIRED: 'Please input account.',
+    },
+    S3_STAGING_DIR: {
+      REQUIRED: 'Please input S3 staging directory.',
+    },
+    AWS_REGION: {
+      REQUIRED: 'Please input AWS region.',
+    },
+    AWS_ACCESS_KEY: {
+      REQUIRED: 'Please input AWS access key ID.',
+    },
+    AWS_SECRET_KEY: {
+      REQUIRED: 'Please input AWS secret access key.',
+    },
+    CLUSTER_IDENTIFIER: {
+      REQUIRED: 'Please input cluster identifier.',
+    },
+    PRIVATE_KEY_FILE: {
+      REQUIRED: 'Please upload a private key file.',
     },
   },
   ADD_RELATION: {

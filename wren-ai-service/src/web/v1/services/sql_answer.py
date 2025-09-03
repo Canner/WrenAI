@@ -8,28 +8,17 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
-from src.web.v1.services import Configuration, SSEEvent
+from src.web.v1.services import BaseRequest, SSEEvent
 
 logger = logging.getLogger("wren-ai-service")
 
 
 # POST /v1/sql-answers
-class SqlAnswerRequest(BaseModel):
-    _query_id: str | None = None
+class SqlAnswerRequest(BaseRequest):
     query: str
     sql: str
     sql_data: Dict
-    project_id: Optional[str] = None
-    thread_id: Optional[str] = None
-    configurations: Configuration = Configuration()
-
-    @property
-    def query_id(self) -> str:
-        return self._query_id
-
-    @query_id.setter
-    def query_id(self, query_id: str):
-        self._query_id = query_id
+    custom_instruction: Optional[str] = None
 
 
 class SqlAnswerResponse(BaseModel):
@@ -73,12 +62,12 @@ class SqlAnswerService:
     ):
         trace_id = kwargs.get("trace_id")
         results = {
-            "sql_answer_result": {},
             "metadata": {
                 "error": {
                     "type": "",
                     "message": "",
-                }
+                },
+                "request_from": sql_answer_request.request_from,
             },
         }
 
@@ -110,7 +99,9 @@ class SqlAnswerService:
                     sql=sql_answer_request.sql,
                     sql_data=preprocessed_sql_data.get("sql_data", {}),
                     language=sql_answer_request.configurations.language,
+                    current_time=sql_answer_request.configurations.show_current_time(),
                     query_id=query_id,
+                    custom_instruction=sql_answer_request.custom_instruction,
                 )
             )
 

@@ -16,7 +16,9 @@ export default function ProjectSettings(props: Props) {
   const { data } = props;
   const router = useRouter();
   const [form] = Form.useForm();
-  const [resetCurrentProject, { client }] = useResetCurrentProjectMutation();
+  const [resetCurrentProject, { client }] = useResetCurrentProjectMutation({
+    onError: (error) => console.error(error),
+  });
   const languageOptions = Object.keys(ProjectLanguage).map((key) => {
     return { label: getLanguageText(key as ProjectLanguage), value: key };
   });

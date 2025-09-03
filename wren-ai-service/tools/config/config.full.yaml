@@ -4,24 +4,47 @@ timeout: 120
 models:
   - alias: default
     model: gpt-4.1-nano-2025-04-14
+    context_window_size: 1000000
     kwargs:
       max_tokens: 4096
       n: 1
       seed: 0
       temperature: 0
   - model: gpt-4.1-mini-2025-04-14
+    context_window_size: 1000000
     kwargs:
       max_tokens: 4096
       n: 1
       seed: 0
       temperature: 0
   - model: gpt-4.1-2025-04-14
+    context_window_size: 1000000
     kwargs:
       max_tokens: 4096
       n: 1
       seed: 0
       temperature: 0
-
+  - model: gpt-5-nano-2025-08-07
+    context_window_size: 380000
+    kwargs:
+      max_completion_tokens: 4096
+      n: 1
+      seed: 0
+      reasoning_effort: minimal
+  - model: gpt-5-mini-2025-08-07
+    context_window_size: 380000
+    kwargs:
+      max_completion_tokens: 4096
+      n: 1
+      seed: 0
+      reasoning_effort: minimal
+  - model: gpt-5-2025-08-07
+    context_window_size: 380000
+    kwargs:
+      max_completion_tokens: 4096
+      n: 1
+      seed: 0
+      reasoning_effort: minimal
 ---
 type: embedder
 provider: litellm_embedder
@@ -79,28 +102,27 @@ pipes:
   - name: sql_generation
     llm: litellm_llm.default
     engine: wren_ui
+    document_store: qdrant
   - name: sql_correction
     llm: litellm_llm.default
     engine: wren_ui
+    document_store: qdrant
   - name: followup_sql_generation
     llm: litellm_llm.default
     engine: wren_ui
+    document_store: qdrant
   - name: sql_answer
     llm: litellm_llm.default
   - name: semantics_description
     llm: litellm_llm.default
   - name: relationship_recommendation
     llm: litellm_llm.default
-    engine: wren_ui
   - name: question_recommendation
     llm: litellm_llm.default
-  - name: question_recommendation_db_schema_retrieval
-    llm: litellm_llm.default
-    embedder: litellm_embedder.default
-    document_store: qdrant
   - name: question_recommendation_sql_generation
     llm: litellm_llm.default
     engine: wren_ui
+    document_store: qdrant
   - name: chart_generation
     llm: litellm_llm.default
   - name: chart_adjustment

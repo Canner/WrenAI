@@ -116,6 +116,7 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
   const [previewData, previewDataResult] = usePreviewDataMutation({
     onError: (error) => console.error(error),
   });
+  const hasPreviewData = !!previewDataResult.data?.previewData;
 
   const onPreviewData = async () => {
     await previewData({ variables: { where: { responseId: id } } });
@@ -242,22 +243,19 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
               View results
             </Button>
 
-            {previewDataResult?.data?.previewData && (
-              <div
-                className="mt-2 mb-3"
-                data-guideid="text-answer-preview-data"
-              >
+            <div className="mt-2 mb-3" data-guideid="text-answer-preview-data">
+              {hasPreviewData && (
                 <Text type="secondary" className="text-sm">
                   Considering the limit of the context window, we retrieve up to
                   500 rows of results to generate the answer.
                 </Text>
-                <PreviewData
-                  error={previewDataResult.error}
-                  loading={previewDataResult.loading}
-                  previewData={previewDataResult?.data?.previewData}
-                />
-              </div>
-            )}
+              )}
+              <PreviewData
+                error={previewDataResult.error}
+                loading={previewDataResult.loading}
+                previewData={previewDataResult?.data?.previewData}
+              />
+            </div>
           </div>
         ) : (
           <>

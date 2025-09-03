@@ -30,6 +30,7 @@ wren-ai-service/tools/dev/etc/**
 .deepeval_telemtry.txt
 docker/config.yaml
 docker/docker-compose-local.yaml
+docker/data
 
 # python
 .python-version

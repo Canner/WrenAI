@@ -11,86 +11,15 @@ from src.globals import (
     get_service_container,
     get_service_metadata,
 )
-from src.web.v1.services import Configuration, SemanticsDescription
+from src.web.v1.services import BaseRequest, SemanticsDescription
 
 router = APIRouter()
 
-"""
-Semantics Description Router
 
-This router handles endpoints related to generating and retrieving semantic descriptions.
-
-Endpoints:
-1. POST /semantics-descriptions
-   - Generates a new semantic description
-   - Request body: PostRequest
-     {
-       "selected_models": ["model1", "model2"],  # List of model names to describe
-       "user_prompt": "Describe these models",   # User's instruction for description
-       "mdl": "{ ... }",                         # JSON string of the MDL (Model Definition Language)
-       "project_id": "project-id",               # Optional project ID
-       "configuration": {                        # Optional configuration settings
-         "language": "English"                   # Optional language, defaults to "English"
-       }
-     }
-   - Response: PostResponse
-     {
-       "id": "unique-uuid"                       # Unique identifier for the generated description
-     }
-
-2. GET /semantics-descriptions/{id}
-   - Retrieves the status and result of a semantic description generation
-   - Path parameter: id (str)
-   - Response: GetResponse
-     {
-       "id": "unique-uuid",                      # Unique identifier of the description
-       "status": "generating" | "finished" | "failed",
-       "response": [                             # Present only if status is "finished" or "generating"
-         {
-           "name": "model1",
-           "columns": [
-             {
-               "name": "col1", 
-               "description": "Unique identifier for each record in the example model."
-             }
-           ],
-           "description": "This model is used for analysis purposes, capturing key attributes of records."
-         },
-         {
-           "name": "model2", 
-           "columns": [
-             {
-               "name": "col1",
-               "description": "Unique identifier for each record in the example model."
-             }
-           ],
-           "description": "This model is used for analysis purposes, capturing key attributes of records."
-         }
-       ],
-       "error": {                                # Present only if status is "failed"
-         "code": "OTHERS",
-         "message": "Error description"
-       }
-     }
-
-The semantic description generation is an asynchronous process. The POST endpoint
-initiates the generation and returns immediately with an ID. The GET endpoint can
-then be used to check the status and retrieve the result when it's ready.
-
-Usage:
-1. Send a POST request to start the generation process.
-2. Use the returned ID to poll the GET endpoint until the status is "finished" or "failed".
-
-Note: The actual generation is performed in the background using FastAPI's BackgroundTasks.
-"""
-
-
-class PostRequest(BaseModel):
+class PostRequest(BaseRequest):
     selected_models: list[str]
     user_prompt: str
     mdl: str
-    project_id: Optional[str] = None
-    configuration: Configuration = Configuration()
 
 
 class PostResponse(BaseModel):

@@ -7,29 +7,18 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
-from src.web.v1.services import Configuration
+from src.web.v1.services import BaseRequest
 
 logger = logging.getLogger("wren-ai-service")
 
 
 # POST /v1/charts
-class ChartRequest(BaseModel):
-    _query_id: str | None = None
+class ChartRequest(BaseRequest):
     query: str
     sql: str
-    project_id: Optional[str] = None
-    thread_id: Optional[str] = None
     data: Optional[Dict[str, Any]] = None
-    remove_data_from_chart_schema: Optional[bool] = True
-    configurations: Configuration = Configuration()
-
-    @property
-    def query_id(self) -> str:
-        return self._query_id
-
-    @query_id.setter
-    def query_id(self, query_id: str):
-        self._query_id = query_id
+    remove_data_from_chart_schema: bool = True
+    custom_instruction: Optional[str] = None
 
 
 class ChartResponse(BaseModel):
@@ -37,17 +26,8 @@ class ChartResponse(BaseModel):
 
 
 # PATCH /v1/charts/{query_id}
-class StopChartRequest(BaseModel):
-    _query_id: str | None = None
+class StopChartRequest(BaseRequest):
     status: Literal["stopped"]
-
-    @property
-    def query_id(self) -> str:
-        return self._query_id
-
-    @query_id.setter
-    def query_id(self, query_id: str):
-        self._query_id = query_id
 
 
 class StopChartResponse(BaseModel):
@@ -112,11 +92,13 @@ class ChartService:
             "metadata": {
                 "error_type": "",
                 "error_message": "",
+                "request_from": chart_request.request_from,
             },
         }
 
         try:
             query_id = chart_request.query_id
+            execute_sql_error_message = None
 
             if not chart_request.data:
                 self._chart_results[query_id] = ChartResultResponse(
@@ -124,14 +106,33 @@ class ChartService:
                     trace_id=trace_id,
                 )
 
-                sql_data = (
+                execute_sql_result = (
                     await self._pipelines["sql_executor"].run(
                         sql=chart_request.sql,
                         project_id=chart_request.project_id,
                     )
-                )["execute_sql"]["results"]
+                )["execute_sql"]
+
+                sql_data = execute_sql_result["results"]
+                execute_sql_error_message = execute_sql_result.get(
+                    "error_message", None
+                )
             else:
                 sql_data = chart_request.data
+                execute_sql_error_message = None
+
+            if execute_sql_error_message:
+                self._chart_results[query_id] = ChartResultResponse(
+                    status="failed",
+                    error=ChartError(
+                        code="OTHERS",
+                        message=execute_sql_error_message,
+                    ),
+                    trace_id=trace_id,
+                )
+                results["metadata"]["error_type"] = "OTHERS"
+                results["metadata"]["error_message"] = execute_sql_error_message
+                return results
 
             self._chart_results[query_id] = ChartResultResponse(
                 status="generating",
@@ -144,6 +145,7 @@ class ChartService:
                 data=sql_data,
                 language=chart_request.configurations.language,
                 remove_data_from_chart_schema=chart_request.remove_data_from_chart_schema,
+                custom_instruction=chart_request.custom_instruction,
             )
             chart_result = chart_generation_result["post_process"]["results"]
 

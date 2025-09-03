@@ -1,6 +1,6 @@
 import { useRouter } from 'next/router';
 import { useState, useCallback } from 'react';
-import { Path } from '@/utils/enum';
+import { Path, REDSHIFT_AUTH_METHOD } from '@/utils/enum';
 import { useSaveDataSourceMutation } from '@/apollo/client/graphql/dataSource.generated';
 import { DataSourceName } from '@/apollo/client/graphql/__types__';
 
@@ -71,6 +71,11 @@ export const transformFormToProperties = (
       configurations,
       extensions: properties.extensions.filter((i) => i),
     };
+  } else if (dataSourceType === DataSourceName.SNOWFLAKE) {
+    return {
+      ...properties,
+      ...getSnowflakeAuthentication(properties),
+    };
   }
 
   return {
@@ -80,6 +85,11 @@ export const transformFormToProperties = (
       properties?.password === PASSWORD_PLACEHOLDER
         ? undefined
         : properties?.password,
+
+    awsSecretKey:
+      properties?.awsSecretKey === PASSWORD_PLACEHOLDER
+        ? undefined
+        : properties?.awsSecretKey,
   };
 };
 
@@ -88,7 +98,6 @@ export const transformPropertiesToForm = (
   dataSourceType: DataSourceName,
 ) => {
   if (dataSourceType === DataSourceName.BIG_QUERY) {
-    return { ...properties, credentials: undefined };
   } else if (dataSourceType === DataSourceName.DUCKDB) {
     const configurations = Object.entries(properties?.configurations || {}).map(
       ([key, value]) => ({ key, value }),
@@ -102,11 +111,40 @@ export const transformPropertiesToForm = (
         : [{ key: '', value: '' }],
       extensions: extensions.length ? extensions : [''],
     };
+  } else if (dataSourceType === DataSourceName.REDSHIFT) {
+    return {
+      ...properties,
+      ...(properties?.redshiftType === REDSHIFT_AUTH_METHOD.redshift
+        ? {
+            password: properties?.password || PASSWORD_PLACEHOLDER,
+          }
+        : {
+            awsSecretKey: properties?.awsSecretKey || PASSWORD_PLACEHOLDER,
+          }),
+    };
   }
 
   return {
     ...properties,
     // provide a password placeholder to UI
     password: properties?.password || PASSWORD_PLACEHOLDER,
+    privateKey: properties?.privateKey || undefined,
   };
 };
+
+function getSnowflakeAuthentication(properties: Record<string, any>) {
+  // Set password or private key to null if only one of them is provided
+  if (properties?.privateKey) {
+    return {
+      privateKey: properties?.privateKey,
+      password: null,
+    };
+  }
+  if (properties?.password && properties?.password !== PASSWORD_PLACEHOLDER) {
+    return {
+      password: properties?.password,
+      privateKey: null,
+    };
+  }
+  return {};
+}

@@ -29,7 +29,12 @@ const config = getConfig();
 const logger = getLogger('ProjectService');
 logger.level = 'debug';
 
-const SENSITIVE_PROPERTY_NAME = new Set(['credentials', 'password']);
+const SENSITIVE_PROPERTY_NAME = new Set([
+  'credentials',
+  'password',
+  'awsSecretKey',
+  'privateKey',
+]);
 export interface ProjectData {
   displayName: string;
   type: DataSourceName;

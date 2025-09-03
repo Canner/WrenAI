@@ -94,7 +94,7 @@ def validate_context_and_answer(example, pred, trace=None):
         prediction.input = example.question
         prediction.expected_output = example.answer
         prediction.context = example.context
-        prediction["type"] = "shallow"
+        prediction["type"] = "execution"
         prediction.actual_output = pred.answer
         # reuse the first predict result to optimize the dspy module
         optimizer_parameters["evaluator"].eval(

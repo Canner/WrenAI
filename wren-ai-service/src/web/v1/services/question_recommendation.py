@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
-from src.web.v1.services import Configuration, MetadataTraceable
+from src.web.v1.services import BaseRequest, MetadataTraceable
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -22,9 +22,10 @@ class QuestionRecommendation:
     class Event(BaseModel, MetadataTraceable):
         event_id: str
         status: Literal["generating", "finished", "failed"] = "generating"
-        response: Optional[dict] = {"questions": {}}
+        response: dict = {"questions": {}}
         error: Optional["QuestionRecommendation.Error"] = None
         trace_id: Optional[str] = None
+        request_from: Literal["ui", "api"] = "ui"
 
     def __init__(
         self,
@@ -45,12 +46,14 @@ class QuestionRecommendation:
         error_message: str,
         code: str = "OTHERS",
         trace_id: Optional[str] = None,
+        request_from: Literal["ui", "api"] = "ui",
     ):
         self._cache[event_id] = self.Event(
             event_id=event_id,
             status="failed",
             error=self.Error(code=code, message=error_message),
             trace_id=trace_id,
+            request_from=request_from,
         )
         logger.error(error_message)
 
@@ -62,9 +65,9 @@ class QuestionRecommendation:
         max_questions: int,
         max_categories: int,
         project_id: Optional[str] = None,
-        configuration: Configuration = Configuration(),
+        allow_data_preview: bool = True,
     ):
-        async def _document_retrieval() -> tuple[list[str], bool, bool]:
+        async def _document_retrieval() -> tuple[list[str], bool, bool, bool]:
             retrieval_result = await self._pipelines["db_schema_retrieval"].run(
                 query=candidate["question"],
                 project_id=project_id,
@@ -74,7 +77,8 @@ class QuestionRecommendation:
             table_ddls = [document.get("table_ddl") for document in documents]
             has_calculated_field = _retrieval_result.get("has_calculated_field", False)
             has_metric = _retrieval_result.get("has_metric", False)
-            return table_ddls, has_calculated_field, has_metric
+            has_json_field = _retrieval_result.get("has_json_field", False)
+            return table_ddls, has_calculated_field, has_metric, has_json_field
 
         async def _sql_pairs_retrieval() -> list[dict]:
             sql_pairs_result = await self._pipelines["sql_pairs_retrieval"].run(
@@ -88,6 +92,7 @@ class QuestionRecommendation:
             result = await self._pipelines["instructions_retrieval"].run(
                 query=candidate["question"],
                 project_id=project_id,
+                scope="sql",
             )
             instructions = result["formatted_output"].get("instructions", [])
             return instructions
@@ -98,7 +103,7 @@ class QuestionRecommendation:
                 _sql_pairs_retrieval(),
                 _instructions_retrieval(),
             )
-            table_ddls, has_calculated_field, has_metric = _document
+            table_ddls, has_calculated_field, has_metric, has_json_field = _document
 
             if self._allow_sql_functions_retrieval:
                 sql_functions = await self._pipelines["sql_functions_retrieval"].run(
@@ -111,12 +116,13 @@ class QuestionRecommendation:
                 query=candidate["question"],
                 contexts=table_ddls,
                 project_id=project_id,
-                configuration=configuration,
                 sql_samples=sql_samples,
                 instructions=instructions,
                 has_calculated_field=has_calculated_field,
                 has_metric=has_metric,
+                has_json_field=has_json_field,
                 sql_functions=sql_functions,
+                allow_data_preview=allow_data_preview,
             )
 
             post_process = generated_sql["post_process"]
@@ -149,27 +155,26 @@ class QuestionRecommendation:
         except Exception as e:
             logger.error(f"Request {request_id}: Error validating question: {str(e)}")
 
-    class Request(BaseModel):
+    class Request(BaseRequest):
         event_id: str
         mdl: str
         previous_questions: list[str] = []
-        project_id: Optional[str] = None
-        max_questions: Optional[int] = 5
-        max_categories: Optional[int] = 3
-        regenerate: Optional[bool] = False
-        configuration: Configuration = Configuration()
+        max_questions: int = 5
+        max_categories: int = 3
+        regenerate: bool = False
+        allow_data_preview: bool = True
 
-    async def _recommend(self, request: dict, input: Request):
+    async def _recommend(self, request: dict):
         resp = await self._pipelines["question_recommendation"].run(**request)
         questions = resp.get("normalized", {}).get("questions", [])
         validation_tasks = [
             self._validate_question(
                 question,
-                input.event_id,
-                input.max_questions,
-                input.max_categories,
-                input.project_id,
-                input.configuration,
+                request["event_id"],
+                request["max_questions"],
+                request["max_categories"],
+                project_id=request["project_id"],
+                allow_data_preview=request["allow_data_preview"],
             )
             for question in questions
         ]
@@ -185,15 +190,27 @@ class QuestionRecommendation:
         trace_id = kwargs.get("trace_id")
 
         try:
+            mdl = orjson.loads(input.mdl)
+            retrieval_result = await self._pipelines["db_schema_retrieval"].run(
+                tables=[model["name"] for model in mdl["models"]],
+                project_id=input.project_id,
+            )
+            _retrieval_result = retrieval_result.get("construct_retrieval_results", {})
+            documents = _retrieval_result.get("retrieval_results", [])
+            table_ddls = [document.get("table_ddl") for document in documents]
+
             request = {
-                "mdl": orjson.loads(input.mdl),
+                "contexts": table_ddls,
                 "previous_questions": input.previous_questions,
-                "language": input.configuration.language,
+                "language": input.configurations.language,
                 "max_questions": input.max_questions,
                 "max_categories": input.max_categories,
+                "project_id": input.project_id,
+                "event_id": input.event_id,
+                "allow_data_preview": input.allow_data_preview,
             }
 
-            await self._recommend(request, input)
+            await self._recommend(request)
 
             resource = self._cache[input.event_id]
             resource.trace_id = trace_id
@@ -218,10 +235,10 @@ class QuestionRecommendation:
                     "categories": categories,
                     "max_categories": len(categories),
                 },
-                input,
             )
 
             self._cache[input.event_id].status = "finished"
+            self._cache[input.event_id].request_from = input.request_from
 
         except orjson.JSONDecodeError as e:
             self._handle_exception(
@@ -229,12 +246,14 @@ class QuestionRecommendation:
                 f"Failed to parse MDL: {str(e)}",
                 code="MDL_PARSE_ERROR",
                 trace_id=trace_id,
+                request_from=input.request_from,
             )
         except Exception as e:
             self._handle_exception(
                 input.event_id,
                 f"An error occurred during question recommendation generation: {str(e)}",
                 trace_id=trace_id,
+                request_from=input.request_from,
             )
 
         return self._cache[input.event_id].with_metadata()

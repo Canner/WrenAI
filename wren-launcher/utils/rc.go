@@ -26,7 +26,7 @@ func (w *WrenRC) getWrenRcFilePath() string {
 
 func (w *WrenRC) ensureRcFile() (string, error) {
 	// ensure folder created
-	err := os.MkdirAll(w.rcFileDir, os.ModePerm)
+	err := os.MkdirAll(w.rcFileDir, 0750)
 	if err != nil {
 		return "", err
 	}
@@ -35,11 +35,11 @@ func (w *WrenRC) ensureRcFile() (string, error) {
 	rcFilePath := w.getWrenRcFilePath()
 	_, err = os.Stat(rcFilePath)
 	if os.IsNotExist(err) {
-		f, err := os.Create(rcFilePath)
+		f, err := os.Create(rcFilePath) // #nosec G304 -- rcFilePath is controlled by application
 		if err != nil {
 			return "", err
 		}
-		f.Close()
+		_ = f.Close()
 	}
 	return rcFilePath, nil
 }
@@ -50,11 +50,11 @@ func (w *WrenRC) parseInto() (map[string]string, error) {
 		return nil, err
 	}
 
-	f, err := os.Open(rcFilePath)
+	f, err := os.Open(rcFilePath) // #nosec G304 -- rcFilePath is controlled by application
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	// prepare a map to store the key value pairs
 	m := make(map[string]string)
@@ -123,11 +123,11 @@ func (w *WrenRC) Set(key string, value string, override bool) error {
 // overrite the rc file with the given key value pairs
 func (w *WrenRC) write(m map[string]string) error {
 	rcFilePath := w.getWrenRcFilePath()
-	f, err := os.Create(rcFilePath)
+	f, err := os.Create(rcFilePath) // #nosec G304 -- rcFilePath is controlled by application
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	for k, v := range m {
 		_, err = fmt.Fprintf(f, "%s=%s\n", k, v)

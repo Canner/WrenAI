@@ -9,7 +9,9 @@ import { LoadingWrapper } from '@/components/PageLoading';
 import DashboardGrid from '@/components/pages/home/dashboardGrid';
 import EmptyDashboard from '@/components/pages/home/dashboardGrid/EmptyDashboard';
 import DashboardHeader from '@/components/pages/home/dashboardGrid/DashboardHeader';
-import CacheSettingsDrawer from '@/components/pages/home/dashboardGrid/CacheSettingsDrawer';
+import CacheSettingsDrawer, {
+  Schedule,
+} from '@/components/pages/home/dashboardGrid/CacheSettingsDrawer';
 import {
   useDashboardQuery,
   useDeleteDashboardItemMutation,
@@ -72,6 +74,7 @@ export default function Dashboard() {
     },
   });
   const [deleteDashboardItem] = useDeleteDashboardItemMutation({
+    onError: (error) => console.error(error),
     onCompleted: (_, query) => {
       message.success('Successfully deleted dashboard item.');
       onRemoveDashboardItemFromQueryCache(query.variables.where.id);
@@ -107,7 +110,7 @@ export default function Dashboard() {
           <EmptyDashboard show={dashboardItems.length === 0}>
             <DashboardHeader
               isSupportCached={isSupportCached}
-              schedule={data?.dashboard?.schedule}
+              schedule={data?.dashboard?.schedule as Schedule}
               nextScheduleTime={data?.dashboard?.nextScheduledAt}
               onCacheSettings={() => {
                 cacheSettingsDrawer.openDrawer({

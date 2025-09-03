@@ -7,6 +7,8 @@ from typing import Any, Callable, Dict
 
 import orjson
 
+from src.pipelines.indexing import clean_display_name
+
 logger = logging.getLogger("wren-ai-service")
 
 
@@ -29,7 +31,7 @@ class Helper:
 def _properties_comment(column: Dict[str, Any], **_) -> str:
     props = column["properties"]
     column_properties = {
-        "alias": props.get("displayName", ""),
+        "alias": clean_display_name(props.get("displayName", "")),
         "description": props.get("description", ""),
     }
 
@@ -132,7 +134,6 @@ def load_helpers(package_path: str = "src.pipelines.indexing.utils"):
         These will be added to their respective global dictionaries.
     """
     package = importlib.import_module(package_path)
-    logger.info(f"Loading Helpers for DB Schema Indexing Pipeline: {package_path}")
 
     for _, name, _ in pkgutil.walk_packages(package.__path__, package.__name__ + "."):
         if name in sys.modules:

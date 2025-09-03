@@ -160,16 +160,23 @@ const handleUpdateRerunAskingTaskCache = (
 export default function useAskPrompt(threadId?: number) {
   const [originalQuestion, setOriginalQuestion] = useState<string>('');
   const [threadQuestions, setThreadQuestions] = useState<string[]>([]);
+  // Handle errors via try/catch blocks rather than onError callback
   const [createAskingTask, createAskingTaskResult] =
     useCreateAskingTaskMutation();
-  const [cancelAskingTask] = useCancelAskingTaskMutation();
-  const [rerunAskingTask] = useRerunAskingTaskMutation();
+  const [cancelAskingTask] = useCancelAskingTaskMutation({
+    onError: (error) => console.error(error),
+  });
+  const [rerunAskingTask] = useRerunAskingTaskMutation({
+    onError: (error) => console.error(error),
+  });
   const [fetchAskingTask, askingTaskResult] = useAskingTaskLazyQuery({
     pollInterval: 1000,
   });
   const [fetchAskingStreamTask, askingStreamTaskResult] = useAskingStreamTask();
   const [createInstantRecommendedQuestions] =
-    useCreateInstantRecommendedQuestionsMutation();
+    useCreateInstantRecommendedQuestionsMutation({
+      onError: (error) => console.error(error),
+    });
   const [fetchInstantRecommendedQuestions, instantRecommendedQuestionsResult] =
     useInstantRecommendedQuestionsLazyQuery({
       pollInterval: 1000,

@@ -24,7 +24,8 @@ export type PreparedTask = AskingTask &
   AdjustmentTask & { isAdjustment: boolean };
 
 export default function Preparation(props: Props) {
-  const { className, data, minimized, onFixSQLStatement } = props;
+  const { className, data, minimized, onFixSQLStatement, fixStatementLoading } =
+    props;
   const { askingTask, adjustmentTask, adjustment, id: responseId, sql } = data;
 
   const [isActive, setIsActive] = useState(!sql);
@@ -54,9 +55,10 @@ export default function Preparation(props: Props) {
           ...preparedTask.error,
           invalidSql: preparedTask?.invalidSql,
           fixStatement: (sql: string) => onFixSQLStatement(responseId, sql),
+          fixStatementLoading,
         }
       : null;
-  }, [preparedTask, responseId, sql]);
+  }, [preparedTask, responseId, sql, fixStatementLoading]);
 
   if (preparedTask === null) return null;
 

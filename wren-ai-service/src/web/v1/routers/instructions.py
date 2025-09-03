@@ -11,74 +11,13 @@ from src.globals import (
     get_service_container,
     get_service_metadata,
 )
-from src.web.v1.services import InstructionsService
+from src.web.v1.services import BaseRequest, InstructionsService
 
 router = APIRouter()
 
 
-"""
-Instructions Router
-
-This router handles endpoints related to preparing and managing instructions.
-
-Endpoints:
-1. POST /instructions
-   - Indexes instructions for retrieval
-   - Request body: PostRequest
-     {
-       "instructions": [                      # List of instructions
-         {
-           "id": "unique-id",                 # Unique identifier for the instruction
-           "content": "Instruction content",  # Content of the instruction
-           "metadata": {}                     # Optional metadata for the instruction
-         }
-       ],
-       "project_id": "project-id"             # Optional project ID
-     }
-   - Response: PostResponse
-     {
-       "event_id": "unique-uuid"              # Unique identifier for tracking indexing
-     }
-
-2. DELETE /instructions
-   - Deletes specified instructions by their IDs
-   - Request body: DeleteRequest
-     {
-       "instruction_ids": ["id1", "id2"],     # List of instruction IDs to delete
-       "project_id": "project-id"             # Optional project ID
-     }
-   - Response: None or Error object if failed
-
-3. GET /instructions/{event_id}
-   - Retrieves status of instructions indexing/deletion
-   - Path parameter: event_id (str)
-   - Response: GetResponse
-     {
-       "event_id": "unique-uuid",             # Unique identifier
-       "status": "indexing" | "deleting" | "finished" | "failed",
-       "error": {                             # Present only if status is "failed"
-         "code": "OTHERS",
-         "message": "Error description"
-       },
-       "trace_id": "trace-id"                 # Optional trace ID for tracking
-     }
-
-The instructions indexing and deletion are asynchronous processes. The POST endpoint
-initiates the operation and returns immediately with an ID. The GET endpoint can then be used
-to check the status and result.
-
-Usage:
-1. Send a POST/DELETE request to start the operation
-2. Use the returned ID to poll the GET endpoint until status is "finished" or "failed"
-
-Note: The actual processing is performed in the background using FastAPI's BackgroundTasks.
-Results are cached with a TTL defined in the service configuration.
-"""
-
-
-class PostRequest(BaseModel):
+class PostRequest(BaseRequest):
     instructions: List[InstructionsService.Instruction]
-    project_id: Optional[str] = None
 
 
 class PostResponse(BaseModel):
@@ -108,9 +47,8 @@ async def index(
     return PostResponse(event_id=event_id)
 
 
-class DeleteRequest(BaseModel):
+class DeleteRequest(BaseRequest):
     instruction_ids: List[str]
-    project_id: Optional[str] = None
 
 
 @router.delete("/instructions")

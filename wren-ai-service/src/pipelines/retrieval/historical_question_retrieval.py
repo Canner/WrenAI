@@ -122,7 +122,7 @@ class HistoricalQuestionRetrieval(BasicPipeline):
         self,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
-        historical_question_retrieval_similarity_threshold: Optional[float] = 0.9,
+        historical_question_retrieval_similarity_threshold: float = 0.9,
         **kwargs,
     ) -> None:
         view_questions_store = document_store_provider.get_store(
@@ -159,13 +159,3 @@ class HistoricalQuestionRetrieval(BasicPipeline):
                 **self._configs,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        HistoricalQuestionRetrieval,
-        "historical_question_retrieval",
-        query="this is a test query",
-    )
