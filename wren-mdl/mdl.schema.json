@@ -57,7 +57,7 @@
                 "LESS_THAN_OR_EQUALS"
               ]
             },
-            "required_properties": {
+            "requiredProperties": {
               "description": "the required properties for the access-control rule",
               "type": "array",
               "items": {
@@ -82,9 +82,13 @@
                     "STRING"
                   ]
                 }
-              }
+              },
+              "required": ["value", "dataType"],
+              "additionalProperties": false
             }
-          }
+          },
+          "required": ["name", "operator", "requiredProperties"],
+          "additionalProperties": false
         },
         "properties": {
           "description": "the customize properties of the column",
@@ -113,7 +117,9 @@
           "description": "the default SQL expression of the session property",
           "type": ["string", "null"]
         }
-      }
+      },
+      "required": ["name", "required"],
+      "additionalProperties": false
     }
   },
   "type": "object",
@@ -225,7 +231,7 @@
                   "description": "the name of the access-control rule",
                   "type": "string"
                 },
-                "required_properties": {
+                "requiredProperties": {
                   "description": "the required properties for the access-control rule",
                   "type": "array",
                   "items": {
@@ -236,7 +242,9 @@
                   "description": "The condition of the access-control rule. A condition is a SQL expression that evaluates to true or false.",
                   "type": "string"
                 }
-              }
+              },
+              "required": ["name", "requiredProperties", "condition"],
+              "additionalProperties": false
             }
           },
           "properties": {
