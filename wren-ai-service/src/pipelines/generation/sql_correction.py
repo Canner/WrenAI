@@ -7,13 +7,13 @@ from hamilton.async_driver import AsyncDriver
 from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
-from pydantic import BaseModel
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.pipelines.common import clean_up_new_lines, retrieve_metadata
 from src.pipelines.generation.utils.sql import (
+    SQL_GENERATION_MODEL_KWARGS,
     TEXT_TO_SQL_RULES,
     SQLGenPostProcessor,
     construct_instructions,
@@ -31,9 +31,8 @@ You are an ANSI SQL expert with exceptional logical thinking skills and debuggin
 ### SQL CORRECTION INSTRUCTIONS ###
 
 1. First, think hard about the error message, and firgure out the root cause first.
-2. Then, generate the reasoning behind the correction.
-3. Finally, generate the syntactically correct ANSI SQL query based on the reasoning to correct the error.
-4. You could try to use other methods(new functions, etc.) to rewrite the SQL query to correct the error, but you should not change the original semantics of the SQL query.
+2. Then, generate the syntactically correct ANSI SQL query to correct the error.
+3. You could try to use other methods(new functions, etc.) to rewrite the SQL query to correct the error, but you should not change the original semantics of the SQL query.
 
 ### SQL RULES ###
 Make sure you follow the SQL Rules strictly.
@@ -44,7 +43,6 @@ Make sure you follow the SQL Rules strictly.
 The final answer must be in JSON format:
 
 {{
-    "reasoning": <REASONING_STRING>,
     "sql": <CORRECTED_SQL_QUERY_STRING>
 }}
 """
@@ -128,22 +126,6 @@ async def post_process(
 ## End of Pipeline
 
 
-class SqlCorrectionResult(BaseModel):
-    reasoning: str
-    sql: str
-
-
-SQL_CORRECTION_MODEL_KWARGS = {
-    "response_format": {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "sql_correction_result",
-            "schema": SqlCorrectionResult.model_json_schema(),
-        },
-    }
-}
-
-
 class SQLCorrection(BasicPipeline):
     def __init__(
         self,
@@ -159,7 +141,7 @@ class SQLCorrection(BasicPipeline):
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=sql_correction_system_prompt,
-                generation_kwargs=SQL_CORRECTION_MODEL_KWARGS,
+                generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
             ),
             "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
