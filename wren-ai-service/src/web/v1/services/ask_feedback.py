@@ -60,6 +60,7 @@ class AskFeedbackService:
         self,
         pipelines: Dict[str, BasicPipeline],
         allow_sql_functions_retrieval: bool = True,
+        allow_sql_diagnosis: bool = True,
         maxsize: int = 1_000_000,
         ttl: int = 120,
     ):
@@ -68,6 +69,7 @@ class AskFeedbackService:
             maxsize=maxsize, ttl=ttl
         )
         self._allow_sql_functions_retrieval = allow_sql_functions_retrieval
+        self._allow_sql_diagnosis = allow_sql_diagnosis
 
     def _is_stopped(self, query_id: str, container: dict):
         if (
@@ -95,6 +97,8 @@ class AskFeedbackService:
         }
 
         query_id = ask_feedback_request.query_id
+        allow_sql_functions_retrieval = self._allow_sql_functions_retrieval
+        allow_sql_diagnosis = self._allow_sql_diagnosis
         api_results = []
         error_message = None
         invalid_sql = None
@@ -126,7 +130,7 @@ class AskFeedbackService:
                     ),
                 )
 
-                if self._allow_sql_functions_retrieval:
+                if allow_sql_functions_retrieval:
                     sql_functions = await self._pipelines[
                         "sql_functions_retrieval"
                     ].run(
@@ -198,20 +202,23 @@ class AskFeedbackService:
                             trace_id=trace_id,
                         )
 
-                        sql_diagnosis_results = await self._pipelines[
-                            "sql_diagnosis"
-                        ].run(
-                            contexts=table_ddls,
-                            original_sql=original_sql,
-                            invalid_sql=invalid_sql,
-                            error_message=error_message,
-                        )
-                        sql_diagnosis_reasoning = sql_diagnosis_results[
-                            "post_process"
-                        ].get("reasoning")
-                        is_sql_syntax_issue = sql_diagnosis_results["post_process"].get(
-                            "is_sql_syntax_issue"
-                        )
+                        is_sql_syntax_issue = True
+                        if allow_sql_diagnosis:
+                            sql_diagnosis_results = await self._pipelines[
+                                "sql_diagnosis"
+                            ].run(
+                                contexts=table_ddls,
+                                original_sql=original_sql,
+                                invalid_sql=invalid_sql,
+                                error_message=error_message,
+                            )
+                            sql_diagnosis_reasoning = sql_diagnosis_results[
+                                "post_process"
+                            ].get("reasoning")
+                            is_sql_syntax_issue = sql_diagnosis_results[
+                                "post_process"
+                            ].get("is_sql_syntax_issue")
+
                         if is_sql_syntax_issue:
                             sql_correction_results = await self._pipelines[
                                 "sql_correction"
@@ -220,7 +227,9 @@ class AskFeedbackService:
                                 instructions=instructions,
                                 invalid_generation_result={
                                     "sql": original_sql,
-                                    "error": sql_diagnosis_reasoning,
+                                    "error": sql_diagnosis_reasoning
+                                    if allow_sql_diagnosis
+                                    else error_message,
                                 },
                                 project_id=ask_feedback_request.project_id,
                                 sql_functions=sql_functions,

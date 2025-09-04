@@ -154,6 +154,7 @@ def create_service_container(
             allow_intent_classification=settings.allow_intent_classification,
             allow_sql_generation_reasoning=settings.allow_sql_generation_reasoning,
             allow_sql_functions_retrieval=settings.allow_sql_functions_retrieval,
+            allow_sql_diagnosis=settings.allow_sql_diagnosis,
             max_histories=settings.max_histories,
             enable_column_pruning=settings.enable_column_pruning,
             max_sql_correction_retries=settings.max_sql_correction_retries,
