@@ -173,6 +173,7 @@ def create_service_container(
                 "sql_diagnosis": _sql_diagnosis_pipeline,
             },
             allow_sql_functions_retrieval=settings.allow_sql_functions_retrieval,
+            allow_sql_diagnosis=settings.allow_sql_diagnosis,
             **query_cache,
         ),
         chart_service=services.ChartService(
