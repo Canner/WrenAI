@@ -89,7 +89,7 @@ def get_database_names(path: Path):
 
 
 def get_tables_by_db(path: Path, key: str):
-    with open(path, "rb",encoding="utf-8") as f:
+    with open(path, "rb")as f:
         json_data = orjson.loads(f.read())
 
     return {item[key]: item for item in json_data}
@@ -210,7 +210,7 @@ def build_mdl_relationships(tables_info):
 
 
 def get_ground_truths_by_db(path: Path, key: str):
-    with open(path, "rb",encoding="utf-8") as f:
+    with open(path, "rb")as f:
         json_data = orjson.loads(f.read())
 
     results = defaultdict(list)
