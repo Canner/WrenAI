@@ -27,14 +27,16 @@ You are an ANSI SQL expert with exceptional logical thinking skills and debuggin
 1. First, think hard about the error message, and analyze the invalid SQL query to figure out the root cause and which part is incorrect.
 2. Then, map the incorrect part of the invalid SQL query to the corresponding part of the original SQL query.
 3. Then, return the reasoning behind the diagnosis.(You should give me the part of the original SQL query that is incorrect and the reason why it is incorrect)
-4. Also, return a boolean value to indicate whether the issue is a SQL syntax issue.
+4. Also, return a boolean value to indicate whether the issue can be corrected with the new SQL query.
+5. Reasoning should be in the language same as the language user provided in the INPUTS section.
+6. Reasoning should be concise and to the point and within 50 words.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be in JSON format:
 
 {
     "reasoning": <REASONING_STRING>,
-    "is_sql_syntax_issue": <IS_SQL_SYNTAX_ISSUE_BOOLEAN>
+    "can_be_corrected": <CAN_BE_CORRECTED_BOOLEAN>
 }
 """
 
@@ -44,14 +46,17 @@ sql_diagnosis_user_prompt_template = """
     {{ document }}
 {% endfor %}
 
-### ORIGINAL SQL ###
+### INPUTS ###
+Original SQL:
 {{ original_sql }}
 
-### INVALID SQL ###
+Invalid SQL:
 {{ invalid_sql }}
 
-### ERROR MESSAGE ###
+Error Message:
 {{ error_message }}
+
+Language: {{ language }}
 
 Please think step by step.
 """
@@ -64,6 +69,7 @@ def prompt(
     original_sql: str,
     invalid_sql: str,
     error_message: str,
+    language: str,
     prompt_builder: PromptBuilder,
 ) -> dict:
     _prompt = prompt_builder.run(
@@ -71,6 +77,7 @@ def prompt(
         original_sql=original_sql,
         invalid_sql=invalid_sql,
         error_message=error_message,
+        language=language,
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
@@ -95,7 +102,7 @@ async def post_process(
 
 class SqlDiagnosisResult(BaseModel):
     reasoning: str
-    is_sql_syntax_issue: bool
+    can_be_corrected: bool
 
 
 SQL_DIAGNOSIS_MODEL_KWARGS = {
@@ -137,6 +144,7 @@ class SQLDiagnosis(BasicPipeline):
         original_sql: str,
         invalid_sql: str,
         error_message: str,
+        language: str,
     ):
         logger.info("SQLDiagnosis pipeline is running...")
 
@@ -147,6 +155,7 @@ class SQLDiagnosis(BasicPipeline):
                 "original_sql": original_sql,
                 "invalid_sql": invalid_sql,
                 "error_message": error_message,
+                "language": language,
                 **self._components,
             },
         )

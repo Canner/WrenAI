@@ -202,7 +202,7 @@ class AskFeedbackService:
                             trace_id=trace_id,
                         )
 
-                        is_sql_syntax_issue = True
+                        can_be_corrected = True
                         if allow_sql_diagnosis:
                             sql_diagnosis_results = await self._pipelines[
                                 "sql_diagnosis"
@@ -215,11 +215,11 @@ class AskFeedbackService:
                             sql_diagnosis_reasoning = sql_diagnosis_results[
                                 "post_process"
                             ].get("reasoning")
-                            is_sql_syntax_issue = sql_diagnosis_results[
+                            can_be_corrected = sql_diagnosis_results[
                                 "post_process"
-                            ].get("is_sql_syntax_issue")
+                            ].get("can_be_corrected")
 
-                        if is_sql_syntax_issue:
+                        if can_be_corrected:
                             sql_correction_results = await self._pipelines[
                                 "sql_correction"
                             ].run(

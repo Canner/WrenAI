@@ -30,9 +30,8 @@ You are an ANSI SQL expert with exceptional logical thinking skills and debuggin
 
 ### SQL CORRECTION INSTRUCTIONS ###
 
-1. First, think hard about the error message, and firgure out the root cause first.
+1. First, think hard about the error message, and firgure out the root cause first(please use the DATABASE SCHEMA, SQL FUNCTIONS and USER INSTRUCTIONS to help you figure out the root cause).
 2. Then, generate the syntactically correct ANSI SQL query to correct the error.
-3. You could try to use other methods(new functions, etc.) to rewrite the SQL query to correct the error, but you should not change the original semantics of the SQL query.
 
 ### SQL RULES ###
 Make sure you follow the SQL Rules strictly.

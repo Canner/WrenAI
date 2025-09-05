@@ -526,14 +526,15 @@ class AskService:
                                 original_sql=original_sql,
                                 invalid_sql=invalid_sql,
                                 error_message=error_message,
+                                language=ask_request.configurations.language,
                             )
                             sql_diagnosis_reasoning = sql_diagnosis_results[
                                 "post_process"
                             ].get("reasoning")
-                            is_sql_syntax_issue = sql_diagnosis_results[
+                            can_be_corrected = sql_diagnosis_results[
                                 "post_process"
-                            ].get("is_sql_syntax_issue")
-                            if not is_sql_syntax_issue:
+                            ].get("can_be_corrected")
+                            if not can_be_corrected:
                                 break
 
                         sql_correction_results = await self._pipelines[
