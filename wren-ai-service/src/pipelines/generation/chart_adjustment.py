@@ -165,7 +165,7 @@ class ChartAdjustment(BasicPipeline):
             "post_processor": ChartGenerationPostProcessor(),
         }
 
-        with open("src/pipelines/generation/utils/vega-lite-schema-v5.json", "r") as f:
+        with open("src/pipelines/generation/utils/vega-lite-schema-v5.json", "r",encoding="utf-8") as f:
             _vega_schema = orjson.loads(f.read())
 
         self._configs = {
