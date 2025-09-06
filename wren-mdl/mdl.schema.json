@@ -33,6 +33,63 @@
           "description": "the expression of the column. If the column is calculated, this field is required",
           "type": ["string", "null"]
         },
+        "isHidden": {
+          "description": "whether the column is hidden or not",
+          "type": "boolean"
+        },
+        "columnLevelAccessControl": {
+          "description": "the access-control rule for the column",
+          "type": "object",
+          "properties": {
+            "name": {
+              "description": "the name of the access-control rule",
+              "type": "string"
+            },
+            "operator": {
+              "description": "the operator of the access-control rule",
+              "type": "string",
+              "enum": [
+                "EQUALS",
+                "NOT_EQUALS",
+                "GREATER_THAN",
+                "LESS_THAN",
+                "GREATER_THAN_OR_EQUALS",
+                "LESS_THAN_OR_EQUALS"
+              ]
+            },
+            "requiredProperties": {
+              "description": "the required properties for the access-control rule",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/sessionProperty"
+              },
+              "minItems": 1,
+              "maxItems": 1
+            },
+            "threshold": {
+              "description": "the threshold value of the access-control rule",
+              "type": "object",
+              "properties": {
+                "value": {
+                  "description": "the value of the threshold",
+                  "type": "string"
+                },
+                "dataType": {
+                  "description": "the data type of the threshold",
+                  "type": "string",
+                  "enum": [
+                    "NUMERIC",
+                    "STRING"
+                  ]
+                }
+              },
+              "required": ["value", "dataType"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["name", "operator", "requiredProperties"],
+          "additionalProperties": false
+        },
         "properties": {
           "description": "the customize properties of the column",
           "type": "object",
@@ -42,6 +99,26 @@
         }
       },
       "required": ["name", "type"],
+      "additionalProperties": false
+    },
+    "sessionProperty": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "the name of the session property",
+          "type": "string",
+          "minLength": 1
+        },
+        "required": {
+          "description": "whether the session property is required or not",
+          "type": "boolean"
+        },
+        "defaultExpr": {
+          "description": "the default SQL expression of the session property",
+          "type": ["string", "null"]
+        }
+      },
+      "required": ["name", "required"],
       "additionalProperties": false
     }
   },
@@ -57,6 +134,34 @@
       "type": "string",
       "minLength": 1
     },
+    "sampleDataFolder": {
+      "description": "the folder path for sample data",
+      "type": "string",
+      "minLength": 1
+    },
+    "dataSource": {
+      "description": "the data source type",
+      "type": "string",
+      "enum": [
+        "BIGQUERY",
+        "CLICKHOUSE",
+        "CANNER",
+        "TRINO",
+        "MSSQL",
+        "MYSQL",
+        "POSTGRES",
+        "SNOWFLAKE",
+        "DUCKDB",
+        "LOCAL_FILE",
+        "S3_FILE",
+        "GCS_FILE",
+        "MINIO_FILE",
+        "ORACLE",
+        "ATHENA",
+        "REDSHIFT"
+      ],
+      "minLength": 1
+    },
     "models": {
       "description": "the list of models",
       "type": "array",
@@ -70,12 +175,12 @@
             "minLength": 1
           },
           "refSql": {
-            "description": "the sql reference of the model",
+            "description": "(WIP) the sql reference of the model",
             "type": "string", 
             "minLength": 1
           },
           "baseObject": {
-            "description": "the base object of the model",
+            "description": "(WIP) the base object of the model",
             "type": "string",
             "minLength": 1
           },
@@ -108,19 +213,45 @@
             "type": "string"
           },
           "cached": {
-            "description": "whether the model is cached or not",
+            "description": "(WIP) whether the model is cached or not",
             "type": "boolean"
           },
           "refreshTime": {
-            "description": "the cache refresh time of the model",
+            "description": "(WIP) the cache refresh time of the model",
             "type": "string",
             "pattern": "^\\s*(\\d+(?:\\.\\d+)?)\\s*([a-zA-Z]+)\\s*$"
+          },
+          "rowLevelAccessControls": {
+            "type": "array",
+            "items": {
+              "description": "the row-level access-control rule for the model",
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "the name of the access-control rule",
+                  "type": "string"
+                },
+                "requiredProperties": {
+                  "description": "the required properties for the access-control rule",
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/sessionProperty"
+                  }
+                },
+                "condition": {
+                  "description": "The condition of the access-control rule. A condition is a SQL expression that evaluates to true or false.",
+                  "type": "string"
+                }
+              },
+              "required": ["name", "requiredProperties", "condition"],
+              "additionalProperties": false
+            }
           },
           "properties": {
             "description": "the customize properties of the model",
             "type": "object",
             "additionalProperties": {
-              "type": "string"
+              "type": ["string", "number", "boolean", "object", "array", "null"]
             }
           }
         },
@@ -169,7 +300,7 @@
             "description": "the customize properties of the relationship",
             "type": "object",
             "additionalProperties": {
-              "type": "string"
+              "type": ["string", "number", "boolean", "object", "array", "null"]
             }
           }
         },
@@ -177,10 +308,11 @@
       }
     },
     "metrics": {
-      "description": "the list of metrics",
+      "description": "(WIP) the list of metrics",
       "type": "array",
       "unevaluatedItems": false,
       "items": {
+        "description": "(WIP) the metric",
         "type": "object",
         "properties": {
           "name": {
@@ -258,7 +390,7 @@
           "properties": {
             "type": "object",
             "additionalProperties": {
-              "type": "string"
+              "type": ["string", "number", "boolean", "object", "array", "null"]
             }
           }
         },
@@ -286,7 +418,7 @@
             "description": "the customize properties of the view",
             "type": "object",
             "additionalProperties": {
-              "type": "string"
+              "type": ["string", "number", "boolean", "object", "array", "null"]
             }
           }
         },
@@ -294,10 +426,11 @@
       }
     },
     "enumDefinitions": {
-      "description": "the list of enum definitions",
+      "description": "(WIP) the list of enum definitions",
       "type": "array",
       "unevaluatedItems": false,
       "items": {
+        "description": "(WIP) the enum definition",
         "type": "object",
         "properties": {
           "name": {
@@ -326,7 +459,7 @@
                   "description": "the customize properties of the member",
                   "type": "object",
                   "additionalProperties": {
-                    "type": "string"
+                    "type": ["string", "number", "boolean", "object", "array", "null"]
                   }
                 }
               },
@@ -337,51 +470,12 @@
             "description": "the customize properties of the enum",
             "type": "object",
             "additionalProperties": {
-              "type": "string"
+              "type": ["string", "number", "boolean", "object", "array", "null"]
             }
           }
         },
         "required": ["name", "values"]
       }
-    },
-    "macros": {
-      "description": "the list of macros",
-      "type": "array",
-      "unevaluatedItems": false,
-      "items": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "description": "the name of the macro",
-            "type": "string",
-            "minLength": 1
-          },
-          "description": {
-            "description": "the definition of the macro",
-            "type": "string",
-            "minLength": 1
-          },
-          "properties": {
-            "description": "the customize properties of the macro",
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
-          }
-        },
-        "required": ["name", "definition"]
-      }
-    },
-    "cumulativeMetrics": {
-        "type": "array",
-        "items": {
-            "type": "object",
-            "description": "experimental feature. The format is subject to change"
-          }
-    },
-    "dateSpine": {
-        "type": "object",
-        "description": "experimental feature. The format is subject to change"
     }
   },
   "required": ["catalog", "schema"],
