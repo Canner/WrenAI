@@ -171,12 +171,6 @@ const getData = (
         ),
     },
     {
-      id: LEARNING.SHARE_RESULTS,
-      title: 'Export to Excel/Sheets',
-      href: 'https://docs.getwren.ai/oss/guide/integrations/excel-add-in',
-      onClick: () => saveRecord(LEARNING.SHARE_RESULTS),
-    },
-    {
       id: LEARNING.VIEW_FULL_SQL,
       title: 'View full SQL',
       href: 'https://docs.getwren.ai/oss/guide/home/answer#view-sqlview-full-sql',

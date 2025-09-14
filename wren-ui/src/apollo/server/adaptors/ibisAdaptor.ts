@@ -551,6 +551,8 @@ export class IbisAdaptor implements IIbisAdaptor {
       e.response?.data ||
       e.message ||
       defaultMessage;
+
+    const errorData = e.response?.data;
     throw Errors.create(Errors.GeneralErrorCodes.IBIS_SERVER_ERROR, {
       customMessage: errorMessageBuilder
         ? errorMessageBuilder(customMessage)
@@ -559,6 +561,7 @@ export class IbisAdaptor implements IIbisAdaptor {
       other: {
         correlationId: e.response?.headers['x-correlation-id'],
         processTime: e.response?.headers['x-process-time'],
+        ...errorData,
       },
     });
   }

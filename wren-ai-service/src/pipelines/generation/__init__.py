@@ -10,6 +10,7 @@ from .relationship_recommendation import RelationshipRecommendation
 from .semantics_description import SemanticsDescription
 from .sql_answer import SQLAnswer
 from .sql_correction import SQLCorrection
+from .sql_diagnosis import SQLDiagnosis
 from .sql_generation import SQLGeneration
 from .sql_generation_reasoning import SQLGenerationReasoning
 from .sql_question import SQLQuestion
@@ -28,6 +29,7 @@ __all__ = [
     "SemanticsDescription",
     "SQLAnswer",
     "SQLCorrection",
+    "SQLDiagnosis",
     "SQLGeneration",
     "SQLGenerationReasoning",
     "UserGuideAssistance",

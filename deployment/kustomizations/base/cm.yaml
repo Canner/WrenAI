@@ -211,6 +211,8 @@ data:
         document_store: qdrant
       - name: sql_tables_extraction
         llm: litellm_llm.default
+      - name: sql_diagnosis
+        llm: litellm_llm.default
 
     ---
     settings:
