@@ -175,7 +175,7 @@ func TestFromDbtProfiles_LocalFile(t *testing.T) {
 		t.Fatalf("Expected WrenLocalFileDataSource, got %T", dataSources[0])
 	}
 
-	if ds.Url != "/abs_path" {
+	if filepath.ToSlash(ds.Url) != "/abs_path" {
 		t.Errorf("Expected url '/abs_path', got '%s'", ds.Url)
 	}
 	if ds.Format != duckdbType {
@@ -279,11 +279,11 @@ func TestFromDbtProfiles_BigQuery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-defer func() {
-	if err := os.RemoveAll(tempDir); err != nil {
-		t.Logf("Failed to remove temporary directory %s: %v", tempDir, err)
-	}
-}()
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("Failed to remove temporary directory %s: %v", tempDir, err)
+		}
+	}()
 
 	t.Run("service-account-json", func(t *testing.T) {
 		keyfileContent := `{"type": "service_account", "project_id": "test-project", "private_key_id": "test-key-id", "private_key": "test-private-key", "client_email": "test-client-email", "client_id": "test-client-id", "auth_uri": "test-auth-uri", "token_uri": "test-token-uri", "auth_provider_x509_cert_url": "test-cert-url", "client_x509_cert_url": "test-client-cert-url"}` // #nosec G101
