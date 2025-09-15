@@ -837,7 +837,7 @@ func buildAggregationExpression(metricType string, typeParams map[string]interfa
 		if measure, ok := typeParams["measure"].(map[string]interface{}); ok {
 			measureName := getStringFromMap(measure, "name", "")
 			if measureData, ok := measureDataLookup[measureName]; ok {
-				agg := getStringFromMap(measureData, "agg", "sum")      // Default to SUM
+				agg := getStringFromMap(measureData, "agg", "sum")         // Default to SUM
 				expr := getStringFromMap(measureData, "expr", measureName) // Fallback to measure name
 				return fmt.Sprintf("%s(%s)", strings.ToUpper(agg), expr)
 			}
