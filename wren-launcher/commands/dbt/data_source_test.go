@@ -279,10 +279,14 @@ func TestFromDbtProfiles_BigQuery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tempDir)
+defer func() {
+	if err := os.RemoveAll(tempDir); err != nil {
+		t.Logf("Failed to remove temporary directory %s: %v", tempDir, err)
+	}
+}()
 
 	t.Run("service-account-json", func(t *testing.T) {
-		keyfileContent := `{"type": "service_account", "project_id": "test-project", "private_key_id": "test-key-id", "private_key": "test-private-key", "client_email": "test-client-email", "client_id": "test-client-id", "auth_uri": "test-auth-uri", "token_uri": "test-token-uri", "auth_provider_x509_cert_url": "test-cert-url", "client_x509_cert_url": "test-client-cert-url"}`
+		keyfileContent := `{"type": "service_account", "project_id": "test-project", "private_key_id": "test-key-id", "private_key": "test-private-key", "client_email": "test-client-email", "client_id": "test-client-id", "auth_uri": "test-auth-uri", "token_uri": "test-token-uri", "auth_provider_x509_cert_url": "test-cert-url", "client_x509_cert_url": "test-client-cert-url"}` // #nosec G101
 		profiles := &DbtProfiles{
 			Profiles: map[string]DbtProfile{
 				"test_profile": {
@@ -331,9 +335,9 @@ func TestFromDbtProfiles_BigQuery(t *testing.T) {
 	})
 
 	t.Run("service-account-with-absolute-keyfile-path", func(t *testing.T) {
-		keyfileContent := `{"type": "service_account"}`
+		keyfileContent := `{"type": "service_account"}` // #nosec G101
 		keyfilePath := filepath.Join(tempDir, "keyfile.json")
-		if err := os.WriteFile(keyfilePath, []byte(keyfileContent), 0644); err != nil {
+		if err := os.WriteFile(keyfilePath, []byte(keyfileContent), 0600); err != nil {
 			t.Fatal(err)
 		}
 
@@ -376,14 +380,14 @@ func TestFromDbtProfiles_BigQuery(t *testing.T) {
 
 	t.Run("service-account-with-relative-keyfile-path", func(t *testing.T) {
 		dbtHomePath := tempDir
-		keyfileContent := `{"type": "service_account"}`
+		keyfileContent := `{"type": "service_account"}` // #nosec G101
 		keyfilePath := "keys/keyfile.json"
 		fullKeyfilePath := filepath.Join(dbtHomePath, keyfilePath)
 
-		if err := os.MkdirAll(filepath.Dir(fullKeyfilePath), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(fullKeyfilePath), 0750); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(fullKeyfilePath, []byte(keyfileContent), 0644); err != nil {
+		if err := os.WriteFile(fullKeyfilePath, []byte(keyfileContent), 0600); err != nil {
 			t.Fatal(err)
 		}
 

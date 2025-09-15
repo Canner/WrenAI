@@ -247,10 +247,11 @@ func convertToBigQueryDataSource(conn DbtConnection, dbtHomePath string) (*WrenB
 				resolvedKeyfilePath = filepath.Join(dbtHomePath, keyfilePath)
 			}
 
-			b, err := os.ReadFile(resolvedKeyfilePath)
+			cleanPath := filepath.Clean(resolvedKeyfilePath)
+			b, err := os.ReadFile(cleanPath)
 			if err != nil {
 				// Update the error message to show the path that was attempted
-				return nil, fmt.Errorf("failed to read keyfile '%s': %w", resolvedKeyfilePath, err)
+				return nil, fmt.Errorf("failed to read keyfile '%s': %w", cleanPath, err)
 			}
 			enc, err := encodeJSON(b)
 			if err != nil {
@@ -466,23 +467,23 @@ func (ds *WrenBigQueryDataSource) Validate() error {
 func (ds *WrenBigQueryDataSource) MapType(sourceType string) string {
 	switch strings.ToUpper(sourceType) {
 	case "INT64", "INTEGER":
-		return "integer"
+		return integerType
 	case "FLOAT64", "FLOAT":
-		return "double"
+		return doubleType
 	case "STRING":
-		return "varchar"
+		return varcharType
 	case "BOOL", "BOOLEAN":
-		return "boolean"
+		return booleanType
 	case "DATE":
-		return "date"
+		return dateType
 	case "TIMESTAMP", "DATETIME":
-		return "timestamp"
+		return timestampType
 	case "NUMERIC", "DECIMAL", "BIGNUMERIC":
-		return "double"
+		return doubleType
 	case "BYTES":
-		return "varchar"
+		return varcharType
 	case "JSON":
-		return "varchar"
+		return varcharType
 	default:
 		return strings.ToLower(sourceType)
 	}

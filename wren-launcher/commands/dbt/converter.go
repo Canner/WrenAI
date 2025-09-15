@@ -280,62 +280,46 @@ func handleLocalhostForContainer(host string) string {
 	return host
 }
 
-// ConvertDbtCatalogToWrenMDL converts dbt catalog.json to Wren MDL format
+// ConvertDbtCatalogToWrenMDL is the main function to convert a dbt catalog into a Wren MDL manifest.
+// It orchestrates the reading of dbt artifacts and processes each dbt node to convert it into a Wren model.
 func ConvertDbtCatalogToWrenMDL(catalogPath string, dataSource DataSource, manifestPath string, semanticManifestPath string, includeStagingModels bool) (*WrenMDLManifest, error) {
-	// Read and parse the catalog.json file
-	data, err := os.ReadFile(catalogPath) // #nosec G304 -- catalogPath is controlled by application
+	// --- 1. Read and Parse All Necessary DBT Artifact Files ---
+
+	// Read and unmarshal the primary catalog.json file.
+	catalogBytes, err := os.ReadFile(filepath.Clean(catalogPath))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read catalog file %s: %w", catalogPath, err)
 	}
-
 	var catalogData map[string]interface{}
-	if err := json.Unmarshal(data, &catalogData); err != nil {
+	if err := json.Unmarshal(catalogBytes, &catalogData); err != nil {
 		return nil, fmt.Errorf("failed to parse catalog JSON: %w", err)
 	}
 
-	// Parse manifest.json for descriptions and relationships (optional)
+	// Read and unmarshal the manifest.json file, which contains rich metadata.
 	var manifestData map[string]interface{}
 	if manifestPath != "" {
 		pterm.Info.Printf("Reading manifest.json for descriptions and relationships from: %s\n", manifestPath)
-		manifestBytes, err := os.ReadFile(manifestPath) // #nosec G304 -- manifestPath is controlled by application
+		manifestBytes, err := os.ReadFile(filepath.Clean(manifestPath)) // #nosec G304 -- manifestPath is controlled by application
 		if err != nil {
-			pterm.Warning.Printf("Warning: Failed to read manifest file %s: %v\n", manifestPath, err)
-		} else {
-			if err := json.Unmarshal(manifestBytes, &manifestData); err != nil {
-				pterm.Warning.Printf("Warning: Failed to parse manifest JSON: %v\n", err)
-			}
+			pterm.Warning.Printf("Could not read manifest file %s: %v. Descriptions and relationships will be missing.\n", manifestPath, err)
+		} else if err := json.Unmarshal(manifestBytes, &manifestData); err != nil {
+			pterm.Warning.Printf("Could not parse manifest file %s: %v. Descriptions and relationships will be missing.\n", manifestPath, err)
 		}
 	}
 
-	// Parse semantic_manifest.json for metrics and primary keys (optional and robust)
+	// Read and unmarshal the semantic_manifest.json file for metrics and primary keys.
 	var semanticManifestData map[string]interface{}
 	if semanticManifestPath != "" {
-		pterm.Info.Printf("Reading semantic_manifest.json for metrics and primary keys from: %s\n", semanticManifestPath)
-		semanticBytes, err := os.ReadFile(semanticManifestPath)
+		semanticBytes, err := os.ReadFile(filepath.Clean(semanticManifestPath))
 		if err != nil {
-			pterm.Warning.Printf("Warning: Could not read semantic_manifest.json: %v\n", err)
-			pterm.Warning.Println("Skipping metric and primary key conversion.")
-		} else {
-			if err := json.Unmarshal(semanticBytes, &semanticManifestData); err != nil {
-				pterm.Warning.Printf("Warning: Failed to parse semantic_manifest.json: %v\n", err)
-				pterm.Warning.Println("Skipping metric and primary key conversion.")
-				semanticManifestData = nil
-			}
+			pterm.Warning.Printf("Could not read semantic_manifest.json: %v. Metrics and primary keys will be missing.\n", err)
+		} else if err := json.Unmarshal(semanticBytes, &semanticManifestData); err != nil {
+			pterm.Warning.Printf("Could not parse semantic_manifest.json: %v. Metrics and primary keys will be missing.\n", err)
 		}
 	}
 
-	// Extract nodes from catalog
-	nodesValue, exists := catalogData["nodes"]
-	if !exists {
-		return nil, fmt.Errorf("no 'nodes' section found in catalog")
-	}
+	// --- 2. Initialize Wren Manifest and Pre-process Metadata ---
 
-	nodesMap, ok := nodesValue.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid 'nodes' format in catalog")
-	}
-
-	// Initialize Wren MDL manifest
 	manifest := &WrenMDLManifest{
 		Catalog:         "wren",
 		Schema:          "public",
@@ -347,126 +331,158 @@ func ConvertDbtCatalogToWrenMDL(catalogPath string, dataSource DataSource, manif
 		DataSources:     dataSource.GetType(),
 	}
 
-	// Maps to store pre-processed information
+	// Create lookup maps to store pre-processed information for quick access.
 	enumValueToNameMap := make(map[string]string)
 	columnToEnumNameMap := make(map[string]string)
 	columnToNotNullMap := make(map[string]bool)
 	modelToPrimaryKeyMap := make(map[string]string)
 
-	// Pre-process manifest to find all tests (enums, not_null)
+	// Pre-process the manifest to extract test data (enums, not-null constraints).
 	if manifestData != nil {
-		if nodes, ok := manifestData["nodes"].(map[string]interface{}); ok {
-			for nodeKey, nodeValue := range nodes {
-				nodeMap, ok := nodeValue.(map[string]interface{})
-				if !ok {
-					continue
-				}
-
-				// Handle tests on model columns (including structs)
-				if strings.HasPrefix(nodeKey, "model.") {
-					modelName := getModelNameFromNodeKey(nodeKey)
-					if modelName == "" {
-						continue
-					}
-					if columns, ok := nodeMap["columns"].(map[string]interface{}); ok {
-						for columnName, colData := range columns {
-							if colMap, ok := colData.(map[string]interface{}); ok {
-								processColumnForTests(nodeKey, modelName, columnName, colMap, &manifest.EnumDefinitions, enumValueToNameMap, columnToEnumNameMap, columnToNotNullMap)
-							}
-						}
-					}
-				}
-
-				// Handle compiled test nodes for simple columns
-				if strings.HasPrefix(nodeKey, "test.") {
-					if testMeta, ok := nodeMap["test_metadata"].(map[string]interface{}); ok {
-						testName := getStringFromMap(testMeta, "name", "")
-						attachedNodeID := getStringFromMap(nodeMap, "attached_node", "")
-						columnName := getStringFromMap(nodeMap, "column_name", "")
-						modelName := getModelNameFromNodeKey(attachedNodeID)
-
-						if attachedNodeID != "" && columnName != "" && modelName != "" {
-							columnKey := fmt.Sprintf("%s.%s", attachedNodeID, columnName)
-
-							if testName == "not_null" {
-								columnToNotNullMap[columnKey] = true
-							}
-
-							if testName == "accepted_values" {
-								if kwargs, ok := testMeta["kwargs"].(map[string]interface{}); ok {
-									if values, ok := kwargs["values"].([]interface{}); ok && len(values) > 0 {
-										createOrLinkEnum(modelName, columnName, columnKey, values, &manifest.EnumDefinitions, enumValueToNameMap, columnToEnumNameMap)
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
+		preprocessManifestForTests(manifestData, &manifest.EnumDefinitions, enumValueToNameMap, columnToEnumNameMap, columnToNotNullMap)
 	}
 
-	// Pre-process semantic manifest for primary keys
+	// Pre-process the semantic manifest to extract primary key information.
 	if semanticManifestData != nil {
-		if semanticModels, ok := semanticManifestData["semantic_models"].([]interface{}); ok {
-			for _, sm := range semanticModels {
-				if smMap, ok := sm.(map[string]interface{}); ok {
-					var modelName string
-					if nr, ok := smMap["node_relation"].(map[string]interface{}); ok {
-						modelName = getStringFromMap(nr, "alias", "")
-					}
-
-					if entities, ok := smMap["entities"].([]interface{}); ok {
-						for _, entity := range entities {
-							if entityMap, ok := entity.(map[string]interface{}); ok {
-								if getStringFromMap(entityMap, "type", "") == "primary" {
-									pk := getStringFromMap(entityMap, "expr", "")
-									if modelName != "" && pk != "" {
-										modelToPrimaryKeyMap[modelName] = pk
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
+		preprocessSemanticManifestForPrimaryKeys(semanticManifestData, modelToPrimaryKeyMap)
 	}
 
-	// Convert each dbt model to Wren model
+	// --- 3. Convert dbt Nodes to Wren Models ---
+
+	nodesValue, exists := catalogData["nodes"]
+	if !exists {
+		return nil, fmt.Errorf("no 'nodes' section found in catalog")
+	}
+	nodesMap, ok := nodesValue.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid 'nodes' format in catalog")
+	}
+
+	// Iterate through each node in the catalog and convert it to a Wren model.
 	for nodeKey, nodeValue := range nodesMap {
 		nodeMap, ok := nodeValue.(map[string]interface{})
 		if !ok {
 			continue
 		}
+		// We are only interested in nodes that represent dbt models.
 		if !strings.HasPrefix(nodeKey, "model.") {
 			continue
 		}
-		if !includeStagingModels {
-			mn := getModelNameFromNodeKey(nodeKey)
-			if strings.HasPrefix(mn, "stg_") || strings.HasPrefix(mn, "staging_") {
-				continue
-			}
+
+		// Skip staging models if the user has opted to exclude them.
+		modelName := getModelNameFromNodeKey(nodeKey)
+		if !includeStagingModels && (strings.HasPrefix(modelName, "stg_") || strings.HasPrefix(modelName, "staging_")) {
+			continue
 		}
+
+		// Perform the conversion for the single node.
 		model, err := convertDbtNodeToWrenModel(nodeKey, nodeMap, dataSource, manifestData, columnToEnumNameMap, columnToNotNullMap, modelToPrimaryKeyMap)
 		if err != nil {
-			pterm.Warning.Printf("Warning: Failed to convert model %s: %v\n", nodeKey, err)
+			pterm.Warning.Printf("Failed to convert model %s: %v\n", nodeKey, err)
 			continue
 		}
 		manifest.Models = append(manifest.Models, *model)
 	}
 
-	// Generate relationships from manifest.json
+	// --- 4. Generate Relationships and Metrics ---
+
+	// Generate relationships between models based on the dbt manifest.
 	if manifestData != nil {
 		manifest.Relationships = generateRelationships(manifestData)
 	}
 
-	// Generate metrics from semantic_manifest.json, only if data is available
+	// Generate metrics from the semantic manifest.
 	if semanticManifestData != nil {
 		manifest.Metrics = convertDbtMetricsToWrenMetrics(semanticManifestData)
 	}
 
 	return manifest, nil
+}
+
+// preprocessManifestForTests extracts information from dbt tests (like 'not_null' and 'accepted_values')
+// and populates maps that will be used later during model conversion.
+func preprocessManifestForTests(manifestData map[string]interface{}, enums *[]EnumDefinition, enumValueToNameMap, columnToEnumNameMap map[string]string, columnToNotNullMap map[string]bool) {
+	nodes, ok := manifestData["nodes"].(map[string]interface{})
+	if !ok {
+		return
+	}
+
+	for nodeKey, nodeValue := range nodes {
+		nodeMap, ok := nodeValue.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Process tests defined directly on model columns.
+		if strings.HasPrefix(nodeKey, "model.") {
+			modelName := getModelNameFromNodeKey(nodeKey)
+			if columns, ok := nodeMap["columns"].(map[string]interface{}); ok {
+				for columnName, colData := range columns {
+					if colMap, ok := colData.(map[string]interface{}); ok {
+						processColumnForTests(nodeKey, modelName, columnName, colMap, enums, enumValueToNameMap, columnToEnumNameMap, columnToNotNullMap)
+					}
+				}
+			}
+		}
+
+		// Process compiled test nodes which are separate entries in the manifest.
+		if strings.HasPrefix(nodeKey, "test.") {
+			testMeta, _ := nodeMap["test_metadata"].(map[string]interface{})
+			testName := getStringFromMap(testMeta, "name", "")
+			attachedNodeID := getStringFromMap(nodeMap, "attached_node", "")
+			columnName := getStringFromMap(nodeMap, "column_name", "")
+
+			if attachedNodeID != "" && columnName != "" {
+				columnKey := fmt.Sprintf("%s.%s", attachedNodeID, columnName)
+				modelName := getModelNameFromNodeKey(attachedNodeID)
+
+				if testName == "not_null" {
+					columnToNotNullMap[columnKey] = true
+				}
+
+				if testName == "accepted_values" {
+					if kwargs, ok := testMeta["kwargs"].(map[string]interface{}); ok {
+						if values, ok := kwargs["values"].([]interface{}); ok && len(values) > 0 {
+							createOrLinkEnum(modelName, columnName, columnKey, values, enums, enumValueToNameMap, columnToEnumNameMap)
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+// preprocessSemanticManifestForPrimaryKeys extracts primary key information from the semantic manifest.
+func preprocessSemanticManifestForPrimaryKeys(semanticData map[string]interface{}, modelToPrimaryKeyMap map[string]string) {
+	semanticModels, ok := semanticData["semantic_models"].([]interface{})
+	if !ok {
+		return
+	}
+
+	for _, sm := range semanticModels {
+		smMap, ok := sm.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		var modelName string
+		if nr, ok := smMap["node_relation"].(map[string]interface{}); ok {
+			modelName = getStringFromMap(nr, "alias", "")
+		}
+
+		if entities, ok := smMap["entities"].([]interface{}); ok {
+			for _, entity := range entities {
+				if entityMap, ok := entity.(map[string]interface{}); ok {
+					if getStringFromMap(entityMap, "type", "") == "primary" {
+						pk := getStringFromMap(entityMap, "expr", "")
+						if modelName != "" && pk != "" {
+							modelToPrimaryKeyMap[modelName] = pk
+						}
+					}
+				}
+			}
+		}
+	}
 }
 
 // generateRelationships iterates through the manifest and creates relationship definitions.
@@ -583,10 +599,8 @@ func extractRelationshipsFromTests(fromModelName, fromColumnName string, tests [
 	return relationships
 }
 
-// createOrLinkEnum is a helper to de-duplicate and manage enum creation.
-func createOrLinkEnum(modelName, columnName, columnKey string, values []interface{},
-	allEnums *[]EnumDefinition, enumValueToNameMap, columnToEnumNameMap map[string]string) {
-
+// createOrLinkEnum is a helper to de-duplicate and manage enum creation based on 'accepted_values' tests.
+func createOrLinkEnum(modelName, columnName, columnKey string, values []interface{}, allEnums *[]EnumDefinition, enumValueToNameMap, columnToEnumNameMap map[string]string) {
 	var strValues []string
 	for _, v := range values {
 		if s, ok := v.(string); ok {
@@ -617,19 +631,17 @@ func createOrLinkEnum(modelName, columnName, columnKey string, values []interfac
 	columnToEnumNameMap[columnKey] = enumName
 }
 
-// processColumnForTests recursively finds tests in embedded column definitions.
-func processColumnForTests(nodeKey, modelName, columnName string, colMap map[string]interface{},
-	allEnums *[]EnumDefinition, enumValueToNameMap, columnToEnumNameMap map[string]string, columnToNotNullMap map[string]bool) {
-
-	// Helper to handle the actual test processing
+// processColumnForTests finds tests in a column definition (including nested fields) and processes them.
+func processColumnForTests(nodeKey, modelName, columnName string, colMap map[string]interface{}, allEnums *[]EnumDefinition, enumValueToNameMap, columnToEnumNameMap map[string]string, columnToNotNullMap map[string]bool) {
+	// Helper to handle the actual test processing for a given column/field
 	processTests := func(currentColumnKey, currentColumnName string, tests []interface{}) {
 		for _, test := range tests {
-			// Handle not_null test (string)
+			// Handle not_null test (string format)
 			if testStr, ok := test.(string); ok && testStr == "not_null" {
 				columnToNotNullMap[currentColumnKey] = true
 			}
 
-			// Handle accepted_values test (map)
+			// Handle tests in map format (e.g., accepted_values)
 			if testMap, ok := test.(map[string]interface{}); ok {
 				if accepted, ok := testMap["accepted_values"].(map[string]interface{}); ok {
 					if values, ok := accepted["values"].([]interface{}); ok && len(values) > 0 {
@@ -640,13 +652,13 @@ func processColumnForTests(nodeKey, modelName, columnName string, colMap map[str
 		}
 	}
 
-	// Case 1: Tests are directly on the column (for structs).
+	// Case 1: Tests are directly on the column itself.
 	if tests, ok := colMap["tests"].([]interface{}); ok {
 		columnKey := fmt.Sprintf("%s.%s", nodeKey, columnName)
 		processTests(columnKey, columnName, tests)
 	}
 
-	// Case 2: Column is a struct with tests on its fields.
+	// Case 2: The column is a struct, and tests are on its fields.
 	if fields, ok := colMap["fields"].([]interface{}); ok {
 		for _, fieldData := range fields {
 			if fieldMap, ok := fieldData.(map[string]interface{}); ok {
@@ -655,7 +667,8 @@ func processColumnForTests(nodeKey, modelName, columnName string, colMap map[str
 					continue
 				}
 				if tests, ok := fieldMap["tests"].([]interface{}); ok {
-					columnKey := fmt.Sprintf("%s.%s", nodeKey, fieldName) // The key is based on the field name
+					// The unique key for a field is based on the field name.
+					columnKey := fmt.Sprintf("%s.%s", nodeKey, fieldName)
 					processTests(columnKey, fieldName, tests)
 				}
 			}
@@ -663,195 +676,288 @@ func processColumnForTests(nodeKey, modelName, columnName string, colMap map[str
 	}
 }
 
-// convertDbtMetricsToWrenMetrics converts dbt metrics from semantic manifest to Wren MDL format
+// convertDbtMetricsToWrenMetrics converts dbt metrics from the semantic manifest into the Wren MDL format.
+// It serves as the main entry point for metric conversion, orchestrating the creation of lookup tables
+// and processing each metric definition.
 func convertDbtMetricsToWrenMetrics(semanticData map[string]interface{}) []Metric {
 	var wrenMetrics []Metric
-	measureToModelMap := make(map[string]string)
-	measureDataLookup := make(map[string]map[string]interface{}) // measureName -> measureData
 
-	// First, build lookup tables for all measures
-	if semanticModels, ok := semanticData["semantic_models"].([]interface{}); ok {
-		for _, sm := range semanticModels {
-			if smMap, ok := sm.(map[string]interface{}); ok {
-				modelName := getStringFromMap(smMap, "name", "")
-				if modelName == "" {
-					continue
-				}
-				if measures, ok := smMap["measures"].([]interface{}); ok {
-					for _, m := range measures {
-						if measureMap, ok := m.(map[string]interface{}); ok {
-							measureName := getStringFromMap(measureMap, "name", "")
-							if measureName != "" {
-								measureToModelMap[measureName] = modelName
-								measureDataLookup[measureName] = measureMap
-							}
-						}
-					}
-				}
-			}
-		}
+	// --- 1. Pre-process semantic models to build fast lookup maps ---
+	// These maps are essential for quickly finding the model a measure belongs to and its details.
+	measureToModelMap, measureDataLookup := buildMeasureLookups(semanticData)
+
+	// --- 2. Iterate through each metric and convert it ---
+	metrics, ok := semanticData["metrics"].([]interface{})
+	if !ok {
+		// If there's no 'metrics' array, there's nothing to do.
+		return wrenMetrics
 	}
 
-	// Now, iterate through the metrics and build Wren metrics
-	if metrics, ok := semanticData["metrics"].([]interface{}); ok {
-		for _, m := range metrics {
-			if metricMap, ok := m.(map[string]interface{}); ok {
-				metricName := getStringFromMap(metricMap, "name", "")
-				metricLabel := getStringFromMap(metricMap, "label", metricName)
-				metricDesc := getStringFromMap(metricMap, "description", "")
-				metricType := getStringFromMap(metricMap, "type", "")
+	for _, m := range metrics {
+		metricMap, ok := m.(map[string]interface{})
+		if !ok {
+			continue // Skip if the item is not a valid map.
+		}
 
-				wrenMetric := Metric{
-					Name:        metricName,
-					DisplayName: metricLabel,
-					Description: metricDesc,
-				}
+		// --- 3. Extract basic metric information ---
+		metricName := getStringFromMap(metricMap, "name", "")
+		if metricName == "" {
+			continue // A metric must have a name.
+		}
 
-				typeParams, _ := metricMap["type_params"].(map[string]interface{})
+		wrenMetric := Metric{
+			Name:        metricName,
+			DisplayName: getStringFromMap(metricMap, "label", metricName),
+			Description: getStringFromMap(metricMap, "description", ""),
+		}
 
-				// Find the underlying model and dimensions
-				var baseModel string
-				var timeDimensions []string
-				if inputMeasuresValue, ok := typeParams["input_measures"]; ok {
-					if inputMeasuresList, ok := inputMeasuresValue.([]interface{}); ok && len(inputMeasuresList) > 0 {
-						// Find the model this metric is based on
-						for _, inputMeasure := range inputMeasuresList {
-							if imMap, ok := inputMeasure.(map[string]interface{}); ok {
-								imName := getStringFromMap(imMap, "name", "")
-								if model, exists := measureToModelMap[imName]; exists {
-									baseModel = model
-									break // Assume all measures for a metric come from the same model
-								}
-							}
-						}
-						if baseModel == "" {
-							pterm.Warning.Printf("Could not find a parent model for metric '%s'\n", metricName)
-						}
-					}
-				}
+		typeParams, _ := metricMap["type_params"].(map[string]interface{})
 
-				// Find time dimensions from the semantic model
-				if baseModel != "" {
-					wrenMetric.Models = []string{baseModel}
-					if semanticModels, ok := semanticData["semantic_models"].([]interface{}); ok {
-						for _, sm := range semanticModels {
-							if smMap, ok := sm.(map[string]interface{}); ok {
-								if getStringFromMap(smMap, "name", "") == baseModel {
-									if dims, ok := smMap["dimensions"].([]interface{}); ok {
-										for _, d := range dims {
-											if dimMap, ok := d.(map[string]interface{}); ok {
-												if getStringFromMap(dimMap, "type", "") == "time" {
-													timeDimensions = append(timeDimensions, getStringFromMap(dimMap, "name", ""))
-												}
-											}
-										}
-									}
-								}
-							}
-						}
-					}
-					wrenMetric.Dimensions = timeDimensions
-				}
+		// --- 4. Determine the base model and time dimensions for the metric ---
+		baseModel := findBaseModelForMetric(typeParams, measureToModelMap)
+		if baseModel == "" {
+			pterm.Warning.Printf("Could not find a parent model for metric '%s'\n", metricName)
+			continue // Skip metric if we can't associate it with a model.
+		}
 
-				// Build the aggregation expression
-				switch metricType {
-				case "simple":
-					if measure, ok := typeParams["measure"].(map[string]interface{}); ok {
-						measureName := getStringFromMap(measure, "name", "")
-						if measureData, ok := measureDataLookup[measureName]; ok {
-							agg := getStringFromMap(measureData, "agg", "sum")
-							expr := getStringFromMap(measureData, "expr", measureName)
-							wrenMetric.Aggregation = fmt.Sprintf("%s(%s)", strings.ToUpper(agg), expr)
-						}
-					}
-				case "ratio":
-					if num, ok := typeParams["numerator"].(map[string]interface{}); ok {
-						if den, ok := typeParams["denominator"].(map[string]interface{}); ok {
-							numName := getStringFromMap(num, "name", "")
-							denName := getStringFromMap(den, "name", "")
-							if numData, ok := measureDataLookup[numName]; ok {
-								if denData, ok := measureDataLookup[denName]; ok {
-									numAgg := strings.ToUpper(getStringFromMap(numData, "agg", "sum"))
-									denAgg := strings.ToUpper(getStringFromMap(denData, "agg", "sum"))
-									numExpr := getStringFromMap(numData, "expr", numName)
-									denExpr := getStringFromMap(denData, "expr", denName)
-									wrenMetric.Aggregation = fmt.Sprintf("(%s(%s)) / (%s(%s))", numAgg, numExpr, denAgg, denExpr)
-								}
-							}
-						}
-					}
-				case "derived":
-					wrenMetric.Aggregation = getStringFromMap(typeParams, "expr", "")
-				}
+		wrenMetric.Models = []string{baseModel}
+		wrenMetric.Dimensions = findTimeDimensionsForModel(semanticData, baseModel)
 
-				if wrenMetric.Aggregation != "" && len(wrenMetric.Models) > 0 {
-					wrenMetrics = append(wrenMetrics, wrenMetric)
-				}
-			}
+		// --- 5. Build the specific aggregation expression based on the metric type ---
+		metricType := getStringFromMap(metricMap, "type", "")
+		wrenMetric.Aggregation = buildAggregationExpression(metricType, typeParams, measureDataLookup)
+
+		// --- 6. Final validation before adding to the list ---
+		// A metric is only valid if it has a base model and a valid aggregation expression.
+		if wrenMetric.Aggregation != "" && len(wrenMetric.Models) > 0 {
+			wrenMetrics = append(wrenMetrics, wrenMetric)
 		}
 	}
 
 	return wrenMetrics
 }
 
-// convertDbtNodeToWrenModel converts a single dbt node to Wren model
-func convertDbtNodeToWrenModel(nodeKey string, nodeData map[string]interface{}, dataSource DataSource, manifestData map[string]interface{}, columnToEnumNameMap map[string]string, columnToNotNullMap map[string]bool, modelToPrimaryKeyMap map[string]string) (*WrenModel, error) {
-	// Extract model name from node key
-	modelName := getModelNameFromNodeKey(nodeKey)
-	if modelName == "" {
-		return nil, fmt.Errorf("invalid node key format: %s", nodeKey)
-	}
+// buildMeasureLookups preprocesses the semantic models to create two essential maps:
+// 1. measureToModelMap: Maps a measure's name to the name of the model it belongs to.
+// 2. measureDataLookup: Maps a measure's name to its full data map for easy access to properties like `agg` and `expr`.
+func buildMeasureLookups(semanticData map[string]interface{}) (map[string]string, map[string]map[string]interface{}) {
+	measureToModelMap := make(map[string]string)
+	measureDataLookup := make(map[string]map[string]interface{})
 
-	// Extract metadata
-	metadataValue, exists := nodeData["metadata"]
-	if !exists {
-		return nil, fmt.Errorf("no metadata found for model %s", nodeKey)
-	}
-
-	metadata, ok := metadataValue.(map[string]interface{})
+	semanticModels, ok := semanticData["semantic_models"].([]interface{})
 	if !ok {
-		return nil, fmt.Errorf("invalid metadata format for model %s", nodeKey)
+		return measureToModelMap, measureDataLookup
 	}
 
-	// Create table reference
-	tableRef := TableReference{
-		Table: getStringFromMap(metadata, "name", modelName),
-	}
+	for _, sm := range semanticModels {
+		smMap, ok := sm.(map[string]interface{})
+		if !ok {
+			continue
+		}
 
-	if catalog := getStringFromMap(metadata, "database", ""); catalog != "" {
-		tableRef.Catalog = catalog
-	}
-	if schema := getStringFromMap(metadata, "schema", ""); schema != "" {
-		tableRef.Schema = schema
-	}
+		modelName := getStringFromMap(smMap, "name", "")
+		if modelName == "" {
+			continue
+		}
 
-	// Extract descriptions from manifest.json if available
-	var modelDescription string
-	var columnDescriptions map[string]string
-
-	if manifestData != nil {
-		if nodes, ok := manifestData["nodes"].(map[string]interface{}); ok {
-			if manifestNode, ok := nodes[nodeKey].(map[string]interface{}); ok {
-				// Extract model description
-				modelDescription = getStringFromMap(manifestNode, "description", "")
-
-				// Extract column descriptions
-				if manifestColumns, ok := manifestNode["columns"].(map[string]interface{}); ok {
-					columnDescriptions = make(map[string]string)
-					for colName, colData := range manifestColumns {
-						if colMap, ok := colData.(map[string]interface{}); ok {
-							description := getStringFromMap(colMap, "description", "")
-							if description != "" {
-								columnDescriptions[colName] = description
-							}
-						}
+		if measures, ok := smMap["measures"].([]interface{}); ok {
+			for _, m := range measures {
+				if measureMap, ok := m.(map[string]interface{}); ok {
+					measureName := getStringFromMap(measureMap, "name", "")
+					if measureName != "" {
+						measureToModelMap[measureName] = modelName
+						measureDataLookup[measureName] = measureMap
 					}
 				}
 			}
 		}
 	}
+	return measureToModelMap, measureDataLookup
+}
 
-	// Convert columns
+// findBaseModelForMetric identifies the underlying base model for a given metric
+// by looking at its "input_measures".
+func findBaseModelForMetric(typeParams map[string]interface{}, measureToModelMap map[string]string) string {
+	inputMeasuresValue, ok := typeParams["input_measures"]
+	if !ok {
+		// Fallback for simple metrics that use "measure" instead of "input_measures"
+		if measureValue, ok := typeParams["measure"]; ok {
+			if measureMap, ok := measureValue.(map[string]interface{}); ok {
+				measureName := getStringFromMap(measureMap, "name", "")
+				if model, exists := measureToModelMap[measureName]; exists {
+					return model
+				}
+			}
+		}
+		return ""
+	}
+
+	inputMeasuresList, ok := inputMeasuresValue.([]interface{})
+	if !ok || len(inputMeasuresList) == 0 {
+		return ""
+	}
+
+	// Assume all measures for a given metric come from the same base model.
+	// We only need to find the first valid one.
+	for _, inputMeasure := range inputMeasuresList {
+		if imMap, ok := inputMeasure.(map[string]interface{}); ok {
+			imName := getStringFromMap(imMap, "name", "")
+			if model, exists := measureToModelMap[imName]; exists {
+				return model // Return the first model we find.
+			}
+		}
+	}
+	return ""
+}
+
+// findTimeDimensionsForModel scans the semantic models to find all columns
+// marked with type "time" for a specific model name.
+func findTimeDimensionsForModel(semanticData map[string]interface{}, baseModelName string) []string {
+	var timeDimensions []string
+	semanticModels, ok := semanticData["semantic_models"].([]interface{})
+	if !ok {
+		return timeDimensions
+	}
+
+	for _, sm := range semanticModels {
+		smMap, ok := sm.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		if getStringFromMap(smMap, "name", "") == baseModelName {
+			if dims, ok := smMap["dimensions"].([]interface{}); ok {
+				for _, d := range dims {
+					if dimMap, ok := d.(map[string]interface{}); ok {
+						if getStringFromMap(dimMap, "type", "") == "time" {
+							timeDimensions = append(timeDimensions, getStringFromMap(dimMap, "name", ""))
+						}
+					}
+				}
+			}
+			break // Found the model, no need to continue looping.
+		}
+	}
+	return timeDimensions
+}
+
+// buildAggregationExpression constructs the SQL aggregation string for a Wren metric
+// based on its dbt type ('simple', 'ratio', or 'derived').
+func buildAggregationExpression(metricType string, typeParams map[string]interface{}, measureDataLookup map[string]map[string]interface{}) string {
+	switch metricType {
+	case "simple":
+		// A simple metric is a direct aggregation of one measure (e.g., SUM(revenue)).
+		if measure, ok := typeParams["measure"].(map[string]interface{}); ok {
+			measureName := getStringFromMap(measure, "name", "")
+			if measureData, ok := measureDataLookup[measureName]; ok {
+				agg := getStringFromMap(measureData, "agg", "sum")         // Default to SUM
+				expr := getStringFromMap(measureData, "expr", measureName) // Fallback to measure name
+				return fmt.Sprintf("%s(%s)", strings.ToUpper(agg), expr)
+			}
+		}
+	case "ratio":
+		// A ratio metric is a division of two measures (e.g., SUM(profit) / SUM(revenue)).
+		num, numOK := typeParams["numerator"].(map[string]interface{})
+		den, denOK := typeParams["denominator"].(map[string]interface{})
+		if !numOK || !denOK {
+			return ""
+		}
+
+		numName := getStringFromMap(num, "name", "")
+		denName := getStringFromMap(den, "name", "")
+		numData, numDataOK := measureDataLookup[numName]
+		denData, denDataOK := measureDataLookup[denName]
+
+		if numDataOK && denDataOK {
+			numAgg := strings.ToUpper(getStringFromMap(numData, "agg", "sum"))
+			denAgg := strings.ToUpper(getStringFromMap(denData, "agg", "sum"))
+			numExpr := getStringFromMap(numData, "expr", numName)
+			denExpr := getStringFromMap(denData, "expr", denName)
+			return fmt.Sprintf("(%s(%s)) / (%s(%s))", numAgg, numExpr, denAgg, denExpr)
+		}
+	case "derived":
+		// A derived metric uses a freeform SQL expression.
+		return getStringFromMap(typeParams, "expr", "")
+	}
+	return "" // Return empty string if no valid aggregation could be built.
+}
+
+// extractDescriptionsFromManifest parses the manifest.json data to find the
+// model-level description and a map of all column-level descriptions.
+func extractDescriptionsFromManifest(manifestData map[string]interface{}, nodeKey string) (string, map[string]string) {
+	if manifestData == nil {
+		return "", nil
+	}
+
+	nodes, ok := manifestData["nodes"].(map[string]interface{})
+	if !ok {
+		return "", nil
+	}
+
+	manifestNode, ok := nodes[nodeKey].(map[string]interface{})
+	if !ok {
+		return "", nil
+	}
+
+	// Extract the top-level model description
+	modelDescription := getStringFromMap(manifestNode, "description", "")
+	columnDescriptions := make(map[string]string)
+
+	manifestColumns, ok := manifestNode["columns"].(map[string]interface{})
+	if !ok {
+		// Return the model description even if columns aren't found
+		return modelDescription, nil
+	}
+
+	// Iterate through columns to extract their descriptions
+	for colName, colData := range manifestColumns {
+		if colMap, ok := colData.(map[string]interface{}); ok {
+			if description := getStringFromMap(colMap, "description", ""); description != "" {
+				columnDescriptions[colName] = description
+			}
+		}
+	}
+
+	return modelDescription, columnDescriptions
+}
+
+// buildWrenColumn creates a single WrenColumn from its corresponding dbt column data map.
+// It populates the name, type, and properties like enums, descriptions, and comments.
+func buildWrenColumn(colMap map[string]interface{}, nodeKey string, dataSource DataSource, columnDescriptions map[string]string, columnToEnumNameMap map[string]string, columnToNotNullMap map[string]bool) WrenColumn {
+	columnName := getStringFromMap(colMap, "name", "")
+	columnKey := fmt.Sprintf("%s.%s", nodeKey, columnName)
+
+	column := WrenColumn{
+		Name:        columnName,
+		DisplayName: getStringFromMap(getMapFromMap(colMap, "meta", nil), "label", ""),
+		Type:        dataSource.MapType(getStringFromMap(colMap, "type", "")),
+		NotNull:     columnToNotNullMap[columnKey], // Defaults to false if not found
+	}
+
+	// Assign an enum if one was derived from dbt tests
+	if enumName, ok := columnToEnumNameMap[columnKey]; ok {
+		column.Enum = enumName
+	}
+
+	// Use a temporary map to build the properties
+	properties := make(map[string]string)
+	if description, exists := columnDescriptions[column.Name]; exists && description != "" {
+		properties["description"] = description
+	}
+	if comment := getStringFromMap(colMap, "comment", ""); comment != "" {
+		properties["comment"] = comment
+	}
+
+	// Assign the properties map only if it's not empty
+	if len(properties) > 0 {
+		column.Properties = properties
+	}
+
+	return column
+}
+
+// convertAndSortColumns extracts, sorts, and converts dbt columns to the WrenColumn format.
+func convertAndSortColumns(nodeData map[string]interface{}, nodeKey string, dataSource DataSource, columnDescriptions map[string]string, columnToEnumNameMap map[string]string, columnToNotNullMap map[string]bool) ([]WrenColumn, error) {
 	columnsValue, exists := nodeData["columns"]
 	if !exists {
 		return nil, fmt.Errorf("no columns found for model %s", nodeKey)
@@ -862,71 +968,84 @@ func convertDbtNodeToWrenModel(nodeKey string, nodeData map[string]interface{}, 
 		return nil, fmt.Errorf("invalid columns format for model %s", nodeKey)
 	}
 
-	var wrenColumns []WrenColumn
+	// Convert map to a slice for sorting
+	var columnsData []map[string]interface{}
 	for _, colValue := range columnsMap {
-		colMap, ok := colValue.(map[string]interface{})
-		if !ok {
+		if colMap, ok := colValue.(map[string]interface{}); ok {
+			columnsData = append(columnsData, colMap)
+		}
+	}
+
+	// Sort columns by the 'index' field, falling back to name
+	sort.Slice(columnsData, func(i, j int) bool {
+		indexI, okI := columnsData[i]["index"].(float64)
+		indexJ, okJ := columnsData[j]["index"].(float64)
+		if okI && okJ {
+			return indexI < indexJ
+		}
+		return getStringFromMap(columnsData[i], "name", "") < getStringFromMap(columnsData[j], "name", "")
+	})
+
+	// Build the final slice of WrenColumns
+	var wrenColumns []WrenColumn
+	for _, colMap := range columnsData {
+		if getStringFromMap(colMap, "name", "") == "" {
 			continue
 		}
-
-		columnName := getStringFromMap(colMap, "name", "")
-		columnKey := fmt.Sprintf("%s.%s", nodeKey, columnName)
-
-		column := WrenColumn{
-			Name:        columnName,
-			DisplayName: getStringFromMap(getMapFromMap(colMap, "meta", nil), "label", ""),
-			Type:        dataSource.MapType(getStringFromMap(colMap, "type", "")),
-			NotNull:     columnToNotNullMap[columnKey], // Will be false if not found
-		}
-
-		// Check for and assign enum
-		if enumName, ok := columnToEnumNameMap[columnKey]; ok {
-			column.Enum = enumName
-		}
-
-		// Initialize properties map if needed
-		if column.Properties == nil {
-			column.Properties = make(map[string]string)
-		}
-
-		// Set description from manifest if available
-		if columnDescriptions != nil {
-			if description, exists := columnDescriptions[column.Name]; exists && description != "" {
-				column.Properties["description"] = description
-			}
-		}
-
-		// Set notNull based on comment or other indicators
-		if comment := getStringFromMap(colMap, "comment", ""); comment != "" {
-			column.Properties["comment"] = comment
-		}
-
+		column := buildWrenColumn(colMap, nodeKey, dataSource, columnDescriptions, columnToEnumNameMap, columnToNotNullMap)
 		wrenColumns = append(wrenColumns, column)
 	}
 
-	// Sort columns by index if available
-	sort.Slice(wrenColumns, func(i, j int) bool {
-		// This is a simplified sort - you might want to use the index from dbt
-		return wrenColumns[i].Name < wrenColumns[j].Name
-	})
+	return wrenColumns, nil
+}
 
+// convertDbtNodeToWrenModel converts a single dbt node to a Wren model.
+// This function now orchestrates calls to helpers to perform the conversion.
+func convertDbtNodeToWrenModel(nodeKey string, nodeData map[string]interface{}, dataSource DataSource, manifestData map[string]interface{}, columnToEnumNameMap map[string]string, columnToNotNullMap map[string]bool, modelToPrimaryKeyMap map[string]string) (*WrenModel, error) {
+	modelName := getModelNameFromNodeKey(nodeKey)
+	if modelName == "" {
+		return nil, fmt.Errorf("invalid node key format: %s", nodeKey)
+	}
+
+	// --- 1. Extract Metadata and Table Reference ---
+	metadataValue, exists := nodeData["metadata"]
+	if !exists {
+		return nil, fmt.Errorf("no metadata found for model %s", nodeKey)
+	}
+	metadata, ok := metadataValue.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid metadata format for model %s", nodeKey)
+	}
+	tableRef := TableReference{
+		Table:   getStringFromMap(metadata, "name", modelName),
+		Catalog: getStringFromMap(metadata, "database", ""),
+		Schema:  getStringFromMap(metadata, "schema", ""),
+	}
+
+	// --- 2. Extract Descriptions from Manifest ---
+	modelDescription, columnDescriptions := extractDescriptionsFromManifest(manifestData, nodeKey)
+
+	// --- 3. Convert and Sort Columns ---
+	wrenColumns, err := convertAndSortColumns(nodeData, nodeKey, dataSource, columnDescriptions, columnToEnumNameMap, columnToNotNullMap)
+	if err != nil {
+		return nil, err
+	}
+
+	// --- 4. Assemble the Final WrenModel ---
 	model := &WrenModel{
 		Name:           modelName,
 		TableReference: tableRef,
 		Columns:        wrenColumns,
 	}
 
-	// Set primary key from semantic manifest if available
+	// Set primary key if available
 	if pk, ok := modelToPrimaryKeyMap[modelName]; ok {
 		model.PrimaryKey = pk
 	}
 
-	// Set model description from manifest if available
+	// Set model description if available
 	if modelDescription != "" {
-		if model.Properties == nil {
-			model.Properties = make(map[string]string)
-		}
-		model.Properties["description"] = modelDescription
+		model.Properties = map[string]string{"description": modelDescription}
 	}
 
 	return model, nil
