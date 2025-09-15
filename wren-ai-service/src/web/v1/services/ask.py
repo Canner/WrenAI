@@ -101,6 +101,7 @@ class AskService:
         allow_intent_classification: bool = True,
         allow_sql_generation_reasoning: bool = True,
         allow_sql_functions_retrieval: bool = True,
+        allow_sql_diagnosis: bool = True,
         enable_column_pruning: bool = False,
         max_sql_correction_retries: int = 3,
         max_histories: int = 5,
@@ -114,6 +115,7 @@ class AskService:
         self._allow_sql_generation_reasoning = allow_sql_generation_reasoning
         self._allow_sql_functions_retrieval = allow_sql_functions_retrieval
         self._allow_intent_classification = allow_intent_classification
+        self._allow_sql_diagnosis = allow_sql_diagnosis
         self._enable_column_pruning = enable_column_pruning
         self._max_histories = max_histories
         self._max_sql_correction_retries = max_sql_correction_retries
@@ -165,6 +167,7 @@ class AskService:
             self._enable_column_pruning or ask_request.enable_column_pruning
         )
         allow_sql_functions_retrieval = self._allow_sql_functions_retrieval
+        allow_sql_diagnosis = self._allow_sql_diagnosis
         max_sql_correction_retries = self._max_sql_correction_retries
         current_sql_correction_retries = 0
         use_dry_plan = ask_request.use_dry_plan
@@ -496,12 +499,12 @@ class AskService:
                     "post_process"
                 ]["invalid_generation_result"]:
                     while current_sql_correction_retries < max_sql_correction_retries:
-                        invalid_sql = failed_dry_run_result["sql"]
-                        error_message = failed_dry_run_result["error"]
-
                         if failed_dry_run_result["type"] == "TIME_OUT":
                             break
 
+                        original_sql = failed_dry_run_result["original_sql"]
+                        invalid_sql = failed_dry_run_result["sql"]
+                        error_message = failed_dry_run_result["error"]
                         current_sql_correction_retries += 1
 
                         self._ask_results[query_id] = AskResultResponse(
@@ -514,15 +517,41 @@ class AskService:
                             trace_id=trace_id,
                             is_followup=True if histories else False,
                         )
+
+                        if allow_sql_diagnosis:
+                            sql_diagnosis_results = await self._pipelines[
+                                "sql_diagnosis"
+                            ].run(
+                                contexts=table_ddls,
+                                original_sql=original_sql,
+                                invalid_sql=invalid_sql,
+                                error_message=error_message,
+                                language=ask_request.configurations.language,
+                            )
+                            sql_diagnosis_reasoning = sql_diagnosis_results[
+                                "post_process"
+                            ].get("reasoning")
+                            can_be_corrected = sql_diagnosis_results[
+                                "post_process"
+                            ].get("can_be_corrected")
+                            if not can_be_corrected:
+                                break
+
                         sql_correction_results = await self._pipelines[
                             "sql_correction"
                         ].run(
                             contexts=table_ddls,
                             instructions=instructions,
-                            invalid_generation_result=failed_dry_run_result,
+                            invalid_generation_result={
+                                "sql": original_sql,
+                                "error": sql_diagnosis_reasoning
+                                if allow_sql_diagnosis
+                                else error_message,
+                            },
                             project_id=ask_request.project_id,
                             use_dry_plan=use_dry_plan,
                             allow_dry_plan_fallback=allow_dry_plan_fallback,
+                            sql_functions=sql_functions,
                         )
 
                         if valid_generation_result := sql_correction_results[

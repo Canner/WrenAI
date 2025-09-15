@@ -110,18 +110,36 @@ class ChartAdjustmentService:
 
         try:
             query_id = chart_adjustment_request.query_id
+            execute_sql_error_message = None
 
             self._chart_adjustment_results[query_id] = ChartAdjustmentResultResponse(
                 status="fetching",
                 trace_id=trace_id,
             )
 
-            sql_data = (
+            execute_sql_result = (
                 await self._pipelines["sql_executor"].run(
                     sql=chart_adjustment_request.sql,
                     project_id=chart_adjustment_request.project_id,
                 )
-            )["execute_sql"]["results"]
+            )["execute_sql"]
+
+            sql_data = execute_sql_result["results"]
+            execute_sql_error_message = execute_sql_result.get("error_message", None)
+
+            if execute_sql_error_message:
+                self._chart_adjustment_results[
+                    query_id
+                ] = ChartAdjustmentResultResponse(
+                    status="failed",
+                    error=ChartAdjustmentError(
+                        code="OTHERS",
+                        message=execute_sql_error_message,
+                    ),
+                )
+                results["metadata"]["error_type"] = "OTHERS"
+                results["metadata"]["error_message"] = execute_sql_error_message
+                return results
 
             self._chart_adjustment_results[query_id] = ChartAdjustmentResultResponse(
                 status="generating",

@@ -79,6 +79,9 @@ def create_service_container(
     _sql_executor_pipeline = retrieval.SQLExecutor(
         **pipe_components["sql_executor"],
     )
+    _sql_diagnosis_pipeline = generation.SQLDiagnosis(
+        **pipe_components["sql_diagnosis"],
+    )
 
     return ServiceContainer(
         semantics_description=services.SemanticsDescription(
@@ -146,10 +149,12 @@ def create_service_container(
                     **pipe_components["followup_sql_generation"],
                 ),
                 "sql_functions_retrieval": _sql_functions_retrieval_pipeline,
+                "sql_diagnosis": _sql_diagnosis_pipeline,
             },
             allow_intent_classification=settings.allow_intent_classification,
             allow_sql_generation_reasoning=settings.allow_sql_generation_reasoning,
             allow_sql_functions_retrieval=settings.allow_sql_functions_retrieval,
+            allow_sql_diagnosis=settings.allow_sql_diagnosis,
             max_histories=settings.max_histories,
             enable_column_pruning=settings.enable_column_pruning,
             max_sql_correction_retries=settings.max_sql_correction_retries,
@@ -165,8 +170,10 @@ def create_service_container(
                     **pipe_components["sql_regeneration"],
                 ),
                 "sql_correction": _sql_correction_pipeline,
+                "sql_diagnosis": _sql_diagnosis_pipeline,
             },
             allow_sql_functions_retrieval=settings.allow_sql_functions_retrieval,
+            allow_sql_diagnosis=settings.allow_sql_diagnosis,
             **query_cache,
         ),
         chart_service=services.ChartService(

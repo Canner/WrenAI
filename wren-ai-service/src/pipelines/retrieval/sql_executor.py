@@ -29,7 +29,7 @@ class DataFetcher:
         limit: int = 500,
     ):
         async with aiohttp.ClientSession() as session:
-            _, data, _ = await self._engine.execute_sql(
+            _, data, addition = await self._engine.execute_sql(
                 sql,
                 session,
                 project_id=project_id,
@@ -37,6 +37,8 @@ class DataFetcher:
                 limit=limit,
             )
 
+            if addition.get("error_message"):
+                return {"results": data, "error_message": addition.get("error_message")}
             return {"results": data}
 
 
