@@ -202,7 +202,6 @@ class AskFeedbackService:
                             trace_id=trace_id,
                         )
 
-                        can_be_corrected = True
                         if allow_sql_diagnosis:
                             sql_diagnosis_results = await self._pipelines[
                                 "sql_diagnosis"
@@ -215,42 +214,38 @@ class AskFeedbackService:
                             sql_diagnosis_reasoning = sql_diagnosis_results[
                                 "post_process"
                             ].get("reasoning")
-                            can_be_corrected = sql_diagnosis_results[
-                                "post_process"
-                            ].get("can_be_corrected")
 
-                        if can_be_corrected:
-                            sql_correction_results = await self._pipelines[
-                                "sql_correction"
-                            ].run(
-                                contexts=table_ddls,
-                                instructions=instructions,
-                                invalid_generation_result={
-                                    "sql": original_sql,
-                                    "error": sql_diagnosis_reasoning
-                                    if allow_sql_diagnosis
-                                    else error_message,
-                                },
-                                project_id=ask_feedback_request.project_id,
-                                sql_functions=sql_functions,
-                            )
+                        sql_correction_results = await self._pipelines[
+                            "sql_correction"
+                        ].run(
+                            contexts=table_ddls,
+                            instructions=instructions,
+                            invalid_generation_result={
+                                "sql": original_sql,
+                                "error": sql_diagnosis_reasoning
+                                if allow_sql_diagnosis
+                                else error_message,
+                            },
+                            project_id=ask_feedback_request.project_id,
+                            sql_functions=sql_functions,
+                        )
 
-                            if valid_generation_result := sql_correction_results[
-                                "post_process"
-                            ]["valid_generation_result"]:
-                                api_results = [
-                                    AskResult(
-                                        **{
-                                            "sql": valid_generation_result.get("sql"),
-                                            "type": "llm",
-                                        }
-                                    )
-                                ]
-                            elif failed_dry_run_result := sql_correction_results[
-                                "post_process"
-                            ]["invalid_generation_result"]:
-                                invalid_sql = failed_dry_run_result["sql"]
-                                error_message = failed_dry_run_result["error"]
+                        if valid_generation_result := sql_correction_results[
+                            "post_process"
+                        ]["valid_generation_result"]:
+                            api_results = [
+                                AskResult(
+                                    **{
+                                        "sql": valid_generation_result.get("sql"),
+                                        "type": "llm",
+                                    }
+                                )
+                            ]
+                        elif failed_dry_run_result := sql_correction_results[
+                            "post_process"
+                        ]["invalid_generation_result"]:
+                            invalid_sql = failed_dry_run_result["sql"]
+                            error_message = failed_dry_run_result["error"]
                     else:
                         invalid_sql = failed_dry_run_result["sql"]
                         error_message = failed_dry_run_result["error"]
