@@ -122,6 +122,10 @@ class SqlPairsRetrieval(BasicPipeline):
         sql_pairs_retrieval_max_size: int = 10,
         **kwargs,
     ) -> None:
+        super().__init__(
+            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
+        )
+
         store = document_store_provider.get_store(dataset_name="sql_pairs")
         self._components = {
             "store": store,
@@ -137,10 +141,6 @@ class SqlPairsRetrieval(BasicPipeline):
             "sql_pairs_similarity_threshold": sql_pairs_similarity_threshold,
             "sql_pairs_retrieval_max_size": sql_pairs_retrieval_max_size,
         }
-
-        super().__init__(
-            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
 
     @observe(name="SqlPairs Retrieval")
     async def run(self, query: str, project_id: Optional[str] = None):

@@ -133,15 +133,15 @@ class SQLCorrection(BasicPipeline):
         engine: Engine,
         **kwargs,
     ):
+        super().__init__(
+            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
+        )
+
         self._llm_provider = llm_provider
         self._engine = engine
         self._components = self._update_components()
         self._retriever = document_store_provider.get_retriever(
             document_store_provider.get_store("project_meta")
-        )
-
-        super().__init__(
-            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
     def _update_components(self):

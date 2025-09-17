@@ -139,6 +139,10 @@ class HistoricalQuestion(BasicPipeline):
         document_store_provider: DocumentStoreProvider,
         **kwargs,
     ) -> None:
+        super().__init__(
+            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
+        )
+
         # keep the store name as it is for now, might change in the future
         store = document_store_provider.get_store(dataset_name="view_questions")
 
@@ -154,10 +158,6 @@ class HistoricalQuestion(BasicPipeline):
         }
         self._configs = {}
         self._final = "write"
-
-        super().__init__(
-            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
 
     @observe(name="Historical Question Indexing")
     async def run(

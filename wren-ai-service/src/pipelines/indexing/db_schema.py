@@ -344,6 +344,10 @@ class DBSchema(BasicPipeline):
         column_batch_size: int = 50,
         **kwargs,
     ) -> None:
+        super().__init__(
+            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
+        )
+
         dbschema_store = document_store_provider.get_store()
 
         self._components = {
@@ -362,9 +366,6 @@ class DBSchema(BasicPipeline):
         self._final = "write"
 
         helper.load_helpers()
-        super().__init__(
-            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
 
     @observe(name="DB Schema Indexing")
     async def run(

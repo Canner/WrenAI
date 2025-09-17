@@ -131,6 +131,10 @@ class Instructions(BasicPipeline):
         document_store_provider: DocumentStoreProvider,
         **kwargs,
     ) -> None:
+        super().__init__(
+            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
+        )
+
         store = document_store_provider.get_store(dataset_name="instructions")
 
         self._components = {
@@ -142,10 +146,6 @@ class Instructions(BasicPipeline):
                 policy=DuplicatePolicy.OVERWRITE,
             ),
         }
-
-        super().__init__(
-            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
 
     @observe(name="Instructions Indexing")
     async def run(

@@ -85,6 +85,10 @@ class UserGuideAssistance(BasicPipeline):
         wren_ai_docs: list[dict],
         **kwargs,
     ):
+        super().__init__(
+            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
+        )
+
         self._user_queues = {}
         self._llm_provider = llm_provider
         self._components = self._update_components()
@@ -92,10 +96,6 @@ class UserGuideAssistance(BasicPipeline):
         self._configs = {
             "wren_ai_docs": wren_ai_docs,
         }
-
-        super().__init__(
-            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
 
     def _update_components(self):
         return {

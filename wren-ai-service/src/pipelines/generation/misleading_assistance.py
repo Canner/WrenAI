@@ -95,13 +95,13 @@ class MisleadingAssistance(BasicPipeline):
         llm_provider: LLMProvider,
         **kwargs,
     ):
-        self._user_queues = {}
-        self._llm_provider = llm_provider
-        self._components = self._update_components()
-
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
+
+        self._user_queues = {}
+        self._llm_provider = llm_provider
+        self._components = self._update_components()
 
     def _update_components(self):
         return {

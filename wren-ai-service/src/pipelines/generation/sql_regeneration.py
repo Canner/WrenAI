@@ -157,13 +157,13 @@ class SQLRegeneration(BasicPipeline):
         engine: Engine,
         **kwargs,
     ):
-        self._llm_provider = llm_provider
-        self._engine = engine
-        self._components = self._update_components()
-
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
+
+        self._llm_provider = llm_provider
+        self._engine = engine
+        self._components = self._update_components()
 
     def _update_components(self):
         return {

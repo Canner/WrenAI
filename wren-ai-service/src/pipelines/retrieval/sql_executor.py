@@ -66,13 +66,13 @@ class SQLExecutor(BasicPipeline):
         engine: Engine,
         **kwargs,
     ):
-        self._components = {
-            "data_fetcher": DataFetcher(engine=engine),
-        }
-
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
+
+        self._components = {
+            "data_fetcher": DataFetcher(engine=engine),
+        }
 
     @observe(name="SQL Execution")
     async def run(

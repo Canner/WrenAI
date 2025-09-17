@@ -87,6 +87,10 @@ class SqlFunctions(BasicPipeline):
         ttl: int = 60 * 60 * 24,
         **kwargs,
     ) -> None:
+        super().__init__(
+            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
+        )
+
         self._retriever = document_store_provider.get_retriever(
             document_store_provider.get_store("project_meta")
         )
@@ -95,10 +99,6 @@ class SqlFunctions(BasicPipeline):
             "engine": engine,
             "ttl_cache": self._cache,
         }
-
-        super().__init__(
-            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
 
     @observe(name="SQL Functions Retrieval")
     async def run(

@@ -459,6 +459,10 @@ class DbSchemaRetrieval(BasicPipeline):
         table_column_retrieval_size: int = 100,
         **kwargs,
     ):
+        super().__init__(
+            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
+        )
+
         self._llm_provider = llm_provider
         self._table_retrieval_size = table_retrieval_size
         self._table_column_retrieval_size = table_column_retrieval_size
@@ -466,10 +470,6 @@ class DbSchemaRetrieval(BasicPipeline):
         self._embedder_provider = embedder_provider
         self._components = self._update_components()
         self._configs = self._update_configs()
-
-        super().__init__(
-            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
 
     def _update_configs(self):
         _model = self._llm_provider.get_model()

@@ -15,6 +15,7 @@ class BasicPipeline(metaclass=ABCMeta):
     def __init__(self, pipe: Pipeline | AsyncDriver | Driver):
         self._pipe = pipe
         self._llm_provider = None
+        self._embedder_provider = None
         self._components = {}
 
     @abstractmethod
@@ -27,6 +28,13 @@ class BasicPipeline(metaclass=ABCMeta):
     def update_llm_provider(self, llm_provider: LLMProvider):
         self._llm_provider = llm_provider
         self._components = self._update_components()
+
+    def update_embedder_provider(self, embedder_provider: EmbedderProvider):
+        self._embedder_provider = embedder_provider
+        self._components = self._update_components()
+
+    def __str__(self):
+        return f"BasicPipeline(llm_provider={self._llm_provider}, embedder_provider={self._embedder_provider})"
 
 
 @dataclass

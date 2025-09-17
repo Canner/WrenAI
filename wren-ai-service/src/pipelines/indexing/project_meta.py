@@ -69,6 +69,10 @@ class ProjectMeta(BasicPipeline):
         document_store_provider: DocumentStoreProvider,
         **kwargs,
     ) -> None:
+        super().__init__(
+            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
+        )
+
         store = document_store_provider.get_store(dataset_name="project_meta")
 
         self._components = {
@@ -80,10 +84,6 @@ class ProjectMeta(BasicPipeline):
             ),
         }
         self._final = "write"
-
-        super().__init__(
-            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
 
     @observe(name="Project Meta Indexing")
     async def run(

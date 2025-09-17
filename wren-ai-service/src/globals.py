@@ -1,5 +1,4 @@
 import logging
-from collections import defaultdict
 from dataclasses import asdict, dataclass
 
 import toml
@@ -8,7 +7,7 @@ from src.config import Settings
 from src.core.pipeline import PipelineComponent
 from src.core.provider import EmbedderProvider, LLMProvider
 from src.pipelines import generation, indexing, retrieval
-from src.utils import fetch_wren_ai_docs
+from src.utils import fetch_wren_ai_docs, has_db_data_in_llm_prompt
 from src.web.v1 import services
 
 logger = logging.getLogger("wren-ai-service")
@@ -263,13 +262,30 @@ def create_service_container(
     )
 
 
-def create_pipe_component_service_mapping(service_container: ServiceContainer):
-    _pipe_component_service_mapping = defaultdict(set)
+def create_pipe_components(service_container: ServiceContainer):
+    _pipe_components = {}
     for _, service in service_container.__dict__.items():
-        for pipe_name in service._pipelines.keys():
-            _pipe_component_service_mapping[pipe_name].add(service)
+        for pipe_name, pipe in service._pipelines.items():
+            print(f"pipe_name: {pipe_name}, pipe: {pipe}")
+            if pipe_name not in _pipe_components:
+                _pipe_components[pipe_name] = {}
+            if hasattr(pipe, "_llm_provider") and pipe._llm_provider is not None:
+                _pipe_components[pipe_name]["llm"] = pipe._llm_provider.get_model()
+            if (
+                hasattr(pipe, "_embedder_provider")
+                and pipe._embedder_provider is not None
+            ):
+                _pipe_components[pipe_name][
+                    "embedder"
+                ] = pipe._embedder_provider.get_model()
+            if "services" not in _pipe_components[pipe_name]:
+                _pipe_components[pipe_name]["services"] = set()
+            _pipe_components[pipe_name]["services"].add(service)
+            _pipe_components[pipe_name][
+                "has_db_data_in_llm_prompt"
+            ] = has_db_data_in_llm_prompt(pipe_name)
 
-    return _pipe_component_service_mapping
+    return _pipe_components
 
 
 # Create a dependency that will be used to access the ServiceContainer

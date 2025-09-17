@@ -237,14 +237,14 @@ class QuestionRecommendation(BasicPipeline):
         llm_provider: LLMProvider,
         **_,
     ):
+        super().__init__(
+            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
+        )
+
         self._llm_provider = llm_provider
         self._components = self._update_components()
 
         self._final = "normalized"
-
-        super().__init__(
-            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
 
     def _update_components(self):
         return {

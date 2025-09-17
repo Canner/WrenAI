@@ -152,6 +152,10 @@ class ChartAdjustment(BasicPipeline):
         llm_provider: LLMProvider,
         **kwargs,
     ):
+        super().__init__(
+            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
+        )
+
         self._llm_provider = llm_provider
         self._components = self._update_components()
 
@@ -161,9 +165,6 @@ class ChartAdjustment(BasicPipeline):
         self._configs = {
             "vega_schema": _vega_schema,
         }
-        super().__init__(
-            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
 
     def _update_components(self):
         return {

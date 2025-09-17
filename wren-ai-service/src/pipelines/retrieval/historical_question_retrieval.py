@@ -125,6 +125,10 @@ class HistoricalQuestionRetrieval(BasicPipeline):
         historical_question_retrieval_similarity_threshold: float = 0.9,
         **kwargs,
     ) -> None:
+        super().__init__(
+            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
+        )
+
         view_questions_store = document_store_provider.get_store(
             dataset_name="view_questions"
         )
@@ -142,10 +146,6 @@ class HistoricalQuestionRetrieval(BasicPipeline):
         self._configs = {
             "historical_question_retrieval_similarity_threshold": historical_question_retrieval_similarity_threshold,
         }
-
-        super().__init__(
-            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
 
     @observe(name="Historical Question")
     async def run(self, query: str, project_id: Optional[str] = None):

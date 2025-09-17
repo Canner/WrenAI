@@ -122,6 +122,10 @@ class TableDescription(BasicPipeline):
         document_store_provider: DocumentStoreProvider,
         **kwargs,
     ) -> None:
+        super().__init__(
+            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
+        )
+
         table_description_store = document_store_provider.get_store(
             dataset_name="table_descriptions"
         )
@@ -138,10 +142,6 @@ class TableDescription(BasicPipeline):
         }
         self._configs = {}
         self._final = "write"
-
-        super().__init__(
-            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
 
     @observe(name="Table Description Indexing")
     async def run(

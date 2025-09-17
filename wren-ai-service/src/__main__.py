@@ -9,7 +9,7 @@ from langfuse.decorators import langfuse_context
 
 from src.config import settings
 from src.globals import (
-    create_pipe_component_service_mapping,
+    create_pipe_components,
     create_service_container,
     create_service_metadata,
 )
@@ -32,9 +32,7 @@ async def lifespan(app: FastAPI):
     # startup events
     pipe_components, instantiated_providers = generate_components(settings.components)
     app.state.service_container = create_service_container(pipe_components, settings)
-    app.state.pipe_component_service_mapping = create_pipe_component_service_mapping(
-        app.state.service_container
-    )
+    app.state.pipe_components = create_pipe_components(app.state.service_container)
     app.state.service_metadata = create_service_metadata(pipe_components)
     app.state.instantiated_providers = instantiated_providers
     init_langfuse(settings)
@@ -92,18 +90,52 @@ def health():
     return {"status": "ok"}
 
 
-@app.get("/pipe_components")
+@app.get("/configs")
 def get_pipe_components():
-    return sorted(list(app.state.pipe_component_service_mapping.keys()))
+    _configs = {
+        "env_vars": {},
+        "providers": {
+            "llm": [],
+            "embedder": [],
+        },
+        "pipelines": {},
+    }
+
+    _llm_configs = []
+    for model_name, model_config in app.state.instantiated_providers["llm"].items():
+        print(f"model_name: {model_name}")
+        print(f"model: {model_config._model}")
+
+    _embedder_configs = []
+    for model_name, model_config in app.state.instantiated_providers[
+        "embedder"
+    ].items():
+        pass
+
+    for pipe_name, pipe_component in app.state.pipe_components.items():
+        llm_provider = pipe_component.get("llm", None)
+        embedder_provider = pipe_component.get("embedder", None)
+        if llm_provider or embedder_provider:
+            _configs["pipelines"][pipe_name] = {
+                "has_db_data_in_llm_prompt": pipe_component.get(
+                    "has_db_data_in_llm_prompt", False
+                ),
+            }
+            if llm_provider:
+                _configs["pipelines"][pipe_name]["llm"] = llm_provider
+            if embedder_provider:
+                _configs["pipelines"][pipe_name]["embedder"] = embedder_provider
+
+    return _configs
 
 
-@app.post("/pipe_components")
+@app.post("/configs")
 def update_pipe_components(pipe_components_request: list[SinglePipeComponentRequest]):
     try:
         for payload in pipe_components_request:
-            for service in app.state.pipe_component_service_mapping[
-                payload.pipeline_name
-            ]:
+            for service in app.state.pipe_components[payload.pipeline_name].get(
+                "services", []
+            ):
                 service._pipelines[payload.pipeline_name].update_llm_provider(
                     app.state.instantiated_providers["llm"][payload.llm_config]
                 )

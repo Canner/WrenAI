@@ -171,6 +171,10 @@ class SqlPairs(BasicPipeline):
         sql_pairs_path: str = "sql_pairs.json",
         **kwargs,
     ) -> None:
+        super().__init__(
+            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
+        )
+
         store = document_store_provider.get_store(dataset_name="sql_pairs")
 
         self._components = {
@@ -184,10 +188,6 @@ class SqlPairs(BasicPipeline):
         }
 
         self._external_pairs = _load_sql_pairs(sql_pairs_path)
-
-        super().__init__(
-            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
 
     @observe(name="SQL Pairs Indexing")
     async def run(

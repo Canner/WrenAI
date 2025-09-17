@@ -191,6 +191,10 @@ class Instructions(BasicPipeline):
         top_k: int = 10,
         **kwargs,
     ) -> None:
+        super().__init__(
+            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
+        )
+
         store = document_store_provider.get_store(dataset_name="instructions")
         self._components = {
             "store": store,
@@ -206,10 +210,6 @@ class Instructions(BasicPipeline):
             "similarity_threshold": similarity_threshold,
             "top_k": top_k,
         }
-
-        super().__init__(
-            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
 
     @observe(name="Instructions Retrieval")
     async def run(

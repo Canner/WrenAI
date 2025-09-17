@@ -224,3 +224,15 @@ def extract_braces_content(resp: str) -> str:
 class SinglePipeComponentRequest(BaseModel):
     pipeline_name: str
     llm_config: str
+
+
+def has_db_data_in_llm_prompt(pipe_name: str) -> bool:
+    pipes_containing_db_data = set(
+        [
+            "sql_answer",
+            "chart_adjustment",
+            "chart_generation",
+        ]
+    )
+
+    return pipe_name in pipes_containing_db_data

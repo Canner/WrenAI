@@ -82,10 +82,10 @@ class PreprocessSqlData(BasicPipeline):
         llm_provider: LLMProvider,
         **kwargs,
     ):
+        super().__init__(Driver({}, sys.modules[__name__], adapter=base.DictResult()))
+
         self._llm_provider = llm_provider
         self._configs = self._update_configs()
-
-        super().__init__(Driver({}, sys.modules[__name__], adapter=base.DictResult()))
 
     def _update_configs(self):
         _model = self._llm_provider.get_model()

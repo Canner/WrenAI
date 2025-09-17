@@ -346,6 +346,10 @@ class IntentClassification(BasicPipeline):
         table_column_retrieval_size: Optional[int] = 100,
         **kwargs,
     ):
+        super().__init__(
+            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
+        )
+
         self._llm_provider = llm_provider
         self._table_retrieval_size = table_retrieval_size
         self._table_column_retrieval_size = table_column_retrieval_size
@@ -356,10 +360,6 @@ class IntentClassification(BasicPipeline):
         self._configs = {
             "wren_ai_docs": wren_ai_docs,
         }
-
-        super().__init__(
-            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
 
     def _update_components(self):
         return {
