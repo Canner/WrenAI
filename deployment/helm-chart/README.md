@@ -56,7 +56,7 @@ kubectl create secret generic wren-secret \
 
 
 # Download Wren AI dependency charts like Qdrant or postgresql
-helm dependency build ./deployment/helm
+helm dependency build ./deployment/helm-chart
 
 # Deploy Wren AI with Helm
 helm upgrade --install wrenai ./deployment/helm \
