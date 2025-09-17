@@ -26,6 +26,7 @@ type DbtConnection struct {
 	Project   string `yaml:"project,omitempty" json:"project,omitempty"`     // BigQuery
 	Dataset   string `yaml:"dataset,omitempty" json:"dataset,omitempty"`     // BigQuery
 	Keyfile   string `yaml:"keyfile,omitempty" json:"keyfile,omitempty"`     // BigQuery
+	Method    string `yaml:"method,omitempty" json:"method,omitempty"`       // BigQuery
 	Account   string `yaml:"account,omitempty" json:"account,omitempty"`     // Snowflake
 	Warehouse string `yaml:"warehouse,omitempty" json:"warehouse,omitempty"` // Snowflake
 	Role      string `yaml:"role,omitempty" json:"role,omitempty"`           // Snowflake

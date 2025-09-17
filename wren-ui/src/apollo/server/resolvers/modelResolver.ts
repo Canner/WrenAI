@@ -15,7 +15,7 @@ import {
 } from '../types';
 import { getLogger, transformInvalidColumnName } from '@server/utils';
 import { DeployResponse } from '../services/deployService';
-import { safeFormatSQL } from '@server/utils/sqlFormat';
+import { format } from 'sql-formatter';
 import { isEmpty, isNil } from 'lodash';
 import { replaceAllowableSyntax, validateDisplayName } from '../utils/regex';
 import { Model, ModelColumn } from '../repositories';
@@ -821,7 +821,7 @@ export class ModelResolver {
     }
 
     // construct cte sql and format it
-    const statement = safeFormatSQL(response.sql);
+    const statement = format(response.sql);
 
     // describe columns
     const { columns } = await ctx.queryService.describeStatement(statement, {
@@ -988,7 +988,7 @@ export class ModelResolver {
       });
     }
     const language = project.type === DataSourceName.MSSQL ? 'tsql' : undefined;
-    return safeFormatSQL(nativeSql, { language });
+    return format(nativeSql, { language });
   }
 
   public async updateViewMetadata(

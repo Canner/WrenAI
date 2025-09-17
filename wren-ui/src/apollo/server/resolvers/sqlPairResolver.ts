@@ -3,7 +3,7 @@ import { SqlPair } from '@server/repositories';
 import * as Errors from '@server/utils/error';
 import { TelemetryEvent, TrackTelemetry } from '@server/telemetry/telemetry';
 import { DialectSQL, WrenSQL } from '@server/models/adaptor';
-import { safeFormatSQL } from '@server/utils/sqlFormat';
+import { format } from 'sql-formatter';
 
 export class SqlPairResolver {
   constructor() {
@@ -111,7 +111,7 @@ export class SqlPairResolver {
         manifest,
       },
     );
-    return safeFormatSQL(wrenSQL, { language: 'postgresql' }) as WrenSQL;
+    return format(wrenSQL, { language: 'postgresql' }) as WrenSQL;
   }
 
   private async validateSql(sql: string, ctx: IContext) {

@@ -1,9 +1,11 @@
 package dbt
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/pterm/pterm"
@@ -17,7 +19,6 @@ const (
 	timestampType = "timestamp"
 	doubleType    = "double"
 	booleanType   = "boolean"
-	postgresType  = "postgres"
 )
 
 // Constants for SQL data types
@@ -75,12 +76,13 @@ func FromDbtProfiles(profiles *DbtProfiles) ([]DataSource, error) {
 // convertConnectionToDataSource converts connection to corresponding DataSource based on connection type
 func convertConnectionToDataSource(conn DbtConnection, dbtHomePath, profileName, outputName string) (DataSource, error) {
 	switch strings.ToLower(conn.Type) {
-	case postgresType, "postgresql":
+	case "postgres", "postgresql":
 		return convertToPostgresDataSource(conn)
 	case "duckdb":
 		return convertToLocalFileDataSource(conn, dbtHomePath)
-	case "mysql":
-		return convertToMysqlDataSource(conn)
+	case "bigquery":
+		// Pass the dbtHomePath to the BigQuery converter
+		return convertToBigQueryDataSource(conn, dbtHomePath)
 	default:
 		// For unsupported database types, we can choose to ignore or return error
 		// Here we choose to return nil and log a warning
@@ -91,24 +93,17 @@ func convertConnectionToDataSource(conn DbtConnection, dbtHomePath, profileName,
 
 // convertToPostgresDataSource converts to PostgreSQL data source
 func convertToPostgresDataSource(conn DbtConnection) (*WrenPostgresDataSource, error) {
-	// For PostgreSQL, prefer dbname over database field
-	dbName := conn.DbName
-	if dbName == "" {
-		dbName = conn.Database
-	}
-
-	pterm.Info.Printf("Converting Postgres data source: %s:%d/%s\n", conn.Host, conn.Port, dbName)
-	port := strconv.Itoa(conn.Port)
-	if conn.Port == 0 {
-		port = "5432"
-	}
-
 	ds := &WrenPostgresDataSource{
 		Host:     conn.Host,
-		Port:     port,
-		Database: dbName,
+		Port:     conn.Port,
+		Database: conn.Database,
 		User:     conn.User,
 		Password: conn.Password,
+	}
+
+	// If no port is specified, use PostgreSQL default port
+	if ds.Port == 0 {
+		ds.Port = 5432
 	}
 
 	return ds, nil
@@ -154,27 +149,94 @@ func convertToLocalFileDataSource(conn DbtConnection, dbtHome string) (*WrenLoca
 	}, nil
 }
 
-func convertToMysqlDataSource(conn DbtConnection) (*WrenMysqlDataSource, error) {
-	pterm.Info.Printf("Converting MySQL data source: %s:%d/%s\n", conn.Host, conn.Port, conn.Database)
+// convertToBigQueryDataSource converts to BigQuery data source
+func convertToBigQueryDataSource(conn DbtConnection, dbtHomePath string) (*WrenBigQueryDataSource, error) {
+	method := strings.ToLower(strings.TrimSpace(conn.Method))
+	var credentials string
 
-	sslMode := "ENABLED" // Default SSL mode
-	if conn.SslDisable {
-		sslMode = "DISABLED"
-	}
-	port := strconv.Itoa(conn.Port)
-	if conn.Port == 0 {
-		port = "3306"
-	}
-
-	ds := &WrenMysqlDataSource{
-		Host:     conn.Host,
-		Port:     port,
-		Database: conn.Database,
-		User:     conn.User,
-		Password: conn.Password,
-		SslMode:  sslMode,
+	// Helper: validate JSON and base64 encode
+	encodeJSON := func(b []byte) (string, error) {
+		var js map[string]interface{}
+		if err := json.Unmarshal(b, &js); err != nil {
+			return "", fmt.Errorf("service account JSON is invalid: %w", err)
+		}
+		return base64.StdEncoding.EncodeToString(b), nil
 	}
 
+	switch method {
+	case "service-account-json":
+		// Extract inline JSON from Additional["keyfile_json"]
+		var keyfileJSON string
+		if kfj, exists := conn.Additional["keyfile_json"]; exists {
+			if kfjStr, ok := kfj.(string); ok {
+				keyfileJSON = kfjStr
+			}
+		}
+		if keyfileJSON == "" {
+			return nil, fmt.Errorf("bigquery: method 'service-account-json' requires 'keyfile_json'")
+		}
+		enc, err := encodeJSON([]byte(keyfileJSON))
+		if err != nil {
+			return nil, err
+		}
+		credentials = enc
+	case "service-account", "":
+		// Prefer structured field; fall back to Additional["keyfile"]
+		keyfilePath := strings.TrimSpace(conn.Keyfile)
+		if keyfilePath == "" {
+			if kf, ok := conn.Additional["keyfile"]; ok {
+				if kfStr, ok := kf.(string); ok {
+					keyfilePath = strings.TrimSpace(kfStr)
+				}
+			}
+		}
+		if keyfilePath == "" {
+			// If method was omitted (""), try as a fallback to inline json
+			if kfj, ok := conn.Additional["keyfile_json"]; ok {
+				if kfjStr, ok := kfj.(string); ok && kfjStr != "" {
+					enc, err := encodeJSON([]byte(kfjStr))
+					if err != nil {
+						return nil, err
+					}
+					credentials = enc
+				}
+			}
+			if credentials == "" {
+				return nil, fmt.Errorf("bigquery: method 'service-account' requires 'keyfile' path")
+			}
+		} else {
+			// If keyfile path is not absolute, join it
+			// with the dbt project's home directory path.
+			resolvedKeyfilePath := keyfilePath
+			if !filepath.IsAbs(keyfilePath) && dbtHomePath != "" {
+				resolvedKeyfilePath = filepath.Join(dbtHomePath, keyfilePath)
+			}
+
+			cleanPath := filepath.Clean(resolvedKeyfilePath)
+			b, err := os.ReadFile(cleanPath)
+			if err != nil {
+				// Update the error message to show the path that was attempted
+				return nil, fmt.Errorf("failed to read keyfile '%s': %w", cleanPath, err)
+			}
+			enc, err := encodeJSON(b)
+			if err != nil {
+				return nil, err
+			}
+			credentials = enc
+		}
+	case "oauth":
+		pterm.Warning.Println("bigquery: oauth auth method is not supported; skipping data source")
+		return nil, nil
+	default:
+		pterm.Warning.Printf("bigquery: unsupported auth method '%s'; supported: service-account, service-account-json\n", method)
+		return nil, nil
+	}
+
+	ds := &WrenBigQueryDataSource{
+		Project:     conn.Project,
+		Dataset:     conn.Dataset,
+		Credentials: credentials,
+	}
 	return ds, nil
 }
 
@@ -224,7 +286,7 @@ func (ds *WrenLocalFileDataSource) MapType(sourceType string) string {
 
 type WrenPostgresDataSource struct {
 	Host     string `json:"host"`
-	Port     string `json:"port"`
+	Port     int    `json:"port"`
 	Database string `json:"database"`
 	User     string `json:"user"`
 	Password string `json:"password"`
@@ -232,7 +294,7 @@ type WrenPostgresDataSource struct {
 
 // GetType implements DataSource interface
 func (ds *WrenPostgresDataSource) GetType() string {
-	return postgresType
+	return "postgres"
 }
 
 // Validate implements DataSource interface
@@ -246,14 +308,7 @@ func (ds *WrenPostgresDataSource) Validate() error {
 	if ds.User == "" {
 		return fmt.Errorf("user cannot be empty")
 	}
-	if ds.Port == "" {
-		return fmt.Errorf("port must be specified")
-	}
-	port, err := strconv.Atoi(ds.Port)
-	if err != nil {
-		return fmt.Errorf("port must be a valid number")
-	}
-	if port <= 0 || port > 65535 {
+	if ds.Port <= 0 || ds.Port > 65535 {
 		return fmt.Errorf("port must be between 1 and 65535")
 	}
 	return nil
@@ -264,79 +319,53 @@ func (ds *WrenPostgresDataSource) MapType(sourceType string) string {
 	return sourceType
 }
 
-type WrenMysqlDataSource struct {
-	Database string `json:"database"`
-	Host     string `json:"host"`
-	Password string `json:"password"`
-	Port     string `json:"port"`
-	User     string `json:"user"`
-	SslCA    string `json:"ssl_ca,omitempty"`   // Optional SSL CA file for MySQL
-	SslMode  string `json:"ssl_mode,omitempty"` // Optional SSL mode for MySQL
+type WrenBigQueryDataSource struct {
+	Project     string `json:"project_id"`
+	Dataset     string `json:"dataset_id"`
+	Credentials string `json:"credentials"`
 }
 
 // GetType implements DataSource interface
-func (ds *WrenMysqlDataSource) GetType() string {
-	return "mysql"
+func (ds *WrenBigQueryDataSource) GetType() string {
+	return "bigquery"
 }
 
 // Validate implements DataSource interface
-func (ds *WrenMysqlDataSource) Validate() error {
-	if ds.Host == "" {
-		return fmt.Errorf("host cannot be empty")
+func (ds *WrenBigQueryDataSource) Validate() error {
+	if strings.TrimSpace(ds.Project) == "" {
+		return fmt.Errorf("project_id cannot be empty")
 	}
-	if ds.Database == "" {
-		return fmt.Errorf("database cannot be empty")
+	if strings.TrimSpace(ds.Dataset) == "" {
+		return fmt.Errorf("dataset_id cannot be empty")
 	}
-	if ds.User == "" {
-		return fmt.Errorf("user cannot be empty")
-	}
-	if ds.Port == "" {
-		return fmt.Errorf("port must be specified")
-	}
-	port, err := strconv.Atoi(ds.Port)
-	if err != nil {
-		return fmt.Errorf("port must be a valid number")
-	}
-	if port <= 0 || port > 65535 {
-		return fmt.Errorf("port must be between 1 and 65535")
+	if strings.TrimSpace(ds.Credentials) == "" {
+		return fmt.Errorf("credentials cannot be empty")
 	}
 	return nil
 }
 
-func (ds *WrenMysqlDataSource) MapType(sourceType string) string {
-	// This method is not used in WrenMysqlDataSource, but required by DataSource interface
-	sourceType = strings.ToUpper(sourceType)
-	switch sourceType {
-	case "CHAR":
-		return "char"
-	case "VARCHAR":
+// MapType implements DataSource interface
+func (ds *WrenBigQueryDataSource) MapType(sourceType string) string {
+	switch strings.ToUpper(sourceType) {
+	case "INT64", "INTEGER":
+		return integerType
+	case "FLOAT64", "FLOAT":
+		return doubleType
+	case "STRING":
 		return varcharType
-	case "TEXT", "TINYTEXT", "MEDIUMTEXT", "LONGTEXT", "ENUM", "SET":
-		return "text"
-	case "BIT", "TINYINT":
-		return "TINYINT"
-	case "SMALLINT":
-		return "SMALLINT"
-	case "MEDIUMINT", "INT", "INTEGER":
-		return "INTEGER"
-	case "BIGINT":
-		return "BIGINT"
-	case "FLOAT", "DOUBLE":
-		return "DOUBLE"
-	case "DECIMAL", "NUMERIC":
-		return "DECIMAL"
+	case "BOOL", "BOOLEAN":
+		return booleanType
 	case "DATE":
-		return "DATE"
-	case "DATETIME":
-		return "DATETIME"
-	case "TIMESTAMP":
-		return "TIMESTAMPTZ"
-	case "BOOLEAN", "BOOL":
-		return "BOOLEAN"
+		return dateType
+	case "TIMESTAMP", "DATETIME":
+		return timestampType
+	case "NUMERIC", "DECIMAL", "BIGNUMERIC":
+		return doubleType
+	case "BYTES":
+		return varcharType
 	case "JSON":
-		return "JSON"
+		return varcharType
 	default:
-		// Return the original type if no mapping is found
 		return strings.ToLower(sourceType)
 	}
 }
@@ -445,7 +474,7 @@ func (d *DefaultDataSource) MapType(sourceType string) string {
 	case "integer", "int", "bigint", "int64":
 		return "integer"
 	case "varchar", "text", "string", "char":
-		return varcharType
+		return "varchar"
 	case "timestamp", "datetime", "date":
 		return "timestamp"
 	case "double", "float", "decimal", "numeric":

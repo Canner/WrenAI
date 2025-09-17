@@ -187,6 +187,18 @@ func askForDbtTarget() (string, error) {
 	return result, nil
 }
 
+func askForIncludeStagingModels() (bool, error) {
+	prompt := promptui.Select{
+		Label: "Include staging models (stg_*, staging_*)?",
+		Items: []string{"No", "Yes"},
+	}
+	_, result, err := prompt.Run()
+	if err != nil {
+		return false, err
+	}
+	return result == "Yes", nil
+}
+
 func Launch() {
 	// recover from panic
 	defer func() {
@@ -521,8 +533,15 @@ func processDbtProject(projectDir string) (string, error) {
 		return "", err
 	}
 
-	// Use the core conversion function from dbt package
-	result, err := DbtConvertProject(dbtProjectPath, targetDir, profileName, target, true)
+	// Ask the user whether to include staging models
+	includeStagingModels, err := askForIncludeStagingModels()
+	if err != nil {
+		pterm.Warning.Println("Could not get staging model preference, defaulting to 'No'.")
+		includeStagingModels = false
+	}
+
+	// Use the core conversion function from dbt package, passing the user's choice
+	result, err := DbtConvertProject(dbtProjectPath, targetDir, profileName, target, true, includeStagingModels)
 	if err != nil {
 		return "", fmt.Errorf("failed to convert dbt project: %w", err)
 	}
