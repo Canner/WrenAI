@@ -42,7 +42,7 @@ LANGFUSE_SECRET_KEY=<Paste LANGFUSE_SECRET_KEY here>
 POSTHOG_API_KEY=<Paste POSTHOG_API_KEY here>
 USER_UUID=$(openssl rand -base64 32)
 
-kubectl create secret generic wrenai-secrets \
+kubectl create secret generic wren-secret \
   --from-literal=OPENAI_API_KEY=$OPENAI_API_KEY \
   --from-literal=PG_USERNAME=$PG_USERNAME \
   --from-literal=PG_PASSWORD=$PG_PASSWORD \
