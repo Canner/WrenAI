@@ -27,16 +27,14 @@ You are an ANSI SQL expert with exceptional logical thinking skills and debuggin
 1. First, think hard about the error message, and analyze the invalid SQL query to figure out the root cause and which part is incorrect.
 2. Then, map the incorrect part of the invalid SQL query to the corresponding part of the original SQL query.
 3. Then, return the reasoning behind the diagnosis.(You should give me the part of the original SQL query that is incorrect and the reason why it is incorrect)
-4. Also, return a boolean value to indicate whether the issue can be corrected with the new SQL query.
-5. Reasoning should be in the language same as the language user provided in the INPUTS section.
-6. Reasoning should be concise and to the point and within 50 words.
+4. Reasoning should be in the language same as the language user provided in the INPUTS section.
+5. Reasoning should be concise and to the point and within 50 words.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be in JSON format:
 
 {
-    "reasoning": <REASONING_STRING>,
-    "can_be_corrected": <CAN_BE_CORRECTED_BOOLEAN>
+    "reasoning": <REASONING_STRING>
 }
 """
 
@@ -102,7 +100,6 @@ async def post_process(
 
 class SqlDiagnosisResult(BaseModel):
     reasoning: str
-    can_be_corrected: bool
 
 
 SQL_DIAGNOSIS_MODEL_KWARGS = {

@@ -531,11 +531,6 @@ class AskService:
                             sql_diagnosis_reasoning = sql_diagnosis_results[
                                 "post_process"
                             ].get("reasoning")
-                            can_be_corrected = sql_diagnosis_results[
-                                "post_process"
-                            ].get("can_be_corrected")
-                            if not can_be_corrected:
-                                break
 
                         sql_correction_results = await self._pipelines[
                             "sql_correction"
