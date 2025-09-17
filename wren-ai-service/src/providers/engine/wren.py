@@ -87,19 +87,29 @@ class WrenUI(Engine):
                 )
                 logger.error(f"Error executing SQL: {error_message}")
                 dialect_sql = (
-                    res_json.get("errors", [{}])[0]
-                    .get("extensions", {})
-                    .get("other", {})
-                    .get("metadata", {})
-                    .get("dialectSql", "")
-                )
+                    (
+                        (
+                            (res_json.get("errors", [{}])[0] or {}).get(
+                                "extensions", {}
+                            )
+                            or {}
+                        ).get("other", {})
+                        or {}
+                    ).get("metadata", {})
+                    or {}
+                ).get("dialectSql", "") or ""
                 planned_sql = (
-                    res_json.get("errors", [{}])[0]
-                    .get("extensions", {})
-                    .get("other", {})
-                    .get("metadata", {})
-                    .get("plannedSql", "")
-                )
+                    (
+                        (
+                            (res_json.get("errors", [{}])[0] or {}).get(
+                                "extensions", {}
+                            )
+                            or {}
+                        ).get("other", {})
+                        or {}
+                    ).get("metadata", {})
+                    or {}
+                ).get("plannedSql", "") or ""
 
                 return (
                     False,
@@ -108,10 +118,16 @@ class WrenUI(Engine):
                         "error_message": error_message,
                         "error_sql": dialect_sql or planned_sql or sql,
                         "correlation_id": (
-                            res_json.get("errors", [{}])[0]
-                            .get("extensions", {})
-                            .get("other", {})
-                            .get("correlationId")
+                            (
+                                (
+                                    (res_json.get("errors", [{}])[0] or {}).get(
+                                        "extensions", {}
+                                    )
+                                    or {}
+                                ).get("other", {})
+                                or {}
+                            ).get("correlationId")
+                            or ""
                         ),
                     },
                 )
