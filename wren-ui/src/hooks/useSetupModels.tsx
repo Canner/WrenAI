@@ -16,15 +16,20 @@ export default function useSetupModels() {
     onError: (error) => console.error(error),
   });
 
+  // Handle errors via try/catch blocks rather than onError callback
   const [saveTablesMutation, { loading: submitting }] = useSaveTablesMutation();
 
   const submitModels = async (tables: string[]) => {
-    await saveTablesMutation({
-      variables: {
-        data: { tables },
-      },
-    });
-    router.push(Path.OnboardingRelationships);
+    try {
+      await saveTablesMutation({
+        variables: {
+          data: { tables },
+        },
+      });
+      router.push(Path.OnboardingRelationships);
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   const onBack = () => {

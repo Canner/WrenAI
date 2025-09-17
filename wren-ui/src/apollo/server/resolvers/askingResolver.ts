@@ -15,7 +15,7 @@ import {
 import { reduce } from 'lodash';
 import { IContext } from '../types';
 import { getLogger } from '@server/utils';
-import { format } from 'sql-formatter';
+import { safeFormatSQL } from '@server/utils/sqlFormat';
 import {
   AskingDetailTaskInput,
   constructCteSql,
@@ -555,7 +555,9 @@ export class AskingResolver {
       error: adjustmentTask?.error,
       sql: adjustmentTask?.response?.[0]?.sql,
       traceId: adjustmentTask?.traceId,
-      invalidSql: adjustmentTask?.invalidSql,
+      invalidSql: adjustmentTask?.invalidSql
+        ? safeFormatSQL(adjustmentTask.invalidSql)
+        : null,
     };
   }
 
@@ -710,9 +712,9 @@ export class AskingResolver {
     sql: (parent: ThreadResponse, _args: any, _ctx: IContext) => {
       if (parent.breakdownDetail && parent.breakdownDetail.steps) {
         // construct sql from breakdownDetail
-        return format(constructCteSql(parent.breakdownDetail.steps));
+        return safeFormatSQL(constructCteSql(parent.breakdownDetail.steps));
       }
-      return parent.sql ? format(parent.sql) : null;
+      return parent.sql ? safeFormatSQL(parent.sql) : null;
     },
     askingTask: async (parent: ThreadResponse, _args: any, ctx: IContext) => {
       if (parent.adjustment) {
@@ -744,20 +746,22 @@ export class AskingResolver {
         error: adjustmentTask?.error,
         sql: adjustmentTask?.response?.[0]?.sql,
         traceId: adjustmentTask?.traceId,
-        invalidSql: adjustmentTask?.invalidSql,
+        invalidSql: adjustmentTask?.invalidSql
+          ? safeFormatSQL(adjustmentTask.invalidSql)
+          : null,
       };
     },
   });
 
   public getDetailStepNestedResolver = () => ({
     sql: (parent: DetailStep, _args: any, _ctx: IContext) => {
-      return format(parent.sql);
+      return safeFormatSQL(parent.sql);
     },
   });
 
   public getResultCandidateNestedResolver = () => ({
     sql: (parent: any, _args: any, _ctx: IContext) => {
-      return format(parent.sql);
+      return safeFormatSQL(parent.sql);
     },
     view: async (parent: any, _args: any, ctx: IContext) => {
       const viewId = parent.view?.id;
@@ -812,7 +816,9 @@ export class AskingResolver {
       intentReasoning: askingTask.intentReasoning,
       sqlGenerationReasoning: askingTask.sqlGenerationReasoning,
       retrievedTables: askingTask.retrievedTables,
-      invalidSql: askingTask.invalidSql ? format(askingTask.invalidSql) : null,
+      invalidSql: askingTask.invalidSql
+        ? safeFormatSQL(askingTask.invalidSql)
+        : null,
       traceId: askingTask.traceId,
     };
   }

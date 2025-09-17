@@ -53,7 +53,7 @@ https://github.com/user-attachments/assets/f9c1cb34-5a95-4580-8890-ec9644da4160
 | **Talk to Your Data** | Ask in any language → precise SQL & answers | Slash the SQL learning curve﻿ |
 | **GenBI Insights** | AI-written summaries, charts & reports | Decision-ready context in one click﻿ |
 | **Semantic Layer** | MDL models encode schema, metrics, joins | Keeps LLM outputs accurate & governed﻿ |
-| **Embed via API**  | Generate queries & charts inside your apps | Build custom agents, SaaS features, chatbots﻿ ([Streamlit Live Demo](https://huggingface.co/spaces/getWrenAI/wrenai-cloud-api-demo)) |
+| **Embed via API**  | Generate queries & charts inside your apps ([API Docs](https://wrenai.readme.io/reference/cloud-getting-started)) | Build custom agents, SaaS features, chatbots﻿ ([Streamlit Live Demo](https://huggingface.co/spaces/getWrenAI/wrenai-cloud-api-demo)) |
 
 🤩 [Learn more about GenBI](https://getwren.ai/genbi?utm_source=github&utm_medium=content&utm_campaign=readme)
 

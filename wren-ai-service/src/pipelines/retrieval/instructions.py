@@ -34,6 +34,26 @@ class OutputFormatter:
         return {"documents": list}
 
 
+@component
+class ScopeFilter:
+    @component.output_types(
+        documents=List[Document],
+    )
+    def run(
+        self,
+        documents: List[Document],
+        scope: str = "sql",
+    ):
+        return {
+            "documents": list(
+                filter(
+                    lambda document: document.meta.get("scope", "sql") == scope,
+                    documents,
+                ),
+            )
+        }
+
+
 ## Start of Pipeline
 @observe(capture_input=False)
 async def count_documents(
@@ -88,6 +108,8 @@ async def retrieval(embedding: dict, project_id: str, retriever: Any) -> dict:
 @observe(capture_input=False)
 def filtered_documents(
     retrieval: dict,
+    scope: str,
+    scope_filter: ScopeFilter,
     score_filter: ScoreFilter,
     similarity_threshold: float,
     top_k: int,
@@ -95,8 +117,13 @@ def filtered_documents(
     if not retrieval:
         return {}
 
-    return score_filter.run(
+    res = scope_filter.run(
         documents=retrieval.get("documents"),
+        scope=scope,
+    )
+
+    return score_filter.run(
+        documents=res.get("documents"),
         score=similarity_threshold,
         max_size=top_k,
     )
@@ -104,7 +131,11 @@ def filtered_documents(
 
 @observe(capture_input=False)
 async def default_instructions(
-    count_documents: int, retriever: Any, project_id: str
+    count_documents: int,
+    retriever: Any,
+    project_id: str,
+    scope_filter: ScopeFilter,
+    scope: str,
 ) -> list[Document]:
     if not count_documents:
         return []
@@ -121,10 +152,16 @@ async def default_instructions(
             {"field": "project_id", "operator": "==", "value": project_id}
         )
 
-    res = await retriever.run(
+    _res = await retriever.run(
         query_embedding=None,
         filters=filters,
     )
+
+    res = scope_filter.run(
+        documents=_res.get("documents"),
+        scope=scope,
+    )
+
     return dict(documents=res.get("documents"))
 
 
@@ -161,6 +198,7 @@ class Instructions(BasicPipeline):
             "retriever": document_store_provider.get_retriever(
                 document_store=store,
             ),
+            "scope_filter": ScopeFilter(),
             "score_filter": ScoreFilter(),
             "output_formatter": OutputFormatter(),
         }
@@ -174,25 +212,17 @@ class Instructions(BasicPipeline):
         )
 
     @observe(name="Instructions Retrieval")
-    async def run(self, query: str, project_id: Optional[str] = None):
+    async def run(
+        self, query: str, project_id: Optional[str] = None, scope: str = "sql"
+    ):
         logger.info("Instructions Retrieval pipeline is running...")
         return await self._pipe.execute(
             ["formatted_output"],
             inputs={
                 "query": query,
                 "project_id": project_id or "",
+                "scope": scope,
                 **self._components,
                 **self._configs,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        Instructions,
-        "instructions_retrieval",
-        query="hello",
-        project_id="string",
-    )

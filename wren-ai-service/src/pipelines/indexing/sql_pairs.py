@@ -225,13 +225,3 @@ class SqlPairs(BasicPipeline):
             project_id=project_id,
             delete_all=delete_all,
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        SqlPairs,
-        "sql_pairs_indexing",
-        mdl_str='{"models": [{"properties": {"boilerplate": "hubspot"}}]}',
-    )

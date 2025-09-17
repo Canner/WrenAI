@@ -15,7 +15,12 @@ from tqdm import tqdm
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
-from src.pipelines.indexing import AsyncDocumentWriter, DocumentCleaner, MDLValidator
+from src.pipelines.indexing import (
+    AsyncDocumentWriter,
+    DocumentCleaner,
+    MDLValidator,
+    clean_display_name,
+)
 from src.pipelines.indexing.utils import helper
 
 logger = logging.getLogger("wren-ai-service")
@@ -123,12 +128,12 @@ class DDLChunker:
         models: List[Dict[str, Any]],
         relationships: List[Dict[str, Any]],
         column_batch_size: int,
-    ) -> List[str]:
+    ) -> List[Dict[str, str]]:
         def _model_command(model: Dict[str, Any]) -> dict:
             properties = model.get("properties", {})
 
             model_properties = {
-                "alias": properties.get("displayName", ""),
+                "alias": clean_display_name(properties.get("displayName", "")),
                 "description": properties.get("description", ""),
             }
             comment = f"\n/* {str(model_properties)} */\n"
@@ -228,7 +233,7 @@ class DDLChunker:
             + [_model_command(model)]
         ]
 
-    def _convert_views(self, views: List[Dict[str, Any]]) -> List[str]:
+    def _convert_views(self, views: List[Dict[str, Any]]) -> List[Dict[str, str]]:
         def _payload(view: Dict[str, Any]) -> dict:
             return {
                 "type": "VIEW",
@@ -243,7 +248,7 @@ class DDLChunker:
             {"name": view["name"], "payload": str(_payload(view))} for view in views
         ]
 
-    def _convert_metrics(self, metrics: List[Dict[str, Any]]) -> List[str]:
+    def _convert_metrics(self, metrics: List[Dict[str, Any]]) -> List[Dict[str, str]]:
         def _create_column(name: str, data_type: str, comment: str) -> dict:
             return {
                 "type": "COLUMN",
@@ -385,13 +390,3 @@ class DBSchema(BasicPipeline):
             cleaner=self._components["cleaner"],
             project_id=project_id,
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        DBSchema,
-        "db_schema_indexing",
-        mdl_str='{"models": [], "views": [], "relationships": [], "metrics": []}',
-    )

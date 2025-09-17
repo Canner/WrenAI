@@ -51,9 +51,13 @@ export default function Home(props: Props) {
   }, [params?.id]);
 
   const onDeleteThread = async (threadId: string) => {
-    await onDelete(threadId);
-    if (params?.id == threadId) {
-      router.push(Path.Home);
+    try {
+      await onDelete(threadId);
+      if (params?.id == threadId) {
+        router.push(Path.Home);
+      }
+    } catch (error) {
+      console.error(error);
     }
   };
 

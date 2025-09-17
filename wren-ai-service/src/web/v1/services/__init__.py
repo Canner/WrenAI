@@ -1,6 +1,8 @@
+from datetime import datetime
 from typing import Literal, Optional
 
 import orjson
+import pytz
 from pydantic import AliasChoices, BaseModel, Field
 
 
@@ -25,6 +27,15 @@ class Configuration(BaseModel):
     class Timezone(BaseModel):
         name: str = "UTC"
         utc_offset: str = ""  # Deprecated, will be removed in the future
+
+    def show_current_time(self):
+        # Get the current time in the specified timezone
+        tz = pytz.timezone(
+            self.timezone.name
+        )  # Assuming timezone.name contains the timezone string
+        current_time = datetime.now(tz)
+
+        return f"{current_time.strftime('%Y-%m-%d %A %H:%M:%S')}"  # YYYY-MM-DD weekday_name HH:MM:SS, ex: 2024-10-23 Wednesday 12:00:00
 
     language: str = "English"
     timezone: Timezone = Timezone()
@@ -52,7 +63,7 @@ class BaseRequest(BaseModel):
         default_factory=Configuration,
         alias=AliasChoices("configurations", "configuration"),  # accept both keys
     )
-    request_from: Literal["ui", "api", "slack"] = "ui"
+    request_from: Literal["ui", "api"] = "ui"
 
     @property
     def query_id(self) -> str:
@@ -65,6 +76,7 @@ class BaseRequest(BaseModel):
 
 # Put the services imports here to avoid circular imports and make them accessible directly to the rest of packages
 from .ask import AskService  # noqa: E402
+from .ask_feedback import AskFeedbackService  # noqa: E402
 from .chart import ChartService  # noqa: E402
 from .chart_adjustment import ChartAdjustmentService  # noqa: E402
 from .instructions import InstructionsService  # noqa: E402
@@ -79,6 +91,7 @@ from .sql_question import SqlQuestionService  # noqa: E402
 
 __all__ = [
     "AskService",
+    "AskFeedbackService",
     "ChartService",
     "ChartAdjustmentService",
     "QuestionRecommendation",

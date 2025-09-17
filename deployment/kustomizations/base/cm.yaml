@@ -75,7 +75,27 @@ data:
         n: 1
         seed: 0
         temperature: 0
-
+    - model: gpt-5-nano-2025-08-07
+      context_window_size: 380000
+      kwargs:
+        max_completion_tokens: 4096
+        n: 1
+        seed: 0
+        reasoning_effort: minimal
+    - model: gpt-5-mini-2025-08-07
+      context_window_size: 380000
+      kwargs:
+        max_completion_tokens: 4096
+        n: 1
+        seed: 0
+        reasoning_effort: minimal
+    - model: gpt-5-2025-08-07
+      context_window_size: 380000
+      kwargs:
+        max_completion_tokens: 4096
+        n: 1
+        seed: 0
+        reasoning_effort: minimal
     ---
     type: embedder
     provider: litellm_embedder
@@ -138,13 +158,8 @@ data:
         llm: litellm_llm.default
       - name: relationship_recommendation
         llm: litellm_llm.default
-        engine: wren_ui
       - name: question_recommendation
         llm: litellm_llm.default
-      - name: question_recommendation_db_schema_retrieval
-        llm: litellm_llm.default
-        embedder: litellm_embedder.default
-        document_store: qdrant
       - name: question_recommendation_sql_generation
         llm: litellm_llm.default
         engine: wren_ui
@@ -195,6 +210,8 @@ data:
       - name: project_meta_indexing
         document_store: qdrant
       - name: sql_tables_extraction
+        llm: litellm_llm.default
+      - name: sql_diagnosis
         llm: litellm_llm.default
 
     ---

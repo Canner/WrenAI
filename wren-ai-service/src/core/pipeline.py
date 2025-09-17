@@ -1,4 +1,3 @@
-import asyncio
 from abc import ABCMeta, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -19,12 +18,6 @@ class BasicPipeline(metaclass=ABCMeta):
     @abstractmethod
     def run(self, *args, **kwargs) -> Dict[str, Any]:
         ...
-
-
-def async_validate(task: callable):
-    result = asyncio.run(task())
-    print(result)
-    return result
 
 
 @dataclass

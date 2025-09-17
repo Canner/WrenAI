@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional, Tuple
 import aiohttp
 import orjson
 
+from src.config import settings
 from src.core.engine import Engine, remove_limit_statement
 from src.providers.loader import provider
 
@@ -28,7 +29,7 @@ class WrenUI(Engine):
         session: aiohttp.ClientSession,
         project_id: str | None = None,
         dry_run: bool = True,
-        timeout: float = 30.0,
+        timeout: float = settings.engine_timeout,
         limit: int = 500,
         **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
@@ -51,31 +52,82 @@ class WrenUI(Engine):
                 },
                 timeout=aiohttp.ClientTimeout(total=timeout),
             ) as response:
-                res = await response.json()
-                if data := res.get("data"):
-                    data = data.get("previewSql", {}) if data else {}
+                res_json = await response.json()
+                if res_data := res_json.get("data"):
+                    res = res_data.get("previewSql", {}) if res_data else {}
+                    if dry_run:
+                        return (
+                            True,
+                            res,
+                            {
+                                "correlation_id": res_json.get("correlationId", ""),
+                            },
+                        )
+
+                    data = res.get("data", []) if res else []
+                    if len(data) > 0:
+                        return (
+                            True,
+                            res,
+                            {
+                                "correlation_id": res_json.get("correlationId", ""),
+                            },
+                        )
+
                     return (
-                        True,
-                        data,
+                        False,
+                        res,
                         {
-                            "correlation_id": res.get("correlationId"),
+                            "correlation_id": res_json.get("correlationId", ""),
                         },
                     )
 
-                error_message = res.get("errors", [{}])[0].get(
+                error_message = res_json.get("errors", [{}])[0].get(
                     "message", "Unknown error"
                 )
                 logger.error(f"Error executing SQL: {error_message}")
+                dialect_sql = (
+                    (
+                        (
+                            (res_json.get("errors", [{}])[0] or {}).get(
+                                "extensions", {}
+                            )
+                            or {}
+                        ).get("other", {})
+                        or {}
+                    ).get("metadata", {})
+                    or {}
+                ).get("dialectSql", "") or ""
+                planned_sql = (
+                    (
+                        (
+                            (res_json.get("errors", [{}])[0] or {}).get(
+                                "extensions", {}
+                            )
+                            or {}
+                        ).get("other", {})
+                        or {}
+                    ).get("metadata", {})
+                    or {}
+                ).get("plannedSql", "") or ""
 
                 return (
                     False,
                     {},
                     {
                         "error_message": error_message,
+                        "error_sql": dialect_sql or planned_sql or sql,
                         "correlation_id": (
-                            res.get("extensions", {})
-                            .get("other", {})
-                            .get("correlationId")
+                            (
+                                (
+                                    (res_json.get("errors", [{}])[0] or {}).get(
+                                        "extensions", {}
+                                    )
+                                    or {}
+                                ).get("other", {})
+                                or {}
+                            ).get("correlationId")
+                            or ""
                         ),
                     },
                 )
@@ -109,7 +161,7 @@ class WrenIbis(Engine):
         sql: str,
         session: aiohttp.ClientSession,
         dry_run: bool = True,
-        timeout: float = 30.0,
+        timeout: float = settings.engine_timeout,
         limit: int = 500,
         **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
@@ -159,7 +211,7 @@ class WrenIbis(Engine):
         session: aiohttp.ClientSession,
         sql: str,
         data_source: str,
-        timeout: float = 30.0,
+        timeout: float = settings.engine_timeout,
         allow_fallback: bool = True,
         **kwargs,
     ) -> Tuple[bool, str]:
@@ -193,7 +245,7 @@ class WrenIbis(Engine):
         self,
         session: aiohttp.ClientSession,
         data_source: str,
-        timeout: float = 30.0,
+        timeout: float = settings.engine_timeout,
     ) -> list[str]:
         api_endpoint = f"{self._endpoint}/v3/connector/{data_source}/functions"
         try:
@@ -228,7 +280,7 @@ class WrenEngine(Engine):
         sql: str,
         session: aiohttp.ClientSession,
         dry_run: bool = True,
-        timeout: float = 30.0,
+        timeout: float = settings.engine_timeout,
         limit: int = 500,
         **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:

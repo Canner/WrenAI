@@ -240,6 +240,7 @@ export const defaultApolloErrorHandler = (error: GraphQLError) => {
         message: error.message,
         shortMessage: shortMessages[code],
         stacktrace: error.extensions?.exception?.stacktrace,
+        other: error.extensions?.other,
       },
     };
   }

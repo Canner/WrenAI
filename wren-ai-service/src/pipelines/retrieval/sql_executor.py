@@ -27,18 +27,18 @@ class DataFetcher:
         sql: str,
         project_id: str | None = None,
         limit: int = 500,
-        timeout: float = 30.0,
     ):
         async with aiohttp.ClientSession() as session:
-            _, data, _ = await self._engine.execute_sql(
+            _, data, addition = await self._engine.execute_sql(
                 sql,
                 session,
                 project_id=project_id,
                 dry_run=False,
                 limit=limit,
-                timeout=timeout,
             )
 
+            if addition.get("error_message"):
+                return {"results": data, "error_message": addition.get("error_message")}
             return {"results": data}
 
 
@@ -47,7 +47,6 @@ class DataFetcher:
 async def execute_sql(
     sql: str,
     data_fetcher: DataFetcher,
-    engine_timeout: float,
     project_id: str | None = None,
     limit: int = 500,
 ) -> dict:
@@ -55,7 +54,6 @@ async def execute_sql(
         sql=sql,
         project_id=project_id,
         limit=limit,
-        timeout=engine_timeout,
     )
 
 
@@ -66,15 +64,10 @@ class SQLExecutor(BasicPipeline):
     def __init__(
         self,
         engine: Engine,
-        engine_timeout: float = 30.0,
         **kwargs,
     ):
         self._components = {
             "data_fetcher": DataFetcher(engine=engine),
-        }
-
-        self._configs = {
-            "engine_timeout": engine_timeout,
         }
 
         super().__init__(
@@ -93,16 +86,5 @@ class SQLExecutor(BasicPipeline):
                 "project_id": project_id,
                 "limit": limit,
                 **self._components,
-                **self._configs,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        SQLExecutor,
-        "sql_executor",
-        sql="SELECT * FROM table",
-    )

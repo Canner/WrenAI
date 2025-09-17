@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
+from src.pipelines.common import clean_up_new_lines
 from src.utils import trace_cost
 from src.web.v1.services import Configuration
 
@@ -51,10 +52,11 @@ def prompt(
     language: str,
     prompt_builder: PromptBuilder,
 ) -> dict:
-    return prompt_builder.run(
+    _prompt = prompt_builder.run(
         sql=sql,
         language=language,
     )
+    return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
 
 @observe(as_type="generation", capture_input=False)
@@ -124,14 +126,3 @@ class SQLQuestion(BasicPipeline):
                 **self._components,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        SQLQuestion,
-        "sql_question",
-        sql="SELECT * FROM table",
-        configuration=Configuration(),
-    )

@@ -11,13 +11,14 @@ from langfuse.decorators import observe
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, LLMProvider
-from src.pipelines.common import retrieve_metadata
+from src.pipelines.common import clean_up_new_lines, retrieve_metadata
 from src.pipelines.generation.utils.sql import (
-    SQL_CORRECTION_EXAMPLES,
     SQL_GENERATION_MODEL_KWARGS,
     TEXT_TO_SQL_RULES,
     SQLGenPostProcessor,
+    construct_instructions,
 )
+from src.pipelines.retrieval.sql_functions import SqlFunction
 from src.utils import trace_cost
 
 logger = logging.getLogger("wren-ai-service")
@@ -25,21 +26,20 @@ logger = logging.getLogger("wren-ai-service")
 
 sql_correction_system_prompt = f"""
 ### TASK ###
-You are an ANSI SQL expert with exceptional logical thinking skills and debugging skills.
-
-Now you are given syntactically incorrect ANSI SQL query and related error message, please generate the syntactically correct ANSI SQL query without changing original semantics.
+You are an ANSI SQL expert with exceptional logical thinking skills and debugging skills, you need to fix the syntactically incorrect ANSI SQL query.
 
 ### SQL CORRECTION INSTRUCTIONS ###
 
-1. Make sure you follow the SQL Rules strictly.
-2. Make sure you check the SQL CORRECTION EXAMPLES for reference.
+1. First, think hard about the error message, and firgure out the root cause first(please use the DATABASE SCHEMA, SQL FUNCTIONS and USER INSTRUCTIONS to help you figure out the root cause).
+2. Then, generate the syntactically correct ANSI SQL query to correct the error.
+
+### SQL RULES ###
+Make sure you follow the SQL Rules strictly.
 
 {TEXT_TO_SQL_RULES}
 
-{SQL_CORRECTION_EXAMPLES}
-
 ### FINAL ANSWER FORMAT ###
-The final answer must be a corrected SQL query in JSON format:
+The final answer must be in JSON format:
 
 {{
     "sql": <CORRECTED_SQL_QUERY_STRING>
@@ -51,6 +51,20 @@ sql_correction_user_prompt_template = """
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
+{% endfor %}
+{% endif %}
+
+{% if sql_functions %}
+### SQL FUNCTIONS ###
+{% for function in sql_functions %}
+{{ function }}
+{% endfor %}
+{% endif %}
+
+{% if instructions %}
+### USER INSTRUCTIONS ###
+{% for instruction in instructions %}
+{{ loop.index }}. {{ instruction }}
 {% endfor %}
 {% endif %}
 
@@ -68,11 +82,18 @@ def prompt(
     documents: List[Document],
     invalid_generation_result: Dict,
     prompt_builder: PromptBuilder,
+    instructions: list[dict] | None = None,
+    sql_functions: list[SqlFunction] | None = None,
 ) -> dict:
-    return prompt_builder.run(
+    _prompt = prompt_builder.run(
         documents=documents,
         invalid_generation_result=invalid_generation_result,
+        instructions=construct_instructions(
+            instructions=instructions,
+        ),
+        sql_functions=sql_functions,
     )
+    return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
 
 @observe(as_type="generation", capture_input=False)
@@ -87,7 +108,6 @@ async def generate_sql_correction(
 async def post_process(
     generate_sql_correction: dict,
     post_processor: SQLGenPostProcessor,
-    engine_timeout: float,
     data_source: str,
     project_id: str | None = None,
     use_dry_plan: bool = False,
@@ -95,7 +115,6 @@ async def post_process(
 ) -> dict:
     return await post_processor.run(
         generate_sql_correction.get("replies"),
-        timeout=engine_timeout,
         project_id=project_id,
         use_dry_plan=use_dry_plan,
         data_source=data_source,
@@ -112,7 +131,6 @@ class SQLCorrection(BasicPipeline):
         llm_provider: LLMProvider,
         document_store_provider: DocumentStoreProvider,
         engine: Engine,
-        engine_timeout: float = 30.0,
         **kwargs,
     ):
         self._retriever = document_store_provider.get_retriever(
@@ -131,10 +149,6 @@ class SQLCorrection(BasicPipeline):
             "post_processor": SQLGenPostProcessor(engine=engine),
         }
 
-        self._configs = {
-            "engine_timeout": engine_timeout,
-        }
-
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
@@ -144,6 +158,8 @@ class SQLCorrection(BasicPipeline):
         self,
         contexts: List[Document],
         invalid_generation_result: Dict[str, str],
+        instructions: list[dict] | None = None,
+        sql_functions: list[SqlFunction] | None = None,
         project_id: str | None = None,
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
@@ -160,22 +176,12 @@ class SQLCorrection(BasicPipeline):
             inputs={
                 "invalid_generation_result": invalid_generation_result,
                 "documents": contexts,
+                "instructions": instructions,
+                "sql_functions": sql_functions,
                 "project_id": project_id,
                 "use_dry_plan": use_dry_plan,
                 "allow_dry_plan_fallback": allow_dry_plan_fallback,
                 "data_source": metadata.get("data_source", "local_file"),
                 **self._components,
-                **self._configs,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        SQLCorrection,
-        "sql_correction",
-        invalid_generation_result={},
-        contexts=[],
-    )

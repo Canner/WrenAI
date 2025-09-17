@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "wren-ai-service"
-version = "0.25.6"
+version = "0.27.14"
 description = ""
 authors = ["dev@getwren.ai"]
 license = "AGPL-3.0"
@@ -10,7 +10,7 @@ package-mode = false
 [tool.poetry.dependencies]
 python = ">=3.12.*, <3.13"
 fastapi = "^0.115.2"
-uvicorn = {extras = ["standard"], version = "^0.30.1"}
+uvicorn = {extras = ["standard"], version = "^0.29.0"} # Litellm requires uvicorn < 0.30.0
 python-dotenv = "^1.0.1"
 haystack-ai = "==2.7.0"
 openai = "^1.40.0"
@@ -26,15 +26,15 @@ ollama-haystack = "^0.0.6"
 langfuse = "^2.43.3"
 ollama = "^0.2.1"
 toml = "^0.10.2"
-sqlglot = "^25.18.0"
+sqlglot = {extras = ["rs"], version = "^25.18.0"}
 cachetools = "^5.5.0"
 pyyaml = "^6.0.2"
 pydantic-settings = "^2.5.2"
 google-auth = "^2.35.0"
 tiktoken = "^0.8.0"
 jsonschema = "^4.23.0"
-litellm = "^1.70.0"
-boto3 = "^1.35.90"
+litellm = "^1.75.2"
+boto3 = "^1.34.34" # Litellm requires boto3 = 1.34.34
 qdrant-client = "==1.11.0"
 
 [tool.poetry.group.dev.dependencies]

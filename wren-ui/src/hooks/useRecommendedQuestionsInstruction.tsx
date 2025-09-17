@@ -48,6 +48,7 @@ export default function useRecommendedQuestionsInstruction() {
       pollInterval: 2000,
     });
 
+  // Handle errors via try/catch blocks rather than onError callback
   const [generateProjectRecommendationQuestions] =
     useGenerateProjectRecommendationQuestionsMutation();
 

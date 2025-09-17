@@ -28,14 +28,6 @@ class SqlFunction:
                 definition.get("description", ""),
             )
 
-        def _param_expr(param_type: str, index: int) -> str:
-            if param_type == "any":
-                return "any"
-
-            param_type = param_type.strip()
-            param_name = f"${index}"
-            return f"{param_name}: {param_type}"
-
         name, function_type, description = _extract()
 
         self._expr = f"type: {function_type}, name: {name}, description: {description}"
@@ -60,13 +52,11 @@ class SqlFunction:
 async def get_functions(
     engine: WrenIbis,
     data_source: str,
-    engine_timeout: float = 30.0,
 ) -> List[SqlFunction]:
     async with aiohttp.ClientSession() as session:
         func_list = await engine.get_func_list(
             session=session,
             data_source=data_source,
-            timeout=engine_timeout,
         )
 
         return [
@@ -94,7 +84,6 @@ class SqlFunctions(BasicPipeline):
         self,
         engine: Engine,
         document_store_provider: DocumentStoreProvider,
-        engine_timeout: float = 30.0,
         ttl: int = 60 * 60 * 24,
         **kwargs,
     ) -> None:
@@ -105,10 +94,6 @@ class SqlFunctions(BasicPipeline):
         self._components = {
             "engine": engine,
             "ttl_cache": self._cache,
-        }
-
-        self._configs = {
-            "engine_timeout": engine_timeout,
         }
 
         super().__init__(
@@ -135,17 +120,6 @@ class SqlFunctions(BasicPipeline):
             "data_source": _data_source,
             "project_id": project_id,
             **self._components,
-            **self._configs,
         }
         result = await self._pipe.execute(["cache"], inputs=input)
         return result["cache"]
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        SqlFunctions,
-        "sql_functions_retrieval",
-        project_id="test",
-    )

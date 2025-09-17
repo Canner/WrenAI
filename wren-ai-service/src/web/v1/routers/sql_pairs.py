@@ -12,76 +12,13 @@ from src.globals import (
     get_service_metadata,
 )
 from src.pipelines.indexing.sql_pairs import SqlPair
-from src.web.v1.services import SqlPairsService
+from src.web.v1.services import BaseRequest, SqlPairsService
 
 router = APIRouter()
 
 
-"""
-SQL Pairs Router
-
-This router handles endpoints related to preparing and managing SQL pairs.
-
-Endpoints:
-1. POST /sql-pairs
-   - Prepares SQL pairs for processing
-   - Request body: PostRequest
-     {
-       "sql_pairs": [                          # List of SQL pairs
-         {
-           "sql": "SELECT * FROM table",        # SQL statement
-           "question": "What is the question?", # Question
-           "id": "unique-id"                    # Unique identifier for the SQL pair
-         }
-       ],
-       "project_id": "project-id"             # Optional project ID
-     }
-   - Response: PostResponse
-     {
-       "id": "unique-uuid"                    # Unique identifier for tracking preparation
-     }
-
-2. DELETE /sql-pairs
-   - Deletes specified SQL pairs by their IDs
-   - Request body: DeleteRequest
-     {
-       "sql_pair_ids": ["id1", "id2"],       # List of SQL pair IDs to delete
-       "project_id": "project-id"            # Optional project ID
-     }
-   - Response: DeleteResponse
-     {
-       "id": "unique-uuid"                   # Unique identifier for tracking deletion
-     }
-
-3. GET /sql-pairs/{id}
-   - Retrieves status of SQL pairs preparation/deletion
-   - Path parameter: id (str)
-   - Response: GetResponse
-     {
-       "id": "unique-uuid",                  # Unique identifier
-       "status": "indexing" | "deleting" | "finished" | "failed",
-       "error": {                            # Present only if status is "failed"
-         "code": "OTHERS",
-         "message": "Error description"
-       }
-     }
-
-The SQL pairs preparation and deletion are asynchronous processes. The POST and DELETE endpoints
-initiate the operations and return immediately with an ID. The GET endpoint can then be used
-to check the status and result.
-
-Usage:
-1. Send a POST/DELETE request to start the operation
-2. Use the returned ID to poll the GET endpoint until status is "finished" or "failed"
-
-Note: The actual processing is performed in the background using FastAPI's BackgroundTasks.
-Results are cached with a TTL of 3600 seconds. Refer to the Settings.query_cache_ttl for more details.
-"""
-
-
-class PostRequest(BaseModel):
+class PostRequest(BaseRequest):
     sql_pairs: List[SqlPair]
-    project_id: Optional[str] = None
 
 
 class PostResponse(BaseModel):
@@ -109,9 +46,8 @@ async def prepare(
     return PostResponse(event_id=event_id)
 
 
-class DeleteRequest(BaseModel):
+class DeleteRequest(BaseRequest):
     sql_pair_ids: List[str]
-    project_id: Optional[str] = None
 
 
 @router.delete("/sql-pairs")

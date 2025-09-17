@@ -10,6 +10,7 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
+from src.pipelines.common import clean_up_new_lines
 from src.pipelines.generation.utils.sql import (
     construct_instructions,
     sql_generation_reasoning_system_prompt,
@@ -55,6 +56,7 @@ SQL:
 ### QUESTION ###
 User's Question: {{ query }}
 Language: {{ language }}
+Current Time: {{ current_time }}
 
 Let's think step by step.
 """
@@ -71,7 +73,7 @@ def prompt(
     prompt_builder: PromptBuilder,
     configuration: Configuration | None = Configuration(),
 ) -> dict:
-    return prompt_builder.run(
+    _prompt = prompt_builder.run(
         query=query,
         documents=documents,
         histories=histories,
@@ -80,7 +82,9 @@ def prompt(
             instructions=instructions,
         ),
         language=configuration.language,
+        current_time=configuration.show_current_time(),
     )
+    return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
 
 @observe(as_type="generation", capture_input=False)
@@ -187,15 +191,3 @@ class FollowUpSQLGenerationReasoning(BasicPipeline):
                 **self._components,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        FollowUpSQLGenerationReasoning,
-        "followup_sql_generation_reasoning",
-        query="this is a test query",
-        histories=[],
-        contexts=[],
-    )

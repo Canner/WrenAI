@@ -167,13 +167,3 @@ class TableDescription(BasicPipeline):
             cleaner=self._components["cleaner"],
             project_id=project_id,
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        TableDescription,
-        "table_description_indexing",
-        mdl_str='{"models": [], "views": [], "relationships": [], "metrics": []}',
-    )

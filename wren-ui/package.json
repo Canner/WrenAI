@@ -1,6 +1,6 @@
 {
   "name": "wren-ui",
-  "version": "0.30.0",
+  "version": "0.31.2",
   "private": true,
   "scripts": {
     "dev": "TZ=UTC next dev",
@@ -29,7 +29,7 @@
     "log4js": "^6.9.1",
     "micro": "^9.4.1",
     "micro-cors": "^0.1.1",
-    "next": "14.2.26",
+    "next": "14.2.32",
     "pg": "^8.8.0",
     "pg-cursor": "^2.7.4",
     "posthog-node": "^4.3.2",

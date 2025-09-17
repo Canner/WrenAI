@@ -84,9 +84,12 @@ export default function QuestionSQLPairModal(props: Props) {
   const [generatingQuestion, setGeneratingQuestion] = useState<boolean>(false);
   const [showPreview, setShowPreview] = useState<boolean>(false);
 
+  // Handle errors via try/catch blocks rather than onError callback
   const [previewSqlMutation, previewSqlResult] = usePreviewSqlMutation();
 
-  const [generateQuestionMutation] = useGenerateQuestionMutation();
+  const [generateQuestionMutation] = useGenerateQuestionMutation({
+    onError: (error) => console.error(error),
+  });
 
   const sqlValue = Form.useWatch('sql', form);
 

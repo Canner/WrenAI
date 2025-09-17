@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
-from src.pipelines.common import build_table_ddl
+from src.pipelines.common import build_table_ddl, clean_up_new_lines
 from src.pipelines.generation.utils.sql import construct_instructions
 from src.utils import trace_cost
 from src.web.v1.services import Configuration
@@ -28,6 +28,7 @@ You are an expert detective specializing in intent classification. Combine the u
 
 ### Instructions ###
 - **Follow the user's previous questions:** If there are previous questions, try to understand the user's current question as following the previous questions.
+- **Follow the user's instructions:** If there are instructions, strictly follow the instructions.
 - **Consider Context of Inputs:** Combine the user's current question, their previous questions, and the user's instructions together to identify the user's true intent.
 - **Rephrase Question:** Rewrite follow-up questions into full standalone questions using prior conversation context.
 - **Concise Reasoning:** The reasoning must be clear, concise, and limited to 20 words.
@@ -258,7 +259,7 @@ def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[str]:
     db_schemas_in_ddl = []
     for table_schema in list(db_schemas.values()):
         if table_schema["type"] == "TABLE":
-            ddl, _ = build_table_ddl(table_schema)
+            ddl, _, _ = build_table_ddl(table_schema)
             db_schemas_in_ddl.append(ddl)
 
     return db_schemas_in_ddl
@@ -275,7 +276,7 @@ def prompt(
     instructions: Optional[list[dict]] = None,
     configuration: Configuration | None = None,
 ) -> dict:
-    return prompt_builder.run(
+    _prompt = prompt_builder.run(
         query=query,
         language=configuration.language,
         db_schemas=construct_db_schemas,
@@ -286,6 +287,7 @@ def prompt(
         ),
         docs=wren_ai_docs,
     )
+    return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
 
 @observe(as_type="generation", capture_input=False)
@@ -396,13 +398,3 @@ class IntentClassification(BasicPipeline):
                 **self._configs,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        IntentClassification,
-        "intent_classification",
-        query="show me the dataset",
-    )
