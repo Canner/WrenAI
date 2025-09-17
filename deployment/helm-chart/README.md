@@ -59,7 +59,7 @@ kubectl create secret generic wren-secret \
 helm dependency build ./deployment/helm-chart
 
 # Deploy Wren AI with Helm
-helm upgrade --install wrenai ./deployment/helm \
+helm upgrade --install wrenai ./deployment/helm-chart \
   --namespace wren \
   -f deployment/helm/values.yaml \
 
