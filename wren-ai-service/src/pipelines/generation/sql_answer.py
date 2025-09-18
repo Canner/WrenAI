@@ -114,7 +114,7 @@ class SQLAnswer(BasicPipeline):
                 system_prompt=sql_to_answer_system_prompt,
                 streaming_callback=self._streaming_callback,
             ),
-            "generator_name": self._llm_provider.get_model(),
+            "generator_name": self._llm_provider.model,
         }
 
     def _streaming_callback(self, chunk, query_id):

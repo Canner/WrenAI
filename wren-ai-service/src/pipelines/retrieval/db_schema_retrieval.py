@@ -474,7 +474,7 @@ class DbSchemaRetrieval(BasicPipeline):
         self._configs = self._update_configs()
 
     def _update_configs(self):
-        _model = self._llm_provider.get_model()
+        _model = (self._llm_provider.model,)
         if "gpt-4o" in _model or "gpt-4o-mini" in _model:
             _encoding = tiktoken.get_encoding("o200k_base")
         else:
@@ -482,7 +482,7 @@ class DbSchemaRetrieval(BasicPipeline):
 
         return {
             "encoding": _encoding,
-            "context_window_size": self._llm_provider.get_context_window_size(),
+            "context_window_size": self._llm_provider.context_window_size,
         }
 
     def _update_components(self):
@@ -502,7 +502,7 @@ class DbSchemaRetrieval(BasicPipeline):
                 system_prompt=table_columns_selection_system_prompt,
                 generation_kwargs=RETRIEVAL_MODEL_KWARGS,
             ),
-            "generator_name": self._llm_provider.get_model(),
+            "generator_name": self._llm_provider.model,
             "prompt_builder": PromptBuilder(
                 template=table_columns_selection_user_prompt_template
             ),

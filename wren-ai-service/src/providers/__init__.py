@@ -109,7 +109,7 @@ def llm_processor(entry: dict) -> dict:
         returned[model_name] = {
             "provider": entry.get("provider"),
             "model": model.get("model"),
-            "alias": model.get("alias"),
+            "alias": model.get("alias", model.get("model")),
             "kwargs": model.get("kwargs"),
             "context_window_size": model.get("context_window_size", 100000),
             "fallback_model_list": fallback_model_list,
@@ -166,7 +166,7 @@ def embedder_processor(entry: dict) -> dict:
         returned[identifier] = {
             "provider": entry.get("provider"),
             "model": model.get("model"),
-            "alias": model.get("alias"),
+            "alias": model.get("alias", model.get("model")),
             **model_additional_params,
             **others,
         }
@@ -378,6 +378,7 @@ def generate_components(configs: list[dict]) -> dict[str, PipelineComponent]:
         }
         for type, configs in config.providers.items()
     }
+    print(f"instantiated_providers: {instantiated_providers}")
 
     def get(type: str, components: dict, instantiated_providers: dict):
         identifier = components.get(type)

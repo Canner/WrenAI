@@ -247,9 +247,9 @@ class Configs(BaseModel):
 
     class Pipeline(BaseModel):
         has_db_data_in_llm_prompt: bool
-        llm: str
-        embedder: str
-        description: str
+        llm: Optional[str] = None
+        embedder: Optional[str] = None
+        description: Optional[str] = None
 
     env_vars: dict[str, str]
     providers: Providers

@@ -222,7 +222,7 @@ class RelationshipRecommendation(BasicPipeline):
                 system_prompt=system_prompt,
                 generation_kwargs=RELATIONSHIP_RECOMMENDATION_MODEL_KWARGS,
             ),
-            "generator_name": self._llm_provider.get_model(),
+            "generator_name": self._llm_provider.model,
         }
 
     @observe(name="Relationship Recommendation")

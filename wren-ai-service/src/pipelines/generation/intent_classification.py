@@ -380,7 +380,7 @@ class IntentClassification(BasicPipeline):
                 system_prompt=intent_classification_system_prompt,
                 generation_kwargs=INTENT_CLASSIFICAION_MODEL_KWARGS,
             ),
-            "generator_name": self._llm_provider.get_model(),
+            "generator_name": self._llm_provider.model,
             "prompt_builder": PromptBuilder(
                 template=intent_classification_user_prompt_template
             ),

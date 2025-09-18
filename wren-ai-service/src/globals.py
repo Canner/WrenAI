@@ -269,21 +269,19 @@ def create_pipe_components(service_container: ServiceContainer):
             if pipe_name not in _pipe_components:
                 _pipe_components[pipe_name] = {}
             if hasattr(pipe, "_llm_provider") and pipe._llm_provider is not None:
-                _pipe_components[pipe_name]["llm"] = pipe._llm_provider.get_model()
+                _pipe_components[pipe_name]["llm"] = pipe._llm_provider.alias
             if (
                 hasattr(pipe, "_embedder_provider")
                 and pipe._embedder_provider is not None
             ):
-                _pipe_components[pipe_name][
-                    "embedder"
-                ] = pipe._embedder_provider.get_model()
+                _pipe_components[pipe_name]["embedder"] = pipe._embedder_provider.alias
             if "services" not in _pipe_components[pipe_name]:
                 _pipe_components[pipe_name]["services"] = set()
             _pipe_components[pipe_name]["services"].add(service)
             _pipe_components[pipe_name][
                 "has_db_data_in_llm_prompt"
             ] = has_db_data_in_llm_prompt(pipe_name)
-            _pipe_components[pipe_name]["description"] = pipe._description
+            _pipe_components[pipe_name]["description"] = pipe._description or ""
 
     return _pipe_components
 
@@ -315,8 +313,8 @@ def create_service_metadata(
     ) -> dict:
         llm_metadata = (
             {
-                "llm_model": llm_provider.get_model(),
-                "llm_model_kwargs": llm_provider.get_model_kwargs(),
+                "llm_model": llm_provider.model,
+                "llm_model_kwargs": llm_provider.model_kwargs,
             }
             if llm_provider
             else {}
@@ -324,7 +322,7 @@ def create_service_metadata(
 
         embedding_metadata = (
             {
-                "embedding_model": embedder_provider.get_model(),
+                "embedding_model": embedder_provider.model,
             }
             if embedder_provider
             else {}

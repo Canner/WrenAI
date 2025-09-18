@@ -134,7 +134,7 @@ class SQLDiagnosis(BasicPipeline):
                 system_prompt=sql_diagnosis_system_prompt,
                 generation_kwargs=SQL_DIAGNOSIS_MODEL_KWARGS,
             ),
-            "generator_name": self._llm_provider.get_model(),
+            "generator_name": self._llm_provider.model,
             "prompt_builder": PromptBuilder(
                 template=sql_diagnosis_user_prompt_template
             ),

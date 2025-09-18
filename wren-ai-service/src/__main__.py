@@ -15,6 +15,7 @@ from src.globals import (
 )
 from src.providers import generate_components
 from src.providers.embedder.litellm import LitellmEmbedderProvider
+from src.providers.llm.litellm import LitellmLLMProvider
 from src.utils import (
     Configs,
     init_langfuse,
@@ -107,36 +108,38 @@ def get_configs():
 
     _llm_configs = []
     for _, model_config in app.state.instantiated_providers["llm"].items():
-        _llm_configs.append(
-            {
-                "model": model_config._model,
-                "alias": model_config._alias,
-                "api_base": model_config._api_base,
-                "api_version": model_config._api_version,
-                "context_window_size": model_config._context_window_size,
-                "timeout": model_config._timeout,
-                "kwargs": model_config._model_kwargs,
-            }
-        )
+        _llm_config = {
+            "model": model_config._model,
+            "alias": model_config._alias,
+            "context_window_size": model_config._context_window_size,
+            "timeout": model_config._timeout,
+            "kwargs": model_config._model_kwargs,
+        }
+        if model_config._api_base:
+            _llm_config["api_base"] = model_config._api_base
+        if model_config._api_version:
+            _llm_config["api_version"] = model_config._api_version
+        _llm_configs.append(_llm_config)
         _llm_model_alias_mapping[model_config._model] = model_config._alias
     _configs["providers"]["llm"] = _llm_configs
 
     _embedder_configs = []
     # we only support one embedding model now
     for _, model_config in app.state.instantiated_providers["embedder"].items():
-        _embedder_configs.append(
-            {
-                "model": model_config._model,
-                "alias": model_config._alias,
-                "dimension": app.state.instantiated_providers["document_store"][
-                    "qdrant"
-                ]._embedding_model_dim,
-                "api_base": model_config._api_base,
-                "api_version": model_config._api_version,
-                "timeout": model_config._timeout,
-                "kwargs": model_config._model_kwargs,
-            }
-        )
+        _embedder_config = {
+            "model": model_config._model,
+            "alias": model_config._alias,
+            "dimension": app.state.instantiated_providers["document_store"][
+                "qdrant"
+            ]._embedding_model_dim,
+            "timeout": model_config._timeout,
+            "kwargs": model_config._model_kwargs,
+        }
+        if model_config._api_base:
+            _embedder_config["api_base"] = model_config._api_base
+        if model_config._api_version:
+            _embedder_config["api_version"] = model_config._api_version
+        _embedder_configs.append(_embedder_config)
         _embedder_model_alias_mapping[model_config._model] = model_config._alias
         break
     _configs["providers"]["embedder"] = _embedder_configs
@@ -170,12 +173,19 @@ def get_configs():
 
 @app.post("/configs")
 def update_configs(configs_request: Configs):
-    embedder_providers = {}
-    for embedder_provider in configs_request.providers.embedder:
-        identifier = f"litellm_embedder.{embedder_provider.alias if embedder_provider.alias else embedder_provider.model}"
-        embedder_providers[identifier] = LitellmEmbedderProvider(
+    # override current instantiated_providers
+    app.state.instantiated_providers["embedder"] = {
+        f"litellm_embedder.{embedder_provider.alias}": LitellmEmbedderProvider(
             **embedder_provider.__dict__
         )
+        for embedder_provider in configs_request.providers.embedder
+    }
+    app.state.instantiated_providers["llm"] = {
+        f"litellm_llm.{llm_provider.alias}": LitellmLLMProvider(**llm_provider.__dict__)
+        for llm_provider in configs_request.providers.llm
+    }
+
+    print(f"pipe_components: {app.state.pipe_components}")
 
     # try:
     #     for payload in pipe_components_request:

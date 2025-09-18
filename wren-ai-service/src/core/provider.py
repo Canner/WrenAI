@@ -8,13 +8,20 @@ class LLMProvider(metaclass=ABCMeta):
     def get_generator(self, *args, **kwargs):
         ...
 
-    def get_model(self):
+    @property
+    def alias(self):
+        return self._alias
+
+    @property
+    def model(self):
         return self._model
 
-    def get_model_kwargs(self):
+    @property
+    def model_kwargs(self):
         return self._model_kwargs
 
-    def get_context_window_size(self):
+    @property
+    def context_window_size(self):
         return self._context_window_size
 
 
@@ -27,8 +34,17 @@ class EmbedderProvider(metaclass=ABCMeta):
     def get_document_embedder(self, *args, **kwargs):
         ...
 
-    def get_model(self):
+    @property
+    def alias(self):
+        return self._alias
+
+    @property
+    def model(self):
         return self._model
+
+    @property
+    def model_kwargs(self):
+        return self._model_kwargs
 
 
 class DocumentStoreProvider(metaclass=ABCMeta):

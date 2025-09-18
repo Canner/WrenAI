@@ -90,7 +90,7 @@ class PreprocessSqlData(BasicPipeline):
         self._configs = self._update_configs()
 
     def _update_configs(self):
-        _model = self._llm_provider.get_model()
+        _model = (self._llm_provider.model,)
         if _model == "gpt-4o-mini" or _model == "gpt-4o":
             _encoding = tiktoken.get_encoding("o200k_base")
         else:
@@ -98,7 +98,7 @@ class PreprocessSqlData(BasicPipeline):
 
         return {
             "encoding": _encoding,
-            "context_window_size": self._llm_provider.get_context_window_size(),
+            "context_window_size": self._llm_provider.context_window_size,
         }
 
     def update_llm_provider(self, llm_provider: LLMProvider):

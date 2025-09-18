@@ -173,7 +173,7 @@ class SQLRegeneration(BasicPipeline):
                 system_prompt=sql_regeneration_system_prompt,
                 generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
             ),
-            "generator_name": self._llm_provider.get_model(),
+            "generator_name": self._llm_provider.model,
             "prompt_builder": PromptBuilder(
                 template=sql_regeneration_user_prompt_template
             ),

@@ -118,7 +118,7 @@ class SQLGenerationReasoning(BasicPipeline):
                 system_prompt=sql_generation_reasoning_system_prompt,
                 streaming_callback=self._streaming_callback,
             ),
-            "generator_name": self._llm_provider.get_model(),
+            "generator_name": self._llm_provider.model,
             "prompt_builder": PromptBuilder(
                 template=sql_generation_reasoning_user_prompt_template
             ),

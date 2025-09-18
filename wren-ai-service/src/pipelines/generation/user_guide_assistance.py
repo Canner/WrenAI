@@ -105,7 +105,7 @@ class UserGuideAssistance(BasicPipeline):
                 system_prompt=user_guide_assistance_system_prompt,
                 streaming_callback=self._streaming_callback,
             ),
-            "generator_name": self._llm_provider.get_model(),
+            "generator_name": self._llm_provider.model,
             "prompt_builder": PromptBuilder(
                 template=user_guide_assistance_user_prompt_template
             ),

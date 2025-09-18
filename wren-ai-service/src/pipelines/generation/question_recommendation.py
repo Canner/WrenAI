@@ -255,7 +255,7 @@ class QuestionRecommendation(BasicPipeline):
                 system_prompt=system_prompt,
                 generation_kwargs=QUESTION_RECOMMENDATION_MODEL_KWARGS,
             ),
-            "generator_name": self._llm_provider.get_model(),
+            "generator_name": self._llm_provider.model,
         }
 
     @observe(name="Question Recommendation")
