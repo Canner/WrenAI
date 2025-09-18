@@ -142,8 +142,22 @@ class SQLCorrection(BasicPipeline):
         self._engine = engine
         self._description = description
         self._components = self._update_components()
-        self._retriever = document_store_provider.get_retriever(
-            document_store_provider.get_store("project_meta")
+        self._document_store_provider = document_store_provider
+        self._retriever = self._document_store_provider.get_retriever(
+            self._document_store_provider.get_store("project_meta")
+        )
+
+    def update_components(
+        self,
+        llm_provider: LLMProvider,
+        document_store_provider: DocumentStoreProvider,
+        **_,
+    ):
+        super().update_components(
+            llm_provider=llm_provider, document_store_provider=document_store_provider
+        )
+        self._retriever = self._document_store_provider.get_retriever(
+            self._document_store_provider.get_store("project_meta")
         )
 
     def _update_components(self):

@@ -32,6 +32,7 @@ class BasicPipeline(metaclass=ABCMeta):
         llm_provider: Optional[LLMProvider] = None,
         embedder_provider: Optional[EmbedderProvider] = None,
         document_store_provider: Optional[DocumentStoreProvider] = None,
+        update_components: bool = True,
     ):
         if llm_provider:
             self._llm_provider = llm_provider
@@ -39,7 +40,8 @@ class BasicPipeline(metaclass=ABCMeta):
             self._embedder_provider = embedder_provider
         if document_store_provider:
             self._document_store_provider = document_store_provider
-        self._components = self._update_components()
+        if update_components:
+            self._components = self._update_components()
 
     def __str__(self):
         return f"BasicPipeline(llm_provider={self._llm_provider}, embedder_provider={self._embedder_provider}, document_store_provider={self._document_store_provider})"

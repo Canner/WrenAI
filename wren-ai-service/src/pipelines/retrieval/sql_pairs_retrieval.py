@@ -138,6 +138,20 @@ class SqlPairsRetrieval(BasicPipeline):
             "sql_pairs_retrieval_max_size": sql_pairs_retrieval_max_size,
         }
 
+    def update_components(
+        self,
+        embedder_provider: EmbedderProvider,
+        document_store_provider: DocumentStoreProvider,
+        **_,
+    ):
+        super().update_components(
+            embedder_provider=embedder_provider,
+            document_store_provider=document_store_provider,
+            update_components=False,
+        )
+        self._store = self._document_store_provider.get_store(dataset_name="sql_pairs")
+        self._components = self._update_components()
+
     def _update_components(self):
         return {
             "store": self._store,

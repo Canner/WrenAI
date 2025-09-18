@@ -83,6 +83,15 @@ class ProjectMeta(BasicPipeline):
         self._components = self._update_components()
         self._final = "write"
 
+    def update_components(self, document_store_provider: DocumentStoreProvider, **_):
+        super().update_components(
+            document_store_provider=document_store_provider, update_components=False
+        )
+        self._store = self._document_store_provider.get_store(
+            dataset_name="project_meta"
+        )
+        self._components = self._update_components()
+
     def _update_components(self):
         return {
             "validator": MDLValidator(),

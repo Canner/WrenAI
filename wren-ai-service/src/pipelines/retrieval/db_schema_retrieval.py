@@ -509,11 +509,27 @@ class DbSchemaRetrieval(BasicPipeline):
         }
 
     def update_components(
-        self, llm_provider: LLMProvider, embedder_provider: EmbedderProvider
+        self,
+        llm_provider: LLMProvider,
+        embedder_provider: EmbedderProvider,
+        document_store_provider: DocumentStoreProvider,
+        **_,
     ):
         super().update_components(
-            llm_provider=llm_provider, embedder_provider=embedder_provider
+            llm_provider=llm_provider,
+            embedder_provider=embedder_provider,
+            document_store_provider=document_store_provider,
+            update_components=False,
         )
+        self._table_retriever = self._document_store_provider.get_retriever(
+            self._document_store_provider.get_store(dataset_name="table_descriptions"),
+            top_k=self._table_retrieval_size,
+        )
+        self._dbschema_retriever = self._document_store_provider.get_retriever(
+            self._document_store_provider.get_store(),
+            top_k=self._table_column_retrieval_size,
+        )
+        self._components = self._update_components()
         self._configs = self._update_configs()
 
     @observe(name="Ask Retrieval")

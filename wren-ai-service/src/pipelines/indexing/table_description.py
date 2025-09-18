@@ -138,6 +138,22 @@ class TableDescription(BasicPipeline):
         self._configs = {}
         self._final = "write"
 
+    def update_components(
+        self,
+        embedder_provider: EmbedderProvider,
+        document_store_provider: DocumentStoreProvider,
+        **_,
+    ):
+        super().update_components(
+            embedder_provider=embedder_provider,
+            document_store_provider=document_store_provider,
+            update_components=False,
+        )
+        self._table_description_store = self._document_store_provider.get_store(
+            dataset_name="table_descriptions"
+        )
+        self._components = self._update_components()
+
     def _update_components(self):
         return {
             "cleaner": DocumentCleaner([self._table_description_store]),

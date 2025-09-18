@@ -144,6 +144,22 @@ class Instructions(BasicPipeline):
         self._description = description
         self._components = self._update_components()
 
+    def update_components(
+        self,
+        embedder_provider: EmbedderProvider,
+        document_store_provider: DocumentStoreProvider,
+        **_,
+    ):
+        super().update_components(
+            embedder_provider=embedder_provider,
+            document_store_provider=document_store_provider,
+            update_components=False,
+        )
+        self._store = self._document_store_provider.get_store(
+            dataset_name="instructions"
+        )
+        self._components = self._update_components()
+
     def _update_components(self):
         return {
             "cleaner": InstructionsCleaner(self._store),

@@ -185,6 +185,20 @@ class SqlPairs(BasicPipeline):
 
         self._external_pairs = _load_sql_pairs(sql_pairs_path)
 
+    def update_components(
+        self,
+        embedder_provider: EmbedderProvider,
+        document_store_provider: DocumentStoreProvider,
+        **_,
+    ):
+        super().update_components(
+            embedder_provider=embedder_provider,
+            document_store_provider=document_store_provider,
+            update_components=False,
+        )
+        self._store = self._document_store_provider.get_store(dataset_name="sql_pairs")
+        self._components = self._update_components()
+
     def _update_components(self):
         return {
             "cleaner": SqlPairsCleaner(self._store),

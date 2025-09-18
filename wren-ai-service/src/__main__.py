@@ -34,10 +34,13 @@ setup_custom_logger(
 async def lifespan(app: FastAPI):
     # startup events
     pipe_components, instantiated_providers = generate_components(settings.components)
-    app.state.service_container = create_service_container(pipe_components, settings)
-    app.state.pipe_components = create_pipe_components(app.state.service_container)
-    app.state.service_metadata = create_service_metadata(pipe_components)
+    app.state.pipe_components = pipe_components
     app.state.instantiated_providers = instantiated_providers
+    app.state.service_container = create_service_container(pipe_components, settings)
+    app.state.pipe_service_components = create_pipe_components(
+        app.state.service_container
+    )
+    app.state.service_metadata = create_service_metadata(pipe_components)
     init_langfuse(settings)
 
     yield
@@ -145,7 +148,7 @@ def get_configs():
         break
     _configs["providers"]["embedder"] = _embedder_configs
 
-    for pipe_name, pipe_component in app.state.pipe_components.items():
+    for pipe_name, pipe_component in app.state.pipe_service_components.items():
         llm_model = pipe_component.get("llm", None)
         embedding_model = pipe_component.get("embedder", None)
         description = pipe_component.get("description", "")
@@ -201,28 +204,48 @@ def update_configs(configs_request: Configs):
             embedding_model_dim=configs_request.providers.embedder[0].dimension,
             recreate_index=True,
         )
+        _embedder_providers = app.state.instantiated_providers["embedder"]
+        _llm_providers = app.state.instantiated_providers["llm"]
+        _document_store_provider = app.state.instantiated_providers["document_store"][
+            "qdrant"
+        ]
 
         # override current pipe_components
-        for pipe_name, pipe_component in app.state.pipe_components.items():
+        for (
+            pipe_name,
+            pipe_service_components,
+        ) in app.state.pipe_service_components.items():
             if pipe_name in configs_request.pipelines:
                 pipe_config = configs_request.pipelines[pipe_name]
-                pipe_component.update(pipe_config)
+                pipe_service_components.update(pipe_config)
 
         # updating pipelines
-        for pipeline_name, pipe_components in app.state.pipe_components.items():
-            for service in pipe_components.get("services", []):
+        for (
+            pipeline_name,
+            pipe_service_components,
+        ) in app.state.pipe_service_components.items():
+            for service in pipe_service_components.get("services", []):
                 if pipe_config := configs_request.pipelines.get(pipeline_name):
                     service._pipelines[pipeline_name].update_components(
-                        llm_provider=app.state.instantiated_providers["llm"][
-                            f"litellm_llm.{pipe_config.llm}"
-                        ]
-                        if pipe_config.llm
-                        else None,
-                        embedder_provider=app.state.instantiated_providers["embedder"][
-                            f"litellm_embedder.{pipe_config.embedder}"
-                        ]
-                        if pipe_config.embedder
-                        else None,
+                        llm_provider=(
+                            _llm_providers[f"litellm_llm.{pipe_config.llm}"]
+                            if pipe_config.llm
+                            else None
+                        ),
+                        embedder_provider=(
+                            _embedder_providers[
+                                f"litellm_embedder.{pipe_config.embedder}"
+                            ]
+                            if pipe_config.embedder
+                            else None
+                        ),
+                        document_store_provider=(
+                            _document_store_provider
+                            if service._pipelines[
+                                pipeline_name
+                            ]._document_store_provider
+                            else None
+                        ),
                     )
                 else:
                     if service._pipelines[pipeline_name]._document_store_provider:
@@ -233,10 +256,12 @@ def update_configs(configs_request: Configs):
                             embedder_provider=service._pipelines[
                                 pipeline_name
                             ]._embedder_provider,
-                            document_store_provider=app.state.instantiated_providers[
-                                "document_store"
-                            ]["qdrant"],
+                            document_store_provider=_document_store_provider,
                         )
+
+        # TODO: updating service_metadata
+        for pipeline_name, _ in app.state.pipe_components.items():
+            pass
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error updating configs: {e}")
 
