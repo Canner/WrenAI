@@ -100,22 +100,28 @@ class SQLTablesExtraction(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
+        description: str = "",
         **kwargs,
     ):
-        self._components = {
-            "generator": llm_provider.get_generator(
+        super().__init__(
+            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
+        )
+
+        self._llm_provider = llm_provider
+        self._description = description
+        self._components = self._update_components()
+
+    def _update_components(self):
+        return {
+            "generator": self._llm_provider.get_generator(
                 system_prompt=sql_tables_extraction_system_prompt,
                 generation_kwargs=SQL_TABLES_EXTRACTION_MODEL_KWARGS,
             ),
-            "generator_name": llm_provider.get_model(),
+            "generator_name": self._llm_provider.model,
             "prompt_builder": PromptBuilder(
                 template=sql_tables_extraction_user_prompt_template
             ),
         }
-
-        super().__init__(
-            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
 
     @observe(name="Sql Tables Extraction")
     async def run(

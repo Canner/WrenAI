@@ -137,27 +137,52 @@ class HistoricalQuestion(BasicPipeline):
         self,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
+        description: str = "",
         **kwargs,
     ) -> None:
-        # keep the store name as it is for now, might change in the future
-        store = document_store_provider.get_store(dataset_name="view_questions")
-
-        self._components = {
-            "cleaner": DocumentCleaner([store]),
-            "validator": MDLValidator(),
-            "embedder": embedder_provider.get_document_embedder(),
-            "chunker": ViewChunker(),
-            "writer": AsyncDocumentWriter(
-                document_store=store,
-                policy=DuplicatePolicy.OVERWRITE,
-            ),
-        }
-        self._configs = {}
-        self._final = "write"
-
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
+
+        # keep the store name as it is for now, might change in the future
+        self._embedder_provider = embedder_provider
+        self._document_store_provider = document_store_provider
+        self._store = self._document_store_provider.get_store(
+            dataset_name="view_questions"
+        )
+        self._description = description
+        self._components = self._update_components()
+
+        self._configs = {}
+        self._final = "write"
+
+    def update_components(
+        self,
+        embedder_provider: EmbedderProvider,
+        document_store_provider: DocumentStoreProvider,
+        **_,
+    ):
+        super().update_components(
+            embedder_provider=embedder_provider,
+            document_store_provider=document_store_provider,
+            update_components=False,
+        )
+        self._store = self._document_store_provider.get_store(
+            dataset_name="view_questions"
+        )
+        self._components = self._update_components()
+
+    def _update_components(self):
+        return {
+            "cleaner": DocumentCleaner([self._store]),
+            "validator": MDLValidator(),
+            "embedder": self._embedder_provider.get_document_embedder(),
+            "chunker": ViewChunker(),
+            "writer": AsyncDocumentWriter(
+                document_store=self._store,
+                policy=DuplicatePolicy.OVERWRITE,
+            ),
+        }
 
     @observe(name="Historical Question Indexing")
     async def run(

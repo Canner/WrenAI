@@ -3,10 +3,12 @@ import logging
 import os
 import re
 from pathlib import Path
+from typing import Any, Optional
 
 import requests
 from dotenv import load_dotenv
 from langfuse.decorators import langfuse_context
+from pydantic import BaseModel
 
 from src.config import Settings
 
@@ -218,3 +220,49 @@ def extract_braces_content(resp: str) -> str:
     """
     match = re.search(r"```json\s*(\{.*?\})\s*```", resp, re.DOTALL)
     return match.group(1) if match else resp
+
+
+class Configs(BaseModel):
+    class Providers(BaseModel):
+        class LLMProvider(BaseModel):
+            model: str
+            alias: str
+            context_window_size: int
+            timeout: float = 600
+            api_base: Optional[str] = None
+            api_version: Optional[str] = None
+            kwargs: Optional[dict[str, Any]] = None
+
+        class EmbedderProvider(BaseModel):
+            model: str
+            alias: str
+            dimension: int
+            timeout: float = 600
+            kwargs: Optional[dict[str, Any]] = None
+            api_base: Optional[str] = None
+            api_version: Optional[str] = None
+
+        llm: list[LLMProvider]
+        embedder: list[EmbedderProvider]
+
+    class Pipeline(BaseModel):
+        has_db_data_in_llm_prompt: bool
+        llm: Optional[str] = None
+        embedder: Optional[str] = None
+        description: Optional[str] = None
+
+    env_vars: dict[str, str]
+    providers: Providers
+    pipelines: dict[str, Pipeline]
+
+
+def has_db_data_in_llm_prompt(pipe_name: str) -> bool:
+    pipes_containing_db_data = set(
+        [
+            "sql_answer",
+            "chart_adjustment",
+            "chart_generation",
+        ]
+    )
+
+    return pipe_name in pipes_containing_db_data

@@ -202,22 +202,28 @@ class RelationshipRecommendation(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
+        description: str = "",
         **_,
     ):
-        self._components = {
-            "prompt_builder": PromptBuilder(template=user_prompt_template),
-            "generator": llm_provider.get_generator(
-                system_prompt=system_prompt,
-                generation_kwargs=RELATIONSHIP_RECOMMENDATION_MODEL_KWARGS,
-            ),
-            "generator_name": llm_provider.get_model(),
-        }
-
-        self._final = "validated"
-
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
+
+        self._llm_provider = llm_provider
+        self._description = description
+        self._components = self._update_components()
+
+        self._final = "validated"
+
+    def _update_components(self):
+        return {
+            "prompt_builder": PromptBuilder(template=user_prompt_template),
+            "generator": self._llm_provider.get_generator(
+                system_prompt=system_prompt,
+                generation_kwargs=RELATIONSHIP_RECOMMENDATION_MODEL_KWARGS,
+            ),
+            "generator_name": self._llm_provider.model,
+        }
 
     @observe(name="Relationship Recommendation")
     async def run(

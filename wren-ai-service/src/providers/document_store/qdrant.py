@@ -389,7 +389,8 @@ class QdrantProvider(DocumentStoreProvider):
         self._api_key = Secret.from_token(api_key) if api_key else None
         self._timeout = timeout
         self._embedding_model_dim = embedding_model_dim
-        self._reset_document_store(recreate_index)
+        if recreate_index:
+            self._reset_document_store(recreate_index)
 
     def _reset_document_store(self, recreate_index: bool):
         self.get_store(recreate_index=recreate_index)

@@ -123,29 +123,51 @@ class HistoricalQuestionRetrieval(BasicPipeline):
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
         historical_question_retrieval_similarity_threshold: float = 0.9,
+        description: str = "",
         **kwargs,
     ) -> None:
-        view_questions_store = document_store_provider.get_store(
+        super().__init__(
+            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
+        )
+
+        self._view_questions_store = document_store_provider.get_store(
             dataset_name="view_questions"
         )
-        self._components = {
-            "view_questions_store": view_questions_store,
-            "embedder": embedder_provider.get_text_embedder(),
-            "view_questions_retriever": document_store_provider.get_retriever(
-                document_store=view_questions_store,
+        self._embedder_provider = embedder_provider
+        self._document_store_provider = document_store_provider
+        self._description = description
+        self._components = self._update_components()
+        self._configs = {
+            "historical_question_retrieval_similarity_threshold": historical_question_retrieval_similarity_threshold,
+        }
+
+    def update_components(
+        self,
+        embedder_provider: EmbedderProvider,
+        document_store_provider: DocumentStoreProvider,
+        **_,
+    ):
+        super().update_components(
+            embedder_provider=embedder_provider,
+            document_store_provider=document_store_provider,
+            update_components=False,
+        )
+        self._view_questions_store = self._document_store_provider.get_store(
+            dataset_name="view_questions"
+        )
+        self._components = self._update_components()
+
+    def _update_components(self):
+        return {
+            "view_questions_store": self._view_questions_store,
+            "embedder": self._embedder_provider.get_text_embedder(),
+            "view_questions_retriever": self._document_store_provider.get_retriever(
+                document_store=self._view_questions_store,
             ),
             "score_filter": ScoreFilter(),
             # TODO: add a llm filter to filter out low scoring document, in case ScoreFilter is not accurate enough
             "output_formatter": OutputFormatter(),
         }
-
-        self._configs = {
-            "historical_question_retrieval_similarity_threshold": historical_question_retrieval_similarity_threshold,
-        }
-
-        super().__init__(
-            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
 
     @observe(name="Historical Question")
     async def run(self, query: str, project_id: Optional[str] = None):

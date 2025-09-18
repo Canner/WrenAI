@@ -123,20 +123,16 @@ class ChartGeneration(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
+        description: str = "",
         **kwargs,
     ):
-        self._components = {
-            "prompt_builder": PromptBuilder(
-                template=chart_generation_user_prompt_template
-            ),
-            "generator": llm_provider.get_generator(
-                system_prompt=chart_generation_system_prompt,
-                generation_kwargs=CHART_GENERATION_MODEL_KWARGS,
-            ),
-            "generator_name": llm_provider.get_model(),
-            "chart_data_preprocessor": ChartDataPreprocessor(),
-            "post_processor": ChartGenerationPostProcessor(),
-        }
+        super().__init__(
+            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
+        )
+
+        self._llm_provider = llm_provider
+        self._description = description
+        self._components = self._update_components()
 
         with open("src/pipelines/generation/utils/vega-lite-schema-v5.json", "r") as f:
             _vega_schema = orjson.loads(f.read())
@@ -145,9 +141,19 @@ class ChartGeneration(BasicPipeline):
             "vega_schema": _vega_schema,
         }
 
-        super().__init__(
-            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
-        )
+    def _update_components(self):
+        return {
+            "prompt_builder": PromptBuilder(
+                template=chart_generation_user_prompt_template
+            ),
+            "generator": self._llm_provider.get_generator(
+                system_prompt=chart_generation_system_prompt,
+                generation_kwargs=CHART_GENERATION_MODEL_KWARGS,
+            ),
+            "generator_name": self._llm_provider.model,
+            "chart_data_preprocessor": ChartDataPreprocessor(),
+            "post_processor": ChartGenerationPostProcessor(),
+        }
 
     @observe(name="Chart Generation")
     async def run(

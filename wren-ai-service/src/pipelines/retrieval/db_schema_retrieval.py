@@ -457,43 +457,80 @@ class DbSchemaRetrieval(BasicPipeline):
         document_store_provider: DocumentStoreProvider,
         table_retrieval_size: int = 10,
         table_column_retrieval_size: int = 100,
+        description: str = "",
         **kwargs,
     ):
-        self._components = {
-            "embedder": embedder_provider.get_text_embedder(),
-            "table_retriever": document_store_provider.get_retriever(
-                document_store_provider.get_store(dataset_name="table_descriptions"),
-                top_k=table_retrieval_size,
-            ),
-            "dbschema_retriever": document_store_provider.get_retriever(
-                document_store_provider.get_store(),
-                top_k=table_column_retrieval_size,
-            ),
-            "table_columns_selection_generator": llm_provider.get_generator(
-                system_prompt=table_columns_selection_system_prompt,
-                generation_kwargs=RETRIEVAL_MODEL_KWARGS,
-            ),
-            "generator_name": llm_provider.get_model(),
-            "prompt_builder": PromptBuilder(
-                template=table_columns_selection_user_prompt_template
-            ),
-        }
+        super().__init__(
+            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
+        )
 
-        # for the first time, we need to load the encodings
-        _model = llm_provider.get_model()
+        self._llm_provider = llm_provider
+        self._table_retrieval_size = table_retrieval_size
+        self._table_column_retrieval_size = table_column_retrieval_size
+        self._document_store_provider = document_store_provider
+        self._embedder_provider = embedder_provider
+        self._description = description
+        self._components = self._update_components()
+        self._configs = self._update_configs()
+
+    def _update_configs(self):
+        _model = (self._llm_provider.model,)
         if "gpt-4o" in _model or "gpt-4o-mini" in _model:
             _encoding = tiktoken.get_encoding("o200k_base")
         else:
             _encoding = tiktoken.get_encoding("cl100k_base")
 
-        self._configs = {
+        return {
             "encoding": _encoding,
-            "context_window_size": llm_provider.get_context_window_size(),
+            "context_window_size": self._llm_provider.context_window_size,
         }
 
-        super().__init__(
-            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
+    def _update_components(self):
+        return {
+            "embedder": self._embedder_provider.get_text_embedder(),
+            "table_retriever": self._document_store_provider.get_retriever(
+                self._document_store_provider.get_store(
+                    dataset_name="table_descriptions"
+                ),
+                top_k=self._table_retrieval_size,
+            ),
+            "dbschema_retriever": self._document_store_provider.get_retriever(
+                self._document_store_provider.get_store(),
+                top_k=self._table_column_retrieval_size,
+            ),
+            "table_columns_selection_generator": self._llm_provider.get_generator(
+                system_prompt=table_columns_selection_system_prompt,
+                generation_kwargs=RETRIEVAL_MODEL_KWARGS,
+            ),
+            "generator_name": self._llm_provider.model,
+            "prompt_builder": PromptBuilder(
+                template=table_columns_selection_user_prompt_template
+            ),
+        }
+
+    def update_components(
+        self,
+        llm_provider: LLMProvider,
+        embedder_provider: EmbedderProvider,
+        document_store_provider: DocumentStoreProvider,
+        **_,
+    ):
+        super().update_components(
+            llm_provider=llm_provider,
+            embedder_provider=embedder_provider,
+            document_store_provider=document_store_provider,
+            update_components=False,
         )
+        self._table_retriever = self._document_store_provider.get_retriever(
+            self._document_store_provider.get_store(dataset_name="table_descriptions"),
+            top_k=self._table_retrieval_size,
+        )
+        self._dbschema_retriever = self._document_store_provider.get_retriever(
+            self._document_store_provider.get_store(),
+            top_k=self._table_column_retrieval_size,
+        )
+        self._components = self._update_components()
+        self._configs = self._update_configs()
 
     @observe(name="Ask Retrieval")
     async def run(
