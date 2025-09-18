@@ -33,13 +33,16 @@ class BasicPipeline(metaclass=ABCMeta):
         embedder_provider: Optional[EmbedderProvider] = None,
         document_store_provider: Optional[DocumentStoreProvider] = None,
     ):
-        self._llm_provider = llm_provider
-        self._embedder_provider = embedder_provider
-        self._document_store_provider = document_store_provider
+        if llm_provider:
+            self._llm_provider = llm_provider
+        if embedder_provider:
+            self._embedder_provider = embedder_provider
+        if document_store_provider:
+            self._document_store_provider = document_store_provider
         self._components = self._update_components()
 
     def __str__(self):
-        return f"BasicPipeline(llm_provider={self._llm_provider}, embedder_provider={self._embedder_provider})"
+        return f"BasicPipeline(llm_provider={self._llm_provider}, embedder_provider={self._embedder_provider}, document_store_provider={self._document_store_provider})"
 
 
 @dataclass

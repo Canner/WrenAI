@@ -103,7 +103,7 @@ class SqlFunctions(BasicPipeline):
             "ttl_cache": self._cache,
         }
 
-    def update_components(self, document_store_provider: DocumentStoreProvider):
+    def update_components(self, document_store_provider: DocumentStoreProvider, **_):
         self._document_store_provider = document_store_provider
         self._retriever = self._document_store_provider.get_retriever(
             self._document_store_provider.get_store("project_meta")

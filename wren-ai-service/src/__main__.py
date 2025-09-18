@@ -14,6 +14,7 @@ from src.globals import (
     create_service_metadata,
 )
 from src.providers import generate_components
+from src.providers.document_store.qdrant import QdrantProvider
 from src.providers.embedder.litellm import LitellmEmbedderProvider
 from src.providers.llm.litellm import LitellmLLMProvider
 from src.utils import (
@@ -187,6 +188,19 @@ def update_configs(configs_request: Configs):
             )
             for llm_provider in configs_request.providers.llm
         }
+        app.state.instantiated_providers["document_store"]["qdrant"] = QdrantProvider(
+            location=app.state.instantiated_providers["document_store"][
+                "qdrant"
+            ]._location,
+            api_key=app.state.instantiated_providers["document_store"][
+                "qdrant"
+            ]._api_key,
+            timeout=app.state.instantiated_providers["document_store"][
+                "qdrant"
+            ]._timeout,
+            embedding_model_dim=configs_request.providers.embedder[0].dimension,
+            recreate_index=True,
+        )
 
         # override current pipe_components
         for pipe_name, pipe_component in app.state.pipe_components.items():
@@ -194,14 +208,35 @@ def update_configs(configs_request: Configs):
                 pipe_config = configs_request.pipelines[pipe_name]
                 pipe_component.update(pipe_config)
 
-        # changing llm models and embedding models based on configs_request
-        for pipeline_name, pipe_config in configs_request.pipelines.items():
-            for service in app.state.pipe_components[pipeline_name].get("services", []):
-                service._pipelines[pipeline_name].update_components(
-                    llm_provider=app.state.instantiated_providers["llm"][
-                        f"litellm_llm.{pipe_config.llm}"
-                    ]
-                )
+        # updating pipelines
+        for pipeline_name, pipe_components in app.state.pipe_components.items():
+            for service in pipe_components.get("services", []):
+                if pipe_config := configs_request.pipelines.get(pipeline_name):
+                    service._pipelines[pipeline_name].update_components(
+                        llm_provider=app.state.instantiated_providers["llm"][
+                            f"litellm_llm.{pipe_config.llm}"
+                        ]
+                        if pipe_config.llm
+                        else None,
+                        embedder_provider=app.state.instantiated_providers["embedder"][
+                            f"litellm_embedder.{pipe_config.embedder}"
+                        ]
+                        if pipe_config.embedder
+                        else None,
+                    )
+                else:
+                    if service._pipelines[pipeline_name]._document_store_provider:
+                        service._pipelines[pipeline_name].update_components(
+                            llm_provider=service._pipelines[
+                                pipeline_name
+                            ]._llm_provider,
+                            embedder_provider=service._pipelines[
+                                pipeline_name
+                            ]._embedder_provider,
+                            document_store_provider=app.state.instantiated_providers[
+                                "document_store"
+                            ]["qdrant"],
+                        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error updating configs: {e}")
 

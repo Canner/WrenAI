@@ -101,7 +101,7 @@ class PreprocessSqlData(BasicPipeline):
             "context_window_size": self._llm_provider.context_window_size,
         }
 
-    def update_components(self, llm_provider: LLMProvider):
+    def update_components(self, llm_provider: LLMProvider, **_):
         self._llm_provider = llm_provider
         self._configs = self._update_configs()
 

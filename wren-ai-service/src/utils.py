@@ -8,7 +8,7 @@ from typing import Any, Optional
 import requests
 from dotenv import load_dotenv
 from langfuse.decorators import langfuse_context
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from src.config import Settings
 
@@ -242,8 +242,8 @@ class Configs(BaseModel):
             api_base: Optional[str] = None
             api_version: Optional[str] = None
 
-        llm: list[LLMProvider] = Field(default_factory=list)
-        embedder: list[EmbedderProvider] = Field(default_factory=list)
+        llm: list[LLMProvider]
+        embedder: list[EmbedderProvider]
 
     class Pipeline(BaseModel):
         has_db_data_in_llm_prompt: bool
