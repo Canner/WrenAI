@@ -227,20 +227,20 @@ class Configs(BaseModel):
         class LLMProvider(BaseModel):
             model: str
             alias: str
-            api_base: Optional[str]
-            api_version: Optional[str]
             context_window_size: int
             timeout: float = 600
-            kwargs: Optional[dict[str, Any]]
+            api_base: Optional[str] = None
+            api_version: Optional[str] = None
+            kwargs: Optional[dict[str, Any]] = None
 
         class EmbedderProvider(BaseModel):
             model: str
             alias: str
             dimension: int
-            api_base: Optional[str]
-            api_version: Optional[str]
             timeout: float = 600
-            kwargs: Optional[dict[str, Any]]
+            kwargs: Optional[dict[str, Any]] = None
+            api_base: Optional[str] = None
+            api_version: Optional[str] = None
 
         llm: list[LLMProvider] = Field(default_factory=list)
         embedder: list[EmbedderProvider] = Field(default_factory=list)

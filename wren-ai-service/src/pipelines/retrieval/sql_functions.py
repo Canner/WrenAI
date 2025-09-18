@@ -93,14 +93,21 @@ class SqlFunctions(BasicPipeline):
         )
 
         self._description = description
-        self._retriever = document_store_provider.get_retriever(
-            document_store_provider.get_store("project_meta")
+        self._document_store_provider = document_store_provider
+        self._retriever = self._document_store_provider.get_retriever(
+            self._document_store_provider.get_store("project_meta")
         )
         self._cache = TTLCache(maxsize=100, ttl=ttl)
         self._components = {
             "engine": engine,
             "ttl_cache": self._cache,
         }
+
+    def update_components(self, document_store_provider: DocumentStoreProvider):
+        self._document_store_provider = document_store_provider
+        self._retriever = self._document_store_provider.get_retriever(
+            self._document_store_provider.get_store("project_meta")
+        )
 
     @observe(name="SQL Functions Retrieval")
     async def run(

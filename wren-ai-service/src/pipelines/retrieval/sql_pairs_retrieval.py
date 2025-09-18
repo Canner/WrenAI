@@ -127,22 +127,27 @@ class SqlPairsRetrieval(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-        store = document_store_provider.get_store(dataset_name="sql_pairs")
+        self._embedder_provider = embedder_provider
+        self._document_store_provider = document_store_provider
+        self._store = self._document_store_provider.get_store(dataset_name="sql_pairs")
         self._description = description
+        self._components = self._update_components()
 
-        self._components = {
-            "store": store,
-            "embedder": embedder_provider.get_text_embedder(),
-            "retriever": document_store_provider.get_retriever(
-                document_store=store,
+        self._configs = {
+            "sql_pairs_similarity_threshold": sql_pairs_similarity_threshold,
+            "sql_pairs_retrieval_max_size": sql_pairs_retrieval_max_size,
+        }
+
+    def _update_components(self):
+        return {
+            "store": self._store,
+            "embedder": self._embedder_provider.get_text_embedder(),
+            "retriever": self._document_store_provider.get_retriever(
+                document_store=self._store,
             ),
             "score_filter": ScoreFilter(),
             # TODO: add a llm filter to filter out low scoring document, in case ScoreFilter is not accurate enough
             "output_formatter": OutputFormatter(),
-        }
-        self._configs = {
-            "sql_pairs_similarity_threshold": sql_pairs_similarity_threshold,
-            "sql_pairs_retrieval_max_size": sql_pairs_retrieval_max_size,
         }
 
     @observe(name="SqlPairs Retrieval")

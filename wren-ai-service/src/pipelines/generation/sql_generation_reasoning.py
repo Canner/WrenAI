@@ -124,10 +124,6 @@ class SQLGenerationReasoning(BasicPipeline):
             ),
         }
 
-    def update_llm_provider(self, llm_provider: LLMProvider):
-        self._llm_provider = llm_provider
-        self._components = self._update_components()
-
     def _streaming_callback(self, chunk, query_id):
         if query_id not in self._user_queues:
             self._user_queues[query_id] = asyncio.Queue()

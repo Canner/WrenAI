@@ -1,7 +1,7 @@
 from abc import ABCMeta, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from hamilton.async_driver import AsyncDriver
 from hamilton.driver import Driver
@@ -17,6 +17,7 @@ class BasicPipeline(metaclass=ABCMeta):
         self._description = ""
         self._llm_provider = None
         self._embedder_provider = None
+        self._document_store_provider = None
         self._components = {}
 
     @abstractmethod
@@ -26,12 +27,15 @@ class BasicPipeline(metaclass=ABCMeta):
     def _update_components(self) -> dict:
         ...
 
-    def update_llm_provider(self, llm_provider: LLMProvider):
+    def update_components(
+        self,
+        llm_provider: Optional[LLMProvider] = None,
+        embedder_provider: Optional[EmbedderProvider] = None,
+        document_store_provider: Optional[DocumentStoreProvider] = None,
+    ):
         self._llm_provider = llm_provider
-        self._components = self._update_components()
-
-    def update_embedder_provider(self, embedder_provider: EmbedderProvider):
         self._embedder_provider = embedder_provider
+        self._document_store_provider = document_store_provider
         self._components = self._update_components()
 
     def __str__(self):

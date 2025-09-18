@@ -127,23 +127,28 @@ class TableDescription(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-        table_description_store = document_store_provider.get_store(
+        self._embedder_provider = embedder_provider
+        self._document_store_provider = document_store_provider
+        self._table_description_store = self._document_store_provider.get_store(
             dataset_name="table_descriptions"
         )
         self._description = description
 
-        self._components = {
-            "cleaner": DocumentCleaner([table_description_store]),
+        self._components = self._update_components()
+        self._configs = {}
+        self._final = "write"
+
+    def _update_components(self):
+        return {
+            "cleaner": DocumentCleaner([self._table_description_store]),
             "validator": MDLValidator(),
-            "embedder": embedder_provider.get_document_embedder(),
+            "embedder": self._embedder_provider.get_document_embedder(),
             "chunker": TableDescriptionChunker(),
             "writer": AsyncDocumentWriter(
-                document_store=table_description_store,
+                document_store=self._table_description_store,
                 policy=DuplicatePolicy.OVERWRITE,
             ),
         }
-        self._configs = {}
-        self._final = "write"
 
     @observe(name="Table Description Indexing")
     async def run(

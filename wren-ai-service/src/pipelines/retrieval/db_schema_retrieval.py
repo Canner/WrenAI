@@ -508,9 +508,12 @@ class DbSchemaRetrieval(BasicPipeline):
             ),
         }
 
-    def update_llm_provider(self, llm_provider: LLMProvider):
-        self._llm_provider = llm_provider
-        self._components = self._update_components()
+    def update_components(
+        self, llm_provider: LLMProvider, embedder_provider: EmbedderProvider
+    ):
+        super().update_components(
+            llm_provider=llm_provider, embedder_provider=embedder_provider
+        )
         self._configs = self._update_configs()
 
     @observe(name="Ask Retrieval")

@@ -136,15 +136,21 @@ class Instructions(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-        store = document_store_provider.get_store(dataset_name="instructions")
+        self._embedder_provider = embedder_provider
+        self._document_store_provider = document_store_provider
+        self._store = self._document_store_provider.get_store(
+            dataset_name="instructions"
+        )
         self._description = description
+        self._components = self._update_components()
 
-        self._components = {
-            "cleaner": InstructionsCleaner(store),
-            "embedder": embedder_provider.get_document_embedder(),
+    def _update_components(self):
+        return {
+            "cleaner": InstructionsCleaner(self._store),
+            "embedder": self._embedder_provider.get_document_embedder(),
             "document_converter": InstructionsConverter(),
             "writer": AsyncDocumentWriter(
-                document_store=store,
+                document_store=self._store,
                 policy=DuplicatePolicy.OVERWRITE,
             ),
         }

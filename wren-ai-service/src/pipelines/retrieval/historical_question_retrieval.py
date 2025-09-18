@@ -130,24 +130,27 @@ class HistoricalQuestionRetrieval(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-        view_questions_store = document_store_provider.get_store(
+        self._view_questions_store = document_store_provider.get_store(
             dataset_name="view_questions"
         )
+        self._embedder_provider = embedder_provider
+        self._document_store_provider = document_store_provider
         self._description = description
+        self._components = self._update_components()
+        self._configs = {
+            "historical_question_retrieval_similarity_threshold": historical_question_retrieval_similarity_threshold,
+        }
 
-        self._components = {
-            "view_questions_store": view_questions_store,
-            "embedder": embedder_provider.get_text_embedder(),
-            "view_questions_retriever": document_store_provider.get_retriever(
-                document_store=view_questions_store,
+    def _update_components(self):
+        return {
+            "view_questions_store": self._view_questions_store,
+            "embedder": self._embedder_provider.get_text_embedder(),
+            "view_questions_retriever": self._document_store_provider.get_retriever(
+                document_store=self._view_questions_store,
             ),
             "score_filter": ScoreFilter(),
             # TODO: add a llm filter to filter out low scoring document, in case ScoreFilter is not accurate enough
             "output_formatter": OutputFormatter(),
-        }
-
-        self._configs = {
-            "historical_question_retrieval_similarity_threshold": historical_question_retrieval_similarity_threshold,
         }
 
     @observe(name="Historical Question")

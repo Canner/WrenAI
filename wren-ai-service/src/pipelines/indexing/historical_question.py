@@ -145,21 +145,28 @@ class HistoricalQuestion(BasicPipeline):
         )
 
         # keep the store name as it is for now, might change in the future
-        store = document_store_provider.get_store(dataset_name="view_questions")
+        self._embedder_provider = embedder_provider
+        self._document_store_provider = document_store_provider
+        self._store = self._document_store_provider.get_store(
+            dataset_name="view_questions"
+        )
         self._description = description
+        self._components = self._update_components()
 
-        self._components = {
-            "cleaner": DocumentCleaner([store]),
+        self._configs = {}
+        self._final = "write"
+
+    def _update_components(self):
+        return {
+            "cleaner": DocumentCleaner([self._store]),
             "validator": MDLValidator(),
-            "embedder": embedder_provider.get_document_embedder(),
+            "embedder": self._embedder_provider.get_document_embedder(),
             "chunker": ViewChunker(),
             "writer": AsyncDocumentWriter(
-                document_store=store,
+                document_store=self._store,
                 policy=DuplicatePolicy.OVERWRITE,
             ),
         }
-        self._configs = {}
-        self._final = "write"
 
     @observe(name="Historical Question Indexing")
     async def run(

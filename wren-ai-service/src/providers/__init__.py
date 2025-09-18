@@ -378,7 +378,6 @@ def generate_components(configs: list[dict]) -> dict[str, PipelineComponent]:
         }
         for type, configs in config.providers.items()
     }
-    print(f"instantiated_providers: {instantiated_providers}")
 
     def get(type: str, components: dict, instantiated_providers: dict):
         identifier = components.get(type)

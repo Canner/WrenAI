@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse, RedirectResponse
@@ -173,32 +173,37 @@ def get_configs():
 
 @app.post("/configs")
 def update_configs(configs_request: Configs):
-    # override current instantiated_providers
-    app.state.instantiated_providers["embedder"] = {
-        f"litellm_embedder.{embedder_provider.alias}": LitellmEmbedderProvider(
-            **embedder_provider.__dict__
-        )
-        for embedder_provider in configs_request.providers.embedder
-    }
-    app.state.instantiated_providers["llm"] = {
-        f"litellm_llm.{llm_provider.alias}": LitellmLLMProvider(**llm_provider.__dict__)
-        for llm_provider in configs_request.providers.llm
-    }
+    try:
+        # override current instantiated_providers
+        app.state.instantiated_providers["embedder"] = {
+            f"litellm_embedder.{embedder_provider.alias}": LitellmEmbedderProvider(
+                **embedder_provider.__dict__
+            )
+            for embedder_provider in configs_request.providers.embedder
+        }
+        app.state.instantiated_providers["llm"] = {
+            f"litellm_llm.{llm_provider.alias}": LitellmLLMProvider(
+                **llm_provider.__dict__
+            )
+            for llm_provider in configs_request.providers.llm
+        }
 
-    print(f"pipe_components: {app.state.pipe_components}")
+        # override current pipe_components
+        for pipe_name, pipe_component in app.state.pipe_components.items():
+            if pipe_name in configs_request.pipelines:
+                pipe_config = configs_request.pipelines[pipe_name]
+                pipe_component.update(pipe_config)
 
-    # try:
-    #     for payload in pipe_components_request:
-    #         for service in app.state.pipe_components[payload.pipeline_name].get(
-    #             "services", []
-    #         ):
-    #             service._pipelines[payload.pipeline_name].update_llm_provider(
-    #                 app.state.instantiated_providers["llm"][payload.llm_config]
-    #             )
-    # except Exception as e:
-    #     raise HTTPException(
-    #         status_code=500, detail=f"Error updating pipe components: {e}"
-    #     )
+        # changing llm models and embedding models based on configs_request
+        for pipeline_name, pipe_config in configs_request.pipelines.items():
+            for service in app.state.pipe_components[pipeline_name].get("services", []):
+                service._pipelines[pipeline_name].update_components(
+                    llm_provider=app.state.instantiated_providers["llm"][
+                        f"litellm_llm.{pipe_config.llm}"
+                    ]
+                )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating configs: {e}")
 
 
 if __name__ == "__main__":

@@ -176,20 +176,25 @@ class SqlPairs(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-        store = document_store_provider.get_store(dataset_name="sql_pairs")
+        self._embedder_provider = embedder_provider
+        self._document_store_provider = document_store_provider
+        self._store = self._document_store_provider.get_store(dataset_name="sql_pairs")
         self._description = description
 
-        self._components = {
-            "cleaner": SqlPairsCleaner(store),
-            "embedder": embedder_provider.get_document_embedder(),
+        self._components = self._update_components()
+
+        self._external_pairs = _load_sql_pairs(sql_pairs_path)
+
+    def _update_components(self):
+        return {
+            "cleaner": SqlPairsCleaner(self._store),
+            "embedder": self._embedder_provider.get_document_embedder(),
             "document_converter": SqlPairsConverter(),
             "writer": AsyncDocumentWriter(
-                document_store=store,
+                document_store=self._store,
                 policy=DuplicatePolicy.OVERWRITE,
             ),
         }
-
-        self._external_pairs = _load_sql_pairs(sql_pairs_path)
 
     @observe(name="SQL Pairs Indexing")
     async def run(

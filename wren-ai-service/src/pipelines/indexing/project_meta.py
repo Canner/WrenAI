@@ -74,18 +74,24 @@ class ProjectMeta(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-        store = document_store_provider.get_store(dataset_name="project_meta")
+        self._document_store_provider = document_store_provider
+        self._store = self._document_store_provider.get_store(
+            dataset_name="project_meta"
+        )
         self._description = description
 
-        self._components = {
+        self._components = self._update_components()
+        self._final = "write"
+
+    def _update_components(self):
+        return {
             "validator": MDLValidator(),
-            "cleaner": DocumentCleaner([store]),
+            "cleaner": DocumentCleaner([self._store]),
             "writer": AsyncDocumentWriter(
-                document_store=store,
+                document_store=self._store,
                 policy=DuplicatePolicy.OVERWRITE,
             ),
         }
-        self._final = "write"
 
     @observe(name="Project Meta Indexing")
     async def run(

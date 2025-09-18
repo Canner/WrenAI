@@ -196,22 +196,27 @@ class Instructions(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
-        store = document_store_provider.get_store(dataset_name="instructions")
+        self._embedder_provider = embedder_provider
+        self._document_store_provider = document_store_provider
+        self._store = document_store_provider.get_store(dataset_name="instructions")
         self._description = description
 
-        self._components = {
-            "store": store,
-            "embedder": embedder_provider.get_text_embedder(),
-            "retriever": document_store_provider.get_retriever(
-                document_store=store,
+        self._components = self._update_components()
+        self._configs = {
+            "similarity_threshold": similarity_threshold,
+            "top_k": top_k,
+        }
+
+    def _update_components(self):
+        return {
+            "store": self._store,
+            "embedder": self._embedder_provider.get_text_embedder(),
+            "retriever": self._document_store_provider.get_retriever(
+                document_store=self._store,
             ),
             "scope_filter": ScopeFilter(),
             "score_filter": ScoreFilter(),
             "output_formatter": OutputFormatter(),
-        }
-        self._configs = {
-            "similarity_threshold": similarity_threshold,
-            "top_k": top_k,
         }
 
     @observe(name="Instructions Retrieval")
