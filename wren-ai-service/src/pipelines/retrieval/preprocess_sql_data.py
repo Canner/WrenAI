@@ -80,11 +80,13 @@ class PreprocessSqlData(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
+        description: str = "",
         **kwargs,
     ):
         super().__init__(Driver({}, sys.modules[__name__], adapter=base.DictResult()))
 
         self._llm_provider = llm_provider
+        self._description = description
         self._configs = self._update_configs()
 
     def _update_configs(self):

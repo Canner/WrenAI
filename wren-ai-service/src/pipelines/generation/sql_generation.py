@@ -151,6 +151,7 @@ class SQLGeneration(BasicPipeline):
         llm_provider: LLMProvider,
         document_store_provider: DocumentStoreProvider,
         engine: Engine,
+        description: str = "",
         **kwargs,
     ):
         super().__init__(
@@ -162,6 +163,7 @@ class SQLGeneration(BasicPipeline):
         )
         self._llm_provider = llm_provider
         self._engine = engine
+        self._description = description
         self._components = self._update_components()
 
     def _update_components(self):

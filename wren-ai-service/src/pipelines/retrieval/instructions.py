@@ -189,6 +189,7 @@ class Instructions(BasicPipeline):
         document_store_provider: DocumentStoreProvider,
         similarity_threshold: float = 0.7,
         top_k: int = 10,
+        description: str = "",
         **kwargs,
     ) -> None:
         super().__init__(
@@ -196,6 +197,8 @@ class Instructions(BasicPipeline):
         )
 
         store = document_store_provider.get_store(dataset_name="instructions")
+        self._description = description
+
         self._components = {
             "store": store,
             "embedder": embedder_provider.get_text_embedder(),

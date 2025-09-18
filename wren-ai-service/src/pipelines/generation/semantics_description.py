@@ -217,12 +217,18 @@ SEMANTICS_DESCRIPTION_MODEL_KWARGS = {
 
 
 class SemanticsDescription(BasicPipeline):
-    def __init__(self, llm_provider: LLMProvider, **_):
+    def __init__(
+        self,
+        llm_provider: LLMProvider,
+        description: str = "",
+        **_,
+    ):
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
         self._llm_provider = llm_provider
+        self._description = description
         self._components = self._update_components()
         self._final = "output"
 

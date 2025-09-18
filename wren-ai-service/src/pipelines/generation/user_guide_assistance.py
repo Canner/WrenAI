@@ -83,6 +83,7 @@ class UserGuideAssistance(BasicPipeline):
         self,
         llm_provider: LLMProvider,
         wren_ai_docs: list[dict],
+        description: str = "",
         **kwargs,
     ):
         super().__init__(
@@ -91,6 +92,7 @@ class UserGuideAssistance(BasicPipeline):
 
         self._user_queues = {}
         self._llm_provider = llm_provider
+        self._description = description
         self._components = self._update_components()
 
         self._configs = {

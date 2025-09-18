@@ -3,11 +3,12 @@ import logging
 import os
 import re
 from pathlib import Path
+from typing import Any, Optional
 
 import requests
 from dotenv import load_dotenv
 from langfuse.decorators import langfuse_context
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.config import Settings
 
@@ -221,9 +222,38 @@ def extract_braces_content(resp: str) -> str:
     return match.group(1) if match else resp
 
 
-class SinglePipeComponentRequest(BaseModel):
-    pipeline_name: str
-    llm_config: str
+class Configs(BaseModel):
+    class Providers(BaseModel):
+        class LLMProvider(BaseModel):
+            model: str
+            alias: str
+            api_base: Optional[str]
+            api_version: Optional[str]
+            context_window_size: int
+            timeout: float = 600
+            kwargs: Optional[dict[str, Any]]
+
+        class EmbedderProvider(BaseModel):
+            model: str
+            alias: str
+            dimension: int
+            api_base: Optional[str]
+            api_version: Optional[str]
+            timeout: float = 600
+            kwargs: Optional[dict[str, Any]]
+
+        llm: list[LLMProvider] = Field(default_factory=list)
+        embedder: list[EmbedderProvider] = Field(default_factory=list)
+
+    class Pipeline(BaseModel):
+        has_db_data_in_llm_prompt: bool
+        llm: str
+        embedder: str
+        description: str
+
+    env_vars: dict[str, str]
+    providers: Providers
+    pipelines: dict[str, Pipeline]
 
 
 def has_db_data_in_llm_prompt(pipe_name: str) -> bool:

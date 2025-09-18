@@ -344,6 +344,7 @@ class IntentClassification(BasicPipeline):
         wren_ai_docs: list[dict],
         table_retrieval_size: Optional[int] = 50,
         table_column_retrieval_size: Optional[int] = 100,
+        description: str = "",
         **kwargs,
     ):
         super().__init__(
@@ -355,6 +356,7 @@ class IntentClassification(BasicPipeline):
         self._table_column_retrieval_size = table_column_retrieval_size
         self._document_store_provider = document_store_provider
         self._embedder_provider = embedder_provider
+        self._description = description
         self._components = self._update_components()
 
         self._configs = {

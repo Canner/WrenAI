@@ -123,6 +123,7 @@ class ChartGeneration(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
+        description: str = "",
         **kwargs,
     ):
         super().__init__(
@@ -130,6 +131,7 @@ class ChartGeneration(BasicPipeline):
         )
 
         self._llm_provider = llm_provider
+        self._description = description
         self._components = self._update_components()
 
         with open("src/pipelines/generation/utils/vega-lite-schema-v5.json", "r") as f:

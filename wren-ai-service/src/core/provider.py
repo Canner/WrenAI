@@ -28,7 +28,7 @@ class EmbedderProvider(metaclass=ABCMeta):
         ...
 
     def get_model(self):
-        return self._embedding_model
+        return self._model
 
 
 class DocumentStoreProvider(metaclass=ABCMeta):

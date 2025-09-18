@@ -169,6 +169,7 @@ class SqlPairs(BasicPipeline):
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
         sql_pairs_path: str = "sql_pairs.json",
+        description: str = "",
         **kwargs,
     ) -> None:
         super().__init__(
@@ -176,6 +177,7 @@ class SqlPairs(BasicPipeline):
         )
 
         store = document_store_provider.get_store(dataset_name="sql_pairs")
+        self._description = description
 
         self._components = {
             "cleaner": SqlPairsCleaner(store),

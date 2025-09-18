@@ -266,7 +266,6 @@ def create_pipe_components(service_container: ServiceContainer):
     _pipe_components = {}
     for _, service in service_container.__dict__.items():
         for pipe_name, pipe in service._pipelines.items():
-            print(f"pipe_name: {pipe_name}, pipe: {pipe}")
             if pipe_name not in _pipe_components:
                 _pipe_components[pipe_name] = {}
             if hasattr(pipe, "_llm_provider") and pipe._llm_provider is not None:
@@ -284,6 +283,7 @@ def create_pipe_components(service_container: ServiceContainer):
             _pipe_components[pipe_name][
                 "has_db_data_in_llm_prompt"
             ] = has_db_data_in_llm_prompt(pipe_name)
+            _pipe_components[pipe_name]["description"] = pipe._description
 
     return _pipe_components
 

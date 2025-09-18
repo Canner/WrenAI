@@ -14,6 +14,7 @@ from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvid
 class BasicPipeline(metaclass=ABCMeta):
     def __init__(self, pipe: Pipeline | AsyncDriver | Driver):
         self._pipe = pipe
+        self._description = ""
         self._llm_provider = None
         self._embedder_provider = None
         self._components = {}
@@ -39,6 +40,7 @@ class BasicPipeline(metaclass=ABCMeta):
 
 @dataclass
 class PipelineComponent(Mapping):
+    description: str = None
     llm_provider: LLMProvider = None
     embedder_provider: EmbedderProvider = None
     document_store_provider: DocumentStoreProvider = None
@@ -52,3 +54,6 @@ class PipelineComponent(Mapping):
 
     def __len__(self):
         return len(self.__dict__)
+
+    def __str__(self):
+        return f"PipelineComponent(description={self.description}, llm_provider={self.llm_provider}, embedder_provider={self.embedder_provider}, document_store_provider={self.document_store_provider}, engine={self.engine})"

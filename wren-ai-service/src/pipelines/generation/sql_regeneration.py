@@ -155,6 +155,7 @@ class SQLRegeneration(BasicPipeline):
         self,
         llm_provider: LLMProvider,
         engine: Engine,
+        description: str = "",
         **kwargs,
     ):
         super().__init__(
@@ -163,6 +164,7 @@ class SQLRegeneration(BasicPipeline):
 
         self._llm_provider = llm_provider
         self._engine = engine
+        self._description = description
         self._components = self._update_components()
 
     def _update_components(self):

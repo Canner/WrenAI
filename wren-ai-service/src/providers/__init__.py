@@ -107,9 +107,10 @@ def llm_processor(entry: dict) -> dict:
         ]
 
         returned[model_name] = {
-            "provider": entry["provider"],
-            "model": model["model"],
-            "kwargs": model["kwargs"],
+            "provider": entry.get("provider"),
+            "model": model.get("model"),
+            "alias": model.get("alias"),
+            "kwargs": model.get("kwargs"),
             "context_window_size": model.get("context_window_size", 100000),
             "fallback_model_list": fallback_model_list,
             **model_additional_params,
@@ -163,8 +164,9 @@ def embedder_processor(entry: dict) -> dict:
             k: v for k, v in model.items() if k not in ["model", "kwargs", "alias"]
         }
         returned[identifier] = {
-            "provider": entry["provider"],
-            "model": model["model"],
+            "provider": entry.get("provider"),
+            "model": model.get("model"),
+            "alias": model.get("alias"),
             **model_additional_params,
             **others,
         }
@@ -277,6 +279,7 @@ def pipeline_processor(entry: dict) -> dict:
             "embedder": "openai_embedder.text-embedding-3-large",
             "document_store": "qdrant",
             "engine": "wren_ui",
+            "description": "Indexing pipeline",
         }
     }
 
@@ -292,6 +295,7 @@ def pipeline_processor(entry: dict) -> dict:
             "embedder": pipe.get("embedder"),
             "document_store": pipe.get("document_store"),
             "engine": pipe.get("engine"),
+            "description": pipe.get("description"),
         }
         for pipe in entry["pipes"]
     }
@@ -381,6 +385,7 @@ def generate_components(configs: list[dict]) -> dict[str, PipelineComponent]:
 
     def componentize(components: dict, instantiated_providers: dict):
         return PipelineComponent(
+            description=components.get("description", ""),
             embedder_provider=get("embedder", components, instantiated_providers),
             llm_provider=get("llm", components, instantiated_providers),
             document_store_provider=get(

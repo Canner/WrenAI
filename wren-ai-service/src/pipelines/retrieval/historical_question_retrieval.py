@@ -123,6 +123,7 @@ class HistoricalQuestionRetrieval(BasicPipeline):
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
         historical_question_retrieval_similarity_threshold: float = 0.9,
+        description: str = "",
         **kwargs,
     ) -> None:
         super().__init__(
@@ -132,6 +133,8 @@ class HistoricalQuestionRetrieval(BasicPipeline):
         view_questions_store = document_store_provider.get_store(
             dataset_name="view_questions"
         )
+        self._description = description
+
         self._components = {
             "view_questions_store": view_questions_store,
             "embedder": embedder_provider.get_text_embedder(),

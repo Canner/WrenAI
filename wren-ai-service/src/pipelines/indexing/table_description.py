@@ -120,6 +120,7 @@ class TableDescription(BasicPipeline):
         self,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
+        description: str = "",
         **kwargs,
     ) -> None:
         super().__init__(
@@ -129,6 +130,7 @@ class TableDescription(BasicPipeline):
         table_description_store = document_store_provider.get_store(
             dataset_name="table_descriptions"
         )
+        self._description = description
 
         self._components = {
             "cleaner": DocumentCleaner([table_description_store]),

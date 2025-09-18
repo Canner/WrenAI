@@ -67,6 +67,7 @@ class ProjectMeta(BasicPipeline):
     def __init__(
         self,
         document_store_provider: DocumentStoreProvider,
+        description: str = "",
         **kwargs,
     ) -> None:
         super().__init__(
@@ -74,6 +75,7 @@ class ProjectMeta(BasicPipeline):
         )
 
         store = document_store_provider.get_store(dataset_name="project_meta")
+        self._description = description
 
         self._components = {
             "validator": MDLValidator(),

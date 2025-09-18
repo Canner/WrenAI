@@ -457,6 +457,7 @@ class DbSchemaRetrieval(BasicPipeline):
         document_store_provider: DocumentStoreProvider,
         table_retrieval_size: int = 10,
         table_column_retrieval_size: int = 100,
+        description: str = "",
         **kwargs,
     ):
         super().__init__(
@@ -468,6 +469,7 @@ class DbSchemaRetrieval(BasicPipeline):
         self._table_column_retrieval_size = table_column_retrieval_size
         self._document_store_provider = document_store_provider
         self._embedder_provider = embedder_provider
+        self._description = description
         self._components = self._update_components()
         self._configs = self._update_configs()
 

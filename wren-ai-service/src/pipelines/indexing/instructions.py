@@ -129,6 +129,7 @@ class Instructions(BasicPipeline):
         self,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
+        description: str = "",
         **kwargs,
     ) -> None:
         super().__init__(
@@ -136,6 +137,7 @@ class Instructions(BasicPipeline):
         )
 
         store = document_store_provider.get_store(dataset_name="instructions")
+        self._description = description
 
         self._components = {
             "cleaner": InstructionsCleaner(store),

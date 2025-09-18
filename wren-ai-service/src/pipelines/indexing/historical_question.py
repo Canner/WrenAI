@@ -137,6 +137,7 @@ class HistoricalQuestion(BasicPipeline):
         self,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
+        description: str = "",
         **kwargs,
     ) -> None:
         super().__init__(
@@ -145,6 +146,7 @@ class HistoricalQuestion(BasicPipeline):
 
         # keep the store name as it is for now, might change in the future
         store = document_store_provider.get_store(dataset_name="view_questions")
+        self._description = description
 
         self._components = {
             "cleaner": DocumentCleaner([store]),

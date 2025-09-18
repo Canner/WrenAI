@@ -154,6 +154,7 @@ class FollowUpSQLGeneration(BasicPipeline):
         llm_provider: LLMProvider,
         document_store_provider: DocumentStoreProvider,
         engine: Engine,
+        description: str = "",
         **kwargs,
     ):
         super().__init__(
@@ -165,6 +166,7 @@ class FollowUpSQLGeneration(BasicPipeline):
         )
         self._llm_provider = llm_provider
         self._engine = engine
+        self._description = description
         self._components = self._update_components()
 
     def _update_components(self):

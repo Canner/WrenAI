@@ -96,6 +96,7 @@ class SQLQuestion(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
+        description: str = "",
         **kwargs,
     ):
         super().__init__(
@@ -103,6 +104,7 @@ class SQLQuestion(BasicPipeline):
         )
 
         self._llm_provider = llm_provider
+        self._description = description
         self._components = self._update_components()
 
     def _update_components(self):

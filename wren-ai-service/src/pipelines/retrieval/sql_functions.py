@@ -85,12 +85,14 @@ class SqlFunctions(BasicPipeline):
         engine: Engine,
         document_store_provider: DocumentStoreProvider,
         ttl: int = 60 * 60 * 24,
+        description: str = "",
         **kwargs,
     ) -> None:
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
+        self._description = description
         self._retriever = document_store_provider.get_retriever(
             document_store_provider.get_store("project_meta")
         )

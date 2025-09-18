@@ -342,6 +342,7 @@ class DBSchema(BasicPipeline):
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
         column_batch_size: int = 50,
+        description: str = "",
         **kwargs,
     ) -> None:
         super().__init__(
@@ -349,6 +350,7 @@ class DBSchema(BasicPipeline):
         )
 
         dbschema_store = document_store_provider.get_store()
+        self._description = description
 
         self._components = {
             "cleaner": DocumentCleaner([dbschema_store]),

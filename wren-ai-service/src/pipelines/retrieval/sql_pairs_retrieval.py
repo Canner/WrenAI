@@ -120,6 +120,7 @@ class SqlPairsRetrieval(BasicPipeline):
         document_store_provider: DocumentStoreProvider,
         sql_pairs_similarity_threshold: float = 0.7,
         sql_pairs_retrieval_max_size: int = 10,
+        description: str = "",
         **kwargs,
     ) -> None:
         super().__init__(
@@ -127,6 +128,8 @@ class SqlPairsRetrieval(BasicPipeline):
         )
 
         store = document_store_provider.get_store(dataset_name="sql_pairs")
+        self._description = description
+
         self._components = {
             "store": store,
             "embedder": embedder_provider.get_text_embedder(),

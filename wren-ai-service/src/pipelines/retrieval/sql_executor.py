@@ -64,12 +64,14 @@ class SQLExecutor(BasicPipeline):
     def __init__(
         self,
         engine: Engine,
+        description: str = "",
         **kwargs,
     ):
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
+        self._description = description
         self._components = {
             "data_fetcher": DataFetcher(engine=engine),
         }
