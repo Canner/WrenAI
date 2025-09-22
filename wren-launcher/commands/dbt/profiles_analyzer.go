@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strconv"
 
 	"gopkg.in/yaml.v3"
 )
@@ -106,12 +105,6 @@ func parseConnection(connectionMap map[string]interface{}) (*DbtConnection, erro
 				return v
 			case float64:
 				return int(v)
-			case int64:
-				return int(v)
-			case string:
-				if i, err := strconv.Atoi(v); err == nil {
-					return i
-				}
 			}
 		}
 		return 0
@@ -149,14 +142,13 @@ func parseConnection(connectionMap map[string]interface{}) (*DbtConnection, erro
 	connection.SSLMode = getString("sslmode")
 	connection.Path = getString("path")
 	connection.SslDisable = getBool("ssl_disable") // MySQL specific
-	connection.Server = getString("server")
 
 	// Store any additional fields that weren't mapped
 	knownFields := map[string]bool{
 		"type": true, "host": true, "port": true, "user": true, "password": true,
 		"database": true, "dbname": true, "schema": true, "project": true, "dataset": true,
 		"keyfile": true, "account": true, "warehouse": true, "role": true,
-		"keepalive": true, "search_path": true, "sslmode": true, "path": true, "server": true, "ssl_disable": true,
+		"keepalive": true, "search_path": true, "sslmode": true, "path": true, "ssl_disable": true,
 	}
 
 	for key, value := range connectionMap {

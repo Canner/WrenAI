@@ -16,7 +16,6 @@ type DbtProfile struct {
 type DbtConnection struct {
 	Type     string `yaml:"type" json:"type"`
 	Host     string `yaml:"host,omitempty" json:"host,omitempty"`
-	Server   string `yaml:"server,omitempty" json:"server,omitempty"` // MSSQL
 	Port     int    `yaml:"port,omitempty" json:"port,omitempty"`
 	User     string `yaml:"user,omitempty" json:"user,omitempty"`
 	Password string `yaml:"password,omitempty" json:"password,omitempty"`
