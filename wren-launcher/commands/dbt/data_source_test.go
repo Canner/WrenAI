@@ -220,6 +220,73 @@ func TestFromDbtProfiles_UnsupportedType(t *testing.T) {
 	}
 }
 
+func TestFromMssqlProfiles(t *testing.T) {
+	// Test MSSQL connection conversion
+	profiles := &DbtProfiles{
+		Profiles: map[string]DbtProfile{
+			"test_profile": {
+				Target: "dev",
+				Outputs: map[string]DbtConnection{
+					"dev": {
+						Type:     "sqlserver",
+						Server:   testHost,
+						Port:     1433,
+						Database: "test_db",
+						User:     testUser,
+						Password: testPassword,
+					},
+				},
+			},
+		},
+	}
+
+	dataSources, err := FromDbtProfiles(profiles)
+	if err != nil {
+		t.Fatalf("FromDbtProfiles failed: %v", err)
+	}
+
+	if len(dataSources) != 1 {
+		t.Fatalf("Expected 1 data source, got %d", len(dataSources))
+	}
+
+	ds, ok := dataSources[0].(*WrenMSSQLDataSource)
+	if !ok {
+		t.Fatalf("Expected WrenMSSQLDataSource, got %T", dataSources[0])
+	}
+
+	if ds.Host != testHost {
+		t.Errorf("Expected host '%s', got '%s'", testHost, ds.Host)
+	}
+
+	if ds.Port != "1433" {
+		t.Errorf("Expected port 1433, got %s", ds.Port)
+	}
+
+	if ds.Database != "test_db" {
+		t.Errorf("Expected database 'test_db', got '%s'", ds.Database)
+	}
+
+	if ds.User != testUser {
+		t.Errorf("Expected user '%s', got '%s'", testUser, ds.User)
+	}
+
+	if ds.Password != testPassword {
+		t.Errorf("Expected password '%s', got '%s'", testPassword, ds.Password)
+	}
+
+	if ds.TdsVersion != "8.0" {
+		t.Errorf("Expected TDS version '8.0', got '%s'", ds.TdsVersion)
+	}
+
+	if ds.Driver != "ODBC Driver 18 for SQL Server" {
+		t.Errorf("Expected driver 'ODBC Driver 18 for SQL Server', got '%s'", ds.Driver)
+	}
+
+	if ds.Kwargs["TrustServerCertificate"] != "YES" {
+		t.Errorf("Expected TrustServerCertificate 'YES', got '%s'", ds.Kwargs["TrustServerCertificate"])
+	}
+}
+
 func TestFromDbtProfiles_NilProfiles(t *testing.T) {
 	// Test nil profiles
 	_, err := FromDbtProfiles(nil)
@@ -755,6 +822,35 @@ func TestMapType(t *testing.T) {
 			got := tt.dataSource.MapType(tt.sourceType)
 			if got != tt.want {
 				t.Errorf("MapType(%s) = %s; want %s", tt.sourceType, got, tt.want)
+			}
+		})
+	}
+}
+
+// Validator interface for data sources
+type Validator interface {
+	Validate() error
+}
+
+// Helper function to test data source validation
+func testDataSourceValidation(t *testing.T, testName string, validDS Validator, invalidDSCases []struct {
+	name string
+	ds   Validator
+}) {
+	t.Helper()
+
+	t.Run(testName+" valid", func(t *testing.T) {
+		if err := validDS.Validate(); err != nil {
+			t.Errorf("Valid data source validation failed: %v", err)
+
+		}
+	})
+
+	for _, tt := range invalidDSCases {
+		t.Run(testName+" "+tt.name, func(t *testing.T) {
+			if err := tt.ds.Validate(); err == nil {
+				t.Errorf("Expected validation error for %s, but got none", tt.name)
+
 			}
 		})
 	}
