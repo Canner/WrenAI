@@ -537,7 +537,7 @@ func processDbtProject(projectDir string) (string, error) {
 	includeStagingModels, err := askForIncludeStagingModels()
 	if err != nil {
 		pterm.Warning.Println("Could not get staging model preference, defaulting to 'No'.")
-        includeStagingModels = false
+		includeStagingModels = false
 	}
 
 	// Use the core conversion function from dbt package, passing the user's choice
