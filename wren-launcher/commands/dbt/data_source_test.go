@@ -826,3 +826,32 @@ func TestMapType(t *testing.T) {
 		})
 	}
 }
+
+// Validator interface for data sources
+type Validator interface {
+	Validate() error
+}
+
+// Helper function to test data source validation
+func testDataSourceValidation(t *testing.T, testName string, validDS Validator, invalidDSCases []struct {
+	name string
+	ds   Validator
+}) {
+	t.Helper()
+
+	t.Run(testName+" valid", func(t *testing.T) {
+		if err := validDS.Validate(); err != nil {
+			t.Errorf("Valid data source validation failed: %v", err)
+
+		}
+	})
+
+	for _, tt := range invalidDSCases {
+		t.Run(testName+" "+tt.name, func(t *testing.T) {
+			if err := tt.ds.Validate(); err == nil {
+				t.Errorf("Expected validation error for %s, but got none", tt.name)
+
+			}
+		})
+	}
+}
