@@ -1,6 +1,9 @@
 package dbt
 
 import (
+	"encoding/base64"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -81,8 +84,8 @@ func TestFromDbtProfiles_Postgres(t *testing.T) {
 	validatePostgresDataSource(t, ds, "test_db")
 }
 
-func TestFromDbtProfiles_PostgresWithDbName(t *testing.T) {
-	// Test PostgreSQL connection conversion with dbname field (PostgreSQL specific)
+func TestFromDbtProfiles_PostgresWithDefaultPort(t *testing.T) {
+	// Test PostgreSQL connection conversion when port is not specified
 	profiles := &DbtProfiles{
 		Profiles: map[string]DbtProfile{
 			"test_profile": {
@@ -172,7 +175,7 @@ func TestFromDbtProfiles_LocalFile(t *testing.T) {
 		t.Fatalf("Expected WrenLocalFileDataSource, got %T", dataSources[0])
 	}
 
-	if ds.Url != "/abs_path" {
+	if filepath.ToSlash(ds.Url) != "/abs_path" {
 		t.Errorf("Expected url '/abs_path', got '%s'", ds.Url)
 	}
 	if ds.Format != duckdbType {
@@ -225,28 +228,256 @@ func TestFromDbtProfiles_NilProfiles(t *testing.T) {
 	}
 }
 
-// Validator interface for data sources
-type Validator interface {
-	Validate() error
+func TestValidateAllDataSources(t *testing.T) {
+	// Test valid profiles
+	validProfiles := &DbtProfiles{
+		Profiles: map[string]DbtProfile{
+			"valid_project": {
+				Target: "dev",
+				Outputs: map[string]DbtConnection{
+					"dev": {
+						Type:     "postgres",
+						Host:     "localhost",
+						Port:     5432,
+						Database: "test_db",
+						User:     "user",
+					},
+				},
+			},
+		},
+	}
+
+	err := ValidateAllDataSources(validProfiles)
+	if err != nil {
+		t.Errorf("ValidateAllDataSources failed for valid profiles: %v", err)
+	}
+
+	// Test invalid profiles
+	invalidProfiles := &DbtProfiles{
+		Profiles: map[string]DbtProfile{
+			"invalid_project": {
+				Target: "dev",
+				Outputs: map[string]DbtConnection{
+					"dev": {
+						Type: "postgres",
+						Host: "localhost",
+						// Missing required fields
+					},
+				},
+			},
+		},
+	}
+
+	err = ValidateAllDataSources(invalidProfiles)
+	if err == nil {
+		t.Error("ValidateAllDataSources should fail for invalid profiles")
+	}
 }
 
-// Helper function to test data source validation
-func testDataSourceValidation(t *testing.T, testName string, validDS Validator, invalidDSCases []struct {
-	name string
-	ds   Validator
-}) {
-	t.Helper()
+func TestFromDbtProfiles_BigQuery(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "test-dbt-home")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("Failed to remove temporary directory %s: %v", tempDir, err)
+		}
+	}()
 
-	t.Run(testName+" valid", func(t *testing.T) {
-		if err := validDS.Validate(); err != nil {
-			t.Errorf("Valid data source validation failed: %v", err)
+	t.Run("service-account-json", func(t *testing.T) {
+		keyfileContent := `{"type": "service_account", "project_id": "test-project", "private_key_id": "test-key-id", "private_key": "test-private-key", "client_email": "test-client-email", "client_id": "test-client-id", "auth_uri": "test-auth-uri", "token_uri": "test-token-uri", "auth_provider_x509_cert_url": "test-cert-url", "client_x509_cert_url": "test-client-cert-url"}` // #nosec G101
+		profiles := &DbtProfiles{
+			Profiles: map[string]DbtProfile{
+				"test_profile": {
+					Target: "dev",
+					Outputs: map[string]DbtConnection{
+						"dev": {
+							Type:    "bigquery",
+							Method:  "service-account-json",
+							Project: "test-project",
+							Dataset: "test-dataset",
+							Additional: map[string]interface{}{
+								"keyfile_json": keyfileContent,
+							},
+						},
+					},
+				},
+			},
+		}
+
+		dataSources, err := GetActiveDataSources(profiles, "", "test_profile", "dev")
+		if err != nil {
+			t.Fatalf("GetActiveDataSources failed: %v", err)
+		}
+
+		if len(dataSources) != 1 {
+			t.Fatalf("Expected 1 data source, got %d", len(dataSources))
+		}
+
+		ds, ok := dataSources[0].(*WrenBigQueryDataSource)
+		if !ok {
+			t.Fatalf("Expected WrenBigQueryDataSource, got %T", dataSources[0])
+		}
+
+		if ds.Project != "test-project" {
+			t.Errorf("Expected project 'test-project', got '%s'", ds.Project)
+		}
+
+		if ds.Dataset != "test-dataset" {
+			t.Errorf("Expected dataset 'test-dataset', got '%s'", ds.Dataset)
+		}
+
+		encodedContent, _ := base64.StdEncoding.DecodeString(ds.Credentials)
+		if string(encodedContent) != keyfileContent {
+			t.Errorf("Expected base64-encoded keyfile JSON content, got different content")
 		}
 	})
 
-	for _, tt := range invalidDSCases {
-		t.Run(testName+" "+tt.name, func(t *testing.T) {
-			if err := tt.ds.Validate(); err == nil {
-				t.Errorf("Expected validation error for %s, but got none", tt.name)
+	t.Run("service-account-with-absolute-keyfile-path", func(t *testing.T) {
+		keyfileContent := `{"type": "service_account"}` // #nosec G101
+		keyfilePath := filepath.Join(tempDir, "keyfile.json")
+		if err := os.WriteFile(keyfilePath, []byte(keyfileContent), 0600); err != nil {
+			t.Fatal(err)
+		}
+
+		profiles := &DbtProfiles{
+			Profiles: map[string]DbtProfile{
+				"test_profile": {
+					Target: "dev",
+					Outputs: map[string]DbtConnection{
+						"dev": {
+							Type:    "bigquery",
+							Method:  "service-account",
+							Project: "test-project",
+							Dataset: "test-dataset",
+							Keyfile: keyfilePath,
+						},
+					},
+				},
+			},
+		}
+
+		dataSources, err := GetActiveDataSources(profiles, "", "test_profile", "dev")
+		if err != nil {
+			t.Fatalf("GetActiveDataSources failed: %v", err)
+		}
+
+		if len(dataSources) != 1 {
+			t.Fatalf("Expected 1 data source, got %d", len(dataSources))
+		}
+
+		ds, ok := dataSources[0].(*WrenBigQueryDataSource)
+		if !ok {
+			t.Fatalf("Expected WrenBigQueryDataSource, got %T", dataSources[0])
+		}
+
+		encodedContent, _ := base64.StdEncoding.DecodeString(ds.Credentials)
+		if string(encodedContent) != keyfileContent {
+			t.Errorf("Expected base64-encoded keyfile content, got different content")
+		}
+	})
+
+	t.Run("service-account-with-relative-keyfile-path", func(t *testing.T) {
+		dbtHomePath := tempDir
+		keyfileContent := `{"type": "service_account"}` // #nosec G101
+		keyfilePath := "keys/keyfile.json"
+		fullKeyfilePath := filepath.Join(dbtHomePath, keyfilePath)
+
+		if err := os.MkdirAll(filepath.Dir(fullKeyfilePath), 0750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(fullKeyfilePath, []byte(keyfileContent), 0600); err != nil {
+			t.Fatal(err)
+		}
+
+		profiles := &DbtProfiles{
+			Profiles: map[string]DbtProfile{
+				"test_profile": {
+					Target: "dev",
+					Outputs: map[string]DbtConnection{
+						"dev": {
+							Type:    "bigquery",
+							Method:  "service-account",
+							Project: "test-project",
+							Dataset: "test-dataset",
+							Keyfile: keyfilePath,
+						},
+					},
+				},
+			},
+		}
+
+		dataSources, err := GetActiveDataSources(profiles, dbtHomePath, "test_profile", "dev")
+		if err != nil {
+			t.Fatalf("GetActiveDataSources failed: %v", err)
+		}
+
+		if len(dataSources) != 1 {
+			t.Fatalf("Expected 1 data source, got %d", len(dataSources))
+		}
+
+		ds, ok := dataSources[0].(*WrenBigQueryDataSource)
+		if !ok {
+			t.Fatalf("Expected WrenBigQueryDataSource, got %T", dataSources[0])
+		}
+
+		encodedContent, _ := base64.StdEncoding.DecodeString(ds.Credentials)
+		if string(encodedContent) != keyfileContent {
+			t.Errorf("Expected base64-encoded keyfile content, got different content")
+		}
+	})
+}
+
+func TestBigQueryDataSourceValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		ds      *WrenBigQueryDataSource
+		wantErr bool
+	}{
+		{
+			name: "valid",
+			ds: &WrenBigQueryDataSource{
+				Project:     "test-project",
+				Dataset:     "test-dataset",
+				Credentials: "dGVzdC1jcmVkZW50aWFscw==", // "test-credentials"
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid - missing project",
+			ds: &WrenBigQueryDataSource{
+				Project:     "",
+				Dataset:     "test-dataset",
+				Credentials: "dGVzdC1jcmVkZW50aWFscw==",
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid - missing dataset",
+			ds: &WrenBigQueryDataSource{
+				Project:     "test-project",
+				Dataset:     "",
+				Credentials: "dGVzdC1jcmVkZW50aWFscw==",
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid - missing credentials",
+			ds: &WrenBigQueryDataSource{
+				Project:     "test-project",
+				Dataset:     "test-dataset",
+				Credentials: "",
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.ds.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
@@ -474,48 +705,57 @@ func TestGetDataSourceByType(t *testing.T) {
 	}
 }
 
-func TestValidateAllDataSources(t *testing.T) {
-	// Test valid profiles
-	validProfiles := &DbtProfiles{
-		Profiles: map[string]DbtProfile{
-			"valid_project": {
-				Target: "dev",
-				Outputs: map[string]DbtConnection{
-					"dev": {
-						Type:     "postgres",
-						Host:     "localhost",
-						Port:     5432,
-						Database: "test_db",
-						User:     "user",
-					},
-				},
-			},
+func TestMapType(t *testing.T) {
+	tests := []struct {
+		name       string
+		dataSource DataSource
+		sourceType string
+		want       string
+	}{
+		{
+			name:       "BigQuery INT64 to integer",
+			dataSource: &WrenBigQueryDataSource{},
+			sourceType: "INT64",
+			want:       "integer",
+		},
+		{
+			name:       "BigQuery STRING to varchar",
+			dataSource: &WrenBigQueryDataSource{},
+			sourceType: "STRING",
+			want:       "varchar",
+		},
+		{
+			name:       "LocalFile INTEGER to integer",
+			dataSource: &WrenLocalFileDataSource{},
+			sourceType: "INTEGER",
+			want:       "integer",
+		},
+		{
+			name:       "LocalFile VARCHAR to varchar",
+			dataSource: &WrenLocalFileDataSource{},
+			sourceType: "VARCHAR",
+			want:       "varchar",
+		},
+		{
+			name:       "DefaultDataSource int to integer",
+			dataSource: &DefaultDataSource{},
+			sourceType: "int",
+			want:       "integer",
+		},
+		{
+			name:       "PostgresDataSource (no mapping)",
+			dataSource: &WrenPostgresDataSource{},
+			sourceType: "unknown_type",
+			want:       "unknown_type",
 		},
 	}
 
-	err := ValidateAllDataSources(validProfiles)
-	if err != nil {
-		t.Errorf("ValidateAllDataSources failed for valid profiles: %v", err)
-	}
-
-	// Test invalid profiles
-	invalidProfiles := &DbtProfiles{
-		Profiles: map[string]DbtProfile{
-			"invalid_project": {
-				Target: "dev",
-				Outputs: map[string]DbtConnection{
-					"dev": {
-						Type: "postgres",
-						Host: "localhost",
-						// Missing required fields
-					},
-				},
-			},
-		},
-	}
-
-	err = ValidateAllDataSources(invalidProfiles)
-	if err == nil {
-		t.Error("ValidateAllDataSources should fail for invalid profiles")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.dataSource.MapType(tt.sourceType)
+			if got != tt.want {
+				t.Errorf("MapType(%s) = %s; want %s", tt.sourceType, got, tt.want)
+			}
+		})
 	}
 }

@@ -2,12 +2,20 @@ package dbt
 
 // WrenMDLManifest represents the complete Wren MDL structure
 type WrenMDLManifest struct {
-	Catalog       string         `json:"catalog"`
-	Schema        string         `json:"schema"`
-	Models        []WrenModel    `json:"models"`
-	Relationships []Relationship `json:"relationships"`
-	Views         []View         `json:"views"`
-	DataSources   string         `json:"dataSources,omitempty"`
+	Catalog         string           `json:"catalog"`
+	Schema          string           `json:"schema"`
+	EnumDefinitions []EnumDefinition `json:"enumDefinitions,omitempty"`
+	Models          []WrenModel      `json:"models"`
+	Relationships   []Relationship   `json:"relationships"`
+	Metrics         []Metric         `json:"metrics,omitempty"`
+	Views           []View           `json:"views"`
+	DataSources     string           `json:"dataSources,omitempty"`
+}
+
+// EnumDefinition represents a named list of values that can be used by columns.
+type EnumDefinition struct {
+	Name   string   `json:"name"`
+	Values []string `json:"values"`
 }
 
 // WrenModel represents a model in the Wren MDL format
@@ -31,7 +39,9 @@ type TableReference struct {
 // WrenColumn represents a column in the Wren MDL format
 type WrenColumn struct {
 	Name         string            `json:"name"`
+	DisplayName  string            `json:"displayName,omitempty"`
 	Type         string            `json:"type"`
+	Enum         string            `json:"enum,omitempty"`
 	Relationship string            `json:"relationship,omitempty"`
 	IsCalculated bool              `json:"isCalculated,omitempty"`
 	NotNull      bool              `json:"notNull,omitempty"`
@@ -46,6 +56,16 @@ type Relationship struct {
 	JoinType   string            `json:"joinType"`
 	Condition  string            `json:"condition"`
 	Properties map[string]string `json:"properties,omitempty"`
+}
+
+// Metric defines a business-level calculation in Wren MDL.
+type Metric struct {
+	Name        string   `json:"name"`
+	Models      []string `json:"models"`
+	Dimensions  []string `json:"dimensions"`
+	Aggregation string   `json:"aggregation"`
+	DisplayName string   `json:"displayName"`
+	Description string   `json:"description,omitempty"`
 }
 
 // View represents a view in the Wren MDL format
