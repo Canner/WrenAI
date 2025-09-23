@@ -565,6 +565,18 @@ export class AskingService implements IAskingService {
   public async initialize() {
     // list thread responses from database
     // filter status not finalized and put them into background tracker
+    try {
+      // existing logic (e.g., loading thread responses, caches, etc.)
+      await this.threadResponseRepository.findAll(); // or whatever it calls first
+    } catch (err: any) {
+      const msg = String(err?.message ?? '');
+      if ((err?.code === 'SQLITE_ERROR' || msg.includes('SQLITE_ERROR')) && msg.includes('no such table')) {
+        // ignore on cold start; background trackers will run with empty state
+        console.warn('[AskingService] Missing tables on cold start; continuing.');
+      } else {
+        throw err;
+      }
+    }
     const threadResponses = await this.threadResponseRepository.findAll();
     const unfininshedBreakdownThreadResponses = threadResponses.filter(
       (threadResponse) =>

@@ -1,0 +1,33 @@
+services:
+  java-engine:
+    image: ghcr.io/canner/wren-engine:latest
+    container_name: wren-java-engine
+    ports: ["8080:8080"]
+    environment:
+      MAX_HEAP_SIZE: 819m
+      MIN_HEAP_SIZE: 819m
+
+  ibis-server:
+    image: ghcr.io/canner/wren-engine-ibis:latest
+    container_name: wren-ibis
+    ports: ["8000:8000"]
+    environment:
+      WREN_ENGINE_ENDPOINT: http://java-engine:8080
+    depends_on: [java-engine]
+
+  wren-ai-service:
+    build: ./wren-ai-service
+    container_name: wren-ai-service
+    ports: ["7001:7000"]
+    env_file: [.env]
+    depends_on: [ibis-server]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  wren-ui:
+    build: ./wren-ui
+    container_name: wren-ui
+    ports: ["3000:3000"]
+    environment:
+      WREN_API_BASE: http://wren-ai-service:7000
+    depends_on: [wren-ai-service]

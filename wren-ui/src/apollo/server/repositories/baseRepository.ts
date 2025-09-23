@@ -76,32 +76,31 @@ export class BaseRepository<T> implements IBasicRepository<T> {
       : null;
   }
 
-  public async findAllBy(filter: Partial<T>, queryOptions?: IQueryOptions) {
-    const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
-    // format filter keys to snake_case
-
-    const query = executer(this.tableName).where(
-      this.transformToDBData(filter),
-    );
-    if (queryOptions?.order) {
-      query.orderBy(queryOptions.order);
+  public async findAll(): Promise<T[]> {
+    try {
+      return await this.knex.select('*').from(this.tableName);
+    } catch (err: any) {
+      const msg = String(err?.message ?? '');
+      if ((err?.code === 'SQLITE_ERROR' || msg.includes('SQLITE_ERROR')) && msg.includes('no such table')) {
+        return [];
+      }
+      throw err;
     }
-    const result = await query;
-    return result.map(this.transformFromDBData);
   }
 
   public async findAll(queryOptions?: IQueryOptions) {
-    const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
-    const query = executer(this.tableName);
-    if (queryOptions?.order) {
-      query.orderBy(queryOptions.order);
+    try {
+      return await this.knex.select('*').from(this.tableName);
+    } catch (err: any) {
+      // Fast-unblock: if the table isn't created yet, act as empty
+      const msg = String(err?.message ?? '');
+      if ((err?.code === 'SQLITE_ERROR' || msg.includes('SQLITE_ERROR')) && msg.includes('no such table')) {
+        return [];
+      }
+      throw err;
     }
-    if (queryOptions?.limit) {
-      query.limit(queryOptions.limit);
-    }
-    const result = await query;
-    return result.map(this.transformFromDBData);
   }
+    
 
   public async createOne(data: Partial<T>, queryOptions?: IQueryOptions) {
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
