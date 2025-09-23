@@ -1,7 +1,10 @@
 package dbt
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -11,13 +14,22 @@ import (
 
 // Constants for data types
 const (
-	integerType   = "integer"
-	varcharType   = "varchar"
-	dateType      = "date"
-	timestampType = "timestamp"
-	doubleType    = "double"
-	booleanType   = "boolean"
-	postgresType  = "postgres"
+	integerType     = "integer"
+	smallintType    = "smallint"
+	bigintType      = "bigint"
+	floatType       = "float"
+	decimalType     = "decimal"
+	varcharType     = "varchar"
+	charType        = "char"
+	textType        = "text"
+	dateType        = "date"
+	timestampType   = "timestamp"
+	timestamptzType = "timestamptz"
+	doubleType      = "double"
+	booleanType     = "boolean"
+	jsonType        = "json"
+	intervalType    = "interval"
+	postgresType    = "postgres"
 )
 
 // Constants for SQL data types
@@ -79,8 +91,13 @@ func convertConnectionToDataSource(conn DbtConnection, dbtHomePath, profileName,
 		return convertToPostgresDataSource(conn)
 	case "duckdb":
 		return convertToLocalFileDataSource(conn, dbtHomePath)
+	case "sqlserver":
+		return convertToMSSQLDataSource(conn)
 	case "mysql":
 		return convertToMysqlDataSource(conn)
+	case "bigquery":
+		// Pass the dbtHomePath to the BigQuery converter
+		return convertToBigQueryDataSource(conn, dbtHomePath)
 	default:
 		// For unsupported database types, we can choose to ignore or return error
 		// Here we choose to return nil and log a warning
@@ -109,6 +126,26 @@ func convertToPostgresDataSource(conn DbtConnection) (*WrenPostgresDataSource, e
 		Database: dbName,
 		User:     conn.User,
 		Password: conn.Password,
+	}
+
+	return ds, nil
+}
+
+func convertToMSSQLDataSource(conn DbtConnection) (*WrenMSSQLDataSource, error) {
+	port := strconv.Itoa(conn.Port)
+	if conn.Port == 0 {
+		port = "1433"
+	}
+
+	ds := &WrenMSSQLDataSource{
+		Database:   conn.Database,
+		Host:       conn.Server,
+		Port:       port,
+		User:       conn.User,
+		Password:   conn.Password,
+		TdsVersion: "8.0",                           // the default tds version for Wren engine image
+		Driver:     "ODBC Driver 18 for SQL Server", // the driver used by Wren engine image
+		Kwargs:     map[string]interface{}{"TrustServerCertificate": "YES"},
 	}
 
 	return ds, nil
@@ -175,6 +212,97 @@ func convertToMysqlDataSource(conn DbtConnection) (*WrenMysqlDataSource, error) 
 		SslMode:  sslMode,
 	}
 
+	return ds, nil
+}
+
+// convertToBigQueryDataSource converts to BigQuery data source
+func convertToBigQueryDataSource(conn DbtConnection, dbtHomePath string) (*WrenBigQueryDataSource, error) {
+	method := strings.ToLower(strings.TrimSpace(conn.Method))
+	var credentials string
+
+	// Helper: validate JSON and base64 encode
+	encodeJSON := func(b []byte) (string, error) {
+		var js map[string]interface{}
+		if err := json.Unmarshal(b, &js); err != nil {
+			return "", fmt.Errorf("service account JSON is invalid: %w", err)
+		}
+		return base64.StdEncoding.EncodeToString(b), nil
+	}
+
+	switch method {
+	case "service-account-json":
+		// Extract inline JSON from Additional["keyfile_json"]
+		var keyfileJSON string
+		if kfj, exists := conn.Additional["keyfile_json"]; exists {
+			if kfjStr, ok := kfj.(string); ok {
+				keyfileJSON = kfjStr
+			}
+		}
+		if keyfileJSON == "" {
+			return nil, fmt.Errorf("bigquery: method 'service-account-json' requires 'keyfile_json'")
+		}
+		enc, err := encodeJSON([]byte(keyfileJSON))
+		if err != nil {
+			return nil, err
+		}
+		credentials = enc
+	case "service-account", "":
+		// Prefer structured field; fall back to Additional["keyfile"]
+		keyfilePath := strings.TrimSpace(conn.Keyfile)
+		if keyfilePath == "" {
+			if kf, ok := conn.Additional["keyfile"]; ok {
+				if kfStr, ok := kf.(string); ok {
+					keyfilePath = strings.TrimSpace(kfStr)
+				}
+			}
+		}
+		if keyfilePath == "" {
+			// If method was omitted (""), try as a fallback to inline json
+			if kfj, ok := conn.Additional["keyfile_json"]; ok {
+				if kfjStr, ok := kfj.(string); ok && kfjStr != "" {
+					enc, err := encodeJSON([]byte(kfjStr))
+					if err != nil {
+						return nil, err
+					}
+					credentials = enc
+				}
+			}
+			if credentials == "" {
+				return nil, fmt.Errorf("bigquery: method 'service-account' requires 'keyfile' path")
+			}
+		} else {
+			// If keyfile path is not absolute, join it
+			// with the dbt project's home directory path.
+			resolvedKeyfilePath := keyfilePath
+			if !filepath.IsAbs(keyfilePath) && dbtHomePath != "" {
+				resolvedKeyfilePath = filepath.Join(dbtHomePath, keyfilePath)
+			}
+
+			cleanPath := filepath.Clean(resolvedKeyfilePath)
+			b, err := os.ReadFile(cleanPath)
+			if err != nil {
+				// Update the error message to show the path that was attempted
+				return nil, fmt.Errorf("failed to read keyfile '%s': %w", cleanPath, err)
+			}
+			enc, err := encodeJSON(b)
+			if err != nil {
+				return nil, err
+			}
+			credentials = enc
+		}
+	case "oauth":
+		pterm.Warning.Println("bigquery: oauth auth method is not supported; skipping data source")
+		return nil, nil
+	default:
+		pterm.Warning.Printf("bigquery: unsupported auth method '%s'; supported: service-account, service-account-json\n", method)
+		return nil, nil
+	}
+
+	ds := &WrenBigQueryDataSource{
+		Project:     conn.Project,
+		Dataset:     conn.Dataset,
+		Credentials: credentials,
+	}
 	return ds, nil
 }
 
@@ -264,6 +392,85 @@ func (ds *WrenPostgresDataSource) MapType(sourceType string) string {
 	return sourceType
 }
 
+type WrenMSSQLDataSource struct {
+	Database   string                 `json:"database"`
+	Host       string                 `json:"host"`
+	Port       string                 `json:"port"`
+	User       string                 `json:"user"`
+	Password   string                 `json:"password"`
+	TdsVersion string                 `json:"tds_version"`
+	Driver     string                 `json:"driver"`
+	Kwargs     map[string]interface{} `json:"kwargs"`
+}
+
+func (ds *WrenMSSQLDataSource) GetType() string {
+	return "mssql"
+}
+
+func (ds *WrenMSSQLDataSource) Validate() error {
+	if ds.Host == "" {
+		return fmt.Errorf("host cannot be empty")
+	}
+	if ds.Database == "" {
+		return fmt.Errorf("database cannot be empty")
+	}
+	if ds.User == "" {
+		return fmt.Errorf("user cannot be empty")
+	}
+	if ds.Port == "" {
+		return fmt.Errorf("port must be specified")
+	}
+	port, err := strconv.Atoi(ds.Port)
+	if err != nil {
+		return fmt.Errorf("port must be a valid number")
+	}
+	if port <= 0 || port > 65535 {
+		return fmt.Errorf("port must be between 1 and 65535")
+	}
+	if ds.Password == "" {
+		return fmt.Errorf("password cannot be empty")
+	}
+	return nil
+}
+
+func (ds *WrenMSSQLDataSource) MapType(sourceType string) string {
+	// This method is not used in WrenMSSQLDataSource, but required by DataSource interface
+	switch strings.ToLower(sourceType) {
+	case charType, "nchar":
+		return charType
+	case varcharType, "nvarchar":
+		return varcharType
+	case textType, "ntext":
+		return textType
+	case "bit", "tinyint":
+		return booleanType
+	case "smallint":
+		return smallintType
+	case "int":
+		return integerType
+	case "bigint":
+		return bigintType
+	case booleanType:
+		return booleanType
+	case "float", "real":
+		return floatType
+	case "decimal", "numeric", "money", "smallmoney":
+		return decimalType
+	case "date":
+		return dateType
+	case "datetime", "datetime2", "smalldatetime":
+		return timestampType
+	case "time":
+		return intervalType
+	case "datetimeoffset":
+		return timestamptzType
+	case "json":
+		return jsonType
+	default:
+		return strings.ToLower(sourceType)
+	}
+}
+
 type WrenMysqlDataSource struct {
 	Database string `json:"database"`
 	Host     string `json:"host"`
@@ -337,6 +544,57 @@ func (ds *WrenMysqlDataSource) MapType(sourceType string) string {
 		return "JSON"
 	default:
 		// Return the original type if no mapping is found
+		return strings.ToLower(sourceType)
+	}
+}
+
+type WrenBigQueryDataSource struct {
+	Project     string `json:"project_id"`
+	Dataset     string `json:"dataset_id"`
+	Credentials string `json:"credentials"`
+}
+
+// GetType implements DataSource interface
+func (ds *WrenBigQueryDataSource) GetType() string {
+	return "bigquery"
+}
+
+// Validate implements DataSource interface
+func (ds *WrenBigQueryDataSource) Validate() error {
+	if strings.TrimSpace(ds.Project) == "" {
+		return fmt.Errorf("project_id cannot be empty")
+	}
+	if strings.TrimSpace(ds.Dataset) == "" {
+		return fmt.Errorf("dataset_id cannot be empty")
+	}
+	if strings.TrimSpace(ds.Credentials) == "" {
+		return fmt.Errorf("credentials cannot be empty")
+	}
+	return nil
+}
+
+// MapType implements DataSource interface
+func (ds *WrenBigQueryDataSource) MapType(sourceType string) string {
+	switch strings.ToUpper(sourceType) {
+	case "INT64", "INTEGER":
+		return integerType
+	case "FLOAT64", "FLOAT":
+		return doubleType
+	case "STRING":
+		return varcharType
+	case "BOOL", "BOOLEAN":
+		return booleanType
+	case "DATE":
+		return dateType
+	case "TIMESTAMP", "DATETIME":
+		return timestampType
+	case "NUMERIC", "DECIMAL", "BIGNUMERIC":
+		return doubleType
+	case "BYTES":
+		return varcharType
+	case "JSON":
+		return varcharType
+	default:
 		return strings.ToLower(sourceType)
 	}
 }

@@ -16,6 +16,7 @@ type DbtProfile struct {
 type DbtConnection struct {
 	Type     string `yaml:"type" json:"type"`
 	Host     string `yaml:"host,omitempty" json:"host,omitempty"`
+	Server   string `yaml:"server,omitempty" json:"server,omitempty"` // MSSQL
 	Port     int    `yaml:"port,omitempty" json:"port,omitempty"`
 	User     string `yaml:"user,omitempty" json:"user,omitempty"`
 	Password string `yaml:"password,omitempty" json:"password,omitempty"`
@@ -26,6 +27,7 @@ type DbtConnection struct {
 	Project   string `yaml:"project,omitempty" json:"project,omitempty"`     // BigQuery
 	Dataset   string `yaml:"dataset,omitempty" json:"dataset,omitempty"`     // BigQuery
 	Keyfile   string `yaml:"keyfile,omitempty" json:"keyfile,omitempty"`     // BigQuery
+	Method    string `yaml:"method,omitempty" json:"method,omitempty"`       // BigQuery
 	Account   string `yaml:"account,omitempty" json:"account,omitempty"`     // Snowflake
 	Warehouse string `yaml:"warehouse,omitempty" json:"warehouse,omitempty"` // Snowflake
 	Role      string `yaml:"role,omitempty" json:"role,omitempty"`           // Snowflake
