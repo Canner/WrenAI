@@ -72,7 +72,7 @@ Using Wren AI is super simple, you can set it up within 3 minutes, and start to 
 ## 🏗️ Architecture
 
 <p align="center">
-  <img src="./misc/how_wrenai_works.png">
+  <img width="1011" height="682" alt="wrenai-architecture" src="https://github.com/user-attachments/assets/e99b999f-9912-4fa7-921a-9c86b6b83354" />
 </p>
 
 👉 [Learn more about our Design](https://getwren.ai/post/how-we-design-our-semantic-engine-for-llms-the-backbone-of-the-semantic-layer-for-llm-architecture?utm_source=github&utm_medium=content&utm_campaign=readme)
