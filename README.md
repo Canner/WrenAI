@@ -37,9 +37,9 @@
 > Wren AI is your GenBI Agent, that you can query any database with natural language → get accurate SQL(Text-to-SQL), charts(Text-to-Charts) & AI-generated insights in seconds. ⚡️
 
 <p align="center">
-  <img src="./misc/workflow.png">
+  <img width="1920" height="1080" alt="1" src="https://github.com/user-attachments/assets/bba9d37a-33e3-49ab-b7cb-32fd6dddc8d1" />
 </p>
-
+ 
 ## 😍 Demos
 
 https://github.com/user-attachments/assets/f9c1cb34-5a95-4580-8890-ec9644da4160
@@ -72,6 +72,8 @@ Using Wren AI is super simple, you can set it up within 3 minutes, and start to 
 </p>
 
 👉 [Learn more about our Design](https://getwren.ai/post/how-we-design-our-semantic-engine-for-llms-the-backbone-of-the-semantic-layer-for-llm-architecture?utm_source=github&utm_medium=content&utm_campaign=readme)
+
+<img width="1920" height="1080" alt="2" src="https://github.com/user-attachments/assets/6555f539-9ef2-485d-9135-0071741fda96" />
 
 
 ## 🔌 Data Sources
