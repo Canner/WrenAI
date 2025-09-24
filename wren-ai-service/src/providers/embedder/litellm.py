@@ -36,15 +36,17 @@ class AsyncTextEmbedder:
         self,
         model: str,
         api_key: Optional[str] = None,
-        api_base_url: Optional[str] = None,
+        api_base: Optional[str] = None,
+        api_version: Optional[str] = None,
         timeout: Optional[float] = None,
         **kwargs,
     ):
         self._api_key = api_key
         self._model = model
-        self._api_base_url = api_base_url
+        self._api_base = api_base
+        self._api_version = api_version
         self._timeout = timeout
-        self._kwargs = kwargs
+        self._model_kwargs = kwargs
 
     @component.output_types(embedding=List[float], meta=Dict[str, Any])
     @backoff.on_exception(backoff.expo, openai.APIError, max_time=60.0, max_tries=3)
@@ -63,9 +65,10 @@ class AsyncTextEmbedder:
             model=self._model,
             input=[text_to_embed],
             api_key=self._api_key,
-            api_base=self._api_base_url,
+            api_base=self._api_base,
+            api_version=self._api_version,
             timeout=self._timeout,
-            **self._kwargs,
+            **self._model_kwargs,
         )
 
         meta = {
@@ -83,16 +86,18 @@ class AsyncDocumentEmbedder:
         model: str,
         batch_size: int = 32,
         api_key: Optional[str] = None,
-        api_base_url: Optional[str] = None,
+        api_base: Optional[str] = None,
+        api_version: Optional[str] = None,
         timeout: Optional[float] = None,
         **kwargs,
     ):
         self._api_key = api_key
         self._model = model
         self._batch_size = batch_size
-        self._api_base_url = api_base_url
+        self._api_base = api_base
+        self._api_version = api_version
         self._timeout = timeout
-        self._kwargs = kwargs
+        self._model_kwargs = kwargs
 
     async def _embed_batch(
         self, texts_to_embed: List[str], batch_size: int
@@ -102,9 +107,10 @@ class AsyncDocumentEmbedder:
                 model=self._model,
                 input=batch,
                 api_key=self._api_key,
-                api_base=self._api_base_url,
+                api_base=self._api_base,
+                api_version=self._api_version,
                 timeout=self._timeout,
-                **self._kwargs,
+                **self._model_kwargs,
             )
 
         batches = [
@@ -171,31 +177,37 @@ class LitellmEmbedderProvider(EmbedderProvider):
             str
         ] = None,  # e.g. EMBEDDER_OPENAI_API_KEY, EMBEDDER_ANTHROPIC_API_KEY, etc.
         api_base: Optional[str] = None,
+        api_version: Optional[str] = None,
+        alias: Optional[str] = None,
         timeout: float = 120.0,
         **kwargs,
     ):
         self._api_key = os.getenv(api_key_name) if api_key_name else None
         self._api_base = remove_trailing_slash(api_base) if api_base else None
-        self._embedding_model = model
+        self._api_version = api_version
+        self._model = model
+        self._alias = alias
         self._timeout = timeout
         if "provider" in kwargs:
             del kwargs["provider"]
-        self._kwargs = kwargs
+        self._model_kwargs = kwargs
 
     def get_text_embedder(self):
         return AsyncTextEmbedder(
             api_key=self._api_key,
             api_base_url=self._api_base,
-            model=self._embedding_model,
+            api_version=self._api_version,
+            model=self._model,
             timeout=self._timeout,
-            **self._kwargs,
+            **self._model_kwargs,
         )
 
     def get_document_embedder(self):
         return AsyncDocumentEmbedder(
             api_key=self._api_key,
-            api_base_url=self._api_base,
-            model=self._embedding_model,
+            api_base=self._api_base,
+            api_version=self._api_version,
+            model=self._model,
             timeout=self._timeout,
-            **self._kwargs,
+            **self._model_kwargs,
         )

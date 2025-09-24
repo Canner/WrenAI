@@ -29,6 +29,7 @@ class LitellmLLMProvider(LLMProvider):
         ] = None,  # e.g. OPENAI_API_KEY, LLM_ANTHROPIC_API_KEY, etc.
         api_base: Optional[str] = None,
         api_version: Optional[str] = None,
+        alias: Optional[str] = None,
         kwargs: Optional[Dict[str, Any]] = None,
         timeout: float = 120.0,
         context_window_size: int = 100000,
@@ -37,7 +38,8 @@ class LitellmLLMProvider(LLMProvider):
         **_,
     ):
         self._model = model
-        # TODO: remove _api_key, _api_base, _api_version in the future, as it is not used in litellm
+        self._alias = alias
+        self._api_key_name = api_key_name
         self._api_key = os.getenv(api_key_name) if api_key_name else None
         self._api_base = remove_trailing_slash(api_base) if api_base else None
         self._api_version = api_version

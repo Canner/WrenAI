@@ -93,23 +93,29 @@ class SQLAnswer(BasicPipeline):
     def __init__(
         self,
         llm_provider: LLMProvider,
+        description: str = "",
         **kwargs,
     ):
-        self._user_queues = {}
-        self._components = {
-            "prompt_builder": PromptBuilder(
-                template=sql_to_answer_user_prompt_template
-            ),
-            "generator": llm_provider.get_generator(
-                system_prompt=sql_to_answer_system_prompt,
-                streaming_callback=self._streaming_callback,
-            ),
-            "generator_name": llm_provider.get_model(),
-        }
-
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
+
+        self._user_queues = {}
+        self._llm_provider = llm_provider
+        self._description = description
+        self._components = self._update_components()
+
+    def _update_components(self):
+        return {
+            "prompt_builder": PromptBuilder(
+                template=sql_to_answer_user_prompt_template
+            ),
+            "generator": self._llm_provider.get_generator(
+                system_prompt=sql_to_answer_system_prompt,
+                streaming_callback=self._streaming_callback,
+            ),
+            "generator_name": self._llm_provider.model,
+        }
 
     def _streaming_callback(self, chunk, query_id):
         if query_id not in self._user_queues:

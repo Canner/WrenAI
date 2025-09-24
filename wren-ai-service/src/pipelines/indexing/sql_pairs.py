@@ -169,25 +169,46 @@ class SqlPairs(BasicPipeline):
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
         sql_pairs_path: str = "sql_pairs.json",
+        description: str = "",
         **kwargs,
     ) -> None:
-        store = document_store_provider.get_store(dataset_name="sql_pairs")
-
-        self._components = {
-            "cleaner": SqlPairsCleaner(store),
-            "embedder": embedder_provider.get_document_embedder(),
-            "document_converter": SqlPairsConverter(),
-            "writer": AsyncDocumentWriter(
-                document_store=store,
-                policy=DuplicatePolicy.OVERWRITE,
-            ),
-        }
-
-        self._external_pairs = _load_sql_pairs(sql_pairs_path)
-
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
+
+        self._embedder_provider = embedder_provider
+        self._document_store_provider = document_store_provider
+        self._store = self._document_store_provider.get_store(dataset_name="sql_pairs")
+        self._description = description
+
+        self._components = self._update_components()
+
+        self._external_pairs = _load_sql_pairs(sql_pairs_path)
+
+    def update_components(
+        self,
+        embedder_provider: EmbedderProvider,
+        document_store_provider: DocumentStoreProvider,
+        **_,
+    ):
+        super().update_components(
+            embedder_provider=embedder_provider,
+            document_store_provider=document_store_provider,
+            update_components=False,
+        )
+        self._store = self._document_store_provider.get_store(dataset_name="sql_pairs")
+        self._components = self._update_components()
+
+    def _update_components(self):
+        return {
+            "cleaner": SqlPairsCleaner(self._store),
+            "embedder": self._embedder_provider.get_document_embedder(),
+            "document_converter": SqlPairsConverter(),
+            "writer": AsyncDocumentWriter(
+                document_store=self._store,
+                policy=DuplicatePolicy.OVERWRITE,
+            ),
+        }
 
     @observe(name="SQL Pairs Indexing")
     async def run(

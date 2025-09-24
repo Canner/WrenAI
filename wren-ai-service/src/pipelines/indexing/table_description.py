@@ -120,28 +120,51 @@ class TableDescription(BasicPipeline):
         self,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
+        description: str = "",
         **kwargs,
     ) -> None:
-        table_description_store = document_store_provider.get_store(
-            dataset_name="table_descriptions"
-        )
-
-        self._components = {
-            "cleaner": DocumentCleaner([table_description_store]),
-            "validator": MDLValidator(),
-            "embedder": embedder_provider.get_document_embedder(),
-            "chunker": TableDescriptionChunker(),
-            "writer": AsyncDocumentWriter(
-                document_store=table_description_store,
-                policy=DuplicatePolicy.OVERWRITE,
-            ),
-        }
-        self._configs = {}
-        self._final = "write"
-
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
+
+        self._embedder_provider = embedder_provider
+        self._document_store_provider = document_store_provider
+        self._table_description_store = self._document_store_provider.get_store(
+            dataset_name="table_descriptions"
+        )
+        self._description = description
+
+        self._components = self._update_components()
+        self._configs = {}
+        self._final = "write"
+
+    def update_components(
+        self,
+        embedder_provider: EmbedderProvider,
+        document_store_provider: DocumentStoreProvider,
+        **_,
+    ):
+        super().update_components(
+            embedder_provider=embedder_provider,
+            document_store_provider=document_store_provider,
+            update_components=False,
+        )
+        self._table_description_store = self._document_store_provider.get_store(
+            dataset_name="table_descriptions"
+        )
+        self._components = self._update_components()
+
+    def _update_components(self):
+        return {
+            "cleaner": DocumentCleaner([self._table_description_store]),
+            "validator": MDLValidator(),
+            "embedder": self._embedder_provider.get_document_embedder(),
+            "chunker": TableDescriptionChunker(),
+            "writer": AsyncDocumentWriter(
+                document_store=self._table_description_store,
+                policy=DuplicatePolicy.OVERWRITE,
+            ),
+        }
 
     @observe(name="Table Description Indexing")
     async def run(

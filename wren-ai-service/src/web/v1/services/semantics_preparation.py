@@ -84,7 +84,7 @@ class SemanticsPreparationService:
                     "db_schema",
                     "historical_question",
                     "table_description",
-                    "sql_pairs",
+                    "sql_pairs_indexing",
                     "project_meta",
                 ]
             ]
@@ -153,7 +153,7 @@ class SemanticsPreparationService:
                 project_id=project_id,
                 delete_all=True,
             )
-            for name in ["sql_pairs", "instructions"]
+            for name in ["sql_pairs_indexing", "instructions_indexing"]
         ]
 
         await asyncio.gather(*tasks)

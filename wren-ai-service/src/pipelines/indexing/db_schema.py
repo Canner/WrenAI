@@ -342,29 +342,51 @@ class DBSchema(BasicPipeline):
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
         column_batch_size: int = 50,
+        description: str = "",
         **kwargs,
     ) -> None:
-        dbschema_store = document_store_provider.get_store()
+        super().__init__(
+            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
+        )
 
-        self._components = {
-            "cleaner": DocumentCleaner([dbschema_store]),
-            "validator": MDLValidator(),
-            "embedder": embedder_provider.get_document_embedder(),
-            "chunker": DDLChunker(),
-            "writer": AsyncDocumentWriter(
-                document_store=dbschema_store,
-                policy=DuplicatePolicy.OVERWRITE,
-            ),
-        }
+        self._embedder_provider = embedder_provider
+        self._document_store_provider = document_store_provider
+        self._dbschema_store = self._document_store_provider.get_store()
+        self._description = description
+        self._components = self._update_components()
+
         self._configs = {
             "column_batch_size": column_batch_size,
         }
         self._final = "write"
 
         helper.load_helpers()
-        super().__init__(
-            AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
+
+    def update_components(
+        self,
+        embedder_provider: EmbedderProvider,
+        document_store_provider: DocumentStoreProvider,
+        **_,
+    ):
+        super().update_components(
+            embedder_provider=embedder_provider,
+            document_store_provider=document_store_provider,
+            update_components=False,
         )
+        self._dbschema_store = self._document_store_provider.get_store()
+        self._components = self._update_components()
+
+    def _update_components(self):
+        return {
+            "cleaner": DocumentCleaner([self._dbschema_store]),
+            "validator": MDLValidator(),
+            "embedder": self._embedder_provider.get_document_embedder(),
+            "chunker": DDLChunker(),
+            "writer": AsyncDocumentWriter(
+                document_store=self._dbschema_store,
+                policy=DuplicatePolicy.OVERWRITE,
+            ),
+        }
 
     @observe(name="DB Schema Indexing")
     async def run(
