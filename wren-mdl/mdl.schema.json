@@ -145,9 +145,9 @@
       "minLength": 1
     },
     "dataSource": {
-      "description": "the data source type (case insensitive)",
+      "description": "the data source type (case insensitive). Valid values are: BIGQUERY, CLICKHOUSE, CANNER, TRINO, MSSQL, MYSQL, POSTGRES, SNOWFLAKE, DUCKDB, LOCAL_FILE, S3_FILE, GCS_FILE, MINIO_FILE, ORACLE, ATHENA, REDSHIFT",
       "type": "string",
-      "pattern": "^(?i)(BIGQUERY|CLICKHOUSE|CANNER|TRINO|MSSQL|MYSQL|POSTGRES|SNOWFLAKE|DUCKDB|LOCAL_FILE|S3_FILE|GCS_FILE|MINIO_FILE|ORACLE|ATHENA|REDSHIFT)$",
+      "pattern": "^(?:[Bb][Ii][Gg][Qq][Uu][Ee][Rr][Yy]|[Cc][Ll][Ii][Cc][Kk][Hh][Oo][Uu][Ss][Ee]|[Cc][Aa][Nn][Nn][Ee][Rr]|[Tt][Rr][Ii][Nn][Oo]|[Mm][Ss][Ss][Qq][Ll]|[Mm][Yy][Ss][Qq][Ll]|[Pp][Oo][Ss][Tt][Gg][Rr][Ee][Ss]|[Ss][Nn][Oo][Ww][Ff][Ll][Aa][Kk][Ee]|[Dd][Uu][Cc][Kk][Dd][Bb]|[Ll][Oo][Cc][Aa][Ll]_[Ff][Ii][Ll][Ee]|[Ss]3_[Ff][Ii][Ll][Ee]|[Gg][Cc][Ss]_[Ff][Ii][Ll][Ee]|[Mm][Ii][Nn][Ii][Oo]_[Ff][Ii][Ll][Ee]|[Oo][Rr][Aa][Cc][Ll][Ee]|[Aa][Tt][Hh][Ee][Nn][Aa]|[Rr][Ee][Dd][Ss][Hh][Ii][Ff][Tt])$",
       "minLength": 1
     },
     "models": {
