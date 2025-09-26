@@ -35,6 +35,8 @@ type ConvertResult struct {
 
 // ConvertDbtProjectCore contains the core logic for converting dbt projects
 // This function is used by both DbtAutoConvert and processDbtProject
+//
+//nolint:gocyclo // This function has high cyclomatic complexity due to extensive dbt project validation and conversion logic
 func ConvertDbtProjectCore(opts ConvertOptions) (*ConvertResult, error) {
 	// Validate dbt project
 	if !IsDbtProjectValid(opts.ProjectPath) {

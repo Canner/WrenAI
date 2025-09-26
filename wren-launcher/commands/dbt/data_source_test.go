@@ -842,7 +842,6 @@ func testDataSourceValidation(t *testing.T, testName string, validDS Validator, 
 	t.Run(testName+" valid", func(t *testing.T) {
 		if err := validDS.Validate(); err != nil {
 			t.Errorf("Valid data source validation failed: %v", err)
-
 		}
 	})
 
@@ -850,7 +849,6 @@ func testDataSourceValidation(t *testing.T, testName string, validDS Validator, 
 		t.Run(testName+" "+tt.name, func(t *testing.T) {
 			if err := tt.ds.Validate(); err == nil {
 				t.Errorf("Expected validation error for %s, but got none", tt.name)
-
 			}
 		})
 	}
