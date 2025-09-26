@@ -2,6 +2,7 @@ package dbt
 
 // WrenMDLManifest represents the complete Wren MDL structure
 type WrenMDLManifest struct {
+	JsonSchema      string           `json:"$schema"`
 	Catalog         string           `json:"catalog"`
 	Schema          string           `json:"schema"`
 	EnumDefinitions []EnumDefinition `json:"enumDefinitions,omitempty"`
@@ -9,13 +10,18 @@ type WrenMDLManifest struct {
 	Relationships   []Relationship   `json:"relationships"`
 	Metrics         []Metric         `json:"metrics,omitempty"`
 	Views           []View           `json:"views"`
-	DataSources     string           `json:"dataSources,omitempty"`
+	DataSource      string           `json:"dataSource,omitempty"`
 }
 
 // EnumDefinition represents a named list of values that can be used by columns.
 type EnumDefinition struct {
-	Name   string   `json:"name"`
-	Values []string `json:"values"`
+	Name   string      `json:"name"`
+	Values []EnumValue `json:"values"`
+}
+
+type EnumValue struct {
+	Name  string `json:"name"`
+	Value string `json:"value,omitempty"`
 }
 
 // WrenModel represents a model in the Wren MDL format
@@ -41,7 +47,6 @@ type WrenColumn struct {
 	Name         string            `json:"name"`
 	DisplayName  string            `json:"displayName,omitempty"`
 	Type         string            `json:"type"`
-	Enum         string            `json:"enum,omitempty"`
 	Relationship string            `json:"relationship,omitempty"`
 	IsCalculated bool              `json:"isCalculated,omitempty"`
 	NotNull      bool              `json:"notNull,omitempty"`
