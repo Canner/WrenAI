@@ -49,6 +49,7 @@ const (
 	decimalSQL   = "DECIMAL"
 	booleanSQL   = "BOOLEAN"
 	boolSQL      = "BOOL"
+	jsonSQL      = "JSON"
 )
 
 // DataSource is a common interface for all data source types
@@ -524,24 +525,24 @@ func (ds *WrenMysqlDataSource) MapType(sourceType string) string {
 		return "TINYINT"
 	case "SMALLINT":
 		return "SMALLINT"
-	case "MEDIUMINT", "INT", "INTEGER":
+	case "MEDIUMINT", "INT", integerSQL:
 		return "INTEGER"
 	case "BIGINT":
 		return "BIGINT"
 	case "FLOAT", "DOUBLE":
 		return "DOUBLE"
-	case "DECIMAL", "NUMERIC":
-		return "DECIMAL"
-	case "DATE":
-		return "DATE"
-	case "DATETIME":
-		return "DATETIME"
+	case decimalSQL, "NUMERIC":
+		return decimalSQL
+	case dateSQL:
+		return dateSQL
+	case datetimeSQL:
+		return datetimeSQL
 	case "TIMESTAMP":
 		return "TIMESTAMPTZ"
-	case "BOOLEAN", "BOOL":
-		return "BOOLEAN"
-	case "JSON":
-		return "JSON"
+	case booleanSQL, "BOOL":
+		return booleanSQL
+	case jsonSQL:
+		return jsonSQL
 	default:
 		// Return the original type if no mapping is found
 		return strings.ToLower(sourceType)

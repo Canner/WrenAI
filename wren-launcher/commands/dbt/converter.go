@@ -35,6 +35,8 @@ type ConvertResult struct {
 
 // ConvertDbtProjectCore contains the core logic for converting dbt projects
 // This function is used by both DbtAutoConvert and processDbtProject
+//
+//nolint:gocyclo // This function has high cyclomatic complexity due to extensive dbt project validation and conversion logic
 func ConvertDbtProjectCore(opts ConvertOptions) (*ConvertResult, error) {
 	// Validate dbt project
 	if !IsDbtProjectValid(opts.ProjectPath) {
@@ -341,6 +343,7 @@ func ConvertDbtCatalogToWrenMDL(catalogPath string, dataSource DataSource, manif
 	// --- 2. Initialize Wren Manifest and Pre-process Metadata ---
 
 	manifest := &WrenMDLManifest{
+		JsonSchema:      "https://raw.githubusercontent.com/Canner/WrenAI/main/wren-mdl/mdl.schema.json",
 		Catalog:         "wren",
 		Schema:          "public",
 		EnumDefinitions: []EnumDefinition{},
@@ -348,7 +351,7 @@ func ConvertDbtCatalogToWrenMDL(catalogPath string, dataSource DataSource, manif
 		Relationships:   []Relationship{},
 		Metrics:         []Metric{},
 		Views:           []View{},
-		DataSources:     dataSource.GetType(),
+		DataSource:      dataSource.GetType(),
 	}
 
 	// Create lookup maps to store pre-processed information for quick access.
@@ -622,9 +625,11 @@ func extractRelationshipsFromTests(fromModelName, fromColumnName string, tests [
 // createOrLinkEnum is a helper to de-duplicate and manage enum creation based on 'accepted_values' tests.
 func createOrLinkEnum(modelName, columnName, columnKey string, values []interface{}, allEnums *[]EnumDefinition, enumValueToNameMap, columnToEnumNameMap map[string]string) {
 	var strValues []string
+	var enumValues []EnumValue
 	for _, v := range values {
 		if s, ok := v.(string); ok {
 			strValues = append(strValues, s)
+			enumValues = append(enumValues, EnumValue{Name: s})
 		}
 	}
 	if len(strValues) == 0 {
@@ -644,7 +649,7 @@ func createOrLinkEnum(modelName, columnName, columnKey string, values []interfac
 		}
 		*allEnums = append(*allEnums, EnumDefinition{
 			Name:   enumName,
-			Values: strValues,
+			Values: enumValues,
 		})
 		enumValueToNameMap[valueKey] = enumName
 	}
@@ -954,11 +959,6 @@ func buildWrenColumn(colMap map[string]interface{}, nodeKey string, dataSource D
 		NotNull:     columnToNotNullMap[columnKey], // Defaults to false if not found
 	}
 
-	// Assign an enum if one was derived from dbt tests
-	if enumName, ok := columnToEnumNameMap[columnKey]; ok {
-		column.Enum = enumName
-	}
-
 	// Use a temporary map to build the properties
 	properties := make(map[string]string)
 	if description, exists := columnDescriptions[column.Name]; exists && description != "" {
@@ -966,6 +966,12 @@ func buildWrenColumn(colMap map[string]interface{}, nodeKey string, dataSource D
 	}
 	if comment := getStringFromMap(colMap, "comment", ""); comment != "" {
 		properties["comment"] = comment
+	}
+
+	// Assign an enum if one was derived from dbt tests
+	// TODO: enum isn't implemented in Wren yet, putting this here for future use
+	if enumName, ok := columnToEnumNameMap[columnKey]; ok {
+		properties["enumDefinition"] = enumName
 	}
 
 	// Assign the properties map only if it's not empty
