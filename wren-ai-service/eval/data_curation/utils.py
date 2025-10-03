@@ -44,8 +44,8 @@ async def is_sql_valid(
     timeout: float = TIMEOUT_SECONDS,
 ) -> Tuple[bool, str]:
     sql = sql.rstrip(";") if sql.endswith(";") else sql
-    quoted_sql, no_error = add_quotes(sql)
-    assert no_error, f"Error in quoting SQL: {sql}"
+    quoted_sql, error = add_quotes(sql)
+    assert not error, f"Error in quoting SQL: {sql}, error: {error}"
 
     if data_source == "duckdb":
         async with aiohttp.request(

@@ -34,7 +34,7 @@ async def get_data_from_wren_engine(
     limit: Optional[int] = None,
 ):
     quoted_sql, error = add_quotes(sql)
-    assert not error, f"Error in quoting SQL: {sql}"
+    assert not error, f"Error in quoting SQL: {sql}, error: {error}"
 
     if data_source == "duckdb":
         async with aiohttp.request(
@@ -157,9 +157,9 @@ async def get_contexts_from_sql(
         timeout: float = 300,
     ) -> List[dict]:
         sql = sql.rstrip(";") if sql.endswith(";") else sql
-        quoted_sql, no_error = add_quotes(sql)
-        if not no_error:
-            print(f"Error in quoting SQL: {sql}")
+        quoted_sql, error = add_quotes(sql)
+        if error:
+            print(f"Error in quoting SQL: {sql}, error: {error}")
             quoted_sql = sql
 
         manifest_str = base64.b64encode(orjson.dumps(mdl_json)).decode()
