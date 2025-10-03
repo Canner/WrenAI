@@ -165,7 +165,7 @@ def build_mdl_models(database, tables_info, database_info={}):
             "primaryKey": (
                 tables_info["column_names_original"][primary_key_column_index][-1]
                 if primary_key_column_index
-                else "",
+                else ""
             ),
             "columns": _build_mdl_columns(
                 tables_info, i, database_info.get(table, None)
