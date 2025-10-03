@@ -410,7 +410,6 @@ if __name__ == "__main__":
                 get_contexts_from_sql(
                     ground_truth["sql"],
                     values["mdl"],
-                    args.dataset,
                     api_endpoint=WREN_ENGINE_API_URL,
                 )
             )

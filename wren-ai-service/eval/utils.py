@@ -80,7 +80,6 @@ async def get_data_from_wren_engine(
 async def get_contexts_from_sql(
     sql: str,
     mdl_json: dict,
-    dataset: str,
     api_endpoint: str = WREN_ENGINE_API_URL,
     timeout: float = 300,
     **kwargs,
@@ -155,18 +154,10 @@ async def get_contexts_from_sql(
         sql: str,
         mdl_json: dict,
         api_endpoint: str,
-        dataset: str,
         timeout: float = 300,
     ) -> List[dict]:
         sql = sql.rstrip(";") if sql.endswith(";") else sql
-        sql = sql.replace("`", '"')
-        if dataset == "spider1.0":
-            read = "sqlite"
-        elif dataset == "bird":
-            read = "postgres"
-        else:
-            read = None
-        quoted_sql, error = add_quotes(sql, read)
+        quoted_sql, error = add_quotes(sql)
         if error:
             print(f"Error in quoting SQL: {sql}, error: {error}")
             quoted_sql = sql
@@ -185,7 +176,7 @@ async def get_contexts_from_sql(
             return await response.json()
 
     sql_analysis_results = await _get_sql_analysis(
-        sql, mdl_json, api_endpoint, dataset, timeout=timeout
+        sql, mdl_json, api_endpoint, timeout=timeout
     )
     contexts = _get_contexts_from_sql_analysis_results(sql_analysis_results)
     return contexts
