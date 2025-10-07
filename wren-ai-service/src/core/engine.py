@@ -51,6 +51,7 @@ def remove_limit_statement(sql: str) -> str:
 
 def add_quotes(sql: str) -> Tuple[str, str]:
     try:
+        sql = sql.replace("`", '"')
         quoted_sql = sqlglot.transpile(
             sql,
             read=None,
