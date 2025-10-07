@@ -550,7 +550,7 @@ func generateRelationships(manifestData map[string]interface{}) []Relationship {
 									Name:      fmt.Sprintf("%s_to_%s_by_%s", fromModelName, toModelName, fromColumnName),
 									Models:    []string{fromModelName, toModelName},
 									JoinType:  "MANY_TO_ONE",
-									Condition: fmt.Sprintf("%s.%s = %s.%s", fromModelName, fromColumnName, toModelName, toField),
+									Condition: fmt.Sprintf("\"%s\".\"%s\" = \"%s\".\"%s\"", fromModelName, fromColumnName, toModelName, toField),
 								}
 								relationships = append(relationships, rel)
 							}
@@ -561,7 +561,8 @@ func generateRelationships(manifestData map[string]interface{}) []Relationship {
 		}
 	}
 	seen := make(map[string]struct{}, len(relationships))
-	var unique []Relationship
+	// if relationship is empty, return empty slice instead of nil
+	unique := []Relationship{}
 	for _, r := range relationships {
 		key := r.Name + "|" + r.JoinType + "|" + r.Condition
 		if _, ok := seen[key]; ok {
@@ -599,7 +600,8 @@ func parseTestsForRelationships(fromModelName, columnName string, colMap map[str
 
 // extractRelationshipsFromTests extracts relationship info from a 'tests' array.
 func extractRelationshipsFromTests(fromModelName, fromColumnName string, tests []interface{}) []Relationship {
-	var relationships []Relationship
+	// if relationship is empty, return empty slice instead of nil
+	relationships := []Relationship{}
 	for _, test := range tests {
 		if relTest, ok := test.(map[string]interface{}); ok {
 			if relData, ok := relTest["relationships"].(map[string]interface{}); ok {
@@ -612,7 +614,7 @@ func extractRelationshipsFromTests(fromModelName, fromColumnName string, tests [
 						Name:      fmt.Sprintf("%s_to_%s_by_%s", fromModelName, toModelName, fromColumnName),
 						Models:    []string{fromModelName, toModelName},
 						JoinType:  "MANY_TO_ONE",
-						Condition: fmt.Sprintf("%s.%s = %s.%s", fromModelName, fromColumnName, toModelName, toField),
+						Condition: fmt.Sprintf("\"%s\".\"%s\" = \"%s\".\"%s\"", fromModelName, fromColumnName, toModelName, toField),
 					}
 					relationships = append(relationships, rel)
 				}
