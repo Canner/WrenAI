@@ -192,7 +192,7 @@ def parse_db_name(path: str) -> str:
         r"bird_(.+?)_eval_dataset\.toml|spider_(.+?)_eval_dataset\.toml", path
     )
     if match:
-        return match.group(1)
+        return match.group(1) or match.group(2)
     else:
         raise ValueError(
             f"Invalid path format: {path}. Expected format: bird_<db_name>_eval_dataset.toml or spider_<db_name>_eval_dataset.toml"

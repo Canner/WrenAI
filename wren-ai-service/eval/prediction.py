@@ -109,6 +109,7 @@ if __name__ == "__main__":
         db_name = parse_db_name(path)
         if "spider_" in path:
             settings.eval_data_db_path = "etc/spider1.0/database"
+            load_eval_data_db_to_postgres(db_name, settings.eval_data_db_path)
         elif "bird_" in path:
             settings.eval_data_db_path = "etc/bird/minidev/MINIDEV/dev_databases"
             load_eval_data_db_to_postgres(db_name, settings.eval_data_db_path)
