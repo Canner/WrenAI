@@ -802,7 +802,7 @@ export class ModelResolver {
 
   // create view from sql of a response
   public async createView(_root: any, args: any, ctx: IContext) {
-    const { name: displayName, responseId } = args.data;
+    const { name: displayName, responseId, rephrasedQuestion } = args.data;
 
     // validate view name
     const validateResult = await this.validateViewName(displayName, ctx);
@@ -842,7 +842,7 @@ export class ModelResolver {
 
       // properties from the thread response
       responseId, // helpful for mapping back to the thread response
-      question: response.question,
+      question: rephrasedQuestion,
     };
 
     const eventName = TelemetryEvent.HOME_CREATE_VIEW;
