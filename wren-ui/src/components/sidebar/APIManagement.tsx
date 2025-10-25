@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import styled from 'styled-components';
+import { useTranslation } from 'react-i18next';
 import { Path, MENU_KEY } from '@/utils/enum';
 import { OpenInNewIcon } from '@/utils/icons';
 import ApiOutlined from '@ant-design/icons/ApiOutlined';
@@ -26,13 +27,14 @@ const linkStyle = { color: 'inherit', transition: 'none' };
 
 export default function APIManagement() {
   const router = useRouter();
+  const { t } = useTranslation('common');
 
   const menuItems = [
     {
       'data-guideid': 'api-history',
       label: (
         <Link style={linkStyle} href={Path.APIManagementHistory}>
-          API history
+          {t('API history')}
         </Link>
       ),
       icon: <ApiOutlined />,
@@ -47,7 +49,7 @@ export default function APIManagement() {
           target="_blank"
           rel="noopener noreferrer"
         >
-          API reference
+          {t('API reference')}
           <OpenInNewIcon className="ml-1" />
         </Link>
       ),

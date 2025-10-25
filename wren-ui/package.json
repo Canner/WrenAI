@@ -24,6 +24,8 @@
     "cron-parser": "^5.1.1",
     "graphql": "^16.6.0",
     "graphql-type-json": "^0.3.2",
+    "i18next": "^25.6.0",
+    "i18next-browser-languagedetector": "^8.2.0",
     "knex": "^3.1.0",
     "lodash": "^4.17.21",
     "log4js": "^6.9.1",
@@ -33,6 +35,7 @@
     "pg": "^8.8.0",
     "pg-cursor": "^2.7.4",
     "posthog-node": "^4.3.2",
+    "react-i18next": "^16.2.0",
     "sql-formatter": "^15.3.0",
     "uuid": "^11.1.0"
   },

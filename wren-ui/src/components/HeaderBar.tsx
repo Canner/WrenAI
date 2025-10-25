@@ -1,6 +1,7 @@
 import { useRouter } from 'next/router';
-import { Button, Layout, Space } from 'antd';
+import { Button, Layout, Space, Select } from 'antd';
 import styled from 'styled-components';
+import { useTranslation } from 'react-i18next';
 import LogoBar from '@/components/LogoBar';
 import { Path } from '@/utils/enum';
 import Deploy from '@/components/deploy/Deploy';
@@ -34,8 +35,20 @@ const StyledHeader = styled(Header)`
 export default function HeaderBar() {
   const router = useRouter();
   const { pathname } = router;
+  const { i18n } = useTranslation();
   const showNav = !pathname.startsWith(Path.Onboarding);
   const isModeling = pathname.startsWith(Path.Modeling);
+
+  const handleLanguageChange = (value: string) => {
+    i18n.changeLanguage(value);
+    if (value === 'fa') {
+      document.documentElement.lang = 'fa';
+      document.documentElement.dir = 'rtl';
+    } else {
+      document.documentElement.lang = 'en';
+      document.documentElement.dir = 'ltr';
+    }
+  };
 
   return (
     <StyledHeader>
@@ -82,11 +95,17 @@ export default function HeaderBar() {
             </Space>
           )}
         </Space>
-        {isModeling && (
-          <Space size={[16, 0]}>
-            <Deploy />
-          </Space>
-        )}
+        <Space size={[16, 0]}>
+          <Select
+            defaultValue="en"
+            style={{ width: 120 }}
+            onChange={handleLanguageChange}
+          >
+            <Select.Option value="en">English</Select.Option>
+            <Select.Option value="fa">فارسی</Select.Option>
+          </Select>
+          {isModeling && <Deploy />}
+        </Space>
       </div>
     </StyledHeader>
   );
