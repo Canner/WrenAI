@@ -436,6 +436,7 @@ export const typeDefs = gql`
   input CreateViewInput {
     name: String!
     responseId: Int!
+    rephrasedQuestion: String!
   }
 
   input ValidateViewInput {

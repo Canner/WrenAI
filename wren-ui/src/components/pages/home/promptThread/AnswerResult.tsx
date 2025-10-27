@@ -122,6 +122,7 @@ export interface Props {
   motion: boolean;
   threadResponse: ThreadResponse;
   isLastThreadResponse: boolean;
+  isOpeningQuestion: boolean;
   onInitPreviewDone: () => void;
 }
 
@@ -186,7 +187,7 @@ const isNeedGenerateAnswer = (answerDetail: ThreadResponseAnswerDetail) => {
 };
 
 export default function AnswerResult(props: Props) {
-  const { threadResponse, isLastThreadResponse } = props;
+  const { threadResponse, isLastThreadResponse, isOpeningQuestion } = props;
 
   const {
     onOpenSaveAsViewModal,
@@ -270,6 +271,17 @@ export default function AnswerResult(props: Props) {
     isAnswerPrepared ||
     isBreakdownOnly;
 
+  const rephrasedQuestion =
+    threadResponse?.askingTask?.rephrasedQuestion || question;
+
+  const questionForSaveAsView = useMemo(() => {
+    // use rephrased question for follow-up questions, otherwise use the original question
+
+    if (isOpeningQuestion) return question;
+
+    return rephrasedQuestion;
+  }, [rephrasedQuestion, question, isOpeningQuestion]);
+
   return (
     <div style={resultStyle} data-jsid="answerResult">
       {isAdjustment && <AdjustmentInformation adjustment={adjustment} />}
@@ -334,9 +346,7 @@ export default function AnswerResult(props: Props) {
                 onClick={() =>
                   onOpenSaveToKnowledgeModal(
                     {
-                      question:
-                        threadResponse?.askingTask?.rephrasedQuestion ||
-                        question,
+                      question: rephrasedQuestion,
                       sql,
                     },
                     { isCreateMode: true },
@@ -352,7 +362,14 @@ export default function AnswerResult(props: Props) {
             </Tooltip>
             <ViewBlock
               view={view}
-              onClick={() => onOpenSaveAsViewModal({ sql, responseId: id })}
+              onClick={() =>
+                onOpenSaveAsViewModal(
+                  { sql, responseId: id },
+                  {
+                    rephrasedQuestion: questionForSaveAsView,
+                  },
+                )
+              }
             />
           </div>
           {renderRecommendedQuestions(
