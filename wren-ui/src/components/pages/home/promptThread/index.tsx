@@ -57,6 +57,7 @@ const AnswerResultTemplate: React.FC<
       {index > 0 && <Divider />}
       <AnswerResult
         motion={motion}
+        isOpeningQuestion={index === 0}
         isLastThreadResponse={isLastThreadResponse}
         onInitPreviewDone={onInitPreviewDone}
         threadResponse={threadResponse}

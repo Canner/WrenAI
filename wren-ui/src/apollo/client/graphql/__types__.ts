@@ -243,6 +243,7 @@ export type CreateThreadResponseInput = {
 
 export type CreateViewInput = {
   name: Scalars['String'];
+  rephrasedQuestion: Scalars['String'];
   responseId: Scalars['Int'];
 };
 
