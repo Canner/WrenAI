@@ -22,7 +22,6 @@ from eval.utils import (
     get_ddl_commands,
     get_documents_given_contexts,
 )
-from src.core.engine import add_quotes
 from src.pipelines.indexing.db_schema import DDLChunker
 
 load_dotenv()
@@ -44,15 +43,13 @@ async def is_sql_valid(
     timeout: float = TIMEOUT_SECONDS,
 ) -> Tuple[bool, str]:
     sql = sql.rstrip(";") if sql.endswith(";") else sql
-    quoted_sql, error = add_quotes(sql)
-    assert not error, f"Error in quoting SQL: {sql}, error: {error}"
 
     if data_source == "duckdb":
         async with aiohttp.request(
             "GET",
             f"{api_endpoint}/v1/mdl/dry-run",
             json={
-                "sql": remove_limit_statement(quoted_sql),
+                "sql": remove_limit_statement(sql),
                 "manifest": mdl_json,
                 "limit": 1,
             },
@@ -68,7 +65,7 @@ async def is_sql_valid(
             "POST",
             f"{api_endpoint}/v3/connector/{data_source}/query?dryRun=true",
             json={
-                "sql": remove_limit_statement(quoted_sql),
+                "sql": remove_limit_statement(sql),
                 "manifestStr": base64.b64encode(orjson.dumps(mdl_json)).decode(),
                 "connectionInfo": connection_info,
             },

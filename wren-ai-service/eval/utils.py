@@ -18,7 +18,6 @@ from tomlkit import parse
 
 import docker
 from eval import WREN_ENGINE_API_URL, EvalSettings
-from src.core.engine import add_quotes
 from src.providers.engine.wren import WrenEngine
 
 load_dotenv(".env", override=True)
@@ -33,15 +32,12 @@ async def get_data_from_wren_engine(
     timeout: float = 300,
     limit: Optional[int] = None,
 ):
-    quoted_sql, error = add_quotes(sql)
-    assert not error, f"Error in quoting SQL: {sql}, error: {error}"
-
     if data_source == "duckdb":
         async with aiohttp.request(
             "GET",
             f"{api_endpoint}/v1/mdl/preview",
             json={
-                "sql": quoted_sql,
+                "sql": sql,
                 "manifest": mdl_json,
                 "limit": 500 if limit is None else limit,
             },
@@ -62,7 +58,7 @@ async def get_data_from_wren_engine(
             "POST",
             url,
             json={
-                "sql": quoted_sql,
+                "sql": sql,
                 "manifestStr": base64.b64encode(orjson.dumps(mdl_json)).decode(),
                 "connectionInfo": connection_info,
             },
@@ -157,18 +153,13 @@ async def get_contexts_from_sql(
         timeout: float = 300,
     ) -> List[dict]:
         sql = sql.rstrip(";") if sql.endswith(";") else sql
-        quoted_sql, error = add_quotes(sql)
-        if error:
-            print(f"Error in quoting SQL: {sql}, error: {error}")
-            quoted_sql = sql
-
         manifest_str = base64.b64encode(orjson.dumps(mdl_json)).decode()
 
         async with aiohttp.request(
             "GET",
             f"{api_endpoint}/v2/analysis/sql",
             json={
-                "sql": quoted_sql,
+                "sql": sql,
                 "manifestStr": manifest_str,
             },
             timeout=aiohttp.ClientTimeout(total=timeout),
