@@ -4,7 +4,6 @@ from abc import ABCMeta, abstractmethod
 from typing import Any, Dict, Optional, Tuple
 
 import aiohttp
-import sqlglot
 from pydantic import BaseModel
 
 logger = logging.getLogger("wren-ai-service")
@@ -47,21 +46,3 @@ def remove_limit_statement(sql: str) -> str:
     modified_sql = re.sub(pattern, "", sql, flags=re.IGNORECASE)
 
     return modified_sql
-
-
-def add_quotes(sql: str) -> Tuple[str, str]:
-    try:
-        sql = sql.replace("`", '"')
-        quoted_sql = sqlglot.transpile(
-            sql,
-            read=None,
-            identify=True,
-            error_level=sqlglot.ErrorLevel.RAISE,
-            unsupported_level=sqlglot.ErrorLevel.RAISE,
-        )[0]
-    except Exception as e:
-        logger.exception(f"Error in sqlglot.transpile to {sql}: {e}")
-
-        return "", str(e)
-
-    return quoted_sql, ""

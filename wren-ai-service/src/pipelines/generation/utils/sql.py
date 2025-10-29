@@ -9,7 +9,6 @@ from pydantic import BaseModel
 
 from src.core.engine import (
     Engine,
-    add_quotes,
     clean_generation_result,
 )
 from src.web.v1.services.ask import AskHistory
@@ -79,96 +78,86 @@ class SQLGenPostProcessor:
     ) -> Dict[str, str]:
         valid_generation_result = {}
         invalid_generation_result = {}
-
-        quoted_sql, error_message = add_quotes(generation_result)
         use_dry_run = not allow_data_preview
 
         async with aiohttp.ClientSession() as session:
-            if not error_message:
-                if use_dry_plan:
-                    dry_plan_result, error_message = await self._engine.dry_plan(
-                        session,
-                        quoted_sql,
-                        data_source,
-                        allow_fallback=allow_dry_plan_fallback,
-                    )
+            if use_dry_plan:
+                dry_plan_result, error_message = await self._engine.dry_plan(
+                    session,
+                    generation_result,
+                    data_source,
+                    allow_fallback=allow_dry_plan_fallback,
+                )
 
-                    if dry_plan_result:
-                        valid_generation_result = {
-                            "sql": quoted_sql,
-                            "correlation_id": "",
-                        }
-                    else:
-                        invalid_generation_result = {
-                            "sql": quoted_sql,
-                            "type": "TIME_OUT"
-                            if error_message.startswith("Request timed out")
-                            else "DRY_PLAN",
-                            "error": error_message,
-                            "correlation_id": "",
-                        }
-                elif use_dry_run:
-                    success, _, addition = await self._engine.execute_sql(
-                        quoted_sql,
-                        session,
-                        project_id=project_id,
-                        limit=1,
-                        dry_run=True,
-                    )
-
-                    if success:
-                        valid_generation_result = {
-                            "sql": quoted_sql,
-                            "correlation_id": addition.get("correlation_id", ""),
-                        }
-                    else:
-                        error_message = addition.get("error_message", "")
-                        invalid_generation_result = {
-                            "sql": addition.get("error_sql", quoted_sql),
-                            "original_sql": quoted_sql,
-                            "type": "TIME_OUT"
-                            if error_message.startswith("Request timed out")
-                            else "DRY_RUN",
-                            "error": error_message,
-                            "correlation_id": addition.get("correlation_id", ""),
-                        }
+                if dry_plan_result:
+                    valid_generation_result = {
+                        "sql": generation_result,
+                        "correlation_id": "",
+                    }
                 else:
-                    has_data, _, addition = await self._engine.execute_sql(
-                        quoted_sql,
-                        session,
-                        project_id=project_id,
-                        limit=1,
-                        dry_run=False,
-                    )
+                    invalid_generation_result = {
+                        "sql": generation_result,
+                        "type": "TIME_OUT"
+                        if error_message.startswith("Request timed out")
+                        else "DRY_PLAN",
+                        "error": error_message,
+                        "correlation_id": "",
+                    }
+            elif use_dry_run:
+                success, _, addition = await self._engine.execute_sql(
+                    generation_result,
+                    session,
+                    project_id=project_id,
+                    limit=1,
+                    dry_run=True,
+                )
 
-                    if has_data:
-                        valid_generation_result = {
-                            "sql": quoted_sql,
-                            "correlation_id": addition.get("correlation_id", ""),
-                        }
-                    else:
-                        error_message = addition.get("error_message", "")
-                        preview_data_status = (
-                            "PREVIEW_EMPTY_DATA"
-                            if error_message == ""
-                            else "PREVIEW_FAILED"
-                        )
-                        invalid_generation_result = {
-                            "sql": addition.get("error_sql", quoted_sql),
-                            "original_sql": quoted_sql,
-                            "type": "TIME_OUT"
-                            if error_message.startswith("Request timed out")
-                            else preview_data_status,
-                            "error": error_message,
-                            "correlation_id": addition.get("correlation_id", ""),
-                        }
+                if success:
+                    valid_generation_result = {
+                        "sql": generation_result,
+                        "correlation_id": addition.get("correlation_id", ""),
+                    }
+                else:
+                    error_message = addition.get("error_message", "")
+                    invalid_generation_result = {
+                        "sql": addition.get("error_sql", generation_result),
+                        "original_sql": generation_result,
+                        "type": "TIME_OUT"
+                        if error_message.startswith("Request timed out")
+                        else "DRY_RUN",
+                        "error": error_message,
+                        "correlation_id": addition.get("correlation_id", ""),
+                    }
             else:
-                invalid_generation_result = {
-                    "sql": generation_result,
-                    "original_sql": generation_result,
-                    "type": "ADD_QUOTES",
-                    "error": error_message,
-                }
+                has_data, _, addition = await self._engine.execute_sql(
+                    generation_result,
+                    session,
+                    project_id=project_id,
+                    limit=1,
+                    dry_run=False,
+                )
+
+                if has_data:
+                    valid_generation_result = {
+                        "sql": generation_result,
+                        "correlation_id": addition.get("correlation_id", ""),
+                    }
+                else:
+                    error_message = addition.get("error_message", "")
+                    preview_data_status = (
+                        "PREVIEW_EMPTY_DATA"
+                        if error_message == ""
+                        else "PREVIEW_FAILED"
+                    )
+                    invalid_generation_result = {
+                        "sql": addition.get("error_sql", generation_result),
+                        "original_sql": generation_result,
+                        "type": "TIME_OUT"
+                        if error_message.startswith("Request timed out")
+                        else preview_data_status,
+                        "error": error_message,
+                        "correlation_id": addition.get("correlation_id", ""),
+                    }
 
         return valid_generation_result, invalid_generation_result
 
@@ -209,6 +198,11 @@ TEXT_TO_SQL_RULES = """
 - DON'T INCLUDE comments in the generated SQL query.
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
 - PREFER USING CTEs over subqueries.
+- When generating SQL query, always:
+    - Put double quotes around column and table names.
+    - Put single quotes around string literals.
+    - Never quote numeric literals.
+    For example: SELECT "customers"."customer_name" FROM "customers" WHERE "customers"."city" = 'Taipei' and "customers"."year" = 1992;
 - YOU MUST USE "lower(<table_name>.<column_name>) like lower(<value>)" function or "lower(<table_name>.<column_name>) = lower(<value>)" function for case-insensitive comparison!
     - Use "lower(<table_name>.<column_name>) LIKE lower(<value>)" when:
         - The user requests a pattern or partial match.
@@ -241,7 +235,7 @@ TEXT_TO_SQL_RULES = """
     }
 
     SQL
-    SELECT _orders.ApprovedTimestamp AS _timestamp FROM orders AS _orders;
+    SELECT "_orders"."ApprovedTimestamp" AS "_timestamp" FROM "orders" AS "_orders";
 - DON'T USE '.' in column/table alias, replace '.' with '_' in column/table alias.
 - DON'T USE "FILTER(WHERE <expression>)" clause in the generated SQL query.
 - DON'T USE "EXTRACT(EPOCH FROM <expression>)" clause in the generated SQL query.
@@ -265,6 +259,7 @@ Given user's question, database schema, etc., you should think deeply and carefu
 2. YOU MUST ONLY CHOOSE the appropriate functions from the sql functions list and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input.
 3. YOU MUST REFER to the sql samples and learn the usage of the schema structures and how SQL is written based on them if the section of SQL SAMPLES is available in user's input.
 4. YOU MUST FOLLOW the reasoning plan step by step strictly to generate the SQL query if the section of REASONING PLAN is available in user's input.
+5. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
 
 {TEXT_TO_SQL_RULES}
 
