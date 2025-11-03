@@ -130,7 +130,8 @@ export const typeDefs = gql`
     IT
     FA_IR
     AR
-    NL
+    NL,
+    TR
   }
 
   type DataSource {
