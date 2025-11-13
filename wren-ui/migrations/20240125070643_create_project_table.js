@@ -24,23 +24,48 @@ exports.up = function (knex) {
     table.string('dataset_id').nullable().comment('big query datasetId');
 
     // duckdb
-    table
-      .jsonb('init_sql')
-      .nullable()
-      .comment('init sql for establishing duckdb environment');
+    if (knex.client.config.client === 'mysql2') {
+      table
+        .json('init_sql')
+        .nullable()
+        .comment('init sql for establishing duckdb environment');
+    } else {
+      table
+        .jsonb('init_sql')
+        .nullable()
+        .comment('init sql for establishing duckdb environment');
+    }
     // knex jsonb ref: https://knexjs.org/guide/schema-builder.html#json
-    table
-      .jsonb('extensions')
-      .nullable()
-      .comment(
-        'duckdb extensions, will be a array-like string like, eg: ["extension1", "extension2"]',
-      );
-    table
-      .jsonb('configurations')
-      .nullable()
-      .comment(
-        'duckdb configurations that can be set in session, eg: { "key1": "value1", "key2": "value2" }',
-      );
+    if (knex.client.config.client === 'mysql2') {
+      table
+        .json('extensions')
+        .nullable()
+        .comment(
+          'duckdb extensions, will be a array-like string like, eg: ["extension1", "extension2"]',
+        );
+    } else {
+      table
+        .jsonb('extensions')
+        .nullable()
+        .comment(
+          'duckdb extensions, will be a array-like string like, eg: ["extension1", "extension2"]',
+        );
+    }
+    if (knex.client.config.client === 'mysql2') {
+      table
+        .json('configurations')
+        .nullable()
+        .comment(
+          'duckdb configurations that can be set in session, eg: { "key1": "value1", "key2": "value2" }',
+        );
+    } else {
+      table
+        .jsonb('configurations')
+        .nullable()
+        .comment(
+          'duckdb configurations that can be set in session, eg: { "key1": "value1", "key2": "value2" }',
+        );
+    }
 
     // not sure to store or not, the catalog & schema in the manifest
     table.string('catalog').comment('catalog name');

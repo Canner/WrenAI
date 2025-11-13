@@ -5,10 +5,18 @@
 exports.up = async function (knex) {
   await knex.schema.createTable('dashboard', (table) => {
     table.increments('id').primary();
-    table
-      .integer('project_id')
-      .notNullable()
-      .comment('Reference to project.id');
+    if (knex.client.config.client === 'mysql2') {
+      table
+        .integer('project_id')
+        .unsigned()
+        .notNullable()
+        .comment('Reference to project.id');
+    } else {
+      table
+        .integer('project_id')
+        .notNullable()
+        .comment('Reference to project.id');
+    }
     table.string('name').notNullable().comment('The dashboard name');
 
     table.foreign('project_id').references('project.id').onDelete('CASCADE');

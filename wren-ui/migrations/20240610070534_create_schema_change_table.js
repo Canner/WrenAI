@@ -8,8 +8,13 @@ exports.up = function (knex) {
     table.integer('project_id').comment('Reference to project.id');
 
     // schema change info
-    table.jsonb('change').nullable();
-    table.jsonb('resolve').nullable();
+    if (knex.client.config.client === 'mysql2') {
+      table.json('change').nullable();
+      table.json('resolve').nullable();
+    } else {
+      table.jsonb('change').nullable();
+      table.jsonb('resolve').nullable();
+    }
 
     // timestamps
     table.timestamps(true, true);

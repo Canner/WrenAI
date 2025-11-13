@@ -8,7 +8,11 @@ exports.up = function (knex) {
     table.integer('project_id').comment('Reference to project.id');
 
     // basic info
-    table.jsonb('manifest').comment('the deployed manifest');
+    if (knex.client.config.client === 'mysql2') {
+      table.json('manifest').comment('the deployed manifest');
+    } else {
+      table.jsonb('manifest').comment('the deployed manifest');
+    }
     table.string('hash').comment('the hash of the manifest');
 
     // status

@@ -5,12 +5,24 @@
 exports.up = function (knex) {
   return knex.schema.createTable('instruction', (table) => {
     table.increments('id').primary();
+    if (knex.client.config.client === 'mysql2') {
     table
-      .integer('project_id')
-      .notNullable()
-      .comment('Reference to project.id');
+        .integer('project_id')
+        .unsigned()
+        .notNullable()
+        .comment('Reference to project.id');
+    } else {
+      table
+        .integer('project_id')
+        .notNullable()
+        .comment('Reference to project.id');
+    }
     table.text('instruction').notNullable().comment('The instruction text');
-    table.jsonb('questions').notNullable().comment('The questions array');
+    if (knex.client.config.client === 'mysql2') {
+      table.json('questions').notNullable().comment('The questions array');
+    } else {
+      table.jsonb('questions').notNullable().comment('The questions array');
+    }
     table
       .boolean('is_default')
       .notNullable()
