@@ -27,6 +27,32 @@ export DB_TYPE=pg
 export PG_URL=postgres://user:password@localhost:5432/dbname
 ```
 -  `PG_URL` is the connection string of your postgres database.
+  `PG_URL` is the connection string of your postgres database.
+
+To use MySQL or MariaDB as the database, set `DB_TYPE=mysql` and provide the connection settings via environment variables below. (The `mysql2` driver used by Wren UI supports both MySQL and MariaDB.)
+
+```bash
+# windows
+SET DB_TYPE=mysql
+SET MYSQL_HOST=localhost
+SET MYSQL_PORT=3306
+SET MYSQL_USER=root
+SET MYSQL_PASSWORD=your_password
+SET MYSQL_DB=your_database
+
+# linux or mac
+export DB_TYPE=mysql
+export MYSQL_HOST=localhost
+export MYSQL_PORT=3306
+export MYSQL_USER=root
+export MYSQL_PASSWORD=your_password
+export MYSQL_DB=your_database
+```
+
+Notes:
+- Ensure the user has sufficient privileges to create tables and run migrations.
+- For MariaDB, the same variables apply; just point them to your MariaDB instance.
+- If you use a non-default port, adjust `MYSQL_PORT` accordingly.
 
 To switch back to using SQLite, you can reassign the `DB_TYPE` to `sqlite`.
 ```
