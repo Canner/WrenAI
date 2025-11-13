@@ -1116,6 +1116,7 @@ export type PreviewViewDataInput = {
 
 export enum ProjectLanguage {
   AR = 'AR',
+  AZ_AZ = 'AZ_AZ',
   DE = 'DE',
   EN = 'EN',
   ES = 'ES',
