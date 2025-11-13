@@ -27,7 +27,7 @@ exports.up = function (knex) {
         .references('id')
         .inTable('thread_response')
         .onDelete('CASCADE');
-    }else{
+    } else {
       table
         .integer('thread_id')
         .references('id')

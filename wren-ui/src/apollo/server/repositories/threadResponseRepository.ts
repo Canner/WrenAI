@@ -181,6 +181,7 @@ export class ThreadResponseRepository
     // MySQL: manually fetch the updated record
     await query;
     const result = await executer(this.tableName).where({ id }).first();
+    return result ? this.transformFromDBData(result) : undefined;
   }
 
   protected override transformFromDBData = (data: any): ThreadResponse => {

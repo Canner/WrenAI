@@ -27,7 +27,6 @@ export DB_TYPE=pg
 export PG_URL=postgres://user:password@localhost:5432/dbname
 ```
 -  `PG_URL` is the connection string of your postgres database.
-  `PG_URL` is the connection string of your postgres database.
 
 To use MySQL or MariaDB as the database, set `DB_TYPE=mysql` and provide the connection settings via environment variables below. (The `mysql2` driver used by Wren UI supports both MySQL and MariaDB.)
 
