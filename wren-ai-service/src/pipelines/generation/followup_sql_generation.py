@@ -23,6 +23,7 @@ from src.pipelines.generation.utils.sql import (
 )
 from src.pipelines.retrieval.sql_functions import SqlFunction
 from src.utils import trace_cost
+from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
@@ -76,6 +77,7 @@ SQL:
 
 ### QUESTION ###
 User's Follow-up Question: {{ query }}
+Current Time: {{ current_time }}
 
 ### REASONING PLAN ###
 {{ sql_generation_reasoning }}
@@ -97,6 +99,7 @@ def prompt(
     has_metric: bool = False,
     has_json_field: bool = False,
     sql_functions: list[SqlFunction] | None = None,
+    configuration: Configuration = Configuration(),
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
@@ -112,6 +115,7 @@ def prompt(
         json_field_instructions=(json_field_instructions if has_json_field else ""),
         sql_samples=sql_samples,
         sql_functions=sql_functions,
+        current_time=configuration.show_current_time(),
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
