@@ -162,7 +162,7 @@ class SQLGenPostProcessor:
         return valid_generation_result, invalid_generation_result
 
 
-TEXT_TO_SQL_RULES = """
+_DEFAULT_TEXT_TO_SQL_RULES = """
 ### SQL RULES ###
 - ONLY USE SELECT statements, NO DELETE, UPDATE OR INSERT etc. statements that might change the data in the database.
 - ONLY USE the tables and columns mentioned in the database schema.
@@ -222,7 +222,7 @@ TEXT_TO_SQL_RULES = """
 """
 
 
-calculated_field_instructions = """
+_DEFAULT_CALCULATED_FIELD_INSTRUCTIONS = """
 #### Instructions for Calculated Field ####
 
 The first structure is the special column marked as "Calculated Field". You need to interpret the purpose and calculation basis for these columns, then utilize them in the following text-to-sql generation tasks.
@@ -269,7 +269,7 @@ So utilize those Calculated Fields in the SQL generation process to give an answ
 SQL Query: SELECT AVG(Rating) FROM orders WHERE ReviewCount > 10
 """
 
-metric_instructions = """
+_DEFAULT_METRIC_INSTRUCTIONS = """
 #### Instructions for Metric ####
 
 Second, you will learn how to effectively utilize the special "metric" structure in text-to-SQL generation tasks.
@@ -360,7 +360,7 @@ WHERE
   PurchaseTimestamp < DATE_TRUNC('month', CURRENT_DATE)
 """
 
-json_field_instructions = """
+_DEFAULT_JSON_FIELD_INSTRUCTIONS = """
 #### Instructions for JSON related functions ####
 - ONLY USE JSON_QUERY for querying fields if "json_type":"JSON" is identified in the columns comment, NOT the deprecated JSON_EXTRACT_SCALAR function.
     - DON'T USE CAST for JSON fields, ONLY USE the following funtions:
@@ -422,29 +422,6 @@ When generating new queries, try to follow similar patterns when applicable, whi
 Learn about the usage of the schema structures and generate SQL based on them.
 """
 
-sql_generation_system_prompt = f"""
-You are a helpful assistant that converts natural language queries into ANSI SQL queries.
-
-Given user's question, database schema, etc., you should think deeply and carefully and generate the SQL query based on the given reasoning plan step by step.
-
-### GENERAL RULES ###
-
-1. YOU MUST FOLLOW the instructions strictly to generate the SQL query if the section of USER INSTRUCTIONS is available in user's input.
-2. YOU MUST ONLY CHOOSE the appropriate functions from the sql functions list and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input.
-3. YOU MUST REFER to the sql samples and learn the usage of the schema structures and how SQL is written based on them if the section of SQL SAMPLES is available in user's input.
-4. YOU MUST FOLLOW the reasoning plan step by step strictly to generate the SQL query if the section of REASONING PLAN is available in user's input.
-5. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
-
-{TEXT_TO_SQL_RULES}
-
-### FINAL ANSWER FORMAT ###
-The final answer must be a ANSI SQL query in JSON format:
-
-{{
-    "sql": <SQL_QUERY_STRING>
-}}
-"""
-
 
 sql_generation_reasoning_system_prompt = """
 ### TASK ###
@@ -470,6 +447,113 @@ otherwise, you will put the relative timeframe in the SQL query.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
+"""
+
+
+TEXT_TO_SQL_RULES: str | None = None
+CALCULATED_FIELD_INSTRUCTIONS: str | None = None
+METRIC_INSTRUCTIONS: str | None = None
+JSON_FIELD_INSTRUCTIONS: str | None = None
+
+
+def set_sql_knowledge(sql_knowledge=None):
+    global \
+        TEXT_TO_SQL_RULES, \
+        CALCULATED_FIELD_INSTRUCTIONS, \
+        METRIC_INSTRUCTIONS, \
+        JSON_FIELD_INSTRUCTIONS
+
+    if sql_knowledge is not None:
+        from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
+
+        if isinstance(sql_knowledge, SqlKnowledge):
+            text_to_sql_rule = sql_knowledge.text_to_sql_rule
+            if text_to_sql_rule and text_to_sql_rule.strip():
+                TEXT_TO_SQL_RULES = text_to_sql_rule
+            else:
+                TEXT_TO_SQL_RULES = _DEFAULT_TEXT_TO_SQL_RULES
+
+            calculated_field_instruction = sql_knowledge.calculated_field_instructions
+            if calculated_field_instruction and calculated_field_instruction.strip():
+                CALCULATED_FIELD_INSTRUCTIONS = calculated_field_instruction
+            else:
+                CALCULATED_FIELD_INSTRUCTIONS = _DEFAULT_CALCULATED_FIELD_INSTRUCTIONS
+
+            metric_instruction = sql_knowledge.metric_instructions
+            if metric_instruction and metric_instruction.strip():
+                METRIC_INSTRUCTIONS = metric_instruction
+            else:
+                METRIC_INSTRUCTIONS = _DEFAULT_METRIC_INSTRUCTIONS
+
+            json_field_instruction = sql_knowledge.json_field_instructions
+            if json_field_instruction and json_field_instruction.strip():
+                JSON_FIELD_INSTRUCTIONS = json_field_instruction
+            else:
+                JSON_FIELD_INSTRUCTIONS = _DEFAULT_JSON_FIELD_INSTRUCTIONS
+            return
+
+    TEXT_TO_SQL_RULES = _DEFAULT_TEXT_TO_SQL_RULES
+    CALCULATED_FIELD_INSTRUCTIONS = _DEFAULT_CALCULATED_FIELD_INSTRUCTIONS
+    METRIC_INSTRUCTIONS = _DEFAULT_METRIC_INSTRUCTIONS
+    JSON_FIELD_INSTRUCTIONS = _DEFAULT_JSON_FIELD_INSTRUCTIONS
+
+
+def get_text_to_sql_rules() -> str:
+    return (
+        TEXT_TO_SQL_RULES
+        if TEXT_TO_SQL_RULES is not None
+        else _DEFAULT_TEXT_TO_SQL_RULES
+    )
+
+
+def get_calculated_field_instructions() -> str:
+    return (
+        CALCULATED_FIELD_INSTRUCTIONS
+        if CALCULATED_FIELD_INSTRUCTIONS is not None
+        else _DEFAULT_CALCULATED_FIELD_INSTRUCTIONS
+    )
+
+
+def get_metric_instructions() -> str:
+    return (
+        METRIC_INSTRUCTIONS
+        if METRIC_INSTRUCTIONS is not None
+        else _DEFAULT_METRIC_INSTRUCTIONS
+    )
+
+
+def get_json_field_instructions() -> str:
+    return (
+        JSON_FIELD_INSTRUCTIONS
+        if JSON_FIELD_INSTRUCTIONS is not None
+        else _DEFAULT_JSON_FIELD_INSTRUCTIONS
+    )
+
+
+def get_sql_generation_system_prompt() -> str:
+    text_to_sql_rules = get_text_to_sql_rules()
+
+    return f"""
+You are a helpful assistant that converts natural language queries into ANSI SQL queries.
+
+Given user's question, database schema, etc., you should think deeply and carefully and generate the SQL query based on the given reasoning plan step by step.
+
+### GENERAL RULES ###
+
+1. YOU MUST FOLLOW the instructions strictly to generate the SQL query if the section of USER INSTRUCTIONS is available in user's input.
+2. YOU MUST ONLY CHOOSE the appropriate functions from the sql functions list and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input.
+3. YOU MUST REFER to the sql samples and learn the usage of the schema structures and how SQL is written based on them if the section of SQL SAMPLES is available in user's input.
+4. YOU MUST FOLLOW the reasoning plan step by step strictly to generate the SQL query if the section of REASONING PLAN is available in user's input.
+5. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
+
+{text_to_sql_rules}
+
+### FINAL ANSWER FORMAT ###
+The final answer must be a ANSI SQL query in JSON format:
+
+{{
+    "sql": <SQL_QUERY_STRING>
+}}
 """
 
 

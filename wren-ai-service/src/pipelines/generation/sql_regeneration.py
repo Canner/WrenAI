@@ -13,12 +13,12 @@ from src.core.provider import LLMProvider
 from src.pipelines.common import clean_up_new_lines
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
-    TEXT_TO_SQL_RULES,
     SQLGenPostProcessor,
-    calculated_field_instructions,
     construct_instructions,
-    json_field_instructions,
-    metric_instructions,
+    get_calculated_field_instructions,
+    get_json_field_instructions,
+    get_metric_instructions,
+    get_text_to_sql_rules,
 )
 from src.pipelines.retrieval.sql_functions import SqlFunction
 from src.utils import trace_cost
@@ -26,14 +26,17 @@ from src.utils import trace_cost
 logger = logging.getLogger("wren-ai-service")
 
 
-sql_regeneration_system_prompt = f"""
+def get_sql_regeneration_system_prompt() -> str:
+    text_to_sql_rules = get_text_to_sql_rules()
+
+    return f"""
 ### TASK ###
 You are a great ANSI SQL expert. Now you are given database schema, SQL generation reasoning and an original SQL query, 
 please carefully review the reasoning, and then generate a new SQL query that matches the reasoning.
 While generating the new SQL query, you should use the original SQL query as a reference.
 While generating the new SQL query, make sure to use the database schema to generate the SQL query.
 
-{TEXT_TO_SQL_RULES}
+{text_to_sql_rules}
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a ANSI SQL query in JSON format:
@@ -42,6 +45,7 @@ The final answer must be a ANSI SQL query in JSON format:
     "sql": <SQL_QUERY_STRING>
 }}
 """
+
 
 sql_regeneration_user_prompt_template = """
 ### DATABASE SCHEMA ###
@@ -115,10 +119,12 @@ def prompt(
             instructions=instructions,
         ),
         calculated_field_instructions=(
-            calculated_field_instructions if has_calculated_field else ""
+            get_calculated_field_instructions() if has_calculated_field else ""
         ),
-        metric_instructions=(metric_instructions if has_metric else ""),
-        json_field_instructions=(json_field_instructions if has_json_field else ""),
+        metric_instructions=(get_metric_instructions() if has_metric else ""),
+        json_field_instructions=(
+            get_json_field_instructions() if has_json_field else ""
+        ),
         sql_samples=sql_samples,
         sql_functions=sql_functions,
     )
@@ -157,9 +163,11 @@ class SQLRegeneration(BasicPipeline):
         engine: Engine,
         **kwargs,
     ):
+        self._llm_provider = llm_provider
+
         self._components = {
             "generator": llm_provider.get_generator(
-                system_prompt=sql_regeneration_system_prompt,
+                system_prompt=get_sql_regeneration_system_prompt(),
                 generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
             ),
             "generator_name": llm_provider.get_model(),
@@ -188,6 +196,12 @@ class SQLRegeneration(BasicPipeline):
         sql_functions: list[SqlFunction] | None = None,
     ):
         logger.info("SQL Regeneration pipeline is running...")
+
+        self._components["generator"] = self._llm_provider.get_generator(
+            system_prompt=get_sql_regeneration_system_prompt(),
+            generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
+        )
+
         return await self._pipe.execute(
             ["post_process"],
             inputs={

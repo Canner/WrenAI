@@ -14,11 +14,11 @@ from src.pipelines.common import clean_up_new_lines, retrieve_metadata
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
-    calculated_field_instructions,
     construct_instructions,
-    json_field_instructions,
-    metric_instructions,
-    sql_generation_system_prompt,
+    get_calculated_field_instructions,
+    get_json_field_instructions,
+    get_metric_instructions,
+    get_sql_generation_system_prompt,
 )
 from src.pipelines.retrieval.sql_functions import SqlFunction
 from src.utils import trace_cost
@@ -102,10 +102,12 @@ def prompt(
             instructions=instructions,
         ),
         calculated_field_instructions=(
-            calculated_field_instructions if has_calculated_field else ""
+            get_calculated_field_instructions() if has_calculated_field else ""
         ),
-        metric_instructions=(metric_instructions if has_metric else ""),
-        json_field_instructions=(json_field_instructions if has_json_field else ""),
+        metric_instructions=(get_metric_instructions() if has_metric else ""),
+        json_field_instructions=(
+            get_json_field_instructions() if has_json_field else ""
+        ),
         sql_samples=sql_samples,
         sql_functions=sql_functions,
     )
@@ -157,9 +159,11 @@ class SQLGeneration(BasicPipeline):
             document_store_provider.get_store("project_meta")
         )
 
+        self._llm_provider = llm_provider
+
         self._components = {
             "generator": llm_provider.get_generator(
-                system_prompt=sql_generation_system_prompt,
+                system_prompt=get_sql_generation_system_prompt(),
                 generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
             ),
             "generator_name": llm_provider.get_model(),
@@ -168,6 +172,7 @@ class SQLGeneration(BasicPipeline):
             ),
             "post_processor": SQLGenPostProcessor(engine=engine),
         }
+        print("get_sql_generation_system_prompt", get_sql_generation_system_prompt())
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
@@ -196,6 +201,11 @@ class SQLGeneration(BasicPipeline):
             metadata = await retrieve_metadata(project_id or "", self._retriever)
         else:
             metadata = {}
+
+        self._components["generator"] = self._llm_provider.get_generator(
+            system_prompt=get_sql_generation_system_prompt(),
+            generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
+        )
 
         return await self._pipe.execute(
             ["post_process"],
