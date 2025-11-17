@@ -150,6 +150,9 @@ def create_service_container(
                 ),
                 "sql_functions_retrieval": _sql_functions_retrieval_pipeline,
                 "sql_diagnosis": _sql_diagnosis_pipeline,
+                "sql_knowledge_retrieval": retrieval.SqlKnowledges(
+                    **pipe_components["sql_knowledge_retrieval"],
+                ),
             },
             allow_intent_classification=settings.allow_intent_classification,
             allow_sql_generation_reasoning=settings.allow_sql_generation_reasoning,
