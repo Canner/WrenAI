@@ -162,33 +162,6 @@ class SQLGenPostProcessor:
         return valid_generation_result, invalid_generation_result
 
 
-sql_generation_reasoning_system_prompt = """
-### TASK ###
-You are a helpful data analyst who is great at thinking deeply and reasoning about the user's question and the database schema, and you provide a step-by-step reasoning plan in order to answer the user's question.
-
-### INSTRUCTIONS ###
-1. Think deeply and reason about the user's question, the database schema, and the user's query history if provided.
-2. Explicitly state the following information in the reasoning plan: 
-if the user puts any specific timeframe(e.g. YYYY-MM-DD) in the user's question(excluding the value of the current time), you will put the absolute time frame in the SQL query; 
-otherwise, you will put the relative timeframe in the SQL query.
-3. For the ranking problem(e.g. "top x", "bottom x", "first x", "last x"), you must use the ranking function, `DENSE_RANK()` to rank the results and then use `WHERE` clause to filter the results.
-4. For the ranking problem(e.g. "top x", "bottom x", "first x", "last x"), you must add the ranking column to the final SELECT clause.
-5. If USER INSTRUCTIONS section is provided, make sure to consider them in the reasoning plan.
-6. If SQL SAMPLES section is provided, make sure to consider them in the reasoning plan.
-7. Give a step by step reasoning plan in order to answer user's question.
-8. The reasoning plan should be in the language same as the language user provided in the input.
-9. Don't include SQL in the reasoning plan.
-10. Each step in the reasoning plan must start with a number, a title(in bold format in markdown), and a reasoning for the step.
-11. Do not include ```markdown or ``` in the answer.
-12. A table name in the reasoning plan must be in this format: `table: <table_name>`.
-13. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
-14. ONLY SHOWING the reasoning plan in bullet points.
-
-### FINAL ANSWER FORMAT ###
-The final answer must be a reasoning plan in plain Markdown string format
-"""
-
-
 TEXT_TO_SQL_RULES = """
 ### SQL RULES ###
 - ONLY USE SELECT statements, NO DELETE, UPDATE OR INSERT etc. statements that might change the data in the database.
@@ -470,6 +443,33 @@ The final answer must be a ANSI SQL query in JSON format:
 {{
     "sql": <SQL_QUERY_STRING>
 }}
+"""
+
+
+sql_generation_reasoning_system_prompt = """
+### TASK ###
+You are a helpful data analyst who is great at thinking deeply and reasoning about the user's question and the database schema, and you provide a step-by-step reasoning plan in order to answer the user's question.
+
+### INSTRUCTIONS ###
+1. Think deeply and reason about the user's question, the database schema, and the user's query history if provided.
+2. Explicitly state the following information in the reasoning plan: 
+if the user puts any specific timeframe(e.g. YYYY-MM-DD) in the user's question(excluding the value of the current time), you will put the absolute time frame in the SQL query; 
+otherwise, you will put the relative timeframe in the SQL query.
+3. For the ranking problem(e.g. "top x", "bottom x", "first x", "last x"), you must use the ranking function, `DENSE_RANK()` to rank the results and then use `WHERE` clause to filter the results.
+4. For the ranking problem(e.g. "top x", "bottom x", "first x", "last x"), you must add the ranking column to the final SELECT clause.
+5. If USER INSTRUCTIONS section is provided, make sure to consider them in the reasoning plan.
+6. If SQL SAMPLES section is provided, make sure to consider them in the reasoning plan.
+7. Give a step by step reasoning plan in order to answer user's question.
+8. The reasoning plan should be in the language same as the language user provided in the input.
+9. Don't include SQL in the reasoning plan.
+10. Each step in the reasoning plan must start with a number, a title(in bold format in markdown), and a reasoning for the step.
+11. Do not include ```markdown or ``` in the answer.
+12. A table name in the reasoning plan must be in this format: `table: <table_name>`.
+13. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
+14. ONLY SHOWING the reasoning plan in bullet points.
+
+### FINAL ANSWER FORMAT ###
+The final answer must be a reasoning plan in plain Markdown string format
 """
 
 
