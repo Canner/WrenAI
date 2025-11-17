@@ -18,10 +18,8 @@ logger = logging.getLogger("wren-ai-service")
 
 
 class SqlKnowledge:
-    _data: Dict = None
-
     def __init__(self, sql_knowledge: dict):
-        self._data = sql_knowledge
+        self._data: Dict = sql_knowledge
 
     @classmethod
     def empty(cls, sql_knowledge: dict):

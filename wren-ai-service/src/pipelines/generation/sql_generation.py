@@ -208,10 +208,7 @@ class SQLGeneration(BasicPipeline):
             system_prompt=get_sql_generation_system_prompt(sql_knowledge),
             generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
         )
-        print(
-            "get_sql_generation_system_prompt(sql_knowledge):",
-            get_sql_generation_system_prompt(sql_knowledge),
-        )
+
         return await self._pipe.execute(
             ["post_process"],
             inputs={
