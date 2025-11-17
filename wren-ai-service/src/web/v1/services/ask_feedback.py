@@ -59,6 +59,7 @@ class AskFeedbackService:
     def __init__(
         self,
         pipelines: Dict[str, BasicPipeline],
+        allow_sql_knowledge_retrieval: bool = True,
         allow_sql_functions_retrieval: bool = True,
         allow_sql_diagnosis: bool = True,
         maxsize: int = 1_000_000,
@@ -68,6 +69,7 @@ class AskFeedbackService:
         self._ask_feedback_results: Dict[str, AskFeedbackResultResponse] = TTLCache(
             maxsize=maxsize, ttl=ttl
         )
+        self._allow_sql_knowledge_retrieval = allow_sql_knowledge_retrieval
         self._allow_sql_functions_retrieval = allow_sql_functions_retrieval
         self._allow_sql_diagnosis = allow_sql_diagnosis
 
@@ -160,6 +162,11 @@ class AskFeedbackService:
                     status="generating",
                     trace_id=trace_id,
                 )
+
+                if self._allow_sql_knowledge_retrieval:
+                    await self._pipelines["sql_knowledge_retrieval"].run(
+                        project_id=ask_feedback_request.project_id,
+                    )
 
                 text_to_sql_generation_results = await self._pipelines[
                     "sql_regeneration"

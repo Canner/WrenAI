@@ -102,6 +102,7 @@ class AskService:
         allow_sql_generation_reasoning: bool = True,
         allow_sql_functions_retrieval: bool = True,
         allow_sql_diagnosis: bool = True,
+        allow_sql_knowledge_retrieval: bool = True,
         enable_column_pruning: bool = False,
         max_sql_correction_retries: int = 3,
         max_histories: int = 5,
@@ -116,6 +117,7 @@ class AskService:
         self._allow_sql_functions_retrieval = allow_sql_functions_retrieval
         self._allow_intent_classification = allow_intent_classification
         self._allow_sql_diagnosis = allow_sql_diagnosis
+        self._allow_sql_knowledge_retrieval = allow_sql_knowledge_retrieval
         self._enable_column_pruning = enable_column_pruning
         self._max_histories = max_histories
         self._max_sql_correction_retries = max_sql_correction_retries
@@ -338,6 +340,11 @@ class AskService:
                     trace_id=trace_id,
                     is_followup=True if histories else False,
                 )
+
+                if self._allow_sql_knowledge_retrieval:
+                    await self._pipelines["sql_knowledge_retrieval"].run(
+                        project_id=ask_request.project_id,
+                    )
 
                 retrieval_result = await self._pipelines["db_schema_retrieval"].run(
                     query=user_query,
