@@ -172,7 +172,6 @@ class SQLGeneration(BasicPipeline):
             ),
             "post_processor": SQLGenPostProcessor(engine=engine),
         }
-        print("get_sql_generation_system_prompt", get_sql_generation_system_prompt())
 
         super().__init__(
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
