@@ -13,17 +13,40 @@ from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.pipelines.common import clean_up_new_lines, retrieve_metadata
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
+    TEXT_TO_SQL_RULES,
     SQLGenPostProcessor,
     calculated_field_instructions,
     construct_instructions,
     json_field_instructions,
     metric_instructions,
-    sql_generation_system_prompt,
 )
 from src.pipelines.retrieval.sql_functions import SqlFunction
 from src.utils import trace_cost
 
 logger = logging.getLogger("wren-ai-service")
+
+sql_generation_system_prompt = f"""
+You are a helpful assistant that converts natural language queries into ANSI SQL queries.
+
+Given user's question, database schema, etc., you should think deeply and carefully and generate the SQL query based on the given reasoning plan step by step.
+
+### GENERAL RULES ###
+
+1. YOU MUST FOLLOW the instructions strictly to generate the SQL query if the section of USER INSTRUCTIONS is available in user's input.
+2. YOU MUST ONLY CHOOSE the appropriate functions from the sql functions list and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input.
+3. YOU MUST REFER to the sql samples and learn the usage of the schema structures and how SQL is written based on them if the section of SQL SAMPLES is available in user's input.
+4. YOU MUST FOLLOW the reasoning plan step by step strictly to generate the SQL query if the section of REASONING PLAN is available in user's input.
+5. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
+
+{TEXT_TO_SQL_RULES}
+
+### FINAL ANSWER FORMAT ###
+The final answer must be a ANSI SQL query in JSON format:
+
+{{
+    "sql": <SQL_QUERY_STRING>
+}}
+"""
 
 
 sql_generation_user_prompt_template = """
