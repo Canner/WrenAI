@@ -21,13 +21,16 @@ from src.pipelines.generation.utils.sql import (
     get_text_to_sql_rules,
 )
 from src.pipelines.retrieval.sql_functions import SqlFunction
+from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
 from src.utils import trace_cost
 
 logger = logging.getLogger("wren-ai-service")
 
 
-def get_sql_regeneration_system_prompt() -> str:
-    text_to_sql_rules = get_text_to_sql_rules()
+def get_sql_regeneration_system_prompt(
+    sql_knowledge: SqlKnowledge | None = None,
+) -> str:
+    text_to_sql_rules = get_text_to_sql_rules(sql_knowledge)
 
     return f"""
 ### TASK ###
@@ -110,6 +113,7 @@ def prompt(
     has_metric: bool = False,
     has_json_field: bool = False,
     sql_functions: list[SqlFunction] | None = None,
+    sql_knowledge: SqlKnowledge | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         sql=sql,
@@ -119,11 +123,15 @@ def prompt(
             instructions=instructions,
         ),
         calculated_field_instructions=(
-            get_calculated_field_instructions() if has_calculated_field else ""
+            get_calculated_field_instructions(sql_knowledge)
+            if has_calculated_field
+            else ""
         ),
-        metric_instructions=(get_metric_instructions() if has_metric else ""),
+        metric_instructions=(
+            get_metric_instructions(sql_knowledge) if has_metric else ""
+        ),
         json_field_instructions=(
-            get_json_field_instructions() if has_json_field else ""
+            get_json_field_instructions(sql_knowledge) if has_json_field else ""
         ),
         sql_samples=sql_samples,
         sql_functions=sql_functions,
@@ -190,11 +198,12 @@ class SQLRegeneration(BasicPipeline):
         has_metric: bool = False,
         has_json_field: bool = False,
         sql_functions: list[SqlFunction] | None = None,
+        sql_knowledge: SqlKnowledge | None = None,
     ):
         logger.info("SQL Regeneration pipeline is running...")
 
         self._components["generator"] = self._llm_provider.get_generator(
-            system_prompt=get_sql_regeneration_system_prompt(),
+            system_prompt=get_sql_regeneration_system_prompt(sql_knowledge),
             generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
         )
 
@@ -211,6 +220,7 @@ class SQLRegeneration(BasicPipeline):
                 "has_metric": has_metric,
                 "has_json_field": has_json_field,
                 "sql_functions": sql_functions,
+                "sql_knowledge": sql_knowledge,
                 **self._components,
             },
         )

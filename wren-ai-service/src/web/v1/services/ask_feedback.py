@@ -104,6 +104,8 @@ class AskFeedbackService:
         api_results = []
         error_message = None
         invalid_sql = None
+        sql_knowledge = None
+        allow_sql_knowledge_retrieval = self._allow_sql_knowledge_retrieval
 
         try:
             if not self._is_stopped(query_id, self._ask_feedback_results):
@@ -141,6 +143,13 @@ class AskFeedbackService:
                 else:
                     sql_functions = []
 
+                if allow_sql_knowledge_retrieval:
+                    sql_knowledge = await self._pipelines[
+                        "sql_knowledge_retrieval"
+                    ].run(
+                        project_id=ask_feedback_request.project_id,
+                    )
+
                 # Extract results from completed tasks
                 _retrieval_result = retrieval_task.get(
                     "construct_retrieval_results", {}
@@ -163,11 +172,6 @@ class AskFeedbackService:
                     trace_id=trace_id,
                 )
 
-                if self._allow_sql_knowledge_retrieval:
-                    await self._pipelines["sql_knowledge_retrieval"].run(
-                        project_id=ask_feedback_request.project_id,
-                    )
-
                 text_to_sql_generation_results = await self._pipelines[
                     "sql_regeneration"
                 ].run(
@@ -181,6 +185,7 @@ class AskFeedbackService:
                     has_metric=has_metric,
                     has_json_field=has_json_field,
                     sql_functions=sql_functions,
+                    sql_knowledge=sql_knowledge,
                 )
 
                 if sql_valid_result := text_to_sql_generation_results["post_process"][
@@ -235,6 +240,7 @@ class AskFeedbackService:
                             },
                             project_id=ask_feedback_request.project_id,
                             sql_functions=sql_functions,
+                            sql_knowledge=sql_knowledge,
                         )
 
                         if valid_generation_result := sql_correction_results[

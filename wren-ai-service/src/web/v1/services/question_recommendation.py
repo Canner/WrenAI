@@ -115,9 +115,11 @@ class QuestionRecommendation:
                 sql_functions = []
 
             if self._allow_sql_knowledge_retrieval:
-                await self._pipelines["sql_knowledge_retrieval"].run(
+                sql_knowledge = await self._pipelines["sql_knowledge_retrieval"].run(
                     project_id=project_id,
                 )
+            else:
+                sql_knowledge = None
 
             generated_sql = await self._pipelines["sql_generation"].run(
                 query=candidate["question"],
@@ -130,6 +132,7 @@ class QuestionRecommendation:
                 has_json_field=has_json_field,
                 sql_functions=sql_functions,
                 allow_data_preview=allow_data_preview,
+                sql_knowledge=sql_knowledge,
             )
 
             post_process = generated_sql["post_process"]

@@ -11,6 +11,7 @@ from src.core.engine import (
     Engine,
     clean_generation_result,
 )
+from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
 from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
@@ -456,49 +457,22 @@ METRIC_INSTRUCTIONS: str | None = None
 JSON_FIELD_INSTRUCTIONS: str | None = None
 
 
-def set_sql_knowledge(sql_knowledge=None):
-    global \
-        TEXT_TO_SQL_RULES, \
-        CALCULATED_FIELD_INSTRUCTIONS, \
-        METRIC_INSTRUCTIONS, \
-        JSON_FIELD_INSTRUCTIONS
+def _extract_from_sql_knowledge(
+    sql_knowledge: SqlKnowledge | None, attribute_name: str, default_value: str
+) -> str:
+    if sql_knowledge is None:
+        return default_value
 
+    value = getattr(sql_knowledge, attribute_name, "")
+    return value if value and value.strip() else default_value
+
+
+def get_text_to_sql_rules(sql_knowledge: SqlKnowledge | None = None) -> str:
     if sql_knowledge is not None:
-        from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
+        return _extract_from_sql_knowledge(
+            sql_knowledge, "text_to_sql_rule", _DEFAULT_TEXT_TO_SQL_RULES
+        )
 
-        if isinstance(sql_knowledge, SqlKnowledge):
-            text_to_sql_rule = sql_knowledge.text_to_sql_rule
-            if text_to_sql_rule and text_to_sql_rule.strip():
-                TEXT_TO_SQL_RULES = text_to_sql_rule
-            else:
-                TEXT_TO_SQL_RULES = _DEFAULT_TEXT_TO_SQL_RULES
-
-            calculated_field_instruction = sql_knowledge.calculated_field_instructions
-            if calculated_field_instruction and calculated_field_instruction.strip():
-                CALCULATED_FIELD_INSTRUCTIONS = calculated_field_instruction
-            else:
-                CALCULATED_FIELD_INSTRUCTIONS = _DEFAULT_CALCULATED_FIELD_INSTRUCTIONS
-
-            metric_instruction = sql_knowledge.metric_instructions
-            if metric_instruction and metric_instruction.strip():
-                METRIC_INSTRUCTIONS = metric_instruction
-            else:
-                METRIC_INSTRUCTIONS = _DEFAULT_METRIC_INSTRUCTIONS
-
-            json_field_instruction = sql_knowledge.json_field_instructions
-            if json_field_instruction and json_field_instruction.strip():
-                JSON_FIELD_INSTRUCTIONS = json_field_instruction
-            else:
-                JSON_FIELD_INSTRUCTIONS = _DEFAULT_JSON_FIELD_INSTRUCTIONS
-            return
-
-    TEXT_TO_SQL_RULES = _DEFAULT_TEXT_TO_SQL_RULES
-    CALCULATED_FIELD_INSTRUCTIONS = _DEFAULT_CALCULATED_FIELD_INSTRUCTIONS
-    METRIC_INSTRUCTIONS = _DEFAULT_METRIC_INSTRUCTIONS
-    JSON_FIELD_INSTRUCTIONS = _DEFAULT_JSON_FIELD_INSTRUCTIONS
-
-
-def get_text_to_sql_rules() -> str:
     return (
         TEXT_TO_SQL_RULES
         if TEXT_TO_SQL_RULES is not None
@@ -506,7 +480,14 @@ def get_text_to_sql_rules() -> str:
     )
 
 
-def get_calculated_field_instructions() -> str:
+def get_calculated_field_instructions(sql_knowledge: SqlKnowledge | None = None) -> str:
+    if sql_knowledge is not None:
+        return _extract_from_sql_knowledge(
+            sql_knowledge,
+            "calculated_field_instructions",
+            _DEFAULT_CALCULATED_FIELD_INSTRUCTIONS,
+        )
+
     return (
         CALCULATED_FIELD_INSTRUCTIONS
         if CALCULATED_FIELD_INSTRUCTIONS is not None
@@ -514,7 +495,12 @@ def get_calculated_field_instructions() -> str:
     )
 
 
-def get_metric_instructions() -> str:
+def get_metric_instructions(sql_knowledge: SqlKnowledge | None = None) -> str:
+    if sql_knowledge is not None:
+        return _extract_from_sql_knowledge(
+            sql_knowledge, "metric_instructions", _DEFAULT_METRIC_INSTRUCTIONS
+        )
+
     return (
         METRIC_INSTRUCTIONS
         if METRIC_INSTRUCTIONS is not None
@@ -522,7 +508,12 @@ def get_metric_instructions() -> str:
     )
 
 
-def get_json_field_instructions() -> str:
+def get_json_field_instructions(sql_knowledge: SqlKnowledge | None = None) -> str:
+    if sql_knowledge is not None:
+        return _extract_from_sql_knowledge(
+            sql_knowledge, "json_field_instructions", _DEFAULT_JSON_FIELD_INSTRUCTIONS
+        )
+
     return (
         JSON_FIELD_INSTRUCTIONS
         if JSON_FIELD_INSTRUCTIONS is not None
@@ -530,8 +521,8 @@ def get_json_field_instructions() -> str:
     )
 
 
-def get_sql_generation_system_prompt() -> str:
-    text_to_sql_rules = get_text_to_sql_rules()
+def get_sql_generation_system_prompt(sql_knowledge: SqlKnowledge | None = None) -> str:
+    text_to_sql_rules = get_text_to_sql_rules(sql_knowledge)
 
     return f"""
 You are a helpful assistant that converts natural language queries into ANSI SQL queries.

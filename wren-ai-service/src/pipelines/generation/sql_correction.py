@@ -19,13 +19,14 @@ from src.pipelines.generation.utils.sql import (
     get_text_to_sql_rules,
 )
 from src.pipelines.retrieval.sql_functions import SqlFunction
+from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
 from src.utils import trace_cost
 
 logger = logging.getLogger("wren-ai-service")
 
 
-def get_sql_correction_system_prompt() -> str:
-    text_to_sql_rules = get_text_to_sql_rules()
+def get_sql_correction_system_prompt(sql_knowledge: SqlKnowledge | None = None) -> str:
+    text_to_sql_rules = get_text_to_sql_rules(sql_knowledge)
 
     return f"""
 ### TASK ###
@@ -164,11 +165,12 @@ class SQLCorrection(BasicPipeline):
         project_id: str | None = None,
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
+        sql_knowledge: SqlKnowledge | None = None,
     ):
         logger.info("SQLCorrection pipeline is running...")
 
         self._components["generator"] = self._llm_provider.get_generator(
-            system_prompt=get_sql_correction_system_prompt(),
+            system_prompt=get_sql_correction_system_prompt(sql_knowledge),
             generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
         )
 

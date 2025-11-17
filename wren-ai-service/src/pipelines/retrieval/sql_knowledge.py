@@ -12,7 +12,6 @@ from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider
 from src.pipelines.common import retrieve_metadata
-from src.pipelines.generation.utils.sql import set_sql_knowledge
 from src.providers.engine.wren import WrenIbis
 
 logger = logging.getLogger("wren-ai-service")
@@ -85,9 +84,8 @@ def cache(
 ) -> Optional[SqlKnowledge]:
     if get_knowledge:
         ttl_cache[data_source] = get_knowledge
-        set_sql_knowledge(get_knowledge)
 
-    return
+    return get_knowledge
 
 
 ## End of Pipeline
@@ -128,7 +126,6 @@ class SqlKnowledges(BasicPipeline):
 
         if _data_source in self._cache:
             logger.info(f"Hit cache of SQL Knowledge for {_data_source}")
-            set_sql_knowledge(self._cache[_data_source])
             return self._cache[_data_source]
 
         input = {

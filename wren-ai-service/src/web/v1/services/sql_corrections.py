@@ -80,6 +80,7 @@ class SqlCorrectionService:
         retrieved_tables = request.retrieved_tables
         use_dry_plan = request.use_dry_plan
         allow_dry_plan_fallback = request.allow_dry_plan_fallback
+        sql_knowledge = None
 
         try:
             _invalid = {
@@ -95,7 +96,7 @@ class SqlCorrectionService:
                 )["post_process"]
 
             if self._allow_sql_knowledge_retrieval:
-                await self._pipelines["sql_knowledge_retrieval"].run(
+                sql_knowledge = await self._pipelines["sql_knowledge_retrieval"].run(
                     project_id=project_id,
                 )
 
@@ -117,6 +118,7 @@ class SqlCorrectionService:
                 project_id=project_id,
                 use_dry_plan=use_dry_plan,
                 allow_dry_plan_fallback=allow_dry_plan_fallback,
+                sql_knowledge=sql_knowledge,
             )
 
             post_process = res["post_process"]
