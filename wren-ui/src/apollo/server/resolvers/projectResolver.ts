@@ -709,15 +709,17 @@ export class ProjectResolver {
     const modelValues = selectedTables.map((table) => {
       const properties = table?.properties;
       // compactTable contain schema and catalog, these information are for building tableReference in mdl
+
       const model = {
         projectId: project.id,
-        displayName: table.name, // use table name as displayName, referenceName and tableName
+        displayName: table.name, // table name comes from ibis-server already formatted correctly
         referenceName: replaceInvalidReferenceName(table.name),
         sourceTableName: table.name,
         cached: false,
         refreshTime: null,
         properties: properties ? JSON.stringify(properties) : null,
       } as Partial<Model>;
+
       return model;
     });
     const models = await ctx.modelRepository.createMany(modelValues);

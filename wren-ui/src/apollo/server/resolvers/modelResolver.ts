@@ -32,6 +32,17 @@ import { TelemetryEvent } from '../telemetry/telemetry';
 const logger = getLogger('ModelResolver');
 logger.level = 'debug';
 
+// Helper function to strip Oracle table prefixes from display names
+function stripOracleDisplayPrefix(displayName: string): string {
+  const prefixes = ['RT ', 'ADMIN ', 'RT_', 'ADMIN_'];
+  for (const prefix of prefixes) {
+    if (displayName.startsWith(prefix)) {
+      return displayName.substring(prefix.length);
+    }
+  }
+  return displayName;
+}
+
 export enum SyncStatusEnum {
   IN_PROGRESS = 'IN_PROGRESS',
   SYNCRONIZED = 'SYNCRONIZED',
@@ -377,7 +388,7 @@ export class ModelResolver {
     const properties = dataSourceTable?.properties;
     const modelValue = {
       projectId: project.id,
-      displayName: sourceTableName, //use table name as displayName, referenceName and tableName
+      displayName: stripOracleDisplayPrefix(sourceTableName), // Strip RT/ADMIN prefix for UI display
       referenceName: replaceInvalidReferenceName(sourceTableName),
       sourceTableName: sourceTableName,
       cached: false,
@@ -901,7 +912,8 @@ export class ModelResolver {
     const modelColumns = await ctx.modelColumnRepository.findColumnsByModelIds([
       model.id,
     ]);
-    const sql = `select ${getPreviewColumnsStr(modelColumns)} from "${model.referenceName}"`;
+    // sourceTableName is already just the table name (schema prefix stripped during model creation)
+    const sql = `select ${getPreviewColumnsStr(modelColumns)} from ${model.sourceTableName}`;
 
     const data = (await ctx.queryService.preview(sql, {
       project,

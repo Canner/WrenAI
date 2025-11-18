@@ -8,7 +8,9 @@ import { CompactColumn } from '@server/services/metadataService';
 
 export function getPreviewColumnsStr(modelColumns: ModelColumn[]) {
   if (modelColumns.length === 0) return '*';
-  const columns = modelColumns.map((column) => `"${column.referenceName}"`);
+  // Use sourceColumnName (original name with spaces) instead of referenceName (with underscores)
+  // This preserves the actual column names from the database
+  const columns = modelColumns.map((column) => `"${column.sourceColumnName}"`);
   return columns.join(',');
 }
 
@@ -23,7 +25,13 @@ export function transformInvalidColumnName(columnName: string) {
 }
 
 export function replaceInvalidReferenceName(referenceName: string) {
-  // replace dot with underscore
+  // For Oracle schema-qualified names like "SCHEMA"."TABLE", preserve the dot
+  // Only replace dots that are NOT between quotes (for DuckDB-style paths like path.to.table)
+  // If the string contains quotes, it's already a properly formatted identifier - don't modify it
+  if (referenceName.includes('"')) {
+    return referenceName;
+  }
+  // For unquoted paths, replace dots with underscores
   return referenceName.replace(/\./g, '_');
 }
 

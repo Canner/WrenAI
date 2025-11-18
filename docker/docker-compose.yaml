@@ -1,5 +1,3 @@
-version: "3"
-
 volumes:
   data:
 
@@ -19,7 +17,10 @@ services:
     command: /bin/sh /app/init.sh
 
   wren-engine:
-    image: ghcr.io/canner/wren-engine:${WREN_ENGINE_VERSION}
+    # BUILD FROM SOURCE - RepairQ fork with Oracle fixes
+    build:
+      context: ../wren-engine/wren-core-legacy
+      dockerfile: docker/Dockerfile.build
     restart: on-failure
     platform: ${PLATFORM}
     expose:
@@ -34,7 +35,14 @@ services:
       - bootstrap
 
   ibis-server:
-    image: ghcr.io/canner/wren-engine-ibis:${IBIS_SERVER_VERSION}
+    # BUILD FROM SOURCE - RepairQ fork with Oracle CTE fix in Rust code
+    build:
+      context: ../wren-engine/ibis-server
+      dockerfile: Dockerfile
+      additional_contexts:
+        wren-core-py: ../wren-engine/wren-core-py
+        wren-core: ../wren-engine/wren-core
+        wren-core-base: ../wren-engine/wren-core-base
     restart: on-failure
     platform: ${PLATFORM}
     expose:
@@ -47,7 +55,10 @@ services:
       - wren
 
   wren-ai-service:
-    image: ghcr.io/canner/wren-ai-service:${WREN_AI_SERVICE_VERSION}
+    # BUILD FROM SOURCE - RepairQ fork
+    build:
+      context: ../wren-ai-service
+      dockerfile: docker/Dockerfile
     restart: on-failure
     platform: ${PLATFORM}
     expose:
@@ -81,7 +92,10 @@ services:
       - wren
 
   wren-ui:
-    image: ghcr.io/canner/wren-ui:${WREN_UI_VERSION}
+    # BUILD FROM SOURCE - RepairQ fork
+    build:
+      context: ../wren-ui
+      dockerfile: Dockerfile
     restart: on-failure
     platform: ${PLATFORM}
     environment:
