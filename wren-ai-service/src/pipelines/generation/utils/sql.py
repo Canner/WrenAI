@@ -451,12 +451,6 @@ The final answer must be a reasoning plan in plain Markdown string format
 """
 
 
-TEXT_TO_SQL_RULES: str | None = None
-CALCULATED_FIELD_INSTRUCTIONS: str | None = None
-METRIC_INSTRUCTIONS: str | None = None
-JSON_FIELD_INSTRUCTIONS: str | None = None
-
-
 def _extract_from_sql_knowledge(
     sql_knowledge: SqlKnowledge | None, attribute_name: str, default_value: str
 ) -> str:
@@ -473,11 +467,7 @@ def get_text_to_sql_rules(sql_knowledge: SqlKnowledge | None = None) -> str:
             sql_knowledge, "text_to_sql_rule", _DEFAULT_TEXT_TO_SQL_RULES
         )
 
-    return (
-        TEXT_TO_SQL_RULES
-        if TEXT_TO_SQL_RULES is not None
-        else _DEFAULT_TEXT_TO_SQL_RULES
-    )
+    return _DEFAULT_TEXT_TO_SQL_RULES
 
 
 def get_calculated_field_instructions(sql_knowledge: SqlKnowledge | None = None) -> str:
@@ -488,11 +478,7 @@ def get_calculated_field_instructions(sql_knowledge: SqlKnowledge | None = None)
             _DEFAULT_CALCULATED_FIELD_INSTRUCTIONS,
         )
 
-    return (
-        CALCULATED_FIELD_INSTRUCTIONS
-        if CALCULATED_FIELD_INSTRUCTIONS is not None
-        else _DEFAULT_CALCULATED_FIELD_INSTRUCTIONS
-    )
+    return _DEFAULT_CALCULATED_FIELD_INSTRUCTIONS
 
 
 def get_metric_instructions(sql_knowledge: SqlKnowledge | None = None) -> str:
@@ -501,11 +487,7 @@ def get_metric_instructions(sql_knowledge: SqlKnowledge | None = None) -> str:
             sql_knowledge, "metric_instructions", _DEFAULT_METRIC_INSTRUCTIONS
         )
 
-    return (
-        METRIC_INSTRUCTIONS
-        if METRIC_INSTRUCTIONS is not None
-        else _DEFAULT_METRIC_INSTRUCTIONS
-    )
+    return _DEFAULT_METRIC_INSTRUCTIONS
 
 
 def get_json_field_instructions(sql_knowledge: SqlKnowledge | None = None) -> str:
@@ -514,11 +496,7 @@ def get_json_field_instructions(sql_knowledge: SqlKnowledge | None = None) -> st
             sql_knowledge, "json_field_instructions", _DEFAULT_JSON_FIELD_INSTRUCTIONS
         )
 
-    return (
-        JSON_FIELD_INSTRUCTIONS
-        if JSON_FIELD_INSTRUCTIONS is not None
-        else _DEFAULT_JSON_FIELD_INSTRUCTIONS
-    )
+    return _DEFAULT_JSON_FIELD_INSTRUCTIONS
 
 
 def get_sql_generation_system_prompt(sql_knowledge: SqlKnowledge | None = None) -> str:
