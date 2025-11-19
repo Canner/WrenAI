@@ -1246,6 +1246,12 @@ export enum RedshiftConnectionType {
   redshift_iam = 'redshift_iam'
 }
 
+export enum ATHENA_AUTH_METHOD {
+  classic = 'classic',
+  oidc = 'oidc',
+}
+
+
 export type Relation = {
   __typename?: 'Relation';
   fromColumnId: Scalars['Int'];
