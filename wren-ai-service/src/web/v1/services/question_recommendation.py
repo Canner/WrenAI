@@ -31,6 +31,7 @@ class QuestionRecommendation:
         self,
         pipelines: Dict[str, BasicPipeline],
         allow_sql_functions_retrieval: bool = True,
+        max_sql_correction_retries: int = 3,
         maxsize: int = 1_000_000,
         ttl: int = 120,
     ):
@@ -39,6 +40,7 @@ class QuestionRecommendation:
             maxsize=maxsize, ttl=ttl
         )
         self._allow_sql_functions_retrieval = allow_sql_functions_retrieval
+        self._max_sql_correction_retries = max_sql_correction_retries
 
     def _handle_exception(
         self,
@@ -127,10 +129,45 @@ class QuestionRecommendation:
 
             post_process = generated_sql["post_process"]
 
+            # If initial generation fails, try correction loop similar to ask flow
             if len(post_process["valid_generation_result"]) == 0:
-                return post_process
+                failed_dry_run_result = post_process.get(
+                    "invalid_generation_result"
+                )
+                current_sql_correction_retries = 0
 
-            valid_sql = post_process["valid_generation_result"]["sql"]
+                while (
+                    failed_dry_run_result
+                    and current_sql_correction_retries
+                    < self._max_sql_correction_retries
+                ):
+                    current_sql_correction_retries += 1
+
+                    sql_correction_results = await self._pipelines[
+                        "sql_correction"
+                    ].run(
+                        contexts=table_ddls,
+                        invalid_generation_result=failed_dry_run_result,
+                        instructions=instructions,
+                        project_id=project_id,
+                    )
+
+                    post_process = sql_correction_results["post_process"]
+                    if valid_generation_result := post_process.get(
+                        "valid_generation_result"
+                    ):
+                        valid_sql = valid_generation_result["sql"]
+                        break
+
+                    failed_dry_run_result = post_process.get(
+                        "invalid_generation_result"
+                    )
+                else:
+                    # Still no valid SQL after corrections
+                    return post_process
+
+            else:
+                valid_sql = post_process["valid_generation_result"]["sql"]
 
             # Partial update the resource
             current = self._cache[request_id]
