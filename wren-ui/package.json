@@ -45,7 +45,7 @@
     "@graphql-codegen/typescript-operations": "^2.5.3",
     "@graphql-codegen/typescript-react-apollo": "3.3.3",
     "@next/bundle-analyzer": "^15.3.0",
-    "@playwright/test": "^1.44.0",
+    "@playwright/test": "^1.55.2",
     "@testing-library/react": "14.0.0",
     "@types/jest": "29.4.4",
     "@types/lodash": "^4.14.202",
