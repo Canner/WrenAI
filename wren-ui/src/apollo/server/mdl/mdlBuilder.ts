@@ -443,7 +443,19 @@ export class MDLBuilder implements IMDLBuilder {
     //TODO phase2: implement the expression for relation condition
     const { fromColumnName, toColumnName, fromModelName, toModelName } =
       relation;
-    return `"${fromModelName}".${fromColumnName} = "${toModelName}".${toColumnName}`;
+
+    // Helper function to add quotes if not already present
+    const ensureQuoted = (identifier: string): string => {
+      const isQuoted = /^"[^"]*"$/.test(identifier);
+      return isQuoted ? identifier : `"${identifier}"`;
+    };
+
+    const quotedFromModel = ensureQuoted(fromModelName);
+    const quotedToModel = ensureQuoted(toModelName);
+    const quotedFromColumn = ensureQuoted(fromColumnName);
+    const quotedToColumn = ensureQuoted(toColumnName);
+
+    return `${quotedFromModel}.${quotedFromColumn} = ${quotedToModel}.${quotedToColumn}`;
   }
 
   private buildTableReference(model: Model): TableReference | null {
