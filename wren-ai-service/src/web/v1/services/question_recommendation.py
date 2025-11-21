@@ -33,12 +33,14 @@ class QuestionRecommendation:
         allow_sql_functions_retrieval: bool = True,
         maxsize: int = 1_000_000,
         ttl: int = 120,
+        allow_sql_knowledge_retrieval: bool = True,
     ):
         self._pipelines = pipelines
         self._cache: Dict[str, QuestionRecommendation.Event] = TTLCache(
             maxsize=maxsize, ttl=ttl
         )
         self._allow_sql_functions_retrieval = allow_sql_functions_retrieval
+        self._allow_sql_knowledge_retrieval = allow_sql_knowledge_retrieval
 
     def _handle_exception(
         self,
@@ -112,6 +114,13 @@ class QuestionRecommendation:
             else:
                 sql_functions = []
 
+            if self._allow_sql_knowledge_retrieval:
+                sql_knowledge = await self._pipelines["sql_knowledge_retrieval"].run(
+                    project_id=project_id,
+                )
+            else:
+                sql_knowledge = None
+
             generated_sql = await self._pipelines["sql_generation"].run(
                 query=candidate["question"],
                 contexts=table_ddls,
@@ -123,6 +132,7 @@ class QuestionRecommendation:
                 has_json_field=has_json_field,
                 sql_functions=sql_functions,
                 allow_data_preview=allow_data_preview,
+                sql_knowledge=sql_knowledge,
             )
 
             post_process = generated_sql["post_process"]
