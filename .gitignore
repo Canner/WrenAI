@@ -100,3 +100,20 @@ wren-launcher/main
 .tmp
 
 !wren-ai-service/tools/.env.example
+
+# Service Central Copilot - Auto-generated files
+# Only specific installed files/directories are ignored.
+# Exceptions (kept for customization):
+# - .github/copilot-instructions.md
+# - AGENTS.md
+# - _ai/docs/ (kept for accumulating AI docs from multiple sources)
+.copilot-config.json
+.copilot-config-backup/
+_ai/
+!_ai/docs/
+.service-central-copilot/
+.github/copilot-review-instructions.md
+.github/code_guide.md
+.github/chatmodes/
+.github/prompts/
+.vscode/
