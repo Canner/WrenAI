@@ -4,7 +4,11 @@
  */
 exports.up = function (knex) {
   return knex.schema.alterTable('thread_response', (table) => {
-    table.jsonb('chart_detail').nullable();
+    if (knex.client.config.client === 'mysql2') {
+      table.json('chart_detail').nullable();
+    } else {
+      table.jsonb('chart_detail').nullable();
+    }
   });
 };
 

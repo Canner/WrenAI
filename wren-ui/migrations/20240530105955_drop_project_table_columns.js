@@ -23,12 +23,21 @@ exports.up = function (knex) {
  */
 exports.down = function (knex) {
   return knex.schema.table('project', (table) => {
-    table
-      .jsonb('configurations')
-      .nullable()
-      .comment(
-        'duckdb configurations that can be set in session, eg: { "key1": "value1", "key2": "value2" }',
-      );
+    if (knex.client.config.client === 'mysql2') {
+      table
+        .json('configurations')
+        .nullable()
+        .comment(
+          'duckdb configurations that can be set in session, eg: { "key1": "value1", "key2": "value2" }',
+        );
+    } else {
+      table
+        .jsonb('configurations')
+        .nullable()
+        .comment(
+          'duckdb configurations that can be set in session, eg: { "key1": "value1", "key2": "value2" }',
+        );
+    }
     table
       .text('credentials')
       .nullable()
@@ -39,12 +48,21 @@ exports.down = function (knex) {
       .comment('gcp project id, big query specific');
     table.string('dataset_id').nullable().comment('big query datasetId');
     table.text('init_sql');
-    table
-      .jsonb('extensions')
-      .nullable()
-      .comment(
-        'duckdb extensions, will be a array-like string like, eg: ["extension1", "extension2"]',
-      );
+    if (knex.client.config.client === 'mysql2') {
+      table
+        .json('extensions')
+        .nullable()
+        .comment(
+          'duckdb extensions, will be a array-like string like, eg: ["extension1", "extension2"]',
+        );
+    } else {
+      table
+        .jsonb('extensions')
+        .nullable()
+        .comment(
+          'duckdb extensions, will be a array-like string like, eg: ["extension1", "extension2"]',
+        );
+    }
     table
       .string('host')
       .nullable()
