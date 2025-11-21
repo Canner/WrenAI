@@ -6,6 +6,7 @@ import { ERROR_TEXTS } from '@/utils/error';
 export enum ATHENA_AUTH_METHOD {
   classic = 'classic',
   oidc = 'oidc',
+  instance_profile = 'instance_profile',
 }
 
 interface Props {
@@ -208,6 +209,9 @@ export default function AthenaProperties(props: Props) {
           <Radio.Button value={ATHENA_AUTH_METHOD.oidc}>
             OIDC (web identity)
           </Radio.Button>
+          <Radio.Button value={ATHENA_AUTH_METHOD.instance_profile}>
+            Instance Profile
+          </Radio.Button>
         </Radio.Group>
       </Form.Item>
 
@@ -220,6 +224,13 @@ export default function AthenaProperties(props: Props) {
             ATHENA_AUTH_METHOD.oidc,
           )}
         />
+      )}
+
+      {authType === ATHENA_AUTH_METHOD.instance_profile && (
+        <div style={{ fontStyle: 'italic', color: '#666' }}>
+          We will automatically detect AWS credentials from the Instance Profile role
+          assigned to this compute environment (EC2, ECS, EKS, Lambda).
+        </div>
       )}
     </>
   );
