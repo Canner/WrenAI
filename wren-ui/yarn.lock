@@ -15366,12 +15366,12 @@ __metadata:
   linkType: hard
 
 "vega-expression@npm:~5.1.1":
-  version: 5.1.1
-  resolution: "vega-expression@npm:5.1.1"
+  version: 5.1.2
+  resolution: "vega-expression@npm:5.1.2"
   dependencies:
     "@types/estree": "npm:^1.0.0"
-    vega-util: "npm:^1.17.2"
-  checksum: 10c0/b7db95a916b947850baf8b3ab993b422eb1005cf566415478927f3f2c88272cf67909a18d5d95f61f59d37cfd73c979cafa8ab7ee1749c675d48f932b2d3df32
+    vega-util: "npm:^1.17.3"
+  checksum: 10c0/ea3e7228e5b3f60496f98fb8558c0a171ef8b04ed31d76aaf25e97c4862e96da4eba66f56e3263693c5eb5af54d038db87747be12caddc0e57c82e9a1d35eacb
   languageName: node
   linkType: hard
 
@@ -15666,7 +15666,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"vega-util@npm:^1.17.4":
+"vega-util@npm:^1.17.3, vega-util@npm:^1.17.4":
   version: 1.17.4
   resolution: "vega-util@npm:1.17.4"
   checksum: 10c0/71457e85821f1f0b51985d7a0721f049f9a359b6134384fb7f0b8b8a50c154ae4e90aba86b1e88f63c553bc18a42ff830fb885adaf14b64776dddfee9f1c879b
