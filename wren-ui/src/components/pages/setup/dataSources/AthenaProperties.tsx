@@ -1,13 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Form, Input, Radio } from 'antd';
-import { FORM_MODE } from '@/utils/enum';
+import { FORM_MODE, ATHENA_AUTH_METHOD } from '@/utils/enum';
 import { ERROR_TEXTS } from '@/utils/error';
-
-export enum ATHENA_AUTH_METHOD {
-  classic = 'classic',
-  oidc = 'oidc',
-  instance_profile = 'instance_profile',
-}
 
 interface Props {
   mode?: FORM_MODE;
@@ -65,7 +59,7 @@ function AthenaOIDCFields(props: { isEditMode: boolean }) {
       >
         <Input.TextArea
           rows={3}
-          placeholder="Paste Google OIDC token here"
+          placeholder="OAuth 2.0 access token or OpenID Connect ID token"
         />
       </Form.Item>
 
@@ -89,7 +83,7 @@ function AthenaOIDCFields(props: { isEditMode: boolean }) {
       <Form.Item
         label="Role session name"
         name="roleSessionName"
-        extra="Optional session name used in STS AssumeRoleWithWebIdentity"
+        extra="Optional session name used in AWS STS assume role operation."
       >
         <Input placeholder="Optional session name" />
       </Form.Item>
@@ -229,7 +223,7 @@ export default function AthenaProperties(props: Props) {
       {authType === ATHENA_AUTH_METHOD.instance_profile && (
         <div style={{ fontStyle: 'italic', color: '#666' }}>
           We will automatically detect AWS credentials from the Instance Profile role
-          assigned to this compute environment (EC2, ECS, EKS, Lambda).
+          assigned to this compute environment (EC2, ECS, EKS).
         </div>
       )}
     </>
