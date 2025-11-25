@@ -107,9 +107,34 @@ interface IbisRedshiftIAMAuth {
   redshift_type: IbisRedshiftConnectionType;
 }
 
+export enum IbisDatabricksConnectionType {
+  TOKEN = 'token',
+  SERVICE_PRINCIPAL = 'service_principal',
+}
+
+interface IbisDatabricksPersonalAccessTokenAuth {
+  databricks_type: IbisDatabricksConnectionType;
+  serverHostname: string;
+  httpPath: string;
+  accessToken: string;
+}
+
+interface IbisDatabricksServicePrincipalAuth {
+  databricks_type: IbisDatabricksConnectionType;
+  serverHostname: string;
+  httpPath: string;
+  clientId: string;
+  clientSecret: string;
+  azureTenantId?: string;
+}
+
 export type IbisRedshiftConnectionInfo =
   | IbisRedshiftPasswordAuth
   | IbisRedshiftIAMAuth;
+
+export type IbisDatabricksConnectionInfo =
+  | IbisDatabricksPersonalAccessTokenAuth
+  | IbisDatabricksServicePrincipalAuth;
 
 export enum SupportedDataSource {
   POSTGRES = 'POSTGRES',
@@ -122,6 +147,7 @@ export enum SupportedDataSource {
   TRINO = 'TRINO',
   ATHENA = 'ATHENA',
   REDSHIFT = 'REDSHIFT',
+  DATABRICKS = 'DATABRICKS',
 }
 
 const dataSourceUrlMap: Record<SupportedDataSource, string> = {
@@ -135,6 +161,7 @@ const dataSourceUrlMap: Record<SupportedDataSource, string> = {
   [SupportedDataSource.TRINO]: 'trino',
   [SupportedDataSource.ATHENA]: 'athena',
   [SupportedDataSource.REDSHIFT]: 'redshift',
+  [SupportedDataSource.DATABRICKS]: 'databricks',
 };
 
 export interface TableResponse {

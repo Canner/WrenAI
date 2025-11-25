@@ -10,6 +10,7 @@ import TrinoProperties from '@/components/pages/setup/dataSources/TrinoPropertie
 import SnowflakeProperties from '@/components/pages/setup/dataSources/SnowflakeProperties';
 import AthenaProperties from '@/components/pages/setup/dataSources/AthenaProperties';
 import RedshiftProperties from '@/components/pages/setup/dataSources/RedshiftProperties';
+import DatabricksProperties from '@/components/pages/setup/dataSources/DatabricksProperties';
 
 export const getDataSourceImage = (dataSource: DATA_SOURCES | string) => {
   switch (dataSource) {
@@ -35,6 +36,8 @@ export const getDataSourceImage = (dataSource: DATA_SOURCES | string) => {
       return '/images/dataSource/athena.svg';
     case DATA_SOURCES.REDSHIFT:
       return '/images/dataSource/redshift.svg';
+    case DATA_SOURCES.DATABRICKS:
+      return '/images/dataSource/databricks.svg';
     default:
       return null;
   }
@@ -64,6 +67,8 @@ export const getDataSourceName = (dataSource: DATA_SOURCES | string) => {
       return 'Athena (Trino)';
     case DATA_SOURCES.REDSHIFT:
       return 'Redshift';
+    case DATA_SOURCES.DATABRICKS:
+      return 'Databricks';
     default:
       return '';
   }
@@ -93,6 +98,8 @@ export const getDataSourceProperties = (dataSource: DATA_SOURCES | string) => {
       return AthenaProperties;
     case DATA_SOURCES.REDSHIFT:
       return RedshiftProperties;
+    case DATA_SOURCES.DATABRICKS:
+      return DatabricksProperties;
     default:
       return null;
   }

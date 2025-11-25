@@ -96,6 +96,8 @@ export enum WrenEngineDataSourceType {
   TRINO = 'TRINO',
   DUCKDB = 'DUCKDB',
   REDSHIFT = 'REDSHIFT',
+  DATABRICKS = 'DATABRICKS',
+
   // accepted by the wren engine, but not supported by the wren ui
   DATAFUSION = 'DATAFUSION',
 }
