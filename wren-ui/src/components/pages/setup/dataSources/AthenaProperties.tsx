@@ -201,7 +201,7 @@ export default function AthenaProperties(props: Props) {
             AWS credentials
           </Radio.Button>
           <Radio.Button value={ATHENA_AUTH_METHOD.oidc}>
-            OIDC (web identity)
+            OIDC (web identity token)
           </Radio.Button>
           <Radio.Button value={ATHENA_AUTH_METHOD.instance_profile}>
             Instance Profile
