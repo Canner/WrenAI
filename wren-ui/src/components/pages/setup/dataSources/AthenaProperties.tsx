@@ -221,7 +221,7 @@ export default function AthenaProperties(props: Props) {
       )}
 
       {authType === ATHENA_AUTH_METHOD.instance_profile && (
-        <div style={{ fontStyle: 'italic', color: '#666' }}>
+        <div className="gray-8" style={{ fontStyle: 'italic'}}>
           We will automatically detect AWS credentials from the Instance Profile role
           assigned to this compute environment (EC2, ECS, EKS).
         </div>
