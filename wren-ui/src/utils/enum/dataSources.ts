@@ -13,3 +13,9 @@ export enum DATA_SOURCES {
   ATHENA = 'ATHENA',
   REDSHIFT = 'REDSHIFT',
 }
+
+export enum ATHENA_AUTH_METHOD {
+  classic = 'classic',
+  oidc = 'oidc',
+  instance_profile = 'instance_profile',
+}

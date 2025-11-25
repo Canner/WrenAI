@@ -73,22 +73,36 @@ interface IDataSourceConnectionInfo<C, I> {
 const dataSource = {
   // Athena
   [DataSourceName.ATHENA]: {
-    sensitiveProps: ['awsSecretKey'],
+    sensitiveProps: ['awsSecretKey', 'webIdentityToken'],
     toIbisConnectionInfo(connectionInfo) {
       const decryptedConnectionInfo = decryptConnectionInfo(
         DataSourceName.ATHENA,
         connectionInfo,
       );
-      const { awsAccessKey, awsRegion, awsSecretKey, s3StagingDir, schema } =
+      const { awsAccessKey, awsRegion, awsSecretKey, s3StagingDir, schema, webIdentityToken, roleArn, roleSessionName } =
         decryptedConnectionInfo as ATHENA_CONNECTION_INFO;
-      const res: IbisAthenaConnectionInfo = {
-        aws_access_key_id: awsAccessKey,
-        aws_secret_access_key: awsSecretKey,
+      
+      // Base fields shared by both authentication methods
+      const base = {
         region_name: awsRegion,
         s3_staging_dir: s3StagingDir,
         schema_name: schema,
-      };
-      return res;
+      };  
+      // If OIDC fields are provided → send OIDC config
+      if (webIdentityToken && roleArn) {
+        return {
+          ...base,
+          web_identity_token: webIdentityToken,
+          role_arn: roleArn,
+          ...(roleSessionName && { role_session_name: roleSessionName }),
+        } satisfies IbisAthenaConnectionInfo;
+      }
+      // Otherwise → fallback to AWS access key authentication
+      return {
+        ...base,
+        aws_access_key_id: awsAccessKey,
+        aws_secret_access_key: awsSecretKey,
+      } satisfies IbisAthenaConnectionInfo;
     },
   } as IDataSourceConnectionInfo<
     ATHENA_CONNECTION_INFO,

@@ -91,8 +91,11 @@ export interface ATHENA_CONNECTION_INFO {
   schema: string;
   s3StagingDir: string;
   awsRegion: string;
-  awsAccessKey: string;
-  awsSecretKey: string;
+  awsAccessKey?: string;
+  awsSecretKey?: string;
+  webIdentityToken?: string;
+  roleArn?: string;
+  roleSessionName?: string;
 }
 
 export interface REDSHIFT_PASSWORD_AUTH {
