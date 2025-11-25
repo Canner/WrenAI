@@ -11,8 +11,6 @@ import requests
 import yaml
 from dotenv import load_dotenv
 
-from src.core.engine import add_quotes
-
 load_dotenv("tools/.env", override=True)
 
 WREN_ENGINE_API_URL = "http://localhost:8080"
@@ -45,13 +43,10 @@ def get_data_from_wren_engine(
     return_df: bool = True,
 ):
     if dataset_type == "duckdb":
-        quoted_sql, no_error = add_quotes(sql)
-        assert no_error, f"Error in adding quotes to SQL: {sql}"
-
         response = requests.get(
             f"{WREN_ENGINE_API_URL}/v1/mdl/preview",
             json={
-                "sql": quoted_sql,
+                "sql": sql,
                 "manifest": manifest,
                 "limit": limit,
             },
@@ -68,13 +63,10 @@ def get_data_from_wren_engine(
         else:
             return data
     else:
-        quoted_sql, no_error = add_quotes(sql)
-        assert no_error, f"Error in adding quotes to SQL: {sql}"
-
         response = requests.post(
             f"{WREN_IBIS_API_URL}/v3/connector/{dataset_type}/query?limit={limit}",
             json={
-                "sql": quoted_sql,
+                "sql": sql,
                 "manifestStr": base64.b64encode(orjson.dumps(manifest)).decode(),
                 "connectionInfo": _get_connection_info(dataset_type),
             },
