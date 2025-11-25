@@ -85,7 +85,7 @@ function AthenaOIDCFields(props: { isEditMode: boolean }) {
         name="roleSessionName"
         extra="Optional session name used in AWS STS assume role operation."
       >
-        <Input placeholder="Optional session name" />
+        <Input placeholder="session name" />
       </Form.Item>
     </>
   );
