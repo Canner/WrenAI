@@ -79,15 +79,23 @@ const dataSource = {
         DataSourceName.ATHENA,
         connectionInfo,
       );
-      const { awsAccessKey, awsRegion, awsSecretKey, s3StagingDir, schema, webIdentityToken, roleArn, roleSessionName } =
-        decryptedConnectionInfo as ATHENA_CONNECTION_INFO;
-      
+      const {
+        awsAccessKey,
+        awsRegion,
+        awsSecretKey,
+        s3StagingDir,
+        schema,
+        webIdentityToken,
+        roleArn,
+        roleSessionName,
+      } = decryptedConnectionInfo as ATHENA_CONNECTION_INFO;
+
       // Base fields shared by both authentication methods
       const base = {
         region_name: awsRegion,
         s3_staging_dir: s3StagingDir,
         schema_name: schema,
-      };  
+      };
       // If OIDC fields are provided → send OIDC config
       if (webIdentityToken && roleArn) {
         return {
