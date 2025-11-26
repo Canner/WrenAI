@@ -99,10 +99,7 @@ export default function AthenaProperties(props: Props) {
 
   const initialTypeRef = useRef<ATHENA_AUTH_METHOD | null>(null);
 
-  const authType = Form.useWatch(
-    'athenaAuthType',
-    form,
-  ) as ATHENA_AUTH_METHOD;
+  const authType = Form.useWatch('athenaAuthType', form) as ATHENA_AUTH_METHOD;
 
   // Set default auth type when creating
   useEffect(() => {
@@ -193,7 +190,7 @@ export default function AthenaProperties(props: Props) {
       >
         <Input placeholder="us-east-1" disabled={isEditMode} />
       </Form.Item>
-      
+
       {/* Authentication method switch */}
       <Form.Item label="Authentication method" name="athenaAuthType">
         <Radio.Group buttonStyle="solid">
@@ -214,16 +211,14 @@ export default function AthenaProperties(props: Props) {
 
       {authType === ATHENA_AUTH_METHOD.oidc && (
         <AthenaOIDCFields
-          isEditMode={getIsEditModeForComponent(
-            ATHENA_AUTH_METHOD.oidc,
-          )}
+          isEditMode={getIsEditModeForComponent(ATHENA_AUTH_METHOD.oidc)}
         />
       )}
 
       {authType === ATHENA_AUTH_METHOD.instance_profile && (
-        <div className="gray-8" style={{ fontStyle: 'italic'}}>
-          We will automatically detect AWS credentials from the Instance Profile role
-          assigned to this compute environment (EC2, ECS, EKS).
+        <div className="gray-8" style={{ fontStyle: 'italic' }}>
+          We will automatically detect AWS credentials from the Instance Profile
+          role assigned to this compute environment (EC2, ECS, EKS).
         </div>
       )}
     </>
