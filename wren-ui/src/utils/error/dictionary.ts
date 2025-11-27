@@ -64,6 +64,12 @@ export const ERROR_TEXTS = {
     AWS_SECRET_KEY: {
       REQUIRED: 'Please input AWS secret access key.',
     },
+    AWS_ROLE_ARN: {
+      REQUIRED: 'Please input AWS role ARN.',
+    },
+    WEB_IDENTITY_TOKEN: {
+      REQUIRED: 'Please input web identity token.',
+    },
     CLUSTER_IDENTIFIER: {
       REQUIRED: 'Please input cluster identifier.',
     },

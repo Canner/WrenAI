@@ -17,4 +17,5 @@ export const getLanguageText = (language: ProjectLanguage) =>
     [ProjectLanguage.AR]: 'Arabic',
     [ProjectLanguage.NL]: 'Dutch',
     [ProjectLanguage.AZ_AZ]: 'Azerbaijani',
+    [ProjectLanguage.TR]: 'Turkish',
   })[language] || language;

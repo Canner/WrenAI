@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "wren-ai-service"
-version = "0.28.0"
+version = "0.29.0"
 description = ""
 authors = ["dev@getwren.ai"]
 license = "AGPL-3.0"
@@ -9,7 +9,7 @@ package-mode = false
 
 [tool.poetry.dependencies]
 python = ">=3.12.*, <3.13"
-fastapi = "^0.115.2"
+fastapi = "^0.121.1"
 uvicorn = {extras = ["standard"], version = "^0.29.0"} # Litellm requires uvicorn < 0.30.0
 python-dotenv = "^1.0.1"
 haystack-ai = "==2.7.0"

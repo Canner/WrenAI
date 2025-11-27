@@ -23,7 +23,7 @@ if [ ! -d ${data_path}/mdl ]; then
   mkdir ${data_path}/mdl
 fi
 
-# put a emtpy sample.json if not exists
+# put an emtpy sample.json if not exists
 if [ ! -f ${data_path}/mdl/sample.json ]; then
   echo "init mdl/sample.json"
   echo "{\"catalog\": \"test_catalog\", \"schema\": \"test_schema\", \"models\": []}" >${data_path}/mdl/sample.json

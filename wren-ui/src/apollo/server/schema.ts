@@ -132,6 +132,7 @@ export const typeDefs = gql`
     AR
     NL
     AZ_AZ
+    TR
   }
 
   type DataSource {

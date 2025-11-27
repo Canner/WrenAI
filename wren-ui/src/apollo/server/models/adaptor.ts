@@ -44,7 +44,8 @@ export enum WrenAILanguage {
   FA_IR = 'Persian',
   AR = 'Arabic',
   NL = 'Dutch',
-  AZ_AZ = 'Azerbaijani'
+  AZ_AZ = 'Azerbaijani',
+  TR = 'Turkish',
 }
 
 export interface DeployData {

@@ -69,8 +69,15 @@ export interface IbisSnowflakeConnectionInfo {
 }
 
 export interface IbisAthenaConnectionInfo {
-  aws_access_key_id: string;
-  aws_secret_access_key: string;
+  // AWS access key auth (optional if using OIDC)
+  aws_access_key_id?: string;
+  aws_secret_access_key?: string;
+
+  // OIDC auth (optional if using access keys)
+  web_identity_token?: string;
+  role_arn?: string;
+  role_session_name?: string;
+
   region_name: string;
   s3_staging_dir: string;
   schema_name: string;
