@@ -203,4 +203,11 @@ function getAthenaAuthentication(properties: Record<string, any>) {
           : properties?.webIdentityToken,
     };
   }
+  
+  return {
+    awsSecretKey:
+      properties?.awsSecretKey === PASSWORD_PLACEHOLDER
+        ? undefined
+        : properties?.awsSecretKey,
+  };
 }
