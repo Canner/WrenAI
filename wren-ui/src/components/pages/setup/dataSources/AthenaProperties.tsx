@@ -57,9 +57,9 @@ function AthenaOIDCFields(props: { isEditMode: boolean }) {
           },
         ]}
       >
-        <Input.TextArea
-          rows={3}
+        <Input.Password
           placeholder="OAuth 2.0 access token or OpenID Connect ID token"
+          autoComplete="off"
         />
       </Form.Item>
 
