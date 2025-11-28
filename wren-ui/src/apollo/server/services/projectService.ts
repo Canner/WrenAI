@@ -36,7 +36,7 @@ const SENSITIVE_PROPERTY_NAME = new Set([
   'privateKey',
   'accessToken',
   'clientSecret',
-  'webIdentityToken'
+  'webIdentityToken',
 ]);
 export interface ProjectData {
   displayName: string;

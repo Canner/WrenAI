@@ -92,7 +92,6 @@ export const transformFormToProperties = (
     };
   }
 
-
   return {
     ...properties,
     // remove password placeholder if user doesn't change the password
@@ -203,7 +202,7 @@ function getAthenaAuthentication(properties: Record<string, any>) {
           : properties?.webIdentityToken,
     };
   }
-  
+
   return {
     awsSecretKey:
       properties?.awsSecretKey === PASSWORD_PLACEHOLDER
