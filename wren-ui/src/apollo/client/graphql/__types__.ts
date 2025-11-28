@@ -330,6 +330,7 @@ export enum DataSourceName {
   ATHENA = 'ATHENA',
   BIG_QUERY = 'BIG_QUERY',
   CLICK_HOUSE = 'CLICK_HOUSE',
+  DATABRICKS = 'DATABRICKS',
   DUCKDB = 'DUCKDB',
   MSSQL = 'MSSQL',
   MYSQL = 'MYSQL',
@@ -338,6 +339,11 @@ export enum DataSourceName {
   REDSHIFT = 'REDSHIFT',
   SNOWFLAKE = 'SNOWFLAKE',
   TRINO = 'TRINO'
+}
+
+export enum DatabricksConnectionType {
+  service_principal = 'service_principal',
+  token = 'token'
 }
 
 export type DeleteDashboardItemInput = {

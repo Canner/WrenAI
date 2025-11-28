@@ -76,6 +76,18 @@ export const ERROR_TEXTS = {
     PRIVATE_KEY_FILE: {
       REQUIRED: 'Please upload a private key file.',
     },
+    HTTP_PATH: {
+      REQUIRED: 'Please input HTTP path.',
+    },
+    PERSONAL_ACCESS_TOKEN: {
+      REQUIRED: 'Please input personal access token.',
+    },
+    CLIENT_ID: {
+      REQUIRED: 'Please input client ID.',
+    },
+    CLIENT_SECRET: {
+      REQUIRED: 'Please input client secret.',
+    },
   },
   ADD_RELATION: {
     FROM_FIELD: {

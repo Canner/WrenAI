@@ -8,6 +8,8 @@ import {
   IbisAthenaConnectionInfo,
   IbisRedshiftConnectionType,
   IbisRedshiftConnectionInfo,
+  IbisDatabricksConnectionType,
+  IbisDatabricksConnectionInfo,
 } from './adaptors/ibisAdaptor';
 import {
   ATHENA_CONNECTION_INFO,
@@ -24,6 +26,9 @@ import {
   REDSHIFT_CONNECTION_INFO,
   REDSHIFT_IAM_AUTH,
   REDSHIFT_PASSWORD_AUTH,
+  DATABRICKS_CONNECTION_INFO,
+  DATABRICKS_PERSONAL_ACCESS_TOKEN_AUTH,
+  DATABRICKS_SERVICE_PRINCIPAL_AUTH,
 } from './repositories';
 import { DataSourceName } from './types';
 import { getConfig } from './config';
@@ -432,6 +437,58 @@ const dataSource = {
   } as IDataSourceConnectionInfo<
     REDSHIFT_CONNECTION_INFO,
     IbisRedshiftConnectionInfo
+  >,
+
+  // Databricks
+  [DataSourceName.DATABRICKS]: {
+    sensitiveProps: ['accessToken', 'clientSecret'],
+    toIbisConnectionInfo(connectionInfo) {
+      const decryptedConnectionInfo = decryptConnectionInfo(
+        DataSourceName.DATABRICKS,
+        connectionInfo,
+      );
+
+      const { databricksType } =
+        decryptedConnectionInfo as DATABRICKS_CONNECTION_INFO;
+
+      if (databricksType === IbisDatabricksConnectionType.TOKEN) {
+        const { serverHostname, httpPath, accessToken } =
+          decryptedConnectionInfo as DATABRICKS_PERSONAL_ACCESS_TOKEN_AUTH;
+
+        return {
+          databricks_type: databricksType,
+          serverHostname,
+          httpPath,
+          accessToken,
+        };
+      }
+
+      if (databricksType === IbisDatabricksConnectionType.SERVICE_PRINCIPAL) {
+        const {
+          serverHostname,
+          httpPath,
+          clientId,
+          clientSecret,
+          azureTenantId,
+        } = decryptedConnectionInfo as DATABRICKS_SERVICE_PRINCIPAL_AUTH;
+
+        return {
+          databricks_type: databricksType,
+          serverHostname,
+          httpPath,
+          clientId,
+          clientSecret,
+          azureTenantId,
+        };
+      }
+
+      throw new Error(
+        'Invalid Databricks connection info: must use either personal access token or service principal authentication',
+      );
+    },
+  } as IDataSourceConnectionInfo<
+    DATABRICKS_CONNECTION_INFO,
+    IbisDatabricksConnectionInfo
   >,
 };
 
