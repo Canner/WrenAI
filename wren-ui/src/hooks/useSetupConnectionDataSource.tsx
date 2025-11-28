@@ -85,7 +85,13 @@ export const transformFormToProperties = (
       ...properties,
       ...getDatabricksAuthentication(properties),
     };
+  } else if (dataSourceType === DataSourceName.ATHENA) {
+    return {
+      ...properties,
+      ...getAthenaAuthentication(properties),
+    };
   }
+
 
   return {
     ...properties,
@@ -186,4 +192,15 @@ function getDatabricksAuthentication(properties: Record<string, any>) {
         ? undefined
         : properties?.accessToken,
   };
+}
+
+function getAthenaAuthentication(properties: Record<string, any>) {
+  if (properties?.webIdentityToken) {
+    return {
+      webIdentityToken:
+        properties?.webIdentityToken === PASSWORD_PLACEHOLDER
+          ? undefined
+          : properties?.webIdentityToken,
+    };
+  }
 }
