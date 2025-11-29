@@ -5,29 +5,51 @@
 exports.up = function (knex) {
   return knex.schema.createTable('dashboard_item', (table) => {
     table.increments('id').primary();
-    table
-      .integer('dashboard_id')
-      .notNullable()
-      .comment('Reference to dashboard.id');
+    if (knex.client.config.client === 'mysql2') {
+      table
+        .integer('dashboard_id')
+        .unsigned()
+        .notNullable()
+        .comment('Reference to dashboard.id');
+    } else {
+      table
+        .integer('dashboard_id')
+        .notNullable()
+        .comment('Reference to dashboard.id');
+    }
     table
       .string('type')
       .notNullable()
       .comment(
         'The chart type of the dashboard item, such as: bar, table, number, etc',
       );
-    table
-      .jsonb('layout')
-      .notNullable()
-      .comment(
-        'The layout of the dashboard item, according to which library it is, such as: { x: 0, y: 0, w: 6, h: 6 }',
-      );
-    table
-      .jsonb('detail')
-      .notNullable()
-      .comment(
-        'The detail of the dashboard item, such as: { chartSchema: {...}, sql: "..." } ',
-      );
-
+    if (knex.client.config.client === 'mysql2') {
+      table
+        .json('layout')
+        .notNullable()
+        .comment(
+          'The layout of the dashboard item, according to which library it is, such as: { x: 0, y: 0, w: 6, h: 6 }',
+        );
+      table
+        .json('detail')
+        .notNullable()
+        .comment(
+          'The detail of the dashboard item, such as: { chartSchema: {...}, sql: "..." } ',
+        );
+    } else {
+      table
+        .jsonb('layout')
+        .notNullable()
+        .comment(
+          'The layout of the dashboard item, according to which library it is, such as: { x: 0, y: 0, w: 6, h: 6 }',
+        );
+      table
+        .jsonb('detail')
+        .notNullable()
+        .comment(
+          'The detail of the dashboard item, such as: { chartSchema: {...}, sql: "..." } ',
+        );
+    }
     table
       .foreign('dashboard_id')
       .references('dashboard.id')
