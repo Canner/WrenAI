@@ -31,9 +31,11 @@ class SqlCorrectionService:
         pipelines: dict[str, BasicPipeline],
         maxsize: int = 1_000_000,
         ttl: int = 120,
+        allow_sql_knowledge_retrieval: bool = True,
     ):
         self._pipelines = pipelines
         self._cache: dict[str, self.Event] = TTLCache(maxsize=maxsize, ttl=ttl)
+        self._allow_sql_knowledge_retrieval = allow_sql_knowledge_retrieval
 
     def _handle_exception(
         self,
@@ -78,6 +80,7 @@ class SqlCorrectionService:
         retrieved_tables = request.retrieved_tables
         use_dry_plan = request.use_dry_plan
         allow_dry_plan_fallback = request.allow_dry_plan_fallback
+        sql_knowledge = None
 
         try:
             _invalid = {
@@ -91,6 +94,11 @@ class SqlCorrectionService:
                         sql=sql,
                     )
                 )["post_process"]
+
+            if self._allow_sql_knowledge_retrieval:
+                sql_knowledge = await self._pipelines["sql_knowledge_retrieval"].run(
+                    project_id=project_id,
+                )
 
             documents = (
                 (
@@ -110,6 +118,7 @@ class SqlCorrectionService:
                 project_id=project_id,
                 use_dry_plan=use_dry_plan,
                 allow_dry_plan_fallback=allow_dry_plan_fallback,
+                sql_knowledge=sql_knowledge,
             )
 
             post_process = res["post_process"]

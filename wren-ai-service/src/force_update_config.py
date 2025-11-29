@@ -18,7 +18,10 @@ def update_config():
             # Update engine name in all pipelines
             for pipe in doc.get("pipes", []):
                 if "engine" in pipe:
-                    if pipe["name"] == "sql_functions_retrieval":
+                    if pipe["name"] in [
+                        "sql_functions_retrieval",
+                        "sql_knowledge_retrieval",
+                    ]:
                         pipe["engine"] = "wren_ibis"
                     else:
                         pipe["engine"] = "wren_ui"

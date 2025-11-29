@@ -14,17 +14,21 @@ from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.pipelines.common import clean_up_new_lines, retrieve_metadata
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
-    TEXT_TO_SQL_RULES,
     SQLGenPostProcessor,
     construct_instructions,
+    get_text_to_sql_rules,
 )
 from src.pipelines.retrieval.sql_functions import SqlFunction
+from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
 from src.utils import trace_cost
 
 logger = logging.getLogger("wren-ai-service")
 
 
-sql_correction_system_prompt = f"""
+def get_sql_correction_system_prompt(sql_knowledge: SqlKnowledge | None = None) -> str:
+    text_to_sql_rules = get_text_to_sql_rules(sql_knowledge)
+
+    return f"""
 ### TASK ###
 You are an ANSI SQL expert with exceptional logical thinking skills and debugging skills, you need to fix the syntactically incorrect ANSI SQL query.
 
@@ -36,7 +40,7 @@ You are an ANSI SQL expert with exceptional logical thinking skills and debuggin
 ### SQL RULES ###
 Make sure you follow the SQL Rules strictly.
 
-{TEXT_TO_SQL_RULES}
+{text_to_sql_rules}
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be in JSON format:
@@ -45,6 +49,7 @@ The final answer must be in JSON format:
     "sql": <CORRECTED_SQL_QUERY_STRING>
 }}
 """
+
 
 sql_correction_user_prompt_template = """
 {% if documents %}
@@ -136,12 +141,9 @@ class SQLCorrection(BasicPipeline):
         self._retriever = document_store_provider.get_retriever(
             document_store_provider.get_store("project_meta")
         )
+        self._llm_provider = llm_provider
 
         self._components = {
-            "generator": llm_provider.get_generator(
-                system_prompt=sql_correction_system_prompt,
-                generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
-            ),
             "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
                 template=sql_correction_user_prompt_template
@@ -163,8 +165,14 @@ class SQLCorrection(BasicPipeline):
         project_id: str | None = None,
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
+        sql_knowledge: SqlKnowledge | None = None,
     ):
         logger.info("SQLCorrection pipeline is running...")
+
+        self._components["generator"] = self._llm_provider.get_generator(
+            system_prompt=get_sql_correction_system_prompt(sql_knowledge),
+            generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
+        )
 
         if use_dry_plan:
             metadata = await retrieve_metadata(project_id or "", self._retriever)

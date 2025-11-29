@@ -102,6 +102,7 @@ class AskService:
         allow_sql_generation_reasoning: bool = True,
         allow_sql_functions_retrieval: bool = True,
         allow_sql_diagnosis: bool = True,
+        allow_sql_knowledge_retrieval: bool = True,
         enable_column_pruning: bool = False,
         max_sql_correction_retries: int = 3,
         max_histories: int = 5,
@@ -116,6 +117,7 @@ class AskService:
         self._allow_sql_functions_retrieval = allow_sql_functions_retrieval
         self._allow_intent_classification = allow_intent_classification
         self._allow_sql_diagnosis = allow_sql_diagnosis
+        self._allow_sql_knowledge_retrieval = allow_sql_knowledge_retrieval
         self._enable_column_pruning = enable_column_pruning
         self._max_histories = max_histories
         self._max_sql_correction_retries = max_sql_correction_retries
@@ -168,10 +170,12 @@ class AskService:
         )
         allow_sql_functions_retrieval = self._allow_sql_functions_retrieval
         allow_sql_diagnosis = self._allow_sql_diagnosis
+        allow_sql_knowledge_retrieval = self._allow_sql_knowledge_retrieval
         max_sql_correction_retries = self._max_sql_correction_retries
         current_sql_correction_retries = 0
         use_dry_plan = ask_request.use_dry_plan
         allow_dry_plan_fallback = ask_request.allow_dry_plan_fallback
+        sql_knowledge = None
 
         try:
             user_query = ask_request.query
@@ -442,6 +446,13 @@ class AskService:
                 else:
                     sql_functions = []
 
+                if allow_sql_knowledge_retrieval:
+                    sql_knowledge = await self._pipelines[
+                        "sql_knowledge_retrieval"
+                    ].run(
+                        project_id=ask_request.project_id,
+                    )
+
                 has_calculated_field = _retrieval_result.get(
                     "has_calculated_field", False
                 )
@@ -465,6 +476,7 @@ class AskService:
                         sql_functions=sql_functions,
                         use_dry_plan=use_dry_plan,
                         allow_dry_plan_fallback=allow_dry_plan_fallback,
+                        sql_knowledge=sql_knowledge,
                     )
                 else:
                     text_to_sql_generation_results = await self._pipelines[
@@ -482,6 +494,7 @@ class AskService:
                         sql_functions=sql_functions,
                         use_dry_plan=use_dry_plan,
                         allow_dry_plan_fallback=allow_dry_plan_fallback,
+                        sql_knowledge=sql_knowledge,
                     )
 
                 if sql_valid_result := text_to_sql_generation_results["post_process"][
@@ -547,6 +560,7 @@ class AskService:
                             use_dry_plan=use_dry_plan,
                             allow_dry_plan_fallback=allow_dry_plan_fallback,
                             sql_functions=sql_functions,
+                            sql_knowledge=sql_knowledge,
                         )
 
                         if valid_generation_result := sql_correction_results[
