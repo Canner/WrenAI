@@ -220,13 +220,17 @@ def create_service_container(
                 ),
                 "db_schema_retrieval": _db_schema_retrieval_pipeline,
                 "sql_generation": generation.SQLGeneration(
-                    **pipe_components["question_recommendation_sql_generation"],
+                    **pipe_components[
+                        "question_recommendation_sql_generation"
+                    ],
                 ),
                 "sql_pairs_retrieval": _sql_pair_retrieval_pipeline,
                 "instructions_retrieval": _instructions_retrieval_pipeline,
                 "sql_functions_retrieval": _sql_functions_retrieval_pipeline,
+                "sql_correction": _sql_correction_pipeline,
             },
             allow_sql_functions_retrieval=settings.allow_sql_functions_retrieval,
+            max_sql_correction_retries=settings.max_sql_correction_retries,
             **query_cache,
         ),
         sql_pairs_service=services.SqlPairsService(
