@@ -1,6 +1,6 @@
 {
   "name": "wren-ui",
-  "version": "0.31.3",
+  "version": "0.32.2",
   "private": true,
   "scripts": {
     "dev": "TZ=UTC next dev",
@@ -90,7 +90,7 @@
     "ts-jest": "29.1.1",
     "ts-node": "9.1.1",
     "typescript": "5.2.2",
-    "vega": "^5.31.0",
+    "vega": "^6.2.0",
     "vega-embed": "^6.29.0",
     "vega-lite": "^5.21.0"
   },
