@@ -430,7 +430,7 @@ export class MDLBuilder implements IMDLBuilder {
     //TODO phase2: implement the expression for relation condition
     const { fromColumnName, toColumnName, fromModelName, toModelName } =
       relation;
-    return `"${fromModelName}".${fromColumnName} = "${toModelName}".${toColumnName}`;
+    return `"${fromModelName}"."${fromColumnName}" = "${toModelName}"."${toColumnName}"`;
   }
 
   private buildTableReference(model: Model): TableReference | null {
