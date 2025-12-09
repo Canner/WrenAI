@@ -86,6 +86,7 @@ If your data source is not listed here, vote for it in our [GitHub discussion th
 - Redshift
 - BigQuery
 - DuckDB
+- Databricks
 - PostgreSQL
 - MySQL
 - Microsoft SQL Server
