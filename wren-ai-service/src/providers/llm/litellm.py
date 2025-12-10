@@ -94,6 +94,8 @@ class LitellmLLMProvider(LLMProvider):
                 convert_message_to_openai_format(message) for message in messages
             ]
 
+            print(f"prompt: {openai_formatted_messages}")
+
             generation_kwargs = {
                 **combined_generation_kwargs,
                 **(generation_kwargs or {}),
