@@ -8,6 +8,8 @@ import {
   IbisAthenaConnectionInfo,
   IbisRedshiftConnectionType,
   IbisRedshiftConnectionInfo,
+  IbisDatabricksConnectionType,
+  IbisDatabricksConnectionInfo,
 } from './adaptors/ibisAdaptor';
 import {
   ATHENA_CONNECTION_INFO,
@@ -24,6 +26,9 @@ import {
   REDSHIFT_CONNECTION_INFO,
   REDSHIFT_IAM_AUTH,
   REDSHIFT_PASSWORD_AUTH,
+  DATABRICKS_CONNECTION_INFO,
+  DATABRICKS_PERSONAL_ACCESS_TOKEN_AUTH,
+  DATABRICKS_SERVICE_PRINCIPAL_AUTH,
 } from './repositories';
 import { DataSourceName } from './types';
 import { getConfig } from './config';
@@ -73,22 +78,44 @@ interface IDataSourceConnectionInfo<C, I> {
 const dataSource = {
   // Athena
   [DataSourceName.ATHENA]: {
-    sensitiveProps: ['awsSecretKey'],
+    sensitiveProps: ['awsSecretKey', 'webIdentityToken'],
     toIbisConnectionInfo(connectionInfo) {
       const decryptedConnectionInfo = decryptConnectionInfo(
         DataSourceName.ATHENA,
         connectionInfo,
       );
-      const { awsAccessKey, awsRegion, awsSecretKey, s3StagingDir, schema } =
-        decryptedConnectionInfo as ATHENA_CONNECTION_INFO;
-      const res: IbisAthenaConnectionInfo = {
-        aws_access_key_id: awsAccessKey,
-        aws_secret_access_key: awsSecretKey,
+      const {
+        awsAccessKey,
+        awsRegion,
+        awsSecretKey,
+        s3StagingDir,
+        schema,
+        webIdentityToken,
+        roleArn,
+        roleSessionName,
+      } = decryptedConnectionInfo as ATHENA_CONNECTION_INFO;
+
+      // Base fields shared by both authentication methods
+      const base = {
         region_name: awsRegion,
         s3_staging_dir: s3StagingDir,
         schema_name: schema,
       };
-      return res;
+      // If OIDC fields are provided → send OIDC config
+      if (webIdentityToken && roleArn) {
+        return {
+          ...base,
+          web_identity_token: webIdentityToken,
+          role_arn: roleArn,
+          ...(roleSessionName && { role_session_name: roleSessionName }),
+        } satisfies IbisAthenaConnectionInfo;
+      }
+      // Otherwise → fallback to AWS access key authentication
+      return {
+        ...base,
+        aws_access_key_id: awsAccessKey,
+        aws_secret_access_key: awsSecretKey,
+      } satisfies IbisAthenaConnectionInfo;
     },
   } as IDataSourceConnectionInfo<
     ATHENA_CONNECTION_INFO,
@@ -410,6 +437,58 @@ const dataSource = {
   } as IDataSourceConnectionInfo<
     REDSHIFT_CONNECTION_INFO,
     IbisRedshiftConnectionInfo
+  >,
+
+  // Databricks
+  [DataSourceName.DATABRICKS]: {
+    sensitiveProps: ['accessToken', 'clientSecret'],
+    toIbisConnectionInfo(connectionInfo) {
+      const decryptedConnectionInfo = decryptConnectionInfo(
+        DataSourceName.DATABRICKS,
+        connectionInfo,
+      );
+
+      const { databricksType } =
+        decryptedConnectionInfo as DATABRICKS_CONNECTION_INFO;
+
+      if (databricksType === IbisDatabricksConnectionType.TOKEN) {
+        const { serverHostname, httpPath, accessToken } =
+          decryptedConnectionInfo as DATABRICKS_PERSONAL_ACCESS_TOKEN_AUTH;
+
+        return {
+          databricks_type: databricksType,
+          serverHostname,
+          httpPath,
+          accessToken,
+        };
+      }
+
+      if (databricksType === IbisDatabricksConnectionType.SERVICE_PRINCIPAL) {
+        const {
+          serverHostname,
+          httpPath,
+          clientId,
+          clientSecret,
+          azureTenantId,
+        } = decryptedConnectionInfo as DATABRICKS_SERVICE_PRINCIPAL_AUTH;
+
+        return {
+          databricks_type: databricksType,
+          serverHostname,
+          httpPath,
+          clientId,
+          clientSecret,
+          azureTenantId,
+        };
+      }
+
+      throw new Error(
+        'Invalid Databricks connection info: must use either personal access token or service principal authentication',
+      );
+    },
+  } as IDataSourceConnectionInfo<
+    DATABRICKS_CONNECTION_INFO,
+    IbisDatabricksConnectionInfo
   >,
 };
 

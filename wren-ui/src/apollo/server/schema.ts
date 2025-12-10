@@ -69,11 +69,17 @@ export const typeDefs = gql`
     TRINO
     SNOWFLAKE
     REDSHIFT
+    DATABRICKS
   }
 
   enum RedshiftConnectionType {
     redshift
     redshift_iam
+  }
+
+  enum DatabricksConnectionType {
+    token
+    service_principal
   }
 
   enum ExpressionName {
@@ -131,6 +137,8 @@ export const typeDefs = gql`
     FA_IR
     AR
     NL
+    AZ_AZ
+    TR
   }
 
   type DataSource {

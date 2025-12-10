@@ -330,6 +330,7 @@ export enum DataSourceName {
   ATHENA = 'ATHENA',
   BIG_QUERY = 'BIG_QUERY',
   CLICK_HOUSE = 'CLICK_HOUSE',
+  DATABRICKS = 'DATABRICKS',
   DUCKDB = 'DUCKDB',
   MSSQL = 'MSSQL',
   MYSQL = 'MYSQL',
@@ -338,6 +339,11 @@ export enum DataSourceName {
   REDSHIFT = 'REDSHIFT',
   SNOWFLAKE = 'SNOWFLAKE',
   TRINO = 'TRINO'
+}
+
+export enum DatabricksConnectionType {
+  service_principal = 'service_principal',
+  token = 'token'
 }
 
 export type DeleteDashboardItemInput = {
@@ -1116,6 +1122,7 @@ export type PreviewViewDataInput = {
 
 export enum ProjectLanguage {
   AR = 'AR',
+  AZ_AZ = 'AZ_AZ',
   DE = 'DE',
   EN = 'EN',
   ES = 'ES',
@@ -1127,6 +1134,7 @@ export enum ProjectLanguage {
   NL = 'NL',
   PT = 'PT',
   RU = 'RU',
+  TR = 'TR',
   ZH_CN = 'ZH_CN',
   ZH_TW = 'ZH_TW'
 }

@@ -9,7 +9,10 @@ import {
   isEmpty,
 } from 'lodash';
 import { DataSourceName } from '@server/types';
-import { IbisRedshiftConnectionType } from '@server/adaptors/ibisAdaptor';
+import {
+  IbisRedshiftConnectionType,
+  IbisDatabricksConnectionType,
+} from '@server/adaptors/ibisAdaptor';
 
 export interface BIG_QUERY_CONNECTION_INFO {
   projectId: string;
@@ -91,8 +94,11 @@ export interface ATHENA_CONNECTION_INFO {
   schema: string;
   s3StagingDir: string;
   awsRegion: string;
-  awsAccessKey: string;
-  awsSecretKey: string;
+  awsAccessKey?: string;
+  awsSecretKey?: string;
+  webIdentityToken?: string;
+  roleArn?: string;
+  roleSessionName?: string;
 }
 
 export interface REDSHIFT_PASSWORD_AUTH {
@@ -114,9 +120,29 @@ export interface REDSHIFT_IAM_AUTH {
   redshiftType: IbisRedshiftConnectionType;
 }
 
+export interface DATABRICKS_PERSONAL_ACCESS_TOKEN_AUTH {
+  serverHostname: string;
+  httpPath: string;
+  accessToken: string;
+  databricksType: IbisDatabricksConnectionType;
+}
+
+export interface DATABRICKS_SERVICE_PRINCIPAL_AUTH {
+  serverHostname: string;
+  httpPath: string;
+  clientId: string;
+  clientSecret: string;
+  azureTenantId?: string;
+  databricksType: IbisDatabricksConnectionType;
+}
+
 export type REDSHIFT_CONNECTION_INFO =
   | REDSHIFT_PASSWORD_AUTH
   | REDSHIFT_IAM_AUTH;
+
+export type DATABRICKS_CONNECTION_INFO =
+  | DATABRICKS_PERSONAL_ACCESS_TOKEN_AUTH
+  | DATABRICKS_SERVICE_PRINCIPAL_AUTH;
 
 export type WREN_AI_CONNECTION_INFO =
   | ATHENA_CONNECTION_INFO
@@ -129,7 +155,8 @@ export type WREN_AI_CONNECTION_INFO =
   | CLICK_HOUSE_CONNECTION_INFO
   | TRINO_CONNECTION_INFO
   | SNOWFLAKE_CONNECTION_INFO
-  | REDSHIFT_CONNECTION_INFO;
+  | REDSHIFT_CONNECTION_INFO
+  | DATABRICKS_CONNECTION_INFO;
 
 export interface RecommendationQuestionResult {
   question: string;
