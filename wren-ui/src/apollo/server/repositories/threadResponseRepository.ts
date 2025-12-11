@@ -170,11 +170,18 @@ export class ThreadResponseRepository
       adjustment: data.adjustment ? JSON.stringify(data.adjustment) : undefined,
     };
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
-    const [result] = await executer(this.tableName)
+        const query = executer(this.tableName)
       .where({ id })
-      .update(this.transformToDBData(transformedData as any))
-      .returning('*');
-    return this.transformFromDBData(result);
+      .update(this.transformToDBData(transformedData as any));
+
+    if (this.knex.client.config.client != 'mysql2') {
+      const [result] = await query.returning('*');
+      return this.transformFromDBData(result);
+    }
+    // MySQL: manually fetch the updated record
+    await query;
+    const result = await executer(this.tableName).where({ id }).first();
+    return result ? this.transformFromDBData(result) : undefined;
   }
 
   protected override transformFromDBData = (data: any): ThreadResponse => {

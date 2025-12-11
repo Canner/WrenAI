@@ -11,6 +11,12 @@ export interface IConfig {
   debug?: boolean;
   // sqlite
   sqliteFile?: string;
+  // mysql / mariadb
+  mysqlHost?: string;
+  mysqlPort?: number;
+  mysqlUser?: string;
+  mysqlPassword?: string;
+  mysqlDb?: string;
 
   persistCredentialDir?: string;
 
@@ -61,6 +67,12 @@ const defaultConfig = {
 
   // sqlite
   sqliteFile: './db.sqlite3',
+  // mysql / mariadb
+  mysqlHost: 'localhost',
+  mysqlPort: 3306,
+  mysqlUser: '',
+  mysqlPassword: '',
+  mysqlDb: 'wren_ui',
 
   persistCredentialDir: `${process.cwd()}/.tmp`,
 
@@ -90,6 +102,14 @@ const config = {
   debug: process.env.DEBUG === 'true',
   // sqlite
   sqliteFile: process.env.SQLITE_FILE,
+  // mysql / mariadb
+  mysqlHost: process.env.MYSQL_HOST,
+  mysqlPort: process.env.MYSQL_PORT
+    ? parseInt(process.env.MYSQL_PORT)
+    : undefined,
+  mysqlUser: process.env.MYSQL_USER,
+  mysqlPassword: process.env.MYSQL_PASSWORD,
+  mysqlDb: process.env.MYSQL_DB,
 
   persistCredentialDir: (() => {
     if (

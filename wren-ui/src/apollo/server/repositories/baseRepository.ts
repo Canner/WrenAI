@@ -105,10 +105,16 @@ export class BaseRepository<T> implements IBasicRepository<T> {
 
   public async createOne(data: Partial<T>, queryOptions?: IQueryOptions) {
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
-    const [result] = await executer(this.tableName)
-      .insert(this.transformToDBData(data))
-      .returning('*');
-    return this.transformFromDBData(result);
+    const query = executer(this.tableName).insert(this.transformToDBData(data));
+
+    if (this.knex.client.config.client != 'mysql2') {
+      const [result] = await query.returning('*');
+      return this.transformFromDBData(result);
+    }
+    // MySQL does not support this, so retrieve the newly created record.
+    const [id] = await query;
+    const inserted = await executer(this.tableName).where({ id }).first();
+    return this.transformFromDBData(inserted);
   }
 
   public async createMany(data: Partial<T>[], queryOptions?: IQueryOptions) {
@@ -119,14 +125,42 @@ export class BaseRepository<T> implements IBasicRepository<T> {
     for (let i = 0; i < batchCount; i++) {
       const start = i * batchSize;
       const end = Math.min((i + 1) * batchSize, data.length);
-      const batchValues = data.slice(start, end);
-      const chunk = await executer(this.tableName)
-        .insert(batchValues.map(this.transformToDBData))
-        .returning('*');
-      result.push(...chunk);
-    }
+      const batchValuesOriginal = data.slice(start, end);
+      // IMPORTANT: we need to convert each object to snake_case before inserting.
+      // createOne already did this; createMany didn't, which caused camelCase columns (e.g., displayName)
+      // to break in databases where the actual column is display_name.
+      const batchValues = batchValuesOriginal.map((v) =>
+        this.transformToDBData(v),
+      );
+      const query = executer(this.tableName).insert(batchValues);
 
-    return result.map((data) => this.transformFromDBData(data));
+      if (this.knex.client.config.client != 'mysql2') {
+        // PostgreSQL and similar
+        const chunk = await query.returning('*');
+        result.push(...chunk.map(this.transformFromDBData));
+      } else {
+        // MySQL / MariaDB: manually fetch the inserted records
+        const insertedIds = await query; // Returns the first ID in the sequence
+        const firstId = Array.isArray(insertedIds)
+          ? insertedIds[0]
+          : insertedIds;
+
+        // Search for the range of inserted IDs (if the table uses autoincrement)
+        // ⚠️ This only works well if the 'id' field is auto increment.
+        if (typeof firstId === 'number') {
+          const lastId = firstId + batchValues.length - 1;
+          const rows = await executer(this.tableName)
+            .whereBetween('id', [firstId, lastId])
+            .orderBy('id', 'asc');
+          result.push(...rows.map(this.transformFromDBData));
+        } else {
+          // Fallback without numeric ID — returns the raw inserted data
+          // Here batchValues are already in snake_case format; transformFromDBData converts to camelCase.
+          result.push(...batchValues.map(this.transformFromDBData));
+        }
+      }
+    }
+    return result;
   }
 
   public async updateOne(
@@ -135,11 +169,17 @@ export class BaseRepository<T> implements IBasicRepository<T> {
     queryOptions?: IQueryOptions,
   ) {
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
-    const [result] = await executer(this.tableName)
+    const query = executer(this.tableName)
       .where({ id })
-      .update(this.transformToDBData(data))
-      .returning('*');
-    return this.transformFromDBData(result);
+      .update(this.transformToDBData(data));
+    if (this.knex.client.config.client != 'mysql2') {
+      const [result] = await query.returning('*');
+      return this.transformFromDBData(result);
+    }
+    // MySQL: manually fetch the updated record
+    await query;
+    const updated = await executer(this.tableName).where({ id }).first();
+    return this.transformFromDBData(updated);
   }
 
   public async deleteOne(id: string, queryOptions?: IQueryOptions) {
