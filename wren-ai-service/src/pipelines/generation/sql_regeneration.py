@@ -174,6 +174,10 @@ class SQLRegeneration(BasicPipeline):
         self._llm_provider = llm_provider
 
         self._components = {
+            "generator": llm_provider.get_generator(
+                system_prompt=get_sql_regeneration_system_prompt(None),
+                generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
+            ),
             "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
                 template=sql_regeneration_user_prompt_template
@@ -202,10 +206,10 @@ class SQLRegeneration(BasicPipeline):
     ):
         logger.info("SQL Regeneration pipeline is running...")
 
-        self._components["generator"] = self._llm_provider.get_generator(
-            system_prompt=get_sql_regeneration_system_prompt(sql_knowledge),
-            generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
-        )
+        if sql_knowledge:
+            self._llm_provider.set_system_prompt(
+                get_sql_regeneration_system_prompt(sql_knowledge)
+            )
 
         return await self._pipe.execute(
             ["post_process"],

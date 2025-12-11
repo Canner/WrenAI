@@ -58,6 +58,7 @@ class LitellmLLMProvider(LLMProvider):
             fallbacks=fallbacks,
         )
         self._enable_fallback_testing = fallback_testing and self._has_fallbacks
+        self._system_prompt = None
 
     def get_generator(
         self,
@@ -79,8 +80,12 @@ class LitellmLLMProvider(LLMProvider):
             query_id: Optional[str] = None,
         ):
             message = ChatMessage.from_user(prompt, image_url)
-            if system_prompt:
-                messages = [ChatMessage.from_system(system_prompt)]
+            current_system_prompt = system_prompt
+            if self._system_prompt:
+                current_system_prompt = self._system_prompt
+
+            if current_system_prompt:
+                messages = [ChatMessage.from_system(current_system_prompt)]
                 if history_messages:
                     messages.extend(history_messages)
                 messages.append(message)
@@ -93,8 +98,6 @@ class LitellmLLMProvider(LLMProvider):
             openai_formatted_messages = [
                 convert_message_to_openai_format(message) for message in messages
             ]
-
-            print(f"prompt: {openai_formatted_messages}")
 
             generation_kwargs = {
                 **combined_generation_kwargs,

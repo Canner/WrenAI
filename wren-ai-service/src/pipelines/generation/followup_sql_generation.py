@@ -171,6 +171,10 @@ class FollowUpSQLGeneration(BasicPipeline):
         self._llm_provider = llm_provider
 
         self._components = {
+            "generator": llm_provider.get_generator(
+                system_prompt=get_sql_generation_system_prompt(None),
+                generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
+            ),
             "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
                 template=text_to_sql_with_followup_user_prompt_template
@@ -207,10 +211,10 @@ class FollowUpSQLGeneration(BasicPipeline):
         else:
             metadata = {}
 
-        self._components["generator"] = self._llm_provider.get_generator(
-            system_prompt=get_sql_generation_system_prompt(sql_knowledge),
-            generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
-        )
+        if sql_knowledge:
+            self._llm_provider.set_system_prompt(
+                get_sql_generation_system_prompt(sql_knowledge)
+            )
 
         return await self._pipe.execute(
             ["post_process"],
