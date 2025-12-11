@@ -74,13 +74,18 @@ class LitellmLLMProvider(LLMProvider):
         async def _run(
             prompt: str,
             image_url: Optional[str] = None,
+            current_system_prompt: Optional[str] = None,
             history_messages: Optional[List[ChatMessage]] = None,
             generation_kwargs: Optional[Dict[str, Any]] = None,
             query_id: Optional[str] = None,
         ):
             message = ChatMessage.from_user(prompt, image_url)
-            if system_prompt:
-                messages = [ChatMessage.from_system(system_prompt)]
+            _system_prompt = system_prompt
+            if current_system_prompt:
+                _system_prompt = current_system_prompt
+
+            if _system_prompt:
+                messages = [ChatMessage.from_system(_system_prompt)]
                 if history_messages:
                     messages.extend(history_messages)
                 messages.append(message)
@@ -93,8 +98,6 @@ class LitellmLLMProvider(LLMProvider):
             openai_formatted_messages = [
                 convert_message_to_openai_format(message) for message in messages
             ]
-
-            print(f"prompt: {openai_formatted_messages}")
 
             generation_kwargs = {
                 **combined_generation_kwargs,

@@ -145,8 +145,12 @@ async def regenerate_sql(
     prompt: dict,
     generator: Any,
     generator_name: str,
+    sql_knowledge: SqlKnowledge | None = None,
 ) -> dict:
-    return await generator(prompt=prompt.get("prompt")), generator_name
+    current_system_prompt = get_sql_regeneration_system_prompt(sql_knowledge)
+    return await generator(
+        prompt=prompt.get("prompt"), current_system_prompt=current_system_prompt
+    ), generator_name
 
 
 @observe(capture_input=False)
@@ -171,9 +175,11 @@ class SQLRegeneration(BasicPipeline):
         engine: Engine,
         **kwargs,
     ):
-        self._llm_provider = llm_provider
-
         self._components = {
+            "generator": llm_provider.get_generator(
+                system_prompt=get_sql_regeneration_system_prompt(None),
+                generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
+            ),
             "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
                 template=sql_regeneration_user_prompt_template
@@ -201,11 +207,6 @@ class SQLRegeneration(BasicPipeline):
         sql_knowledge: SqlKnowledge | None = None,
     ):
         logger.info("SQL Regeneration pipeline is running...")
-
-        self._components["generator"] = self._llm_provider.get_generator(
-            system_prompt=get_sql_regeneration_system_prompt(sql_knowledge),
-            generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
-        )
 
         return await self._pipe.execute(
             ["post_process"],
