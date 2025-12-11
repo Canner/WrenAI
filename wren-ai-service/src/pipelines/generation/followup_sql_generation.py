@@ -127,11 +127,18 @@ def prompt(
 @observe(as_type="generation", capture_input=False)
 @trace_cost
 async def generate_sql_in_followup(
-    prompt: dict, generator: Any, histories: list[AskHistory], generator_name: str
+    prompt: dict,
+    generator: Any,
+    histories: list[AskHistory],
+    generator_name: str,
+    sql_knowledge: SqlKnowledge | None = None,
 ) -> dict:
     history_messages = construct_ask_history_messages(histories)
+    current_system_prompt = get_sql_generation_system_prompt(sql_knowledge)
     return await generator(
-        prompt=prompt.get("prompt"), history_messages=history_messages
+        prompt=prompt.get("prompt"),
+        history_messages=history_messages,
+        current_system_prompt=current_system_prompt,
     ), generator_name
 
 
@@ -167,8 +174,6 @@ class FollowUpSQLGeneration(BasicPipeline):
         self._retriever = document_store_provider.get_retriever(
             document_store_provider.get_store("project_meta")
         )
-
-        self._llm_provider = llm_provider
 
         self._components = {
             "generator": llm_provider.get_generator(
@@ -210,11 +215,6 @@ class FollowUpSQLGeneration(BasicPipeline):
             metadata = await retrieve_metadata(project_id or "", self._retriever)
         else:
             metadata = {}
-
-        if sql_knowledge:
-            self._llm_provider.set_system_prompt(
-                get_sql_generation_system_prompt(sql_knowledge)
-            )
 
         return await self._pipe.execute(
             ["post_process"],

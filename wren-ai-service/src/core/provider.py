@@ -1,5 +1,4 @@
 from abc import ABCMeta, abstractmethod
-from typing import Optional
 
 from haystack.document_stores.types import DocumentStore
 
@@ -8,9 +7,6 @@ class LLMProvider(metaclass=ABCMeta):
     @abstractmethod
     def get_generator(self, *args, **kwargs):
         ...
-
-    def set_system_prompt(self, system_prompt: Optional[str]) -> None:
-        self._system_prompt = system_prompt
 
     def get_model(self):
         return self._model
