@@ -3672,13 +3672,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/estree@npm:^1.0.8":
-  version: 1.0.8
-  resolution: "@types/estree@npm:1.0.8"
-  checksum: 10c0/39d34d1afaa338ab9763f37ad6066e3f349444f9052b9676a7cc0252ef9485a41c6d81c9c4e0d26e9077993354edf25efc853f3224dd4b447175ef62bdcc86a5
-  languageName: node
-  linkType: hard
-
 "@types/geojson@npm:*":
   version: 7946.0.14
   resolution: "@types/geojson@npm:7946.0.14"
@@ -15355,23 +15348,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"vega-expression@npm:^6.1.0, vega-expression@npm:~6.1.0":
-  version: 6.1.0
-  resolution: "vega-expression@npm:6.1.0"
-  dependencies:
-    "@types/estree": "npm:^1.0.8"
-    vega-util: "npm:^2.1.0"
-  checksum: 10c0/985ffcbc884a460c4d825de8b68c0bab167a6c7a42ac7b2642a29c04420ab239e78d8ec6527948db75c40e0700890ce270479e1b00fab919424a4b4ab915225a
-  languageName: node
-  linkType: hard
-
-"vega-expression@npm:~5.1.1":
-  version: 5.1.2
-  resolution: "vega-expression@npm:5.1.2"
+"vega-expression@npm:5.2.1":
+  version: 5.2.1
+  resolution: "vega-expression@npm:5.2.1"
   dependencies:
     "@types/estree": "npm:^1.0.0"
-    vega-util: "npm:^1.17.3"
-  checksum: 10c0/ea3e7228e5b3f60496f98fb8558c0a171ef8b04ed31d76aaf25e97c4862e96da4eba66f56e3263693c5eb5af54d038db87747be12caddc0e57c82e9a1d35eacb
+    vega-util: "npm:^1.17.4"
+  checksum: 10c0/704fc5eb2bf0f0c032fa187cb7203972bcca1440783c236a69a59d4dda3291d34fc5f748d71af5481b1aeb0b35e695121bc841b9fda30dd14ea0a43ed62d2cb0
   languageName: node
   linkType: hard
 
@@ -15666,7 +15649,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"vega-util@npm:^1.17.3, vega-util@npm:^1.17.4":
+"vega-util@npm:^1.17.4":
   version: 1.17.4
   resolution: "vega-util@npm:1.17.4"
   checksum: 10c0/71457e85821f1f0b51985d7a0721f049f9a359b6134384fb7f0b8b8a50c154ae4e90aba86b1e88f63c553bc18a42ff830fb885adaf14b64776dddfee9f1c879b
