@@ -908,17 +908,25 @@ export class ModelResolver {
       throw new Error('Model not found');
     }
     const project = await ctx.projectService.getCurrentProject();
-    const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
     const modelColumns = await ctx.modelColumnRepository.findColumnsByModelIds([
       model.id,
     ]);
     // sourceTableName is already just the table name (schema prefix stripped during model creation)
-    const sql = `select ${getPreviewColumnsStr(modelColumns)} from ${model.sourceTableName}`;
+    // Quote the table name to handle identifiers with spaces or special characters
+    const sql = `select ${getPreviewColumnsStr(modelColumns)} from "${model.sourceTableName}"`;
+
+    // Use empty manifest to bypass WrenPlanner rewriting for simple preview queries
+    // This prevents the unnecessary CTE wrapping that causes ORA-32039 errors in Oracle
+    const emptyManifest = {
+      catalog: project.catalog || 'default',
+      schema: project.schema || 'default',
+      models: [],
+    };
 
     const data = (await ctx.queryService.preview(sql, {
       project,
       modelingOnly: false,
-      manifest,
+      manifest: emptyManifest,
     })) as PreviewDataResponse;
 
     return data;
