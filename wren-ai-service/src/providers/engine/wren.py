@@ -263,6 +263,28 @@ class WrenIbis(Engine):
             logger.exception(f"Unexpected error during get_func_list: {str(e)}")
             return []
 
+    async def get_sql_knowledge(
+        self,
+        session: aiohttp.ClientSession,
+        data_source: str,
+        timeout: float = settings.engine_timeout,
+    ) -> Optional[Dict[str, Any]]:
+        api_endpoint = f"{self._endpoint}/v3/connector/{data_source}/knowledge"
+        try:
+            async with session.get(api_endpoint, timeout=timeout) as response:
+                res = await response.json()
+
+                if response.status != 200:
+                    raise Exception(f"Request failed with message: {res}")
+
+                return res
+        except asyncio.TimeoutError:
+            logger.error(f"Request timed out: {timeout} seconds")
+            return None
+        except Exception as e:
+            logger.exception(f"Unexpected error during get_sql_knowledge: {str(e)}")
+            return None
+
 
 @provider("wren_engine")
 class WrenEngine(Engine):

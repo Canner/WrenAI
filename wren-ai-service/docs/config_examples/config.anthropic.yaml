@@ -142,7 +142,9 @@ pipes:
     llm: litellm_llm.default
   - name: sql_diagnosis
     llm: litellm_llm.default
-
+  - name: sql_knowledge_retrieval
+    engine: wren_ibis
+    document_store: qdrant
 ---
 settings:
   engine_timeout: 30
