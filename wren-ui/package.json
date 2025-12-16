@@ -98,7 +98,8 @@
     "ws": "8.17.1",
     "axios": "1.12.0",
     "tar-fs": "2.1.4",
-    "tmp": "0.2.4"
+    "tmp": "0.2.4",
+    "glob": "10.5.0"
   },
   "_moduleAliases": {
     "@server": "src/apollo/server"
