@@ -138,7 +138,21 @@ class DDLChunker:
             }
             comment = f"\n/* {str(model_properties)} */\n"
 
-            table_name = model["name"]
+            # Use physical table/view name from tableReference if available
+            table_reference = model.get("tableReference")
+            if table_reference and table_reference.get("table"):
+                # Build fully qualified name: [catalog.]schema.table or just table
+                table_name_parts = []
+                if table_reference.get("catalog"):
+                    table_name_parts.append(table_reference["catalog"])
+                if table_reference.get("schema"):
+                    table_name_parts.append(table_reference["schema"])
+                table_name_parts.append(table_reference["table"])
+                table_name = ".".join(table_name_parts)
+            else:
+                # Fallback to model name if no tableReference
+                table_name = model["name"]
+
             payload = {
                 "type": "TABLE",
                 "comment": comment,
@@ -188,8 +202,8 @@ class DDLChunker:
             condition_parts = condition.split(" = ")
             fk_column = condition_parts[0 if is_source else 1].split(".")[1]
 
-            # Build foreign key constraint
-            fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
+            # Build foreign key constraint with quoted identifiers
+            fk_constraint = f'FOREIGN KEY ("{fk_column}") REFERENCES "{related_table}"("{primary_keys_map[related_table]}")'
 
             return {
                 "type": "FOREIGN_KEY",

@@ -45,7 +45,8 @@ def build_table_ddl(
                     has_calculated_field = True
                 if column["data_type"].lower() == "json":
                     has_json_field = True
-                column_ddl = f"{column['comment']}{column['name']} {get_engine_supported_data_type(column['data_type'])}"
+                # Quote column names to handle spaces and special characters
+                column_ddl = f'{column["comment"]}"{column["name"]}" {get_engine_supported_data_type(column["data_type"])}'
                 if column["is_primary_key"]:
                     column_ddl += " PRIMARY KEY"
                 columns_ddl.append(column_ddl)
@@ -55,7 +56,8 @@ def build_table_ddl(
 
     return (
         (
-            f"{content['comment']}CREATE TABLE {content['name']} (\n  "
+            # Quote table names to handle spaces and special characters
+            f'{content["comment"]}CREATE TABLE "{content["name"]}" (\n  '
             + ",\n  ".join(columns_ddl)
             + "\n);"
         ),

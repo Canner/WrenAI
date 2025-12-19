@@ -84,14 +84,37 @@ export class DiagramResolver {
     views: View[],
     manifest: Manifest,
   ): Diagram {
+    logger.error(`=== DIAGRAM DEBUG START ===`);
+    logger.error(`Total models from DB: ${models.length}`);
+    logger.error(`Total manifest models: ${manifest.models.length}`);
+    logger.error(
+      `Manifest model names: ${manifest.models.map((m) => m.name).join(', ')}`,
+    );
+
     const diagramModels = models.map((model) => {
       const transformedModel = this.transformModel(model);
       const allColumns = modelColumns.filter(
         (column) => column.modelId === model.id,
       );
+
+      logger.error(`Processing model ${model.id}: "${model.referenceName}"`);
+
       const modelMDL = manifest.models.find(
         (modelMDL) => modelMDL.name === model.referenceName,
       );
+
+      if (!modelMDL) {
+        logger.error(`  ❌ MODEL NOT FOUND IN MANIFEST!`);
+        logger.error(
+          `  Available: ${manifest.models.map((m) => m.name).join(', ')}`,
+        );
+        throw new Error(`Model "${model.referenceName}" not found in manifest`);
+      }
+
+      logger.error(
+        `  ✅ Found in manifest, has ${modelMDL.columns?.length || 0} columns`,
+      );
+
       allColumns.forEach((column) => {
         const columnRelations = relations
           .map((relation) =>

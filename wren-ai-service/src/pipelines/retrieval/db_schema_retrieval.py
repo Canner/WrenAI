@@ -100,23 +100,26 @@ table_columns_selection_user_prompt_template = """
 
 
 def _build_metric_ddl(content: dict) -> str:
+    # Quote column names to handle spaces and special characters
     columns_ddl = [
-        f"{column['comment']}{column['name']} {get_engine_supported_data_type(column['data_type'])}"
+        f'{column["comment"]}"{column["name"]}" {get_engine_supported_data_type(column["data_type"])}'
         for column in content["columns"]
         if column["data_type"].lower()
         != "unknown"  # quick fix: filtering out UNKNOWN column type
     ]
 
     return (
-        f"{content['comment']}CREATE TABLE {content['name']} (\n  "
+        # Quote table names to handle spaces and special characters
+        f'{content["comment"]}CREATE TABLE "{content["name"]}" (\n  '
         + ",\n  ".join(columns_ddl)
         + "\n);"
     )
 
 
 def _build_view_ddl(content: dict) -> str:
+    # Quote view names to handle spaces and special characters
     return (
-        f"{content['comment']}CREATE VIEW {content['name']}\nAS {content['statement']}"
+        f'{content["comment"]}CREATE VIEW "{content["name"]}"\nAS {content["statement"]}'
     )
 
 

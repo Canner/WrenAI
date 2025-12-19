@@ -386,15 +386,26 @@ export class ModelResolver {
       throw new Error('Table not found in the data source');
     }
     const properties = dataSourceTable?.properties;
+
+    // DEBUG: Log the transformation process
+    const strippedName = stripOracleDisplayPrefix(sourceTableName);
+    const finalReferenceName = replaceInvalidReferenceName(strippedName);
+    logger.info(`=== MODEL CREATION DEBUG ===`);
+    logger.info(`Input sourceTableName: "${sourceTableName}"`);
+    logger.info(`After stripOracleDisplayPrefix: "${strippedName}"`);
+    logger.info(`After replaceInvalidReferenceName: "${finalReferenceName}"`);
+
     const modelValue = {
       projectId: project.id,
-      displayName: stripOracleDisplayPrefix(sourceTableName), // Strip RT/ADMIN prefix for UI display
-      referenceName: replaceInvalidReferenceName(sourceTableName),
+      displayName: strippedName, // Strip RT/ADMIN prefix for UI display
+      referenceName: finalReferenceName,
       sourceTableName: sourceTableName,
       cached: false,
       refreshTime: null,
       properties: properties ? JSON.stringify(properties) : null,
     } as Partial<Model>;
+
+    logger.info(`Final modelValue: ${JSON.stringify(modelValue, null, 2)}`);
     const model = await ctx.modelRepository.createOne(modelValue);
 
     // create columns

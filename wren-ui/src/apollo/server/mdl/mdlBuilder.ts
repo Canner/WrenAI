@@ -100,18 +100,6 @@ export class MDLBuilder implements IMDLBuilder {
 
   // Helper to strip common Oracle table prefixes from model names for CTE generation
   // This prevents Oracle ORA-32039 error when CTE name matches table name
-  private stripOracleTablePrefix(referenceName: string): string {
-    // Strip common prefixes like "RT ", "ADMIN ", etc. to avoid CTE name conflicts
-    // Preserve the referenceName for internal references, only modify CTE name
-    const prefixes = ['RT_', 'ADMIN_', 'RT ', 'ADMIN '];
-    for (const prefix of prefixes) {
-      if (referenceName.startsWith(prefix)) {
-        return referenceName.substring(prefix.length);
-      }
-    }
-    return referenceName;
-  }
-
   public addModel(): void {
     if (!isEmpty(this.manifest.models)) {
       return;
@@ -125,7 +113,7 @@ export class MDLBuilder implements IMDLBuilder {
       const tableReference = this.buildTableReference(model);
 
       return {
-        name: this.stripOracleTablePrefix(model.referenceName),
+        name: model.referenceName,
         columns: [],
         tableReference,
         // can only have one of refSql or tableReference

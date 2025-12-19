@@ -279,7 +279,8 @@ def get_ddl_commands(mdl: Dict[str, Any]) -> List[str]:
                         )
                     column_name = column["name"]
                     column_type = column["type"]
-                    column_ddl = f"{comment}{column_name} {column_type}"
+                    # Quote column names to handle spaces and special characters
+                    column_ddl = f'{comment}"{column_name}" {column_type}'
 
                     # If column is a primary key
                     if column_name == model.get("primaryKey", ""):
@@ -296,7 +297,8 @@ def get_ddl_commands(mdl: Dict[str, Any]) -> List[str]:
                 ):
                     related_table = relationship["models"][1]
                     fk_column = relationship["condition"].split(" = ")[0].split(".")[1]
-                    fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
+                    # Quote identifiers in foreign key constraints
+                    fk_constraint = f'FOREIGN KEY ("{fk_column}") REFERENCES "{related_table}"("{primary_keys_map[related_table]}")'
                     columns_ddl.append(f"{comment}{fk_constraint}")
                 elif (
                     table_name == relationship["models"][1]
@@ -304,7 +306,8 @@ def get_ddl_commands(mdl: Dict[str, Any]) -> List[str]:
                 ):
                     related_table = relationship["models"][0]
                     fk_column = relationship["condition"].split(" = ")[1].split(".")[1]
-                    fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
+                    # Quote identifiers in foreign key constraints
+                    fk_constraint = f'FOREIGN KEY ("{fk_column}") REFERENCES "{related_table}"("{primary_keys_map[related_table]}")'
                     columns_ddl.append(f"{comment}{fk_constraint}")
                 elif (
                     table_name in relationship["models"]
@@ -317,7 +320,8 @@ def get_ddl_commands(mdl: Dict[str, Any]) -> List[str]:
                     fk_column = (
                         relationship["condition"].split(" = ")[index].split(".")[1]
                     )
-                    fk_constraint = f"FOREIGN KEY ({fk_column}) REFERENCES {related_table}({primary_keys_map[related_table]})"
+                    # Quote identifiers in foreign key constraints
+                    fk_constraint = f'FOREIGN KEY ("{fk_column}") REFERENCES "{related_table}"("{primary_keys_map[related_table]}")'
                     columns_ddl.append(f"{comment}{fk_constraint}")
 
             if "properties" in model:
@@ -330,8 +334,9 @@ def get_ddl_commands(mdl: Dict[str, Any]) -> List[str]:
             else:
                 comment = ""
 
+            # Quote table names to handle spaces and special characters
             create_table_ddl = (
-                f"{comment}CREATE TABLE {table_name} (\n  "
+                f'{comment}CREATE TABLE "{table_name}" (\n  '
                 + ",\n  ".join(columns_ddl)
                 + "\n);"
             )
@@ -342,7 +347,8 @@ def get_ddl_commands(mdl: Dict[str, Any]) -> List[str]:
     def _convert_views(views: List[Dict[str, Any]]) -> List[str]:
         def _format(view: Dict[str, Any]) -> str:
             properties = view["properties"] if "properties" in view else ""
-            return f"/* {properties} */\nCREATE VIEW {view['name']}\nAS ({view['statement']})"
+            # Quote view names to handle spaces and special characters
+            return f'/* {properties} */\nCREATE VIEW "{view["name"]}"\nAS ({view["statement"]})'
 
         return [_format(view) for view in views]
 
@@ -356,19 +362,22 @@ def get_ddl_commands(mdl: Dict[str, Any]) -> List[str]:
                 column_name = dimension["name"]
                 column_type = dimension["type"]
                 comment = "-- This column is a dimension\n  "
-                column_ddl = f"{comment}{column_name} {column_type}"
+                # Quote column names to handle spaces and special characters
+                column_ddl = f'{comment}"{column_name}" {column_type}'
                 columns_ddl.append(column_ddl)
 
             for measure in metric["measure"]:
                 column_name = measure["name"]
                 column_type = measure["type"]
                 comment = f"-- This column is a measure\n  -- expression: {measure['expression']}\n  "
-                column_ddl = f"{comment}{column_name} {column_type}"
+                # Quote column names to handle spaces and special characters
+                column_ddl = f'{comment}"{column_name}" {column_type}'
                 columns_ddl.append(column_ddl)
 
             comment = f"\n/* This table is a metric */\n/* Metric Base Object: {metric['baseObject']} */\n"
+            # Quote table names to handle spaces and special characters
             create_table_ddl = (
-                f"{comment}CREATE TABLE {table_name} (\n  "
+                f'{comment}CREATE TABLE "{table_name}" (\n  '
                 + ",\n  ".join(columns_ddl)
                 + "\n);"
             )

@@ -6,6 +6,17 @@ import {
 import { replaceAllowableSyntax } from './regex';
 import { CompactColumn } from '@server/services/metadataService';
 
+// Helper function to strip Oracle table prefixes from display names
+export function stripOracleDisplayPrefix(displayName: string): string {
+  const prefixes = ['RT ', 'ADMIN ', 'RT_', 'ADMIN_'];
+  for (const prefix of prefixes) {
+    if (displayName.startsWith(prefix)) {
+      return displayName.substring(prefix.length);
+    }
+  }
+  return displayName;
+}
+
 export function getPreviewColumnsStr(modelColumns: ModelColumn[]) {
   if (modelColumns.length === 0) return '*';
   // Use sourceColumnName (original name with spaces) instead of referenceName (with underscores)
@@ -31,8 +42,8 @@ export function replaceInvalidReferenceName(referenceName: string) {
   if (referenceName.includes('"')) {
     return referenceName;
   }
-  // For unquoted paths, replace dots with underscores
-  return referenceName.replace(/\./g, '_');
+  // For unquoted paths, replace dots AND SPACES with underscores
+  return referenceName.replace(/[\.\s]/g, '_');
 }
 
 export function findColumnsToUpdate(

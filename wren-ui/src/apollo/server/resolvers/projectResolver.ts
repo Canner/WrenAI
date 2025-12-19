@@ -14,6 +14,7 @@ import {
   replaceInvalidReferenceName,
   transformInvalidColumnName,
   handleNestedColumns,
+  stripOracleDisplayPrefix,
 } from '@server/utils';
 import {
   DUCKDB_CONNECTION_INFO,
@@ -712,8 +713,10 @@ export class ProjectResolver {
 
       const model = {
         projectId: project.id,
-        displayName: table.name, // table name comes from ibis-server already formatted correctly
-        referenceName: replaceInvalidReferenceName(table.name),
+        displayName: stripOracleDisplayPrefix(table.name),
+        referenceName: replaceInvalidReferenceName(
+          stripOracleDisplayPrefix(table.name),
+        ),
         sourceTableName: table.name,
         cached: false,
         refreshTime: null,
