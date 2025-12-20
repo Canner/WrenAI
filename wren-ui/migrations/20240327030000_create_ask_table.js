@@ -15,7 +15,11 @@ exports.up = function (knex) {
     })
     .createTable('thread_response', (table) => {
       table.increments('id').comment('ID');
-      table.integer('thread_id').comment('Reference to thread.id');
+      if (knex.client.config.client === 'mysql2') {
+        table.integer('thread_id').unsigned().comment('Reference to thread.id');
+      } else {
+        table.integer('thread_id').comment('Reference to thread.id');
+      }
       table.foreign('thread_id').references('thread.id').onDelete('CASCADE');
 
       // query id from AI service
@@ -24,8 +28,13 @@ exports.up = function (knex) {
       // response from AI service
       table.text('question').comment('the question of the response');
       table.string('status').comment('the status of the response');
-      table.jsonb('detail').nullable().comment('the detail of the response');
-      table.jsonb('error').nullable().comment('the error message if any');
+      if (knex.client.config.client === 'mysql2') {
+        table.json('detail').nullable().comment('the detail of the response');
+        table.json('error').nullable().comment('the error message if any');
+      } else {
+        table.jsonb('detail').nullable().comment('the detail of the response');
+        table.jsonb('error').nullable().comment('the error message if any');
+      }
 
       // timestamps
       table.timestamps(true, true);

@@ -4,12 +4,21 @@
  */
 exports.up = function (knex) {
   return knex.schema.alterTable('thread_response', (table) => {
-    table
-      .jsonb('adjustment')
-      .nullable()
-      .comment(
-        'Adjustment data for thread response, including type and payload',
-      );
+    if (knex.client.config.client === 'mysql2') {
+      table
+        .json('adjustment')
+        .nullable()
+        .comment(
+          'Adjustment data for thread response, including type and payload',
+        );
+    } else {
+      table
+        .jsonb('adjustment')
+        .nullable()
+        .comment(
+          'Adjustment data for thread response, including type and payload',
+        );
+    }
   });
 };
 
