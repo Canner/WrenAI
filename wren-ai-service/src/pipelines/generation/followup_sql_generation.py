@@ -14,14 +14,15 @@ from src.pipelines.common import clean_up_new_lines, retrieve_metadata
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
-    calculated_field_instructions,
     construct_ask_history_messages,
     construct_instructions,
-    json_field_instructions,
-    metric_instructions,
-    sql_generation_system_prompt,
+    get_calculated_field_instructions,
+    get_json_field_instructions,
+    get_metric_instructions,
+    get_sql_generation_system_prompt,
 )
 from src.pipelines.retrieval.sql_functions import SqlFunction
+from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
 from src.utils import trace_cost
 from src.web.v1.services.ask import AskHistory
 
@@ -97,6 +98,7 @@ def prompt(
     has_metric: bool = False,
     has_json_field: bool = False,
     sql_functions: list[SqlFunction] | None = None,
+    sql_knowledge: SqlKnowledge | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
@@ -106,10 +108,16 @@ def prompt(
             instructions=instructions,
         ),
         calculated_field_instructions=(
-            calculated_field_instructions if has_calculated_field else ""
+            get_calculated_field_instructions(sql_knowledge)
+            if has_calculated_field
+            else ""
         ),
-        metric_instructions=(metric_instructions if has_metric else ""),
-        json_field_instructions=(json_field_instructions if has_json_field else ""),
+        metric_instructions=(
+            get_metric_instructions(sql_knowledge) if has_metric else ""
+        ),
+        json_field_instructions=(
+            get_json_field_instructions(sql_knowledge) if has_json_field else ""
+        ),
         sql_samples=sql_samples,
         sql_functions=sql_functions,
     )
@@ -119,11 +127,18 @@ def prompt(
 @observe(as_type="generation", capture_input=False)
 @trace_cost
 async def generate_sql_in_followup(
-    prompt: dict, generator: Any, histories: list[AskHistory], generator_name: str
+    prompt: dict,
+    generator: Any,
+    histories: list[AskHistory],
+    generator_name: str,
+    sql_knowledge: SqlKnowledge | None = None,
 ) -> dict:
     history_messages = construct_ask_history_messages(histories)
+    current_system_prompt = get_sql_generation_system_prompt(sql_knowledge)
     return await generator(
-        prompt=prompt.get("prompt"), history_messages=history_messages
+        prompt=prompt.get("prompt"),
+        history_messages=history_messages,
+        current_system_prompt=current_system_prompt,
     ), generator_name
 
 
@@ -162,7 +177,7 @@ class FollowUpSQLGeneration(BasicPipeline):
 
         self._components = {
             "generator": llm_provider.get_generator(
-                system_prompt=sql_generation_system_prompt,
+                system_prompt=get_sql_generation_system_prompt(None),
                 generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
             ),
             "generator_name": llm_provider.get_model(),
@@ -192,6 +207,7 @@ class FollowUpSQLGeneration(BasicPipeline):
         sql_functions: list[SqlFunction] | None = None,
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
+        sql_knowledge: SqlKnowledge | None = None,
     ):
         logger.info("Follow-Up SQL Generation pipeline is running...")
 
@@ -217,6 +233,7 @@ class FollowUpSQLGeneration(BasicPipeline):
                 "use_dry_plan": use_dry_plan,
                 "allow_dry_plan_fallback": allow_dry_plan_fallback,
                 "data_source": metadata.get("data_source", "local_file"),
+                "sql_knowledge": sql_knowledge,
                 **self._components,
             },
         )

@@ -112,6 +112,11 @@ export const DATA_SOURCE_OPTIONS = {
     guide: 'https://docs.getwren.ai/oss/guide/connect/redshift',
     disabled: false,
   },
+  [DATA_SOURCES.DATABRICKS]: {
+    ...getDataSourceConfig(DATA_SOURCES.DATABRICKS),
+    guide: 'https://docs.getwren.ai/oss/guide/connect/databricks',
+    disabled: false,
+  },
 } as { [key: string]: ButtonOption };
 
 export const TEMPLATE_OPTIONS = {
