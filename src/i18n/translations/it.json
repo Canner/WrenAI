@@ -1,0 +1,68 @@
+{
+  "common": {
+    "welcome": "Benvenuto",
+    "login": "Accedi",
+    "signup": "Registrati",
+    "logout": "Disconnetti",
+    "cancel": "Annulla",
+    "save": "Salva",
+    "edit": "Modifica",
+    "delete": "Elimina",
+    "next": "Avanti",
+    "finish": "Fine",
+    "close": "Chiudi",
+    "submit": "Invia",
+    "deploy": "Distribuisci",
+    "synced": "Sincronizzato",
+    "home": "Home",
+    "modeling": "Modellazione"
+  },
+  "setup": {
+    "connection": {
+      "displayName": "Nome visualizzato",
+      "host": "Host",
+      "port": "Porta",
+      "username": "Nome utente",
+      "password": "Password",
+      "database": "Nome database",
+      "useSSL": "Usa SSL",
+      "schema": "Schema",
+      "catalog": "Catalogo"
+    }
+  },
+  "modeling": {
+    "metadata": {
+      "title": "Modifica metadati",
+      "name": "Nome",
+      "description": "Descrizione",
+      "updateSuccess": "Metadati del modello aggiornati con successo."
+    },
+    "relationships": {
+      "add": "Aggiungi relazione",
+      "edit": "Aggiorna relazione",
+      "delete": "Elimina relazione",
+      "deleteConfirm": "Sei sicuro di voler eliminare questa relazione?",
+      "createSuccess": "Relazione creata con successo.",
+      "updateSuccess": "Relazione aggiornata con successo.",
+      "deleteSuccess": "Relazione eliminata con successo."
+    },
+    "deploy": {
+      "undeployedChanges": "Modifiche non distribuite",
+      "deploying": "Distribuzione in corso..."
+    }
+  },
+  "views": {
+    "saveAs": "Salva come Vista",
+    "saveSuccess": "Vista creata con successo.",
+    "updateSuccess": "Metadati della vista aggiornati con successo.",
+    "deployNotice": "Dopo il salvataggio, assicurati di andare alla \"Pagina di Modellazione\" per distribuire tutte le viste salvate."
+  },
+  "calculatedFields": {
+    "add": "Aggiungi campo calcolato",
+    "edit": "Modifica campo calcolato",
+    "delete": "Elimina campo calcolato",
+    "createSuccess": "Campo calcolato creato con successo.",
+    "updateSuccess": "Campo calcolato aggiornato con successo.",
+    "deleteSuccess": "Campo calcolato eliminato con successo."
+  }
+} 

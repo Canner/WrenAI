@@ -1,0 +1,68 @@
+{
+  "common": {
+    "welcome": "Welcome",
+    "login": "Login",
+    "signup": "Sign Up",
+    "logout": "Logout",
+    "cancel": "Cancel",
+    "save": "Save",
+    "edit": "Edit",
+    "delete": "Delete",
+    "next": "Next",
+    "finish": "Finish",
+    "close": "Close",
+    "submit": "Submit",
+    "deploy": "Deploy",
+    "synced": "Synced",
+    "home": "Home",
+    "modeling": "Modeling"
+  },
+  "setup": {
+    "connection": {
+      "displayName": "Display name",
+      "host": "Host",
+      "port": "Port",
+      "username": "Username",
+      "password": "Password",
+      "database": "Database name",
+      "useSSL": "Use SSL",
+      "schema": "Schema",
+      "catalog": "Catalog"
+    }
+  },
+  "modeling": {
+    "metadata": {
+      "title": "Edit metadata",
+      "name": "Name",
+      "description": "Description",
+      "updateSuccess": "Successfully updated model metadata."
+    },
+    "relationships": {
+      "add": "Add relationship",
+      "edit": "Update relationship",
+      "delete": "Delete relationship",
+      "deleteConfirm": "Are you sure you want to delete this relationship?",
+      "createSuccess": "Successfully created relationship.",
+      "updateSuccess": "Successfully updated relationship.",
+      "deleteSuccess": "Successfully deleted relationship."
+    },
+    "deploy": {
+      "undeployedChanges": "Undeployed changes",
+      "deploying": "Deploying..."
+    }
+  },
+  "views": {
+    "saveAs": "Save as View",
+    "saveSuccess": "Successfully created view.",
+    "updateSuccess": "Successfully updated view metadata.",
+    "deployNotice": "After saving, make sure you go to \"Modeling Page\" to deploy all saved views."
+  },
+  "calculatedFields": {
+    "add": "Add calculated field",
+    "edit": "Edit calculated field",
+    "delete": "Delete calculated field",
+    "createSuccess": "Successfully created calculated field.",
+    "updateSuccess": "Successfully updated calculated field.",
+    "deleteSuccess": "Successfully deleted calculated field."
+  }
+} 
