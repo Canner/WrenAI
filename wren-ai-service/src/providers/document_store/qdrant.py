@@ -1,7 +1,7 @@
 import logging
 import os
 from typing import Any, Dict, List, Optional
-
+from qdrant_client.http import models
 import numpy as np
 import qdrant_client
 from haystack import Document, component
@@ -159,7 +159,8 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
         # to improve the indexing performance
         # see https://qdrant.tech/documentation/guides/multiple-partitions/?q=mul#calibrate-performance
         self.client.create_payload_index(
-            collection_name=index, field_name="project_id", field_schema="keyword"
+            collection_name=index, field_name="project_id",
+              field_schema=models.PayloadSchemaType.KEYWORD,
         )
 
     async def _query_by_embedding(
