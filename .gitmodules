@@ -1,3 +1,3 @@
 [submodule "wren-engine"]
-	path = wren-engine
-	url = git@github.com:Canner/wren-engine.git
+    path = wren-engine
+    url = https://github.com/Canner/wren-engine.git
