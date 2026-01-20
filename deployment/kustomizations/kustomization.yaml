@@ -63,3 +63,9 @@ resources:
 #  - examples/certificate-qdrant_example.yaml
 ### Best practice is to create and deploy Secrets manually, not as part of kustomization or GitOps!
 #  - examples/secret-wren_example.yaml
+
+# ============================================
+# Node Selectors and Tolerations
+# ============================================
+patchesStrategicMerge:
+  - patches/node-selectors.yaml

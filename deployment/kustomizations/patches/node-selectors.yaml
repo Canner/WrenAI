@@ -1,0 +1,106 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wren-ai-service
+spec:
+  template:
+    spec:
+      nodeSelector:
+        app: wren-ai
+      tolerations:
+        - key: "if-wren-ai-pod"
+          value: "true"
+          effect: "NoSchedule"
+        - key: "if-monitoring-pod"
+          value: "true"
+          effect: "NoSchedule"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wren-ui
+spec:
+  template:
+    spec:
+      nodeSelector:
+        app: wren-ai
+      tolerations:
+        - key: "if-wren-ai-pod"
+          value: "true"
+          effect: "NoSchedule"
+        - key: "if-monitoring-pod"
+          value: "true"
+          effect: "NoSchedule"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wren-engine
+spec:
+  template:
+    spec:
+      nodeSelector:
+        app: wren-ai
+      tolerations:
+        - key: "if-wren-ai-pod"
+          value: "true"
+          effect: "NoSchedule"
+        - key: "if-monitoring-pod"
+          value: "true"
+          effect: "NoSchedule"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wren-ibis-server
+spec:
+  template:
+    spec:
+      nodeSelector:
+        app: wren-ai
+      tolerations:
+        - key: "if-wren-ai-pod"
+          value: "true"
+          effect: "NoSchedule"
+        - key: "if-monitoring-pod"
+          value: "true"
+          effect: "NoSchedule"
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: wren-postgresql
+spec:
+  template:
+    spec:
+      nodeSelector:
+        app: wren-ai
+      tolerations:
+        - key: "if-wren-ai-pod"
+          value: "true"
+          effect: "NoSchedule"
+        - key: "if-monitoring-pod"
+          value: "true"
+          effect: "NoSchedule"
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: wren-qdrant-0
+spec:
+  template:
+    spec:
+      nodeSelector:
+        app: wren-ai
+      tolerations:
+        - key: "if-wren-ai-pod"
+          value: "true"
+          effect: "NoSchedule"
+        - key: "if-monitoring-pod"
+          value: "true"
+          effect: "NoSchedule"
