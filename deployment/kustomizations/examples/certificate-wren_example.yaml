@@ -6,11 +6,11 @@ metadata:
   name: wren-ui.myhost.net
 spec:
   dnsNames:
-    - wren-ui.myhost.net
+    - wren.drivex.dev
   issuerRef:
     group: cert-manager.io
     kind: ClusterIssuer
     ### Replace with the name of your issuer, otherwise the secret will be produce randoom name and the ingress will not work.
-    name: myhost.net-prod
+    name: letsencrypt-dev
   ### Your ingress will be looking for this exact name:
   secretName: wren-ui.myhost.net-tls
