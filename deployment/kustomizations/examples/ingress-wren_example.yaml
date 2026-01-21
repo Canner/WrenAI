@@ -45,4 +45,4 @@ spec:
   tls:
     - hosts:
       - wren.drivex.dev
-      secretName: wren-ui.myhost.net-tls
+      secretName: wren-drivex-dev-tls 
