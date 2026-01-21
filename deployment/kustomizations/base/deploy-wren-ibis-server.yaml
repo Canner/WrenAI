@@ -13,7 +13,7 @@ spec:
         app: wren-ibis
     spec:
       nodeSelector:
-        app: if-wren-ai-pod
+        if-wren-ai-pod: 'true'
       tolerations:
         - key: "if-wren-ai-pod"
           value: "true"

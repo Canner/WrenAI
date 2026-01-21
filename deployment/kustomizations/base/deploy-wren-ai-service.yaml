@@ -13,14 +13,14 @@ spec:
         app: wren-ai-service
     spec:
       nodeSelector:
-        app: if-wren-ai-pod
+        if-wren-ai-pod: 'true'
       tolerations:
         - key: "if-wren-ai-pod"
           value: "true"
           effect: "NoSchedule"
         - key: "if-monitoring-pod"
           value: "true"
-          effect: "NoSchedule"    
+          effect: "NoSchedule"
       containers:
         - name: wren-ai-service
           image: ghcr.io/canner/wren-ai-service:latest
