@@ -217,9 +217,8 @@ data:
         llm: litellm_llm.default
       - name: sql_breakdown
         llm: litellm_llm.default
-      - name: sql_regeneration_correction
+      - name: sql_expansion
         llm: litellm_llm.default
-        engine: wren_ui             
     ---
     settings:
       doc_endpoint: https://docs.getwren.ai
