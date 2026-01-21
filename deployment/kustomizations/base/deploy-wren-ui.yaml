@@ -13,7 +13,7 @@ spec:
         app: wren-ui
     spec:
       nodeSelector:
-        app: wren-ai
+        app: if-wren-ai-pod
       tolerations:
         - key: "if-wren-ai-pod"
           value: "true"
