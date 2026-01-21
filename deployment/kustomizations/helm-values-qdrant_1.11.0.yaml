@@ -119,9 +119,16 @@ lifecycle:
 # user and fsGroup
 updateVolumeFsOwnership: true
 
-nodeSelector: {}
+nodeSelector:
+  app: wren-qdrant
 
-tolerations: []
+tolerations:
+  - key: "if-wren-ai-pod"
+    value: "true"
+    effect: "NoSchedule"
+  - key: "if-monitoring-pod"
+    value: "true"
+    effect: "NoSchedule"
 
 affinity: {}
 
