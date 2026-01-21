@@ -14,6 +14,7 @@ metadata:
     #external-dns.alpha.kubernetes.io/target: ingress2.myhost.net
     
     ### Dependancy nginx-ingress-controller
+    cert-manager.io/cluster-issuer: "letsencrypt-dev"
     nginx.ingress.kubernetes.io/disable-lua: 'true'
     nginx.ingress.kubernetes.io/enable-lua: 'false'
     nginx.ingress.kubernetes.io/enable-vts-status: 'false'
@@ -30,7 +31,7 @@ spec:
   #"nginx" or "alb"
   ingressClassName: nginx
   rules:
-    - host: wren-ui.myhost.net
+    - host: wren.drivex.dev
       http:
         paths:
           - path: /
@@ -43,5 +44,5 @@ spec:
 ### Comment TLS section if you are not going to use https
   tls:
     - hosts:
-      - wren-ui.myhost.net
+      - wren.drivex.dev
       secretName: wren-ui.myhost.net-tls
