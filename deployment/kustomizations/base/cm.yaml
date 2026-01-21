@@ -215,6 +215,8 @@ data:
         llm: litellm_llm.default
       - name: sql_summary
         llm: litellm_llm.default
+      - name: sql_breakdown
+        llm: litellm_llm.default        
     ---
     settings:
       doc_endpoint: https://docs.getwren.ai
