@@ -7,6 +7,11 @@ global:
   postgresql:
     auth:
       database: admin_ui
+image:
+  registry: docker.io
+  repository: bitnamilegacy/postgresql
+  tag: "16.3.0-debian-12-r14"
+  pullPolicy: IfNotPresent
 
 # Add this section:
 primary:
