@@ -60,7 +60,7 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: wren-ibis-server-deployment
+  name: wren-ibis-server
 spec:
   template:
     spec:
