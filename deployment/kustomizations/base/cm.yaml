@@ -219,6 +219,10 @@ data:
         llm: litellm_llm.default
       - name: sql_expansion
         llm: litellm_llm.default
+      - name: question_recommendation_db_schema_retrieval
+        llm: litellm_llm.default
+        embedder: litellm_embedder.default
+        document_store: qdrant        
     ---
     settings:
       doc_endpoint: https://docs.getwren.ai
