@@ -2,8 +2,24 @@ auth:
   secretKeys:
     adminPasswordKey: postgres-password
   existingSecret: wrenai-postgresql
-#creates admin_ui database
+
 global:
   postgresql:
     auth:
       database: admin_ui
+
+# Add this section:
+primary:
+  persistence:
+    enabled: true
+    storageClass: "gp2"
+    size: 8Gi
+  nodeSelector:
+    if-wren-ai-pod: 'true'
+  tolerations:
+    - key: "if-wren-ai-pod"
+      value: "true"
+      effect: "NoSchedule"
+    - key: "if-monitoring-pod"
+      value: "true"
+      effect: "NoSchedule"         
