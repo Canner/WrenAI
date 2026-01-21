@@ -57,7 +57,7 @@ resources:
   - base/pvc.yaml
   - base/svc.yaml
 ### Modify these examples first and uncomment them:
-  # - examples/ingress-wren_example.yaml
+  - examples/ingress-wren_example.yaml
   # - examples/certificate-wren_example.yaml
 ### Usually you do not need to generate a certificate for Qdrant
 #  - examples/certificate-qdrant_example.yaml
