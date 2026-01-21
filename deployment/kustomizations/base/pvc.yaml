@@ -8,4 +8,4 @@ spec:
   resources:
     requests:
       storage: 8Gi
-#  storageClassName: vsphere-retain
+    storageClassName: gp2

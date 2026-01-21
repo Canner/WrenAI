@@ -138,8 +138,7 @@ persistence:
   accessModes: ["ReadWriteOnce"]
   size: 20Gi
   annotations: {}
-#  storageClassName: vsphere-retain
-
+  storageClassName: gp2
 # If you use snapshots or the snapshot shard transfer mechanism, we recommend
 # creating a separate volume of the same size as your main volume so that your
 # cluster won't crash if the snapshot is too big.
