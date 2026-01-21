@@ -12,6 +12,15 @@ spec:
       labels:
         app: wren-engine
     spec:
+      nodeSelector:
+        app: wren-ai
+      tolerations:
+        - key: "if-wren-ai-pod"
+          value: "true"
+          effect: "NoSchedule"
+        - key: "if-monitoring-pod"
+          value: "true"
+          effect: "NoSchedule"       
       volumes:
         - name: wren-data
           persistentVolumeClaim:

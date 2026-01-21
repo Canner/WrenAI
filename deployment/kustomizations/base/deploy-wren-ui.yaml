@@ -12,8 +12,16 @@ spec:
       labels:
         app: wren-ui
     spec:
+      nodeSelector:
+        app: wren-ai
+      tolerations:
+        - key: "if-wren-ai-pod"
+          value: "true"
+          effect: "NoSchedule"
+        - key: "if-monitoring-pod"
+          value: "true"
+          effect: "NoSchedule"       
       containers:
-
         - name: wren-ui
           image: ghcr.io/canner/wren-ui:0.5.6
           env:

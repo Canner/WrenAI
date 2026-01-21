@@ -12,6 +12,15 @@ spec:
       labels:
         app: wren-ibis
     spec:
+      nodeSelector:
+        app: wren-ai
+      tolerations:
+        - key: "if-wren-ai-pod"
+          value: "true"
+          effect: "NoSchedule"
+        - key: "if-monitoring-pod"
+          value: "true"
+          effect: "NoSchedule"       
       containers:
         - name: wren-ibis
           image: ghcr.io/canner/wren-engine-ibis:0.5.0
