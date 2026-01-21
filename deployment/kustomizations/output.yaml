@@ -1,0 +1,1261 @@
+apiVersion: v1
+automountServiceAccountToken: false
+kind: ServiceAccount
+metadata:
+  labels:
+    app.kubernetes.io/instance: wren-postgresql
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: postgresql
+    app.kubernetes.io/version: 16.3.0
+    helm.sh/chart: postgresql-15.5.5
+  name: wren-postgresql
+  namespace: wren
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: qdrant
+    app.kubernetes.io/instance: wren-qdrant
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: qdrant
+    app.kubernetes.io/version: v1.11.0
+    helm.sh/chart: qdrant-1.11.0
+  name: wren-qdrant
+---
+apiVersion: v1
+data:
+  config.yaml: |
+    type: llm
+    provider: litellm_llm
+    timeout: 120
+    models:
+    - alias: default
+      model: gpt-4.1-nano-2025-04-14
+      context_window_size: 1000000
+      kwargs:
+        max_tokens: 4096
+        n: 1
+        seed: 0
+        temperature: 0
+    - model: gpt-4.1-mini-2025-04-14
+      context_window_size: 1000000
+      kwargs:
+        max_tokens: 4096
+        n: 1
+        seed: 0
+        temperature: 0
+    - model: gpt-4.1-2025-04-14
+      context_window_size: 1000000
+      kwargs:
+        max_tokens: 4096
+        n: 1
+        seed: 0
+        temperature: 0
+    - model: gpt-5-nano-2025-08-07
+      context_window_size: 380000
+      kwargs:
+        max_completion_tokens: 4096
+        n: 1
+        seed: 0
+        reasoning_effort: minimal
+    - model: gpt-5-mini-2025-08-07
+      context_window_size: 380000
+      kwargs:
+        max_completion_tokens: 4096
+        n: 1
+        seed: 0
+        reasoning_effort: minimal
+    - model: gpt-5-2025-08-07
+      context_window_size: 380000
+      kwargs:
+        max_completion_tokens: 4096
+        n: 1
+        seed: 0
+        reasoning_effort: minimal
+    ---
+    type: embedder
+    provider: litellm_embedder
+    models:
+    - model: text-embedding-3-large
+      alias: default
+      timeout: 120
+
+    ---
+    type: engine
+    provider: wren_ui
+    endpoint: http://wren-ui-svc:3000
+
+    ---
+    type: engine
+    provider: wren_ibis
+    endpoint: http://wren-ibis-server-svc:8000
+
+    ---
+    type: document_store
+    provider: qdrant
+    location: http://wren-qdrant:6333
+    embedding_model_dim: 3072
+    timeout: 120
+
+    ---
+    type: pipeline
+    pipes:
+      - name: db_schema_indexing
+        embedder: litellm_embedder.default
+        document_store: qdrant
+      - name: historical_question_indexing
+        embedder: litellm_embedder.default
+        document_store: qdrant
+      - name: table_description_indexing
+        embedder: litellm_embedder.default
+        document_store: qdrant
+      - name: db_schema_retrieval
+        llm: litellm_llm.default
+        embedder: litellm_embedder.default
+        document_store: qdrant
+      - name: historical_question_retrieval
+        embedder: litellm_embedder.default
+        document_store: qdrant
+      - name: sql_generation
+        llm: litellm_llm.default
+        engine: wren_ui
+        document_store: qdrant
+      - name: sql_correction
+        llm: litellm_llm.default
+        engine: wren_ui
+        document_store: qdrant
+      - name: followup_sql_generation
+        llm: litellm_llm.default
+        engine: wren_ui
+        document_store: qdrant
+      - name: sql_answer
+        llm: litellm_llm.default
+      - name: semantics_description
+        llm: litellm_llm.default
+      - name: relationship_recommendation
+        llm: litellm_llm.default
+      - name: question_recommendation
+        llm: litellm_llm.default
+      - name: question_recommendation_sql_generation
+        llm: litellm_llm.default
+        engine: wren_ui
+        document_store: qdrant
+      - name: intent_classification
+        llm: litellm_llm.default
+        embedder: litellm_embedder.default
+        document_store: qdrant
+      - name: misleading_assistance
+        llm: litellm_llm.default
+      - name: data_assistance
+        llm: litellm_llm.default
+      - name: sql_pairs_indexing
+        document_store: qdrant
+        embedder: litellm_embedder.default
+      - name: sql_pairs_retrieval
+        document_store: qdrant
+        embedder: litellm_embedder.default
+        llm: litellm_llm.default
+      - name: preprocess_sql_data
+        llm: litellm_llm.default
+      - name: sql_executor
+        engine: wren_ui
+      - name: chart_generation
+        llm: litellm_llm.default
+      - name: chart_adjustment
+        llm: litellm_llm.default
+      - name: user_guide_assistance
+        llm: litellm_llm.default
+      - name: sql_question_generation
+        llm: litellm_llm.default
+      - name: sql_generation_reasoning
+        llm: litellm_llm.default
+      - name: followup_sql_generation_reasoning
+        llm: litellm_llm.default
+      - name: sql_regeneration
+        llm: litellm_llm.default
+        engine: wren_ui
+      - name: instructions_indexing
+        embedder: litellm_embedder.default
+        document_store: qdrant
+      - name: instructions_retrieval
+        embedder: litellm_embedder.default
+        document_store: qdrant
+      - name: sql_functions_retrieval
+        engine: wren_ibis
+        document_store: qdrant
+      - name: project_meta_indexing
+        document_store: qdrant
+      - name: sql_tables_extraction
+        llm: litellm_llm.default
+      - name: sql_diagnosis
+        llm: litellm_llm.default
+
+    ---
+    settings:
+      doc_endpoint: https://docs.getwren.ai
+      is_oss: true
+      engine_timeout: 30
+      column_indexing_batch_size: 50
+      table_retrieval_size: 10
+      table_column_retrieval_size: 100
+      allow_intent_classification: true
+      allow_sql_generation_reasoning: true
+      allow_sql_functions_retrieval: true
+      enable_column_pruning: false
+      max_sql_correction_retries: 3
+      query_cache_maxsize: 1000
+      query_cache_ttl: 3600
+      langfuse_host: https://cloud.langfuse.com
+      langfuse_enable: true
+      logging_level: DEBUG
+      development: false
+      historical_question_retrieval_similarity_threshold: 0.9
+      sql_pairs_similarity_threshold: 0.7
+      sql_pairs_retrieval_max_size: 10
+      instructions_similarity_threshold: 0.7
+      instructions_top_k: 10
+kind: ConfigMap
+metadata:
+  name: wren-ai-service-config
+  namespace: wren
+---
+apiVersion: v1
+data:
+  GENERATION_MODEL: gpt-4o-mini-2024-07-18
+  IBIS_SERVER_ENDPOINT: http://wren-ibis-server-svc:8000
+  LOGGING_LEVEL: INFO
+  POSTHOG_HOST: https://app.posthog.com
+  QDRANT_HOST: wren-qdrant
+  TELEMETRY_ENABLED: "false"
+  WREN_AI_ENDPOINT: http://wren-ai-service-svc:5555
+  WREN_AI_SERVICE_PORT: "5555"
+  WREN_AI_SERVICE_VERSION: 0.12.1
+  WREN_ENGINE_DATA_PATH: /app/data
+  WREN_ENGINE_ENDPOINT: http://wren-engine-svc:8080
+  WREN_ENGINE_PORT: "8080"
+  WREN_ENGINE_VERSION: 0.12.3
+  WREN_PRODUCT_VERSION: 0.12.0
+  WREN_UI_DB_TYPE: pg
+  WREN_UI_ENDPOINT: http://wren-ui-svc:3000
+  WREN_UI_VERSION: 0.17.6
+kind: ConfigMap
+metadata:
+  name: wren-config
+  namespace: wren
+---
+apiVersion: v1
+data:
+  initialize.sh: |
+    #!/bin/sh
+    SET_INDEX=${HOSTNAME##*-}
+    echo "Starting initializing for pod $SET_INDEX"
+    if [ "$SET_INDEX" = "0" ]; then
+      exec ./entrypoint.sh --uri 'http://wren-qdrant-0.wren-qdrant-headless:6335'
+    else
+      exec ./entrypoint.sh --bootstrap 'http://wren-qdrant-0.wren-qdrant-headless:6335' --uri 'http://wren-qdrant-'"$SET_INDEX"'.wren-qdrant-headless:6335'
+    fi
+  production.yaml: |
+    cluster:
+      consensus:
+        tick_period_ms: 100
+      enabled: true
+      p2p:
+        port: 6335
+kind: ConfigMap
+metadata:
+  labels:
+    app: qdrant
+    app.kubernetes.io/instance: wren-qdrant
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: qdrant
+    app.kubernetes.io/version: v1.11.0
+    helm.sh/chart: qdrant-1.11.0
+  name: wren-qdrant
+---
+apiVersion: v1
+data:
+  entrypoint.sh: |
+    #!/bin/bash
+    set -xe
+    # Kind's networking is very flaky
+    echo 'connect-timeout = 5' > $HOME/.curlrc
+    echo 'retry = 60' >> $HOME/.curlrc
+    echo 'retry-delay = 5' >> $HOME/.curlrc
+    echo 'retry-all-errors' >> $HOME/.curlrc
+    # Don't clutter the logs with progress bars
+    echo 'no-progress-meter' >> $HOME/.curlrc
+    # Ensure errors cause the script to fail, but show the response body
+    echo 'fail-with-body' >> $HOME/.curlrc
+
+    if [ -d /mnt/secrets/certs ]; then
+      cp /mnt/secrets/certs/ca.pem /usr/share/pki/trust/anchors/private-ca.pem
+      update-ca-certificates
+    fi
+
+    QDRANT_COLLECTION="test_collection"
+    echo "Connecting to wren-qdrant.wren:6333"
+    QDRANT_URL="http://wren-qdrant.wren:6333"
+    API_KEY_HEADER=""
+
+    # Delete collection if exists
+    curl -X DELETE -H "${API_KEY_HEADER}" $QDRANT_URL/collections/${QDRANT_COLLECTION}
+
+    # Create collection
+    curl -X PUT \
+    -H 'Content-Type: application-json' \
+    -d '{"vectors":{"size":4,"distance":"Dot"}}' \
+    -H  "${API_KEY_HEADER}" \
+    $QDRANT_URL/collections/${QDRANT_COLLECTION}
+
+    # Insert points
+    curl -X PUT \
+    -H 'Content-Type: application-json' \
+    -d '{"points":[
+      {"id":1,"vector":[0.05, 0.61, 0.76, 0.74],"payload":{"city":"Berlin"}},
+      {"id":2,"vector":[0.19, 0.81, 0.75, 0.11],"payload":{"city":"London"}},
+      {"id":3,"vector":[0.36, 0.55, 0.47, 0.94],"payload":{"city":"Moscow"}},
+      {"id":4,"vector":[0.18, 0.01, 0.85, 0.80],"payload":{"city":"New York"}},
+      {"id":5,"vector":[0.24, 0.18, 0.22, 0.44],"payload":{"city":"Beijing"}},
+      {"id":6,"vector":[0.35, 0.08, 0.11, 0.44],"payload":{"city":"Mumbai"}}
+    ]}' \
+    -H  "${API_KEY_HEADER}" \
+    $QDRANT_URL/collections/${QDRANT_COLLECTION}/points
+
+    # Run query
+    curl -X POST \
+    -H 'Content-Type: application-json' \
+    -d '{"vector":[0.2, 0.1, 0.9, 0.7],"limit":3}' \
+    -H  "${API_KEY_HEADER}" \
+    $QDRANT_URL/collections/${QDRANT_COLLECTION}/points/search
+kind: ConfigMap
+metadata:
+  annotations:
+    helm.sh/hook: test
+  labels:
+    app: qdrant
+    app.kubernetes.io/instance: wren-qdrant
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: qdrant
+    app.kubernetes.io/version: v1.11.0
+    helm.sh/chart: qdrant-1.11.0
+  name: wren-qdrant-test-db-interaction
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wren-ai-service-svc
+  namespace: wren
+spec:
+  ports:
+  - name: wren-ai-service
+    port: 5555
+    protocol: TCP
+    targetPort: 5555
+  selector:
+    app: wren-ai-service
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wren-engine-svc
+  namespace: wren
+spec:
+  ports:
+  - name: wren-engine
+    port: 8080
+    protocol: TCP
+    targetPort: 8080
+  - name: wren-engine-sql
+    port: 7432
+    protocol: TCP
+    targetPort: 7432
+  selector:
+    app: wren-engine
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wren-ibis-server-svc
+  namespace: wren
+spec:
+  ports:
+  - name: wren-ibis
+    port: 8000
+    protocol: TCP
+    targetPort: 8000
+  selector:
+    app: wren-ibis
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/component: primary
+    app.kubernetes.io/instance: wren-postgresql
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: postgresql
+    app.kubernetes.io/version: 16.3.0
+    helm.sh/chart: postgresql-15.5.5
+  name: wren-postgresql
+  namespace: wren
+spec:
+  ports:
+  - name: tcp-postgresql
+    nodePort: null
+    port: 5432
+    targetPort: tcp-postgresql
+  selector:
+    app.kubernetes.io/component: primary
+    app.kubernetes.io/instance: wren-postgresql
+    app.kubernetes.io/name: postgresql
+  sessionAffinity: None
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    service.alpha.kubernetes.io/tolerate-unready-endpoints: "true"
+  labels:
+    app.kubernetes.io/component: primary
+    app.kubernetes.io/instance: wren-postgresql
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: postgresql
+    app.kubernetes.io/version: 16.3.0
+    helm.sh/chart: postgresql-15.5.5
+  name: wren-postgresql-hl
+  namespace: wren
+spec:
+  clusterIP: None
+  ports:
+  - name: tcp-postgresql
+    port: 5432
+    targetPort: tcp-postgresql
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/component: primary
+    app.kubernetes.io/instance: wren-postgresql
+    app.kubernetes.io/name: postgresql
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wren-ui-svc
+  namespace: wren
+spec:
+  ports:
+  - name: http-ui
+    port: 3000
+    protocol: TCP
+    targetPort: 3000
+  selector:
+    app: wren-ui
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: qdrant
+    app.kubernetes.io/instance: wren-qdrant
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: qdrant
+    app.kubernetes.io/version: v1.11.0
+    helm.sh/chart: qdrant-1.11.0
+  name: wren-qdrant
+spec:
+  ports:
+  - name: http
+    port: 6333
+    protocol: TCP
+    targetPort: 6333
+  - name: grpc
+    port: 6334
+    protocol: TCP
+    targetPort: 6334
+  - name: p2p
+    port: 6335
+    protocol: TCP
+    targetPort: 6335
+  selector:
+    app: qdrant
+    app.kubernetes.io/instance: wren-qdrant
+    app.kubernetes.io/name: qdrant
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: qdrant
+    app.kubernetes.io/component: cluster-discovery
+    app.kubernetes.io/instance: wren-qdrant
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: qdrant
+    app.kubernetes.io/version: v1.11.0
+    helm.sh/chart: qdrant-1.11.0
+  name: wren-qdrant-headless
+spec:
+  clusterIP: None
+  ports:
+  - name: http
+    port: 6333
+    protocol: TCP
+    targetPort: 6333
+  - name: grpc
+    port: 6334
+    protocol: TCP
+    targetPort: 6334
+  - name: p2p
+    port: 6335
+    protocol: TCP
+    targetPort: 6335
+  publishNotReadyAddresses: true
+  selector:
+    app: qdrant
+    app.kubernetes.io/instance: wren-qdrant
+    app.kubernetes.io/name: qdrant
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wren-data-pvc
+  namespace: wren
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 8Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wren-ai-service-deployment
+  namespace: wren
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wren-ai-service
+  template:
+    metadata:
+      labels:
+        app: wren-ai-service
+    spec:
+      containers:
+      - env:
+        - name: WREN_AI_SERVICE_PORT
+          valueFrom:
+            configMapKeyRef:
+              key: WREN_AI_SERVICE_PORT
+              name: wren-config
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              key: OPENAI_API_KEY
+              name: wrenai-secrets
+        - name: QDRANT_HOST
+          valueFrom:
+            configMapKeyRef:
+              key: QDRANT_HOST
+              name: wren-config
+        - name: LOGGING_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              key: LOGGING_LEVEL
+              name: wren-config
+        - name: WREN_UI_ENDPOINT
+          valueFrom:
+            configMapKeyRef:
+              key: WREN_UI_ENDPOINT
+              name: wren-config
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: LANGFUSE_PUBLIC_KEY
+          valueFrom:
+            secretKeyRef:
+              key: LANGFUSE_PUBLIC_KEY
+              name: wrenai-secrets
+        - name: LANGFUSE_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              key: LANGFUSE_SECRET_KEY
+              name: wrenai-secrets
+        - name: CONFIG_PATH
+          value: /app/data/config.yaml
+        image: ghcr.io/canner/wren-ai-service:0.19.7
+        name: wren-ai-service
+        ports:
+        - containerPort: 5555
+        volumeMounts:
+        - mountPath: /app/data
+          name: config-volume
+      nodeSelector:
+        if-wren-ai-pod: "true"
+      tolerations:
+      - effect: NoSchedule
+        key: if-wren-ai-pod
+        value: "true"
+      - effect: NoSchedule
+        key: if-monitoring-pod
+        value: "true"
+      volumes:
+      - configMap:
+          items:
+          - key: config.yaml
+            path: config.yaml
+          name: wren-ai-service-config
+        name: config-volume
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wren-engine-deployment
+  namespace: wren
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wren-engine
+  template:
+    metadata:
+      labels:
+        app: wren-engine
+    spec:
+      containers:
+      - image: ghcr.io/canner/wren-engine:0.14.8
+        name: wren-engine
+        ports:
+        - containerPort: 8080
+        - containerPort: 7432
+        volumeMounts:
+        - mountPath: /usr/src/app/etc
+          name: wren-data
+      initContainers:
+      - command:
+        - /bin/sh
+        - /app/init.sh
+        env:
+        - name: DATA_PATH
+          valueFrom:
+            configMapKeyRef:
+              key: WREN_ENGINE_DATA_PATH
+              name: wren-config
+        - name: PG_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: postgres-password
+              name: wrenai-postgresql
+        - name: PG_USERNAME
+          valueFrom:
+            secretKeyRef:
+              key: PG_USERNAME
+              name: wrenai-secrets
+        image: ghcr.io/canner/wren-bootstrap:0.1.5
+        name: bootstrap
+        volumeMounts:
+        - mountPath: /app/data
+          name: wren-data
+      nodeSelector:
+        if-wren-ai-pod: "true"
+      tolerations:
+      - effect: NoSchedule
+        key: if-wren-ai-pod
+        value: "true"
+      - effect: NoSchedule
+        key: if-monitoring-pod
+        value: "true"
+      volumes:
+      - name: wren-data
+        persistentVolumeClaim:
+          claimName: wren-data-pvc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wren-ibis-server
+  namespace: wren
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wren-ibis
+  template:
+    metadata:
+      labels:
+        app: wren-ibis
+    spec:
+      containers:
+      - env:
+        - name: WREN_ENGINE_ENDPOINT
+          valueFrom:
+            configMapKeyRef:
+              key: WREN_ENGINE_ENDPOINT
+              name: wren-config
+        - name: LOGGING_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              key: LOGGING_LEVEL
+              name: wren-config
+        image: ghcr.io/canner/wren-engine-ibis:0.14.8
+        name: wren-ibis
+        ports:
+        - containerPort: 8000
+      nodeSelector:
+        if-wren-ai-pod: "true"
+      tolerations:
+      - effect: NoSchedule
+        key: if-wren-ai-pod
+        value: "true"
+      - effect: NoSchedule
+        key: if-monitoring-pod
+        value: "true"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wren-ui-deployment
+  namespace: wren
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wren-ui
+  template:
+    metadata:
+      labels:
+        app: wren-ui
+    spec:
+      containers:
+      - env:
+        - name: DB_TYPE
+          valueFrom:
+            configMapKeyRef:
+              key: WREN_UI_DB_TYPE
+              name: wren-config
+        - name: WREN_ENGINE_ENDPOINT
+          valueFrom:
+            configMapKeyRef:
+              key: WREN_ENGINE_ENDPOINT
+              name: wren-config
+        - name: WREN_AI_ENDPOINT
+          valueFrom:
+            configMapKeyRef:
+              key: WREN_AI_ENDPOINT
+              name: wren-config
+        - name: GENERATION_MODEL
+          valueFrom:
+            configMapKeyRef:
+              key: GENERATION_MODEL
+              name: wren-config
+        - name: PG_URL
+          valueFrom:
+            secretKeyRef:
+              key: PG_URL
+              name: wrenai-secrets
+        - name: WREN_ENGINE_PORT
+          valueFrom:
+            configMapKeyRef:
+              key: WREN_ENGINE_PORT
+              name: wren-config
+        - name: WREN_AI_SERVICE_VERSION
+          valueFrom:
+            configMapKeyRef:
+              key: WREN_AI_SERVICE_VERSION
+              name: wren-config
+        - name: WREN_UI_VERSION
+          valueFrom:
+            configMapKeyRef:
+              key: WREN_UI_VERSION
+              name: wren-config
+        - name: WREN_ENGINE_VERSION
+          valueFrom:
+            configMapKeyRef:
+              key: WREN_ENGINE_VERSION
+              name: wren-config
+        - name: USER_UUID
+          valueFrom:
+            secretKeyRef:
+              key: USER_UUID
+              name: wrenai-secrets
+        - name: POSTHOG_API_KEY
+          valueFrom:
+            secretKeyRef:
+              key: POSTHOG_API_KEY
+              name: wrenai-secrets
+        - name: POSTHOG_HOST
+          valueFrom:
+            secretKeyRef:
+              key: POSTHOG_HOST
+              name: wrenai-secrets
+        - name: TELEMETRY_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              key: TELEMETRY_ENABLED
+              name: wren-config
+        - name: NEXT_PUBLIC_USER_UUID
+          valueFrom:
+            secretKeyRef:
+              key: USER_UUID
+              name: wrenai-secrets
+        - name: NEXT_PUBLIC_POSTHOG_API_KEY
+          valueFrom:
+            secretKeyRef:
+              key: POSTHOG_API_KEY
+              name: wrenai-secrets
+        - name: NEXT_PUBLIC_POSTHOG_HOST
+          valueFrom:
+            secretKeyRef:
+              key: POSTHOG_HOST
+              name: wrenai-secrets
+        - name: NEXT_PUBLIC_TELEMETRY_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              key: TELEMETRY_ENABLED
+              name: wren-config
+        - name: WREN_PRODUCT_VERSION
+          valueFrom:
+            configMapKeyRef:
+              key: WREN_PRODUCT_VERSION
+              name: wren-config
+        - name: IBIS_SERVER_ENDPOINT
+          valueFrom:
+            configMapKeyRef:
+              key: IBIS_SERVER_ENDPOINT
+              name: wren-config
+        image: ghcr.io/canner/wren-ui:0.24.1
+        name: wren-ui
+        ports:
+        - containerPort: 3000
+      nodeSelector:
+        if-wren-ai-pod: "true"
+      tolerations:
+      - effect: NoSchedule
+        key: if-wren-ai-pod
+        value: "true"
+      - effect: NoSchedule
+        key: if-monitoring-pod
+        value: "true"
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    app.kubernetes.io/component: primary
+    app.kubernetes.io/instance: wren-postgresql
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: postgresql
+    app.kubernetes.io/version: 16.3.0
+    helm.sh/chart: postgresql-15.5.5
+  name: wren-postgresql
+  namespace: wren
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: primary
+      app.kubernetes.io/instance: wren-postgresql
+      app.kubernetes.io/name: postgresql
+  serviceName: wren-postgresql-hl
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: primary
+        app.kubernetes.io/instance: wren-postgresql
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: postgresql
+        app.kubernetes.io/version: 16.3.0
+        helm.sh/chart: postgresql-15.5.5
+      name: wren-postgresql
+    spec:
+      affinity:
+        nodeAffinity: null
+        podAffinity: null
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/component: primary
+                  app.kubernetes.io/instance: wren-postgresql
+                  app.kubernetes.io/name: postgresql
+              topologyKey: kubernetes.io/hostname
+            weight: 1
+      automountServiceAccountToken: false
+      containers:
+      - env:
+        - name: BITNAMI_DEBUG
+          value: "false"
+        - name: POSTGRESQL_PORT_NUMBER
+          value: "5432"
+        - name: POSTGRESQL_VOLUME_DIR
+          value: /bitnami/postgresql
+        - name: PGDATA
+          value: /bitnami/postgresql/data
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: postgres-password
+              name: wrenai-postgresql
+        - name: POSTGRES_DATABASE
+          value: admin_ui
+        - name: POSTGRESQL_ENABLE_LDAP
+          value: "no"
+        - name: POSTGRESQL_ENABLE_TLS
+          value: "no"
+        - name: POSTGRESQL_LOG_HOSTNAME
+          value: "false"
+        - name: POSTGRESQL_LOG_CONNECTIONS
+          value: "false"
+        - name: POSTGRESQL_LOG_DISCONNECTIONS
+          value: "false"
+        - name: POSTGRESQL_PGAUDIT_LOG_CATALOG
+          value: "off"
+        - name: POSTGRESQL_CLIENT_MIN_MESSAGES
+          value: error
+        - name: POSTGRESQL_SHARED_PRELOAD_LIBRARIES
+          value: pgaudit
+        image: docker.io/bitnami/postgresql:16.3.0-debian-12-r14
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - exec pg_isready -U "postgres" -d "dbname=admin_ui" -h 127.0.0.1 -p 5432
+          failureThreshold: 6
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 5
+        name: postgresql
+        ports:
+        - containerPort: 5432
+          name: tcp-postgresql
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - -e
+            - |
+              exec pg_isready -U "postgres" -d "dbname=admin_ui" -h 127.0.0.1 -p 5432
+              [ -f /opt/bitnami/postgresql/tmp/.initialized ] || [ -f /bitnami/postgresql/.initialized ]
+          failureThreshold: 6
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 5
+        resources:
+          limits:
+            cpu: 150m
+            ephemeral-storage: 1024Mi
+            memory: 192Mi
+          requests:
+            cpu: 100m
+            ephemeral-storage: 50Mi
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          privileged: false
+          readOnlyRootFilesystem: true
+          runAsGroup: 1001
+          runAsNonRoot: true
+          runAsUser: 1001
+          seLinuxOptions: {}
+          seccompProfile:
+            type: RuntimeDefault
+        volumeMounts:
+        - mountPath: /tmp
+          name: empty-dir
+          subPath: tmp-dir
+        - mountPath: /opt/bitnami/postgresql/conf
+          name: empty-dir
+          subPath: app-conf-dir
+        - mountPath: /opt/bitnami/postgresql/tmp
+          name: empty-dir
+          subPath: app-tmp-dir
+        - mountPath: /dev/shm
+          name: dshm
+        - mountPath: /bitnami/postgresql
+          name: data
+      hostIPC: false
+      hostNetwork: false
+      securityContext:
+        fsGroup: 1001
+        fsGroupChangePolicy: Always
+        supplementalGroups: []
+        sysctls: []
+      serviceAccountName: wren-postgresql
+      volumes:
+      - emptyDir: {}
+        name: empty-dir
+      - emptyDir:
+          medium: Memory
+        name: dshm
+  updateStrategy:
+    rollingUpdate: {}
+    type: RollingUpdate
+  volumeClaimTemplates:
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: data
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 8Gi
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    app: qdrant
+    app.kubernetes.io/instance: wren-qdrant
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: qdrant
+    app.kubernetes.io/version: v1.11.0
+    helm.sh/chart: qdrant-1.11.0
+  name: wren-qdrant
+spec:
+  podManagementPolicy: Parallel
+  replicas: 1
+  selector:
+    matchLabels:
+      app: qdrant
+      app.kubernetes.io/instance: wren-qdrant
+      app.kubernetes.io/name: qdrant
+  serviceName: wren-qdrant-headless
+  template:
+    metadata:
+      annotations:
+        checksum/config: 7c50c8cf211cd1ee0a5ebe4ffe978dd995c4887d99c2d0874651ceda561d091d
+      labels:
+        app: qdrant
+        app.kubernetes.io/instance: wren-qdrant
+        app.kubernetes.io/name: qdrant
+    spec:
+      containers:
+      - args:
+        - ./config/initialize.sh
+        command:
+        - /bin/bash
+        - -c
+        env:
+        - name: QDRANT_INIT_FILE_PATH
+          value: /qdrant/init/.qdrant-initialized
+        image: docker.io/qdrant/qdrant:v1.11.0
+        imagePullPolicy: IfNotPresent
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - sleep
+              - "3"
+        name: qdrant
+        ports:
+        - containerPort: 6333
+          name: http
+          protocol: TCP
+        - containerPort: 6334
+          name: grpc
+          protocol: TCP
+        - containerPort: 6335
+          name: p2p
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 6
+          httpGet:
+            path: /readyz
+            port: 6333
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources: {}
+        securityContext:
+          allowPrivilegeEscalation: false
+          privileged: false
+          readOnlyRootFilesystem: true
+          runAsGroup: 2000
+          runAsNonRoot: true
+          runAsUser: 1000
+        volumeMounts:
+        - mountPath: /qdrant/storage
+          name: qdrant-storage
+        - mountPath: /qdrant/config/initialize.sh
+          name: qdrant-config
+          subPath: initialize.sh
+        - mountPath: /qdrant/config/production.yaml
+          name: qdrant-config
+          subPath: production.yaml
+        - mountPath: /qdrant/snapshots
+          name: qdrant-snapshots
+        - mountPath: /qdrant/init
+          name: qdrant-init
+      initContainers:
+      - command:
+        - chown
+        - -R
+        - 1000:3000
+        - /qdrant/storage
+        - /qdrant/snapshots
+        image: docker.io/qdrant/qdrant:v1.11.0
+        name: ensure-dir-ownership
+        volumeMounts:
+        - mountPath: /qdrant/storage
+          name: qdrant-storage
+        - mountPath: /qdrant/snapshots
+          name: qdrant-snapshots
+      nodeSelector:
+        app: wren-qdrant
+      securityContext:
+        fsGroup: 3000
+        fsGroupChangePolicy: Always
+      serviceAccountName: wren-qdrant
+      tolerations:
+      - effect: NoSchedule
+        key: if-wren-ai-pod
+        value: "true"
+      - effect: NoSchedule
+        key: if-monitoring-pod
+        value: "true"
+      volumes:
+      - configMap:
+          defaultMode: 493
+          name: wren-qdrant
+        name: qdrant-config
+      - emptyDir: {}
+        name: qdrant-snapshots
+      - emptyDir: {}
+        name: qdrant-init
+  volumeClaimTemplates:
+  - metadata:
+      labels:
+        app: qdrant
+      name: qdrant-storage
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 20Gi
+      storageClassName: null
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  labels:
+    app.kubernetes.io/component: primary
+    app.kubernetes.io/instance: wren-postgresql
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: postgresql
+    app.kubernetes.io/version: 16.3.0
+    helm.sh/chart: postgresql-15.5.5
+  name: wren-postgresql
+  namespace: wren
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: primary
+      app.kubernetes.io/instance: wren-postgresql
+      app.kubernetes.io/name: postgresql
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-dev
+    external-dns.alpha.kubernetes.io/target: ingress1.myhost.net
+    nginx.ingress.kubernetes.io/disable-lua: "true"
+    nginx.ingress.kubernetes.io/enable-lua: "false"
+    nginx.ingress.kubernetes.io/enable-modsecurity: "false"
+    nginx.ingress.kubernetes.io/enable-owasp-modsecurity-crs: "false"
+    nginx.ingress.kubernetes.io/enable-vts-status: "false"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "360"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "360"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "360"
+  name: wren-ui-ingress
+  namespace: wren
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: wren.drivex.dev
+    http:
+      paths:
+      - backend:
+          service:
+            name: wren-ui-svc
+            port:
+              number: 3000
+        path: /
+        pathType: Prefix
+  tls:
+  - hosts:
+    - wren.drivex.dev
+    secretName: wren-drivex-dev-tls
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/component: primary
+    app.kubernetes.io/instance: wren-postgresql
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: postgresql
+    app.kubernetes.io/version: 16.3.0
+    helm.sh/chart: postgresql-15.5.5
+  name: wren-postgresql
+  namespace: wren
+spec:
+  egress:
+  - {}
+  ingress:
+  - ports:
+    - port: 5432
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: primary
+      app.kubernetes.io/instance: wren-postgresql
+      app.kubernetes.io/name: postgresql
+  policyTypes:
+  - Ingress
+  - Egress
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    helm.sh/hook: test
+  labels:
+    app: qdrant
+    app.kubernetes.io/instance: wren-qdrant
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: qdrant
+    app.kubernetes.io/version: v1.11.0
+    helm.sh/chart: qdrant-1.11.0
+  name: wren-qdrant-test-db-interaction
+spec:
+  containers:
+  - args:
+    - bash
+    - /app/entrypoint.sh
+    image: registry.suse.com/bci/bci-base:latest
+    name: test-script
+    volumeMounts:
+    - mountPath: /app
+      name: test-script
+  restartPolicy: Never
+  serviceAccountName: wren-qdrant
+  volumes:
+  - configMap:
+      name: wren-qdrant-test-db-interaction
+    name: test-script
