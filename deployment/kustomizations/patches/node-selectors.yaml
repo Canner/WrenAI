@@ -1,8 +1,9 @@
 ---
+# Wren AI Service
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: wren-ai-service
+  name: wren-ai-service-deployment
 spec:
   template:
     spec:
@@ -17,27 +18,11 @@ spec:
           effect: "NoSchedule"
 
 ---
+# Wren UI
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: wren-ui
-spec:
-  template:
-    spec:
-      nodeSelector:
-        app: wren-ai
-      tolerations:
-        - key: "if-wren-ai-pod"
-          value: "true"
-          effect: "NoSchedule"
-        - key: "if-monitoring-pod"
-          value: "true"
-          effect: "NoSchedule"
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: wren-engine
+  name: wren-ui-deployment
 spec:
   template:
     spec:
@@ -52,10 +37,11 @@ spec:
           effect: "NoSchedule"
 
 ---
+# Wren Engine
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: wren-ibis-server
+  name: wren-engine-deployment
 spec:
   template:
     spec:
@@ -70,6 +56,26 @@ spec:
           effect: "NoSchedule"
 
 ---
+# Wren Ibis Server
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wren-ibis-server-deployment
+spec:
+  template:
+    spec:
+      nodeSelector:
+        app: wren-ai
+      tolerations:
+        - key: "if-wren-ai-pod"
+          value: "true"
+          effect: "NoSchedule"
+        - key: "if-monitoring-pod"
+          value: "true"
+          effect: "NoSchedule"
+
+---
+# PostgreSQL StatefulSet (from Helm chart)
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -88,10 +94,11 @@ spec:
           effect: "NoSchedule"
 
 ---
+# Qdrant StatefulSet (from Helm chart)
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: wren-qdrant-0
+  name: wren-qdrant
 spec:
   template:
     spec:
