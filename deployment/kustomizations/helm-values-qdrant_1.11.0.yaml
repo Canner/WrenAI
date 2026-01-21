@@ -86,13 +86,13 @@ additionalLabels: {}
 podAnnotations: {}
 podLabels: {}
 
-resources: {}
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
+resources:
+  limits:
+    cpu: 100m
+    memory: 128Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
 
 containerSecurityContext:
   runAsNonRoot: true
@@ -120,7 +120,7 @@ lifecycle:
 updateVolumeFsOwnership: true
 
 nodeSelector:
-  app: wren-qdrant
+  if-wren-ai-pod: 'true'
 
 tolerations:
   - key: "if-wren-ai-pod"
