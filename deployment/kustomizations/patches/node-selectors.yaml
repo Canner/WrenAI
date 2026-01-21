@@ -27,7 +27,7 @@ spec:
   template:
     spec:
       nodeSelector:
-        app: wren-ai
+        app: wren-ui
       tolerations:
         - key: "if-wren-ai-pod"
           value: "true"
@@ -46,7 +46,7 @@ spec:
   template:
     spec:
       nodeSelector:
-        app: wren-ai
+        app: wren-engine
       tolerations:
         - key: "if-wren-ai-pod"
           value: "true"
@@ -65,7 +65,7 @@ spec:
   template:
     spec:
       nodeSelector:
-        app: wren-ai
+        app: wren-ibis
       tolerations:
         - key: "if-wren-ai-pod"
           value: "true"
@@ -84,7 +84,7 @@ spec:
   template:
     spec:
       nodeSelector:
-        app: wren-ai
+        app: wren-postgresql
       tolerations:
         - key: "if-wren-ai-pod"
           value: "true"
@@ -103,7 +103,7 @@ spec:
   template:
     spec:
       nodeSelector:
-        app: wren-ai
+        app: wren-qdrant
       tolerations:
         - key: "if-wren-ai-pod"
           value: "true"
