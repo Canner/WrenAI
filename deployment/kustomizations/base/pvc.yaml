@@ -3,9 +3,10 @@ kind: PersistentVolumeClaim
 metadata:
   name: wren-data-pvc
 spec:
+  storageClassName: gp2
   accessModes:
   - ReadWriteOnce
   resources:
     requests:
       storage: 8Gi
-    storageClassName: gp2
+
