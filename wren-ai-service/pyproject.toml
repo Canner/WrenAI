@@ -35,6 +35,7 @@ jsonschema = "^4.23.0"
 litellm = "^1.75.2"
 boto3 = "^1.34.34" # Litellm requires boto3 = 1.34.34
 qdrant-client = "==1.11.0"
+filelock = "^3.20.1"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.7.1"
