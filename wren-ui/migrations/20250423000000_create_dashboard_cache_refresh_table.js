@@ -2,8 +2,13 @@ exports.up = function (knex) {
   return knex.schema.createTable('dashboard_item_refresh_job', (table) => {
     table.increments('id').primary();
     table.string('hash').notNullable().comment('uuid for the refresh job');
-    table.integer('dashboard_id').notNullable();
-    table.integer('dashboard_item_id').notNullable();
+    if (knex.client.config.client === 'mysql2') {
+      table.integer('dashboard_id').unsigned().notNullable();
+      table.integer('dashboard_item_id').unsigned().notNullable();
+    }else{
+      table.integer('dashboard_id').notNullable();
+      table.integer('dashboard_item_id').notNullable();
+    }
     table.timestamp('started_at').notNullable();
     table.timestamp('finished_at');
     table.string('status').notNullable(); // 'success', 'failed', 'in_progress'

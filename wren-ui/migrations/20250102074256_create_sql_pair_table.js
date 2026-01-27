@@ -5,10 +5,18 @@
 exports.up = function (knex) {
   return knex.schema.createTable('sql_pair', (table) => {
     table.increments('id').primary();
-    table
-      .integer('project_id')
-      .notNullable()
-      .comment('Reference to project.id');
+    if (knex.client.config.client === 'mysql2') {
+      table
+        .integer('project_id')
+        .unsigned()
+        .notNullable()
+        .comment('Reference to project.id');
+    } else {
+      table
+        .integer('project_id')
+        .notNullable()
+        .comment('Reference to project.id');
+    }
     table.text('sql').notNullable();
     table.string('question', 1000).notNullable();
     table.timestamps(true, true);

@@ -6,7 +6,11 @@ exports.up = function (knex) {
   return knex.schema.createTable('model_nested_column', (table) => {
     table.increments('id').comment('ID');
     table.integer('model_id').comment('Reference to model ID');
-    table.integer('column_id').comment('Reference to column ID');
+    if (knex.client.config.client === 'mysql2') {
+      table.integer('column_id').unsigned().comment('Reference to column ID');
+    } else {
+      table.integer('column_id').comment('Reference to column ID');
+    }
     table
       .string('column_path')
       .comment(

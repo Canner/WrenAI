@@ -5,9 +5,15 @@
 exports.up = function (knex) {
   return knex.schema
     .alterTable('model_column', (table) => {
+      if (knex.client.config.client === 'mysql2') {
+        table.integer('model_id').unsigned().alter();
+      }
       table.foreign('model_id').references('model.id').onDelete('CASCADE');
     })
     .alterTable('metric_measure', (table) => {
+      if (knex.client.config.client === 'mysql2') {
+        table.integer('metric_id').unsigned().alter();
+      }
       table.foreign('metric_id').references('metric.id').onDelete('CASCADE');
     });
 };

@@ -7,19 +7,39 @@ exports.up = function (knex) {
     table.increments('id').primary();
     table.string('query_id').notNullable().unique();
     table.text('question');
-    table.jsonb('detail').defaultTo('{}');
+    if (knex.client.config.client === 'mysql2') {
+      table.json('detail').defaultTo('{}');
+    } else {
+      table.jsonb('detail').defaultTo('{}');
+    }
 
-    table
-      .integer('thread_id')
-      .references('id')
-      .inTable('thread')
-      .onDelete('CASCADE');
+    if (knex.client.config.client === 'mysql2') {
+      table
+        .integer('thread_id')
+        .unsigned()
+        .references('id')
+        .inTable('thread')
+        .onDelete('CASCADE');
 
-    table
-      .integer('thread_response_id')
-      .references('id')
-      .inTable('thread_response')
-      .onDelete('CASCADE');
+      table
+        .integer('thread_response_id')
+        .unsigned()
+        .references('id')
+        .inTable('thread_response')
+        .onDelete('CASCADE');
+    } else {
+      table
+        .integer('thread_id')
+        .references('id')
+        .inTable('thread')
+        .onDelete('CASCADE');
+
+      table
+        .integer('thread_response_id')
+        .references('id')
+        .inTable('thread_response')
+        .onDelete('CASCADE');
+    }
 
     table.timestamps(true, true);
   });

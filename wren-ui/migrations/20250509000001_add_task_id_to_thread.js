@@ -4,12 +4,22 @@
  */
 exports.up = function (knex) {
   return knex.schema.alterTable('thread_response', (table) => {
-    table
-      .integer('asking_task_id')
-      .nullable()
-      .references('id')
-      .inTable('asking_task')
-      .onDelete('SET NULL');
+    if (knex.client.config.client === 'mysql2') {
+      table
+        .integer('asking_task_id')
+        .unsigned()
+        .nullable()
+        .references('id')
+        .inTable('asking_task')
+        .onDelete('SET NULL');
+    }else{
+      table
+        .integer('asking_task_id')
+        .nullable()
+        .references('id')
+        .inTable('asking_task')
+        .onDelete('SET NULL');
+    }
   });
 };
 

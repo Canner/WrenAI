@@ -7,7 +7,11 @@ exports.up = function (knex) {
     table.string('id').primary();
 
     // Project
-    table.integer('project_id').notNullable();
+    if (knex.client.config.client === 'mysql2') {
+      table.integer('project_id').unsigned().notNullable();
+    } else {
+      table.integer('project_id').notNullable();
+    }
     table
       .foreign('project_id')
       .references('id')
@@ -20,12 +24,21 @@ exports.up = function (knex) {
     // API Type
     table.string('api_type').notNullable();
 
-    // Request
-    table.jsonb('headers');
-    table.jsonb('request_payload');
+    if (knex.client.config.client === 'mysql2') {
+      // Request
+      table.json('headers');
+      table.json('request_payload');
 
-    // Response
-    table.jsonb('response_payload');
+      // Response
+      table.json('response_payload');
+    } else {
+      // Request
+      table.jsonb('headers');
+      table.jsonb('request_payload');
+
+      // Response
+      table.jsonb('response_payload');
+    }
 
     // Result
     table.integer('status_code').notNullable();
