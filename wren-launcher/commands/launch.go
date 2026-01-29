@@ -338,6 +338,56 @@ func Launch() {
 		panic(err)
 	}
 
+	if strings.ToLower(llmProvider) == "custom" {
+
+		// chech if  ~/.wrenai is exist
+		wrenDir, err := utils.TryGetWrenAIDir()
+		if err != nil || wrenDir == "" {
+			pterm.Warning.Println("⚠️ ~/.wrenai not found. Skipping custom UI setup for now.")
+			return
+		}
+
+		containerName := "wrenai-providers-setup"
+
+		// Find available port for Streamlit UI
+		streamlitPort := utils.FindAvailablePort(8501)
+		pterm.Info.Println("Using port", streamlitPort, "for Streamlit UI")
+
+		// Remove any existing container (whether running or stopped)
+		if err := utils.RemoveContainerIfExists(containerName); err != nil {
+			pterm.Warning.Println("⚠️ Failed to remove existing container:", err)
+		}
+
+		// Build and start the Streamlit UI container
+		err = utils.RunStreamlitUIContainer(streamlitPort)
+		if err != nil {
+			pterm.Error.Println("❌ Failed to start Streamlit UI:", err)
+			return
+		}
+
+		pterm.Info.Println(fmt.Sprintf("🚀 providers-setup UI container started at http://localhost:%d", streamlitPort))
+
+		// Wait for user to complete configuration in the UI
+		pterm.Info.Println("⌛ Waiting for user to finish UI configuration...")
+		timeoutTime := time.Now().Add(60 * time.Minute) // 60 minute timeout
+		for {
+			if time.Now().After(timeoutTime) {
+				pterm.Warning.Println("⚠️ Configuration timeout reached. Proceeding without custom setup.")
+				break
+			}
+			if utils.IsCustomConfigReady() {
+				pterm.Info.Println("✅ Detected config.done. Proceeding...")
+				break
+			}
+			time.Sleep(3 * time.Second)
+		}
+
+		// Clean up container after config is complete
+		if err := utils.RemoveContainerIfExists(containerName); err != nil {
+			pterm.Warning.Println("⚠️ Failed to remove existing container:", err)
+		}
+	}
+
 	// launch Wren AI
 	pterm.Info.Println("Launching Wren AI")
 	const projectName string = "wrenai"
