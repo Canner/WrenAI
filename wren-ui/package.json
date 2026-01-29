@@ -101,7 +101,10 @@
     "tmp": "0.2.4",
     "glob": "10.5.0",
     "js-yaml": "4.1.1",
-    "jws": "4.0.1"
+    "jws": "4.0.1",
+    "tar": "7.5.7",
+    "vega-selections": "6.1.2",
+    "vega-functions": "6.1.1"
   },
   "_moduleAliases": {
     "@server": "src/apollo/server"
