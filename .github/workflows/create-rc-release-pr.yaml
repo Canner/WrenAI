@@ -65,7 +65,7 @@ jobs:
           git diff
 
       - name: Create PR
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           base: main
           branch: "release/${{ github.event.inputs.release_version }}"
