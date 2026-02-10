@@ -74,11 +74,22 @@ manifest: ""
 
 ---
 type: document_store
+# Option 1: Qdrant (self-hosted vector database)
 provider: qdrant
 location: http://localhost:6333
 embedding_model_dim: 3072
 timeout: 120
 recreate_index: false
+
+# Option 2: OpenSearch (AWS OpenSearch Service or self-hosted)
+# Uncomment below and comment out Qdrant config to use OpenSearch
+# provider: opensearch
+# hosts: https://your-opensearch-host:9200
+# username: admin
+# password: your-password
+# embedding_model_dim: 1024
+# timeout: 120
+# recreate_index: false
 
 ---
 type: pipeline

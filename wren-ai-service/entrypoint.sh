@@ -4,19 +4,23 @@ set -e
 INTERVAL=1
 TIMEOUT=60
 
-# Wait for qdrant to be responsive
-echo "Waiting for qdrant to start..."
-current=0
+# Wait for qdrant to be responsive (only if QDRANT_HOST is set)
+if [[ -n "$QDRANT_HOST" ]]; then
+    echo "Waiting for qdrant to start..."
+    current=0
 
-while ! nc -z $QDRANT_HOST 6333; do
-    sleep $INTERVAL
-    current=$((current + INTERVAL))
-    if [ $current -eq $TIMEOUT ]; then
-        echo "Timeout: qdrant did not start within $TIMEOUT seconds"
-        exit 1
-    fi
-done
-echo "qdrant has started."
+    while ! nc -z $QDRANT_HOST 6333; do
+        sleep $INTERVAL
+        current=$((current + INTERVAL))
+        if [ $current -eq $TIMEOUT ]; then
+            echo "Timeout: qdrant did not start within $TIMEOUT seconds"
+            exit 1
+        fi
+    done
+    echo "qdrant has started."
+else
+    echo "Using OpenSearch (no qdrant check needed)"
+fi
 
 # Start wren-ai-service in the background
 uvicorn src.__main__:app --host 0.0.0.0 --port $WREN_AI_SERVICE_PORT --loop uvloop --http httptools &
