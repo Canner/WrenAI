@@ -39,6 +39,7 @@ filelock = "^3.20.1"
 urllib3 = ">=2.6.3"
 werkzeug = ">=3.1.5"  # CVE: safe_join Windows device name vulnerability
 marshmallow = ">=3.26.2"  # CVE: Schema.load(many=True) DoS
+pillow = ">=12.1.1"  # CVE: out-of-bounds write when loading PSD images
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.7.1"
@@ -52,7 +53,7 @@ requests = "^2.32.4"
 extra-streamlit-components = "^0.1.71"
 deepeval = "^1.0.6"
 tomlkit = "^0.13.0"
-nltk = "^3.9.1"
+nltk = "^3.9.3"
 psycopg2 = "^2.9.10"
 
 [tool.poetry.group.eval.dependencies]
