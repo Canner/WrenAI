@@ -104,7 +104,8 @@
     "jws": "4.0.1",
     "tar": "7.5.7",
     "vega-selections": "6.1.2",
-    "vega-functions": "6.1.1"
+    "vega-functions": "6.1.1",
+    "fast-xml-parser": "4.5.4"
   },
   "_moduleAliases": {
     "@server": "src/apollo/server"
