@@ -1,7 +1,7 @@
 FROM node:18-bookworm-slim AS base
 
-# Install required packages
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+# Install required packages (including build tools for native modules like duckdb, better-sqlite3)
+RUN apt-get update && apt-get install -y curl python3 make g++ cmake && rm -rf /var/lib/apt/lists/*
 
 # Next.js collects completely anonymous telemetry data about general usage.
 # Learn more here: https://nextjs.org/telemetry

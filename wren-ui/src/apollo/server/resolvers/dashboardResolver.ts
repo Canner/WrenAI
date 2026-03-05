@@ -96,6 +96,9 @@ export class DashboardResolver {
     // query with cache enabled
     const project = await ctx.projectService.getCurrentProject();
     const deployment = await ctx.deployService.getLastDeployment(project.id);
+    if (!deployment) {
+      throw new Error('No deployment found. Please deploy the model first.');
+    }
     const mdl = deployment.manifest;
     await ctx.queryService.preview(response.sql, {
       project,
@@ -163,6 +166,9 @@ export class DashboardResolver {
       const { cacheEnabled } = await ctx.dashboardService.getCurrentDashboard();
       const project = await ctx.projectService.getCurrentProject();
       const deployment = await ctx.deployService.getLastDeployment(project.id);
+      if (!deployment) {
+        throw new Error('No deployment found. Please deploy the model first.');
+      }
       const mdl = deployment.manifest;
       const data = (await ctx.queryService.preview(item.detail.sql, {
         project,

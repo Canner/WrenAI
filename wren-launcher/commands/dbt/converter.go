@@ -212,6 +212,17 @@ func ConvertDbtProjectCore(opts ConvertOptions) (*ConvertResult, error) {
 						"sslMode":  typedDS.SslMode,
 					},
 				}
+			case *WrenDorisDataSource:
+				wrenDataSource = map[string]interface{}{
+					"type": "doris",
+					"properties": map[string]interface{}{
+						"host":     typedDS.Host,
+						"port":     typedDS.Port,
+						"database": typedDS.Database,
+						"user":     typedDS.User,
+						"password": typedDS.Password,
+					},
+				}
 			default:
 				pterm.Warning.Printf("Warning: Unsupported data source type: %s\n", ds.GetType())
 				wrenDataSource = map[string]interface{}{

@@ -148,6 +148,7 @@ export enum SupportedDataSource {
   ATHENA = 'ATHENA',
   REDSHIFT = 'REDSHIFT',
   DATABRICKS = 'DATABRICKS',
+  DORIS = 'DORIS',
 }
 
 const dataSourceUrlMap: Record<SupportedDataSource, string> = {
@@ -162,6 +163,7 @@ const dataSourceUrlMap: Record<SupportedDataSource, string> = {
   [SupportedDataSource.ATHENA]: 'athena',
   [SupportedDataSource.REDSHIFT]: 'redshift',
   [SupportedDataSource.DATABRICKS]: 'databricks',
+  [SupportedDataSource.DORIS]: 'doris',
 };
 
 export interface TableResponse {
