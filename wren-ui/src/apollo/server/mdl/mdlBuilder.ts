@@ -516,6 +516,8 @@ export class MDLBuilder implements IMDLBuilder {
         return WrenEngineDataSourceType.REDSHIFT;
       case DataSourceName.DATABRICKS:
         return WrenEngineDataSourceType.DATABRICKS;
+      case DataSourceName.DORIS:
+        return WrenEngineDataSourceType.DORIS;
       default:
         throw new Error(
           `Unsupported data source type: ${type} found when building manifest`,

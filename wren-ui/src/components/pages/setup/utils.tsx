@@ -117,6 +117,11 @@ export const DATA_SOURCE_OPTIONS = {
     guide: 'https://docs.getwren.ai/oss/guide/connect/databricks',
     disabled: false,
   },
+  [DATA_SOURCES.DORIS]: {
+    ...getDataSourceConfig(DATA_SOURCES.DORIS),
+    guide: '',
+    disabled: false,
+  },
 } as { [key: string]: ButtonOption };
 
 export const TEMPLATE_OPTIONS = {
