@@ -13,10 +13,6 @@ const resolveAlias = {
 const nextConfig = withLess({
   output: 'standalone',
   staticPageGenerationTimeout: 1000,
-  typescript: {
-    // vega-lite@6.x ESM types not compatible with moduleResolution:node
-    ignoreBuildErrors: true,
-  },
   compiler: {
     // Enables the styled-components SWC transform
     styledComponents: {
