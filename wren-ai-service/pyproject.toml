@@ -34,12 +34,13 @@ tiktoken = "^0.8.0"
 jsonschema = "^4.23.0"
 litellm = "^1.75.2"
 boto3 = "^1.34.34" # Litellm requires boto3 = 1.34.34
-qdrant-client = "==1.11.0"
+qdrant-client = ">=1.12.0,<2.0.0"
 filelock = "^3.20.1"
 urllib3 = ">=2.6.3"
 werkzeug = ">=3.1.5"  # CVE: safe_join Windows device name vulnerability
 marshmallow = ">=3.26.2"  # CVE: Schema.load(many=True) DoS
 pillow = ">=12.1.1"  # CVE: out-of-bounds write when loading PSD images
+protobuf = ">=5.29.6"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.7.1"
@@ -51,7 +52,7 @@ sseclient-py = "^1.8.0"
 dspy-ai = "^2.5.26"
 requests = "^2.32.4"
 extra-streamlit-components = "^0.1.71"
-deepeval = "^1.0.6"
+deepeval = "^3.0.0"
 tomlkit = "^0.13.0"
 nltk = "^3.9.3"
 psycopg2 = "^2.9.10"
