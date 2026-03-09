@@ -119,7 +119,6 @@ export const DATA_SOURCE_OPTIONS = {
   },
   [DATA_SOURCES.DORIS]: {
     ...getDataSourceConfig(DATA_SOURCES.DORIS),
-    guide: '',
     disabled: false,
   },
 } as { [key: string]: ButtonOption };

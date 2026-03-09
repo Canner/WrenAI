@@ -213,10 +213,16 @@ func ConvertDbtProjectCore(opts ConvertOptions) (*ConvertResult, error) {
 					},
 				}
 			case *WrenDorisDataSource:
+				var host string
+				if opts.UsedByContainer {
+					host = handleLocalhostForContainer(typedDS.Host)
+				} else {
+					host = typedDS.Host
+				}
 				wrenDataSource = map[string]interface{}{
 					"type": "doris",
 					"properties": map[string]interface{}{
-						"host":     typedDS.Host,
+						"host":     host,
 						"port":     typedDS.Port,
 						"database": typedDS.Database,
 						"user":     typedDS.User,

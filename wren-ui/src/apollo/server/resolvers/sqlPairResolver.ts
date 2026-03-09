@@ -117,7 +117,10 @@ export class SqlPairResolver {
     return safeFormatSQL(wrenSQL, { language: 'postgresql' }) as WrenSQL;
   }
 
-  private async validateSql(sql: string, ctx: IContext) {
+  private async validateSql(sql: string | undefined, ctx: IContext) {
+    if (sql == null) {
+      return;
+    }    
     const project = await ctx.projectService.getCurrentProject();
     const lastDeployment = await ctx.deployService.getLastDeployment(
       project.id,
