@@ -120,7 +120,7 @@ export class SqlPairResolver {
   private async validateSql(sql: string | undefined, ctx: IContext) {
     if (sql == null) {
       return;
-    }    
+    }
     const project = await ctx.projectService.getCurrentProject();
     const lastDeployment = await ctx.deployService.getLastDeployment(
       project.id,
