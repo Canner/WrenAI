@@ -119,6 +119,7 @@ export const DATA_SOURCE_OPTIONS = {
   },
   [DATA_SOURCES.DORIS]: {
     ...getDataSourceConfig(DATA_SOURCES.DORIS),
+    guide: 'https://docs.getwren.ai/oss/guide/connect/doris',
     disabled: false,
   },
 } as { [key: string]: ButtonOption };
