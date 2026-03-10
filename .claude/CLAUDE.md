@@ -1,9 +1,5 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-## Project Overview
-
 WrenAI is an open-source GenBI (Generative BI) agent that converts natural language questions into SQL queries and charts. It uses a semantic layer (MDL - Metadata Definition Language) to guide LLM-powered text-to-SQL generation via retrieval-augmented generation (RAG).
 
 ## Repository Structure
