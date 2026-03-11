@@ -104,6 +104,9 @@ export class DashboardCacheBackgroundTracker {
       // Get project and deployment info
       const project = await this.projectService.getCurrentProject();
       const deployment = await this.deployService.getLastDeployment(project.id);
+      if (!deployment) {
+        throw new Error('No deployment found. Please deploy the model first.');
+      }
       const mdl = deployment.manifest;
       const hash = uuidv4();
 
