@@ -1,6 +1,6 @@
 # Fork Customizations
 
-> This repository is a fork of [unknown]().
+> This repository is a fork of [Canner/WrenAI](https://github.com/Canner/WrenAI).
 > Managed under the [iAiFy Enterprise](https://github.com/enterprises/iAiFy) governance model.
 
 ## Purpose
@@ -11,7 +11,7 @@
 
 | Property | Value |
 |----------|-------|
-| Upstream | [unknown]() |
+| Upstream | [Canner/WrenAI](https://github.com/Canner/WrenAI) |
 | Language | TypeScript |
 | Fork org | AiFeatures |
 
