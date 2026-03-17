@@ -36,3 +36,21 @@ The `config.qwen3.yaml` file provides an example configuration for using Qwen3 m
 ```
 
 **Note**: You need to set `OPENROUTER_API_KEY` in your `~/.wrenai/.env` file to use OpenRouter as the provider for Qwen3 models.
+
+## MiniMax Configuration
+
+The `config.minimax.yaml` file provides an example configuration for using [MiniMax](https://www.minimax.io/) models via the dedicated `minimax_llm` provider. This provider talks directly to the MiniMax OpenAI-compatible API with built-in temperature clamping and automatic `response_format` removal.
+
+### Available Models
+
+| Model | Context Window | Description |
+|-------|---------------|-------------|
+| `MiniMax-M2.5` | 204,800 tokens | Peak Performance. Ultimate Value. Master the Complex |
+| `MiniMax-M2.5-highspeed` | 204,800 tokens | Same performance, faster and more agile |
+
+### Key Notes
+
+- **Temperature**: MiniMax requires temperature in the range `(0, 1.0]`. The provider automatically clamps values — `0` becomes `0.01`.
+- **`response_format`**: Not supported by MiniMax. The provider strips it automatically.
+- **API endpoints**: International `https://api.minimax.io/v1` (default), China mainland `https://api.minimaxi.com/v1`.
+- Set `MINIMAX_API_KEY=<your_api_key>` in your `~/.wrenai/.env` file.
