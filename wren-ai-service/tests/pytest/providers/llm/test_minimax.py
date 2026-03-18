@@ -34,7 +34,7 @@ class TestMiniMaxLLMProviderInit:
     @patch.dict(os.environ, {"MINIMAX_API_KEY": "test-key-123"})
     def test_default_initialization(self):
         provider = MiniMaxLLMProvider()
-        assert provider._model == "MiniMax-M2.5"
+        assert provider._model == "MiniMax-M2.7"
         assert provider._api_base == MINIMAX_API_BASE
         assert provider._timeout == 120.0
         assert provider._context_window_size == 204800
@@ -42,8 +42,13 @@ class TestMiniMaxLLMProviderInit:
 
     @patch.dict(os.environ, {"MINIMAX_API_KEY": "test-key-123"})
     def test_custom_model(self):
-        provider = MiniMaxLLMProvider(model="MiniMax-M2.5-highspeed")
-        assert provider._model == "MiniMax-M2.5-highspeed"
+        provider = MiniMaxLLMProvider(model="MiniMax-M2.7-highspeed")
+        assert provider._model == "MiniMax-M2.7-highspeed"
+
+    @patch.dict(os.environ, {"MINIMAX_API_KEY": "test-key-123"})
+    def test_legacy_m25_model_still_works(self):
+        provider = MiniMaxLLMProvider(model="MiniMax-M2.5")
+        assert provider._model == "MiniMax-M2.5"
 
     @patch.dict(os.environ, {"MINIMAX_API_KEY": "test-key-123"})
     def test_custom_api_base(self):
@@ -68,8 +73,8 @@ class TestMiniMaxLLMProviderInit:
 
     @patch.dict(os.environ, {"MINIMAX_API_KEY": "test-key-123"})
     def test_get_model(self):
-        provider = MiniMaxLLMProvider(model="MiniMax-M2.5")
-        assert provider.get_model() == "MiniMax-M2.5"
+        provider = MiniMaxLLMProvider(model="MiniMax-M2.7")
+        assert provider.get_model() == "MiniMax-M2.7"
 
     @patch.dict(os.environ, {"MINIMAX_API_KEY": "test-key-123"})
     def test_get_context_window_size(self):
@@ -117,7 +122,7 @@ class TestMiniMaxLLMProviderGenerator:
 
         mock_completion = MagicMock()
         mock_completion.choices = [mock_choice]
-        mock_completion.model = "MiniMax-M2.5"
+        mock_completion.model = "MiniMax-M2.7"
         mock_completion.usage = MagicMock()
         mock_completion.usage.__iter__ = MagicMock(
             return_value=iter([("prompt_tokens", 10), ("completion_tokens", 5)])
@@ -136,7 +141,7 @@ class TestMiniMaxLLMProviderGenerator:
 
         # Verify the API was called with correct parameters
         call_kwargs = provider._client.chat.completions.create.call_args
-        assert call_kwargs.kwargs["model"] == "MiniMax-M2.5"
+        assert call_kwargs.kwargs["model"] == "MiniMax-M2.7"
         assert call_kwargs.kwargs["stream"] is False
         assert call_kwargs.kwargs["temperature"] == 0.5
         # response_format should NOT be in the call
@@ -154,7 +159,7 @@ class TestMiniMaxLLMProviderGenerator:
 
         mock_completion = MagicMock()
         mock_completion.choices = [mock_choice]
-        mock_completion.model = "MiniMax-M2.5"
+        mock_completion.model = "MiniMax-M2.7"
         mock_completion.usage = MagicMock()
         mock_completion.usage.__iter__ = MagicMock(
             return_value=iter([("prompt_tokens", 5), ("completion_tokens", 3)])
@@ -184,7 +189,7 @@ class TestMiniMaxLLMProviderGenerator:
 
         mock_completion = MagicMock()
         mock_completion.choices = [mock_choice]
-        mock_completion.model = "MiniMax-M2.5"
+        mock_completion.model = "MiniMax-M2.7"
         mock_completion.usage = MagicMock()
         mock_completion.usage.__iter__ = MagicMock(
             return_value=iter([("prompt_tokens", 5), ("completion_tokens", 3)])
@@ -214,7 +219,7 @@ class TestMiniMaxLLMProviderGenerator:
 
         mock_completion = MagicMock()
         mock_completion.choices = [mock_choice]
-        mock_completion.model = "MiniMax-M2.5"
+        mock_completion.model = "MiniMax-M2.7"
         mock_completion.usage = MagicMock()
         mock_completion.usage.__iter__ = MagicMock(
             return_value=iter([("prompt_tokens", 10), ("completion_tokens", 5)])

@@ -44,7 +44,9 @@ class MiniMaxLLMProvider(LLMProvider):
     """MiniMax LLM provider using the OpenAI-compatible Chat API.
 
     Supported models:
-        - MiniMax-M2.5 (default, 204K context)
+        - MiniMax-M2.7 (default, latest flagship with enhanced reasoning and coding)
+        - MiniMax-M2.7-highspeed (high-speed version of M2.7 for low-latency scenarios)
+        - MiniMax-M2.5 (204K context)
         - MiniMax-M2.5-highspeed (faster variant, 204K context)
 
     API docs: https://platform.minimax.io/docs/api-reference/text-openai-api
@@ -52,7 +54,7 @@ class MiniMaxLLMProvider(LLMProvider):
 
     def __init__(
         self,
-        model: str = "MiniMax-M2.5",
+        model: str = "MiniMax-M2.7",
         api_key_name: Optional[str] = "MINIMAX_API_KEY",
         api_base: Optional[str] = None,
         kwargs: Optional[Dict[str, Any]] = None,

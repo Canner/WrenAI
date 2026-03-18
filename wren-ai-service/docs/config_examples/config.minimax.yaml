@@ -16,8 +16,22 @@ models:
   # put MINIMAX_API_KEY=<your_api_key> in ~/.wrenai/.env
   # International endpoint (default): https://api.minimax.io/v1
   # China mainland endpoint:          https://api.minimaxi.com/v1
-  - model: MiniMax-M2.5
+  - model: MiniMax-M2.7
     alias: default
+    context_window_size: 204800
+    timeout: 120
+    kwargs:
+      max_tokens: 4096
+      n: 1
+      temperature: 1.0
+  - model: MiniMax-M2.7-highspeed
+    context_window_size: 204800
+    timeout: 120
+    kwargs:
+      max_tokens: 4096
+      n: 1
+      temperature: 1.0
+  - model: MiniMax-M2.5
     context_window_size: 204800
     timeout: 120
     kwargs:
