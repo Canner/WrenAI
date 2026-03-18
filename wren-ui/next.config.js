@@ -13,6 +13,11 @@ const resolveAlias = {
 const nextConfig = withLess({
   output: 'standalone',
   staticPageGenerationTimeout: 1000,
+  i18n: {
+    locales: ['en', 'fr'],
+    defaultLocale: 'en',
+    localeDetection: true,
+  },
   compiler: {
     // Enables the styled-components SWC transform
     styledComponents: {

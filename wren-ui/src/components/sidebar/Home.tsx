@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useParams } from 'next/navigation';
 import styled from 'styled-components';
+import { useTranslations } from 'next-intl';
 import { Path } from '@/utils/enum';
 import FundViewOutlined from '@ant-design/icons/FundViewOutlined';
 import SidebarTree, {
@@ -41,6 +42,7 @@ export const StyledSidebarTree = styled(SidebarTree)`
 export default function Home(props: Props) {
   const { data, onSelect, onRename, onDelete } = props;
   const router = useRouter();
+  const t = useTranslations();
   const params = useParams<{ id: string }>();
   const { threads } = data;
 
@@ -78,7 +80,7 @@ export default function Home(props: Props) {
         href={Path.HomeDashboard}
       >
         <FundViewOutlined className="mr-2" />
-        <span className="text-medium">Dashboard</span>
+        <span className="text-medium">{t('home.dashboard')}</span>
       </StyledTreeNodeLink>
       <ThreadTree
         threads={threads}

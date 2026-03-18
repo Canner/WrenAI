@@ -8,6 +8,7 @@ import {
   message,
 } from 'antd';
 import styled from 'styled-components';
+import { useTranslations } from 'next-intl';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import PageLayout from '@/components/layouts/PageLayout';
 import { InstructionsSVG } from '@/utils/svgs';
@@ -49,6 +50,7 @@ const StyledInstructionsIcon = styled(InstructionsSVG)`
 `;
 
 export default function ManageInstructions() {
+  const t = useTranslations();
   const instructionModal = useModalAction();
   const instructionDrawer = useDrawerAction();
 
@@ -70,7 +72,7 @@ export default function ManageInstructions() {
     useCreateInstructionMutation(
       getBaseOptions({
         onCompleted: () => {
-          message.success('Successfully created instruction.');
+          message.success(t('toasts.instructionCreated'));
         },
       }),
     );
@@ -79,7 +81,7 @@ export default function ManageInstructions() {
     useUpdateInstructionMutation(
       getBaseOptions({
         onCompleted: () => {
-          message.success('Successfully updated instruction.');
+          message.success(t('toasts.instructionUpdated'));
         },
       }),
     );
@@ -87,7 +89,7 @@ export default function ManageInstructions() {
   const [deleteInstructionMutation] = useDeleteInstructionMutation(
     getBaseOptions({
       onCompleted: () => {
-        message.success('Successfully deleted instruction.');
+        message.success(t('toasts.instructionDeleted'));
       },
     }),
   );
@@ -107,7 +109,7 @@ export default function ManageInstructions() {
 
   const columns: TableColumnsType<Instruction> = [
     {
-      title: 'Instruction details',
+      title: t('page.instructionDetails'),
       dataIndex: 'instruction',
       render: (instruction) => (
         <Paragraph title={instruction} ellipsis={{ rows: 3 }}>
@@ -116,7 +118,7 @@ export default function ManageInstructions() {
       ),
     },
     {
-      title: 'Matching questions',
+      title: t('page.matchingQuestions'),
       dataIndex: 'questions',
       width: '50%',
       render: (questions, record) => {
@@ -139,7 +141,10 @@ export default function ManageInstructions() {
             ))}
             {moreCount > 0 && (
               <div className="text-sm gray-7 pl-1">
-                +{moreCount} more question{moreCount > 1 ? 's' : ''}
+                +{moreCount}{' '}
+                {moreCount > 1
+                  ? t('page.moreQuestions')
+                  : t('page.moreQuestion')}
               </div>
             )}
           </StyledQuestionsBlock>
@@ -147,7 +152,7 @@ export default function ManageInstructions() {
       },
     },
     {
-      title: 'Created time',
+      title: t('page.createdTime'),
       dataIndex: 'createdAt',
       width: 130,
       render: (time) => <Text className="gray-7">{getCompactTime(time)}</Text>,
@@ -171,27 +176,24 @@ export default function ManageInstructions() {
         title={
           <>
             <StyledInstructionsIcon className="mr-2 gray-8" />
-            Manage instruction
+            {t('page.manageInstruction')}
           </>
         }
         titleExtra={
           <Button type="primary" onClick={() => instructionModal.openModal()}>
-            Add an instruction
+            {t('page.addInstruction')}
           </Button>
         }
         description={
           <>
-            On this page, you can manage saved instructions that guide Wren AI
-            in generating SQL queries. These instructions help Wren AI
-            understand your data model and business rules, improving query
-            accuracy and reducing the need for manual refinements.{' '}
+            {t('page.instructionDescription')}{' '}
             <Link
               className="gray-8 underline"
               href="https://docs.getwren.ai/oss/guide/knowledge/instructions"
               rel="noopener noreferrer"
               target="_blank"
             >
-              Learn more.
+              {t('common.learnMore')}
             </Link>
           </>
         }

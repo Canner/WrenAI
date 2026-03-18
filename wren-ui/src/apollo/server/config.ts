@@ -17,7 +17,7 @@ export interface IConfig {
   // wren engine
   wrenEngineEndpoint: string;
 
-  // wren AI
+  // Kernel IQ
   wrenAIEndpoint: string;
   generationModel?: string;
 
@@ -67,7 +67,7 @@ const defaultConfig = {
   // wren engine
   wrenEngineEndpoint: 'http://localhost:8080',
 
-  // wren AI
+  // Kernel IQ
   wrenAIEndpoint: 'http://localhost:5555',
 
   // ibis server
@@ -104,7 +104,7 @@ const config = {
   // wren engine
   wrenEngineEndpoint: process.env.WREN_ENGINE_ENDPOINT,
 
-  // wren AI
+  // Kernel IQ
   wrenAIEndpoint: process.env.WREN_AI_ENDPOINT,
   generationModel: process.env.GENERATION_MODEL,
 

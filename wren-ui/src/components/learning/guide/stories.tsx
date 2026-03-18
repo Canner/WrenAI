@@ -397,10 +397,10 @@ const playKnowledgeGuide = (
         ),
         description: renderToString(
           <>
-            Create and manage <b>Question-SQL pairs</b> to refine Wren AI’s SQL
+            Create and manage <b>Question-SQL pairs</b> to refine Kernel IQ’s SQL
             generation. You can manually add pairs here or go to Home, ask a
             question, and save the correct answer to Knowledge. The more you
-            save, the smarter Wren AI becomes!
+            save, the smarter Kernel IQ becomes!
           </>,
         ),
         onPopoverRender: (popoverDom: DriverPopoverDOM) => {
@@ -427,7 +427,7 @@ const playKnowledgeGuide = (
           <>
             In addition to Question-SQL pairs, you can create instructions to
             define <b>business rules</b> and <b>query logic</b>. These rules
-            guide Wren AI in applying consistent filters, constraints, and best
+            guide Kernel IQ in applying consistent filters, constraints, and best
             practices to SQL queries.
           </>,
         ),

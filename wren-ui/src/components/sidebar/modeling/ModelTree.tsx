@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { message } from 'antd';
+import { useTranslations } from 'next-intl';
 import { DataNode } from 'antd/es/tree';
 import { DiagramModel } from '@/utils/data';
 import { getNodeTypeIcon } from '@/utils/nodeType';
@@ -44,6 +45,7 @@ const getHasSchemaChange = (schemaChange: SchemaChange) => {
 
 export default function ModelTree(props: Props) {
   const { onOpenModelDrawer, models } = props;
+  const t = useTranslations();
 
   const schemaChangeModal = useModalAction();
   const [triggerDataSourceDetection, { loading: isDetecting }] =
@@ -51,9 +53,9 @@ export default function ModelTree(props: Props) {
       onError: (error) => console.error(error),
       onCompleted: async (data) => {
         if (data.triggerDataSourceDetection) {
-          message.warning('Schema change detected.');
+          message.warning(t('toasts.schemaChangeDetected'));
         } else {
-          message.success('There is no schema change.');
+          message.success(t('toasts.noSchemaChange'));
         }
         await refetchSchemaChange();
       },
@@ -64,9 +66,9 @@ export default function ModelTree(props: Props) {
       onCompleted: async (_, options) => {
         const { type } = options.variables?.where;
         if (type === SchemaChangeType.DELETED_TABLES) {
-          message.success('Source table deleted resolved successfully.');
+          message.success(t('toasts.sourceTableDeletedResolved'));
         } else if (type === SchemaChangeType.DELETED_COLUMNS) {
-          message.success('Source column deleted resolved successfully.');
+          message.success(t('toasts.sourceColumnDeletedResolved'));
         }
 
         const { data } = await refetchSchemaChange();

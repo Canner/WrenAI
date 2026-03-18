@@ -4,6 +4,7 @@ import { useSearchParams } from 'next/navigation';
 import { forwardRef, useEffect, useMemo, useRef } from 'react';
 import { message } from 'antd';
 import styled from 'styled-components';
+import { useTranslations } from 'next-intl';
 import { MORE_ACTION, NODE_TYPE } from '@/utils/enum';
 import { editCalculatedField } from '@/utils/modelingHelper';
 import SiderLayout from '@/components/layouts/SiderLayout';
@@ -59,6 +60,7 @@ const DiagramWrapper = styled.div`
 
 export default function Modeling() {
   const router = useRouter();
+  const t = useTranslations();
   const searchParams = useSearchParams();
   const diagramRef = useRef(null);
 
@@ -96,7 +98,7 @@ export default function Modeling() {
       getBaseOptions({
         onError: null,
         onCompleted: () => {
-          message.success('Successfully created calculated field.');
+          message.success(t('toasts.calculatedFieldCreated'));
         },
       }),
     );
@@ -106,7 +108,7 @@ export default function Modeling() {
       getBaseOptions({
         onError: null,
         onCompleted: () => {
-          message.success('Successfully updated calculated field.');
+          message.success(t('toasts.calculatedFieldUpdated'));
         },
       }),
     );
@@ -114,7 +116,7 @@ export default function Modeling() {
   const [deleteCalculatedField] = useDeleteCalculatedFieldMutation(
     getBaseOptions({
       onCompleted: () => {
-        message.success('Successfully deleted calculated field.');
+        message.success(t('toasts.calculatedFieldDeleted'));
       },
     }),
   );
@@ -123,7 +125,7 @@ export default function Modeling() {
     useCreateModelMutation(
       getBaseOptions({
         onCompleted: () => {
-          message.success('Successfully created model.');
+          message.success(t('toasts.modelCreated'));
         },
         refetchQueries: refetchQueriesForModel,
       }),
@@ -132,7 +134,7 @@ export default function Modeling() {
   const [deleteModelMutation] = useDeleteModelMutation(
     getBaseOptions({
       onCompleted: () => {
-        message.success('Successfully deleted model.');
+        message.success(t('toasts.modelDeleted'));
       },
       refetchQueries: refetchQueriesForModel,
     }),
@@ -142,7 +144,7 @@ export default function Modeling() {
     useUpdateModelMutation(
       getBaseOptions({
         onCompleted: () => {
-          message.success('Successfully updated model.');
+          message.success(t('toasts.modelUpdated'));
         },
         refetchQueries: refetchQueriesForModel,
       }),
@@ -151,7 +153,7 @@ export default function Modeling() {
   const [deleteViewMutation] = useDeleteViewMutation(
     getBaseOptions({
       onCompleted: () => {
-        message.success('Successfully deleted view.');
+        message.success(t('toasts.viewDeleted'));
       },
     }),
   );
@@ -160,7 +162,7 @@ export default function Modeling() {
     useUpdateModelMetadataMutation(
       getBaseOptions({
         onCompleted: () => {
-          message.success('Successfully updated model metadata.');
+          message.success(t('toasts.modelMetadataUpdated'));
         },
       }),
     );
@@ -169,7 +171,7 @@ export default function Modeling() {
     useCreateRelationshipMutation(
       getBaseOptions({
         onCompleted: () => {
-          message.success('Successfully created relationship.');
+          message.success(t('toasts.relationshipCreated'));
         },
       }),
     );
@@ -177,7 +179,7 @@ export default function Modeling() {
   const [deleteRelationshipMutation] = useDeleteRelationshipMutation(
     getBaseOptions({
       onCompleted: () => {
-        message.success('Successfully deleted relationship.');
+        message.success(t('toasts.relationshipDeleted'));
       },
     }),
   );
@@ -186,7 +188,7 @@ export default function Modeling() {
     useUpdateRelationshipMutation(
       getBaseOptions({
         onCompleted: () => {
-          message.success('Successfully updated relationship.');
+          message.success(t('toasts.relationshipUpdated'));
         },
       }),
     );
@@ -195,7 +197,7 @@ export default function Modeling() {
     useUpdateViewMetadataMutation(
       getBaseOptions({
         onCompleted: () => {
-          message.success('Successfully updated view metadata.');
+          message.success(t('toasts.viewMetadataUpdated'));
         },
       }),
     );

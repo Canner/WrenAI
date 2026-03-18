@@ -151,13 +151,13 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       });
 
       if (response.status === 200) {
-        logger.info(`Wren AI: Deleted semantics for project ${projectId}`);
+        logger.info(`Kernel IQ: Deleted semantics for project ${projectId}`);
       } else {
         throw new Error(`Failed to delete semantics. ${response.data?.error}`);
       }
     } catch (error: any) {
       throw new Error(
-        `Wren AI: Failed to delete semantics: ${getAIServiceError(error)}`,
+        `Kernel IQ: Failed to delete semantics: ${getAIServiceError(error)}`,
       );
     }
   }
@@ -242,7 +242,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       });
       return { queryId: res.data.query_id };
     } catch (err: any) {
-      logger.debug(`Got error when asking wren AI: ${getAIServiceError(err)}`);
+      logger.debug(`Got error when asking Kernel IQ: ${getAIServiceError(err)}`);
       throw err;
     }
   }
@@ -344,25 +344,25 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       );
       const deployId = res.data.id;
       logger.debug(
-        `Wren AI: Deploying wren AI, hash: ${hash}, deployId: ${deployId}`,
+        `Kernel IQ: Deploying Kernel IQ, hash: ${hash}, deployId: ${deployId}`,
       );
       const deploySuccess = await this.waitDeployFinished(deployId);
       if (deploySuccess) {
-        logger.debug(`Wren AI: Deploy wren AI success, hash: ${hash}`);
+        logger.debug(`Kernel IQ: Deploy Kernel IQ success, hash: ${hash}`);
         return { status: WrenAIDeployStatusEnum.SUCCESS };
       } else {
         return {
           status: WrenAIDeployStatusEnum.FAILED,
-          error: `Wren AI: Deploy wren AI failed or timeout, hash: ${hash}`,
+          error: `Kernel IQ: Deploy Kernel IQ failed or timeout, hash: ${hash}`,
         };
       }
     } catch (err: any) {
       logger.debug(
-        `Got error when deploying to wren AI, hash: ${hash}. Error: ${err.message}`,
+        `Got error when deploying to Kernel IQ, hash: ${hash}. Error: ${err.message}`,
       );
       return {
         status: WrenAIDeployStatusEnum.FAILED,
-        error: `Wren AI Error: deployment hash:${hash}, ${err.message}`,
+        error: `Kernel IQ Error: deployment hash:${hash}, ${err.message}`,
       };
     }
   }
@@ -377,14 +377,14 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       max_categories: input.maxCategories,
       configuration: input.configuration,
     };
-    logger.info(`Wren AI: Generating recommendation questions`);
+    logger.info(`Kernel IQ: Generating recommendation questions`);
     try {
       const res = await axios.post(
         `${this.wrenAIBaseEndpoint}/v1/question-recommendations`,
         body,
       );
       logger.info(
-        `Wren AI: Generating recommendation questions, queryId: ${res.data.id}`,
+        `Kernel IQ: Generating recommendation questions, queryId: ${res.data.id}`,
       );
       return { queryId: res.data.id };
     } catch (err: any) {
@@ -775,7 +775,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     for (let waitTime = 1; waitTime <= 7; waitTime++) {
       try {
         const status = await this.getDeployStatus(deployId);
-        logger.debug(`Wren AI: Deploy status: ${status}`);
+        logger.debug(`Kernel IQ: Deploy status: ${status}`);
         if (status === WrenAISystemStatus.FINISHED) {
           deploySuccess = true;
           break;
@@ -784,7 +784,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
         } else if (status === WrenAISystemStatus.INDEXING) {
           // do nothing
         } else {
-          logger.debug(`Wren AI: Unknown Wren AI deploy status: ${status}`);
+          logger.debug(`Kernel IQ: Unknown Kernel IQ deploy status: ${status}`);
           return;
         }
       } catch (err: any) {

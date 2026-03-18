@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import styled from 'styled-components';
+import { useTranslations } from 'next-intl';
 import FunctionOutlined from '@ant-design/icons/FunctionOutlined';
 import { Path, MENU_KEY } from '@/utils/enum';
 import { InstructionsSVG } from '@/utils/svgs';
@@ -26,13 +27,14 @@ const linkStyle = { color: 'inherit', transition: 'none' };
 
 export default function Knowledge() {
   const router = useRouter();
+  const t = useTranslations();
 
   const menuItems = [
     {
       'data-guideid': 'question-sql-pairs',
       label: (
         <Link style={linkStyle} href={Path.KnowledgeQuestionSQLPairs}>
-          Question-SQL pairs
+          {t('knowledge.questionSqlPairs')}
         </Link>
       ),
       icon: <FunctionOutlined />,
@@ -43,7 +45,7 @@ export default function Knowledge() {
       'data-guideid': 'instructions',
       label: (
         <Link style={linkStyle} href={Path.KnowledgeInstructions}>
-          Instructions
+          {t('knowledge.instructions')}
         </Link>
       ),
       icon: <InstructionsSVG />,

@@ -18,13 +18,13 @@ const { projectService, instructionService } = components;
  * Instructions API - Supports two types of instructions:
  *
  * 1. Global Instructions (isGlobal: true)
- *    - Apply to every query that Wren AI generates
+ *    - Apply to every query that Kernel IQ generates
  *    - Ideal for setting consistent standards, enforcing business rules
  *    - Should NOT include questions field
  *
  * 2. Question-Matching Instructions (isGlobal: false or undefined)
  *    - Applied only when user's question matches certain patterns
- *    - Ideal for guiding how Wren AI handles specific business concepts
+ *    - Ideal for guiding how Kernel IQ handles specific business concepts
  *    - MUST include questions array with at least one question
  */
 interface CreateInstructionRequest {

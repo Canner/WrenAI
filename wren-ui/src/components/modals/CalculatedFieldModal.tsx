@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Modal, Form, Input, Typography, Button, Alert } from 'antd';
+import { useTranslations } from 'next-intl';
 import LinkOutlined from '@ant-design/icons/LinkOutlined';
 import { FORM_MODE } from '@/utils/enum';
 import { ERROR_TEXTS } from '@/utils/error';
@@ -49,6 +50,7 @@ export default function AddCalculatedFieldModal(props: Props) {
     payload,
     formMode,
   } = props;
+  const t = useTranslations();
 
   const isEditMode = formMode === FORM_MODE.EDIT;
   const [error, setError] =
@@ -137,7 +139,11 @@ export default function AddCalculatedFieldModal(props: Props) {
 
   return (
     <Modal
-      title={`${isEditMode ? 'Update' : 'Add'} calculated field`}
+      title={
+        isEditMode
+          ? t('calculatedFieldModal.updateTitle')
+          : t('calculatedFieldModal.addTitle')
+      }
       width={750}
       visible={visible}
       onCancel={onClose}
@@ -155,13 +161,13 @@ export default function AddCalculatedFieldModal(props: Props) {
               target="_blank"
               rel="noopener noreferrer"
             >
-              How to set primary key in a model.
+              {t('calculatedFieldModal.primaryKeyGuide')}
             </Typography.Link>
           </div>
           <div>
-            <Button onClick={onClose}>Cancel</Button>
+            <Button onClick={onClose}>{t('actions.cancel')}</Button>
             <Button type="primary" onClick={submit} loading={loading}>
-              Save
+              {t('actions.save')}
             </Button>
           </div>
         </div>
@@ -169,7 +175,7 @@ export default function AddCalculatedFieldModal(props: Props) {
     >
       <Form form={form} preserve={false} layout="vertical">
         <Form.Item
-          label="Name"
+          label={t('saveAsView.name')}
           name="name"
           required
           rules={[
@@ -184,7 +190,7 @@ export default function AddCalculatedFieldModal(props: Props) {
         </Form.Item>
 
         <Form.Item
-          label="Select an expression"
+          label={t('calculatedFieldModal.selectExpression')}
           name="expression"
           required
           rules={[
@@ -195,7 +201,7 @@ export default function AddCalculatedFieldModal(props: Props) {
           ]}
         >
           <DescriptiveSelector
-            placeholder="Select an expression"
+            placeholder={t('calculatedFieldModal.selectExpression')}
             options={expressionOptions}
             descriptiveContentRender={(content) => {
               return (

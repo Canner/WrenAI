@@ -1,6 +1,7 @@
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { Button, message, Table, TableColumnsType, Typography } from 'antd';
+import { useTranslations } from 'next-intl';
 import { format } from 'sql-formatter';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import PageLayout from '@/components/layouts/PageLayout';
@@ -28,6 +29,7 @@ const SQLCodeBlock = dynamic(() => import('@/components/code/SQLCodeBlock'), {
 const { Paragraph, Text } = Typography;
 
 export default function ManageQuestionSQLPairs() {
+  const t = useTranslations();
   const questionSqlPairModal = useModalAction();
   const sqlPairDrawer = useDrawerAction();
 
@@ -49,7 +51,7 @@ export default function ManageQuestionSQLPairs() {
     useCreateSqlPairMutation(
       getBaseOptions({
         onCompleted: () => {
-          message.success('Successfully created question-sql pair.');
+          message.success(t('toasts.questionSqlPairCreated'));
         },
       }),
     );
@@ -57,7 +59,7 @@ export default function ManageQuestionSQLPairs() {
   const [deleteSqlPairMutation] = useDeleteSqlPairMutation(
     getBaseOptions({
       onCompleted: () => {
-        message.success('Successfully deleted question-sql pair.');
+        message.success(t('toasts.questionSqlPairDeleted'));
       },
     }),
   );
@@ -66,7 +68,7 @@ export default function ManageQuestionSQLPairs() {
     useUpdateSqlPairMutation(
       getBaseOptions({
         onCompleted: () => {
-          message.success('Successfully updated question-sql pair.');
+          message.success(t('toasts.questionSqlPairUpdated'));
         },
       }),
     );
@@ -86,7 +88,7 @@ export default function ManageQuestionSQLPairs() {
 
   const columns: TableColumnsType<SqlPair> = [
     {
-      title: 'Question',
+      title: t('page.question'),
       dataIndex: 'question',
       width: 300,
       render: (question) => (
@@ -96,7 +98,7 @@ export default function ManageQuestionSQLPairs() {
       ),
     },
     {
-      title: 'SQL statement',
+      title: t('page.sqlStatement'),
       dataIndex: 'sql',
       width: '60%',
       render: (sql) => (
@@ -106,7 +108,7 @@ export default function ManageQuestionSQLPairs() {
       ),
     },
     {
-      title: 'Created time',
+      title: t('page.createdTime'),
       dataIndex: 'createdAt',
       width: 130,
       render: (time) => <Text className="gray-7">{getCompactTime(time)}</Text>,
@@ -130,7 +132,7 @@ export default function ManageQuestionSQLPairs() {
         title={
           <>
             <FunctionOutlined className="mr-2 gray-8" />
-            Manage question-SQL pairs
+            {t('page.manageQuestionSqlPairs')}
           </>
         }
         titleExtra={
@@ -139,21 +141,19 @@ export default function ManageQuestionSQLPairs() {
             className=""
             onClick={() => questionSqlPairModal.openModal()}
           >
-            Add question-SQL pair
+            {t('page.addQuestionSqlPair')}
           </Button>
         }
         description={
           <>
-            On this page, you can manage your saved question-SQL pairs. These
-            pairs help Wren AI learn how your organization writes SQL, allowing
-            it to generate queries that better align with your expectations.{' '}
+            {t('page.questionSqlDescription')}{' '}
             <Link
               className="gray-8 underline"
               href="https://docs.getwren.ai/oss/guide/knowledge/question-sql-pairs"
               rel="noopener noreferrer"
               target="_blank"
             >
-              Learn more.
+              {t('common.learnMore')}
             </Link>
           </>
         }

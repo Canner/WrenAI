@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { isEmpty } from 'lodash';
 import { message } from 'antd';
+import { useTranslations } from 'next-intl';
 import { Path } from '@/utils/enum';
 import useHomeSidebar from '@/hooks/useHomeSidebar';
 import SiderLayout from '@/components/layouts/SiderLayout';
@@ -58,7 +59,7 @@ const getThreadResponseIsFinished = (threadResponse: ThreadResponse) => {
   let isAnswerFinished = isBreakdownOnly ? null : false;
   let isChartFinished = null;
 
-  // answerDetail status can be FAILED before getting queryId from Wren AI adapter
+  // answerDetail status can be FAILED before getting queryId from Kernel IQ adapter
   if (answerDetail?.queryId || answerDetail?.status) {
     isAnswerFinished = getAnswerIsFinished(answerDetail?.status);
   }
@@ -73,6 +74,7 @@ const getThreadResponseIsFinished = (threadResponse: ThreadResponse) => {
 export default function HomeThread() {
   const $prompt = useRef<ComponentRef<typeof Prompt>>(null);
   const router = useRouter();
+  const t = useTranslations();
   const params = useParams();
   const homeSidebar = useHomeSidebar();
   const threadId = useMemo(() => Number(params?.id) || null, [params]);
@@ -88,7 +90,7 @@ export default function HomeThread() {
 
   const [createViewMutation, { loading: creating }] = useCreateViewMutation({
     onError: (error) => console.error(error),
-    onCompleted: () => message.success('Successfully created view.'),
+    onCompleted: () => message.success(t('toasts.viewCreated')),
   });
 
   const { data, updateQuery: updateThreadQuery } = useThreadQuery({
@@ -116,7 +118,7 @@ export default function HomeThread() {
     useUpdateThreadResponseMutation({
       onError: (error) => console.error(error),
       onCompleted: (data) => {
-        message.success('Successfully updated the SQL statement');
+        message.success(t('toasts.sqlUpdated'));
         // trigger generate answer after sql statement updated
         onGenerateThreadResponseAnswer(data.updateThreadResponse.id);
       },
@@ -168,7 +170,7 @@ export default function HomeThread() {
       awaitRefetchQueries: true,
       onError: (error) => console.error(error),
       onCompleted: () => {
-        message.success('Successfully created question-sql pair.');
+        message.success(t('toasts.questionSqlPairCreated'));
       },
     });
 

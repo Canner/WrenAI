@@ -1,4 +1,5 @@
 import { Button, Form, Input, Modal, Typography } from 'antd';
+import { useTranslations } from 'next-intl';
 import InfoCircleOutlined from '@ant-design/icons/InfoCircleOutlined';
 import { ModalAction } from '@/hooks/useModalAction';
 import { createViewNameValidator } from '@/utils/validator';
@@ -15,6 +16,7 @@ type Props = ModalAction<{ sql: string }> & {
 
 export default function SaveAsViewModal(props: Props) {
   const { visible, loading, onSubmit, onClose, defaultValue, payload } = props;
+  const t = useTranslations();
   const [form] = Form.useForm();
   const [validateViewMutation] = useValidateViewMutation({
     fetchPolicy: 'no-cache',
@@ -38,7 +40,7 @@ export default function SaveAsViewModal(props: Props) {
 
   return (
     <Modal
-      title="Save as View"
+      title={t('saveAsView.title')}
       centered
       closable
       destroyOnClose
@@ -55,14 +57,13 @@ export default function SaveAsViewModal(props: Props) {
           >
             <InfoCircleOutlined className="mr-2 text-sm gray-6" />
             <Text type="secondary" className="text-sm gray-6 text-left">
-              After saving, make sure you go to "Modeling Page" to deploy all
-              saved views.
+              {t('saveAsView.hint')}
             </Text>
           </div>
           <div>
-            <Button onClick={onClose}>Cancel</Button>
+            <Button onClick={onClose}>{t('actions.cancel')}</Button>
             <Button type="primary" onClick={submit} loading={loading}>
-              Save
+              {t('actions.save')}
             </Button>
           </div>
         </div>
@@ -70,7 +71,7 @@ export default function SaveAsViewModal(props: Props) {
     >
       <Form form={form} preserve={false} layout="vertical">
         <Form.Item
-          label="Name"
+          label={t('saveAsView.name')}
           name="name"
           required
           rules={[
@@ -82,7 +83,7 @@ export default function SaveAsViewModal(props: Props) {
         >
           <Input />
         </Form.Item>
-        <Form.Item label="SQL Statement">
+        <Form.Item label={t('saveAsView.sqlStatement')}>
           <SQLCodeBlock code={sql} showLineNumbers maxHeight="300" />
         </Form.Item>
       </Form>

@@ -2,6 +2,7 @@ import { useRouter } from 'next/router';
 import Image from 'next/image';
 import { useEffect, useMemo } from 'react';
 import { Button, Form, Modal, message, Alert } from 'antd';
+import { useTranslations } from 'next-intl';
 import { makeIterable } from '@/utils/iteration';
 import { DATA_SOURCES, FORM_MODE, Path } from '@/utils/enum';
 import { getDataSource, getTemplates } from '@/components/pages/setup/utils';
@@ -32,6 +33,7 @@ interface Props {
 const SampleDatasetIterator = makeIterable(ButtonItem);
 
 const SampleDatasetPanel = (props: Props) => {
+  const t = useTranslations();
   const router = useRouter();
   const { sampleDataset, closeModal } = props;
   const templates = getTemplates();
@@ -49,9 +51,11 @@ const SampleDatasetPanel = (props: Props) => {
     if (!isCurrentTemplate) {
       const template = templates.find((item) => item.value === name);
       Modal.confirm({
-        title: `Are you sure you want to change to "${template.label}" dataset?`,
+        title: t('dataSourceSettings.changeSampleDatasetConfirm', {
+          name: template.label,
+        }),
         okButtonProps: { danger: true },
-        okText: 'Change',
+        okText: t('settings.change'),
         onOk: async () => {
           await startSampleDataset({ variables: { data: { name } } });
         },
@@ -61,7 +65,7 @@ const SampleDatasetPanel = (props: Props) => {
 
   return (
     <>
-      <div className="mb-2">Change sample dataset</div>
+      <div className="mb-2">{t('dataSourceSettings.changeSampleDataset')}</div>
       <div className="d-grid grid-columns-3 g-4">
         <SampleDatasetIterator
           data={templates}
@@ -70,14 +74,14 @@ const SampleDatasetPanel = (props: Props) => {
         />
       </div>
       <div className="gray-6 mt-1">
-        Please be aware that choosing another sample dataset will delete all
-        thread records in the Home page.
+        {t('dataSourceSettings.changeSampleDatasetWarning')}
       </div>
     </>
   );
 };
 
 const DataSourcePanel = (props: Props) => {
+  const t = useTranslations();
   const { type, properties, refetchSettings } = props;
 
   const current = getDataSource(type as unknown as DATA_SOURCES);
@@ -87,7 +91,7 @@ const DataSourcePanel = (props: Props) => {
     onError: (error) => console.error(error),
     onCompleted: async () => {
       refetchSettings();
-      message.success('Successfully update data source.');
+      message.success(t('toasts.dataSourceUpdated'));
     },
   });
 
@@ -143,7 +147,7 @@ const DataSourcePanel = (props: Props) => {
 
         <div className="py-2 text-right">
           <Button className="mr-2" style={{ width: 80 }} onClick={reset}>
-            Cancel
+            {t('actions.cancel')}
           </Button>
           <Button
             type="primary"
@@ -151,7 +155,7 @@ const DataSourcePanel = (props: Props) => {
             onClick={submit}
             loading={loading}
           >
-            Save
+            {t('actions.save')}
           </Button>
         </div>
       </Form>

@@ -3,6 +3,7 @@ import dynamic from 'next/dynamic';
 import styled from 'styled-components';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Form, Button, Skeleton, Modal, message } from 'antd';
+import { useTranslations } from 'next-intl';
 import { attachLoading } from '@/utils/helper';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import BasicProperties from '@/components/chart/properties/BasicProperties';
@@ -78,6 +79,7 @@ const getDynamicProperties = (chartType: ChartType) => {
 };
 
 export default function ChartAnswer(props: AnswerResultProps) {
+  const t = useTranslations();
   const { onGenerateChartAnswer, onAdjustChartAnswer } = usePromptThreadStore();
   const { threadResponse } = props;
   const [regenerating, setRegenerating] = useState(false);
@@ -96,7 +98,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
   const [createDashboardItem] = useCreateDashboardItemMutation({
     onError: (error) => console.error(error),
     onCompleted: () => {
-      message.success('Successfully pinned chart to dashboard.');
+      message.success(t('toasts.chartPinned'));
     },
   });
 
@@ -169,7 +171,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
 
   const onReload = () => {
     Modal.confirm({
-      title: 'Are you sure you want to regenerate the chart?',
+      title: t('chart.regenerateConfirmTitle'),
       onOk: onRegenerate,
     });
   };
@@ -180,8 +182,8 @@ export default function ChartAnswer(props: AnswerResultProps) {
 
   const onPin = () => {
     Modal.confirm({
-      title: 'Are you sure you want to pin this chart to the dashboard?',
-      okText: 'Save',
+      title: t('chart.pinConfirmTitle'),
+      okText: t('actions.save'),
       onOk: async () =>
         await createDashboardItem({
           variables: {
@@ -211,7 +213,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
   const regenerateBtn = (
     <div className="text-center mt-4">
       <Button icon={<ReloadOutlined />} onClick={onReload}>
-        Regenerate
+        {t('chart.regenerate')}
       </Button>
     </div>
   );
@@ -266,14 +268,14 @@ export default function ChartAnswer(props: AnswerResultProps) {
                   {isAdjusted && (
                     <div className="d-flex flex-column">
                       <Button className="ml-4 mb-2" onClick={onResetAdjustment}>
-                        Reset
+                        {t('actions.reset')}
                       </Button>
                       <Button
                         className="ml-4"
                         type="primary"
                         onClick={onAdjustChart}
                       >
-                        Adjust
+                        {t('chart.adjust')}
                       </Button>
                     </div>
                   )}

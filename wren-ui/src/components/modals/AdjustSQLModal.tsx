@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Alert, Button, Form, Modal, Typography } from 'antd';
+import { useTranslations } from 'next-intl';
 import InfoCircleOutlined from '@ant-design/icons/InfoCircleOutlined';
 import { ERROR_TEXTS } from '@/utils/error';
 import { ModalAction } from '@/hooks/useModalAction';
@@ -20,6 +21,7 @@ type Props = ModalAction<AdjustSQLFormValues, AdjustSQLFormValues> & {
 
 export default function AdjustSQLModal(props: Props) {
   const { defaultValue, loading, onClose, onSubmit, visible } = props;
+  const t = useTranslations();
 
   const [form] = Form.useForm();
   const [error, setError] =
@@ -62,7 +64,7 @@ export default function AdjustSQLModal(props: Props) {
 
   const handleError = (error) => {
     const graphQLError = parseGraphQLError(error);
-    setError({ ...graphQLError, shortMessage: 'Invalid SQL syntax' });
+    setError({ ...graphQLError, shortMessage: t('sql.invalidSyntax') });
     console.error(graphQLError);
   };
 
@@ -119,7 +121,7 @@ export default function AdjustSQLModal(props: Props) {
 
   return (
     <Modal
-      title="Adjust SQL"
+      title={t('adjustSql.title')}
       centered
       closable
       confirmLoading={confirmLoading}
@@ -143,25 +145,25 @@ export default function AdjustSQLModal(props: Props) {
               className="text-sm gray-7 text-left"
             >
               The SQL statement used here follows <b>Wren SQL</b>, which is
-              based on ANSI SQL and optimized for Wren AI.{` `}
+              {t('sql.wrenSqlDescription')}{` `}
               <Typography.Link
                 type="secondary"
                 href="https://docs.getwren.ai/oss/guide/home/wren_sql"
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Learn more about the syntax.
+                {t('sql.learnSyntax')}
               </Typography.Link>
             </Typography.Text>
           </div>
           <div>
-            <Button onClick={onClose}>Cancel</Button>
+            <Button onClick={onClose}>{t('actions.cancel')}</Button>
             <Button
               type="primary"
               onClick={onSubmitButton}
               loading={confirmLoading}
             >
-              Submit
+              {t('actions.submit')}
             </Button>
           </div>
         </div>
@@ -169,7 +171,7 @@ export default function AdjustSQLModal(props: Props) {
     >
       <Form form={form} preserve={false} layout="vertical">
         <Form.Item
-          label="SQL statement"
+          label={t('page.sqlStatement')}
           name="sql"
           required
           rules={[
@@ -184,14 +186,14 @@ export default function AdjustSQLModal(props: Props) {
       </Form>
       <div className="my-3">
         <Typography.Text className="d-block gray-7 mb-2">
-          Data preview (50 rows)
+          {t('sql.dataPreview50')}
         </Typography.Text>
         <Button
           onClick={onPreviewData}
           loading={previewing}
           disabled={disabled}
         >
-          Preview data
+          {t('sql.previewData')}
         </Button>
         {showPreview && (
           <div className="my-3">

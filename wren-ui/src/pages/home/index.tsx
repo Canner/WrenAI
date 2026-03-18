@@ -1,6 +1,7 @@
 import { ComponentRef, useMemo, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { Button, Typography } from 'antd';
+import { useTranslations } from 'next-intl';
 import { Logo } from '@/components/Logo';
 import { Path } from '@/utils/enum';
 import SiderLayout from '@/components/layouts/SiderLayout';
@@ -17,10 +18,13 @@ import {
 } from '@/apollo/client/graphql/home.generated';
 import { useGetSettingsQuery } from '@/apollo/client/graphql/settings.generated';
 import { CreateThreadInput } from '@/apollo/client/graphql/__types__';
+import { pushWithLocale } from '@/i18n/navigation';
 
 const { Text } = Typography;
 
 const Wrapper = ({ children }) => {
+  const t = useTranslations();
+
   return (
     <div
       className="d-flex align-center justify-center flex-column"
@@ -28,7 +32,7 @@ const Wrapper = ({ children }) => {
     >
       <Logo size={48} color="var(--gray-8)" />
       <div className="text-md text-medium gray-8 mt-3">
-        Know more about your data
+        {t('home.knowMore')}
       </div>
       {children}
     </div>
@@ -47,6 +51,7 @@ const SampleQuestionsInstruction = (props) => {
 
 function RecommendedQuestionsInstruction(props) {
   const { onSelect, loading } = props;
+  const t = useTranslations();
 
   const {
     buttonProps,
@@ -73,14 +78,14 @@ function RecommendedQuestionsInstruction(props) {
       <Button className="mt-6" {...buttonProps} />
       {generating && (
         <Text className="mt-3 text-sm gray-6">
-          Thinking of good questions for you... (about 1 minute)
+          {t('home.thinkingQuestions')}
         </Text>
       )}
       {!generating && showRetry && (
         <Text className="mt-3 text-sm gray-6 text-center">
-          We couldn't think of questions right now.
+          {t('home.retryQuestions')}
           <br />
-          Let's try again later.
+          {t('home.retryQuestionsLater')}
         </Text>
       )}
     </Wrapper>
@@ -126,7 +131,7 @@ export default function Home() {
       const response = await createThread({ variables: { data: payload } });
       const threadId = response.data.createThread.id;
       await preloadThread({ variables: { threadId } });
-      router.push(Path.Home + `/${threadId}`);
+      await pushWithLocale(router, Path.Home + `/${threadId}`);
     } catch (error) {
       console.error(error);
     }

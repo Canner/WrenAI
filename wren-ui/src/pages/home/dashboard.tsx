@@ -1,5 +1,6 @@
 import { useMemo, useRef } from 'react';
 import { message } from 'antd';
+import { useTranslations } from 'next-intl';
 import { Path } from '@/utils/enum';
 import { useRouter } from 'next/router';
 import SiderLayout from '@/components/layouts/SiderLayout';
@@ -34,6 +35,7 @@ const isSupportCachedSettings = (dataSource: DataSource) => {
 
 export default function Dashboard() {
   const router = useRouter();
+  const t = useTranslations();
   const dashboardGridRef = useRef<{ onRefreshAll: () => void }>(null);
   const homeSidebar = useHomeSidebar();
   const cacheSettingsDrawer = useDrawerAction();
@@ -51,7 +53,7 @@ export default function Dashboard() {
   } = useDashboardQuery({
     fetchPolicy: 'cache-and-network',
     onError: () => {
-      message.error('Failed to fetch dashboard items.');
+      message.error(t('toasts.dashboardFetchFailed'));
       router.push(Path.Home);
     },
   });
@@ -63,20 +65,20 @@ export default function Dashboard() {
   const [setDashboardSchedule] = useSetDashboardScheduleMutation({
     refetchQueries: ['Dashboard'],
     onCompleted: () => {
-      message.success('Successfully updated dashboard schedule.');
+      message.success(t('toasts.dashboardScheduleUpdated'));
     },
     onError: (error) => console.error(error),
   });
 
   const [updateDashboardItemLayouts] = useUpdateDashboardItemLayoutsMutation({
     onError: () => {
-      message.error('Failed to update dashboard item layouts.');
+      message.error(t('toasts.dashboardLayoutUpdateFailed'));
     },
   });
   const [deleteDashboardItem] = useDeleteDashboardItemMutation({
     onError: (error) => console.error(error),
     onCompleted: (_, query) => {
-      message.success('Successfully deleted dashboard item.');
+      message.success(t('toasts.dashboardItemDeleted'));
       onRemoveDashboardItemFromQueryCache(query.variables.where.id);
     },
   });

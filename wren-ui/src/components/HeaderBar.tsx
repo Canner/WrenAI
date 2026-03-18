@@ -1,9 +1,11 @@
 import { useRouter } from 'next/router';
 import { Button, Layout, Space } from 'antd';
 import styled from 'styled-components';
+import { useTranslations } from 'next-intl';
 import LogoBar from '@/components/LogoBar';
 import { Path } from '@/utils/enum';
 import Deploy from '@/components/deploy/Deploy';
+import { pushWithLocale } from '@/i18n/navigation';
 
 const { Header } = Layout;
 
@@ -33,6 +35,7 @@ const StyledHeader = styled(Header)`
 
 export default function HeaderBar() {
   const router = useRouter();
+  const t = useTranslations();
   const { pathname } = router;
   const showNav = !pathname.startsWith(Path.Onboarding);
   const isModeling = pathname.startsWith(Path.Modeling);
@@ -51,33 +54,35 @@ export default function HeaderBar() {
                 shape="round"
                 size="small"
                 $isHighlight={pathname.startsWith(Path.Home)}
-                onClick={() => router.push(Path.Home)}
+                onClick={() => pushWithLocale(router, Path.Home)}
               >
-                Home
+                {t('nav.home')}
               </StyledButton>
               <StyledButton
                 shape="round"
                 size="small"
                 $isHighlight={pathname.startsWith(Path.Modeling)}
-                onClick={() => router.push(Path.Modeling)}
+                onClick={() => pushWithLocale(router, Path.Modeling)}
               >
-                Modeling
+                {t('nav.modeling')}
               </StyledButton>
               <StyledButton
                 shape="round"
                 size="small"
                 $isHighlight={pathname.startsWith(Path.Knowledge)}
-                onClick={() => router.push(Path.KnowledgeQuestionSQLPairs)}
+                onClick={() =>
+                  pushWithLocale(router, Path.KnowledgeQuestionSQLPairs)
+                }
               >
-                Knowledge
+                {t('nav.knowledge')}
               </StyledButton>
               <StyledButton
                 shape="round"
                 size="small"
                 $isHighlight={pathname.startsWith(Path.APIManagement)}
-                onClick={() => router.push(Path.APIManagementHistory)}
+                onClick={() => pushWithLocale(router, Path.APIManagementHistory)}
               >
-                API
+                {t('nav.api')}
               </StyledButton>
             </Space>
           )}

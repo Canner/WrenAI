@@ -1,0 +1,134 @@
+{
+  "app": {
+    "title": "Kernel IQ"
+  },
+  "nav": {
+    "home": "Accueil",
+    "modeling": "Modélisation",
+    "knowledge": "Connaissances",
+    "api": "API"
+  },
+  "home": {
+    "knowMore": "Explorez davantage vos données",
+    "thinkingQuestions": "Recherche de questions pertinentes pour vous... (environ 1 minute)",
+    "retryQuestions": "Impossible de générer des questions pour le moment.",
+    "retryQuestionsLater": "Veuillez réessayer plus tard.",
+    "dashboard": "Tableau de bord"
+  },
+  "knowledge": {
+    "questionSqlPairs": "Paires Question-SQL",
+    "instructions": "Instructions"
+  },
+  "common": {
+    "learnMore": "En savoir plus."
+  },
+  "actions": {
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "reset": "Réinitialiser",
+    "submit": "Valider"
+  },
+  "settings": {
+    "change": "Modifier"
+  },
+  "chart": {
+    "regenerate": "Régénérer",
+    "adjust": "Ajuster",
+    "regenerateConfirmTitle": "Voulez-vous vraiment régénérer ce graphique ?",
+    "pinConfirmTitle": "Voulez-vous vraiment ajouter ce graphique au tableau de bord ?"
+  },
+  "sql": {
+    "wrenSql": "Wren SQL",
+    "wrenSqlLead": "La requête SQL utilisée ici suit",
+    "wrenSqlDescription": "la norme ANSI SQL et est optimisée pour Kernel IQ.",
+    "learnSyntax": "En savoir plus sur la syntaxe.",
+    "previewData": "Aperçu des données",
+    "dataPreview50": "Aperçu des données (50 lignes)",
+    "invalidSyntax": "Syntaxe SQL invalide",
+    "importFromDataSource": "Importer depuis le SQL de {name}"
+  },
+  "saveAsView": {
+    "title": "Enregistrer comme vue",
+    "hint": "Après l'enregistrement, allez dans la page « Modélisation » pour déployer toutes les vues enregistrées.",
+    "name": "Nom",
+    "sqlStatement": "Requête SQL"
+  },
+  "adjustSql": {
+    "title": "Modifier le SQL"
+  },
+  "instructionModal": {
+    "addTitle": "Ajouter une instruction",
+    "updateTitle": "Modifier une instruction",
+    "instructionPlaceholder": "Saisissez une règle que Kernel IQ devra suivre lors de la génération des requêtes SQL.",
+    "applyTo": "Appliquer l’instruction à",
+    "allQueries": "toutes les requêtes",
+    "or": "ou",
+    "onlyWhenSimilarDetected": "uniquement lorsque des questions similaires sont détectées",
+    "globalOption": "Global (s’applique à toutes les questions)",
+    "matchedOption": "Associé à des questions spécifiques",
+    "matchingQuestionsHelp": "Kernel IQ analysera les requêtes utilisateur par similarité et appliquera cette instruction lorsque c’est pertinent.",
+    "questionPlaceholder": "Saisissez un exemple de question qui doit déclencher cette instruction.",
+    "addQuestion": "Ajouter une question"
+  },
+  "questionSqlPairModal": {
+    "addTitle": "Ajouter une paire Question-SQL",
+    "updateTitle": "Modifier une paire Question-SQL",
+    "generateQuestionHint": "Laissez l’IA générer une question correspondant à cette requête SQL.",
+    "generateQuestion": "Générer une question"
+  },
+  "calculatedFieldModal": {
+    "addTitle": "Ajouter un champ calculé",
+    "updateTitle": "Modifier un champ calculé",
+    "primaryKeyGuide": "Comment définir une clé primaire dans un modèle.",
+    "selectExpression": "Sélectionner une expression"
+  },
+  "projectSettings": {
+    "projectLanguage": "Langue du projet",
+    "projectLanguageHelp": "Ce paramètre détermine la langue utilisée par l’IA pour vous répondre.",
+    "selectLanguage": "Choisir une langue",
+    "resetProject": "Réinitialiser le projet",
+    "resetWarning": "Attention : la réinitialisation supprimera tous les paramètres et enregistrements actuels, y compris ceux des pages Modélisation et Accueil.",
+    "resetConfirmTitle": "Voulez-vous vraiment réinitialiser le projet ?"
+  },
+  "dataSourceSettings": {
+    "changeSampleDataset": "Changer le jeu de données d’exemple",
+    "changeSampleDatasetWarning": "Attention : choisir un autre jeu de données supprimera toutes les discussions de la page Accueil.",
+    "changeSampleDatasetConfirm": "Voulez-vous vraiment passer au jeu de données « {name} » ?"
+  },
+  "toasts": {
+    "viewCreated": "Vue créée avec succès.",
+    "sqlUpdated": "Requête SQL mise à jour avec succès.",
+    "questionSqlPairCreated": "Paire Question-SQL créée avec succès.",
+    "calculatedFieldCreated": "Champ calculé créé avec succès.",
+    "calculatedFieldUpdated": "Champ calculé mis à jour avec succès.",
+    "calculatedFieldDeleted": "Champ calculé supprimé avec succès.",
+    "modelCreated": "Modèle créé avec succès.",
+    "modelDeleted": "Modèle supprimé avec succès.",
+    "modelUpdated": "Modèle mis à jour avec succès.",
+    "viewDeleted": "Vue supprimée avec succès.",
+    "modelMetadataUpdated": "Métadonnées du modèle mises à jour.",
+    "relationshipCreated": "Relation créée avec succès.",
+    "relationshipDeleted": "Relation supprimée avec succès.",
+    "relationshipUpdated": "Relation mise à jour avec succès.",
+    "viewMetadataUpdated": "Métadonnées de la vue mises à jour.",
+    "questionSqlPairDeleted": "Paire Question-SQL supprimée.",
+    "questionSqlPairUpdated": "Paire Question-SQL mise à jour.",
+    "instructionCreated": "Instruction créée avec succès.",
+    "instructionUpdated": "Instruction mise à jour avec succès.",
+    "instructionDeleted": "Instruction supprimée avec succès.",
+    "dashboardFetchFailed": "Impossible de récupérer les éléments du tableau de bord.",
+    "dashboardScheduleUpdated": "Planification du tableau de bord mise à jour.",
+    "dashboardLayoutUpdateFailed": "Échec de la mise à jour de la disposition des éléments du tableau de bord.",
+    "dashboardItemDeleted": "Élément du tableau de bord supprimé.",
+    "projectLanguageUpdated": "Langue du projet mise à jour.",
+    "dataSourceUpdated": "Source de données mise à jour.",
+    "chartPinned": "Graphique ajouté au tableau de bord.",
+    "schemaChangeDetected": "Modification du schéma détectée.",
+    "noSchemaChange": "Aucune modification du schéma.",
+    "sourceTableDeletedResolved": "Suppression de la table source résolue avec succès.",
+    "sourceColumnDeletedResolved": "Suppression de la colonne source résolue avec succès."
+  },
+  "modeling": {
+    "title": "Modélisation"
+  }
+}

@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Button, Form, Input, Modal, Row, Col, Radio } from 'antd';
+import { useTranslations } from 'next-intl';
 import DeleteOutlined from '@ant-design/icons/DeleteOutlined';
 import PlusOutlined from '@ant-design/icons/PlusOutlined';
 import { isEmpty } from 'lodash';
@@ -16,6 +17,7 @@ type Props = ModalAction<Instruction> & {
 
 export default function InstructionModal(props: Props) {
   const { defaultValue, formMode, loading, onClose, onSubmit, visible } = props;
+  const t = useTranslations();
 
   const isCreateMode = formMode === FORM_MODE.CREATE;
 
@@ -49,7 +51,11 @@ export default function InstructionModal(props: Props) {
 
   return (
     <Modal
-      title={`${isCreateMode ? 'Add' : 'Update'} an instruction`}
+      title={
+        isCreateMode
+          ? t('instructionModal.addTitle')
+          : t('instructionModal.updateTitle')
+      }
       centered
       closable
       confirmLoading={loading}
@@ -59,13 +65,13 @@ export default function InstructionModal(props: Props) {
       visible={visible}
       width={720}
       cancelButtonProps={{ disabled: loading }}
-      okText="Submit"
+      okText={t('actions.submit')}
       onOk={onSubmitButton}
       afterClose={() => form.resetFields()}
     >
       <Form form={form} preserve={false} layout="vertical">
         <Form.Item
-          label="Instruction details"
+          label={t('page.instructionDetails')}
           name="instruction"
           rules={[
             {
@@ -76,14 +82,14 @@ export default function InstructionModal(props: Props) {
         >
           <Input.TextArea
             autoFocus
-            placeholder="Enter a rule that Wren AI should follow when generating SQL queries."
+            placeholder={t('instructionModal.instructionPlaceholder')}
             maxLength={1000}
             rows={3}
             showCount
           />
         </Form.Item>
         <Form.Item
-          label="Apply instruction to"
+          label={t('instructionModal.applyTo')}
           name="isDefault"
           required={false}
           rules={[
@@ -95,9 +101,10 @@ export default function InstructionModal(props: Props) {
           extra={
             <>
               Choose whether this instruction applies to{' '}
-              <span className="gray-7">all queries</span> or{' '}
+              <span className="gray-7">{t('instructionModal.allQueries')}</span>{' '}
+              {t('instructionModal.or')}{' '}
               <span className="gray-7">
-                only when similar user questions are detected
+                {t('instructionModal.onlyWhenSimilarDetected')}
               </span>
               .
             </>
@@ -105,18 +112,18 @@ export default function InstructionModal(props: Props) {
         >
           <Radio.Group>
             <Radio.Button value={true}>
-              Global (applies to all questions)
+              {t('instructionModal.globalOption')}
             </Radio.Button>
             <Radio.Button value={false}>
-              Matched to specific questions
+              {t('instructionModal.matchedOption')}
             </Radio.Button>
           </Radio.Group>
         </Form.Item>
         {!isDefault && (
           <Form.Item
-            label="Matching questions"
+            label={t('page.matchingQuestions')}
             required
-            extra="Wren AI will match user queries based on similarity and apply this instruction when relevant."
+            extra={t('instructionModal.matchingQuestionsHelp')}
           >
             <Form.List name="questions" initialValue={['']}>
               {(fields, { add, remove }) => (
@@ -140,7 +147,9 @@ export default function InstructionModal(props: Props) {
                           ]}
                         >
                           <Input
-                            placeholder="Enter an example question that should trigger this instruction."
+                            placeholder={t(
+                              'instructionModal.questionPlaceholder',
+                            )}
                             maxLength={100}
                             showCount
                           />
@@ -167,7 +176,7 @@ export default function InstructionModal(props: Props) {
                       disabled={fields.length >= MAX_QUESTIONS}
                       className="mb-1"
                     >
-                      Add a question
+                      {t('instructionModal.addQuestion')}
                     </Button>
                   </Form.Item>
                 </>

@@ -1,5 +1,6 @@
 import { Button, Modal, Select, Row, Col, Form, message } from 'antd';
 import { useRouter } from 'next/router';
+import { useTranslations } from 'next-intl';
 import { Path } from '@/utils/enum';
 import {
   useResetCurrentProjectMutation,
@@ -15,6 +16,7 @@ interface Props {
 export default function ProjectSettings(props: Props) {
   const { data } = props;
   const router = useRouter();
+  const t = useTranslations();
   const [form] = Form.useForm();
   const [resetCurrentProject, { client }] = useResetCurrentProjectMutation({
     onError: (error) => console.error(error),
@@ -27,15 +29,15 @@ export default function ProjectSettings(props: Props) {
     refetchQueries: ['GetSettings'],
     onError: (error) => console.error(error),
     onCompleted: () => {
-      message.success('Successfully updated project language.');
+      message.success(t('toasts.projectLanguageUpdated'));
     },
   });
 
   const reset = () => {
     Modal.confirm({
-      title: 'Are you sure you want to reset?',
+      title: t('projectSettings.resetConfirmTitle'),
       okButtonProps: { danger: true },
-      okText: 'Reset',
+      okText: t('actions.reset'),
       onOk: async () => {
         await resetCurrentProject();
         client.clearStore();
@@ -61,14 +63,14 @@ export default function ProjectSettings(props: Props) {
         initialValues={{ language: data.language }}
       >
         <Form.Item
-          label="Project language"
-          extra="This setting will affect the language in which the AI responds to you."
+          label={t('projectSettings.projectLanguage')}
+          extra={t('projectSettings.projectLanguageHelp')}
         >
           <Row gutter={16} wrap={false}>
             <Col className="flex-grow-1">
               <Form.Item name="language" noStyle>
                 <Select
-                  placeholder="Select a language"
+                  placeholder={t('projectSettings.selectLanguage')}
                   showSearch
                   options={languageOptions}
                 />
@@ -81,19 +83,18 @@ export default function ProjectSettings(props: Props) {
                 onClick={submit}
                 loading={loading}
               >
-                Save
+                {t('actions.save')}
               </Button>
             </Col>
           </Row>
         </Form.Item>
       </Form>
-      <div className="gray-8 mb-2">Reset project</div>
+      <div className="gray-8 mb-2">{t('projectSettings.resetProject')}</div>
       <Button type="primary" style={{ width: 70 }} danger onClick={reset}>
-        Reset
+        {t('actions.reset')}
       </Button>
       <div className="gray-6 mt-1">
-        Please be aware that resetting will delete all current settings and
-        records, including those in the Modeling Page and Home Page threads.
+        {t('projectSettings.resetWarning')}
       </div>
     </div>
   );

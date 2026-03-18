@@ -30,8 +30,10 @@ export default class AppDocument extends Document {
   }
 
   render() {
+    const locale = this.props.__NEXT_DATA__.locale || 'en';
+
     return (
-      <Html>
+      <Html lang={locale}>
         <Head>{this.props.styles}</Head>
         <body>
           <Main />
