@@ -15,5 +15,18 @@
       "Bash(ls:*)",
       "Bash(wc:*)"
     ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx block-no-verify@1.1.2"
+          }
+        ]
+      }
+    ]
   }
 }
