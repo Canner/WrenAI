@@ -92,14 +92,10 @@ export class InstructionResolver {
 
   public getInstructionNestedResolver = () => ({
     createdAt: (instruction: Instruction) => {
-      return instruction.createdAt
-        ? new Date(instruction.createdAt).toISOString()
-        : null;
+      return new Date(instruction.createdAt).toISOString();
     },
     updatedAt: (instruction: Instruction) => {
-      return instruction.updatedAt
-        ? new Date(instruction.updatedAt).toISOString()
-        : null;
+      return new Date(instruction.updatedAt).toISOString();
     },
   });
 }
