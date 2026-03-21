@@ -89,4 +89,17 @@ export class InstructionResolver {
     await ctx.instructionService.deleteInstruction(id, project.id);
     return true;
   }
+
+  public getInstructionNestedResolver = () => ({
+    createdAt: (instruction: Instruction) => {
+      return instruction.createdAt
+        ? new Date(instruction.createdAt).toISOString()
+        : null;
+    },
+    updatedAt: (instruction: Instruction) => {
+      return instruction.updatedAt
+        ? new Date(instruction.updatedAt).toISOString()
+        : null;
+    },
+  });
 }
