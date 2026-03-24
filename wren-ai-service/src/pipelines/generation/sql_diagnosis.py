@@ -92,7 +92,10 @@ async def generate_sql_diagnosis(
 async def post_process(
     generate_sql_diagnosis: dict,
 ) -> str:
-    return orjson.loads(generate_sql_diagnosis.get("replies")[0])
+    reply = generate_sql_diagnosis.get("replies", [""])[0]
+    if not reply or not reply.strip():
+        return {"reasoning": "LLM did not return any response."}
+    return orjson.loads(reply)
 
 
 ## End of Pipeline
