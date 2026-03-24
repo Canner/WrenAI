@@ -101,8 +101,7 @@ class LitellmLLMProvider(LLMProvider):
 
             generation_kwargs = {
                 **combined_generation_kwargs,
-                **(generation_kwargs or {}),
-                
+                **(generation_kwargs or {}),                
             }
             # Strip response_format with type=json_schema — only supported by OpenAI
             # native models. Custom api_base models (e.g. Ollama, LiteLLM proxy with

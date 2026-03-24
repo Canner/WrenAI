@@ -91,7 +91,7 @@ async def generate_sql_diagnosis(
 @observe(capture_input=False)
 async def post_process(
     generate_sql_diagnosis: dict,
-) -> str:
+) -> dict:
     reply = generate_sql_diagnosis.get("replies", [""])[0]
     if not reply or not reply.strip():
         return {"reasoning": "LLM did not return any response."}
