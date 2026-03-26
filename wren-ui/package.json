@@ -106,7 +106,8 @@
     "vega-selections": "6.1.2",
     "vega-functions": "6.1.1",
     "fast-xml-parser": "4.5.4",
-    "lodash": "4.17.23"
+    "lodash": "4.17.23",
+    "minimatch": "4.2.5"
   },
   "_moduleAliases": {
     "@server": "src/apollo/server"
