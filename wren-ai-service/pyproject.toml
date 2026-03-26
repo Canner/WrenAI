@@ -19,7 +19,7 @@ backoff = "^2.2.1"
 tqdm = "^4.66.4"
 numpy = "^1.26.4"
 sqlparse = "^0.5.4"
-orjson = "^3.11.5"
+orjson = "^3.11.6"
 sf-hamilton = {version = "^1.69.0"}
 aiohttp = {extras = ["speedups"], version = "^3.13.3"}
 ollama-haystack = "^0.0.6"
