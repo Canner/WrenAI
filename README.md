@@ -130,7 +130,7 @@ WrenAI is a full-stack AI system with interesting problems at every layer — se
 
 Some areas where contributions tend to have the most impact across both repos:
 
-- **Data source connectors** — ibis-server supports 15+ sources; new connectors are always useful
+- **Data source connectors** — wren-engine supports 15+ sources; new connectors are always useful
 - **MCP integration** — wren-engine exposes an MCP server; agent-native workflows are still early and evolving
 - **SQL generation quality** — prompt engineering, correction loop heuristics, and eval harnesses in wren-ai-service
 - **Semantic layer tooling** — MDL schema inference, validation, and developer ergonomics in wren-ui
