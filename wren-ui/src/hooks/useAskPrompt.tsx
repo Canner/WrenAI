@@ -42,17 +42,24 @@ export const canGenerateAnswer = (
   adjustmentTask: AdjustmentTask,
 ) =>
   (askingTask === null && adjustmentTask === null) ||
-  askingTask?.status === AskingTaskStatus.FINISHED ||
+  (askingTask?.status === AskingTaskStatus.FINISHED &&
+    askingTask?.type !== AskingTaskType.SKILL) ||
   adjustmentTask?.status === AskingTaskStatus.FINISHED;
 
 export const canFetchThreadResponse = (askingTask: AskingTask) =>
   askingTask !== null &&
   askingTask?.status !== AskingTaskStatus.FAILED &&
-  askingTask?.status !== AskingTaskStatus.STOPPED;
+  askingTask?.status !== AskingTaskStatus.STOPPED &&
+  !(
+    askingTask?.type === AskingTaskType.SKILL &&
+    askingTask?.status === AskingTaskStatus.FINISHED
+  );
 
 export const isReadyToThreadResponse = (askingTask: AskingTask) =>
-  askingTask?.status === AskingTaskStatus.SEARCHING &&
-  askingTask?.type === AskingTaskType.TEXT_TO_SQL;
+  (askingTask?.status === AskingTaskStatus.SEARCHING &&
+    askingTask?.type === AskingTaskType.TEXT_TO_SQL) ||
+  (askingTask?.status === AskingTaskStatus.FINISHED &&
+    askingTask?.type === AskingTaskType.SKILL);
 
 export const isRecommendedFinished = (status: RecommendedQuestionsTaskStatus) =>
   [

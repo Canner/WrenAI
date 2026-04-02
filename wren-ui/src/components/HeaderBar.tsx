@@ -4,6 +4,8 @@ import styled from 'styled-components';
 import LogoBar from '@/components/LogoBar';
 import { Path } from '@/utils/enum';
 import Deploy from '@/components/deploy/Deploy';
+import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
+import RuntimeScopeSelector from '@/components/runtimeScope/RuntimeScopeSelector';
 
 const { Header } = Layout;
 
@@ -33,7 +35,8 @@ const StyledHeader = styled(Header)`
 
 export default function HeaderBar() {
   const router = useRouter();
-  const { pathname } = router;
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
+  const { asPath, pathname } = router;
   const showNav = !pathname.startsWith(Path.Onboarding);
   const isModeling = pathname.startsWith(Path.Modeling);
 
@@ -51,7 +54,7 @@ export default function HeaderBar() {
                 shape="round"
                 size="small"
                 $isHighlight={pathname.startsWith(Path.Home)}
-                onClick={() => router.push(Path.Home)}
+                onClick={() => runtimeScopeNavigation.push(Path.Home)}
               >
                 Home
               </StyledButton>
@@ -59,7 +62,7 @@ export default function HeaderBar() {
                 shape="round"
                 size="small"
                 $isHighlight={pathname.startsWith(Path.Modeling)}
-                onClick={() => router.push(Path.Modeling)}
+                onClick={() => runtimeScopeNavigation.push(Path.Modeling)}
               >
                 Modeling
               </StyledButton>
@@ -67,7 +70,9 @@ export default function HeaderBar() {
                 shape="round"
                 size="small"
                 $isHighlight={pathname.startsWith(Path.Knowledge)}
-                onClick={() => router.push(Path.KnowledgeQuestionSQLPairs)}
+                onClick={() =>
+                  runtimeScopeNavigation.push(Path.KnowledgeQuestionSQLPairs)
+                }
               >
                 Knowledge
               </StyledButton>
@@ -75,16 +80,19 @@ export default function HeaderBar() {
                 shape="round"
                 size="small"
                 $isHighlight={pathname.startsWith(Path.APIManagement)}
-                onClick={() => router.push(Path.APIManagementHistory)}
+                onClick={() =>
+                  runtimeScopeNavigation.push(Path.APIManagementHistory)
+                }
               >
                 API
               </StyledButton>
             </Space>
           )}
         </Space>
-        {isModeling && (
+        {showNav && (
           <Space size={[16, 0]}>
-            <Deploy />
+            <RuntimeScopeSelector key={asPath} />
+            {isModeling && <Deploy />}
           </Space>
         )}
       </div>

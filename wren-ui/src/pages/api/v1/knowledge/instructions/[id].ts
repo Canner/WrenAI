@@ -11,7 +11,7 @@ import { getLogger } from '@server/utils';
 const logger = getLogger('API_INSTRUCTION_BY_ID');
 logger.level = 'debug';
 
-const { projectService, instructionService } = components;
+const { runtimeScopeResolver, instructionService } = components;
 
 /**
  * Instructions API - Supports two types of instructions:
@@ -54,6 +54,7 @@ const validateInstructionId = (id: any): number => {
 const handleUpdateInstruction = async (
   req: NextApiRequest,
   res: NextApiResponse,
+  runtimeScope: any,
   project: any,
   startTime: number,
 ) => {
@@ -67,7 +68,7 @@ const handleUpdateInstruction = async (
   const existingInstruction =
     await instructionService.getInstruction(instructionId);
 
-  if (!existingInstruction) {
+  if (!existingInstruction || existingInstruction.projectId !== project.id) {
     throw new ApiError('Instruction not found', 404);
   }
 
@@ -107,6 +108,7 @@ const handleUpdateInstruction = async (
       isGlobal: isGlobalValue,
     },
     projectId: project.id,
+    runtimeScope,
     apiType: ApiType.UPDATE_INSTRUCTION,
     startTime,
     requestPayload: req.body,
@@ -120,6 +122,7 @@ const handleUpdateInstruction = async (
 const handleDeleteInstruction = async (
   req: NextApiRequest,
   res: NextApiResponse,
+  runtimeScope: any,
   project: any,
   startTime: number,
 ) => {
@@ -135,6 +138,7 @@ const handleDeleteInstruction = async (
     statusCode: 204,
     responsePayload: {},
     projectId: project.id,
+    runtimeScope,
     apiType: ApiType.DELETE_INSTRUCTION,
     startTime,
     requestPayload: { id: instructionId },
@@ -148,19 +152,27 @@ export default async function handler(
 ) {
   const startTime = Date.now();
   let project;
+  let runtimeScope;
 
   try {
-    project = await projectService.getCurrentProject();
+    runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
+    project = runtimeScope.project;
 
     // Handle PUT method - update instruction
     if (req.method === 'PUT') {
-      await handleUpdateInstruction(req, res, project, startTime);
+      await handleUpdateInstruction(req, res, runtimeScope, project, startTime);
       return;
     }
 
     // Handle DELETE method - delete instruction
     if (req.method === 'DELETE') {
-      await handleDeleteInstruction(req, res, project, startTime);
+      await handleDeleteInstruction(
+        req,
+        res,
+        runtimeScope,
+        project,
+        startTime,
+      );
       return;
     }
 
@@ -171,6 +183,7 @@ export default async function handler(
       error,
       res,
       projectId: project?.id,
+      runtimeScope,
       apiType:
         req.method === 'PUT'
           ? ApiType.UPDATE_INSTRUCTION

@@ -20,7 +20,9 @@ export class LearningResolver {
     _args: any,
     ctx: IContext,
   ): Promise<any> {
-    const result = await ctx.learningRepository.findAll();
+    const result = await ctx.learningRepository.findAllBy({
+      userId: this.getActiveLearningUserId(ctx),
+    });
     return { paths: result[0]?.paths || [] };
   }
 
@@ -30,19 +32,24 @@ export class LearningResolver {
     ctx: IContext,
   ): Promise<any> {
     const { path } = args.data;
-    const result = await ctx.learningRepository.findAll();
+    const userId = this.getActiveLearningUserId(ctx);
+    const result = await ctx.learningRepository.findAllBy({ userId });
 
     if (!result.length) {
       return await ctx.learningRepository.createOne({
-        userId: config?.userUUID,
+        userId,
         paths: [path],
       });
     }
 
     const [record] = result;
     return await ctx.learningRepository.updateOne(record.id, {
-      userId: config?.userUUID,
+      userId,
       paths: uniq([...record.paths, path]),
     });
+  }
+
+  private getActiveLearningUserId(ctx: IContext) {
+    return ctx.runtimeScope?.userId || config?.userUUID;
   }
 }

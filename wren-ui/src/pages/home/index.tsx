@@ -1,5 +1,4 @@
 import { ComponentRef, useMemo, useRef } from 'react';
-import { useRouter } from 'next/router';
 import { Button, Typography } from 'antd';
 import { Logo } from '@/components/Logo';
 import { Path } from '@/utils/enum';
@@ -17,6 +16,8 @@ import {
 } from '@/apollo/client/graphql/home.generated';
 import { useGetSettingsQuery } from '@/apollo/client/graphql/settings.generated';
 import { CreateThreadInput } from '@/apollo/client/graphql/__types__';
+import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
+import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
 
 const { Text } = Typography;
 
@@ -46,7 +47,7 @@ const SampleQuestionsInstruction = (props) => {
 };
 
 function RecommendedQuestionsInstruction(props) {
-  const { onSelect, loading } = props;
+  const { enabled, onSelect, loading } = props;
 
   const {
     buttonProps,
@@ -54,7 +55,7 @@ function RecommendedQuestionsInstruction(props) {
     recommendedQuestions,
     showRetry,
     showRecommendedQuestionsPromptMode,
-  } = useRecommendedQuestionsInstruction();
+  } = useRecommendedQuestionsInstruction(enabled);
 
   return showRecommendedQuestionsPromptMode ? (
     <div
@@ -89,12 +90,14 @@ function RecommendedQuestionsInstruction(props) {
 
 export default function Home() {
   const $prompt = useRef<ComponentRef<typeof Prompt>>(null);
-  const router = useRouter();
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
+  const runtimeScopePage = useProtectedRuntimeScopePage();
   const homeSidebar = useHomeSidebar();
   const askPrompt = useAskPrompt();
 
   const { data: suggestedQuestionsData } = useSuggestedQuestionsQuery({
     fetchPolicy: 'cache-and-network',
+    skip: !runtimeScopePage.hasRuntimeScope,
   });
   const [createThread, { loading: threadCreating }] = useCreateThreadMutation({
     onError: (error) => console.error(error),
@@ -104,7 +107,9 @@ export default function Home() {
     fetchPolicy: 'cache-and-network',
   });
 
-  const { data: settingsResult } = useGetSettingsQuery();
+  const { data: settingsResult } = useGetSettingsQuery({
+    skip: !runtimeScopePage.hasRuntimeScope,
+  });
   const settings = settingsResult?.settings;
   const isSampleDataset = useMemo(
     () => Boolean(settings?.dataSource?.sampleDataset),
@@ -126,11 +131,15 @@ export default function Home() {
       const response = await createThread({ variables: { data: payload } });
       const threadId = response.data.createThread.id;
       await preloadThread({ variables: { threadId } });
-      router.push(Path.Home + `/${threadId}`);
+      runtimeScopeNavigation.push(`${Path.Home}/${threadId}`);
     } catch (error) {
       console.error(error);
     }
   };
+
+  if (runtimeScopePage.guarding) {
+    return <SiderLayout loading sidebar={homeSidebar} />;
+  }
 
   return (
     <SiderLayout loading={false} sidebar={homeSidebar}>
@@ -143,6 +152,7 @@ export default function Home() {
 
       {!isSampleDataset && (
         <RecommendedQuestionsInstruction
+          enabled={runtimeScopePage.hasRuntimeScope}
           onSelect={onCreateResponse}
           loading={threadCreating}
         />

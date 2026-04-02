@@ -104,6 +104,7 @@ export type AskingTask = {
   queryId?: Maybe<Scalars['String']>;
   rephrasedQuestion?: Maybe<Scalars['String']>;
   retrievedTables?: Maybe<Array<Scalars['String']>>;
+  skillResult?: Maybe<Scalars['JSON']>;
   sqlGenerationReasoning?: Maybe<Scalars['String']>;
   status: AskingTaskStatus;
   traceId?: Maybe<Scalars['String']>;
@@ -129,6 +130,7 @@ export enum AskingTaskStatus {
 export enum AskingTaskType {
   GENERAL = 'GENERAL',
   MISLEADING_QUERY = 'MISLEADING_QUERY',
+  SKILL = 'SKILL',
   TEXT_TO_SQL = 'TEXT_TO_SQL'
 }
 

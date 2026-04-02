@@ -1,15 +1,14 @@
 import { useState } from 'react';
 import { Path, SETUP } from '@/utils/enum';
-import { useRouter } from 'next/router';
 import {
   useListDataSourceTablesQuery,
   useSaveTablesMutation,
 } from '@/apollo/client/graphql/dataSource.generated';
+import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
 
 export default function useSetupModels() {
   const [stepKey] = useState(SETUP.SELECT_MODELS);
-
-  const router = useRouter();
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
 
   const { data, loading: fetching } = useListDataSourceTablesQuery({
     fetchPolicy: 'no-cache',
@@ -26,14 +25,14 @@ export default function useSetupModels() {
           data: { tables },
         },
       });
-      router.push(Path.OnboardingRelationships);
+      runtimeScopeNavigation.push(Path.OnboardingRelationships);
     } catch (error) {
       console.error(error);
     }
   };
 
   const onBack = () => {
-    router.push(Path.OnboardingConnection);
+    runtimeScopeNavigation.push(Path.OnboardingConnection);
   };
 
   const onNext = (data: { selectedTables: string[] }) => {

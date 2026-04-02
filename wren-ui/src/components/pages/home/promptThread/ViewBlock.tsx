@@ -4,6 +4,7 @@ import FileDoneOutlined from '@ant-design/icons/FileDoneOutlined';
 import SaveOutlined from '@ant-design/icons/SaveOutlined';
 import { Path } from '@/utils/enum';
 import { ViewInfo } from '@/apollo/client/graphql/__types__';
+import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 
 interface Props {
   view?: ViewInfo;
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export default function ViewBlock({ view, onClick }: Props) {
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const isViewSaved = !!view;
 
   if (isViewSaved) {
@@ -20,7 +22,10 @@ export default function ViewBlock({ view, onClick }: Props) {
         Generated from saved view{' '}
         <Link
           className="gray-7"
-          href={`${Path.Modeling}?viewId=${view.id}&openMetadata=true`}
+          href={runtimeScopeNavigation.href(Path.Modeling, {
+            viewId: view.id,
+            openMetadata: true,
+          })}
           target="_blank"
           rel="noreferrer noopener"
         >

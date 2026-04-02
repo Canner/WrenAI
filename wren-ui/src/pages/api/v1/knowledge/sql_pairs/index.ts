@@ -12,7 +12,7 @@ import { getLogger } from '@server/utils';
 const logger = getLogger('API_SQL_PAIRS');
 logger.level = 'debug';
 
-const { projectService, sqlPairService, deployService, queryService } =
+const { runtimeScopeResolver, sqlPairService, deployService, queryService } =
   components;
 
 /**
@@ -29,6 +29,7 @@ interface CreateSqlPairRequest {
 const handleGetSqlPairs = async (
   req: NextApiRequest,
   res: NextApiResponse,
+  runtimeScope: any,
   project: any,
   startTime: number,
 ) => {
@@ -41,6 +42,7 @@ const handleGetSqlPairs = async (
     statusCode: 200,
     responsePayload: sqlPairs,
     projectId: project.id,
+    runtimeScope,
     apiType: ApiType.GET_SQL_PAIRS,
     startTime,
     requestPayload: {},
@@ -54,6 +56,7 @@ const handleGetSqlPairs = async (
 const handleCreateSqlPair = async (
   req: NextApiRequest,
   res: NextApiResponse,
+  runtimeScope: any,
   project: any,
   startTime: number,
 ) => {
@@ -91,6 +94,7 @@ const handleCreateSqlPair = async (
     statusCode: 201,
     responsePayload: newSqlPair,
     projectId: project.id,
+    runtimeScope,
     apiType: ApiType.CREATE_SQL_PAIR,
     startTime,
     requestPayload: req.body,
@@ -104,19 +108,21 @@ export default async function handler(
 ) {
   const startTime = Date.now();
   let project;
+  let runtimeScope;
 
   try {
-    project = await projectService.getCurrentProject();
+    runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
+    project = runtimeScope.project;
 
     // Handle GET method - list SQL pairs
     if (req.method === 'GET') {
-      await handleGetSqlPairs(req, res, project, startTime);
+      await handleGetSqlPairs(req, res, runtimeScope, project, startTime);
       return;
     }
 
     // Handle POST method - create SQL pair
     if (req.method === 'POST') {
-      await handleCreateSqlPair(req, res, project, startTime);
+      await handleCreateSqlPair(req, res, runtimeScope, project, startTime);
       return;
     }
 
@@ -127,6 +133,7 @@ export default async function handler(
       error,
       res,
       projectId: project?.id,
+      runtimeScope,
       apiType:
         req.method === 'GET' ? ApiType.GET_SQL_PAIRS : ApiType.CREATE_SQL_PAIR,
       requestPayload: req.method === 'GET' ? {} : req.body,

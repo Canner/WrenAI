@@ -20,8 +20,7 @@ export class SqlPairResolver {
     _arg: any,
     ctx: IContext,
   ): Promise<SqlPair[]> {
-    const project = await ctx.projectService.getCurrentProject();
-    return ctx.sqlPairService.getProjectSqlPairs(project.id);
+    return ctx.sqlPairService.getProjectSqlPairs(ctx.runtimeScope!.project.id);
   }
 
   @TrackTelemetry(TelemetryEvent.KNOWLEDGE_CREATE_SQL_PAIR)
@@ -35,9 +34,11 @@ export class SqlPairResolver {
     },
     ctx: IContext,
   ): Promise<SqlPair> {
-    const project = await ctx.projectService.getCurrentProject();
     await this.validateSql(arg.data.sql, ctx);
-    return await ctx.sqlPairService.createSqlPair(project.id, arg.data);
+    return await ctx.sqlPairService.createSqlPair(
+      ctx.runtimeScope!.project.id,
+      arg.data,
+    );
   }
 
   @TrackTelemetry(TelemetryEvent.KNOWLEDGE_UPDATE_SQL_PAIR)
@@ -54,9 +55,12 @@ export class SqlPairResolver {
     },
     ctx: IContext,
   ): Promise<SqlPair> {
-    const project = await ctx.projectService.getCurrentProject();
     await this.validateSql(arg.data.sql, ctx);
-    return ctx.sqlPairService.editSqlPair(project.id, arg.where.id, arg.data);
+    return ctx.sqlPairService.editSqlPair(
+      ctx.runtimeScope!.project.id,
+      arg.where.id,
+      arg.data,
+    );
   }
 
   @TrackTelemetry(TelemetryEvent.KNOWLEDGE_DELETE_SQL_PAIR)
@@ -69,8 +73,10 @@ export class SqlPairResolver {
     },
     ctx: IContext,
   ): Promise<boolean> {
-    const project = await ctx.projectService.getCurrentProject();
-    return ctx.sqlPairService.deleteSqlPair(project.id, arg.where.id);
+    return ctx.sqlPairService.deleteSqlPair(
+      ctx.runtimeScope!.project.id,
+      arg.where.id,
+    );
   }
 
   public async generateQuestion(
@@ -82,7 +88,7 @@ export class SqlPairResolver {
     },
     ctx: IContext,
   ) {
-    const project = await ctx.projectService.getCurrentProject();
+    const project = ctx.runtimeScope!.project;
     const questions = await ctx.sqlPairService.generateQuestions(project, [
       arg.data.sql,
     ]);
@@ -98,7 +104,7 @@ export class SqlPairResolver {
     },
     ctx: IContext,
   ): Promise<WrenSQL> {
-    const project = await ctx.projectService.getCurrentProject();
+    const project = ctx.runtimeScope!.project;
     const lastDeployment = await ctx.deployService.getLastDeployment(
       project.id,
     );
@@ -115,7 +121,7 @@ export class SqlPairResolver {
   }
 
   private async validateSql(sql: string, ctx: IContext) {
-    const project = await ctx.projectService.getCurrentProject();
+    const project = ctx.runtimeScope!.project;
     const lastDeployment = await ctx.deployService.getLastDeployment(
       project.id,
     );

@@ -31,7 +31,7 @@ const getGroupedQuestions = (
   );
 };
 
-export default function useRecommendedQuestionsInstruction() {
+export default function useRecommendedQuestionsInstruction(enabled = true) {
   const [showRetry, setShowRetry] = useState<boolean>(false);
   const [generating, setGenerating] = useState<boolean>(false);
   const [isRegenerate, setIsRegenerate] = useState<boolean>(false);
@@ -60,6 +60,10 @@ export default function useRecommendedQuestionsInstruction() {
   );
 
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
     const fetchRecommendationQuestionsData = async () => {
       const result = await fetchRecommendationQuestions();
       const data = result.data?.getProjectRecommendationQuestions;
@@ -76,7 +80,7 @@ export default function useRecommendedQuestionsInstruction() {
     };
 
     fetchRecommendationQuestionsData();
-  }, []);
+  }, [enabled, fetchRecommendationQuestions]);
 
   useEffect(() => {
     if (isRecommendedFinished(recommendedQuestionsTask?.status)) {
@@ -109,6 +113,10 @@ export default function useRecommendedQuestionsInstruction() {
   }, [recommendedQuestionsTask]);
 
   const onGetRecommendationQuestions = async () => {
+    if (!enabled) {
+      return;
+    }
+
     setGenerating(true);
     setIsRegenerate(true);
     try {

@@ -59,6 +59,7 @@ const COMMON_ASKING_TASK = gql`
   fragment CommonAskingTask on AskingTask {
     status
     type
+    skillResult
     candidates {
       sql
       type

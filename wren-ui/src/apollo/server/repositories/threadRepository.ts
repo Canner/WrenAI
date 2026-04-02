@@ -17,6 +17,11 @@ export interface ThreadRecommendationQuestionResult {
 export interface Thread {
   id: number; // ID
   projectId: number; // Reference to project.id
+  workspaceId?: string | null;
+  knowledgeBaseId?: string | null;
+  kbSnapshotId?: string | null;
+  deployHash?: string | null;
+  actorUserId?: string | null;
   summary: string; // Thread summary
 
   // recommend question

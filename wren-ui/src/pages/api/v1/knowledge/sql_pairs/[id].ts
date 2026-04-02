@@ -12,7 +12,7 @@ import { getLogger } from '@server/utils';
 const logger = getLogger('API_SQL_PAIR_BY_ID');
 logger.level = 'debug';
 
-const { projectService, sqlPairService, deployService, queryService } =
+const { runtimeScopeResolver, sqlPairService, deployService, queryService } =
   components;
 
 /**
@@ -45,6 +45,7 @@ const validateSqlPairId = (id: any): number => {
 const handleUpdateSqlPair = async (
   req: NextApiRequest,
   res: NextApiResponse,
+  runtimeScope: any,
   project: any,
   startTime: number,
 ) => {
@@ -90,6 +91,7 @@ const handleUpdateSqlPair = async (
     statusCode: 200,
     responsePayload: updatedSqlPair,
     projectId: project.id,
+    runtimeScope,
     apiType: ApiType.UPDATE_SQL_PAIR,
     startTime,
     requestPayload: req.body,
@@ -103,6 +105,7 @@ const handleUpdateSqlPair = async (
 const handleDeleteSqlPair = async (
   req: NextApiRequest,
   res: NextApiResponse,
+  runtimeScope: any,
   project: any,
   startTime: number,
 ) => {
@@ -118,6 +121,7 @@ const handleDeleteSqlPair = async (
     statusCode: 204,
     responsePayload: {},
     projectId: project.id,
+    runtimeScope,
     apiType: ApiType.DELETE_SQL_PAIR,
     startTime,
     requestPayload: { id: sqlPairId },
@@ -131,19 +135,21 @@ export default async function handler(
 ) {
   const startTime = Date.now();
   let project;
+  let runtimeScope;
 
   try {
-    project = await projectService.getCurrentProject();
+    runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
+    project = runtimeScope.project;
 
     // Handle PUT method - update SQL pair
     if (req.method === 'PUT') {
-      await handleUpdateSqlPair(req, res, project, startTime);
+      await handleUpdateSqlPair(req, res, runtimeScope, project, startTime);
       return;
     }
 
     // Handle DELETE method - delete SQL pair
     if (req.method === 'DELETE') {
-      await handleDeleteSqlPair(req, res, project, startTime);
+      await handleDeleteSqlPair(req, res, runtimeScope, project, startTime);
       return;
     }
 
@@ -154,6 +160,7 @@ export default async function handler(
       error,
       res,
       projectId: project?.id,
+      runtimeScope,
       apiType:
         req.method === 'PUT'
           ? ApiType.UPDATE_SQL_PAIR

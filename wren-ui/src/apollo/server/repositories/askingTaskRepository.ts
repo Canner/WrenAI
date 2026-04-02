@@ -18,6 +18,12 @@ export type AskingTaskDetail =
 export interface AskingTask {
   id: number;
   queryId: string;
+  projectId?: number | null;
+  workspaceId?: string | null;
+  knowledgeBaseId?: string | null;
+  kbSnapshotId?: string | null;
+  deployHash?: string | null;
+  actorUserId?: string | null;
   question?: string;
   detail?: AskingTaskDetail;
   threadId?: number;

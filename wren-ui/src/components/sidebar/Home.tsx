@@ -10,6 +10,7 @@ import SidebarTree, {
   useSidebarTreeState,
 } from './SidebarTree';
 import ThreadTree, { ThreadData } from './home/ThreadTree';
+import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 
 export interface Props {
   data: {
@@ -41,6 +42,7 @@ export const StyledSidebarTree = styled(SidebarTree)`
 export default function Home(props: Props) {
   const { data, onSelect, onRename, onDelete } = props;
   const router = useRouter();
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const params = useParams<{ id: string }>();
   const { threads } = data;
 
@@ -54,7 +56,7 @@ export default function Home(props: Props) {
     try {
       await onDelete(threadId);
       if (params?.id == threadId) {
-        router.push(Path.Home);
+        runtimeScopeNavigation.push(Path.Home);
       }
     } catch (error) {
       console.error(error);
@@ -75,7 +77,7 @@ export default function Home(props: Props) {
         className={clsx({
           'adm-treeNode--selected': router.pathname === Path.HomeDashboard,
         })}
-        href={Path.HomeDashboard}
+        href={runtimeScopeNavigation.href(Path.HomeDashboard)}
       >
         <FundViewOutlined className="mr-2" />
         <span className="text-medium">Dashboard</span>

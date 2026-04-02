@@ -1,4 +1,5 @@
 import { getLogger } from '@server/utils';
+import { PersistedRuntimeIdentity } from '@server/context/runtimeScope';
 import {
   AskFeedbackInput,
   AskFeedbackResult,
@@ -28,6 +29,7 @@ interface TrackedTask {
   question: string;
   originalThreadResponseId: number;
   rerun?: boolean;
+  runtimeIdentity?: PersistedRuntimeIdentity;
   adjustmentPayload?: {
     originalThreadResponseId: number;
     retrievedTables: string[];
@@ -45,6 +47,7 @@ export type CreateAdjustmentTaskInput = AskFeedbackInput & {
   question: string;
   originalThreadResponseId: number;
   configurations: { language: string };
+  runtimeIdentity?: PersistedRuntimeIdentity;
 };
 
 export type RerunAdjustmentTaskInput = {
@@ -52,6 +55,7 @@ export type RerunAdjustmentTaskInput = {
   threadId: number;
   projectId: number;
   configurations: { language: string };
+  runtimeIdentity?: PersistedRuntimeIdentity;
 };
 
 export interface IAdjustmentBackgroundTaskTracker {
@@ -109,7 +113,8 @@ export class AdjustmentBackgroundTaskTracker
   ): Promise<{ queryId: string; createdThreadResponse: ThreadResponse }> {
     try {
       // Call the AI service to create a task
-      const response = await this.wrenAIAdaptor.createAskFeedback(input);
+      const { runtimeIdentity: _runtimeIdentity, ...adaptorInput } = input;
+      const response = await this.wrenAIAdaptor.createAskFeedback(adaptorInput);
       const queryId = response.queryId;
 
       // create a new asking task
@@ -123,11 +128,13 @@ export class AdjustmentBackgroundTaskTracker
           response: [],
           error: null,
         },
+        ...(input.runtimeIdentity || {}),
       });
 
       // create a new thread response with adjustment payload
       const createdThreadResponse =
         await this.threadResponseRepository.createOne({
+          ...(input.runtimeIdentity || {}),
           question: input.question,
           threadId: input.threadId,
           askingTaskId: createdAskingTask.id,
@@ -151,11 +158,13 @@ export class AdjustmentBackgroundTaskTracker
       // Start tracking this task
       const task = {
         queryId,
+        taskId: createdAskingTask.id,
         lastPolled: Date.now(),
         isFinalized: false,
         originalThreadResponseId: input.originalThreadResponseId,
         threadResponseId: createdThreadResponse.id,
         question: input.question,
+        runtimeIdentity: input.runtimeIdentity,
         adjustmentPayload: {
           originalThreadResponseId: input.originalThreadResponseId,
           retrievedTables: input.tables,
@@ -203,8 +212,9 @@ export class AdjustmentBackgroundTaskTracker
     }
 
     // call createAskFeedback on AI service
+    const { runtimeIdentity: _runtimeIdentity, ...adaptorInput } = input;
     const response = await this.wrenAIAdaptor.createAskFeedback({
-      ...input,
+      ...adaptorInput,
       tables: adjustment.payload?.retrievedTables,
       sqlGenerationReasoning: adjustment.payload?.sqlGenerationReasoning,
       sql: originalThreadResponse.sql,
@@ -225,18 +235,21 @@ export class AdjustmentBackgroundTaskTracker
           response: [],
           error: null,
         },
+        ...(input.runtimeIdentity || {}),
       },
     );
 
     // schedule task
     const task = {
       queryId,
+      taskId: currentThreadResponse.askingTaskId,
       lastPolled: Date.now(),
       isFinalized: false,
       originalThreadResponseId: originalThreadResponse.id,
       threadResponseId: currentThreadResponse.id,
       question: originalThreadResponse.question,
       rerun: true,
+      runtimeIdentity: input.runtimeIdentity,
       adjustmentPayload: {
         originalThreadResponseId: originalThreadResponse.id,
         retrievedTables: adjustment.payload?.retrievedTables,

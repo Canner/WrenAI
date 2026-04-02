@@ -1,4 +1,3 @@
-import { useRouter } from 'next/router';
 import Image from 'next/image';
 import { useEffect, useMemo } from 'react';
 import { Button, Form, Modal, message, Alert } from 'antd';
@@ -20,6 +19,7 @@ import {
   DataSourceName,
   SampleDatasetName,
 } from '@/apollo/client/graphql/__types__';
+import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 
 interface Props {
   type: DataSourceName;
@@ -32,13 +32,13 @@ interface Props {
 const SampleDatasetIterator = makeIterable(ButtonItem);
 
 const SampleDatasetPanel = (props: Props) => {
-  const router = useRouter();
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const { sampleDataset, closeModal } = props;
   const templates = getTemplates();
   const [startSampleDataset] = useStartSampleDatasetMutation({
     onError: (error) => console.error(error),
     onCompleted: () => {
-      router.push(Path.Home);
+      runtimeScopeNavigation.push(Path.Home);
       closeModal();
     },
     refetchQueries: 'active',

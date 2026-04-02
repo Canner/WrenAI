@@ -8,6 +8,7 @@ import { DashboardResolver } from './resolvers/dashboardResolver';
 import { SqlPairResolver } from './resolvers/sqlPairResolver';
 import { InstructionResolver } from './resolvers/instructionResolver';
 import { ApiHistoryResolver } from './resolvers/apiHistoryResolver';
+import { RuntimeSelectorResolver } from './resolvers/runtimeSelectorResolver';
 import { convertColumnType } from '@server/utils';
 import { DialectSQLScalar } from './scalars';
 
@@ -20,6 +21,7 @@ const dashboardResolver = new DashboardResolver();
 const sqlPairResolver = new SqlPairResolver();
 const instructionResolver = new InstructionResolver();
 const apiHistoryResolver = new ApiHistoryResolver();
+const runtimeSelectorResolver = new RuntimeSelectorResolver();
 const resolvers = {
   JSON: GraphQLJSON,
   DialectSQL: DialectSQLScalar,
@@ -75,6 +77,9 @@ const resolvers = {
 
     // API History
     apiHistory: apiHistoryResolver.getApiHistory,
+
+    // Runtime scope
+    runtimeSelectorState: runtimeSelectorResolver.getRuntimeSelectorState,
   },
   Mutation: {
     deploy: modelResolver.deploy,

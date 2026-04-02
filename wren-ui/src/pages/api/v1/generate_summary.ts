@@ -21,8 +21,7 @@ import { getLogger } from '@server/utils';
 const logger = getLogger('API_GENERATE_SUMMARY');
 logger.level = 'debug';
 
-const { projectService, wrenAIAdaptor, deployService, queryService } =
-  components;
+const { runtimeScopeResolver, wrenAIAdaptor, queryService } = components;
 
 interface GenerateSummaryRequest {
   question: string;
@@ -30,6 +29,11 @@ interface GenerateSummaryRequest {
   sampleSize?: number;
   language?: string;
   threadId?: string;
+  workspaceId?: string;
+  knowledgeBaseId?: string;
+  kbSnapshotId?: string;
+  deployHash?: string;
+  projectId?: number;
 }
 
 export default async function handler(
@@ -40,10 +44,9 @@ export default async function handler(
     req.body as GenerateSummaryRequest;
   const startTime = Date.now();
   let project;
+  let runtimeScope;
 
   try {
-    project = await projectService.getCurrentProject();
-
     // Only allow POST method
     if (req.method !== 'POST') {
       throw new ApiError('Method not allowed', 405);
@@ -58,8 +61,9 @@ export default async function handler(
       throw new ApiError('SQL is required', 400);
     }
 
-    // Get current project's last deployment
-    const lastDeploy = await deployService.getLastDeployment(project.id);
+    runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
+    project = runtimeScope.project;
+    const lastDeploy = runtimeScope.deployment;
     if (!lastDeploy) {
       throw new ApiError(
         'No deployment found, please deploy your project first',
@@ -95,6 +99,7 @@ export default async function handler(
       sql,
       sqlData,
       threadId: newThreadId,
+      userId: runtimeScope.userId || undefined,
       configurations: {
         language:
           language || WrenAILanguage[project.language] || WrenAILanguage.EN,
@@ -177,6 +182,7 @@ export default async function handler(
         threadId: newThreadId,
       },
       projectId: project.id,
+      runtimeScope,
       apiType: ApiType.GENERATE_SUMMARY,
       startTime,
       requestPayload: req.body,
@@ -188,6 +194,7 @@ export default async function handler(
       error,
       res,
       projectId: project?.id,
+      runtimeScope,
       apiType: ApiType.GENERATE_SUMMARY,
       requestPayload: req.body,
       threadId,

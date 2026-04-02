@@ -1,5 +1,4 @@
 import { Button, Modal, Select, Row, Col, Form, message } from 'antd';
-import { useRouter } from 'next/router';
 import { Path } from '@/utils/enum';
 import {
   useResetCurrentProjectMutation,
@@ -7,6 +6,7 @@ import {
 } from '@/apollo/client/graphql/settings.generated';
 import { getLanguageText } from '@/utils/language';
 import { ProjectLanguage } from '@/apollo/client/graphql/__types__';
+import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 
 interface Props {
   data: { language: string };
@@ -14,7 +14,7 @@ interface Props {
 
 export default function ProjectSettings(props: Props) {
   const { data } = props;
-  const router = useRouter();
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const [form] = Form.useForm();
   const [resetCurrentProject, { client }] = useResetCurrentProjectMutation({
     onError: (error) => console.error(error),
@@ -39,7 +39,7 @@ export default function ProjectSettings(props: Props) {
       onOk: async () => {
         await resetCurrentProject();
         client.clearStore();
-        router.push(Path.OnboardingConnection);
+        runtimeScopeNavigation.push(Path.OnboardingConnection);
       },
     });
   };

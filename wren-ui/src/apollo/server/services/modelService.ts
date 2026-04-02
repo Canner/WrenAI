@@ -40,16 +40,33 @@ export interface ValidateCalculatedFieldResponse {
 }
 
 export interface IModelService {
-  updatePrimaryKeys(tables: SampleDatasetTable[]): Promise<void>;
-  batchUpdateModelProperties(tables: SampleDatasetTable[]): Promise<void>;
-  batchUpdateColumnProperties(tables: SampleDatasetTable[]): Promise<void>;
+  updatePrimaryKeys(
+    projectId: number,
+    tables: SampleDatasetTable[],
+  ): Promise<void>;
+  batchUpdateModelProperties(
+    projectId: number,
+    tables: SampleDatasetTable[],
+  ): Promise<void>;
+  batchUpdateColumnProperties(
+    projectId: number,
+    tables: SampleDatasetTable[],
+  ): Promise<void>;
   // saveRelations was used in the onboarding process, we assume there is not existing relation in the project
   saveRelations(relations: RelationData[]): Promise<Relation[]>;
   createRelation(relation: RelationData): Promise<Relation>;
-  updateRelation(relation: UpdateRelationData, id: number): Promise<Relation>;
-  deleteRelation(id: number): Promise<void>;
-  createCalculatedField(data: CreateCalculatedFieldData): Promise<ModelColumn>;
-  updateCalculatedField(
+  updateRelation(
+    projectId: number,
+    relation: UpdateRelationData,
+    id: number,
+  ): Promise<Relation>;
+  deleteRelation(projectId: number, id: number): Promise<void>;
+  createCalculatedFieldScoped(
+    projectId: number,
+    data: CreateCalculatedFieldData,
+  ): Promise<ModelColumn>;
+  updateCalculatedFieldScoped(
+    projectId: number,
     data: UpdateCalculatedFieldData,
     id: number,
   ): Promise<ModelColumn>;
@@ -108,7 +125,7 @@ export class ModelService implements IModelService {
     this.queryService = queryService;
   }
 
-  public async createCalculatedField(
+  private async createCalculatedField(
     data: CreateCalculatedFieldData,
   ): Promise<ModelColumn> {
     const { modelId, name: displayName, expression, lineage } = data;
@@ -174,7 +191,15 @@ export class ModelService implements IModelService {
     return column;
   }
 
-  public async updateCalculatedField(
+  public async createCalculatedFieldScoped(
+    projectId: number,
+    data: CreateCalculatedFieldData,
+  ): Promise<ModelColumn> {
+    await this.ensureModelProjectScope(data.modelId, projectId);
+    return this.createCalculatedField(data);
+  }
+
+  private async updateCalculatedField(
     data: UpdateCalculatedFieldData,
     id: number,
   ): Promise<ModelColumn> {
@@ -234,11 +259,22 @@ export class ModelService implements IModelService {
     return updatedColumn;
   }
 
-  public async updatePrimaryKeys(tables: SampleDatasetTable[]) {
+  public async updateCalculatedFieldScoped(
+    projectId: number,
+    data: UpdateCalculatedFieldData,
+    id: number,
+  ): Promise<ModelColumn> {
+    await this.ensureColumnProjectScope(id, projectId);
+    return this.updateCalculatedField(data, id);
+  }
+
+  public async updatePrimaryKeys(
+    projectId: number,
+    tables: SampleDatasetTable[],
+  ) {
     logger.debug('start update primary keys');
-    const { id } = await this.projectService.getCurrentProject();
     const models = await this.modelRepository.findAllBy({
-      projectId: id,
+      projectId,
     });
     const tableToUpdate = tables.filter((t) => t.primaryKey);
     for (const table of tableToUpdate) {
@@ -253,11 +289,13 @@ export class ModelService implements IModelService {
     }
   }
 
-  public async batchUpdateModelProperties(tables: SampleDatasetTable[]) {
+  public async batchUpdateModelProperties(
+    projectId: number,
+    tables: SampleDatasetTable[],
+  ) {
     logger.debug('start batch update model description');
-    const { id } = await this.projectService.getCurrentProject();
     const models = await this.modelRepository.findAllBy({
-      projectId: id,
+      projectId,
     });
 
     await Promise.all([
@@ -278,11 +316,13 @@ export class ModelService implements IModelService {
     ]);
   }
 
-  public async batchUpdateColumnProperties(tables: SampleDatasetTable[]) {
+  public async batchUpdateColumnProperties(
+    projectId: number,
+    tables: SampleDatasetTable[],
+  ) {
     logger.debug('start batch update column description');
-    const { id } = await this.projectService.getCurrentProject();
     const models = await this.modelRepository.findAllBy({
-      projectId: id,
+      projectId,
     });
     const sourceColumns =
       (await this.modelColumnRepository.findColumnsByModelIds(
@@ -342,33 +382,34 @@ export class ModelService implements IModelService {
     if (isEmpty(relations)) {
       return [];
     }
-    const { id } = await this.projectService.getCurrentProject();
-
-    const models = await this.modelRepository.findAllBy({
-      projectId: id,
-    });
+    const modelIds = relations
+      .map(({ fromModelId, toModelId }) => [fromModelId, toModelId])
+      .flat();
+    const uniqueModelIds = [...new Set(modelIds)];
+    const models = await this.modelRepository.findAllByIds(uniqueModelIds);
+    const projectId = this.resolveRelationProjectId(models, uniqueModelIds);
 
     const columnIds = relations
       .map(({ fromColumnId, toColumnId }) => [fromColumnId, toColumnId])
       .flat();
+    const uniqueColumnIds = [...new Set(columnIds)];
     const columns =
-      await this.modelColumnRepository.findColumnsByIds(columnIds);
+      await this.modelColumnRepository.findColumnsByIds(uniqueColumnIds);
+    if (columns.length !== uniqueColumnIds.length) {
+      throw new Error('Column not found');
+    }
     const relationValues = relations.map((relation) => {
-      const fromColumn = columns.find(
-        (column) => column.id === relation.fromColumnId,
+      const { valid, message } = this.validateCreateRelationSync(
+        models,
+        columns,
+        relation,
       );
-      if (!fromColumn) {
-        throw new Error(`Column not found, column Id ${relation.fromColumnId}`);
-      }
-      const toColumn = columns.find(
-        (column) => column.id === relation.toColumnId,
-      );
-      if (!toColumn) {
-        throw new Error(`Column not found, column Id  ${relation.toColumnId}`);
+      if (!valid) {
+        throw new Error(message);
       }
       const relationName = this.generateRelationName(relation, models, columns);
       return {
-        projectId: id,
+        projectId,
         name: relationName,
         fromColumnId: relation.fromColumnId,
         toColumnId: relation.toColumnId,
@@ -386,12 +427,17 @@ export class ModelService implements IModelService {
   }
 
   public async createRelation(relation: RelationData): Promise<Relation> {
-    const { id } = await this.projectService.getCurrentProject();
     const modelIds = [relation.fromModelId, relation.toModelId];
-    const models = await this.modelRepository.findAllByIds(modelIds);
+    const uniqueModelIds = [...new Set(modelIds)];
+    const models = await this.modelRepository.findAllByIds(uniqueModelIds);
+    const projectId = this.resolveRelationProjectId(models, uniqueModelIds);
     const columnIds = [relation.fromColumnId, relation.toColumnId];
+    const uniqueColumnIds = [...new Set(columnIds)];
     const columns =
-      await this.modelColumnRepository.findColumnsByIds(columnIds);
+      await this.modelColumnRepository.findColumnsByIds(uniqueColumnIds);
+    if (columns.length !== uniqueColumnIds.length) {
+      throw new Error('Column not found');
+    }
 
     const { valid, message } = await this.validateCreateRelation(
       models,
@@ -403,7 +449,7 @@ export class ModelService implements IModelService {
     }
     const relationName = this.generateRelationName(relation, models, columns);
     const savedRelation = await this.relationRepository.createOne({
-      projectId: id,
+      projectId,
       name: relationName,
       fromColumnId: relation.fromColumnId,
       toColumnId: relation.toColumnId,
@@ -413,20 +459,19 @@ export class ModelService implements IModelService {
   }
 
   public async updateRelation(
+    projectId: number,
     relation: UpdateRelationData,
     id: number,
   ): Promise<Relation> {
+    await this.ensureRelationProjectScope(id, projectId);
     const updatedRelation = await this.relationRepository.updateOne(id, {
       joinType: relation.type,
     });
     return updatedRelation;
   }
 
-  public async deleteRelation(id: number): Promise<void> {
-    const relation = await this.relationRepository.findOneBy({ id });
-    if (!relation) {
-      throw new Error('Relation not found');
-    }
+  public async deleteRelation(projectId: number, id: number): Promise<void> {
+    await this.ensureRelationProjectScope(id, projectId);
     const calculatedFields = await this.getCalculatedFieldByRelation(id);
     if (calculatedFields.length > 0) {
       // delete related calculated fields
@@ -605,8 +650,14 @@ export class ModelService implements IModelService {
     modelName: string,
     data: CheckCalculatedFieldCanQueryData,
   ) {
-    const project = await this.projectService.getCurrentProject();
-    const { mdlBuilder } = await this.mdlService.makeCurrentModelMDL();
+    const model = await this.modelRepository.findOneBy({ id: modelId });
+    if (!model) {
+      throw new Error('Model not found');
+    }
+    const project = await this.projectService.getProjectById(model.projectId);
+    const { mdlBuilder } = await this.mdlService.makeCurrentModelMDL(
+      model.projectId,
+    );
     const { referenceName, expression, lineage } = data;
     const inputFieldId = lineage[lineage.length - 1];
     const dataType = await this.inferCalculatedFieldDataType(
@@ -663,6 +714,38 @@ export class ModelService implements IModelService {
     columns: ModelColumn[],
     relation: RelationData,
   ) {
+    const crossProjectError = this.validateRelationProjectConsistency(models);
+    if (crossProjectError) {
+      return crossProjectError;
+    }
+
+    const syncValidation = this.validateCreateRelationSync(
+      models,
+      columns,
+      relation,
+    );
+    if (!syncValidation.valid) {
+      return syncValidation;
+    }
+
+    const existedRelations =
+      await this.relationRepository.findExistedRelationBetweenModels(relation);
+
+    if (existedRelations.length > 0) {
+      return {
+        valid: false,
+        message: 'This relationship already exists.',
+      };
+    }
+
+    return { valid: true };
+  }
+
+  private validateCreateRelationSync(
+    models: Model[],
+    columns: ModelColumn[],
+    relation: RelationData,
+  ) {
     const { fromModelId, fromColumnId, toModelId, toColumnId } = relation;
     const fromModel = models.find((m) => m.id === fromModelId);
     const toModel = models.find((m) => m.id === toModelId);
@@ -709,16 +792,76 @@ export class ModelService implements IModelService {
       };
     }
 
-    const existedRelations =
-      await this.relationRepository.findExistedRelationBetweenModels(relation);
+    return { valid: true };
+  }
 
-    if (existedRelations.length > 0) {
+  private resolveRelationProjectId(models: Model[], modelIds: number[]) {
+    if (models.length !== modelIds.length) {
+      throw new Error('Model not found');
+    }
+
+    const consistencyError = this.validateRelationProjectConsistency(models);
+    if (consistencyError) {
+      throw new Error(consistencyError.message);
+    }
+
+    const projectId = models[0]?.projectId;
+    if (!projectId) {
+      throw new Error('Model not found');
+    }
+
+    return projectId;
+  }
+
+  private validateRelationProjectConsistency(models: Model[]) {
+    if (models.length === 0) {
+      return { valid: false, message: 'Model not found' };
+    }
+
+    const projectId = models[0].projectId;
+    if (models.some((model) => model.projectId !== projectId)) {
       return {
         valid: false,
-        message: 'This relationship already exists.',
+        message: 'Relations must belong to a single project',
       };
     }
 
-    return { valid: true };
+    return null;
+  }
+
+  private async ensureRelationProjectScope(id: number, projectId: number) {
+    const relation = await this.relationRepository.findOneBy({ id });
+    if (!relation || relation.projectId !== projectId) {
+      throw new Error('Relation not found');
+    }
+
+    return relation;
+  }
+
+  private async ensureModelProjectScope(
+    modelId: number,
+    projectId: number,
+    errorMessage = 'Model not found',
+  ) {
+    const model = await this.modelRepository.findOneBy({ id: modelId });
+    if (!model || model.projectId !== projectId) {
+      throw new Error(errorMessage);
+    }
+
+    return model;
+  }
+
+  private async ensureColumnProjectScope(
+    columnId: number,
+    projectId: number,
+    errorMessage = 'Column not found',
+  ) {
+    const column = await this.modelColumnRepository.findOneBy({ id: columnId });
+    if (!column) {
+      throw new Error(errorMessage);
+    }
+
+    await this.ensureModelProjectScope(column.modelId, projectId, errorMessage);
+    return column;
   }
 }

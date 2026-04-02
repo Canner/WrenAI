@@ -68,9 +68,12 @@ export class ApiHistoryResolver {
   ) {
     const { filter, pagination } = args;
     const { offset, limit } = pagination;
+    const activeProjectId = ctx.runtimeScope!.project.id;
 
     // Build filter criteria
-    const filterCriteria: Partial<ApiHistory> = {};
+    const filterCriteria: Partial<ApiHistory> = {
+      projectId: activeProjectId,
+    };
 
     if (filter) {
       if (filter.apiType) {
@@ -85,8 +88,10 @@ export class ApiHistoryResolver {
         filterCriteria.threadId = filter.threadId;
       }
 
-      if (filter.projectId) {
-        filterCriteria.projectId = filter.projectId;
+      if (filter.projectId && filter.projectId !== activeProjectId) {
+        throw new Error(
+          'apiHistory projectId filter does not match active runtime scope',
+        );
       }
     }
 

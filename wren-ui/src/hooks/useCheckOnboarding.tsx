@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { useOnboardingStatusQuery } from '@/apollo/client/graphql/onboarding.generated';
 import { OnboardingStatus } from '@/apollo/client/graphql/__types__';
 import { Path } from '@/utils/enum';
+import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
 
 const redirectRoute = {
   [OnboardingStatus.DATASOURCE_SAVED]: Path.OnboardingModels,
@@ -13,6 +14,7 @@ const redirectRoute = {
 
 export const useWithOnboarding = () => {
   const router = useRouter();
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const { data, loading } = useOnboardingStatusQuery();
 
   const onboardingStatus = data?.onboardingStatus?.status;
@@ -37,7 +39,7 @@ export const useWithOnboarding = () => {
           return;
         }
 
-        router.push(newPath);
+        runtimeScopeNavigation.push(newPath);
         return;
       }
 
@@ -45,7 +47,7 @@ export const useWithOnboarding = () => {
 
       // redirect to the home page when entering the Index page
       if (pathname === '/') {
-        router.push(newPath);
+        runtimeScopeNavigation.push(newPath);
         return;
       }
 
@@ -54,7 +56,7 @@ export const useWithOnboarding = () => {
         pathname === Path.OnboardingRelationships &&
         onboardingStatus === OnboardingStatus.WITH_SAMPLE_DATASET
       ) {
-        router.push(newPath);
+        runtimeScopeNavigation.push(newPath);
         return;
       }
 
@@ -64,7 +66,7 @@ export const useWithOnboarding = () => {
           pathname as Path,
         )
       ) {
-        router.push(newPath);
+        runtimeScopeNavigation.push(newPath);
         return;
       }
     }

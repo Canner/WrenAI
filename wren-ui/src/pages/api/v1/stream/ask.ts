@@ -6,14 +6,18 @@ import { v4 as uuidv4 } from 'uuid';
 import {
   ApiError,
   MAX_WAIT_TIME,
+  createApiHistoryRecord,
   isAskResultFinished,
   validateSummaryResult,
   transformHistoryInput,
+  getScopedThreadHistories,
 } from '@/apollo/server/utils/apiUtils';
+import { buildAskRuntimeContext } from '@server/utils/askContext';
 import {
   AskResult,
   AskResultStatus,
   WrenAILanguage,
+  SkillResultType,
   TextBasedAnswerInput,
   TextBasedAnswerResult,
   TextBasedAnswerStatus,
@@ -42,10 +46,11 @@ logger.level = 'debug';
 
 const {
   apiHistoryRepository,
-  projectService,
-  deployService,
+  runtimeScopeResolver,
   wrenAIAdaptor,
   queryService,
+  skillService,
+  connectorService,
 } = components;
 
 /**
@@ -100,10 +105,9 @@ export default async function handler(
     req.body as AsyncAskRequest;
   const startTime = Date.now();
   let project;
+  let runtimeScope;
 
   try {
-    project = await projectService.getCurrentProject();
-
     // Only allow POST method
     if (req.method !== 'POST') {
       throw new ApiError('Method not allowed', 405);
@@ -123,8 +127,9 @@ export default async function handler(
     // Send message start event
     sendMessageStart(res);
 
-    // Get current project's last deployment
-    const lastDeploy = await deployService.getLastDeployment(project.id);
+    runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
+    project = runtimeScope.project;
+    const lastDeploy = runtimeScope.deployment;
     if (!lastDeploy) {
       throw new ApiError(
         'No deployment found, please deploy your project first',
@@ -137,9 +142,25 @@ export default async function handler(
     const newThreadId = threadId || uuidv4();
 
     // Get conversation history if threadId is provided
-    const histories = threadId
-      ? await apiHistoryRepository.findAllBy({ threadId })
-      : undefined;
+    const histories = await getScopedThreadHistories({
+      apiHistoryRepository,
+      projectId: project.id,
+      threadId,
+      runtimeScope,
+    });
+    const askRuntimeContext = await buildAskRuntimeContext({
+      runtimeIdentity: {
+        projectId: runtimeScope.project.id,
+        workspaceId: runtimeScope.workspace?.id,
+        knowledgeBaseId: runtimeScope.knowledgeBase?.id,
+        kbSnapshotId: runtimeScope.kbSnapshot?.id,
+        deployHash: runtimeScope.deployHash,
+        actorUserId: runtimeScope.userId,
+      },
+      actorClaims: runtimeScope.actorClaims,
+      skillService,
+      connectorService,
+    });
 
     // Step 1: Generate SQL
     sendStateUpdate(res, StateType.SQL_GENERATION_START, {
@@ -150,12 +171,13 @@ export default async function handler(
     });
     const askTask = await wrenAIAdaptor.ask({
       query: question,
-      deployId: lastDeploy.hash,
+      deployId: runtimeScope.deployHash,
       histories: transformHistoryInput(histories) as any,
       configurations: {
         language:
           language || WrenAILanguage[project.language] || WrenAILanguage.EN,
       },
+      ...askRuntimeContext,
     });
 
     // Poll for the SQL generation result
@@ -271,15 +293,65 @@ export default async function handler(
       }
 
       // Log the API call and end the stream
-      await apiHistoryRepository.createOne({
+      await createApiHistoryRecord({
+        apiHistoryRepository,
         id: uuidv4(),
         projectId: project.id,
+        runtimeScope,
         apiType: ApiType.STREAM_ASK,
         threadId: newThreadId,
         headers: req.headers as Record<string, string>,
-        requestPayload: { question, sampleSize, language },
+        requestPayload: {
+          question,
+          sampleSize,
+          language,
+          workspaceId: runtimeScope.selector.workspaceId,
+          knowledgeBaseId: runtimeScope.selector.knowledgeBaseId,
+          kbSnapshotId: runtimeScope.selector.kbSnapshotId,
+          deployHash: runtimeScope.deployHash,
+        },
         responsePayload: {
           explanation,
+        },
+        statusCode: 200,
+        durationMs: Date.now() - startTime,
+      });
+
+      endStream(res, newThreadId, startTime);
+      return;
+    }
+
+    if (askResult.type === AskResultType.SKILL) {
+      if (askResult.skillResult?.resultType === SkillResultType.TEXT) {
+        sendContentBlockStart(res, ContentBlockContentType.EXPLANATION);
+        sendContentBlockDelta(res, askResult.skillResult.text || '');
+        sendContentBlockStop(res);
+      } else {
+        sendStateUpdate(res, StateType.SQL_GENERATION_SUCCESS, {
+          skillResult: askResult.skillResult,
+        });
+      }
+
+      await createApiHistoryRecord({
+        apiHistoryRepository,
+        id: uuidv4(),
+        projectId: project.id,
+        runtimeScope,
+        apiType: ApiType.STREAM_ASK,
+        threadId: newThreadId,
+        headers: req.headers as Record<string, string>,
+        requestPayload: {
+          question,
+          sampleSize,
+          language,
+          workspaceId: runtimeScope.selector.workspaceId,
+          knowledgeBaseId: runtimeScope.selector.knowledgeBaseId,
+          kbSnapshotId: runtimeScope.selector.kbSnapshotId,
+          deployHash: runtimeScope.deployHash,
+        },
+        responsePayload: {
+          type: 'SKILL_QUERY',
+          skillResult: askResult.skillResult,
         },
         statusCode: 200,
         durationMs: Date.now() - startTime,
@@ -328,6 +400,7 @@ export default async function handler(
       sql,
       sqlData,
       threadId: newThreadId,
+      userId: runtimeScope.userId || undefined,
       configurations: {
         language:
           language || WrenAILanguage[project.language] || WrenAILanguage.EN,
@@ -429,13 +502,23 @@ export default async function handler(
     }
 
     // Log the API call
-    await apiHistoryRepository.createOne({
+    await createApiHistoryRecord({
+      apiHistoryRepository,
       id: uuidv4(),
       projectId: project.id,
+      runtimeScope,
       apiType: ApiType.STREAM_ASK,
       threadId: newThreadId,
       headers: req.headers as Record<string, string>,
-      requestPayload: { question, sampleSize, language },
+      requestPayload: {
+        question,
+        sampleSize,
+        language,
+        workspaceId: runtimeScope.selector.workspaceId,
+        knowledgeBaseId: runtimeScope.selector.knowledgeBaseId,
+        kbSnapshotId: runtimeScope.selector.kbSnapshotId,
+        deployHash: runtimeScope.deployHash,
+      },
       responsePayload: {
         sql,
         summary,
@@ -449,13 +532,15 @@ export default async function handler(
     logger.error('Error in stream ask API:', error);
 
     // Log the error
-    await apiHistoryRepository.createOne({
+    await createApiHistoryRecord({
+      apiHistoryRepository,
       id: uuidv4(),
       projectId: project?.id || 0,
+      runtimeScope,
       apiType: ApiType.STREAM_ASK,
       threadId: threadId || uuidv4(),
       headers: req.headers as Record<string, string>,
-      requestPayload: { question, sampleSize, language },
+      requestPayload: req.body,
       responsePayload: {
         error: error instanceof Error ? error.message : String(error),
       },

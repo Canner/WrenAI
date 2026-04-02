@@ -24,6 +24,7 @@ import TextBasedAnswer, {
 import ChartAnswer from '@/components/pages/home/promptThread/ChartAnswer';
 import Preparation from '@/components/pages/home/preparation';
 import {
+  AskingTaskType,
   AskingTaskStatus,
   ThreadResponse,
   ThreadResponseAnswerDetail,
@@ -225,7 +226,10 @@ export default function AnswerResult(props: Props) {
     showRecommendedQuestions,
   );
 
-  const isAnswerPrepared = !!answerDetail?.queryId || !!answerDetail?.status;
+  const isSkillAnswer = askingTask?.type === AskingTaskType.SKILL;
+  const hasSkillResult = Boolean(askingTask?.skillResult);
+  const isAnswerPrepared =
+    !!answerDetail?.queryId || !!answerDetail?.status || hasSkillResult;
   const isBreakdownOnly = useMemo(() => {
     // we support rendering different types of answers now, so we need to check if it's old data.
     // existing thread response's answerDetail is null.
@@ -234,7 +238,7 @@ export default function AnswerResult(props: Props) {
 
   // initialize generate answer
   useEffect(() => {
-    if (isBreakdownOnly) return;
+    if (isBreakdownOnly || isSkillAnswer) return;
     if (
       canGenerateAnswer(askingTask, adjustmentTask) &&
       isNeedGenerateAnswer(answerDetail)
@@ -255,6 +259,7 @@ export default function AnswerResult(props: Props) {
     }
   }, [
     isBreakdownOnly,
+    isSkillAnswer,
     askingTask?.status,
     adjustmentTask?.status,
     answerDetail?.status,
@@ -267,6 +272,7 @@ export default function AnswerResult(props: Props) {
   };
 
   const showAnswerTabs =
+    hasSkillResult ||
     askingTask?.status === AskingTaskStatus.FINISHED ||
     isAnswerPrepared ||
     isBreakdownOnly;
@@ -308,70 +314,78 @@ export default function AnswerResult(props: Props) {
                 <TextBasedAnswer {...props} />
               </Tabs.TabPane>
             )}
-            <Tabs.TabPane
-              key={ANSWER_TAB_KEYS.VIEW_SQL}
-              tab={
-                <div className="select-none">
-                  <CodeFilled className="mr-2" />
-                  <Text>View SQL</Text>
-                </div>
-              }
-            >
-              <ViewSQLTabContent {...props} />
-            </Tabs.TabPane>
-            <Tabs.TabPane
-              key="chart"
-              tab={
-                <div className="select-none">
-                  <PieChartFilled className="mr-2" />
-                  <Text>
-                    Chart<Tag className="adm-beta-tag">Beta</Tag>
-                  </Text>
-                </div>
-              }
-            >
-              <ChartAnswer {...props} />
-            </Tabs.TabPane>
+            {!isSkillAnswer && (
+              <Tabs.TabPane
+                key={ANSWER_TAB_KEYS.VIEW_SQL}
+                tab={
+                  <div className="select-none">
+                    <CodeFilled className="mr-2" />
+                    <Text>View SQL</Text>
+                  </div>
+                }
+              >
+                <ViewSQLTabContent {...props} />
+              </Tabs.TabPane>
+            )}
+            {!isSkillAnswer && (
+              <Tabs.TabPane
+                key="chart"
+                tab={
+                  <div className="select-none">
+                    <PieChartFilled className="mr-2" />
+                    <Text>
+                      Chart<Tag className="adm-beta-tag">Beta</Tag>
+                    </Text>
+                  </div>
+                }
+              >
+                <ChartAnswer {...props} />
+              </Tabs.TabPane>
+            )}
           </StyledTabs>
-          <div className="mt-2 d-flex align-center">
-            <Tooltip
-              overlayInnerStyle={{ width: 'max-content' }}
-              placement="topLeft"
-              title={knowledgeTooltip}
-            >
-              <Button
-                type="link"
-                size="small"
-                className="mr-2"
+          {(sql || view) && (
+            <div className="mt-2 d-flex align-center">
+              {sql && (
+                <Tooltip
+                  overlayInnerStyle={{ width: 'max-content' }}
+                  placement="topLeft"
+                  title={knowledgeTooltip}
+                >
+                  <Button
+                    type="link"
+                    size="small"
+                    className="mr-2"
+                    onClick={() =>
+                      onOpenSaveToKnowledgeModal(
+                        {
+                          question: rephrasedQuestion,
+                          sql,
+                        },
+                        { isCreateMode: true },
+                      )
+                    }
+                    data-guideid="save-to-knowledge"
+                  >
+                    <div className="d-flex align-center">
+                      <RobotSVG className="mr-2" />
+                      Save to knowledge
+                    </div>
+                  </Button>
+                </Tooltip>
+              )}
+              <ViewBlock
+                view={view}
                 onClick={() =>
-                  onOpenSaveToKnowledgeModal(
+                  onOpenSaveAsViewModal(
+                    { sql, responseId: id },
                     {
-                      question: rephrasedQuestion,
-                      sql,
+                      rephrasedQuestion: questionForSaveAsView,
                     },
-                    { isCreateMode: true },
                   )
                 }
-                data-guideid="save-to-knowledge"
-              >
-                <div className="d-flex align-center">
-                  <RobotSVG className="mr-2" />
-                  Save to knowledge
-                </div>
-              </Button>
-            </Tooltip>
-            <ViewBlock
-              view={view}
-              onClick={() =>
-                onOpenSaveAsViewModal(
-                  { sql, responseId: id },
-                  {
-                    rephrasedQuestion: questionForSaveAsView,
-                  },
-                )
-              }
-            />
-          </div>
+              />
+            </div>
+          )}
           {renderRecommendedQuestions(
             isLastThreadResponse,
             recommendedQuestionProps,

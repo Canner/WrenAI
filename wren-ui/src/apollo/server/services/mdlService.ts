@@ -14,7 +14,7 @@ export interface MakeCurrentModelMDLResult {
   mdlBuilder: MDLBuilder;
 }
 export interface IMDLService {
-  makeCurrentModelMDL(): Promise<MakeCurrentModelMDLResult>;
+  makeCurrentModelMDL(projectId: number): Promise<MakeCurrentModelMDLResult>;
 }
 
 export class MDLService implements IMDLService {
@@ -48,10 +48,11 @@ export class MDLService implements IMDLService {
     this.viewRepository = viewRepository;
   }
 
-  public async makeCurrentModelMDL() {
-    const project = await this.projectRepository.getCurrentProject();
-    const projectId = project.id;
-    const models = await this.modelRepository.findAllBy({ projectId });
+  public async makeCurrentModelMDL(projectId: number) {
+    const project = await this.projectRepository.findOneBy({ id: projectId });
+    const models = await this.modelRepository.findAllBy({
+      projectId,
+    });
     const modelIds = models.map((m) => m.id);
     const columns =
       await this.modelColumnRepository.findColumnsByModelIds(modelIds);
@@ -62,7 +63,9 @@ export class MDLService implements IMDLService {
     const relations = await this.relationRepository.findRelationInfoBy({
       projectId,
     });
-    const views = await this.viewRepository.findAllBy({ projectId });
+    const views = await this.viewRepository.findAllBy({
+      projectId,
+    });
     const relatedModels = models;
     const relatedColumns = columns;
     const relatedRelations = relations;

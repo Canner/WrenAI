@@ -18,6 +18,7 @@ import {
   ProjectLanguage,
   SampleDatasetName,
 } from '@/apollo/client/graphql/__types__';
+import { buildRuntimeScopeUrl } from '@/apollo/client/runtimeScope';
 import { TEMPLATE_OPTIONS as SAMPLE_DATASET_INFO } from '@/components/pages/setup/utils';
 import { getLanguageText } from '@/utils/language';
 import * as events from '@/utils/events';
@@ -242,7 +243,7 @@ const playDataModelingGuide = (
         },
         doneBtnText: 'Go to Home',
         onNextClick: () => {
-          router.push(Path.Home);
+          router.push(buildRuntimeScopeUrl(Path.Home));
           $driver.destroy();
           dispatcher?.onDone && dispatcher.onDone();
         },

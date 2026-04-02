@@ -47,6 +47,15 @@ class Settings(BaseSettings):
 
     # engine config
     engine_timeout: float = Field(default=30.0)
+    skill_runner_enabled: bool = Field(default=False, alias="SKILL_RUNNER_ENABLED")
+    skill_runner_endpoint: str = Field(
+        default="http://127.0.0.1:5600",
+        alias="SKILL_RUNNER_ENDPOINT",
+    )
+    skill_runner_timeout: float = Field(
+        default=30.0,
+        alias="SKILL_RUNNER_TIMEOUT",
+    )
 
     # service config
     query_cache_ttl: int = Field(default=3600)  # unit: seconds

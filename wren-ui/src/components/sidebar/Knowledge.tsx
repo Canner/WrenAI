@@ -5,6 +5,7 @@ import FunctionOutlined from '@ant-design/icons/FunctionOutlined';
 import { Path, MENU_KEY } from '@/utils/enum';
 import { InstructionsSVG } from '@/utils/svgs';
 import SidebarMenu from '@/components/sidebar/SidebarMenu';
+import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 
 const Layout = styled.div`
   padding: 16px 0;
@@ -26,12 +27,16 @@ const linkStyle = { color: 'inherit', transition: 'none' };
 
 export default function Knowledge() {
   const router = useRouter();
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
 
   const menuItems = [
     {
       'data-guideid': 'question-sql-pairs',
       label: (
-        <Link style={linkStyle} href={Path.KnowledgeQuestionSQLPairs}>
+        <Link
+          style={linkStyle}
+          href={runtimeScopeNavigation.href(Path.KnowledgeQuestionSQLPairs)}
+        >
           Question-SQL pairs
         </Link>
       ),
@@ -42,7 +47,10 @@ export default function Knowledge() {
     {
       'data-guideid': 'instructions',
       label: (
-        <Link style={linkStyle} href={Path.KnowledgeInstructions}>
+        <Link
+          style={linkStyle}
+          href={runtimeScopeNavigation.href(Path.KnowledgeInstructions)}
+        >
           Instructions
         </Link>
       ),

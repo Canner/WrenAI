@@ -623,6 +623,7 @@ export const typeDefs = gql`
     GENERAL
     TEXT_TO_SQL
     MISLEADING_QUERY
+    SKILL
   }
 
   enum ChartTaskStatus {
@@ -661,6 +662,7 @@ export const typeDefs = gql`
     type: AskingTaskType
     error: Error
     candidates: [ResultCandidate!]!
+    skillResult: JSON
     rephrasedQuestion: String
     intentReasoning: String
     sqlGenerationReasoning: String
@@ -1110,6 +1112,36 @@ export const typeDefs = gql`
     id: Int!
   }
 
+  type RuntimeSelectorWorkspace {
+    id: String!
+    slug: String!
+    name: String!
+  }
+
+  type RuntimeSelectorKnowledgeBase {
+    id: String!
+    slug: String!
+    name: String!
+    defaultKbSnapshotId: String
+  }
+
+  type RuntimeSelectorKBSnapshot {
+    id: String!
+    snapshotKey: String!
+    displayName: String!
+    deployHash: String!
+    status: String!
+  }
+
+  type RuntimeSelectorState {
+    currentProjectId: Int
+    currentWorkspace: RuntimeSelectorWorkspace
+    currentKnowledgeBase: RuntimeSelectorKnowledgeBase
+    currentKbSnapshot: RuntimeSelectorKBSnapshot
+    knowledgeBases: [RuntimeSelectorKnowledgeBase!]!
+    kbSnapshots: [RuntimeSelectorKBSnapshot!]!
+  }
+
   # Query and Mutation
   type Query {
     # On Boarding Steps
@@ -1167,6 +1199,9 @@ export const typeDefs = gql`
       filter: ApiHistoryFilterInput
       pagination: ApiHistoryPaginationInput!
     ): ApiHistoryPaginatedResponse!
+
+    # Runtime Scope
+    runtimeSelectorState: RuntimeSelectorState
   }
 
   type Mutation {

@@ -10,6 +10,7 @@ import {
   ChartAdjustmentOption,
   WrenAILanguage,
 } from '@server/models/adaptor';
+import { buildAskRuntimeContext } from '@server/utils/askContext';
 import { IDeployService } from './deployService';
 import { IProjectService } from './projectService';
 import { IThreadRepository, Thread } from '../repositories/threadRepository';
@@ -43,6 +44,10 @@ import {
 import { getConfig } from '@server/config';
 import { TextBasedAnswerBackgroundTracker } from '../backgrounds/textBasedAnswerBackgroundTracker';
 import { IAskingTaskTracker, TrackedAskingResult } from './askingTaskTracker';
+import { PersistedRuntimeIdentity } from '@server/context/runtimeScope';
+import { ActorClaims } from './authService';
+import { IConnectorService } from './connectorService';
+import { ISkillService } from './skillService';
 
 const config = getConfig();
 
@@ -57,6 +62,13 @@ export interface Task {
 
 export interface AskingPayload {
   threadId?: number;
+  projectId: number;
+  workspaceId?: string | null;
+  knowledgeBaseId?: string | null;
+  kbSnapshotId?: string | null;
+  deployHash?: string | null;
+  actorUserId?: string | null;
+  actorClaims?: ActorClaims | null;
   language: string;
 }
 
@@ -91,6 +103,11 @@ export interface InstantRecommendedQuestionsInput {
   previousQuestions?: string[];
 }
 
+type InstantRecommendedQuestionTask = {
+  runtimeIdentity: PersistedRuntimeIdentity;
+  createdAt: number;
+};
+
 export enum ThreadResponseAnswerStatus {
   NOT_STARTED = 'NOT_STARTED',
   FETCHING_DATA = 'FETCHING_DATA',
@@ -106,11 +123,52 @@ export interface AdjustmentReasoningInput {
   tables: string[];
   sqlGenerationReasoning: string;
   projectId: number;
+  runtimeIdentity?: PersistedRuntimeIdentity;
 }
 
 export interface AdjustmentSqlInput {
   sql: string;
 }
+
+const toPersistedRuntimeIdentity = (source: {
+  projectId: number;
+  workspaceId?: string | null;
+  knowledgeBaseId?: string | null;
+  kbSnapshotId?: string | null;
+  deployHash?: string | null;
+  actorUserId?: string | null;
+}): PersistedRuntimeIdentity => ({
+  projectId: source.projectId,
+  workspaceId: source.workspaceId || null,
+  knowledgeBaseId: source.knowledgeBaseId || null,
+  kbSnapshotId: source.kbSnapshotId || null,
+  deployHash: source.deployHash || null,
+  actorUserId: source.actorUserId || null,
+});
+
+const isRuntimeIdentityMatch = (
+  source: {
+    projectId?: number | null;
+    workspaceId?: string | null;
+    knowledgeBaseId?: string | null;
+    kbSnapshotId?: string | null;
+    deployHash?: string | null;
+  },
+  runtimeIdentity: PersistedRuntimeIdentity,
+) => {
+  if (!source.projectId || source.projectId !== runtimeIdentity.projectId) {
+    return false;
+  }
+
+  return (
+    (!source.workspaceId || source.workspaceId === runtimeIdentity.workspaceId) &&
+    (!source.knowledgeBaseId ||
+      source.knowledgeBaseId === runtimeIdentity.knowledgeBaseId) &&
+    (!source.kbSnapshotId ||
+      source.kbSnapshotId === runtimeIdentity.kbSnapshotId) &&
+    (!source.deployHash || source.deployHash === runtimeIdentity.deployHash)
+  );
+};
 
 export interface IAskingService {
   /**
@@ -139,65 +197,110 @@ export interface IAskingService {
   /**
    * Asking detail task.
    */
-  createThread(input: AskingDetailTaskInput): Promise<Thread>;
-  updateThread(
+  createThread(
+    input: AskingDetailTaskInput,
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ): Promise<Thread>;
+  updateThreadScoped(
     threadId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
     input: Partial<AskingDetailTaskUpdateInput>,
   ): Promise<Thread>;
-  deleteThread(threadId: number): Promise<void>;
-  listThreads(): Promise<Thread[]>;
-  createThreadResponse(
+  deleteThreadScoped(
+    threadId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ): Promise<void>;
+  listThreads(runtimeIdentity: PersistedRuntimeIdentity): Promise<Thread[]>;
+  assertThreadScope(
+    threadId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ): Promise<Thread>;
+  assertAskingTaskScope(
+    queryId: string,
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ): Promise<void>;
+  assertAskingTaskScopeById(
+    taskId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ): Promise<void>;
+  assertResponseScope(
+    responseId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ): Promise<ThreadResponse>;
+  createThreadResponseScoped(
     input: AskingDetailTaskInput,
     threadId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
   ): Promise<ThreadResponse>;
-  updateThreadResponse(
+  updateThreadResponseScoped(
     responseId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
     data: { sql: string },
   ): Promise<ThreadResponse>;
-  getResponsesWithThread(threadId: number): Promise<ThreadResponse[]>;
-  getResponse(responseId: number): Promise<ThreadResponse>;
-  generateThreadResponseBreakdown(
+  getResponsesWithThreadScoped(
+    threadId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ): Promise<ThreadResponse[]>;
+  getResponseScoped(
+    responseId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ): Promise<ThreadResponse>;
+  getThreadProject(threadId: number): Promise<Project>;
+  getResponseProject(responseId: number): Promise<Project>;
+  generateThreadResponseBreakdownScoped(
     threadResponseId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
     configurations: { language: string },
   ): Promise<ThreadResponse>;
-  generateThreadResponseAnswer(
+  generateThreadResponseAnswerScoped(
     threadResponseId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
     configurations: { language: string },
   ): Promise<ThreadResponse>;
-  generateThreadResponseChart(
+  generateThreadResponseChartScoped(
     threadResponseId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
     configurations: { language: string },
   ): Promise<ThreadResponse>;
-  adjustThreadResponseChart(
+  adjustThreadResponseChartScoped(
     threadResponseId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
     input: ChartAdjustmentOption,
     configurations: { language: string },
   ): Promise<ThreadResponse>;
-  adjustThreadResponseWithSQL(
+  adjustThreadResponseWithSQLScoped(
     threadResponseId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
     input: AdjustmentSqlInput,
   ): Promise<ThreadResponse>;
-  adjustThreadResponseAnswer(
+  adjustThreadResponseAnswerScoped(
     threadResponseId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
     input: AdjustmentReasoningInput,
     configurations: { language: string },
   ): Promise<ThreadResponse>;
   cancelAdjustThreadResponseAnswer(taskId: string): Promise<void>;
   rerunAdjustThreadResponseAnswer(
     threadResponseId: number,
-    projectId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
     configurations: { language: string },
   ): Promise<{ queryId: string }>;
   getAdjustmentTask(taskId: string): Promise<TrackedAdjustmentResult>;
   getAdjustmentTaskById(id: number): Promise<TrackedAdjustmentResult>;
-  changeThreadResponseAnswerDetailStatus(
+  changeThreadResponseAnswerDetailStatusScoped(
     responseId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
     status: ThreadResponseAnswerStatus,
     content?: string,
   ): Promise<ThreadResponse>;
-  previewData(responseId: number, limit?: number): Promise<PreviewDataResponse>;
-  previewBreakdownData(
+  previewDataScoped(
     responseId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+    limit?: number,
+  ): Promise<PreviewDataResponse>;
+  previewBreakdownDataScoped(
+    responseId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
     stepIndex?: number,
     limit?: number,
   ): Promise<PreviewDataResponse>;
@@ -207,9 +310,11 @@ export interface IAskingService {
    */
   createInstantRecommendedQuestions(
     input: InstantRecommendedQuestionsInput,
+    runtimeIdentity: PersistedRuntimeIdentity,
   ): Promise<Task>;
   getInstantRecommendedQuestions(
     queryId: string,
+    runtimeIdentity: PersistedRuntimeIdentity,
   ): Promise<RecommendationQuestionsResult>;
   generateThreadRecommendationQuestions(threadId: number): Promise<void>;
   getThreadRecommendationQuestions(
@@ -227,6 +332,15 @@ const isFinalized = (status: AskResultStatus) => {
     status === AskResultStatus.FAILED ||
     status === AskResultStatus.FINISHED ||
     status === AskResultStatus.STOPPED
+  );
+};
+
+const isRecommendationQuestionsFinalized = (
+  status: RecommendationQuestionStatus,
+) => {
+  return (
+    status === RecommendationQuestionStatus.FAILED ||
+    status === RecommendationQuestionStatus.FINISHED
   );
 };
 
@@ -399,6 +513,10 @@ class BreakdownBackgroundTracker {
 }
 
 export class AskingService implements IAskingService {
+  private instantRecommendedQuestionTasks = new Map<
+    string,
+    InstantRecommendedQuestionTask
+  >();
   private wrenAIAdaptor: IWrenAIAdaptor;
   private deployService: IDeployService;
   private projectService: IProjectService;
@@ -416,6 +534,11 @@ export class AskingService implements IAskingService {
   private askingTaskTracker: IAskingTaskTracker;
   private askingTaskRepository: IAskingTaskRepository;
   private adjustmentBackgroundTracker: AdjustmentBackgroundTaskTracker;
+  private skillService?: Pick<
+    ISkillService,
+    'listSkillBindingsByKnowledgeBase' | 'getSkillDefinitionById'
+  >;
+  private connectorService?: Pick<IConnectorService, 'getResolvedConnector'>;
 
   constructor({
     telemetry,
@@ -429,6 +552,8 @@ export class AskingService implements IAskingService {
     queryService,
     mdlService,
     askingTaskTracker,
+    skillService,
+    connectorService,
   }: {
     telemetry: PostHogTelemetry;
     wrenAIAdaptor: IWrenAIAdaptor;
@@ -441,6 +566,11 @@ export class AskingService implements IAskingService {
     queryService: IQueryService;
     mdlService: IMDLService;
     askingTaskTracker: IAskingTaskTracker;
+    skillService?: Pick<
+      ISkillService,
+      'listSkillBindingsByKnowledgeBase' | 'getSkillDefinitionById'
+    >;
+    connectorService?: Pick<IConnectorService, 'getResolvedConnector'>;
   }) {
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.deployService = deployService;
@@ -459,6 +589,7 @@ export class AskingService implements IAskingService {
       new TextBasedAnswerBackgroundTracker({
         wrenAIAdaptor,
         threadResponseRepository,
+        threadRepository,
         projectService,
         deployService,
         queryService,
@@ -490,6 +621,8 @@ export class AskingService implements IAskingService {
     this.askingTaskRepository = askingTaskRepository;
     this.mdlService = mdlService;
     this.askingTaskTracker = askingTaskTracker;
+    this.skillService = skillService;
+    this.connectorService = connectorService;
   }
 
   public async getThreadRecommendationQuestions(
@@ -531,8 +664,10 @@ export class AskingService implements IAskingService {
       return;
     }
 
-    const project = await this.projectService.getCurrentProject();
-    const { manifest } = await this.mdlService.makeCurrentModelMDL();
+    const project = await this.projectService.getProjectById(thread.projectId);
+    const { manifest } = await this.mdlService.makeCurrentModelMDL(
+      thread.projectId,
+    );
 
     const threadResponses = await this.threadResponseRepository.findAllBy({
       threadId,
@@ -592,7 +727,23 @@ export class AskingService implements IAskingService {
     threadResponseId?: number,
   ): Promise<Task> {
     const { threadId, language } = payload;
-    const deployId = await this.getDeployId();
+    const threadRuntimeIdentity = threadId
+      ? toPersistedRuntimeIdentity(await this.getThreadById(threadId))
+      : null;
+    const runtimeIdentity = threadRuntimeIdentity || {
+      projectId: payload.projectId,
+      workspaceId: payload.workspaceId,
+      knowledgeBaseId: payload.knowledgeBaseId,
+      kbSnapshotId: payload.kbSnapshotId,
+      deployHash: payload.deployHash || null,
+      actorUserId: payload.actorUserId,
+    };
+    const deployId =
+      runtimeIdentity.deployHash ||
+      (await this.getDeployId({
+        threadId,
+        projectId: runtimeIdentity.projectId,
+      }));
 
     // if it's a follow-up question, then the input will have a threadId
     // then use the threadId to get the sql and get the steps of last thread response
@@ -600,6 +751,17 @@ export class AskingService implements IAskingService {
     const histories = threadId
       ? await this.getAskingHistory(threadId, threadResponseId)
       : null;
+    const askRuntimeContext = await buildAskRuntimeContext({
+      runtimeIdentity: {
+        ...runtimeIdentity,
+        deployHash: runtimeIdentity.deployHash || deployId,
+      },
+      actorClaims: payload.actorClaims,
+      skillService: this.skillService,
+      connectorService: this.connectorService,
+    });
+    const { runtimeIdentity: _runtimeIdentity, ...askContextWithoutIdentity } =
+      askRuntimeContext;
     const response = await this.askingTaskTracker.createAskingTask({
       query: input.question,
       histories,
@@ -608,6 +770,11 @@ export class AskingService implements IAskingService {
       rerunFromCancelled,
       previousTaskId,
       threadResponseId,
+      runtimeIdentity: {
+        ...runtimeIdentity,
+        deployHash: runtimeIdentity.deployHash || deployId,
+      },
+      ...askContextWithoutIdentity,
     });
     return {
       id: response.queryId,
@@ -677,15 +844,18 @@ export class AskingService implements IAskingService {
    * 2. create a task on AI service to generate the detail
    * 3. update the thread response with the task id
    */
-  public async createThread(input: AskingDetailTaskInput): Promise<Thread> {
+  public async createThread(
+    input: AskingDetailTaskInput,
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ): Promise<Thread> {
     // 1. create a thread and the first thread response
-    const { id } = await this.projectService.getCurrentProject();
     const thread = await this.threadRepository.createOne({
-      projectId: id,
+      ...runtimeIdentity,
       summary: input.question,
     });
 
     const threadResponse = await this.threadResponseRepository.createOne({
+      ...toPersistedRuntimeIdentity(thread),
       threadId: thread.id,
       question: input.question,
       sql: input.sql,
@@ -706,12 +876,84 @@ export class AskingService implements IAskingService {
     return thread;
   }
 
-  public async listThreads(): Promise<Thread[]> {
-    const { id } = await this.projectService.getCurrentProject();
-    return await this.threadRepository.listAllTimeDescOrder(id);
+  public async listThreads(
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ): Promise<Thread[]> {
+    const threads = await this.threadRepository.listAllTimeDescOrder(
+      runtimeIdentity.projectId,
+    );
+    return threads.filter((thread) =>
+      isRuntimeIdentityMatch(thread, runtimeIdentity),
+    );
   }
 
-  public async updateThread(
+  public async assertThreadScope(
+    threadId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ): Promise<Thread> {
+    const thread = await this.getThreadById(threadId);
+    if (!isRuntimeIdentityMatch(thread, runtimeIdentity)) {
+      throw new Error(
+        `Thread ${threadId} does not belong to the current runtime scope`,
+      );
+    }
+
+    return thread;
+  }
+
+  public async assertAskingTaskScope(
+    queryId: string,
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ): Promise<void> {
+    const task = await this.askingTaskRepository.findByQueryId(queryId);
+    if (!task) {
+      throw new Error(`Asking task ${queryId} not found`);
+    }
+
+    if (!isRuntimeIdentityMatch(task, runtimeIdentity)) {
+      throw new Error(
+        `Asking task ${queryId} does not belong to the current runtime scope`,
+      );
+    }
+  }
+
+  public async assertAskingTaskScopeById(
+    taskId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ): Promise<void> {
+    const task = await this.askingTaskRepository.findOneBy({ id: taskId });
+    if (!task) {
+      throw new Error(`Asking task ${taskId} not found`);
+    }
+
+    if (!isRuntimeIdentityMatch(task, runtimeIdentity)) {
+      throw new Error(
+        `Asking task ${taskId} does not belong to the current runtime scope`,
+      );
+    }
+  }
+
+  public async assertResponseScope(
+    responseId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ): Promise<ThreadResponse> {
+    const response = await this.getResponse(responseId);
+    if (!response) {
+      throw new Error(`Thread response ${responseId} not found`);
+    }
+
+    const responseRuntimeIdentity =
+      await this.getThreadResponseRuntimeIdentity(response);
+    if (!isRuntimeIdentityMatch(responseRuntimeIdentity, runtimeIdentity)) {
+      throw new Error(
+        `Thread response ${responseId} does not belong to the current runtime scope`,
+      );
+    }
+
+    return response;
+  }
+
+  private async updateThread(
     threadId: number,
     input: Partial<AskingDetailTaskUpdateInput>,
   ): Promise<Thread> {
@@ -725,11 +967,28 @@ export class AskingService implements IAskingService {
     });
   }
 
-  public async deleteThread(threadId: number): Promise<void> {
+  public async updateThreadScoped(
+    threadId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+    input: Partial<AskingDetailTaskUpdateInput>,
+  ): Promise<Thread> {
+    await this.assertThreadScope(threadId, runtimeIdentity);
+    return this.updateThread(threadId, input);
+  }
+
+  private async deleteThread(threadId: number): Promise<void> {
     await this.threadRepository.deleteOne(threadId);
   }
 
-  public async createThreadResponse(
+  public async deleteThreadScoped(
+    threadId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ): Promise<void> {
+    await this.assertThreadScope(threadId, runtimeIdentity);
+    await this.deleteThread(threadId);
+  }
+
+  private async createThreadResponse(
     input: AskingDetailTaskInput,
     threadId: number,
   ): Promise<ThreadResponse> {
@@ -742,6 +1001,7 @@ export class AskingService implements IAskingService {
     }
 
     const threadResponse = await this.threadResponseRepository.createOne({
+      ...toPersistedRuntimeIdentity(thread),
       threadId: thread.id,
       question: input.question,
       sql: input.sql,
@@ -761,7 +1021,16 @@ export class AskingService implements IAskingService {
     return threadResponse;
   }
 
-  public async updateThreadResponse(
+  public async createThreadResponseScoped(
+    input: AskingDetailTaskInput,
+    threadId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ): Promise<ThreadResponse> {
+    await this.assertThreadScope(threadId, runtimeIdentity);
+    return this.createThreadResponse(input, threadId);
+  }
+
+  private async updateThreadResponse(
     responseId: number,
     data: { sql: string },
   ): Promise<ThreadResponse> {
@@ -777,7 +1046,16 @@ export class AskingService implements IAskingService {
     });
   }
 
-  public async generateThreadResponseBreakdown(
+  public async updateThreadResponseScoped(
+    responseId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+    data: { sql: string },
+  ): Promise<ThreadResponse> {
+    await this.assertResponseScope(responseId, runtimeIdentity);
+    return this.updateThreadResponse(responseId, data);
+  }
+
+  private async generateThreadResponseBreakdown(
     threadResponseId: number,
     configurations: { language: string },
   ): Promise<ThreadResponse> {
@@ -815,8 +1093,21 @@ export class AskingService implements IAskingService {
     return updatedThreadResponse;
   }
 
-  public async generateThreadResponseAnswer(
+  public async generateThreadResponseBreakdownScoped(
     threadResponseId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+    configurations: { language: string },
+  ): Promise<ThreadResponse> {
+    await this.assertResponseScope(threadResponseId, runtimeIdentity);
+    return this.generateThreadResponseBreakdown(
+      threadResponseId,
+      configurations,
+    );
+  }
+
+  private async generateThreadResponseAnswer(
+    threadResponseId: number,
+    _configurations?: { language: string },
   ): Promise<ThreadResponse> {
     const threadResponse = await this.threadResponseRepository.findOneBy({
       id: threadResponseId,
@@ -842,7 +1133,16 @@ export class AskingService implements IAskingService {
     return updatedThreadResponse;
   }
 
-  public async generateThreadResponseChart(
+  public async generateThreadResponseAnswerScoped(
+    threadResponseId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+    configurations: { language: string },
+  ): Promise<ThreadResponse> {
+    await this.assertResponseScope(threadResponseId, runtimeIdentity);
+    return this.generateThreadResponseAnswer(threadResponseId, configurations);
+  }
+
+  private async generateThreadResponseChart(
     threadResponseId: number,
     configurations: { language: string },
   ): Promise<ThreadResponse> {
@@ -878,7 +1178,16 @@ export class AskingService implements IAskingService {
     return updatedThreadResponse;
   }
 
-  public async adjustThreadResponseChart(
+  public async generateThreadResponseChartScoped(
+    threadResponseId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+    configurations: { language: string },
+  ): Promise<ThreadResponse> {
+    await this.assertResponseScope(threadResponseId, runtimeIdentity);
+    return this.generateThreadResponseChart(threadResponseId, configurations);
+  }
+
+  private async adjustThreadResponseChart(
     threadResponseId: number,
     input: ChartAdjustmentOption,
     configurations: { language: string },
@@ -918,21 +1227,75 @@ export class AskingService implements IAskingService {
     return updatedThreadResponse;
   }
 
-  public async getResponsesWithThread(threadId: number) {
+  public async adjustThreadResponseChartScoped(
+    threadResponseId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+    input: ChartAdjustmentOption,
+    configurations: { language: string },
+  ): Promise<ThreadResponse> {
+    await this.assertResponseScope(threadResponseId, runtimeIdentity);
+    return this.adjustThreadResponseChart(
+      threadResponseId,
+      input,
+      configurations,
+    );
+  }
+
+  private async getResponsesWithThread(threadId: number) {
     return this.threadResponseRepository.getResponsesWithThread(threadId);
   }
 
-  public async getResponse(responseId: number) {
+  public async getResponsesWithThreadScoped(
+    threadId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ) {
+    await this.assertThreadScope(threadId, runtimeIdentity);
+    return this.getResponsesWithThread(threadId);
+  }
+
+  private async getResponse(responseId: number) {
     return this.threadResponseRepository.findOneBy({ id: responseId });
   }
 
-  public async previewData(responseId: number, limit?: number) {
+  public async getResponseScoped(
+    responseId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ) {
+    return this.assertResponseScope(responseId, runtimeIdentity);
+  }
+
+  public async getThreadProject(threadId: number): Promise<Project> {
+    const thread = await this.getThreadById(threadId);
+    return await this.projectService.getProjectById(thread.projectId);
+  }
+
+  public async getResponseProject(responseId: number): Promise<Project> {
     const response = await this.getResponse(responseId);
     if (!response) {
       throw new Error(`Thread response ${responseId} not found`);
     }
-    const project = await this.projectService.getCurrentProject();
-    const deployment = await this.deployService.getLastDeployment(project.id);
+
+    if (response.projectId) {
+      return await this.projectService.getProjectById(response.projectId);
+    }
+
+    return await this.getThreadProject(response.threadId);
+  }
+
+  private async previewData(responseId: number, limit?: number) {
+    const response = await this.getResponse(responseId);
+    if (!response) {
+      throw new Error(`Thread response ${responseId} not found`);
+    }
+    const runtimeIdentity =
+      await this.getThreadResponseRuntimeIdentity(response);
+    const project = await this.projectService.getProjectById(
+      runtimeIdentity.projectId,
+    );
+    const deployment = await this.deployService.getDeployment(
+      runtimeIdentity.projectId,
+      runtimeIdentity.deployHash,
+    );
     const mdl = deployment.manifest;
     const eventName = TelemetryEvent.HOME_PREVIEW_ANSWER;
     try {
@@ -954,6 +1317,15 @@ export class AskingService implements IAskingService {
     }
   }
 
+  public async previewDataScoped(
+    responseId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+    limit?: number,
+  ): Promise<PreviewDataResponse> {
+    await this.assertResponseScope(responseId, runtimeIdentity);
+    return this.previewData(responseId, limit);
+  }
+
   /**
    * this function is used to preview the data of a thread response
    * get the target thread response and get the steps
@@ -962,7 +1334,7 @@ export class AskingService implements IAskingService {
    * @param stepIndex: the step in the response detail
    * @returns Promise<QueryResponse>
    */
-  public async previewBreakdownData(
+  private async previewBreakdownData(
     responseId: number,
     stepIndex?: number,
     limit?: number,
@@ -971,8 +1343,15 @@ export class AskingService implements IAskingService {
     if (!response) {
       throw new Error(`Thread response ${responseId} not found`);
     }
-    const project = await this.projectService.getCurrentProject();
-    const deployment = await this.deployService.getLastDeployment(project.id);
+    const runtimeIdentity =
+      await this.getThreadResponseRuntimeIdentity(response);
+    const project = await this.projectService.getProjectById(
+      runtimeIdentity.projectId,
+    );
+    const deployment = await this.deployService.getDeployment(
+      runtimeIdentity.projectId,
+      runtimeIdentity.deployHash,
+    );
     const mdl = deployment.manifest;
     const steps = response?.breakdownDetail?.steps;
     const sql = safeFormatSQL(constructCteSql(steps, stepIndex));
@@ -996,10 +1375,22 @@ export class AskingService implements IAskingService {
     }
   }
 
+  public async previewBreakdownDataScoped(
+    responseId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+    stepIndex?: number,
+    limit?: number,
+  ): Promise<PreviewDataResponse> {
+    await this.assertResponseScope(responseId, runtimeIdentity);
+    return this.previewBreakdownData(responseId, stepIndex, limit);
+  }
+
   public async createInstantRecommendedQuestions(
     input: InstantRecommendedQuestionsInput,
+    runtimeIdentity: PersistedRuntimeIdentity,
   ): Promise<Task> {
-    const project = await this.projectService.getCurrentProject();
+    const projectId = runtimeIdentity.projectId;
+    const project = await this.projectService.getProjectById(projectId);
     const { manifest } = await this.deployService.getLastDeployment(project.id);
 
     const response = await this.wrenAIAdaptor.generateRecommendationQuestions({
@@ -1007,14 +1398,20 @@ export class AskingService implements IAskingService {
       previousQuestions: input.previousQuestions,
       ...this.getThreadRecommendationQuestionsConfig(project),
     });
+    this.trackInstantRecommendedQuestionTask(response.queryId, runtimeIdentity);
     return { id: response.queryId };
   }
 
   public async getInstantRecommendedQuestions(
     queryId: string,
+    runtimeIdentity: PersistedRuntimeIdentity,
   ): Promise<RecommendationQuestionsResult> {
+    this.assertInstantRecommendedQuestionTaskScope(queryId, runtimeIdentity);
     const response =
       await this.wrenAIAdaptor.getRecommendationQuestionsResult(queryId);
+    if (isRecommendationQuestionsFinalized(response.status)) {
+      this.instantRecommendedQuestionTasks.delete(queryId);
+    }
     return response;
   }
 
@@ -1023,7 +1420,7 @@ export class AskingService implements IAskingService {
     await this.threadRepository.deleteAllBy({ projectId });
   }
 
-  public async changeThreadResponseAnswerDetailStatus(
+  private async changeThreadResponseAnswerDetailStatus(
     responseId: number,
     status: ThreadResponseAnswerStatus,
     content?: string,
@@ -1053,13 +1450,70 @@ export class AskingService implements IAskingService {
     return updatedResponse;
   }
 
-  private async getDeployId() {
-    const { id } = await this.projectService.getCurrentProject();
-    const lastDeploy = await this.deployService.getLastDeployment(id);
+  public async changeThreadResponseAnswerDetailStatusScoped(
+    responseId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+    status: ThreadResponseAnswerStatus,
+    content?: string,
+  ): Promise<ThreadResponse> {
+    await this.assertResponseScope(responseId, runtimeIdentity);
+    return this.changeThreadResponseAnswerDetailStatus(
+      responseId,
+      status,
+      content,
+    );
+  }
+
+  private async getDeployId({
+    threadId,
+    projectId,
+  }: {
+    threadId?: number;
+    projectId?: number;
+  }) {
+    const thread = threadId ? await this.getThreadById(threadId) : null;
+    if (thread?.deployHash) {
+      return thread.deployHash;
+    }
+
+    const resolvedProjectId = thread ? thread.projectId : projectId;
+    if (!resolvedProjectId) {
+      throw new Error('createAskingTask requires threadId or projectId');
+    }
+    const lastDeploy =
+      await this.deployService.getLastDeployment(resolvedProjectId);
     return lastDeploy.hash;
   }
 
-  public async adjustThreadResponseWithSQL(
+  private async getThreadById(threadId: number): Promise<Thread> {
+    const thread = await this.threadRepository.findOneBy({ id: threadId });
+    if (!thread) {
+      throw new Error(`Thread ${threadId} not found`);
+    }
+
+    return thread;
+  }
+
+  private async getThreadResponseRuntimeIdentity(
+    threadResponse: ThreadResponse,
+  ): Promise<PersistedRuntimeIdentity> {
+    if (threadResponse.projectId) {
+      return {
+        projectId: threadResponse.projectId,
+        workspaceId: threadResponse.workspaceId || null,
+        knowledgeBaseId: threadResponse.knowledgeBaseId || null,
+        kbSnapshotId: threadResponse.kbSnapshotId || null,
+        deployHash: threadResponse.deployHash || null,
+        actorUserId: threadResponse.actorUserId || null,
+      };
+    }
+
+    return toPersistedRuntimeIdentity(
+      await this.getThreadById(threadResponse.threadId),
+    );
+  }
+
+  private async adjustThreadResponseWithSQL(
     threadResponseId: number,
     input: AdjustmentSqlInput,
   ): Promise<ThreadResponse> {
@@ -1069,8 +1523,11 @@ export class AskingService implements IAskingService {
     if (!response) {
       throw new Error(`Thread response ${threadResponseId} not found`);
     }
+    const runtimeIdentity =
+      await this.getThreadResponseRuntimeIdentity(response);
 
     return await this.threadResponseRepository.createOne({
+      ...runtimeIdentity,
       sql: input.sql,
       threadId: response.threadId,
       question: response.question,
@@ -1084,7 +1541,16 @@ export class AskingService implements IAskingService {
     });
   }
 
-  public async adjustThreadResponseAnswer(
+  public async adjustThreadResponseWithSQLScoped(
+    threadResponseId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+    input: AdjustmentSqlInput,
+  ): Promise<ThreadResponse> {
+    await this.assertResponseScope(threadResponseId, runtimeIdentity);
+    return this.adjustThreadResponseWithSQL(threadResponseId, input);
+  }
+
+  private async adjustThreadResponseAnswer(
     threadResponseId: number,
     input: AdjustmentReasoningInput,
     configurations: { language: string },
@@ -1104,11 +1570,26 @@ export class AskingService implements IAskingService {
         sqlGenerationReasoning: input.sqlGenerationReasoning,
         sql: originalThreadResponse.sql,
         projectId: input.projectId,
+        runtimeIdentity: input.runtimeIdentity,
         configurations,
         question: originalThreadResponse.question,
         originalThreadResponseId: originalThreadResponse.id,
       });
     return createdThreadResponse;
+  }
+
+  public async adjustThreadResponseAnswerScoped(
+    threadResponseId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+    input: AdjustmentReasoningInput,
+    configurations: { language: string },
+  ): Promise<ThreadResponse> {
+    await this.assertResponseScope(threadResponseId, runtimeIdentity);
+    return this.adjustThreadResponseAnswer(
+      threadResponseId,
+      input,
+      configurations,
+    );
   }
 
   public async cancelAdjustThreadResponseAnswer(taskId: string): Promise<void> {
@@ -1118,7 +1599,7 @@ export class AskingService implements IAskingService {
 
   public async rerunAdjustThreadResponseAnswer(
     threadResponseId: number,
-    projectId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
     configurations: { language: string },
   ): Promise<{ queryId: string }> {
     const threadResponse = await this.threadResponseRepository.findOneBy({
@@ -1132,7 +1613,8 @@ export class AskingService implements IAskingService {
       await this.adjustmentBackgroundTracker.rerunAdjustmentTask({
         threadId: threadResponse.threadId,
         threadResponseId,
-        projectId,
+        projectId: runtimeIdentity.projectId,
+        runtimeIdentity,
         configurations,
       });
     return { queryId };
@@ -1187,5 +1669,25 @@ export class AskingService implements IAskingService {
         language: WrenAILanguage[project.language] || WrenAILanguage.EN,
       },
     };
+  }
+
+  private trackInstantRecommendedQuestionTask(
+    queryId: string,
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ) {
+    this.instantRecommendedQuestionTasks.set(queryId, {
+      runtimeIdentity,
+      createdAt: Date.now(),
+    });
+  }
+
+  private assertInstantRecommendedQuestionTaskScope(
+    queryId: string,
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ) {
+    const task = this.instantRecommendedQuestionTasks.get(queryId);
+    if (!task || !isRuntimeIdentityMatch(task.runtimeIdentity, runtimeIdentity)) {
+      throw new Error('Instant recommended questions task not found');
+    }
   }
 }

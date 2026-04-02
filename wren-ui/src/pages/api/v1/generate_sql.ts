@@ -13,6 +13,7 @@ import {
   isAskResultFinished,
   validateAskResult,
   transformHistoryInput,
+  getScopedThreadHistories,
 } from '@/apollo/server/utils/apiUtils';
 import { DataSourceName } from '@server/types';
 
@@ -21,8 +22,7 @@ logger.level = 'debug';
 
 const {
   apiHistoryRepository,
-  projectService,
-  deployService,
+  runtimeScopeResolver,
   wrenAIAdaptor,
   wrenEngineAdaptor,
   ibisAdaptor,
@@ -33,6 +33,11 @@ interface GenerateSqlRequest {
   threadId?: string;
   language?: string;
   returnSqlDialect?: boolean;
+  workspaceId?: string;
+  knowledgeBaseId?: string;
+  kbSnapshotId?: string;
+  deployHash?: string;
+  projectId?: number;
 }
 
 export default async function handler(
@@ -47,10 +52,9 @@ export default async function handler(
   } = req.body as GenerateSqlRequest;
   const startTime = Date.now();
   let project;
+  let runtimeScope;
 
   try {
-    project = await projectService.getCurrentProject();
-
     // Only allow POST method
     if (req.method !== 'POST') {
       throw new ApiError('Method not allowed', 405);
@@ -61,8 +65,9 @@ export default async function handler(
       throw new ApiError('Question is required', 400);
     }
 
-    // get current project's last deployment
-    const lastDeploy = await deployService.getLastDeployment(project.id);
+    runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
+    project = runtimeScope.project;
+    const lastDeploy = runtimeScope.deployment;
 
     if (!lastDeploy) {
       throw new ApiError(
@@ -73,12 +78,15 @@ export default async function handler(
     }
 
     // ask AI service to generate SQL
-    const histories = threadId
-      ? await apiHistoryRepository.findAllBy({ threadId })
-      : undefined;
+    const histories = await getScopedThreadHistories({
+      apiHistoryRepository,
+      projectId: project.id,
+      threadId,
+      runtimeScope,
+    });
     const task = await wrenAIAdaptor.ask({
       query: question,
-      deployId: lastDeploy.hash,
+      deployId: runtimeScope.deployHash,
       histories: transformHistoryInput(histories) as any,
       configurations: {
         language:
@@ -144,6 +152,7 @@ export default async function handler(
         threadId: newThreadId,
       },
       projectId: project.id,
+      runtimeScope,
       apiType: ApiType.GENERATE_SQL,
       startTime,
       requestPayload: req.body,
@@ -155,6 +164,7 @@ export default async function handler(
       error,
       res,
       projectId: project?.id,
+      runtimeScope,
       apiType: ApiType.GENERATE_SQL,
       requestPayload: req.body,
       threadId,

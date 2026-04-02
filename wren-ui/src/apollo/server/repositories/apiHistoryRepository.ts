@@ -23,6 +23,14 @@ export enum ApiType {
   UPDATE_SQL_PAIR = 'UPDATE_SQL_PAIR',
   DELETE_SQL_PAIR = 'DELETE_SQL_PAIR',
   GET_MODELS = 'GET_MODELS',
+  GET_SKILLS = 'GET_SKILLS',
+  CREATE_SKILL = 'CREATE_SKILL',
+  UPDATE_SKILL = 'UPDATE_SKILL',
+  DELETE_SKILL = 'DELETE_SKILL',
+  GET_SKILL_BINDINGS = 'GET_SKILL_BINDINGS',
+  CREATE_SKILL_BINDING = 'CREATE_SKILL_BINDING',
+  UPDATE_SKILL_BINDING = 'UPDATE_SKILL_BINDING',
+  DELETE_SKILL_BINDING = 'DELETE_SKILL_BINDING',
   STREAM_ASK = 'STREAM_ASK',
   STREAM_GENERATE_SQL = 'STREAM_GENERATE_SQL',
 }
@@ -30,6 +38,11 @@ export enum ApiType {
 export interface ApiHistory {
   id?: string;
   projectId: number;
+  workspaceId?: string | null;
+  knowledgeBaseId?: string | null;
+  kbSnapshotId?: string | null;
+  deployHash?: string | null;
+  actorUserId?: string | null;
   apiType: ApiType;
   threadId?: string;
   headers?: Record<string, string>;

@@ -1,21 +1,67 @@
 import asyncio
 import logging
-from typing import Dict, List, Literal, Optional
+import uuid
+from typing import Any, Dict, List, Literal, Optional
 
 from cachetools import TTLCache
 from langfuse.decorators import observe
 from pydantic import AliasChoices, BaseModel, Field
 
+from src.core import (
+    SkillActorClaims,
+    SkillConnector,
+    SkillExecutionResult,
+    SkillHistoryEntry,
+    SkillResultType,
+    SkillRuntimeIdentity,
+    SkillRunnerClient,
+    SkillRunnerClientError,
+    SkillRunnerExecutionRequest,
+    SkillRunnerExecutionStatus,
+    SkillRunnerLimits,
+    SkillSecret,
+)
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
 from src.web.v1.services import BaseRequest, SSEEvent
 
 logger = logging.getLogger("wren-ai-service")
+DEFAULT_SKILL_RUNNER_POLL_ATTEMPTS = 3
+DEFAULT_SKILL_RUNNER_POLL_INTERVAL = 0.2
 
 
 class AskHistory(BaseModel):
     sql: str
     question: str
+
+
+class AskSkillCandidate(BaseModel):
+    skill_id: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("skill_id", "skillId"),
+    )
+    skill_name: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("skill_name", "skillName"),
+    )
+    runtime_kind: str = Field(
+        default="isolated_python",
+        validation_alias=AliasChoices("runtime_kind", "runtimeKind"),
+    )
+    source_type: str = Field(
+        default="inline",
+        validation_alias=AliasChoices("source_type", "sourceType"),
+    )
+    source_ref: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("source_ref", "sourceRef"),
+    )
+    entrypoint: Optional[str] = None
+    skill_config: dict[str, Any] = Field(
+        default_factory=dict,
+        validation_alias=AliasChoices("skill_config", "skillConfig"),
+    )
+    limits: SkillRunnerLimits = Field(default_factory=SkillRunnerLimits)
 
 
 # POST /v1/asks
@@ -30,6 +76,21 @@ class AskRequest(BaseRequest):
     use_dry_plan: bool = False
     allow_dry_plan_fallback: bool = True
     custom_instruction: Optional[str] = None
+    runtime_identity: Optional[SkillRuntimeIdentity] = Field(
+        default=None,
+        validation_alias=AliasChoices("runtime_identity", "runtimeIdentity"),
+    )
+    actor_claims: Optional[SkillActorClaims] = Field(
+        default=None,
+        validation_alias=AliasChoices("actor_claims", "actorClaims"),
+    )
+    connectors: list[SkillConnector] = Field(default_factory=list)
+    secrets: list[SkillSecret] = Field(default_factory=list)
+    skill_config: dict[str, Any] = Field(
+        default_factory=dict,
+        validation_alias=AliasChoices("skill_config", "skillConfig"),
+    )
+    skills: list[AskSkillCandidate] = Field(default_factory=list)
 
 
 class AskResponse(BaseModel):
@@ -75,9 +136,10 @@ class _AskResultResponse(BaseModel):
     rephrased_question: Optional[str] = None
     intent_reasoning: Optional[str] = None
     sql_generation_reasoning: Optional[str] = None
-    type: Optional[Literal["GENERAL", "TEXT_TO_SQL"]] = None
+    type: Optional[Literal["GENERAL", "TEXT_TO_SQL", "SKILL"]] = None
     retrieved_tables: Optional[List[str]] = None
     response: Optional[List[AskResult]] = None
+    skill_result: Optional[SkillExecutionResult] = None
     invalid_sql: Optional[str] = None
     error: Optional[AskError] = None
     trace_id: Optional[str] = None
@@ -106,6 +168,7 @@ class AskService:
         enable_column_pruning: bool = False,
         max_sql_correction_retries: int = 3,
         max_histories: int = 5,
+        skill_runner_client: Optional[SkillRunnerClient] = None,
         maxsize: int = 1_000_000,
         ttl: int = 120,
     ):
@@ -121,6 +184,161 @@ class AskService:
         self._enable_column_pruning = enable_column_pruning
         self._max_histories = max_histories
         self._max_sql_correction_retries = max_sql_correction_retries
+        self._skill_runner_client = skill_runner_client
+
+    def _build_skill_history_window(
+        self,
+        histories: list[AskHistory],
+    ) -> list[SkillHistoryEntry]:
+        return [
+            SkillHistoryEntry(
+                role="user",
+                content=history.question,
+                sql=history.sql,
+                metadata={"source": "ask_history"},
+            )
+            for history in histories
+        ]
+
+    def _build_skill_runner_request(
+        self,
+        ask_request: AskRequest,
+        query: str,
+        histories: list[AskHistory],
+        skill: AskSkillCandidate,
+    ) -> SkillRunnerExecutionRequest:
+        return SkillRunnerExecutionRequest(
+            execution_id=str(uuid.uuid4()),
+            skill_id=skill.skill_id,
+            skill_name=skill.skill_name,
+            runtime_kind=skill.runtime_kind,
+            source_type=skill.source_type,
+            source_ref=skill.source_ref,
+            entrypoint=skill.entrypoint,
+            limits=skill.limits,
+            query=query,
+            runtime_identity=ask_request.runtime_identity,
+            actor_claims=ask_request.actor_claims,
+            connectors=ask_request.connectors,
+            secrets=ask_request.secrets,
+            history_window=self._build_skill_history_window(histories),
+            skill_config={
+                **ask_request.skill_config,
+                **skill.skill_config,
+            },
+            metadata={"request_from": ask_request.request_from},
+        )
+
+    async def _await_skill_result(
+        self,
+        execution_id: str,
+    ):
+        if not self._skill_runner_client:
+            return None
+
+        latest_result = None
+        for attempt in range(DEFAULT_SKILL_RUNNER_POLL_ATTEMPTS):
+            latest_result = await self._skill_runner_client.get_result(execution_id)
+            if latest_result.status not in (
+                SkillRunnerExecutionStatus.ACCEPTED,
+                SkillRunnerExecutionStatus.RUNNING,
+            ):
+                return latest_result
+
+            if attempt < DEFAULT_SKILL_RUNNER_POLL_ATTEMPTS - 1:
+                await asyncio.sleep(DEFAULT_SKILL_RUNNER_POLL_INTERVAL)
+
+        return latest_result
+
+    def _normalize_skill_result(
+        self,
+        result: SkillExecutionResult,
+        execution_id: str,
+        skill: AskSkillCandidate,
+    ) -> SkillExecutionResult:
+        trace = result.trace.model_copy(
+            update={
+                "runner_job_id": result.trace.runner_job_id or execution_id,
+            }
+        )
+        metadata = {
+            **result.metadata,
+            "execution_id": execution_id,
+            "skill_id": skill.skill_id,
+            "skill_name": skill.skill_name,
+            "runtime_kind": skill.runtime_kind,
+            "source_type": skill.source_type,
+        }
+
+        return result.model_copy(
+            update={
+                "trace": trace,
+                "metadata": metadata,
+            }
+        )
+
+    async def _run_skill_first(
+        self,
+        ask_request: AskRequest,
+        query: str,
+        histories: list[AskHistory],
+    ) -> Optional[SkillExecutionResult]:
+        if (
+            not self._skill_runner_client
+            or not self._skill_runner_client.enabled
+            or not ask_request.runtime_identity
+            or not ask_request.skills
+        ):
+            return None
+
+        for skill in ask_request.skills:
+            request = self._build_skill_runner_request(
+                ask_request=ask_request,
+                query=query,
+                histories=histories,
+                skill=skill,
+            )
+
+            try:
+                execution = await self._skill_runner_client.run(request)
+                if execution.status in (
+                    SkillRunnerExecutionStatus.ACCEPTED,
+                    SkillRunnerExecutionStatus.RUNNING,
+                ):
+                    execution = await self._await_skill_result(execution.execution_id)
+
+                if (
+                    execution
+                    and execution.status == SkillRunnerExecutionStatus.SUCCEEDED
+                    and execution.result
+                    and execution.result.result_type != SkillResultType.ERROR
+                ):
+                    return self._normalize_skill_result(
+                        result=execution.result,
+                        execution_id=execution.execution_id,
+                        skill=skill,
+                    )
+
+                logger.warning(
+                    "Skill runner fallback to NL2SQL: skill_id=%s status=%s error=%s",
+                    skill.skill_id,
+                    execution.status if execution else "unknown",
+                    execution.error.message if execution and execution.error else None,
+                )
+            except SkillRunnerClientError as exc:
+                logger.warning(
+                    "Skill runner fallback to NL2SQL: skill_id=%s error=%s",
+                    skill.skill_id,
+                    exc,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Unexpected skill runner failure, fallback to NL2SQL: skill_id=%s error=%s",
+                    skill.skill_id,
+                    exc,
+                )
+
+        return None
 
     def _is_stopped(self, query_id: str, container: dict):
         if (
@@ -212,6 +430,26 @@ class AskService:
                     ]
                     sql_generation_reasoning = ""
                 else:
+                    skill_result = await self._run_skill_first(
+                        ask_request=ask_request,
+                        query=user_query,
+                        histories=histories,
+                    )
+                    if skill_result:
+                        self._ask_results[query_id] = AskResultResponse(
+                            status="finished",
+                            type="SKILL",
+                            skill_result=skill_result,
+                            trace_id=trace_id,
+                            is_followup=True if histories else False,
+                        )
+                        results["skill_result"] = skill_result.model_dump(
+                            mode="json",
+                            by_alias=True,
+                        )
+                        results["metadata"]["type"] = "SKILL"
+                        return results
+
                     # Run both pipeline operations concurrently
                     sql_samples_task, instructions_task = await asyncio.gather(
                         self._pipelines["sql_pairs_retrieval"].run(

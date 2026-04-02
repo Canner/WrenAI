@@ -1,16 +1,18 @@
 import { useMemo } from 'react';
-import { useRouter } from 'next/router';
 import { Path } from '@/utils/enum';
 import {
   useDeleteThreadMutation,
   useThreadsQuery,
   useUpdateThreadMutation,
 } from '@/apollo/client/graphql/home.generated';
+import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
 
 export default function useHomeSidebar() {
-  const router = useRouter();
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
+  const { hasRuntimeScope } = runtimeScopeNavigation;
   const { data, refetch } = useThreadsQuery({
     fetchPolicy: 'cache-and-network',
+    skip: !hasRuntimeScope,
   });
   const [updateThread] = useUpdateThreadMutation({
     onError: (error) => console.error(error),
@@ -29,7 +31,7 @@ export default function useHomeSidebar() {
   );
 
   const onSelect = (selectKeys: string[]) => {
-    router.push(`${Path.Home}/${selectKeys[0]}`);
+    runtimeScopeNavigation.push(`${Path.Home}/${selectKeys[0]}`);
   };
 
   const onRename = async (id: string, newName: string) => {

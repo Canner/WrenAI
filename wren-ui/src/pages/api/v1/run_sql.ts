@@ -15,7 +15,7 @@ import { transformToObjects } from '@server/utils/dataUtils';
 const logger = getLogger('API_RUN_SQL');
 logger.level = 'debug';
 
-const { projectService, queryService, deployService } = components;
+const { runtimeScopeResolver, queryService } = components;
 
 /**
  * Validates the SQL result and ensures it has the expected format
@@ -36,6 +36,11 @@ interface RunSqlRequest {
   sql: string;
   threadId?: string;
   limit?: number;
+  workspaceId?: string;
+  knowledgeBaseId?: string;
+  kbSnapshotId?: string;
+  deployHash?: string;
+  projectId?: number;
 }
 
 export default async function handler(
@@ -45,6 +50,7 @@ export default async function handler(
   const { sql, threadId, limit = 1000 } = req.body as RunSqlRequest;
   const startTime = Date.now();
   let project;
+  let runtimeScope;
 
   try {
     // Only allow POST method
@@ -57,9 +63,9 @@ export default async function handler(
       throw new ApiError('SQL is required', 400);
     }
 
-    project = await projectService.getCurrentProject();
-
-    const deployment = await deployService.getLastDeployment(project.id);
+    runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
+    project = runtimeScope.project;
+    const deployment = runtimeScope.deployment;
 
     if (!deployment) {
       throw new ApiError(
@@ -102,6 +108,7 @@ export default async function handler(
           totalRows: queryResult.data?.length || 0,
         },
         projectId: project.id,
+        runtimeScope,
         apiType: ApiType.RUN_SQL,
         startTime,
         requestPayload: req.body,
@@ -121,6 +128,7 @@ export default async function handler(
       error,
       res,
       projectId: project?.id,
+      runtimeScope,
       apiType: ApiType.RUN_SQL,
       requestPayload: req.body,
       threadId,

@@ -21,6 +21,62 @@ logger.level = 'debug';
 
 const cors = microCors();
 
+const LEGACY_RUNTIME_SCOPE_OPERATION_NAMES = new Set([
+  'RuntimeSelectorState',
+  'SaveDataSource',
+  'StartSampleDataset',
+]);
+
+const RECOVERABLE_RUNTIME_SCOPE_ERRORS = new Set(['No project found']);
+
+const NULL_RUNTIME_SCOPE_OPERATION_NAMES = new Set([
+  'RuntimeSelectorState',
+  'OnboardingStatus',
+  'SaveDataSource',
+  'StartSampleDataset',
+]);
+
+const readOperationName = (req: NextApiRequest): string | null => {
+  const body =
+    req.body && typeof req.body === 'object'
+      ? (req.body as Record<string, any>)
+      : undefined;
+  const query = req.query as Record<string, any>;
+
+  const bodyOperationName = body?.operationName;
+  if (typeof bodyOperationName === 'string' && bodyOperationName.trim()) {
+    return bodyOperationName;
+  }
+
+  const queryOperationName = query.operationName;
+  if (typeof queryOperationName === 'string' && queryOperationName.trim()) {
+    return queryOperationName;
+  }
+
+  return null;
+};
+
+const shouldAllowLegacyProjectShim = (req: NextApiRequest) => {
+  const operationName = readOperationName(req);
+  return (
+    !!operationName && LEGACY_RUNTIME_SCOPE_OPERATION_NAMES.has(operationName)
+  );
+};
+
+const shouldRecoverWithNullRuntimeScope = (
+  req: NextApiRequest,
+  error: Error | null | undefined,
+) => {
+  const operationName = readOperationName(req);
+  return (
+    !!operationName &&
+    !!error?.message &&
+    NULL_RUNTIME_SCOPE_OPERATION_NAMES.has(operationName) &&
+    (RECOVERABLE_RUNTIME_SCOPE_ERRORS.has(error.message) ||
+      error.message === 'Runtime scope selector is required for this request')
+  );
+};
+
 export const config: PageConfig = {
   api: {
     bodyParser: false,
@@ -47,6 +103,13 @@ const bootstrapServer = async () => {
     instructionRepository,
     apiHistoryRepository,
     dashboardItemRefreshJobRepository,
+    workspaceRepository,
+    knowledgeBaseRepository,
+    kbSnapshotRepository,
+    userRepository,
+    authIdentityRepository,
+    authSessionRepository,
+    workspaceMemberRepository,
     // adaptors
     wrenEngineAdaptor,
     ibisAdaptor,
@@ -60,8 +123,10 @@ const bootstrapServer = async () => {
     mdlService,
     dashboardService,
     sqlPairService,
-
     instructionService,
+    authService,
+    workspaceService,
+    runtimeScopeResolver,
     // background trackers
     projectRecommendQuestionBackgroundTracker,
     threadRecommendQuestionBackgroundTracker,
@@ -125,44 +190,72 @@ const bootstrapServer = async () => {
       return defaultApolloErrorHandler(error);
     },
     introspection: process.env.NODE_ENV !== 'production',
-    context: (): IContext => ({
-      config: serverConfig,
-      telemetry,
-      // adaptor
-      wrenEngineAdaptor,
-      ibisServerAdaptor: ibisAdaptor,
-      wrenAIAdaptor,
-      // services
-      projectService,
-      modelService,
-      mdlService,
-      deployService,
-      askingService,
-      queryService,
-      dashboardService,
-      sqlPairService,
-      instructionService,
-      // repository
-      projectRepository,
-      modelRepository,
-      modelColumnRepository,
-      modelNestedColumnRepository,
-      relationRepository,
-      viewRepository,
-      deployRepository: deployLogRepository,
-      schemaChangeRepository,
-      learningRepository,
-      dashboardRepository,
-      dashboardItemRepository,
-      sqlPairRepository,
-      instructionRepository,
-      apiHistoryRepository,
-      dashboardItemRefreshJobRepository,
-      // background trackers
-      projectRecommendQuestionBackgroundTracker,
-      threadRecommendQuestionBackgroundTracker,
-      dashboardCacheBackgroundTracker,
-    }),
+    context: async ({ req }): Promise<IContext> => {
+      let runtimeScope = null;
+      const allowLegacyProjectShim = shouldAllowLegacyProjectShim(req);
+      try {
+        runtimeScope = await runtimeScopeResolver.resolveRequestScope(req, {
+          allowLegacyProjectShim,
+        });
+      } catch (error: any) {
+        if (!shouldRecoverWithNullRuntimeScope(req, error)) {
+          throw error;
+        }
+        logger.debug(
+          `Runtime scope unavailable during bootstrap flow: ${error.message}`,
+        );
+      }
+
+      return {
+        config: serverConfig,
+        telemetry,
+        // adaptor
+        wrenEngineAdaptor,
+        ibisServerAdaptor: ibisAdaptor,
+        wrenAIAdaptor,
+        // services
+        projectService,
+        modelService,
+        mdlService,
+        deployService,
+        askingService,
+        queryService,
+        dashboardService,
+        sqlPairService,
+        instructionService,
+        authService,
+        workspaceService,
+        runtimeScopeResolver,
+        runtimeScope,
+        // repository
+        projectRepository,
+        modelRepository,
+        modelColumnRepository,
+        modelNestedColumnRepository,
+        relationRepository,
+        viewRepository,
+        deployRepository: deployLogRepository,
+        schemaChangeRepository,
+        learningRepository,
+        dashboardRepository,
+        dashboardItemRepository,
+        sqlPairRepository,
+        instructionRepository,
+        apiHistoryRepository,
+        dashboardItemRefreshJobRepository,
+        workspaceRepository,
+        knowledgeBaseRepository,
+        kbSnapshotRepository,
+        userRepository,
+        authIdentityRepository,
+        authSessionRepository,
+        workspaceMemberRepository,
+        // background trackers
+        projectRecommendQuestionBackgroundTracker,
+        threadRecommendQuestionBackgroundTracker,
+        dashboardCacheBackgroundTracker,
+      };
+    },
   });
   await apolloServer.start();
   return apolloServer;

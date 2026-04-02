@@ -17,8 +17,7 @@ import { PreviewDataResponse } from '@server/services/queryService';
 import { transformToObjects } from '@server/utils/dataUtils';
 import { enhanceVegaSpec } from '@/utils/vegaSpecUtils';
 
-const { projectService, wrenAIAdaptor, deployService, queryService } =
-  components;
+const { runtimeScopeResolver, wrenAIAdaptor, queryService } = components;
 
 const MAX_WAIT_TIME = 1000 * 60 * 3; // 3 minutes
 
@@ -48,6 +47,11 @@ interface GenerateVegaSpecRequest {
   sql: string;
   threadId?: string;
   sampleSize?: number;
+  workspaceId?: string;
+  knowledgeBaseId?: string;
+  kbSnapshotId?: string;
+  deployHash?: string;
+  projectId?: number;
 }
 
 export default async function handler(
@@ -62,10 +66,9 @@ export default async function handler(
   } = req.body as GenerateVegaSpecRequest;
   const startTime = Date.now();
   let project;
+  let runtimeScope;
 
   try {
-    project = await projectService.getCurrentProject();
-
     // Only allow POST method
     if (req.method !== 'POST') {
       throw new ApiError('Method not allowed', 405);
@@ -88,8 +91,9 @@ export default async function handler(
       throw new ApiError('Invalid sampleSize', 400);
     }
 
-    // Get current project's last deployment
-    const lastDeploy = await deployService.getLastDeployment(project.id);
+    runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
+    project = runtimeScope.project;
+    const lastDeploy = runtimeScope.deployment;
     if (!lastDeploy) {
       throw new ApiError(
         'No deployment found, please deploy your project first',
@@ -179,6 +183,7 @@ export default async function handler(
         threadId: newThreadId,
       },
       projectId: project.id,
+      runtimeScope,
       apiType: ApiType.GENERATE_VEGA_CHART,
       startTime,
       requestPayload: req.body,
@@ -190,6 +195,7 @@ export default async function handler(
       error,
       res,
       projectId: project?.id,
+      runtimeScope,
       apiType: ApiType.GENERATE_VEGA_CHART,
       requestPayload: req.body,
       threadId,

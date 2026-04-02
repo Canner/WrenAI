@@ -13,6 +13,7 @@ import {
 } from '@/components/sidebar/utils';
 import LabelTitle from '@/components/sidebar/LabelTitle';
 import { StyledSidebarTree } from '@/components/sidebar/Modeling';
+import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 
 interface Props {
   [key: string]: any;
@@ -21,6 +22,7 @@ interface Props {
 
 export default function ViewTree(props: Props) {
   const { views } = props;
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
 
   const onAddView = () => {
     Modal.info({
@@ -29,7 +31,7 @@ export default function ViewTree(props: Props) {
         <div>
           Pose your questions at{' '}
           <Link
-            href={Path.Home}
+            href={runtimeScopeNavigation.href(Path.Home)}
             data-ph-capture="true"
             data-ph-capture-attribute-name="cta_add_view_navigate_to_home"
           >

@@ -6,8 +6,10 @@ import { v4 as uuidv4 } from 'uuid';
 import {
   ApiError,
   MAX_WAIT_TIME,
+  createApiHistoryRecord,
   isAskResultFinished,
   transformHistoryInput,
+  getScopedThreadHistories,
   validateAskResult,
 } from '@/apollo/server/utils/apiUtils';
 import {
@@ -29,7 +31,7 @@ import {
 const logger = getLogger('API_STREAM_GENERATE_SQL');
 logger.level = 'debug';
 
-const { apiHistoryRepository, projectService, deployService, wrenAIAdaptor } =
+const { apiHistoryRepository, runtimeScopeResolver, wrenAIAdaptor } =
   components;
 
 export default async function handler(
@@ -39,10 +41,9 @@ export default async function handler(
   const { question, language, threadId } = req.body as AsyncAskRequest;
   const startTime = Date.now();
   let project;
+  let runtimeScope;
 
   try {
-    project = await projectService.getCurrentProject();
-
     // Only allow POST method
     if (req.method !== 'POST') {
       throw new ApiError('Method not allowed', 405);
@@ -65,8 +66,9 @@ export default async function handler(
     // Send message start event
     sendMessageStart(res);
 
-    // Get current project's last deployment
-    const lastDeploy = await deployService.getLastDeployment(project.id);
+    runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
+    project = runtimeScope.project;
+    const lastDeploy = runtimeScope.deployment;
     if (!lastDeploy) {
       throw new ApiError(
         'No deployment found, please deploy your project first',
@@ -76,9 +78,12 @@ export default async function handler(
     }
 
     // Get conversation history if threadId is provided
-    const histories = threadId
-      ? await apiHistoryRepository.findAllBy({ threadId })
-      : undefined;
+    const histories = await getScopedThreadHistories({
+      apiHistoryRepository,
+      projectId: project.id,
+      threadId,
+      runtimeScope,
+    });
 
     // Step 1: Generate SQL
     sendStateUpdate(res, StateType.SQL_GENERATION_START, {
@@ -90,7 +95,7 @@ export default async function handler(
 
     const askTask = await wrenAIAdaptor.ask({
       query: question,
-      deployId: lastDeploy.hash,
+      deployId: runtimeScope.deployHash,
       histories: transformHistoryInput(histories) as any,
       configurations: {
         language:
@@ -159,13 +164,22 @@ export default async function handler(
     sendStateUpdate(res, StateType.SQL_GENERATION_SUCCESS, { sql });
 
     // Log the API call
-    await apiHistoryRepository.createOne({
+    await createApiHistoryRecord({
+      apiHistoryRepository,
       id: uuidv4(),
       projectId: project.id,
+      runtimeScope,
       apiType: ApiType.STREAM_GENERATE_SQL,
       threadId: newThreadId,
       headers: req.headers as Record<string, string>,
-      requestPayload: { question, language },
+      requestPayload: {
+        question,
+        language,
+        workspaceId: runtimeScope.selector.workspaceId,
+        knowledgeBaseId: runtimeScope.selector.knowledgeBaseId,
+        kbSnapshotId: runtimeScope.selector.kbSnapshotId,
+        deployHash: runtimeScope.deployHash,
+      },
       responsePayload: { sql },
       statusCode: 200,
       durationMs: Date.now() - startTime,
@@ -176,13 +190,15 @@ export default async function handler(
     logger.error('Error in stream generate SQL API:', error);
 
     // Log the error
-    await apiHistoryRepository.createOne({
+    await createApiHistoryRecord({
+      apiHistoryRepository,
       id: uuidv4(),
       projectId: project?.id || 0,
+      runtimeScope,
       apiType: ApiType.STREAM_GENERATE_SQL,
       threadId: threadId || uuidv4(),
       headers: req.headers as Record<string, string>,
-      requestPayload: { question, language },
+      requestPayload: req.body,
       responsePayload: {
         error: error instanceof Error ? error.message : String(error),
       },

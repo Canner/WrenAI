@@ -33,6 +33,7 @@ export interface IDeployService {
     force?: boolean,
   ): Promise<DeployResponse>;
   getLastDeployment(projectId: number): Promise<Deploy>;
+  getDeployment(projectId: number, hash?: string | null): Promise<Deploy>;
   getInProgressDeployment(projectId: number): Promise<Deploy>;
   createMDLHash(manifest: Manifest, projectId: number): string;
   getMDLByHash(hash: string): Promise<string>;
@@ -65,6 +66,20 @@ export class DeployService implements IDeployService {
       return null;
     }
     return lastDeploy;
+  }
+
+  public async getDeployment(projectId, hash?: string | null) {
+    if (hash) {
+      const deployment = await this.deployLogRepository.findOneBy({
+        projectId,
+        hash,
+      });
+      if (deployment) {
+        return deployment;
+      }
+    }
+
+    return await this.getLastDeployment(projectId);
   }
 
   public async getInProgressDeployment(projectId) {

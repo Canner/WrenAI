@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { buildRuntimeScopeUrl } from '@/apollo/client/runtimeScope';
 
 type TextBasedAnswerStreamTaskReturn = [
   (responseId: number) => void,
@@ -27,7 +28,7 @@ export default function useTextBasedAnswerStreamTask() {
     onReset();
 
     const eventSource = new EventSource(
-      `/api/ask_task/streaming_answer?responseId=${responseId}`,
+      buildRuntimeScopeUrl('/api/ask_task/streaming_answer', { responseId }),
     );
 
     eventSource.onmessage = (event) => {

@@ -12,7 +12,7 @@ import { isNil } from 'lodash';
 const logger = getLogger('API_INSTRUCTIONS');
 logger.level = 'debug';
 
-const { projectService, instructionService } = components;
+const { runtimeScopeResolver, instructionService } = components;
 
 /**
  * Instructions API - Supports two types of instructions:
@@ -39,6 +39,7 @@ interface CreateInstructionRequest {
 const handleGetInstructions = async (
   req: NextApiRequest,
   res: NextApiResponse,
+  runtimeScope: any,
   project: any,
   startTime: number,
 ) => {
@@ -64,6 +65,7 @@ const handleGetInstructions = async (
     statusCode: 200,
     responsePayload: instructions,
     projectId: project.id,
+    runtimeScope,
     apiType: ApiType.GET_INSTRUCTIONS,
     startTime,
     requestPayload: {},
@@ -77,6 +79,7 @@ const handleGetInstructions = async (
 const handleCreateInstruction = async (
   req: NextApiRequest,
   res: NextApiResponse,
+  runtimeScope: any,
   project: any,
   startTime: number,
 ) => {
@@ -158,6 +161,7 @@ const handleCreateInstruction = async (
       isGlobal: isGlobalValue,
     },
     projectId: project.id,
+    runtimeScope,
     apiType: ApiType.CREATE_INSTRUCTION,
     startTime,
     requestPayload: req.body,
@@ -171,19 +175,21 @@ export default async function handler(
 ) {
   const startTime = Date.now();
   let project;
+  let runtimeScope;
 
   try {
-    project = await projectService.getCurrentProject();
+    runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
+    project = runtimeScope.project;
 
     // Handle GET method - list instructions
     if (req.method === 'GET') {
-      await handleGetInstructions(req, res, project, startTime);
+      await handleGetInstructions(req, res, runtimeScope, project, startTime);
       return;
     }
 
     // Handle POST method - create instruction
     if (req.method === 'POST') {
-      await handleCreateInstruction(req, res, project, startTime);
+      await handleCreateInstruction(req, res, runtimeScope, project, startTime);
       return;
     }
 
@@ -194,6 +200,7 @@ export default async function handler(
       error,
       res,
       projectId: project?.id,
+      runtimeScope,
       apiType:
         req.method === 'GET'
           ? ApiType.GET_INSTRUCTIONS

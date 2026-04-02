@@ -14,10 +14,12 @@ import SQLCodeBlock from '@/components/code/SQLCodeBlock';
 import DetailsDrawer from '@/components/pages/apiManagement/DetailsDrawer';
 import { useApiHistoryQuery } from '@/apollo/client/graphql/apiManagement.generated';
 import { ApiType, ApiHistoryResponse } from '@/apollo/client/graphql/__types__';
+import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
 
 const PAGE_SIZE = 10;
 
 export default function APIHistory() {
+  const runtimeScopePage = useProtectedRuntimeScopePage();
   const detailsDrawer = useDrawerAction();
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [filters, setFilters] = useState<Record<string, any>>({});
@@ -35,6 +37,7 @@ export default function APIHistory() {
         threadId: filters['threadId']?.[0],
       },
     },
+    skip: !runtimeScopePage.hasRuntimeScope,
     onError: (error) => console.error(error),
   });
 
@@ -160,8 +163,12 @@ export default function APIHistory() {
     },
   ];
 
+  if (runtimeScopePage.guarding) {
+    return <SiderLayout loading sidebar={null} />;
+  }
+
   return (
-    <SiderLayout loading={false} sidebar={null}>
+    <SiderLayout loading={loading} sidebar={null}>
       <PageLayout
         title={
           <>

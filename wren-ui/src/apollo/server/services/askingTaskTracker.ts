@@ -1,4 +1,5 @@
 import { getLogger } from '@server/utils';
+import { PersistedRuntimeIdentity } from '@server/context/runtimeScope';
 import {
   AskResult,
   AskResultType,
@@ -26,6 +27,7 @@ interface TrackedTask {
   isFinalized: boolean;
   threadResponseId?: number;
   rerunFromCancelled?: boolean;
+  runtimeIdentity?: PersistedRuntimeIdentity;
 }
 
 export type TrackedAskingResult = AskResult & {
@@ -38,6 +40,7 @@ export type CreateAskingTaskInput = AskInput & {
   rerunFromCancelled?: boolean;
   previousTaskId?: number;
   threadResponseId?: number;
+  runtimeIdentity?: PersistedRuntimeIdentity;
 };
 
 export interface IAskingTaskTracker {
@@ -114,6 +117,7 @@ export class AskingTaskTracker implements IAskingTaskTracker {
         question: input.query,
         isFinalized: false,
         rerunFromCancelled: input.rerunFromCancelled,
+        runtimeIdentity: input.runtimeIdentity,
       } as TrackedTask;
       this.trackedTasks.set(queryId, task);
 
@@ -140,6 +144,7 @@ export class AskingTaskTracker implements IAskingTaskTracker {
         // update the query id in database
         await this.askingTaskRepository.updateOne(input.previousTaskId, {
           queryId,
+          ...(input.runtimeIdentity || {}),
         });
       }
 
@@ -429,6 +434,7 @@ export class AskingTaskTracker implements IAskingTaskTracker {
         queryId,
         question: trackedTask.question,
         detail: trackedTask.result,
+        ...(trackedTask.runtimeIdentity || {}),
       });
       // update the task id in memory
       let existingTask: TrackedTask;
@@ -446,6 +452,7 @@ export class AskingTaskTracker implements IAskingTaskTracker {
     // update the task
     await this.askingTaskRepository.updateOne(taskRecord.id, {
       detail: trackedTask.result,
+      ...(trackedTask.runtimeIdentity || {}),
     });
   }
 

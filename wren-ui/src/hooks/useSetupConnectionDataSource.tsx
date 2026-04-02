@@ -1,4 +1,3 @@
-import { useRouter } from 'next/router';
 import { useState, useCallback } from 'react';
 import {
   Path,
@@ -7,11 +6,12 @@ import {
 } from '@/utils/enum';
 import { useSaveDataSourceMutation } from '@/apollo/client/graphql/dataSource.generated';
 import { DataSourceName } from '@/apollo/client/graphql/__types__';
+import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
 
 const PASSWORD_PLACEHOLDER = '************';
 
 export default function useSetupConnectionDataSource() {
-  const router = useRouter();
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const [selected, setSelected] = useState<DataSourceName>();
 
   const [saveDataSourceMutation, { loading, error }] =
@@ -25,7 +25,7 @@ export default function useSetupConnectionDataSource() {
       setSelected(payload.dataSource);
       payload?.dispatch?.();
     },
-    [router],
+    [],
   );
 
   const saveDataSource = useCallback(
@@ -43,8 +43,8 @@ export default function useSetupConnectionDataSource() {
   );
 
   const completedDataSourceSave = useCallback(async () => {
-    router.push(Path.OnboardingModels);
-  }, [selected, router]);
+    runtimeScopeNavigation.push(Path.OnboardingModels);
+  }, [runtimeScopeNavigation]);
 
   return {
     loading,

@@ -1,17 +1,13 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
+import { toPersistedRuntimeIdentity } from '@/apollo/server/context/runtimeScope';
 
-const { wrenAIAdaptor } = components;
+const { wrenAIAdaptor, askingService, runtimeScopeResolver } = components;
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache, no-transform');
-  res.setHeader('Connection', 'keep-alive');
-  res.flushHeaders();
-
   const { queryId } = req.query;
   if (!queryId) {
     res.status(400).json({ error: 'queryId is required' });
@@ -19,6 +15,17 @@ export default async function handler(
   }
 
   try {
+    const runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
+    await askingService.assertAskingTaskScope(
+      queryId as string,
+      toPersistedRuntimeIdentity(runtimeScope),
+    );
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
     const stream = await wrenAIAdaptor.getAskStreamingResult(queryId as string);
 
     stream.on('data', (chunk) => {

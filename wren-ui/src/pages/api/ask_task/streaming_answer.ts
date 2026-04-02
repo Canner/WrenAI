@@ -2,8 +2,10 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
 import { ThreadResponseAnswerStatus } from '@/apollo/server/services/askingService';
 import { TelemetryEvent } from '@/apollo/server/telemetry/telemetry';
+import { toPersistedRuntimeIdentity } from '@/apollo/server/context/runtimeScope';
 
-const { wrenAIAdaptor, askingService, telemetry } = components;
+const { wrenAIAdaptor, askingService, telemetry, runtimeScopeResolver } =
+  components;
 
 class ContentMap {
   private contentMap: { [key: string]: string } = {};
@@ -49,7 +51,16 @@ export default async function handler(
     return;
   }
   try {
-    const response = await askingService.getResponse(Number(responseId));
+    const runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
+    const runtimeIdentity = toPersistedRuntimeIdentity(runtimeScope);
+    await askingService.assertResponseScope(
+      Number(responseId),
+      runtimeIdentity,
+    );
+    const response = await askingService.getResponseScoped(
+      Number(responseId),
+      runtimeIdentity,
+    );
     if (!response) {
       throw new Error(`Thread response ${responseId} not found`);
     }
@@ -88,8 +99,9 @@ export default async function handler(
       res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
       res.end();
       askingService
-        .changeThreadResponseAnswerDetailStatus(
+        .changeThreadResponseAnswerDetailStatusScoped(
           Number(responseId),
+          runtimeIdentity,
           ThreadResponseAnswerStatus.FINISHED,
           contentMap.getContent(queryId),
         )
@@ -124,8 +136,9 @@ export default async function handler(
     req.on('close', () => {
       stream.destroy();
       askingService
-        .changeThreadResponseAnswerDetailStatus(
+        .changeThreadResponseAnswerDetailStatusScoped(
           Number(responseId),
+          runtimeIdentity,
           ThreadResponseAnswerStatus.INTERRUPTED,
           contentMap.getContent(queryId),
         )

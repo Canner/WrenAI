@@ -1,10 +1,16 @@
 import { IConfig } from '@server/config';
 import {
+  IRuntimeScopeResolver,
+  RuntimeScope,
+} from '@server/context/runtimeScope';
+import {
   IIbisAdaptor,
   IWrenAIAdaptor,
   IWrenEngineAdaptor,
 } from '@server/adaptors';
 import {
+  IAuthIdentityRepository,
+  IAuthSessionRepository,
   IModelColumnRepository,
   IModelNestedColumnRepository,
   IModelRepository,
@@ -20,8 +26,18 @@ import {
   IInstructionRepository,
   IApiHistoryRepository,
   IDashboardItemRefreshJobRepository,
+  IKnowledgeBaseRepository,
+  IKBSnapshotRepository,
+  IConnectorRepository,
+  ISecretRepository,
+  ISkillBindingRepository,
+  ISkillDefinitionRepository,
+  IUserRepository,
+  IWorkspaceMemberRepository,
+  IWorkspaceRepository,
 } from '@server/repositories';
 import {
+  IAuthService,
   IQueryService,
   IAskingService,
   IDeployService,
@@ -30,6 +46,10 @@ import {
   IProjectService,
   IDashboardService,
   IInstructionService,
+  IWorkspaceService,
+  ISecretService,
+  IConnectorService,
+  ISkillService,
 } from '@server/services';
 import { ITelemetry } from '@server/telemetry/telemetry';
 import {
@@ -59,6 +79,13 @@ export interface IContext {
   dashboardService: IDashboardService;
   sqlPairService: ISqlPairService;
   instructionService: IInstructionService;
+  authService: IAuthService;
+  workspaceService: IWorkspaceService;
+  secretService: ISecretService;
+  connectorService: IConnectorService;
+  skillService: ISkillService;
+  runtimeScopeResolver: IRuntimeScopeResolver;
+  runtimeScope: RuntimeScope | null;
 
   // repository
   projectRepository: IProjectRepository;
@@ -76,6 +103,17 @@ export interface IContext {
   instructionRepository: IInstructionRepository;
   apiHistoryRepository: IApiHistoryRepository;
   dashboardItemRefreshJobRepository: IDashboardItemRefreshJobRepository;
+  workspaceRepository: IWorkspaceRepository;
+  knowledgeBaseRepository: IKnowledgeBaseRepository;
+  kbSnapshotRepository: IKBSnapshotRepository;
+  connectorRepository: IConnectorRepository;
+  secretRepository: ISecretRepository;
+  skillDefinitionRepository: ISkillDefinitionRepository;
+  skillBindingRepository: ISkillBindingRepository;
+  userRepository: IUserRepository;
+  authIdentityRepository: IAuthIdentityRepository;
+  authSessionRepository: IAuthSessionRepository;
+  workspaceMemberRepository: IWorkspaceMemberRepository;
 
   // background trackers
   projectRecommendQuestionBackgroundTracker: ProjectRecommendQuestionBackgroundTracker;

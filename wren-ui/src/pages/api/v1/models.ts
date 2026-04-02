@@ -12,7 +12,7 @@ import { getLogger } from '@server/utils';
 const logger = getLogger('API_MODELS');
 logger.level = 'debug';
 
-const { projectService, deployService } = components;
+const { runtimeScopeResolver } = components;
 
 export default async function handler(
   req: NextApiRequest,
@@ -20,17 +20,17 @@ export default async function handler(
 ) {
   const startTime = Date.now();
   let project;
+  let runtimeScope;
 
   try {
-    project = await projectService.getCurrentProject();
-
     // Only allow GET method
     if (req.method !== 'GET') {
       throw new ApiError('Method not allowed', 405);
     }
 
-    // Get current project's last deployment
-    const lastDeploy = await deployService.getLastDeployment(project.id);
+    runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
+    project = runtimeScope.project;
+    const lastDeploy = runtimeScope.deployment;
     if (!lastDeploy) {
       throw new ApiError(
         'No deployment found, please deploy your project first',
@@ -58,6 +58,7 @@ export default async function handler(
         views,
       },
       projectId: project.id,
+      runtimeScope,
       apiType: ApiType.GET_MODELS,
       startTime,
       headers: req.headers as Record<string, string>,
@@ -67,6 +68,7 @@ export default async function handler(
       error,
       res,
       projectId: project?.id,
+      runtimeScope,
       apiType: ApiType.GET_MODELS,
       headers: req.headers as Record<string, string>,
       startTime,

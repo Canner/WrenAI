@@ -183,6 +183,10 @@ export interface Project {
 }
 
 export interface IProjectRepository extends IBasicRepository<Project> {
+  /**
+   * @deprecated Compatibility shim for legacy single-project flows only.
+   * New runtime paths must resolve context via RuntimeScopeResolver.
+   */
   getCurrentProject: () => Promise<Project>;
 }
 
@@ -196,6 +200,10 @@ export class ProjectRepository
     super({ knexPg, tableName: 'project' });
   }
 
+  /**
+   * @deprecated Compatibility shim for legacy single-project flows only.
+   * New runtime paths must resolve context via RuntimeScopeResolver.
+   */
   public async getCurrentProject() {
     const projects = await this.findAll({
       order: 'id',

@@ -6,6 +6,7 @@ import { OpenInNewIcon } from '@/utils/icons';
 import ApiOutlined from '@ant-design/icons/ApiOutlined';
 import ReadOutlined from '@ant-design/icons/ReadOutlined';
 import SidebarMenu from '@/components/sidebar/SidebarMenu';
+import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 
 const Layout = styled.div`
   padding: 16px 0;
@@ -26,12 +27,16 @@ const linkStyle = { color: 'inherit', transition: 'none' };
 
 export default function APIManagement() {
   const router = useRouter();
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
 
   const menuItems = [
     {
       'data-guideid': 'api-history',
       label: (
-        <Link style={linkStyle} href={Path.APIManagementHistory}>
+        <Link
+          style={linkStyle}
+          href={runtimeScopeNavigation.href(Path.APIManagementHistory)}
+        >
           API history
         </Link>
       ),

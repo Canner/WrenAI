@@ -56,19 +56,16 @@ export interface IProjectService {
     projectData: Partial<Project>,
   ) => Promise<Project>;
   getGeneralConnectionInfo: (project: Project) => Record<string, any>;
-  getProjectDataSourceTables: (
-    project?: Project,
-    projectId?: number,
-  ) => Promise<CompactTable[]>;
-  getProjectDataSourceVersion: (
-    project?: Project,
-    projectId?: number,
-  ) => Promise<string>;
+  getProjectDataSourceTables: (project: Project) => Promise<CompactTable[]>;
+  getProjectDataSourceVersion: (project: Project) => Promise<string>;
   getProjectSuggestedConstraint: (
-    project?: Project,
-    projectId?: number,
+    project: Project,
   ) => Promise<RecommendConstraint[]>;
 
+  /**
+   * @deprecated Compatibility shim for legacy single-project flows only.
+   * New runtime paths must resolve context via RuntimeScopeResolver.
+   */
   getCurrentProject: () => Promise<Project>;
   getProjectById: (projectId: number) => Promise<Project>;
   writeCredentialFile: (
@@ -76,10 +73,12 @@ export interface IProjectService {
     persistCredentialDir: string,
   ) => string;
   deleteProject: (projectId: number) => Promise<void>;
-  getProjectRecommendationQuestions: () => Promise<ProjectRecommendationQuestionsResult>;
+  getProjectRecommendationQuestions: (
+    projectId: number,
+  ) => Promise<ProjectRecommendationQuestionsResult>;
 
   // recommend questions
-  generateProjectRecommendationQuestions: () => Promise<void>;
+  generateProjectRecommendationQuestions: (projectId: number) => Promise<void>;
 }
 
 export class ProjectService implements IProjectService {
@@ -119,24 +118,18 @@ export class ProjectService implements IProjectService {
     return await this.projectRepository.updateOne(projectId, projectData);
   }
 
-  public async getProjectDataSourceVersion(
-    project?: Project,
-    projectId?: number,
-  ): Promise<string> {
-    const usedProject = project
-      ? project
-      : projectId
-        ? await this.getProjectById(projectId)
-        : await this.getCurrentProject();
-    return await this.metadataService.getVersion(usedProject);
+  public async getProjectDataSourceVersion(project: Project): Promise<string> {
+    return await this.metadataService.getVersion(project);
   }
 
-  public async generateProjectRecommendationQuestions(): Promise<void> {
-    const project = await this.getCurrentProject();
+  public async generateProjectRecommendationQuestions(
+    projectId: number,
+  ): Promise<void> {
+    const project = await this.getProjectById(projectId);
     if (!project) {
       throw new Error(`Project not found`);
     }
-    const { manifest } = await this.mdlService.makeCurrentModelMDL();
+    const { manifest } = await this.mdlService.makeCurrentModelMDL(project.id);
     const recommendQuestionResult =
       await this.wrenAIAdaptor.generateRecommendationQuestions({
         manifest,
@@ -161,8 +154,8 @@ export class ProjectService implements IProjectService {
     }
   }
 
-  public async getProjectRecommendationQuestions() {
-    const project = await this.projectRepository.getCurrentProject();
+  public async getProjectRecommendationQuestions(projectId: number) {
+    const project = await this.getProjectById(projectId);
     if (!project) {
       throw new Error(`Project not found`);
     }
@@ -181,6 +174,10 @@ export class ProjectService implements IProjectService {
     return result;
   }
 
+  /**
+   * @deprecated Compatibility shim for legacy single-project flows only.
+   * New runtime paths must resolve context via RuntimeScopeResolver.
+   */
   public async getCurrentProject() {
     return await this.projectRepository.getCurrentProject();
   }
@@ -189,28 +186,12 @@ export class ProjectService implements IProjectService {
     return await this.projectRepository.findOneBy({ id: projectId });
   }
 
-  public async getProjectDataSourceTables(
-    project?: Project,
-    projectId?: number,
-  ) {
-    const usedProject = project
-      ? project
-      : projectId
-        ? await this.getProjectById(projectId)
-        : await this.getCurrentProject();
-    return await this.metadataService.listTables(usedProject);
+  public async getProjectDataSourceTables(project: Project) {
+    return await this.metadataService.listTables(project);
   }
 
-  public async getProjectSuggestedConstraint(
-    project?: Project,
-    projectId?: number,
-  ) {
-    const usedProject = project
-      ? project
-      : projectId
-        ? await this.getProjectById(projectId)
-        : await this.getCurrentProject();
-    return await this.metadataService.listConstraints(usedProject);
+  public async getProjectSuggestedConstraint(project: Project) {
+    return await this.metadataService.listConstraints(project);
   }
 
   public async createProject(projectData: ProjectData) {

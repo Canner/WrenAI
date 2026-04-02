@@ -155,15 +155,18 @@ const Failed = makeProcessingError({
 const Understanding = makeProcessing('Understanding question');
 
 const IntentionFinished = (props: Props) => {
-  const { data, onIntentSQLAnswer } = props;
+  const { data, onIntentSQLAnswer, processState } = props;
   const { type } = data;
 
   useEffect(() => {
     // create an empty response first if this is a text to sql task
-    if (type === AskingTaskType.TEXT_TO_SQL) {
+    if (
+      type === AskingTaskType.TEXT_TO_SQL ||
+      (type === AskingTaskType.SKILL && processState === PROCESS_STATE.FINISHED)
+    ) {
       onIntentSQLAnswer && onIntentSQLAnswer();
     }
-  }, [type]);
+  }, [onIntentSQLAnswer, processState, type]);
 
   // To keep the UI result keep showing as understanding
   return <Understanding {...props} />;

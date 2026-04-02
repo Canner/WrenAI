@@ -28,6 +28,7 @@ import {
   useUpdateInstructionMutation,
   useDeleteInstructionMutation,
 } from '@/apollo/client/graphql/instructions.generated';
+import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
 
 const { Paragraph, Text } = Typography;
 
@@ -49,11 +50,13 @@ const StyledInstructionsIcon = styled(InstructionsSVG)`
 `;
 
 export default function ManageInstructions() {
+  const runtimeScopePage = useProtectedRuntimeScopePage();
   const instructionModal = useModalAction();
   const instructionDrawer = useDrawerAction();
 
   const { data, loading } = useInstructionsQuery({
     fetchPolicy: 'cache-and-network',
+    skip: !runtimeScopePage.hasRuntimeScope,
   });
   const instructions = data?.instructions || [];
 
@@ -165,8 +168,12 @@ export default function ManageInstructions() {
     },
   ];
 
+  if (runtimeScopePage.guarding) {
+    return <SiderLayout loading />;
+  }
+
   return (
-    <SiderLayout loading={false}>
+    <SiderLayout loading={loading}>
       <PageLayout
         title={
           <>

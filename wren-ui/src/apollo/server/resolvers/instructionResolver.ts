@@ -21,8 +21,9 @@ export class InstructionResolver {
     ctx: IContext,
   ): Promise<Instruction[]> {
     try {
-      const project = await ctx.projectService.getCurrentProject();
-      return await ctx.instructionService.getInstructions(project.id);
+      return await ctx.instructionService.getInstructions(
+        ctx.runtimeScope!.project.id,
+      );
     } catch (error) {
       logger.error(`Error getting instructions: ${error}`);
       throw error;
@@ -42,12 +43,11 @@ export class InstructionResolver {
     ctx: IContext,
   ): Promise<Instruction> {
     const { instruction, questions, isDefault } = args.data;
-    const project = await ctx.projectService.getCurrentProject();
     return await ctx.instructionService.createInstruction({
       instruction,
       questions,
       isDefault,
-      projectId: project.id,
+      projectId: ctx.runtimeScope!.project.id,
     });
   }
 
@@ -68,10 +68,9 @@ export class InstructionResolver {
     if (!id) {
       throw new Error('Instruction ID is required.');
     }
-    const project = await ctx.projectService.getCurrentProject();
     return await ctx.instructionService.updateInstruction({
       id,
-      projectId: project.id,
+      projectId: ctx.runtimeScope!.project.id,
       instruction,
       questions,
       isDefault,
@@ -85,8 +84,10 @@ export class InstructionResolver {
     ctx: IContext,
   ): Promise<boolean> {
     const { id } = args.where;
-    const project = await ctx.projectService.getCurrentProject();
-    await ctx.instructionService.deleteInstruction(id, project.id);
+    await ctx.instructionService.deleteInstruction(
+      id,
+      ctx.runtimeScope!.project.id,
+    );
     return true;
   }
 }

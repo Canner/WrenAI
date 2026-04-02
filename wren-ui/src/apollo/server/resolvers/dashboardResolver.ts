@@ -11,6 +11,7 @@ import {
   DashboardItemType,
 } from '@server/repositories';
 import { getLogger } from '@server/utils';
+import { toPersistedRuntimeIdentity } from '@server/context/runtimeScope';
 import {
   SetDashboardCacheData,
   DashboardSchedule,
@@ -44,7 +45,9 @@ export class DashboardResolver {
       nextScheduledAt: string | null;
     }
   > {
-    const dashboard = await ctx.dashboardService.getCurrentDashboard();
+    const dashboard = await ctx.dashboardService.getCurrentDashboard(
+      ctx.runtimeScope!.project.id,
+    );
     if (!dashboard) {
       throw new Error('Dashboard not found.');
     }
@@ -65,7 +68,9 @@ export class DashboardResolver {
     _args: any,
     ctx: IContext,
   ): Promise<DashboardItem[]> {
-    const dashboard = await ctx.dashboardService.getCurrentDashboard();
+    const dashboard = await ctx.dashboardService.getCurrentDashboard(
+      ctx.runtimeScope!.project.id,
+    );
     if (!dashboard) {
       throw new Error('Dashboard not found.');
     }
@@ -78,8 +83,17 @@ export class DashboardResolver {
     ctx: IContext,
   ): Promise<DashboardItem> {
     const { responseId, itemType } = args.data;
-    const dashboard = await ctx.dashboardService.getCurrentDashboard();
-    const response = await ctx.askingService.getResponse(responseId);
+    const dashboard = await ctx.dashboardService.getCurrentDashboard(
+      ctx.runtimeScope!.project.id,
+    );
+    await ctx.askingService.assertResponseScope(
+      responseId,
+      toPersistedRuntimeIdentity(ctx.runtimeScope!),
+    );
+    const response = await ctx.askingService.getResponseScoped(
+      responseId,
+      toPersistedRuntimeIdentity(ctx.runtimeScope!),
+    );
 
     if (!response) {
       throw new Error(`Thread response not found. responseId: ${responseId}`);
@@ -94,8 +108,11 @@ export class DashboardResolver {
     }
 
     // query with cache enabled
-    const project = await ctx.projectService.getCurrentProject();
-    const deployment = await ctx.deployService.getLastDeployment(project.id);
+    const project = await ctx.projectService.getProjectById(dashboard.projectId);
+    const deployment = await ctx.deployService.getDeployment(
+      response.projectId || dashboard.projectId,
+      response.deployHash,
+    );
     const mdl = deployment.manifest;
     await ctx.queryService.preview(response.sql, {
       project,
@@ -120,10 +137,7 @@ export class DashboardResolver {
   ): Promise<DashboardItem> {
     const { id } = args.where;
     const { displayName } = args.data;
-    const item = await ctx.dashboardService.getDashboardItem(id);
-    if (!item) {
-      throw new Error(`Dashboard item not found. id: ${id}`);
-    }
+    await this.ensureDashboardItemScope(ctx, id);
     return await ctx.dashboardService.updateDashboardItem(id, { displayName });
   }
 
@@ -133,10 +147,7 @@ export class DashboardResolver {
     ctx: IContext,
   ): Promise<boolean> {
     const { id } = args.where;
-    const item = await ctx.dashboardService.getDashboardItem(id);
-    if (!item) {
-      throw new Error(`Dashboard item not found. id: ${id}`);
-    }
+    await this.ensureDashboardItemScope(ctx, id);
     return await ctx.dashboardService.deleteDashboardItem(id);
   }
 
@@ -149,6 +160,9 @@ export class DashboardResolver {
     if (layouts.length === 0) {
       throw new Error('Layouts are required.');
     }
+    await Promise.all(
+      layouts.map((layout) => this.ensureDashboardItemScope(ctx, layout.itemId)),
+    );
     return await ctx.dashboardService.updateDashboardItemLayouts(layouts);
   }
 
@@ -159,10 +173,15 @@ export class DashboardResolver {
   ): Promise<PreviewItemResponse> {
     const { itemId, limit, refresh } = args.data;
     try {
-      const item = await ctx.dashboardService.getDashboardItem(itemId);
-      const { cacheEnabled } = await ctx.dashboardService.getCurrentDashboard();
-      const project = await ctx.projectService.getCurrentProject();
-      const deployment = await ctx.deployService.getLastDeployment(project.id);
+      const item = await this.ensureDashboardItemScope(ctx, itemId);
+      const dashboard = await this.ensureCurrentDashboard(ctx);
+      const { cacheEnabled } = dashboard;
+      const project = await ctx.projectService.getProjectById(
+        dashboard.projectId,
+      );
+      const deployment = await ctx.deployService.getLastDeployment(
+        dashboard.projectId,
+      );
       const mdl = deployment.manifest;
       const data = (await ctx.queryService.preview(item.detail.sql, {
         project,
@@ -198,7 +217,9 @@ export class DashboardResolver {
     ctx: IContext,
   ): Promise<Dashboard> {
     try {
-      const dashboard = await ctx.dashboardService.getCurrentDashboard();
+      const dashboard = await ctx.dashboardService.getCurrentDashboard(
+        ctx.runtimeScope!.project.id,
+      );
       if (!dashboard) {
         throw new Error('Dashboard not found.');
       }
@@ -211,5 +232,29 @@ export class DashboardResolver {
       logger.error(`Failed to set dashboard schedule: ${error.message}`);
       throw error;
     }
+  }
+
+  private async ensureCurrentDashboard(ctx: IContext): Promise<Dashboard> {
+    const dashboard = await ctx.dashboardService.getCurrentDashboard(
+      ctx.runtimeScope!.project.id,
+    );
+    if (!dashboard) {
+      throw new Error('Dashboard not found.');
+    }
+
+    return dashboard;
+  }
+
+  private async ensureDashboardItemScope(
+    ctx: IContext,
+    itemId: number,
+  ): Promise<DashboardItem> {
+    const item = await ctx.dashboardService.getDashboardItem(itemId);
+    const dashboard = await this.ensureCurrentDashboard(ctx);
+    if (!item || item.dashboardId !== dashboard.id) {
+      throw new Error(`Dashboard item not found. id: ${itemId}`);
+    }
+
+    return item;
   }
 }

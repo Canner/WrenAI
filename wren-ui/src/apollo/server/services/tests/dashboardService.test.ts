@@ -33,7 +33,6 @@ class TestDashboardService extends DashboardService {
 
 describe('DashboardService', () => {
   let dashboardService: TestDashboardService;
-  let mockProjectService;
   let mockDashboardItemRepository;
   let mockDashboardRepository;
 
@@ -62,9 +61,6 @@ describe('DashboardService', () => {
   };
 
   beforeEach(() => {
-    mockProjectService = {
-      getCurrentProject: jest.fn(),
-    };
     mockDashboardItemRepository = {
       findOneBy: jest.fn(),
       findAllBy: jest.fn(),
@@ -79,9 +75,45 @@ describe('DashboardService', () => {
     };
 
     dashboardService = new TestDashboardService({
-      projectService: mockProjectService,
       dashboardItemRepository: mockDashboardItemRepository,
       dashboardRepository: mockDashboardRepository,
+    });
+  });
+
+  describe('project-scoped dashboard access', () => {
+    it('should prefer explicit project id when initializing dashboard', async () => {
+      mockDashboardRepository.findOneBy.mockResolvedValue(null);
+      mockDashboardRepository.createOne.mockResolvedValue({
+        id: 1,
+        projectId: 42,
+        name: 'Dashboard',
+      });
+
+      const result = await dashboardService.initDashboard(42);
+
+      expect(mockDashboardRepository.findOneBy).toHaveBeenCalledWith({
+        projectId: 42,
+      });
+      expect(mockDashboardRepository.createOne).toHaveBeenCalledWith({
+        name: 'Dashboard',
+        projectId: 42,
+      });
+      expect(result.projectId).toBe(42);
+    });
+
+    it('should fetch current dashboard by explicit project id', async () => {
+      mockDashboardRepository.findOneBy.mockResolvedValue({
+        id: 2,
+        projectId: 7,
+        name: 'Dashboard',
+      });
+
+      const result = await dashboardService.getCurrentDashboard(7);
+
+      expect(mockDashboardRepository.findOneBy).toHaveBeenCalledWith({
+        projectId: 7,
+      });
+      expect(result.projectId).toBe(7);
     });
   });
 

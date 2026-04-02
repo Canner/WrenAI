@@ -1,4 +1,3 @@
-import { useRouter } from 'next/router';
 import { useParams } from 'next/navigation';
 import {
   ComponentRef,
@@ -43,14 +42,23 @@ import {
 import { useCreateViewMutation } from '@/apollo/client/graphql/view.generated';
 import {
   AdjustThreadResponseChartInput,
+  AskingTaskType,
   CreateThreadResponseInput,
   ThreadResponse,
   CreateSqlPairInput,
 } from '@/apollo/client/graphql/__types__';
 import { useCreateSqlPairMutation } from '@/apollo/client/graphql/sqlPairs.generated';
+import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
+import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
 
 const getThreadResponseIsFinished = (threadResponse: ThreadResponse) => {
-  const { answerDetail, breakdownDetail, chartDetail } = threadResponse || {};
+  const { answerDetail, askingTask, breakdownDetail, chartDetail } =
+    threadResponse || {};
+
+  if (askingTask?.type === AskingTaskType.SKILL) {
+    return getIsFinished(askingTask?.status);
+  }
+
   // it means it's the old data before support text based answer
   const isBreakdownOnly = answerDetail === null && !isEmpty(breakdownDetail);
 
@@ -72,7 +80,8 @@ const getThreadResponseIsFinished = (threadResponse: ThreadResponse) => {
 
 export default function HomeThread() {
   const $prompt = useRef<ComponentRef<typeof Prompt>>(null);
-  const router = useRouter();
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
+  const runtimeScopePage = useProtectedRuntimeScopePage();
   const params = useParams();
   const homeSidebar = useHomeSidebar();
   const threadId = useMemo(() => Number(params?.id) || null, [params]);
@@ -94,8 +103,8 @@ export default function HomeThread() {
   const { data, updateQuery: updateThreadQuery } = useThreadQuery({
     variables: { threadId },
     fetchPolicy: 'cache-and-network',
-    skip: threadId === null,
-    onError: () => router.push(Path.Home),
+    skip: !runtimeScopePage.hasRuntimeScope || threadId === null,
+    onError: () => runtimeScopeNavigation.push(Path.Home),
   });
   const [createThreadResponse] = useCreateThreadResponseMutation({
     onError: (error) => console.error(error),
@@ -254,7 +263,7 @@ export default function HomeThread() {
 
   // stop all requests when change thread
   useEffect(() => {
-    if (threadId !== null) {
+    if (runtimeScopePage.hasRuntimeScope && threadId !== null) {
       fetchThreadRecommendationQuestions({ variables: { threadId } });
       setShowRecommendedQuestions(true);
     }
@@ -264,7 +273,11 @@ export default function HomeThread() {
       threadRecommendationQuestionsResult.stopPolling();
       $prompt.current?.close();
     };
-  }, [threadId]);
+  }, [
+    fetchThreadRecommendationQuestions,
+    runtimeScopePage.hasRuntimeScope,
+    threadId,
+  ]);
 
   // initialize asking task
   useEffect(() => {
@@ -330,6 +343,10 @@ export default function HomeThread() {
     onOpenAdjustReasoningStepsModal: adjustReasoningStepsModal.openModal,
     onOpenAdjustSQLModal: adjustSqlModal.openModal,
   };
+
+  if (runtimeScopePage.guarding) {
+    return <SiderLayout loading sidebar={homeSidebar} />;
+  }
 
   return (
     <SiderLayout loading={false} sidebar={homeSidebar}>

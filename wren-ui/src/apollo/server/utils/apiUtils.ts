@@ -1,6 +1,15 @@
 import { NextApiResponse } from 'next';
 import { v4 as uuidv4 } from 'uuid';
-import { ApiType, ApiHistory } from '@server/repositories/apiHistoryRepository';
+import {
+  ApiType,
+  ApiHistory,
+  IApiHistoryRepository,
+} from '@server/repositories/apiHistoryRepository';
+import {
+  PersistedRuntimeIdentity,
+  RuntimeScope,
+  toPersistedRuntimeIdentity,
+} from '@server/context/runtimeScope';
 import * as Errors from '@server/utils/error';
 import { components } from '@/common';
 import {
@@ -11,8 +20,6 @@ import {
   TextBasedAnswerResult,
   TextBasedAnswerStatus,
 } from '@/apollo/server/models/adaptor';
-
-const { apiHistoryRepository } = components;
 
 export const MAX_WAIT_TIME = 1000 * 60 * 3; // 3 minutes
 
@@ -114,7 +121,84 @@ export const transformHistoryInput = (histories: ApiHistory[]) => {
     .map((history) => ({
       question: history.requestPayload?.question,
       sql: history.responsePayload?.sql,
-    }));
+  }));
+};
+
+const isRuntimeIdentityMatch = (
+  history: ApiHistory,
+  runtimeIdentity: PersistedRuntimeIdentity,
+) => {
+  if (history.projectId !== runtimeIdentity.projectId) {
+    return false;
+  }
+
+  return (
+    (!history.workspaceId || history.workspaceId === runtimeIdentity.workspaceId) &&
+    (!history.knowledgeBaseId ||
+      history.knowledgeBaseId === runtimeIdentity.knowledgeBaseId) &&
+    (!history.kbSnapshotId ||
+      history.kbSnapshotId === runtimeIdentity.kbSnapshotId) &&
+    (!history.deployHash || history.deployHash === runtimeIdentity.deployHash)
+  );
+};
+
+export const getScopedThreadHistories = async ({
+  apiHistoryRepository,
+  projectId,
+  threadId,
+  runtimeScope,
+}: {
+  apiHistoryRepository: Pick<IApiHistoryRepository, 'findAllBy'>;
+  projectId: number;
+  threadId?: string;
+  runtimeScope?: RuntimeScope | null;
+}): Promise<ApiHistory[]> => {
+  if (!threadId) {
+    return [];
+  }
+
+  const histories = await apiHistoryRepository.findAllBy({
+    projectId,
+    threadId,
+  });
+
+  if (!runtimeScope) {
+    return histories;
+  }
+
+  const runtimeIdentity = toPersistedRuntimeIdentity(runtimeScope);
+  return histories.filter((history) =>
+    isRuntimeIdentityMatch(history, runtimeIdentity),
+  );
+};
+
+export const createApiHistoryRecord = async ({
+  apiHistoryRepository = components.apiHistoryRepository,
+  projectId,
+  runtimeScope,
+  ...record
+}: {
+  apiHistoryRepository?: Pick<IApiHistoryRepository, 'createOne'>;
+  projectId: number;
+  runtimeScope?: RuntimeScope | null;
+} & Omit<ApiHistory, 'projectId'>) => {
+  const runtimeIdentity =
+    runtimeScope &&
+    (projectId === 0 || runtimeScope.project.id === projectId)
+    ? toPersistedRuntimeIdentity(runtimeScope)
+    : {
+        projectId,
+        workspaceId: null,
+        knowledgeBaseId: null,
+        kbSnapshotId: null,
+        deployHash: null,
+        actorUserId: null,
+      };
+
+  return await apiHistoryRepository.createOne({
+    ...record,
+    ...runtimeIdentity,
+  });
 };
 
 /**
@@ -177,6 +261,7 @@ export const respondWith = async ({
   statusCode,
   responsePayload,
   projectId,
+  runtimeScope,
   apiType,
   threadId,
   headers,
@@ -187,6 +272,7 @@ export const respondWith = async ({
   statusCode: number;
   responsePayload: any;
   projectId: number;
+  runtimeScope?: RuntimeScope | null;
   apiType: ApiType;
   startTime: number;
   requestPayload?: Record<string, any>;
@@ -195,9 +281,10 @@ export const respondWith = async ({
 }) => {
   const durationMs = startTime ? Date.now() - startTime : undefined;
   const responseId = uuidv4();
-  await apiHistoryRepository.createOne({
+  await createApiHistoryRecord({
     id: responseId,
     projectId,
+    runtimeScope,
     apiType,
     threadId,
     headers,
@@ -222,6 +309,7 @@ export const respondWithSimple = async ({
   statusCode,
   responsePayload,
   projectId,
+  runtimeScope,
   apiType,
   headers,
   requestPayload,
@@ -231,6 +319,7 @@ export const respondWithSimple = async ({
   statusCode: number;
   responsePayload: any;
   projectId: number;
+  runtimeScope?: RuntimeScope | null;
   apiType: ApiType;
   startTime: number;
   requestPayload?: Record<string, any>;
@@ -238,9 +327,10 @@ export const respondWithSimple = async ({
 }) => {
   const durationMs = startTime ? Date.now() - startTime : undefined;
   const responseId = uuidv4();
-  await apiHistoryRepository.createOne({
+  await createApiHistoryRecord({
     id: responseId,
     projectId,
+    runtimeScope,
     apiType,
     headers,
     requestPayload,
@@ -259,6 +349,7 @@ export const handleApiError = async ({
   error,
   res,
   projectId,
+  runtimeScope,
   apiType,
   requestPayload,
   threadId,
@@ -269,6 +360,7 @@ export const handleApiError = async ({
   error: any;
   res: NextApiResponse;
   projectId?: number;
+  runtimeScope?: RuntimeScope | null;
   apiType: ApiType;
   requestPayload?: Record<string, any>;
   threadId?: string;
@@ -280,7 +372,12 @@ export const handleApiError = async ({
     logger.error(`Error in ${apiType} API:`, error);
   }
 
-  const statusCode = error instanceof ApiError ? error.statusCode : 500;
+  const statusCode =
+    error instanceof ApiError
+      ? error.statusCode
+      : typeof error?.statusCode === 'number'
+        ? error.statusCode
+        : 500;
   let responsePayload: Record<string, any>;
 
   if (error instanceof ApiError && error.code) {
@@ -302,6 +399,7 @@ export const handleApiError = async ({
     statusCode,
     responsePayload,
     projectId: projectId || 0,
+    runtimeScope,
     apiType,
     startTime,
     requestPayload,

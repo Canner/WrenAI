@@ -4,7 +4,11 @@ import {
   TextBasedAnswerResult,
   TextBasedAnswerStatus,
 } from '../models/adaptor';
-import { ThreadResponse, IThreadResponseRepository } from '../repositories';
+import {
+  IThreadRepository,
+  ThreadResponse,
+  IThreadResponseRepository,
+} from '../repositories';
 import {
   IProjectService,
   IDeployService,
@@ -13,9 +17,26 @@ import {
   PreviewDataResponse,
 } from '../services';
 import { getLogger } from '@server/utils';
+import { PersistedRuntimeIdentity } from '@server/context/runtimeScope';
 
 const logger = getLogger('TextBasedAnswerBackgroundTracker');
 logger.level = 'debug';
+
+const toPersistedRuntimeIdentity = (source: {
+  projectId: number;
+  workspaceId?: string | null;
+  knowledgeBaseId?: string | null;
+  kbSnapshotId?: string | null;
+  deployHash?: string | null;
+  actorUserId?: string | null;
+}): PersistedRuntimeIdentity => ({
+  projectId: source.projectId,
+  workspaceId: source.workspaceId || null,
+  knowledgeBaseId: source.knowledgeBaseId || null,
+  kbSnapshotId: source.kbSnapshotId || null,
+  deployHash: source.deployHash || null,
+  actorUserId: source.actorUserId || null,
+});
 
 export class TextBasedAnswerBackgroundTracker {
   // tasks is a kv pair of task id and thread response
@@ -23,6 +44,7 @@ export class TextBasedAnswerBackgroundTracker {
   private intervalTime: number;
   private wrenAIAdaptor: IWrenAIAdaptor;
   private threadResponseRepository: IThreadResponseRepository;
+  private threadRepository: IThreadRepository;
   private projectService: IProjectService;
   private deployService: IDeployService;
   private queryService: IQueryService;
@@ -31,18 +53,21 @@ export class TextBasedAnswerBackgroundTracker {
   constructor({
     wrenAIAdaptor,
     threadResponseRepository,
+    threadRepository,
     projectService,
     deployService,
     queryService,
   }: {
     wrenAIAdaptor: IWrenAIAdaptor;
     threadResponseRepository: IThreadResponseRepository;
+    threadRepository: IThreadRepository;
     projectService: IProjectService;
     deployService: IDeployService;
     queryService: IQueryService;
   }) {
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.threadResponseRepository = threadResponseRepository;
+    this.threadRepository = threadRepository;
     this.projectService = projectService;
     this.deployService = deployService;
     this.queryService = queryService;
@@ -71,9 +96,14 @@ export class TextBasedAnswerBackgroundTracker {
           });
 
           // get sql data
-          const project = await this.projectService.getCurrentProject();
-          const deployment = await this.deployService.getLastDeployment(
-            project.id,
+          const runtimeIdentity =
+            await this.getRuntimeIdentity(threadResponse);
+          const project = await this.projectService.getProjectById(
+            runtimeIdentity.projectId,
+          );
+          const deployment = await this.deployService.getDeployment(
+            runtimeIdentity.projectId,
+            runtimeIdentity.deployHash,
           );
           const mdl = deployment.manifest;
           let data: PreviewDataResponse;
@@ -165,5 +195,31 @@ export class TextBasedAnswerBackgroundTracker {
 
   public getTasks() {
     return this.tasks;
+  }
+
+  private async getRuntimeIdentity(
+    threadResponse: ThreadResponse,
+  ): Promise<PersistedRuntimeIdentity> {
+    if (threadResponse.projectId) {
+      return {
+        projectId: threadResponse.projectId,
+        workspaceId: threadResponse.workspaceId || null,
+        knowledgeBaseId: threadResponse.knowledgeBaseId || null,
+        kbSnapshotId: threadResponse.kbSnapshotId || null,
+        deployHash: threadResponse.deployHash || null,
+        actorUserId: threadResponse.actorUserId || null,
+      };
+    }
+
+    const thread = await this.threadRepository.findOneBy({
+      id: threadResponse.threadId,
+    });
+    if (!thread) {
+      throw new Error(
+        `Thread ${threadResponse.threadId} not found for response ${threadResponse.id}`,
+      );
+    }
+
+    return toPersistedRuntimeIdentity(thread);
   }
 }

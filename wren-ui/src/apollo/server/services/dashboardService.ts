@@ -9,7 +9,6 @@ import {
 } from '@server/repositories';
 import { getLogger } from '@server/utils';
 import { getUTCOffsetMinutes } from '@server/utils/timezone';
-import { IProjectService } from './projectService';
 import {
   SetDashboardCacheData,
   ScheduleFrequencyEnum,
@@ -37,8 +36,8 @@ export type UpdateDashboardItemLayouts = (DashboardItemLayout & {
 })[];
 
 export interface IDashboardService {
-  initDashboard(): Promise<Dashboard>;
-  getCurrentDashboard(): Promise<Dashboard>;
+  initDashboard(projectId: number): Promise<Dashboard>;
+  getCurrentDashboard(projectId: number): Promise<Dashboard>;
   getDashboardItem(dashboardItemId: number): Promise<DashboardItem>;
   getDashboardItems(dashboardId: number): Promise<DashboardItem[]>;
   createDashboardItem(input: CreateDashboardItemInput): Promise<DashboardItem>;
@@ -58,20 +57,16 @@ export interface IDashboardService {
 }
 
 export class DashboardService implements IDashboardService {
-  private projectService: IProjectService;
   private dashboardItemRepository: IDashboardItemRepository;
   private dashboardRepository: IDashboardRepository;
 
   constructor({
-    projectService,
     dashboardItemRepository,
     dashboardRepository,
   }: {
-    projectService: IProjectService;
     dashboardItemRepository: IDashboardItemRepository;
     dashboardRepository: IDashboardRepository;
   }) {
-    this.projectService = projectService;
     this.dashboardItemRepository = dashboardItemRepository;
     this.dashboardRepository = dashboardRepository;
   }
@@ -125,23 +120,21 @@ export class DashboardService implements IDashboardService {
     }
   }
 
-  public async initDashboard(): Promise<Dashboard> {
-    const project = await this.projectService.getCurrentProject();
+  public async initDashboard(projectId: number): Promise<Dashboard> {
     const existingDashboard = await this.dashboardRepository.findOneBy({
-      projectId: project.id,
+      projectId,
     });
     if (existingDashboard) return existingDashboard;
     // only support one dashboard for oss
     return await this.dashboardRepository.createOne({
       name: 'Dashboard',
-      projectId: project.id,
+      projectId,
     });
   }
 
-  public async getCurrentDashboard(): Promise<Dashboard> {
-    const project = await this.projectService.getCurrentProject();
+  public async getCurrentDashboard(projectId: number): Promise<Dashboard> {
     const dashboard = await this.dashboardRepository.findOneBy({
-      projectId: project.id,
+      projectId,
     });
     return { ...dashboard };
   }

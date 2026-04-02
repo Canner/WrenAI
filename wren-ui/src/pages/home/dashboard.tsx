@@ -1,7 +1,6 @@
 import { useMemo, useRef } from 'react';
 import { message } from 'antd';
 import { Path } from '@/utils/enum';
-import { useRouter } from 'next/router';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import useHomeSidebar from '@/hooks/useHomeSidebar';
 import useDrawerAction from '@/hooks/useDrawerAction';
@@ -24,6 +23,8 @@ import {
   DataSourceName,
   ItemLayoutInput,
 } from '@/apollo/client/graphql/__types__';
+import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
+import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
 
 const isSupportCachedSettings = (dataSource: DataSource) => {
   // DuckDB not supported, sample dataset as well
@@ -33,11 +34,14 @@ const isSupportCachedSettings = (dataSource: DataSource) => {
 };
 
 export default function Dashboard() {
-  const router = useRouter();
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
+  const runtimeScopePage = useProtectedRuntimeScopePage();
   const dashboardGridRef = useRef<{ onRefreshAll: () => void }>(null);
   const homeSidebar = useHomeSidebar();
   const cacheSettingsDrawer = useDrawerAction();
-  const { data: settingsResult } = useGetSettingsQuery();
+  const { data: settingsResult } = useGetSettingsQuery({
+    skip: !runtimeScopePage.hasRuntimeScope,
+  });
   const settings = settingsResult?.settings;
   const isSupportCached = useMemo(
     () => isSupportCachedSettings(settings?.dataSource),
@@ -50,9 +54,10 @@ export default function Dashboard() {
     updateQuery: updateDashboardQuery,
   } = useDashboardQuery({
     fetchPolicy: 'cache-and-network',
+    skip: !runtimeScopePage.hasRuntimeScope,
     onError: () => {
       message.error('Failed to fetch dashboard items.');
-      router.push(Path.Home);
+      runtimeScopeNavigation.push(Path.Home);
     },
   });
   const dashboardItems = useMemo(
@@ -103,8 +108,12 @@ export default function Dashboard() {
     await deleteDashboardItem({ variables: { where: { id } } });
   };
 
+  if (runtimeScopePage.guarding) {
+    return <SiderLayout loading color="gray-3" sidebar={homeSidebar} />;
+  }
+
   return (
-    <SiderLayout loading={false} color="gray-3" sidebar={homeSidebar}>
+    <SiderLayout loading={loading} color="gray-3" sidebar={homeSidebar}>
       <LoadingWrapper loading={loading}>
         <>
           <EmptyDashboard show={dashboardItems.length === 0}>

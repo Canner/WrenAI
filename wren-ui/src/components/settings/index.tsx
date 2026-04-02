@@ -13,6 +13,7 @@ import {
   useGetSettingsLazyQuery,
   GetSettingsQuery,
 } from '@/apollo/client/graphql/settings.generated';
+import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 
 const { Sider, Content } = Layout;
 
@@ -93,6 +94,7 @@ const MenuIterator = makeIterable(MenuTemplate);
 
 export default function Settings(props: Props) {
   const { onClose, visible } = props;
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const [menu, setMenu] = useState<SETTINGS>(SETTINGS.DATA_SOURCE);
   const current = getSettingMenu(menu);
   const menuList = Object.keys(SETTINGS).map((key) => ({
@@ -108,8 +110,10 @@ export default function Settings(props: Props) {
   }, [data?.settings]);
 
   useEffect(() => {
-    if (visible) fetchSettings();
-  }, [visible]);
+    if (visible && runtimeScopeNavigation.hasRuntimeScope) {
+      fetchSettings();
+    }
+  }, [fetchSettings, runtimeScopeNavigation.hasRuntimeScope, visible]);
 
   const onMenuClick = ({ value }) => setMenu(value);
 

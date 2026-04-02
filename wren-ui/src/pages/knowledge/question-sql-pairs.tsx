@@ -20,6 +20,7 @@ import {
   useUpdateSqlPairMutation,
   useDeleteSqlPairMutation,
 } from '@/apollo/client/graphql/sqlPairs.generated';
+import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
 
 const SQLCodeBlock = dynamic(() => import('@/components/code/SQLCodeBlock'), {
   ssr: false,
@@ -28,11 +29,13 @@ const SQLCodeBlock = dynamic(() => import('@/components/code/SQLCodeBlock'), {
 const { Paragraph, Text } = Typography;
 
 export default function ManageQuestionSQLPairs() {
+  const runtimeScopePage = useProtectedRuntimeScopePage();
   const questionSqlPairModal = useModalAction();
   const sqlPairDrawer = useDrawerAction();
 
   const { data, loading } = useSqlPairsQuery({
     fetchPolicy: 'cache-and-network',
+    skip: !runtimeScopePage.hasRuntimeScope,
   });
   const sqlPairs = data?.sqlPairs || [];
 
@@ -124,8 +127,12 @@ export default function ManageQuestionSQLPairs() {
     },
   ];
 
+  if (runtimeScopePage.guarding) {
+    return <SiderLayout loading />;
+  }
+
   return (
-    <SiderLayout loading={false}>
+    <SiderLayout loading={loading}>
       <PageLayout
         title={
           <>

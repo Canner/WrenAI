@@ -2,14 +2,20 @@ import axios from 'axios';
 import { Readable } from 'stream';
 import {
   AskCandidateType,
+  AskActorClaims,
   AskDetailInput,
   AskDetailResult,
   AskHistory,
   AskResult,
   AskResultStatus,
+  AskRuntimeIdentity,
+  AskSkillCandidate,
+  AskSkillConnector,
+  AskSkillSecret,
   AsyncQueryResponse,
   RecommendationQuestionsInput,
   RecommendationQuestionsResult,
+  SkillExecutionResult,
   WrenAIDeployStatusEnum,
   WrenAISystemStatus,
   WrenAIDeployResponse,
@@ -239,6 +245,12 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
         id: input.deployId,
         histories: this.transformHistoryInput(input.histories),
         configurations: input.configurations,
+        runtime_identity: this.transformRuntimeIdentity(input.runtimeIdentity),
+        actor_claims: this.transformActorClaims(input.actorClaims),
+        connectors: this.transformConnectors(input.connectors),
+        secrets: this.transformSecrets(input.secrets),
+        skill_config: input.skillConfig,
+        skills: this.transformSkills(input.skills),
       });
       return { queryId: res.data.query_id };
     } catch (err: any) {
@@ -831,8 +843,43 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       intentReasoning: body?.intent_reasoning,
       sqlGenerationReasoning: body?.sql_generation_reasoning,
       retrievedTables: body?.retrieved_tables,
+      skillResult: this.transformSkillResult(body?.skill_result),
       invalidSql: body?.invalid_sql,
       traceId: body?.trace_id,
+    };
+  }
+
+  private transformSkillResult(body: any): SkillExecutionResult | null {
+    if (!body) {
+      return null;
+    }
+
+    return {
+      resultType: body?.result_type,
+      rows: body?.rows || [],
+      columns: (body?.columns || []).map((column: any) => ({
+        name: column?.name,
+        type: column?.type,
+        description: column?.description,
+      })),
+      series: body?.series || [],
+      text: body?.text || null,
+      chartSpec: body?.chart_spec || null,
+      citations: (body?.citations || []).map((citation: any) => ({
+        title: citation?.title,
+        url: citation?.url,
+        snippet: citation?.snippet,
+        metadata: citation?.metadata || {},
+      })),
+      metadata: body?.metadata || {},
+      trace: body?.trace
+        ? {
+            skillRunId: body.trace?.skill_run_id || null,
+            runnerJobId: body.trace?.runner_job_id || null,
+            traceId: body.trace?.trace_id || null,
+            metadata: body.trace?.metadata || {},
+          }
+        : null,
     };
   }
 
@@ -932,6 +979,66 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     return histories.map((history) => ({
       sql: history.sql,
       question: history.question,
+    }));
+  }
+
+  private transformRuntimeIdentity(runtimeIdentity?: AskRuntimeIdentity) {
+    if (!runtimeIdentity?.workspaceId || !runtimeIdentity?.knowledgeBaseId) {
+      return undefined;
+    }
+
+    return {
+      workspaceId: runtimeIdentity.workspaceId,
+      knowledgeBaseId: runtimeIdentity.knowledgeBaseId,
+      kbSnapshotId: runtimeIdentity.kbSnapshotId,
+      deployHash: runtimeIdentity.deployHash,
+      projectId: runtimeIdentity.projectId,
+      actorUserId: runtimeIdentity.actorUserId,
+    };
+  }
+
+  private transformActorClaims(actorClaims?: AskActorClaims) {
+    if (!actorClaims) {
+      return undefined;
+    }
+
+    return {
+      userId: actorClaims.userId,
+      workspaceMemberId: actorClaims.workspaceMemberId,
+      roleKeys: actorClaims.roleKeys,
+      permissionScopes: actorClaims.permissionScopes,
+    };
+  }
+
+  private transformConnectors(connectors?: AskSkillConnector[]) {
+    return connectors?.map((connector) => ({
+      id: connector.id,
+      type: connector.type,
+      displayName: connector.displayName,
+      config: connector.config,
+      metadata: connector.metadata,
+    }));
+  }
+
+  private transformSecrets(secrets?: AskSkillSecret[]) {
+    return secrets?.map((secret) => ({
+      id: secret.id,
+      name: secret.name,
+      values: secret.values,
+      redactedKeys: secret.redactedKeys,
+    }));
+  }
+
+  private transformSkills(skills?: AskSkillCandidate[]) {
+    return skills?.map((skill) => ({
+      skillId: skill.skillId,
+      skillName: skill.skillName,
+      runtimeKind: skill.runtimeKind,
+      sourceType: skill.sourceType,
+      sourceRef: skill.sourceRef,
+      entrypoint: skill.entrypoint,
+      skillConfig: skill.skillConfig,
+      limits: skill.limits,
     }));
   }
 }

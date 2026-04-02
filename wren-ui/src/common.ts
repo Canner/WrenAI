@@ -1,6 +1,8 @@
 import { getConfig } from '@server/config';
 import { bootstrapKnex } from './apollo/server/utils/knex';
 import {
+  AuthIdentityRepository,
+  AuthSessionRepository,
   ProjectRepository,
   ViewRepository,
   DeployLogRepository,
@@ -19,6 +21,19 @@ import {
   InstructionRepository,
   ApiHistoryRepository,
   DashboardItemRefreshJobRepository,
+  WorkspaceRepository,
+  UserRepository,
+  WorkspaceMemberRepository,
+  IdentityProviderConfigRepository,
+  KnowledgeBaseRepository,
+  KBSnapshotRepository,
+  ConnectorRepository,
+  SecretRepository,
+  SkillDefinitionRepository,
+  SkillBindingRepository,
+  ScheduleJobRepository,
+  ScheduleJobRunRepository,
+  AuditEventRepository,
 } from '@server/repositories';
 import {
   WrenEngineAdaptor,
@@ -26,6 +41,7 @@ import {
   IbisAdaptor,
 } from '@server/adaptors';
 import {
+  AuthService,
   DataSourceMetadataService,
   QueryService,
   ProjectService,
@@ -35,8 +51,13 @@ import {
   DashboardService,
   AskingTaskTracker,
   InstructionService,
+  WorkspaceService,
+  SecretService,
+  ConnectorService,
+  SkillService,
 } from '@server/services';
 import { PostHogTelemetry } from './apollo/server/telemetry/telemetry';
+import { RuntimeScopeResolver } from './apollo/server/context/runtimeScope';
 import {
   ProjectRecommendQuestionBackgroundTracker,
   ThreadRecommendQuestionBackgroundTracker,
@@ -75,6 +96,22 @@ export const initComponents = () => {
   const apiHistoryRepository = new ApiHistoryRepository(knex);
   const dashboardItemRefreshJobRepository =
     new DashboardItemRefreshJobRepository(knex);
+  const workspaceRepository = new WorkspaceRepository(knex);
+  const userRepository = new UserRepository(knex);
+  const authIdentityRepository = new AuthIdentityRepository(knex);
+  const identityProviderConfigRepository =
+    new IdentityProviderConfigRepository(knex);
+  const authSessionRepository = new AuthSessionRepository(knex);
+  const workspaceMemberRepository = new WorkspaceMemberRepository(knex);
+  const knowledgeBaseRepository = new KnowledgeBaseRepository(knex);
+  const kbSnapshotRepository = new KBSnapshotRepository(knex);
+  const connectorRepository = new ConnectorRepository(knex);
+  const secretRepository = new SecretRepository(knex);
+  const skillDefinitionRepository = new SkillDefinitionRepository(knex);
+  const skillBindingRepository = new SkillBindingRepository(knex);
+  const scheduleJobRepository = new ScheduleJobRepository(knex);
+  const scheduleJobRunRepository = new ScheduleJobRunRepository(knex);
+  const auditEventRepository = new AuditEventRepository(knex);
 
   // adaptors
   const wrenEngineAdaptor = new WrenEngineAdaptor({
@@ -123,6 +160,50 @@ export const initComponents = () => {
     threadResponseRepository,
     viewRepository,
   });
+  const dashboardService = new DashboardService({
+    dashboardItemRepository,
+    dashboardRepository,
+  });
+  const sqlPairService = new SqlPairService({
+    sqlPairRepository,
+    wrenAIAdaptor,
+    ibisAdaptor,
+  });
+  const instructionService = new InstructionService({
+    instructionRepository,
+    wrenAIAdaptor,
+  });
+  const workspaceService = new WorkspaceService({
+    workspaceRepository,
+    workspaceMemberRepository,
+    userRepository,
+  });
+  const authService = new AuthService({
+    userRepository,
+    authIdentityRepository,
+    authSessionRepository,
+    workspaceRepository,
+    workspaceMemberRepository,
+  });
+  const secretService = new SecretService({
+    secretRepository,
+    encryptionPassword: serverConfig.encryptionPassword,
+    encryptionSalt: serverConfig.encryptionSalt,
+  });
+  const connectorService = new ConnectorService({
+    connectorRepository,
+    workspaceRepository,
+    knowledgeBaseRepository,
+    secretService,
+  });
+  const skillService = new SkillService({
+    workspaceRepository,
+    knowledgeBaseRepository,
+    kbSnapshotRepository,
+    connectorRepository,
+    skillDefinitionRepository,
+    skillBindingRepository,
+  });
   const askingService = new AskingService({
     telemetry,
     wrenAIAdaptor,
@@ -135,20 +216,17 @@ export const initComponents = () => {
     mdlService,
     askingTaskTracker,
     askingTaskRepository,
+    skillService,
+    connectorService,
   });
-  const dashboardService = new DashboardService({
-    projectService,
-    dashboardItemRepository,
-    dashboardRepository,
-  });
-  const sqlPairService = new SqlPairService({
-    sqlPairRepository,
-    wrenAIAdaptor,
-    ibisAdaptor,
-  });
-  const instructionService = new InstructionService({
-    instructionRepository,
-    wrenAIAdaptor,
+  const runtimeScopeResolver = new RuntimeScopeResolver({
+    projectRepository,
+    deployRepository: deployLogRepository,
+    deployService,
+    authService,
+    workspaceRepository,
+    knowledgeBaseRepository,
+    kbSnapshotRepository,
   });
 
   // background trackers
@@ -196,6 +274,21 @@ export const initComponents = () => {
     apiHistoryRepository,
     instructionRepository,
     dashboardItemRefreshJobRepository,
+    workspaceRepository,
+    userRepository,
+    authIdentityRepository,
+    identityProviderConfigRepository,
+    authSessionRepository,
+    workspaceMemberRepository,
+    knowledgeBaseRepository,
+    kbSnapshotRepository,
+    connectorRepository,
+    secretRepository,
+    skillDefinitionRepository,
+    skillBindingRepository,
+    scheduleJobRepository,
+    scheduleJobRunRepository,
+    auditEventRepository,
 
     // adaptors
     wrenEngineAdaptor,
@@ -212,6 +305,12 @@ export const initComponents = () => {
     dashboardService,
     sqlPairService,
     instructionService,
+    workspaceService,
+    authService,
+    secretService,
+    connectorService,
+    skillService,
+    runtimeScopeResolver,
     askingTaskTracker,
 
     // background trackers

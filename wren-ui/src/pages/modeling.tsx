@@ -1,5 +1,4 @@
 import dynamic from 'next/dynamic';
-import { useRouter } from 'next/router';
 import { useSearchParams } from 'next/navigation';
 import { forwardRef, useEffect, useMemo, useRef } from 'react';
 import { message } from 'antd';
@@ -17,6 +16,7 @@ import RelationModal, {
 import useDrawerAction from '@/hooks/useDrawerAction';
 import useModalAction from '@/hooks/useModalAction';
 import useRelationshipModal from '@/hooks/useRelationshipModal';
+import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import { convertFormValuesToIdentifier } from '@/hooks/useCombineFieldOptions';
 import { ClickPayload } from '@/components/diagram/Context';
 import { DeployStatusContext } from '@/components/deploy/Context';
@@ -45,6 +45,7 @@ import {
   useUpdateRelationshipMutation,
 } from '@/apollo/client/graphql/relationship.generated';
 import * as events from '@/utils/events';
+import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
 
 const Diagram = dynamic(() => import('@/components/diagram'), { ssr: false });
 // https://github.com/vercel/next.js/issues/4957#issuecomment-413841689
@@ -58,12 +59,14 @@ const DiagramWrapper = styled.div`
 `;
 
 export default function Modeling() {
-  const router = useRouter();
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
+  const runtimeScopePage = useProtectedRuntimeScopePage();
   const searchParams = useSearchParams();
   const diagramRef = useRef(null);
 
   const { data } = useDiagramQuery({
     fetchPolicy: 'cache-and-network',
+    skip: !runtimeScopePage.hasRuntimeScope,
     onCompleted: () => {
       diagramRef.current?.fitView();
     },
@@ -72,6 +75,7 @@ export default function Modeling() {
   const deployStatusQueryResult = useDeployStatusQuery({
     pollInterval: 1000,
     fetchPolicy: 'no-cache',
+    skip: !runtimeScopePage.hasRuntimeScope,
   });
 
   const refetchQueries = [{ query: DIAGRAM }];
@@ -226,7 +230,7 @@ export default function Modeling() {
       );
       !!searchedView && metadataDrawer.openDrawer(searchedView);
       // clear query params after opening the drawer
-      router.replace(router.pathname);
+      runtimeScopeNavigation.replace('/modeling');
     }
   }, [queryParams, diagramData]);
 
@@ -380,7 +384,7 @@ export default function Modeling() {
   return (
     <DeployStatusContext.Provider value={{ ...deployStatusQueryResult }}>
       <SiderLayout
-        loading={diagramData === null}
+        loading={runtimeScopePage.guarding || diagramData === null}
         sidebar={{
           data: diagramData,
           onOpenModelDrawer: modelDrawer.openDrawer,
