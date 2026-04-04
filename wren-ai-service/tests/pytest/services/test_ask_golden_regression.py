@@ -10,7 +10,6 @@ import pytest
 from src.core import SkillRunnerExecutionResponse
 from src.web.v1.services.ask import AskRequest, AskResultRequest, AskService
 
-
 FIXTURES_DIR = Path(__file__).resolve().parents[2] / "data"
 
 
@@ -202,6 +201,24 @@ def assert_path_specific_signals(case: dict, pipelines: dict, skill_runner_clien
         assert pipelines["sql_generation"].run.await_count == 0
 
 
+def assert_runtime_signals(case: dict, metadata: dict):
+    expected_path = case["expected"]["path"]
+
+    assert metadata["ask_runtime_mode"] == "deepagents"
+    assert metadata["primary_runtime"] == "deepagents"
+
+    if expected_path == "skill":
+        assert metadata["resolved_runtime"] == "deepagents"
+        assert metadata["deepagents_fallback"] is False
+        assert metadata.get("fallback_reason") is None
+        assert metadata.get("deepagents_routing_reason") is None
+    else:
+        assert metadata["resolved_runtime"] == "legacy"
+        assert metadata["deepagents_fallback"] is True
+        assert metadata["fallback_reason"] == "skill_runner_unavailable"
+        assert metadata["deepagents_routing_reason"] == "skill_runner_unavailable"
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("case", ASK_GOLDEN_CASES, ids=lambda case: case["name"])
 async def test_ask_golden_regression_baseline(case: dict):
@@ -212,7 +229,7 @@ async def test_ask_golden_regression_baseline(case: dict):
     )
     service = AskService(
         pipelines=pipelines,
-        ask_runtime_mode="deepagents" if skill_runner_config else "legacy",
+        ask_runtime_mode="deepagents",
         skill_runner_client=skill_runner_client,
     )
     request = make_request(case)
@@ -248,4 +265,5 @@ async def test_ask_golden_regression_baseline(case: dict):
     if expected.get("isFollowup") is not None:
         assert ask_result.is_followup == expected["isFollowup"]
 
+    assert_runtime_signals(case, result["metadata"])
     assert_path_specific_signals(case, pipelines, skill_runner_client)

@@ -5781,3 +5781,4 @@
 {"timestamp":"2026-04-04T01:36:30.076Z","type":"auto_nudge_skipped","reason":"unmanaged_session"}
 {"timestamp":"2026-04-04T01:36:31.063Z","type":"auto_nudge_skipped","reason":"unmanaged_session"}
 {"timestamp":"2026-04-04T01:36:32.061Z","type":"auto_nudge_skipped","reason":"unmanaged_session"}
+{"timestamp":"2026-04-04T01:56:22.017Z","type":"worker_idle_notification","team":"wrenai-v1-closeout-lane1-p1-09","tmux_target":"%0","worker":"worker-2","prev_state":"unknown","task_id":null}
