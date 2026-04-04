@@ -20,7 +20,7 @@ def test_settings_default_values():
         assert settings.skill_runner_enabled is False
         assert settings.skill_runner_endpoint == "http://127.0.0.1:5600"
         assert settings.skill_runner_timeout == 30.0
-        assert settings.ask_runtime_mode == "legacy"
+        assert settings.ask_runtime_mode == "deepagents"
         assert settings.ask_shadow_compare_enabled is False
 
         assert settings.langfuse_host == "https://cloud.langfuse.com"

@@ -1,6 +1,6 @@
 import logging
-from typing import Literal
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from dotenv import load_dotenv
@@ -59,7 +59,7 @@ class Settings(BaseSettings):
         alias="SKILL_RUNNER_TIMEOUT",
     )
     ask_runtime_mode: Literal["legacy", "deepagents"] = Field(
-        default="legacy",
+        default="deepagents",
         alias="ASK_RUNTIME_MODE",
     )
     ask_shadow_compare_enabled: bool = Field(

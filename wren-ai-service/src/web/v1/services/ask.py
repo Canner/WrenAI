@@ -216,7 +216,7 @@ class AskService:
     def __init__(
         self,
         pipelines: Dict[str, BasicPipeline],
-        ask_runtime_mode: Literal["legacy", "deepagents"] = "legacy",
+        ask_runtime_mode: Literal["legacy", "deepagents"] = "deepagents",
         ask_shadow_compare_enabled: bool = False,
         allow_intent_classification: bool = True,
         allow_sql_generation_reasoning: bool = True,

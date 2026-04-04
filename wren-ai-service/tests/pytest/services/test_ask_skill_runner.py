@@ -179,7 +179,7 @@ def base_pipelines():
 def make_service(
     pipelines,
     skill_runner_client=None,
-    ask_runtime_mode="legacy",
+    ask_runtime_mode="deepagents",
     ask_shadow_compare_enabled=False,
     deepagents_orchestrator=None,
     mixed_answer_composer=None,
@@ -491,6 +491,66 @@ async def test_ask_legacy_mode_skips_skill_runner_even_when_enabled(base_pipelin
     assert ask_result.response is not None
     assert ask_result.response[0].sql == 'SELECT 1'
     assert skill_runner_client.run.await_count == 0
+    assert base_pipelines['db_schema_retrieval'].run.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_ask_service_defaults_to_deepagents_primary_runtime(base_pipelines):
+    orchestrator = DeepAgentsOrchestratorStub(
+        result=SkillExecutionResult.model_validate(
+            {
+                'result_type': 'text',
+                'text': '本月 GMV 为 128 万',
+            }
+        )
+    )
+    ask_service = make_service(
+        base_pipelines,
+        deepagents_orchestrator=orchestrator,
+    )
+    ask_request = make_request(
+        runtimeIdentity={
+            'workspaceId': 'workspace-1',
+            'knowledgeBaseId': 'kb-1',
+        },
+        skills=[
+            {
+                'skillId': 'skill-1',
+                'skillName': 'sales_skill',
+                'sourceType': 'inline',
+            }
+        ],
+    )
+
+    result = await ask_service.ask(ask_request)
+
+    assert result['metadata']['type'] == 'SKILL'
+    assert result['metadata']['ask_runtime_mode'] == 'deepagents'
+    assert result['metadata']['primary_runtime'] == 'deepagents'
+    assert result['metadata']['resolved_runtime'] == 'deepagents'
+    assert result['metadata']['deepagents_fallback'] is False
+    assert orchestrator.run.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_ask_service_default_deepagents_preserves_legacy_fallback(
+    base_pipelines,
+):
+    ask_service = make_service(base_pipelines)
+    ask_request = make_request()
+
+    result = await ask_service.ask(ask_request)
+    ask_result = ask_service.get_ask_result(AskResultRequest(query_id=ask_request.query_id))
+
+    assert result['metadata']['type'] == 'TEXT_TO_SQL'
+    assert result['metadata']['ask_runtime_mode'] == 'deepagents'
+    assert result['metadata']['primary_runtime'] == 'deepagents'
+    assert result['metadata']['resolved_runtime'] == 'legacy'
+    assert result['metadata']['deepagents_fallback'] is True
+    assert ask_result.status == 'finished'
+    assert ask_result.type == 'TEXT_TO_SQL'
+    assert ask_result.response is not None
+    assert ask_result.response[0].sql == 'SELECT 1'
     assert base_pipelines['db_schema_retrieval'].run.await_count == 1
 
 
