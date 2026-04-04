@@ -51,7 +51,7 @@ export type SetDashboardScheduleMutationVariables = Types.Exact<{
 }>;
 
 
-export type SetDashboardScheduleMutation = { __typename?: 'Mutation', setDashboardSchedule: { __typename?: 'Dashboard', id: number, projectId: number, name: string, cacheEnabled: boolean, scheduleFrequency?: Types.ScheduleFrequencyEnum | null, scheduleTimezone?: string | null, scheduleCron?: string | null, nextScheduledAt?: string | null } };
+export type SetDashboardScheduleMutation = { __typename?: 'Mutation', setDashboardSchedule: { __typename?: 'Dashboard', id: number, name: string, cacheEnabled: boolean, scheduleFrequency?: Types.ScheduleFrequencyEnum | null, scheduleTimezone?: string | null, scheduleCron?: string | null, nextScheduledAt?: string | null } };
 
 export type DashboardQueryVariables = Types.Exact<{ [key: string]: never; }>;
 
@@ -282,7 +282,6 @@ export const SetDashboardScheduleDocument = gql`
     mutation SetDashboardSchedule($data: SetDashboardScheduleInput!) {
   setDashboardSchedule(data: $data) {
     id
-    projectId
     name
     cacheEnabled
     scheduleFrequency

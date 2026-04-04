@@ -12,6 +12,7 @@ import {
   validateSummaryResult,
   transformHistoryInput,
   getScopedThreadHistories,
+  buildAskDiagnostics,
 } from '@/apollo/server/utils/apiUtils';
 import { buildAskRuntimeContext } from '@server/utils/askContext';
 import {
@@ -143,10 +144,14 @@ export default async function handler(
       const errorMessage =
         (askResult.error as WrenAIError).message || 'Unknown error';
       const additionalData: Record<string, any> = {};
+      const askDiagnostics = buildAskDiagnostics(askResult);
 
       // Include invalid SQL if available
       if (askResult.invalidSql) {
         additionalData.invalidSql = askResult.invalidSql;
+      }
+      if (askDiagnostics) {
+        additionalData.askDiagnostics = askDiagnostics;
       }
 
       throw new ApiError(
@@ -198,6 +203,7 @@ export default async function handler(
           type: 'NON_SQL_QUERY',
           explanation,
           threadId: newThreadId,
+          askDiagnostics: buildAskDiagnostics(askResult),
         },
         projectId: project.id,
         runtimeScope,
@@ -222,6 +228,7 @@ export default async function handler(
               : undefined,
           skillResult: askResult.skillResult,
           threadId: newThreadId,
+          askDiagnostics: buildAskDiagnostics(askResult),
         },
         projectId: project.id,
         runtimeScope,
@@ -349,6 +356,7 @@ export default async function handler(
         sql,
         summary,
         threadId: newThreadId,
+        askDiagnostics: buildAskDiagnostics(askResult),
       },
       projectId: project.id,
       runtimeScope,

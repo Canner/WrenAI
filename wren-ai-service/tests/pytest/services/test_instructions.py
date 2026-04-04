@@ -6,11 +6,13 @@ from src.config import settings
 from src.core.provider import DocumentStoreProvider
 from src.globals import create_service_container
 from src.providers import generate_components
+from tests.pytest.conftest import require_pgvector_runtime
 from src.web.v1.services.instructions import InstructionsService
 
 
 @pytest.fixture
 def instructions_service():
+    require_pgvector_runtime()
     pipe_components = generate_components(settings.components)
     service_container = create_service_container(pipe_components, settings)
 

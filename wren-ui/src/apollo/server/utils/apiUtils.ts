@@ -14,6 +14,7 @@ import * as Errors from '@server/utils/error';
 import { components } from '@/common';
 import {
   AskResult,
+  AskDiagnostics,
   AskResultStatus,
   AskResultType,
   WrenAIError,
@@ -97,6 +98,27 @@ export const validateSummaryResult = (result: TextBasedAnswerResult): void => {
   if (result.status !== TextBasedAnswerStatus.SUCCEEDED) {
     throw new ApiError('Summary generation is still in progress', 500);
   }
+};
+
+export const buildAskDiagnostics = (
+  result?: Pick<AskResult, 'traceId' | 'askPath' | 'shadowCompare'> | null,
+): AskDiagnostics | undefined => {
+  if (!result) {
+    return undefined;
+  }
+
+  const diagnostics: AskDiagnostics = {};
+  if (result.traceId) {
+    diagnostics.traceId = result.traceId;
+  }
+  if (result.askPath) {
+    diagnostics.askPath = result.askPath;
+  }
+  if (result.shadowCompare) {
+    diagnostics.shadowCompare = result.shadowCompare;
+  }
+
+  return Object.keys(diagnostics).length > 0 ? diagnostics : undefined;
 };
 
 export const transformHistoryInput = (histories: ApiHistory[]) => {

@@ -3,6 +3,7 @@ import {
   IDashboardRepository,
   IDashboardItemRepository,
   IDashboardItemRefreshJobRepository,
+  IKBSnapshotRepository,
   DashboardCacheRefreshStatus,
 } from '@server/repositories';
 import {
@@ -10,6 +11,7 @@ import {
   IDeployService,
   IQueryService,
 } from '@server/services';
+import { resolveDashboardRuntime } from '@server/utils/dashboardRuntime';
 import { CronExpressionParser } from 'cron-parser';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -21,6 +23,7 @@ export class DashboardCacheBackgroundTracker {
   private dashboardRepository: IDashboardRepository;
   private dashboardItemRepository: IDashboardItemRepository;
   private dashboardItemRefreshJobRepository: IDashboardItemRefreshJobRepository;
+  private kbSnapshotRepository: IKBSnapshotRepository;
   private projectService: IProjectService;
   private deployService: IDeployService;
   private queryService: IQueryService;
@@ -30,25 +33,32 @@ export class DashboardCacheBackgroundTracker {
     dashboardRepository,
     dashboardItemRepository,
     dashboardItemRefreshJobRepository,
+    kbSnapshotRepository,
     projectService,
     deployService,
     queryService,
+    enablePolling = true,
   }: {
     dashboardRepository: IDashboardRepository;
     dashboardItemRepository: IDashboardItemRepository;
     dashboardItemRefreshJobRepository: IDashboardItemRefreshJobRepository;
+    kbSnapshotRepository: IKBSnapshotRepository;
     projectService: IProjectService;
     deployService: IDeployService;
     queryService: IQueryService;
+    enablePolling?: boolean;
   }) {
     this.dashboardRepository = dashboardRepository;
     this.dashboardItemRepository = dashboardItemRepository;
     this.dashboardItemRefreshJobRepository = dashboardItemRefreshJobRepository;
+    this.kbSnapshotRepository = kbSnapshotRepository;
     this.projectService = projectService;
     this.deployService = deployService;
     this.queryService = queryService;
     this.intervalTime = 60000; // 1 minute
-    this.start();
+    if (enablePolling) {
+      this.start();
+    }
   }
 
   private start(): void {
@@ -87,10 +97,21 @@ export class DashboardCacheBackgroundTracker {
     }
   }
 
-  private async refreshDashboardCache(dashboard: any): Promise<void> {
+  public async refreshDashboardById(dashboardId: number): Promise<number> {
+    const dashboard = await this.dashboardRepository.findOneBy({
+      id: dashboardId,
+    });
+    if (!dashboard) {
+      throw new Error(`Dashboard ${dashboardId} not found`);
+    }
+
+    return await this.refreshDashboardCache(dashboard);
+  }
+
+  private async refreshDashboardCache(dashboard: any): Promise<number> {
     if (this.runningJobs.has(dashboard.id)) {
       logger.debug(`Dashboard ${dashboard.id} refresh already in progress`);
-      return;
+      return 0;
     }
 
     this.runningJobs.add(dashboard.id);
@@ -102,17 +123,25 @@ export class DashboardCacheBackgroundTracker {
       });
 
       // Get project and deployment info
-      const project = await this.projectService.getProjectById(
-        dashboard.projectId,
-      );
-      const deployment = await this.deployService.getLastDeployment(
-        dashboard.projectId,
+      const runtime = await resolveDashboardRuntime({
+        dashboard,
+        kbSnapshotRepository: this.kbSnapshotRepository,
+      });
+      if (!runtime.projectId) {
+        throw new Error(
+          `Dashboard ${dashboard.id} is missing a project runtime binding`,
+        );
+      }
+      const project = await this.projectService.getProjectById(runtime.projectId);
+      const deployment = await this.deployService.getDeployment(
+        runtime.projectId,
+        runtime.deployHash,
       );
       const mdl = deployment.manifest;
       const hash = uuidv4();
 
       // Refresh cache for each item
-      await Promise.all(
+      const refreshResults = await Promise.all(
         items.map(async (item) => {
           try {
             // Create a record for this refresh job
@@ -143,6 +172,7 @@ export class DashboardCacheBackgroundTracker {
                   status: DashboardCacheRefreshStatus.SUCCESS,
                 },
               );
+              return true;
             } catch (error) {
               // Update the record with failure
               await this.dashboardItemRefreshJobRepository.updateOne(
@@ -156,14 +186,17 @@ export class DashboardCacheBackgroundTracker {
               logger.debug(
                 `Error refreshing cache for item ${item.id}: ${error.message}`,
               );
+              return false;
             }
           } catch (error) {
             logger.debug(
               `Error creating refresh job record for item ${item.id}: ${error.message}`,
             );
+            return false;
           }
         }),
       );
+      const refreshedItems = refreshResults.filter(Boolean).length;
 
       // Calculate next scheduled time
       const nextScheduledAt = this.calculateNextRunTime(dashboard.scheduleCron);
@@ -177,10 +210,12 @@ export class DashboardCacheBackgroundTracker {
       );
 
       logger.info(`Successfully refreshed cache for dashboard ${dashboard.id}`);
+      return refreshedItems;
     } catch (error) {
       logger.error(
         `Error refreshing dashboard ${dashboard.id}: ${error.message}`,
       );
+      return 0;
     } finally {
       this.runningJobs.delete(dashboard.id);
     }

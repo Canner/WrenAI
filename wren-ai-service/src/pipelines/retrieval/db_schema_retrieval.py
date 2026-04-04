@@ -15,9 +15,11 @@ from pydantic import BaseModel
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.pipelines.common import (
+    build_runtime_scope_filters,
     build_table_ddl,
     clean_up_new_lines,
     get_engine_supported_data_type,
+    normalize_runtime_scope_id,
 )
 from src.utils import trace_cost
 from src.web.v1.services.ask import AskHistory
@@ -140,31 +142,26 @@ async def embedding(query: str, embedder: Any, histories: list[AskHistory]) -> d
 async def table_retrieval(
     embedding: dict, project_id: str, tables: list[str], table_retriever: Any
 ) -> dict:
-    filters = {
-        "operator": "AND",
-        "conditions": [
-            {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
-        ],
-    }
-
-    if project_id:
-        filters["conditions"].append(
-            {"field": "project_id", "operator": "==", "value": project_id}
-        )
+    runtime_scope_id = normalize_runtime_scope_id(project_id)
+    conditions = [
+        {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
+    ]
 
     if embedding:
         return await table_retriever.run(
             query_embedding=embedding.get("embedding"),
-            filters=filters,
+            filters=build_runtime_scope_filters(
+                runtime_scope_id, conditions=conditions
+            ),
         )
     else:
-        filters["conditions"].append(
-            {"field": "name", "operator": "in", "value": tables}
-        )
+        conditions.append({"field": "name", "operator": "in", "value": tables})
 
         return await table_retriever.run(
             query_embedding=[],
-            filters=filters,
+            filters=build_runtime_scope_filters(
+                runtime_scope_id, conditions=conditions
+            ),
         )
 
 
@@ -172,6 +169,7 @@ async def table_retrieval(
 async def dbschema_retrieval(
     table_retrieval: dict, project_id: str, dbschema_retriever: Any
 ) -> list[Document]:
+    runtime_scope_id = normalize_runtime_scope_id(project_id)
     tables = table_retrieval.get("documents", [])
     table_names = []
     for table in tables:
@@ -184,18 +182,13 @@ async def dbschema_retrieval(
     ]
 
     if table_name_conditions:
-        filters = {
-            "operator": "AND",
-            "conditions": [
+        filters = build_runtime_scope_filters(
+            runtime_scope_id,
+            conditions=[
                 {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
                 {"operator": "OR", "conditions": table_name_conditions},
             ],
-        }
-
-        if project_id:
-            filters["conditions"].append(
-                {"field": "project_id", "operator": "==", "value": project_id}
-            )
+        )
 
         results = await dbschema_retriever.run(query_embedding=[], filters=filters)
         return results["documents"]
@@ -505,12 +498,13 @@ class DbSchemaRetrieval(BasicPipeline):
         enable_column_pruning: bool = False,
     ):
         logger.info("Ask Retrieval pipeline is running...")
+        runtime_scope_id = normalize_runtime_scope_id(project_id)
         return await self._pipe.execute(
             ["construct_retrieval_results"],
             inputs={
                 "query": query,
                 "tables": tables,
-                "project_id": project_id or "",
+                "project_id": runtime_scope_id or "",
                 "histories": histories or [],
                 "enable_column_pruning": enable_column_pruning,
                 **self._components,

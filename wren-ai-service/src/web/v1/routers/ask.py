@@ -15,6 +15,8 @@ from src.web.v1.services.ask import (
     AskResponse,
     AskResultRequest,
     AskResultResponse,
+    AskShadowCompareRolloutReadiness,
+    AskShadowCompareStats,
     StopAskRequest,
     StopAskResponse,
 )
@@ -56,6 +58,20 @@ async def stop_ask(
         stop_ask_request,
     )
     return StopAskResponse(query_id=query_id)
+
+
+@router.get("/asks/shadow-compare/stats")
+async def get_shadow_compare_stats(
+    service_container: ServiceContainer = Depends(get_service_container),
+) -> AskShadowCompareStats:
+    return service_container.ask_service.get_shadow_compare_stats()
+
+
+@router.get("/asks/shadow-compare/readiness")
+async def get_shadow_compare_rollout_readiness(
+    service_container: ServiceContainer = Depends(get_service_container),
+) -> AskShadowCompareRolloutReadiness:
+    return service_container.ask_service.get_shadow_compare_rollout_readiness()
 
 
 @router.get("/asks/{query_id}/result")

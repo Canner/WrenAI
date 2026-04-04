@@ -4,8 +4,14 @@ import {
   IBasicRepository,
   IQueryOptions,
 } from './baseRepository';
-import { camelCase, isPlainObject, mapKeys, mapValues } from 'lodash';
-import { AskResultStatus } from '@server/models/adaptor';
+import {
+  camelCase,
+  isPlainObject,
+  mapKeys,
+  mapValues,
+  snakeCase,
+} from 'lodash';
+import { AskResultStatus, SkillExecutionResult } from '@server/models/adaptor';
 
 export interface DetailStep {
   summary: string;
@@ -78,6 +84,7 @@ export interface ThreadResponse {
   answerDetail?: ThreadResponseAnswerDetail; // AI generated text-based answer detail
   breakdownDetail?: ThreadResponseBreakdownDetail; // Thread response breakdown detail
   chartDetail?: ThreadResponseChartDetail; // Thread response chart detail
+  skillResult?: SkillExecutionResult | null; // Persisted skill execution result
   adjustment?: ThreadResponseAdjustment; // Thread response adjustment
 }
 
@@ -97,6 +104,7 @@ export class ThreadResponseRepository
     'answerDetail',
     'breakdownDetail',
     'chartDetail',
+    'skillResult',
     'adjustment',
   ];
 
@@ -133,6 +141,10 @@ export class ThreadResponseRepository
           res.chartDetail && typeof res.chartDetail === 'string'
             ? JSON.parse(res.chartDetail)
             : res.chartDetail;
+        const skillResult =
+          res.skillResult && typeof res.skillResult === 'string'
+            ? JSON.parse(res.skillResult)
+            : res.skillResult;
         const adjustment =
           res.adjustment && typeof res.adjustment === 'string'
             ? JSON.parse(res.adjustment)
@@ -142,6 +154,7 @@ export class ThreadResponseRepository
           answerDetail: answerDetail || null,
           breakdownDetail: breakdownDetail || null,
           chartDetail: chartDetail || null,
+          skillResult: skillResult || null,
           adjustment: adjustment || null,
         };
       }) as ThreadResponse[];
@@ -156,32 +169,31 @@ export class ThreadResponseRepository
       answerDetail: ThreadResponseAnswerDetail;
       breakdownDetail: ThreadResponseBreakdownDetail;
       chartDetail: ThreadResponseChartDetail;
+      skillResult: SkillExecutionResult | null;
       adjustment: ThreadResponseAdjustment;
     }>,
     queryOptions?: IQueryOptions,
   ) {
-    const transformedData = {
-      status: data.status ? data.status : undefined,
-      sql: data.sql ? data.sql : undefined,
-      viewId: data.viewId ? data.viewId : undefined,
-      answerDetail: data.answerDetail
-        ? JSON.stringify(data.answerDetail)
-        : undefined,
-      breakdownDetail: data.breakdownDetail
-        ? JSON.stringify(data.breakdownDetail)
-        : undefined,
-      chartDetail: data.chartDetail
-        ? JSON.stringify(data.chartDetail)
-        : undefined,
-      adjustment: data.adjustment ? JSON.stringify(data.adjustment) : undefined,
-    };
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
     const [result] = await executer(this.tableName)
       .where({ id })
-      .update(this.transformToDBData(transformedData as any))
+      .update(this.transformToDBData(data as any))
       .returning('*');
     return this.transformFromDBData(result);
   }
+
+  protected override transformToDBData = (data: any) => {
+    if (!isPlainObject(data)) {
+      throw new Error('Unexpected dbdata');
+    }
+    const transformedData = mapValues(data, (value, key) => {
+      if (this.jsonbColumns.includes(key)) {
+        return value === undefined ? value : JSON.stringify(value);
+      }
+      return value;
+    });
+    return mapKeys(transformedData, (_value, key) => snakeCase(key));
+  };
 
   protected override transformFromDBData = (data: any): ThreadResponse => {
     if (!isPlainObject(data)) {

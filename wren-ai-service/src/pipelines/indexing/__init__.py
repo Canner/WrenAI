@@ -9,6 +9,8 @@ from haystack import Document, component
 from haystack.components.writers import DocumentWriter
 from haystack.document_stores.types import DocumentStore, DuplicatePolicy
 
+from src.pipelines.common import build_runtime_scope_filters, normalize_runtime_scope_id
+
 logger = logging.getLogger("wren-ai-service")
 
 
@@ -27,20 +29,14 @@ class DocumentCleaner:
         async def _clear_documents(
             store: DocumentStore, project_id: Optional[str] = None
         ) -> None:
+            runtime_scope_id = normalize_runtime_scope_id(project_id)
             store_name = (
                 store.to_dict().get("init_parameters", {}).get("index", "unknown")
             )
-            logger.info(f"Project ID: {project_id}, Cleaning documents in {store_name}")
-            filters = (
-                {
-                    "operator": "AND",
-                    "conditions": [
-                        {"field": "project_id", "operator": "==", "value": project_id},
-                    ],
-                }
-                if project_id
-                else None
+            logger.info(
+                f"Runtime scope: {runtime_scope_id}, Cleaning documents in {store_name}"
             )
+            filters = build_runtime_scope_filters(runtime_scope_id)
             await store.delete_documents(filters)
 
         await asyncio.gather(

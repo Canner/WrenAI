@@ -226,8 +226,11 @@ export default function AnswerResult(props: Props) {
     showRecommendedQuestions,
   );
 
-  const isSkillAnswer = askingTask?.type === AskingTaskType.SKILL;
-  const hasSkillResult = Boolean(askingTask?.skillResult);
+  const hasSkillResult = Boolean(
+    threadResponse.skillResult || askingTask?.skillResult,
+  );
+  const isSkillAnswer =
+    hasSkillResult || askingTask?.type === AskingTaskType.SKILL;
   const isAnswerPrepared =
     !!answerDetail?.queryId || !!answerDetail?.status || hasSkillResult;
   const isBreakdownOnly = useMemo(() => {

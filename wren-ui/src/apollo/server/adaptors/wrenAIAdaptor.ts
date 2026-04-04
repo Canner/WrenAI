@@ -57,7 +57,10 @@ const getAIServiceError = (error: any) => {
 
 export interface IWrenAIAdaptor {
   deploy(deployData: DeployData): Promise<WrenAIDeployResponse>;
-  delete(projectId: number): Promise<void>;
+  delete(
+    projectId: number,
+    runtimeIdentity?: AskRuntimeIdentity | null,
+  ): Promise<void>;
 
   /**
    * Ask AI service a question.
@@ -144,15 +147,19 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     this.wrenAIBaseEndpoint = wrenAIBaseEndpoint;
   }
 
-  public async delete(projectId: number): Promise<void> {
+  public async delete(
+    projectId: number,
+    runtimeIdentity?: AskRuntimeIdentity | null,
+  ): Promise<void> {
     try {
       if (!projectId) {
         throw new Error('Project ID is required');
       }
       const url = `${this.wrenAIBaseEndpoint}/v1/semantics`;
       const response = await axios.delete(url, {
-        params: {
+        data: {
           project_id: projectId.toString(),
+          runtime_identity: this.transformRuntimeIdentity(runtimeIdentity),
         },
       });
 
@@ -243,6 +250,10 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       const res = await axios.post(`${this.wrenAIBaseEndpoint}/v1/asks`, {
         query: input.query,
         id: input.deployId,
+        project_id:
+          input.runtimeIdentity?.projectId !== undefined
+            ? input.runtimeIdentity.projectId.toString()
+            : undefined,
         histories: this.transformHistoryInput(input.histories),
         configurations: input.configurations,
         runtime_identity: this.transformRuntimeIdentity(input.runtimeIdentity),
@@ -352,6 +363,10 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
         {
           mdl: JSON.stringify(manifest),
           id: hash,
+          project_id:
+            deployData.projectId !== undefined
+              ? deployData.projectId.toString()
+              : undefined,
         },
       );
       const deployId = res.data.id;
@@ -844,8 +859,41 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       sqlGenerationReasoning: body?.sql_generation_reasoning,
       retrievedTables: body?.retrieved_tables,
       skillResult: this.transformSkillResult(body?.skill_result),
+      askPath: body?.ask_path,
+      shadowCompare: this.transformAskShadowCompare(body?.shadow_compare),
       invalidSql: body?.invalid_sql,
       traceId: body?.trace_id,
+    };
+  }
+
+  private transformAskShadowCompare(body: any) {
+    if (!body) {
+      return null;
+    }
+
+    return {
+      enabled: Boolean(body?.enabled),
+      executed: Boolean(body?.executed),
+      comparable: Boolean(body?.comparable),
+      primaryType: body?.primary_type || null,
+      shadowType: body?.shadow_type || null,
+      primaryAskPath: body?.primary_ask_path || null,
+      shadowAskPath: body?.shadow_ask_path || null,
+      primaryErrorType: body?.primary_error_type || null,
+      shadowErrorType: body?.shadow_error_type || null,
+      primarySql: body?.primary_sql || null,
+      shadowSql: body?.shadow_sql || null,
+      primaryResultCount:
+        typeof body?.primary_result_count === 'number'
+          ? body.primary_result_count
+          : 0,
+      shadowResultCount:
+        typeof body?.shadow_result_count === 'number'
+          ? body.shadow_result_count
+          : 0,
+      matched: Boolean(body?.matched),
+      shadowError: body?.shadow_error || null,
+      reason: body?.reason || null,
     };
   }
 

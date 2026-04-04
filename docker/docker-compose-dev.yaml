@@ -1,7 +1,6 @@
-version: "3"
-
 volumes:
   data:
+  postgres_data:
 
 networks:
   wren:
@@ -45,6 +44,8 @@ services:
       # using PYTHONUNBUFFERED: 1 can fix this
       PYTHONUNBUFFERED: 1
       CONFIG_PATH: /app/config.yaml
+      PG_CONN_STR: ${PG_CONN_STR:-postgresql://postgres:postgres@postgres:5432/wrenai}
+      EMBEDDING_MODEL_DIMENSION: ${EMBEDDING_MODEL_DIMENSION:-3072}
     env_file:
       - ${PROJECT_DIR}/.env
     volumes:
@@ -53,7 +54,7 @@ services:
     networks:
       - wren
     depends_on:
-      - qdrant
+      - postgres
 
   ibis-server:
     image: ghcr.io/canner/wren-engine-ibis:${IBIS_SERVER_VERSION}
@@ -69,27 +70,18 @@ services:
     networks:
       - wren
 
-  qdrant:
-    image: qdrant/qdrant:v1.11.0
+  postgres:
+    image: pgvector/pgvector:pg17
     pull_policy: always
+    expose:
+      - 5432
     ports:
-      - 6333:6333
-      - 6334:6334
+      - 9432:5432
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-wrenai}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     networks:
       - wren
-
-  # If you want to use postgres for testing purpose, uncomment the following block
-  # postgres:
-  #   image: postgres:14-alpine
-  #   platform: ${PLATFORM}
-  #   ports:
-  #     - 9432:5432
-  #   volumes:
-  #     - data:/var/lib/postgresql/data
-  #   environment:
-  #     - POSTGRES_PASSWORD=secret
-  #     - POSTGRES_USER=test
-  #     - POSTGRES_DB=test
-  #     - PGDATA=/var/lib/postgresql/data/pgdata
-  #   networks:
-  #     - wren

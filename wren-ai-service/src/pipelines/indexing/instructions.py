@@ -12,6 +12,11 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
+from src.pipelines.common import (
+    build_runtime_scope_filters,
+    build_runtime_scope_meta,
+    normalize_runtime_scope_id,
+)
 from src.pipelines.indexing import AsyncDocumentWriter
 
 logger = logging.getLogger("wren-ai-service")
@@ -30,9 +35,12 @@ class Instruction(BaseModel):
 class InstructionsConverter:
     @component.output_types(documents=List[Document])
     def run(self, instructions: list[Instruction], project_id: str = ""):
-        logger.info(f"Project ID: {project_id} Converting instructions to documents...")
+        runtime_scope_id = normalize_runtime_scope_id(project_id)
+        logger.info(
+            f"Runtime scope: {runtime_scope_id} Converting instructions to documents..."
+        )
 
-        addition = {"project_id": project_id} if project_id else {}
+        addition = build_runtime_scope_meta(runtime_scope_id)
 
         return {
             "documents": [
@@ -63,17 +71,13 @@ class InstructionsCleaner:
     async def run(
         self, instruction_ids: List[str], project_id: Optional[str] = None
     ) -> None:
-        filter = {
-            "operator": "AND",
-            "conditions": [
+        runtime_scope_id = normalize_runtime_scope_id(project_id)
+        filter = build_runtime_scope_filters(
+            runtime_scope_id,
+            conditions=[
                 {"field": "instruction_id", "operator": "in", "value": instruction_ids},
             ],
-        }
-
-        if project_id:
-            filter["conditions"].append(
-                {"field": "project_id", "operator": "==", "value": project_id}
-            )
+        )
 
         return await self.store.delete_documents(filter)
 
@@ -87,7 +91,8 @@ def to_documents(
     document_converter: InstructionsConverter,
     project_id: str = "",
 ) -> Dict[str, Any]:
-    return document_converter.run(instructions=instructions, project_id=project_id)
+    runtime_scope_id = normalize_runtime_scope_id(project_id)
+    return document_converter.run(instructions=instructions, project_id=runtime_scope_id)
 
 
 @observe(capture_input=False, capture_output=False)
@@ -106,9 +111,13 @@ async def clean(
     project_id: str = "",
     delete_all: bool = False,
 ) -> Dict[str, Any]:
+    runtime_scope_id = normalize_runtime_scope_id(project_id)
     instruction_ids = [instruction.id for instruction in instructions]
     if instruction_ids or delete_all:
-        await cleaner.run(instruction_ids=instruction_ids, project_id=project_id)
+        await cleaner.run(
+            instruction_ids=instruction_ids,
+            project_id=runtime_scope_id,
+        )
 
     return embedding
 
@@ -153,12 +162,13 @@ class Instructions(BasicPipeline):
         instructions: list[Instruction],
         project_id: str = "",
     ) -> Dict[str, Any]:
+        runtime_scope_id = normalize_runtime_scope_id(project_id)
         logger.info(
-            f"Project ID: {project_id} Instructions Indexing pipeline is running..."
+            f"Runtime scope: {runtime_scope_id} Instructions Indexing pipeline is running..."
         )
 
         input = {
-            "project_id": project_id,
+            "project_id": runtime_scope_id,
             "instructions": instructions,
             **self._components,
         }
@@ -172,9 +182,10 @@ class Instructions(BasicPipeline):
         project_id: Optional[str] = None,
         delete_all: bool = False,
     ) -> None:
+        runtime_scope_id = normalize_runtime_scope_id(project_id)
         await clean(
             instructions=instructions or [],
             cleaner=self._components["cleaner"],
-            project_id=project_id,
+            project_id=runtime_scope_id,
             delete_all=delete_all,
         )

@@ -1,5 +1,11 @@
-import { ApiType, ApiHistory } from '@server/repositories/apiHistoryRepository';
+import {
+  ApiType,
+  ApiHistory,
+  AskShadowCompareStats,
+} from '@server/repositories/apiHistoryRepository';
 import { IContext } from '@server/types';
+
+const ASK_SHADOW_COMPARE_API_TYPES = [ApiType.ASK, ApiType.STREAM_ASK];
 
 export interface ApiHistoryFilter {
   apiType?: ApiType;
@@ -14,6 +20,48 @@ export interface ApiHistoryPagination {
   offset: number;
   limit: number;
 }
+
+const toDateFilter = (filter?: ApiHistoryFilter) => {
+  const dateFilter: { startDate?: Date; endDate?: Date } = {};
+
+  if (filter?.startDate) {
+    dateFilter.startDate = new Date(filter.startDate);
+  }
+  if (filter?.endDate) {
+    dateFilter.endDate = new Date(filter.endDate);
+  }
+
+  return dateFilter;
+};
+
+const toScopedFilterCriteria = (
+  filter: ApiHistoryFilter | undefined,
+  activeProjectId: number,
+) => {
+  const filterCriteria: Partial<ApiHistory> = {
+    projectId: activeProjectId,
+  };
+
+  if (!filter) {
+    return filterCriteria;
+  }
+
+  if (filter.statusCode) {
+    filterCriteria.statusCode = filter.statusCode;
+  }
+
+  if (filter.threadId) {
+    filterCriteria.threadId = filter.threadId;
+  }
+
+  if (filter.projectId && filter.projectId !== activeProjectId) {
+    throw new Error(
+      'apiHistory projectId filter does not match active runtime scope',
+    );
+  }
+
+  return filterCriteria;
+};
 
 /**
  * Sanitize response payload to remove large data fields
@@ -53,6 +101,7 @@ const sanitizeResponsePayload = (payload: any, apiType?: ApiType): any => {
 export class ApiHistoryResolver {
   constructor() {
     this.getApiHistory = this.getApiHistory.bind(this);
+    this.getAskShadowCompareStats = this.getAskShadowCompareStats.bind(this);
   }
 
   /**
@@ -69,39 +118,11 @@ export class ApiHistoryResolver {
     const { filter, pagination } = args;
     const { offset, limit } = pagination;
     const activeProjectId = ctx.runtimeScope!.project.id;
+    const filterCriteria = toScopedFilterCriteria(filter, activeProjectId);
+    const dateFilter = toDateFilter(filter);
 
-    // Build filter criteria
-    const filterCriteria: Partial<ApiHistory> = {
-      projectId: activeProjectId,
-    };
-
-    if (filter) {
-      if (filter.apiType) {
-        filterCriteria.apiType = filter.apiType;
-      }
-
-      if (filter.statusCode) {
-        filterCriteria.statusCode = filter.statusCode;
-      }
-
-      if (filter.threadId) {
-        filterCriteria.threadId = filter.threadId;
-      }
-
-      if (filter.projectId && filter.projectId !== activeProjectId) {
-        throw new Error(
-          'apiHistory projectId filter does not match active runtime scope',
-        );
-      }
-    }
-
-    // Handle date filtering
-    const dateFilter: { startDate?: Date; endDate?: Date } = {};
-    if (filter?.startDate) {
-      dateFilter.startDate = new Date(filter.startDate);
-    }
-    if (filter?.endDate) {
-      dateFilter.endDate = new Date(filter.endDate);
+    if (filter?.apiType) {
+      filterCriteria.apiType = filter.apiType;
     }
 
     // Get total count for pagination info
@@ -136,6 +157,39 @@ export class ApiHistoryResolver {
     };
   }
 
+  public async getAskShadowCompareStats(
+    _root: unknown,
+    args: {
+      filter?: ApiHistoryFilter;
+    },
+    ctx: IContext,
+  ): Promise<AskShadowCompareStats> {
+    const filter = args?.filter;
+    const activeProjectId = ctx.runtimeScope!.project.id;
+    const filterCriteria = toScopedFilterCriteria(filter, activeProjectId);
+    const dateFilter = toDateFilter(filter);
+    const apiTypes = this.getAskShadowCompareApiTypes(filter?.apiType);
+
+    return await ctx.apiHistoryRepository.getAskShadowCompareStats(
+      filterCriteria,
+      dateFilter,
+      apiTypes,
+    );
+  }
+
+  private getAskShadowCompareApiTypes(apiType?: ApiType): ApiType[] {
+    if (!apiType) {
+      return ASK_SHADOW_COMPARE_API_TYPES;
+    }
+
+    if (!ASK_SHADOW_COMPARE_API_TYPES.includes(apiType)) {
+      throw new Error(
+        'askShadowCompareStats only supports ASK or STREAM_ASK apiType filters',
+      );
+    }
+
+    return [apiType];
+  }
   /**
    * Resolver for ApiHistoryResponse fields
    */

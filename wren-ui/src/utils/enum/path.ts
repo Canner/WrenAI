@@ -8,6 +8,8 @@ export enum Path {
   OnboardingModels = '/setup/models',
   OnboardingRelationships = '/setup/relationships',
   Knowledge = '/knowledge',
+  KnowledgeConnectors = '/knowledge/connectors',
+  KnowledgeSkills = '/knowledge/skills',
   KnowledgeQuestionSQLPairs = '/knowledge/question-sql-pairs',
   KnowledgeInstructions = '/knowledge/instructions',
   APIManagement = '/api-management',

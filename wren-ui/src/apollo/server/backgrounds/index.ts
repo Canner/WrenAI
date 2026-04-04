@@ -3,3 +3,4 @@ export * from './textBasedAnswerBackgroundTracker';
 export * from './chart';
 export * from './recommend-question';
 export * from './dashboardCacheBackgroundTracker';
+export * from './scheduleWorker';

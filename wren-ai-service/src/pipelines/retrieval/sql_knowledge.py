@@ -11,7 +11,7 @@ from langfuse.decorators import observe
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider
-from src.pipelines.common import retrieve_metadata
+from src.pipelines.common import normalize_runtime_scope_id, retrieve_data_source
 from src.providers.engine.wren import WrenIbis
 
 logger = logging.getLogger("wren-ai-service")
@@ -115,20 +115,20 @@ class SqlKnowledges(BasicPipeline):
         self,
         project_id: Optional[str] = None,
     ) -> Optional[SqlKnowledge]:
+        runtime_scope_id = normalize_runtime_scope_id(project_id)
         logger.info(
-            f"Project ID: {project_id} SQL Knowledge Retrieval pipeline is running..."
+            f"Runtime scope: {runtime_scope_id} SQL Knowledge Retrieval pipeline is running..."
         )
 
-        metadata = await retrieve_metadata(project_id or "", self._retriever)
-        _data_source = metadata.get("data_source", "local_file")
+        data_source = await retrieve_data_source(runtime_scope_id, self._retriever)
 
-        if _data_source in self._cache:
-            logger.info(f"Hit cache of SQL Knowledge for {_data_source}")
-            return self._cache[_data_source]
+        if data_source in self._cache:
+            logger.info(f"Hit cache of SQL Knowledge for {data_source}")
+            return self._cache[data_source]
 
         input = {
-            "data_source": _data_source,
-            "project_id": project_id,
+            "data_source": data_source,
+            "project_id": runtime_scope_id,
             **self._components,
         }
         result = await self._pipe.execute(["cache"], inputs=input)

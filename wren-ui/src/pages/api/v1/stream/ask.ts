@@ -11,6 +11,7 @@ import {
   validateSummaryResult,
   transformHistoryInput,
   getScopedThreadHistories,
+  buildAskDiagnostics,
 } from '@/apollo/server/utils/apiUtils';
 import { buildAskRuntimeContext } from '@server/utils/askContext';
 import {
@@ -230,10 +231,14 @@ export default async function handler(
       const errorMessage =
         (askResult.error as WrenAIError).message || 'Unknown error';
       const additionalData: Record<string, any> = {};
+      const askDiagnostics = buildAskDiagnostics(askResult);
 
       // Include invalid SQL if available
       if (askResult.invalidSql) {
         additionalData.invalidSql = askResult.invalidSql;
+      }
+      if (askDiagnostics) {
+        additionalData.askDiagnostics = askDiagnostics;
       }
 
       throw new ApiError(
@@ -312,6 +317,7 @@ export default async function handler(
         },
         responsePayload: {
           explanation,
+          askDiagnostics: buildAskDiagnostics(askResult),
         },
         statusCode: 200,
         durationMs: Date.now() - startTime,
@@ -352,6 +358,7 @@ export default async function handler(
         responsePayload: {
           type: 'SKILL_QUERY',
           skillResult: askResult.skillResult,
+          askDiagnostics: buildAskDiagnostics(askResult),
         },
         statusCode: 200,
         durationMs: Date.now() - startTime,
@@ -522,6 +529,7 @@ export default async function handler(
       responsePayload: {
         sql,
         summary,
+        askDiagnostics: buildAskDiagnostics(askResult),
       },
       statusCode: 200,
       durationMs: Date.now() - startTime,
@@ -543,6 +551,7 @@ export default async function handler(
       requestPayload: req.body,
       responsePayload: {
         error: error instanceof Error ? error.message : String(error),
+        ...(error?.additionalData || {}),
       },
       statusCode: 500,
       durationMs: Date.now() - startTime,

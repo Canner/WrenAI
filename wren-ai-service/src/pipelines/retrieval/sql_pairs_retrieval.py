@@ -10,7 +10,11 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
-from src.pipelines.common import ScoreFilter
+from src.pipelines.common import (
+    ScoreFilter,
+    build_runtime_scope_filters,
+    normalize_runtime_scope_id,
+)
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -38,16 +42,8 @@ class OutputFormatter:
 async def count_documents(
     store: QdrantDocumentStore, project_id: Optional[str] = None
 ) -> int:
-    filters = (
-        {
-            "operator": "AND",
-            "conditions": [
-                {"field": "project_id", "operator": "==", "value": project_id},
-            ],
-        }
-        if project_id
-        else None
-    )
+    runtime_scope_id = normalize_runtime_scope_id(project_id)
+    filters = build_runtime_scope_filters(runtime_scope_id)
     document_count = await store.count_documents(filters=filters)
     return document_count
 
@@ -63,20 +59,10 @@ async def embedding(count_documents: int, query: str, embedder: Any) -> dict:
 @observe(capture_input=False)
 async def retrieval(embedding: dict, project_id: str, retriever: Any) -> dict:
     if embedding:
-        filters = (
-            {
-                "operator": "AND",
-                "conditions": [
-                    {"field": "project_id", "operator": "==", "value": project_id},
-                ],
-            }
-            if project_id
-            else None
-        )
-
+        runtime_scope_id = normalize_runtime_scope_id(project_id)
         res = await retriever.run(
             query_embedding=embedding.get("embedding"),
-            filters=filters,
+            filters=build_runtime_scope_filters(runtime_scope_id),
         )
         return dict(documents=res.get("documents"))
 
@@ -145,11 +131,12 @@ class SqlPairsRetrieval(BasicPipeline):
     @observe(name="SqlPairs Retrieval")
     async def run(self, query: str, project_id: Optional[str] = None):
         logger.info("SqlPairs Retrieval pipeline is running...")
+        runtime_scope_id = normalize_runtime_scope_id(project_id)
         return await self._pipe.execute(
             ["formatted_output"],
             inputs={
                 "query": query,
-                "project_id": project_id or "",
+                "project_id": runtime_scope_id or "",
                 **self._components,
                 **self._configs,
             },

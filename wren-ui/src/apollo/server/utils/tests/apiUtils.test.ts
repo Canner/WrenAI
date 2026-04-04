@@ -8,7 +8,7 @@ jest.mock('@/common', () => ({
   },
 }));
 
-import { getScopedThreadHistories } from '../apiUtils';
+import { buildAskDiagnostics, getScopedThreadHistories } from '../apiUtils';
 import { ApiType } from '../../repositories/apiHistoryRepository';
 import { createApiHistoryRecord, handleApiError } from '../apiUtils';
 
@@ -161,6 +161,41 @@ describe('apiUtils', () => {
           error: 'Runtime scope selector is required for this request',
         }),
       );
+    });
+  });
+
+  describe('buildAskDiagnostics', () => {
+    it('returns undefined when no diagnostics are available', () => {
+      expect(buildAskDiagnostics(null)).toBeUndefined();
+      expect(buildAskDiagnostics({} as any)).toBeUndefined();
+    });
+
+    it('returns ask trace, path and shadow compare when present', () => {
+      expect(
+        buildAskDiagnostics({
+          traceId: 'trace-1',
+          askPath: 'skill',
+          shadowCompare: {
+            enabled: true,
+            executed: true,
+            matched: false,
+            comparable: false,
+            primaryType: 'SKILL',
+            shadowType: 'TEXT_TO_SQL',
+          },
+        } as any),
+      ).toEqual({
+        traceId: 'trace-1',
+        askPath: 'skill',
+        shadowCompare: {
+          enabled: true,
+          executed: true,
+          matched: false,
+          comparable: false,
+          primaryType: 'SKILL',
+          shadowType: 'TEXT_TO_SQL',
+        },
+      });
     });
   });
 });

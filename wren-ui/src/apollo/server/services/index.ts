@@ -13,3 +13,4 @@ export * from './workspaceService';
 export * from './secretService';
 export * from './connectorService';
 export * from './skillService';
+export * from './scheduleService';

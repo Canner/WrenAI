@@ -3,6 +3,57 @@ from typing import Any, List, Optional, Tuple
 
 from haystack import Document, component
 
+LEGACY_PROJECT_SCOPE_FIELD = "project_id"
+
+
+def normalize_runtime_scope_id(value: str | int | None) -> Optional[str]:
+    if value is None:
+        return None
+
+    normalized = str(value).strip()
+    return normalized or None
+
+
+def build_runtime_scope_filters(
+    scope_id: str | int | None,
+    *,
+    conditions: Optional[list[dict[str, Any]]] = None,
+) -> Optional[dict[str, Any]]:
+    """
+    Build retrieval/indexing filters for the current runtime scope.
+
+    Storage backends still index documents by the legacy `project_id` meta field
+    during the migration window. Keep that compatibility detail localized here so
+    pipelines stop hand-coding the legacy field name.
+    """
+
+    merged_conditions = list(conditions or [])
+    normalized_scope_id = normalize_runtime_scope_id(scope_id)
+    if normalized_scope_id:
+        merged_conditions.append(
+            {
+                "field": LEGACY_PROJECT_SCOPE_FIELD,
+                "operator": "==",
+                "value": normalized_scope_id,
+            }
+        )
+
+    if not merged_conditions:
+        return None
+
+    return {
+        "operator": "AND",
+        "conditions": merged_conditions,
+    }
+
+
+def build_runtime_scope_meta(scope_id: str | int | None) -> dict[str, str]:
+    normalized_scope_id = normalize_runtime_scope_id(scope_id)
+    if not normalized_scope_id:
+        return {}
+
+    return {LEGACY_PROJECT_SCOPE_FIELD: normalized_scope_id}
+
 
 def get_engine_supported_data_type(data_type: str) -> str:
     """
@@ -64,16 +115,8 @@ def build_table_ddl(
     )
 
 
-async def retrieve_metadata(project_id: str, retriever) -> dict[str, Any]:
-    filters = None
-    if project_id:
-        filters = {
-            "operator": "AND",
-            "conditions": [
-                {"field": "project_id", "operator": "==", "value": project_id},
-            ],
-        }
-
+async def retrieve_metadata(scope_id: str | int | None, retriever) -> dict[str, Any]:
+    filters = build_runtime_scope_filters(scope_id)
     result = await retriever.run(query_embedding=[], filters=filters)
     documents = result["documents"]
 
@@ -83,6 +126,16 @@ async def retrieve_metadata(project_id: str, retriever) -> dict[str, Any]:
         return doc.meta
     else:
         return {}
+
+
+async def retrieve_data_source(
+    scope_id: str | int | None,
+    retriever,
+    *,
+    default: str = "local_file",
+) -> str:
+    metadata = await retrieve_metadata(scope_id, retriever)
+    return metadata.get("data_source", default)
 
 
 @component

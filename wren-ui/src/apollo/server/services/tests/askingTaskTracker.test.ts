@@ -1,5 +1,5 @@
 import { AskingTaskTracker } from '../askingTaskTracker';
-import { AskResultStatus } from '@server/models/adaptor';
+import { AskResultStatus, SkillResultType } from '@server/models/adaptor';
 
 describe('AskingTaskTracker', () => {
   const createTracker = () => {
@@ -93,6 +93,35 @@ describe('AskingTaskTracker', () => {
       kbSnapshotId: 'snapshot-9',
       deployHash: 'deploy-9',
       actorUserId: 'user-9',
+    });
+  });
+
+  it('persists finalized skill results onto the bound thread response', async () => {
+    const tracker = createTracker();
+    const threadResponseRepository = ((
+      tracker as any
+    ).threadResponseRepository = {
+      updateOne: jest.fn(),
+    });
+
+    await (tracker as any).updateThreadResponseWhenTaskFinalized({
+      threadResponseId: 21,
+      result: {
+        status: AskResultStatus.FINISHED,
+        type: 'SKILL',
+        response: [],
+        skillResult: {
+          resultType: SkillResultType.TEXT,
+          text: '本月 GMV 为 128 万',
+        },
+      },
+    });
+
+    expect(threadResponseRepository.updateOne).toHaveBeenCalledWith(21, {
+      skillResult: {
+        resultType: SkillResultType.TEXT,
+        text: '本月 GMV 为 128 万',
+      },
     });
   });
 });

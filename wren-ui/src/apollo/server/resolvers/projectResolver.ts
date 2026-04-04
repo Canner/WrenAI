@@ -31,6 +31,7 @@ import {
 import { snakeCase } from 'lodash';
 import { CompactTable, ProjectData } from '../services';
 import { DuckDBPrepareOptions } from '@server/adaptors/wrenEngineAdaptor';
+import { toPersistedRuntimeIdentity } from '@server/context/runtimeScope';
 import DataSourceSchemaDetector, {
   SchemaChangeType,
 } from '@server/managers/dataSourceSchemaDetector';
@@ -109,7 +110,9 @@ export class ProjectResolver {
 
     // only generating for user's data source
     if (project.sampleDataset === null) {
-      await ctx.projectService.generateProjectRecommendationQuestions(project.id);
+      await ctx.projectService.generateProjectRecommendationQuestions(
+        project.id,
+      );
     }
     return true;
   }
@@ -128,7 +131,10 @@ export class ProjectResolver {
       await ctx.modelService.deleteAllViewsByProjectId(id);
       await ctx.modelService.deleteAllModelsByProjectId(id);
       await ctx.projectService.deleteProject(id);
-      await ctx.wrenAIAdaptor.delete(id);
+      await ctx.wrenAIAdaptor.delete(
+        id,
+        ctx.runtimeScope ? toPersistedRuntimeIdentity(ctx.runtimeScope) : null,
+      );
 
       // telemetry
       ctx.telemetry.sendEvent(eventName, {
@@ -182,7 +188,8 @@ export class ProjectResolver {
       );
 
       // list all the tables in the data source
-      const tables = await ctx.projectService.getProjectDataSourceTables(project);
+      const tables =
+        await ctx.projectService.getProjectDataSourceTables(project);
       const tableNames = tables.map((table) => table.name);
 
       // save tables as model and modelColumns
@@ -603,7 +610,12 @@ export class ProjectResolver {
 
     // init dashboard
     logger.debug('Dashboard init...');
-    await ctx.dashboardService.initDashboard(project.id);
+    await ctx.dashboardService.initDashboard(project.id, {
+      knowledgeBaseId: ctx.runtimeScope?.knowledgeBase?.id || null,
+      kbSnapshotId: ctx.runtimeScope?.kbSnapshot?.id || null,
+      deployHash: ctx.runtimeScope?.deployHash || null,
+      createdBy: ctx.runtimeScope?.userId || null,
+    });
     logger.debug('Dashboard created.');
 
     const eventName = TelemetryEvent.CONNECTION_SAVE_DATA_SOURCE;

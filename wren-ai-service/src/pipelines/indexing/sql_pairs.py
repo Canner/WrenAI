@@ -14,6 +14,11 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
+from src.pipelines.common import (
+    build_runtime_scope_filters,
+    build_runtime_scope_meta,
+    normalize_runtime_scope_id,
+)
 from src.pipelines.indexing import AsyncDocumentWriter
 
 logger = logging.getLogger("wren-ai-service")
@@ -29,9 +34,25 @@ class SqlPair(BaseModel):
 class SqlPairsConverter:
     @component.output_types(documents=List[Document])
     def run(self, sql_pairs: List[SqlPair], project_id: str = ""):
-        logger.info(f"Project ID: {project_id} Converting SQL pairs to documents...")
+        runtime_scope_id = normalize_runtime_scope_id(project_id)
+        logger.info(
+            f"Runtime scope: {runtime_scope_id} Converting SQL pairs to documents..."
+        )
 
-        addition = {"project_id": project_id} if project_id else {}
+        empty_question_pair = next(
+            (
+                sql_pair
+                for sql_pair in sql_pairs
+                if not (sql_pair.question or "").strip()
+            ),
+            None,
+        )
+        if empty_question_pair is not None:
+            raise ValueError(
+                f"SQL pair question cannot be empty: {empty_question_pair.id}"
+            )
+
+        addition = build_runtime_scope_meta(runtime_scope_id)
 
         return {
             "documents": [
@@ -58,17 +79,13 @@ class SqlPairsCleaner:
     async def run(
         self, sql_pair_ids: List[str], project_id: Optional[str] = None
     ) -> None:
-        filter = {
-            "operator": "AND",
-            "conditions": [
+        runtime_scope_id = normalize_runtime_scope_id(project_id)
+        filter = build_runtime_scope_filters(
+            runtime_scope_id,
+            conditions=[
                 {"field": "sql_pair_id", "operator": "in", "value": sql_pair_ids},
             ],
-        }
-
-        if project_id:
-            filter["conditions"].append(
-                {"field": "project_id", "operator": "==", "value": project_id}
-            )
+        )
 
         return await self.store.delete_documents(filter)
 
@@ -110,7 +127,8 @@ def to_documents(
     document_converter: SqlPairsConverter,
     project_id: str = "",
 ) -> Dict[str, Any]:
-    return document_converter.run(sql_pairs=sql_pairs, project_id=project_id)
+    runtime_scope_id = normalize_runtime_scope_id(project_id)
+    return document_converter.run(sql_pairs=sql_pairs, project_id=runtime_scope_id)
 
 
 @observe(capture_input=False, capture_output=False)
@@ -129,9 +147,10 @@ async def clean(
     project_id: str = "",
     delete_all: bool = False,
 ) -> Dict[str, Any]:
+    runtime_scope_id = normalize_runtime_scope_id(project_id)
     sql_pair_ids = [sql_pair.id for sql_pair in sql_pairs]
     if sql_pair_ids or delete_all:
-        await cleaner.run(sql_pair_ids=sql_pair_ids, project_id=project_id)
+        await cleaner.run(sql_pair_ids=sql_pair_ids, project_id=runtime_scope_id)
 
     return embedding
 
@@ -196,13 +215,14 @@ class SqlPairs(BasicPipeline):
         project_id: str = "",
         external_pairs: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
+        runtime_scope_id = normalize_runtime_scope_id(project_id)
         logger.info(
-            f"Project ID: {project_id} SQL Pairs Indexing pipeline is running..."
+            f"Runtime scope: {runtime_scope_id} SQL Pairs Indexing pipeline is running..."
         )
 
         input = {
             "mdl_str": mdl_str,
-            "project_id": project_id,
+            "project_id": runtime_scope_id,
             "external_pairs": {
                 **self._external_pairs,
                 **(external_pairs or {}),
@@ -219,9 +239,10 @@ class SqlPairs(BasicPipeline):
         project_id: Optional[str] = None,
         delete_all: bool = False,
     ) -> None:
+        runtime_scope_id = normalize_runtime_scope_id(project_id)
         await clean(
             sql_pairs=sql_pairs,
             cleaner=self._components["cleaner"],
-            project_id=project_id,
+            project_id=runtime_scope_id,
             delete_all=delete_all,
         )

@@ -9,6 +9,7 @@ import { SqlPairResolver } from './resolvers/sqlPairResolver';
 import { InstructionResolver } from './resolvers/instructionResolver';
 import { ApiHistoryResolver } from './resolvers/apiHistoryResolver';
 import { RuntimeSelectorResolver } from './resolvers/runtimeSelectorResolver';
+import { SkillResolver } from './resolvers/skillResolver';
 import { convertColumnType } from '@server/utils';
 import { DialectSQLScalar } from './scalars';
 
@@ -22,6 +23,7 @@ const sqlPairResolver = new SqlPairResolver();
 const instructionResolver = new InstructionResolver();
 const apiHistoryResolver = new ApiHistoryResolver();
 const runtimeSelectorResolver = new RuntimeSelectorResolver();
+const skillResolver = new SkillResolver();
 const resolvers = {
   JSON: GraphQLJSON,
   DialectSQL: DialectSQLScalar,
@@ -77,9 +79,14 @@ const resolvers = {
 
     // API History
     apiHistory: apiHistoryResolver.getApiHistory,
+    askShadowCompareStats: apiHistoryResolver.getAskShadowCompareStats,
 
     // Runtime scope
     runtimeSelectorState: runtimeSelectorResolver.getRuntimeSelectorState,
+
+    // Skills
+    skillDefinitions: skillResolver.getSkillDefinitions,
+    skillBindings: skillResolver.getSkillBindings,
   },
   Mutation: {
     deploy: modelResolver.deploy,
@@ -182,6 +189,14 @@ const resolvers = {
     createInstruction: instructionResolver.createInstruction,
     updateInstruction: instructionResolver.updateInstruction,
     deleteInstruction: instructionResolver.deleteInstruction,
+
+    // Skills
+    createSkillDefinition: skillResolver.createSkillDefinition,
+    updateSkillDefinition: skillResolver.updateSkillDefinition,
+    deleteSkillDefinition: skillResolver.deleteSkillDefinition,
+    createSkillBinding: skillResolver.createSkillBinding,
+    updateSkillBinding: skillResolver.updateSkillBinding,
+    deleteSkillBinding: skillResolver.deleteSkillBinding,
   },
   ThreadResponse: askingResolver.getThreadResponseNestedResolver(),
   DetailStep: askingResolver.getDetailStepNestedResolver(),

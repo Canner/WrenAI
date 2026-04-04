@@ -10,7 +10,11 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
-from src.pipelines.common import ScoreFilter
+from src.pipelines.common import (
+    ScoreFilter,
+    build_runtime_scope_filters,
+    normalize_runtime_scope_id,
+)
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -59,16 +63,8 @@ class ScopeFilter:
 async def count_documents(
     store: QdrantDocumentStore, project_id: Optional[str] = None
 ) -> int:
-    filters = (
-        {
-            "operator": "AND",
-            "conditions": [
-                {"field": "project_id", "operator": "==", "value": project_id},
-            ],
-        }
-        if project_id
-        else None
-    )
+    runtime_scope_id = normalize_runtime_scope_id(project_id)
+    filters = build_runtime_scope_filters(runtime_scope_id)
     document_count = await store.count_documents(filters=filters)
     return document_count
 
@@ -86,17 +82,13 @@ async def retrieval(embedding: dict, project_id: str, retriever: Any) -> dict:
     if not embedding:
         return {}
 
-    filters = {
-        "operator": "AND",
-        "conditions": [
+    runtime_scope_id = normalize_runtime_scope_id(project_id)
+    filters = build_runtime_scope_filters(
+        runtime_scope_id,
+        conditions=[
             {"field": "is_default", "operator": "==", "value": False},
         ],
-    }
-
-    if project_id:
-        filters["conditions"].append(
-            {"field": "project_id", "operator": "==", "value": project_id}
-        )
+    )
 
     res = await retriever.run(
         query_embedding=embedding.get("embedding"),
@@ -140,17 +132,13 @@ async def default_instructions(
     if not count_documents:
         return []
 
-    filters = {
-        "operator": "AND",
-        "conditions": [
+    runtime_scope_id = normalize_runtime_scope_id(project_id)
+    filters = build_runtime_scope_filters(
+        runtime_scope_id,
+        conditions=[
             {"field": "is_default", "operator": "==", "value": True},
         ],
-    }
-
-    if project_id:
-        filters["conditions"].append(
-            {"field": "project_id", "operator": "==", "value": project_id}
-        )
+    )
 
     _res = await retriever.run(
         query_embedding=None,
@@ -216,11 +204,12 @@ class Instructions(BasicPipeline):
         self, query: str, project_id: Optional[str] = None, scope: str = "sql"
     ):
         logger.info("Instructions Retrieval pipeline is running...")
+        runtime_scope_id = normalize_runtime_scope_id(project_id)
         return await self._pipe.execute(
             ["formatted_output"],
             inputs={
                 "query": query,
-                "project_id": project_id or "",
+                "project_id": runtime_scope_id or "",
                 "scope": scope,
                 **self._components,
                 **self._configs,

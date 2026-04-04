@@ -1,0 +1,64 @@
+{
+  "pid": 75457,
+  "parent_pid": 77268,
+  "started_at": "2026-04-04T01:24:59.277Z",
+  "cwd": "/Users/liyi/Code/WrenAI",
+  "notify_script": "/Users/liyi/.nvm/versions/node/v22.18.0/lib/node_modules/oh-my-codex/dist/scripts/notify-hook.js",
+  "poll_ms": 75,
+  "pid_file": null,
+  "max_lifetime_ms": 0,
+  "tracked_files": 0,
+  "seen_turns": 0,
+  "dispatch_drain": {
+    "enabled": true,
+    "max_per_tick": 5,
+    "run_count": 1,
+    "leader_only": true,
+    "last_tick_at": "2026-04-04T01:24:59.279Z",
+    "last_result": {
+      "processed": 0,
+      "skipped": 0,
+      "failed": 0
+    },
+    "last_error": null
+  },
+  "leader_nudge": {
+    "enabled": true,
+    "leader_only": true,
+    "stale_threshold_ms": 180000,
+    "precomputed_leader_stale": true,
+    "last_tick_at": "2026-04-04T01:24:59.279Z",
+    "last_error": null,
+    "run_count": 1
+  },
+  "ralph_continue_steer": {
+    "enabled": true,
+    "cadence_ms": 60000,
+    "message": "Ralph loop active continue",
+    "active": false,
+    "last_state_check_at": "2026-04-04T01:24:59.343Z",
+    "last_sent_at": "",
+    "cooldown_anchor_at": "",
+    "last_reason": "cleared",
+    "last_error": null,
+    "state_path": "",
+    "pane_id": "",
+    "pane_current_command": "",
+    "current_phase": "",
+    "shared_timestamp_path": "/Users/liyi/Code/WrenAI/.omx/state/ralph-last-steer-at",
+    "shared_last_sent_at": "",
+    "singleton_lock_path": "/Users/liyi/Code/WrenAI/.omx/state/ralph-continue-steer.lock"
+  },
+  "fallback_auto_nudge": {
+    "enabled": true,
+    "stall_ms": 5000,
+    "last_tick_at": "2026-04-04T01:24:59.341Z",
+    "last_turn_at": "2026-04-03T15:50:48.326Z",
+    "last_turn_count": 32,
+    "last_message": "可以，但**最佳方案不是二选一**，而是：\n\n## 推荐\n**先用 `$team`，必要时再用 `$ralph` 收口。**\n\n### 为什么\n- **`$team` 更适合现在**  \n  你剩下的",
+    "last_reason": "eligible_but_not_sent",
+    "last_error": null,
+    "last_nudged_signature": "hud:4|2026-04-03T07:51:44.469Z|lane p1 09 'wren ai service src core deepagents_orch",
+    "last_nudged_at": "2026-04-03T07:58:29.215Z"
+  }
+}

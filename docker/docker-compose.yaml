@@ -1,7 +1,6 @@
-version: "3"
-
 volumes:
   data:
+  postgres_data:
 
 networks:
   wren:
@@ -54,29 +53,34 @@ services:
       - ${WREN_AI_SERVICE_PORT}
     ports:
       - ${AI_SERVICE_FORWARD_PORT}:${WREN_AI_SERVICE_PORT}
+    env_file:
+      - ${PROJECT_DIR}/.env
     environment:
       # sometimes the console won't show print messages,
       # using PYTHONUNBUFFERED: 1 can fix this
       PYTHONUNBUFFERED: 1
       CONFIG_PATH: /app/config.yaml
-    env_file:
-      - ${PROJECT_DIR}/.env
+      PG_CONN_STR: ${PG_CONN_STR:-postgresql://postgres:postgres@postgres:5432/wrenai}
+      EMBEDDING_MODEL_DIMENSION: ${EMBEDDING_MODEL_DIMENSION:-3072}
     volumes:
       - ${PROJECT_DIR}/config.yaml:/app/config.yaml:ro
       - ${PROJECT_DIR}/data:/app/data:ro
     networks:
       - wren
     depends_on:
-      - qdrant
+      - postgres
 
-  qdrant:
-    image: qdrant/qdrant:v1.11.0
+  postgres:
+    image: pgvector/pgvector:pg17
     restart: on-failure
     expose:
-      - 6333
-      - 6334
+      - 5432
     volumes:
-      - data:/qdrant/storage
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-wrenai}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     networks:
       - wren
 
@@ -85,9 +89,8 @@ services:
     restart: on-failure
     platform: ${PLATFORM}
     environment:
-      DB_TYPE: sqlite
-      # /app is the working directory in the container
-      SQLITE_FILE: /app/data/db.sqlite3
+      DB_TYPE: pg
+      PG_URL: ${PG_URL:-postgres://postgres:postgres@postgres:5432/wrenai}
       WREN_ENGINE_ENDPOINT: http://wren-engine:${WREN_ENGINE_PORT}
       WREN_AI_ENDPOINT: http://wren-ai-service:${WREN_AI_SERVICE_PORT}
       IBIS_SERVER_ENDPOINT: http://ibis-server:${IBIS_SERVER_PORT}
@@ -120,3 +123,4 @@ services:
     depends_on:
       - wren-ai-service
       - wren-engine
+      - postgres

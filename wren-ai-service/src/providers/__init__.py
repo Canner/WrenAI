@@ -181,8 +181,8 @@ def document_store_processor(entry: dict) -> dict:
 
     {
         "type": "document_store",
-        "provider": "qdrant",
-        "location": "http://localhost:6333",
+        "provider": "pgvector",
+        "dsn": "postgresql://postgres:postgres@localhost:5432/wrenai",
         "embedding_model_dim": 3072,
         "timeout": 120,
         "recreate_index": False,
@@ -191,9 +191,9 @@ def document_store_processor(entry: dict) -> dict:
     The function processes this input and returns a dictionary with the following structure:
 
     {
-        "qdrant": {
-            "provider": "qdrant",
-            "location": "http://localhost:6333",
+        "pgvector": {
+            "provider": "pgvector",
+            "dsn": "postgresql://postgres:postgres@localhost:5432/wrenai",
             "embedding_model_dim": 3072,
             "timeout": 120,
             "recreate_index": False,
@@ -263,7 +263,7 @@ def pipeline_processor(entry: dict) -> dict:
                 "name": "indexing",
                 "llm": "openai_llm.gpt-4o-mini",
                 "embedder": "openai_embedder.text-embedding-3-large",
-                "document_store": "qdrant",
+                "document_store": "pgvector",
                 "engine": "wren_ui"
             }
         ]
@@ -275,7 +275,7 @@ def pipeline_processor(entry: dict) -> dict:
         "indexing": {
             "llm": "openai_llm.gpt-4o-mini",
             "embedder": "openai_embedder.text-embedding-3-large",
-            "document_store": "qdrant",
+            "document_store": "pgvector",
             "engine": "wren_ui",
         }
     }

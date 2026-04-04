@@ -77,6 +77,7 @@ class InstructionsService:
         trace_id = kwargs.get("trace_id")
 
         try:
+            runtime_scope_id = request.resolve_project_id()
             instructions = []
             for instruction in request.instructions:
                 if instruction.is_default:
@@ -102,7 +103,7 @@ class InstructionsService:
                         )
 
             await self._pipelines["instructions_indexing"].run(
-                project_id=request.project_id,
+                project_id=runtime_scope_id,
                 instructions=instructions,
             )
 
@@ -140,9 +141,10 @@ class InstructionsService:
         trace_id = kwargs.get("trace_id")
 
         try:
+            runtime_scope_id = request.resolve_project_id()
             instructions = [Instruction(id=id) for id in request.instruction_ids]
             await self._pipelines["instructions_indexing"].clean(
-                instructions=instructions, project_id=request.project_id
+                instructions=instructions, project_id=runtime_scope_id
             )
 
             self._cache[request.event_id] = self.Event(

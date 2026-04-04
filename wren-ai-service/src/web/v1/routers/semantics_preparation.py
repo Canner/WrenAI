@@ -1,6 +1,6 @@
 from dataclasses import asdict
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query
 
 from src.globals import (
     ServiceContainer,
@@ -9,6 +9,7 @@ from src.globals import (
     get_service_metadata,
 )
 from src.web.v1.services.semantics_preparation import (
+    DeleteSemanticsRequest,
     SemanticsPreparationRequest,
     SemanticsPreparationResponse,
     SemanticsPreparationStatusRequest,
@@ -51,9 +52,22 @@ async def get_prepare_semantics_status(
 
 @router.delete("/semantics")
 async def delete_semantics(
-    project_id: str,
+    delete_semantics_request: DeleteSemanticsRequest | None = Body(default=None),
+    project_id: str | None = Query(default=None),
+    projectId: str | None = Query(default=None),
     service_container: ServiceContainer = Depends(get_service_container),
 ) -> None:
-    if not project_id:
+    payload = (
+        delete_semantics_request.model_dump(mode="python")
+        if delete_semantics_request
+        else {}
+    )
+    payload.setdefault("project_id", project_id or projectId)
+    request = DeleteSemanticsRequest.model_validate(payload)
+    runtime_scope_id = request.resolve_project_id()
+
+    if not runtime_scope_id:
         raise HTTPException(status_code=400, detail="Project ID is required")
-    await service_container.semantics_preparation_service.delete_semantics(project_id)
+    await service_container.semantics_preparation_service.delete_semantics(
+        runtime_scope_id
+    )

@@ -1,0 +1,30 @@
+{
+  "active": false,
+  "iteration": 14,
+  "current_phase": "p1-05-start-after-p1-07",
+  "completed": [
+    "P1-02",
+    "P1-07",
+    "P1-09",
+    "P1-10"
+  ],
+  "in_progress": [
+    "P1-09-deepagents-ask-hardening",
+    "P1-10-postgres-pgvector-default-cutover"
+  ],
+  "evidence": {
+    "P1-02": {
+      "tests": "wren-ui auth/service suites 12/12 passed",
+      "diagnostics": "0 issues on login.ts/session.ts"
+    }
+  },
+  "last_turn_at": "2026-04-03T08:52:47.037Z",
+  "waiting_on": [
+    "019d5243-49a2-72a1-8af9-03c71d83069b",
+    "019d5243-4702-77d2-a05b-ce6476dbf737"
+  ],
+  "next": "workspace-diff-review-and-final-verification",
+  "next_package": "P1-05",
+  "focus": "skill control plane closure",
+  "completed_at": "2026-04-03T09:25:33.927Z"
+}

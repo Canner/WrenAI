@@ -15,6 +15,7 @@ from tqdm import tqdm
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
+from src.pipelines.common import build_runtime_scope_meta, normalize_runtime_scope_id
 from src.pipelines.indexing import (
     AsyncDocumentWriter,
     DocumentCleaner,
@@ -35,8 +36,10 @@ class DDLChunker:
         column_batch_size: int,
         project_id: Optional[str] = None,
     ):
+        runtime_scope_id = normalize_runtime_scope_id(project_id)
+
         def _additional_meta() -> Dict[str, Any]:
-            return {"project_id": project_id} if project_id else {}
+            return build_runtime_scope_meta(runtime_scope_id)
 
         chunks = [
             {
@@ -58,7 +61,7 @@ class DDLChunker:
                 Document(**chunk)
                 for chunk in tqdm(
                     chunks,
-                    desc=f"Project ID: {project_id}, Chunking DDL commands into documents",
+                    desc=f"Runtime scope: {runtime_scope_id}, Chunking DDL commands into documents",
                 )
             ]
         }
@@ -309,7 +312,7 @@ async def chunk(
     return await chunker.run(
         mdl=mdl,
         column_batch_size=column_batch_size,
-        project_id=project_id,
+        project_id=normalize_runtime_scope_id(project_id),
     )
 
 
@@ -324,7 +327,7 @@ async def clean(
     cleaner: DocumentCleaner,
     project_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    await cleaner.run(project_id=project_id)
+    await cleaner.run(project_id=normalize_runtime_scope_id(project_id))
     return embedding
 
 
@@ -370,14 +373,15 @@ class DBSchema(BasicPipeline):
     async def run(
         self, mdl_str: str, project_id: Optional[str] = None
     ) -> Dict[str, Any]:
+        runtime_scope_id = normalize_runtime_scope_id(project_id)
         logger.info(
-            f"Project ID: {project_id}, DB Schema Indexing pipeline is running..."
+            f"Runtime scope: {runtime_scope_id}, DB Schema Indexing pipeline is running..."
         )
         return await self._pipe.execute(
             [self._final],
             inputs={
                 "mdl_str": mdl_str,
-                "project_id": project_id,
+                "project_id": runtime_scope_id,
                 **self._components,
                 **self._configs,
             },
@@ -388,5 +392,5 @@ class DBSchema(BasicPipeline):
         await clean(
             embedding={"documents": []},
             cleaner=self._components["cleaner"],
-            project_id=project_id,
+            project_id=normalize_runtime_scope_id(project_id),
         )

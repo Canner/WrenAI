@@ -1,4 +1,6 @@
 import logging
+from typing import Literal
+from pathlib import Path
 
 import yaml
 from dotenv import load_dotenv
@@ -56,6 +58,14 @@ class Settings(BaseSettings):
         default=30.0,
         alias="SKILL_RUNNER_TIMEOUT",
     )
+    ask_runtime_mode: Literal["legacy", "deepagents"] = Field(
+        default="legacy",
+        alias="ASK_RUNTIME_MODE",
+    )
+    ask_shadow_compare_enabled: bool = Field(
+        default=False,
+        alias="ASK_SHADOW_COMPARE_ENABLED",
+    )
 
     # service config
     query_cache_ttl: int = Field(default=3600)  # unit: seconds
@@ -81,7 +91,7 @@ class Settings(BaseSettings):
     development: bool = Field(default=False)
 
     # this is used to store the config like type: llm, embedder, etc. and we will process them later
-    config_path: str = Field(default="config.yaml")
+    config_path: str = Field(default="config.yaml", alias="CONFIG_PATH")
     _components: list[dict]
 
     sql_pairs_path: str = Field(default="sql_pairs.json")
@@ -96,16 +106,47 @@ class Settings(BaseSettings):
         ]
 
     def config_loader(self):
-        try:
-            with open(self.config_path, "r") as file:
-                return list(yaml.load_all(file, Loader=yaml.SafeLoader))
-        except FileNotFoundError:
-            message = f"Warning: Configuration file {self.config_path} not found. Using default settings."
-            logger.warning(message)
-            return []
-        except yaml.YAMLError as e:
-            logger.exception(f"Error parsing YAML file: {e}")
-            return []
+        candidates = self._resolve_config_candidates()
+
+        for path in candidates:
+            try:
+                with open(path, "r") as file:
+                    return list(yaml.load_all(file, Loader=yaml.SafeLoader))
+            except FileNotFoundError:
+                continue
+            except yaml.YAMLError as e:
+                logger.exception(f"Error parsing YAML file {path}: {e}")
+                return []
+
+        message = (
+            f"Warning: Configuration file {self.config_path} not found. "
+            f"Checked: {', '.join(str(path) for path in candidates)}. "
+            "Using default settings."
+        )
+        logger.warning(message)
+        return []
+
+    def _resolve_config_candidates(self) -> list[Path]:
+        configured = Path(self.config_path)
+        candidates: list[Path] = []
+
+        if configured.is_absolute():
+            candidates.append(configured)
+            return candidates
+
+        repo_root = Path(__file__).resolve().parents[2]
+        service_root = Path(__file__).resolve().parents[1]
+
+        for candidate in (
+            Path.cwd() / configured,
+            service_root / configured,
+            repo_root / configured,
+            repo_root / "docker" / configured.name,
+        ):
+            if candidate not in candidates:
+                candidates.append(candidate)
+
+        return candidates
 
     def override(self, raw: list[dict]) -> None:
         override_settings = {}

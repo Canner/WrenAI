@@ -31,13 +31,31 @@ export interface UpdateDashboardItemInput {
   displayName: string;
 }
 
+export interface DashboardRuntimeBinding {
+  knowledgeBaseId?: string | null;
+  kbSnapshotId?: string | null;
+  deployHash?: string | null;
+  createdBy?: string | null;
+}
+
 export type UpdateDashboardItemLayouts = (DashboardItemLayout & {
   itemId: number;
 })[];
 
 export interface IDashboardService {
-  initDashboard(projectId: number): Promise<Dashboard>;
+  initDashboard(
+    projectId: number,
+    binding?: DashboardRuntimeBinding,
+  ): Promise<Dashboard>;
   getCurrentDashboard(projectId: number): Promise<Dashboard>;
+  getCurrentDashboardForScope(
+    projectId: number,
+    binding?: DashboardRuntimeBinding,
+  ): Promise<Dashboard>;
+  syncDashboardRuntimeBinding(
+    dashboardId: number,
+    binding: DashboardRuntimeBinding,
+  ): Promise<Dashboard>;
   getDashboardItem(dashboardItemId: number): Promise<DashboardItem>;
   getDashboardItems(dashboardId: number): Promise<DashboardItem[]>;
   createDashboardItem(input: CreateDashboardItemInput): Promise<DashboardItem>;
@@ -120,16 +138,33 @@ export class DashboardService implements IDashboardService {
     }
   }
 
-  public async initDashboard(projectId: number): Promise<Dashboard> {
-    const existingDashboard = await this.dashboardRepository.findOneBy({
-      projectId,
-    });
-    if (existingDashboard) return existingDashboard;
-    // only support one dashboard for oss
-    return await this.dashboardRepository.createOne({
-      name: 'Dashboard',
-      projectId,
-    });
+  public async initDashboard(
+    projectId: number,
+    binding?: DashboardRuntimeBinding,
+  ): Promise<Dashboard> {
+    const scopedKnowledgeBaseId = binding?.knowledgeBaseId || null;
+    if (scopedKnowledgeBaseId) {
+      const scopedDashboard = await this.dashboardRepository.findOneBy({
+        knowledgeBaseId: scopedKnowledgeBaseId,
+      });
+      if (scopedDashboard) {
+        return await this.syncDashboardRuntimeBinding(
+          scopedDashboard.id,
+          binding || {},
+        );
+      }
+    }
+
+    const legacyDashboard = binding
+      ? await this.findUnboundProjectDashboard(projectId)
+      : await this.findLegacyProjectDashboard(projectId);
+    if (legacyDashboard) {
+      return binding
+        ? await this.syncDashboardRuntimeBinding(legacyDashboard.id, binding)
+        : legacyDashboard;
+    }
+
+    return await this.createDashboard(projectId, binding);
   }
 
   public async getCurrentDashboard(projectId: number): Promise<Dashboard> {
@@ -137,6 +172,57 @@ export class DashboardService implements IDashboardService {
       projectId,
     });
     return { ...dashboard };
+  }
+
+  public async getCurrentDashboardForScope(
+    projectId: number,
+    binding?: DashboardRuntimeBinding,
+  ): Promise<Dashboard> {
+    const scopedKnowledgeBaseId = binding?.knowledgeBaseId || null;
+    const scopedDashboard = scopedKnowledgeBaseId
+      ? await this.dashboardRepository.findOneBy({
+          knowledgeBaseId: scopedKnowledgeBaseId,
+        })
+      : null;
+
+    if (scopedDashboard) {
+      return await this.syncDashboardRuntimeBinding(
+        scopedDashboard.id,
+        binding || {},
+      );
+    }
+
+    const legacyDashboard = await this.findUnboundProjectDashboard(projectId);
+    if (legacyDashboard) {
+      return binding
+        ? await this.syncDashboardRuntimeBinding(legacyDashboard.id, binding)
+        : legacyDashboard;
+    }
+
+    if (!binding) {
+      return await this.getCurrentDashboard(projectId);
+    }
+
+    return await this.createDashboard(projectId, binding);
+  }
+
+  public async syncDashboardRuntimeBinding(
+    dashboardId: number,
+    binding: DashboardRuntimeBinding,
+  ): Promise<Dashboard> {
+    const dashboard = await this.dashboardRepository.findOneBy({
+      id: dashboardId,
+    });
+    if (!dashboard) {
+      throw new Error(`Dashboard with id ${dashboardId} not found`);
+    }
+
+    const patch = this.buildRuntimeBindingPatch(dashboard, binding);
+    if (Object.keys(patch).length === 0) {
+      return dashboard;
+    }
+
+    return await this.dashboardRepository.updateOne(dashboardId, patch);
   }
 
   public async getDashboardItem(
@@ -220,6 +306,80 @@ export class DashboardService implements IDashboardService {
   public async deleteDashboardItem(dashboardItemId: number): Promise<boolean> {
     await this.dashboardItemRepository.deleteOne(dashboardItemId);
     return true;
+  }
+
+  private buildRuntimeBindingPatch(
+    dashboard: Dashboard,
+    binding: DashboardRuntimeBinding,
+  ): Partial<Dashboard> {
+    if (
+      dashboard.knowledgeBaseId &&
+      binding.knowledgeBaseId &&
+      dashboard.knowledgeBaseId !== binding.knowledgeBaseId
+    ) {
+      throw new Error(
+        `Dashboard ${dashboard.id} is already bound to another knowledge base`,
+      );
+    }
+
+    const patch: Partial<Dashboard> = {};
+
+    if (
+      binding.knowledgeBaseId !== undefined &&
+      binding.knowledgeBaseId !== dashboard.knowledgeBaseId
+    ) {
+      patch.knowledgeBaseId = binding.knowledgeBaseId ?? null;
+    }
+    if (
+      binding.kbSnapshotId !== undefined &&
+      binding.kbSnapshotId !== dashboard.kbSnapshotId
+    ) {
+      patch.kbSnapshotId = binding.kbSnapshotId ?? null;
+    }
+    if (
+      binding.deployHash !== undefined &&
+      binding.deployHash !== dashboard.deployHash
+    ) {
+      patch.deployHash = binding.deployHash ?? null;
+    }
+    if (
+      binding.createdBy !== undefined &&
+      binding.createdBy !== dashboard.createdBy
+    ) {
+      patch.createdBy = binding.createdBy ?? null;
+    }
+
+    return patch;
+  }
+
+  private async findLegacyProjectDashboard(
+    projectId: number,
+  ): Promise<Dashboard | null> {
+    const dashboards = await this.dashboardRepository.findAllBy({ projectId });
+    return dashboards.find((dashboard) => dashboard.projectId === projectId) || null;
+  }
+
+  private async findUnboundProjectDashboard(
+    projectId: number,
+  ): Promise<Dashboard | null> {
+    const dashboards = await this.dashboardRepository.findAllBy({ projectId });
+    return (
+      dashboards.find((dashboard) => !dashboard.knowledgeBaseId) || null
+    );
+  }
+
+  private async createDashboard(
+    projectId: number,
+    binding?: DashboardRuntimeBinding,
+  ): Promise<Dashboard> {
+    return await this.dashboardRepository.createOne({
+      name: 'Dashboard',
+      projectId,
+      knowledgeBaseId: binding?.knowledgeBaseId ?? null,
+      kbSnapshotId: binding?.kbSnapshotId ?? null,
+      deployHash: binding?.deployHash ?? null,
+      createdBy: binding?.createdBy ?? null,
+    });
   }
 
   private async calculateNewLayout(

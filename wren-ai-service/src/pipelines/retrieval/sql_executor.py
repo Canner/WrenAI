@@ -10,6 +10,7 @@ from langfuse.decorators import observe
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
+from src.pipelines.common import normalize_runtime_scope_id
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -28,11 +29,12 @@ class DataFetcher:
         project_id: str | None = None,
         limit: int = 500,
     ):
+        runtime_scope_id = normalize_runtime_scope_id(project_id)
         async with aiohttp.ClientSession() as session:
             _, data, addition = await self._engine.execute_sql(
                 sql,
                 session,
-                project_id=project_id,
+                project_id=runtime_scope_id,
                 dry_run=False,
                 limit=limit,
             )
@@ -50,9 +52,10 @@ async def execute_sql(
     project_id: str | None = None,
     limit: int = 500,
 ) -> dict:
+    runtime_scope_id = normalize_runtime_scope_id(project_id)
     return await data_fetcher.run(
         sql=sql,
-        project_id=project_id,
+        project_id=runtime_scope_id,
         limit=limit,
     )
 
@@ -79,11 +82,12 @@ class SQLExecutor(BasicPipeline):
         self, sql: str, project_id: str | None = None, limit: int = 500
     ) -> dict:
         logger.info("SQL Execution pipeline is running...")
+        runtime_scope_id = normalize_runtime_scope_id(project_id)
         return await self._pipe.execute(
             ["execute_sql"],
             inputs={
                 "sql": sql,
-                "project_id": project_id,
+                "project_id": runtime_scope_id,
                 "limit": limit,
                 **self._components,
             },

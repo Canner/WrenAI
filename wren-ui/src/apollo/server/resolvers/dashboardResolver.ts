@@ -11,6 +11,7 @@ import {
   DashboardItemType,
 } from '@server/repositories';
 import { getLogger } from '@server/utils';
+import { resolveDashboardRuntime } from '@server/utils/dashboardRuntime';
 import { toPersistedRuntimeIdentity } from '@server/context/runtimeScope';
 import {
   SetDashboardCacheData,
@@ -45,8 +46,9 @@ export class DashboardResolver {
       nextScheduledAt: string | null;
     }
   > {
-    const dashboard = await ctx.dashboardService.getCurrentDashboard(
+    const dashboard = await ctx.dashboardService.getCurrentDashboardForScope(
       ctx.runtimeScope!.project.id,
+      this.getRuntimeBinding(ctx),
     );
     if (!dashboard) {
       throw new Error('Dashboard not found.');
@@ -68,8 +70,9 @@ export class DashboardResolver {
     _args: any,
     ctx: IContext,
   ): Promise<DashboardItem[]> {
-    const dashboard = await ctx.dashboardService.getCurrentDashboard(
+    const dashboard = await ctx.dashboardService.getCurrentDashboardForScope(
       ctx.runtimeScope!.project.id,
+      this.getRuntimeBinding(ctx),
     );
     if (!dashboard) {
       throw new Error('Dashboard not found.');
@@ -83,8 +86,9 @@ export class DashboardResolver {
     ctx: IContext,
   ): Promise<DashboardItem> {
     const { responseId, itemType } = args.data;
-    const dashboard = await ctx.dashboardService.getCurrentDashboard(
+    const dashboard = await ctx.dashboardService.getCurrentDashboardForScope(
       ctx.runtimeScope!.project.id,
+      this.getRuntimeBinding(ctx),
     );
     await ctx.askingService.assertResponseScope(
       responseId,
@@ -108,10 +112,17 @@ export class DashboardResolver {
     }
 
     // query with cache enabled
-    const project = await ctx.projectService.getProjectById(dashboard.projectId);
+    const runtime = await resolveDashboardRuntime({
+      dashboard,
+      kbSnapshotRepository: ctx.kbSnapshotRepository,
+    });
+    if (!runtime.projectId) {
+      throw new Error(`Dashboard ${dashboard.id} is missing a project binding`);
+    }
+    const project = await ctx.projectService.getProjectById(runtime.projectId);
     const deployment = await ctx.deployService.getDeployment(
-      response.projectId || dashboard.projectId,
-      response.deployHash,
+      response.projectId || runtime.projectId,
+      response.deployHash || runtime.deployHash,
     );
     const mdl = deployment.manifest;
     await ctx.queryService.preview(response.sql, {
@@ -176,11 +187,19 @@ export class DashboardResolver {
       const item = await this.ensureDashboardItemScope(ctx, itemId);
       const dashboard = await this.ensureCurrentDashboard(ctx);
       const { cacheEnabled } = dashboard;
-      const project = await ctx.projectService.getProjectById(
-        dashboard.projectId,
-      );
-      const deployment = await ctx.deployService.getLastDeployment(
-        dashboard.projectId,
+      const runtime = await resolveDashboardRuntime({
+        dashboard,
+        kbSnapshotRepository: ctx.kbSnapshotRepository,
+      });
+      if (!runtime.projectId) {
+        throw new Error(
+          `Dashboard ${dashboard.id} is missing a project runtime binding`,
+        );
+      }
+      const project = await ctx.projectService.getProjectById(runtime.projectId);
+      const deployment = await ctx.deployService.getDeployment(
+        runtime.projectId,
+        runtime.deployHash,
       );
       const mdl = deployment.manifest;
       const data = (await ctx.queryService.preview(item.detail.sql, {
@@ -217,17 +236,39 @@ export class DashboardResolver {
     ctx: IContext,
   ): Promise<Dashboard> {
     try {
-      const dashboard = await ctx.dashboardService.getCurrentDashboard(
+      const dashboard = await ctx.dashboardService.getCurrentDashboardForScope(
         ctx.runtimeScope!.project.id,
+        this.getRuntimeBinding(ctx),
       );
       if (!dashboard) {
         throw new Error('Dashboard not found.');
       }
 
-      return await ctx.dashboardService.setDashboardSchedule(
+      const updatedDashboard = await ctx.dashboardService.setDashboardSchedule(
         dashboard.id,
         args.data,
       );
+      const scheduleBinding = await this.resolveScheduleBinding(
+        ctx,
+        updatedDashboard,
+      );
+
+      await ctx.scheduleService.syncDashboardRefreshJob({
+        dashboardId: updatedDashboard.id,
+        enabled: Boolean(
+          updatedDashboard.cacheEnabled && updatedDashboard.scheduleCron,
+        ),
+        cronExpr: updatedDashboard.scheduleCron,
+        timezone: updatedDashboard.scheduleTimezone,
+        nextRunAt: updatedDashboard.nextScheduledAt,
+        workspaceId: scheduleBinding.workspaceId,
+        knowledgeBaseId: scheduleBinding.knowledgeBaseId,
+        kbSnapshotId: scheduleBinding.kbSnapshotId,
+        deployHash: scheduleBinding.deployHash,
+        createdBy: ctx.runtimeScope?.userId,
+      });
+
+      return updatedDashboard;
     } catch (error) {
       logger.error(`Failed to set dashboard schedule: ${error.message}`);
       throw error;
@@ -235,8 +276,9 @@ export class DashboardResolver {
   }
 
   private async ensureCurrentDashboard(ctx: IContext): Promise<Dashboard> {
-    const dashboard = await ctx.dashboardService.getCurrentDashboard(
+    const dashboard = await ctx.dashboardService.getCurrentDashboardForScope(
       ctx.runtimeScope!.project.id,
+      this.getRuntimeBinding(ctx),
     );
     if (!dashboard) {
       throw new Error('Dashboard not found.');
@@ -256,5 +298,48 @@ export class DashboardResolver {
     }
 
     return item;
+  }
+
+  private getRuntimeBinding(ctx: IContext) {
+    return {
+      knowledgeBaseId: ctx.runtimeScope?.knowledgeBase?.id || null,
+      kbSnapshotId: ctx.runtimeScope?.kbSnapshot?.id || null,
+      deployHash: ctx.runtimeScope?.deployHash || null,
+      createdBy: ctx.runtimeScope?.userId || null,
+    };
+  }
+
+  private async resolveScheduleBinding(
+    ctx: IContext,
+    dashboard: Dashboard,
+  ): Promise<{
+    workspaceId: string | null;
+    knowledgeBaseId: string | null;
+    kbSnapshotId: string | null;
+    deployHash: string | null;
+  }> {
+    const knowledgeBaseId =
+      dashboard.knowledgeBaseId || ctx.runtimeScope?.knowledgeBase?.id || null;
+    const kbSnapshotId =
+      dashboard.kbSnapshotId || ctx.runtimeScope?.kbSnapshot?.id || null;
+    const deployHash = dashboard.deployHash || ctx.runtimeScope?.deployHash || null;
+
+    let workspaceId = ctx.runtimeScope?.workspace?.id || null;
+    if (
+      knowledgeBaseId &&
+      knowledgeBaseId !== ctx.runtimeScope?.knowledgeBase?.id
+    ) {
+      const knowledgeBase = await ctx.knowledgeBaseRepository.findOneBy({
+        id: knowledgeBaseId,
+      });
+      workspaceId = knowledgeBase?.workspaceId || workspaceId;
+    }
+
+    return {
+      workspaceId,
+      knowledgeBaseId,
+      kbSnapshotId,
+      deployHash,
+    };
   }
 }

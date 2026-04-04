@@ -86,6 +86,134 @@ def test_trace_metadata(service_metadata: ServiceMetadata, mocker: MockFixture):
     )
 
 
+def test_trace_metadata_flattens_shadow_compare(
+    service_metadata: ServiceMetadata, mocker: MockFixture
+):
+    function = mocker.patch(
+        "src.utils.langfuse_context.update_current_trace", return_value=None
+    )
+
+    class Request:
+        project_id = "mock-project-id"
+        thread_id = "mock-thread-id"
+        mdl_hash = "mock-mdl-hash"
+        query = "mock-user-query"
+
+    @utils.trace_metadata
+    async def my_function(_: str, b: Request, **kwargs):
+        return {
+            "metadata": {
+                "type": "SKILL",
+                "ask_path": "skill",
+                "shadow_compare": {
+                    "enabled": True,
+                    "executed": True,
+                    "comparable": False,
+                    "matched": False,
+                    "primary_type": "SKILL",
+                    "shadow_type": "TEXT_TO_SQL",
+                    "primary_ask_path": "skill",
+                    "shadow_ask_path": "nl2sql",
+                    "shadow_error_type": "",
+                    "reason": None,
+                },
+            }
+        }
+
+    asyncio.run(my_function("", Request(), service_metadata=asdict(service_metadata)))
+
+    function.assert_called_once_with(
+        user_id=None,
+        session_id="mock-thread-id",
+        release=service_metadata.service_version,
+        metadata={
+            "mdl_hash": "mock-mdl-hash",
+            "project_id": "mock-project-id",
+            "query": "mock-user-query",
+            "type": "SKILL",
+            "ask_path": "skill",
+            "shadow_compare": {
+                "enabled": True,
+                "executed": True,
+                "comparable": False,
+                "matched": False,
+                "primary_type": "SKILL",
+                "shadow_type": "TEXT_TO_SQL",
+                "primary_ask_path": "skill",
+                "shadow_ask_path": "nl2sql",
+                "shadow_error_type": "",
+                "reason": None,
+            },
+            "shadow_compare_enabled": True,
+            "shadow_compare_executed": True,
+            "shadow_compare_comparable": False,
+            "shadow_compare_matched": False,
+            "shadow_compare_primary_type": "SKILL",
+            "shadow_compare_shadow_type": "TEXT_TO_SQL",
+            "shadow_compare_primary_ask_path": "skill",
+            "shadow_compare_shadow_ask_path": "nl2sql",
+            "shadow_compare_shadow_error_type": "",
+            "shadow_compare_reason": None,
+            **service_metadata.pipes_metadata,
+        },
+    )
+
+
+def test_trace_metadata_flattens_deepagents_runtime_metadata(
+    service_metadata: ServiceMetadata, mocker: MockFixture
+):
+    function = mocker.patch(
+        "src.utils.langfuse_context.update_current_trace", return_value=None
+    )
+
+    class Request:
+        project_id = "mock-project-id"
+        thread_id = "mock-thread-id"
+        mdl_hash = "mock-mdl-hash"
+        query = "mock-user-query"
+
+    @utils.trace_metadata
+    async def my_function(_: str, b: Request, **kwargs):
+        return {
+            "metadata": {
+                "type": "TEXT_TO_SQL",
+                "ask_path": "nl2sql",
+                "ask_runtime_mode": "deepagents",
+                "primary_runtime": "deepagents",
+                "resolved_runtime": "legacy",
+                "fallback_reason": "skill_runner_disabled",
+                "deepagents_routing_reason": "skill_runner_disabled",
+                "deepagents_skill_candidate_count": 1,
+                "deepagents_skill_attempt_count": 0,
+                "deepagents_skill_failure_count": 0,
+            }
+        }
+
+    asyncio.run(my_function("", Request(), service_metadata=asdict(service_metadata)))
+
+    function.assert_called_once_with(
+        user_id=None,
+        session_id="mock-thread-id",
+        release=service_metadata.service_version,
+        metadata={
+            "mdl_hash": "mock-mdl-hash",
+            "project_id": "mock-project-id",
+            "query": "mock-user-query",
+            "type": "TEXT_TO_SQL",
+            "ask_path": "nl2sql",
+            "ask_runtime_mode": "deepagents",
+            "primary_runtime": "deepagents",
+            "resolved_runtime": "legacy",
+            "fallback_reason": "skill_runner_disabled",
+            "deepagents_routing_reason": "skill_runner_disabled",
+            "deepagents_skill_candidate_count": 1,
+            "deepagents_skill_attempt_count": 0,
+            "deepagents_skill_failure_count": 0,
+            **service_metadata.pipes_metadata,
+        },
+    )
+
+
 def test_clean_display_name():
     # Test empty and None cases
     assert clean_display_name("") == ""

@@ -51,6 +51,7 @@ export enum WrenAILanguage {
 export interface DeployData {
   manifest: Manifest;
   hash: string;
+  projectId?: number;
 }
 
 // ask
@@ -77,6 +78,11 @@ export interface AskRuntimeIdentity {
   kbSnapshotId?: string | null;
   deployHash?: string | null;
   actorUserId?: string | null;
+}
+
+export interface DeleteSemanticsInput {
+  projectId: number;
+  runtimeIdentity?: AskRuntimeIdentity | null;
 }
 
 export interface AskActorClaims {
@@ -208,6 +214,31 @@ export interface SkillExecutionResult {
   trace?: SkillExecutionTrace | null;
 }
 
+export interface AskShadowCompare {
+  enabled: boolean;
+  executed: boolean;
+  comparable?: boolean;
+  primaryType?: string | null;
+  shadowType?: string | null;
+  primaryAskPath?: string | null;
+  shadowAskPath?: string | null;
+  primaryErrorType?: string | null;
+  shadowErrorType?: string | null;
+  primarySql?: string | null;
+  shadowSql?: string | null;
+  primaryResultCount?: number;
+  shadowResultCount?: number;
+  matched: boolean;
+  shadowError?: string | null;
+  reason?: string | null;
+}
+
+export interface AskDiagnostics {
+  traceId?: string | null;
+  askPath?: string | null;
+  shadowCompare?: AskShadowCompare | null;
+}
+
 export interface AskDetailInput {
   query: string;
   sql: string;
@@ -236,6 +267,8 @@ export type AskResult = AskResponse<
   sqlGenerationReasoning?: string;
   retrievedTables?: string[];
   skillResult?: SkillExecutionResult | null;
+  askPath?: string | null;
+  shadowCompare?: AskShadowCompare | null;
   invalidSql?: string;
   traceId?: string;
 };

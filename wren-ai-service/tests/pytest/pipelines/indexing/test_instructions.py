@@ -5,10 +5,12 @@ from src.core.provider import DocumentStoreProvider
 from src.pipelines.indexing import Instructions
 from src.pipelines.indexing.instructions import Instruction
 from src.providers import generate_components
+from tests.pytest.conftest import require_pgvector_runtime
 
 
 @pytest.mark.asyncio
 async def test_instructions_indexing():
+    require_pgvector_runtime()
     pipe_components = generate_components(settings.components)
     document_store_provider: DocumentStoreProvider = pipe_components[
         "instructions_indexing"
@@ -51,6 +53,7 @@ async def test_instructions_indexing():
 
 @pytest.mark.asyncio
 async def test_instructions_indexing_with_multiple_project_ids():
+    require_pgvector_runtime()
     pipe_components = generate_components(settings.components)
     document_store_provider: DocumentStoreProvider = pipe_components[
         "instructions_indexing"
@@ -93,6 +96,7 @@ async def test_instructions_indexing_with_multiple_project_ids():
 
 @pytest.mark.asyncio
 async def test_instructions_deletion():
+    require_pgvector_runtime()
     pipe_components = generate_components(settings.components)
     document_store_provider: DocumentStoreProvider = pipe_components[
         "instructions_indexing"

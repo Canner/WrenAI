@@ -11,6 +11,7 @@ from src.core.engine import (
     Engine,
     clean_generation_result,
 )
+from src.pipelines.common import normalize_runtime_scope_id
 from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
 from src.web.v1.services.ask import AskHistory
 
@@ -36,6 +37,7 @@ class SQLGenPostProcessor:
         allow_data_preview: bool = False,
     ) -> dict:
         try:
+            runtime_scope_id = normalize_runtime_scope_id(project_id)
             cleaned_generation_result = clean_generation_result(replies[0])
 
             # test if cleaned_generation_result in string format is actually a dictionary with key 'sql'
@@ -49,7 +51,7 @@ class SQLGenPostProcessor:
                 invalid_generation_result,
             ) = await self._classify_generation_result(
                 cleaned_generation_result,
-                project_id=project_id,
+                project_id=runtime_scope_id,
                 use_dry_plan=use_dry_plan,
                 allow_dry_plan_fallback=allow_dry_plan_fallback,
                 data_source=data_source,
@@ -77,6 +79,7 @@ class SQLGenPostProcessor:
         data_source: str = "",
         allow_data_preview: bool = False,
     ) -> Dict[str, str]:
+        runtime_scope_id = normalize_runtime_scope_id(project_id)
         valid_generation_result = {}
         invalid_generation_result = {}
         use_dry_run = not allow_data_preview
@@ -108,7 +111,7 @@ class SQLGenPostProcessor:
                 success, _, addition = await self._engine.execute_sql(
                     generation_result,
                     session,
-                    project_id=project_id,
+                    project_id=runtime_scope_id,
                     limit=1,
                     dry_run=True,
                 )
@@ -133,7 +136,7 @@ class SQLGenPostProcessor:
                 has_data, _, addition = await self._engine.execute_sql(
                     generation_result,
                     session,
-                    project_id=project_id,
+                    project_id=runtime_scope_id,
                     limit=1,
                     dry_run=False,
                 )

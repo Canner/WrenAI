@@ -126,6 +126,25 @@ def test_table_description_missing_description():
     assert document.content == str({"name": "user", "description": "", "columns": ""})
 
 
+def test_table_description_normalizes_runtime_scope_before_writing_meta():
+    chunker = TableDescriptionChunker()
+    mdl = {
+        "models": [{"name": "user"}],
+        "views": [],
+        "relationships": [],
+        "metrics": [],
+    }
+
+    actual = chunker.run(mdl, project_id=" test-project ")
+
+    document: Document = actual["documents"][0]
+    assert document.meta == {
+        "type": "TABLE_DESCRIPTION",
+        "name": "user",
+        "project_id": "test-project",
+    }
+
+
 @pytest.mark.asyncio
 async def test_pipeline_run(mocker: MockFixture):
     test_mdl = {

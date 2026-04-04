@@ -12,7 +12,8 @@
     "check-types": "tsc --noEmit",
     "migrate": "yarn knex migrate:latest",
     "rollback": "yarn knex migrate:rollback",
-    "generate-gql": "yarn graphql-codegen --config codegen.yaml"
+    "generate-gql": "yarn graphql-codegen --config codegen.yaml",
+    "re-encrypt-secrets": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/re_encrypt_secrets.ts"
   },
   "dependencies": {
     "@google-cloud/bigquery": "^6.0.3",

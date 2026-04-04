@@ -35,6 +35,12 @@ describe('DeployService', () => {
     const response = await deployService.deploy(manifest, projectId);
 
     expect(response.status).toEqual(DeployStatusEnum.SUCCESS);
+    expect(mockWrenAIAdaptor.deploy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        manifest,
+        projectId,
+      }),
+    );
     expect(mockDeployLogRepository.updateOne).toHaveBeenCalledWith(123, {
       status: DeployStatusEnum.SUCCESS,
       error: undefined,

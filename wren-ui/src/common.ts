@@ -55,6 +55,7 @@ import {
   SecretService,
   ConnectorService,
   SkillService,
+  ScheduleService,
 } from '@server/services';
 import { PostHogTelemetry } from './apollo/server/telemetry/telemetry';
 import { RuntimeScopeResolver } from './apollo/server/context/runtimeScope';
@@ -62,6 +63,7 @@ import {
   ProjectRecommendQuestionBackgroundTracker,
   ThreadRecommendQuestionBackgroundTracker,
   DashboardCacheBackgroundTracker,
+  ScheduleWorker,
 } from './apollo/server/backgrounds';
 import { SqlPairService } from './apollo/server/services/sqlPairService';
 
@@ -204,6 +206,9 @@ export const initComponents = () => {
     skillDefinitionRepository,
     skillBindingRepository,
   });
+  const scheduleService = new ScheduleService({
+    scheduleJobRepository,
+  });
   const askingService = new AskingService({
     telemetry,
     wrenAIAdaptor,
@@ -246,9 +251,37 @@ export const initComponents = () => {
     dashboardRepository,
     dashboardItemRepository,
     dashboardItemRefreshJobRepository,
+    kbSnapshotRepository,
     projectService,
     deployService,
     queryService,
+    enablePolling: false,
+  });
+  new ScheduleWorker({
+    scheduleJobRepository,
+    scheduleJobRunRepository,
+    auditEventRepository,
+    executors: {
+      dashboard_refresh: async (job) => {
+        const dashboardId = Number.parseInt(job.targetId, 10);
+        if (Number.isNaN(dashboardId)) {
+          throw new Error(
+            `Invalid dashboard refresh target id: ${job.targetId}`,
+          );
+        }
+
+        const refreshedItems =
+          await dashboardCacheBackgroundTracker.refreshDashboardById(
+            dashboardId,
+          );
+
+        return {
+          detailJson: {
+            refreshedItems,
+          },
+        };
+      },
+    },
   });
 
   return {
@@ -310,6 +343,7 @@ export const initComponents = () => {
     secretService,
     connectorService,
     skillService,
+    scheduleService,
     runtimeScopeResolver,
     askingTaskTracker,
 

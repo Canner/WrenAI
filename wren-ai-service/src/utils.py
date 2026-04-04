@@ -123,6 +123,49 @@ def trace_metadata(func):
 
         return metadata
 
+    def flatten_trace_metadata(additional_metadata: dict) -> dict:
+        flattened = dict(additional_metadata)
+        shadow_compare = flattened.get("shadow_compare")
+        if isinstance(shadow_compare, dict):
+            flattened.update(
+                {
+                    "shadow_compare_enabled": shadow_compare.get("enabled"),
+                    "shadow_compare_executed": shadow_compare.get("executed"),
+                    "shadow_compare_comparable": shadow_compare.get("comparable"),
+                    "shadow_compare_matched": shadow_compare.get("matched"),
+                    "shadow_compare_primary_type": shadow_compare.get("primary_type"),
+                    "shadow_compare_shadow_type": shadow_compare.get("shadow_type"),
+                    "shadow_compare_primary_ask_path": shadow_compare.get(
+                        "primary_ask_path"
+                    ),
+                    "shadow_compare_shadow_ask_path": shadow_compare.get(
+                        "shadow_ask_path"
+                    ),
+                    "shadow_compare_shadow_error_type": shadow_compare.get(
+                        "shadow_error_type"
+                    ),
+                    "shadow_compare_reason": shadow_compare.get("reason"),
+                }
+            )
+        for key in (
+            "ask_runtime_mode",
+            "primary_runtime",
+            "resolved_runtime",
+            "fallback_reason",
+            "deepagents_error",
+            "deepagents_routing_reason",
+            "deepagents_skill_candidate_count",
+            "deepagents_skill_attempt_count",
+            "deepagents_skill_failure_count",
+            "deepagents_selected_skill_id",
+        ):
+            if key in flattened:
+                continue
+            value = additional_metadata.get(key)
+            if value is not None:
+                flattened[key] = value
+        return flattened
+
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
         trace_id = langfuse_context.get_current_trace_id()
@@ -132,7 +175,7 @@ def trace_metadata(func):
         addition = {}
         if isinstance(results, dict):
             additional_metadata = results.get("metadata", {})
-            addition.update(additional_metadata)
+            addition.update(flatten_trace_metadata(additional_metadata))
 
         metadata = extract(*args)
         service_metadata = kwargs.get(

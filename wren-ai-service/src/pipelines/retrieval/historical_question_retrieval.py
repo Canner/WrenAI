@@ -10,7 +10,11 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
-from src.pipelines.common import ScoreFilter
+from src.pipelines.common import (
+    ScoreFilter,
+    build_runtime_scope_filters,
+    normalize_runtime_scope_id,
+)
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -40,17 +44,8 @@ async def count_documents(
     view_questions_store: QdrantDocumentStore,
     project_id: Optional[str] = None,
 ) -> int:
-    filters = (
-        {
-            "operator": "AND",
-            "conditions": [
-                {"field": "project_id", "operator": "==", "value": project_id},
-            ],
-        }
-        if project_id
-        else None
-    )
-
+    runtime_scope_id = normalize_runtime_scope_id(project_id)
+    filters = build_runtime_scope_filters(runtime_scope_id)
     return await view_questions_store.count_documents(filters=filters)
 
 
@@ -69,20 +64,10 @@ async def retrieval(
     view_questions_retriever: Any,
 ) -> dict:
     if embedding:
-        filters = (
-            {
-                "operator": "AND",
-                "conditions": [
-                    {"field": "project_id", "operator": "==", "value": project_id},
-                ],
-            }
-            if project_id
-            else None
-        )
-
+        runtime_scope_id = normalize_runtime_scope_id(project_id)
         view_question_res = await view_questions_retriever.run(
             query_embedding=embedding.get("embedding"),
-            filters=filters,
+            filters=build_runtime_scope_filters(runtime_scope_id),
         )
         return dict(documents=view_question_res.get("documents"))
 
@@ -150,11 +135,12 @@ class HistoricalQuestionRetrieval(BasicPipeline):
     @observe(name="Historical Question")
     async def run(self, query: str, project_id: Optional[str] = None):
         logger.info("HistoricalQuestion Retrieval pipeline is running...")
+        runtime_scope_id = normalize_runtime_scope_id(project_id)
         return await self._pipe.execute(
             ["formatted_output"],
             inputs={
                 "query": query,
-                "project_id": project_id or "",
+                "project_id": runtime_scope_id or "",
                 **self._components,
                 **self._configs,
             },

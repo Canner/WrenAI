@@ -57,6 +57,35 @@ export const typeDefs = gql`
     hasMore: Boolean!
   }
 
+  type AskShadowCompareBucket {
+    key: String!
+    count: Int!
+  }
+
+  type AskShadowCompareTrendBucket {
+    date: String!
+    total: Int!
+    executed: Int!
+    comparable: Int!
+    matched: Int!
+    mismatched: Int!
+    errorCount: Int!
+  }
+
+  type AskShadowCompareStats {
+    total: Int!
+    withDiagnostics: Int!
+    enabled: Int!
+    executed: Int!
+    comparable: Int!
+    matched: Int!
+    mismatched: Int!
+    errorCount: Int!
+    byAskPath: [AskShadowCompareBucket!]!
+    byShadowErrorType: [AskShadowCompareBucket!]!
+    trends: [AskShadowCompareTrendBucket!]!
+  }
+
   enum DataSourceName {
     ATHENA
     BIG_QUERY
@@ -814,6 +843,7 @@ export const typeDefs = gql`
     threadId: Int!
     question: String!
     sql: String
+    skillResult: JSON
     view: ViewInfo
     breakdownDetail: ThreadResponseBreakdownDetail
     answerDetail: ThreadResponseAnswerDetail
@@ -1036,7 +1066,7 @@ export const typeDefs = gql`
 
   type Dashboard {
     id: Int!
-    projectId: Int!
+    projectId: Int! @deprecated(reason: "Legacy bridge field. Runtime-scoped dashboard flows should not rely on projectId.")
     name: String!
     cacheEnabled: Boolean!
     scheduleFrequency: ScheduleFrequencyEnum
@@ -1110,6 +1140,70 @@ export const typeDefs = gql`
 
   input InstructionWhereInput {
     id: Int!
+  }
+
+  type SkillDefinition {
+    id: String!
+    workspaceId: String!
+    name: String!
+    runtimeKind: String!
+    sourceType: String!
+    sourceRef: String
+    entrypoint: String
+    manifest: JSON
+    createdBy: String
+  }
+
+  input CreateSkillDefinitionInput {
+    name: String!
+    runtimeKind: String
+    sourceType: String
+    sourceRef: String
+    entrypoint: String
+    manifest: JSON
+  }
+
+  input UpdateSkillDefinitionInput {
+    name: String
+    runtimeKind: String
+    sourceType: String
+    sourceRef: String
+    entrypoint: String
+    manifest: JSON
+  }
+
+  input SkillDefinitionWhereUniqueInput {
+    id: String!
+  }
+
+  type SkillBinding {
+    id: String!
+    knowledgeBaseId: String!
+    kbSnapshotId: String
+    skillDefinitionId: String!
+    connectorId: String
+    bindingConfig: JSON
+    enabled: Boolean!
+    createdBy: String
+  }
+
+  input CreateSkillBindingInput {
+    kbSnapshotId: String
+    skillDefinitionId: String!
+    connectorId: String
+    bindingConfig: JSON
+    enabled: Boolean
+  }
+
+  input UpdateSkillBindingInput {
+    kbSnapshotId: String
+    connectorId: String
+    bindingConfig: JSON
+    enabled: Boolean
+  }
+
+  input SkillBindingWhereUniqueInput {
+    id: String!
   }
 
   type RuntimeSelectorWorkspace {
@@ -1194,11 +1288,16 @@ export const typeDefs = gql`
     # Instructions
     instructions: [Instruction]!
 
+    # Skills
+    skillDefinitions: [SkillDefinition!]!
+    skillBindings: [SkillBinding!]!
+
     # Api History
     apiHistory(
       filter: ApiHistoryFilterInput
       pagination: ApiHistoryPaginationInput!
     ): ApiHistoryPaginatedResponse!
+    askShadowCompareStats(filter: ApiHistoryFilterInput): AskShadowCompareStats!
 
     # Runtime Scope
     runtimeSelectorState: RuntimeSelectorState
@@ -1347,5 +1446,19 @@ export const typeDefs = gql`
       data: UpdateInstructionInput!
     ): Instruction!
     deleteInstruction(where: InstructionWhereInput!): Boolean!
+
+    # Skills
+    createSkillDefinition(data: CreateSkillDefinitionInput!): SkillDefinition!
+    updateSkillDefinition(
+      where: SkillDefinitionWhereUniqueInput!
+      data: UpdateSkillDefinitionInput!
+    ): SkillDefinition!
+    deleteSkillDefinition(where: SkillDefinitionWhereUniqueInput!): Boolean!
+    createSkillBinding(data: CreateSkillBindingInput!): SkillBinding!
+    updateSkillBinding(
+      where: SkillBindingWhereUniqueInput!
+      data: UpdateSkillBindingInput!
+    ): SkillBinding!
+    deleteSkillBinding(where: SkillBindingWhereUniqueInput!): Boolean!
   }
 `;

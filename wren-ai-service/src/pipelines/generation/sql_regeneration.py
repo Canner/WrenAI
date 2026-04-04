@@ -10,7 +10,7 @@ from langfuse.decorators import observe
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.pipelines.common import clean_up_new_lines
+from src.pipelines.common import clean_up_new_lines, normalize_runtime_scope_id
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
@@ -207,6 +207,7 @@ class SQLRegeneration(BasicPipeline):
         sql_knowledge: SqlKnowledge | None = None,
     ):
         logger.info("SQL Regeneration pipeline is running...")
+        runtime_scope_id = normalize_runtime_scope_id(project_id)
 
         return await self._pipe.execute(
             ["post_process"],
@@ -216,7 +217,7 @@ class SQLRegeneration(BasicPipeline):
                 "sql": sql,
                 "sql_samples": sql_samples,
                 "instructions": instructions,
-                "project_id": project_id,
+                "project_id": runtime_scope_id,
                 "has_calculated_field": has_calculated_field,
                 "has_metric": has_metric,
                 "has_json_field": has_json_field,

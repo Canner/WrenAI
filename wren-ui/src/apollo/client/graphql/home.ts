@@ -96,6 +96,7 @@ const COMMON_RESPONSE = gql`
     threadId
     question
     sql
+    skillResult
     view {
       id
       name

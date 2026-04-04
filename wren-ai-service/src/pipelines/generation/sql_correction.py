@@ -11,7 +11,11 @@ from langfuse.decorators import observe
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, LLMProvider
-from src.pipelines.common import clean_up_new_lines, retrieve_metadata
+from src.pipelines.common import (
+    clean_up_new_lines,
+    normalize_runtime_scope_id,
+    retrieve_data_source,
+)
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
@@ -177,11 +181,12 @@ class SQLCorrection(BasicPipeline):
         sql_knowledge: SqlKnowledge | None = None,
     ):
         logger.info("SQLCorrection pipeline is running...")
+        runtime_scope_id = normalize_runtime_scope_id(project_id)
 
         if use_dry_plan:
-            metadata = await retrieve_metadata(project_id or "", self._retriever)
+            data_source = await retrieve_data_source(runtime_scope_id, self._retriever)
         else:
-            metadata = {}
+            data_source = "local_file"
 
         return await self._pipe.execute(
             ["post_process"],
@@ -190,10 +195,10 @@ class SQLCorrection(BasicPipeline):
                 "documents": contexts,
                 "instructions": instructions,
                 "sql_functions": sql_functions,
-                "project_id": project_id,
+                "project_id": runtime_scope_id,
                 "use_dry_plan": use_dry_plan,
                 "allow_dry_plan_fallback": allow_dry_plan_fallback,
-                "data_source": metadata.get("data_source", "local_file"),
+                "data_source": data_source,
                 "sql_knowledge": sql_knowledge,
                 **self._components,
             },

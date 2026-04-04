@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import styled from 'styled-components';
+import CodeOutlined from '@ant-design/icons/CodeOutlined';
+import ApiOutlined from '@ant-design/icons/ApiOutlined';
 import FunctionOutlined from '@ant-design/icons/FunctionOutlined';
 import { Path, MENU_KEY } from '@/utils/enum';
 import { InstructionsSVG } from '@/utils/svgs';
@@ -19,6 +21,8 @@ const Layout = styled.div`
 `;
 
 const MENU_KEY_MAP = {
+  [Path.KnowledgeConnectors]: MENU_KEY.CONNECTORS,
+  [Path.KnowledgeSkills]: MENU_KEY.SKILLS,
   [Path.KnowledgeQuestionSQLPairs]: MENU_KEY.QUESTION_SQL_PAIRS,
   [Path.KnowledgeInstructions]: MENU_KEY.INSTRUCTIONS,
 };
@@ -30,6 +34,34 @@ export default function Knowledge() {
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
 
   const menuItems = [
+    {
+      'data-guideid': 'connectors',
+      label: (
+        <Link
+          style={linkStyle}
+          href={runtimeScopeNavigation.href(Path.KnowledgeConnectors)}
+        >
+          Connectors
+        </Link>
+      ),
+      icon: <ApiOutlined />,
+      key: MENU_KEY.CONNECTORS,
+      className: 'pl-4',
+    },
+    {
+      'data-guideid': 'skills',
+      label: (
+        <Link
+          style={linkStyle}
+          href={runtimeScopeNavigation.href(Path.KnowledgeSkills)}
+        >
+          Skills
+        </Link>
+      ),
+      icon: <CodeOutlined />,
+      key: MENU_KEY.SKILLS,
+      className: 'pl-4',
+    },
     {
       'data-guideid': 'question-sql-pairs',
       label: (

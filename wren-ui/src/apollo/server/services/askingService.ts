@@ -161,7 +161,8 @@ const isRuntimeIdentityMatch = (
   }
 
   return (
-    (!source.workspaceId || source.workspaceId === runtimeIdentity.workspaceId) &&
+    (!source.workspaceId ||
+      source.workspaceId === runtimeIdentity.workspaceId) &&
     (!source.knowledgeBaseId ||
       source.knowledgeBaseId === runtimeIdentity.knowledgeBaseId) &&
     (!source.kbSnapshotId ||
@@ -860,6 +861,7 @@ export class AskingService implements IAskingService {
       question: input.question,
       sql: input.sql,
       askingTaskId: input.trackedAskingResult?.taskId,
+      skillResult: input.trackedAskingResult?.skillResult || null,
     });
 
     // if queryId is provided, update asking task
@@ -1006,6 +1008,7 @@ export class AskingService implements IAskingService {
       question: input.question,
       sql: input.sql,
       askingTaskId: input.trackedAskingResult?.taskId,
+      skillResult: input.trackedAskingResult?.skillResult || null,
     });
 
     // if queryId is provided, update asking task
@@ -1686,7 +1689,10 @@ export class AskingService implements IAskingService {
     runtimeIdentity: PersistedRuntimeIdentity,
   ) {
     const task = this.instantRecommendedQuestionTasks.get(queryId);
-    if (!task || !isRuntimeIdentityMatch(task.runtimeIdentity, runtimeIdentity)) {
+    if (
+      !task ||
+      !isRuntimeIdentityMatch(task.runtimeIdentity, runtimeIdentity)
+    ) {
       throw new Error('Instant recommended questions task not found');
     }
   }

@@ -370,24 +370,33 @@ export class AskingTaskTracker implements IAskingTaskTracker {
     task: TrackedTask,
   ): Promise<void> {
     const response = task?.result?.response?.[0];
-    if (!response) {
+    const skillResult = task?.result?.skillResult;
+    if (!response && !skillResult) {
       return;
     }
+
+    const updatePayload: Record<string, any> = {};
+
+    if (skillResult) {
+      updatePayload.skillResult = skillResult;
+    }
+
     // if the generated response of asking task is not null, update the thread response
-    if (response.viewId) {
+    if (response?.viewId) {
       // get sql from the view
       const view = await this.viewRepository.findOneBy({
         id: response.viewId,
       });
-      await this.threadResponseRepository.updateOne(task.threadResponseId, {
-        sql: view.statement,
-        viewId: response.viewId,
-      });
-    } else {
-      await this.threadResponseRepository.updateOne(task.threadResponseId, {
-        sql: response?.sql,
-      });
+      updatePayload.sql = view.statement;
+      updatePayload.viewId = response.viewId;
+    } else if (response?.sql) {
+      updatePayload.sql = response.sql;
     }
+
+    await this.threadResponseRepository.updateOne(
+      task.threadResponseId,
+      updatePayload,
+    );
   }
 
   private async getAskingResultFromDB({

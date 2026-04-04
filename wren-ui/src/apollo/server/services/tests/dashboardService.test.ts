@@ -70,6 +70,7 @@ describe('DashboardService', () => {
     };
     mockDashboardRepository = {
       findOneBy: jest.fn(),
+      findAllBy: jest.fn(),
       createOne: jest.fn(),
       updateOne: jest.fn(),
     };
@@ -82,7 +83,7 @@ describe('DashboardService', () => {
 
   describe('project-scoped dashboard access', () => {
     it('should prefer explicit project id when initializing dashboard', async () => {
-      mockDashboardRepository.findOneBy.mockResolvedValue(null);
+      mockDashboardRepository.findAllBy.mockResolvedValue([]);
       mockDashboardRepository.createOne.mockResolvedValue({
         id: 1,
         projectId: 42,
@@ -91,12 +92,16 @@ describe('DashboardService', () => {
 
       const result = await dashboardService.initDashboard(42);
 
-      expect(mockDashboardRepository.findOneBy).toHaveBeenCalledWith({
+      expect(mockDashboardRepository.findAllBy).toHaveBeenCalledWith({
         projectId: 42,
       });
       expect(mockDashboardRepository.createOne).toHaveBeenCalledWith({
         name: 'Dashboard',
         projectId: 42,
+        knowledgeBaseId: null,
+        kbSnapshotId: null,
+        deployHash: null,
+        createdBy: null,
       });
       expect(result.projectId).toBe(42);
     });
@@ -114,6 +119,140 @@ describe('DashboardService', () => {
         projectId: 7,
       });
       expect(result.projectId).toBe(7);
+    });
+
+    it('should prefer knowledge-base bound dashboard when scope binding exists', async () => {
+      mockDashboardRepository.findOneBy
+        .mockResolvedValueOnce({
+          id: 3,
+          projectId: 7,
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snap-old',
+          deployHash: 'deploy-old',
+          createdBy: null,
+          name: 'Dashboard',
+        })
+        .mockResolvedValueOnce({
+          id: 3,
+          projectId: 7,
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snap-old',
+          deployHash: 'deploy-old',
+          createdBy: null,
+          name: 'Dashboard',
+        });
+      mockDashboardRepository.updateOne.mockResolvedValue({
+        id: 3,
+        projectId: 7,
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snap-1',
+        deployHash: 'deploy-1',
+        createdBy: 'user-1',
+        name: 'Dashboard',
+        });
+
+      const result = await dashboardService.getCurrentDashboardForScope(7, {
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snap-1',
+        deployHash: 'deploy-1',
+        createdBy: 'user-1',
+      });
+
+      expect(mockDashboardRepository.findOneBy).toHaveBeenNthCalledWith(1, {
+        knowledgeBaseId: 'kb-1',
+      });
+      expect(mockDashboardRepository.updateOne).toHaveBeenCalledWith(3, {
+        kbSnapshotId: 'snap-1',
+        deployHash: 'deploy-1',
+        createdBy: 'user-1',
+      });
+      expect(result.kbSnapshotId).toBe('snap-1');
+    });
+
+    it('should backfill runtime binding onto legacy project dashboard', async () => {
+      mockDashboardRepository.findOneBy.mockResolvedValueOnce(null);
+      mockDashboardRepository.findAllBy.mockResolvedValueOnce([
+        {
+          id: 4,
+          projectId: 9,
+          name: 'Dashboard',
+          knowledgeBaseId: null,
+        },
+      ]);
+      mockDashboardRepository.findOneBy.mockResolvedValueOnce({
+        id: 4,
+        projectId: 9,
+        name: 'Dashboard',
+        knowledgeBaseId: null,
+      });
+      mockDashboardRepository.updateOne.mockResolvedValue({
+        id: 4,
+        projectId: 9,
+        knowledgeBaseId: 'kb-9',
+        kbSnapshotId: 'snap-9',
+        deployHash: 'deploy-9',
+        createdBy: 'user-9',
+        name: 'Dashboard',
+      });
+
+      const result = await dashboardService.getCurrentDashboardForScope(9, {
+        knowledgeBaseId: 'kb-9',
+        kbSnapshotId: 'snap-9',
+        deployHash: 'deploy-9',
+        createdBy: 'user-9',
+      });
+
+      expect(mockDashboardRepository.findOneBy).toHaveBeenNthCalledWith(1, {
+        knowledgeBaseId: 'kb-9',
+      });
+      expect(mockDashboardRepository.findAllBy).toHaveBeenNthCalledWith(1, {
+        projectId: 9,
+      });
+      expect(mockDashboardRepository.updateOne).toHaveBeenCalledWith(4, {
+        knowledgeBaseId: 'kb-9',
+        kbSnapshotId: 'snap-9',
+        deployHash: 'deploy-9',
+        createdBy: 'user-9',
+      });
+      expect(result.knowledgeBaseId).toBe('kb-9');
+    });
+
+    it('should create a scoped dashboard instead of rebinding another knowledge base', async () => {
+      mockDashboardRepository.findOneBy.mockResolvedValueOnce(null);
+      mockDashboardRepository.findAllBy.mockResolvedValueOnce([
+        {
+          id: 5,
+          projectId: 11,
+          knowledgeBaseId: 'kb-other',
+          name: 'Dashboard',
+        },
+      ]);
+      mockDashboardRepository.createOne.mockResolvedValue({
+        id: 6,
+        projectId: 11,
+        knowledgeBaseId: 'kb-11',
+        kbSnapshotId: 'snap-11',
+        deployHash: 'deploy-11',
+        createdBy: 'user-11',
+        name: 'Dashboard',
+      });
+
+      const result = await dashboardService.getCurrentDashboardForScope(11, {
+        knowledgeBaseId: 'kb-11',
+        kbSnapshotId: 'snap-11',
+        deployHash: 'deploy-11',
+        createdBy: 'user-11',
+      });
+
+      expect(mockDashboardRepository.createOne).toHaveBeenCalledWith({
+        name: 'Dashboard',
+        projectId: 11,
+        knowledgeBaseId: 'kb-11',
+        kbSnapshotId: 'snap-11',
+        deployHash: 'deploy-11',
+        createdBy: 'user-11',
+      });
+      expect(result.id).toBe(6);
     });
   });
 

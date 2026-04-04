@@ -6,13 +6,18 @@ from src.config import settings
 from src.core.provider import DocumentStoreProvider
 from src.globals import create_service_container
 from src.providers import generate_components
+from tests.pytest.conftest import (
+    install_test_document_embedder,
+    require_pgvector_runtime,
+)
 from src.web.v1.services.sql_pairs import SqlPair, SqlPairsService
 
 
 @pytest.fixture
 def sql_pairs_service():
+    require_pgvector_runtime()
     pipe_components = generate_components(settings.components)
-    service_container = create_service_container(pipe_components, settings)
+    install_test_document_embedder(pipe_components, ("sql_pairs_indexing",))
 
     document_store_provider: DocumentStoreProvider = pipe_components[
         "sql_pairs_indexing"
@@ -21,6 +26,8 @@ def sql_pairs_service():
         dataset_name="sql_pairs",
         recreate_index=True,
     )
+
+    service_container = create_service_container(pipe_components, settings)
 
     return service_container.sql_pairs_service
 

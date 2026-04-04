@@ -9,6 +9,7 @@ import orjson
 
 from src.config import settings
 from src.core.engine import Engine, remove_limit_statement
+from src.core.runtime_identity import resolve_legacy_project_id
 from src.providers.loader import provider
 
 logger = logging.getLogger("wren-ai-service")
@@ -33,9 +34,10 @@ class WrenUI(Engine):
         limit: int = 500,
         **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+        runtime_scope_id = resolve_legacy_project_id(project_id=project_id)
         data = {
             "sql": remove_limit_statement(sql),
-            "projectId": project_id,
+            "projectId": runtime_scope_id,
         }
         if dry_run:
             data["dryRun"] = True

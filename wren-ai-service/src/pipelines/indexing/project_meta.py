@@ -13,6 +13,7 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider
+from src.pipelines.common import build_runtime_scope_meta, normalize_runtime_scope_id
 from src.pipelines.indexing import AsyncDocumentWriter, DocumentCleaner, MDLValidator
 
 logger = logging.getLogger("wren-ai-service")
@@ -31,7 +32,7 @@ def chunk(
     mdl: dict[str, Any],
     project_id: Optional[str] = None,
 ) -> dict[str, Any]:
-    addition = {"project_id": project_id} if project_id else {}
+    addition = build_runtime_scope_meta(project_id)
     data_source = mdl.get("dataSource", "local_file").lower()
 
     if data_source == "duckdb":
@@ -51,7 +52,7 @@ async def clean(
     cleaner: DocumentCleaner,
     project_id: Optional[str] = None,
 ) -> dict[str, Any]:
-    await cleaner.run(project_id=project_id)
+    await cleaner.run(project_id=normalize_runtime_scope_id(project_id))
     return chunk
 
 
@@ -89,18 +90,21 @@ class ProjectMeta(BasicPipeline):
     async def run(
         self, mdl_str: str, project_id: Optional[str] = None
     ) -> dict[str, Any]:
+        runtime_scope_id = normalize_runtime_scope_id(project_id)
         logger.info(
-            f"Project ID: {project_id}, Project Meta Indexing pipeline is running..."
+            f"Runtime scope: {runtime_scope_id}, Project Meta Indexing pipeline is running..."
         )
         return await self._pipe.execute(
             [self._final],
             inputs={
                 "mdl_str": mdl_str,
-                "project_id": project_id,
+                "project_id": runtime_scope_id,
                 **self._components,
             },
         )
 
     @observe(name="Clean Documents for Project Meta")
     async def clean(self, project_id: Optional[str] = None) -> None:
-        await self._components["cleaner"].run(project_id=project_id)
+        await self._components["cleaner"].run(
+            project_id=normalize_runtime_scope_id(project_id)
+        )

@@ -162,6 +162,8 @@ def create_service_container(
                     **pipe_components["sql_knowledge_retrieval"],
                 ),
             },
+            ask_runtime_mode=settings.ask_runtime_mode,
+            ask_shadow_compare_enabled=settings.ask_shadow_compare_enabled,
             allow_intent_classification=settings.allow_intent_classification,
             allow_sql_generation_reasoning=settings.allow_sql_generation_reasoning,
             allow_sql_functions_retrieval=settings.allow_sql_functions_retrieval,

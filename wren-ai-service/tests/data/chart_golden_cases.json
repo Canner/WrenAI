@@ -1,0 +1,45 @@
+[
+  {
+    "name": "line_chart_from_sql_result",
+    "query": "按月份展示 GMV 趋势",
+    "project_id": "deploy-1",
+    "sql": "SELECT month, gmv FROM monthly_gmv ORDER BY month",
+    "scenario": {
+      "sql_executor_results": {
+        "results": [
+          {
+            "month": "2026-01-01",
+            "gmv": 120.5
+          },
+          {
+            "month": "2026-02-01",
+            "gmv": 135.2
+          }
+        ]
+      },
+      "chart_generation_result": {
+        "reasoning": "时间序列更适合折线图。",
+        "chart_type": "line",
+        "chart_schema": {
+          "mark": "line",
+          "encoding": {
+            "x": {
+              "field": "month",
+              "type": "temporal"
+            },
+            "y": {
+              "field": "gmv",
+              "type": "quantitative"
+            }
+          }
+        }
+      }
+    },
+    "expected": {
+      "status": "finished",
+      "chartType": "line",
+      "reasoning": "时间序列更适合折线图。"
+    },
+    "allowed_variance": "chart schema 可增补配置，但主类型与查询数据透传不应回退。"
+  }
+]

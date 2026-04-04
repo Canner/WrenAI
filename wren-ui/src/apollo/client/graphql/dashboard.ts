@@ -80,7 +80,6 @@ export const SET_DASHBOARD_SCHEDULE = gql`
   mutation SetDashboardSchedule($data: SetDashboardScheduleInput!) {
     setDashboardSchedule(data: $data) {
       id
-      projectId
       name
       cacheEnabled
       scheduleFrequency

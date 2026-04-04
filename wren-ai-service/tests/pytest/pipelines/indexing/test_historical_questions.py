@@ -281,6 +281,28 @@ def test_view_with_project_id():
     assert document.content == "How many books are there?"
 
 
+def test_view_with_project_id_is_normalized():
+    chunker = ViewChunker()
+    mdl = {
+        "views": [
+            {
+                "name": "book",
+                "statement": "SELECT * FROM book",
+                "properties": {
+                    "question": "How many books are there?",
+                    "summary": "Retrieve the number of books",
+                    "viewId": "fake-id-1",
+                },
+            }
+        ]
+    }
+
+    actual = chunker.run(mdl, project_id=" test-project ")
+
+    document: Document = actual["documents"][0]
+    assert document.meta["project_id"] == "test-project"
+
+
 @pytest.mark.asyncio
 async def test_pipeline_run(mocker: MockFixture):
     # Mock embedder provider

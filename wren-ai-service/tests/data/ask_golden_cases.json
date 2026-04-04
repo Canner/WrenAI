@@ -1,0 +1,283 @@
+[
+  {
+    "name": "historical_hit",
+    "query": "有多少本书？",
+    "runtimeIdentity": {
+      "workspaceId": "workspace-1",
+      "knowledgeBaseId": "kb-1",
+      "deployHash": "deploy-1"
+    },
+    "scenario": {
+      "historical_documents": [
+        {
+          "statement": "SELECT COUNT(*) AS total_books FROM books",
+          "viewId": "view-book-count"
+        }
+      ]
+    },
+    "expected": {
+      "path": "historical",
+      "type": "TEXT_TO_SQL",
+      "status": "finished",
+      "sql": "SELECT COUNT(*) AS total_books FROM books",
+      "resultType": "view",
+      "viewId": "view-book-count",
+      "retrievedTables": []
+    },
+    "allowed_variance": "历史命中时跳过后续检索与生成。"
+  },
+  {
+    "name": "sql_pair_guided_nl2sql",
+    "query": "近 30 天订单量",
+    "runtimeIdentity": {
+      "workspaceId": "workspace-1",
+      "knowledgeBaseId": "kb-1",
+      "deployHash": "deploy-1"
+    },
+    "scenario": {
+      "sql_pairs_documents": [
+        {
+          "question": "过去 30 天订单量",
+          "sql": "SELECT COUNT(*) FROM orders WHERE order_date >= CURRENT_DATE - INTERVAL '30 days'"
+        }
+      ],
+      "schema_documents": [
+        {
+          "table_name": "orders",
+          "table_ddl": "CREATE TABLE orders (order_date date, amount numeric)"
+        }
+      ],
+      "sql_generation_reasoning": "参考历史 SQL pair 生成查询",
+      "sql_generation": {
+        "valid_sql": "SELECT COUNT(*) AS order_count FROM orders WHERE order_date >= CURRENT_DATE - INTERVAL '30 days'"
+      }
+    },
+    "expected": {
+      "path": "sql_pairs",
+      "type": "TEXT_TO_SQL",
+      "status": "finished",
+      "sql": "SELECT COUNT(*) AS order_count FROM orders WHERE order_date >= CURRENT_DATE - INTERVAL '30 days'",
+      "retrievedTables": [
+        "orders"
+      ]
+    },
+    "allowed_variance": "允许 reasoning 文案变化，但 SQL pair 需被透传到生成阶段。"
+  },
+  {
+    "name": "instruction_guided_nl2sql",
+    "query": "按地区统计销售额，只看已支付订单",
+    "runtimeIdentity": {
+      "workspaceId": "workspace-1",
+      "knowledgeBaseId": "kb-1",
+      "deployHash": "deploy-1"
+    },
+    "scenario": {
+      "instructions_documents": [
+        {
+          "instruction": "orders.status = 'paid' 才算有效销售"
+        }
+      ],
+      "schema_documents": [
+        {
+          "table_name": "orders",
+          "table_ddl": "CREATE TABLE orders (region text, amount numeric, status text)"
+        }
+      ],
+      "sql_generation_reasoning": "根据 instruction 添加 paid 过滤条件",
+      "sql_generation": {
+        "valid_sql": "SELECT region, SUM(amount) AS total_sales FROM orders WHERE status = 'paid' GROUP BY region"
+      }
+    },
+    "expected": {
+      "path": "instructions",
+      "type": "TEXT_TO_SQL",
+      "status": "finished",
+      "sql": "SELECT region, SUM(amount) AS total_sales FROM orders WHERE status = 'paid' GROUP BY region",
+      "retrievedTables": [
+        "orders"
+      ]
+    },
+    "allowed_variance": "允许 reasoning 文案变化，但 instruction 需被透传到生成阶段。"
+  },
+  {
+    "name": "standard_nl2sql",
+    "query": "本月 GMV",
+    "runtimeIdentity": {
+      "workspaceId": "workspace-1",
+      "knowledgeBaseId": "kb-1",
+      "deployHash": "deploy-1"
+    },
+    "scenario": {
+      "schema_documents": [
+        {
+          "table_name": "orders",
+          "table_ddl": "CREATE TABLE orders (order_date date, amount numeric)"
+        }
+      ],
+      "sql_generation_reasoning": "按月份聚合 GMV",
+      "sql_generation": {
+        "valid_sql": "SELECT DATE_TRUNC('month', order_date) AS month, SUM(amount) AS gmv FROM orders GROUP BY 1"
+      }
+    },
+    "expected": {
+      "path": "nl2sql",
+      "type": "TEXT_TO_SQL",
+      "status": "finished",
+      "sql": "SELECT DATE_TRUNC('month', order_date) AS month, SUM(amount) AS gmv FROM orders GROUP BY 1",
+      "retrievedTables": [
+        "orders"
+      ]
+    },
+    "allowed_variance": "正常 NL2SQL 主链路。"
+  },
+  {
+    "name": "correction_after_invalid_sql",
+    "query": "每个地区的支付销售额",
+    "runtimeIdentity": {
+      "workspaceId": "workspace-1",
+      "knowledgeBaseId": "kb-1",
+      "deployHash": "deploy-1"
+    },
+    "scenario": {
+      "schema_documents": [
+        {
+          "table_name": "orders",
+          "table_ddl": "CREATE TABLE orders (region text, amount numeric, status text)"
+        }
+      ],
+      "sql_generation_reasoning": "先生成初稿 SQL，再纠错",
+      "sql_generation": {
+        "invalid_generation_result": {
+          "type": "EXECUTION_ERROR",
+          "original_sql": "SELECT region, SUM(amount) FROM orders WHERE state = 'paid' GROUP BY region",
+          "sql": "SELECT region, SUM(amount) FROM orders WHERE state = 'paid' GROUP BY region",
+          "error": "column state does not exist"
+        }
+      },
+      "sql_diagnosis_reasoning": "应使用 status 字段而不是 state",
+      "sql_correction": {
+        "valid_sql": "SELECT region, SUM(amount) AS total_sales FROM orders WHERE status = 'paid' GROUP BY region"
+      }
+    },
+    "expected": {
+      "path": "correction",
+      "type": "TEXT_TO_SQL",
+      "status": "finished",
+      "sql": "SELECT region, SUM(amount) AS total_sales FROM orders WHERE status = 'paid' GROUP BY region",
+      "retrievedTables": [
+        "orders"
+      ]
+    },
+    "allowed_variance": "允许诊断文案变化，但必须走 sql_correction 成功收敛。"
+  },
+  {
+    "name": "general_non_sql_assistance",
+    "query": "怎么查看订单指标定义？",
+    "runtimeIdentity": {
+      "workspaceId": "workspace-1",
+      "knowledgeBaseId": "kb-1",
+      "deployHash": "deploy-1"
+    },
+    "scenario": {
+      "intent": "GENERAL",
+      "intent_reasoning": "这是知识说明类问题，不需要生成 SQL。"
+    },
+    "expected": {
+      "path": "general",
+      "type": "GENERAL",
+      "status": "finished",
+      "generalType": "DATA_ASSISTANCE"
+    },
+    "allowed_variance": "后台 data assistance 流可继续演进，但问数主链路不应误入 SQL 生成。"
+  },
+  {
+    "name": "followup_nl2sql",
+    "query": "那上个月呢？",
+    "runtimeIdentity": {
+      "workspaceId": "workspace-1",
+      "knowledgeBaseId": "kb-1",
+      "deployHash": "deploy-1"
+    },
+    "histories": [
+      {
+        "question": "本月 GMV",
+        "sql": "SELECT DATE_TRUNC('month', order_date) AS month, SUM(amount) AS gmv FROM orders GROUP BY 1"
+      }
+    ],
+    "scenario": {
+      "schema_documents": [
+        {
+          "table_name": "orders",
+          "table_ddl": "CREATE TABLE orders (order_date date, amount numeric)"
+        }
+      ],
+      "followup_sql_generation_reasoning": "复用上一轮上下文，将时间范围改为上个月。",
+      "followup_sql_generation": {
+        "valid_sql": "SELECT DATE_TRUNC('month', order_date) AS month, SUM(amount) AS gmv FROM orders WHERE order_date >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month') AND order_date < DATE_TRUNC('month', CURRENT_DATE) GROUP BY 1"
+      }
+    },
+    "expected": {
+      "path": "followup",
+      "type": "TEXT_TO_SQL",
+      "status": "finished",
+      "sql": "SELECT DATE_TRUNC('month', order_date) AS month, SUM(amount) AS gmv FROM orders WHERE order_date >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month') AND order_date < DATE_TRUNC('month', CURRENT_DATE) GROUP BY 1",
+      "retrievedTables": [
+        "orders"
+      ],
+      "isFollowup": true
+    },
+    "allowed_variance": "必须使用 followup 分支，而不是普通 sql_generation。"
+  },
+  {
+    "name": "skill_first_text",
+    "query": "本月 API 里的实时 GMV",
+    "runtimeIdentity": {
+      "workspaceId": "workspace-1",
+      "knowledgeBaseId": "kb-1",
+      "deployHash": "deploy-1"
+    },
+    "actorClaims": {
+      "userId": "user-1"
+    },
+    "skillConfig": {
+      "mode": "skill-first"
+    },
+    "skills": [
+      {
+        "skillId": "skill-1",
+        "skillName": "realtime_gmv_skill",
+        "sourceType": "inline",
+        "runtimeKind": "isolated_python",
+        "entrypoint": "main.py"
+      }
+    ],
+    "scenario": {
+      "skill_runner": {
+        "enabled": true,
+        "run_response": {
+          "execution_id": "exec-1",
+          "status": "accepted"
+        },
+        "result_response": {
+          "execution_id": "exec-1",
+          "status": "succeeded",
+          "result": {
+            "result_type": "text",
+            "text": "实时 GMV 为 128 万",
+            "trace": {
+              "skillRunId": "run-1"
+            }
+          }
+        }
+      }
+    },
+    "expected": {
+      "path": "skill",
+      "type": "SKILL",
+      "status": "finished",
+      "skillResultType": "text",
+      "skillText": "实时 GMV 为 128 万"
+    },
+    "allowed_variance": "skill trace metadata 可扩展，但 skill-first 命中后不应再回落到 NL2SQL。"
+  }
+]

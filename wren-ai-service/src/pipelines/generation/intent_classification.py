@@ -13,7 +13,12 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
-from src.pipelines.common import build_table_ddl, clean_up_new_lines
+from src.pipelines.common import (
+    build_runtime_scope_filters,
+    build_table_ddl,
+    clean_up_new_lines,
+    normalize_runtime_scope_id,
+)
 from src.pipelines.generation.utils.sql import construct_instructions
 from src.utils import trace_cost
 from src.web.v1.services import Configuration
@@ -177,17 +182,13 @@ async def embedding(query: str, embedder: Any, histories: list[AskHistory]) -> d
 async def table_retrieval(
     embedding: dict, project_id: str, table_retriever: Any
 ) -> dict:
-    filters = {
-        "operator": "AND",
-        "conditions": [
+    runtime_scope_id = normalize_runtime_scope_id(project_id)
+    filters = build_runtime_scope_filters(
+        runtime_scope_id,
+        conditions=[
             {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
         ],
-    }
-
-    if project_id:
-        filters["conditions"].append(
-            {"field": "project_id", "operator": "==", "value": project_id}
-        )
+    )
 
     return await table_retriever.run(
         query_embedding=embedding.get("embedding"),
@@ -199,6 +200,7 @@ async def table_retrieval(
 async def dbschema_retrieval(
     table_retrieval: dict, embedding: dict, project_id: str, dbschema_retriever: Any
 ) -> list[Document]:
+    runtime_scope_id = normalize_runtime_scope_id(project_id)
     tables = table_retrieval.get("documents", [])
     table_names = []
     for table in tables:
@@ -212,18 +214,13 @@ async def dbschema_retrieval(
         for table_name in table_names
     ]
 
-    filters = {
-        "operator": "AND",
-        "conditions": [
+    filters = build_runtime_scope_filters(
+        runtime_scope_id,
+        conditions=[
             {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
             {"operator": "OR", "conditions": table_name_conditions},
         ],
-    }
-
-    if project_id:
-        filters["conditions"].append(
-            {"field": "project_id", "operator": "==", "value": project_id}
-        )
+    )
 
     results = await dbschema_retriever.run(
         query_embedding=embedding.get("embedding"), filters=filters
@@ -385,11 +382,12 @@ class IntentClassification(BasicPipeline):
         configuration: Configuration = Configuration(),
     ):
         logger.info("Intent Classification pipeline is running...")
+        runtime_scope_id = normalize_runtime_scope_id(project_id)
         return await self._pipe.execute(
             ["post_process"],
             inputs={
                 "query": query,
-                "project_id": project_id or "",
+                "project_id": runtime_scope_id or "",
                 "histories": histories or [],
                 "sql_samples": sql_samples or [],
                 "instructions": instructions or [],

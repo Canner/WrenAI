@@ -1,0 +1,49 @@
+{
+  "active": false,
+  "current_phase": "completed",
+  "started_at": "2026-04-01T14:00:00+08:00",
+  "task_description": "将两个非阻塞点正式写入 WrenAI V1 ralplan：V1 UI 统一 kb_snapshot selector；secret 采用应用层加密 + 环境主密钥且 V1 不做自动轮换。",
+  "workflow": "ralplan",
+  "request": "分析 docs/需求V1.md 和 docs/refer_dula，并结合当前代码形成可执行的改造计划",
+  "artifacts": [
+    ".omx/context/wrenai-v1-rebuild-20260331T160000Z.md",
+    ".omx/plans/phase0-wrenai-v1-execution.md",
+    ".omx/plans/phase1-task-packages.md",
+    ".omx/plans/prd-wrenai-v1-rebuild.md",
+    ".omx/plans/ralplan-wrenai-v1-rebuild.md",
+    ".omx/plans/test-spec-wrenai-v1-rebuild.md"
+  ],
+  "status": "completed",
+  "completed_at": "2026-04-01T14:58:41+08:00",
+  "iteration": 6,
+  "last_turn_at": "2026-04-01T06:58:41Z",
+  "plan_file": ".omx/plans/ralplan-wrenai-v1-rebuild.md",
+  "decisions": [
+    "内建账号体系，保留 SSO/OIDC 扩展",
+    "产品层只保留知识库，project 退到内部 runtime identity",
+    "V1 API source 默认 REST JSON connector",
+    "定时报表先只做站内",
+    "权限首期只做 workspace + knowledge_base",
+    "存储直接 PostgreSQL + pgvector",
+    "尽快用 deepagents 替换 ask 编排"
+  ],
+  "updated_sections": [
+    "ADR",
+    "Acceptance Criteria",
+    "Companion Artifacts",
+    "Consensus Changelog",
+    "Current State and Gap Analysis",
+    "Implementation Plan",
+    "Open Questions",
+    "RALPLAN-DR Summary",
+    "Recommended Technical Decisions",
+    "Requirements Summary",
+    "Target Product and Architecture"
+  ],
+  "resolved_user_decisions": [
+    "V1 UI uses one unified kb_snapshot selector",
+    "secret uses app-layer encryption + environment master key",
+    "V1 secret management reserves key_version and re-encryption script but no auto rotation"
+  ],
+  "remaining_open_questions": []
+}

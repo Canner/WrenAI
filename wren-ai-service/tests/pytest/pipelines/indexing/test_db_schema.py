@@ -99,6 +99,22 @@ async def test_multiple_models():
 
 
 @pytest.mark.asyncio
+async def test_db_schema_chunker_normalizes_runtime_scope_before_writing_meta():
+    chunker = DDLChunker()
+    mdl = {
+        "models": [{"name": "user", "properties": {}}],
+        "views": [],
+        "relationships": [],
+        "metrics": [],
+    }
+
+    actual = await chunker.run(mdl, column_batch_size=1, project_id=" test-project ")
+
+    document: Document = actual["documents"][0]
+    assert document.meta["project_id"] == "test-project"
+
+
+@pytest.mark.asyncio
 async def test_column_is_primary_key():
     chunker = DDLChunker()
     mdl = {

@@ -101,6 +101,46 @@ describe('SecretService', () => {
     expect(service.decryptPayload(updated)).toEqual({ apiKey: 'new-secret' });
   });
 
+  it('persists explicit key version and decrypts with the same master key', async () => {
+    const secretRecord = await service.createSecretRecord({
+      workspaceId: 'workspace-1',
+      scopeType: 'skill',
+      scopeId: 'skill-1',
+      payload: { token: 'v2-secret' },
+      keyVersion: 2,
+    });
+
+    expect(secretRepository.createOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        keyVersion: 2,
+      }),
+      undefined,
+    );
+
+    secretRepository.findOneBy.mockResolvedValue(secretRecord);
+
+    await expect(service.decryptSecretRecord(secretRecord.id)).resolves.toEqual({
+      token: 'v2-secret',
+    });
+  });
+
+  it('rejects decrypting ciphertext with a different master key', async () => {
+    const secretRecord = await service.createSecretRecord({
+      workspaceId: 'workspace-1',
+      scopeType: 'connector',
+      scopeId: 'connector-1',
+      payload: { apiKey: 'rotating-secret' },
+    });
+
+    const wrongKeyService = new SecretService({
+      secretRepository,
+      encryptionPassword: 'wrong-password',
+      encryptionSalt: 'wrong-salt',
+    });
+
+    expect(() => wrongKeyService.decryptPayload(secretRecord)).toThrow();
+  });
+
   it('deletes a secret record by id', async () => {
     await expect(service.deleteSecretRecord('secret-1')).resolves.toBe(1);
     expect(secretRepository.deleteOne).toHaveBeenCalledWith(

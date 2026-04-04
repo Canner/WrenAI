@@ -6,9 +6,11 @@ describe('ProjectResolver', () => {
     it('prefers runtime scope project id', async () => {
       const resolver = new ProjectResolver();
       const getCurrentProject = jest.fn();
-      const getProjectRecommendationQuestions = jest
-        .fn()
-        .mockResolvedValue({ status: 'NOT_STARTED', questions: [], error: null });
+      const getProjectRecommendationQuestions = jest.fn().mockResolvedValue({
+        status: 'NOT_STARTED',
+        questions: [],
+        error: null,
+      });
 
       const result = await resolver.getProjectRecommendationQuestions(
         null,
@@ -47,7 +49,9 @@ describe('ProjectResolver', () => {
             getProjectRecommendationQuestions,
           },
         } as any),
-      ).rejects.toThrow('Active runtime project is required for this operation');
+      ).rejects.toThrow(
+        'Active runtime project is required for this operation',
+      );
 
       expect(getProjectRecommendationQuestions).not.toHaveBeenCalled();
     });
@@ -68,12 +72,16 @@ describe('ProjectResolver', () => {
         'Active runtime project is required for this operation',
       );
 
-      expect(ctx.projectService.getGeneralConnectionInfo).not.toHaveBeenCalled();
+      expect(
+        ctx.projectService.getGeneralConnectionInfo,
+      ).not.toHaveBeenCalled();
     });
 
     it('keeps onboarding status bootstrap-compatible when runtime scope is missing', async () => {
       const resolver = new ProjectResolver();
-      const getCurrentProject = jest.fn().mockRejectedValue(new Error('missing'));
+      const getCurrentProject = jest
+        .fn()
+        .mockRejectedValue(new Error('missing'));
       const ctx = {
         runtimeScope: null,
         projectService: {
@@ -81,7 +89,9 @@ describe('ProjectResolver', () => {
         },
       } as any;
 
-      await expect(resolver.getOnboardingStatus(null, null, ctx)).resolves.toEqual({
+      await expect(
+        resolver.getOnboardingStatus(null, null, ctx),
+      ).resolves.toEqual({
         status: 'NOT_STARTED',
       });
       expect(getCurrentProject).not.toHaveBeenCalled();
@@ -145,12 +155,10 @@ describe('ProjectResolver', () => {
       } as any;
 
       await expect(
-        resolver.updateCurrentProject(
-          null,
-          { data: { language: 'EN' } },
-          ctx,
-        ),
-      ).rejects.toThrow('Active runtime project is required for this operation');
+        resolver.updateCurrentProject(null, { data: { language: 'EN' } }, ctx),
+      ).rejects.toThrow(
+        'Active runtime project is required for this operation',
+      );
 
       expect(ctx.projectRepository.updateOne).not.toHaveBeenCalled();
       expect(
@@ -168,11 +176,61 @@ describe('ProjectResolver', () => {
         },
       } as any;
 
-      await expect(
-        resolver.resetCurrentProject(null, null, ctx),
-      ).resolves.toBe(true);
+      await expect(resolver.resetCurrentProject(null, null, ctx)).resolves.toBe(
+        true,
+      );
 
       expect(getCurrentProject).not.toHaveBeenCalled();
+    });
+
+    it('passes runtime identity when deleting semantics during reset', async () => {
+      const resolver = new ProjectResolver();
+      const ctx = {
+        runtimeScope: {
+          project: { id: 42, type: 'POSTGRES' },
+          workspace: { id: 'workspace-1' },
+          knowledgeBase: { id: 'kb-1' },
+          kbSnapshot: { id: 'snapshot-1' },
+          deployHash: 'deploy-1',
+          userId: 'user-1',
+        },
+        telemetry: { sendEvent: jest.fn() },
+        schemaChangeRepository: {
+          deleteAllBy: jest.fn().mockResolvedValue(undefined),
+        },
+        deployService: {
+          deleteAllByProjectId: jest.fn().mockResolvedValue(undefined),
+        },
+        askingService: {
+          deleteAllByProjectId: jest.fn().mockResolvedValue(undefined),
+        },
+        modelService: {
+          deleteAllViewsByProjectId: jest.fn().mockResolvedValue(undefined),
+          deleteAllModelsByProjectId: jest.fn().mockResolvedValue(undefined),
+        },
+        projectService: {
+          deleteProject: jest.fn().mockResolvedValue(undefined),
+        },
+        wrenAIAdaptor: {
+          delete: jest.fn().mockResolvedValue(undefined),
+        },
+      } as any;
+
+      await expect(resolver.resetCurrentProject(null, null, ctx)).resolves.toBe(
+        true,
+      );
+
+      expect(ctx.wrenAIAdaptor.delete).toHaveBeenCalledWith(
+        42,
+        expect.objectContaining({
+          projectId: 42,
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snapshot-1',
+          deployHash: 'deploy-1',
+          actorUserId: 'user-1',
+        }),
+      );
     });
   });
 
@@ -189,7 +247,9 @@ describe('ProjectResolver', () => {
         { id: 101, modelId: 11, referenceName: 'dept_no' },
       ];
 
-      resolver.createProjectFromDataSource = jest.fn().mockResolvedValue(project);
+      resolver.createProjectFromDataSource = jest
+        .fn()
+        .mockResolvedValue(project);
       resolver.overwriteModelsAndColumns = jest
         .fn()
         .mockResolvedValue({ models, columns });
@@ -233,11 +293,7 @@ describe('ProjectResolver', () => {
         },
       } as any;
 
-      await resolver.startSampleDataset(
-        null,
-        { data: { name: 'HR' } },
-        ctx,
-      );
+      await resolver.startSampleDataset(null, { data: { name: 'HR' } }, ctx);
 
       expect(resolver.createProjectFromDataSource).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -246,9 +302,9 @@ describe('ProjectResolver', () => {
         ctx,
       );
       expect(ctx.projectService.getCurrentProject).not.toHaveBeenCalled();
-      expect(ctx.projectService.getProjectDataSourceTables).toHaveBeenCalledWith(
-        project,
-      );
+      expect(
+        ctx.projectService.getProjectDataSourceTables,
+      ).toHaveBeenCalledWith(project);
 
       expect(resolver.buildRelationInput).toHaveBeenCalledWith(
         expect.any(Array),

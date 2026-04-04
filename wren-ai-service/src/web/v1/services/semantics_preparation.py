@@ -43,6 +43,10 @@ class SemanticsPreparationStatusResponse(BaseModel):
     error: Optional[SemanticsPreparationError] = None
 
 
+class DeleteSemanticsRequest(BaseRequest):
+    pass
+
+
 class SemanticsPreparationService:
     def __init__(
         self,
@@ -72,10 +76,13 @@ class SemanticsPreparationService:
 
         try:
             logger.info(f"MDL: {prepare_semantics_request.mdl}")
+            runtime_scope_id = prepare_semantics_request.resolve_project_id(
+                fallback_id=prepare_semantics_request.mdl_hash,
+            )
 
             input = {
                 "mdl_str": prepare_semantics_request.mdl,
-                "project_id": prepare_semantics_request.project_id,
+                "project_id": runtime_scope_id,
             }
 
             tasks = [
@@ -138,10 +145,19 @@ class SemanticsPreparationService:
     @observe(name="Delete Semantics Documents")
     @trace_metadata
     async def delete_semantics(self, project_id: str, **kwargs):
-        logger.info(f"Project ID: {project_id}, Deleting semantics documents...")
+        runtime_scope_id = DeleteSemanticsRequest.model_validate(
+            {"project_id": project_id}
+        ).resolve_project_id()
+
+        if not runtime_scope_id:
+            raise ValueError("Runtime scope is required to delete semantics documents")
+
+        logger.info(
+            f"Runtime scope: {runtime_scope_id}, Deleting semantics documents..."
+        )
 
         tasks = [
-            self._pipelines[name].clean(project_id=project_id)
+            self._pipelines[name].clean(project_id=runtime_scope_id)
             for name in [
                 "db_schema",
                 "historical_question",
@@ -150,7 +166,7 @@ class SemanticsPreparationService:
             ]
         ] + [
             self._pipelines[name].clean(
-                project_id=project_id,
+                project_id=runtime_scope_id,
                 delete_all=True,
             )
             for name in ["sql_pairs", "instructions"]

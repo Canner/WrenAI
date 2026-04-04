@@ -50,6 +50,7 @@ import {
   ISecretService,
   IConnectorService,
   ISkillService,
+  IScheduleService,
 } from '@server/services';
 import { ITelemetry } from '@server/telemetry/telemetry';
 import {
@@ -84,6 +85,7 @@ export interface IContext {
   secretService: ISecretService;
   connectorService: IConnectorService;
   skillService: ISkillService;
+  scheduleService: IScheduleService;
   runtimeScopeResolver: IRuntimeScopeResolver;
   runtimeScope: RuntimeScope | null;
 

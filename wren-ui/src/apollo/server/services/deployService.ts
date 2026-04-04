@@ -117,6 +117,7 @@ export class DeployService implements IDeployService {
         await this.wrenAIAdaptor.deploy({
           manifest,
           hash,
+          projectId,
         });
 
       // update deploy status

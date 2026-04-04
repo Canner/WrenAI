@@ -1,0 +1,18 @@
+{
+  "active": false,
+  "started_at": "2026-04-03T07:25:00Z",
+  "current_phase": "failed-to-launch",
+  "task_description": "OMX team launch failed before work started.",
+  "team_name": "phase1-parallel-20260403",
+  "lanes": [
+    "P1-09",
+    "P1-10",
+    "P1-02"
+  ],
+  "context_snapshot": ".omx/context/phase1-parallel-20260403T072500Z.md",
+  "iteration": 92,
+  "last_turn_at": "2026-04-03T07:30:42.304Z",
+  "completed_at": "2026-04-03T07:31:00Z",
+  "error": "Team mode requires running inside tmux current leader pane",
+  "job_id": "omx-mnikzdxb"
+}

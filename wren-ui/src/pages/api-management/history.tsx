@@ -1,6 +1,17 @@
 import Link from 'next/link';
-import { useState } from 'react';
-import { Table, TableColumnsType, Button, Tag, Typography } from 'antd';
+import { useCallback, useMemo } from 'react';
+import { useRouter } from 'next/router';
+import moment, { Moment } from 'moment';
+import {
+  Alert,
+  Button,
+  DatePicker,
+  Space,
+  Table,
+  TableColumnsType,
+  Tag,
+  Typography,
+} from 'antd';
 import { getAbsoluteTime } from '@/utils/time';
 import useDrawerAction from '@/hooks/useDrawerAction';
 import { getColumnSearchProps } from '@/utils/table';
@@ -12,17 +23,112 @@ import CheckCircleOutlined from '@ant-design/icons/CheckCircleOutlined';
 import CloseCircleOutlined from '@ant-design/icons/CloseCircleOutlined';
 import SQLCodeBlock from '@/components/code/SQLCodeBlock';
 import DetailsDrawer from '@/components/pages/apiManagement/DetailsDrawer';
-import { useApiHistoryQuery } from '@/apollo/client/graphql/apiManagement.generated';
+import ShadowCompareSummary from '@/components/pages/apiManagement/ShadowCompareSummary';
+import AskDiagnosticsSummary from '@/components/pages/apiManagement/AskDiagnosticsSummary';
+import {
+  useApiHistoryQuery,
+  useAskShadowCompareStatsQuery,
+} from '@/apollo/client/graphql/apiManagement.generated';
 import { ApiType, ApiHistoryResponse } from '@/apollo/client/graphql/__types__';
+import {
+  buildRuntimeScopeUrl,
+  omitRuntimeScopeQuery,
+  readRuntimeScopeSelectorFromObject,
+} from '@/apollo/client/runtimeScope';
 import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
+import {
+  ApiHistoryTableFilters,
+  buildApiHistoryQueryParams,
+  normalizeApiHistoryTableFilters,
+  omitApiHistoryManagedQuery,
+  readApiHistoryQueryState,
+} from '@/components/pages/apiManagement/historyQuery';
+import {
+  ApiHistoryDateRange,
+  buildApiHistoryDateFilter,
+  getApiHistoryDateRangePresets,
+  hasApiHistoryDateRange,
+} from '@/components/pages/apiManagement/timeRange';
 
 const PAGE_SIZE = 10;
 
+const isAskShadowCompareApiType = (apiType?: ApiType) =>
+  !apiType || apiType === ApiType.ASK || apiType === ApiType.STREAM_ASK;
+
 export default function APIHistory() {
+  const router = useRouter();
   const runtimeScopePage = useProtectedRuntimeScopePage();
   const detailsDrawer = useDrawerAction();
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  const [filters, setFilters] = useState<Record<string, any>>({});
+  const runtimeScopeSelector = useMemo(
+    () => readRuntimeScopeSelectorFromObject(router.query),
+    [router.query],
+  );
+  const { currentPage, filters, dateRange } = useMemo(
+    () => readApiHistoryQueryState(router.query),
+    [router.query],
+  );
+
+  const selectedApiType = filters['apiType']?.[0] as ApiType | undefined;
+  const selectedStatusCode = filters['statusCode']?.[0] as number | undefined;
+  const selectedThreadId = filters['threadId']?.[0] as string | undefined;
+  const dateFilter = useMemo(
+    () => buildApiHistoryDateFilter(dateRange),
+    [dateRange],
+  );
+
+  const shadowCompareFilter = useMemo(
+    () => ({
+      apiType: isAskShadowCompareApiType(selectedApiType)
+        ? selectedApiType
+        : undefined,
+      statusCode: selectedStatusCode,
+      threadId: selectedThreadId,
+      ...dateFilter,
+    }),
+    [selectedApiType, selectedStatusCode, selectedThreadId, dateFilter],
+  );
+
+  const syncHistoryQuery = useCallback(
+    ({
+      currentPage,
+      filters,
+      dateRange,
+    }: {
+      currentPage: number;
+      filters: ApiHistoryTableFilters;
+      dateRange: ApiHistoryDateRange;
+    }) => {
+      if (!router.isReady) {
+        return;
+      }
+
+      const baseQuery = omitApiHistoryManagedQuery(
+        omitRuntimeScopeQuery(router.query),
+      );
+      const nextUrl = buildRuntimeScopeUrl(
+        router.pathname,
+        {
+          ...baseQuery,
+          ...buildApiHistoryQueryParams({
+            currentPage,
+            filters,
+            dateRange,
+          }),
+        },
+        runtimeScopeSelector,
+      );
+
+      if (nextUrl === router.asPath) {
+        return;
+      }
+
+      void router.replace(nextUrl, undefined, {
+        shallow: true,
+        scroll: false,
+      });
+    },
+    [router, runtimeScopeSelector],
+  );
 
   const { data, loading } = useApiHistoryQuery({
     fetchPolicy: 'cache-and-network',
@@ -35,9 +141,26 @@ export default function APIHistory() {
         apiType: filters['apiType']?.[0],
         statusCode: filters['statusCode']?.[0],
         threadId: filters['threadId']?.[0],
+        ...dateFilter,
       },
     },
-    skip: !runtimeScopePage.hasRuntimeScope,
+    skip: !runtimeScopePage.hasRuntimeScope || !router.isReady,
+    onError: (error) => console.error(error),
+  });
+
+  const {
+    data: shadowCompareData,
+    loading: shadowCompareLoading,
+    error: shadowCompareError,
+  } = useAskShadowCompareStatsQuery({
+    fetchPolicy: 'cache-and-network',
+    variables: {
+      filter: shadowCompareFilter,
+    },
+    skip:
+      !router.isReady ||
+      !runtimeScopePage.hasRuntimeScope ||
+      !isAskShadowCompareApiType(selectedApiType),
     onError: (error) => console.error(error),
   });
 
@@ -136,6 +259,18 @@ export default function APIHistory() {
       }),
     },
     {
+      title: 'Diagnostics',
+      dataIndex: 'responsePayload',
+      key: 'diagnostics',
+      width: 220,
+      render: (responsePayload: Record<string, any>, record) => (
+        <AskDiagnosticsSummary
+          apiType={record.apiType}
+          responsePayload={responsePayload}
+        />
+      ),
+    },
+    {
       title: 'Duration (ms)',
       dataIndex: 'durationMs',
       key: 'durationMs',
@@ -163,8 +298,31 @@ export default function APIHistory() {
     },
   ];
 
+  const handleDateRangeChange = (
+    nextDateRange: [Moment | null, Moment | null] | null,
+  ) => {
+    if (!nextDateRange?.[0] || !nextDateRange?.[1]) {
+      syncHistoryQuery({
+        currentPage: 1,
+        filters,
+        dateRange: null,
+      });
+      return;
+    }
+
+    syncHistoryQuery({
+      currentPage: 1,
+      filters,
+      dateRange: [nextDateRange[0], nextDateRange[1]],
+    });
+  };
+
   if (runtimeScopePage.guarding) {
-    return <SiderLayout loading sidebar={null} />;
+    return (
+      <SiderLayout loading sidebar={null}>
+        {null}
+      </SiderLayout>
+    );
   }
 
   return (
@@ -192,23 +350,62 @@ export default function APIHistory() {
             </div>
           </>
         }
+        titleExtra={
+          <Space size="middle">
+            <Typography.Text className="gray-7">Time range</Typography.Text>
+            <DatePicker.RangePicker
+              allowClear
+              value={dateRange as any}
+              ranges={getApiHistoryDateRangePresets(moment()) as any}
+              onChange={handleDateRangeChange as any}
+            />
+            <Button
+              type="link"
+              size="small"
+              onClick={() => handleDateRangeChange(null)}
+              disabled={!hasApiHistoryDateRange(dateRange)}
+            >
+              Reset
+            </Button>
+          </Space>
+        }
       >
+        <ShadowCompareSummary
+          stats={shadowCompareData?.askShadowCompareStats}
+          loading={shadowCompareLoading}
+          unsupportedApiType={
+            isAskShadowCompareApiType(selectedApiType) ? null : selectedApiType
+          }
+        />
+        {shadowCompareError && (
+          <Alert
+            className="mb-4"
+            type="warning"
+            showIcon
+            message="Failed to load shadow compare rollout stats"
+            description={shadowCompareError.message}
+          />
+        )}
         <Table
           className="ant-table-has-header"
           dataSource={data?.apiHistory.items || []}
-          loading={loading}
+          loading={loading || !router.isReady}
           columns={columns}
           rowKey="id"
           pagination={{
+            current: currentPage,
             hideOnSinglePage: true,
             pageSize: PAGE_SIZE,
             size: 'small',
             total: data?.apiHistory.total,
           }}
-          scroll={{ x: 1200 }}
-          onChange={(pagination, filters, _sorter) => {
-            setCurrentPage(pagination.current);
-            setFilters(filters);
+          scroll={{ x: 1420 }}
+          onChange={(pagination, nextFilters, _sorter) => {
+            syncHistoryQuery({
+              currentPage: pagination.current || 1,
+              filters: normalizeApiHistoryTableFilters(nextFilters),
+              dateRange,
+            });
           }}
         />
         <DetailsDrawer

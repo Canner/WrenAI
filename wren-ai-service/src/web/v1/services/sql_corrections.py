@@ -76,7 +76,7 @@ class SqlCorrectionService:
         event_id = request.event_id
         sql = request.sql
         error = request.error
-        project_id = request.project_id
+        runtime_scope_id = request.resolve_project_id()
         retrieved_tables = request.retrieved_tables
         use_dry_plan = request.use_dry_plan
         allow_dry_plan_fallback = request.allow_dry_plan_fallback
@@ -97,13 +97,13 @@ class SqlCorrectionService:
 
             if self._allow_sql_knowledge_retrieval:
                 sql_knowledge = await self._pipelines["sql_knowledge_retrieval"].run(
-                    project_id=project_id,
+                    project_id=runtime_scope_id,
                 )
 
             documents = (
                 (
                     await self._pipelines["db_schema_retrieval"].run(
-                        project_id=project_id,
+                        project_id=runtime_scope_id,
                         tables=retrieved_tables,
                     )
                 )
@@ -115,7 +115,7 @@ class SqlCorrectionService:
             res = await self._pipelines["sql_correction"].run(
                 contexts=table_ddls,
                 invalid_generation_result=_invalid,
-                project_id=project_id,
+                project_id=runtime_scope_id,
                 use_dry_plan=use_dry_plan,
                 allow_dry_plan_fallback=allow_dry_plan_fallback,
                 sql_knowledge=sql_knowledge,

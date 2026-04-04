@@ -1,0 +1,25 @@
+# Context Snapshot — WrenAI V1 Rebuild
+
+- Task statement: 分析 `docs/需求V1.md` 与 `docs/refer_dula/`，结合当前 WrenAI 工程代码，输出一份 ralplan 风格的完整改造方案。
+- Desired outcome: 形成可执行、可分期、可落到模块与代码目录的改造计划。
+- Known facts / evidence:
+  - 需求文档提出多租户(workspace)、知识库管理、术语表、PostgreSQL+pgvector、deepagents+skills、数据权限、定时报表、多看板。
+  - `docs/refer_dula/` 提供 11 张参考页面设计图。
+  - 当前仓库包含 `wren-ui`、`wren-ai-service`、`wren-engine`(submodule) 等模块。
+  - 先前代码扫描显示 UI 当前主要是 setup/modeling/home/knowledge/api management 等单项目流。
+  - 主仓库已脱离上游 origin；`wren-engine` 仍为子模块，可先按远程依赖处理。
+- Constraints:
+  - 计划必须结合当前代码，不做纯需求空谈。
+  - 当前阶段是规划，不直接改业务代码。
+  - 网络受限；优先基于本地代码与文档分析。
+- Unknowns / open questions:
+  - 参考页面的信息架构与现有 UI 差距有多大。
+  - `wren-ai-service` 当前编排里 Haystack / Hamilton / LLM / 向量检索 的耦合点。
+  - 当前数据模型、鉴权、数据库默认依赖、dashboard 能力上限。
+  - deepagents 应作为前置路由、旁路增强还是主编排替换。
+- Likely codebase touchpoints:
+  - `wren-ui/src/pages/**`
+  - `wren-ui/src/components/pages/**`
+  - `wren-ai-service/**`
+  - `docker/**`, `*.yml`, env files
+  - `docs/需求V1.md`, `docs/refer_dula/*`

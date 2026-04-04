@@ -1,0 +1,19 @@
+{
+  "enabled": true,
+  "target": {
+    "type": "pane",
+    "value": "%0"
+  },
+  "allowed_modes": [
+    "ralph",
+    "ultrawork",
+    "team"
+  ],
+  "cooldown_ms": 15000,
+  "max_injections_per_session": 200,
+  "prompt_template": "Continue from current mode state. [OMX_TMUX_INJECT]",
+  "marker": "[OMX_TMUX_INJECT]",
+  "dry_run": false,
+  "log_level": "info",
+  "skip_if_scrolling": true
+}

@@ -4,11 +4,17 @@ from src.config import settings
 from src.core.provider import DocumentStoreProvider
 from src.pipelines.indexing import SqlPairs
 from src.providers import generate_components
+from tests.pytest.conftest import (
+    install_test_document_embedder,
+    require_pgvector_runtime,
+)
 
 
 @pytest.mark.asyncio
 async def test_sql_pairs_indexing_saving_to_document_store():
+    require_pgvector_runtime()
     pipe_components = generate_components(settings.components)
+    install_test_document_embedder(pipe_components, ("sql_pairs_indexing",))
     document_store_provider: DocumentStoreProvider = pipe_components[
         "sql_pairs_indexing"
     ]["document_store_provider"]
@@ -36,7 +42,9 @@ async def test_sql_pairs_indexing_saving_to_document_store():
 
 @pytest.mark.asyncio
 async def test_sql_pairs_indexing_saving_to_document_store_with_multiple_project_ids():
+    require_pgvector_runtime()
     pipe_components = generate_components(settings.components)
+    install_test_document_embedder(pipe_components, ("sql_pairs_indexing",))
     document_store_provider: DocumentStoreProvider = pipe_components[
         "sql_pairs_indexing"
     ]["document_store_provider"]
@@ -72,7 +80,9 @@ async def test_sql_pairs_indexing_saving_to_document_store_with_multiple_project
 
 @pytest.mark.asyncio
 async def test_sql_pairs_deletion():
+    require_pgvector_runtime()
     pipe_components = generate_components(settings.components)
+    install_test_document_embedder(pipe_components, ("sql_pairs_indexing",))
     document_store_provider: DocumentStoreProvider = pipe_components[
         "sql_pairs_indexing"
     ]["document_store_provider"]

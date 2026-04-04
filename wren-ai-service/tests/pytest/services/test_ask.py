@@ -7,6 +7,7 @@ import pytest
 from src.config import settings
 from src.pipelines import generation, indexing, retrieval
 from src.providers import generate_components
+from tests.pytest.conftest import require_pgvector_runtime
 from src.utils import fetch_wren_ai_docs
 from src.web.v1.services.ask import (
     AskRequest,
@@ -21,6 +22,7 @@ from src.web.v1.services.semantics_preparation import (
 
 @pytest.fixture
 def ask_service():
+    require_pgvector_runtime()
     pipe_components = generate_components(settings.components)
     wren_ai_docs = fetch_wren_ai_docs(settings.doc_endpoint, settings.is_oss)
 
@@ -64,6 +66,7 @@ def ask_service():
 
 @pytest.fixture
 def indexing_service():
+    require_pgvector_runtime()
     pipe_components = generate_components(settings.components)
 
     return SemanticsPreparationService(

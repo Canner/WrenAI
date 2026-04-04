@@ -5,6 +5,9 @@ import orjson
 import pytz
 from pydantic import AliasChoices, BaseModel, Field
 
+from src.core import RuntimeIdentity
+from src.web.v1.services.runtime_models import resolve_request_project_id
+
 
 class MetadataTraceable:
     def with_metadata(self) -> dict:
@@ -57,13 +60,30 @@ class SSEEvent(BaseModel):
 # for POST, PATCH, UPDATE, DELETE requests
 class BaseRequest(BaseModel):
     _query_id: str | None = None
-    project_id: Optional[str] = None
-    thread_id: Optional[str] = None
+    project_id: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("project_id", "projectId"),
+    )
+    thread_id: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("thread_id", "threadId"),
+    )
+    runtime_identity: Optional[RuntimeIdentity] = Field(
+        default=None,
+        validation_alias=AliasChoices("runtime_identity", "runtimeIdentity"),
+    )
     configurations: Configuration = Field(
         default_factory=Configuration,
         alias=AliasChoices("configurations", "configuration"),  # accept both keys
     )
     request_from: Literal["ui", "api"] = "ui"
+
+    def resolve_project_id(self, fallback_id: str | int | None = None) -> Optional[str]:
+        return resolve_request_project_id(
+            project_id=self.project_id,
+            runtime_identity=self.runtime_identity,
+            mdl_hash=fallback_id,
+        )
 
     @property
     def query_id(self) -> str:

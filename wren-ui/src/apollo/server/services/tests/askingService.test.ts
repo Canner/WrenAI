@@ -1,5 +1,8 @@
 import { AskingService, constructCteSql } from '../askingService';
-import { RecommendationQuestionStatus } from '../../models/adaptor';
+import {
+  RecommendationQuestionStatus,
+  SkillResultType,
+} from '../../models/adaptor';
 
 describe('AskingService', () => {
   describe('utility: constructCteSql', () => {
@@ -152,6 +155,7 @@ describe('AskingService', () => {
         question: 'what happened yesterday',
         sql: undefined,
         askingTaskId: 9,
+        skillResult: null,
       });
       expect(service.askingTaskTracker.bindThreadResponse).toHaveBeenCalledWith(
         9,
@@ -205,6 +209,59 @@ describe('AskingService', () => {
         question: 'follow up',
         sql: undefined,
         askingTaskId: 9,
+        skillResult: null,
+      });
+    });
+
+    it('persists skill results onto thread responses when present', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      service.threadRepository = {
+        findOneBy: jest.fn().mockResolvedValue({
+          id: 101,
+          projectId: 42,
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snapshot-1',
+          deployHash: 'deploy-1',
+          actorUserId: 'user-1',
+        }),
+      };
+      service.threadResponseRepository = {
+        createOne: jest.fn().mockResolvedValue({ id: 202 }),
+      };
+      service.askingTaskTracker = {
+        bindThreadResponse: jest.fn(),
+      };
+
+      const skillResult = {
+        resultType: SkillResultType.TEXT,
+        text: '本月 GMV 为 128 万',
+      };
+
+      await service.createThreadResponse(
+        {
+          question: 'follow up',
+          trackedAskingResult: {
+            taskId: 9,
+            queryId: 'query-9',
+            skillResult,
+          },
+        },
+        101,
+      );
+
+      expect(service.threadResponseRepository.createOne).toHaveBeenCalledWith({
+        projectId: 42,
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snapshot-1',
+        deployHash: 'deploy-1',
+        actorUserId: 'user-1',
+        threadId: 101,
+        question: 'follow up',
+        sql: undefined,
+        askingTaskId: 9,
+        skillResult,
       });
     });
   });
@@ -227,7 +284,8 @@ describe('AskingService', () => {
         createAskingTask: jest.fn().mockResolvedValue({ queryId: 'query-1' }),
       };
       service.getAskingHistory = jest.fn().mockResolvedValue([]);
-      service.getDeployId = AskingService.prototype['getDeployId'].bind(service);
+      service.getDeployId =
+        AskingService.prototype['getDeployId'].bind(service);
       service.deployService = {
         getLastDeployment: jest.fn(),
       };
@@ -394,7 +452,6 @@ describe('AskingService', () => {
       ).rejects.toThrow(
         'Thread response 202 does not belong to the current runtime scope',
       );
-      });
     });
   });
 
@@ -418,7 +475,9 @@ describe('AskingService', () => {
         }),
       };
       service.deployService = {
-        getLastDeployment: jest.fn().mockResolvedValue({ manifest: { models: [] } }),
+        getLastDeployment: jest
+          .fn()
+          .mockResolvedValue({ manifest: { models: [] } }),
       };
       service.wrenAIAdaptor = {
         generateRecommendationQuestions: jest
@@ -465,9 +524,9 @@ describe('AskingService', () => {
         getRecommendationQuestionsResult: jest.fn(),
       };
       service['assertInstantRecommendedQuestionTaskScope'] =
-        AskingService.prototype['assertInstantRecommendedQuestionTaskScope'].bind(
-          service,
-        );
+        AskingService.prototype[
+          'assertInstantRecommendedQuestionTaskScope'
+        ].bind(service);
 
       await expect(
         service.getInstantRecommendedQuestions('instant-1', runtimeIdentity),
@@ -497,14 +556,18 @@ describe('AskingService', () => {
         }),
       };
       service['assertInstantRecommendedQuestionTaskScope'] =
-        AskingService.prototype['assertInstantRecommendedQuestionTaskScope'].bind(
-          service,
-        );
+        AskingService.prototype[
+          'assertInstantRecommendedQuestionTaskScope'
+        ].bind(service);
 
-      await service.getInstantRecommendedQuestions('instant-1', runtimeIdentity);
+      await service.getInstantRecommendedQuestions(
+        'instant-1',
+        runtimeIdentity,
+      );
 
       expect(service.instantRecommendedQuestionTasks.has('instant-1')).toBe(
         false,
       );
     });
   });
+});

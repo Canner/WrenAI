@@ -1,0 +1,294 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1775209418798,
+  "projectRoot": "/Users/liyi/Code/WrenAI",
+  "techStack": {
+    "languages": [],
+    "frameworks": [],
+    "packageManager": null,
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": null,
+    "testCommand": null,
+    "lintCommand": null,
+    "devCommand": null,
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "docs"
+    ],
+    "gitBranches": null
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "deployment": {
+      "path": "deployment",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1775209418787,
+      "keyFiles": [
+        "README.md"
+      ]
+    },
+    "docker": {
+      "path": "docker",
+      "purpose": null,
+      "fileCount": 8,
+      "lastAccessed": 1775209418787,
+      "keyFiles": [
+        "README.md",
+        "config.example.yaml",
+        "config.yaml",
+        "docker-compose-dev.yaml",
+        "docker-compose.yaml"
+      ]
+    },
+    "docs": {
+      "path": "docs",
+      "purpose": "Documentation",
+      "fileCount": 7,
+      "lastAccessed": 1775209418787,
+      "keyFiles": [
+        "gen-pptx.js",
+        "xd-ai-v1-presentation.pptx",
+        "xdai-v1-ppt.md",
+        "xdai-v1-ppt.pptx",
+        "xdai-v1-ppt2.pptx"
+      ]
+    },
+    "misc": {
+      "path": "misc",
+      "purpose": null,
+      "fileCount": 19,
+      "lastAccessed": 1775209418787,
+      "keyFiles": [
+        "AI-generated-understanding_recommend_questions.png",
+        "API_doc.png",
+        "data_source.png",
+        "how_wrenai_works.png",
+        "logo_template.jpg"
+      ]
+    },
+    "wren-ai-service": {
+      "path": "wren-ai-service",
+      "purpose": null,
+      "fileCount": 9,
+      "lastAccessed": 1775209418787,
+      "keyFiles": [
+        "CONTRIBUTING.md",
+        "Justfile",
+        "README.md",
+        "entrypoint.sh",
+        "poetry.lock"
+      ]
+    },
+    "wren-engine": {
+      "path": "wren-engine",
+      "purpose": null,
+      "fileCount": 5,
+      "lastAccessed": 1775209418787,
+      "keyFiles": [
+        "LICENSE",
+        "README.md",
+        "SECURITY.md"
+      ]
+    },
+    "wren-launcher": {
+      "path": "wren-launcher",
+      "purpose": null,
+      "fileCount": 6,
+      "lastAccessed": 1775209418788,
+      "keyFiles": [
+        "Makefile",
+        "README.md",
+        "go.mod",
+        "go.sum",
+        "main.go"
+      ]
+    },
+    "wren-mdl": {
+      "path": "wren-mdl",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1775209418788,
+      "keyFiles": [
+        "mdl.schema.json"
+      ]
+    },
+    "wren-ui": {
+      "path": "wren-ui",
+      "purpose": null,
+      "fileCount": 20,
+      "lastAccessed": 1775209418788,
+      "keyFiles": [
+        "Dockerfile",
+        "README.md",
+        "codegen.yaml",
+        "db.sqlite3",
+        "jest.config.js"
+      ]
+    },
+    "docker/data": {
+      "path": "docker/data",
+      "purpose": "Data files",
+      "fileCount": 0,
+      "lastAccessed": 1775209418788,
+      "keyFiles": []
+    },
+    "misc/scripts": {
+      "path": "misc/scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 2,
+      "lastAccessed": 1775209418788,
+      "keyFiles": [
+        "scan-current-project.sh",
+        "scan-runtime-identity.sh"
+      ]
+    },
+    "wren-ai-service/docs": {
+      "path": "wren-ai-service/docs",
+      "purpose": "Documentation",
+      "fileCount": 2,
+      "lastAccessed": 1775209418788,
+      "keyFiles": [
+        "code_design.md",
+        "configuration.md"
+      ]
+    },
+    "wren-launcher/config": {
+      "path": "wren-launcher/config",
+      "purpose": "Configuration files",
+      "fileCount": 1,
+      "lastAccessed": 1775209418789,
+      "keyFiles": [
+        "config.go"
+      ]
+    },
+    "wren-launcher/utils": {
+      "path": "wren-launcher/utils",
+      "purpose": "Utility functions",
+      "fileCount": 6,
+      "lastAccessed": 1775209418789,
+      "keyFiles": [
+        "docker.go",
+        "docker_test.go",
+        "network.go"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": ".omx/drafts/wrenai-v1-ppt.md",
+      "accessCount": 38,
+      "lastAccessed": 1775188153113,
+      "type": "file"
+    },
+    {
+      "path": "docs/gen-pptx.js",
+      "accessCount": 4,
+      "lastAccessed": 1775209346231,
+      "type": "file"
+    },
+    {
+      "path": "docs/xdai-v1-ppt.md",
+      "accessCount": 2,
+      "lastAccessed": 1775197591384,
+      "type": "file"
+    },
+    {
+      "path": ".omx/plans/phase1-task-packages.md",
+      "accessCount": 1,
+      "lastAccessed": 1775115395010,
+      "type": "file"
+    },
+    {
+      "path": ".omx/plans/phase0-wrenai-v1-execution.md",
+      "accessCount": 1,
+      "lastAccessed": 1775115395061,
+      "type": "file"
+    },
+    {
+      "path": "docs/refer_dula/01 AI数据分析.png",
+      "accessCount": 1,
+      "lastAccessed": 1775183231139,
+      "type": "file"
+    },
+    {
+      "path": "docs/refer_dula/01 知识库首页.png",
+      "accessCount": 1,
+      "lastAccessed": 1775183231522,
+      "type": "file"
+    },
+    {
+      "path": "docs/refer_dula/02.png",
+      "accessCount": 1,
+      "lastAccessed": 1775183231948,
+      "type": "file"
+    },
+    {
+      "path": "docs/refer_dula/03 添加知识库.png",
+      "accessCount": 1,
+      "lastAccessed": 1775183232035,
+      "type": "file"
+    },
+    {
+      "path": "docs/refer_dula/04 添加数据资产-1.png",
+      "accessCount": 1,
+      "lastAccessed": 1775183353268,
+      "type": "file"
+    },
+    {
+      "path": "docs/refer_dula/05 添加数据资产-2.png",
+      "accessCount": 1,
+      "lastAccessed": 1775183353320,
+      "type": "file"
+    },
+    {
+      "path": "docs/refer_dula/06 知识库概况和评分.png",
+      "accessCount": 1,
+      "lastAccessed": 1775183353338,
+      "type": "file"
+    },
+    {
+      "path": "docs/refer_dula/07 数据表详情.png",
+      "accessCount": 1,
+      "lastAccessed": 1775183353385,
+      "type": "file"
+    },
+    {
+      "path": "docs/refer_dula/09 分析规则-2.png",
+      "accessCount": 1,
+      "lastAccessed": 1775183497656,
+      "type": "file"
+    },
+    {
+      "path": "docs/refer_dula/10 SQL 模板-1.png",
+      "accessCount": 1,
+      "lastAccessed": 1775183497804,
+      "type": "file"
+    },
+    {
+      "path": "docs/refer_dula/08 分析规则-1.png",
+      "accessCount": 1,
+      "lastAccessed": 1775183497856,
+      "type": "file"
+    },
+    {
+      "path": "docs/refer_dula/11 SQL 模板-2.png",
+      "accessCount": 1,
+      "lastAccessed": 1775183497907,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

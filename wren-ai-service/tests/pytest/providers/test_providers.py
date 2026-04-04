@@ -101,3 +101,30 @@ def test_generate_components(mocker: MockerFixture):
     assert isinstance(result["indexing"].llm_provider, LLMProvider)
     assert isinstance(result["indexing"].document_store_provider, DocumentStoreProvider)
     assert isinstance(result["indexing"].engine, Engine)
+
+
+def test_generate_components_with_pgvector_document_store():
+    config = [
+        {
+            "type": "document_store",
+            "provider": "pgvector",
+            "connection_string": "postgresql://postgres:postgres@localhost:5432/postgres",
+            "embedding_dimension": 1536,
+        },
+        {
+            "type": "pipeline",
+            "pipes": [
+                {
+                    "name": "retrieval",
+                    "document_store": "pgvector",
+                }
+            ],
+        },
+    ]
+
+    result = generate_components(config)
+
+    assert "retrieval" in result
+    assert isinstance(result["retrieval"], PipelineComponent)
+    assert isinstance(result["retrieval"].document_store_provider, DocumentStoreProvider)
+    assert result["retrieval"].document_store_provider.__class__.__name__ == "PgvectorProvider"
