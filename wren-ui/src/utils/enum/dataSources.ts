@@ -16,6 +16,7 @@ export enum DATA_SOURCES {
   ATHENA = 'ATHENA',
   REDSHIFT = 'REDSHIFT',
   DATABRICKS = 'DATABRICKS',
+  DORIS = 'DORIS',
 }
 
 export enum ATHENA_AUTH_METHOD {

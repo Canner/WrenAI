@@ -16,6 +16,7 @@ import {
   BIG_QUERY_CONNECTION_INFO,
   DUCKDB_CONNECTION_INFO,
   MYSQL_CONNECTION_INFO,
+  DORIS_CONNECTION_INFO,
   POSTGRES_CONNECTION_INFO,
   MS_SQL_CONNECTION_INFO,
   WREN_AI_CONNECTION_INFO,
@@ -194,6 +195,29 @@ const dataSource = {
     },
   } as IDataSourceConnectionInfo<
     MYSQL_CONNECTION_INFO,
+    HostBasedConnectionInfo
+  >,
+
+  // Doris
+  [DataSourceName.DORIS]: {
+    sensitiveProps: ['password'],
+    toIbisConnectionInfo(connectionInfo) {
+      const decryptedConnectionInfo = decryptConnectionInfo(
+        DataSourceName.DORIS,
+        connectionInfo,
+      );
+      const { host, port, database, user, password } =
+        decryptedConnectionInfo as DORIS_CONNECTION_INFO;
+      return {
+        host,
+        port,
+        database,
+        user,
+        password,
+      };
+    },
+  } as IDataSourceConnectionInfo<
+    DORIS_CONNECTION_INFO,
     HostBasedConnectionInfo
   >,
 
