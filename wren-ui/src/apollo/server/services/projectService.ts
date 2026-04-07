@@ -15,6 +15,7 @@ import {
   RecommendationQuestionStatus,
   WrenAIError,
   WrenAILanguage,
+  AskRuntimeIdentity,
 } from '@server/models/adaptor';
 import { encryptConnectionInfo } from '../dataSource';
 import { IWrenAIAdaptor } from '../adaptors';
@@ -62,11 +63,6 @@ export interface IProjectService {
     project: Project,
   ) => Promise<RecommendConstraint[]>;
 
-  /**
-   * @deprecated Compatibility shim for legacy single-project flows only.
-   * New runtime paths must resolve context via RuntimeScopeResolver.
-   */
-  getCurrentProject: () => Promise<Project>;
   getProjectById: (projectId: number) => Promise<Project>;
   writeCredentialFile: (
     credentials: JSON,
@@ -78,7 +74,10 @@ export interface IProjectService {
   ) => Promise<ProjectRecommendationQuestionsResult>;
 
   // recommend questions
-  generateProjectRecommendationQuestions: (projectId: number) => Promise<void>;
+  generateProjectRecommendationQuestions: (
+    projectId: number,
+    runtimeScopeId?: string | null,
+  ) => Promise<void>;
 }
 
 export class ProjectService implements IProjectService {
@@ -124,6 +123,7 @@ export class ProjectService implements IProjectService {
 
   public async generateProjectRecommendationQuestions(
     projectId: number,
+    runtimeScopeId?: string | null,
   ): Promise<void> {
     const project = await this.getProjectById(projectId);
     if (!project) {
@@ -133,6 +133,10 @@ export class ProjectService implements IProjectService {
     const recommendQuestionResult =
       await this.wrenAIAdaptor.generateRecommendationQuestions({
         manifest,
+        runtimeScopeId: runtimeScopeId || undefined,
+        runtimeIdentity: {
+          projectId: project.id,
+        } as AskRuntimeIdentity,
         ...this.getProjectRecommendationQuestionsConfig(project),
       });
 
@@ -172,14 +176,6 @@ export class ProjectService implements IProjectService {
       result.error = project.questionsError as WrenAIError;
     }
     return result;
-  }
-
-  /**
-   * @deprecated Compatibility shim for legacy single-project flows only.
-   * New runtime paths must resolve context via RuntimeScopeResolver.
-   */
-  public async getCurrentProject() {
-    return await this.projectRepository.getCurrentProject();
   }
 
   public async getProjectById(projectId: number) {

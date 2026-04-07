@@ -33,16 +33,19 @@ import {
   QuestionInput,
   QuestionsResult,
   QuestionsStatus,
-  GenerateInstructionInput,
   InstructionStatus,
   InstructionResult,
   AskFeedbackInput,
   AskFeedbackResult,
   AskFeedbackStatus,
+  DeleteSemanticsInput,
+  DeploySqlPairInput,
+  DeleteSqlPairsInput,
+  GenerateInstructionsPayload,
+  DeleteInstructionsInput,
 } from '@server/models/adaptor';
 import { getLogger } from '@server/utils';
 import * as Errors from '@server/utils/error';
-import { SqlPair } from '../repositories';
 import { ThreadResponse } from '@server/repositories';
 
 const logger = getLogger('WrenAIAdaptor');
@@ -57,10 +60,7 @@ const getAIServiceError = (error: any) => {
 
 export interface IWrenAIAdaptor {
   deploy(deployData: DeployData): Promise<WrenAIDeployResponse>;
-  delete(
-    projectId: number,
-    runtimeIdentity?: AskRuntimeIdentity | null,
-  ): Promise<void>;
+  delete(input: DeleteSemanticsInput): Promise<void>;
 
   /**
    * Ask AI service a question.
@@ -114,12 +114,9 @@ export interface IWrenAIAdaptor {
   /**
    * Sql Pair APIs
    */
-  deploySqlPair(
-    projectId: number,
-    sqlPair: { question: string; sql: string },
-  ): Promise<AsyncQueryResponse>;
+  deploySqlPair(input: DeploySqlPairInput): Promise<AsyncQueryResponse>;
   getSqlPairResult(queryId: string): Promise<SqlPairResult>;
-  deleteSqlPairs(projectId: number, sqlPairIds: number[]): Promise<void>;
+  deleteSqlPairs(input: DeleteSqlPairsInput): Promise<void>;
   generateQuestions(input: QuestionInput): Promise<AsyncQueryResponse>;
   getQuestionsResult(queryId: string): Promise<Partial<QuestionsResult>>;
 
@@ -127,10 +124,10 @@ export interface IWrenAIAdaptor {
    * instruction related APIs
    */
   generateInstruction(
-    input: GenerateInstructionInput[],
+    input: GenerateInstructionsPayload,
   ): Promise<AsyncQueryResponse>;
   getInstructionResult(queryId: string): Promise<InstructionResult>;
-  deleteInstructions(ids: number[], projectId: number): Promise<void>;
+  deleteInstructions(input: DeleteInstructionsInput): Promise<void>;
 
   /**
    * Ask feedback APIs
@@ -147,24 +144,22 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     this.wrenAIBaseEndpoint = wrenAIBaseEndpoint;
   }
 
-  public async delete(
-    projectId: number,
-    runtimeIdentity?: AskRuntimeIdentity | null,
-  ): Promise<void> {
+  public async delete(input: DeleteSemanticsInput): Promise<void> {
     try {
-      if (!projectId) {
-        throw new Error('Project ID is required');
-      }
+      const runtimeIdentity = this.requireRuntimeIdentity(
+        input.runtimeIdentity,
+      );
       const url = `${this.wrenAIBaseEndpoint}/v1/semantics`;
       const response = await axios.delete(url, {
         data: {
-          project_id: projectId.toString(),
-          runtime_identity: this.transformRuntimeIdentity(runtimeIdentity),
+          runtime_identity: runtimeIdentity,
         },
       });
 
       if (response.status === 200) {
-        logger.info(`Wren AI: Deleted semantics for project ${projectId}`);
+        logger.info(
+          `Wren AI: Deleted semantics for runtime ${this.describeRuntimeIdentity(runtimeIdentity)}`,
+        );
       } else {
         throw new Error(`Failed to delete semantics. ${response.data?.error}`);
       }
@@ -176,19 +171,21 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   }
 
   public async deploySqlPair(
-    projectId: number,
-    sqlPair: Partial<SqlPair>,
+    input: DeploySqlPairInput,
   ): Promise<AsyncQueryResponse> {
     try {
+      const runtimeIdentity = this.requireRuntimeIdentity(
+        input.runtimeIdentity,
+      );
       const body = {
         sql_pairs: [
           {
-            id: `${sqlPair.id}`,
-            sql: sqlPair.sql,
-            question: sqlPair.question,
+            id: `${input.sqlPair.id}`,
+            sql: input.sqlPair.sql,
+            question: input.sqlPair.question,
           },
         ],
-        project_id: projectId.toString(),
+        runtime_identity: runtimeIdentity,
       };
 
       return axios
@@ -220,15 +217,15 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       throw err;
     }
   }
-  public async deleteSqlPairs(
-    projectId: number,
-    sqlPairIds: number[],
-  ): Promise<void> {
+  public async deleteSqlPairs(input: DeleteSqlPairsInput): Promise<void> {
     try {
+      const runtimeIdentity = this.requireRuntimeIdentity(
+        input.runtimeIdentity,
+      );
       await axios.delete(`${this.wrenAIBaseEndpoint}/v1/sql-pairs`, {
         data: {
-          sql_pair_ids: sqlPairIds.map((id) => id.toString()),
-          project_id: projectId.toString(),
+          sql_pair_ids: input.sqlPairIds.map((id) => id.toString()),
+          runtime_identity: runtimeIdentity,
         },
       });
       return;
@@ -250,10 +247,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       const res = await axios.post(`${this.wrenAIBaseEndpoint}/v1/asks`, {
         query: input.query,
         id: input.deployId,
-        project_id:
-          input.runtimeIdentity?.projectId !== undefined
-            ? input.runtimeIdentity.projectId.toString()
-            : undefined,
+        runtime_scope_id: input.runtimeScopeId,
         histories: this.transformHistoryInput(input.histories),
         configurations: input.configurations,
         runtime_identity: this.transformRuntimeIdentity(input.runtimeIdentity),
@@ -358,15 +352,15 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   public async deploy(deployData: DeployData): Promise<WrenAIDeployResponse> {
     const { manifest, hash } = deployData;
     try {
+      const runtimeIdentity = this.requireRuntimeIdentity(
+        deployData.runtimeIdentity,
+      );
       const res = await axios.post(
         `${this.wrenAIBaseEndpoint}/v1/semantics-preparations`,
         {
           mdl: JSON.stringify(manifest),
           id: hash,
-          project_id:
-            deployData.projectId !== undefined
-              ? deployData.projectId.toString()
-              : undefined,
+          runtime_identity: runtimeIdentity,
         },
       );
       const deployId = res.data.id;
@@ -399,6 +393,8 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   ): Promise<AsyncQueryResponse> {
     const body = {
       mdl: JSON.stringify(input.manifest),
+      runtime_scope_id: input.runtimeScopeId,
+      runtime_identity: this.transformRuntimeIdentity(input.runtimeIdentity),
       previous_questions: input.previousQuestions,
       max_questions: input.maxQuestions,
       max_categories: input.maxCategories,
@@ -499,9 +495,10 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
 
   public async generateChart(input: ChartInput): Promise<AsyncQueryResponse> {
     try {
+      const chartInput = this.transformChartInput(input);
       const res = await axios.post(
         `${this.wrenAIBaseEndpoint}/v1/charts`,
-        input,
+        chartInput,
       );
       return { queryId: res.data.query_id };
     } catch (err: any) {
@@ -585,8 +582,8 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     try {
       const body = {
         sqls: input.sqls,
-        project_id: input.projectId.toString(),
         configurations: input.configurations,
+        runtime_identity: this.transformRuntimeIdentity(input.runtimeIdentity),
       };
 
       const res = await axios.post(
@@ -603,16 +600,17 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   }
 
   public async generateInstruction(
-    input: GenerateInstructionInput[],
+    input: GenerateInstructionsPayload,
   ): Promise<AsyncQueryResponse> {
+    const runtimeIdentity = this.requireRuntimeIdentity(input.runtimeIdentity);
     const body = {
-      instructions: input.map((item) => ({
+      instructions: input.instructions.map((item) => ({
         id: item.id.toString(),
         instruction: item.instruction,
         questions: item.questions,
         is_default: item.isDefault,
       })),
-      project_id: input[0]?.projectId.toString(),
+      runtime_identity: runtimeIdentity,
     };
     try {
       const res = await axios.post(
@@ -666,14 +664,16 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   }
 
   public async deleteInstructions(
-    ids: number[],
-    projectId: number,
+    input: DeleteInstructionsInput,
   ): Promise<void> {
     try {
+      const runtimeIdentity = this.requireRuntimeIdentity(
+        input.runtimeIdentity,
+      );
       await axios.delete(`${this.wrenAIBaseEndpoint}/v1/instructions`, {
         data: {
-          instruction_ids: ids.map((id) => id.toString()),
-          project_id: projectId.toString(),
+          instruction_ids: input.ids.map((id) => id.toString()),
+          runtime_identity: runtimeIdentity,
         },
       });
     } catch (err: any) {
@@ -688,12 +688,15 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     input: AskFeedbackInput,
   ): Promise<AsyncQueryResponse> {
     try {
+      const runtimeIdentity = this.requireRuntimeIdentity(
+        input.runtimeIdentity,
+      );
       const body = {
         question: input.question,
         tables: input.tables,
         sql_generation_reasoning: input.sqlGenerationReasoning,
         sql: input.sql,
-        project_id: input.projectId.toString(),
+        runtime_identity: runtimeIdentity,
         configurations: input.configurations,
       };
       const res = await axios.post(
@@ -770,7 +773,17 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
         theta: adjustmentOption.theta,
       },
       chart_schema: chartSchema,
+      runtime_identity: this.transformRuntimeIdentity(input.runtimeIdentity),
       configurations,
+    };
+  }
+
+  private transformChartInput(input: ChartInput) {
+    return {
+      query: input.query,
+      sql: input.sql,
+      runtime_identity: this.transformRuntimeIdentity(input.runtimeIdentity),
+      configurations: input.configurations,
     };
   }
 
@@ -1030,19 +1043,69 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     }));
   }
 
-  private transformRuntimeIdentity(runtimeIdentity?: AskRuntimeIdentity) {
-    if (!runtimeIdentity?.workspaceId || !runtimeIdentity?.knowledgeBaseId) {
+  private transformRuntimeIdentity(
+    runtimeIdentity?: AskRuntimeIdentity | null,
+  ) {
+    if (!runtimeIdentity) {
       return undefined;
     }
 
+    const hasCanonicalRuntimeFields =
+      this.hasCanonicalRuntimeIdentity(runtimeIdentity);
+    const hasAnyRuntimeFields = Boolean(
+      runtimeIdentity.projectId || hasCanonicalRuntimeFields,
+    );
+
+    if (!hasAnyRuntimeFields) {
+      return undefined;
+    }
+
+    const projectBridgeId =
+      !hasCanonicalRuntimeFields && runtimeIdentity.projectId !== undefined
+        ? runtimeIdentity.projectId.toString()
+        : undefined;
+
     return {
+      projectBridgeId,
       workspaceId: runtimeIdentity.workspaceId,
       knowledgeBaseId: runtimeIdentity.knowledgeBaseId,
       kbSnapshotId: runtimeIdentity.kbSnapshotId,
       deployHash: runtimeIdentity.deployHash,
-      projectId: runtimeIdentity.projectId,
       actorUserId: runtimeIdentity.actorUserId,
     };
+  }
+
+  private requireRuntimeIdentity(
+    runtimeIdentity?: AskRuntimeIdentity | null,
+  ): Record<string, any> {
+    const transformed = this.transformRuntimeIdentity(runtimeIdentity);
+    if (!transformed) {
+      throw new Error('Runtime identity is required');
+    }
+    return transformed;
+  }
+
+  private hasCanonicalRuntimeIdentity(runtimeIdentity: AskRuntimeIdentity) {
+    return Boolean(
+      runtimeIdentity.workspaceId ||
+        runtimeIdentity.knowledgeBaseId ||
+        runtimeIdentity.kbSnapshotId ||
+        runtimeIdentity.deployHash ||
+        runtimeIdentity.actorUserId,
+    );
+  }
+
+  private describeRuntimeIdentity(runtimeIdentity: Record<string, any>) {
+    return (
+      runtimeIdentity.deployHash ||
+      runtimeIdentity.kbSnapshotId ||
+      runtimeIdentity.knowledgeBaseId ||
+      runtimeIdentity.workspaceId ||
+      runtimeIdentity.actorUserId ||
+      runtimeIdentity.projectBridgeId ||
+      runtimeIdentity.projectId ||
+      'unknown'
+    );
   }
 
   private transformActorClaims(actorClaims?: AskActorClaims) {

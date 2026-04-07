@@ -39,8 +39,14 @@ describe('WrenAIAdaptor', () => {
   describe('generateRecommendationQuestions', () => {
     const mockInput: RecommendationQuestionsInput = {
       manifest: sampleManifest,
+      runtimeScopeId: 'runtime-scope-1',
+      runtimeIdentity: {
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snapshot-1',
+        deployHash: 'deploy-1',
+      },
       previousQuestions: ['What is sales by region?'],
-      projectId: 'project-123',
       maxQuestions: 5,
       maxCategories: 3,
       configuration: {
@@ -59,6 +65,13 @@ describe('WrenAIAdaptor', () => {
         `${baseEndpoint}/v1/question-recommendations`,
         {
           mdl: JSON.stringify(mockInput.manifest),
+          runtime_scope_id: 'runtime-scope-1',
+          runtime_identity: expect.objectContaining({
+            workspaceId: 'workspace-1',
+            knowledgeBaseId: 'kb-1',
+            kbSnapshotId: 'snapshot-1',
+            deployHash: 'deploy-1',
+          }),
           previous_questions: mockInput.previousQuestions,
           max_questions: mockInput.maxQuestions,
           max_categories: mockInput.maxCategories,
@@ -86,9 +99,9 @@ describe('WrenAIAdaptor', () => {
       const result = await adaptor.ask({
         query: '本月 GMV',
         deployId: 'deploy-1',
+        runtimeScopeId: 'runtime-scope-1',
         configurations: { language: 'English' },
         runtimeIdentity: {
-          projectId: 42,
           workspaceId: 'workspace-1',
           knowledgeBaseId: 'kb-1',
           kbSnapshotId: 'snapshot-1',
@@ -137,7 +150,7 @@ describe('WrenAIAdaptor', () => {
         expect.objectContaining({
           query: '本月 GMV',
           id: 'deploy-1',
-          project_id: '42',
+          runtime_scope_id: 'runtime-scope-1',
           runtime_identity: expect.objectContaining({
             workspaceId: 'workspace-1',
             knowledgeBaseId: 'kb-1',
@@ -167,18 +180,25 @@ describe('WrenAIAdaptor', () => {
           ],
         }),
       );
+      expect(mockedAxios.post.mock.calls[0]?.[1]).not.toHaveProperty(
+        'project_id',
+      );
     });
   });
 
   describe('deploy', () => {
-    it('should include the compatibility project_id when preparing semantics', async () => {
+    it('should send runtime identity when preparing semantics', async () => {
       mockedAxios.post.mockResolvedValueOnce({ data: { id: 'deploy-1' } });
       mockedAxios.get.mockResolvedValueOnce({ data: { status: 'finished' } });
 
       const result = await adaptor.deploy({
         manifest: sampleManifest,
         hash: 'deploy-1',
-        projectId: 42,
+        runtimeIdentity: {
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          deployHash: 'deploy-1',
+        },
       });
 
       expect(result).toEqual({ status: 'SUCCESS' });
@@ -186,38 +206,352 @@ describe('WrenAIAdaptor', () => {
         `${baseEndpoint}/v1/semantics-preparations`,
         expect.objectContaining({
           id: 'deploy-1',
-          project_id: '42',
+          runtime_identity: expect.objectContaining({
+            workspaceId: 'workspace-1',
+            knowledgeBaseId: 'kb-1',
+            deployHash: 'deploy-1',
+          }),
         }),
       );
+      const requestBody = mockedAxios.post.mock.calls[0]?.[1] as any;
+      expect(requestBody?.runtime_identity?.projectBridgeId).toBeUndefined();
     });
   });
 
   describe('delete semantics', () => {
-    it('should send project compatibility id and runtime identity in delete body', async () => {
+    it('should send runtime identity in delete body', async () => {
       mockedAxios.delete.mockResolvedValueOnce({ status: 200, data: {} });
 
-      await adaptor.delete(42, {
-        projectId: 42,
-        workspaceId: 'workspace-1',
-        knowledgeBaseId: 'kb-1',
-        kbSnapshotId: 'snapshot-1',
-        deployHash: 'deploy-1',
-        actorUserId: 'user-1',
+      await adaptor.delete({
+        runtimeIdentity: {
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snapshot-1',
+          deployHash: 'deploy-1',
+          actorUserId: 'user-1',
+        },
       });
 
       expect(mockedAxios.delete).toHaveBeenCalledWith(
         `${baseEndpoint}/v1/semantics`,
         expect.objectContaining({
           data: expect.objectContaining({
-            project_id: '42',
             runtime_identity: expect.objectContaining({
               workspaceId: 'workspace-1',
               knowledgeBaseId: 'kb-1',
               kbSnapshotId: 'snapshot-1',
               deployHash: 'deploy-1',
-              projectId: 42,
               actorUserId: 'user-1',
             }),
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('runtime-identity-first maintenance APIs', () => {
+    it('should deploy sql pairs with runtime identity instead of top-level project_id', async () => {
+      mockedAxios.post.mockResolvedValueOnce({ data: { event_id: 'event-1' } });
+
+      const result = await adaptor.deploySqlPair({
+        runtimeIdentity: {
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snapshot-1',
+          deployHash: 'deploy-1',
+        },
+        sqlPair: {
+          id: 7,
+          question: '本月 GMV 是多少？',
+          sql: 'SELECT 1',
+        },
+      });
+
+      expect(result).toEqual({ queryId: 'event-1' });
+      expect(mockedAxios.post).toHaveBeenCalledWith(
+        `${baseEndpoint}/v1/sql-pairs`,
+        expect.objectContaining({
+          runtime_identity: {
+            workspaceId: 'workspace-1',
+            knowledgeBaseId: 'kb-1',
+            kbSnapshotId: 'snapshot-1',
+            deployHash: 'deploy-1',
+          },
+        }),
+      );
+      expect(mockedAxios.post.mock.calls[0]?.[1]).not.toHaveProperty(
+        'project_id',
+      );
+    });
+
+    it('should delete sql pairs with runtime identity instead of top-level project_id', async () => {
+      mockedAxios.delete.mockResolvedValueOnce({ status: 200, data: {} });
+
+      await adaptor.deleteSqlPairs({
+        runtimeIdentity: {
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snapshot-1',
+          deployHash: 'deploy-1',
+        },
+        sqlPairIds: [7, 8],
+      });
+
+      expect(mockedAxios.delete).toHaveBeenCalledWith(
+        `${baseEndpoint}/v1/sql-pairs`,
+        expect.objectContaining({
+          data: expect.objectContaining({
+            sql_pair_ids: ['7', '8'],
+            runtime_identity: {
+              workspaceId: 'workspace-1',
+              knowledgeBaseId: 'kb-1',
+              kbSnapshotId: 'snapshot-1',
+              deployHash: 'deploy-1',
+            },
+          }),
+        }),
+      );
+    });
+
+    it('should deploy instructions with runtime identity instead of top-level project_id', async () => {
+      mockedAxios.post.mockResolvedValueOnce({ data: { event_id: 'event-2' } });
+
+      const result = await adaptor.generateInstruction({
+        instructions: [
+          {
+            id: 9,
+            instruction: '仅统计已支付订单',
+            questions: ['本月订单'],
+            isDefault: false,
+          },
+        ],
+        runtimeIdentity: {
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snapshot-1',
+          deployHash: 'deploy-1',
+        },
+      });
+
+      expect(result).toEqual({ queryId: 'event-2' });
+      expect(mockedAxios.post).toHaveBeenCalledWith(
+        `${baseEndpoint}/v1/instructions`,
+        expect.objectContaining({
+          runtime_identity: {
+            workspaceId: 'workspace-1',
+            knowledgeBaseId: 'kb-1',
+            kbSnapshotId: 'snapshot-1',
+            deployHash: 'deploy-1',
+          },
+        }),
+      );
+      expect(mockedAxios.post.mock.calls[0]?.[1]).not.toHaveProperty(
+        'project_id',
+      );
+    });
+
+    it('should delete instructions with runtime identity instead of top-level project_id', async () => {
+      mockedAxios.delete.mockResolvedValueOnce({ status: 200, data: {} });
+
+      await adaptor.deleteInstructions({
+        ids: [9],
+        runtimeIdentity: {
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snapshot-1',
+          deployHash: 'deploy-1',
+        },
+      });
+
+      expect(mockedAxios.delete).toHaveBeenCalledWith(
+        `${baseEndpoint}/v1/instructions`,
+        expect.objectContaining({
+          data: expect.objectContaining({
+            instruction_ids: ['9'],
+            runtime_identity: {
+              workspaceId: 'workspace-1',
+              knowledgeBaseId: 'kb-1',
+              kbSnapshotId: 'snapshot-1',
+              deployHash: 'deploy-1',
+            },
+          }),
+        }),
+      );
+    });
+
+    it('should reject semantics preparation without runtime identity', async () => {
+      await expect(
+        adaptor.deploy({
+          manifest: sampleManifest,
+          hash: 'deploy-1',
+        }),
+      ).resolves.toEqual({
+        status: 'FAILED',
+        error: expect.stringContaining('Runtime identity is required'),
+      });
+      expect(mockedAxios.post).not.toHaveBeenCalled();
+    });
+
+    it('should reject instruction generation without runtime identity', async () => {
+      await expect(
+        adaptor.generateInstruction({
+          instructions: [
+            {
+              id: 9,
+              instruction: '仅统计已支付订单',
+              questions: ['本月订单'],
+              isDefault: false,
+            },
+          ],
+        }),
+      ).rejects.toThrow('Runtime identity is required');
+      expect(mockedAxios.post).not.toHaveBeenCalled();
+    });
+
+    it('should keep projectBridgeId when runtime identity only contains the legacy bridge', async () => {
+      mockedAxios.post.mockResolvedValueOnce({
+        data: { event_id: 'event-legacy' },
+      });
+
+      await adaptor.deploySqlPair({
+        runtimeIdentity: {
+          projectId: 42,
+        },
+        sqlPair: {
+          id: 7,
+          question: 'legacy project only',
+          sql: 'SELECT 1',
+        },
+      });
+
+      expect(mockedAxios.post).toHaveBeenCalledWith(
+        `${baseEndpoint}/v1/sql-pairs`,
+        expect.objectContaining({
+          runtime_identity: expect.objectContaining({
+            projectBridgeId: '42',
+          }),
+        }),
+      );
+    });
+
+    it('should prefer canonical runtime fields over projectBridgeId when both are present', async () => {
+      mockedAxios.post.mockResolvedValueOnce({
+        data: { event_id: 'event-canonical' },
+      });
+
+      await adaptor.deploySqlPair({
+        runtimeIdentity: {
+          projectId: 42,
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          deployHash: 'deploy-1',
+        },
+        sqlPair: {
+          id: 8,
+          question: 'canonical beats legacy bridge',
+          sql: 'SELECT 1',
+        },
+      });
+
+      expect(mockedAxios.post).toHaveBeenCalledWith(
+        `${baseEndpoint}/v1/sql-pairs`,
+        expect.objectContaining({
+          runtime_identity: expect.objectContaining({
+            workspaceId: 'workspace-1',
+            knowledgeBaseId: 'kb-1',
+            deployHash: 'deploy-1',
+            projectBridgeId: undefined,
+          }),
+        }),
+      );
+    });
+
+    it('should create ask feedback with runtime identity instead of top-level project_id', async () => {
+      mockedAxios.post.mockResolvedValueOnce({
+        data: { query_id: 'query-fb-1' },
+      });
+
+      const result = await adaptor.createAskFeedback({
+        question: '本月 GMV',
+        tables: ['orders'],
+        sqlGenerationReasoning: '需要限定已支付订单',
+        sql: 'SELECT 1',
+        runtimeIdentity: {
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snapshot-1',
+          deployHash: 'deploy-1',
+        },
+        configurations: { language: 'English' },
+      });
+
+      expect(result).toEqual({ queryId: 'query-fb-1' });
+      expect(mockedAxios.post).toHaveBeenCalledWith(
+        `${baseEndpoint}/v1/ask-feedbacks`,
+        expect.objectContaining({
+          runtime_identity: expect.objectContaining({
+            workspaceId: 'workspace-1',
+            knowledgeBaseId: 'kb-1',
+          }),
+        }),
+      );
+      expect(mockedAxios.post.mock.calls[0]?.[1]).not.toHaveProperty(
+        'project_id',
+      );
+    });
+
+    it('should generate charts with runtime identity instead of top-level project_id', async () => {
+      mockedAxios.post.mockResolvedValueOnce({ data: { query_id: 'chart-1' } });
+
+      const result = await adaptor.generateChart({
+        query: '本月 GMV',
+        sql: 'SELECT 1',
+        runtimeIdentity: {
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          deployHash: 'deploy-1',
+        },
+        configurations: { language: 'English' },
+      });
+
+      expect(result).toEqual({ queryId: 'chart-1' });
+      expect(mockedAxios.post).toHaveBeenCalledWith(
+        `${baseEndpoint}/v1/charts`,
+        expect.objectContaining({
+          runtime_identity: expect.objectContaining({
+            deployHash: 'deploy-1',
+          }),
+        }),
+      );
+      expect(mockedAxios.post.mock.calls[0]?.[1]).not.toHaveProperty(
+        'project_id',
+      );
+    });
+
+    it('should adjust charts with runtime identity instead of top-level project_id', async () => {
+      mockedAxios.post.mockResolvedValueOnce({
+        data: { query_id: 'chart-adjustment-1' },
+      });
+
+      const result = await adaptor.adjustChart({
+        query: '本月 GMV',
+        sql: 'SELECT 1',
+        adjustmentOption: { chartType: 'bar' as any },
+        chartSchema: { mark: 'bar' },
+        runtimeIdentity: {
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          deployHash: 'deploy-1',
+        },
+        configurations: { language: 'English' },
+      });
+
+      expect(result).toEqual({ queryId: 'chart-adjustment-1' });
+      expect(mockedAxios.post).toHaveBeenCalledWith(
+        `${baseEndpoint}/v1/chart-adjustments`,
+        expect.objectContaining({
+          runtime_identity: expect.objectContaining({
+            deployHash: 'deploy-1',
           }),
         }),
       );

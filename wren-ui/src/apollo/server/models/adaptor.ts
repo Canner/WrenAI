@@ -1,6 +1,6 @@
 import * as Errors from '@server/utils/error';
 import { Manifest } from '@server/mdl/type';
-import { ThreadResponse } from '../repositories';
+import { SqlPair, ThreadResponse } from '../repositories';
 
 // Add branded types for SQL strings
 type Brand<T, B> = T & { __brand: B };
@@ -51,7 +51,7 @@ export enum WrenAILanguage {
 export interface DeployData {
   manifest: Manifest;
   hash: string;
-  projectId?: number;
+  runtimeIdentity?: AskRuntimeIdentity | null;
 }
 
 // ask
@@ -72,7 +72,8 @@ export interface ProjectConfigurations {
 }
 
 export interface AskRuntimeIdentity {
-  projectId: number;
+  // legacy bridge only; prefer workspace/knowledgeBase/kbSnapshot/deployHash
+  projectId?: number;
   workspaceId?: string | null;
   knowledgeBaseId?: string | null;
   kbSnapshotId?: string | null;
@@ -81,7 +82,16 @@ export interface AskRuntimeIdentity {
 }
 
 export interface DeleteSemanticsInput {
-  projectId: number;
+  runtimeIdentity?: AskRuntimeIdentity | null;
+}
+
+export interface DeploySqlPairInput {
+  sqlPair: Partial<SqlPair>;
+  runtimeIdentity?: AskRuntimeIdentity | null;
+}
+
+export interface DeleteSqlPairsInput {
+  sqlPairIds: number[];
   runtimeIdentity?: AskRuntimeIdentity | null;
 }
 
@@ -125,6 +135,7 @@ export interface AskSkillCandidate {
 export interface AskInput {
   query: string;
   deployId: string;
+  runtimeScopeId?: string;
   histories?: ThreadResponse[];
   configurations?: ProjectConfigurations;
   runtimeIdentity?: AskRuntimeIdentity;
@@ -282,10 +293,10 @@ export enum RecommendationQuestionStatus {
 export type RecommendationQuestionsInput = {
   // JSON string of the MDL (Model Definition Language)
   manifest: Manifest;
+  runtimeScopeId?: string;
+  runtimeIdentity?: AskRuntimeIdentity;
   // Optional list of previous questions
   previousQuestions?: string[];
-  // Optional project ID
-  projectId?: string;
   // Optional max number of questions to generate (default: 5)
   maxQuestions?: number;
   // Optional max number of categories (default: 3)
@@ -351,7 +362,7 @@ export enum ChartType {
 export interface ChartInput {
   query: string;
   sql: string;
-  projectId?: string;
+  runtimeIdentity?: AskRuntimeIdentity | null;
   configurations?: ProjectConfigurations;
 }
 
@@ -369,7 +380,7 @@ export interface ChartAdjustmentInput {
   sql: string;
   adjustmentOption: ChartAdjustmentOption;
   chartSchema: Record<string, any>;
-  projectId?: string;
+  runtimeIdentity?: AskRuntimeIdentity | null;
   configurations?: ProjectConfigurations;
 }
 
@@ -397,8 +408,8 @@ export interface SqlPairResult {
 
 export interface QuestionInput {
   sqls: string[];
-  projectId: number;
   configurations?: ProjectConfigurations;
+  runtimeIdentity?: AskRuntimeIdentity | null;
 }
 
 export enum QuestionsStatus {
@@ -416,10 +427,19 @@ export interface QuestionsResult {
 
 export interface GenerateInstructionInput {
   id: number;
-  projectId: number;
   instruction: string;
   questions: string[];
   isDefault: boolean;
+}
+
+export interface GenerateInstructionsPayload {
+  instructions: GenerateInstructionInput[];
+  runtimeIdentity?: AskRuntimeIdentity | null;
+}
+
+export interface DeleteInstructionsInput {
+  ids: number[];
+  runtimeIdentity?: AskRuntimeIdentity | null;
 }
 
 export enum InstructionStatus {
@@ -438,7 +458,7 @@ export interface AskFeedbackInput {
   tables: string[];
   sqlGenerationReasoning: string;
   sql: string;
-  projectId: number;
+  runtimeIdentity?: AskRuntimeIdentity | null;
   configurations?: ProjectConfigurations;
 }
 

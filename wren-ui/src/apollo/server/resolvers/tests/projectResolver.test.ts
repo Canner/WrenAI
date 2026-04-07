@@ -3,6 +3,37 @@ import { RelationType } from '../../types';
 
 describe('ProjectResolver', () => {
   describe('getProjectRecommendationQuestions', () => {
+    it('falls back to deployment project id when runtime scope project is absent', async () => {
+      const resolver = new ProjectResolver();
+      const getProjectRecommendationQuestions = jest.fn().mockResolvedValue({
+        status: 'NOT_STARTED',
+        questions: [],
+        error: null,
+      });
+
+      const result = await resolver.getProjectRecommendationQuestions(
+        null,
+        null,
+        {
+          runtimeScope: {
+            project: null,
+            deployment: { projectId: 42 },
+          },
+          projectService: {
+            getProjectById: jest.fn().mockResolvedValue({ id: 42 }),
+            getProjectRecommendationQuestions,
+          },
+        } as any,
+      );
+
+      expect(getProjectRecommendationQuestions).toHaveBeenCalledWith(42);
+      expect(result).toEqual({
+        status: 'NOT_STARTED',
+        questions: [],
+        error: null,
+      });
+    });
+
     it('prefers runtime scope project id', async () => {
       const resolver = new ProjectResolver();
       const getCurrentProject = jest.fn();
@@ -77,6 +108,34 @@ describe('ProjectResolver', () => {
       ).not.toHaveBeenCalled();
     });
 
+    it('resolves onboarding status from deployment project when runtime scope project is absent', async () => {
+      const resolver = new ProjectResolver();
+      const findAllBy = jest.fn().mockResolvedValue([]);
+      const ctx = {
+        runtimeScope: {
+          project: null,
+          deployment: { projectId: 42 },
+        },
+        projectService: {
+          getProjectById: jest.fn().mockResolvedValue({
+            id: 42,
+            sampleDataset: null,
+          }),
+        },
+        modelRepository: {
+          findAllBy,
+        },
+      } as any;
+
+      await expect(
+        resolver.getOnboardingStatus(null, null, ctx),
+      ).resolves.toEqual({
+        status: 'DATASOURCE_SAVED',
+      });
+      expect(ctx.projectService.getProjectById).toHaveBeenCalledWith(42);
+      expect(findAllBy).toHaveBeenCalledWith({ projectId: 42 });
+    });
+
     it('keeps onboarding status bootstrap-compatible when runtime scope is missing', async () => {
       const resolver = new ProjectResolver();
       const getCurrentProject = jest
@@ -142,6 +201,41 @@ describe('ProjectResolver', () => {
   });
 
   describe('mutation scope requirements', () => {
+    it('resolves settings from deployment project when runtime scope project is absent', async () => {
+      const resolver = new ProjectResolver();
+      const ctx = {
+        runtimeScope: {
+          project: null,
+          deployment: { projectId: 42 },
+        },
+        config: {},
+        projectService: {
+          getProjectById: jest.fn().mockResolvedValue({
+            id: 42,
+            type: 'POSTGRES',
+            displayName: 'Warehouse',
+            sampleDataset: null,
+            language: 'EN',
+          }),
+          getGeneralConnectionInfo: jest.fn().mockReturnValue({ host: 'db' }),
+        },
+      } as any;
+
+      await expect(resolver.getSettings(null, null, ctx)).resolves.toEqual({
+        productVersion: '',
+        dataSource: {
+          type: 'POSTGRES',
+          properties: {
+            displayName: 'Warehouse',
+            host: 'db',
+          },
+          sampleDataset: null,
+        },
+        language: 'EN',
+      });
+      expect(ctx.projectService.getProjectById).toHaveBeenCalledWith(42);
+    });
+
     it('rejects updateCurrentProject when runtime scope is missing', async () => {
       const resolver = new ProjectResolver();
       const ctx = {
@@ -220,17 +314,107 @@ describe('ProjectResolver', () => {
         true,
       );
 
-      expect(ctx.wrenAIAdaptor.delete).toHaveBeenCalledWith(
-        42,
-        expect.objectContaining({
-          projectId: 42,
+      expect(ctx.wrenAIAdaptor.delete).toHaveBeenCalledWith({
+        runtimeIdentity: expect.objectContaining({
+          projectId: null,
           workspaceId: 'workspace-1',
           knowledgeBaseId: 'kb-1',
           kbSnapshotId: 'snapshot-1',
           deployHash: 'deploy-1',
           actorUserId: 'user-1',
         }),
+      });
+    });
+
+    it('passes runtime identity when deploying onboarding changes', async () => {
+      const resolver = new ProjectResolver() as any;
+      const ctx = {
+        runtimeScope: {
+          project: { id: 7, type: 'POSTGRES' },
+          workspace: { id: 'workspace-1' },
+          knowledgeBase: { id: 'kb-1' },
+          kbSnapshot: { id: 'snapshot-1' },
+          deployHash: 'old-deploy-hash',
+          userId: 'user-1',
+        },
+        mdlService: {
+          makeCurrentModelMDL: jest.fn().mockResolvedValue({
+            manifest: { models: [] },
+          }),
+        },
+        deployService: {
+          deploy: jest.fn().mockResolvedValue({ status: 'SUCCESS' }),
+        },
+        projectService: {
+          generateProjectRecommendationQuestions: jest
+            .fn()
+            .mockResolvedValue(undefined),
+        },
+      } as any;
+
+      await resolver.deploy(ctx, {
+        id: 42,
+        sampleDataset: null,
+      });
+
+      expect(ctx.deployService.deploy).toHaveBeenCalledWith(
+        { models: [] },
+        expect.objectContaining({
+          projectId: 42,
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snapshot-1',
+          deployHash: null,
+          actorUserId: 'user-1',
+        }),
+        false,
       );
+    });
+
+    it('keeps resetCurrentProject using scoped runtime identity only', async () => {
+      const resolver = new ProjectResolver();
+      const ctx = {
+        runtimeScope: {
+          project: { id: 42, type: 'POSTGRES' },
+          workspace: { id: 'workspace-1' },
+          knowledgeBase: { id: 'kb-1' },
+          kbSnapshot: { id: 'snapshot-1' },
+          deployHash: 'deploy-1',
+          userId: 'user-1',
+        },
+        telemetry: { sendEvent: jest.fn() },
+        schemaChangeRepository: {
+          deleteAllBy: jest.fn().mockResolvedValue(undefined),
+        },
+        deployService: {
+          deleteAllByProjectId: jest.fn().mockResolvedValue(undefined),
+        },
+        askingService: {
+          deleteAllByProjectId: jest.fn().mockResolvedValue(undefined),
+        },
+        modelService: {
+          deleteAllViewsByProjectId: jest.fn().mockResolvedValue(undefined),
+          deleteAllModelsByProjectId: jest.fn().mockResolvedValue(undefined),
+        },
+        projectService: {
+          deleteProject: jest.fn().mockResolvedValue(undefined),
+        },
+        wrenAIAdaptor: {
+          delete: jest.fn().mockResolvedValue(undefined),
+        },
+      } as any;
+
+      await resolver.resetCurrentProject(null, null, ctx);
+
+      expect(ctx.wrenAIAdaptor.delete).toHaveBeenCalledWith({
+        runtimeIdentity: expect.objectContaining({
+          projectId: null,
+          deployHash: 'deploy-1',
+        }),
+      });
+      expect(ctx.wrenAIAdaptor.delete).not.toHaveBeenCalledWith({
+        runtimeIdentity: { projectId: 42 },
+      });
     });
   });
 
@@ -238,6 +422,7 @@ describe('ProjectResolver', () => {
     it('reuses the newly created project instead of falling back to current project', async () => {
       const resolver = new ProjectResolver() as any;
       const project = { id: 42, sampleDataset: null };
+      const updatedProject = { id: 42, sampleDataset: 'HR' };
       const models = [
         { id: 10, projectId: 42, sourceTableName: 'employees' },
         { id: 11, projectId: 42, sourceTableName: 'departments' },
@@ -289,11 +474,17 @@ describe('ProjectResolver', () => {
           }),
         },
         projectRepository: {
-          updateOne: jest.fn().mockResolvedValue(undefined),
+          updateOne: jest.fn().mockResolvedValue(updatedProject),
         },
       } as any;
 
-      await resolver.startSampleDataset(null, { data: { name: 'HR' } }, ctx);
+      await expect(
+        resolver.startSampleDataset(null, { data: { name: 'HR' } }, ctx),
+      ).resolves.toEqual({
+        name: 'HR',
+        projectId: 42,
+        runtimeScopeId: '42',
+      });
 
       expect(resolver.createProjectFromDataSource).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -313,10 +504,7 @@ describe('ProjectResolver', () => {
       );
       expect(resolver.deploy).toHaveBeenCalledWith(
         ctx,
-        expect.objectContaining({
-          id: 42,
-          sampleDataset: 'HR',
-        }),
+        updatedProject,
       );
       expect(ctx.modelService.saveRelations).toHaveBeenCalledWith([]);
       expect(ctx.modelRepository.findAll).not.toHaveBeenCalled();

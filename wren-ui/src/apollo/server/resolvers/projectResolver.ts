@@ -37,6 +37,11 @@ import DataSourceSchemaDetector, {
 } from '@server/managers/dataSourceSchemaDetector';
 import { encryptConnectionInfo } from '../dataSource';
 import { TelemetryEvent } from '../telemetry/telemetry';
+import { resolveRuntimeProject as resolveScopedRuntimeProject } from '../utils/runtimeExecutionContext';
+import {
+  normalizeCanonicalPersistedRuntimeIdentity,
+  toLegacyProjectRuntimeIdentity,
+} from '@server/utils/persistedRuntimeIdentity';
 
 const logger = getLogger('DataSourceResolver');
 logger.level = 'debug';
@@ -69,7 +74,7 @@ export class ProjectResolver {
   }
 
   public async getSettings(_root: any, _arg: any, ctx: IContext) {
-    const project = await this.getMutableProject(ctx);
+    const project = await this.getActiveRuntimeProjectOrThrow(ctx);
     const generalConnectionInfo =
       ctx.projectService.getGeneralConnectionInfo(project);
     const dataSourceType = project.type;
@@ -93,7 +98,7 @@ export class ProjectResolver {
     _arg: any,
     ctx: IContext,
   ) {
-    const project = await this.getMutableProject(ctx);
+    const project = await this.getActiveRuntimeProjectOrThrow(ctx);
     return ctx.projectService.getProjectRecommendationQuestions(project.id);
   }
 
@@ -103,7 +108,7 @@ export class ProjectResolver {
     ctx: IContext,
   ) {
     const { language } = arg.data;
-    const project = await this.getMutableProject(ctx);
+    const project = await this.getActiveRuntimeProjectOrThrow(ctx);
     await ctx.projectRepository.updateOne(project.id, {
       language,
     });
@@ -112,13 +117,14 @@ export class ProjectResolver {
     if (project.sampleDataset === null) {
       await ctx.projectService.generateProjectRecommendationQuestions(
         project.id,
+        this.getCurrentRuntimeScopeId(ctx),
       );
     }
     return true;
   }
 
   public async resetCurrentProject(_root: any, _arg: any, ctx: IContext) {
-    const project = ctx.runtimeScope?.project || null;
+    const project = await this.resolveActiveRuntimeProject(ctx);
     if (!project) {
       return true;
     }
@@ -131,10 +137,9 @@ export class ProjectResolver {
       await ctx.modelService.deleteAllViewsByProjectId(id);
       await ctx.modelService.deleteAllModelsByProjectId(id);
       await ctx.projectService.deleteProject(id);
-      await ctx.wrenAIAdaptor.delete(
-        id,
-        ctx.runtimeScope ? toPersistedRuntimeIdentity(ctx.runtimeScope) : null,
-      );
+      await ctx.wrenAIAdaptor.delete({
+        runtimeIdentity: this.getRuntimeIdentity(ctx),
+      });
 
       // telemetry
       ctx.telemetry.sendEvent(eventName, {
@@ -219,13 +224,17 @@ export class ProjectResolver {
       await ctx.modelService.saveRelations(mappedRelations);
 
       // mark current project as using sample dataset
-      await ctx.projectRepository.updateOne(project.id, {
+      const updatedProject = await ctx.projectRepository.updateOne(project.id, {
         sampleDataset: name,
       });
-      await this.deploy(ctx, { ...project, sampleDataset: name });
+      await this.deploy(ctx, updatedProject);
       // telemetry
       ctx.telemetry.sendEvent(eventName, eventProperties);
-      return { name };
+      return {
+        name,
+        projectId: updatedProject.id,
+        runtimeScopeId: String(updatedProject.id),
+      };
     } catch (err: any) {
       ctx.telemetry.sendEvent(
         eventName,
@@ -238,7 +247,7 @@ export class ProjectResolver {
   }
 
   public async getOnboardingStatus(_root: any, _arg: any, ctx: IContext) {
-    const project = ctx.runtimeScope?.project || null;
+    const project = await this.resolveActiveRuntimeProject(ctx);
     if (!project) {
       return {
         status: OnboardingStatusEnum.NOT_STARTED,
@@ -287,7 +296,7 @@ export class ProjectResolver {
   ) {
     const { properties } = args.data;
     const { displayName, ...connectionInfo } = properties;
-    const project = await this.getMutableProject(ctx);
+    const project = await this.getActiveRuntimeProjectOrThrow(ctx);
     const dataSourceType = project.type;
 
     // only new connection info needed to encrypt
@@ -332,7 +341,7 @@ export class ProjectResolver {
   }
 
   public async listDataSourceTables(_root: any, _arg, ctx: IContext) {
-    const project = await this.getMutableProject(ctx);
+    const project = await this.getActiveRuntimeProjectOrThrow(ctx);
     return await ctx.projectService.getProjectDataSourceTables(project);
   }
 
@@ -346,7 +355,7 @@ export class ProjectResolver {
     const eventName = TelemetryEvent.CONNECTION_SAVE_TABLES;
 
     // get current project
-    const project = await this.getMutableProject(ctx);
+    const project = await this.getActiveRuntimeProjectOrThrow(ctx);
     try {
       // delete existing models and columns
       const { models, columns } = await this.overwriteModelsAndColumns(
@@ -376,7 +385,7 @@ export class ProjectResolver {
   }
 
   public async autoGenerateRelation(_root: any, _arg: any, ctx: IContext) {
-    const project = await this.getMutableProject(ctx);
+    const project = await this.getActiveRuntimeProjectOrThrow(ctx);
 
     // get models and columns
     const models = await ctx.modelRepository.findAllBy({
@@ -456,7 +465,7 @@ export class ProjectResolver {
   ) {
     const eventName = TelemetryEvent.CONNECTION_SAVE_RELATION;
     try {
-      const project = await this.getMutableProject(ctx);
+      const project = await this.getActiveRuntimeProjectOrThrow(ctx);
       await this.ensureModelsBelongToProject(
         ctx,
         arg.data.relations.flatMap(({ fromModelId, toModelId }) => [
@@ -486,7 +495,7 @@ export class ProjectResolver {
   }
 
   public async getSchemaChange(_root: any, _arg: any, ctx: IContext) {
-    const project = await this.getMutableProject(ctx);
+    const project = await this.getActiveRuntimeProjectOrThrow(ctx);
     const lastSchemaChange =
       await ctx.schemaChangeRepository.findLastSchemaChange(project.id);
 
@@ -544,7 +553,7 @@ export class ProjectResolver {
     _arg: any,
     ctx: IContext,
   ) {
-    const project = await this.getMutableProject(ctx);
+    const project = await this.getActiveRuntimeProjectOrThrow(ctx);
     const schemaDetector = new DataSourceSchemaDetector({
       ctx,
       projectId: project.id,
@@ -571,7 +580,7 @@ export class ProjectResolver {
     ctx: IContext,
   ) {
     const { type } = arg.where;
-    const project = await this.getMutableProject(ctx);
+    const project = await this.getActiveRuntimeProjectOrThrow(ctx);
     const schemaDetector = new DataSourceSchemaDetector({
       ctx,
       projectId: project.id,
@@ -665,23 +674,71 @@ export class ProjectResolver {
 
   private async deploy(ctx: IContext, project: Project) {
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL(project.id);
-    const deployRes = await ctx.deployService.deploy(manifest, project.id);
+    const deployRes = await ctx.deployService.deploy(
+      manifest,
+      this.getRuntimeIdentityForProjectBridge(ctx, project.id),
+      false,
+    );
 
     // only generating for user's data source
     if (project.sampleDataset === null) {
       await ctx.projectService.generateProjectRecommendationQuestions(
         project.id,
+        this.getCurrentRuntimeScopeId(ctx),
       );
     }
     return deployRes;
   }
 
-  private async getMutableProject(ctx: IContext): Promise<Project> {
-    if (!ctx.runtimeScope?.project) {
+  private getCurrentRuntimeScopeId(ctx: IContext) {
+    return ctx.runtimeScope?.selector?.runtimeScopeId || null;
+  }
+
+  private async getActiveRuntimeProjectOrThrow(ctx: IContext): Promise<Project> {
+    const project = await this.resolveActiveRuntimeProject(ctx);
+    if (!project) {
       throw new Error('Active runtime project is required for this operation');
     }
 
-    return ctx.runtimeScope.project;
+    return project;
+  }
+
+  private async resolveActiveRuntimeProject(
+    ctx: IContext,
+  ): Promise<Project | null> {
+    if (!ctx.runtimeScope) {
+      return null;
+    }
+
+    return await resolveScopedRuntimeProject(
+      ctx.runtimeScope,
+      ctx.projectService,
+    );
+  }
+
+  private getRuntimeIdentity(ctx: IContext) {
+    return ctx.runtimeScope
+      ? normalizeCanonicalPersistedRuntimeIdentity(
+          toPersistedRuntimeIdentity(ctx.runtimeScope),
+        )
+      : null;
+  }
+
+  private getRuntimeIdentityForProjectBridge(
+    ctx: IContext,
+    projectBridgeId: number,
+  ) {
+    const runtimeIdentity = this.getRuntimeIdentity(ctx);
+
+    if (!runtimeIdentity) {
+      return toLegacyProjectRuntimeIdentity(projectBridgeId);
+    }
+
+    return {
+      ...runtimeIdentity,
+      projectId: projectBridgeId,
+      deployHash: null,
+    };
   }
   private buildRelationInput(
     relations: SampleDatasetRelationship[],

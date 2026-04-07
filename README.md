@@ -118,6 +118,10 @@ Check [configuration examples here](https://github.com/Canner/WrenAI/tree/main/w
 
 Visit [Wren AI documentation](https://docs.getwren.ai/oss/overview/introduction?utm_source=github&utm_medium=content&utm_campaign=readme) to view the full documentation.
 
+For this local worktree, additional repo-specific notes are available here:
+- [Local source quickstart](./docs/local-source-quickstart.md)
+- [Local source acceptance guide](./docs/local-source-acceptance.md)
+
 ## 📪 Keep Posted?
 
 [Subscribe our blog](https://www.getwren.ai/blog/?utm_source=github&utm_medium=content&utm_campaign=readme) and [Follow our LinkedIn](https://www.linkedin.com/company/wrenai)

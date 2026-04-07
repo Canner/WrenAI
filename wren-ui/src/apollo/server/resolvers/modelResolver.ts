@@ -17,7 +17,7 @@ import { getLogger, transformInvalidColumnName } from '@server/utils';
 import { DeployResponse } from '../services/deployService';
 import { safeFormatSQL } from '@server/utils/sqlFormat';
 import { isEmpty, isNil } from 'lodash';
-import { replaceAllowableSyntax, validateDisplayName } from '../utils/regex';
+import { replaceAllowableSyntax } from '../utils/regex';
 import { Model, ModelColumn, Relation, View } from '../repositories';
 import {
   findColumnsToUpdate,
@@ -28,7 +28,15 @@ import {
 } from '../utils/model';
 import { CompactTable, PreviewDataResponse } from '@server/services';
 import { TelemetryEvent } from '../telemetry/telemetry';
-import { toPersistedRuntimeIdentity } from '../context/runtimeScope';
+import {
+  PersistedRuntimeIdentity,
+  toPersistedRuntimeIdentity,
+} from '../context/runtimeScope';
+import {
+  getRuntimeProjectBridgeId,
+  resolveRuntimeExecutionContext,
+  resolveRuntimeProject,
+} from '../utils/runtimeExecutionContext';
 
 const logger = getLogger('ModelResolver');
 logger.level = 'debug';
@@ -84,11 +92,15 @@ export class ModelResolver {
     ctx: IContext,
   ) {
     const { data } = args;
+    const { runtimeIdentity } = this.getRuntimeSelection(ctx);
     await this.ensureModelsScope(ctx, [data.fromModelId, data.toModelId]);
 
     const eventName = TelemetryEvent.MODELING_CREATE_RELATION;
     try {
-      const relation = await ctx.modelService.createRelation(data);
+      const relation = await ctx.modelService.createRelationByRuntimeIdentity(
+        runtimeIdentity,
+        data,
+      );
       ctx.telemetry.sendEvent(eventName, { data });
       return relation;
     } catch (err: any) {
@@ -108,11 +120,12 @@ export class ModelResolver {
     ctx: IContext,
   ) {
     const { data, where } = args;
+    const { runtimeIdentity } = this.getRuntimeSelection(ctx);
     await this.ensureRelationScope(ctx, where.id);
     const eventName = TelemetryEvent.MODELING_UPDATE_RELATION;
     try {
-      const relation = await ctx.modelService.updateRelation(
-        this.getActiveProjectId(ctx),
+      const relation = await ctx.modelService.updateRelationByRuntimeIdentity(
+        runtimeIdentity,
         data,
         where.id,
       );
@@ -134,9 +147,13 @@ export class ModelResolver {
     args: { where: { id: number } },
     ctx: IContext,
   ) {
+    const { runtimeIdentity } = this.getRuntimeSelection(ctx);
     const relationId = args.where.id;
     await this.ensureRelationScope(ctx, relationId);
-    await ctx.modelService.deleteRelation(this.getActiveProjectId(ctx), relationId);
+    await ctx.modelService.deleteRelationByRuntimeIdentity(
+      runtimeIdentity,
+      relationId,
+    );
     return true;
   }
 
@@ -145,13 +162,15 @@ export class ModelResolver {
     _args: { data: CreateCalculatedFieldData },
     ctx: IContext,
   ) {
+    const { runtimeIdentity } = this.getRuntimeSelection(ctx);
     await this.ensureModelScope(ctx, _args.data.modelId);
     const eventName = TelemetryEvent.MODELING_CREATE_CF;
     try {
-      const column = await ctx.modelService.createCalculatedFieldScoped(
-        this.getActiveProjectId(ctx),
-        _args.data,
-      );
+      const column =
+        await ctx.modelService.createCalculatedFieldByRuntimeIdentity(
+          runtimeIdentity,
+          _args.data,
+        );
       ctx.telemetry.sendEvent(eventName, { data: _args.data });
       return column;
     } catch (err: any) {
@@ -184,6 +203,7 @@ export class ModelResolver {
     ctx: IContext,
   ) {
     const { data, where } = _args;
+    const { runtimeIdentity } = this.getRuntimeSelection(ctx);
     const column = await this.ensureColumnScope(
       ctx,
       where.id,
@@ -195,11 +215,12 @@ export class ModelResolver {
 
     const eventName = TelemetryEvent.MODELING_UPDATE_CF;
     try {
-      const column = await ctx.modelService.updateCalculatedFieldScoped(
-        this.getActiveProjectId(ctx),
-        data,
-        where.id,
-      );
+      const column =
+        await ctx.modelService.updateCalculatedFieldByRuntimeIdentity(
+          runtimeIdentity,
+          data,
+          where.id,
+        );
       ctx.telemetry.sendEvent(eventName, { data });
       return column;
     } catch (err: any) {
@@ -228,13 +249,30 @@ export class ModelResolver {
   }
 
   public async checkModelSync(_root: any, _args: any, ctx: IContext) {
-    const projectId = ctx.runtimeScope!.project.id;
-    const { manifest } = await ctx.mdlService.makeCurrentModelMDL(projectId);
-    const currentHash = ctx.deployService.createMDLHash(manifest, projectId);
-    const lastDeploy = await ctx.deployService.getLastDeployment(projectId);
+    const runtimeIdentity = this.getCurrentRuntimeIdentity(ctx);
+    const useRuntimeIdentity =
+      this.hasCanonicalRuntimeIdentity(runtimeIdentity);
+    const { manifest, project } = useRuntimeIdentity
+      ? await ctx.mdlService.makeCurrentModelMDLByRuntimeIdentity(
+          runtimeIdentity,
+        )
+      : await ctx.mdlService.makeCurrentModelMDL(
+          runtimeIdentity.projectId as number,
+        );
+    const currentHash = ctx.deployService.createMDLHashByRuntimeIdentity(
+      manifest,
+      runtimeIdentity,
+      project.id,
+    );
+    const lastDeploy =
+      await ctx.deployService.getLastDeploymentByRuntimeIdentity(
+        runtimeIdentity,
+      );
     const lastDeployHash = lastDeploy?.hash;
     const inProgressDeployment =
-      await ctx.deployService.getInProgressDeployment(projectId);
+      await ctx.deployService.getInProgressDeploymentByRuntimeIdentity(
+        runtimeIdentity,
+      );
     if (inProgressDeployment) {
       return { status: SyncStatusEnum.IN_PROGRESS };
     }
@@ -248,24 +286,40 @@ export class ModelResolver {
     args: { force: boolean },
     ctx: IContext,
   ): Promise<DeployResponse> {
-    const project = ctx.runtimeScope!.project;
+    const { projectBridgeId, runtimeIdentity } = this.getRuntimeSelection(ctx);
+    const useRuntimeIdentity =
+      this.hasCanonicalRuntimeIdentity(runtimeIdentity);
+    const mdlResult = useRuntimeIdentity
+      ? await ctx.mdlService.makeCurrentModelMDLByRuntimeIdentity(
+          runtimeIdentity,
+        )
+      : await ctx.mdlService.makeCurrentModelMDL(projectBridgeId as number);
+    const project =
+      mdlResult.project || (await this.getRuntimeProject(ctx, projectBridgeId));
+    const resolvedProjectId = project.id;
     if (!project.version && project.type !== DataSourceName.DUCKDB) {
       const version =
         await ctx.projectService.getProjectDataSourceVersion(project);
-      await ctx.projectService.updateProject(project.id, {
+      await ctx.projectService.updateProject(resolvedProjectId, {
         version,
       });
     }
-    const { manifest } = await ctx.mdlService.makeCurrentModelMDL(project.id);
+    const { manifest } = mdlResult;
     const deployRes = await ctx.deployService.deploy(
       manifest,
-      project.id,
+      {
+        ...runtimeIdentity,
+        projectId: resolvedProjectId,
+      },
       args.force,
     );
 
     // only generating for user's data source
     if (project.sampleDataset === null) {
-      await ctx.projectService.generateProjectRecommendationQuestions(project.id);
+      await ctx.projectService.generateProjectRecommendationQuestions(
+        resolvedProjectId,
+        this.getCurrentRuntimeScopeId(ctx),
+      );
     }
     return deployRes;
   }
@@ -279,8 +333,9 @@ export class ModelResolver {
   }
 
   public async listModels(_root: any, _args: any, ctx: IContext) {
-    const projectId = ctx.runtimeScope!.project.id;
-    const models = await ctx.modelRepository.findAllBy({ projectId });
+    const { runtimeIdentity } = this.getRuntimeSelection(ctx);
+    const models =
+      await ctx.modelService.listModelsByRuntimeIdentity(runtimeIdentity);
     const modelIds = models.map((m) => m.id);
     const modelColumnList =
       await ctx.modelColumnRepository.findColumnsByModelIds(modelIds);
@@ -386,7 +441,8 @@ export class ModelResolver {
     fields: [string],
     primaryKey: string,
   ) {
-    const project = ctx.runtimeScope!.project;
+    const { projectBridgeId, runtimeIdentity } = this.getRuntimeSelection(ctx);
+    const project = await this.getRuntimeProject(ctx, projectBridgeId);
     const dataSourceTables =
       await ctx.projectService.getProjectDataSourceTables(project);
     this.validateTableExist(sourceTableName, dataSourceTables);
@@ -400,8 +456,17 @@ export class ModelResolver {
       throw new Error('Table not found in the data source');
     }
     const properties = dataSourceTable?.properties;
+    const persistedProjectId = this.getPersistedProjectBridge(
+      runtimeIdentity,
+      projectBridgeId,
+    );
     const modelValue = {
-      projectId: project.id,
+      projectId: persistedProjectId,
+      workspaceId: runtimeIdentity.workspaceId ?? null,
+      knowledgeBaseId: runtimeIdentity.knowledgeBaseId ?? null,
+      kbSnapshotId: runtimeIdentity.kbSnapshotId ?? null,
+      deployHash: runtimeIdentity.deployHash ?? null,
+      actorUserId: runtimeIdentity.actorUserId ?? null,
       displayName: sourceTableName, //use table name as displayName, referenceName and tableName
       referenceName: replaceInvalidReferenceName(sourceTableName),
       sourceTableName: sourceTableName,
@@ -480,7 +545,8 @@ export class ModelResolver {
     fields: [string],
     primaryKey: string,
   ) {
-    const project = ctx.runtimeScope!.project;
+    const { projectBridgeId } = this.getRuntimeSelection(ctx);
+    const project = await this.getRuntimeProject(ctx, projectBridgeId);
     const dataSourceTables =
       await ctx.projectService.getProjectDataSourceTables(project);
     const model = await this.ensureModelScope(ctx, args.where.id);
@@ -790,8 +856,9 @@ export class ModelResolver {
 
   // list views
   public async listViews(_root: any, _args: any, ctx: IContext) {
-    const projectId = ctx.runtimeScope!.project.id;
-    const views = await ctx.viewRepository.findAllBy({ projectId });
+    const { runtimeIdentity } = this.getRuntimeSelection(ctx);
+    const views =
+      await ctx.modelService.getViewsByRuntimeIdentity(runtimeIdentity);
     return views.map((view) => ({
       ...view,
       displayName: view.properties
@@ -818,18 +885,14 @@ export class ModelResolver {
   // create view from sql of a response
   public async createView(_root: any, args: any, ctx: IContext) {
     const { name: displayName, responseId, rephrasedQuestion } = args.data;
-    await ctx.askingService.assertResponseScope(
-      responseId,
-      toPersistedRuntimeIdentity(ctx.runtimeScope!),
-    );
-    const project = await ctx.askingService.getResponseProject(responseId);
+    const { runtimeIdentity } = this.getRuntimeSelection(ctx);
+    await ctx.askingService.assertResponseScope(responseId, runtimeIdentity);
 
     // validate view name
     const validateResult = await this.validateViewName(
       displayName,
       ctx,
       undefined,
-      project.id,
     );
     if (!validateResult.valid) {
       throw new Error(validateResult.message);
@@ -838,14 +901,17 @@ export class ModelResolver {
     // get sql statement of a response
     const response = await ctx.askingService.getResponseScoped(
       responseId,
-      toPersistedRuntimeIdentity(ctx.runtimeScope!),
+      runtimeIdentity,
     );
     if (!response) {
       throw new Error(`Thread response ${responseId} not found`);
     }
-    const deployment = await ctx.deployService.getDeployment(
-      response.projectId || project.id,
-      response.deployHash,
+    const { project, manifest } = await this.getResponseExecutionContext(
+      ctx,
+      this.toExecutionRuntimeIdentitySource({
+        projectBridgeId: response.projectId ?? null,
+        deployHash: response.deployHash ?? null,
+      }),
     );
 
     // construct cte sql and format it
@@ -856,7 +922,7 @@ export class ModelResolver {
       project,
       limit: 1,
       modelingOnly: false,
-      manifest: deployment.manifest,
+      manifest,
     });
 
     if (isEmpty(columns)) {
@@ -873,6 +939,7 @@ export class ModelResolver {
       question: rephrasedQuestion,
     };
 
+    const persistedProjectId = this.getPersistedProjectBridge(runtimeIdentity);
     const eventName = TelemetryEvent.HOME_CREATE_VIEW;
     const eventProperties = {
       statement,
@@ -882,7 +949,12 @@ export class ModelResolver {
     try {
       const name = replaceAllowableSyntax(displayName);
       const view = await ctx.viewRepository.createOne({
-        projectId: project.id,
+        projectId: persistedProjectId,
+        workspaceId: runtimeIdentity.workspaceId ?? null,
+        knowledgeBaseId: runtimeIdentity.knowledgeBaseId ?? null,
+        kbSnapshotId: runtimeIdentity.kbSnapshotId ?? null,
+        deployHash: runtimeIdentity.deployHash ?? null,
+        actorUserId: runtimeIdentity.actorUserId ?? null,
         name,
         statement,
         properties: JSON.stringify(properties),
@@ -918,9 +990,13 @@ export class ModelResolver {
   public async previewModelData(_root: any, args: any, ctx: IContext) {
     const modelId = args.where.id;
     const model = await this.ensureModelScope(ctx, modelId);
-    const project = await ctx.projectService.getProjectById(model.projectId);
-    const { manifest } = await ctx.mdlService.makeCurrentModelMDL(
-      model.projectId,
+    const { runtimeIdentity } = this.getRuntimeSelection(ctx);
+    const { project, manifest } = await this.getResponseExecutionContext(
+      ctx,
+      this.toExecutionRuntimeIdentitySource({
+        projectBridgeId: model.projectId ?? null,
+        deployHash: model.deployHash ?? runtimeIdentity.deployHash ?? null,
+      }),
     );
     const modelColumns = await ctx.modelColumnRepository.findColumnsByModelIds([
       model.id,
@@ -939,10 +1015,14 @@ export class ModelResolver {
   public async previewViewData(_root: any, args: any, ctx: IContext) {
     const { id: viewId, limit } = args.where;
     const view = await this.ensureViewScope(ctx, viewId);
-    const { manifest } = await ctx.mdlService.makeCurrentModelMDL(
-      view.projectId,
+    const { runtimeIdentity } = this.getRuntimeSelection(ctx);
+    const { project, manifest } = await this.getResponseExecutionContext(
+      ctx,
+      this.toExecutionRuntimeIdentitySource({
+        projectBridgeId: view.projectId ?? null,
+        deployHash: view.deployHash ?? runtimeIdentity.deployHash ?? null,
+      }),
     );
-    const project = await ctx.projectService.getProjectById(view.projectId);
 
     const data = (await ctx.queryService.preview(view.statement, {
       project,
@@ -960,18 +1040,18 @@ export class ModelResolver {
     args: { data: PreviewSQLData },
     ctx: IContext,
   ) {
-    const { sql, projectId, limit, dryRun } = args.data;
-    const activeProjectId = ctx.runtimeScope!.project.id;
-    const resolvedProjectId = projectId
-      ? parseInt(projectId, 10)
-      : activeProjectId;
-    if (resolvedProjectId !== activeProjectId) {
-      throw new Error(
-        'previewSql projectId does not match active runtime scope',
-      );
+    const { sql, limit, dryRun, runtimeScopeId } = args.data;
+    const runtimeScope = runtimeScopeId
+      ? await ctx.runtimeScopeResolver.resolveRuntimeScopeId(runtimeScopeId)
+      : ctx.runtimeScope!;
+    const executionContext = await resolveRuntimeExecutionContext({
+      runtimeScope,
+      projectService: ctx.projectService,
+    });
+    if (!executionContext) {
+      throw new Error('No deployment found, please deploy your project first');
     }
-    const project = ctx.runtimeScope!.project;
-    const { manifest } = await ctx.deployService.getLastDeployment(project.id);
+    const { project, manifest } = executionContext;
     return await ctx.queryService.preview(sql, {
       project,
       limit: limit,
@@ -987,35 +1067,36 @@ export class ModelResolver {
     ctx: IContext,
   ): Promise<string> {
     const { responseId } = args;
-    await ctx.askingService.assertResponseScope(
-      responseId,
-      toPersistedRuntimeIdentity(ctx.runtimeScope!),
-    );
+    const { runtimeIdentity } = this.getRuntimeSelection(ctx);
+    await ctx.askingService.assertResponseScope(responseId, runtimeIdentity);
 
-    // If using a sample dataset, native SQL is not supported
-    const project = await ctx.askingService.getResponseProject(responseId);
-    if (project.sampleDataset) {
-      throw new Error(`Doesn't support Native SQL`);
-    }
     // get sql statement of a response
     const response = await ctx.askingService.getResponseScoped(
       responseId,
-      toPersistedRuntimeIdentity(ctx.runtimeScope!),
+      runtimeIdentity,
     );
     if (!response) {
       throw new Error(`Thread response ${responseId} not found`);
     }
-    const deployment = await ctx.deployService.getDeployment(
-      response.projectId || project.id,
-      response.deployHash,
+    const { project, manifest } = await this.getResponseExecutionContext(
+      ctx,
+      this.toExecutionRuntimeIdentitySource({
+        projectBridgeId: response.projectId ?? null,
+        deployHash: response.deployHash ?? null,
+      }),
     );
+
+    // If using a sample dataset, native SQL is not supported
+    if (project.sampleDataset) {
+      throw new Error(`Doesn't support Native SQL`);
+    }
 
     // construct cte sql and format it
     let nativeSql: string;
     if (project.type === DataSourceName.DUCKDB) {
       logger.info(`Getting native sql from wren engine`);
       nativeSql = await ctx.wrenEngineAdaptor.getNativeSQL(response.sql, {
-        manifest: deployment.manifest,
+        manifest,
         modelingOnly: false,
       });
     } else {
@@ -1023,7 +1104,7 @@ export class ModelResolver {
       nativeSql = await ctx.ibisServerAdaptor.getNativeSql({
         dataSource: project.type,
         sql: response.sql,
-        mdl: deployment.manifest,
+        mdl: manifest,
       });
     }
     const language = project.type === DataSourceName.MSSQL ? 'tsql' : undefined;
@@ -1045,7 +1126,7 @@ export class ModelResolver {
     let newName = view.name;
     // if displayName is not null, or undefined, update the displayName
     if (!isNil(data.displayName)) {
-      await this.validateViewName(data.displayName, ctx, viewId, view.projectId);
+      await this.validateViewName(data.displayName, ctx, viewId);
       newName = replaceAllowableSyntax(data.displayName);
       properties.displayName = this.determineMetadataValue(data.displayName);
     }
@@ -1098,33 +1179,13 @@ export class ModelResolver {
     viewDisplayName: string,
     ctx: IContext,
     selfView?: number,
-    projectId?: number,
   ): Promise<{ valid: boolean; message?: string }> {
-    // check if view name is valid
-    // a-z, A-Z, 0-9, _, - are allowed and cannot start with number
-    const { valid, message } = validateDisplayName(viewDisplayName);
-    if (!valid) {
-      return {
-        valid: false,
-        message,
-      };
-    }
-    const referenceName = replaceAllowableSyntax(viewDisplayName);
-    // check if view name is duplicated
-    const resolvedProjectId = projectId || ctx.runtimeScope!.project.id;
-    const views = await ctx.viewRepository.findAllBy({
-      projectId: resolvedProjectId,
-    });
-    if (views.find((v) => v.name === referenceName && v.id !== selfView)) {
-      return {
-        valid: false,
-        message: `Generated view name "${referenceName}" is duplicated`,
-      };
-    }
-
-    return {
-      valid: true,
-    };
+    const { runtimeIdentity } = this.getRuntimeSelection(ctx);
+    return ctx.modelService.validateViewNameByRuntimeIdentity(
+      runtimeIdentity,
+      viewDisplayName,
+      selfView,
+    );
   }
 
   private validateTableExist(
@@ -1153,8 +1214,170 @@ export class ModelResolver {
     }
   }
 
-  private getActiveProjectId(ctx: IContext) {
-    return ctx.runtimeScope!.project.id;
+  private getCurrentRuntimeIdentity(ctx: IContext) {
+    return this.normalizeRuntimeIdentity(
+      toPersistedRuntimeIdentity(ctx.runtimeScope!),
+    );
+  }
+
+  private getRuntimeSelection(ctx: IContext) {
+    const runtimeIdentity = this.getCurrentRuntimeIdentity(ctx);
+    return {
+      runtimeIdentity,
+      projectBridgeId: getRuntimeProjectBridgeId(
+        ctx.runtimeScope!,
+        runtimeIdentity.projectId ?? null,
+      ),
+    };
+  }
+
+  private getCurrentRuntimeScopeId(ctx: IContext) {
+    return ctx.runtimeScope?.selector?.runtimeScopeId || null;
+  }
+
+  private hasCanonicalRuntimeIdentity(
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ) {
+    return Boolean(
+      runtimeIdentity.workspaceId ||
+        runtimeIdentity.knowledgeBaseId ||
+        runtimeIdentity.kbSnapshotId ||
+        runtimeIdentity.deployHash,
+    );
+  }
+
+  private async getRuntimeProject(
+    ctx: IContext,
+    fallbackProjectBridgeId?: number | null,
+  ) {
+    const project = await resolveRuntimeProject(
+      ctx.runtimeScope!,
+      ctx.projectService,
+      fallbackProjectBridgeId,
+    );
+    if (!project) {
+      throw new Error('No project found for the active runtime scope');
+    }
+
+    return project;
+  }
+
+  private toExecutionRuntimeIdentitySource(
+    source?: {
+      projectBridgeId?: number | null;
+      workspaceId?: string | null;
+      knowledgeBaseId?: string | null;
+      kbSnapshotId?: string | null;
+      deployHash?: string | null;
+      actorUserId?: string | null;
+    } | null,
+  ): Partial<PersistedRuntimeIdentity> | null {
+    if (!source) {
+      return null;
+    }
+
+    const runtimeSource: Partial<PersistedRuntimeIdentity> = {};
+    if (Object.prototype.hasOwnProperty.call(source, 'projectBridgeId')) {
+      runtimeSource.projectId = source.projectBridgeId ?? null;
+    }
+    if (Object.prototype.hasOwnProperty.call(source, 'workspaceId')) {
+      runtimeSource.workspaceId = source.workspaceId ?? null;
+    }
+    if (Object.prototype.hasOwnProperty.call(source, 'knowledgeBaseId')) {
+      runtimeSource.knowledgeBaseId = source.knowledgeBaseId ?? null;
+    }
+    if (Object.prototype.hasOwnProperty.call(source, 'kbSnapshotId')) {
+      runtimeSource.kbSnapshotId = source.kbSnapshotId ?? null;
+    }
+    if (Object.prototype.hasOwnProperty.call(source, 'deployHash')) {
+      runtimeSource.deployHash = source.deployHash ?? null;
+    }
+    if (Object.prototype.hasOwnProperty.call(source, 'actorUserId')) {
+      runtimeSource.actorUserId = source.actorUserId ?? null;
+    }
+
+    return runtimeSource;
+  }
+
+  private buildExecutionRuntimeIdentity(
+    ctx: IContext,
+    source?: Partial<PersistedRuntimeIdentity> | null,
+  ) {
+    const { runtimeIdentity } = this.getRuntimeSelection(ctx);
+    const hasField = <K extends keyof PersistedRuntimeIdentity>(field: K) =>
+      source != null && Object.prototype.hasOwnProperty.call(source, field);
+
+    return this.normalizeRuntimeIdentity({
+      projectId: hasField('projectId')
+        ? source?.projectId ?? null
+        : runtimeIdentity.projectId ?? null,
+      workspaceId: hasField('workspaceId')
+        ? source?.workspaceId ?? null
+        : runtimeIdentity.workspaceId ?? null,
+      knowledgeBaseId: hasField('knowledgeBaseId')
+        ? source?.knowledgeBaseId ?? null
+        : runtimeIdentity.knowledgeBaseId ?? null,
+      kbSnapshotId: hasField('kbSnapshotId')
+        ? source?.kbSnapshotId ?? null
+        : runtimeIdentity.kbSnapshotId ?? null,
+      deployHash: hasField('deployHash')
+        ? source?.deployHash ?? null
+        : runtimeIdentity.deployHash ?? null,
+      actorUserId: hasField('actorUserId')
+        ? source?.actorUserId ?? null
+        : runtimeIdentity.actorUserId ?? null,
+    });
+  }
+
+  private normalizeRuntimeIdentity(
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ): PersistedRuntimeIdentity {
+    if (!this.hasCanonicalRuntimeIdentity(runtimeIdentity)) {
+      return runtimeIdentity;
+    }
+
+    return {
+      ...runtimeIdentity,
+      projectId: null,
+    };
+  }
+
+  private getPersistedProjectBridge(
+    runtimeIdentity: PersistedRuntimeIdentity,
+    fallbackProjectBridgeId?: number | null,
+  ) {
+    if (this.hasCanonicalRuntimeIdentity(runtimeIdentity)) {
+      return null;
+    }
+
+    return runtimeIdentity.projectId ?? fallbackProjectBridgeId ?? null;
+  }
+
+  private async getResponseExecutionContext(
+    ctx: IContext,
+    source?: Partial<PersistedRuntimeIdentity> | null,
+  ) {
+    const runtimeIdentity = this.buildExecutionRuntimeIdentity(ctx, source);
+    const deployment =
+      await ctx.deployService.getDeploymentByRuntimeIdentity(runtimeIdentity);
+    if (!deployment) {
+      throw new Error('No deployment found, please deploy your project first');
+    }
+
+    const project = await ctx.projectService.getProjectById(
+      deployment.projectId,
+    );
+
+    return {
+      runtimeIdentity: {
+        ...runtimeIdentity,
+        projectId: deployment.projectId,
+        deployHash: runtimeIdentity.deployHash ?? deployment.hash,
+      },
+      project,
+      deployment,
+      manifest: deployment.manifest,
+    };
   }
 
   private async ensureModelsScope(
@@ -1162,14 +1385,12 @@ export class ModelResolver {
     modelIds: number[],
     errorMessage = 'Model not found',
   ): Promise<Model[]> {
-    const uniqueModelIds = [...new Set(modelIds)];
-    const models = await ctx.modelRepository.findAllByIds(uniqueModelIds);
-    if (models.length !== uniqueModelIds.length) {
-      throw new Error(errorMessage);
-    }
-
-    const activeProjectId = this.getActiveProjectId(ctx);
-    if (models.some((model) => model.projectId !== activeProjectId)) {
+    const { runtimeIdentity } = this.getRuntimeSelection(ctx);
+    const models = await ctx.modelService.getModelsByRuntimeIdentity(
+      runtimeIdentity,
+      modelIds,
+    );
+    if (models.length !== [...new Set(modelIds)].length) {
       throw new Error(errorMessage);
     }
 
@@ -1181,7 +1402,14 @@ export class ModelResolver {
     modelId: number,
     errorMessage = 'Model not found',
   ): Promise<Model> {
-    const [model] = await this.ensureModelsScope(ctx, [modelId], errorMessage);
+    const { runtimeIdentity } = this.getRuntimeSelection(ctx);
+    const model = await ctx.modelService.getModelByRuntimeIdentity(
+      runtimeIdentity,
+      modelId,
+    );
+    if (!model) {
+      throw new Error(errorMessage);
+    }
     return model;
   }
 
@@ -1190,8 +1418,12 @@ export class ModelResolver {
     viewId: number,
     errorMessage = 'View not found',
   ): Promise<View> {
-    const view = await ctx.viewRepository.findOneBy({ id: viewId });
-    if (!view || view.projectId !== this.getActiveProjectId(ctx)) {
+    const { runtimeIdentity } = this.getRuntimeSelection(ctx);
+    const view = await ctx.modelService.getViewByRuntimeIdentity(
+      runtimeIdentity,
+      viewId,
+    );
+    if (!view) {
       throw new Error(errorMessage);
     }
 
@@ -1203,8 +1435,12 @@ export class ModelResolver {
     relationId: number,
     errorMessage = 'Relation not found',
   ): Promise<Relation> {
-    const relation = await ctx.relationRepository.findOneBy({ id: relationId });
-    if (!relation || relation.projectId !== this.getActiveProjectId(ctx)) {
+    const { runtimeIdentity } = this.getRuntimeSelection(ctx);
+    const relation = await ctx.modelService.getRelationByRuntimeIdentity(
+      runtimeIdentity,
+      relationId,
+    );
+    if (!relation) {
       throw new Error(errorMessage);
     }
 
@@ -1216,12 +1452,14 @@ export class ModelResolver {
     columnId: number,
     errorMessage = 'Column not found',
   ): Promise<ModelColumn> {
-    const column = await ctx.modelColumnRepository.findOneBy({ id: columnId });
+    const { runtimeIdentity } = this.getRuntimeSelection(ctx);
+    const column = await ctx.modelService.getColumnByRuntimeIdentity(
+      runtimeIdentity,
+      columnId,
+    );
     if (!column) {
       throw new Error(errorMessage);
     }
-
-    await this.ensureModelScope(ctx, column.modelId, errorMessage);
     return column;
   }
 }

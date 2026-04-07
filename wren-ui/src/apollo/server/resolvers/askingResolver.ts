@@ -1,6 +1,5 @@
 import {
   WrenAIError,
-  WrenAILanguage,
   AskResultStatus,
   AskResultType,
   SkillExecutionResult,
@@ -30,6 +29,10 @@ import {
 import { toPersistedRuntimeIdentity } from '../context/runtimeScope';
 import { TelemetryEvent, WrenService } from '../telemetry/telemetry';
 import { TrackedAskingResult } from '../services';
+import {
+  resolveProjectLanguage,
+  resolveRuntimeProject as resolveScopedRuntimeProject,
+} from '../utils/runtimeExecutionContext';
 
 const logger = getLogger('AskingResolver');
 logger.level = 'debug';
@@ -135,8 +138,10 @@ export class AskingResolver {
     _args: any,
     ctx: IContext,
   ): Promise<boolean> {
+    const project = await this.getActiveRuntimeProject(ctx);
     await ctx.projectService.generateProjectRecommendationQuestions(
-      ctx.runtimeScope!.project.id,
+      project.id,
+      this.getCurrentRuntimeScopeId(ctx),
     );
     return true;
   }
@@ -149,7 +154,10 @@ export class AskingResolver {
     const { threadId } = args;
     const askingService = ctx.askingService;
     await this.ensureThreadScope(ctx, threadId);
-    await askingService.generateThreadRecommendationQuestions(threadId);
+    await askingService.generateThreadRecommendationQuestions(
+      threadId,
+      this.getCurrentRuntimeScopeId(ctx),
+    );
     return true;
   }
 
@@ -169,7 +177,7 @@ export class AskingResolver {
     _args: any,
     ctx: IContext,
   ): Promise<SuggestedQuestionResponse> {
-    const project = ctx.runtimeScope!.project;
+    const project = await this.getActiveRuntimeProject(ctx);
     const { sampleDataset } = project;
     if (!sampleDataset) {
       return { questions: [] };
@@ -187,17 +195,15 @@ export class AskingResolver {
     if (threadId) {
       await this.ensureThreadScope(ctx, threadId);
     }
-    const project = threadId
-      ? await ctx.askingService.getThreadProject(threadId)
-      : ctx.runtimeScope!.project;
 
     const askingService = ctx.askingService;
     const data = { question };
     const task = await askingService.createAskingTask(data, {
-      ...this.getRuntimeIdentity(ctx, project.id),
+      runtimeScopeId: this.getCurrentRuntimeScopeId(ctx),
+      runtimeIdentity: this.getCurrentPersistedRuntimeIdentity(ctx),
       threadId,
       actorClaims: ctx.runtimeScope?.actorClaims || null,
-      language: WrenAILanguage[project.language] || WrenAILanguage.EN,
+      language: await this.getCurrentLanguage(ctx),
     });
     ctx.telemetry.sendEvent(TelemetryEvent.HOME_ASK_CANDIDATE, {
       question,
@@ -296,7 +302,7 @@ export class AskingResolver {
     try {
       const thread = await askingService.createThread(
         threadInput,
-        this.getRuntimeIdentity(ctx, ctx.runtimeScope!.project.id),
+        this.getCurrentPersistedRuntimeIdentity(ctx),
       );
       ctx.telemetry.sendEvent(eventName, {});
       return thread;
@@ -322,7 +328,7 @@ export class AskingResolver {
     const askingService = ctx.askingService;
     const responses = await askingService.getResponsesWithThreadScoped(
       threadId,
-      this.getCurrentRuntimeIdentity(ctx),
+      this.getCurrentPersistedRuntimeIdentity(ctx),
     );
     // reduce responses to group by thread id
     const thread = reduce(
@@ -368,7 +374,7 @@ export class AskingResolver {
     try {
       const thread = await askingService.updateThreadScoped(
         where.id,
-        this.getCurrentRuntimeIdentity(ctx),
+        this.getCurrentPersistedRuntimeIdentity(ctx),
         data,
       );
       // telemetry
@@ -399,7 +405,7 @@ export class AskingResolver {
     const askingService = ctx.askingService;
     await askingService.deleteThreadScoped(
       where.id,
-      this.getCurrentRuntimeIdentity(ctx),
+      this.getCurrentPersistedRuntimeIdentity(ctx),
     );
     return true;
   }
@@ -410,7 +416,7 @@ export class AskingResolver {
     ctx: IContext,
   ): Promise<Thread[]> {
     const threads = await ctx.askingService.listThreads(
-      this.getCurrentRuntimeIdentity(ctx),
+      this.getCurrentPersistedRuntimeIdentity(ctx),
     );
     return threads;
   }
@@ -456,7 +462,7 @@ export class AskingResolver {
       const response = await askingService.createThreadResponseScoped(
         threadResponseInput,
         threadId,
-        this.getCurrentRuntimeIdentity(ctx),
+        this.getCurrentPersistedRuntimeIdentity(ctx),
       );
       ctx.telemetry.sendEvent(eventName, { data });
       return response;
@@ -480,7 +486,7 @@ export class AskingResolver {
     const askingService = ctx.askingService;
     const response = await askingService.updateThreadResponseScoped(
       where.id,
-      this.getCurrentRuntimeIdentity(ctx),
+      this.getCurrentPersistedRuntimeIdentity(ctx),
       data,
     );
     return response;
@@ -494,11 +500,11 @@ export class AskingResolver {
     const { responseId } = args;
     const askingService = ctx.askingService;
     await this.ensureResponseScope(ctx, responseId);
-    const project = await askingService.getResponseProject(responseId);
 
     const task = await askingService.rerunAskingTask(responseId, {
-      ...this.getRuntimeIdentity(ctx, project.id),
-      language: WrenAILanguage[project.language] || WrenAILanguage.EN,
+      runtimeScopeId: this.getCurrentRuntimeScopeId(ctx),
+      runtimeIdentity: this.getCurrentPersistedRuntimeIdentity(ctx),
+      language: await this.getCurrentLanguage(ctx),
     });
     ctx.telemetry.sendEvent(TelemetryEvent.HOME_RERUN_ASKING_TASK, {
       responseId,
@@ -525,7 +531,7 @@ export class AskingResolver {
     if (data.sql) {
       const response = await askingService.adjustThreadResponseWithSQLScoped(
         responseId,
-        this.getCurrentRuntimeIdentity(ctx),
+        this.getCurrentPersistedRuntimeIdentity(ctx),
         {
           sql: data.sql,
         },
@@ -540,18 +546,16 @@ export class AskingResolver {
       return response;
     }
 
-    const project = await askingService.getResponseProject(responseId);
     return askingService.adjustThreadResponseAnswerScoped(
       responseId,
-      this.getCurrentRuntimeIdentity(ctx),
+      this.getCurrentPersistedRuntimeIdentity(ctx),
       {
-        projectId: project.id,
-        runtimeIdentity: this.getRuntimeIdentity(ctx, project.id),
+        runtimeIdentity: this.getCurrentPersistedRuntimeIdentity(ctx),
         tables: data.tables,
         sqlGenerationReasoning: data.sqlGenerationReasoning,
       },
       {
-        language: WrenAILanguage[project.language] || WrenAILanguage.EN,
+        language: await this.getCurrentLanguage(ctx),
       },
     );
   }
@@ -576,12 +580,11 @@ export class AskingResolver {
     const { responseId } = args;
     const askingService = ctx.askingService;
     await this.ensureResponseScope(ctx, responseId);
-    const project = await askingService.getResponseProject(responseId);
     await askingService.rerunAdjustThreadResponseAnswer(
       responseId,
-      this.getRuntimeIdentity(ctx, project.id),
+      this.getCurrentPersistedRuntimeIdentity(ctx),
       {
-        language: WrenAILanguage[project.language] || WrenAILanguage.EN,
+        language: await this.getCurrentLanguage(ctx),
       },
     );
     return true;
@@ -616,13 +619,12 @@ export class AskingResolver {
     const { responseId } = args;
     const askingService = ctx.askingService;
     await this.ensureResponseScope(ctx, responseId);
-    const project = await askingService.getResponseProject(responseId);
     const breakdownDetail =
       await askingService.generateThreadResponseBreakdownScoped(
-      responseId,
-      this.getCurrentRuntimeIdentity(ctx),
-      { language: WrenAILanguage[project.language] || WrenAILanguage.EN },
-    );
+        responseId,
+        this.getCurrentPersistedRuntimeIdentity(ctx),
+        { language: await this.getCurrentLanguage(ctx) },
+      );
     return breakdownDetail;
   }
 
@@ -634,12 +636,11 @@ export class AskingResolver {
     const { responseId } = args;
     const askingService = ctx.askingService;
     await this.ensureResponseScope(ctx, responseId);
-    const project = await askingService.getResponseProject(responseId);
     return askingService.generateThreadResponseAnswerScoped(
       responseId,
-      this.getCurrentRuntimeIdentity(ctx),
+      this.getCurrentPersistedRuntimeIdentity(ctx),
       {
-      language: WrenAILanguage[project.language] || WrenAILanguage.EN,
+        language: await this.getCurrentLanguage(ctx),
       },
     );
   }
@@ -652,12 +653,11 @@ export class AskingResolver {
     const { responseId } = args;
     const askingService = ctx.askingService;
     await this.ensureResponseScope(ctx, responseId);
-    const project = await askingService.getResponseProject(responseId);
     return askingService.generateThreadResponseChartScoped(
       responseId,
-      this.getCurrentRuntimeIdentity(ctx),
+      this.getCurrentPersistedRuntimeIdentity(ctx),
       {
-      language: WrenAILanguage[project.language] || WrenAILanguage.EN,
+        language: await this.getCurrentLanguage(ctx),
       },
     );
   }
@@ -670,13 +670,12 @@ export class AskingResolver {
     const { responseId, data } = args;
     const askingService = ctx.askingService;
     await this.ensureResponseScope(ctx, responseId);
-    const project = await askingService.getResponseProject(responseId);
     return askingService.adjustThreadResponseChartScoped(
       responseId,
-      this.getCurrentRuntimeIdentity(ctx),
+      this.getCurrentPersistedRuntimeIdentity(ctx),
       data,
       {
-        language: WrenAILanguage[project.language] || WrenAILanguage.EN,
+        language: await this.getCurrentLanguage(ctx),
       },
     );
   }
@@ -691,7 +690,7 @@ export class AskingResolver {
     await this.ensureResponseScope(ctx, responseId);
     const response = await askingService.getResponseScoped(
       responseId,
-      this.getCurrentRuntimeIdentity(ctx),
+      this.getCurrentPersistedRuntimeIdentity(ctx),
     );
 
     return response;
@@ -707,7 +706,7 @@ export class AskingResolver {
     await this.ensureResponseScope(ctx, responseId);
     const data = await askingService.previewDataScoped(
       responseId,
-      this.getCurrentRuntimeIdentity(ctx),
+      this.getCurrentPersistedRuntimeIdentity(ctx),
       limit,
     );
     return data;
@@ -723,7 +722,7 @@ export class AskingResolver {
     await this.ensureResponseScope(ctx, responseId);
     const data = await askingService.previewBreakdownDataScoped(
       responseId,
-      this.getCurrentRuntimeIdentity(ctx),
+      this.getCurrentPersistedRuntimeIdentity(ctx),
       stepIndex,
       limit,
     );
@@ -739,7 +738,8 @@ export class AskingResolver {
     const askingService = ctx.askingService;
     return askingService.createInstantRecommendedQuestions(
       data,
-      this.getCurrentRuntimeIdentity(ctx),
+      this.getCurrentPersistedRuntimeIdentity(ctx),
+      this.getCurrentRuntimeScopeId(ctx),
     );
   }
 
@@ -752,7 +752,7 @@ export class AskingResolver {
     const askingService = ctx.askingService;
     const result = await askingService.getInstantRecommendedQuestions(
       taskId,
-      this.getCurrentRuntimeIdentity(ctx),
+      this.getCurrentPersistedRuntimeIdentity(ctx),
     );
     return {
       questions: result.response?.questions || [],
@@ -810,7 +810,7 @@ export class AskingResolver {
       const askingService = ctx.askingService;
       await askingService.assertAskingTaskScopeById(
         parent.askingTaskId,
-        this.getCurrentRuntimeIdentity(ctx),
+        this.getCurrentPersistedRuntimeIdentity(ctx),
       );
       const askingTask = await askingService.getAskingTaskById(
         parent.askingTaskId,
@@ -832,7 +832,7 @@ export class AskingResolver {
       const askingService = ctx.askingService;
       await askingService.assertAskingTaskScopeById(
         parent.askingTaskId,
-        this.getCurrentRuntimeIdentity(ctx),
+        this.getCurrentPersistedRuntimeIdentity(ctx),
       );
       const adjustmentTask = await askingService.getAdjustmentTaskById(
         parent.askingTaskId,
@@ -877,34 +877,49 @@ export class AskingResolver {
     },
   });
 
-  private getRuntimeIdentity(ctx: IContext, projectId: number) {
-    return ctx.runtimeScope && ctx.runtimeScope.project.id === projectId
-      ? toPersistedRuntimeIdentity(ctx.runtimeScope)
-      : { projectId };
+  private getCurrentPersistedRuntimeIdentity(ctx: IContext) {
+    return toPersistedRuntimeIdentity(ctx.runtimeScope!);
   }
 
-  private getCurrentRuntimeIdentity(ctx: IContext) {
-    return toPersistedRuntimeIdentity(ctx.runtimeScope!);
+  private getCurrentRuntimeScopeId(ctx: IContext) {
+    return ctx.runtimeScope?.selector?.runtimeScopeId || null;
+  }
+
+  private async getActiveRuntimeProject(ctx: IContext) {
+    const project = await resolveScopedRuntimeProject(
+      ctx.runtimeScope!,
+      ctx.projectService,
+    );
+    if (!project) {
+      throw new Error('No project found for the active runtime scope');
+    }
+
+    return project;
+  }
+
+  private async getCurrentLanguage(ctx: IContext) {
+    const project = await this.getActiveRuntimeProject(ctx);
+    return resolveProjectLanguage(project);
   }
 
   private async ensureThreadScope(ctx: IContext, threadId: number) {
     await ctx.askingService.assertThreadScope(
       threadId,
-      this.getCurrentRuntimeIdentity(ctx),
+      this.getCurrentPersistedRuntimeIdentity(ctx),
     );
   }
 
   private async ensureResponseScope(ctx: IContext, responseId: number) {
     await ctx.askingService.assertResponseScope(
       responseId,
-      this.getCurrentRuntimeIdentity(ctx),
+      this.getCurrentPersistedRuntimeIdentity(ctx),
     );
   }
 
   private async ensureAskingTaskScope(ctx: IContext, taskId: string) {
     await ctx.askingService.assertAskingTaskScope(
       taskId,
-      this.getCurrentRuntimeIdentity(ctx),
+      this.getCurrentPersistedRuntimeIdentity(ctx),
     );
   }
 
@@ -955,18 +970,16 @@ export class AskingResolver {
   }
 
   private async findScopedView(ctx: IContext, viewId: number) {
-    const view = await ctx.viewRepository.findOneBy({ id: viewId });
-    if (!view || view.projectId !== ctx.runtimeScope!.project.id) {
-      return null;
-    }
-    return view;
+    return await ctx.modelService.getViewByRuntimeIdentity(
+      this.getCurrentPersistedRuntimeIdentity(ctx),
+      viewId,
+    );
   }
 
   private async findScopedSqlPair(ctx: IContext, sqlPairId: number) {
-    const sqlPair = await ctx.sqlPairRepository.findOneBy({ id: sqlPairId });
-    if (!sqlPair || sqlPair.projectId !== ctx.runtimeScope!.project.id) {
-      return null;
-    }
-    return sqlPair;
+    return await ctx.sqlPairService.getSqlPair(
+      toPersistedRuntimeIdentity(ctx.runtimeScope!),
+      sqlPairId,
+    );
   }
 }

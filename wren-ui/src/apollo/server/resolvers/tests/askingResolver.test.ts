@@ -13,6 +13,7 @@ describe('AskingResolver', () => {
   const createContext = (overrides: Record<string, any> = {}) =>
     ({
       runtimeScope: {
+        selector: { runtimeScopeId: 'runtime-scope-1' },
         project: { id: runtimeIdentity.projectId, language: 'EN' },
         workspace: { id: runtimeIdentity.workspaceId },
         knowledgeBase: { id: runtimeIdentity.knowledgeBaseId },
@@ -21,6 +22,14 @@ describe('AskingResolver', () => {
         userId: runtimeIdentity.actorUserId,
       },
       telemetry: { sendEvent: jest.fn() },
+      projectService: {
+        generateProjectRecommendationQuestions: jest.fn(),
+        getProjectById: jest.fn().mockResolvedValue({
+          id: runtimeIdentity.projectId,
+          language: 'EN',
+          sampleDataset: null,
+        }),
+      },
       askingService: {
         assertThreadScope: jest.fn().mockResolvedValue(undefined),
         assertAskingTaskScope: jest.fn().mockResolvedValue(undefined),
@@ -39,9 +48,17 @@ describe('AskingResolver', () => {
           response: [],
         }),
         cancelAskingTask: jest.fn().mockResolvedValue(undefined),
+        createAskingTask: jest.fn().mockResolvedValue({ id: 'task-99' }),
         createThread: jest.fn().mockResolvedValue({ id: 99 }),
         createThreadResponse: jest.fn().mockResolvedValue({ id: 199 }),
         createThreadResponseScoped: jest.fn().mockResolvedValue({ id: 199 }),
+        generateThreadRecommendationQuestions: jest
+          .fn()
+          .mockResolvedValue(undefined),
+        getThreadProject: jest.fn().mockResolvedValue({
+          id: runtimeIdentity.projectId,
+          language: 'EN',
+        }),
         getResponsesWithThreadScoped: jest.fn().mockResolvedValue([]),
         updateThreadScoped: jest.fn().mockResolvedValue({ id: 99 }),
         deleteThreadScoped: jest.fn().mockResolvedValue(undefined),
@@ -67,7 +84,9 @@ describe('AskingResolver', () => {
         getResponseScoped: jest.fn().mockResolvedValue({ id: 199 }),
         previewDataScoped: jest.fn().mockResolvedValue([]),
         previewBreakdownDataScoped: jest.fn().mockResolvedValue([]),
-        cancelAdjustThreadResponseAnswer: jest.fn().mockResolvedValue(undefined),
+        cancelAdjustThreadResponseAnswer: jest
+          .fn()
+          .mockResolvedValue(undefined),
         getAdjustmentTaskById: jest.fn().mockResolvedValue({
           queryId: 'task-1',
           status: 'FINISHED',
@@ -96,6 +115,12 @@ describe('AskingResolver', () => {
       viewRepository: {
         findOneBy: jest.fn(),
       },
+      modelService: {
+        getViewByRuntimeIdentity: jest.fn(),
+      },
+      sqlPairService: {
+        getSqlPair: jest.fn(),
+      },
       sqlPairRepository: {
         findOneBy: jest.fn(),
       },
@@ -112,6 +137,38 @@ describe('AskingResolver', () => {
       'task-1',
       runtimeIdentity,
     );
+  });
+
+  it('scopes project recommendation generation to the active runtime identity', async () => {
+    const resolver = new AskingResolver();
+    const ctx = createContext();
+
+    await resolver.generateProjectRecommendationQuestions(null, {}, ctx);
+
+    expect(
+      ctx.projectService.generateProjectRecommendationQuestions,
+    ).toHaveBeenCalledWith(runtimeIdentity.projectId, 'runtime-scope-1');
+  });
+
+  it('falls back to deployment.projectId when runtime scope project is absent', async () => {
+    const resolver = new AskingResolver();
+    const ctx = createContext({
+      runtimeScope: {
+        project: null,
+        deployment: { projectId: runtimeIdentity.projectId },
+        workspace: { id: runtimeIdentity.workspaceId },
+        knowledgeBase: { id: runtimeIdentity.knowledgeBaseId },
+        kbSnapshot: { id: runtimeIdentity.kbSnapshotId },
+        deployHash: runtimeIdentity.deployHash,
+        userId: runtimeIdentity.actorUserId,
+      },
+    });
+
+    await resolver.generateProjectRecommendationQuestions(null, {}, ctx);
+
+    expect(
+      ctx.projectService.generateProjectRecommendationQuestions,
+    ).toHaveBeenCalledWith(runtimeIdentity.projectId, null);
   });
 
   it('scopes askingTask cancellation to the active runtime identity', async () => {
@@ -131,11 +188,7 @@ describe('AskingResolver', () => {
     const resolver = new AskingResolver();
     const ctx = createContext();
 
-    await resolver.createThread(
-      null,
-      { data: { taskId: 'task-1' } },
-      ctx,
-    );
+    await resolver.createThread(null, { data: { taskId: 'task-1' } }, ctx);
 
     expect(ctx.askingService.assertAskingTaskScope).toHaveBeenCalledWith(
       'task-1',
@@ -150,6 +203,59 @@ describe('AskingResolver', () => {
         }),
       },
       runtimeIdentity,
+    );
+  });
+
+  it('creates asking task with the active runtime identity', async () => {
+    const resolver = new AskingResolver();
+    const ctx = createContext();
+
+    await resolver.createAskingTask(
+      null,
+      { data: { question: 'What happened?' } },
+      ctx,
+    );
+
+    expect(ctx.askingService.createAskingTask).toHaveBeenCalledWith(
+      { question: 'What happened?' },
+      expect.objectContaining({
+        runtimeScopeId: 'runtime-scope-1',
+        runtimeIdentity,
+        actorClaims: null,
+        threadId: undefined,
+        language: 'English',
+      }),
+    );
+  });
+
+  it('loads language from projectService when runtime scope project is absent', async () => {
+    const resolver = new AskingResolver();
+    const ctx = createContext({
+      runtimeScope: {
+        project: null,
+        deployment: { projectId: runtimeIdentity.projectId },
+        workspace: { id: runtimeIdentity.workspaceId },
+        knowledgeBase: { id: runtimeIdentity.knowledgeBaseId },
+        kbSnapshot: { id: runtimeIdentity.kbSnapshotId },
+        deployHash: runtimeIdentity.deployHash,
+        userId: runtimeIdentity.actorUserId,
+      },
+    });
+
+    await resolver.createAskingTask(
+      null,
+      { data: { question: 'What happened?' } },
+      ctx,
+    );
+
+    expect(ctx.projectService.getProjectById).toHaveBeenCalledWith(
+      runtimeIdentity.projectId,
+    );
+    expect(ctx.askingService.createAskingTask).toHaveBeenCalledWith(
+      { question: 'What happened?' },
+      expect.objectContaining({
+        language: 'English',
+      }),
     );
   });
 
@@ -214,7 +320,30 @@ describe('AskingResolver', () => {
 
     expect(
       ctx.askingService.createInstantRecommendedQuestions,
-    ).toHaveBeenCalledWith({ previousQuestions: ['q0'] }, runtimeIdentity);
+    ).toHaveBeenCalledWith(
+      { previousQuestions: ['q0'] },
+      runtimeIdentity,
+      'runtime-scope-1',
+    );
+  });
+
+  it('passes runtime scope when generating thread recommended questions', async () => {
+    const resolver = new AskingResolver();
+    const ctx = createContext();
+
+    await resolver.generateThreadRecommendationQuestions(
+      null,
+      { threadId: 12 },
+      ctx,
+    );
+
+    expect(ctx.askingService.assertThreadScope).toHaveBeenCalledWith(
+      12,
+      runtimeIdentity,
+    );
+    expect(
+      ctx.askingService.generateThreadRecommendationQuestions,
+    ).toHaveBeenCalledWith(12, 'runtime-scope-1');
   });
 
   it('scopes instant recommended questions lookup to the active runtime identity', async () => {
@@ -227,10 +356,9 @@ describe('AskingResolver', () => {
       ctx,
     );
 
-    expect(ctx.askingService.getInstantRecommendedQuestions).toHaveBeenCalledWith(
-      'instant-1',
-      runtimeIdentity,
-    );
+    expect(
+      ctx.askingService.getInstantRecommendedQuestions,
+    ).toHaveBeenCalledWith('instant-1', runtimeIdentity);
   });
 
   it('hides candidate views and sql pairs outside the active project', async () => {
@@ -259,6 +387,9 @@ describe('AskingResolver', () => {
           name: 'foreign_view',
         }),
       },
+      modelService: {
+        getViewByRuntimeIdentity: jest.fn().mockResolvedValue(null),
+      },
       sqlPairRepository: {
         findOneBy: jest.fn().mockResolvedValue({
           id: 20,
@@ -267,10 +398,25 @@ describe('AskingResolver', () => {
           sql: 'select 2',
         }),
       },
+      sqlPairService: {
+        getSqlPair: jest.fn().mockResolvedValue(null),
+      },
     });
 
-    const result = await resolver.getAskingTask(null, { taskId: 'task-1' }, ctx);
+    const result = await resolver.getAskingTask(
+      null,
+      { taskId: 'task-1' },
+      ctx,
+    );
 
+    expect(ctx.modelService.getViewByRuntimeIdentity).toHaveBeenCalledWith(
+      runtimeIdentity,
+      10,
+    );
+    expect(ctx.sqlPairService.getSqlPair).toHaveBeenCalledWith(
+      runtimeIdentity,
+      20,
+    );
     expect(result.candidates).toEqual([
       expect.objectContaining({
         view: null,
@@ -282,19 +428,18 @@ describe('AskingResolver', () => {
   it('returns null for thread response view outside the active project', async () => {
     const resolver = new AskingResolver();
     const ctx = createContext({
-      viewRepository: {
-        findOneBy: jest.fn().mockResolvedValue({
-          id: 10,
-          projectId: 99,
-          name: 'foreign_view',
-          properties: JSON.stringify({ displayName: 'Foreign' }),
-        }),
+      modelService: {
+        getViewByRuntimeIdentity: jest.fn().mockResolvedValue(null),
       },
     });
 
     const nested = resolver.getThreadResponseNestedResolver();
     const result = await nested.view({ viewId: 10 } as any, null, ctx);
 
+    expect(ctx.modelService.getViewByRuntimeIdentity).toHaveBeenCalledWith(
+      runtimeIdentity,
+      10,
+    );
     expect(result).toBeNull();
   });
 
