@@ -7,12 +7,9 @@ import {
   ApiError,
   respondWith,
   handleApiError,
+  deriveRuntimeExecutionContextFromRequest,
 } from '@/apollo/server/utils/apiUtils';
-import {
-  ChartResult,
-  ChartStatus,
-  WrenAILanguage,
-} from '@/apollo/server/models/adaptor';
+import { ChartResult, ChartStatus } from '@/apollo/server/models/adaptor';
 import { PreviewDataResponse } from '@server/services/queryService';
 import { transformToObjects } from '@server/utils/dataUtils';
 import { enhanceVegaSpec } from '@/utils/vegaSpecUtils';
@@ -51,7 +48,6 @@ interface GenerateVegaSpecRequest {
   knowledgeBaseId?: string;
   kbSnapshotId?: string;
   deployHash?: string;
-  projectId?: number;
 }
 
 export default async function handler(
@@ -65,7 +61,6 @@ export default async function handler(
     sampleSize = 10000,
   } = req.body as GenerateVegaSpecRequest;
   const startTime = Date.now();
-  let project;
   let runtimeScope;
 
   try {
@@ -91,16 +86,13 @@ export default async function handler(
       throw new ApiError('Invalid sampleSize', 400);
     }
 
-    runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
-    project = runtimeScope.project;
-    const lastDeploy = runtimeScope.deployment;
-    if (!lastDeploy) {
-      throw new ApiError(
-        'No deployment found, please deploy your project first',
-        400,
-        Errors.GeneralErrorCodes.NO_DEPLOYMENT_FOUND,
-      );
-    }
+    const derivedContext = await deriveRuntimeExecutionContextFromRequest({
+      req,
+      runtimeScopeResolver,
+    });
+    runtimeScope = derivedContext.runtimeScope;
+    const { project, language, manifest, runtimeIdentity } =
+      derivedContext.executionContext;
 
     // Execute the SQL query to get the data
     let queryResult: PreviewDataResponse;
@@ -108,7 +100,7 @@ export default async function handler(
       queryResult = (await queryService.preview(sql, {
         project,
         limit: sampleSize,
-        manifest: lastDeploy.manifest,
+        manifest,
         modelingOnly: false,
       })) as PreviewDataResponse;
     } catch (queryError) {
@@ -129,9 +121,11 @@ export default async function handler(
     const task = await wrenAIAdaptor.generateChart({
       query: question,
       sql,
-      projectId: project.id.toString(),
+      data: queryResult,
+      runtimeScopeId: runtimeScope.selector.runtimeScopeId || undefined,
+      runtimeIdentity,
       configurations: {
-        language: WrenAILanguage[project.language] || WrenAILanguage.EN,
+        language,
       },
     });
 
@@ -182,7 +176,6 @@ export default async function handler(
         vegaSpec: enhancedVegaSpec,
         threadId: newThreadId,
       },
-      projectId: project.id,
       runtimeScope,
       apiType: ApiType.GENERATE_VEGA_CHART,
       startTime,
@@ -194,7 +187,6 @@ export default async function handler(
     await handleApiError({
       error,
       res,
-      projectId: project?.id,
       runtimeScope,
       apiType: ApiType.GENERATE_VEGA_CHART,
       requestPayload: req.body,

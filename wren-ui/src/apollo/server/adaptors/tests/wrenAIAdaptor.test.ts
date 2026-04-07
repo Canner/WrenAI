@@ -500,12 +500,22 @@ describe('WrenAIAdaptor', () => {
       );
     });
 
-    it('should generate charts with runtime identity instead of top-level project_id', async () => {
+    it('should generate charts with runtime scope payload instead of re-resolving top-level project_id', async () => {
       mockedAxios.post.mockResolvedValueOnce({ data: { query_id: 'chart-1' } });
+
+      const sqlData = {
+        columns: ['status', 'total'],
+        data: [
+          ['paid', 10],
+          ['pending', 3],
+        ],
+      };
 
       const result = await adaptor.generateChart({
         query: '本月 GMV',
         sql: 'SELECT 1',
+        data: sqlData,
+        runtimeScopeId: 'scope-1',
         runtimeIdentity: {
           workspaceId: 'workspace-1',
           knowledgeBaseId: 'kb-1',
@@ -518,6 +528,8 @@ describe('WrenAIAdaptor', () => {
       expect(mockedAxios.post).toHaveBeenCalledWith(
         `${baseEndpoint}/v1/charts`,
         expect.objectContaining({
+          data: sqlData,
+          runtime_scope_id: 'scope-1',
           runtime_identity: expect.objectContaining({
             deployHash: 'deploy-1',
           }),

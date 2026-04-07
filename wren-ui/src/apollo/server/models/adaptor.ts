@@ -362,6 +362,8 @@ export enum ChartType {
 export interface ChartInput {
   query: string;
   sql: string;
+  data?: any;
+  runtimeScopeId?: string;
   runtimeIdentity?: AskRuntimeIdentity | null;
   configurations?: ProjectConfigurations;
 }

@@ -782,6 +782,8 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     return {
       query: input.query,
       sql: input.sql,
+      data: input.data,
+      runtime_scope_id: input.runtimeScopeId,
       runtime_identity: this.transformRuntimeIdentity(input.runtimeIdentity),
       configurations: input.configurations,
     };
