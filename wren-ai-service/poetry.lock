@@ -3961,14 +3961,14 @@ test-extras = ["pytest-mpl", "pytest-randomly"]
 
 [[package]]
 name = "nltk"
-version = "3.9.3"
+version = "3.9.4"
 description = "Natural Language Toolkit"
 optional = false
 python-versions = ">=3.10"
 groups = ["dev"]
 files = [
-    {file = "nltk-3.9.3-py3-none-any.whl", hash = "sha256:60b3db6e9995b3dd976b1f0fa7dec22069b2677e759c28eb69b62ddd44870522"},
-    {file = "nltk-3.9.3.tar.gz", hash = "sha256:cb5945d6424a98d694c2b9a0264519fab4363711065a46aa0ae7a2195b92e71f"},
+    {file = "nltk-3.9.4-py3-none-any.whl", hash = "sha256:f2fa301c3a12718ce4a0e9305c5675299da5ad9e26068218b69d692fda84828f"},
+    {file = "nltk-3.9.4.tar.gz", hash = "sha256:ed03bc098a40481310320808b2db712d95d13ca65b27372f8a403949c8b523d0"},
 ]
 
 [package.dependencies]
@@ -7789,4 +7789,4 @@ testing = ["coverage[toml]", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12.*, <3.13"
-content-hash = "a14c580387d223bfc744e255cf0ec3e173ad3ed4f078c0f8b59126ad379539f8"
+content-hash = "4711d4517aca36796fbf45eef618be9bced3760b5e89703f2b3e806a4820aa89"
