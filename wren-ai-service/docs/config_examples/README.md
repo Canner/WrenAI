@@ -4,6 +4,16 @@ Since these config files are examples, so **please carefully read the file and c
 
 We also definitely welcome your contribution to add config files for other LLM providers.
 
+## Eval / benchmark note
+
+If you are configuring Spider/BIRD eval runs with PostgreSQL-backed benchmark loading:
+
+- prefer the explicit `spider_benchmark_db_target` form when you want one isolated PostgreSQL database per benchmark catalog via `{db_name}`
+- use `postgres_host` / `postgres_port` (or the DSN target itself) for the **host-side published PostgreSQL address** seen by `just predict` / `just eval`
+- do not blindly reuse container-internal addresses like `postgres:5432` for host-run eval commands unless the component that consumes the setting is also running inside the Docker network
+
+The full benchmark-setting details now live in [`../configuration.md`](../configuration.md) and [`../../eval/README.md`](../../eval/README.md).
+
 ## Qwen3 Think and No_Think Configuration
 
 The `config.qwen3.yaml` file provides an example configuration for using Qwen3 models with their unique thinking and non-thinking capabilities. Qwen3 models support two modes:

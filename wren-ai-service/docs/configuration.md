@@ -95,7 +95,7 @@ The configuration file (`config.yaml`) is structured into several sections, each
    provider: <provider_name>
    ```
 
-   This component configures the document store, which is responsible for storing and retrieving embeddings. The `provider` specifies the document store service (e.g., Qdrant).
+   This component configures the document store, which is responsible for storing and retrieving embeddings. The `provider` specifies the document store service (e.g., pgvector).
 
 5. **Pipeline Configuration**:
 
@@ -139,5 +139,31 @@ The configuration file (`config.yaml`) is structured into several sections, each
    ```
 
    This section defines various service settings including host, port, indexing and retrieval parameters, cache settings, Langfuse configuration, logging level, and development mode.
+
+### Eval benchmark settings
+
+`EvalSettings` extends the main `Settings` model, so eval-only keys can also live under the same `settings:` block in `config.yaml`.
+
+Useful optional keys for Spider/BIRD benchmark runs:
+
+```yaml
+settings:
+  eval_data_db_path: etc/spider1.0/database
+  spider_benchmark_db_target: postgresql://postgres:postgres@localhost:9432/{db_name}?schema=public
+  # or use a single reusable PostgreSQL database instead of {db_name} templates:
+  spider_benchmark_use_postgres: true
+  spider_benchmark_postgres_schema: public
+  postgres_host: localhost
+  postgres_port: 9432
+  postgres_user: postgres
+  postgres_password: postgres
+  postgres_database: wrenai
+```
+
+Notes:
+
+- `spider_benchmark_db_target` is the most explicit option and supports `{db_name}` templates for one benchmark database per catalog.
+- `spider_benchmark_use_postgres: true` builds a single PostgreSQL benchmark target from `postgres_*` + `spider_benchmark_postgres_schema`.
+- When you run eval commands from the host, `postgres_host` / `postgres_port` (or the explicit DSN target) must point to the **host-side published PostgreSQL address** exposed by your local stack. Depending on your compose setup this may be `localhost:9432` or `localhost:5432`.
 
 This configuration file allows for detailed customization of the AI service components, pipelines, and overall behavior. It provides a centralized place to manage complex configurations while keeping sensitive information separate (managed through environment variables). See [Full Configuration File](../tools/config/config.full.yaml) for a complete example.

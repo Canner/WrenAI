@@ -48,6 +48,80 @@ The command performs two main steps:
 
 Each evaluation dataset contains questions, SQL queries, and relevant context needed for testing the system's text-to-SQL capabilities.
 
+## Benchmark SQLite exception
+
+The product runtime and local development stack are PostgreSQL-first.
+However, the evaluation pipeline still contains intentional SQLite references for upstream benchmark compatibility:
+
+- Spider execution / exact-match helpers open the benchmark `.sqlite` databases directly.
+- Bird preparation reads the upstream `mini_dev_sqlite.json` file name as provided by the dataset.
+- DuckDB helper setup attaches benchmark `.sqlite` files before loading them into PostgreSQL for eval flows that require that conversion.
+
+Treat these SQLite references as **benchmark artifact compatibility**, not as guidance for the main application database.
+
+There is now an **experimental PostgreSQL adapter entry point** inside the Spider metrics helpers:
+
+- exact-match / execution helpers can resolve a PostgreSQL DSN template instead of a `.sqlite` path
+- PostgreSQL schema introspection is supported through `information_schema.columns`
+- execution falls back to a single PostgreSQL target instead of a sibling `.sqlite` testsuite directory
+- prediction / evaluation reload now resolves `{db_name}`, creates the target benchmark database when needed, and imports the upstream SQLite asset into that exact PostgreSQL target
+
+This is only a first migration step. The default benchmark path remains SQLite-backed until execution-parity against the upstream testsuite is proven.
+
+If you want to exercise that adapter explicitly, set an optional benchmark target in `config.yaml`:
+
+```yaml
+spider_benchmark_db_target: "postgresql://postgres:postgres@localhost:<published-postgres-port>/{db_name}?schema=public"
+```
+
+`{db_name}` is replaced with the current benchmark catalog name. If this field is omitted, Spider metrics continue using the existing `eval_data_db_path` / SQLite dataset layout.
+
+Use the **host-side PostgreSQL port published by your local stack** in this DSN (for example `9432` in the current local Wren docker-compose stack). The loader will map that host-side target back to the matching Docker network/container alias for `pgloader`.
+
+You can also opt into the default PostgreSQL benchmark target without hardcoding the full DSN template:
+
+```yaml
+spider_benchmark_use_postgres: true
+spider_benchmark_postgres_schema: public
+postgres_host: localhost
+postgres_port: 9432
+postgres_user: postgres
+postgres_password: postgres
+postgres_database: wrenai
+```
+
+This shorthand targets **one PostgreSQL database** built from the `postgres_*` settings above.
+Use it when you want the current benchmark to be imported into a single reusable database (for example `wrenai`).
+
+If you want **one isolated PostgreSQL database per benchmark catalog**, prefer the explicit DSN template form:
+
+```yaml
+spider_benchmark_db_target: "postgresql://postgres:postgres@localhost:9432/{db_name}?schema=public"
+```
+
+For host-run `just predict` / `just eval` flows, make sure `postgres_host` / `postgres_port` (or the explicit DSN template) point to the **host-side published PostgreSQL address** that your local stack exposes. In the current local Wren stack this is often `localhost:9432`, while other compose setups may still publish `localhost:5432`.
+
+Prediction outputs now persist both `eval_data_db_path` and `spider_benchmark_db_target` in their metadata so `just eval ...` can reload the same benchmark source into PostgreSQL before running Spider metrics.
+
+For the PostgreSQL-backed rehearsal path:
+
+- benchmark SQLite databases are imported without `quote identifiers`
+- PostgreSQL execution lowers double-quoted identifiers before execution so canonical Spider SQL remains compatible with the case-normalized import
+- non-`public` benchmark schemas are supported by moving imported tables into the requested schema and setting the target database `search_path`
+
+You can run a synthetic end-to-end loader smoke test locally:
+
+```cli
+just eval-postgres-loader-smoke "postgresql://postgres:postgres@localhost:9432/smoke_{db_name}?schema=analytics"
+```
+
+That command:
+
+1. creates a tiny temporary SQLite benchmark DB under `tools/dev/etc/tmp-loader-smoke`
+2. imports it through `load_eval_data_db_to_postgres()`
+3. verifies both unqualified and schema-qualified PostgreSQL reads
+4. drops the temporary PostgreSQL database and temp SQLite source unless `--keep-artifacts` is used directly via the Python script
+
 ## Evaluation Dataset Schema
 
 - dataset_id(UUID)

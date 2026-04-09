@@ -74,43 +74,43 @@ manifest: ""
 
 ---
 type: document_store
-provider: qdrant
-location: http://localhost:6333
-embedding_model_dim: 3072
+provider: pgvector
+connection_string_env: PG_CONN_STR
+embedding_dimension: 3072
 timeout: 120
-recreate_index: false
+recreate_table: false
 
 ---
 type: pipeline
 pipes:
   - name: db_schema_indexing
     embedder: litellm_embedder.default
-    document_store: qdrant
+    document_store: pgvector
   - name: historical_question_indexing
     embedder: litellm_embedder.default
-    document_store: qdrant
+    document_store: pgvector
   - name: table_description_indexing
     embedder: litellm_embedder.default
-    document_store: qdrant
+    document_store: pgvector
   - name: db_schema_retrieval
     llm: litellm_llm.default
     embedder: litellm_embedder.default
-    document_store: qdrant
+    document_store: pgvector
   - name: historical_question_retrieval
     embedder: litellm_embedder.default
-    document_store: qdrant
+    document_store: pgvector
   - name: sql_generation
     llm: litellm_llm.default
     engine: wren_ui
-    document_store: qdrant
+    document_store: pgvector
   - name: sql_correction
     llm: litellm_llm.default
     engine: wren_ui
-    document_store: qdrant
+    document_store: pgvector
   - name: followup_sql_generation
     llm: litellm_llm.default
     engine: wren_ui
-    document_store: qdrant
+    document_store: pgvector
   - name: sql_answer
     llm: litellm_llm.default
   - name: semantics_description
@@ -122,7 +122,7 @@ pipes:
   - name: question_recommendation_sql_generation
     llm: litellm_llm.default
     engine: wren_ui
-    document_store: qdrant
+    document_store: pgvector
   - name: chart_generation
     llm: litellm_llm.default
   - name: chart_adjustment
@@ -130,16 +130,16 @@ pipes:
   - name: intent_classification
     llm: litellm_llm.default
     embedder: litellm_embedder.default
-    document_store: qdrant
+    document_store: pgvector
   - name: misleading_assistance
     llm: litellm_llm.default
   - name: data_assistance
     llm: litellm_llm.default
   - name: sql_pairs_indexing
-    document_store: qdrant
+    document_store: pgvector
     embedder: litellm_embedder.default
   - name: sql_pairs_retrieval
-    document_store: qdrant
+    document_store: pgvector
     embedder: litellm_embedder.default
     llm: litellm_llm.default
   - name: preprocess_sql_data
@@ -161,15 +161,15 @@ pipes:
     llm: litellm_llm.default
   - name: instructions_indexing
     embedder: litellm_embedder.default
-    document_store: qdrant
+    document_store: pgvector
   - name: instructions_retrieval
     embedder: litellm_embedder.default
-    document_store: qdrant
+    document_store: pgvector
   - name: sql_functions_retrieval
     engine: wren_ibis
-    document_store: qdrant
+    document_store: pgvector
   - name: project_meta_indexing
-    document_store: qdrant
+    document_store: pgvector
   - name: sql_tables_extraction
     llm: litellm_llm.default
   - name: sql_diagnosis
@@ -179,6 +179,20 @@ pipes:
 settings:
   host: 127.0.0.1
   port: 5556
+  # Eval-only benchmark settings (optional):
+  # For host-run Spider/BIRD PostgreSQL eval flows, point these at the
+  # host-side published PostgreSQL address exposed by your local stack.
+  # If you want one isolated PostgreSQL database per benchmark catalog,
+  # prefer spider_benchmark_db_target with a {db_name} template.
+  # eval_data_db_path: etc/spider1.0/database
+  # spider_benchmark_db_target: postgresql://postgres:postgres@localhost:9432/{db_name}?schema=public
+  # spider_benchmark_use_postgres: true
+  # spider_benchmark_postgres_schema: public
+  # postgres_host: localhost
+  # postgres_port: 9432
+  # postgres_user: postgres
+  # postgres_password: postgres
+  # postgres_database: wrenai
   doc_endpoint: https://docs.getwren.ai
   is_oss: true
   engine_timeout: 30

@@ -1,21 +1,26 @@
 import argparse
 import sys
+import traceback
 from pathlib import Path
-from typing import Tuple
+from typing import Any, Tuple
 
 from deepeval import evaluate
-from deepeval.evaluate import TestResult
 from deepeval.test_case import LLMTestCase
 from langfuse import Langfuse
 from langfuse.decorators import langfuse_context, observe
 
 sys.path.append(f"{Path().parent.resolve()}")
-import traceback
 
 import eval.pipelines as pipelines
 import src.providers as provider
-from eval import EvalSettings
-from eval.utils import parse_toml, trace_metadata
+from eval import EvalSettings, default_eval_data_db_path
+from eval.metrics.spider.database import is_postgres_target
+from eval.utils import (
+    load_eval_data_db_to_postgres,
+    parse_db_name,
+    parse_toml,
+    trace_metadata,
+)
 from src import utils
 
 
@@ -88,6 +93,36 @@ def parse_args() -> Tuple[str]:
     return parser.parse_args()
 
 
+def prepare_spider_benchmark_target(meta: dict, settings: EvalSettings) -> None:
+    benchmark_target = meta.get("spider_benchmark_db_target")
+    if benchmark_target:
+        settings.spider_benchmark_db_target = benchmark_target
+
+    evaluation_dataset = meta.get("evaluation_dataset", "")
+    source_path = meta.get("eval_data_db_path") or default_eval_data_db_path(
+        evaluation_dataset
+    )
+    if source_path:
+        settings.eval_data_db_path = source_path
+
+    if not any(dataset in evaluation_dataset for dataset in ("spider_", "bird_")):
+        return
+
+    if not is_postgres_target(settings.effective_spider_benchmark_db_target):
+        return
+
+    if not settings.eval_data_db_path:
+        raise ValueError(
+            "PostgreSQL-backed Spider benchmark evaluation requires eval_data_db_path metadata"
+        )
+
+    load_eval_data_db_to_postgres(
+        parse_db_name(evaluation_dataset),
+        settings.eval_data_db_path,
+        settings.effective_spider_benchmark_db_target,
+    )
+
+
 class Evaluator:
     def __init__(self, metrics: list, **kwargs):
         self._score_collector = {}
@@ -111,7 +146,7 @@ class Evaluator:
 
         self._average_score(meta)
 
-    def _score_metrics(self, test_case: LLMTestCase, result: TestResult) -> None:
+    def _score_metrics(self, test_case: LLMTestCase, result: Any) -> None:
         for metric in result.metrics_data:
             name = metric.name
             score = metric.score or 0
@@ -163,13 +198,14 @@ class Evaluator:
 if __name__ == "__main__":
     args = parse_args()
 
-    settings = EvalSettings()
-    pipe_components = provider.generate_components(settings.components)
-    utils.init_langfuse(settings)
-
     predicted_file = parse_toml(f"outputs/predictions/{args.file}")
     meta = predicted_file["meta"]
     predictions = predicted_file["predictions"]
+
+    settings = EvalSettings()
+    prepare_spider_benchmark_target(meta=meta, settings=settings)
+    pipe_components = provider.generate_components(settings.components)
+    utils.init_langfuse(settings)
 
     dataset = parse_toml(meta["evaluation_dataset"])
     metrics = pipelines.metrics_initiator(

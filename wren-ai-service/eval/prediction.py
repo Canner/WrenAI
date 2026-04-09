@@ -15,7 +15,8 @@ sys.path.append(f"{Path().parent.resolve()}")
 import eval.pipelines as pipelines
 import src.providers as provider
 import src.utils as utils
-from eval import EvalSettings
+from eval import EvalSettings, default_eval_data_db_path
+from eval.metrics.spider.database import is_postgres_target
 from eval.utils import (
     load_eval_data_db_to_postgres,
     parse_db_name,
@@ -48,6 +49,13 @@ def generate_meta(
         "batch_interval": settings.batch_interval,
         "catalog": dataset["mdl"]["catalog"],
         "datasource": settings.datasource,
+        "eval_data_db_path": settings.eval_data_db_path,
+        "spider_benchmark_db_target": settings.effective_spider_benchmark_db_target,
+        "spider_benchmark_backend": (
+            "postgres"
+            if is_postgres_target(settings.effective_spider_benchmark_db_target)
+            else "sqlite"
+        ),
     }
 
 
@@ -105,14 +113,14 @@ if __name__ == "__main__":
     settings = EvalSettings()
     # todo: refactor this
     _mdl = base64.b64encode(orjson.dumps(dataset["mdl"])).decode("utf-8")
-    if "spider_" in path or "bird_" in path:
-        db_name = parse_db_name(path)
-        if "spider_" in path:
-            settings.eval_data_db_path = "etc/spider1.0/database"
-            load_eval_data_db_to_postgres(db_name, settings.eval_data_db_path)
-        elif "bird_" in path:
-            settings.eval_data_db_path = "etc/bird/minidev/MINIDEV/dev_databases"
-            load_eval_data_db_to_postgres(db_name, settings.eval_data_db_path)
+    benchmark_source_path = default_eval_data_db_path(path)
+    if benchmark_source_path:
+        settings.eval_data_db_path = settings.eval_data_db_path or benchmark_source_path
+        load_eval_data_db_to_postgres(
+            parse_db_name(path),
+            settings.eval_data_db_path,
+            settings.effective_spider_benchmark_db_target,
+        )
 
         settings.datasource = "postgres"
         _connection_info = base64.b64encode(

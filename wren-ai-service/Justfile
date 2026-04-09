@@ -41,6 +41,11 @@ predict dataset pipeline='ask':
 eval prediction_result semantics='--no-semantics':
     poetry run python -u eval/evaluation.py --file {{prediction_result}} {{semantics}}
 
+eval-postgres-loader-smoke benchmark_target db_name='loader_smoke_case':
+	poetry run python tools/eval_postgres_loader_smoke.py \
+		--benchmark-target '{{benchmark_target}}' \
+		--db-name {{db_name}}
+
 test test_args='': up && down
 	poetry run pytest -s {{test_args}} --ignore tests/pytest/test_usecases.py
 
@@ -52,7 +57,7 @@ load-test:
 
 prepare-files:
 	# only remove files related to engine and ui
-	rm -rf tools/dev/etc/duckdb tools/dev/etc/mdl tools/dev/etc/config.properties tools/dev/etc/db.sqlite3 tools/dev/etc/archived
+	rm -rf tools/dev/etc/duckdb tools/dev/etc/mdl tools/dev/etc/config.properties tools/dev/etc/archived
 	mkdir -p tools/dev/etc
 	cp tools/dev/config.properties.example tools/dev/etc/config.properties
 	mkdir -p tools/dev/etc/mdl
