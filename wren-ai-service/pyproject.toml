@@ -44,7 +44,7 @@ protobuf = ">=5.29.6"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.7.1"
-streamlit = "^1.37.0"
+streamlit = "^1.54.0"
 watchdog = "^4.0.0"
 pandas = "^2.2.2"
 matplotlib = "^3.9.2"
