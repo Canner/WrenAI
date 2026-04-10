@@ -18,7 +18,7 @@
     "@google-cloud/bigquery": "^6.0.3",
     "@google-cloud/storage": "^6.10.1",
     "apollo-server-micro": "^3.10.2",
-    "axios": "^1.13.5",
+    "axios": "^1.15.0",
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^9.4.3",
     "cron-parser": "^5.1.1",
@@ -96,7 +96,7 @@
   },
   "resolutions": {
     "ws": "8.17.1",
-    "axios": "1.13.5",
+    "axios": "1.15.0",
     "tar-fs": "2.1.4",
     "tmp": "0.2.4",
     "glob": "10.5.0",
