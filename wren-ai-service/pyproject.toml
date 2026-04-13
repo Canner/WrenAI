@@ -21,7 +21,7 @@ numpy = "^1.26.4"
 sqlparse = "^0.5.4"
 orjson = "^3.11.5"
 sf-hamilton = {version = "^1.69.0"}
-aiohttp = {extras = ["speedups"], version = "^3.13.3"}
+aiohttp = {extras = ["speedups"], version = "^3.13.4"}
 ollama-haystack = "^0.0.6"
 langfuse = "^2.43.3"
 ollama = "^0.2.1"
@@ -44,17 +44,17 @@ protobuf = ">=5.29.6"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.7.1"
-streamlit = "^1.37.0"
+streamlit = "^1.54.0"
 watchdog = "^4.0.0"
 pandas = "^2.2.2"
 matplotlib = "^3.9.2"
 sseclient-py = "^1.8.0"
 dspy-ai = "^2.5.26"
-requests = "^2.32.4"
+requests = "^2.33.0"
 extra-streamlit-components = "^0.1.71"
 deepeval = "^3.0.0"
 tomlkit = "^0.13.0"
-nltk = "^3.9.3"
+nltk = "^3.9.4"
 psycopg2 = "^2.9.10"
 
 [tool.poetry.group.eval.dependencies]
