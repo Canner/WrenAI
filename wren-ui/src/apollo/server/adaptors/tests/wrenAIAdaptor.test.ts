@@ -5,7 +5,6 @@ import {
   AskResultType,
   RecommendationQuestionsInput,
   RecommendationQuestionStatus,
-  SkillResultType,
 } from '@server/models/adaptor';
 import { Manifest } from '../../mdl/type';
 
@@ -108,38 +107,12 @@ describe('WrenAIAdaptor', () => {
           deployHash: 'deploy-1',
           actorUserId: 'user-1',
         },
-        actorClaims: {
-          userId: 'user-1',
-          workspaceMemberId: 'member-1',
-          roleKeys: ['owner'],
-          permissionScopes: ['knowledge_base:*'],
-        },
-        connectors: [
-          {
-            id: 'connector-1',
-            type: 'postgres',
-            displayName: 'Warehouse',
-            config: { schema: 'public' },
-            metadata: { workspaceId: 'workspace-1' },
-          },
-        ],
-        secrets: [
-          {
-            id: 'secret-1',
-            name: 'Warehouse Secret',
-            values: { password: 'test' },
-            redactedKeys: ['password'],
-          },
-        ],
         skills: [
           {
             skillId: 'skill-1',
             skillName: 'sales_skill',
-            runtimeKind: 'isolated_python',
-            sourceType: 'inline',
-            sourceRef: 'skills/sales',
-            entrypoint: 'main.py',
-            skillConfig: { timeoutSec: 15 },
+            instruction: '仅统计已支付订单',
+            executionMode: 'inject_only',
           },
         ],
       });
@@ -155,27 +128,12 @@ describe('WrenAIAdaptor', () => {
             workspaceId: 'workspace-1',
             knowledgeBaseId: 'kb-1',
           }),
-          actor_claims: expect.objectContaining({
-            userId: 'user-1',
-            workspaceMemberId: 'member-1',
-          }),
-          connectors: [
-            expect.objectContaining({
-              id: 'connector-1',
-              displayName: 'Warehouse',
-            }),
-          ],
-          secrets: [
-            expect.objectContaining({
-              id: 'secret-1',
-              name: 'Warehouse Secret',
-            }),
-          ],
           skills: [
             expect.objectContaining({
               skillId: 'skill-1',
               skillName: 'sales_skill',
-              skillConfig: { timeoutSec: 15 },
+              instruction: '仅统计已支付订单',
+              executionMode: 'inject_only',
             }),
           ],
         }),
@@ -183,6 +141,13 @@ describe('WrenAIAdaptor', () => {
       expect(mockedAxios.post.mock.calls[0]?.[1]).not.toHaveProperty(
         'project_id',
       );
+      expect(mockedAxios.post.mock.calls[0]?.[1]).not.toHaveProperty(
+        'actor_claims',
+      );
+      expect(mockedAxios.post.mock.calls[0]?.[1]).not.toHaveProperty(
+        'connectors',
+      );
+      expect(mockedAxios.post.mock.calls[0]?.[1]).not.toHaveProperty('secrets');
     });
   });
 
@@ -214,7 +179,7 @@ describe('WrenAIAdaptor', () => {
         }),
       );
       const requestBody = mockedAxios.post.mock.calls[0]?.[1] as any;
-      expect(requestBody?.runtime_identity?.projectBridgeId).toBeUndefined();
+      expect(requestBody?.runtime_identity?.bridgeScopeId).toBeUndefined();
     });
   });
 
@@ -408,7 +373,7 @@ describe('WrenAIAdaptor', () => {
       expect(mockedAxios.post).not.toHaveBeenCalled();
     });
 
-    it('should keep projectBridgeId when runtime identity only contains the legacy bridge', async () => {
+    it('should keep bridgeScopeId when runtime identity only contains the legacy bridge', async () => {
       mockedAxios.post.mockResolvedValueOnce({
         data: { event_id: 'event-legacy' },
       });
@@ -428,13 +393,13 @@ describe('WrenAIAdaptor', () => {
         `${baseEndpoint}/v1/sql-pairs`,
         expect.objectContaining({
           runtime_identity: expect.objectContaining({
-            projectBridgeId: '42',
+            bridgeScopeId: '42',
           }),
         }),
       );
     });
 
-    it('should prefer canonical runtime fields over projectBridgeId when both are present', async () => {
+    it('should prefer canonical runtime fields over bridgeScopeId when both are present', async () => {
       mockedAxios.post.mockResolvedValueOnce({
         data: { event_id: 'event-canonical' },
       });
@@ -460,7 +425,7 @@ describe('WrenAIAdaptor', () => {
             workspaceId: 'workspace-1',
             knowledgeBaseId: 'kb-1',
             deployHash: 'deploy-1',
-            projectBridgeId: undefined,
+            bridgeScopeId: undefined,
           }),
         }),
       );
@@ -476,6 +441,7 @@ describe('WrenAIAdaptor', () => {
         tables: ['orders'],
         sqlGenerationReasoning: '需要限定已支付订单',
         sql: 'SELECT 1',
+        runtimeScopeId: 'scope-1',
         runtimeIdentity: {
           workspaceId: 'workspace-1',
           knowledgeBaseId: 'kb-1',
@@ -489,6 +455,7 @@ describe('WrenAIAdaptor', () => {
       expect(mockedAxios.post).toHaveBeenCalledWith(
         `${baseEndpoint}/v1/ask-feedbacks`,
         expect.objectContaining({
+          runtime_scope_id: 'scope-1',
           runtime_identity: expect.objectContaining({
             workspaceId: 'workspace-1',
             knowledgeBaseId: 'kb-1',
@@ -550,6 +517,7 @@ describe('WrenAIAdaptor', () => {
         sql: 'SELECT 1',
         adjustmentOption: { chartType: 'bar' as any },
         chartSchema: { mark: 'bar' },
+        runtimeScopeId: 'scope-2',
         runtimeIdentity: {
           workspaceId: 'workspace-1',
           knowledgeBaseId: 'kb-1',
@@ -562,6 +530,7 @@ describe('WrenAIAdaptor', () => {
       expect(mockedAxios.post).toHaveBeenCalledWith(
         `${baseEndpoint}/v1/chart-adjustments`,
         expect.objectContaining({
+          runtime_scope_id: 'scope-2',
           runtime_identity: expect.objectContaining({
             deployHash: 'deploy-1',
           }),
@@ -592,9 +561,9 @@ describe('WrenAIAdaptor', () => {
       const result = await adaptor.getRecommendationQuestionsResult(queryId);
 
       expect(result).toEqual({
+        ...mockResponse,
         status: RecommendationQuestionStatus.FINISHED,
         error: null,
-        ...mockResponse,
       });
       expect(mockedAxios.get).toHaveBeenCalledWith(
         `${baseEndpoint}/v1/question-recommendations/${queryId}`,
@@ -612,53 +581,78 @@ describe('WrenAIAdaptor', () => {
   });
 
   describe('getAskResult', () => {
-    it('should transform skill results from ai-service', async () => {
+    it('should transform text-to-sql results from ai-service', async () => {
       mockedAxios.get.mockResolvedValueOnce({
         data: {
           status: 'finished',
-          type: 'SKILL',
-          ask_path: 'skill',
+          type: 'TEXT_TO_SQL',
+          ask_path: 'instructions',
           shadow_compare: {
             enabled: true,
             executed: true,
-            comparable: false,
-            primary_type: 'SKILL',
+            comparable: true,
+            primary_type: 'TEXT_TO_SQL',
             shadow_type: 'TEXT_TO_SQL',
-            primary_ask_path: 'skill',
-            shadow_ask_path: 'nl2sql',
-            shadow_error_type: '',
+            primary_ask_path: 'instructions',
+            shadow_ask_path: 'instructions',
+            shadow_error_type: null,
+            primary_sql: 'SELECT 1',
             shadow_sql: 'SELECT 1',
             shadow_result_count: 1,
-            matched: false,
+            matched: true,
           },
-          skill_result: {
-            result_type: 'text',
-            text: '本月 GMV 为 128 万',
-            trace: {
-              skill_run_id: 'run-1',
-              runner_job_id: 'exec-1',
-            },
-          },
+          response: [{ type: 'llm', sql: 'SELECT 1' }],
         },
       });
 
       const result = await adaptor.getAskResult('query-skill-1');
 
       expect(result.status).toBe(AskResultStatus.FINISHED);
-      expect(result.type).toBe(AskResultType.SKILL);
-      expect(result.askPath).toBe('skill');
+      expect(result.type).toBe(AskResultType.TEXT_TO_SQL);
+      expect(result.askPath).toBe('instructions');
+      expect(result.response?.[0]?.sql).toBe('SELECT 1');
       expect(result.shadowCompare?.executed).toBe(true);
-      expect(result.shadowCompare?.comparable).toBe(false);
-      expect(result.shadowCompare?.primaryType).toBe('SKILL');
+      expect(result.shadowCompare?.comparable).toBe(true);
+      expect(result.shadowCompare?.primaryType).toBe('TEXT_TO_SQL');
       expect(result.shadowCompare?.shadowType).toBe('TEXT_TO_SQL');
-      expect(result.shadowCompare?.shadowAskPath).toBe('nl2sql');
+      expect(result.shadowCompare?.shadowAskPath).toBe('instructions');
       expect(result.shadowCompare?.shadowSql).toBe('SELECT 1');
       expect(result.shadowCompare?.shadowResultCount).toBe(1);
-      expect(result.shadowCompare?.matched).toBe(false);
-      expect(result.skillResult?.resultType).toBe(SkillResultType.TEXT);
-      expect(result.skillResult?.text).toBe('本月 GMV 为 128 万');
-      expect(result.skillResult?.trace?.skillRunId).toBe('run-1');
-      expect(result.skillResult?.trace?.runnerJobId).toBe('exec-1');
+      expect(result.shadowCompare?.matched).toBe(true);
+    });
+  });
+
+  describe('createTextBasedAnswer', () => {
+    it('should forward runtime scope metadata with sql answers', async () => {
+      mockedAxios.post.mockResolvedValueOnce({
+        data: { query_id: 'answer-1' },
+      });
+
+      const result = await adaptor.createTextBasedAnswer({
+        query: 'summarize orders',
+        sql: 'SELECT 1',
+        sqlData: { columns: ['status'], data: [['paid']] },
+        threadId: 'thread-1',
+        userId: 'user-1',
+        runtimeScopeId: 'scope-1',
+        runtimeIdentity: {
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          deployHash: 'deploy-1',
+        },
+        configurations: { language: 'English' },
+      });
+
+      expect(result).toEqual({ queryId: 'answer-1' });
+      expect(mockedAxios.post).toHaveBeenCalledWith(
+        `${baseEndpoint}/v1/sql-answers`,
+        expect.objectContaining({
+          runtime_scope_id: 'scope-1',
+          runtime_identity: expect.objectContaining({
+            deployHash: 'deploy-1',
+          }),
+        }),
+      );
     });
   });
 });

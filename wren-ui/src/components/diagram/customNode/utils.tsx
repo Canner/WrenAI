@@ -98,9 +98,9 @@ export const CachedIcon = ({ originalData }: { originalData: CachedProps }) => {
     <Tooltip
       title={
         <>
-          Cached
+          已开启缓存
           {originalData.refreshTime
-            ? `: refresh every ${originalData.refreshTime}`
+            ? `：每 ${originalData.refreshTime} 刷新`
             : null}
         </>
       }

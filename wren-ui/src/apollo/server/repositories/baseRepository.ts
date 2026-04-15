@@ -84,7 +84,7 @@ export class BaseRepository<T> implements IBasicRepository<T> {
       this.transformToDBData(filter),
     );
     if (queryOptions?.order) {
-      query.orderBy(queryOptions.order);
+      this.applyOrder(query, queryOptions.order);
     }
     const result = await query;
     return result.map(this.transformFromDBData);
@@ -94,7 +94,7 @@ export class BaseRepository<T> implements IBasicRepository<T> {
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
     const query = executer(this.tableName);
     if (queryOptions?.order) {
-      query.orderBy(queryOptions.order);
+      this.applyOrder(query, queryOptions.order);
     }
     if (queryOptions?.limit) {
       query.limit(queryOptions.limit);
@@ -142,7 +142,7 @@ export class BaseRepository<T> implements IBasicRepository<T> {
     return this.transformFromDBData(result);
   }
 
-  public async deleteOne(id: string, queryOptions?: IQueryOptions) {
+  public async deleteOne(id: string | number, queryOptions?: IQueryOptions) {
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
     const builder = executer.from(this.tableName).where({ id }).delete();
     return await builder;
@@ -181,5 +181,32 @@ export class BaseRepository<T> implements IBasicRepository<T> {
     }
     const camelCaseData = mapKeys(data, (_value, key) => camelCase(key));
     return camelCaseData as T;
+  };
+
+  protected applyOrder = (
+    query: Knex.QueryBuilder,
+    orderExpression: string,
+  ) => {
+    const normalizedExpressions = orderExpression
+      .split(',')
+      .map((expression) => expression.trim())
+      .filter(Boolean);
+
+    normalizedExpressions.forEach((expression) => {
+      const match = expression.match(/^([A-Za-z0-9_."$]+)(?:\s+(asc|desc))?$/i);
+      if (!match) {
+        query.orderBy(expression);
+        return;
+      }
+
+      const column = match[1];
+      const direction = match[2]?.toLowerCase();
+      if (direction === 'asc' || direction === 'desc') {
+        query.orderBy(column, direction);
+        return;
+      }
+
+      query.orderBy(column);
+    });
   };
 }

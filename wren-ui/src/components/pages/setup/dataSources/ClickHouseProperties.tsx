@@ -13,7 +13,7 @@ export default function ClickHouseProperties(props: Props) {
   return (
     <>
       <Form.Item
-        label="Display name"
+        label="显示名称"
         name="displayName"
         required
         rules={[
@@ -26,7 +26,7 @@ export default function ClickHouseProperties(props: Props) {
         <Input />
       </Form.Item>
       <Form.Item
-        label="Host"
+        label="主机地址"
         name="host"
         required
         rules={[
@@ -42,7 +42,7 @@ export default function ClickHouseProperties(props: Props) {
         />
       </Form.Item>
       <Form.Item
-        label="Port"
+        label="端口"
         name="port"
         required
         rules={[
@@ -55,7 +55,7 @@ export default function ClickHouseProperties(props: Props) {
         <Input placeholder="8443" disabled={isEditMode} />
       </Form.Item>
       <Form.Item
-        label="Username"
+        label="用户名"
         name="user"
         rules={[
           {
@@ -67,7 +67,7 @@ export default function ClickHouseProperties(props: Props) {
         <Input />
       </Form.Item>
       <Form.Item
-        label="Password"
+        label="密码"
         name="password"
         required
         rules={[
@@ -77,10 +77,10 @@ export default function ClickHouseProperties(props: Props) {
           },
         ]}
       >
-        <Input.Password placeholder="input password" />
+        <Input.Password placeholder="请输入密码" />
       </Form.Item>
       <Form.Item
-        label="Database name"
+        label="数据库名称"
         name="database"
         required
         rules={[
@@ -90,9 +90,12 @@ export default function ClickHouseProperties(props: Props) {
           },
         ]}
       >
-        <Input placeholder="ClickHouse database name" disabled={isEditMode} />
+        <Input
+          placeholder="请输入 ClickHouse 数据库名称"
+          disabled={isEditMode}
+        />
       </Form.Item>
-      <Form.Item label="Use SSL" name="ssl" valuePropName="checked">
+      <Form.Item label="启用 SSL" name="ssl" valuePropName="checked">
         <Switch />
       </Form.Item>
     </>

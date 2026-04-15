@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
-import SimpleLayout from '@/components/layouts/SimpleLayout';
 import ContainerCard from '@/components/pages/setup/ContainerCard';
+import SetupConsoleLayout from '@/components/reference/SetupConsoleLayout';
 import useSetupRelations from '@/hooks/useSetupRelations';
 import { SETUP_STEPS } from '@/components/pages/setup/utils';
 
@@ -18,7 +18,10 @@ export default function SetupRelationships() {
   const current = useMemo(() => SETUP_STEPS[stepKey], [stepKey]);
 
   return (
-    <SimpleLayout>
+    <SetupConsoleLayout
+      title="定义关系"
+      description="确认模型间关联关系，确保后续问答、SQL 生成和图表聚合能基于统一语义执行。"
+    >
       <ContainerCard step={current.step} maxWidth={current.maxWidth}>
         <current.component
           fetching={fetching}
@@ -29,6 +32,6 @@ export default function SetupRelationships() {
           submitting={submitting}
         />
       </ContainerCard>
-    </SimpleLayout>
+    </SetupConsoleLayout>
   );
 }

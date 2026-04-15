@@ -24,12 +24,19 @@ export interface IScheduleService {
   ): Promise<ScheduleJob | null>;
 }
 
+type ScheduleRuntimeBinding = {
+  workspaceId?: string;
+  knowledgeBaseId?: string;
+  kbSnapshotId?: string;
+  deployHash?: string;
+};
+
 const assignIfPresent = <T extends Record<string, any>>(
   patch: T,
   key: keyof T,
   value: any,
 ) => {
-  if (value !== undefined) {
+  if (value !== undefined && value !== null) {
     patch[key] = value;
   }
 };
@@ -69,14 +76,14 @@ export class ScheduleService implements IScheduleService {
       }
 
       return await this.scheduleJobRepository.updateOne(existingJob.id, {
-        ...this.buildRuntimeIdentityPatch(input),
+        ...this.selectRuntimeBinding(input, false),
         status: 'inactive',
         nextRunAt: null,
         lastError: null,
       });
     }
 
-    const runtimeIdentity = this.requireRuntimeIdentity(input);
+    const runtimeIdentity = this.selectRuntimeBinding(input, true);
     const cronExpr = input.cronExpr?.trim();
     if (!cronExpr) {
       throw new Error(
@@ -113,51 +120,44 @@ export class ScheduleService implements IScheduleService {
     });
   }
 
-  private requireRuntimeIdentity(
+  private selectRuntimeBinding(
     input: SyncDashboardScheduleJobInput,
-  ): Required<
-    Pick<
-      SyncDashboardScheduleJobInput,
-      'workspaceId' | 'knowledgeBaseId' | 'kbSnapshotId' | 'deployHash'
-    >
-  > {
-    if (!input.workspaceId) {
+    requireAll: true,
+  ): Required<ScheduleRuntimeBinding>;
+  private selectRuntimeBinding(
+    input: SyncDashboardScheduleJobInput,
+    requireAll: false,
+  ): Partial<ScheduleRuntimeBinding>;
+  private selectRuntimeBinding(
+    input: SyncDashboardScheduleJobInput,
+    requireAll: boolean,
+  ): Required<ScheduleRuntimeBinding> | Partial<ScheduleRuntimeBinding> {
+    if (requireAll && !input.workspaceId) {
       throw new Error(
         'Dashboard refresh schedule requires workspace runtime binding',
       );
     }
-    if (!input.knowledgeBaseId) {
+    if (requireAll && !input.knowledgeBaseId) {
       throw new Error(
         'Dashboard refresh schedule requires knowledge base runtime binding',
       );
     }
-    if (!input.kbSnapshotId) {
+    if (requireAll && !input.kbSnapshotId) {
       throw new Error(
         'Dashboard refresh schedule requires snapshot runtime binding',
       );
     }
-    if (!input.deployHash) {
+    if (requireAll && !input.deployHash) {
       throw new Error(
         'Dashboard refresh schedule requires deploy hash runtime binding',
       );
     }
 
-    return {
-      workspaceId: input.workspaceId,
-      knowledgeBaseId: input.knowledgeBaseId,
-      kbSnapshotId: input.kbSnapshotId,
-      deployHash: input.deployHash,
-    };
-  }
-
-  private buildRuntimeIdentityPatch(
-    input: SyncDashboardScheduleJobInput,
-  ): Partial<ScheduleJob> {
-    const patch: Partial<ScheduleJob> = {};
+    const patch: Partial<ScheduleRuntimeBinding> = {};
     assignIfPresent(patch, 'workspaceId', input.workspaceId);
     assignIfPresent(patch, 'knowledgeBaseId', input.knowledgeBaseId);
     assignIfPresent(patch, 'kbSnapshotId', input.kbSnapshotId);
     assignIfPresent(patch, 'deployHash', input.deployHash);
-    return patch;
+    return requireAll ? (patch as Required<ScheduleRuntimeBinding>) : patch;
   }
 }

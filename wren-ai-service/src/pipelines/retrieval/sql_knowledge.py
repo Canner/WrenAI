@@ -11,7 +11,10 @@ from langfuse.decorators import observe
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider
-from src.pipelines.common import normalize_runtime_scope_id, retrieve_data_source
+from src.pipelines.common import (
+    resolve_pipeline_runtime_scope_id,
+    retrieve_data_source,
+)
 from src.providers.engine.wren import WrenIbis
 
 logger = logging.getLogger("wren-ai-service")
@@ -113,9 +116,12 @@ class SqlKnowledges(BasicPipeline):
     @observe(name="SQL Knowledge Retrieval")
     async def run(
         self,
-        project_id: Optional[str] = None,
+        runtime_scope_id: Optional[str] = None,
+        bridge_scope_id: Optional[str] = None,
     ) -> Optional[SqlKnowledge]:
-        runtime_scope_id = normalize_runtime_scope_id(project_id)
+        runtime_scope_id = resolve_pipeline_runtime_scope_id(
+            runtime_scope_id, bridge_scope_id=bridge_scope_id
+        )
         logger.info(
             f"Runtime scope: {runtime_scope_id} SQL Knowledge Retrieval pipeline is running..."
         )
@@ -128,7 +134,7 @@ class SqlKnowledges(BasicPipeline):
 
         input = {
             "data_source": data_source,
-            "project_id": runtime_scope_id,
+            "runtime_scope_id": runtime_scope_id,
             **self._components,
         }
         result = await self._pipe.execute(["cache"], inputs=input)

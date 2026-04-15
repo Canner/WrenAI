@@ -110,8 +110,25 @@ def trace_metadata(func):
         request = args[1]  # fix the position of the request object
         metadata = {}
 
-        if hasattr(request, "project_id"):
-            metadata["project_id"] = request.project_id
+        if hasattr(request, "resolve_runtime_scope_id"):
+            runtime_scope_id = request.resolve_runtime_scope_id()
+            if runtime_scope_id:
+                metadata["runtime_scope_id"] = runtime_scope_id
+        elif hasattr(request, "runtime_scope_id") and request.runtime_scope_id:
+            metadata["runtime_scope_id"] = request.runtime_scope_id
+
+        if hasattr(request, "resolve_bridge_scope_id"):
+            project_id = request.resolve_bridge_scope_id()
+            if project_id:
+                metadata["project_id"] = project_id
+        elif hasattr(request, "bridge_scope_id"):
+            project_id = request.bridge_scope_id
+            if project_id:
+                metadata["project_id"] = project_id
+        elif hasattr(request, "project_id"):
+            project_id = request.project_id
+            if project_id:
+                metadata["project_id"] = project_id
         if hasattr(request, "thread_id"):
             metadata["thread_id"] = request.thread_id
         if hasattr(request, "mdl_hash"):
@@ -189,9 +206,12 @@ def trace_metadata(func):
             **service_metadata.get("pipes_metadata"),
             **addition,
             "mdl_hash": metadata.get("mdl_hash"),
-            "project_id": metadata.get("project_id"),
             "query": metadata.get("query"),
         }
+        if metadata.get("project_id") is not None:
+            langfuse_metadata["project_id"] = metadata.get("project_id")
+        if metadata.get("runtime_scope_id") is not None:
+            langfuse_metadata["runtime_scope_id"] = metadata.get("runtime_scope_id")
         langfuse_context.update_current_trace(
             user_id=metadata.get("user_id"),
             session_id=metadata.get("thread_id"),
@@ -246,7 +266,7 @@ def fetch_wren_ai_docs(doc_endpoint: str, is_oss: bool) -> list[dict]:
             path, content = doc.split("\n")
             results.append(
                 {
-                    "path": f'{doc_endpoint_base}/{path.replace(".md", "")}',
+                    "path": f"{doc_endpoint_base}/{path.replace('.md', '')}",
                     "content": content,
                 }
             )

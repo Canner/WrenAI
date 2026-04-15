@@ -59,6 +59,18 @@ class SemanticsPreparationService:
             str, SemanticsPreparationStatusResponse
         ] = TTLCache(maxsize=maxsize, ttl=ttl)
 
+    def _iter_available_pipelines(self, names: list[str], *, operation: str):
+        for name in names:
+            pipeline = self._pipelines.get(name)
+            if pipeline is None:
+                logger.warning(
+                    "Skipping %s pipeline during semantics %s because it is not configured",
+                    name,
+                    operation,
+                )
+                continue
+            yield name, pipeline
+
     @observe(name="Prepare Semantics")
     @trace_metadata
     async def prepare_semantics(
@@ -76,24 +88,27 @@ class SemanticsPreparationService:
 
         try:
             logger.info(f"MDL: {prepare_semantics_request.mdl}")
-            runtime_scope_id = prepare_semantics_request.resolve_project_id(
+            runtime_scope_id = prepare_semantics_request.resolve_runtime_scope_id(
                 fallback_id=prepare_semantics_request.mdl_hash,
             )
 
             input = {
                 "mdl_str": prepare_semantics_request.mdl,
-                "project_id": runtime_scope_id,
+                "runtime_scope_id": runtime_scope_id,
             }
 
             tasks = [
-                self._pipelines[name].run(**input)
-                for name in [
-                    "db_schema",
-                    "historical_question",
-                    "table_description",
-                    "sql_pairs",
-                    "project_meta",
-                ]
+                pipeline.run(**input)
+                for _, pipeline in self._iter_available_pipelines(
+                    [
+                        "db_schema",
+                        "historical_question",
+                        "table_description",
+                        "sql_pairs",
+                        "project_meta",
+                    ],
+                    operation="prepare",
+                )
             ]
 
             await asyncio.gather(*tasks)
@@ -144,10 +159,12 @@ class SemanticsPreparationService:
 
     @observe(name="Delete Semantics Documents")
     @trace_metadata
-    async def delete_semantics(self, project_id: str, **kwargs):
-        runtime_scope_id = DeleteSemanticsRequest.model_validate(
-            {"project_id": project_id}
-        ).resolve_project_id()
+    async def delete_semantics(
+        self,
+        request: DeleteSemanticsRequest,
+        **kwargs,
+    ):
+        runtime_scope_id = request.resolve_runtime_scope_id()
 
         if not runtime_scope_id:
             raise ValueError("Runtime scope is required to delete semantics documents")
@@ -157,19 +174,27 @@ class SemanticsPreparationService:
         )
 
         tasks = [
-            self._pipelines[name].clean(project_id=runtime_scope_id)
-            for name in [
-                "db_schema",
-                "historical_question",
-                "table_description",
-                "project_meta",
-            ]
+            pipeline.clean(runtime_scope_id=runtime_scope_id)
+            for _, pipeline in self._iter_available_pipelines(
+                [
+                    "db_schema",
+                    "historical_question",
+                    "table_description",
+                    "project_meta",
+                ],
+                operation="delete",
+            )
+            if hasattr(pipeline, "clean")
         ] + [
-            self._pipelines[name].clean(
-                project_id=runtime_scope_id,
+            pipeline.clean(
+                runtime_scope_id=runtime_scope_id,
                 delete_all=True,
             )
-            for name in ["sql_pairs", "instructions"]
+            for _, pipeline in self._iter_available_pipelines(
+                ["sql_pairs", "instructions"],
+                operation="delete",
+            )
+            if hasattr(pipeline, "clean")
         ]
 
         await asyncio.gather(*tasks)

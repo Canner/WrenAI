@@ -45,7 +45,7 @@ export function findColumnsToUpdate(
       const shouldKeep = columns.includes(sourceColumnName);
       return shouldKeep ? undefined : id;
     })
-    .filter((id) => id);
+    .filter((id): id is number => id !== undefined);
   const existColumnNames = existingColumns.map(
     ({ sourceColumnName }) => sourceColumnName,
   );
@@ -53,7 +53,13 @@ export function findColumnsToUpdate(
     (columnName) => !existColumnNames.includes(columnName),
   );
 
-  const toUpdateColumns = sourceTableColumns.reduce((acc, sourceColumn) => {
+  const toUpdateColumns = sourceTableColumns.reduce<
+    Array<{
+      id: number;
+      sourceColumnName: string;
+      type: string;
+    }>
+  >((acc, sourceColumn) => {
     const existingColumn = existingColumns.find(
       (col) => col.sourceColumnName === sourceColumn.name,
     );
@@ -64,14 +70,12 @@ export function findColumnsToUpdate(
 
     if (sourceColumn.type === existingColumn.type) return acc;
 
-    return [
-      ...acc,
-      {
-        id: existingColumn.id,
-        sourceColumnName: sourceColumn.name,
-        type: sourceColumn.type || 'string',
-      },
-    ];
+    acc.push({
+      id: existingColumn.id,
+      sourceColumnName: sourceColumn.name,
+      type: sourceColumn.type || 'string',
+    });
+    return acc;
   }, []);
 
   return {

@@ -3,11 +3,10 @@ export interface ClientRuntimeScopeSelector {
   knowledgeBaseId?: string;
   kbSnapshotId?: string;
   deployHash?: string;
-  projectId?: string;
+  runtimeScopeId?: string;
 }
 
 export interface RuntimeSelectorStateBootstrapData {
-  currentProjectId?: number | null;
   currentWorkspace?: {
     id?: string | null;
   } | null;
@@ -32,29 +31,71 @@ export interface RuntimeScopeWindowLike {
   };
   sessionStorage?: StorageLike | null;
   localStorage?: StorageLike | null;
+  addEventListener?: (
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+  ) => void;
+  removeEventListener?: (
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+  ) => void;
+  dispatchEvent?: (event: Event) => boolean;
+}
+
+export interface RuntimeScopeBootstrapCandidate {
+  source: 'url' | 'stored' | 'server_default' | 'default';
+  selector: ClientRuntimeScopeSelector;
 }
 
 const STORAGE_KEY = 'wren.runtimeScope';
+export const RUNTIME_SCOPE_RECOVERY_EVENT = 'wren:runtime-scope-recovery';
+const RECOVERABLE_RUNTIME_SCOPE_ERROR_CODES = new Set([
+  'NO_DEPLOYMENT_FOUND',
+  'OUTDATED_RUNTIME_SNAPSHOT',
+]);
 
 const QUERY_KEYS = {
   workspaceId: ['workspaceId', 'workspace_id'],
   knowledgeBaseId: ['knowledgeBaseId', 'knowledge_base_id'],
   kbSnapshotId: ['kbSnapshotId', 'kb_snapshot_id'],
   deployHash: ['deployHash', 'deploy_hash'],
-  projectId: ['projectId', 'project_id', 'legacyProjectId', 'legacy_project_id'],
 } as const;
+
+// Compatibility-only query aliases; new routes should use runtimeScopeId or
+// canonical runtime scope fields instead of relying on these stale params.
+const STALE_PROJECT_SCOPE_QUERY_KEYS = ['projectId', 'project_id'] as const;
+
+const RUNTIME_SCOPE_ID_QUERY_KEYS = [
+  'runtimeScopeId',
+  'runtime_scope_id',
+] as const;
 
 const HEADER_KEYS = {
   workspaceId: 'x-wren-workspace-id',
   knowledgeBaseId: 'x-wren-knowledge-base-id',
   kbSnapshotId: 'x-wren-kb-snapshot-id',
   deployHash: 'x-wren-deploy-hash',
-  projectId: 'x-wren-project-id',
+  runtimeScopeId: 'x-wren-runtime-scope-id',
 } as const;
 
-const RUNTIME_SCOPE_QUERY_KEYS = new Set(
-  (Object.values(QUERY_KEYS) as readonly (readonly string[])[]).flat(),
-);
+const RUNTIME_SCOPE_QUERY_KEYS = new Set([
+  ...(Object.values(QUERY_KEYS) as readonly (readonly string[])[]).flat(),
+  ...STALE_PROJECT_SCOPE_QUERY_KEYS,
+  ...RUNTIME_SCOPE_ID_QUERY_KEYS,
+]);
+
+const isRemovedLegacyProjectScopeQueryKey = (key: string) =>
+  key.replace(/_/g, '').toLowerCase() === 'legacyprojectid';
+
+const warnDeprecatedProjectScopeAlias = (source: string) => {
+  if (typeof console === 'undefined' || typeof console.warn !== 'function') {
+    return;
+  }
+
+  console.warn(
+    `[runtimeScope] Detected deprecated compatibility query alias in ${source}; migrate to runtimeScopeId or canonical runtime scope fields.`,
+  );
+};
 
 const normalizeValue = (value?: string | null): string | undefined => {
   if (value === undefined || value === null) {
@@ -67,18 +108,86 @@ const normalizeValue = (value?: string | null): string | undefined => {
 
 const normalizeSelector = (
   selector: ClientRuntimeScopeSelector,
-): ClientRuntimeScopeSelector => ({
-  workspaceId: normalizeValue(selector.workspaceId),
-  knowledgeBaseId: normalizeValue(selector.knowledgeBaseId),
-  kbSnapshotId: normalizeValue(selector.kbSnapshotId),
-  deployHash: normalizeValue(selector.deployHash),
-  projectId: normalizeValue(selector.projectId),
-});
+): ClientRuntimeScopeSelector => {
+  const normalizedSelector = {
+    workspaceId: normalizeValue(selector.workspaceId),
+    knowledgeBaseId: normalizeValue(selector.knowledgeBaseId),
+    kbSnapshotId: normalizeValue(selector.kbSnapshotId),
+    deployHash: normalizeValue(selector.deployHash),
+    runtimeScopeId: normalizeValue(selector.runtimeScopeId),
+  };
+
+  if (
+    normalizedSelector.workspaceId ||
+    normalizedSelector.knowledgeBaseId ||
+    normalizedSelector.kbSnapshotId ||
+    normalizedSelector.deployHash
+  ) {
+    return {
+      ...normalizedSelector,
+      runtimeScopeId: undefined,
+    };
+  }
+
+  return normalizedSelector;
+};
+
+const hasModernRuntimeScopeSelector = (
+  selector: ClientRuntimeScopeSelector,
+) => {
+  const normalizedSelector = normalizeSelector(selector);
+
+  return Boolean(
+    normalizedSelector.workspaceId ||
+      normalizedSelector.knowledgeBaseId ||
+      normalizedSelector.kbSnapshotId ||
+      normalizedSelector.deployHash,
+  );
+};
+
+const shouldUseProjectBridgeFallback = (
+  selector: ClientRuntimeScopeSelector,
+) => {
+  const normalizedSelector = normalizeSelector(selector);
+  return Boolean(
+    normalizedSelector.runtimeScopeId &&
+      !hasModernRuntimeScopeSelector(normalizedSelector),
+  );
+};
 
 export const hasExplicitRuntimeScopeSelector = (
   selector: ClientRuntimeScopeSelector,
+) => Object.values(normalizeSelector(selector)).some(Boolean);
+
+export const hasExecutableRuntimeScopeSelector = (
+  selector: ClientRuntimeScopeSelector,
+) => {
+  const normalizedSelector = normalizeSelector(selector);
+  return Boolean(
+    normalizedSelector.kbSnapshotId || normalizedSelector.deployHash,
+  );
+};
+
+export const shouldHydrateRuntimeScopeSelector = (
+  selector: ClientRuntimeScopeSelector,
 ) =>
-  Object.values(normalizeSelector(selector)).some(Boolean);
+  hasExplicitRuntimeScopeSelector(selector) &&
+  !hasExecutableRuntimeScopeSelector(selector);
+
+export const mergeRuntimeScopeSelectors = (
+  preferredSelector: ClientRuntimeScopeSelector,
+  fallbackSelector: ClientRuntimeScopeSelector,
+): ClientRuntimeScopeSelector =>
+  normalizeSelector({
+    workspaceId: preferredSelector.workspaceId || fallbackSelector.workspaceId,
+    knowledgeBaseId:
+      preferredSelector.knowledgeBaseId || fallbackSelector.knowledgeBaseId,
+    kbSnapshotId:
+      preferredSelector.kbSnapshotId || fallbackSelector.kbSnapshotId,
+    deployHash: preferredSelector.deployHash || fallbackSelector.deployHash,
+    runtimeScopeId:
+      preferredSelector.runtimeScopeId || fallbackSelector.runtimeScopeId,
+  });
 
 const readSearchParam = (
   searchParams: URLSearchParams,
@@ -93,6 +202,10 @@ const readSearchParam = (
 
   return undefined;
 };
+
+const hasStaleProjectScopeAliasInSearch = (searchParams: URLSearchParams) =>
+  STALE_PROJECT_SCOPE_QUERY_KEYS.some((alias) => searchParams.has(alias)) ||
+  Array.from(searchParams.keys()).some(isRemovedLegacyProjectScopeQueryKey);
 
 const readValueFromObject = (
   source: Record<string, any> | undefined | null,
@@ -122,6 +235,19 @@ const readValueFromObject = (
   return undefined;
 };
 
+const hasStaleProjectScopeAliasInObject = (
+  source: Record<string, any> | undefined | null,
+) =>
+  Boolean(
+    source &&
+      Object.keys(source).some(
+        (key) =>
+          STALE_PROJECT_SCOPE_QUERY_KEYS.includes(
+            key as (typeof STALE_PROJECT_SCOPE_QUERY_KEYS)[number],
+          ) || isRemovedLegacyProjectScopeQueryKey(key),
+      ),
+  );
+
 const readQueryValue = (
   value: string | string[] | number | boolean | null | undefined,
 ): string | undefined => {
@@ -137,7 +263,7 @@ const readQueryValue = (
 };
 
 const isRuntimeScopeQueryKey = (key: string) =>
-  RUNTIME_SCOPE_QUERY_KEYS.has(key);
+  RUNTIME_SCOPE_QUERY_KEYS.has(key) || isRemovedLegacyProjectScopeQueryKey(key);
 
 const getBrowserWindow = (): RuntimeScopeWindowLike | null => {
   if (typeof window === 'undefined') {
@@ -146,6 +272,17 @@ const getBrowserWindow = (): RuntimeScopeWindowLike | null => {
 
   return window;
 };
+
+const createRuntimeScopeRecoveryEvent = () => {
+  if (typeof Event === 'function') {
+    return new Event(RUNTIME_SCOPE_RECOVERY_EVENT);
+  }
+
+  return { type: RUNTIME_SCOPE_RECOVERY_EVENT } as Event;
+};
+
+export const shouldRecoverRuntimeScopeFromErrorCode = (code?: string | null) =>
+  RECOVERABLE_RUNTIME_SCOPE_ERROR_CODES.has(normalizeValue(code) || '');
 
 const getPreferredStorage = (
   windowObject?: RuntimeScopeWindowLike | null,
@@ -162,12 +299,16 @@ export const readRuntimeScopeSelectorFromSearch = (
 ): ClientRuntimeScopeSelector => {
   const searchParams = new URLSearchParams((search || '').replace(/^\?/, ''));
 
+  if (hasStaleProjectScopeAliasInSearch(searchParams)) {
+    warnDeprecatedProjectScopeAlias('search params');
+  }
+
   return normalizeSelector({
     workspaceId: readSearchParam(searchParams, QUERY_KEYS.workspaceId),
     knowledgeBaseId: readSearchParam(searchParams, QUERY_KEYS.knowledgeBaseId),
     kbSnapshotId: readSearchParam(searchParams, QUERY_KEYS.kbSnapshotId),
     deployHash: readSearchParam(searchParams, QUERY_KEYS.deployHash),
-    projectId: readSearchParam(searchParams, QUERY_KEYS.projectId),
+    runtimeScopeId: readSearchParam(searchParams, RUNTIME_SCOPE_ID_QUERY_KEYS),
   });
 };
 
@@ -188,14 +329,19 @@ export const readRuntimeScopeSelectorFromUrl = (
 
 export const readRuntimeScopeSelectorFromObject = (
   source?: Record<string, any> | null,
-): ClientRuntimeScopeSelector =>
-  normalizeSelector({
+): ClientRuntimeScopeSelector => {
+  if (hasStaleProjectScopeAliasInObject(source)) {
+    warnDeprecatedProjectScopeAlias('query object');
+  }
+
+  return normalizeSelector({
     workspaceId: readValueFromObject(source, QUERY_KEYS.workspaceId),
     knowledgeBaseId: readValueFromObject(source, QUERY_KEYS.knowledgeBaseId),
     kbSnapshotId: readValueFromObject(source, QUERY_KEYS.kbSnapshotId),
     deployHash: readValueFromObject(source, QUERY_KEYS.deployHash),
-    projectId: readValueFromObject(source, QUERY_KEYS.projectId),
+    runtimeScopeId: readValueFromObject(source, RUNTIME_SCOPE_ID_QUERY_KEYS),
   });
+};
 
 export const buildRuntimeScopeQuery = (
   selector: ClientRuntimeScopeSelector,
@@ -215,8 +361,11 @@ export const buildRuntimeScopeQuery = (
   if (normalizedSelector.deployHash) {
     query.deployHash = normalizedSelector.deployHash;
   }
-  if (normalizedSelector.projectId) {
-    query.projectId = normalizedSelector.projectId;
+  if (
+    shouldUseProjectBridgeFallback(normalizedSelector) &&
+    normalizedSelector.runtimeScopeId
+  ) {
+    query.runtimeScopeId = normalizedSelector.runtimeScopeId;
   }
 
   return query;
@@ -246,69 +395,176 @@ export const buildRuntimeScopeStateKey = (
 ): string => {
   const normalizedSelector = normalizeSelector(selector);
 
-  return [
+  const keyParts = [
     normalizedSelector.workspaceId || '',
     normalizedSelector.knowledgeBaseId || '',
     normalizedSelector.kbSnapshotId || '',
     normalizedSelector.deployHash || '',
-    normalizedSelector.projectId || '',
-  ].join('|');
+  ];
+
+  if (
+    shouldUseProjectBridgeFallback(normalizedSelector) &&
+    normalizedSelector.runtimeScopeId
+  ) {
+    keyParts.push(normalizedSelector.runtimeScopeId);
+  }
+
+  return keyParts.join('|');
 };
 
 export const buildRuntimeScopeSelectorFromRuntimeSelectorState = (
   selectorState?: RuntimeSelectorStateBootstrapData | null,
 ): ClientRuntimeScopeSelector => {
-  if (
-    selectorState?.currentWorkspace?.id &&
-    selectorState?.currentKnowledgeBase?.id &&
-    selectorState?.currentKbSnapshot?.id &&
-    selectorState?.currentKbSnapshot?.deployHash
-  ) {
-    return normalizeSelector({
-      workspaceId: selectorState.currentWorkspace.id,
-      knowledgeBaseId: selectorState.currentKnowledgeBase.id,
-      kbSnapshotId: selectorState.currentKbSnapshot.id,
-      deployHash: selectorState.currentKbSnapshot.deployHash,
-    });
+  if (!selectorState?.currentWorkspace?.id) {
+    return {};
   }
 
-  if (selectorState?.currentProjectId) {
-    return normalizeSelector({
-      projectId: `${selectorState.currentProjectId}`,
+  return normalizeSelector({
+    workspaceId: selectorState.currentWorkspace.id,
+    knowledgeBaseId: selectorState.currentKnowledgeBase?.id || undefined,
+    kbSnapshotId: selectorState.currentKbSnapshot?.id || undefined,
+    deployHash: selectorState.currentKbSnapshot?.deployHash || undefined,
+  });
+};
+
+export const buildRuntimeScopeBootstrapCandidates = ({
+  urlSelector,
+  storedSelector,
+  serverDefaultSelector,
+}: {
+  urlSelector: ClientRuntimeScopeSelector;
+  storedSelector: ClientRuntimeScopeSelector;
+  serverDefaultSelector?: ClientRuntimeScopeSelector;
+}): RuntimeScopeBootstrapCandidate[] => {
+  const candidates: RuntimeScopeBootstrapCandidate[] = [];
+  const seen = new Set<string>();
+
+  const appendCandidate = (
+    source: RuntimeScopeBootstrapCandidate['source'],
+    selector: ClientRuntimeScopeSelector,
+  ) => {
+    const normalizedSelector = normalizeSelector(selector);
+    const key = hasExplicitRuntimeScopeSelector(normalizedSelector)
+      ? buildRuntimeScopeStateKey(normalizedSelector)
+      : '__default__';
+
+    if (seen.has(key)) {
+      return;
+    }
+
+    seen.add(key);
+    candidates.push({
+      source,
+      selector: normalizedSelector,
     });
+  };
+
+  if (hasExplicitRuntimeScopeSelector(urlSelector)) {
+    appendCandidate('url', urlSelector);
   }
 
-  return {};
+  if (hasExplicitRuntimeScopeSelector(storedSelector)) {
+    appendCandidate('stored', storedSelector);
+  }
+
+  if (hasExplicitRuntimeScopeSelector(serverDefaultSelector || {})) {
+    appendCandidate('server_default', serverDefaultSelector || {});
+  }
+
+  appendCandidate('default', {});
+
+  return candidates;
+};
+
+export const resolveRuntimeScopeBootstrapSelector = ({
+  candidate,
+  selectorFromServer,
+}: {
+  candidate: RuntimeScopeBootstrapCandidate;
+  selectorFromServer: ClientRuntimeScopeSelector;
+}): ClientRuntimeScopeSelector => {
+  if (hasExplicitRuntimeScopeSelector(selectorFromServer)) {
+    return mergeRuntimeScopeSelectors(selectorFromServer, candidate.selector);
+  }
+
+  if (candidate.source === 'default') {
+    return normalizeSelector(selectorFromServer);
+  }
+
+  return normalizeSelector(candidate.selector);
 };
 
 export const shouldBlockRuntimeScopeBootstrapRender = ({
-  hasUrlSelector,
   isBrowser,
-  isServerBootstrapLoading,
+  currentUrl,
+  nextUrl,
+  isBootstrapLoading,
   routerReady,
-  selectorToSync,
   syncFailed,
+  allowLoadingWhileValidating = false,
 }: {
-  hasUrlSelector: boolean;
   isBrowser: boolean;
-  isServerBootstrapLoading: boolean;
+  currentUrl: string;
+  nextUrl?: string | null;
+  isBootstrapLoading: boolean;
   routerReady: boolean;
-  selectorToSync?: ClientRuntimeScopeSelector | null;
   syncFailed: boolean;
+  allowLoadingWhileValidating?: boolean;
 }) => {
-  if (hasUrlSelector || syncFailed) {
+  if (!isBrowser) {
     return false;
   }
 
-  if (!isBrowser || !routerReady) {
+  if (!routerReady) {
     return true;
   }
 
-  if (hasExplicitRuntimeScopeSelector(selectorToSync || {})) {
+  if (isBootstrapLoading && !allowLoadingWhileValidating) {
     return true;
   }
 
-  return isServerBootstrapLoading;
+  if (syncFailed) {
+    return false;
+  }
+
+  return Boolean(nextUrl && nextUrl !== currentUrl);
+};
+
+export const shouldDeferRuntimeScopeUrlSync = ({
+  selectorFromUrl,
+  selectorToSync,
+}: {
+  selectorFromUrl: ClientRuntimeScopeSelector;
+  selectorToSync?: ClientRuntimeScopeSelector | null;
+}) => {
+  const normalizedUrlSelector = normalizeSelector(selectorFromUrl);
+  const normalizedSelectorToSync = normalizeSelector(selectorToSync || {});
+
+  if (!hasExplicitRuntimeScopeSelector(normalizedUrlSelector)) {
+    return false;
+  }
+
+  if (!hasExplicitRuntimeScopeSelector(normalizedSelectorToSync)) {
+    return true;
+  }
+
+  return !(
+    (!normalizedUrlSelector.workspaceId ||
+      normalizedUrlSelector.workspaceId ===
+        normalizedSelectorToSync.workspaceId) &&
+    (!normalizedUrlSelector.knowledgeBaseId ||
+      normalizedUrlSelector.knowledgeBaseId ===
+        normalizedSelectorToSync.knowledgeBaseId) &&
+    (!normalizedUrlSelector.kbSnapshotId ||
+      normalizedUrlSelector.kbSnapshotId ===
+        normalizedSelectorToSync.kbSnapshotId) &&
+    (!normalizedUrlSelector.deployHash ||
+      normalizedUrlSelector.deployHash ===
+        normalizedSelectorToSync.deployHash) &&
+    (!normalizedUrlSelector.runtimeScopeId ||
+      normalizedUrlSelector.runtimeScopeId ===
+        normalizedSelectorToSync.runtimeScopeId)
+  );
 };
 
 const readStoredRuntimeScopeSelector = (
@@ -330,6 +586,13 @@ const readStoredRuntimeScopeSelector = (
   }
 };
 
+export const readPersistedRuntimeScopeSelector = ({
+  windowObject = getBrowserWindow(),
+}: {
+  windowObject?: RuntimeScopeWindowLike | null;
+} = {}): ClientRuntimeScopeSelector =>
+  readStoredRuntimeScopeSelector(getPreferredStorage(windowObject));
+
 const persistRuntimeScopeSelector = (
   storage: StorageLike | null,
   selector: ClientRuntimeScopeSelector,
@@ -350,6 +613,35 @@ const persistRuntimeScopeSelector = (
   } catch (_error) {
     // ignore storage write failures in restricted browsers
   }
+};
+
+export const writePersistedRuntimeScopeSelector = (
+  selector: ClientRuntimeScopeSelector,
+  {
+    windowObject = getBrowserWindow(),
+  }: {
+    windowObject?: RuntimeScopeWindowLike | null;
+  } = {},
+) => {
+  persistRuntimeScopeSelector(getPreferredStorage(windowObject), selector);
+};
+
+export const triggerRuntimeScopeRecovery = ({
+  windowObject = getBrowserWindow(),
+}: {
+  windowObject?: RuntimeScopeWindowLike | null;
+} = {}) => {
+  if (!windowObject) {
+    return false;
+  }
+
+  writePersistedRuntimeScopeSelector({}, { windowObject });
+
+  if (typeof windowObject.dispatchEvent !== 'function') {
+    return false;
+  }
+
+  return windowObject.dispatchEvent(createRuntimeScopeRecoveryEvent());
 };
 
 export const resolveClientRuntimeScopeSelector = ({
@@ -394,12 +686,23 @@ export const buildRuntimeScopeHeaders = (
   if (normalizedSelector.deployHash) {
     headers[HEADER_KEYS.deployHash] = normalizedSelector.deployHash;
   }
-  if (normalizedSelector.projectId) {
-    headers[HEADER_KEYS.projectId] = normalizedSelector.projectId;
+  if (
+    shouldUseProjectBridgeFallback(normalizedSelector) &&
+    normalizedSelector.runtimeScopeId
+  ) {
+    headers[HEADER_KEYS.runtimeScopeId] = normalizedSelector.runtimeScopeId;
   }
 
   return headers;
 };
+
+export const mergeRuntimeScopeRequestHeaders = (
+  previousHeaders: Record<string, any> = {},
+  selector = resolveClientRuntimeScopeSelector(),
+): Record<string, any> => ({
+  ...buildRuntimeScopeHeaders(selector),
+  ...previousHeaders,
+});
 
 export const buildRuntimeScopeUrl = (
   url: string,
@@ -408,6 +711,12 @@ export const buildRuntimeScopeUrl = (
 ): string => {
   const normalizedSelector = normalizeSelector(selector);
   const parsedUrl = new URL(url, 'http://wren.local');
+
+  Array.from(parsedUrl.searchParams.keys()).forEach((key) => {
+    if (isRuntimeScopeQueryKey(key)) {
+      parsedUrl.searchParams.delete(key);
+    }
+  });
 
   Object.entries(params).forEach(([key, value]) => {
     if (value === undefined || value === null) {
@@ -432,8 +741,14 @@ export const buildRuntimeScopeUrl = (
   if (normalizedSelector.deployHash) {
     parsedUrl.searchParams.set('deployHash', normalizedSelector.deployHash);
   }
-  if (normalizedSelector.projectId) {
-    parsedUrl.searchParams.set('projectId', normalizedSelector.projectId);
+  if (
+    shouldUseProjectBridgeFallback(normalizedSelector) &&
+    normalizedSelector.runtimeScopeId
+  ) {
+    parsedUrl.searchParams.set(
+      'runtimeScopeId',
+      normalizedSelector.runtimeScopeId,
+    );
   }
 
   return `${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}`;

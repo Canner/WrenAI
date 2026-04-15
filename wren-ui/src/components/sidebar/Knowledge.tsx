@@ -1,11 +1,8 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import styled from 'styled-components';
-import CodeOutlined from '@ant-design/icons/CodeOutlined';
-import ApiOutlined from '@ant-design/icons/ApiOutlined';
-import FunctionOutlined from '@ant-design/icons/FunctionOutlined';
-import { Path, MENU_KEY } from '@/utils/enum';
-import { InstructionsSVG } from '@/utils/svgs';
+import BookOutlined from '@ant-design/icons/BookOutlined';
+import { Path } from '@/utils/enum';
 import SidebarMenu from '@/components/sidebar/SidebarMenu';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 
@@ -20,12 +17,7 @@ const Layout = styled.div`
   overflow: hidden;
 `;
 
-const MENU_KEY_MAP = {
-  [Path.KnowledgeConnectors]: MENU_KEY.CONNECTORS,
-  [Path.KnowledgeSkills]: MENU_KEY.SKILLS,
-  [Path.KnowledgeQuestionSQLPairs]: MENU_KEY.QUESTION_SQL_PAIRS,
-  [Path.KnowledgeInstructions]: MENU_KEY.INSTRUCTIONS,
-};
+const KNOWLEDGE_MENU_KEY = 'knowledge-overview';
 
 const linkStyle = { color: 'inherit', transition: 'none' };
 
@@ -35,59 +27,17 @@ export default function Knowledge() {
 
   const menuItems = [
     {
-      'data-guideid': 'connectors',
+      'data-guideid': 'knowledge-overview',
       label: (
         <Link
           style={linkStyle}
-          href={runtimeScopeNavigation.href(Path.KnowledgeConnectors)}
+          href={runtimeScopeNavigation.hrefWorkspace(Path.Knowledge)}
         >
-          Connectors
+          知识库
         </Link>
       ),
-      icon: <ApiOutlined />,
-      key: MENU_KEY.CONNECTORS,
-      className: 'pl-4',
-    },
-    {
-      'data-guideid': 'skills',
-      label: (
-        <Link
-          style={linkStyle}
-          href={runtimeScopeNavigation.href(Path.KnowledgeSkills)}
-        >
-          Skills
-        </Link>
-      ),
-      icon: <CodeOutlined />,
-      key: MENU_KEY.SKILLS,
-      className: 'pl-4',
-    },
-    {
-      'data-guideid': 'question-sql-pairs',
-      label: (
-        <Link
-          style={linkStyle}
-          href={runtimeScopeNavigation.href(Path.KnowledgeQuestionSQLPairs)}
-        >
-          Question-SQL pairs
-        </Link>
-      ),
-      icon: <FunctionOutlined />,
-      key: MENU_KEY.QUESTION_SQL_PAIRS,
-      className: 'pl-4',
-    },
-    {
-      'data-guideid': 'instructions',
-      label: (
-        <Link
-          style={linkStyle}
-          href={runtimeScopeNavigation.href(Path.KnowledgeInstructions)}
-        >
-          Instructions
-        </Link>
-      ),
-      icon: <InstructionsSVG />,
-      key: MENU_KEY.INSTRUCTIONS,
+      icon: <BookOutlined />,
+      key: KNOWLEDGE_MENU_KEY,
       className: 'pl-4',
     },
   ];
@@ -96,7 +46,9 @@ export default function Knowledge() {
     <Layout>
       <SidebarMenu
         items={menuItems}
-        selectedKeys={MENU_KEY_MAP[router.pathname]}
+        selectedKeys={
+          router.pathname.startsWith(Path.Knowledge) ? [KNOWLEDGE_MENU_KEY] : []
+        }
       />
     </Layout>
   );

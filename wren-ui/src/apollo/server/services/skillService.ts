@@ -1,15 +1,16 @@
 import crypto from 'crypto';
 import {
   IConnectorRepository,
-  IKBSnapshotRepository,
-  IKnowledgeBaseRepository,
   IQueryOptions,
-  ISkillBindingRepository,
   ISkillDefinitionRepository,
+  ISkillMarketplaceCatalogRepository,
   IWorkspaceRepository,
-  SkillBinding,
   SkillDefinition,
+  SkillExecutionMode,
+  SkillInstalledFrom,
+  SkillMarketplaceCatalog,
 } from '../repositories';
+import { ISecretService, SecretPayload } from './secretService';
 
 export interface CreateSkillDefinitionInput {
   workspaceId: string;
@@ -19,6 +20,16 @@ export interface CreateSkillDefinitionInput {
   sourceRef?: string | null;
   entrypoint?: string | null;
   manifest?: Record<string, any> | null;
+  catalogId?: string | null;
+  instruction?: string | null;
+  isEnabled?: boolean;
+  executionMode?: SkillExecutionMode;
+  connectorId?: string | null;
+  runtimeConfig?: Record<string, any> | null;
+  kbSuggestionIds?: string[] | null;
+  installedFrom?: SkillInstalledFrom;
+  migrationSourceBindingId?: string | null;
+  secret?: SecretPayload | null;
   createdBy?: string | null;
 }
 
@@ -29,73 +40,86 @@ export interface UpdateSkillDefinitionInput {
   sourceRef?: string | null;
   entrypoint?: string | null;
   manifest?: Record<string, any> | null;
+  secret?: SecretPayload | null;
 }
 
-export interface CreateSkillBindingInput {
-  knowledgeBaseId: string;
-  kbSnapshotId?: string | null;
-  skillDefinitionId: string;
+export interface UpdateSkillDefinitionRuntimeInput {
+  instruction?: string | null;
+  isEnabled?: boolean;
+  executionMode?: SkillExecutionMode;
   connectorId?: string | null;
-  bindingConfig?: Record<string, any> | null;
-  enabled?: boolean;
-  createdBy?: string | null;
-}
-
-export interface UpdateSkillBindingInput {
-  kbSnapshotId?: string | null;
-  connectorId?: string | null;
-  bindingConfig?: Record<string, any> | null;
-  enabled?: boolean;
+  runtimeConfig?: Record<string, any> | null;
+  kbSuggestionIds?: string[] | null;
 }
 
 export interface ISkillService {
-  createSkillDefinition(input: CreateSkillDefinitionInput): Promise<SkillDefinition>;
+  createSkillDefinition(
+    input: CreateSkillDefinitionInput,
+  ): Promise<SkillDefinition>;
   updateSkillDefinition(
     skillDefinitionId: string,
     input: UpdateSkillDefinitionInput,
   ): Promise<SkillDefinition>;
-  getSkillDefinitionById(skillDefinitionId: string): Promise<SkillDefinition | null>;
-  listSkillDefinitionsByWorkspace(workspaceId: string): Promise<SkillDefinition[]>;
+  getSkillDefinitionById(
+    skillDefinitionId: string,
+  ): Promise<SkillDefinition | null>;
+  resolveSkillSecret(skillDefinitionId: string): Promise<SecretPayload | null>;
+  getResolvedSkillDefinition(
+    skillDefinitionId: string,
+  ): Promise<ResolvedSkillDefinition | null>;
+  listSkillDefinitionsByWorkspace(
+    workspaceId: string,
+  ): Promise<SkillDefinition[]>;
+  listAvailableSkills(workspaceId: string): Promise<SkillDefinition[]>;
+  listMarketplaceCatalogSkills(): Promise<SkillMarketplaceCatalog[]>;
+  installSkillFromMarketplace(input: {
+    workspaceId: string;
+    catalogId: string;
+    userId?: string | null;
+  }): Promise<SkillDefinition>;
+  toggleSkillEnabled(
+    workspaceId: string,
+    skillDefinitionId: string,
+    enabled: boolean,
+  ): Promise<SkillDefinition>;
+  updateSkillDefinitionRuntime(
+    skillDefinitionId: string,
+    input: UpdateSkillDefinitionRuntimeInput,
+  ): Promise<SkillDefinition>;
   deleteSkillDefinition(skillDefinitionId: string): Promise<void>;
-  createSkillBinding(input: CreateSkillBindingInput): Promise<SkillBinding>;
-  updateSkillBinding(
-    skillBindingId: string,
-    input: UpdateSkillBindingInput,
-  ): Promise<SkillBinding>;
-  getSkillBindingById(skillBindingId: string): Promise<SkillBinding | null>;
-  listSkillBindingsByKnowledgeBase(knowledgeBaseId: string): Promise<SkillBinding[]>;
-  deleteSkillBinding(skillBindingId: string): Promise<void>;
 }
+
+export interface ResolvedSkillDefinition extends SkillDefinition {
+  secret: SecretPayload | null;
+}
+
+const normalizeSkillExecutionMode = (): SkillExecutionMode => 'inject_only';
 
 export class SkillService implements ISkillService {
   private workspaceRepository: IWorkspaceRepository;
-  private knowledgeBaseRepository: IKnowledgeBaseRepository;
-  private kbSnapshotRepository: IKBSnapshotRepository;
   private connectorRepository: IConnectorRepository;
+  private secretService: ISecretService;
   private skillDefinitionRepository: ISkillDefinitionRepository;
-  private skillBindingRepository: ISkillBindingRepository;
+  private skillMarketplaceCatalogRepository: ISkillMarketplaceCatalogRepository;
 
   constructor({
     workspaceRepository,
-    knowledgeBaseRepository,
-    kbSnapshotRepository,
     connectorRepository,
+    secretService,
     skillDefinitionRepository,
-    skillBindingRepository,
+    skillMarketplaceCatalogRepository,
   }: {
     workspaceRepository: IWorkspaceRepository;
-    knowledgeBaseRepository: IKnowledgeBaseRepository;
-    kbSnapshotRepository: IKBSnapshotRepository;
     connectorRepository: IConnectorRepository;
+    secretService: ISecretService;
     skillDefinitionRepository: ISkillDefinitionRepository;
-    skillBindingRepository: ISkillBindingRepository;
+    skillMarketplaceCatalogRepository: ISkillMarketplaceCatalogRepository;
   }) {
     this.workspaceRepository = workspaceRepository;
-    this.knowledgeBaseRepository = knowledgeBaseRepository;
-    this.kbSnapshotRepository = kbSnapshotRepository;
     this.connectorRepository = connectorRepository;
+    this.secretService = secretService;
     this.skillDefinitionRepository = skillDefinitionRepository;
-    this.skillBindingRepository = skillBindingRepository;
+    this.skillMarketplaceCatalogRepository = skillMarketplaceCatalogRepository;
   }
 
   public async createSkillDefinition(
@@ -108,10 +132,31 @@ export class SkillService implements ISkillService {
       await this.ensureSkillNameAvailable(input.workspaceId, input.name, {
         tx,
       });
+      await this.ensureConnectorMatchesWorkspace(
+        input.workspaceId,
+        input.connectorId,
+        { tx },
+      );
+      const skillDefinitionId = crypto.randomUUID();
+      let secretRecordId: string | null = null;
+
+      if (input.secret) {
+        const secretRecord = await this.secretService.createSecretRecord(
+          {
+            workspaceId: input.workspaceId,
+            scopeType: 'skill',
+            scopeId: skillDefinitionId,
+            payload: input.secret,
+            createdBy: input.createdBy,
+          },
+          { tx },
+        );
+        secretRecordId = secretRecord.id;
+      }
 
       const skillDefinition = await this.skillDefinitionRepository.createOne(
         {
-          id: crypto.randomUUID(),
+          id: skillDefinitionId,
           workspaceId: input.workspaceId,
           name: input.name,
           runtimeKind: input.runtimeKind || 'isolated_python',
@@ -119,6 +164,16 @@ export class SkillService implements ISkillService {
           sourceRef: input.sourceRef ?? null,
           entrypoint: input.entrypoint ?? null,
           manifestJson: input.manifest ?? null,
+          catalogId: input.catalogId ?? null,
+          instruction: input.instruction ?? null,
+          isEnabled: input.isEnabled ?? true,
+          executionMode: normalizeSkillExecutionMode(),
+          connectorId: input.connectorId ?? null,
+          runtimeConfigJson: input.runtimeConfig ?? null,
+          kbSuggestionIds: input.kbSuggestionIds ?? null,
+          installedFrom: input.installedFrom ?? 'custom',
+          migrationSourceBindingId: input.migrationSourceBindingId ?? null,
+          secretRecordId,
           createdBy: input.createdBy,
         },
         { tx },
@@ -147,10 +202,7 @@ export class SkillService implements ISkillService {
         throw new Error(`Skill definition ${skillDefinitionId} not found`);
       }
 
-      if (
-        input.name !== undefined &&
-        input.name !== skillDefinition.name
-      ) {
+      if (input.name !== undefined && input.name !== skillDefinition.name) {
         await this.ensureSkillNameAvailable(
           skillDefinition.workspaceId,
           input.name,
@@ -178,6 +230,35 @@ export class SkillService implements ISkillService {
       if (Object.prototype.hasOwnProperty.call(input, 'manifest')) {
         patch.manifestJson = input.manifest ?? null;
       }
+      if (Object.prototype.hasOwnProperty.call(input, 'secret')) {
+        if (input.secret) {
+          if (skillDefinition.secretRecordId) {
+            await this.secretService.updateSecretRecord(
+              skillDefinition.secretRecordId,
+              { payload: input.secret },
+              { tx },
+            );
+          } else {
+            const secretRecord = await this.secretService.createSecretRecord(
+              {
+                workspaceId: skillDefinition.workspaceId,
+                scopeType: 'skill',
+                scopeId: skillDefinition.id,
+                payload: input.secret,
+                createdBy: skillDefinition.createdBy,
+              },
+              { tx },
+            );
+            patch.secretRecordId = secretRecord.id;
+          }
+        } else if (skillDefinition.secretRecordId) {
+          await this.secretService.deleteSecretRecord(
+            skillDefinition.secretRecordId,
+            { tx },
+          );
+          patch.secretRecordId = null;
+        }
+      }
 
       const updatedSkillDefinition =
         Object.keys(patch).length === 0
@@ -199,13 +280,209 @@ export class SkillService implements ISkillService {
   public async getSkillDefinitionById(
     skillDefinitionId: string,
   ): Promise<SkillDefinition | null> {
-    return await this.skillDefinitionRepository.findOneBy({ id: skillDefinitionId });
+    return await this.skillDefinitionRepository.findOneBy({
+      id: skillDefinitionId,
+    });
+  }
+
+  public async resolveSkillSecret(
+    skillDefinitionId: string,
+  ): Promise<SecretPayload | null> {
+    const skillDefinition =
+      await this.getSkillDefinitionById(skillDefinitionId);
+    if (!skillDefinition) {
+      throw new Error(`Skill definition ${skillDefinitionId} not found`);
+    }
+
+    if (!skillDefinition.secretRecordId) {
+      return null;
+    }
+
+    return await this.secretService.decryptSecretRecord(
+      skillDefinition.secretRecordId,
+    );
+  }
+
+  public async getResolvedSkillDefinition(
+    skillDefinitionId: string,
+  ): Promise<ResolvedSkillDefinition | null> {
+    const skillDefinition =
+      await this.getSkillDefinitionById(skillDefinitionId);
+    if (!skillDefinition) {
+      return null;
+    }
+
+    return {
+      ...skillDefinition,
+      secret: skillDefinition.secretRecordId
+        ? await this.secretService.decryptSecretRecord(
+            skillDefinition.secretRecordId,
+          )
+        : null,
+    };
   }
 
   public async listSkillDefinitionsByWorkspace(
     workspaceId: string,
   ): Promise<SkillDefinition[]> {
     return await this.skillDefinitionRepository.findAllBy({ workspaceId });
+  }
+
+  public async listAvailableSkills(
+    workspaceId: string,
+  ): Promise<SkillDefinition[]> {
+    return await this.skillDefinitionRepository.listAvailableSkillsByWorkspace(
+      workspaceId,
+    );
+  }
+
+  public async listMarketplaceCatalogSkills(): Promise<
+    SkillMarketplaceCatalog[]
+  > {
+    return await this.skillMarketplaceCatalogRepository.findAll({
+      order: 'name',
+    });
+  }
+
+  public async installSkillFromMarketplace({
+    workspaceId,
+    catalogId,
+    userId,
+  }: {
+    workspaceId: string;
+    catalogId: string;
+    userId?: string | null;
+  }): Promise<SkillDefinition> {
+    const tx = await this.skillDefinitionRepository.transaction();
+
+    try {
+      await this.ensureWorkspaceExists(workspaceId, { tx });
+      const catalog = await this.skillMarketplaceCatalogRepository.findOneBy(
+        { id: catalogId },
+        { tx },
+      );
+      if (!catalog) {
+        throw new Error(`Skill marketplace catalog ${catalogId} not found`);
+      }
+
+      const existingSkillDefinition =
+        await this.skillDefinitionRepository.findOneBy(
+          { workspaceId, catalogId },
+          { tx },
+        );
+      if (existingSkillDefinition) {
+        await this.skillDefinitionRepository.commit(tx);
+        return existingSkillDefinition;
+      }
+
+      const skillDefinition = await this.skillDefinitionRepository.createOne(
+        {
+          id: crypto.randomUUID(),
+          workspaceId,
+          name: await this.reserveSkillName(workspaceId, catalog.name, {
+            tx,
+          }),
+          runtimeKind: catalog.runtimeKind || 'isolated_python',
+          sourceType: catalog.sourceType || 'marketplace',
+          sourceRef: catalog.sourceRef ?? null,
+          entrypoint: catalog.entrypoint ?? null,
+          manifestJson: catalog.manifestJson ?? null,
+          catalogId: catalog.id,
+          instruction: catalog.defaultInstruction ?? null,
+          isEnabled: true,
+          executionMode: normalizeSkillExecutionMode(),
+          connectorId: null,
+          runtimeConfigJson: null,
+          kbSuggestionIds: null,
+          installedFrom: catalog.isBuiltin ? 'builtin' : 'marketplace',
+          migrationSourceBindingId: null,
+          secretRecordId: null,
+          createdBy: userId ?? null,
+        },
+        { tx },
+      );
+
+      await this.skillDefinitionRepository.commit(tx);
+      return skillDefinition;
+    } catch (error) {
+      await this.skillDefinitionRepository.rollback(tx);
+      throw error;
+    }
+  }
+
+  public async toggleSkillEnabled(
+    workspaceId: string,
+    skillDefinitionId: string,
+    enabled: boolean,
+  ): Promise<SkillDefinition> {
+    const skillDefinition =
+      await this.requireSkillDefinition(skillDefinitionId);
+    if (skillDefinition.workspaceId !== workspaceId) {
+      throw new Error(
+        `Skill definition ${skillDefinitionId} does not belong to workspace ${workspaceId}`,
+      );
+    }
+
+    return await this.skillDefinitionRepository.updateOne(skillDefinitionId, {
+      isEnabled: enabled,
+    });
+  }
+
+  public async updateSkillDefinitionRuntime(
+    skillDefinitionId: string,
+    input: UpdateSkillDefinitionRuntimeInput,
+  ): Promise<SkillDefinition> {
+    const tx = await this.skillDefinitionRepository.transaction();
+
+    try {
+      const skillDefinition = await this.requireSkillDefinition(
+        skillDefinitionId,
+        { tx },
+      );
+
+      if (Object.prototype.hasOwnProperty.call(input, 'connectorId')) {
+        await this.ensureConnectorMatchesWorkspace(
+          skillDefinition.workspaceId,
+          input.connectorId,
+          { tx },
+        );
+      }
+
+      const patch: Partial<SkillDefinition> = {};
+      if (Object.prototype.hasOwnProperty.call(input, 'instruction')) {
+        patch.instruction = input.instruction ?? null;
+      }
+      if (input.isEnabled !== undefined) {
+        patch.isEnabled = input.isEnabled;
+      }
+      if (input.executionMode !== undefined) {
+        patch.executionMode = normalizeSkillExecutionMode();
+      }
+      if (Object.prototype.hasOwnProperty.call(input, 'connectorId')) {
+        patch.connectorId = input.connectorId ?? null;
+      }
+      if (Object.prototype.hasOwnProperty.call(input, 'runtimeConfig')) {
+        patch.runtimeConfigJson = input.runtimeConfig ?? null;
+      }
+      if (Object.prototype.hasOwnProperty.call(input, 'kbSuggestionIds')) {
+        patch.kbSuggestionIds = input.kbSuggestionIds ?? null;
+      }
+
+      const updatedSkillDefinition =
+        Object.keys(patch).length === 0
+          ? skillDefinition
+          : await this.skillDefinitionRepository.updateOne(
+              skillDefinitionId,
+              patch,
+              { tx },
+            );
+
+      await this.skillDefinitionRepository.commit(tx);
+      return updatedSkillDefinition;
+    } catch (error) {
+      await this.skillDefinitionRepository.rollback(tx);
+      throw error;
+    }
   }
 
   public async deleteSkillDefinition(skillDefinitionId: string): Promise<void> {
@@ -221,160 +498,15 @@ export class SkillService implements ISkillService {
       }
 
       await this.skillDefinitionRepository.deleteOne(skillDefinitionId, { tx });
+      if (skillDefinition.secretRecordId) {
+        await this.secretService.deleteSecretRecord(
+          skillDefinition.secretRecordId,
+          { tx },
+        );
+      }
       await this.skillDefinitionRepository.commit(tx);
     } catch (error) {
       await this.skillDefinitionRepository.rollback(tx);
-      throw error;
-    }
-  }
-
-  public async createSkillBinding(
-    input: CreateSkillBindingInput,
-  ): Promise<SkillBinding> {
-    const tx = await this.skillBindingRepository.transaction();
-
-    try {
-      const knowledgeBase = await this.requireKnowledgeBase(
-        input.knowledgeBaseId,
-        { tx },
-      );
-      const skillDefinition = await this.requireSkillDefinition(
-        input.skillDefinitionId,
-        { tx },
-      );
-      if (skillDefinition.workspaceId !== knowledgeBase.workspaceId) {
-        throw new Error(
-          `Skill definition ${input.skillDefinitionId} does not belong to workspace ${knowledgeBase.workspaceId}`,
-        );
-      }
-
-      await this.ensureSnapshotMatchesKnowledgeBase(
-        input.knowledgeBaseId,
-        input.kbSnapshotId,
-        { tx },
-      );
-      await this.ensureConnectorMatchesKnowledgeBase(
-        knowledgeBase.workspaceId,
-        input.knowledgeBaseId,
-        input.connectorId,
-        { tx },
-      );
-
-      const skillBinding = await this.skillBindingRepository.createOne(
-        {
-          id: crypto.randomUUID(),
-          knowledgeBaseId: input.knowledgeBaseId,
-          kbSnapshotId: input.kbSnapshotId ?? null,
-          skillDefinitionId: input.skillDefinitionId,
-          connectorId: input.connectorId ?? null,
-          bindingConfig: input.bindingConfig ?? null,
-          enabled: input.enabled ?? true,
-          createdBy: input.createdBy,
-        },
-        { tx },
-      );
-
-      await this.skillBindingRepository.commit(tx);
-      return skillBinding;
-    } catch (error) {
-      await this.skillBindingRepository.rollback(tx);
-      throw error;
-    }
-  }
-
-  public async updateSkillBinding(
-    skillBindingId: string,
-    input: UpdateSkillBindingInput,
-  ): Promise<SkillBinding> {
-    const tx = await this.skillBindingRepository.transaction();
-
-    try {
-      const skillBinding = await this.skillBindingRepository.findOneBy(
-        { id: skillBindingId },
-        { tx },
-      );
-      if (!skillBinding) {
-        throw new Error(`Skill binding ${skillBindingId} not found`);
-      }
-
-      const knowledgeBase = await this.requireKnowledgeBase(
-        skillBinding.knowledgeBaseId,
-        { tx },
-      );
-
-      if (Object.prototype.hasOwnProperty.call(input, 'kbSnapshotId')) {
-        await this.ensureSnapshotMatchesKnowledgeBase(
-          skillBinding.knowledgeBaseId,
-          input.kbSnapshotId,
-          { tx },
-        );
-      }
-      if (Object.prototype.hasOwnProperty.call(input, 'connectorId')) {
-        await this.ensureConnectorMatchesKnowledgeBase(
-          knowledgeBase.workspaceId,
-          skillBinding.knowledgeBaseId,
-          input.connectorId,
-          { tx },
-        );
-      }
-
-      const patch: Partial<SkillBinding> = {};
-      if (Object.prototype.hasOwnProperty.call(input, 'kbSnapshotId')) {
-        patch.kbSnapshotId = input.kbSnapshotId ?? null;
-      }
-      if (Object.prototype.hasOwnProperty.call(input, 'connectorId')) {
-        patch.connectorId = input.connectorId ?? null;
-      }
-      if (Object.prototype.hasOwnProperty.call(input, 'bindingConfig')) {
-        patch.bindingConfig = input.bindingConfig ?? null;
-      }
-      if (input.enabled !== undefined) {
-        patch.enabled = input.enabled;
-      }
-
-      const updatedSkillBinding =
-        Object.keys(patch).length === 0
-          ? skillBinding
-          : await this.skillBindingRepository.updateOne(skillBindingId, patch, {
-              tx,
-            });
-
-      await this.skillBindingRepository.commit(tx);
-      return updatedSkillBinding;
-    } catch (error) {
-      await this.skillBindingRepository.rollback(tx);
-      throw error;
-    }
-  }
-
-  public async getSkillBindingById(
-    skillBindingId: string,
-  ): Promise<SkillBinding | null> {
-    return await this.skillBindingRepository.findOneBy({ id: skillBindingId });
-  }
-
-  public async listSkillBindingsByKnowledgeBase(
-    knowledgeBaseId: string,
-  ): Promise<SkillBinding[]> {
-    return await this.skillBindingRepository.findAllBy({ knowledgeBaseId });
-  }
-
-  public async deleteSkillBinding(skillBindingId: string): Promise<void> {
-    const tx = await this.skillBindingRepository.transaction();
-
-    try {
-      const skillBinding = await this.skillBindingRepository.findOneBy(
-        { id: skillBindingId },
-        { tx },
-      );
-      if (!skillBinding) {
-        throw new Error(`Skill binding ${skillBindingId} not found`);
-      }
-
-      await this.skillBindingRepository.deleteOne(skillBindingId, { tx });
-      await this.skillBindingRepository.commit(tx);
-    } catch (error) {
-      await this.skillBindingRepository.rollback(tx);
       throw error;
     }
   }
@@ -398,10 +530,11 @@ export class SkillService implements ISkillService {
     queryOptions?: IQueryOptions,
     currentSkillDefinitionId?: string,
   ) {
-    const existingSkillDefinition = await this.skillDefinitionRepository.findOneBy(
-      { workspaceId, name },
-      queryOptions,
-    );
+    const existingSkillDefinition =
+      await this.skillDefinitionRepository.findOneBy(
+        { workspaceId, name },
+        queryOptions,
+      );
     if (
       existingSkillDefinition &&
       existingSkillDefinition.id !== currentSkillDefinitionId
@@ -410,20 +543,6 @@ export class SkillService implements ISkillService {
         `Skill definition ${name} already exists in workspace ${workspaceId}`,
       );
     }
-  }
-
-  private async requireKnowledgeBase(
-    knowledgeBaseId: string,
-    queryOptions?: IQueryOptions,
-  ) {
-    const knowledgeBase = await this.knowledgeBaseRepository.findOneBy(
-      { id: knowledgeBaseId },
-      queryOptions,
-    );
-    if (!knowledgeBase) {
-      throw new Error(`Knowledge base ${knowledgeBaseId} not found`);
-    }
-    return knowledgeBase;
   }
 
   private async requireSkillDefinition(
@@ -440,29 +559,8 @@ export class SkillService implements ISkillService {
     return skillDefinition;
   }
 
-  private async ensureSnapshotMatchesKnowledgeBase(
-    knowledgeBaseId: string,
-    kbSnapshotId?: string | null,
-    queryOptions?: IQueryOptions,
-  ) {
-    if (!kbSnapshotId) {
-      return;
-    }
-
-    const kbSnapshot = await this.kbSnapshotRepository.findOneBy(
-      { id: kbSnapshotId },
-      queryOptions,
-    );
-    if (!kbSnapshot || kbSnapshot.knowledgeBaseId !== knowledgeBaseId) {
-      throw new Error(
-        `KB snapshot ${kbSnapshotId} does not belong to knowledge base ${knowledgeBaseId}`,
-      );
-    }
-  }
-
-  private async ensureConnectorMatchesKnowledgeBase(
+  private async ensureConnectorMatchesWorkspace(
     workspaceId: string,
-    knowledgeBaseId: string,
     connectorId?: string | null,
     queryOptions?: IQueryOptions,
   ) {
@@ -479,10 +577,30 @@ export class SkillService implements ISkillService {
         `Connector ${connectorId} does not belong to workspace ${workspaceId}`,
       );
     }
-    if (connector.knowledgeBaseId && connector.knowledgeBaseId !== knowledgeBaseId) {
-      throw new Error(
-        `Connector ${connectorId} does not belong to knowledge base ${knowledgeBaseId}`,
-      );
+  }
+
+  private async reserveSkillName(
+    workspaceId: string,
+    baseName: string,
+    queryOptions?: IQueryOptions,
+  ): Promise<string> {
+    const normalizedBaseName = baseName.trim() || 'skill';
+    let candidateName = normalizedBaseName;
+    let attempt = 1;
+
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const existingSkillDefinition =
+        await this.skillDefinitionRepository.findOneBy(
+          { workspaceId, name: candidateName },
+          queryOptions,
+        );
+      if (!existingSkillDefinition) {
+        return candidateName;
+      }
+
+      attempt += 1;
+      candidateName = `${normalizedBaseName} (${attempt})`;
     }
   }
 }

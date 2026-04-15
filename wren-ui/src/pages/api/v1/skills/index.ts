@@ -2,11 +2,27 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
 import { ApiType } from '@server/repositories/apiHistoryRepository';
 import {
-  ApiError,
   handleApiError,
   respondWithSimple,
+  ApiError,
 } from '@/apollo/server/utils/apiUtils';
 import { getLogger } from '@server/utils';
+import {
+  requirePersistedWorkspaceId,
+  toCanonicalPersistedRuntimeIdentityFromScope,
+} from '@server/utils/persistedRuntimeIdentity';
+import {
+  toSkillResponse,
+  toSkillRuntimeInput,
+  validateSkillRuntimePayload,
+  type SkillRuntimeMutationRequest,
+} from './shared';
+import {
+  assertAuthorizedWithAudit,
+  buildAuthorizationActorFromRuntimeScope,
+  buildAuthorizationContextFromRequest,
+  recordAuditEvent,
+} from '@server/authz';
 
 const logger = getLogger('API_SKILLS');
 logger.level = 'debug';
@@ -20,28 +36,11 @@ interface CreateSkillRequest {
   sourceRef?: string | null;
   entrypoint?: string | null;
   manifest?: Record<string, any> | null;
+  secret?: Record<string, any> | null;
 }
 
-const requireWorkspaceId = (runtimeScope: any) => {
-  const workspaceId = runtimeScope.workspace?.id;
-  if (!workspaceId) {
-    throw new ApiError('Workspace scope is required', 400);
-  }
-
-  return workspaceId as string;
-};
-
-const toSkillResponse = (skillDefinition: any) => ({
-  id: skillDefinition.id,
-  workspaceId: skillDefinition.workspaceId,
-  name: skillDefinition.name,
-  runtimeKind: skillDefinition.runtimeKind,
-  sourceType: skillDefinition.sourceType,
-  sourceRef: skillDefinition.sourceRef ?? null,
-  entrypoint: skillDefinition.entrypoint ?? null,
-  manifest: skillDefinition.manifestJson ?? null,
-  createdBy: skillDefinition.createdBy ?? null,
-});
+type CreateSkillMutationRequest = CreateSkillRequest &
+  SkillRuntimeMutationRequest;
 
 const validateSkillPayload = (
   payload: Partial<CreateSkillRequest>,
@@ -62,23 +61,48 @@ const validateSkillPayload = (
   ) {
     throw new ApiError('Skill manifest must be an object', 400);
   }
+
+  if (
+    payload.secret !== undefined &&
+    payload.secret !== null &&
+    (typeof payload.secret !== 'object' || Array.isArray(payload.secret))
+  ) {
+    throw new ApiError('Skill secret must be an object', 400);
+  }
 };
 
 const handleListSkills = async (
   req: NextApiRequest,
   res: NextApiResponse,
   runtimeScope: any,
-  project: any,
   startTime: number,
 ) => {
-  const workspaceId = requireWorkspaceId(runtimeScope);
-  const skills = await skillService.listSkillDefinitionsByWorkspace(workspaceId);
+  const workspaceId = requirePersistedWorkspaceId(
+    toCanonicalPersistedRuntimeIdentityFromScope(runtimeScope),
+  );
+  const actor = buildAuthorizationActorFromRuntimeScope(runtimeScope);
+  await assertAuthorizedWithAudit({
+    auditEventRepository: components.auditEventRepository,
+    actor,
+    action: 'skill.read',
+    resource: {
+      resourceType: 'workspace',
+      resourceId: workspaceId,
+      workspaceId,
+    },
+    context: buildAuthorizationContextFromRequest({
+      req,
+      sessionId: actor?.sessionId,
+      runtimeScope,
+    }),
+  });
+  const skills =
+    await skillService.listSkillDefinitionsByWorkspace(workspaceId);
 
   await respondWithSimple({
     res,
     statusCode: 200,
     responsePayload: skills.map(toSkillResponse),
-    projectId: project.id,
     runtimeScope,
     apiType: ApiType.GET_SKILLS,
     startTime,
@@ -91,12 +115,31 @@ const handleCreateSkill = async (
   req: NextApiRequest,
   res: NextApiResponse,
   runtimeScope: any,
-  project: any,
   startTime: number,
 ) => {
-  const workspaceId = requireWorkspaceId(runtimeScope);
-  const payload = req.body as CreateSkillRequest;
+  const runtimeIdentity =
+    toCanonicalPersistedRuntimeIdentityFromScope(runtimeScope);
+  const workspaceId = requirePersistedWorkspaceId(runtimeIdentity);
+  const actor = buildAuthorizationActorFromRuntimeScope(runtimeScope);
+  const auditContext = buildAuthorizationContextFromRequest({
+    req,
+    sessionId: actor?.sessionId,
+    runtimeScope,
+  });
+  const payload = req.body as CreateSkillMutationRequest;
   validateSkillPayload(payload, true);
+  validateSkillRuntimePayload(payload);
+  await assertAuthorizedWithAudit({
+    auditEventRepository: components.auditEventRepository,
+    actor,
+    action: 'skill.create',
+    resource: {
+      resourceType: 'workspace',
+      resourceId: workspaceId,
+      workspaceId,
+    },
+    context: auditContext,
+  });
 
   const skillDefinition = await skillService.createSkillDefinition({
     workspaceId,
@@ -106,14 +149,29 @@ const handleCreateSkill = async (
     sourceRef: payload.sourceRef,
     entrypoint: payload.entrypoint,
     manifest: payload.manifest,
-    createdBy: runtimeScope.userId || undefined,
+    secret: payload.secret,
+    ...toSkillRuntimeInput(payload),
+    createdBy: runtimeIdentity.actorUserId || undefined,
+  });
+
+  await recordAuditEvent({
+    auditEventRepository: components.auditEventRepository,
+    actor,
+    action: 'skill.create',
+    resource: {
+      resourceType: 'skill_definition',
+      resourceId: skillDefinition.id,
+      workspaceId,
+    },
+    result: 'succeeded',
+    context: auditContext,
+    afterJson: skillDefinition as any,
   });
 
   await respondWithSimple({
     res,
     statusCode: 201,
     responsePayload: toSkillResponse(skillDefinition),
-    projectId: project.id,
     runtimeScope,
     apiType: ApiType.CREATE_SKILL,
     startTime,
@@ -127,20 +185,18 @@ export default async function handler(
   res: NextApiResponse,
 ) {
   const startTime = Date.now();
-  let project;
   let runtimeScope;
 
   try {
     runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
-    project = runtimeScope.project;
 
     if (req.method === 'GET') {
-      await handleListSkills(req, res, runtimeScope, project, startTime);
+      await handleListSkills(req, res, runtimeScope, startTime);
       return;
     }
 
     if (req.method === 'POST') {
-      await handleCreateSkill(req, res, runtimeScope, project, startTime);
+      await handleCreateSkill(req, res, runtimeScope, startTime);
       return;
     }
 
@@ -149,10 +205,8 @@ export default async function handler(
     await handleApiError({
       error,
       res,
-      projectId: project?.id,
       runtimeScope,
-      apiType:
-        req.method === 'GET' ? ApiType.GET_SKILLS : ApiType.CREATE_SKILL,
+      apiType: req.method === 'GET' ? ApiType.GET_SKILLS : ApiType.CREATE_SKILL,
       requestPayload: req.method === 'GET' ? {} : req.body,
       headers: req.headers as Record<string, string>,
       startTime,

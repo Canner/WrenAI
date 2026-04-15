@@ -7,7 +7,7 @@ export default function GlobalLabel() {
   return (
     <>
       <GlobalOutlined className="mr-2" />
-      <Text className="gray-9">Global</Text>
+      <Text className="gray-9">全局</Text>
     </>
   );
 }

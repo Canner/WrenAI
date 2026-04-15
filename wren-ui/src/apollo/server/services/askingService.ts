@@ -1,14 +1,15 @@
 import { IWrenAIAdaptor } from '@server/adaptors/wrenAIAdaptor';
 import {
+  AskRuntimeIdentity,
   AskResultStatus,
   RecommendationQuestionsResult,
   RecommendationQuestionsInput,
   RecommendationQuestion,
   WrenAIError,
+  WrenAILanguage,
   RecommendationQuestionStatus,
   ChartStatus,
   ChartAdjustmentOption,
-  WrenAILanguage,
 } from '@server/models/adaptor';
 import { buildAskRuntimeContext } from '@server/utils/askContext';
 import { IDeployService } from './deployService';
@@ -20,7 +21,7 @@ import {
   ThreadResponseAdjustmentType,
 } from '../repositories/threadResponseRepository';
 import { getLogger } from '@server/utils';
-import { isEmpty, isNil } from 'lodash';
+import { isEmpty, isEqual, isNil } from 'lodash';
 import { safeFormatSQL } from '@server/utils/sqlFormat';
 import { DataSourceName } from '@server/types';
 import {
@@ -30,6 +31,7 @@ import {
 } from '../telemetry/telemetry';
 import {
   IAskingTaskRepository,
+  IKnowledgeBaseRepository,
   IViewRepository,
   Project,
 } from '../repositories';
@@ -45,21 +47,27 @@ import { getConfig } from '@server/config';
 import { TextBasedAnswerBackgroundTracker } from '../backgrounds/textBasedAnswerBackgroundTracker';
 import { IAskingTaskTracker, TrackedAskingResult } from './askingTaskTracker';
 import { PersistedRuntimeIdentity } from '@server/context/runtimeScope';
-import { ActorClaims } from './authService';
-import { IConnectorService } from './connectorService';
 import { ISkillService } from './skillService';
 import { Deploy } from '../repositories/deployLogRepository';
 import {
   isPersistedRuntimeIdentityMatch,
   normalizeCanonicalPersistedRuntimeIdentity,
+  resolveRuntimeScopeIdFromPersistedIdentityWithProjectBridgeFallback,
   toPersistedRuntimeIdentityFromSource,
 } from '@server/utils/persistedRuntimeIdentity';
+import { resolveProjectLanguage } from '@server/utils/runtimeExecutionContext';
 import { Manifest, WrenEngineDataSourceType } from '../mdl/type';
+import { registerShutdownCallback } from '@server/utils/shutdown';
+import {
+  applyDeterministicChartAdjustment,
+  shapeChartPreviewData,
+} from '@/utils/chartSpecRuntime';
 
 const config = getConfig();
 
 const logger = getLogger('AskingService');
 logger.level = 'debug';
+const CHART_GENERATION_SAMPLE_LIMIT = 200;
 
 // const QUERY_ID_PLACEHOLDER = '0';
 
@@ -71,18 +79,21 @@ export interface AskingPayload {
   threadId?: number;
   runtimeScopeId?: string | null;
   runtimeIdentity?: PersistedRuntimeIdentity | null;
-  actorClaims?: ActorClaims | null;
   language: string;
 }
 
 export interface AskingTaskInput {
   question: string;
+  knowledgeBaseIds?: string[];
+  selectedSkillIds?: string[];
 }
 
 export interface AskingDetailTaskInput {
   question?: string;
   sql?: string;
   trackedAskingResult?: TrackedAskingResult;
+  knowledgeBaseIds?: string[];
+  selectedSkillIds?: string[];
 }
 
 export interface AskingDetailTaskUpdateInput {
@@ -153,8 +164,8 @@ export interface IAskingService {
     payload: AskingPayload,
   ): Promise<Task>;
   cancelAskingTask(taskId: string): Promise<void>;
-  getAskingTask(taskId: string): Promise<TrackedAskingResult>;
-  getAskingTaskById(id: number): Promise<TrackedAskingResult>;
+  getAskingTask(taskId: string): Promise<TrackedAskingResult | null>;
+  getAskingTaskById(id: number): Promise<TrackedAskingResult | null>;
 
   /**
    * Asking detail task.
@@ -221,12 +232,14 @@ export interface IAskingService {
     threadResponseId: number,
     runtimeIdentity: PersistedRuntimeIdentity,
     configurations: { language: string },
+    runtimeScopeId?: string | null,
   ): Promise<ThreadResponse>;
   adjustThreadResponseChartScoped(
     threadResponseId: number,
     runtimeIdentity: PersistedRuntimeIdentity,
     input: ChartAdjustmentOption,
     configurations: { language: string },
+    runtimeScopeId?: string | null,
   ): Promise<ThreadResponse>;
   adjustThreadResponseWithSQLScoped(
     threadResponseId: number,
@@ -238,15 +251,17 @@ export interface IAskingService {
     runtimeIdentity: PersistedRuntimeIdentity,
     input: AdjustmentReasoningInput,
     configurations: { language: string },
+    runtimeScopeId?: string | null,
   ): Promise<ThreadResponse>;
   cancelAdjustThreadResponseAnswer(taskId: string): Promise<void>;
   rerunAdjustThreadResponseAnswer(
     threadResponseId: number,
     runtimeIdentity: PersistedRuntimeIdentity,
     configurations: { language: string },
+    runtimeScopeId?: string | null,
   ): Promise<{ queryId: string }>;
-  getAdjustmentTask(taskId: string): Promise<TrackedAdjustmentResult>;
-  getAdjustmentTaskById(id: number): Promise<TrackedAdjustmentResult>;
+  getAdjustmentTask(taskId: string): Promise<TrackedAdjustmentResult | null>;
+  getAdjustmentTaskById(id: number): Promise<TrackedAdjustmentResult | null>;
   changeThreadResponseAnswerDetailStatusScoped(
     responseId: number,
     runtimeIdentity: PersistedRuntimeIdentity,
@@ -366,6 +381,8 @@ class BreakdownBackgroundTracker {
   private threadResponseRepository: IThreadResponseRepository;
   private runningJobs = new Set();
   private telemetry: PostHogTelemetry;
+  private pollingIntervalId: ReturnType<typeof setInterval> | null = null;
+  private unregisterShutdown?: () => void;
 
   constructor({
     telemetry,
@@ -384,8 +401,11 @@ class BreakdownBackgroundTracker {
   }
 
   public start() {
+    if (this.pollingIntervalId) {
+      return;
+    }
     logger.info('Background tracker started');
-    setInterval(() => {
+    this.pollingIntervalId = setInterval(() => {
       const jobs = Object.values(this.tasks).map(
         (threadResponse) => async () => {
           // check if same job is running
@@ -398,6 +418,10 @@ class BreakdownBackgroundTracker {
 
           // get the answer detail
           const breakdownDetail = threadResponse.breakdownDetail;
+          if (!breakdownDetail?.queryId) {
+            this.runningJobs.delete(threadResponse.id);
+            return;
+          }
 
           // get the latest result from AI service
           const result = await this.wrenAIAdaptor.getAskDetailResult(
@@ -417,15 +441,28 @@ class BreakdownBackgroundTracker {
           // update database
           const updatedBreakdownDetail = {
             queryId: breakdownDetail.queryId,
-            status: result?.status,
-            error: result?.error,
+            status: result?.status || breakdownDetail.status,
+            error: result?.error || undefined,
             description: result?.response?.description,
             steps: result?.response?.steps,
           };
           logger.debug(`Job ${threadResponse.id} status changed, updating`);
-          await this.threadResponseRepository.updateOne(threadResponse.id, {
-            breakdownDetail: updatedBreakdownDetail,
-          });
+          const updatedThreadResponse =
+            await this.threadResponseRepository.updateOneByIdWithRuntimeScope(
+              threadResponse.id,
+              toPersistedRuntimeIdentityFromSource(threadResponse),
+              {
+                breakdownDetail: updatedBreakdownDetail,
+              },
+            );
+          if (!updatedThreadResponse) {
+            delete this.tasks[threadResponse.id];
+            this.runningJobs.delete(threadResponse.id);
+            throw new Error(
+              `Thread response ${threadResponse.id} no longer matches the tracked runtime scope`,
+            );
+          }
+          this.tasks[threadResponse.id] = updatedThreadResponse;
 
           // remove the task from tracker if it is finalized
           if (isFinalized(result.status)) {
@@ -465,6 +502,16 @@ class BreakdownBackgroundTracker {
         });
       });
     }, this.intervalTime);
+    this.unregisterShutdown = registerShutdownCallback(() => this.stop());
+  }
+
+  public stop() {
+    if (this.pollingIntervalId) {
+      clearInterval(this.pollingIntervalId);
+      this.pollingIntervalId = null;
+    }
+    this.unregisterShutdown?.();
+    this.unregisterShutdown = undefined;
   }
 
   public addTask(threadResponse: ThreadResponse) {
@@ -497,11 +544,12 @@ export class AskingService implements IAskingService {
   private askingTaskTracker: IAskingTaskTracker;
   private askingTaskRepository: IAskingTaskRepository;
   private adjustmentBackgroundTracker: AdjustmentBackgroundTaskTracker;
-  private skillService?: Pick<
-    ISkillService,
-    'listSkillBindingsByKnowledgeBase' | 'getSkillDefinitionById'
+  private knowledgeBaseRepository?: Pick<
+    IKnowledgeBaseRepository,
+    'findOneBy' | 'findAll'
   >;
-  private connectorService?: Pick<IConnectorService, 'getResolvedConnector'>;
+  private skillService?: Pick<ISkillService, 'getSkillDefinitionById'>;
+  private backgroundTrackerWorkspaceId?: string | null;
 
   constructor({
     telemetry,
@@ -515,7 +563,8 @@ export class AskingService implements IAskingService {
     queryService,
     askingTaskTracker,
     skillService,
-    connectorService,
+    knowledgeBaseRepository,
+    backgroundTrackerWorkspaceId,
   }: {
     telemetry: PostHogTelemetry;
     wrenAIAdaptor: IWrenAIAdaptor;
@@ -527,11 +576,12 @@ export class AskingService implements IAskingService {
     askingTaskRepository: IAskingTaskRepository;
     queryService: IQueryService;
     askingTaskTracker: IAskingTaskTracker;
-    skillService?: Pick<
-      ISkillService,
-      'listSkillBindingsByKnowledgeBase' | 'getSkillDefinitionById'
+    knowledgeBaseRepository?: Pick<
+      IKnowledgeBaseRepository,
+      'findOneBy' | 'findAll'
     >;
-    connectorService?: Pick<IConnectorService, 'getResolvedConnector'>;
+    skillService?: Pick<ISkillService, 'getSkillDefinitionById'>;
+    backgroundTrackerWorkspaceId?: string | null;
   }) {
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.deployService = deployService;
@@ -554,6 +604,7 @@ export class AskingService implements IAskingService {
         projectService,
         deployService,
         queryService,
+        knowledgeBaseRepository,
       });
     this.chartBackgroundTracker = new ChartBackgroundTracker({
       telemetry,
@@ -581,8 +632,9 @@ export class AskingService implements IAskingService {
 
     this.askingTaskRepository = askingTaskRepository;
     this.askingTaskTracker = askingTaskTracker;
+    this.knowledgeBaseRepository = knowledgeBaseRepository;
     this.skillService = skillService;
-    this.connectorService = connectorService;
+    this.backgroundTrackerWorkspaceId = backgroundTrackerWorkspaceId ?? null;
   }
 
   public async getThreadRecommendationQuestions(
@@ -597,14 +649,28 @@ export class AskingService implements IAskingService {
     const res: ThreadRecommendQuestionResult = {
       status: RecommendQuestionResultStatus.NOT_STARTED,
       questions: [],
-      error: null,
+      error: undefined,
     };
     if (thread.queryId && thread.questionsStatus) {
-      res.status = RecommendQuestionResultStatus[thread.questionsStatus]
-        ? RecommendQuestionResultStatus[thread.questionsStatus]
-        : res.status;
+      const mappedStatus =
+        thread.questionsStatus as keyof typeof RecommendQuestionResultStatus;
+      res.status = RecommendQuestionResultStatus[mappedStatus] || res.status;
       res.questions = thread.questions || [];
-      res.error = thread.questionsError as WrenAIError;
+      res.error = (thread.questionsError as WrenAIError) || undefined;
+
+      const shouldRegenerateInChinese =
+        res.status === RecommendQuestionResultStatus.FINISHED &&
+        this.isLikelyNonChineseQuestions(res.questions) &&
+        (await this.shouldForceChineseThreadRecommendation(thread));
+
+      if (shouldRegenerateInChinese) {
+        await this.generateThreadRecommendationQuestions(threadId);
+        return {
+          status: RecommendQuestionResultStatus.GENERATING,
+          questions: [],
+          error: undefined,
+        };
+      }
     }
     return res;
   }
@@ -642,7 +708,9 @@ export class AskingService implements IAskingService {
     const recommendQuestionData: RecommendationQuestionsInput = {
       manifest,
       runtimeScopeId: runtimeScopeId || undefined,
-      runtimeIdentity: recommendQuestionRuntimeIdentity,
+      runtimeIdentity: this.toAskRuntimeIdentity(
+        recommendQuestionRuntimeIdentity,
+      ),
       previousQuestions: questions,
       ...this.getThreadRecommendationQuestionsConfig(project),
     };
@@ -655,29 +723,73 @@ export class AskingService implements IAskingService {
       queryId: result.queryId,
       questionsStatus: RecommendationQuestionStatus.GENERATING,
       questions: [],
-      questionsError: null,
+      questionsError: undefined,
     });
     this.threadRecommendQuestionBackgroundTracker.addTask(updatedThread);
     return;
   }
 
   public async initialize() {
-    // list thread responses from database
-    // filter status not finalized and put them into background tracker
-    const threadResponses = await this.threadResponseRepository.findAll();
-    const unfininshedBreakdownThreadResponses = threadResponses.filter(
-      (threadResponse) =>
-        threadResponse?.breakdownDetail?.status &&
-        !isFinalized(
-          threadResponse?.breakdownDetail?.status as AskResultStatus,
-        ),
-    );
+    const bootstrapWorkspaceId =
+      await this.resolveBreakdownBootstrapWorkspaceId();
+    const scopeLabel = bootstrapWorkspaceId
+      ? `workspace ${bootstrapWorkspaceId}`
+      : 'all workspaces';
+
+    const unfininshedBreakdownThreadResponses = bootstrapWorkspaceId
+      ? await this.threadResponseRepository.findUnfinishedBreakdownResponsesByWorkspaceId(
+          bootstrapWorkspaceId,
+        )
+      : await this.threadResponseRepository.findUnfinishedBreakdownResponses();
     logger.info(
-      `Initialization: adding unfininshed breakdown thread responses (total: ${unfininshedBreakdownThreadResponses.length}) to background tracker`,
+      `Initialization: adding unfininshed breakdown thread responses for ${scopeLabel} (total: ${unfininshedBreakdownThreadResponses.length}) to background tracker`,
     );
     for (const threadResponse of unfininshedBreakdownThreadResponses) {
       this.breakdownBackgroundTracker.addTask(threadResponse);
     }
+
+    const unfinishedChartResponses =
+      await this.threadResponseRepository.findUnfinishedChartResponses({
+        adjustment: false,
+      });
+    logger.info(
+      `Initialization: adding unfinished chart thread responses for all workspaces (total: ${unfinishedChartResponses.length}) to background tracker`,
+    );
+    for (const threadResponse of unfinishedChartResponses) {
+      this.chartBackgroundTracker.addTask(threadResponse);
+    }
+
+    const unfinishedChartAdjustmentResponses =
+      await this.threadResponseRepository.findUnfinishedChartResponses({
+        adjustment: true,
+      });
+    logger.info(
+      `Initialization: adding unfinished chart adjustment thread responses for all workspaces (total: ${unfinishedChartAdjustmentResponses.length}) to background tracker`,
+    );
+    for (const threadResponse of unfinishedChartAdjustmentResponses) {
+      this.chartAdjustmentBackgroundTracker.addTask(threadResponse);
+    }
+  }
+
+  private async resolveBreakdownBootstrapWorkspaceId(): Promise<string | null> {
+    if (this.backgroundTrackerWorkspaceId) {
+      return this.backgroundTrackerWorkspaceId;
+    }
+
+    const knowledgeBases = await this.knowledgeBaseRepository?.findAll?.();
+    const workspaceIds = Array.from(
+      new Set(
+        (knowledgeBases || [])
+          .map((knowledgeBase) => knowledgeBase.workspaceId)
+          .filter(Boolean),
+      ),
+    );
+
+    if (workspaceIds.length === 1) {
+      return workspaceIds[0];
+    }
+
+    return null;
   }
 
   /**
@@ -691,30 +803,66 @@ export class AskingService implements IAskingService {
     threadResponseId?: number,
   ): Promise<Task> {
     const { threadId, language } = payload;
-    const threadRuntimeIdentity = threadId
-      ? await this.getThreadRuntimeIdentity(threadId, payload.runtimeIdentity)
+    const thread = threadId ? await this.getThreadById(threadId) : null;
+    const threadRuntimeIdentity = thread
+      ? toPersistedRuntimeIdentityFromSource(
+          thread,
+          payload.runtimeIdentity
+            ? normalizeCanonicalPersistedRuntimeIdentity({
+                ...payload.runtimeIdentity,
+                deployHash: null,
+              })
+            : null,
+        )
       : null;
     const runtimeIdentity = this.resolveAskingRuntimeIdentity(
       payload,
       threadRuntimeIdentity,
     );
+    const knowledgeBaseIds = this.resolveScopedKnowledgeBaseIds(
+      input.knowledgeBaseIds,
+      thread,
+      runtimeIdentity,
+    );
+    const scopedRuntimeIdentity =
+      await this.resolveRuntimeIdentityFromKnowledgeSelection(
+        runtimeIdentity,
+        knowledgeBaseIds,
+      );
+    const selectedSkillIds = this.resolveScopedSelectedSkillIds(
+      input.selectedSkillIds,
+      thread,
+    );
     const deployId =
-      runtimeIdentity.deployHash || (await this.getDeployId(runtimeIdentity));
+      scopedRuntimeIdentity.deployHash ||
+      (await this.getDeployId(scopedRuntimeIdentity));
+    const retrievalScopeIds = await this.resolveRetrievalScopeIds(
+      knowledgeBaseIds,
+      {
+        ...scopedRuntimeIdentity,
+        deployHash: scopedRuntimeIdentity.deployHash || deployId,
+      },
+    );
+    const taskRuntimeIdentity = this.buildAskTaskRuntimeIdentity(
+      scopedRuntimeIdentity,
+      scopedRuntimeIdentity.deployHash || deployId,
+    );
 
     // if it's a follow-up question, then the input will have a threadId
     // then use the threadId to get the sql and get the steps of last thread response
     // construct it into AskHistory and pass to ask
     const histories = threadId
-      ? await this.getAskingHistory(threadId, runtimeIdentity, threadResponseId)
-      : null;
+      ? await this.getAskingHistory(
+          threadId,
+          scopedRuntimeIdentity,
+          threadResponseId,
+        )
+      : undefined;
     const askRuntimeContext = await buildAskRuntimeContext({
-      runtimeIdentity: {
-        ...runtimeIdentity,
-        deployHash: runtimeIdentity.deployHash || deployId,
-      },
-      actorClaims: payload.actorClaims,
+      runtimeIdentity: this.toAskRuntimeIdentity(taskRuntimeIdentity),
+      knowledgeBaseIds,
+      selectedSkillIds,
       skillService: this.skillService,
-      connectorService: this.connectorService,
     });
     const { runtimeIdentity: _runtimeIdentity, ...askContextWithoutIdentity } =
       askRuntimeContext;
@@ -727,12 +875,19 @@ export class AskingService implements IAskingService {
       rerunFromCancelled,
       previousTaskId,
       threadResponseId,
-      runtimeIdentity: {
-        ...runtimeIdentity,
-        deployHash: runtimeIdentity.deployHash || deployId,
-      },
+      runtimeIdentity: taskRuntimeIdentity,
+      retrievalScopeIds,
       ...askContextWithoutIdentity,
     });
+
+    if (!rerunFromCancelled) {
+      await this.ensureTrackedAskingTaskPersisted(
+        response.queryId,
+        input.question,
+        taskRuntimeIdentity,
+      );
+    }
+
     return {
       id: response.queryId,
     };
@@ -807,9 +962,26 @@ export class AskingService implements IAskingService {
   ): Promise<Thread> {
     const persistedRuntimeIdentity =
       this.buildPersistedRuntimeIdentityPatch(runtimeIdentity);
+    const normalizedKnowledgeBaseIds = Array.from(
+      new Set(
+        [
+          ...(input.knowledgeBaseIds || []),
+          persistedRuntimeIdentity.knowledgeBaseId || null,
+        ].filter(Boolean),
+      ),
+    ) as string[];
+    const hasSelectedSkillIds = Array.isArray(input.selectedSkillIds);
+    const normalizedSelectedSkillIds = Array.from(
+      new Set((input.selectedSkillIds || []).filter(Boolean)),
+    );
     // 1. create a thread and the first thread response
     const thread = await this.threadRepository.createOne({
       ...persistedRuntimeIdentity,
+      knowledgeBaseIds:
+        normalizedKnowledgeBaseIds.length > 0
+          ? normalizedKnowledgeBaseIds
+          : null,
+      selectedSkillIds: hasSelectedSkillIds ? normalizedSelectedSkillIds : null,
       summary: input.question,
     });
 
@@ -819,7 +991,6 @@ export class AskingService implements IAskingService {
       question: input.question,
       sql: input.sql,
       askingTaskId: input.trackedAskingResult?.taskId,
-      skillResult: input.trackedAskingResult?.skillResult || null,
     });
 
     // if queryId is provided, update asking task
@@ -883,6 +1054,19 @@ export class AskingService implements IAskingService {
       scopedRuntimeIdentity,
     );
     if (!task) {
+      const trackedRuntimeIdentity =
+        await this.askingTaskTracker?.getTrackedRuntimeIdentity?.(queryId);
+      if (
+        trackedRuntimeIdentity &&
+        isPersistedRuntimeIdentityMatch(
+          this.normalizeRuntimeScope(trackedRuntimeIdentity) ??
+            trackedRuntimeIdentity,
+          scopedRuntimeIdentity,
+        )
+      ) {
+        return;
+      }
+
       if (!(await this.askingTaskRepository.findByQueryId(queryId))) {
         throw new Error(`Asking task ${queryId} not found`);
       }
@@ -989,7 +1173,6 @@ export class AskingService implements IAskingService {
       question: input.question,
       sql: input.sql,
       askingTaskId: input.trackedAskingResult?.taskId,
-      skillResult: input.trackedAskingResult?.skillResult || null,
     });
 
     // if queryId is provided, update asking task
@@ -1050,6 +1233,9 @@ export class AskingService implements IAskingService {
 
     if (!threadResponse) {
       throw new Error(`Thread response ${threadResponseId} not found`);
+    }
+    if (!threadResponse.sql) {
+      throw new Error(`Thread response ${threadResponseId} has no SQL`);
     }
 
     // 1. create a task on AI service to generate the detail
@@ -1130,6 +1316,7 @@ export class AskingService implements IAskingService {
     threadResponseId: number,
     runtimeIdentity: PersistedRuntimeIdentity,
     configurations: { language: string },
+    runtimeScopeId?: string | null,
   ): Promise<ThreadResponse> {
     const threadResponse = await this.threadResponseRepository.findOneBy({
       id: threadResponseId,
@@ -1138,12 +1325,40 @@ export class AskingService implements IAskingService {
     if (!threadResponse) {
       throw new Error(`Thread response ${threadResponseId} not found`);
     }
+    if (!threadResponse.sql) {
+      throw new Error(`Thread response ${threadResponseId} has no SQL`);
+    }
+
+    let previewDataSample: PreviewDataResponse | undefined;
+    try {
+      const { project, manifest } =
+        await this.getExecutionResources(runtimeIdentity);
+      previewDataSample = (await this.queryService.preview(threadResponse.sql, {
+        project,
+        manifest,
+        limit: CHART_GENERATION_SAMPLE_LIMIT,
+        modelingOnly: false,
+      })) as PreviewDataResponse;
+    } catch (error) {
+      logger.warn(
+        `Unable to fetch chart sample data for response ${threadResponseId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
 
     // 1. create a task on AI service to generate the chart
     const response = await this.wrenAIAdaptor.generateChart({
       query: threadResponse.question,
       sql: threadResponse.sql,
-      runtimeIdentity,
+      data: previewDataSample,
+      runtimeScopeId:
+        runtimeScopeId ||
+        resolveRuntimeScopeIdFromPersistedIdentityWithProjectBridgeFallback(
+          runtimeIdentity,
+        ) ||
+        undefined,
+      runtimeIdentity: this.toAskRuntimeIdentity(runtimeIdentity),
       configurations,
     });
 
@@ -1168,20 +1383,23 @@ export class AskingService implements IAskingService {
     threadResponseId: number,
     runtimeIdentity: PersistedRuntimeIdentity,
     configurations: { language: string },
+    runtimeScopeId?: string | null,
   ): Promise<ThreadResponse> {
     await this.assertResponseScope(threadResponseId, runtimeIdentity);
     return this.generateThreadResponseChart(
       threadResponseId,
       runtimeIdentity,
       configurations,
+      runtimeScopeId,
     );
   }
 
   private async adjustThreadResponseChart(
     threadResponseId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
+    _runtimeIdentity: PersistedRuntimeIdentity,
     input: ChartAdjustmentOption,
-    configurations: { language: string },
+    _configurations: { language: string },
+    _runtimeScopeId?: string | null,
   ): Promise<ThreadResponse> {
     const threadResponse = await this.threadResponseRepository.findOneBy({
       id: threadResponseId,
@@ -1190,31 +1408,25 @@ export class AskingService implements IAskingService {
     if (!threadResponse) {
       throw new Error(`Thread response ${threadResponseId} not found`);
     }
+    if (!threadResponse.sql) {
+      throw new Error(`Thread response ${threadResponseId} has no SQL`);
+    }
+    if (!threadResponse.chartDetail?.chartSchema) {
+      throw new Error(`Thread response ${threadResponseId} has no chart`);
+    }
 
-    // 1. create a task on AI service to adjust the chart
-    const response = await this.wrenAIAdaptor.adjustChart({
-      query: threadResponse.question,
-      sql: threadResponse.sql,
-      adjustmentOption: input,
-      chartSchema: threadResponse.chartDetail?.chartSchema,
-      runtimeIdentity,
-      configurations,
-    });
-
-    // 2. update the thread response with chart detail
     const updatedThreadResponse = await this.threadResponseRepository.updateOne(
       threadResponse.id,
       {
-        chartDetail: {
-          queryId: response.queryId,
-          status: ChartStatus.FETCHING,
-          adjustment: true,
-        },
+        chartDetail: applyDeterministicChartAdjustment(
+          {
+            ...threadResponse.chartDetail,
+            status: ChartStatus.FINISHED,
+          },
+          input,
+        ),
       },
     );
-
-    // 3. put the task into background tracker
-    this.chartAdjustmentBackgroundTracker.addTask(updatedThreadResponse);
 
     return updatedThreadResponse;
   }
@@ -1224,6 +1436,7 @@ export class AskingService implements IAskingService {
     runtimeIdentity: PersistedRuntimeIdentity,
     input: ChartAdjustmentOption,
     configurations: { language: string },
+    runtimeScopeId?: string | null,
   ): Promise<ThreadResponse> {
     await this.assertResponseScope(threadResponseId, runtimeIdentity);
     return this.adjustThreadResponseChart(
@@ -1231,6 +1444,7 @@ export class AskingService implements IAskingService {
       runtimeIdentity,
       input,
       configurations,
+      runtimeScopeId,
     );
   }
 
@@ -1278,6 +1492,9 @@ export class AskingService implements IAskingService {
     if (!response) {
       throw new Error(`Thread response ${responseId} not found`);
     }
+    if (!response.sql) {
+      throw new Error(`Thread response ${responseId} has no SQL`);
+    }
     const runtimeIdentity = await this.getThreadResponseRuntimeIdentity(
       response,
       fallbackRuntimeIdentity,
@@ -1286,11 +1503,50 @@ export class AskingService implements IAskingService {
       await this.getExecutionResources(runtimeIdentity);
     const eventName = TelemetryEvent.HOME_PREVIEW_ANSWER;
     try {
-      const data = (await this.queryService.preview(response.sql, {
+      const rawData = (await this.queryService.preview(response.sql, {
         project,
         manifest,
         limit,
       })) as PreviewDataResponse;
+      const shapedChartPreview = shapeChartPreviewData({
+        chartDetail: response.chartDetail,
+        previewData: rawData,
+      });
+
+      if (response.chartDetail) {
+        const nextChartDetail = {
+          ...response.chartDetail,
+          renderHints:
+            shapedChartPreview.renderHints || response.chartDetail.renderHints,
+          chartDataProfile:
+            shapedChartPreview.chartDataProfile ||
+            response.chartDetail.chartDataProfile,
+        };
+
+        if (
+          !isEqual(response.chartDetail.renderHints, nextChartDetail.renderHints) ||
+          !isEqual(
+            response.chartDetail.chartDataProfile,
+            nextChartDetail.chartDataProfile,
+          )
+        ) {
+          await this.threadResponseRepository.updateOneByIdWithRuntimeScope(
+            response.id,
+            runtimeIdentity,
+            {
+              chartDetail: nextChartDetail,
+            },
+          );
+        }
+      }
+
+      const data = {
+        ...shapedChartPreview.previewData,
+        chartDataProfile:
+          shapedChartPreview.chartDataProfile || response.chartDetail?.chartDataProfile,
+      } as PreviewDataResponse & {
+        chartDataProfile?: Record<string, unknown>;
+      };
       this.telemetry.sendEvent(eventName, { sql: response.sql });
       return data;
     } catch (err: any) {
@@ -1337,7 +1593,7 @@ export class AskingService implements IAskingService {
     );
     const { project, manifest } =
       await this.getExecutionResources(runtimeIdentity);
-    const steps = response?.breakdownDetail?.steps;
+    const steps = response?.breakdownDetail?.steps || [];
     const sql = safeFormatSQL(constructCteSql(steps, stepIndex));
     const eventName = TelemetryEvent.HOME_PREVIEW_ANSWER;
     try {
@@ -1387,7 +1643,9 @@ export class AskingService implements IAskingService {
     const response = await this.wrenAIAdaptor.generateRecommendationQuestions({
       manifest,
       runtimeScopeId: runtimeScopeId || undefined,
-      runtimeIdentity: recommendQuestionRuntimeIdentity,
+      runtimeIdentity: this.toAskRuntimeIdentity(
+        recommendQuestionRuntimeIdentity,
+      ),
       previousQuestions: input.previousQuestions,
       ...this.getThreadRecommendationQuestionsConfig(project),
     });
@@ -1426,7 +1684,7 @@ export class AskingService implements IAskingService {
     }
 
     if (response.answerDetail?.status === status) {
-      return;
+      return response;
     }
 
     const updatedResponse = await this.threadResponseRepository.updateOne(
@@ -1494,6 +1752,114 @@ export class AskingService implements IAskingService {
     return { project, deployment };
   }
 
+  private resolveScopedKnowledgeBaseIds(
+    inputKnowledgeBaseIds?: string[] | null,
+    thread?: Thread | null,
+    runtimeIdentity?: PersistedRuntimeIdentity | null,
+  ) {
+    return Array.from(
+      new Set(
+        [
+          ...(thread?.knowledgeBaseIds || []),
+          ...(inputKnowledgeBaseIds || []),
+          runtimeIdentity?.knowledgeBaseId || null,
+        ].filter(Boolean),
+      ),
+    ) as string[];
+  }
+
+  private async resolveRuntimeIdentityFromKnowledgeSelection(
+    runtimeIdentity: PersistedRuntimeIdentity,
+    knowledgeBaseIds: string[],
+  ): Promise<PersistedRuntimeIdentity> {
+    if (
+      runtimeIdentity.knowledgeBaseId ||
+      !runtimeIdentity.workspaceId ||
+      knowledgeBaseIds.length === 0
+    ) {
+      return runtimeIdentity;
+    }
+
+    const primaryKnowledgeBaseId = knowledgeBaseIds[0];
+    const lastDeploy =
+      runtimeIdentity.deployHash ||
+      (
+        await this.deployService.getLastDeploymentByRuntimeIdentity({
+          ...this.buildPersistedRuntimeIdentityPatch(runtimeIdentity),
+          workspaceId: runtimeIdentity.workspaceId,
+          knowledgeBaseId: primaryKnowledgeBaseId,
+          kbSnapshotId: null,
+          deployHash: null,
+          projectId: null,
+        })
+      )?.hash;
+
+    return this.buildPersistedRuntimeIdentityPatch({
+      ...runtimeIdentity,
+      knowledgeBaseId: primaryKnowledgeBaseId,
+      deployHash: lastDeploy || null,
+    });
+  }
+
+  private resolveScopedSelectedSkillIds(
+    inputSelectedSkillIds?: string[] | null,
+    thread?: Thread | null,
+  ) {
+    if (Array.isArray(thread?.selectedSkillIds)) {
+      return Array.from(
+        new Set((thread?.selectedSkillIds || []).filter(Boolean)),
+      );
+    }
+
+    if (Array.isArray(inputSelectedSkillIds)) {
+      return Array.from(new Set((inputSelectedSkillIds || []).filter(Boolean)));
+    }
+
+    return undefined;
+  }
+
+  private async resolveRetrievalScopeIds(
+    knowledgeBaseIds: string[],
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ) {
+    const scopedKnowledgeBaseIds = Array.from(
+      new Set(
+        [...knowledgeBaseIds, runtimeIdentity.knowledgeBaseId || null].filter(
+          Boolean,
+        ),
+      ),
+    ) as string[];
+
+    const workspaceId = runtimeIdentity.workspaceId || null;
+    const scopeIds = await Promise.all(
+      scopedKnowledgeBaseIds.map(async (knowledgeBaseId) => {
+        if (
+          knowledgeBaseId === runtimeIdentity.knowledgeBaseId &&
+          runtimeIdentity.deployHash
+        ) {
+          return runtimeIdentity.deployHash;
+        }
+
+        if (!workspaceId) {
+          return knowledgeBaseId;
+        }
+
+        const deployment =
+          await this.deployService.getLastDeploymentByRuntimeIdentity({
+            projectId: null,
+            workspaceId,
+            knowledgeBaseId,
+            kbSnapshotId: null,
+            deployHash: null,
+          });
+
+        return deployment?.hash || knowledgeBaseId;
+      }),
+    );
+
+    return Array.from(new Set(scopeIds.filter(Boolean)));
+  }
+
   private resolveAskingRuntimeIdentity(
     payload: AskingPayload,
     threadRuntimeIdentity?: PersistedRuntimeIdentity | null,
@@ -1517,6 +1883,33 @@ export class AskingService implements IAskingService {
     runtimeIdentity: PersistedRuntimeIdentity,
   ): PersistedRuntimeIdentity {
     return normalizeCanonicalPersistedRuntimeIdentity(runtimeIdentity);
+  }
+
+  private async ensureTrackedAskingTaskPersisted(
+    queryId: string,
+    question: string,
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ): Promise<void> {
+    if (!this.askingTaskRepository) {
+      return;
+    }
+
+    const existingTask = await this.askingTaskRepository.findByQueryId(queryId);
+    if (existingTask) {
+      return;
+    }
+
+    await this.askingTaskRepository.createOne({
+      queryId,
+      question,
+      detail: {
+        type: null,
+        status: AskResultStatus.UNDERSTANDING,
+        response: [],
+        error: null,
+      },
+      ...this.buildPersistedRuntimeIdentityPatch(runtimeIdentity),
+    });
   }
 
   private async getThreadById(threadId: number): Promise<Thread> {
@@ -1621,6 +2014,7 @@ export class AskingService implements IAskingService {
     threadResponseId: number,
     input: AdjustmentReasoningInput,
     configurations: { language: string },
+    runtimeScopeId?: string | null,
   ): Promise<ThreadResponse> {
     const originalThreadResponse =
       await this.threadResponseRepository.findOneBy({
@@ -1629,6 +2023,12 @@ export class AskingService implements IAskingService {
     if (!originalThreadResponse) {
       throw new Error(`Thread response ${threadResponseId} not found`);
     }
+    if (!originalThreadResponse.sql) {
+      throw new Error(`Thread response ${threadResponseId} has no SQL`);
+    }
+    const adjustmentRuntimeIdentity = input.runtimeIdentity
+      ? this.buildAskTaskRuntimeIdentity(input.runtimeIdentity)
+      : undefined;
 
     const { createdThreadResponse } =
       await this.adjustmentBackgroundTracker.createAdjustmentTask({
@@ -1636,7 +2036,13 @@ export class AskingService implements IAskingService {
         tables: input.tables,
         sqlGenerationReasoning: input.sqlGenerationReasoning,
         sql: originalThreadResponse.sql,
-        runtimeIdentity: input.runtimeIdentity,
+        runtimeScopeId:
+          runtimeScopeId ||
+          resolveRuntimeScopeIdFromPersistedIdentityWithProjectBridgeFallback(
+            adjustmentRuntimeIdentity,
+          ) ||
+          undefined,
+        runtimeIdentity: adjustmentRuntimeIdentity,
         configurations,
         question: originalThreadResponse.question,
         originalThreadResponseId: originalThreadResponse.id,
@@ -1649,12 +2055,14 @@ export class AskingService implements IAskingService {
     runtimeIdentity: PersistedRuntimeIdentity,
     input: AdjustmentReasoningInput,
     configurations: { language: string },
+    runtimeScopeId?: string | null,
   ): Promise<ThreadResponse> {
     await this.assertResponseScope(threadResponseId, runtimeIdentity);
     return this.adjustThreadResponseAnswer(
       threadResponseId,
       input,
       configurations,
+      runtimeScopeId,
     );
   }
 
@@ -1667,6 +2075,7 @@ export class AskingService implements IAskingService {
     threadResponseId: number,
     runtimeIdentity: PersistedRuntimeIdentity,
     configurations: { language: string },
+    runtimeScopeId?: string | null,
   ): Promise<{ queryId: string }> {
     const threadResponse = await this.threadResponseRepository.findOneBy({
       id: threadResponseId,
@@ -1679,6 +2088,12 @@ export class AskingService implements IAskingService {
       await this.adjustmentBackgroundTracker.rerunAdjustmentTask({
         threadId: threadResponse.threadId,
         threadResponseId,
+        runtimeScopeId:
+          runtimeScopeId ||
+          resolveRuntimeScopeIdFromPersistedIdentityWithProjectBridgeFallback(
+            runtimeIdentity,
+          ) ||
+          undefined,
         runtimeIdentity,
         configurations,
       });
@@ -1736,9 +2151,48 @@ export class AskingService implements IAskingService {
       maxCategories: config.threadRecommendationQuestionMaxCategories,
       maxQuestions: config.threadRecommendationQuestionsMaxQuestions,
       configuration: {
-        language: WrenAILanguage[project.language] || WrenAILanguage.EN,
+        language: resolveProjectLanguage(project),
       },
     };
+  }
+
+  private isLikelyNonChineseQuestions(
+    questions: RecommendationQuestion[] | undefined | null,
+  ): boolean {
+    if (!questions?.length) {
+      return false;
+    }
+
+    const joined = questions
+      .map((item) => `${item?.category || ''} ${item?.question || ''}`)
+      .join(' ');
+
+    return !/[\u3400-\u9FFF]/.test(joined);
+  }
+
+  private async shouldForceChineseThreadRecommendation(
+    thread: Thread,
+  ): Promise<boolean> {
+    try {
+      const runtimeIdentity = toPersistedRuntimeIdentityFromSource(thread);
+      const { project } = await this.getExecutionResources(runtimeIdentity);
+      const knowledgeBase =
+        runtimeIdentity.knowledgeBaseId && this.knowledgeBaseRepository
+          ? await this.knowledgeBaseRepository.findOneBy({
+              id: runtimeIdentity.knowledgeBaseId,
+            })
+          : null;
+      const preferredLanguage = resolveProjectLanguage(project, knowledgeBase);
+      return (
+        preferredLanguage === WrenAILanguage.ZH_CN ||
+        preferredLanguage === WrenAILanguage.ZH_TW
+      );
+    } catch (error) {
+      logger.warn(
+        `failed to resolve thread recommendation language for thread ${thread.id}: ${error}`,
+      );
+      return false;
+    }
   }
 
   private trackInstantRecommendedQuestionTask(
@@ -1833,6 +2287,41 @@ export class AskingService implements IAskingService {
       default:
         return null;
     }
+  }
+
+  private toAskRuntimeIdentity(
+    runtimeIdentity?: PersistedRuntimeIdentity | null,
+  ): AskRuntimeIdentity | undefined {
+    if (!runtimeIdentity) {
+      return undefined;
+    }
+
+    return {
+      ...(typeof runtimeIdentity.projectId === 'number'
+        ? { projectId: runtimeIdentity.projectId }
+        : {}),
+      workspaceId: runtimeIdentity.workspaceId ?? null,
+      knowledgeBaseId: runtimeIdentity.knowledgeBaseId ?? null,
+      kbSnapshotId: runtimeIdentity.kbSnapshotId ?? null,
+      deployHash: runtimeIdentity.deployHash ?? null,
+      actorUserId: runtimeIdentity.actorUserId ?? null,
+    };
+  }
+
+  private buildAskTaskRuntimeIdentity(
+    runtimeIdentity: PersistedRuntimeIdentity,
+    deployHash?: string | null,
+  ): AskRuntimeIdentity & PersistedRuntimeIdentity {
+    return {
+      ...(typeof runtimeIdentity.projectId === 'number'
+        ? { projectId: runtimeIdentity.projectId }
+        : {}),
+      workspaceId: runtimeIdentity.workspaceId ?? null,
+      knowledgeBaseId: runtimeIdentity.knowledgeBaseId ?? null,
+      kbSnapshotId: runtimeIdentity.kbSnapshotId ?? null,
+      deployHash: deployHash ?? runtimeIdentity.deployHash ?? null,
+      actorUserId: runtimeIdentity.actorUserId ?? null,
+    };
   }
 
   private normalizeRuntimeScope(

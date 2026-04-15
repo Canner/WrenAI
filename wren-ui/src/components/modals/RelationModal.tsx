@@ -10,6 +10,7 @@ import {
   createRelationshipFromFieldValidator,
   createRelationshipToFieldValidator,
 } from '@/utils/validator';
+import { handleFormSubmitError } from '@/utils/errorHandler';
 import useCombineFieldOptions, {
   convertDefaultValueToIdentifier,
 } from '@/hooks/useCombineFieldOptions';
@@ -57,7 +58,7 @@ export default function RelationModal(props: Props) {
   // only suitable use for modeling page
   const isUpdateMode = formMode === FORM_MODE.EDIT;
 
-  const fromCombineField = useCombineFieldOptions({ model });
+  const fromCombineField = useCombineFieldOptions({ model, enabled: visible });
   const modelValue = fromCombineField.modelOptions.find((option) => {
     const value: any = convertIdentifierToObject(option.value);
     return value.referenceName === model;
@@ -67,6 +68,7 @@ export default function RelationModal(props: Props) {
   const toCombineField = useCombineFieldOptions({
     model: toFieldModel,
     excludeModels: [model],
+    enabled: visible,
   });
 
   useEffect(() => {
@@ -78,27 +80,33 @@ export default function RelationModal(props: Props) {
     toCombineField.onModelChange(transformedValue.toField.model);
   }, [form, defaultValue, visible]);
 
-  const relationTypeOptions = Object.keys(JOIN_TYPE).map((key) => ({
-    label: getJoinTypeText(key),
-    value: JOIN_TYPE[key],
+  const relationTypeOptions = Object.values(JOIN_TYPE).map((value) => ({
+    label: getJoinTypeText(value),
+    value,
   }));
 
   const submit = () => {
     form
       .validateFields()
       .then(async (values) => {
+        if (!onSubmit) {
+          return;
+        }
         await onSubmit({ ...defaultValue, ...values });
         onClose();
       })
-      .catch(console.error);
+      .catch((error) => {
+        handleFormSubmitError(error, '保存关系失败，请稍后重试。');
+      });
   };
 
   return (
     <Modal
-      title={`${isEmpty(defaultValue) ? 'Add' : 'Update'} relationship`}
+      title={`${isEmpty(defaultValue) ? '新增' : '编辑'}关系`}
       width={750}
       visible={visible}
-      okText="Submit"
+      okText="保存"
+      cancelText="取消"
       onOk={submit}
       onCancel={onClose}
       confirmLoading={loading}
@@ -109,7 +117,7 @@ export default function RelationModal(props: Props) {
     >
       <Form form={form} preserve={false} layout="vertical">
         <Form.Item
-          label="From"
+          label="来源字段"
           name={FormFieldKey.FROM_FIELD}
           required
           rules={[
@@ -132,7 +140,7 @@ export default function RelationModal(props: Props) {
           />
         </Form.Item>
         <Form.Item
-          label="To"
+          label="目标字段"
           name={FormFieldKey.TO_FIELD}
           required
           rules={[
@@ -154,7 +162,7 @@ export default function RelationModal(props: Props) {
           />
         </Form.Item>
         <Form.Item
-          label="Type"
+          label="关系类型"
           name={FormFieldKey.TYPE}
           required
           rules={[
@@ -167,7 +175,7 @@ export default function RelationModal(props: Props) {
           <Select
             data-testid="relationship-form__type-select"
             options={relationTypeOptions}
-            placeholder="Select a relationship type"
+            placeholder="请选择关系类型"
           />
         </Form.Item>
       </Form>

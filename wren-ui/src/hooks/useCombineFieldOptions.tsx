@@ -1,22 +1,40 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useListModelsQuery } from '@/apollo/client/graphql/model.generated';
+import { message } from 'antd';
 import {
   convertObjectToIdentifier,
   convertIdentifierToObject,
 } from '@/utils/enum';
 import { RelationsDataType } from '@/components/table/ModelRelationSelectionTable';
 import { RelationFormValues } from '@/components/modals/RelationModal';
+import useModelList from '@/hooks/useModelList';
 
 interface Props {
   // The initial base model of model select
   model?: string;
   // The models to be excluded from model select
   excludeModels?: string[];
+  enabled?: boolean;
 }
 
 // for identifier keys
 const modelKeys = ['id', 'referenceName'];
 const fieldKeys = ['id', 'referenceName'];
+
+type RelationDefaultValue = {
+  fromField: {
+    modelId: string | number;
+    modelName: string;
+    fieldId: string | number;
+    fieldName: string;
+  };
+  toField: {
+    modelId: string | number;
+    modelName: string;
+    fieldId: string | number;
+    fieldName: string;
+  };
+  type?: string;
+};
 
 export const convertFormValuesToIdentifier = (
   relationFormValues: RelationFormValues,
@@ -50,7 +68,9 @@ export const convertFormValuesToIdentifier = (
   } as RelationsDataType;
 };
 
-export const convertDefaultValueToIdentifier = (defaultValue) => {
+export const convertDefaultValueToIdentifier = (
+  defaultValue: RelationDefaultValue,
+) => {
   const fromField = {
     model: {
       id: defaultValue.fromField.modelId,
@@ -85,25 +105,31 @@ export const convertDefaultValueToIdentifier = (defaultValue) => {
 };
 
 export default function useCombineFieldOptions(props: Props) {
-  const { model, excludeModels } = props;
+  const { model, excludeModels, enabled = true } = props;
 
-  const [baseModel, setBaseModel] = useState<string>(model || '');
+  const [baseModel, setBaseModel] = useState<string>(model ?? '');
 
   // bind model to baseModel
-  useEffect(() => setBaseModel(model), [model]);
+  useEffect(() => setBaseModel(model ?? ''), [model]);
 
-  const { data } = useListModelsQuery({
-    fetchPolicy: 'cache-and-network',
+  const { data } = useModelList({
+    enabled,
+    onError: (error) => {
+      message.error(error.message || '加载模型列表失败，请稍后重试。');
+    },
   });
 
   const allModels = useMemo(() => {
     if (!data) return [];
 
-    return data.listModels.map((model) => ({
+    return data.map((model) => ({
       id: model.id,
       referenceName: model.referenceName,
       displayName: model.displayName,
-      fields: model.fields,
+      fields: model.fields.filter(
+        (field): field is NonNullable<(typeof model.fields)[number]> =>
+          field != null,
+      ),
     }));
   }, [data]);
 
@@ -113,7 +139,7 @@ export default function useCombineFieldOptions(props: Props) {
         (item) =>
           !(excludeModels && excludeModels.includes(item.referenceName)),
       ),
-    [excludeModels, baseModel, data],
+    [allModels, excludeModels],
   );
 
   const modelOptions = useMemo(
@@ -128,7 +154,7 @@ export default function useCombineFieldOptions(props: Props) {
 
   const selectedModel = useMemo(
     () => filteredModels.find((item) => item.referenceName === baseModel),
-    [modelOptions, baseModel],
+    [filteredModels, baseModel],
   );
 
   const fieldOptions = useMemo(

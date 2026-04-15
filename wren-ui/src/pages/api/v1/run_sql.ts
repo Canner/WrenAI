@@ -9,13 +9,51 @@ import {
   ApiError,
   respondWith,
   handleApiError,
+  deriveRuntimeExecutionContextFromRequest,
 } from '@/apollo/server/utils/apiUtils';
 import { transformToObjects } from '@server/utils/dataUtils';
+import {
+  assertAuthorizedWithAudit,
+  buildAuthorizationActorFromRuntimeScope,
+  buildAuthorizationContextFromRequest,
+} from '@server/authz';
 
 const logger = getLogger('API_RUN_SQL');
 logger.level = 'debug';
 
-const { runtimeScopeResolver, queryService } = components;
+const { runtimeScopeResolver, queryService, auditEventRepository } = components;
+
+const assertKnowledgeBaseReadAccess = async ({
+  req,
+  runtimeScope,
+}: {
+  req: NextApiRequest;
+  runtimeScope: any;
+}) => {
+  const actor = buildAuthorizationActorFromRuntimeScope(runtimeScope);
+  await assertAuthorizedWithAudit({
+    auditEventRepository,
+    actor,
+    action: 'knowledge_base.read',
+    resource: {
+      resourceType: runtimeScope?.knowledgeBase
+        ? 'knowledge_base'
+        : 'workspace',
+      resourceId:
+        runtimeScope?.knowledgeBase?.id || runtimeScope?.workspace?.id,
+      workspaceId: runtimeScope?.workspace?.id || null,
+      attributes: {
+        workspaceKind: runtimeScope?.workspace?.kind || null,
+        knowledgeBaseKind: runtimeScope?.knowledgeBase?.kind || null,
+      },
+    },
+    context: buildAuthorizationContextFromRequest({
+      req,
+      sessionId: actor?.sessionId,
+      runtimeScope,
+    }),
+  });
+};
 
 /**
  * Validates the SQL result and ensures it has the expected format
@@ -36,20 +74,24 @@ interface RunSqlRequest {
   sql: string;
   threadId?: string;
   limit?: number;
+  dryRun?: boolean;
   workspaceId?: string;
   knowledgeBaseId?: string;
   kbSnapshotId?: string;
   deployHash?: string;
-  projectId?: number;
 }
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
-  const { sql, threadId, limit = 1000 } = req.body as RunSqlRequest;
+  const {
+    sql,
+    threadId,
+    limit = 1000,
+    dryRun = false,
+  } = req.body as RunSqlRequest;
   const startTime = Date.now();
-  let project;
   let runtimeScope;
 
   try {
@@ -63,19 +105,14 @@ export default async function handler(
       throw new ApiError('SQL is required', 400);
     }
 
-    runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
-    project = runtimeScope.project;
-    const deployment = runtimeScope.deployment;
-
-    if (!deployment) {
-      throw new ApiError(
-        'No deployment found, please deploy your project first',
-        400,
-        Errors.GeneralErrorCodes.NO_DEPLOYMENT_FOUND,
-      );
-    }
-
-    const manifest = deployment.manifest;
+    const derivedContext = await deriveRuntimeExecutionContextFromRequest({
+      req,
+      runtimeScopeResolver,
+      requireLatestExecutableSnapshot: true,
+    });
+    runtimeScope = derivedContext.runtimeScope;
+    await assertKnowledgeBaseReadAccess({ req, runtimeScope });
+    const { project, manifest } = derivedContext.executionContext;
 
     // Execute the SQL query
     try {
@@ -84,7 +121,24 @@ export default async function handler(
         limit,
         manifest,
         modelingOnly: false,
+        dryRun,
       });
+
+      if (dryRun) {
+        await respondWith({
+          res,
+          statusCode: 200,
+          responsePayload: {
+            valid: true,
+          },
+          runtimeScope,
+          apiType: ApiType.RUN_SQL,
+          startTime,
+          requestPayload: req.body,
+          headers: req.headers as Record<string, string>,
+        });
+        return;
+      }
 
       // Validate the SQL result
       const queryResult = validateSqlResult(result);
@@ -107,7 +161,6 @@ export default async function handler(
           threadId: newThreadId,
           totalRows: queryResult.data?.length || 0,
         },
-        projectId: project.id,
         runtimeScope,
         apiType: ApiType.RUN_SQL,
         startTime,
@@ -115,10 +168,14 @@ export default async function handler(
         threadId: newThreadId,
         headers: req.headers as Record<string, string>,
       });
-    } catch (queryError) {
+    } catch (queryError: unknown) {
+      const queryErrorMessage =
+        queryError instanceof Error
+          ? queryError.message
+          : 'Error executing SQL query';
       logger.error('Error executing SQL:', queryError);
       throw new ApiError(
-        queryError.message || 'Error executing SQL query',
+        queryErrorMessage,
         400,
         Errors.GeneralErrorCodes.INVALID_SQL_ERROR,
       );
@@ -127,7 +184,6 @@ export default async function handler(
     await handleApiError({
       error,
       res,
-      projectId: project?.id,
       runtimeScope,
       apiType: ApiType.RUN_SQL,
       requestPayload: req.body,

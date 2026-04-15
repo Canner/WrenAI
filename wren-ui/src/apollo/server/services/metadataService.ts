@@ -66,7 +66,7 @@ export class DataSourceMetadataService implements IDataSourceMetadataService {
     this.wrenEngineAdaptor = wrenEngineAdaptor;
   }
 
-  public async listTables(project): Promise<CompactTable[]> {
+  public async listTables(project: Project): Promise<CompactTable[]> {
     const { type: dataSource, connectionInfo } = project;
     if (dataSource === DataSourceName.DUCKDB) {
       const tables = await this.wrenEngineAdaptor.listTables();

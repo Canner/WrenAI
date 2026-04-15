@@ -58,7 +58,7 @@ describe('RuntimeScopeResolver', () => {
       id: 'snap-1',
       knowledgeBaseId: 'kb-1',
       deployHash: 'deploy-1',
-      legacyProjectId: 101,
+      bridgeProjectId: 101,
     });
     knowledgeBaseRepository.findOneBy.mockResolvedValue({
       id: 'kb-1',
@@ -101,7 +101,7 @@ describe('RuntimeScopeResolver', () => {
       id: 'snap-no-project',
       knowledgeBaseId: 'kb-no-project',
       deployHash: 'deploy-no-project',
-      legacyProjectId: null,
+      bridgeProjectId: null,
     });
     knowledgeBaseRepository.findOneBy.mockResolvedValue({
       id: 'kb-no-project',
@@ -137,7 +137,7 @@ describe('RuntimeScopeResolver', () => {
       id: 'snap-2',
       knowledgeBaseId: 'kb-2',
       deployHash: 'deploy-2',
-      legacyProjectId: null,
+      bridgeProjectId: null,
     });
     knowledgeBaseRepository.findOneBy.mockResolvedValue({
       id: 'kb-2',
@@ -197,7 +197,7 @@ describe('RuntimeScopeResolver', () => {
     expect(result.project?.id ?? result.deployment?.projectId).toBe(501);
     expect(result.deployHash).toBe('deploy-explicit');
     expect(result.selector.deployHash).toBe('deploy-explicit');
-    expect(result.selector.legacyProjectId).toBeNull();
+    expect(result.selector.bridgeProjectId).toBeNull();
     expect(deployService.getDeploymentByRuntimeIdentity).toHaveBeenCalledWith({
       workspaceId: null,
       knowledgeBaseId: null,
@@ -212,7 +212,7 @@ describe('RuntimeScopeResolver', () => {
       id: 'snap-vars',
       knowledgeBaseId: 'kb-vars',
       deployHash: 'deploy-vars',
-      legacyProjectId: 301,
+      bridgeProjectId: 301,
     });
     knowledgeBaseRepository.findOneBy.mockResolvedValue({
       id: 'kb-vars',
@@ -249,7 +249,7 @@ describe('RuntimeScopeResolver', () => {
     expect(result.source).toBe('explicit-request');
     expect(result.project?.id ?? result.deployment?.projectId).toBe(301);
     expect(result.selector.kbSnapshotId).toBe('snap-vars');
-    expect(result.selector.legacyProjectId).toBeNull();
+    expect(result.selector.bridgeProjectId).toBeNull();
   });
 
   it('ignores legacy project selectors when canonical runtime fields are present', async () => {
@@ -257,7 +257,7 @@ describe('RuntimeScopeResolver', () => {
       id: 'snap-modern',
       knowledgeBaseId: 'kb-modern',
       deployHash: 'deploy-modern',
-      legacyProjectId: 901,
+      bridgeProjectId: 901,
     });
     knowledgeBaseRepository.findOneBy.mockResolvedValue({
       id: 'kb-modern',
@@ -290,9 +290,9 @@ describe('RuntimeScopeResolver', () => {
 
     expect(result.project?.id ?? result.deployment?.projectId).toBe(901);
     expect(result.selector.kbSnapshotId).toBe('snap-modern');
-    expect(result.selector.legacyProjectId).toBeNull();
+    expect(result.selector.bridgeProjectId).toBeNull();
     expect(kbSnapshotRepository.findOneBy).not.toHaveBeenCalledWith({
-      legacyProjectId: 777,
+      bridgeProjectId: 777,
     });
     expect(deployService.getDeploymentByRuntimeIdentity).toHaveBeenCalledWith({
       workspaceId: null,
@@ -312,7 +312,7 @@ describe('RuntimeScopeResolver', () => {
           knowledgeBaseId: 'kb-1',
           kbSnapshotId: 'snap-1',
           deployHash: 'deploy-1',
-          legacyProjectId: 42,
+          bridgeProjectId: 42,
         },
         project: { id: 42 } as any,
         deployment: null,
@@ -349,7 +349,7 @@ describe('RuntimeScopeResolver', () => {
       id: 'snap-7',
       knowledgeBaseId: 'kb-7',
       deployHash: 'deploy-7',
-      legacyProjectId: 7,
+      bridgeProjectId: 7,
     });
     knowledgeBaseRepository.findOneBy.mockResolvedValue({
       id: 'kb-7',
@@ -375,7 +375,7 @@ describe('RuntimeScopeResolver', () => {
     expect(projectRepository.getCurrentProject).not.toHaveBeenCalled();
   });
 
-  it('resolves an explicit legacy project selector without workspace or deployment', async () => {
+  it('resolves a numeric runtimeScopeId through the project bridge without workspace or deployment', async () => {
     projectRepository.findOneBy.mockResolvedValue({
       id: 501,
       language: 'EN',
@@ -386,7 +386,7 @@ describe('RuntimeScopeResolver', () => {
     const result = await resolver.resolveRequestScope(
       createRequest({
         body: {
-          projectId: 501,
+          runtimeScopeId: '501',
         },
       }),
     );
@@ -396,6 +396,23 @@ describe('RuntimeScopeResolver', () => {
     expect(result.workspace).toBeNull();
     expect(result.deployment).toBeNull();
     expect(result.deployHash).toBeNull();
+    expect(result.selector.runtimeScopeId).toBe('501');
+    expect(result.selector.bridgeProjectId).toBe(501);
+    expect(kbSnapshotRepository.findOneBy).not.toHaveBeenCalledWith({
+      bridgeProjectId: 501,
+    });
+  });
+
+  it('rejects removed legacy project request keys now that canonical runtime scope ids are required', async () => {
+    await expect(
+      resolver.resolveRequestScope(
+        createRequest({
+          body: {
+            projectId: 501,
+          },
+        }),
+      ),
+    ).rejects.toThrow('Runtime scope selector is required for this request');
   });
 
   it('resolves explicit runtime scope via deploy hash bridge without kb snapshot', async () => {
@@ -435,7 +452,7 @@ describe('RuntimeScopeResolver', () => {
       id: 'snap-bridge',
       knowledgeBaseId: 'kb-bridge',
       deployHash: 'deploy-bridge',
-      legacyProjectId: 777,
+      bridgeProjectId: 777,
     });
     knowledgeBaseRepository.findOneBy.mockResolvedValue({
       id: 'kb-bridge',
@@ -471,7 +488,7 @@ describe('RuntimeScopeResolver', () => {
     expect(result.selector.workspaceId).toBe('ws-bridge');
     expect(result.selector.knowledgeBaseId).toBe('kb-bridge');
     expect(result.selector.kbSnapshotId).toBe('snap-bridge');
-    expect(result.selector.legacyProjectId).toBeNull();
+    expect(result.selector.bridgeProjectId).toBeNull();
     expect(result.project?.id ?? result.deployment?.projectId).toBe(777);
     expect(result.deployHash).toBe('deploy-bridge');
   });
@@ -486,7 +503,7 @@ describe('RuntimeScopeResolver', () => {
       id: 'snap-scope-only',
       knowledgeBaseId: 'kb-scope-only',
       deployHash: 'deploy-scope-only',
-      legacyProjectId: null,
+      bridgeProjectId: null,
     });
     workspaceRepository.findOneBy.mockResolvedValue({
       id: 'ws-scope-only',
@@ -572,48 +589,12 @@ describe('RuntimeScopeResolver', () => {
     });
   });
 
-  it('rejects when deploy hash project bridge conflicts with kb snapshot bridge', async () => {
-    kbSnapshotRepository.findOneBy.mockResolvedValueOnce({
-      id: 'snap-conflict',
-      knowledgeBaseId: 'kb-1',
-      deployHash: 'deploy-1',
-      legacyProjectId: 101,
-    });
-    knowledgeBaseRepository.findOneBy.mockResolvedValue({
-      id: 'kb-1',
-      workspaceId: 'ws-1',
-    });
-    workspaceRepository.findOneBy.mockResolvedValue({
-      id: 'ws-1',
-      status: 'active',
-    });
-    deployService.getDeploymentByRuntimeIdentity.mockResolvedValue({
-      id: 2,
-      projectId: 999,
-      hash: 'deploy-1',
-      manifest: {},
-    });
-
-    await expect(
-      resolver.resolveRequestScope(
-        createRequest({
-          body: {
-            kbSnapshotId: 'snap-conflict',
-            deployHash: 'deploy-1',
-          },
-        }),
-      ),
-    ).rejects.toThrow(
-      'deploy_hash does not match the requested kb_snapshot project bridge',
-    );
-  });
-
   it('rejects when deployHash does not match the requested kb snapshot', async () => {
     kbSnapshotRepository.findOneBy.mockResolvedValueOnce({
       id: 'snap-1',
       knowledgeBaseId: 'kb-1',
       deployHash: 'deploy-from-snapshot',
-      legacyProjectId: 101,
+      bridgeProjectId: 101,
     });
     knowledgeBaseRepository.findOneBy.mockResolvedValue({
       id: 'kb-1',
@@ -668,7 +649,7 @@ describe('RuntimeScopeResolver', () => {
       id: 'snap-1',
       knowledgeBaseId: 'kb-1',
       deployHash: 'deploy-1',
-      legacyProjectId: 44,
+      bridgeProjectId: 44,
     });
     workspaceRepository.findOneBy.mockResolvedValue({
       id: 'ws-request',
@@ -726,7 +707,7 @@ describe('RuntimeScopeResolver', () => {
     expect(result.deployHash).toBe('deploy-header');
     expect(result.selector.runtimeScopeId).toBe('deploy-header');
     expect(result.selector.deployHash).toBe('deploy-header');
-    expect(result.selector.legacyProjectId).toBeNull();
+    expect(result.selector.bridgeProjectId).toBeNull();
   });
 
   it('hydrates deployment hash when runtimeScopeId falls back to a legacy project bridge', async () => {
@@ -736,7 +717,7 @@ describe('RuntimeScopeResolver', () => {
       type: 'POSTGRES',
     });
     deployService.getDeploymentByRuntimeIdentity.mockImplementation(
-      async (runtimeIdentity) =>
+      async (runtimeIdentity: { projectId?: number | null } | null) =>
         runtimeIdentity?.projectId === 44
           ? {
               id: 5,
@@ -759,6 +740,9 @@ describe('RuntimeScopeResolver', () => {
     expect(result.deployment?.hash).toBe('deploy-legacy-44');
     expect(result.deployHash).toBe('deploy-legacy-44');
     expect(result.selector.runtimeScopeId).toBe('44');
-    expect(result.selector.legacyProjectId).toBe(44);
+    expect(result.selector.bridgeProjectId).toBe(44);
+    expect(kbSnapshotRepository.findOneBy).not.toHaveBeenCalledWith({
+      bridgeProjectId: 44,
+    });
   });
 });

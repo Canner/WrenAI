@@ -2,6 +2,7 @@ import { DashboardItem } from '@server/repositories';
 
 export interface PreviewItemResponse {
   data: Record<string, any>[];
+  chartDataProfile?: Record<string, any> | null;
   cacheHit: boolean;
   cacheCreatedAt: string | null;
   cacheOverrodeAt: string | null;

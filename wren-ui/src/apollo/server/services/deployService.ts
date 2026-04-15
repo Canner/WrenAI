@@ -1,4 +1,8 @@
-import { WrenAIDeployStatusEnum } from '@server/models/adaptor';
+import {
+  AskRuntimeIdentity,
+  WrenAIDeployStatusEnum,
+} from '@server/models/adaptor';
+import { PersistedRuntimeIdentity } from '@server/context/runtimeScope';
 import { IWrenAIAdaptor } from '../adaptors/wrenAIAdaptor';
 import {
   Deploy,
@@ -8,6 +12,14 @@ import {
 import { Manifest } from '../mdl/type';
 import { createHash } from 'node:crypto';
 import { getLogger } from '@server/utils';
+import {
+  hasCanonicalRuntimeIdentity,
+  requirePersistedProjectBridgeId,
+  resolvePersistedProjectBridgeId,
+  resolveRuntimeScopeIdFromPersistedIdentityWithProjectBridgeFallback,
+  toPersistedRuntimeIdentityPatch,
+  PersistedRuntimeIdentitySource,
+} from '@server/utils/persistedRuntimeIdentity';
 import {
   PostHogTelemetry,
   TelemetryEvent,
@@ -29,16 +41,58 @@ export interface MDLSyncResponse {
 export interface IDeployService {
   deploy(
     manifest: Manifest,
-    projectId: number,
+    runtimeIdentity: AskRuntimeIdentity | PersistedRuntimeIdentity,
     force?: boolean,
   ): Promise<DeployResponse>;
-  getLastDeployment(projectId: number): Promise<Deploy>;
-  getDeployment(projectId: number, hash?: string | null): Promise<Deploy>;
-  getInProgressDeployment(projectId: number): Promise<Deploy>;
-  createMDLHash(manifest: Manifest, projectId: number): string;
-  getMDLByHash(hash: string): Promise<string>;
-  deleteAllByProjectId(projectId: number): Promise<void>;
+  getLastDeployment(bridgeProjectId: number): Promise<Deploy | null>;
+  getLastDeploymentByRuntimeIdentity(
+    runtimeIdentity: RuntimeDeploymentLookupIdentity,
+  ): Promise<Deploy | null>;
+  getDeployment(
+    bridgeProjectId: number,
+    hash?: string | null,
+  ): Promise<Deploy | null>;
+  getDeploymentByRuntimeIdentity(
+    runtimeIdentity: RuntimeDeploymentLookupIdentity,
+  ): Promise<Deploy | null>;
+  getInProgressDeployment(bridgeProjectId: number): Promise<Deploy | null>;
+  getInProgressDeploymentByRuntimeIdentity(
+    runtimeIdentity: RuntimeDeploymentLookupIdentity,
+  ): Promise<Deploy | null>;
+  createMDLHash(manifest: Manifest, bridgeProjectId: number): string;
+  createMDLHashByRuntimeIdentity(
+    manifest: Manifest,
+    runtimeIdentity: RuntimeDeploymentLookupIdentity,
+    fallbackProjectBridgeId?: number | null,
+  ): string;
+  getMDLByHash(hash: string): Promise<string | null>;
+  deleteAllByProjectId(bridgeProjectId: number): Promise<void>;
 }
+
+type RuntimeDeploymentLookupIdentity = Pick<
+  PersistedRuntimeIdentitySource,
+  | 'projectId'
+  | 'workspaceId'
+  | 'knowledgeBaseId'
+  | 'kbSnapshotId'
+  | 'deployHash'
+>;
+
+type CanonicalRuntimeDeploymentLookupIdentity = Pick<
+  PersistedRuntimeIdentitySource,
+  'workspaceId' | 'knowledgeBaseId' | 'kbSnapshotId' | 'deployHash'
+>;
+
+const toAdaptorRuntimeIdentity = (
+  runtimeIdentity: PersistedRuntimeIdentity,
+): AskRuntimeIdentity => ({
+  projectId: runtimeIdentity.projectId ?? undefined,
+  workspaceId: runtimeIdentity.workspaceId ?? null,
+  knowledgeBaseId: runtimeIdentity.knowledgeBaseId ?? null,
+  kbSnapshotId: runtimeIdentity.kbSnapshotId ?? null,
+  deployHash: runtimeIdentity.deployHash ?? null,
+  actorUserId: runtimeIdentity.actorUserId ?? null,
+});
 
 export class DeployService implements IDeployService {
   private wrenAIAdaptor: IWrenAIAdaptor;
@@ -59,46 +113,155 @@ export class DeployService implements IDeployService {
     this.telemetry = telemetry;
   }
 
-  public async getLastDeployment(projectId) {
+  public async getLastDeployment(bridgeProjectId: number) {
     const lastDeploy =
-      await this.deployLogRepository.findLastProjectDeployLog(projectId);
+      await this.deployLogRepository.findLastProjectDeployLog(bridgeProjectId);
     if (!lastDeploy) {
       return null;
     }
     return lastDeploy;
   }
 
-  public async getDeployment(projectId, hash?: string | null) {
+  public async getLastDeploymentByRuntimeIdentity(
+    runtimeIdentity: RuntimeDeploymentLookupIdentity,
+  ) {
+    const deployment = await this.findDeploymentByDeployHash(
+      runtimeIdentity.deployHash,
+      { status: DeployStatusEnum.SUCCESS },
+    );
+    if (deployment) {
+      return deployment;
+    }
+
+    const runtimeDeployment =
+      await this.findLatestCanonicalRuntimeDeployment(runtimeIdentity);
+    if (runtimeDeployment) {
+      return runtimeDeployment;
+    }
+
+    const bridgeProjectId =
+      await this.resolveProjectBridgeIdForRuntimeLookup(runtimeIdentity);
+    if (!bridgeProjectId) {
+      return null;
+    }
+
+    return await this.getLastDeployment(bridgeProjectId);
+  }
+
+  public async getDeployment(bridgeProjectId: number, hash?: string | null) {
     if (hash) {
-      const deployment = await this.deployLogRepository.findOneBy({
-        projectId,
+      const deployment = await this.deployLogRepository.findLatestDeployLogByHash(
         hash,
-      });
-      if (deployment) {
-        return deployment;
+        {
+          projectId: bridgeProjectId,
+          status: DeployStatusEnum.SUCCESS,
+        },
+      );
+      const fallbackDeployment =
+        deployment ||
+        (await this.deployLogRepository.findLatestDeployLogByHash(hash, {
+          projectId: bridgeProjectId,
+        }));
+      if (fallbackDeployment) {
+        return fallbackDeployment;
       }
     }
 
-    return await this.getLastDeployment(projectId);
+    return await this.getLastDeployment(bridgeProjectId);
   }
 
-  public async getInProgressDeployment(projectId) {
-    return await this.deployLogRepository.findInProgressProjectDeployLog(
-      projectId,
+  public async getDeploymentByRuntimeIdentity(
+    runtimeIdentity: RuntimeDeploymentLookupIdentity,
+  ) {
+    const deployment = await this.findDeploymentByDeployHash(
+      runtimeIdentity.deployHash,
+      { status: DeployStatusEnum.SUCCESS },
+    );
+    if (deployment) {
+      return deployment;
+    }
+
+    const runtimeDeployment =
+      await this.findLatestCanonicalRuntimeDeployment(runtimeIdentity);
+    if (runtimeDeployment) {
+      return runtimeDeployment;
+    }
+
+    const bridgeProjectId =
+      await this.resolveProjectBridgeIdForRuntimeLookup(runtimeIdentity);
+    if (!bridgeProjectId) {
+      return null;
+    }
+
+    return await this.getDeployment(
+      bridgeProjectId,
+      runtimeIdentity.deployHash,
     );
   }
 
-  public async deploy(manifest, projectId, force = false) {
+  public async getInProgressDeployment(bridgeProjectId: number) {
+    return await this.deployLogRepository.findInProgressProjectDeployLog(
+      bridgeProjectId,
+    );
+  }
+
+  public async getInProgressDeploymentByRuntimeIdentity(
+    runtimeIdentity: RuntimeDeploymentLookupIdentity,
+  ) {
+    const deployment = await this.findDeploymentByDeployHash(
+      runtimeIdentity.deployHash,
+      { status: DeployStatusEnum.IN_PROGRESS },
+    );
+    if (deployment?.status === DeployStatusEnum.IN_PROGRESS) {
+      return deployment;
+    }
+
+    if (deployment) {
+      return await this.getInProgressDeployment(deployment.projectId);
+    }
+
+    const runtimeDeployment =
+      await this.findLatestInProgressCanonicalRuntimeDeployment(
+        runtimeIdentity,
+      );
+    if (runtimeDeployment) {
+      return runtimeDeployment;
+    }
+
+    const bridgeProjectId =
+      await this.resolveProjectBridgeIdForRuntimeLookup(runtimeIdentity);
+    if (!bridgeProjectId) {
+      return null;
+    }
+
+    return await this.getInProgressDeployment(bridgeProjectId);
+  }
+
+  public async deploy(
+    manifest: Manifest,
+    runtimeIdentity: AskRuntimeIdentity | PersistedRuntimeIdentity,
+    force = false,
+  ) {
     const eventName = TelemetryEvent.MODELING_DEPLOY_MDL;
     try {
+      const bridgeProjectId = await this.resolveDeployProjectBridgeId(
+        runtimeIdentity,
+        'deploy',
+      );
       // generate hash of manifest
-      const hash = this.createMDLHash(manifest, projectId);
+      const hash = this.createMDLHashByRuntimeIdentity(
+        manifest,
+        runtimeIdentity,
+        bridgeProjectId,
+      );
       logger.debug(`Deploying model, hash: ${hash}`);
 
       if (!force) {
         // check if the model current deployment
         const lastDeploy =
-          await this.deployLogRepository.findLastProjectDeployLog(projectId);
+          await this.deployLogRepository.findLastProjectDeployLog(
+            bridgeProjectId,
+          );
         if (lastDeploy && lastDeploy.hash === hash) {
           logger.log(`Model has been deployed, hash: ${hash}`);
           return { status: DeployStatusEnum.SUCCESS };
@@ -107,17 +270,25 @@ export class DeployService implements IDeployService {
       const deployData = {
         manifest,
         hash,
-        projectId,
+        projectId: bridgeProjectId,
+        ...this.buildPersistedDeploymentRuntimeIdentity(runtimeIdentity, hash),
         status: DeployStatusEnum.IN_PROGRESS,
       } as Deploy;
       const deploy = await this.deployLogRepository.createOne(deployData);
 
       // deploy to AI-service
+      const persistedAiRuntimeIdentity = toPersistedRuntimeIdentityPatch({
+        ...runtimeIdentity,
+        deployHash: hash,
+      });
+      const aiRuntimeIdentity = toAdaptorRuntimeIdentity(
+        persistedAiRuntimeIdentity,
+      );
       const { status: aiStatus, error: aiError } =
         await this.wrenAIAdaptor.deploy({
           manifest,
           hash,
-          projectId,
+          runtimeIdentity: aiRuntimeIdentity,
         });
 
       // update deploy status
@@ -154,15 +325,38 @@ export class DeployService implements IDeployService {
     }
   }
 
-  public createMDLHash(manifest: Manifest, projectId: number) {
+  public createMDLHash(manifest: Manifest, bridgeProjectId: number) {
     const manifestStr = JSON.stringify(manifest);
-    const content = `${projectId} ${manifestStr}`;
+    const content = `${bridgeProjectId} ${manifestStr}`;
     const hash = createHash('sha1').update(content).digest('hex');
     return hash;
   }
 
-  public async getMDLByHash(hash: string) {
-    const deploy = await this.deployLogRepository.findOneBy({ hash });
+  public createMDLHashByRuntimeIdentity(
+    manifest: Manifest,
+    runtimeIdentity: RuntimeDeploymentLookupIdentity,
+    fallbackProjectBridgeId?: number | null,
+  ) {
+    const scopeKey =
+      resolveRuntimeScopeIdFromPersistedIdentityWithProjectBridgeFallback(
+        runtimeIdentity,
+        fallbackProjectBridgeId,
+      );
+
+    if (scopeKey == null) {
+      throw new Error('createMDLHashByRuntimeIdentity requires a scope key');
+    }
+
+    const manifestStr = JSON.stringify(manifest);
+    const content = `${scopeKey} ${manifestStr}`;
+    return createHash('sha1').update(content).digest('hex');
+  }
+
+  public async getMDLByHash(hash: string): Promise<string | null> {
+    const deploy =
+      (await this.deployLogRepository.findLatestDeployLogByHash(hash, {
+        status: DeployStatusEnum.SUCCESS,
+      })) || (await this.deployLogRepository.findLatestDeployLogByHash(hash));
     if (!deploy) {
       return null;
     }
@@ -170,8 +364,135 @@ export class DeployService implements IDeployService {
     return Buffer.from(JSON.stringify(deploy.manifest)).toString('base64');
   }
 
-  public async deleteAllByProjectId(projectId: number): Promise<void> {
+  public async deleteAllByProjectId(bridgeProjectId: number): Promise<void> {
     // delete all deploy logs
-    await this.deployLogRepository.deleteAllBy({ projectId });
+    await this.deployLogRepository.deleteAllBy({
+      projectId: bridgeProjectId,
+    });
+  }
+
+  private async resolveDeployProjectBridgeId(
+    runtimeIdentity: RuntimeDeploymentLookupIdentity,
+    action: string,
+  ) {
+    const explicitProjectId =
+      !runtimeIdentity.deployHash &&
+      resolvePersistedProjectBridgeId(runtimeIdentity);
+    if (explicitProjectId) {
+      return explicitProjectId;
+    }
+
+    const bridgeProjectId =
+      await this.resolveProjectBridgeIdForRuntimeLookup(runtimeIdentity);
+    if (bridgeProjectId) {
+      return bridgeProjectId;
+    }
+
+    return requirePersistedProjectBridgeId(runtimeIdentity, action);
+  }
+
+  private async findDeploymentByDeployHash(
+    deployHash?: string | null,
+    options?: {
+      projectId?: number | null;
+      status?: DeployStatusEnum;
+    },
+  ): Promise<Deploy | null> {
+    if (!deployHash) {
+      return null;
+    }
+
+    const prioritizedMatch = await this.deployLogRepository.findLatestDeployLogByHash(
+      deployHash,
+      options,
+    );
+    if (prioritizedMatch) {
+      return prioritizedMatch;
+    }
+
+    return (
+      (await this.deployLogRepository.findLatestDeployLogByHash(deployHash)) ||
+      null
+    );
+  }
+
+  private async findLatestCanonicalRuntimeDeployment(
+    runtimeIdentity: CanonicalRuntimeDeploymentLookupIdentity,
+  ): Promise<Deploy | null> {
+    if (!hasCanonicalRuntimeIdentity(runtimeIdentity)) {
+      return null;
+    }
+
+    return await this.deployLogRepository.findLastRuntimeDeployLog(
+      this.buildCanonicalRuntimeDeploymentLookup(runtimeIdentity),
+    );
+  }
+
+  private async findLatestInProgressCanonicalRuntimeDeployment(
+    runtimeIdentity: CanonicalRuntimeDeploymentLookupIdentity,
+  ): Promise<Deploy | null> {
+    if (!hasCanonicalRuntimeIdentity(runtimeIdentity)) {
+      return null;
+    }
+
+    return await this.deployLogRepository.findInProgressRuntimeDeployLog(
+      this.buildCanonicalRuntimeDeploymentLookup(runtimeIdentity),
+    );
+  }
+
+  private async resolveProjectBridgeIdForRuntimeLookup(
+    runtimeIdentity: RuntimeDeploymentLookupIdentity,
+  ): Promise<number | null> {
+    const deployment = await this.findDeploymentByDeployHash(
+      runtimeIdentity.deployHash,
+    );
+    if (deployment?.projectId) {
+      return deployment.projectId;
+    }
+
+    const runtimeDeployment =
+      await this.findLatestCanonicalRuntimeDeployment(runtimeIdentity);
+    if (runtimeDeployment?.projectId) {
+      return runtimeDeployment.projectId;
+    }
+
+    if (hasCanonicalRuntimeIdentity(runtimeIdentity)) {
+      return null;
+    }
+
+    return resolvePersistedProjectBridgeId(runtimeIdentity);
+  }
+
+  private buildCanonicalRuntimeDeploymentLookup(
+    runtimeIdentity: CanonicalRuntimeDeploymentLookupIdentity,
+  ): PersistedRuntimeIdentity {
+    return toPersistedRuntimeIdentityPatch({
+      projectId: null,
+      workspaceId: runtimeIdentity.workspaceId ?? null,
+      knowledgeBaseId: runtimeIdentity.knowledgeBaseId ?? null,
+      kbSnapshotId: runtimeIdentity.kbSnapshotId ?? null,
+      deployHash: null,
+      actorUserId: null,
+    });
+  }
+
+  private buildPersistedDeploymentRuntimeIdentity(
+    runtimeIdentity: AskRuntimeIdentity | PersistedRuntimeIdentity,
+    hash: string,
+  ): Pick<
+    Deploy,
+    | 'workspaceId'
+    | 'knowledgeBaseId'
+    | 'kbSnapshotId'
+    | 'deployHash'
+    | 'actorUserId'
+  > {
+    const { projectId: _ignoredProjectId, ...persistedRuntimeIdentity } =
+      toPersistedRuntimeIdentityPatch({
+        ...runtimeIdentity,
+        deployHash: hash,
+      });
+
+    return persistedRuntimeIdentity;
   }
 }

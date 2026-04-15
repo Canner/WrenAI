@@ -13,11 +13,17 @@ const DemoBlock = styled.div`
 `;
 
 interface Props {
-  demo: any[];
+  demo: Array<{ label: string; question: string }>;
   onSelect: (data: { label: string; question: string }) => void;
 }
 
-const DemoTemplate = ({ label, question, onSelect }) => {
+type DemoItem = Props['demo'][number];
+
+const DemoTemplate = ({
+  label,
+  question,
+  onSelect,
+}: DemoItem & Pick<Props, 'onSelect'>) => {
   return (
     <Col span={8}>
       <DemoBlock

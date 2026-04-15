@@ -8,6 +8,11 @@ import {
 } from '@server/repositories';
 import { CronExpressionParser } from 'cron-parser';
 import { v4 as uuidv4 } from 'uuid';
+import { registerShutdownCallback } from '@server/utils/shutdown';
+import {
+  buildScheduledJobActor,
+  serializeAuthorizationActor,
+} from '@server/authz';
 
 const logger = getLogger('ScheduleWorker');
 logger.level = 'debug';
@@ -33,6 +38,8 @@ export class ScheduleWorker {
   private readonly executors: ScheduleWorkerExecutors;
   private readonly runningJobs = new Set<string>();
   private readonly generateId: () => string;
+  private pollingIntervalId: ReturnType<typeof setInterval> | null = null;
+  private unregisterShutdown?: () => void;
 
   constructor({
     scheduleJobRepository,
@@ -59,10 +66,23 @@ export class ScheduleWorker {
   }
 
   private start() {
+    if (this.pollingIntervalId) {
+      return;
+    }
     logger.info('Schedule worker started');
-    setInterval(() => {
+    this.pollingIntervalId = setInterval(() => {
       void this.runDueJobsOnce();
     }, this.intervalTime);
+    this.unregisterShutdown = registerShutdownCallback(() => this.stop());
+  }
+
+  public stop() {
+    if (this.pollingIntervalId) {
+      clearInterval(this.pollingIntervalId);
+      this.pollingIntervalId = null;
+    }
+    this.unregisterShutdown?.();
+    this.unregisterShutdown = undefined;
   }
 
   public async runDueJobsOnce() {
@@ -74,11 +94,11 @@ export class ScheduleWorker {
     await Promise.all(
       jobs
         .filter((job) => job.nextRunAt && new Date(job.nextRunAt) <= now)
-        .map((job) => this.runJob(job)),
+        .map((job) => this.runJobNow(job)),
     );
   }
 
-  private async runJob(job: ScheduleJob) {
+  public async runJobNow(job: ScheduleJob) {
     if (this.runningJobs.has(job.id)) {
       logger.debug(`Schedule job ${job.id} is already running`);
       return;
@@ -87,7 +107,11 @@ export class ScheduleWorker {
     const executor = this.executors[job.targetType];
     const runId = this.generateId();
     const startedAt = new Date();
-    const bindingPayload = this.buildBindingPayload(job);
+    const executionActor = buildScheduledJobActor({
+      workspaceId: job.workspaceId,
+      principalId: job.id,
+    });
+    const bindingPayload = this.buildBindingPayload(job, executionActor);
     this.runningJobs.add(job.id);
 
     try {
@@ -126,10 +150,16 @@ export class ScheduleWorker {
 
       await this.recordAuditEvent({
         workspaceId: job.workspaceId,
-        actorUserId: job.createdBy || null,
+        actorType: executionActor.principalType,
+        actorId: executionActor.principalId,
+        actorUserId: null,
+        action: 'schedule_job.run',
         entityType: 'schedule_job',
         entityId: job.id,
+        resourceType: 'schedule_job',
+        resourceId: job.id,
         eventType: 'schedule_job.succeeded',
+        result: 'succeeded',
         payloadJson: {
           ...bindingPayload,
           traceId: result.traceId || null,
@@ -153,10 +183,17 @@ export class ScheduleWorker {
       });
       await this.recordAuditEvent({
         workspaceId: job.workspaceId,
-        actorUserId: job.createdBy || null,
+        actorType: executionActor.principalType,
+        actorId: executionActor.principalId,
+        actorUserId: null,
+        action: 'schedule_job.run',
         entityType: 'schedule_job',
         entityId: job.id,
+        resourceType: 'schedule_job',
+        resourceId: job.id,
         eventType: 'schedule_job.failed',
+        result: 'failed',
+        reason: errorMessage,
         payloadJson: {
           ...bindingPayload,
           status: 'failed',
@@ -169,10 +206,20 @@ export class ScheduleWorker {
     }
   }
 
-  private buildBindingPayload(job: ScheduleJob) {
+  private buildBindingPayload(
+    job: ScheduleJob,
+    executionActor = buildScheduledJobActor({
+      workspaceId: job.workspaceId,
+      principalId: job.id,
+    }),
+  ) {
     return {
       targetType: job.targetType,
       targetId: job.targetId,
+      requestedByUserId: job.createdBy || null,
+      createdByUserId: job.createdBy || null,
+      executedBy: executionActor.principalType,
+      authorizationActor: serializeAuthorizationActor(executionActor),
       runtimeIdentity: {
         workspaceId: job.workspaceId,
         knowledgeBaseId: job.knowledgeBaseId,
@@ -197,9 +244,9 @@ export class ScheduleWorker {
         .next()
         .toDate();
     } catch (error) {
-      logger.error(
-        `Failed to parse schedule cron expression: ${error.message}`,
-      );
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      logger.error(`Failed to parse schedule cron expression: ${errorMessage}`);
       return null;
     }
   }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Form, FormInstance, Select } from 'antd';
+import { Form, FormInstance, Select, message } from 'antd';
 import { TransferItem } from 'antd/es/transfer';
 import { isEmpty } from 'lodash';
 import { FORM_MODE } from '@/utils/enum';
@@ -11,10 +11,15 @@ import TableTransfer, {
   defaultColumns,
 } from '@/components/table/TableTransfer';
 import { useListDataSourceTablesQuery } from '@/apollo/client/graphql/dataSource.generated';
-import { useListModelsQuery } from '@/apollo/client/graphql/model.generated';
 import { CompactTable, CompactColumn } from '@/apollo/client/graphql/__types__';
+import {
+  getCompactTableCatalogLabel,
+  getCompactTableQualifiedName,
+  getCompactTableScopedName,
+} from '@/utils/compactTable';
+import useModelList from '@/hooks/useModelList';
 
-const { Option } = Select;
+const { Option, OptGroup } = Select;
 
 const FormFieldKey = {
   SOURCE_TABLE: 'sourceTableName',
@@ -41,26 +46,33 @@ export default function ModelForm(props: Props) {
   const { defaultValue, form, formMode } = props;
 
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
-  const [sourceTableName, setSourceTableName] = useState<string>(undefined);
+  const [sourceTableName, setSourceTableName] = useState<string | undefined>(
+    undefined,
+  );
   const sourceTableFieldValue = Form.useWatch(FormFieldKey.SOURCE_TABLE, form);
 
   const isUpdateMode = formMode === FORM_MODE.EDIT;
 
-  const { data: listModelsQueryResult, loading: listModelsQueryLoading } =
-    useListModelsQuery({
-      fetchPolicy: 'cache-and-network',
-      skip: isUpdateMode,
-    });
+  const { data: modelListData, loading: listModelsQueryLoading } = useModelList(
+    {
+      enabled: !isUpdateMode,
+      onError: (error) => {
+        message.error(error.message || '加载模型列表失败，请稍后重试。');
+      },
+    },
+  );
+  const existingModels = modelListData || [];
 
   const { data, loading: fetching } = useListDataSourceTablesQuery({
     fetchPolicy: 'cache-and-network',
-    onError: (error) => console.error(error),
+    onError: (error) => {
+      message.error(error.message || '加载数据源表失败，请稍后重试。');
+    },
   });
 
   const dataSourceTables = data?.listDataSourceTables || [];
-  const existingModels = listModelsQueryResult?.listModels;
   const inUsedModelList = useMemo(
-    () => (existingModels || []).map((model) => model.sourceTableName),
+    () => existingModels.map((model) => model.sourceTableName),
     [existingModels],
   );
 
@@ -101,7 +113,7 @@ export default function ModelForm(props: Props) {
     if (defaultValue) {
       const fields: string[] = defaultValue.fields
         .map((field: DiagramModelField) => field.referenceName)
-        .filter((col) => columns.find((c) => c.name === col));
+        .filter((col: string) => columns.some((c) => c.name === col));
 
       const primaryKeyField = defaultValue.fields.find(
         (field: DiagramModelField) => field.isPrimaryKey,
@@ -117,18 +129,40 @@ export default function ModelForm(props: Props) {
     }
   }, [defaultValue, form, columns]);
 
-  const tableOptions: JSX.Element[] = dataSourceTables.map(
-    (table: CompactTable) => {
-      const disabled = inUsedModelList.includes(table.name);
-      const option = {
-        disabled,
-        children: table.name,
-        value: table.name,
-      };
+  const tableOptions: JSX.Element[] = useMemo(() => {
+    const groups = new Map<string, CompactTable[]>();
 
-      return <Option {...option} key={option.value} />;
-    },
-  );
+    [...dataSourceTables]
+      .sort((left, right) =>
+        getCompactTableQualifiedName(left).localeCompare(
+          getCompactTableQualifiedName(right),
+        ),
+      )
+      .forEach((table) => {
+        const catalogLabel = getCompactTableCatalogLabel(table);
+        groups.set(catalogLabel, [...(groups.get(catalogLabel) || []), table]);
+      });
+
+    return Array.from(groups.entries()).map(([catalogLabel, tables]) => (
+      <OptGroup key={catalogLabel} label={catalogLabel}>
+        {tables.map((table) => {
+          const disabled = inUsedModelList.includes(table.name);
+          const qualifiedName = getCompactTableQualifiedName(table);
+
+          return (
+            <Option
+              key={table.name}
+              value={table.name}
+              disabled={disabled}
+              title={qualifiedName}
+            >
+              {getCompactTableScopedName(table)}
+            </Option>
+          );
+        })}
+      </OptGroup>
+    ));
+  }, [dataSourceTables, inUsedModelList]);
 
   const onChangeColumns = (newKeys: string[]) => setSelectedColumns(newKeys);
 
@@ -140,7 +174,7 @@ export default function ModelForm(props: Props) {
         {!isUpdateMode && (
           <div>
             <Form.Item
-              label="Select a table"
+              label="选择数据表"
               name={FormFieldKey.SOURCE_TABLE}
               required
               rules={[
@@ -152,8 +186,9 @@ export default function ModelForm(props: Props) {
             >
               <Select
                 getPopupContainer={(trigger) => trigger.parentElement!}
-                placeholder="Select a table"
+                placeholder="请选择数据表"
                 showSearch
+                optionFilterProp="title"
                 loading={dataSourceTablesLoading}
                 disabled={isUpdateMode}
               >
@@ -164,7 +199,7 @@ export default function ModelForm(props: Props) {
         )}
         <Loading spinning={isUpdateMode ? dataSourceTablesLoading : false}>
           <Form.Item
-            label="Select columns"
+            label="选择字段"
             name={FormFieldKey.COLUMNS}
             rules={[
               {
@@ -184,13 +219,13 @@ export default function ModelForm(props: Props) {
               }
               leftColumns={defaultColumns}
               rightColumns={defaultColumns}
-              titles={['Available Columns', 'Target Columns']}
+              titles={['可选字段', '已选字段']}
               showSearch
             />
           </Form.Item>
         </Loading>
         <Form.Item
-          label="Select primary key"
+          label="选择主键"
           name={FormFieldKey.PRIMARY_KEY}
           rules={[
             {
@@ -200,7 +235,7 @@ export default function ModelForm(props: Props) {
         >
           <Select
             getPopupContainer={(trigger) => trigger.parentElement!}
-            placeholder="Select a column"
+            placeholder="请选择字段"
             showSearch
             allowClear
           >

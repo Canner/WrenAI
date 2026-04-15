@@ -10,7 +10,10 @@ from langfuse.decorators import observe
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
-from src.pipelines.common import clean_up_new_lines, normalize_runtime_scope_id
+from src.pipelines.common import (
+    clean_up_new_lines,
+    resolve_pipeline_runtime_scope_id,
+)
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
@@ -157,11 +160,11 @@ async def regenerate_sql(
 async def post_process(
     regenerate_sql: dict,
     post_processor: SQLGenPostProcessor,
-    project_id: str | None = None,
+    runtime_scope_id: str | None = None,
 ) -> dict:
     return await post_processor.run(
         regenerate_sql.get("replies"),
-        project_id=project_id,
+        runtime_scope_id=runtime_scope_id,
     )
 
 
@@ -199,15 +202,18 @@ class SQLRegeneration(BasicPipeline):
         sql: str,
         sql_samples: list[dict] | None = None,
         instructions: list[dict] | None = None,
-        project_id: str | None = None,
+        runtime_scope_id: str | None = None,
         has_calculated_field: bool = False,
         has_metric: bool = False,
         has_json_field: bool = False,
         sql_functions: list[SqlFunction] | None = None,
         sql_knowledge: SqlKnowledge | None = None,
+        bridge_scope_id: str | None = None,
     ):
         logger.info("SQL Regeneration pipeline is running...")
-        runtime_scope_id = normalize_runtime_scope_id(project_id)
+        runtime_scope_id = resolve_pipeline_runtime_scope_id(
+            runtime_scope_id, bridge_scope_id=bridge_scope_id
+        )
 
         return await self._pipe.execute(
             ["post_process"],
@@ -217,7 +223,7 @@ class SQLRegeneration(BasicPipeline):
                 "sql": sql,
                 "sql_samples": sql_samples,
                 "instructions": instructions,
-                "project_id": runtime_scope_id,
+                "runtime_scope_id": runtime_scope_id,
                 "has_calculated_field": has_calculated_field,
                 "has_metric": has_metric,
                 "has_json_field": has_json_field,

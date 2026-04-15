@@ -21,13 +21,11 @@ export default function CalculatedFieldTable(props: Props) {
           ? {
               expandedRowRender: (record) => (
                 <ExpandableRows
-                  data={[
-                    { title: 'Description', value: record.description || '-' },
-                  ]}
+                  data={[{ title: '描述', value: record.description || '-' }]}
                 />
               ),
             }
-          : null
+          : undefined
       }
     />
   );

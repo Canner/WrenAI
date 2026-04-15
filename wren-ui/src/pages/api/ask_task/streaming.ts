@@ -1,8 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
-import { toPersistedRuntimeIdentity } from '@/apollo/server/context/runtimeScope';
+import { getLogger } from '@server/utils';
+import { toCanonicalPersistedRuntimeIdentityFromScope } from '@server/utils/persistedRuntimeIdentity';
 
 const { wrenAIAdaptor, askingService, runtimeScopeResolver } = components;
+const logger = getLogger('API_ASK_TASK_STREAMING');
 
 export default async function handler(
   req: NextApiRequest,
@@ -23,7 +25,7 @@ export default async function handler(
     const runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
     await askingService.assertAskingTaskScope(
       queryId as string,
-      toPersistedRuntimeIdentity(runtimeScope),
+      toCanonicalPersistedRuntimeIdentityFromScope(runtimeScope),
     );
     const stream = await wrenAIAdaptor.getAskStreamingResult(queryId as string);
 
@@ -42,7 +44,7 @@ export default async function handler(
       stream.destroy();
     });
   } catch (error) {
-    console.error(error);
+    logger.error('Failed to stream asking task', error);
     res.status(500).end();
   }
 }

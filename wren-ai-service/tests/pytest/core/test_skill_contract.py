@@ -5,7 +5,7 @@ from src.core.skill_contract import (
 )
 
 
-def test_skill_execution_request_accepts_camel_case_aliases():
+def test_skill_execution_request_accepts_current_shape_and_ignores_legacy_fields():
     request = SkillExecutionRequest.model_validate(
         {
             "query": "本月 GMV",
@@ -15,44 +15,29 @@ def test_skill_execution_request_accepts_camel_case_aliases():
                 "kbSnapshotId": "snap-1",
                 "deployHash": "deploy-1",
             },
-            "actorClaims": {
-                "userId": "user-1",
-                "workspaceMemberId": "member-1",
-                "roleKeys": ["owner"],
-                "permissionScopes": ["knowledge_base:*"],
-            },
-            "connectors": [
-                {
-                    "id": "connector-1",
-                    "type": "postgres",
-                    "displayName": "Warehouse",
-                    "config": {"schema": "public"},
-                }
-            ],
-            "secrets": [
-                {
-                    "id": "secret-1",
-                    "values": {"password": "redacted"},
-                    "redactedKeys": ["password"],
-                }
-            ],
             "historyWindow": [
                 {
                     "role": "user",
                     "content": "上个月 GMV 呢？",
                 }
             ],
-            "skillConfig": {"mode": "hybrid"},
+            "actorClaims": {
+                "userId": "user-1",
+            },
+            "connectors": [{"id": "connector-1"}],
+            "secrets": [{"id": "secret-1"}],
+            "skillConfig": {"timeoutSec": 30},
         }
     )
 
     assert request.runtime_identity.workspace_id == "workspace-1"
     assert request.runtime_identity.knowledge_base_id == "kb-1"
-    assert request.actor_claims.user_id == "user-1"
-    assert request.connectors[0].display_name == "Warehouse"
-    assert request.secrets[0].redacted_keys == ["password"]
     assert request.history_window[0].content == "上个月 GMV 呢？"
-    assert request.skill_config == {"mode": "hybrid"}
+    dumped = request.model_dump()
+    assert "actor_claims" not in dumped
+    assert "connectors" not in dumped
+    assert "secrets" not in dumped
+    assert "skill_config" not in dumped
 
 
 def test_skill_execution_result_keeps_normalized_output_shape():

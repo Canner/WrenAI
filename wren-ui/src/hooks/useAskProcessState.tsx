@@ -85,7 +85,15 @@ export default function useAskProcessState() {
 }
 
 export class ProcessStateMachine {
-  private static transitions = {
+  private static transitions: Partial<
+    Record<
+      PROCESS_STATE,
+      {
+        next: PROCESS_STATE[];
+        prev: PROCESS_STATE[];
+      }
+    >
+  > = {
     [PROCESS_STATE.IDLE]: {
       next: [PROCESS_STATE.UNDERSTANDING],
       prev: [],
@@ -133,7 +141,7 @@ export class ProcessStateMachine {
       to === PROCESS_STATE.FINISHED ||
       to === PROCESS_STATE.FAILED ||
       to === PROCESS_STATE.STOPPED ||
-      this.transitions[from]?.next.includes(to)
+      this.transitions[from]?.next.includes(to) === true
     );
   }
 
@@ -141,7 +149,7 @@ export class ProcessStateMachine {
     const allNextStates = new Set<PROCESS_STATE>(includeSelf ? [state] : []);
     const collectNextStates = (currentState: PROCESS_STATE) => {
       const nextStates = this.transitions[currentState]?.next || [];
-      nextStates.forEach((nextState) => {
+      nextStates.forEach((nextState: PROCESS_STATE) => {
         if (!allNextStates.has(nextState)) {
           allNextStates.add(nextState);
           collectNextStates(nextState);

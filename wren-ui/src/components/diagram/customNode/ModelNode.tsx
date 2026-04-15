@@ -34,9 +34,18 @@ import { AddButton, MoreButton } from '@/components/ActionButton';
 
 const { Text } = Typography;
 
+const isComposeDiagramField = (
+  field: ComposeDiagramField | null | undefined,
+): field is ComposeDiagramField => Boolean(field);
+
 export const ModelNode = ({ data }: CustomNodeProps<DiagramModel>) => {
   const context = useContext(DiagramContext);
-  const onMoreClick = (type: MORE_ACTION) => {
+  const readOnly = Boolean(context?.readOnly);
+  const onMoreClick = (
+    payload: MORE_ACTION | { type: MORE_ACTION; data: any },
+  ) => {
+    const type =
+      typeof payload === 'object' && payload !== null ? payload.type : payload;
     context?.onMoreClick({
       type,
       data: data.originalData,
@@ -55,9 +64,9 @@ export const ModelNode = ({ data }: CustomNodeProps<DiagramModel>) => {
   };
 
   const renderColumns = useCallback(
-    (columns: ComposeDiagramField[]) =>
+    (columns: Array<ComposeDiagramField | null | undefined>) =>
       getColumns(columns, data, { limit: Config.columnsLimit }),
-    [data.highlight],
+    [data],
   );
 
   return (
@@ -74,12 +83,22 @@ export const ModelNode = ({ data }: CustomNodeProps<DiagramModel>) => {
           </Text>
         </span>
         <span>
-          <CachedIcon originalData={data.originalData} />
-          <ModelDropdown data={data.originalData} onMoreClick={onMoreClick}>
+          <CachedIcon
+            originalData={{
+              cached: Boolean(data.originalData.cached),
+              refreshTime: data.originalData.refreshTime || undefined,
+            }}
+          />
+          <ModelDropdown
+            data={data.originalData}
+            onMoreClick={onMoreClick}
+            disableMutationActions={readOnly}
+          >
             <MoreButton
               className="gray-1"
               marginRight={-4}
               data-guideid={`edit-model-${data.index}`}
+              disabled={readOnly}
             />
           </ModelDropdown>
         </span>
@@ -87,7 +106,7 @@ export const ModelNode = ({ data }: CustomNodeProps<DiagramModel>) => {
         <MarkerHandle id={data.originalData.id.toString()} />
       </NodeHeader>
       <NodeBody draggable={false}>
-        <Column.Title show={true}>Columns</Column.Title>
+        <Column.Title show={true}>字段</Column.Title>
         {renderColumns(data.originalData.fields)}
         <Column.Title
           show={true}
@@ -95,11 +114,12 @@ export const ModelNode = ({ data }: CustomNodeProps<DiagramModel>) => {
             <AddButton
               className="gray-8"
               marginRight={-8}
+              disabled={readOnly}
               onClick={() => onAddClick(NODE_TYPE.CALCULATED_FIELD)}
             />
           }
         >
-          Calculated Fields
+          计算字段
         </Column.Title>
         {renderColumns(data.originalData.calculatedFields)}
         <Column.Title
@@ -108,11 +128,12 @@ export const ModelNode = ({ data }: CustomNodeProps<DiagramModel>) => {
             <AddButton
               className="gray-8"
               marginRight={-8}
+              disabled={readOnly}
               onClick={() => onAddClick(NODE_TYPE.RELATION)}
             />
           }
         >
-          Relationships
+          关系
         </Column.Title>
         {renderColumns(data.originalData.relationFields)}
       </NodeBody>
@@ -122,18 +143,41 @@ export const ModelNode = ({ data }: CustomNodeProps<DiagramModel>) => {
 
 export default memo(ModelNode);
 
-const ColumnTemplate = (props) => {
-  const { nodeType, id, type, isPrimaryKey, highlight } = props;
+type ColumnTemplateProps = ComposeDiagramField & {
+  data: ComposeDiagramField[];
+  index: number;
+  highlight: string[];
+};
+
+const ColumnTemplate = (props: ColumnTemplateProps) => {
+  const {
+    nodeType,
+    id,
+    type,
+    isPrimaryKey,
+    highlight,
+    data: _data,
+    index: _index,
+  } = props;
   const isRelationship = nodeType === NODE_TYPE.RELATION;
   const isCalculatedField = nodeType === NODE_TYPE.CALCULATED_FIELD;
   const isMoreButtonShow = isCalculatedField || isRelationship;
   const reactflowInstance = useReactFlow();
 
   const context = useContext(DiagramContext);
-  const onMoreClick = (type: MORE_ACTION) => {
+  const readOnly = Boolean(context?.readOnly);
+  const onMoreClick = (
+    payload: MORE_ACTION | { type: MORE_ACTION; data: any },
+  ) => {
+    const type =
+      typeof payload === 'object' && payload !== null ? payload.type : payload;
+    const moreData =
+      typeof payload === 'object' && payload !== null && payload.data
+        ? payload.data
+        : props;
     context?.onMoreClick({
       type,
-      data: props,
+      data: moreData,
     });
   };
 
@@ -144,17 +188,22 @@ const ColumnTemplate = (props) => {
       const edges = getEdges();
       const relatedEdge = edges.find(
         (edge: any) =>
-          trimId(edge.sourceHandle) === id || trimId(edge.targetHandle) === id,
+          trimId(edge.sourceHandle || '') === id ||
+          trimId(edge.targetHandle || '') === id,
       );
 
       // skip to highlight & open relationship popup if no related edge
       if (!relatedEdge) return;
 
+      const highlightedHandles = [
+        relatedEdge.sourceHandle ? trimId(relatedEdge.sourceHandle) : '',
+        relatedEdge.targetHandle ? trimId(relatedEdge.targetHandle) : '',
+      ].filter(Boolean);
       setEdges(highlightEdges([relatedEdge?.id], true));
       setNodes(
         highlightNodes(
           [relatedEdge.source, relatedEdge.target],
-          [trimId(relatedEdge.sourceHandle), trimId(relatedEdge.targetHandle)],
+          highlightedHandles,
         ),
       );
     },
@@ -193,7 +242,9 @@ const ColumnTemplate = (props) => {
 
   return (
     <Column
-      {...props}
+      id={id}
+      type={String(type || '')}
+      displayName={props.displayName}
       key={id}
       className={highlight.includes(id) ? 'bg-gray-3' : undefined}
       icon={isRelationship ? <ModelIcon /> : getColumnTypeIcon({ type })}
@@ -205,10 +256,12 @@ const ColumnTemplate = (props) => {
               data={props}
               onMoreClick={onMoreClick}
               onMenuEnter={onMenuEnter}
+              disableMutationActions={readOnly}
             >
               <MoreButton
                 className="gray-8"
                 marginRight={-4}
+                disabled={readOnly}
                 onMouseEnter={onMoreMouseEnter}
                 onMouseLeave={onMoreMouseLeave}
               />
@@ -225,14 +278,17 @@ const ColumnTemplate = (props) => {
 const ColumnIterator = makeIterable(ColumnTemplate);
 
 const getColumns = (
-  columns: ComposeDiagramField[],
+  columns: Array<ComposeDiagramField | null | undefined>,
   data: CustomNodeProps<ComposeDiagram>['data'],
   pagination?: { limit: number },
 ) => {
-  const moreCount = pagination ? columns.length - pagination.limit : 0;
+  const normalizedColumns = columns.filter(isComposeDiagramField);
+  const moreCount = pagination
+    ? normalizedColumns.length - pagination.limit
+    : 0;
   const slicedColumns = pagination
-    ? columns.slice(0, pagination.limit)
-    : columns;
+    ? normalizedColumns.slice(0, pagination.limit)
+    : normalizedColumns;
   return (
     <>
       <ColumnIterator

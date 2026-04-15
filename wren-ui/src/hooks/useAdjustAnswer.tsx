@@ -1,32 +1,68 @@
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { cloneDeep } from 'lodash';
-import { ApolloClient, NormalizedCacheObject } from '@apollo/client';
+import { message } from 'antd';
+import { ApolloClient } from '@apollo/client';
+import type { ClientRuntimeScopeSelector } from '@/apollo/client/runtimeScope';
 import { THREAD } from '@/apollo/client/graphql/home';
-import { nextTick } from '@/utils/time';
 import {
   useAdjustThreadResponseMutation,
   useCancelAdjustmentTaskMutation,
   useRerunAdjustmentTaskMutation,
-  useThreadResponseLazyQuery,
 } from '@/apollo/client/graphql/home.generated';
 import {
   AskingTaskStatus,
   DetailedThread,
   ThreadResponse,
 } from '@/apollo/client/graphql/__types__';
+import type {
+  ThreadDetailQueryData,
+  UpdateThreadDetailQuery,
+} from './useThreadDetail';
+import useThreadResponsePolling from './useThreadResponsePolling';
 
-export const getIsFinished = (status: AskingTaskStatus) =>
+const ADJUSTMENT_POLL_INTERVAL_MS = 1500;
+const ADJUSTMENT_POLL_TIMEOUT_MS = 45_000;
+
+export const getIsFinished = (status?: AskingTaskStatus | null) =>
+  status !== undefined &&
+  status !== null &&
   [
     AskingTaskStatus.FINISHED,
     AskingTaskStatus.FAILED,
     AskingTaskStatus.STOPPED,
-  ].includes(status);
+  ].includes(status as AskingTaskStatus);
 
 const handleUpdateThreadCache = (
   threadId: number,
   threadResponse: ThreadResponse,
-  client: ApolloClient<NormalizedCacheObject>,
+  client: ApolloClient<object>,
+  updateThreadQuery?: UpdateThreadDetailQuery,
 ) => {
+  const updater = (
+    existingData: ThreadDetailQueryData | null,
+  ): ThreadDetailQueryData | null => {
+    if (!existingData?.thread) {
+      return existingData;
+    }
+
+    const isNewResponse = !existingData.thread.responses
+      .map((response: ThreadResponse) => response.id)
+      .includes(threadResponse.id);
+
+    return {
+      thread: {
+        ...existingData.thread,
+        responses: isNewResponse
+          ? [...existingData.thread.responses, threadResponse]
+          : existingData.thread.responses.map((response: ThreadResponse) => {
+              return response.id === threadResponse.id
+                ? cloneDeep(threadResponse)
+                : response;
+            }),
+      },
+    };
+  };
+
   const result = client.cache.readQuery<{ thread: DetailedThread }>({
     query: THREAD,
     variables: { threadId },
@@ -38,48 +74,103 @@ const handleUpdateThreadCache = (
         query: THREAD,
         variables: { threadId },
       },
-      (existingData) => {
-        const isNewResponse = !existingData.thread.responses
-          .map((r) => r.id)
-          .includes(threadResponse.id);
-        return {
-          thread: {
-            ...existingData.thread,
-            responses: isNewResponse
-              ? [...existingData.thread.responses, threadResponse]
-              : existingData.thread.responses.map((response) => {
-                  return response.id === threadResponse.id
-                    ? cloneDeep(threadResponse)
-                    : response;
-                }),
-          },
-        };
+      (existingData: { thread: DetailedThread } | null) => {
+        return updater(existingData as ThreadDetailQueryData) as {
+          thread: DetailedThread;
+        } | null;
       },
     );
   }
+
+  updateThreadQuery?.((existingData) => {
+    return updater(existingData) || existingData;
+  });
 };
 
-export default function useAdjustAnswer(threadId?: number) {
+export default function useAdjustAnswer(
+  threadId?: number,
+  updateThreadQuery?: UpdateThreadDetailQuery,
+  runtimeScopeSelector?: ClientRuntimeScopeSelector,
+) {
+  const adjustmentPollingTimeoutRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
   const [cancelAdjustmentTask] = useCancelAdjustmentTaskMutation({
-    onError: (error) => console.error(error),
+    onError: (_error) => {
+      message.error('停止调整任务失败，请稍后重试');
+    },
   });
   const [rerunAdjustmentTask] = useRerunAdjustmentTaskMutation({
-    onError: (error) => console.error(error),
+    onError: (_error) => {
+      message.error('重试调整任务失败，请稍后重试');
+    },
   });
   const [adjustThreadResponse, adjustThreadResponseResult] =
     useAdjustThreadResponseMutation({
-      onError: (error) => console.error(error),
+      onError: (_error) => {
+        message.error('调整回答失败，请稍后重试');
+      },
     });
-  const [fetchThreadResponse, threadResponseResult] =
-    useThreadResponseLazyQuery({
-      pollInterval: 1000,
-    });
+  const {
+    data: threadResponse,
+    fetchById: fetchThreadResponse,
+    stopPolling: stopThreadResponsePolling,
+  } = useThreadResponsePolling({
+    runtimeScopeSelector,
+    pollInterval: ADJUSTMENT_POLL_INTERVAL_MS,
+    onCompleted: (nextThreadResponse) => {
+      if (!threadId) {
+        return;
+      }
+
+      handleUpdateThreadCache(
+        threadId,
+        nextThreadResponse,
+        adjustThreadResponseResult.client,
+        updateThreadQuery,
+      );
+    },
+    onError: () => {
+      message.error('加载调整结果失败，请稍后重试');
+    },
+  });
+
+  const clearAdjustmentPollingTimeout = useCallback(() => {
+    if (adjustmentPollingTimeoutRef.current) {
+      clearTimeout(adjustmentPollingTimeoutRef.current);
+      adjustmentPollingTimeoutRef.current = null;
+    }
+  }, []);
+
+  const scheduleAdjustmentPollingStop = useCallback(() => {
+    clearAdjustmentPollingTimeout();
+    adjustmentPollingTimeoutRef.current = setTimeout(() => {
+      stopThreadResponsePolling();
+      message.warning('调整任务轮询超时，请稍后重试');
+    }, ADJUSTMENT_POLL_TIMEOUT_MS);
+  }, [clearAdjustmentPollingTimeout, stopThreadResponsePolling]);
+
+  const fetchThreadResponseWithGuard = useCallback(
+    async (responseId: number) => {
+      clearAdjustmentPollingTimeout();
+      stopThreadResponsePolling();
+      const response = await fetchThreadResponse(responseId);
+      scheduleAdjustmentPollingStop();
+      return response;
+    },
+    [
+      clearAdjustmentPollingTimeout,
+      fetchThreadResponse,
+      scheduleAdjustmentPollingStop,
+      stopThreadResponsePolling,
+    ],
+  );
 
   const loading = adjustThreadResponseResult.loading;
 
   const adjustmentTask = useMemo(() => {
-    return threadResponseResult.data?.threadResponse.adjustmentTask || null;
-  }, [threadResponseResult.data]);
+    return threadResponse?.adjustmentTask || null;
+  }, [threadResponse]);
 
   const data = useMemo(() => {
     return {
@@ -89,8 +180,21 @@ export default function useAdjustAnswer(threadId?: number) {
 
   useEffect(() => {
     const isFinished = getIsFinished(adjustmentTask?.status);
-    if (isFinished) threadResponseResult.stopPolling();
-  }, [adjustmentTask?.status]);
+    if (isFinished) {
+      stopThreadResponsePolling();
+      clearAdjustmentPollingTimeout();
+    }
+  }, [
+    adjustmentTask?.status,
+    clearAdjustmentPollingTimeout,
+    stopThreadResponsePolling,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      clearAdjustmentPollingTimeout();
+    };
+  }, [clearAdjustmentPollingTimeout]);
 
   const onAdjustReasoningSteps = async (
     responseId: number,
@@ -108,16 +212,21 @@ export default function useAdjustAnswer(threadId?: number) {
 
     // start polling new thread response
     const nextThreadResponse = response.data?.adjustThreadResponse;
-    await fetchThreadResponse({
-      variables: { responseId: nextThreadResponse.id },
-    });
+    if (!nextThreadResponse) {
+      message.error('调整回答失败，请稍后重试');
+      return;
+    }
+    await fetchThreadResponseWithGuard(nextThreadResponse.id);
 
     // update new thread response to cache
-    handleUpdateThreadCache(
-      threadId,
-      nextThreadResponse,
-      threadResponseResult.client,
-    );
+    if (threadId) {
+      handleUpdateThreadCache(
+        threadId,
+        nextThreadResponse,
+        adjustThreadResponseResult.client,
+        updateThreadQuery,
+      );
+    }
   };
 
   const onAdjustSQL = async (responseId: number, sql: string) => {
@@ -127,11 +236,18 @@ export default function useAdjustAnswer(threadId?: number) {
 
     // update thread cache
     const nextThreadResponse = response.data?.adjustThreadResponse;
-    handleUpdateThreadCache(
-      threadId,
-      nextThreadResponse,
-      threadResponseResult.client,
-    );
+    if (!nextThreadResponse) {
+      message.error('调整回答失败，请稍后重试');
+      return;
+    }
+    if (threadId) {
+      handleUpdateThreadCache(
+        threadId,
+        nextThreadResponse,
+        adjustThreadResponseResult.client,
+        updateThreadQuery,
+      );
+    }
 
     // It won't have adjusmentTask, no need to fetch
   };
@@ -143,15 +259,19 @@ export default function useAdjustAnswer(threadId?: number) {
         ?.queryId;
     if (taskId) {
       await cancelAdjustmentTask({ variables: { taskId } });
-      // waiting for polling fetching stop
-      await nextTick(1000);
+      stopThreadResponsePolling();
+      clearAdjustmentPollingTimeout();
     }
   };
 
   const onReRun = async (threadResponse: ThreadResponse) => {
     const responseId = threadResponse.id;
-    await rerunAdjustmentTask({ variables: { responseId } });
-    await fetchThreadResponse({ variables: { responseId } });
+    try {
+      await rerunAdjustmentTask({ variables: { responseId } });
+      await fetchThreadResponseWithGuard(responseId);
+    } catch (_error) {
+      message.error('重试调整失败，请稍后重试');
+    }
   };
 
   return {

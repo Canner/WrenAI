@@ -7,6 +7,9 @@ import {
 } from 'lodash';
 import { BaseRepository, IBasicRepository } from './baseRepository';
 import { Knex } from 'knex';
+import { getLogger } from '@server/utils';
+
+const logger = getLogger('ApiHistoryRepository');
 
 export enum ApiType {
   GENERATE_SQL = 'GENERATE_SQL',
@@ -23,6 +26,14 @@ export enum ApiType {
   UPDATE_SQL_PAIR = 'UPDATE_SQL_PAIR',
   DELETE_SQL_PAIR = 'DELETE_SQL_PAIR',
   GET_MODELS = 'GET_MODELS',
+  GET_THREADS = 'GET_THREADS',
+  GET_API_HISTORY = 'GET_API_HISTORY',
+  UPDATE_THREAD = 'UPDATE_THREAD',
+  DELETE_THREAD = 'DELETE_THREAD',
+  CREATE_VIEW = 'CREATE_VIEW',
+  DELETE_VIEW = 'DELETE_VIEW',
+  PREVIEW_VIEW_DATA = 'PREVIEW_VIEW_DATA',
+  PREVIEW_MODEL_DATA = 'PREVIEW_MODEL_DATA',
   GET_SKILLS = 'GET_SKILLS',
   CREATE_SKILL = 'CREATE_SKILL',
   UPDATE_SKILL = 'UPDATE_SKILL',
@@ -31,17 +42,18 @@ export enum ApiType {
   CREATE_CONNECTOR = 'CREATE_CONNECTOR',
   UPDATE_CONNECTOR = 'UPDATE_CONNECTOR',
   DELETE_CONNECTOR = 'DELETE_CONNECTOR',
-  GET_SKILL_BINDINGS = 'GET_SKILL_BINDINGS',
-  CREATE_SKILL_BINDING = 'CREATE_SKILL_BINDING',
-  UPDATE_SKILL_BINDING = 'UPDATE_SKILL_BINDING',
-  DELETE_SKILL_BINDING = 'DELETE_SKILL_BINDING',
+  TEST_CONNECTOR = 'TEST_CONNECTOR',
+  REENCRYPT_SECRETS = 'REENCRYPT_SECRETS',
+  GET_KNOWLEDGE_BASES = 'GET_KNOWLEDGE_BASES',
+  CREATE_KNOWLEDGE_BASE = 'CREATE_KNOWLEDGE_BASE',
+  UPDATE_KNOWLEDGE_BASE = 'UPDATE_KNOWLEDGE_BASE',
   STREAM_ASK = 'STREAM_ASK',
   STREAM_GENERATE_SQL = 'STREAM_GENERATE_SQL',
 }
 
 export interface ApiHistory {
   id?: string;
-  projectId: number;
+  projectId: number | null;
   workspaceId?: string | null;
   knowledgeBaseId?: string | null;
   kbSnapshotId?: string | null;
@@ -240,13 +252,14 @@ export class ApiHistoryRepository
     const camelCaseData = mapKeys(data, (_value, key) => camelCase(key));
     const formattedData = mapValues(camelCaseData, (value, key) => {
       if (this.jsonbColumns.includes(key)) {
-        // The value from Sqlite will be string type, while the value from PG is JSON object
+        // Older stringified payloads are still parsed for compatibility;
+        // PostgreSQL jsonb rows already return objects.
         if (typeof value === 'string') {
           if (!value) return value;
           try {
             return JSON.parse(value);
           } catch (error) {
-            console.error(`Failed to parse JSON for ${key}:`, error);
+            logger.warn(`Failed to parse JSON for ${key}`, error);
             return value; // Return raw value if parsing fails
           }
         } else {
@@ -425,40 +438,20 @@ export class ApiHistoryRepository
     };
   }
 
-  private isPostgres() {
-    return this.knex.client.config.client === 'pg';
-  }
-
   private jsonPath(path: string[]) {
     return path.join(',');
   }
 
-  private sqliteJsonPath(path: string[]) {
-    return `$.${path.join('.')}`;
-  }
-
   private jsonExistsExpression(path: string[]) {
-    if (this.isPostgres()) {
-      return `response_payload #> '{${this.jsonPath(path)}}' IS NOT NULL`;
-    }
-
-    return `json_type(response_payload, '${this.sqliteJsonPath(path)}') IS NOT NULL`;
+    return `response_payload #> '{${this.jsonPath(path)}}' IS NOT NULL`;
   }
 
   private jsonTextExpression(path: string[]) {
-    if (this.isPostgres()) {
-      return `NULLIF(response_payload #>> '{${this.jsonPath(path)}}', '')`;
-    }
-
-    return `NULLIF(json_extract(response_payload, '${this.sqliteJsonPath(path)}'), '')`;
+    return `NULLIF(response_payload #>> '{${this.jsonPath(path)}}', '')`;
   }
 
   private jsonBooleanTrueExpression(path: string[]) {
-    if (this.isPostgres()) {
-      return `(${this.jsonTextExpression(path)} = 'true')`;
-    }
-
-    return `(${this.jsonTextExpression(path)} = 1 OR ${this.jsonTextExpression(path)} = 'true')`;
+    return `(${this.jsonTextExpression(path)} = 'true')`;
   }
 
   private askPathExpression() {

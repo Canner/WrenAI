@@ -16,12 +16,7 @@ import {
 
 type SetupStep = {
   step: number;
-  component: (
-    props?: React.ComponentProps<typeof Starter> &
-      React.ComponentProps<typeof ConnectDataSource> &
-      React.ComponentProps<typeof SelectModels> &
-      React.ComponentProps<typeof DefineRelations>,
-  ) => JSX.Element;
+  component: React.ComponentType<any>;
   maxWidth?: number;
 };
 
@@ -121,12 +116,12 @@ export const DATA_SOURCE_OPTIONS = {
 
 export const TEMPLATE_OPTIONS = {
   [SampleDatasetName.ECOMMERCE]: {
-    label: 'E-commerce',
+    label: '电商订单数据',
     IconComponent: ShoppingCartOutlined,
     guide: 'https://docs.getwren.ai/oss/getting_started/sample_data/ecommerce',
   },
   [SampleDatasetName.HR]: {
-    label: 'Human Resource',
+    label: '人力资源数据',
     IconComponent: IdCardOutlined,
     guide: 'https://docs.getwren.ai/oss/getting_started/sample_data/hr',
   },
@@ -144,8 +139,8 @@ export const getDataSource = (dataSource: DATA_SOURCES) => {
 };
 
 export const getTemplates = () => {
-  return Object.keys(TEMPLATE_OPTIONS).map((key) => ({
-    ...TEMPLATE_OPTIONS[key],
+  return Object.entries(TEMPLATE_OPTIONS).map(([key, option]) => ({
+    ...option,
     value: key,
   })) as ButtonOption[];
 };
@@ -154,17 +149,16 @@ export const getPostgresErrorMessage = (error: Record<string, any>) => {
   if (error.code === ERROR_CODES.CONNECTION_REFUSED) {
     return (
       <div>
-        {error.message}. <br />
-        If you are having trouble connecting to your PostgreSQL database, please
-        refer to our{' '}
+        {error.message}。<br />
+        如果你在连接 PostgreSQL 数据库时遇到问题，请参考我们的
         <a
           href="https://docs.getwren.ai/oss/guide/connect/postgresql#connect"
           target="_blank"
           rel="noopener noreferrer"
         >
-          documentation
-        </a>{' '}
-        for detailed instructions.
+          文档
+        </a>
+        获取详细说明。
       </div>
     );
   }

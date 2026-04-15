@@ -29,11 +29,11 @@ spec:
                 secretKeyRef:
                   name: wrenai-secrets
                   key: OPENAI_API_KEY
-            - name: QDRANT_HOST
+            - name: PG_CONN_STR
               valueFrom:
-                configMapKeyRef:
-                  name: wren-config
-                  key: QDRANT_HOST
+                secretKeyRef:
+                  name: wrenai-secrets
+                  key: PG_CONN_STR
             - name: LOGGING_LEVEL
               valueFrom:
                 configMapKeyRef:

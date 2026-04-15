@@ -8,33 +8,31 @@ import {
 
 // Create a test class that extends DashboardService to access protected methods
 class TestDashboardService extends DashboardService {
-  public testGenerateCronExpression(
-    schedule: DashboardSchedule,
-  ): string | null {
-    return this.generateCronExpression(schedule);
+  public testGenerateCronExpression(schedule: any): string | null {
+    return this.generateCronExpression(schedule as DashboardSchedule);
   }
 
   public testCalculateNextRunTime(cronExpression: string): Date | null {
     return this.calculateNextRunTime(cronExpression);
   }
 
-  public testToUTC(schedule: DashboardSchedule): DashboardSchedule {
-    return this.toUTC(schedule);
+  public testToUTC(schedule: any): DashboardSchedule {
+    return this.toUTC(schedule as DashboardSchedule);
   }
 
-  public testToTimezone(schedule: DashboardSchedule): DashboardSchedule {
-    return this.toTimezone(schedule);
+  public testToTimezone(schedule: any): DashboardSchedule {
+    return this.toTimezone(schedule as DashboardSchedule);
   }
 
-  public testValidateScheduleInput(data: SetDashboardCacheData): void {
-    return this.validateScheduleInput(data);
+  public testValidateScheduleInput(data: any): void {
+    return this.validateScheduleInput(data as SetDashboardCacheData);
   }
 }
 
 describe('DashboardService', () => {
   let dashboardService: TestDashboardService;
-  let mockDashboardItemRepository;
-  let mockDashboardRepository;
+  let mockDashboardItemRepository: any;
+  let mockDashboardRepository: any;
 
   const createScheduleData = (
     frequency: ScheduleFrequencyEnum,
@@ -149,7 +147,7 @@ describe('DashboardService', () => {
         deployHash: 'deploy-1',
         createdBy: 'user-1',
         name: 'Dashboard',
-        });
+      });
 
       const result = await dashboardService.getCurrentDashboardForScope(7, {
         knowledgeBaseId: 'kb-1',
@@ -166,7 +164,73 @@ describe('DashboardService', () => {
         deployHash: 'deploy-1',
         createdBy: 'user-1',
       });
-      expect(result.kbSnapshotId).toBe('snap-1');
+      expect(result?.kbSnapshotId).toBe('snap-1');
+    });
+
+    it('should resolve a knowledge-base bound dashboard without requiring a legacy project bridge', async () => {
+      mockDashboardRepository.findOneBy
+        .mockResolvedValueOnce({
+          id: 30,
+          projectId: 7,
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snap-1',
+          deployHash: 'deploy-1',
+          createdBy: 'user-1',
+          name: 'Dashboard',
+        })
+        .mockResolvedValueOnce({
+          id: 30,
+          projectId: 7,
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snap-1',
+          deployHash: 'deploy-1',
+          createdBy: 'user-1',
+          name: 'Dashboard',
+        });
+
+      const result = await dashboardService.getCurrentDashboardForScope(null, {
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snap-1',
+        deployHash: 'deploy-1',
+        createdBy: 'user-1',
+      });
+
+      expect(mockDashboardRepository.findOneBy).toHaveBeenCalledWith({
+        knowledgeBaseId: 'kb-1',
+      });
+      expect(mockDashboardRepository.findAllBy).not.toHaveBeenCalled();
+      expect(mockDashboardRepository.updateOne).not.toHaveBeenCalled();
+      expect(result?.id).toBe(30);
+    });
+
+    it('should create a bound dashboard when no scoped dashboard exists and no legacy project bridge is available', async () => {
+      mockDashboardRepository.findOneBy.mockResolvedValue(null);
+      mockDashboardRepository.createOne.mockResolvedValue({
+        id: 31,
+        projectId: null,
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snap-1',
+        deployHash: 'deploy-1',
+        createdBy: 'user-1',
+        name: 'Dashboard',
+      });
+
+      const result = await dashboardService.getCurrentDashboardForScope(null, {
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snap-1',
+        deployHash: 'deploy-1',
+        createdBy: 'user-1',
+      });
+
+      expect(mockDashboardRepository.createOne).toHaveBeenCalledWith({
+        name: 'Dashboard',
+        projectId: null,
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snap-1',
+        deployHash: 'deploy-1',
+        createdBy: 'user-1',
+      });
+      expect(result?.projectId).toBeNull();
     });
 
     it('should backfill runtime binding onto legacy project dashboard', async () => {
@@ -214,7 +278,7 @@ describe('DashboardService', () => {
         deployHash: 'deploy-9',
         createdBy: 'user-9',
       });
-      expect(result.knowledgeBaseId).toBe('kb-9');
+      expect(result?.knowledgeBaseId).toBe('kb-9');
     });
 
     it('should create a scoped dashboard instead of rebinding another knowledge base', async () => {
@@ -252,7 +316,7 @@ describe('DashboardService', () => {
         deployHash: 'deploy-11',
         createdBy: 'user-11',
       });
-      expect(result.id).toBe(6);
+      expect(result?.id).toBe(6);
     });
   });
 

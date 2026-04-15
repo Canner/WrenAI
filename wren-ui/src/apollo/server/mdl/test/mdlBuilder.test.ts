@@ -25,7 +25,7 @@ describe('MDLBuilder', () => {
         relatedModels: [],
         relatedColumns: [],
         relatedRelations: [],
-      } as MDLBuilderBuildFromOptions;
+      } as unknown as MDLBuilderBuildFromOptions;
       mdlBuilder = new MDLBuilder(builderOptions);
 
       const manifest = mdlBuilder.build();
@@ -46,7 +46,7 @@ describe('MDLBuilder', () => {
         catalog: 'wrenai',
         schema: 'public',
         sampleDataset: null,
-      } as Project;
+      } as unknown as Project;
       const models = [
         {
           id: 1,
@@ -79,7 +79,7 @@ describe('MDLBuilder', () => {
             table: 'customer',
           }),
         },
-      ] as Model[];
+      ] as unknown as Model[];
       const columns = [
         {
           id: 1,
@@ -126,7 +126,7 @@ describe('MDLBuilder', () => {
           isPk: false,
           properties: null,
         },
-      ] as ModelColumn[];
+      ] as unknown as ModelColumn[];
       const nestedColumns = [
         {
           id: 1,
@@ -139,7 +139,7 @@ describe('MDLBuilder', () => {
           type: 'STRING',
           properties: { description: 'bar' },
         },
-      ] as ModelNestedColumn[];
+      ] as unknown as ModelNestedColumn[];
       const relations = [
         {
           id: 1,
@@ -158,7 +158,7 @@ describe('MDLBuilder', () => {
             description: 'the relationship between orders and customers',
           }),
         },
-      ] as RelationInfo[];
+      ] as unknown as RelationInfo[];
       const builderOptions = {
         project,
         models,
@@ -168,7 +168,7 @@ describe('MDLBuilder', () => {
         relatedModels: [],
         relatedColumns: [],
         relatedRelations: [],
-      } as MDLBuilderBuildFromOptions;
+      } as unknown as MDLBuilderBuildFromOptions;
       mdlBuilder = new MDLBuilder(builderOptions);
 
       // Act
@@ -183,11 +183,9 @@ describe('MDLBuilder', () => {
             catalog: 'bq-project-id',
             table: 'order',
           },
-          refSql: null,
           columns: [
             {
               name: 'orderKey',
-              expression: '',
               type: 'STRING',
               isCalculated: false,
               notNull: true,
@@ -198,12 +196,11 @@ describe('MDLBuilder', () => {
               type: 'customer',
               isCalculated: false,
               relationship: 'OrderCustomer',
-              properties: null,
+              properties: {},
               notNull: false,
             },
           ],
           cached: false,
-          refreshTime: null,
           primaryKey: 'orderKey',
           properties: {
             description: 'foo table',
@@ -217,11 +214,9 @@ describe('MDLBuilder', () => {
             catalog: null,
             table: 'customer',
           },
-          refSql: null,
           columns: [
             {
               name: 'orderKey',
-              expression: '',
               type: 'STRING',
               isCalculated: false,
               notNull: true,
@@ -229,7 +224,6 @@ describe('MDLBuilder', () => {
             },
             {
               name: 'event_params',
-              expression: '',
               type: 'ARRAY<STRUCT<key STRING>>',
               isCalculated: false,
               notNull: true,
@@ -245,12 +239,11 @@ describe('MDLBuilder', () => {
               isCalculated: false,
               relationship: 'OrderCustomer',
               notNull: false,
-              properties: null,
+              properties: {},
             },
           ],
           primaryKey: '',
           cached: false,
-          refreshTime: null,
           properties: {
             description: undefined,
             displayName: 'customer',
@@ -289,7 +282,7 @@ describe('MDLBuilder', () => {
       catalog: 'wrenai',
       schema: 'public',
       sampleDataset: null,
-    } as Project;
+    } as unknown as Project;
     const models = [
       {
         id: 1,
@@ -322,7 +315,7 @@ describe('MDLBuilder', () => {
           table: 'customer',
         }),
       },
-    ] as Model[];
+    ] as unknown as Model[];
     const columns = [
       {
         id: 1,
@@ -369,7 +362,7 @@ describe('MDLBuilder', () => {
         isPk: false,
         properties: null,
       },
-    ] as ModelColumn[];
+    ] as unknown as ModelColumn[];
     const nestedColumns = [
       {
         id: 1,
@@ -382,7 +375,7 @@ describe('MDLBuilder', () => {
         type: 'STRING',
         properties: { description: 'bar' },
       },
-    ] as ModelNestedColumn[];
+    ] as unknown as ModelNestedColumn[];
     const relations = [
       {
         id: 1,
@@ -401,7 +394,7 @@ describe('MDLBuilder', () => {
           description: 'the relationship between orders and customers',
         }),
       },
-    ] as RelationInfo[];
+    ] as unknown as RelationInfo[];
     const views = [
       {
         id: 1,
@@ -426,7 +419,7 @@ describe('MDLBuilder', () => {
       relatedModels: [],
       relatedColumns: [],
       relatedRelations: [],
-    } as MDLBuilderBuildFromOptions;
+    } as unknown as MDLBuilderBuildFromOptions;
     mdlBuilder = new MDLBuilder(builderOptions);
 
     // Act
@@ -436,7 +429,6 @@ describe('MDLBuilder', () => {
     const expectedModels = [
       {
         name: 'order',
-        refSql: null,
         tableReference: {
           schema: 'my-dataset',
           catalog: 'bq-project-id',
@@ -445,7 +437,6 @@ describe('MDLBuilder', () => {
         columns: [
           {
             name: 'orderKey',
-            expression: '',
             type: 'STRING',
             isCalculated: false,
             notNull: true,
@@ -457,17 +448,15 @@ describe('MDLBuilder', () => {
             isCalculated: false,
             relationship: 'OrderCustomer',
             notNull: false,
-            properties: null,
+            properties: {},
           },
         ],
         cached: false,
-        refreshTime: null,
         primaryKey: 'orderKey',
         properties: { description: 'foo table', displayName: 'order' },
       },
       {
         name: 'customer',
-        refSql: null,
         tableReference: {
           schema: 'my-dataset',
           catalog: 'bq-project-id',
@@ -476,7 +465,6 @@ describe('MDLBuilder', () => {
         columns: [
           {
             name: 'orderKey',
-            expression: '',
             type: 'STRING',
             isCalculated: false,
             notNull: true,
@@ -484,7 +472,6 @@ describe('MDLBuilder', () => {
           },
           {
             name: 'event_params',
-            expression: '',
             type: 'ARRAY<STRUCT<key STRING>>',
             isCalculated: false,
             notNull: true,
@@ -500,12 +487,11 @@ describe('MDLBuilder', () => {
             isCalculated: false,
             relationship: 'OrderCustomer',
             notNull: false,
-            properties: null,
+            properties: {},
           },
         ],
         primaryKey: '',
         cached: false,
-        refreshTime: null,
         properties: { description: undefined, displayName: 'customer' },
       },
     ] as ModelMDL[];
@@ -577,7 +563,7 @@ describe('MDLBuilder', () => {
         refreshTime: null,
         properties: null,
       },
-    ] as Model[];
+    ] as unknown as Model[];
     const columns = [
       // customer columns: id, name, total_payment
       {
@@ -702,7 +688,7 @@ describe('MDLBuilder', () => {
         isPk: false,
         properties: null,
       },
-    ] as ModelColumn[];
+    ] as unknown as ModelColumn[];
     const relations = [
       {
         id: 1,
@@ -744,16 +730,18 @@ describe('MDLBuilder', () => {
       relatedModels: models,
       relatedColumns: columns,
       relatedRelations: relations,
-    } as MDLBuilderBuildFromOptions;
+    } as unknown as MDLBuilderBuildFromOptions;
     mdlBuilder = new MDLBuilder(builderOptions);
 
     const manifest = mdlBuilder.build();
 
-    const customerModel = manifest.models.find((m) => m.name === 'customer');
-    const totalPaymentColumn = customerModel.columns.find(
+    const customerModel = (manifest.models ?? []).find(
+      (m) => m.name === 'customer',
+    );
+    const totalPaymentColumn = customerModel?.columns?.find(
       (c) => c.name === 'total_payment',
     );
-    expect(totalPaymentColumn.expression).toEqual(
+    expect(totalPaymentColumn?.expression).toEqual(
       'sum(order.payment."amount")',
     );
   });
@@ -773,11 +761,11 @@ describe('MDLBuilder', () => {
         catalog: 'wrenai',
         schema: 'public',
         sampleDataset: null,
-      } as Project;
-      const models = [] as Model[];
-      const columns = [] as ModelColumn[];
-      const nestedColumns = [] as ModelNestedColumn[];
-      const relations = [] as RelationInfo[];
+      } as unknown as Project;
+      const models = [] as unknown as Model[];
+      const columns = [] as unknown as ModelColumn[];
+      const nestedColumns = [] as unknown as ModelNestedColumn[];
+      const relations = [] as unknown as RelationInfo[];
       const views = [] as View[];
       const builderOptions = {
         project,
@@ -786,7 +774,7 @@ describe('MDLBuilder', () => {
         nestedColumns,
         relations,
         views,
-      } as MDLBuilderBuildFromOptions;
+      } as unknown as MDLBuilderBuildFromOptions;
       mdlBuilder = new MDLBuilder(builderOptions);
       const manifest = mdlBuilder.build();
       expect(manifest.dataSource).toBeDefined();

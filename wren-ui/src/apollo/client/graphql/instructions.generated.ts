@@ -3,19 +3,19 @@ import * as Types from './__types__';
 import { gql } from '@apollo/client';
 import * as Apollo from '@apollo/client';
 const defaultOptions = {} as const;
-export type InstructionFragment = { __typename?: 'Instruction', id: number, projectId: number, instruction: string, questions: Array<string>, isDefault: boolean, createdAt: string, updatedAt: string };
+export type InstructionFragment = { __typename?: 'Instruction', id: number, instruction: string, questions: Array<string>, isDefault: boolean, createdAt: string, updatedAt: string };
 
 export type InstructionsQueryVariables = Types.Exact<{ [key: string]: never; }>;
 
 
-export type InstructionsQuery = { __typename?: 'Query', instructions: Array<{ __typename?: 'Instruction', id: number, projectId: number, instruction: string, questions: Array<string>, isDefault: boolean, createdAt: string, updatedAt: string } | null> };
+export type InstructionsQuery = { __typename?: 'Query', instructions: Array<{ __typename?: 'Instruction', id: number, instruction: string, questions: Array<string>, isDefault: boolean, createdAt: string, updatedAt: string } | null> };
 
 export type CreateInstructionMutationVariables = Types.Exact<{
   data: Types.CreateInstructionInput;
 }>;
 
 
-export type CreateInstructionMutation = { __typename?: 'Mutation', createInstruction: { __typename?: 'Instruction', id: number, projectId: number, instruction: string, questions: Array<string>, isDefault: boolean, createdAt: string, updatedAt: string } };
+export type CreateInstructionMutation = { __typename?: 'Mutation', createInstruction: { __typename?: 'Instruction', id: number, instruction: string, questions: Array<string>, isDefault: boolean, createdAt: string, updatedAt: string } };
 
 export type UpdateInstructionMutationVariables = Types.Exact<{
   where: Types.InstructionWhereInput;
@@ -23,7 +23,7 @@ export type UpdateInstructionMutationVariables = Types.Exact<{
 }>;
 
 
-export type UpdateInstructionMutation = { __typename?: 'Mutation', updateInstruction: { __typename?: 'Instruction', id: number, projectId: number, instruction: string, questions: Array<string>, isDefault: boolean, createdAt: string, updatedAt: string } };
+export type UpdateInstructionMutation = { __typename?: 'Mutation', updateInstruction: { __typename?: 'Instruction', id: number, instruction: string, questions: Array<string>, isDefault: boolean, createdAt: string, updatedAt: string } };
 
 export type DeleteInstructionMutationVariables = Types.Exact<{
   where: Types.InstructionWhereInput;
@@ -35,7 +35,6 @@ export type DeleteInstructionMutation = { __typename?: 'Mutation', deleteInstruc
 export const InstructionFragmentDoc = gql`
     fragment Instruction on Instruction {
   id
-  projectId
   instruction
   questions
   isDefault

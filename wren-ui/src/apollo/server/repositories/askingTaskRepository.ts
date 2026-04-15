@@ -32,8 +32,25 @@ export interface AskingTask {
   updatedAt: Date;
 }
 
+export type AskingTaskRuntimeScope = Pick<
+  AskingTask,
+  | 'projectId'
+  | 'workspaceId'
+  | 'knowledgeBaseId'
+  | 'kbSnapshotId'
+  | 'deployHash'
+>;
+
 export interface IAskingTaskRepository extends IBasicRepository<AskingTask> {
   findByQueryId(queryId: string): Promise<AskingTask | null>;
+  findByQueryIdWithRuntimeScope(
+    queryId: string,
+    scope: AskingTaskRuntimeScope,
+  ): Promise<AskingTask | null>;
+  findOneByIdWithRuntimeScope(
+    id: number,
+    scope: AskingTaskRuntimeScope,
+  ): Promise<AskingTask | null>;
 }
 
 export class AskingTaskRepository
@@ -48,6 +65,80 @@ export class AskingTaskRepository
 
   public async findByQueryId(queryId: string): Promise<AskingTask | null> {
     return this.findOneBy({ queryId });
+  }
+
+  public async findByQueryIdWithRuntimeScope(
+    queryId: string,
+    scope: AskingTaskRuntimeScope,
+  ): Promise<AskingTask | null> {
+    return this.findOneWithRuntimeScope({ queryId }, scope);
+  }
+
+  public async findOneByIdWithRuntimeScope(
+    id: number,
+    scope: AskingTaskRuntimeScope,
+  ): Promise<AskingTask | null> {
+    return this.findOneWithRuntimeScope({ id }, scope);
+  }
+
+  private async findOneWithRuntimeScope(
+    filter: Partial<Pick<AskingTask, 'id' | 'queryId'>>,
+    scope: AskingTaskRuntimeScope,
+  ): Promise<AskingTask | null> {
+    const query = this.knex(this.tableName).where(
+      this.transformToDBData(filter),
+    );
+    this.applyBridgeScopeField(
+      query,
+      scope.projectId,
+      this.hasCanonicalRuntimeScope(scope),
+    );
+    this.applyScopeField(query, 'workspaceId', scope.workspaceId);
+    this.applyScopeField(query, 'knowledgeBaseId', scope.knowledgeBaseId);
+    this.applyScopeField(query, 'kbSnapshotId', scope.kbSnapshotId);
+    this.applyScopeField(query, 'deployHash', scope.deployHash);
+
+    const result = await query.first();
+    return result ? this.transformFromDBData(result) : null;
+  }
+
+  private applyBridgeScopeField(
+    query: Knex.QueryBuilder,
+    bridgeProjectId?: number | null,
+    hasCanonicalScope = false,
+  ) {
+    if (bridgeProjectId == null) {
+      if (hasCanonicalScope) {
+        return;
+      }
+      query.whereNull('project_id');
+      return;
+    }
+
+    query.andWhere('project_id', bridgeProjectId);
+  }
+
+  private applyScopeField(
+    query: Knex.QueryBuilder,
+    field: Exclude<keyof AskingTaskRuntimeScope, 'projectId'>,
+    value?: string | null,
+  ) {
+    const column = snakeCase(field);
+    if (value == null) {
+      query.whereNull(column);
+      return;
+    }
+
+    query.andWhere(column, value);
+  }
+
+  private hasCanonicalRuntimeScope(scope: AskingTaskRuntimeScope) {
+    return Boolean(
+      scope.workspaceId ||
+        scope.knowledgeBaseId ||
+        scope.kbSnapshotId ||
+        scope.deployHash,
+    );
   }
 
   protected override transformFromDBData = (data: any) => {

@@ -4,8 +4,9 @@ import {
   useState,
   forwardRef,
   useImperativeHandle,
+  ReactNode,
 } from 'react';
-import styled from 'styled-components';
+import styled, { css } from 'styled-components';
 import { PROCESS_STATE } from '@/utils/enum';
 import PromptInput from '@/components/pages/home/prompt/Input';
 import PromptResult from '@/components/pages/home/prompt/Result';
@@ -32,6 +33,15 @@ interface Props {
   inputProps: {
     placeholder: string;
   };
+  leadingIcon?: ReactNode;
+  variant?: 'fixed' | 'sticky' | 'embedded';
+  buttonMode?: 'text' | 'icon';
+  inputLayout?: 'inline' | 'stacked';
+  footerContent?: ReactNode;
+  inputDisabled?: boolean;
+  onAtTrigger?: () => void;
+  showInlineResult?: boolean;
+  className?: string;
 }
 
 interface Attributes {
@@ -39,16 +49,46 @@ interface Attributes {
   close: () => void;
 }
 
-const PromptStyle = styled.div`
-  position: fixed;
-  width: 680px;
-  left: 50%;
-  margin-left: calc(-340px + 133px);
-  bottom: 18px;
-  z-index: 999;
-  box-shadow:
-    rgba(0, 0, 0, 0.1) 0px 10px 15px -3px,
-    rgba(0, 0, 0, 0.05) 0px 4px 6px -2px;
+const PromptStyle = styled.div<{ $variant: 'fixed' | 'sticky' | 'embedded' }>`
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 20px;
+  padding: 14px 16px;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
+
+  ${(props) =>
+    props.$variant === 'fixed' &&
+    css`
+      position: fixed;
+      left: calc(50% + 140px);
+      transform: translateX(-50%);
+      bottom: 18px;
+      z-index: 999;
+      max-width: 760px;
+    `}
+
+  ${(props) =>
+    props.$variant === 'sticky' &&
+    css`
+      position: sticky;
+      bottom: 20px;
+      z-index: 12;
+    `}
+
+  ${(props) =>
+    props.$variant === 'embedded' &&
+    css`
+      position: relative;
+      box-shadow: none;
+      border: 0;
+      border-radius: 0;
+      padding: 0;
+      background: transparent;
+    `}
 `;
 
 export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
@@ -61,6 +101,15 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
     onStopStreaming,
     onStopRecommend,
     inputProps,
+    leadingIcon,
+    variant = 'fixed',
+    buttonMode = 'text',
+    inputLayout = 'inline',
+    footerContent,
+    inputDisabled = false,
+    onAtTrigger,
+    showInlineResult = true,
+    className,
   } = props;
   const askProcessState = useAskProcessState();
 
@@ -73,10 +122,10 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
 
   const result = useMemo(
     () => ({
-      type: askingTask?.type, // question's type
-      originalQuestion, // original question
-      askingStreamTask, // for general answer
-      recommendedQuestions, // guiding user to ask
+      type: askingTask?.type,
+      originalQuestion,
+      askingStreamTask,
+      recommendedQuestions,
       intentReasoning: askingTask?.intentReasoning || '',
     }),
     [data],
@@ -107,7 +156,6 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
     }
   }, [error]);
 
-  // create thread response for recommended question
   const selectRecommendedQuestion = async (payload: {
     question: string;
     sql: string;
@@ -116,7 +164,6 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
     closeResult();
   };
 
-  // create thread response for text to sql
   const intentSQLAnswer = async () => {
     onCreateResponse &&
       (await onCreateResponse({ question, taskId: askingTask?.queryId }));
@@ -139,9 +186,10 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
   const submitAsk = async (value: string) => {
     setQuestion(value);
     if (isProcessing || !value) return;
-    // start the state as understanding when user submit question
-    askProcessState.transitionTo(PROCESS_STATE.UNDERSTANDING);
-    setShowResult(true);
+    if (showInlineResult) {
+      askProcessState.transitionTo(PROCESS_STATE.UNDERSTANDING);
+      setShowResult(true);
+    }
     onSubmit && (await onSubmit(value));
   };
 
@@ -155,15 +203,21 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
   );
 
   return (
-    <PromptStyle className="d-flex align-end bg-gray-2 p-3 border border-gray-3 rounded">
+    <PromptStyle $variant={variant} className={className}>
       <PromptInput
         question={question}
         isProcessing={isProcessing}
         onAsk={submitAsk}
         inputProps={inputProps}
+        leadingIcon={leadingIcon}
+        buttonMode={buttonMode}
+        layout={inputLayout}
+        footerContent={footerContent}
+        disabled={inputDisabled}
+        onAtTrigger={onAtTrigger}
       />
 
-      {showResult && (
+      {showInlineResult && showResult && (
         <PromptResult
           data={result}
           error={error}

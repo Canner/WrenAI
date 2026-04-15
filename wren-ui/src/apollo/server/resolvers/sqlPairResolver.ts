@@ -1,9 +1,62 @@
 import { IContext } from '@server/types/context';
 import { SqlPair } from '@server/repositories';
+import { toPersistedRuntimeIdentity } from '@server/context/runtimeScope';
 import * as Errors from '@server/utils/error';
 import { TelemetryEvent, TrackTelemetry } from '@server/telemetry/telemetry';
 import { DialectSQL, WrenSQL } from '@server/models/adaptor';
 import { safeFormatSQL } from '@server/utils/sqlFormat';
+import { validateSql as validateSqlWithExecutionContext } from '@server/utils/apiUtils';
+import {
+  assertLatestExecutableRuntimeScope,
+  resolveRuntimeExecutionContext,
+  resolveRuntimeProject,
+} from '@server/utils/runtimeExecutionContext';
+import {
+  assertAuthorizedWithAudit,
+  buildAuthorizationActorFromRuntimeScope,
+  recordAuditEvent,
+} from '@server/authz';
+
+const getKnowledgeBaseAuthorizationTarget = (ctx: IContext) => {
+  const workspaceId = ctx.runtimeScope?.workspace?.id || null;
+  const knowledgeBase = ctx.runtimeScope?.knowledgeBase;
+
+  return {
+    actor:
+      ctx.authorizationActor ||
+      buildAuthorizationActorFromRuntimeScope(ctx.runtimeScope),
+    resource: {
+      resourceType: knowledgeBase ? 'knowledge_base' : 'workspace',
+      resourceId: knowledgeBase?.id || workspaceId,
+      workspaceId,
+      attributes: {
+        workspaceKind: ctx.runtimeScope?.workspace?.kind || null,
+        knowledgeBaseKind: knowledgeBase?.kind || null,
+      },
+    },
+  };
+};
+
+const requireKnowledgeBaseWriteAccess = async (ctx: IContext) => {
+  const { actor, resource } = getKnowledgeBaseAuthorizationTarget(ctx);
+  await assertAuthorizedWithAudit({
+    auditEventRepository: ctx.auditEventRepository,
+    actor,
+    action: 'knowledge_base.update',
+    resource,
+  });
+};
+
+const requireKnowledgeBaseReadAccess = async (ctx: IContext) => {
+  const { actor, resource } = getKnowledgeBaseAuthorizationTarget(ctx);
+  await assertAuthorizedWithAudit({
+    auditEventRepository: ctx.auditEventRepository,
+    actor,
+    action: 'knowledge_base.read',
+    resource,
+  });
+  return { actor, resource };
+};
 
 export class SqlPairResolver {
   constructor() {
@@ -20,7 +73,21 @@ export class SqlPairResolver {
     _arg: any,
     ctx: IContext,
   ): Promise<SqlPair[]> {
-    return ctx.sqlPairService.getProjectSqlPairs(ctx.runtimeScope!.project.id);
+    const { actor, resource } = await requireKnowledgeBaseReadAccess(ctx);
+    const sqlPairs = await ctx.sqlPairService.listSqlPairs(
+      toPersistedRuntimeIdentity(ctx.runtimeScope!),
+    );
+    await recordAuditEvent({
+      auditEventRepository: ctx.auditEventRepository,
+      actor,
+      action: 'knowledge_base.read',
+      resource,
+      result: 'allowed',
+      payloadJson: {
+        operation: 'get_project_sql_pairs',
+      },
+    });
+    return sqlPairs;
   }
 
   @TrackTelemetry(TelemetryEvent.KNOWLEDGE_CREATE_SQL_PAIR)
@@ -34,11 +101,29 @@ export class SqlPairResolver {
     },
     ctx: IContext,
   ): Promise<SqlPair> {
+    await requireKnowledgeBaseWriteAccess(ctx);
     await this.validateSql(arg.data.sql, ctx);
-    return await ctx.sqlPairService.createSqlPair(
-      ctx.runtimeScope!.project.id,
+    const created = await ctx.sqlPairService.createSqlPair(
+      toPersistedRuntimeIdentity(ctx.runtimeScope!),
       arg.data,
     );
+    const { actor, resource } = getKnowledgeBaseAuthorizationTarget(ctx);
+    await recordAuditEvent({
+      auditEventRepository: ctx.auditEventRepository,
+      actor,
+      action: 'knowledge_base.update',
+      resource: {
+        ...resource,
+        resourceType: 'sql_pair',
+        resourceId: created.id,
+      },
+      result: 'succeeded',
+      afterJson: created as any,
+      payloadJson: {
+        operation: 'create_sql_pair',
+      },
+    });
+    return created;
   }
 
   @TrackTelemetry(TelemetryEvent.KNOWLEDGE_UPDATE_SQL_PAIR)
@@ -55,12 +140,32 @@ export class SqlPairResolver {
     },
     ctx: IContext,
   ): Promise<SqlPair> {
-    await this.validateSql(arg.data.sql, ctx);
-    return ctx.sqlPairService.editSqlPair(
-      ctx.runtimeScope!.project.id,
+    await requireKnowledgeBaseWriteAccess(ctx);
+    if (arg.data.sql) {
+      await this.validateSql(arg.data.sql, ctx);
+    }
+    const updated = await ctx.sqlPairService.updateSqlPair(
+      toPersistedRuntimeIdentity(ctx.runtimeScope!),
       arg.where.id,
       arg.data,
     );
+    const { actor, resource } = getKnowledgeBaseAuthorizationTarget(ctx);
+    await recordAuditEvent({
+      auditEventRepository: ctx.auditEventRepository,
+      actor,
+      action: 'knowledge_base.update',
+      resource: {
+        ...resource,
+        resourceType: 'sql_pair',
+        resourceId: arg.where.id,
+      },
+      result: 'succeeded',
+      afterJson: updated as any,
+      payloadJson: {
+        operation: 'update_sql_pair',
+      },
+    });
+    return updated;
   }
 
   @TrackTelemetry(TelemetryEvent.KNOWLEDGE_DELETE_SQL_PAIR)
@@ -73,10 +178,28 @@ export class SqlPairResolver {
     },
     ctx: IContext,
   ): Promise<boolean> {
-    return ctx.sqlPairService.deleteSqlPair(
-      ctx.runtimeScope!.project.id,
+    await this.assertExecutableRuntimeScope(ctx);
+    await requireKnowledgeBaseWriteAccess(ctx);
+    const deleted = await ctx.sqlPairService.deleteSqlPair(
+      toPersistedRuntimeIdentity(ctx.runtimeScope!),
       arg.where.id,
     );
+    const { actor, resource } = getKnowledgeBaseAuthorizationTarget(ctx);
+    await recordAuditEvent({
+      auditEventRepository: ctx.auditEventRepository,
+      actor,
+      action: 'knowledge_base.update',
+      resource: {
+        ...resource,
+        resourceType: 'sql_pair',
+        resourceId: arg.where.id,
+      },
+      result: 'succeeded',
+      payloadJson: {
+        operation: 'delete_sql_pair',
+      },
+    });
+    return deleted;
   }
 
   public async generateQuestion(
@@ -88,10 +211,21 @@ export class SqlPairResolver {
     },
     ctx: IContext,
   ) {
-    const project = ctx.runtimeScope!.project;
+    const { actor, resource } = await requireKnowledgeBaseReadAccess(ctx);
+    const project = await this.getActiveRuntimeProject(ctx);
     const questions = await ctx.sqlPairService.generateQuestions(project, [
       arg.data.sql,
     ]);
+    await recordAuditEvent({
+      auditEventRepository: ctx.auditEventRepository,
+      actor,
+      action: 'knowledge_base.read',
+      resource,
+      result: 'allowed',
+      payloadJson: {
+        operation: 'generate_question',
+      },
+    });
     return questions[0];
   }
 
@@ -104,11 +238,18 @@ export class SqlPairResolver {
     },
     ctx: IContext,
   ): Promise<WrenSQL> {
-    const project = ctx.runtimeScope!.project;
-    const lastDeployment = await ctx.deployService.getLastDeployment(
-      project.id,
-    );
-    const manifest = lastDeployment.manifest;
+    const { actor, resource } = await requireKnowledgeBaseReadAccess(ctx);
+    await this.assertExecutableRuntimeScope(ctx);
+    const executionContext = await resolveRuntimeExecutionContext({
+      runtimeScope: ctx.runtimeScope!,
+      projectService: ctx.projectService,
+    });
+    if (!executionContext) {
+      throw Errors.create(Errors.GeneralErrorCodes.NO_DEPLOYMENT_FOUND, {
+        customMessage: 'No deployment found, please deploy your project first',
+      });
+    }
+    const { project, manifest } = executionContext;
 
     const wrenSQL = await ctx.sqlPairService.modelSubstitute(
       arg.data.sql as DialectSQL,
@@ -117,34 +258,79 @@ export class SqlPairResolver {
         manifest,
       },
     );
+    await recordAuditEvent({
+      auditEventRepository: ctx.auditEventRepository,
+      actor,
+      action: 'knowledge_base.read',
+      resource,
+      result: 'allowed',
+      payloadJson: {
+        operation: 'model_substitute',
+      },
+    });
     return safeFormatSQL(wrenSQL, { language: 'postgresql' }) as WrenSQL;
   }
 
   private async validateSql(sql: string, ctx: IContext) {
-    const project = ctx.runtimeScope!.project;
-    const lastDeployment = await ctx.deployService.getLastDeployment(
-      project.id,
-    );
-    const manifest = lastDeployment.manifest;
     try {
-      await ctx.queryService.preview(sql, {
-        manifest,
-        project,
-        dryRun: true,
+      await this.assertExecutableRuntimeScope(ctx);
+      const executionContext = await resolveRuntimeExecutionContext({
+        runtimeScope: ctx.runtimeScope!,
+        projectService: ctx.projectService,
       });
+      if (!executionContext) {
+        throw new Error(
+          'No deployment found, please deploy your project first',
+        );
+      }
+      await validateSqlWithExecutionContext(
+        sql,
+        executionContext,
+        ctx.queryService,
+      );
     } catch (err) {
       throw Errors.create(Errors.GeneralErrorCodes.INVALID_SQL_ERROR, {
-        customMessage: err.message,
+        customMessage: err instanceof Error ? err.message : String(err),
       });
     }
   }
 
   public getSqlPairNestedResolver = () => ({
     createdAt: (sqlPair: SqlPair, _args: any, _ctx: IContext) => {
-      return new Date(sqlPair.createdAt).toISOString();
+      return new Date(sqlPair.createdAt || Date.now()).toISOString();
     },
     updatedAt: (sqlPair: SqlPair, _args: any, _ctx: IContext) => {
-      return new Date(sqlPair.updatedAt).toISOString();
+      return new Date(sqlPair.updatedAt || Date.now()).toISOString();
     },
   });
+
+  private async getActiveRuntimeProject(ctx: IContext) {
+    await this.assertExecutableRuntimeScope(ctx);
+    const project = await resolveRuntimeProject(
+      ctx.runtimeScope!,
+      ctx.projectService,
+    );
+    if (!project) {
+      throw Errors.create(Errors.GeneralErrorCodes.NO_DEPLOYMENT_FOUND, {
+        customMessage: 'No deployment found, please deploy your project first',
+      });
+    }
+
+    return project;
+  }
+
+  private async assertExecutableRuntimeScope(ctx: IContext) {
+    try {
+      await assertLatestExecutableRuntimeScope({
+        runtimeScope: ctx.runtimeScope!,
+        knowledgeBaseRepository: ctx.knowledgeBaseRepository,
+        kbSnapshotRepository: ctx.kbSnapshotRepository,
+      });
+    } catch (error) {
+      throw Errors.create(Errors.GeneralErrorCodes.OUTDATED_RUNTIME_SNAPSHOT, {
+        customMessage:
+          error instanceof Error ? error.message : 'Snapshot outdated',
+      });
+    }
+  }
 }

@@ -48,7 +48,7 @@ export interface ProjectData {
 export interface ProjectRecommendationQuestionsResult {
   status: RecommendQuestionResultStatus;
   questions: RecommendationQuestion[];
-  error: WrenAIError;
+  error: WrenAIError | null;
 }
 export interface IProjectService {
   createProject: (projectData: ProjectData) => Promise<Project>;
@@ -144,7 +144,7 @@ export class ProjectService implements IProjectService {
       queryId: recommendQuestionResult.queryId,
       questionsStatus: RecommendationQuestionStatus.GENERATING,
       questions: [],
-      questionsError: null,
+      questionsError: undefined,
     });
 
     if (
@@ -169,17 +169,26 @@ export class ProjectService implements IProjectService {
       error: null,
     };
     if (project.queryId) {
-      result.status = project.questionsStatus
-        ? RecommendQuestionResultStatus[project.questionsStatus]
-        : result.status;
+      if (
+        project.questionsStatus &&
+        project.questionsStatus in RecommendQuestionResultStatus
+      ) {
+        const statusKey =
+          project.questionsStatus as keyof typeof RecommendQuestionResultStatus;
+        result.status = RecommendQuestionResultStatus[statusKey];
+      }
       result.questions = project.questions || [];
-      result.error = project.questionsError as WrenAIError;
+      result.error = (project.questionsError || null) as WrenAIError | null;
     }
     return result;
   }
 
-  public async getProjectById(projectId: number) {
-    return await this.projectRepository.findOneBy({ id: projectId });
+  public async getProjectById(projectId: number): Promise<Project> {
+    const project = await this.projectRepository.findOneBy({ id: projectId });
+    if (!project) {
+      throw new Error(`Project not found`);
+    }
+    return project;
   }
 
   public async getProjectDataSourceTables(project: Project) {
@@ -234,7 +243,7 @@ export class ProjectService implements IProjectService {
     await this.projectRepository.deleteOne(projectId);
   }
 
-  public getGeneralConnectionInfo(project) {
+  public getGeneralConnectionInfo(project: Project): Record<string, unknown> {
     return Object.entries(project.connectionInfo).reduce(
       (acc, [key, value]) => {
         if (!SENSITIVE_PROPERTY_NAME.has(key)) {
@@ -242,17 +251,22 @@ export class ProjectService implements IProjectService {
         }
         return acc;
       },
-      {},
+      {} as Record<string, unknown>,
     );
   }
 
   private getProjectRecommendationQuestionsConfig(project: Project) {
+    const languageKey = project.language;
+    const language =
+      languageKey && languageKey in WrenAILanguage
+        ? WrenAILanguage[languageKey as keyof typeof WrenAILanguage]
+        : WrenAILanguage.EN;
     return {
       maxCategories: config.projectRecommendationQuestionMaxCategories,
       maxQuestions: config.projectRecommendationQuestionsMaxQuestions,
       regenerate: true,
       configuration: {
-        language: WrenAILanguage[project.language] || WrenAILanguage.EN,
+        language,
       },
     };
   }

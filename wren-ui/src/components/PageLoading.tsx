@@ -48,17 +48,27 @@ export default function PageLoading(props: Props) {
     >
       <div className="text-center">
         <Spin indicator={defaultIndicator} />
-        <div className="mt-2 geekblue-6">Loading...</div>
+        <div className="mt-2 geekblue-6">加载中…</div>
       </div>
     </Wrapper>
   );
 }
 
-export const FlexLoading = (props) => {
-  const { height, tip } = props;
+export const FlexLoading = (props: {
+  height?: number | string;
+  tip?: string;
+  align?: 'left' | 'center' | 'right';
+}) => {
+  const { height, tip, align = 'center' } = props;
   return (
     <div
-      className="d-flex align-center justify-center flex-column geekblue-6"
+      className={`d-flex align-center flex-column geekblue-6 ${
+        align === 'left'
+          ? 'justify-start'
+          : align === 'right'
+            ? 'justify-end'
+            : 'justify-center'
+      }`}
       style={{ height: height || '100%' }}
     >
       {defaultIndicator}

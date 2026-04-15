@@ -37,7 +37,7 @@ interface Props {
 export default function ModelRelationSelectionTable(props: Props) {
   return (
     <SelectionTable
-      {...props}
+      {...(props as any)}
       tableHeader={
         <>
           <ModelIcon className="pr-2 text-md" />

@@ -3,8 +3,13 @@ import { gql } from '@apollo/client';
 export const RUNTIME_SELECTOR_STATE = gql`
   query RuntimeSelectorState {
     runtimeSelectorState {
-      currentProjectId
       currentWorkspace {
+        id
+        slug
+        name
+        kind
+      }
+      workspaces {
         id
         slug
         name
@@ -13,6 +18,7 @@ export const RUNTIME_SELECTOR_STATE = gql`
         id
         slug
         name
+        kind
         defaultKbSnapshotId
       }
       currentKbSnapshot {

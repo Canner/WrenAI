@@ -1,4 +1,5 @@
 import { Drawer, Tag, Typography } from 'antd';
+import styled from 'styled-components';
 import { getCompactTime } from '@/utils/time';
 import QuestionOutlined from '@ant-design/icons/QuestionOutlined';
 import { DrawerAction } from '@/hooks/useDrawerAction';
@@ -7,42 +8,87 @@ import { Instruction } from '@/apollo/client/graphql/__types__';
 
 const { Text } = Typography;
 
+const StyledDrawer = styled(Drawer)`
+  .ant-drawer-header {
+    border-bottom: 1px solid #eef2f7;
+    padding: 18px 20px;
+  }
+
+  .ant-drawer-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #111827;
+  }
+
+  .ant-drawer-body {
+    padding: 20px;
+    background: #fff;
+  }
+`;
+
+const Section = styled.section`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 0;
+  border-bottom: 1px solid #f1f5f9;
+
+  &:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+`;
+
+const Label = styled(Typography.Text)`
+  &.ant-typography {
+    font-size: 12px;
+    font-weight: 600;
+    color: #6b7280;
+    margin-bottom: 0;
+  }
+`;
+
+const Value = styled.div`
+  color: #111827;
+  font-size: 14px;
+  line-height: 1.8;
+`;
+
 type Props = DrawerAction<Instruction>;
 
 export default function InstructionDrawer(props: Props) {
   const { visible, defaultValue, onClose } = props;
 
   return (
-    <Drawer
+    <StyledDrawer
       closable
       destroyOnClose
       onClose={onClose}
-      title="View instruction"
+      title="分析规则详情"
       visible={visible}
       width={760}
     >
-      <div className="mb-6">
-        <Typography.Text className="gray-7 mb-2">
-          Instruction details
-        </Typography.Text>
-        <div>{defaultValue?.instruction || '-'}</div>
-      </div>
-      <div className="mb-6">
-        <Typography.Text className="gray-7 mb-2">
-          Matching questions
-        </Typography.Text>
+      <Section>
+        <Label>规则内容</Label>
+        <Value>{defaultValue?.instruction || '-'}</Value>
+      </Section>
+      <Section>
+        <Label>匹配问题示例</Label>
         <div>
           {defaultValue?.isDefault ? (
             <>
               <GlobalLabel />
               <Text className="gray-7 ml-2" type="secondary">
-                (applies to all questions)
+                （适用于所有问题）
               </Text>
             </>
           ) : (
             defaultValue?.questions.map((question, index) => (
               <div key={`${question}-${index}`} className="my-2">
-                <Tag className="bg-gray-1 border-gray-5">
+                <Tag
+                  className="bg-gray-1 border-gray-5"
+                  style={{ borderRadius: 999, paddingInline: 10 }}
+                >
                   <QuestionOutlined className="geekblue-6" />
                   <Text className="gray-9">{question}</Text>
                 </Tag>
@@ -50,15 +96,15 @@ export default function InstructionDrawer(props: Props) {
             ))
           )}
         </div>
-      </div>
-      <div className="mb-6">
-        <Typography.Text className="gray-7 mb-2">Created time</Typography.Text>
-        <div>
+      </Section>
+      <Section>
+        <Label>创建时间</Label>
+        <Value>
           {defaultValue?.createdAt
             ? getCompactTime(defaultValue.createdAt)
             : '-'}
-        </div>
-      </div>
-    </Drawer>
+        </Value>
+      </Section>
+    </StyledDrawer>
   );
 }

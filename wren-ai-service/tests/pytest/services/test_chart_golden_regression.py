@@ -43,7 +43,7 @@ async def test_chart_golden_regression_baseline(case: dict):
         {
             "query": case["query"],
             "sql": case["sql"],
-            "project_id": case["project_id"],
+            "runtime_scope_id": case["project_id"],
         }
     )
     request.query_id = f"chart-{case['name']}"
@@ -62,7 +62,7 @@ async def test_chart_golden_regression_baseline(case: dict):
     assert sql_executor.run.await_count == 1
     assert sql_executor.run.await_args.kwargs == {
         "sql": case["sql"],
-        "project_id": case["project_id"],
+        "runtime_scope_id": case["project_id"],
     }
     assert chart_generation.run.await_count == 1
     assert chart_generation.run.await_args.kwargs["data"] == scenario[

@@ -9,7 +9,12 @@ class RetrievalMock(retrieval.DbSchemaRetrieval):
     def __init__(self, documents: list = []):
         self._documents = documents
 
-    async def run(self, query: str, project_id: Optional[str] = None):
+    async def run(
+        self,
+        query: str,
+        runtime_scope_id: Optional[str] = None,
+        project_id: Optional[str] = None,
+    ):
         return {"construct_retrieval_results": self._documents}
 
 
@@ -17,7 +22,12 @@ class SqlPairsRetrievalMock(retrieval.SqlPairsRetrieval):
     def __init__(self, documents: list = []):
         self._documents = documents
 
-    async def run(self, query: str, project_id: Optional[str] = None):
+    async def run(
+        self,
+        query: str,
+        runtime_scope_id: Optional[str] = None,
+        project_id: Optional[str] = None,
+    ):
         return {"formatted_output": {"documents": self._documents}}
 
 
@@ -25,7 +35,12 @@ class InstructionsRetrievalMock(retrieval.Instructions):
     def __init__(self, documents: list = []):
         self._documents = documents
 
-    async def run(self, query: str, project_id: Optional[str] = None):
+    async def run(
+        self,
+        query: str,
+        runtime_scope_id: Optional[str] = None,
+        project_id: Optional[str] = None,
+    ):
         return {"formatted_output": {"documents": self._documents}}
 
 
@@ -33,7 +48,12 @@ class HistoricalQuestionMock(retrieval.HistoricalQuestionRetrieval):
     def __init__(self, documents: list = []):
         self._documents = documents
 
-    async def run(self, query: str, project_id: Optional[str] = None):
+    async def run(
+        self,
+        query: str,
+        runtime_scope_id: Optional[str] = None,
+        project_id: Optional[str] = None,
+    ):
         return {"formatted_output": {"documents": self._documents}}
 
 
@@ -44,6 +64,7 @@ class IntentClassificationMock(generation.IntentClassification):
     async def run(
         self,
         query: str,
+        runtime_scope_id: Optional[str] = None,
         project_id: Optional[str] = None,
         histories: Optional[list[AskHistory]] = None,
         configuration: Configuration | None = None,
@@ -63,6 +84,7 @@ class GenerationMock(generation.SQLGeneration):
         query: str,
         contexts: list[str],
         exclude: list[dict],
+        runtime_scope_id: str | None = None,
         project_id: str | None = None,
         configuration: Configuration | None = None,
     ):

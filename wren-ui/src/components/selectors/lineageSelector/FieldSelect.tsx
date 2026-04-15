@@ -66,18 +66,27 @@ export interface FieldValue {
 
 type Props = FieldValue & {
   options: FieldOption[];
-  onChange?: (value: any, index: number) => void;
-  onFetchOptions?: (item: any, index: number) => Promise<FieldOption[]>;
+  onChange?: (value: string, index: number) => void;
+  onFetchOptions?: (item: FieldValue, index: number) => Promise<FieldOption[]>;
 };
 
-export const getFieldValue = (field): FieldValue => {
+type FieldValueSource = {
+  nodeType: NODE_TYPE;
+  referenceName: string;
+  displayName: string;
+  type?: string | null;
+  relationId?: number | null;
+  columnId?: number | null;
+};
+
+export const getFieldValue = (field: FieldValueSource): FieldValue => {
   return {
     nodeType: field.nodeType,
     referenceName: field.referenceName,
     displayName: field.displayName,
-    type: field.type,
-    relationId: field?.relationId,
-    columnId: field?.columnId,
+    type: field.type || undefined,
+    relationId: field?.relationId ?? undefined,
+    columnId: field?.columnId ?? undefined,
   };
 };
 
@@ -97,7 +106,7 @@ export default function FieldSelect(props: IterableComponent<Props>) {
     NODE_TYPE.MODEL,
     NODE_TYPE.RELATION,
   ].includes(nodeType);
-  const [options, setOptions] = useState([]);
+  const [options, setOptions] = useState<FieldOption[]>([]);
 
   const getOptions = async () => {
     const result = onFetchOptions && (await onFetchOptions(props, index));
@@ -130,20 +139,20 @@ export default function FieldSelect(props: IterableComponent<Props>) {
       </FieldHeader>
 
       {selectedValue?.nodeType === NODE_TYPE.RELATION && (
-        <div className="gray-7 text-sm px-3 pt-1">Relationships</div>
+        <div className="gray-7 text-sm px-3 pt-1">关系</div>
       )}
 
       <StyledSelector
         bordered={false}
         options={options}
         optionLabelProp="label"
-        placeholder="Select field"
+        placeholder="选择字段"
         suffixIcon={null}
         value={selectedValue}
         dropdownClassName="adm-model-field-select-dropdown"
         onDropdownVisibleChange={onDropdownVisibleChange}
         onSelect={(value) => {
-          onChange && onChange(value, index);
+          onChange && onChange(String(value), index);
         }}
         data-testid="common__lineage-fields-select"
       />

@@ -1,6 +1,6 @@
 import clsx from 'clsx';
 import Image from 'next/image';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ComponentProps } from 'react';
 import { Typography, Collapse } from 'antd';
 import DownOutlined from '@ant-design/icons/DownOutlined';
 import ErrorBoundary from './ErrorBoundary';
@@ -49,16 +49,18 @@ export default function Preparation(props: Props) {
   useEffect(() => {
     setIsActive(!minimized);
   }, [minimized]);
-  const error = useMemo(() => {
-    return preparedTask?.error && !sql
+  const error = useMemo<ComponentProps<typeof ErrorBoundary>['error']>(() => {
+    return preparedTask?.error && !sql && onFixSQLStatement
       ? {
           ...preparedTask.error,
-          invalidSql: preparedTask?.invalidSql,
+          message: preparedTask.error.message || '回答生成失败',
+          shortMessage: preparedTask.error.shortMessage || '回答生成失败',
+          invalidSql: preparedTask?.invalidSql || undefined,
           fixStatement: (sql: string) => onFixSQLStatement(responseId, sql),
           fixStatementLoading,
         }
-      : null;
-  }, [preparedTask, responseId, sql, fixStatementLoading]);
+      : undefined;
+  }, [preparedTask, responseId, sql, fixStatementLoading, onFixSQLStatement]);
 
   if (preparedTask === null) return null;
 
@@ -88,12 +90,12 @@ export default function Preparation(props: Props) {
               <Typography.Title level={5} className="gray-8 text-medium mb-0">
                 <Image
                   src="/images/icon/message-ai.svg"
-                  alt="Answer Preparation Steps"
+                  alt="回答准备步骤"
                   width={24}
                   height={24}
                   className="mr-1"
                 />
-                Answer preparation steps
+                回答准备步骤
               </Typography.Title>
               <PreparationStatus {...props} preparedTask={preparedTask} />
             </div>

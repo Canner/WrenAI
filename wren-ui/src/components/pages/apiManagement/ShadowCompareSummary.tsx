@@ -1,5 +1,6 @@
 import { Alert, Card, Col, Row, Tag, Typography } from 'antd';
 import { ApiType } from '@/apollo/client/graphql/__types__';
+import { formatApiTypeLabel } from './apiTypeLabels';
 
 export interface AskShadowCompareBucket {
   key: string;
@@ -66,6 +67,14 @@ const EMPTY_STATS: AskShadowCompareStatsView = {
   trends: [],
 };
 
+const ROLLOUT_MODE_LABELS: Record<
+  AskShadowCompareRolloutReadinessView['recommendedMode'],
+  string
+> = {
+  keep_legacy: '保留旧链路',
+  canary_deepagents: '逐步切到 deepagents',
+};
+
 export const deriveShadowCompareRolloutReadiness = (
   stats?: AskShadowCompareStatsView | null,
 ): AskShadowCompareRolloutReadinessView => {
@@ -77,7 +86,7 @@ export const deriveShadowCompareRolloutReadiness = (
     return {
       status: 'no_data',
       recommendedMode: 'keep_legacy',
-      reason: 'No shadow compare samples recorded yet.',
+      reason: '还没有记录到影子对比样本。',
       comparableMatchRate: 0,
       comparableMismatchRate: 0,
       errorRate: 0,
@@ -88,10 +97,9 @@ export const deriveShadowCompareRolloutReadiness = (
     return {
       status: 'investigate_shadow_errors',
       recommendedMode: 'keep_legacy',
-      reason: 'Shadow compare recorded legacy shadow errors.',
+      reason: '影子对比已经记录到旧链路的影子执行错误。',
       comparableMatchRate: normalized.matched / comparableDenominator,
-      comparableMismatchRate:
-        normalized.mismatched / comparableDenominator,
+      comparableMismatchRate: normalized.mismatched / comparableDenominator,
       errorRate: normalized.errorCount / executedDenominator,
     };
   }
@@ -100,8 +108,7 @@ export const deriveShadowCompareRolloutReadiness = (
     return {
       status: 'waiting_for_comparable_samples',
       recommendedMode: 'keep_legacy',
-      reason:
-        'Current shadow compares do not yet produce directly comparable primary and shadow results.',
+      reason: '当前影子对比还没有产出可以直接比较的主链路与影子链路结果。',
       comparableMatchRate: 0,
       comparableMismatchRate: 0,
       errorRate: 0,
@@ -112,10 +119,9 @@ export const deriveShadowCompareRolloutReadiness = (
     return {
       status: 'blocked_on_comparable_mismatches',
       recommendedMode: 'keep_legacy',
-      reason: 'Comparable shadow compare samples still contain mismatches.',
+      reason: '可比对的影子样本里仍然存在结果不匹配。',
       comparableMatchRate: normalized.matched / comparableDenominator,
-      comparableMismatchRate:
-        normalized.mismatched / comparableDenominator,
+      comparableMismatchRate: normalized.mismatched / comparableDenominator,
       errorRate: 0,
     };
   }
@@ -123,7 +129,7 @@ export const deriveShadowCompareRolloutReadiness = (
   return {
     status: 'ready_for_canary',
     recommendedMode: 'canary_deepagents',
-    reason: 'Comparable shadow compare samples are matching.',
+    reason: '可比对的影子样本已经全部匹配，可以进入金丝雀验证。',
     comparableMatchRate: normalized.matched / comparableDenominator,
     comparableMismatchRate: normalized.mismatched / comparableDenominator,
     errorRate: 0,
@@ -165,9 +171,8 @@ const renderTrends = (
     <div key={trend.date} className="mb-2">
       <Typography.Text className="gray-7">{trend.date}</Typography.Text>
       <div>
-        total {trend.total} · executed {trend.executed} · matched{' '}
-        {trend.matched} · mismatched {trend.mismatched} · errors{' '}
-        {trend.errorCount}
+        总数 {trend.total} · 已执行 {trend.executed} · 已匹配 {trend.matched} ·
+        不匹配 {trend.mismatched} · 错误 {trend.errorCount}
       </div>
     </div>
   ));
@@ -183,8 +188,8 @@ export default function ShadowCompareSummary(props: Props) {
       <Alert
         type="info"
         showIcon
-        message="Shadow compare rollout"
-        description={`Rollout stats only support ASK / STREAM_ASK records. Current API type filter: ${unsupportedApiType.toLowerCase()}.`}
+        message="影子对比发布看板"
+        description={`当前发布统计只支持 ASK / STREAM_ASK 请求记录。当前 API 类型筛选：${formatApiTypeLabel(unsupportedApiType)}。`}
       />
     );
   }
@@ -193,7 +198,7 @@ export default function ShadowCompareSummary(props: Props) {
     <Card
       size="small"
       loading={loading}
-      title="Shadow compare rollout"
+      title="影子对比发布看板"
       className="mb-4"
     >
       <Alert
@@ -206,25 +211,25 @@ export default function ShadowCompareSummary(props: Props) {
               : 'warning'
         }
         showIcon
-        message={`Recommendation: ${readiness.recommendedMode}`}
-        description={`${readiness.reason} Match ${Math.round(
+        message={`建议策略：${ROLLOUT_MODE_LABELS[readiness.recommendedMode]}`}
+        description={`${readiness.reason} 匹配率 ${Math.round(
           readiness.comparableMatchRate * 100,
-        )}% · mismatch ${Math.round(
+        )}% · 不匹配率 ${Math.round(
           readiness.comparableMismatchRate * 100,
-        )}% · errors ${Math.round(readiness.errorRate * 100)}%.`}
+        )}% · 错误率 ${Math.round(readiness.errorRate * 100)}%。`}
         className="mb-4"
       />
 
       <Row gutter={[16, 16]}>
         <Col span={6}>
           <Typography.Text className="gray-7 d-block mb-1">
-            Records
+            请求记录数
           </Typography.Text>
           <div className="text-medium">{stats.total}</div>
         </Col>
         <Col span={6}>
           <Typography.Text className="gray-7 d-block mb-1">
-            Diagnostics coverage
+            诊断覆盖率
           </Typography.Text>
           <div className="text-medium">
             {formatRate(stats.withDiagnostics, stats.total)}
@@ -232,7 +237,7 @@ export default function ShadowCompareSummary(props: Props) {
         </Col>
         <Col span={6}>
           <Typography.Text className="gray-7 d-block mb-1">
-            Shadow executed
+            已执行影子链路
           </Typography.Text>
           <div className="text-medium">
             {formatRate(stats.executed, stats.enabled)}
@@ -240,7 +245,7 @@ export default function ShadowCompareSummary(props: Props) {
         </Col>
         <Col span={6}>
           <Typography.Text className="gray-7 d-block mb-1">
-            Match rate
+            匹配率
           </Typography.Text>
           <div className="text-medium">
             {formatRate(stats.matched, stats.comparable)}
@@ -251,19 +256,19 @@ export default function ShadowCompareSummary(props: Props) {
       <Row gutter={[16, 16]} className="mt-4">
         <Col span={8}>
           <Typography.Text className="gray-7 d-block mb-1">
-            Comparable
+            可比对样本
           </Typography.Text>
           <div>{stats.comparable}</div>
         </Col>
         <Col span={8}>
           <Typography.Text className="gray-7 d-block mb-1">
-            Mismatched
+            不匹配样本
           </Typography.Text>
           <div>{stats.mismatched}</div>
         </Col>
         <Col span={8}>
           <Typography.Text className="gray-7 d-block mb-1">
-            Shadow errors
+            影子链路错误
           </Typography.Text>
           <div>{stats.errorCount}</div>
         </Col>
@@ -271,23 +276,23 @@ export default function ShadowCompareSummary(props: Props) {
 
       <div className="mt-4">
         <Typography.Text className="gray-7 d-block mb-2">
-          Top ask paths
+          主要问答路径
         </Typography.Text>
-        <div>{renderBuckets(stats.byAskPath, 'No ask diagnostics yet')}</div>
+        <div>{renderBuckets(stats.byAskPath, '暂时还没有问答诊断数据')}</div>
       </div>
 
       <div className="mt-4">
         <Typography.Text className="gray-7 d-block mb-2">
-          Shadow error types
+          影子错误类型
         </Typography.Text>
-        <div>{renderBuckets(stats.byShadowErrorType, 'No shadow errors')}</div>
+        <div>{renderBuckets(stats.byShadowErrorType, '暂无影子链路错误')}</div>
       </div>
 
       <div className="mt-4">
         <Typography.Text className="gray-7 d-block mb-2">
-          Recent trend
+          最近趋势
         </Typography.Text>
-        <div>{renderTrends(stats.trends, 'No trend data yet')}</div>
+        <div>{renderTrends(stats.trends, '暂时还没有趋势数据')}</div>
       </div>
     </Card>
   );

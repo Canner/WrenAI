@@ -1,4 +1,11 @@
-import { ReactNode, useEffect, useRef, useState } from 'react';
+import {
+  Children,
+  ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import styled from 'styled-components';
 
 interface Props {
@@ -28,23 +35,32 @@ export default function EllipsisWrapper(props: Props) {
   const { text, multipleLine, minHeight, children, showMoreCount } = props;
   const ref = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
-  const [width, setWidth] = useState(undefined);
+  const [width, setWidth] = useState<number | 'auto' | undefined>(undefined);
   const hasWidth = width !== undefined;
+  const childrenArray = useMemo(() => Children.toArray(children), [children]);
   // Stage for counting the children that will be shown
-  const [stage, setStage] = useState([]);
+  const [stage, setStage] = useState<ReactNode[]>([]);
 
   const isStageEnd = useRef(false);
   const calculateStageShow = () => {
     if (isStageEnd.current) return;
+    if (typeof width !== 'number') return;
     const remainSpace = 60; // remain space for showing more tip
     const stageWidth = stageRef.current?.clientWidth;
+    if (stageWidth === undefined) return;
     const canPrintNext = stageWidth < width - remainSpace;
 
     if (canPrintNext) {
-      const hasMoreChildren = (children as ReactNode[]).length > stage.length;
-      hasMoreChildren && setStage([...stage, children[stage.length]]);
+      setStage((previousStage) => {
+        if (childrenArray.length <= previousStage.length) {
+          return previousStage;
+        }
+        return [...previousStage, childrenArray[previousStage.length]];
+      });
     } else {
-      setStage(stage.slice(0, stage.length - 1));
+      setStage((previousStage) =>
+        previousStage.slice(0, previousStage.length - 1),
+      );
       isStageEnd.current = true;
     }
   };
@@ -69,18 +85,18 @@ export default function EllipsisWrapper(props: Props) {
     if (!showMoreCount) return;
     // Run only once when showMoreCount is true
     if (stage.length === 0) {
-      setStage([children[0]]);
+      setStage(childrenArray.slice(0, 1));
       return;
     }
     calculateStageShow();
-  }, [showMoreCount, stage]);
+  }, [showMoreCount, stage, childrenArray, width]);
 
   const renderContent = () => {
     if (!children) return text || '-';
 
     // Turn another template if showMoreCount is provided
     if (showMoreCount) {
-      const moreCount = (children as ReactNode[]).length - stage.length;
+      const moreCount = childrenArray.length - stage.length;
       return (
         <span className="d-inline-block" ref={stageRef}>
           {stage}
@@ -92,13 +108,10 @@ export default function EllipsisWrapper(props: Props) {
     return children;
   };
 
-  // Convert to string if React pass its children as array type to props
-  const title = Array.isArray(text) ? text.join('') : text;
-
   return (
     <Wrapper
       ref={ref}
-      title={title}
+      title={text}
       multipleLine={multipleLine}
       style={{ width, minHeight }}
     >

@@ -22,8 +22,9 @@ def test_transform():
         },
         {
             "type": "document_store",
-            "provider": "qdrant",
-            "kwargs": {"host": "localhost", "port": 6333},
+            "provider": "pgvector",
+            "connection_string": "postgresql://postgres:postgres@localhost:5432/postgres",
+            "embedding_dimension": 1536,
         },
         {
             "type": "engine",
@@ -37,7 +38,7 @@ def test_transform():
                     "name": "indexing",
                     "llm": "openai_llm.gpt-4",
                     "embedder": "openai_embedder.text-embedding-ada-002",
-                    "document_store": "qdrant",
+                    "document_store": "pgvector",
                     "engine": "wren_ui",
                 }
             ],
@@ -49,7 +50,7 @@ def test_transform():
     assert isinstance(result, Configuration)
     assert "openai_llm.gpt-4" in result.providers["llm"]
     assert "openai_embedder.text-embedding-ada-002" in result.providers["embedder"]
-    assert "qdrant" in result.providers["document_store"]
+    assert "pgvector" in result.providers["document_store"]
     assert "wren_ui" in result.providers["engine"]
     assert "indexing" in result.pipelines
 
@@ -77,7 +78,12 @@ def test_generate_components(mocker: MockerFixture):
             "provider": "openai_embedder",
             "models": [{"model": "text-embedding-ada-002", "dimension": 1536}],
         },
-        {"type": "document_store", "provider": "qdrant", "kwargs": {}},
+        {
+            "type": "document_store",
+            "provider": "pgvector",
+            "connection_string": "postgresql://postgres:postgres@localhost:5432/postgres",
+            "embedding_dimension": 1536,
+        },
         {"type": "engine", "provider": "wren_ui", "kwargs": {}},
         {
             "type": "pipeline",
@@ -86,7 +92,7 @@ def test_generate_components(mocker: MockerFixture):
                     "name": "indexing",
                     "llm": "openai_llm.gpt-4",
                     "embedder": "openai_embedder.text-embedding-ada-002",
-                    "document_store": "qdrant",
+                    "document_store": "pgvector",
                     "engine": "wren_ui",
                 }
             ],

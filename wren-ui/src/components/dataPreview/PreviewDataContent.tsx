@@ -17,14 +17,17 @@ interface Props {
 const getValueByValueType = (value: any) =>
   ['boolean', 'object'].includes(typeof value) ? JSON.stringify(value) : value;
 
-const convertResultData = (data: Array<any>, columns) => {
+const convertResultData = (data: Array<any[]>, columns: TableColumn[]) => {
   return data.map((datum: Array<any>, index: number) => {
-    const obj = {};
+    const obj: Record<string, unknown> = {};
     // should have a unique "key" prop.
-    obj['key'] = index;
+    obj.key = index;
 
-    datum.forEach((value, index) => {
-      const columnName = columns[index].dataIndex;
+    datum.forEach((value, columnIndex) => {
+      const columnDataIndex = columns[columnIndex]?.dataIndex;
+      const columnName = Array.isArray(columnDataIndex)
+        ? columnDataIndex.join('.')
+        : String(columnDataIndex ?? columnIndex);
       obj[columnName] = getValueByValueType(value);
     });
 

@@ -17,9 +17,6 @@ def test_settings_default_values():
 
         assert settings.query_cache_ttl == 3600
         assert settings.query_cache_maxsize == 1_000_000
-        assert settings.skill_runner_enabled is False
-        assert settings.skill_runner_endpoint == "http://127.0.0.1:5600"
-        assert settings.skill_runner_timeout == 30.0
         assert settings.ask_runtime_mode == "deepagents"
         assert settings.ask_shadow_compare_enabled is False
 
@@ -38,8 +35,6 @@ def test_settings_env_var_override():
         "WREN_AI_SERVICE_PORT": "8000",
         "LOGGING_LEVEL": "DEBUG",
         "CONFIG_PATH": "/tmp/custom-config.yaml",
-        "SKILL_RUNNER_ENABLED": "true",
-        "SKILL_RUNNER_ENDPOINT": "http://runner.internal:5600",
         "ASK_RUNTIME_MODE": "deepagents",
         "ASK_SHADOW_COMPARE_ENABLED": "true",
     }
@@ -52,8 +47,6 @@ def test_settings_env_var_override():
         assert settings.port == int(env_vars["WREN_AI_SERVICE_PORT"])
         assert settings.logging_level == env_vars["LOGGING_LEVEL"]
         assert settings.config_path == env_vars["CONFIG_PATH"]
-        assert settings.skill_runner_enabled is True
-        assert settings.skill_runner_endpoint == env_vars["SKILL_RUNNER_ENDPOINT"]
         assert settings.ask_runtime_mode == env_vars["ASK_RUNTIME_MODE"]
         assert settings.ask_shadow_compare_enabled is True
 

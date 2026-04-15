@@ -1,10 +1,10 @@
 import asyncio
-import os
 
 from deepeval.metrics import BaseMetric
 from deepeval.test_case import LLMTestCase
 
 from eval.metrics.spider import eval_exec_match
+from eval.metrics.spider.database import build_benchmark_db_target
 
 
 class ExecutionAccuracy(BaseMetric):
@@ -26,10 +26,10 @@ class ExecutionAccuracy(BaseMetric):
             return 0
 
         db_name = test_case.additional_metadata["catalog"]
-        db = os.path.join(self.db_dir, db_name, db_name + ".sqlite")
+        db_path = build_benchmark_db_target(self.db_dir, db_name)
 
         self.score = await eval_exec_match(
-            db=db,
+            db=db_path,
             p_str=test_case.actual_output,
             g_str=test_case.expected_output,
         )

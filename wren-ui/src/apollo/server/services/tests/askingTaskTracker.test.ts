@@ -1,5 +1,5 @@
 import { AskingTaskTracker } from '../askingTaskTracker';
-import { AskResultStatus, SkillResultType } from '@server/models/adaptor';
+import { AskResultStatus } from '@server/models/adaptor';
 
 describe('AskingTaskTracker', () => {
   const createTracker = () => {
@@ -52,7 +52,7 @@ describe('AskingTaskTracker', () => {
       queryId: 'query-1',
       question: 'hello',
       detail: { status: AskResultStatus.FINISHED, response: [] },
-      projectId: 42,
+      projectId: null,
       workspaceId: 'workspace-1',
       knowledgeBaseId: 'kb-1',
       kbSnapshotId: 'snapshot-1',
@@ -87,7 +87,7 @@ describe('AskingTaskTracker', () => {
 
     expect(askingTaskRepository.updateOne).toHaveBeenCalledWith(11, {
       detail: { status: AskResultStatus.FAILED, response: [] },
-      projectId: 99,
+      projectId: null,
       workspaceId: 'workspace-9',
       knowledgeBaseId: 'kb-9',
       kbSnapshotId: 'snapshot-9',
@@ -96,7 +96,116 @@ describe('AskingTaskTracker', () => {
     });
   });
 
-  it('persists finalized skill results onto the bound thread response', async () => {
+  it('reuses the same runtime identity payload when rerunning a cancelled task', async () => {
+    const tracker = createTracker();
+    const wrenAIAdaptor = (tracker as any).wrenAIAdaptor;
+    const askingTaskRepository = (tracker as any).askingTaskRepository;
+    wrenAIAdaptor.ask.mockResolvedValue({ queryId: 'query-rerun' });
+    wrenAIAdaptor.getAskResult.mockResolvedValue({
+      status: AskResultStatus.UNDERSTANDING,
+      response: [],
+    });
+
+    await tracker.createAskingTask({
+      query: 'rerun me',
+      rerunFromCancelled: true,
+      previousTaskId: 77,
+      threadResponseId: 55,
+      runtimeIdentity: {
+        projectId: 42,
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snapshot-1',
+        deployHash: 'deploy-1',
+        actorUserId: 'user-1',
+      },
+    } as any);
+
+    expect(askingTaskRepository.updateOne).toHaveBeenCalledWith(77, {
+      queryId: 'query-rerun',
+      projectId: null,
+      workspaceId: 'workspace-1',
+      knowledgeBaseId: 'kb-1',
+      kbSnapshotId: 'snapshot-1',
+      deployHash: 'deploy-1',
+      actorUserId: 'user-1',
+    });
+  });
+
+  it('persists an understanding-state task immediately after creation', async () => {
+    const tracker = createTracker();
+    const wrenAIAdaptor = (tracker as any).wrenAIAdaptor;
+    const askingTaskRepository = (tracker as any).askingTaskRepository;
+    wrenAIAdaptor.ask.mockResolvedValue({ queryId: 'query-new' });
+    askingTaskRepository.findByQueryId.mockResolvedValue(null);
+    askingTaskRepository.createOne.mockResolvedValue({ id: 12 });
+
+    await tracker.createAskingTask({
+      query: '最近7天订单量趋势',
+      deployId: 'deploy-1',
+      runtimeIdentity: {
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snapshot-1',
+        deployHash: 'deploy-1',
+        actorUserId: 'user-1',
+      },
+    } as any);
+
+    expect(askingTaskRepository.createOne).toHaveBeenCalledWith({
+      queryId: 'query-new',
+      question: '最近7天订单量趋势',
+      detail: {
+        type: null,
+        status: AskResultStatus.UNDERSTANDING,
+        response: [],
+        error: null,
+      },
+      projectId: null,
+      workspaceId: 'workspace-1',
+      knowledgeBaseId: 'kb-1',
+      kbSnapshotId: 'snapshot-1',
+      deployHash: 'deploy-1',
+      actorUserId: 'user-1',
+    });
+  });
+
+  it('reuses the same runtime identity payload when polling updates an existing task record', async () => {
+    const tracker = createTracker();
+    const askingTaskRepository = (tracker as any).askingTaskRepository;
+    askingTaskRepository.findByQueryId.mockResolvedValue({ id: 88 });
+
+    await (tracker as any).updateTaskInDatabase(
+      { queryId: 'query-3' },
+      {
+        queryId: 'query-3',
+        lastPolled: Date.now(),
+        question: 'tracked',
+        result: { status: AskResultStatus.FINISHED, response: [] },
+        isFinalized: true,
+        runtimeIdentity: {
+          projectId: 7,
+          workspaceId: 'workspace-7',
+          knowledgeBaseId: 'kb-7',
+          kbSnapshotId: 'snapshot-7',
+          deployHash: 'deploy-7',
+          actorUserId: 'user-7',
+        },
+      },
+    );
+
+    expect(askingTaskRepository.updateOne).toHaveBeenCalledWith(88, {
+      detail: { status: AskResultStatus.FINISHED, response: [] },
+      projectId: null,
+      workspaceId: 'workspace-7',
+      knowledgeBaseId: 'kb-7',
+      kbSnapshotId: 'snapshot-7',
+      deployHash: 'deploy-7',
+      actorUserId: 'user-7',
+    });
+  });
+
+  it('persists finalized text-to-sql results onto the bound thread response', async () => {
     const tracker = createTracker();
     const threadResponseRepository = ((
       tracker as any
@@ -108,20 +217,13 @@ describe('AskingTaskTracker', () => {
       threadResponseId: 21,
       result: {
         status: AskResultStatus.FINISHED,
-        type: 'SKILL',
-        response: [],
-        skillResult: {
-          resultType: SkillResultType.TEXT,
-          text: '本月 GMV 为 128 万',
-        },
+        type: 'TEXT_TO_SQL',
+        response: [{ sql: 'SELECT 1' }],
       },
     });
 
     expect(threadResponseRepository.updateOne).toHaveBeenCalledWith(21, {
-      skillResult: {
-        resultType: SkillResultType.TEXT,
-        text: '本月 GMV 为 128 万',
-      },
+      sql: 'SELECT 1',
     });
   });
 });

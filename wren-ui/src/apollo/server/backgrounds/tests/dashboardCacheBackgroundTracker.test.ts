@@ -48,7 +48,7 @@ describe('DashboardCacheBackgroundTracker', () => {
     kbSnapshotRepository = {
       findOneBy: jest.fn().mockResolvedValue({
         id: 'snapshot-1',
-        legacyProjectId: 42,
+        projectBridgeId: 42,
         deployHash: 'deploy-42',
       }),
     };
@@ -56,7 +56,9 @@ describe('DashboardCacheBackgroundTracker', () => {
       getProjectById: jest.fn().mockResolvedValue({ id: 42, type: 'view' }),
     };
     deployService = {
-      getDeployment: jest.fn().mockResolvedValue({ manifest: 'mock-mdl' }),
+      getDeploymentByRuntimeIdentity: jest
+        .fn()
+        .mockResolvedValue({ projectId: 42, manifest: 'mock-mdl' }),
     };
     queryService = {
       preview: jest.fn().mockResolvedValue({}),
@@ -84,10 +86,13 @@ describe('DashboardCacheBackgroundTracker', () => {
     expect(kbSnapshotRepository.findOneBy).toHaveBeenCalledWith({
       id: 'snapshot-1',
     });
-    expect(deployService.getDeployment).toHaveBeenCalledWith(
-      42,
-      'deploy-42',
-    );
+    expect(deployService.getDeploymentByRuntimeIdentity).toHaveBeenCalledWith({
+      projectId: null,
+      workspaceId: null,
+      knowledgeBaseId: null,
+      kbSnapshotId: 'snapshot-1',
+      deployHash: 'deploy-42',
+    });
     expect(queryService.preview).toHaveBeenCalledWith('SELECT * FROM orders', {
       project: { id: 42, type: 'view' },
       manifest: 'mock-mdl',

@@ -3,19 +3,33 @@ import * as Types from './__types__';
 import { gql } from '@apollo/client';
 import * as Apollo from '@apollo/client';
 const defaultOptions = {} as const;
-export type CommonDashboardItemFragment = { __typename?: 'DashboardItem', id: number, dashboardId: number, type: Types.DashboardItemType, displayName?: string | null, layout: { __typename?: 'DashboardItemLayout', x: number, y: number, w: number, h: number }, detail: { __typename?: 'DashboardItemDetail', sql: string, chartSchema?: any | null } };
+export type CommonDashboardItemFragment = { __typename?: 'DashboardItem', id: number, dashboardId: number, type: Types.DashboardItemType, displayName?: string | null, layout: { __typename?: 'DashboardItemLayout', x: number, y: number, w: number, h: number }, detail: { __typename?: 'DashboardItemDetail', sql: string, chartSchema?: any | null, renderHints?: any | null, canonicalizationVersion?: string | null, chartDataProfile?: any | null, validationErrors?: Array<string> | null, sourceResponseId?: number | null, sourceThreadId?: number | null, sourceQuestion?: string | null } };
 
-export type DashboardItemsQueryVariables = Types.Exact<{ [key: string]: never; }>;
+export type DashboardItemsQueryVariables = Types.Exact<{
+  where?: Types.InputMaybe<Types.DashboardWhereInput>;
+}>;
 
 
-export type DashboardItemsQuery = { __typename?: 'Query', dashboardItems: Array<{ __typename?: 'DashboardItem', id: number, dashboardId: number, type: Types.DashboardItemType, displayName?: string | null, layout: { __typename?: 'DashboardItemLayout', x: number, y: number, w: number, h: number }, detail: { __typename?: 'DashboardItemDetail', sql: string, chartSchema?: any | null } }> };
+export type DashboardItemsQuery = { __typename?: 'Query', dashboardItems: Array<{ __typename?: 'DashboardItem', id: number, dashboardId: number, type: Types.DashboardItemType, displayName?: string | null, layout: { __typename?: 'DashboardItemLayout', x: number, y: number, w: number, h: number }, detail: { __typename?: 'DashboardItemDetail', sql: string, chartSchema?: any | null, renderHints?: any | null, canonicalizationVersion?: string | null, chartDataProfile?: any | null, validationErrors?: Array<string> | null, sourceResponseId?: number | null, sourceThreadId?: number | null, sourceQuestion?: string | null } }> };
+
+export type DashboardsQueryVariables = Types.Exact<{ [key: string]: never; }>;
+
+
+export type DashboardsQuery = { __typename?: 'Query', dashboards: Array<{ __typename?: 'Dashboard', id: number, name: string, cacheEnabled: boolean, nextScheduledAt?: string | null, scheduleFrequency?: Types.ScheduleFrequencyEnum | null }> };
+
+export type CreateDashboardMutationVariables = Types.Exact<{
+  data: Types.CreateDashboardInput;
+}>;
+
+
+export type CreateDashboardMutation = { __typename?: 'Mutation', createDashboard: { __typename?: 'Dashboard', id: number, name: string, cacheEnabled: boolean, nextScheduledAt?: string | null, scheduleFrequency?: Types.ScheduleFrequencyEnum | null, scheduleTimezone?: string | null, scheduleCron?: string | null } };
 
 export type CreateDashboardItemMutationVariables = Types.Exact<{
   data: Types.CreateDashboardItemInput;
 }>;
 
 
-export type CreateDashboardItemMutation = { __typename?: 'Mutation', createDashboardItem: { __typename?: 'DashboardItem', id: number, dashboardId: number, type: Types.DashboardItemType, displayName?: string | null, layout: { __typename?: 'DashboardItemLayout', x: number, y: number, w: number, h: number }, detail: { __typename?: 'DashboardItemDetail', sql: string, chartSchema?: any | null } } };
+export type CreateDashboardItemMutation = { __typename?: 'Mutation', createDashboardItem: { __typename?: 'DashboardItem', id: number, dashboardId: number, type: Types.DashboardItemType, displayName?: string | null, layout: { __typename?: 'DashboardItemLayout', x: number, y: number, w: number, h: number }, detail: { __typename?: 'DashboardItemDetail', sql: string, chartSchema?: any | null, renderHints?: any | null, canonicalizationVersion?: string | null, chartDataProfile?: any | null, validationErrors?: Array<string> | null, sourceResponseId?: number | null, sourceThreadId?: number | null, sourceQuestion?: string | null } } };
 
 export type UpdateDashboardItemMutationVariables = Types.Exact<{
   where: Types.DashboardItemWhereInput;
@@ -23,14 +37,14 @@ export type UpdateDashboardItemMutationVariables = Types.Exact<{
 }>;
 
 
-export type UpdateDashboardItemMutation = { __typename?: 'Mutation', updateDashboardItem: { __typename?: 'DashboardItem', id: number, dashboardId: number, type: Types.DashboardItemType, displayName?: string | null, layout: { __typename?: 'DashboardItemLayout', x: number, y: number, w: number, h: number }, detail: { __typename?: 'DashboardItemDetail', sql: string, chartSchema?: any | null } } };
+export type UpdateDashboardItemMutation = { __typename?: 'Mutation', updateDashboardItem: { __typename?: 'DashboardItem', id: number, dashboardId: number, type: Types.DashboardItemType, displayName?: string | null, layout: { __typename?: 'DashboardItemLayout', x: number, y: number, w: number, h: number }, detail: { __typename?: 'DashboardItemDetail', sql: string, chartSchema?: any | null, renderHints?: any | null, canonicalizationVersion?: string | null, chartDataProfile?: any | null, validationErrors?: Array<string> | null, sourceResponseId?: number | null, sourceThreadId?: number | null, sourceQuestion?: string | null } } };
 
 export type UpdateDashboardItemLayoutsMutationVariables = Types.Exact<{
   data: Types.UpdateDashboardItemLayoutsInput;
 }>;
 
 
-export type UpdateDashboardItemLayoutsMutation = { __typename?: 'Mutation', updateDashboardItemLayouts: Array<{ __typename?: 'DashboardItem', id: number, dashboardId: number, type: Types.DashboardItemType, displayName?: string | null, layout: { __typename?: 'DashboardItemLayout', x: number, y: number, w: number, h: number }, detail: { __typename?: 'DashboardItemDetail', sql: string, chartSchema?: any | null } }> };
+export type UpdateDashboardItemLayoutsMutation = { __typename?: 'Mutation', updateDashboardItemLayouts: Array<{ __typename?: 'DashboardItem', id: number, dashboardId: number, type: Types.DashboardItemType, displayName?: string | null, layout: { __typename?: 'DashboardItemLayout', x: number, y: number, w: number, h: number }, detail: { __typename?: 'DashboardItemDetail', sql: string, chartSchema?: any | null, renderHints?: any | null, canonicalizationVersion?: string | null, chartDataProfile?: any | null, validationErrors?: Array<string> | null, sourceResponseId?: number | null, sourceThreadId?: number | null, sourceQuestion?: string | null } }> };
 
 export type DeleteDashboardItemMutationVariables = Types.Exact<{
   where: Types.DashboardItemWhereInput;
@@ -44,7 +58,7 @@ export type PreviewItemSqlMutationVariables = Types.Exact<{
 }>;
 
 
-export type PreviewItemSqlMutation = { __typename?: 'Mutation', previewItemSQL: { __typename?: 'PreviewItemResponse', data: any, cacheHit: boolean, cacheCreatedAt?: string | null, cacheOverrodeAt?: string | null, override: boolean } };
+export type PreviewItemSqlMutation = { __typename?: 'Mutation', previewItemSQL: { __typename?: 'PreviewItemResponse', data: any, chartDataProfile?: any | null, cacheHit: boolean, cacheCreatedAt?: string | null, cacheOverrodeAt?: string | null, override: boolean } };
 
 export type SetDashboardScheduleMutationVariables = Types.Exact<{
   data: Types.SetDashboardScheduleInput;
@@ -53,10 +67,12 @@ export type SetDashboardScheduleMutationVariables = Types.Exact<{
 
 export type SetDashboardScheduleMutation = { __typename?: 'Mutation', setDashboardSchedule: { __typename?: 'Dashboard', id: number, name: string, cacheEnabled: boolean, scheduleFrequency?: Types.ScheduleFrequencyEnum | null, scheduleTimezone?: string | null, scheduleCron?: string | null, nextScheduledAt?: string | null } };
 
-export type DashboardQueryVariables = Types.Exact<{ [key: string]: never; }>;
+export type DashboardQueryVariables = Types.Exact<{
+  where?: Types.InputMaybe<Types.DashboardWhereInput>;
+}>;
 
 
-export type DashboardQuery = { __typename?: 'Query', dashboard: { __typename?: 'DetailedDashboard', id: number, name: string, description?: string | null, cacheEnabled: boolean, nextScheduledAt?: string | null, schedule?: { __typename?: 'DashboardSchedule', frequency?: Types.ScheduleFrequencyEnum | null, hour?: number | null, minute?: number | null, day?: Types.CacheScheduleDayEnum | null, timezone?: string | null, cron?: string | null } | null, items: Array<{ __typename?: 'DashboardItem', id: number, dashboardId: number, type: Types.DashboardItemType, displayName?: string | null, layout: { __typename?: 'DashboardItemLayout', x: number, y: number, w: number, h: number }, detail: { __typename?: 'DashboardItemDetail', sql: string, chartSchema?: any | null } }> } };
+export type DashboardQuery = { __typename?: 'Query', dashboard: { __typename?: 'DetailedDashboard', id: number, name: string, description?: string | null, cacheEnabled: boolean, nextScheduledAt?: string | null, schedule?: { __typename?: 'DashboardSchedule', frequency?: Types.ScheduleFrequencyEnum | null, hour?: number | null, minute?: number | null, day?: Types.CacheScheduleDayEnum | null, timezone?: string | null, cron?: string | null } | null, items: Array<{ __typename?: 'DashboardItem', id: number, dashboardId: number, type: Types.DashboardItemType, displayName?: string | null, layout: { __typename?: 'DashboardItemLayout', x: number, y: number, w: number, h: number }, detail: { __typename?: 'DashboardItemDetail', sql: string, chartSchema?: any | null, renderHints?: any | null, canonicalizationVersion?: string | null, chartDataProfile?: any | null, validationErrors?: Array<string> | null, sourceResponseId?: number | null, sourceThreadId?: number | null, sourceQuestion?: string | null } }> } };
 
 export const CommonDashboardItemFragmentDoc = gql`
     fragment CommonDashboardItem on DashboardItem {
@@ -72,13 +88,20 @@ export const CommonDashboardItemFragmentDoc = gql`
   detail {
     sql
     chartSchema
+    renderHints
+    canonicalizationVersion
+    chartDataProfile
+    validationErrors
+    sourceResponseId
+    sourceThreadId
+    sourceQuestion
   }
   displayName
 }
     `;
 export const DashboardItemsDocument = gql`
-    query DashboardItems {
-  dashboardItems {
+    query DashboardItems($where: DashboardWhereInput) {
+  dashboardItems(where: $where) {
     ...CommonDashboardItem
   }
 }
@@ -96,6 +119,7 @@ export const DashboardItemsDocument = gql`
  * @example
  * const { data, loading, error } = useDashboardItemsQuery({
  *   variables: {
+ *      where: // value for 'where'
  *   },
  * });
  */
@@ -110,6 +134,83 @@ export function useDashboardItemsLazyQuery(baseOptions?: Apollo.LazyQueryHookOpt
 export type DashboardItemsQueryHookResult = ReturnType<typeof useDashboardItemsQuery>;
 export type DashboardItemsLazyQueryHookResult = ReturnType<typeof useDashboardItemsLazyQuery>;
 export type DashboardItemsQueryResult = Apollo.QueryResult<DashboardItemsQuery, DashboardItemsQueryVariables>;
+export const DashboardsDocument = gql`
+    query Dashboards {
+  dashboards {
+    id
+    name
+    cacheEnabled
+    nextScheduledAt
+    scheduleFrequency
+  }
+}
+    `;
+
+/**
+ * __useDashboardsQuery__
+ *
+ * To run a query within a React component, call `useDashboardsQuery` and pass it any options that fit your needs.
+ * When your component renders, `useDashboardsQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useDashboardsQuery({
+ *   variables: {
+ *   },
+ * });
+ */
+export function useDashboardsQuery(baseOptions?: Apollo.QueryHookOptions<DashboardsQuery, DashboardsQueryVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useQuery<DashboardsQuery, DashboardsQueryVariables>(DashboardsDocument, options);
+      }
+export function useDashboardsLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<DashboardsQuery, DashboardsQueryVariables>) {
+          const options = {...defaultOptions, ...baseOptions}
+          return Apollo.useLazyQuery<DashboardsQuery, DashboardsQueryVariables>(DashboardsDocument, options);
+        }
+export type DashboardsQueryHookResult = ReturnType<typeof useDashboardsQuery>;
+export type DashboardsLazyQueryHookResult = ReturnType<typeof useDashboardsLazyQuery>;
+export type DashboardsQueryResult = Apollo.QueryResult<DashboardsQuery, DashboardsQueryVariables>;
+export const CreateDashboardDocument = gql`
+    mutation CreateDashboard($data: CreateDashboardInput!) {
+  createDashboard(data: $data) {
+    id
+    name
+    cacheEnabled
+    nextScheduledAt
+    scheduleFrequency
+    scheduleTimezone
+    scheduleCron
+  }
+}
+    `;
+export type CreateDashboardMutationFn = Apollo.MutationFunction<CreateDashboardMutation, CreateDashboardMutationVariables>;
+
+/**
+ * __useCreateDashboardMutation__
+ *
+ * To run a mutation, you first call `useCreateDashboardMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useCreateDashboardMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [createDashboardMutation, { data, loading, error }] = useCreateDashboardMutation({
+ *   variables: {
+ *      data: // value for 'data'
+ *   },
+ * });
+ */
+export function useCreateDashboardMutation(baseOptions?: Apollo.MutationHookOptions<CreateDashboardMutation, CreateDashboardMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<CreateDashboardMutation, CreateDashboardMutationVariables>(CreateDashboardDocument, options);
+      }
+export type CreateDashboardMutationHookResult = ReturnType<typeof useCreateDashboardMutation>;
+export type CreateDashboardMutationResult = Apollo.MutationResult<CreateDashboardMutation>;
+export type CreateDashboardMutationOptions = Apollo.BaseMutationOptions<CreateDashboardMutation, CreateDashboardMutationVariables>;
 export const CreateDashboardItemDocument = gql`
     mutation CreateDashboardItem($data: CreateDashboardItemInput!) {
   createDashboardItem(data: $data) {
@@ -245,6 +346,7 @@ export const PreviewItemSqlDocument = gql`
     mutation PreviewItemSQL($data: PreviewItemSQLInput!) {
   previewItemSQL(data: $data) {
     data
+    chartDataProfile
     cacheHit
     cacheCreatedAt
     cacheOverrodeAt
@@ -318,8 +420,8 @@ export type SetDashboardScheduleMutationHookResult = ReturnType<typeof useSetDas
 export type SetDashboardScheduleMutationResult = Apollo.MutationResult<SetDashboardScheduleMutation>;
 export type SetDashboardScheduleMutationOptions = Apollo.BaseMutationOptions<SetDashboardScheduleMutation, SetDashboardScheduleMutationVariables>;
 export const DashboardDocument = gql`
-    query Dashboard {
-  dashboard {
+    query Dashboard($where: DashboardWhereInput) {
+  dashboard(where: $where) {
     id
     name
     description
@@ -352,6 +454,7 @@ export const DashboardDocument = gql`
  * @example
  * const { data, loading, error } = useDashboardQuery({
  *   variables: {
+ *      where: // value for 'where'
  *   },
  * });
  */

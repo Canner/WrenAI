@@ -119,9 +119,11 @@ describe('SecretService', () => {
 
     secretRepository.findOneBy.mockResolvedValue(secretRecord);
 
-    await expect(service.decryptSecretRecord(secretRecord.id)).resolves.toEqual({
-      token: 'v2-secret',
-    });
+    await expect(service.decryptSecretRecord(secretRecord.id)).resolves.toEqual(
+      {
+        token: 'v2-secret',
+      },
+    );
   });
 
   it('rejects decrypting ciphertext with a different master key', async () => {

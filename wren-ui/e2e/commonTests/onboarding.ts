@@ -1,6 +1,10 @@
-import { expect } from '@playwright/test';
+import { Page, expect } from '@playwright/test';
 
-export const setupModels = async ({ page }) => {
+type OnboardingPageContext = {
+  page: Page;
+};
+
+export const setupModels = async ({ page }: OnboardingPageContext) => {
   await page.goto('/setup/models');
 
   // select all models
@@ -10,7 +14,9 @@ export const setupModels = async ({ page }) => {
   await expect(page).toHaveURL('/setup/relationships', { timeout: 60000 });
 };
 
-export const saveRecommendedRelationships = async ({ page }) => {
+export const saveRecommendedRelationships = async ({
+  page,
+}: OnboardingPageContext) => {
   await page.goto('/setup/relationships');
 
   await page.getByRole('button', { name: 'Finish' }).click();

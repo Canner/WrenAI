@@ -13,19 +13,38 @@ export interface KnowledgeBase {
   workspaceId: string;
   slug: string;
   name: string;
+  kind?: string;
   description?: string | null;
   defaultKbSnapshotId?: string | null;
+  primaryConnectorId?: string | null;
+  runtimeProjectId?: number | null;
+  language?: string | null;
+  sampleDataset?: string | null;
+  recommendationQueryId?: string | null;
+  recommendationStatus?: string | null;
+  recommendationQuestions?: Array<{
+    question: string;
+    category: string;
+    sql: string;
+  }> | null;
+  recommendationError?: Record<string, any> | null;
   createdBy?: string | null;
   archivedAt?: Date | null;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
 }
 
-export interface IKnowledgeBaseRepository extends IBasicRepository<KnowledgeBase> {}
+export interface IKnowledgeBaseRepository
+  extends IBasicRepository<KnowledgeBase> {}
 
 export class KnowledgeBaseRepository
   extends BaseRepository<KnowledgeBase>
   implements IKnowledgeBaseRepository
 {
-  private readonly jsonColumns = [];
+  private readonly jsonColumns = [
+    'recommendationQuestions',
+    'recommendationError',
+  ];
 
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'knowledge_base' });

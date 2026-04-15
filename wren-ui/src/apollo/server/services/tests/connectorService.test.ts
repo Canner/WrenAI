@@ -1,10 +1,13 @@
 import { ConnectorService } from '../connectorService';
+import { DataSourceName } from '@server/types';
 
 describe('ConnectorService', () => {
   let connectorRepository: any;
   let workspaceRepository: any;
   let knowledgeBaseRepository: any;
   let secretService: any;
+  let metadataService: any;
+  let federatedRuntimeProjectService: any;
   let service: ConnectorService;
   const tx = { id: 'tx' };
 
@@ -33,12 +36,21 @@ describe('ConnectorService', () => {
       deleteSecretRecord: jest.fn(),
       decryptSecretRecord: jest.fn(),
     };
+    metadataService = {
+      listTables: jest.fn(),
+      getVersion: jest.fn(),
+    };
+    federatedRuntimeProjectService = {
+      syncKnowledgeBaseFederation: jest.fn(),
+    };
 
     service = new ConnectorService({
       connectorRepository,
       workspaceRepository,
       knowledgeBaseRepository,
       secretService,
+      metadataService,
+      federatedRuntimeProjectService,
     });
   });
 
@@ -84,6 +96,9 @@ describe('ConnectorService', () => {
     );
     expect(connector.secretRecordId).toBe('secret-1');
     expect(connectorRepository.commit).toHaveBeenCalledWith(tx);
+    expect(
+      federatedRuntimeProjectService.syncKnowledgeBaseFederation,
+    ).toHaveBeenCalledWith('kb-1');
   });
 
   it('updates connector secret and mutable fields', async () => {
@@ -97,6 +112,7 @@ describe('ConnectorService', () => {
       secretRecordId: 'secret-1',
       createdBy: 'user-1',
     });
+    workspaceRepository.findOneBy.mockResolvedValue({ id: 'workspace-1' });
     knowledgeBaseRepository.findOneBy.mockResolvedValue({
       id: 'kb-2',
       workspaceId: 'workspace-1',
@@ -132,13 +148,25 @@ describe('ConnectorService', () => {
     );
     expect(connector.displayName).toBe('Orders API v2');
     expect(connectorRepository.commit).toHaveBeenCalledWith(tx);
+    expect(
+      federatedRuntimeProjectService.syncKnowledgeBaseFederation,
+    ).toHaveBeenNthCalledWith(1, 'kb-1');
+    expect(
+      federatedRuntimeProjectService.syncKnowledgeBaseFederation,
+    ).toHaveBeenNthCalledWith(2, 'kb-2');
   });
 
   it('deletes connector and cascades to secret service', async () => {
     connectorRepository.findOneBy.mockResolvedValue({
       id: 'connector-1',
       workspaceId: 'workspace-1',
+      knowledgeBaseId: 'kb-1',
       secretRecordId: 'secret-1',
+    });
+    workspaceRepository.findOneBy.mockResolvedValue({ id: 'workspace-1' });
+    knowledgeBaseRepository.findOneBy.mockResolvedValue({
+      id: 'kb-1',
+      workspaceId: 'workspace-1',
     });
 
     await service.deleteConnector('connector-1');
@@ -150,6 +178,9 @@ describe('ConnectorService', () => {
       tx,
     });
     expect(connectorRepository.commit).toHaveBeenCalledWith(tx);
+    expect(
+      federatedRuntimeProjectService.syncKnowledgeBaseFederation,
+    ).toHaveBeenCalledWith('kb-1');
   });
 
   it('rejects connector creation when workspace is missing', async () => {
@@ -162,6 +193,60 @@ describe('ConnectorService', () => {
         displayName: 'Broken',
       }),
     ).rejects.toThrow('Workspace workspace-missing not found');
+
+    expect(connectorRepository.rollback).toHaveBeenCalledWith(tx);
+  });
+
+  it('rejects connector creation inside the default workspace', async () => {
+    workspaceRepository.findOneBy.mockResolvedValue({
+      id: 'workspace-default',
+      kind: 'default',
+    });
+
+    await expect(
+      service.createConnector({
+        workspaceId: 'workspace-default',
+        knowledgeBaseId: null,
+        type: 'database',
+        displayName: 'Prod PG',
+      }),
+    ).rejects.toMatchObject({
+      message: '系统样例空间不支持接入或管理连接器',
+      statusCode: 403,
+    });
+
+    expect(connectorRepository.rollback).toHaveBeenCalledWith(tx);
+  });
+
+  it('rejects connector updates for system sample knowledge bases', async () => {
+    connectorRepository.findOneBy.mockResolvedValue({
+      id: 'connector-sample',
+      workspaceId: 'workspace-default',
+      knowledgeBaseId: 'kb-sample',
+      type: 'database',
+      displayName: 'Sample',
+      configJson: null,
+      secretRecordId: null,
+      createdBy: null,
+    });
+    workspaceRepository.findOneBy.mockResolvedValue({
+      id: 'workspace-default',
+      kind: 'default',
+    });
+    knowledgeBaseRepository.findOneBy.mockResolvedValue({
+      id: 'kb-sample',
+      workspaceId: 'workspace-default',
+      kind: 'system_sample',
+    });
+
+    await expect(
+      service.updateConnector('connector-sample', {
+        displayName: 'Updated sample connector',
+      }),
+    ).rejects.toMatchObject({
+      message: '系统样例知识库不支持接入或管理连接器',
+      statusCode: 403,
+    });
 
     expect(connectorRepository.rollback).toHaveBeenCalledWith(tx);
   });
@@ -184,5 +269,127 @@ describe('ConnectorService', () => {
         secret: { apiKey: 'resolved-secret' },
       }),
     );
+  });
+
+  it('tests an ad-hoc database connector connection', async () => {
+    workspaceRepository.findOneBy.mockResolvedValue({ id: 'workspace-1' });
+    metadataService.listTables.mockResolvedValue([
+      { name: 'orders' },
+      { name: 'customers' },
+    ]);
+    metadataService.getVersion.mockResolvedValue('PostgreSQL 16.3');
+
+    await expect(
+      service.testConnectorConnection({
+        workspaceId: 'workspace-1',
+        type: 'database',
+        databaseProvider: 'postgres',
+        config: {
+          host: '127.0.0.1',
+          port: '5432',
+          database: 'analytics',
+          username: 'postgres',
+        },
+        secret: {
+          password: 'postgres',
+        },
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        success: true,
+        connectorType: 'database',
+        dataSource: DataSourceName.POSTGRES,
+        tableCount: 2,
+        sampleTables: ['orders', 'customers'],
+        version: 'PostgreSQL 16.3',
+      }),
+    );
+    expect(metadataService.listTables).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: DataSourceName.POSTGRES,
+      }),
+    );
+  });
+
+  it('reuses the persisted connector secret when testing an existing connector', async () => {
+    workspaceRepository.findOneBy.mockResolvedValue({ id: 'workspace-1' });
+    knowledgeBaseRepository.findOneBy.mockResolvedValue({
+      id: 'kb-1',
+      workspaceId: 'workspace-1',
+    });
+    connectorRepository.findOneBy.mockResolvedValue({
+      id: 'connector-2',
+      workspaceId: 'workspace-1',
+      knowledgeBaseId: 'kb-1',
+      type: 'database',
+      databaseProvider: 'postgres',
+      displayName: 'Warehouse',
+      configJson: {
+        host: 'warehouse.internal',
+        port: 5432,
+        database: 'warehouse',
+        username: 'readonly',
+      },
+      secretRecordId: 'secret-2',
+    });
+    secretService.decryptSecretRecord.mockResolvedValue({
+      password: 'stored-password',
+    });
+    metadataService.listTables.mockResolvedValue([{ name: 'events' }]);
+    metadataService.getVersion.mockResolvedValue('PostgreSQL 15');
+
+    await expect(
+      service.testConnectorConnection({
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        connectorId: 'connector-2',
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        success: true,
+        connectorType: 'database',
+        tableCount: 1,
+        sampleTables: ['events'],
+      }),
+    );
+    expect(secretService.decryptSecretRecord).toHaveBeenCalledWith('secret-2');
+  });
+
+  it('rejects unsupported connector types for connection testing', async () => {
+    workspaceRepository.findOneBy.mockResolvedValue({ id: 'workspace-1' });
+
+    await expect(
+      service.testConnectorConnection({
+        workspaceId: 'workspace-1',
+        type: 'rest_json',
+        config: { baseUrl: 'https://api.example.com' },
+      }),
+    ).rejects.toThrow('暂不支持 rest_json 连接器的连接测试');
+  });
+
+  it('rejects connector connection tests inside the default workspace', async () => {
+    workspaceRepository.findOneBy.mockResolvedValue({
+      id: 'workspace-default',
+      kind: 'default',
+    });
+
+    await expect(
+      service.testConnectorConnection({
+        workspaceId: 'workspace-default',
+        type: 'database',
+        config: {
+          host: '127.0.0.1',
+          port: '5432',
+          database: 'analytics',
+          username: 'postgres',
+        },
+        secret: {
+          password: 'postgres',
+        },
+      }),
+    ).rejects.toMatchObject({
+      message: '系统样例空间不支持接入或管理连接器',
+      statusCode: 403,
+    });
   });
 });

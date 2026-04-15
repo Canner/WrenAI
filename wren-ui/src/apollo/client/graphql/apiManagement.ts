@@ -8,7 +8,6 @@ export const API_HISTORY = gql`
     apiHistory(filter: $filter, pagination: $pagination) {
       items {
         id
-        projectId
         apiType
         threadId
         headers

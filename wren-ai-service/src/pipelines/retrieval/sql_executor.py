@@ -10,7 +10,7 @@ from langfuse.decorators import observe
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
-from src.pipelines.common import normalize_runtime_scope_id
+from src.pipelines.common import resolve_pipeline_runtime_scope_id
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -26,15 +26,15 @@ class DataFetcher:
     async def run(
         self,
         sql: str,
-        project_id: str | None = None,
+        runtime_scope_id: str | None = None,
         limit: int = 500,
     ):
-        runtime_scope_id = normalize_runtime_scope_id(project_id)
+        runtime_scope_id = resolve_pipeline_runtime_scope_id(runtime_scope_id)
         async with aiohttp.ClientSession() as session:
             _, data, addition = await self._engine.execute_sql(
                 sql,
                 session,
-                project_id=runtime_scope_id,
+                runtime_scope_id=runtime_scope_id,
                 dry_run=False,
                 limit=limit,
             )
@@ -49,13 +49,12 @@ class DataFetcher:
 async def execute_sql(
     sql: str,
     data_fetcher: DataFetcher,
-    project_id: str | None = None,
+    runtime_scope_id: str | None = None,
     limit: int = 500,
 ) -> dict:
-    runtime_scope_id = normalize_runtime_scope_id(project_id)
     return await data_fetcher.run(
         sql=sql,
-        project_id=runtime_scope_id,
+        runtime_scope_id=runtime_scope_id,
         limit=limit,
     )
 
@@ -79,15 +78,21 @@ class SQLExecutor(BasicPipeline):
 
     @observe(name="SQL Execution")
     async def run(
-        self, sql: str, project_id: str | None = None, limit: int = 500
+        self,
+        sql: str,
+        runtime_scope_id: str | None = None,
+        limit: int = 500,
+        bridge_scope_id: str | None = None,
     ) -> dict:
         logger.info("SQL Execution pipeline is running...")
-        runtime_scope_id = normalize_runtime_scope_id(project_id)
+        runtime_scope_id = resolve_pipeline_runtime_scope_id(
+            runtime_scope_id, bridge_scope_id=bridge_scope_id
+        )
         return await self._pipe.execute(
             ["execute_sql"],
             inputs={
                 "sql": sql,
-                "project_id": runtime_scope_id,
+                "runtime_scope_id": runtime_scope_id,
                 "limit": limit,
                 **self._components,
             },

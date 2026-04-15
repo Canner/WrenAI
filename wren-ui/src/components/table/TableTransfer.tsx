@@ -22,11 +22,11 @@ const StyledTable = styled(Table)`
 export const defaultColumns = [
   {
     dataIndex: 'name',
-    title: 'Column Name',
+    title: '字段名称',
   },
   {
     dataIndex: 'type',
-    title: 'Column Type',
+    title: '字段类型',
     render: (type: string) => <Tag>{type.toUpperCase()}</Tag>,
   },
 ];
@@ -46,7 +46,18 @@ const TableTransfer = (
   ref: any,
 ) => {
   return (
-    <Transfer {...restProps} showSelectAll={false} listStyle={{ height: 332 }}>
+    <Transfer
+      {...restProps}
+      locale={{
+        searchPlaceholder: '搜索字段',
+        itemUnit: '项',
+        itemsUnit: '项',
+        notFoundContent: '暂无数据',
+        ...restProps.locale,
+      }}
+      showSelectAll={false}
+      listStyle={{ height: 332 }}
+    >
       {({
         direction,
         filteredItems,
@@ -56,6 +67,7 @@ const TableTransfer = (
         disabled: listDisabled,
       }) => {
         const columns = direction === 'left' ? leftColumns : rightColumns;
+        const shouldPaginate = filteredItems.length > 120;
 
         const rowSelection: TableRowSelection<TransferItem> = {
           getCheckboxProps: (item) => ({
@@ -82,6 +94,7 @@ const TableTransfer = (
               rowSelection={rowSelection}
               columns={columns}
               dataSource={filteredItems}
+              locale={{ emptyText: '暂无数据' }}
               size="small"
               style={
                 {
@@ -102,7 +115,15 @@ const TableTransfer = (
                 itemDisabled ? 'ant-table-row-disabled' : ''
               }
               scroll={{ y: 200 }}
-              pagination={false}
+              pagination={
+                shouldPaginate
+                  ? {
+                      pageSize: 50,
+                      showSizeChanger: false,
+                      size: 'small',
+                    }
+                  : false
+              }
             />
           </div>
         );

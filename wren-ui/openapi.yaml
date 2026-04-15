@@ -175,8 +175,13 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /generate_vega_chart:
     post:
+      deprecated: true
       summary: Generate Vega visualization chart spec
-      description: Generates a Vega chart spec for data visualization from a question and SQL query
+      description: |
+        Deprecated compatibility endpoint.
+        Generates a Vega chart spec for data visualization from a question and SQL query.
+        Internal ask/chart 主链路已不再依赖此接口，建议迁移到统一的 ask/chart workflow。
+        Planned removal gate: API history 中连续一个发布观察窗口无 GENERATE_VEGA_CHART 调用，并完成外部调用迁移。
       requestBody:
         required: true
         content:
@@ -203,6 +208,15 @@ paths:
       responses:
         '200':
           description: Successfully generated Vega specification
+          headers:
+            Deprecation:
+              schema:
+                type: string
+              description: Always `true` for this deprecated endpoint.
+            Warning:
+              schema:
+                type: string
+              description: Deprecation notice pointing callers to the ask/chart workflow.
           content:
             application/json:
               schema:
@@ -214,8 +228,36 @@ paths:
                   threadId:
                     type: string
                     description: ID of the thread (existing or newly created)
+                  canonicalizationVersion:
+                    type: string
+                    nullable: true
+                    description: Version of the server-side chart canonicalization rules
+                  renderHints:
+                    type: object
+                    nullable: true
+                    description: Renderer and display hints inferred by the server
+                  validationErrors:
+                    type: array
+                    items:
+                      type: string
+                    description: Non-fatal canonicalization validation errors
+                  chartDataProfile:
+                    type: object
+                    nullable: true
+                    description: Server-side chart data shaping summary
                 example:
                   threadId: "75ab23c8-9124-4560-a125-fbe7e321dcba"
+                  canonicalizationVersion: "chart-canonical-v1"
+                  renderHints:
+                    preferredRenderer: "canvas"
+                    suggestedTopN: 25
+                  validationErrors: []
+                  chartDataProfile:
+                    sourceRowCount: 30
+                    resultRowCount: 26
+                    appliedShaping:
+                      - type: "top_n"
+                        value: 25
                   vegaSpec: {
                     "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
                     "config": {

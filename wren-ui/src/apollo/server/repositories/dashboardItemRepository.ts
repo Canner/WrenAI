@@ -31,6 +31,13 @@ export interface DashboardItemLayout {
 export interface DashboardItemDetail {
   sql: string;
   chartSchema?: Record<string, any>;
+  renderHints?: Record<string, any>;
+  canonicalizationVersion?: string | null;
+  chartDataProfile?: Record<string, any>;
+  validationErrors?: string[];
+  sourceResponseId?: number | null;
+  sourceThreadId?: number | null;
+  sourceQuestion?: string | null;
 }
 
 export interface DashboardItem {

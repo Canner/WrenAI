@@ -32,7 +32,7 @@ wren-ai-service is basically an AI service which provides REST api endpoints for
 4. `Providers`: Now there are 4 kinds of providers:
     - llm: representing large language models, and now we support OpenAI, Azure OpenAI, OpenAI api-compatible and Ollama models
     - embedder: representing embedding models, and now we support OpenAI, Azure OpenAI, OpenAI api-compatible and Ollama models
-    - document store: representing vector database, and now we use Qdrant
+    - document store: representing vector database, and now we use pgvector
     - engine: representing data engine, which is responsible for validating generated SQL's syntax.
 
 ### Entrypoint
@@ -90,7 +90,7 @@ async def lifespan(app: FastAPI):
 - The file is located at [`wren-ai-service/src/globals.py`](../src/globals.py)
 - You can understand the details of service containers and service metadata here
     - service containers(Other services are not supported in UI yet)
-        - SemanticsPreparationService: this is responsible for indexing [MDL](https://docs.getwren.ai/oss/engine/concept/what_is_mdl) to Qdarnt
+        - SemanticsPreparationService: this is responsible for indexing [MDL](https://docs.getwren.ai/oss/engine/concept/what_is_mdl) to pgvector
         - AskService: this is responsible for answering users' questions with SQLs, namely text-to-sql
         - AskDetailsService: this is responsible for SQL breakdown to several sub-steps
     - service metadata

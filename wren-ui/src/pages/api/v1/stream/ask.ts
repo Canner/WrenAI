@@ -5,20 +5,25 @@ import * as Errors from '@/apollo/server/utils/error';
 import { v4 as uuidv4 } from 'uuid';
 import {
   ApiError,
-  MAX_WAIT_TIME,
   createApiHistoryRecord,
   isAskResultFinished,
   validateSummaryResult,
   transformHistoryInput,
   getScopedThreadHistories,
   buildAskDiagnostics,
+  deriveRuntimeExecutionContextFromRequest,
+  pollUntil,
 } from '@/apollo/server/utils/apiUtils';
 import { buildAskRuntimeContext } from '@server/utils/askContext';
 import {
+  assertAuthorizedWithAudit,
+  buildAuthorizationActorFromRuntimeScope,
+  buildAuthorizationContextFromRequest,
+} from '@server/authz';
+import {
   AskResult,
+  AskRuntimeIdentity,
   AskResultStatus,
-  WrenAILanguage,
-  SkillResultType,
   TextBasedAnswerInput,
   TextBasedAnswerResult,
   TextBasedAnswerStatus,
@@ -41,7 +46,6 @@ import {
   getSqlGenerationState,
   endStream,
 } from '@/apollo/server/utils';
-
 const logger = getLogger('API_STREAM_ASK');
 logger.level = 'debug';
 
@@ -50,9 +54,64 @@ const {
   runtimeScopeResolver,
   wrenAIAdaptor,
   queryService,
-  skillService,
-  connectorService,
+  auditEventRepository,
 } = components;
+
+const toAskRuntimeIdentity = (runtimeIdentity: {
+  [K in keyof AskRuntimeIdentity]?: AskRuntimeIdentity[K] | null;
+}): AskRuntimeIdentity => ({
+  projectId: runtimeIdentity.projectId ?? undefined,
+  workspaceId: runtimeIdentity.workspaceId ?? null,
+  knowledgeBaseId: runtimeIdentity.knowledgeBaseId ?? null,
+  kbSnapshotId: runtimeIdentity.kbSnapshotId ?? null,
+  deployHash: runtimeIdentity.deployHash ?? null,
+  actorUserId: runtimeIdentity.actorUserId ?? null,
+});
+
+const getErrorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+
+const getApiErrorAdditionalData = (
+  error: unknown,
+): Record<string, any> | undefined =>
+  error instanceof ApiError ? error.additionalData : undefined;
+
+const getApiErrorCode = (error: unknown): Errors.GeneralErrorCodes =>
+  error instanceof ApiError && error.code
+    ? error.code
+    : Errors.GeneralErrorCodes.INTERNAL_SERVER_ERROR;
+
+const assertKnowledgeBaseReadAccess = async ({
+  req,
+  runtimeScope,
+}: {
+  req: NextApiRequest;
+  runtimeScope: any;
+}) => {
+  const actor = buildAuthorizationActorFromRuntimeScope(runtimeScope);
+  await assertAuthorizedWithAudit({
+    auditEventRepository,
+    actor,
+    action: 'knowledge_base.read',
+    resource: {
+      resourceType: runtimeScope?.knowledgeBase
+        ? 'knowledge_base'
+        : 'workspace',
+      resourceId:
+        runtimeScope?.knowledgeBase?.id || runtimeScope?.workspace?.id,
+      workspaceId: runtimeScope?.workspace?.id || null,
+      attributes: {
+        workspaceKind: runtimeScope?.workspace?.kind || null,
+        knowledgeBaseKind: runtimeScope?.knowledgeBase?.kind || null,
+      },
+    },
+    context: buildAuthorizationContextFromRequest({
+      req,
+      sessionId: actor?.sessionId,
+      runtimeScope,
+    }),
+  });
+};
 
 /**
  * Send content block start event to client
@@ -105,7 +164,6 @@ export default async function handler(
   const { question, sampleSize, language, threadId } =
     req.body as AsyncAskRequest;
   const startTime = Date.now();
-  let project;
   let runtimeScope;
 
   try {
@@ -128,10 +186,22 @@ export default async function handler(
     // Send message start event
     sendMessageStart(res);
 
-    runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
-    project = runtimeScope.project;
-    const lastDeploy = runtimeScope.deployment;
-    if (!lastDeploy) {
+    const derivedContext = await deriveRuntimeExecutionContextFromRequest({
+      req,
+      runtimeScopeResolver,
+      requireLatestExecutableSnapshot: true,
+    });
+    runtimeScope = derivedContext.runtimeScope;
+    await assertKnowledgeBaseReadAccess({ req, runtimeScope });
+    const {
+      project,
+      manifest,
+      language: runtimeLanguage,
+      runtimeIdentity,
+    } = derivedContext.executionContext;
+    const askRuntimeIdentity = toAskRuntimeIdentity(runtimeIdentity);
+    const deployHash = runtimeScope.deployHash || askRuntimeIdentity.deployHash;
+    if (!deployHash) {
       throw new ApiError(
         'No deployment found, please deploy your project first',
         400,
@@ -145,85 +215,57 @@ export default async function handler(
     // Get conversation history if threadId is provided
     const histories = await getScopedThreadHistories({
       apiHistoryRepository,
-      projectId: project.id,
       threadId,
       runtimeScope,
     });
     const askRuntimeContext = await buildAskRuntimeContext({
-      runtimeIdentity: {
-        projectId: runtimeScope.project.id,
-        workspaceId: runtimeScope.workspace?.id,
-        knowledgeBaseId: runtimeScope.knowledgeBase?.id,
-        kbSnapshotId: runtimeScope.kbSnapshot?.id,
-        deployHash: runtimeScope.deployHash,
-        actorUserId: runtimeScope.userId,
-      },
-      actorClaims: runtimeScope.actorClaims,
-      skillService,
-      connectorService,
+      runtimeIdentity: askRuntimeIdentity,
     });
 
     // Step 1: Generate SQL
     sendStateUpdate(res, StateType.SQL_GENERATION_START, {
       question,
       threadId: newThreadId,
-      language:
-        language || WrenAILanguage[project.language] || WrenAILanguage.EN,
+      language: language || runtimeLanguage,
     });
     const askTask = await wrenAIAdaptor.ask({
       query: question,
-      deployId: runtimeScope.deployHash,
+      deployId: deployHash,
       histories: transformHistoryInput(histories) as any,
       configurations: {
-        language:
-          language || WrenAILanguage[project.language] || WrenAILanguage.EN,
+        language: language || runtimeLanguage,
       },
       ...askRuntimeContext,
     });
 
-    // Poll for the SQL generation result
-    const deadline = Date.now() + MAX_WAIT_TIME;
-    let askResult: AskResult;
     let pollCount = 0;
     let previousStatus: AskResultStatus | null = null;
 
-    while (true) {
-      askResult = await wrenAIAdaptor.getAskResult(askTask.queryId);
-
-      // Send status change updates when AskResultStatus changes
-      if (askResult.status !== previousStatus) {
-        const sqlGenerationState = getSqlGenerationState(askResult.status);
-        sendStateUpdate(res, sqlGenerationState, {
-          pollCount: pollCount + 1,
-          rephrasedQuestion: askResult.rephrasedQuestion,
-          intentReasoning: askResult.intentReasoning,
-          sqlGenerationReasoning: askResult.sqlGenerationReasoning,
-          retrievedTables: askResult.retrievedTables,
-          invalidSql: askResult.invalidSql,
-          traceId: askResult.traceId,
-        });
-        previousStatus = askResult.status;
-      }
-
-      pollCount++;
-
-      // Check if the result is finished
-      if (isAskResultFinished(askResult)) {
-        break;
-      }
-
-      // Check if we've exceeded the maximum wait time
-      if (Date.now() > deadline) {
-        throw new ApiError(
-          'Request timeout',
-          400,
-          Errors.GeneralErrorCodes.POLLING_TIMEOUT,
-        );
-      }
-
-      // Wait before polling again
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    }
+    const askResult = await pollUntil<AskResult>({
+      fetcher: () => wrenAIAdaptor.getAskResult(askTask.queryId),
+      isFinished: isAskResultFinished,
+      onTick: (nextResult) => {
+        pollCount += 1;
+        if (nextResult.status !== previousStatus) {
+          const sqlGenerationState = getSqlGenerationState(nextResult.status);
+          sendStateUpdate(res, sqlGenerationState, {
+            pollCount,
+            rephrasedQuestion: nextResult.rephrasedQuestion,
+            intentReasoning: nextResult.intentReasoning,
+            sqlGenerationReasoning: nextResult.sqlGenerationReasoning,
+            retrievedTables: nextResult.retrievedTables,
+            invalidSql: nextResult.invalidSql,
+            traceId: nextResult.traceId,
+          });
+          previousStatus = nextResult.status;
+        }
+      },
+      timeoutError: new ApiError(
+        'Request timeout',
+        400,
+        Errors.GeneralErrorCodes.POLLING_TIMEOUT,
+      ),
+    });
 
     // Validate the ask result
     // Check for error in result
@@ -301,7 +343,6 @@ export default async function handler(
       await createApiHistoryRecord({
         apiHistoryRepository,
         id: uuidv4(),
-        projectId: project.id,
         runtimeScope,
         apiType: ApiType.STREAM_ASK,
         threadId: newThreadId,
@@ -317,47 +358,6 @@ export default async function handler(
         },
         responsePayload: {
           explanation,
-          askDiagnostics: buildAskDiagnostics(askResult),
-        },
-        statusCode: 200,
-        durationMs: Date.now() - startTime,
-      });
-
-      endStream(res, newThreadId, startTime);
-      return;
-    }
-
-    if (askResult.type === AskResultType.SKILL) {
-      if (askResult.skillResult?.resultType === SkillResultType.TEXT) {
-        sendContentBlockStart(res, ContentBlockContentType.EXPLANATION);
-        sendContentBlockDelta(res, askResult.skillResult.text || '');
-        sendContentBlockStop(res);
-      } else {
-        sendStateUpdate(res, StateType.SQL_GENERATION_SUCCESS, {
-          skillResult: askResult.skillResult,
-        });
-      }
-
-      await createApiHistoryRecord({
-        apiHistoryRepository,
-        id: uuidv4(),
-        projectId: project.id,
-        runtimeScope,
-        apiType: ApiType.STREAM_ASK,
-        threadId: newThreadId,
-        headers: req.headers as Record<string, string>,
-        requestPayload: {
-          question,
-          sampleSize,
-          language,
-          workspaceId: runtimeScope.selector.workspaceId,
-          knowledgeBaseId: runtimeScope.selector.knowledgeBaseId,
-          kbSnapshotId: runtimeScope.selector.kbSnapshotId,
-          deployHash: runtimeScope.deployHash,
-        },
-        responsePayload: {
-          type: 'SKILL_QUERY',
-          skillResult: askResult.skillResult,
           askDiagnostics: buildAskDiagnostics(askResult),
         },
         statusCode: 200,
@@ -388,14 +388,14 @@ export default async function handler(
       const queryResult = await queryService.preview(sql, {
         project,
         limit: sampleSize || 500,
-        manifest: lastDeploy.manifest,
+        manifest,
         modelingOnly: false,
       });
       sqlData = queryResult;
       sendStateUpdate(res, StateType.SQL_EXECUTION_END);
     } catch (queryError) {
       throw new ApiError(
-        `SQL execution failed: ${queryError.message || 'Unknown error'}`,
+        `SQL execution failed: ${getErrorMessage(queryError) || 'Unknown error'}`,
         400,
         Errors.GeneralErrorCodes.SQL_EXECUTION_ERROR,
       );
@@ -407,10 +407,11 @@ export default async function handler(
       sql,
       sqlData,
       threadId: newThreadId,
-      userId: runtimeScope.userId || undefined,
+      userId: askRuntimeIdentity.actorUserId || undefined,
+      runtimeScopeId: runtimeScope.selector.runtimeScopeId || undefined,
+      runtimeIdentity: askRuntimeIdentity,
       configurations: {
-        language:
-          language || WrenAILanguage[project.language] || WrenAILanguage.EN,
+        language: language || runtimeLanguage,
       },
     };
 
@@ -426,34 +427,18 @@ export default async function handler(
       );
     }
 
-    // Poll for the summary generation result
-    const summaryDeadline = Date.now() + MAX_WAIT_TIME;
-    let summaryResult: TextBasedAnswerResult;
-
-    while (true) {
-      summaryResult = await wrenAIAdaptor.getTextBasedAnswerResult(
-        summaryTask.queryId,
-      );
-
-      if (
-        summaryResult.status === TextBasedAnswerStatus.SUCCEEDED ||
-        summaryResult.status === TextBasedAnswerStatus.FAILED
-      ) {
-        break;
-      }
-
-      // Check if we've exceeded the maximum wait time
-      if (Date.now() > summaryDeadline) {
-        throw new ApiError(
-          'Summary generation timeout',
-          400,
-          Errors.GeneralErrorCodes.POLLING_TIMEOUT,
-        );
-      }
-
-      // Wait before polling again
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    }
+    const summaryResult = await pollUntil<TextBasedAnswerResult>({
+      fetcher: () =>
+        wrenAIAdaptor.getTextBasedAnswerResult(summaryTask.queryId),
+      isFinished: (nextResult) =>
+        nextResult.status === TextBasedAnswerStatus.SUCCEEDED ||
+        nextResult.status === TextBasedAnswerStatus.FAILED,
+      timeoutError: new ApiError(
+        'Summary generation timeout',
+        400,
+        Errors.GeneralErrorCodes.POLLING_TIMEOUT,
+      ),
+    });
 
     // Validate the summary result
     validateSummaryResult(summaryResult);
@@ -512,7 +497,6 @@ export default async function handler(
     await createApiHistoryRecord({
       apiHistoryRepository,
       id: uuidv4(),
-      projectId: project.id,
       runtimeScope,
       apiType: ApiType.STREAM_ASK,
       threadId: newThreadId,
@@ -543,7 +527,6 @@ export default async function handler(
     await createApiHistoryRecord({
       apiHistoryRepository,
       id: uuidv4(),
-      projectId: project?.id || 0,
       runtimeScope,
       apiType: ApiType.STREAM_ASK,
       threadId: threadId || uuidv4(),
@@ -551,7 +534,7 @@ export default async function handler(
       requestPayload: req.body,
       responsePayload: {
         error: error instanceof Error ? error.message : String(error),
-        ...(error?.additionalData || {}),
+        ...(getApiErrorAdditionalData(error) || {}),
       },
       statusCode: 500,
       durationMs: Date.now() - startTime,
@@ -560,8 +543,8 @@ export default async function handler(
     sendError(
       res,
       error instanceof Error ? error.message : 'Internal server error',
-      error.code || Errors.GeneralErrorCodes.INTERNAL_SERVER_ERROR,
-      error.additionalData,
+      getApiErrorCode(error),
+      getApiErrorAdditionalData(error),
     );
     endStream(res, threadId || uuidv4(), startTime);
   }

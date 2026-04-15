@@ -64,9 +64,12 @@ export default function PreparationSteps(
   // displays
   const showView = !!view;
   const showSqlPair = !!preparedTask?.candidates[0]?.sqlPair;
-  const showRetrieving = retrievingNextStates.includes(processState);
-  const showOrganizing = organizingNextStates.includes(processState);
-  const showGenerating = generatingNextStates.includes(processState);
+  const showRetrieving =
+    processState != null && retrievingNextStates.includes(processState);
+  const showOrganizing =
+    processState != null && organizingNextStates.includes(processState);
+  const showGenerating =
+    processState != null && generatingNextStates.includes(processState);
 
   // data
   const retrievedTables = preparedTask?.retrievedTables || [];

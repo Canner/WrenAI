@@ -1,6 +1,7 @@
 import { DataSourceName } from '@server/types';
 import { Manifest } from '@server/mdl/type';
 import { IWrenEngineAdaptor } from '../adaptors/wrenEngineAdaptor';
+import { DUCKDB_CONNECTION_INFO } from '../repositories';
 import {
   SupportedDataSource,
   IIbisAdaptor,
@@ -11,6 +12,7 @@ import {
 import { getLogger } from '@server/utils';
 import { Project } from '../repositories';
 import { PostHogTelemetry, TelemetryEvent } from '../telemetry/telemetry';
+import { QueryExecutionContext } from '../utils/runtimeExecutionContext';
 
 const logger = getLogger('QueryService');
 logger.level = 'debug';
@@ -35,11 +37,8 @@ export interface DescribeStatementResponse {
   columns: ColumnMetadata[];
 }
 
-export interface PreviewOptions {
-  project: Project;
+export interface PreviewOptions extends QueryExecutionContext {
   modelingOnly?: boolean;
-  // if not given, will use the deployed manifest
-  manifest: Manifest;
   limit?: number;
   dryRun?: boolean;
   refresh?: boolean;
@@ -80,6 +79,7 @@ export class QueryService implements IQueryService {
   private readonly ibisAdaptor: IIbisAdaptor;
   private readonly wrenEngineAdaptor: IWrenEngineAdaptor;
   private readonly telemetry: PostHogTelemetry;
+  private currentDuckDbRuntimeKey: string | null = null;
 
   constructor({
     ibisAdaptor,
@@ -109,6 +109,9 @@ export class QueryService implements IQueryService {
     } = options;
     const { type: dataSource, connectionInfo } = project;
     if (this.useEngine(dataSource)) {
+      await this.ensureDuckDbRuntime(
+        (connectionInfo || {}) as DUCKDB_CONNECTION_INFO,
+      );
       if (dryRun) {
         logger.debug('Using wren engine to dry run');
         await this.wrenEngineAdaptor.dryRun(sql, {
@@ -132,7 +135,7 @@ export class QueryService implements IQueryService {
           dataSource,
           connectionInfo,
           mdl,
-          limit,
+          limit ?? DEFAULT_PREVIEW_LIMIT,
           refresh,
           cacheEnabled,
         );
@@ -156,7 +159,7 @@ export class QueryService implements IQueryService {
   }
 
   public async validate(
-    project,
+    project: Project,
     rule: ValidationRules,
     manifest: Manifest,
     parameters: Record<string, any>,
@@ -169,7 +172,10 @@ export class QueryService implements IQueryService {
       manifest,
       parameters,
     );
-    return res;
+    return {
+      valid: res.valid,
+      message: res.message ?? undefined,
+    };
   }
 
   private useEngine(dataSource: DataSourceName): boolean {
@@ -186,6 +192,59 @@ export class QueryService implements IQueryService {
     ) {
       throw new Error(`Unsupported datasource for ibis: "${dataSource}"`);
     }
+  }
+
+  private getDuckDbInitSql(connectionInfo: DUCKDB_CONNECTION_INFO): string {
+    const initSql =
+      connectionInfo && typeof connectionInfo.initSql === 'string'
+        ? connectionInfo.initSql
+        : '';
+    const extensions = Array.isArray(connectionInfo?.extensions)
+      ? connectionInfo.extensions.filter(
+          (ext): ext is string => typeof ext === 'string' && ext.trim() !== '',
+        )
+      : [];
+    const installExtensionsSql = extensions
+      .map((ext) => `INSTALL ${ext};`)
+      .join('\n');
+
+    return [installExtensionsSql, initSql].filter(Boolean).join('\n');
+  }
+
+  private getDuckDbSessionProps(connectionInfo: DUCKDB_CONNECTION_INFO) {
+    const rawConfig = connectionInfo?.configurations;
+    if (!rawConfig || typeof rawConfig !== 'object') {
+      return {};
+    }
+    return rawConfig as Record<string, any>;
+  }
+
+  private buildDuckDbRuntimeKey(
+    connectionInfo: DUCKDB_CONNECTION_INFO,
+  ): string {
+    return JSON.stringify({
+      initSql: this.getDuckDbInitSql(connectionInfo),
+      sessionProps: this.getDuckDbSessionProps(connectionInfo),
+    });
+  }
+
+  private async ensureDuckDbRuntime(
+    connectionInfo: DUCKDB_CONNECTION_INFO,
+  ): Promise<void> {
+    const runtimeKey = this.buildDuckDbRuntimeKey(connectionInfo);
+    if (this.currentDuckDbRuntimeKey === runtimeKey) {
+      return;
+    }
+
+    await this.wrenEngineAdaptor.prepareDuckDB({
+      initSql: this.getDuckDbInitSql(connectionInfo),
+      sessionProps: this.getDuckDbSessionProps(connectionInfo),
+    });
+    await this.wrenEngineAdaptor.patchConfig({
+      'wren.datasource.type': 'duckdb',
+    });
+
+    this.currentDuckDbRuntimeKey = runtimeKey;
   }
 
   private async ibisDryRun(

@@ -7,7 +7,17 @@ interface Relationship {
   relationshipType: string;
 }
 
-export const checkDeploySynced = async ({ page }) => {
+type ModelingPageContext = {
+  page: Page;
+  baseURL?: string;
+};
+
+const isModelingPage = ({ page, baseURL }: ModelingPageContext) =>
+  baseURL
+    ? page.url() === `${baseURL}/modeling`
+    : /\/modeling$/.test(page.url());
+
+export const checkDeploySynced = async ({ page }: ModelingPageContext) => {
   await page.goto('/modeling');
   await expect(page).toHaveURL('/modeling', { timeout: 60000 });
 
@@ -16,8 +26,11 @@ export const checkDeploySynced = async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Deploy' })).toBeDisabled();
 };
 
-export const checkDeployUndeployedChanges = async ({ page, baseURL }) => {
-  if (page.url() !== `${baseURL}/modeling`) {
+export const checkDeployUndeployedChanges = async ({
+  page,
+  baseURL,
+}: ModelingPageContext) => {
+  if (!isModelingPage({ page, baseURL })) {
     await page.goto('/modeling');
     await expect(page).toHaveURL('/modeling', { timeout: 60000 });
   }
@@ -28,8 +41,8 @@ export const checkDeployUndeployedChanges = async ({ page, baseURL }) => {
   await expect(page.getByRole('button', { name: 'Deploy' })).toBeEnabled();
 };
 
-export const executeDeploy = async ({ page, baseURL }) => {
-  if (page.url() !== `${baseURL}/modeling`) {
+export const executeDeploy = async ({ page, baseURL }: ModelingPageContext) => {
+  if (!isModelingPage({ page, baseURL })) {
     await page.goto('/modeling');
     await expect(page).toHaveURL('/modeling', { timeout: 60000 });
   }
@@ -435,7 +448,7 @@ export const updateModelMetadata = async (
 };
 
 export const updateViewMetadata = async (
-  { page, baseURL }: { page: Page; baseURL: string },
+  { page, baseURL }: ModelingPageContext,
   {
     viewDisplayName,
     viewDescription,

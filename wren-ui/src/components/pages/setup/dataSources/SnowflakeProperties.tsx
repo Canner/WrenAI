@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Button, Form, Input, Radio, Upload, UploadProps, message } from 'antd';
+import type { RadioChangeEvent } from 'antd';
 import UploadOutlined from '@ant-design/icons/UploadOutlined';
 import { ERROR_TEXTS } from '@/utils/error';
 import { FORM_MODE } from '@/utils/enum';
@@ -16,7 +17,7 @@ interface Props {
 }
 
 const UploadPrivateKey = (props: {
-  onChange?: (value: string) => void;
+  onChange?: (value?: string) => void;
   value?: string;
 }) => {
   const { onChange, value } = props;
@@ -26,21 +27,22 @@ const UploadPrivateKey = (props: {
     if (!value) setFileList([]);
   }, [value]);
 
-  const onUploadChange = async (info) => {
+  const onUploadChange: NonNullable<UploadProps['onChange']> = async (info) => {
     const { file, fileList } = info;
     if (fileList.length) {
       const uploadFile = fileList[0];
 
       try {
+        if (!file.originFileObj) {
+          throw new Error('missing private key file');
+        }
+
         const result = await readFileContent(file.originFileObj);
         const extractedPrivateKey = extractPrivateKeyString(result);
         onChange && onChange(extractedPrivateKey);
         setFileList([uploadFile]);
-      } catch (error) {
-        console.error('Failed to handle file', error);
-        message.error(
-          'Failed to handle file. Please upload a valid private key file.',
-        );
+      } catch {
+        message.error('文件处理失败，请上传有效的私钥文件。');
       }
     }
   };
@@ -58,7 +60,7 @@ const UploadPrivateKey = (props: {
       onRemove={onRemove}
       maxCount={1}
     >
-      <Button icon={<UploadOutlined />}>Upload private key</Button>
+      <Button icon={<UploadOutlined />}>上传私钥文件</Button>
     </Upload>
   );
 };
@@ -68,14 +70,14 @@ export default function SnowflakeProperties(props: Props) {
   const isEditMode = mode === FORM_MODE.EDIT;
   const [tabKey, setTabKey] = useState(TAB_KEY.PASSWORD_AUTHENTICATION);
 
-  const changeTabKey = (e) => {
+  const changeTabKey = (e: RadioChangeEvent) => {
     setTabKey(e.target.value);
   };
 
   return (
     <>
       <Form.Item
-        label="Display name"
+        label="显示名称"
         name="displayName"
         required
         rules={[
@@ -88,7 +90,7 @@ export default function SnowflakeProperties(props: Props) {
         <Input />
       </Form.Item>
       <Form.Item
-        label="Account"
+        label="账号标识（Account）"
         name="account"
         required
         rules={[
@@ -104,7 +106,7 @@ export default function SnowflakeProperties(props: Props) {
         />
       </Form.Item>
       <Form.Item
-        label="Database name"
+        label="数据库名称"
         name="database"
         required
         rules={[
@@ -114,7 +116,10 @@ export default function SnowflakeProperties(props: Props) {
           },
         ]}
       >
-        <Input placeholder="Snowflake database name" disabled={isEditMode} />
+        <Input
+          placeholder="请输入 Snowflake 数据库名称"
+          disabled={isEditMode}
+        />
       </Form.Item>
       <Form.Item
         label="Schema"
@@ -142,7 +147,7 @@ export default function SnowflakeProperties(props: Props) {
         <Input />
       </Form.Item>
       <Form.Item
-        label="User"
+        label="用户"
         name="user"
         rules={[
           {
@@ -156,18 +161,18 @@ export default function SnowflakeProperties(props: Props) {
       <Form.Item
         label={
           <div>
-            Authentication method
+            认证方式
             <div className="gray-6">
-              Username and password authentication will be{' '}
-              <span className="gray-7">deprecated by November 2025</span>. We
-              recommend switching to key pair authentication.{' '}
+              用户名密码认证将在{' '}
+              <span className="gray-7">2025 年 11 月后废弃</span>，
+              建议尽快切换到密钥对认证。{' '}
               <Link
                 className="gray-7 underline"
                 href="https://www.snowflake.com/en/blog/blocking-single-factor-password-authentification"
                 target="_blank"
                 rel="noreferrer noopener"
               >
-                Learn more
+                了解更多
               </Link>
             </div>
           </div>
@@ -175,10 +180,10 @@ export default function SnowflakeProperties(props: Props) {
       >
         <Radio.Group value={tabKey} onChange={changeTabKey} buttonStyle="solid">
           <Radio.Button value={TAB_KEY.PASSWORD_AUTHENTICATION}>
-            Password authentication
+            密码认证
           </Radio.Button>
           <Radio.Button value={TAB_KEY.KEY_PAIR_AUTHENTICATION}>
-            Key pair authentication
+            密钥对认证
           </Radio.Button>
         </Radio.Group>
       </Form.Item>
@@ -186,7 +191,7 @@ export default function SnowflakeProperties(props: Props) {
       <div>
         {tabKey === TAB_KEY.PASSWORD_AUTHENTICATION && (
           <Form.Item
-            label="Password"
+            label="密码"
             name="password"
             required
             rules={[
@@ -196,12 +201,12 @@ export default function SnowflakeProperties(props: Props) {
               },
             ]}
           >
-            <Input.Password placeholder="input password" />
+            <Input.Password placeholder="请输入密码" />
           </Form.Item>
         )}
         {tabKey === TAB_KEY.KEY_PAIR_AUTHENTICATION && (
           <Form.Item
-            label="Private key file"
+            label="私钥文件"
             name="privateKey"
             required
             rules={[
@@ -210,11 +215,7 @@ export default function SnowflakeProperties(props: Props) {
                 message: ERROR_TEXTS.CONNECTION.PRIVATE_KEY_FILE.REQUIRED,
               },
             ]}
-            extra={
-              <div className="gray-6">
-                Upload your private key file for key pair authentication.
-              </div>
-            }
+            extra={<div className="gray-6">上传用于密钥对认证的私钥文件。</div>}
           >
             <UploadPrivateKey />
           </Form.Item>

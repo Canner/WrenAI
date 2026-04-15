@@ -9,11 +9,13 @@ import { getLogger } from '@server/utils';
 import { getConfig } from '@server/config';
 import { ModelService } from '@server/services/modelService';
 import {
+  create as createGraphQLError,
   defaultApolloErrorHandler,
   GeneralErrorCodes,
 } from '@/apollo/server/utils/error';
 import { TelemetryEvent } from '@/apollo/server/telemetry/telemetry';
 import { components } from '@/common';
+import { resolveRequestActor } from '@server/context';
 
 const serverConfig = getConfig();
 const logger = getLogger('APOLLO');
@@ -21,13 +23,15 @@ logger.level = 'debug';
 
 const cors = microCors();
 
-const LEGACY_RUNTIME_SCOPE_OPERATION_NAMES = new Set([
-  'RuntimeSelectorState',
-  'SaveDataSource',
-  'StartSampleDataset',
+const RECOVERABLE_RUNTIME_SCOPE_ERRORS = new Set([
+  'No project found',
+  'Workspace scope could not be resolved',
+  'Knowledge base does not belong to the requested workspace',
+  'kb_snapshot does not belong to the requested knowledge base',
+  'No deployment found for the requested runtime scope',
+  'deploy_hash does not match the requested kb_snapshot',
+  'Session workspace does not match requested workspace',
 ]);
-
-const RECOVERABLE_RUNTIME_SCOPE_ERRORS = new Set(['No project found']);
 
 const NULL_RUNTIME_SCOPE_OPERATION_NAMES = new Set([
   'RuntimeSelectorState',
@@ -35,13 +39,95 @@ const NULL_RUNTIME_SCOPE_OPERATION_NAMES = new Set([
   'SaveDataSource',
   'StartSampleDataset',
 ]);
+const RUNTIME_SCOPE_BOOTSTRAP_HEADER = 'x-wren-runtime-bootstrap';
+
+const MISSING_RUNTIME_SCOPE_SELECTOR_ERROR =
+  'Runtime scope selector is required for this request';
+
+const stripContextCreationPrefix = (message?: string | null) =>
+  (message || '').replace(/^Context creation failed:\s*/i, '').trim();
+
+export const classifyRuntimeScopeContextError = (
+  message?: string | null,
+): {
+  code: GeneralErrorCodes;
+  customMessage: string;
+} | null => {
+  const normalizedMessage = stripContextCreationPrefix(message);
+  if (!normalizedMessage) {
+    return null;
+  }
+
+  if (
+    normalizedMessage === 'No deployment found for the requested runtime scope'
+  ) {
+    return {
+      code: GeneralErrorCodes.NO_DEPLOYMENT_FOUND,
+      customMessage:
+        'Current knowledge base runtime is unavailable. Refresh or reselect a knowledge base and try again.',
+    };
+  }
+
+  const isOutdatedRuntimeSnapshotError =
+    normalizedMessage ===
+    'deploy_hash does not match the requested kb_snapshot';
+
+  if (isOutdatedRuntimeSnapshotError) {
+    return {
+      code: GeneralErrorCodes.OUTDATED_RUNTIME_SNAPSHOT,
+      customMessage:
+        'Current knowledge base snapshot is outdated. Refresh or reselect a knowledge base and try again.',
+    };
+  }
+
+  if (
+    normalizedMessage === MISSING_RUNTIME_SCOPE_SELECTOR_ERROR ||
+    RECOVERABLE_RUNTIME_SCOPE_ERRORS.has(normalizedMessage)
+  ) {
+    return {
+      code: GeneralErrorCodes.INTERNAL_SERVER_ERROR,
+      customMessage:
+        'Current workspace context is unavailable. Refresh or reselect a knowledge base and try again.',
+    };
+  }
+
+  return null;
+};
+
+const readParsedBody = (
+  req: NextApiRequest,
+): Record<string, any> | undefined => {
+  if (!req.body) {
+    return undefined;
+  }
+
+  if (typeof req.body === 'object' && !Buffer.isBuffer(req.body)) {
+    return req.body as Record<string, any>;
+  }
+
+  const rawBody = Buffer.isBuffer(req.body)
+    ? req.body.toString('utf8')
+    : typeof req.body === 'string'
+      ? req.body
+      : null;
+
+  if (!rawBody) {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(rawBody);
+    return parsed && typeof parsed === 'object'
+      ? (parsed as Record<string, any>)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+};
 
 const readOperationName = (req: NextApiRequest): string | null => {
-  const body =
-    req.body && typeof req.body === 'object'
-      ? (req.body as Record<string, any>)
-      : undefined;
-  const query = req.query as Record<string, any>;
+  const body = readParsedBody(req);
+  const query = ((req.query || {}) as Record<string, any>) || {};
 
   const bodyOperationName = body?.operationName;
   if (typeof bodyOperationName === 'string' && bodyOperationName.trim()) {
@@ -56,24 +142,27 @@ const readOperationName = (req: NextApiRequest): string | null => {
   return null;
 };
 
-const shouldAllowLegacyProjectShim = (req: NextApiRequest) => {
-  const operationName = readOperationName(req);
-  return (
-    !!operationName && LEGACY_RUNTIME_SCOPE_OPERATION_NAMES.has(operationName)
-  );
-};
-
 const shouldRecoverWithNullRuntimeScope = (
   req: NextApiRequest,
   error: Error | null | undefined,
 ) => {
   const operationName = readOperationName(req);
+  const runtimeBootstrapHeader = req.headers[RUNTIME_SCOPE_BOOTSTRAP_HEADER];
+  const isRuntimeBootstrapRequest = Array.isArray(runtimeBootstrapHeader)
+    ? runtimeBootstrapHeader.includes('1')
+    : runtimeBootstrapHeader === '1';
+
+  if (error?.message === MISSING_RUNTIME_SCOPE_SELECTOR_ERROR) {
+    return true;
+  }
+
   return (
-    !!operationName &&
+    (isRuntimeBootstrapRequest ||
+      (!!operationName &&
+        NULL_RUNTIME_SCOPE_OPERATION_NAMES.has(operationName))) &&
     !!error?.message &&
-    NULL_RUNTIME_SCOPE_OPERATION_NAMES.has(operationName) &&
     (RECOVERABLE_RUNTIME_SCOPE_ERRORS.has(error.message) ||
-      error.message === 'Runtime scope selector is required for this request')
+      error.message === MISSING_RUNTIME_SCOPE_SELECTOR_ERROR)
   );
 };
 
@@ -109,7 +198,8 @@ const bootstrapServer = async () => {
     connectorRepository,
     secretRepository,
     skillDefinitionRepository,
-    skillBindingRepository,
+    skillMarketplaceCatalogRepository,
+    auditEventRepository,
     userRepository,
     authIdentityRepository,
     authSessionRepository,
@@ -163,6 +253,19 @@ const bootstrapServer = async () => {
     typeDefs,
     resolvers,
     formatError: (error: GraphQLError) => {
+      const originalError = error.extensions?.originalError as Error;
+      const runtimeScopeContextError = classifyRuntimeScopeContextError(
+        error.message || originalError?.message,
+      );
+      if (runtimeScopeContextError) {
+        return defaultApolloErrorHandler(
+          createGraphQLError(runtimeScopeContextError.code, {
+            customMessage: runtimeScopeContextError.customMessage,
+            originalError,
+          }),
+        );
+      }
+
       // stop print error stacktrace of dry run error
       if (error.extensions?.code === GeneralErrorCodes.DRY_RUN_ERROR) {
         return defaultApolloErrorHandler(error);
@@ -175,7 +278,6 @@ const bootstrapServer = async () => {
       }
 
       // print original error stacktrace
-      const originalError = error.extensions?.originalError as Error;
       if (originalError) {
         logger.error(`== original error ==`);
         // error may not have stack, so print error message if stack is not available
@@ -200,11 +302,10 @@ const bootstrapServer = async () => {
     introspection: process.env.NODE_ENV !== 'production',
     context: async ({ req }): Promise<IContext> => {
       let runtimeScope = null;
-      const allowLegacyProjectShim = shouldAllowLegacyProjectShim(req);
+      let requestActor = null;
+      let authorizationActor = null;
       try {
-        runtimeScope = await runtimeScopeResolver.resolveRequestScope(req, {
-          allowLegacyProjectShim,
-        });
+        runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
       } catch (error: any) {
         if (!shouldRecoverWithNullRuntimeScope(req, error)) {
           throw error;
@@ -214,7 +315,20 @@ const bootstrapServer = async () => {
         );
       }
 
+      try {
+        requestActor = await resolveRequestActor({
+          req,
+          authService,
+          automationService: components.automationService,
+          workspaceId: runtimeScope?.workspace?.id,
+        });
+        authorizationActor = requestActor?.authorizationActor || null;
+      } catch (error: any) {
+        logger.debug(`Request actor unavailable: ${error.message}`);
+      }
+
       return {
+        req,
         config: serverConfig,
         telemetry,
         // adaptor
@@ -239,6 +353,8 @@ const bootstrapServer = async () => {
         scheduleService,
         runtimeScopeResolver,
         runtimeScope,
+        requestActor,
+        authorizationActor,
         // repository
         projectRepository,
         modelRepository,
@@ -261,7 +377,8 @@ const bootstrapServer = async () => {
         connectorRepository,
         secretRepository,
         skillDefinitionRepository,
-        skillBindingRepository,
+        skillMarketplaceCatalogRepository,
+        auditEventRepository,
         userRepository,
         authIdentityRepository,
         authSessionRepository,
@@ -286,6 +403,11 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
   })(req, res);
 };
 
-export default cors((req: NextApiRequest, res: NextApiResponse) =>
-  req.method === 'OPTIONS' ? res.status(200).end() : handler(req, res),
-);
+export default cors(((req: NextApiRequest, res: NextApiResponse) => {
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+
+  void handler(req, res);
+}) as any);

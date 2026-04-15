@@ -53,6 +53,9 @@ export default function EditableWrapper(props: Props) {
   }, [editing]);
 
   const toggleEdit = () => {
+    if (!form) {
+      return;
+    }
     if (textRef.current) inputWidth.current = textRef.current.clientWidth;
     setEditing(!editing);
     const value = get(record, dataIndexKey);
@@ -60,6 +63,9 @@ export default function EditableWrapper(props: Props) {
   };
 
   const save = async () => {
+    if (!form) {
+      return;
+    }
     try {
       const values = await form.validateFields();
 

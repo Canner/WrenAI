@@ -78,9 +78,9 @@ export default function Sidebar(props: Props) {
   const { onOpenSettings } = props;
   const router = useRouter();
 
-  const onSettingsClick = (event) => {
+  const onSettingsClick = (event: React.MouseEvent<HTMLElement>) => {
     onOpenSettings && onOpenSettings();
-    event.target.blur();
+    event.currentTarget.blur();
   };
 
   return (
@@ -90,7 +90,7 @@ export default function Sidebar(props: Props) {
       <div className="border-t border-gray-4 pt-2">
         <StyledButton type="text" block onClick={onSettingsClick}>
           <SettingOutlined className="text-md" />
-          Settings
+          设置
         </StyledButton>
         <StyledButton type="text" block>
           <Link

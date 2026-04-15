@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
 import { ApiType } from '@server/repositories/apiHistoryRepository';
-import { AskResult, WrenAILanguage } from '@/apollo/server/models/adaptor';
+import { AskResult } from '@/apollo/server/models/adaptor';
 import * as Errors from '@/apollo/server/utils/error';
 import { getLogger } from '@server/utils';
 import { v4 as uuidv4 } from 'uuid';
@@ -9,12 +9,22 @@ import {
   ApiError,
   respondWith,
   handleApiError,
-  MAX_WAIT_TIME,
   isAskResultFinished,
   validateAskResult,
   transformHistoryInput,
+  deriveRuntimeExecutionContextFromRequest,
   getScopedThreadHistories,
+  pollUntil,
 } from '@/apollo/server/utils/apiUtils';
+import {
+  buildAskRuntimeContext,
+  toAskRuntimeIdentity,
+} from '@server/utils/askContext';
+import {
+  assertAuthorizedWithAudit,
+  buildAuthorizationActorFromRuntimeScope,
+  buildAuthorizationContextFromRequest,
+} from '@server/authz';
 import { DataSourceName } from '@server/types';
 
 const logger = getLogger('API_GENERATE_SQL');
@@ -26,7 +36,41 @@ const {
   wrenAIAdaptor,
   wrenEngineAdaptor,
   ibisAdaptor,
+  skillService,
+  auditEventRepository,
 } = components;
+
+const assertKnowledgeBaseReadAccess = async ({
+  req,
+  runtimeScope,
+}: {
+  req: NextApiRequest;
+  runtimeScope: any;
+}) => {
+  const actor = buildAuthorizationActorFromRuntimeScope(runtimeScope);
+  await assertAuthorizedWithAudit({
+    auditEventRepository,
+    actor,
+    action: 'knowledge_base.read',
+    resource: {
+      resourceType: runtimeScope?.knowledgeBase
+        ? 'knowledge_base'
+        : 'workspace',
+      resourceId:
+        runtimeScope?.knowledgeBase?.id || runtimeScope?.workspace?.id,
+      workspaceId: runtimeScope?.workspace?.id || null,
+      attributes: {
+        workspaceKind: runtimeScope?.workspace?.kind || null,
+        knowledgeBaseKind: runtimeScope?.knowledgeBase?.kind || null,
+      },
+    },
+    context: buildAuthorizationContextFromRequest({
+      req,
+      sessionId: actor?.sessionId,
+      runtimeScope,
+    }),
+  });
+};
 
 interface GenerateSqlRequest {
   question: string;
@@ -37,7 +81,6 @@ interface GenerateSqlRequest {
   knowledgeBaseId?: string;
   kbSnapshotId?: string;
   deployHash?: string;
-  projectId?: number;
 }
 
 export default async function handler(
@@ -51,7 +94,6 @@ export default async function handler(
     returnSqlDialect = false,
   } = req.body as GenerateSqlRequest;
   const startTime = Date.now();
-  let project;
   let runtimeScope;
 
   try {
@@ -65,54 +107,60 @@ export default async function handler(
       throw new ApiError('Question is required', 400);
     }
 
-    runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
-    project = runtimeScope.project;
-    const lastDeploy = runtimeScope.deployment;
-
-    if (!lastDeploy) {
+    const derivedContext = await deriveRuntimeExecutionContextFromRequest({
+      req,
+      runtimeScopeResolver,
+      noDeploymentMessage: 'No deployment found, please deploy a model first',
+      requireLatestExecutableSnapshot: true,
+    });
+    runtimeScope = derivedContext.runtimeScope;
+    await assertKnowledgeBaseReadAccess({ req, runtimeScope });
+    const {
+      project,
+      deployment,
+      language: runtimeLanguage,
+      runtimeIdentity,
+    } = derivedContext.executionContext;
+    const deployId = runtimeScope.deployHash || deployment.hash;
+    if (!deployId) {
       throw new ApiError(
         'No deployment found, please deploy a model first',
         400,
-        Errors.GeneralErrorCodes.NO_DEPLOYMENT_FOUND,
       );
     }
 
     // ask AI service to generate SQL
     const histories = await getScopedThreadHistories({
       apiHistoryRepository,
-      projectId: project.id,
       threadId,
       runtimeScope,
     });
+    const askRuntimeContext = await buildAskRuntimeContext({
+      runtimeIdentity: toAskRuntimeIdentity({
+        ...runtimeIdentity,
+        deployHash: runtimeIdentity.deployHash || deployId,
+      }),
+      skillService,
+    });
     const task = await wrenAIAdaptor.ask({
       query: question,
-      deployId: runtimeScope.deployHash,
+      deployId,
       histories: transformHistoryInput(histories) as any,
       configurations: {
-        language:
-          language || WrenAILanguage[project.language] || WrenAILanguage.EN,
+        language: language || runtimeLanguage,
       },
+      ...askRuntimeContext,
     });
 
-    // polling for the result
-    const deadline = Date.now() + MAX_WAIT_TIME;
-    let result: AskResult;
-    while (true) {
-      result = await wrenAIAdaptor.getAskResult(task.queryId);
-      if (isAskResultFinished(result)) {
-        break;
-      }
-
-      if (Date.now() > deadline) {
-        throw new ApiError(
-          'Timeout waiting for SQL generation',
-          500,
-          Errors.GeneralErrorCodes.POLLING_TIMEOUT,
-        );
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // poll every second
-    }
+    const result = await pollUntil<AskResult>({
+      fetcher: () => wrenAIAdaptor.getAskResult(task.queryId),
+      isFinished: isAskResultFinished,
+      timeoutError: new ApiError(
+        'Timeout waiting for SQL generation',
+        500,
+        Errors.GeneralErrorCodes.POLLING_TIMEOUT,
+      ),
+    });
 
     // Validate the AI result
     validateAskResult(result, task.queryId);
@@ -128,14 +176,14 @@ export default async function handler(
       let nativeSql: string;
       if (project.type === DataSourceName.DUCKDB) {
         nativeSql = await wrenEngineAdaptor.getNativeSQL(sql, {
-          manifest: lastDeploy.manifest,
+          manifest: deployment.manifest,
           modelingOnly: false,
         });
       } else {
         nativeSql = await ibisAdaptor.getNativeSql({
           dataSource: project.type,
           sql,
-          mdl: lastDeploy.manifest,
+          mdl: deployment.manifest,
         });
       }
 
@@ -151,7 +199,6 @@ export default async function handler(
         sql,
         threadId: newThreadId,
       },
-      projectId: project.id,
       runtimeScope,
       apiType: ApiType.GENERATE_SQL,
       startTime,
@@ -163,7 +210,6 @@ export default async function handler(
     await handleApiError({
       error,
       res,
-      projectId: project?.id,
       runtimeScope,
       apiType: ApiType.GENERATE_SQL,
       requestPayload: req.body,

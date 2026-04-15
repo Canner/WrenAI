@@ -29,7 +29,6 @@ wren-ai-service/tools/dev/etc/**
 .deepeval-cache.json
 .deepeval_telemtry.txt
 docker/config.yaml
-docker/docker-compose-local.yaml
 docker/data
 
 # python
@@ -40,6 +39,7 @@ __pycache__
 local_cache
 .ruff_cache
 .pytest_cache
+.venv/
 
 # ide
 .idea
@@ -65,6 +65,7 @@ wren-ui/coverage
 wren-ui/test-results
 wren-ui/playwright-report
 wren-ui/e2e/e2e.config.json
+wren-ui/db.sqlite3*.bak
 
 ## next.js
 wren-ui/.next
@@ -81,9 +82,12 @@ yarn-debug.log*
 yarn-error.log*
 
 ## local env files
-.env*.local
-.env*
-.env.ai
+**/.env
+**/.env.local
+**/.env.*
+!**/.env.example
+!**/.env.*.example
+!wren-ui/.env.test
 
 ## vercel
 .vercel
@@ -98,5 +102,26 @@ wren-launcher/main
 
 ## temporary files
 .tmp
+/tmp/
+.trino/
+docker/.trino/
+playwright-home-snapshot.md
+.playwright-mcp/
+
+# local agent/runtime state
+.omc/state/
+.omc/sessions/
+docs/.omc/
+
+# OMX runtime artifacts (keep context/plans under version control)
+.omx/logs/
+.omx/state/
+.omx/metrics.json
+.omx/keynote-export/
+.omx/ppt-export/
+.omx/ppt-render/
+.omx/xdai-v1-ppt-render/
+.omx/*-montage.png
 
 !wren-ai-service/tools/.env.example
+.omx/

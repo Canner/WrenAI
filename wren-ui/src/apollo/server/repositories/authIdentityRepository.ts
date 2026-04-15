@@ -13,13 +13,19 @@ export interface AuthIdentity {
   userId: string;
   providerType: string;
   providerSubject: string;
+  identityProviderConfigId?: string | null;
+  issuer?: string | null;
+  externalSubject?: string | null;
   passwordHash?: string | null;
   passwordAlgo?: string | null;
   emailVerifiedAt?: Date | null;
   metadata?: Record<string, any> | null;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
 }
 
-export interface IAuthIdentityRepository extends IBasicRepository<AuthIdentity> {}
+export interface IAuthIdentityRepository
+  extends IBasicRepository<AuthIdentity> {}
 
 export class AuthIdentityRepository
   extends BaseRepository<AuthIdentity>

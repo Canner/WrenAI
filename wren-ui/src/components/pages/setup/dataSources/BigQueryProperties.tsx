@@ -10,8 +10,8 @@ interface Props {
 }
 
 const UploadCredentials = (props: {
-  onChange?: (value: string) => void;
-  value?: string;
+  onChange?: (value?: Record<string, unknown>) => void;
+  value?: Record<string, unknown>;
 }) => {
   const { onChange, value } = props;
 
@@ -21,28 +21,29 @@ const UploadCredentials = (props: {
     if (!value) setFileList([]);
   }, [value]);
 
-  const onUploadChange = async (info) => {
+  const onUploadChange: UploadProps['onChange'] = async (info) => {
     const { file, fileList } = info;
     if (fileList.length) {
       const uploadFile = fileList[0];
+      if (!file.originFileObj) {
+        message.error('文件读取失败，请重试。');
+        return;
+      }
 
       try {
         const result = await readFileContent(file.originFileObj);
         const parsedJson = JSON.parse(result);
-        onChange && onChange(parsedJson);
+        onChange?.(parsedJson as Record<string, unknown>);
         setFileList([uploadFile]);
-      } catch (error) {
-        console.error('Failed to handle file', error);
-        message.error(
-          'Failed to handle file. Please upload a valid credentials file.',
-        );
+      } catch {
+        message.error('文件处理失败，请上传有效的凭证文件。');
       }
     }
   };
 
   const onRemove = () => {
     setFileList([]);
-    onChange && onChange(undefined);
+    onChange?.(undefined);
   };
 
   return (
@@ -53,7 +54,7 @@ const UploadCredentials = (props: {
       onRemove={onRemove}
       maxCount={1}
     >
-      <Button icon={<UploadOutlined />}>Click to upload JSON key file</Button>
+      <Button icon={<UploadOutlined />}>上传 JSON 密钥文件</Button>
     </Upload>
   );
 };
@@ -65,7 +66,7 @@ export default function BigQueryProperties(props: Props) {
   return (
     <>
       <Form.Item
-        label="Display name"
+        label="显示名称"
         required
         name="displayName"
         rules={[
@@ -75,10 +76,10 @@ export default function BigQueryProperties(props: Props) {
           },
         ]}
       >
-        <Input placeholder="Our BigQuery" />
+        <Input placeholder="例如：团队 BigQuery" />
       </Form.Item>
       <Form.Item
-        label="Project ID"
+        label="项目 ID"
         required
         name="projectId"
         rules={[
@@ -88,10 +89,10 @@ export default function BigQueryProperties(props: Props) {
           },
         ]}
       >
-        <Input placeholder="The GCP project ID" disabled={isEditMode} />
+        <Input placeholder="请输入 GCP 项目 ID" disabled={isEditMode} />
       </Form.Item>
       <Form.Item
-        label="Dataset ID"
+        label="数据集 ID"
         required
         name="datasetId"
         rules={[
@@ -104,7 +105,7 @@ export default function BigQueryProperties(props: Props) {
         <Input disabled={isEditMode} />
       </Form.Item>
       <Form.Item
-        label="Credentials"
+        label="凭证"
         required={!isEditMode}
         name="credentials"
         rules={[

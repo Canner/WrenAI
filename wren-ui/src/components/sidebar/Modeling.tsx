@@ -1,7 +1,7 @@
 import styled from 'styled-components';
 import SidebarTree, { sidebarCommonStyle } from './SidebarTree';
 import ModelTree from './modeling/ModelTree';
-import { Diagram } from '@/utils/data';
+import { Diagram, DiagramModel, DiagramView } from '@/utils/data';
 import ViewTree from './modeling/ViewTree';
 
 export const StyledSidebarTree = styled(SidebarTree)`
@@ -20,22 +20,35 @@ export const StyledSidebarTree = styled(SidebarTree)`
 export interface Props {
   data: Diagram;
   onOpenModelDrawer: () => void;
-  onSelect: (selectKeys) => void;
+  onSelect: (selectKeys: React.Key[]) => void;
+  readOnly?: boolean;
 }
 
 export default function Modeling(props: Props) {
-  const { data, onSelect, onOpenModelDrawer } = props;
+  const { data, onSelect, onOpenModelDrawer, readOnly } = props;
   const { models = [], views = [] } = data || {};
+  const filteredModels = models.filter(
+    (model): model is DiagramModel => model != null,
+  );
+  const filteredViews = views.filter(
+    (view): view is DiagramView => view != null,
+  );
 
   return (
     <>
       <ModelTree
-        models={models}
+        models={filteredModels}
         onSelect={onSelect}
         selectedKeys={[]}
         onOpenModelDrawer={onOpenModelDrawer}
+        readOnly={readOnly}
       />
-      <ViewTree views={views} onSelect={onSelect} selectedKeys={[]} />
+      <ViewTree
+        views={filteredViews}
+        onSelect={onSelect}
+        selectedKeys={[]}
+        readOnly={readOnly}
+      />
     </>
   );
 }

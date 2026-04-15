@@ -6,6 +6,7 @@ import {
   RelationInfo,
   View,
 } from '@server/repositories';
+import { toPersistedRuntimeIdentity } from '@server/context/runtimeScope';
 import {
   Diagram,
   DiagramModel,
@@ -18,10 +19,78 @@ import {
 } from '@server/types';
 import { ColumnMDL, Manifest } from '@server/mdl/type';
 import { getLogger } from '@server/utils';
-import { MDLBuilder } from '../mdl/mdlBuilder';
+import {
+  assertAuthorizedWithAudit,
+  buildAuthorizationActorFromRuntimeScope,
+  recordAuditEvent,
+} from '@server/authz';
 
 const logger = getLogger('DiagramResolver');
 logger.level = 'debug';
+
+const parseJsonObject = (value?: string | null): Record<string, any> => {
+  if (!value) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const requireAuthorizationActor = (ctx: IContext) =>
+  ctx.authorizationActor ||
+  buildAuthorizationActorFromRuntimeScope(ctx.runtimeScope);
+
+const assertKnowledgeBaseReadAccess = async (ctx: IContext) => {
+  const { actor, resource } = getKnowledgeBaseReadAuthorizationTarget(ctx);
+  await assertAuthorizedWithAudit({
+    auditEventRepository: ctx.auditEventRepository,
+    actor,
+    action: 'knowledge_base.read',
+    resource,
+  });
+};
+
+const getKnowledgeBaseReadAuthorizationTarget = (ctx: IContext) => {
+  const runtimeIdentity = toPersistedRuntimeIdentity(ctx.runtimeScope!);
+  const workspaceId =
+    ctx.runtimeScope?.workspace?.id || runtimeIdentity.workspaceId || null;
+  const knowledgeBase = ctx.runtimeScope?.knowledgeBase;
+
+  return {
+    actor: requireAuthorizationActor(ctx),
+    resource: {
+      resourceType: knowledgeBase ? 'knowledge_base' : 'workspace',
+      resourceId: knowledgeBase?.id || workspaceId,
+      workspaceId,
+      attributes: {
+        workspaceKind: ctx.runtimeScope?.workspace?.kind || null,
+        knowledgeBaseKind: knowledgeBase?.kind || null,
+      },
+    },
+  };
+};
+
+const recordKnowledgeBaseReadAudit = async (ctx: IContext) => {
+  const { actor, resource } = getKnowledgeBaseReadAuthorizationTarget(ctx);
+  await recordAuditEvent({
+    auditEventRepository: ctx.auditEventRepository,
+    actor,
+    action: 'knowledge_base.read',
+    resource: {
+      ...resource,
+      resourceType: 'diagram',
+    },
+    result: 'allowed',
+    payloadJson: {
+      operation: 'get_diagram',
+    },
+  });
+};
 
 export class DiagramResolver {
   constructor() {
@@ -33,10 +102,14 @@ export class DiagramResolver {
     _args: any,
     ctx: IContext,
   ): Promise<Diagram> {
-    const project = ctx.runtimeScope!.project;
-    const models = await ctx.modelRepository.findAllBy({
-      projectId: project.id,
-    });
+    await assertKnowledgeBaseReadAccess(ctx);
+    const runtimeIdentity = toPersistedRuntimeIdentity(ctx.runtimeScope!);
+    const { manifest } =
+      await ctx.mdlService.makeCurrentModelMDLByRuntimeIdentity(
+        runtimeIdentity,
+      );
+    const models =
+      await ctx.modelRepository.findAllByRuntimeIdentity(runtimeIdentity);
 
     const modelIds = models.map((model) => model.id);
     const modelColumns =
@@ -48,25 +121,10 @@ export class DiagramResolver {
     const modelRelations = await ctx.relationRepository.findRelationInfoBy({
       columnIds: modelColumns.map((column) => column.id),
     });
-    const views = await ctx.viewRepository.findAllBy({
-      projectId: project.id,
-    });
+    const views =
+      await ctx.viewRepository.findAllByRuntimeIdentity(runtimeIdentity);
 
-    const builder = new MDLBuilder({
-      project,
-      models,
-      columns: modelColumns,
-      nestedColumns: modelNestedColumns,
-      relations: modelRelations,
-      views,
-      relatedModels: models,
-      relatedColumns: modelColumns,
-      relatedRelations: modelRelations,
-    });
-
-    const manifest = builder.build();
-
-    return this.buildDiagram(
+    const result = this.buildDiagram(
       models,
       modelColumns,
       modelNestedColumns,
@@ -74,6 +132,8 @@ export class DiagramResolver {
       views,
       manifest,
     );
+    await recordKnowledgeBaseReadAudit(ctx);
+    return result;
   }
 
   private buildDiagram(
@@ -89,7 +149,7 @@ export class DiagramResolver {
       const allColumns = modelColumns.filter(
         (column) => column.modelId === model.id,
       );
-      const modelMDL = manifest.models.find(
+      const modelMDL = (manifest.models || []).find(
         (modelMDL) => modelMDL.name === model.referenceName,
       );
       allColumns.forEach((column) => {
@@ -99,7 +159,7 @@ export class DiagramResolver {
               ? relation
               : null,
           )
-          .filter((relation) => !!relation);
+          .filter((relation): relation is RelationInfo => Boolean(relation));
 
         if (columnRelations.length > 0) {
           columnRelations.forEach((relation) => {
@@ -114,7 +174,7 @@ export class DiagramResolver {
 
         if (column.isCalculated) {
           transformedModel.calculatedFields.push(
-            this.transformCalculatedField(column, modelMDL.columns),
+            this.transformCalculatedField(column, modelMDL?.columns || []),
           );
         } else {
           const nestedColumns = modelNestedColumns.filter(
@@ -133,7 +193,7 @@ export class DiagramResolver {
   }
 
   private transformModel(model: Model): DiagramModel {
-    const properties = JSON.parse(model.properties);
+    const properties = parseJsonObject(model.properties);
     return {
       id: uuidv4(),
       modelId: model.id,
@@ -142,9 +202,9 @@ export class DiagramResolver {
       referenceName: model.referenceName,
       sourceTableName: model.sourceTableName,
       refSql: model.refSql,
-      refreshTime: model.refreshTime,
+      refreshTime: model.refreshTime || '',
       cached: model.cached,
-      description: properties?.description,
+      description: properties?.description || '',
       fields: [],
       calculatedFields: [],
       relationFields: [],
@@ -155,7 +215,7 @@ export class DiagramResolver {
     column: ModelColumn,
     nestedColumns: ModelNestedColumn[],
   ): DiagramModelField {
-    const properties = JSON.parse(column.properties);
+    const properties = parseJsonObject(column.properties);
     return {
       id: uuidv4(),
       columnId: column.id,
@@ -165,7 +225,7 @@ export class DiagramResolver {
       type: column.type,
       displayName: column.displayName,
       referenceName: column.referenceName,
-      description: properties?.description,
+      description: properties?.description || '',
       isPrimaryKey: column.isPk,
       expression: column.aggregation,
       nestedFields: nestedColumns.length
@@ -176,9 +236,9 @@ export class DiagramResolver {
             type: nestedColumn.type,
             displayName: nestedColumn.displayName,
             referenceName: nestedColumn.referenceName,
-            description: nestedColumn.properties?.description,
+            description: nestedColumn.properties?.description || '',
           }))
-        : null,
+        : undefined,
     };
   }
 
@@ -186,8 +246,7 @@ export class DiagramResolver {
     column: ModelColumn,
     columnsMDL: ColumnMDL[],
   ): DiagramModelField {
-    const properties = JSON.parse(column.properties);
-    const lineage = JSON.parse(column.lineage);
+    const properties = parseJsonObject(column.properties);
     const columnMDL = columnsMDL.find(
       ({ name }) => name === column.referenceName,
     );
@@ -196,13 +255,13 @@ export class DiagramResolver {
       columnId: column.id,
       nodeType: NodeType.CALCULATED_FIELD,
       aggregation: column.aggregation,
-      lineage,
+      lineage: column.lineage || '[]',
       type: column.type,
       displayName: column.displayName,
       referenceName: column.referenceName,
-      description: properties?.description,
+      description: properties?.description || '',
       isPrimaryKey: column.isPk,
-      expression: columnMDL.expression,
+      expression: columnMDL?.expression,
     };
   }
 
@@ -222,14 +281,12 @@ export class DiagramResolver {
     const displayName = models.find(
       (model) => model.referenceName === referenceName,
     )?.displayName;
-    const properties = relation.properties
-      ? JSON.parse(relation.properties)
-      : null;
+    const properties = parseJsonObject(relation.properties);
     return {
       id: uuidv4(),
       relationId: relation.id,
       nodeType: NodeType.RELATION,
-      displayName,
+      displayName: displayName || referenceName,
       referenceName,
       type: relation.joinType as RelationType,
       fromModelId: relation.fromModelId,
@@ -244,19 +301,19 @@ export class DiagramResolver {
       toColumnId: relation.toColumnId,
       toColumnName: relation.toColumnName,
       toColumnDisplayName: relation.toColumnDisplayName,
-      description: properties?.description,
+      description: properties?.description || '',
     };
   }
 
   private transformView(view: View): DiagramView {
-    const properties = JSON.parse(view.properties);
+    const properties = parseJsonObject(view.properties);
     const fields = (properties?.columns || []).map((column: any) => ({
       id: uuidv4(),
       nodeType: NodeType.FIELD,
       type: column.type,
       displayName: column.name,
       referenceName: column.name,
-      description: column?.properties?.description,
+      description: column?.properties?.description || '',
     }));
 
     return {
@@ -267,7 +324,7 @@ export class DiagramResolver {
       referenceName: view.name,
       displayName: properties?.displayName || view.name,
       fields,
-      description: properties?.description,
+      description: properties?.description || '',
     };
   }
 }

@@ -5,6 +5,7 @@ import uuid
 import orjson
 import pytest
 from fastapi.testclient import TestClient
+from tests.pytest.conftest import require_pgvector_runtime
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -24,6 +25,8 @@ GLOBAL_DATA = {
 
 
 def test_semantics_preparation(app):
+    require_pgvector_runtime()
+
     with TestClient(app) as client:
         semantics_preperation_id = GLOBAL_DATA["semantics_preperation_id"]
 
@@ -56,6 +59,8 @@ def test_semantics_preparation(app):
 
 
 def test_asks_with_successful_query(app):
+    require_pgvector_runtime()
+
     with TestClient(app) as client:
         semantics_preparation_id = GLOBAL_DATA["semantics_preperation_id"]
 
@@ -89,6 +94,8 @@ def test_asks_with_successful_query(app):
 
 
 def test_stop_asks(app):
+    require_pgvector_runtime()
+
     with TestClient(app) as client:
         query_id = GLOBAL_DATA["query_id"]
 

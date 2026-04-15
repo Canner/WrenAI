@@ -41,9 +41,10 @@ export function encryptConnectionInfo(
   dataSourceType: DataSourceName,
   connectionInfo: WREN_AI_CONNECTION_INFO,
 ) {
+  const rawConnectionInfo = connectionInfo as Record<string, any>;
   return dataSource[dataSourceType].sensitiveProps.reduce(
     (acc, prop: string) => {
-      const value = connectionInfo[prop];
+      const value = rawConnectionInfo[prop];
       if (value) {
         const encryption = encryptor.encrypt(
           JSON.parse(JSON.stringify({ [prop]: value })),
@@ -56,26 +57,36 @@ export function encryptConnectionInfo(
   );
 }
 
-export function toIbisConnectionInfo(dataSourceType, connectionInfo) {
+export function toIbisConnectionInfo(
+  dataSourceType: DataSourceName,
+  connectionInfo: WREN_AI_CONNECTION_INFO,
+): Record<string, any> {
   return dataSource[dataSourceType].toIbisConnectionInfo(connectionInfo);
 }
 
-export function toMultipleIbisConnectionInfos(dataSourceType, connectionInfo) {
-  if (!dataSource[dataSourceType].toMultipleIbisConnectionInfos) {
+export function toMultipleIbisConnectionInfos(
+  dataSourceType: DataSourceName,
+  connectionInfo: WREN_AI_CONNECTION_INFO,
+): Array<Record<string, any>> | null {
+  const handler = dataSource[dataSourceType].toMultipleIbisConnectionInfos;
+  if (!handler) {
     return null;
   }
-  return dataSource[dataSourceType].toMultipleIbisConnectionInfos(
-    connectionInfo,
-  );
+  return handler(connectionInfo);
 }
 
-interface IDataSourceConnectionInfo<C, I> {
+interface IDataSourceConnectionInfo<C, I extends Record<string, any>> {
   sensitiveProps: string[];
   toIbisConnectionInfo(connectionInfo: C): I;
   toMultipleIbisConnectionInfos?(connectionInfo: C): I[];
 }
 
-const dataSource = {
+type DataSourceConnectionRegistry = Record<
+  DataSourceName,
+  IDataSourceConnectionInfo<WREN_AI_CONNECTION_INFO, Record<string, any>>
+>;
+
+const dataSource: DataSourceConnectionRegistry = {
   // Athena
   [DataSourceName.ATHENA]: {
     sensitiveProps: ['awsSecretKey', 'webIdentityToken'],
@@ -214,12 +225,12 @@ const dataSource = {
         user,
         password,
         dsn,
-      }).reduce((acc, [key, value]) => {
+      }).reduce<Record<string, any>>((acc, [key, value]) => {
         if (value !== undefined && value !== '') {
           acc[key] = value;
         }
         return acc;
-      }, {});
+      }, {}) as HostBasedConnectionInfo;
     },
   } as IDataSourceConnectionInfo<
     ORACLE_CONNECTION_INFO,
@@ -289,7 +300,7 @@ const dataSource = {
       }
       return {
         host: ssl ? `https://${host}` : `http://${host}`,
-        port,
+        port: String(port),
         catalog,
         schema,
         user: username,
@@ -328,7 +339,7 @@ const dataSource = {
 
         return {
           host: ssl ? `https://${host}` : `http://${host}`,
-          port,
+          port: String(port),
           catalog,
           schema: schemaName,
           user: username,
@@ -380,7 +391,7 @@ const dataSource = {
     toIbisConnectionInfo(_connectionInfo) {
       throw new Error('Not implemented');
     },
-  } as IDataSourceConnectionInfo<DUCKDB_CONNECTION_INFO, unknown>,
+  } as IDataSourceConnectionInfo<DUCKDB_CONNECTION_INFO, Record<string, any>>,
 
   // Redshift
   [DataSourceName.REDSHIFT]: {
@@ -496,9 +507,10 @@ function decryptConnectionInfo(
   dataSourceType: DataSourceName,
   connectionInfo: WREN_AI_CONNECTION_INFO,
 ): WREN_AI_CONNECTION_INFO {
+  const rawConnectionInfo = connectionInfo as Record<string, any>;
   return dataSource[dataSourceType].sensitiveProps.reduce(
     (acc, prop: string) => {
-      const value = connectionInfo[prop];
+      const value = rawConnectionInfo[prop];
       if (value) {
         const decryption = encryptor.decrypt(value);
         const decryptedValue = JSON.parse(decryption)[prop];

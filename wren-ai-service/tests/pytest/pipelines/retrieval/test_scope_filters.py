@@ -3,14 +3,22 @@ from collections.abc import Callable
 import pytest
 from haystack import Document
 
-from src.pipelines.common import build_runtime_scope_filters, retrieve_metadata
-from src.pipelines.common import retrieve_data_source
+from src.pipelines.common import (
+    build_runtime_scope_filters,
+    resolve_pipeline_runtime_scope_id,
+    retrieve_data_source,
+    retrieve_metadata,
+)
 from src.pipelines.generation.intent_classification import (
     dbschema_retrieval as intent_dbschema_retrieval,
+)
+from src.pipelines.generation.intent_classification import (
     table_retrieval as intent_table_retrieval,
 )
 from src.pipelines.retrieval.db_schema_retrieval import (
     dbschema_retrieval as ask_dbschema_retrieval,
+)
+from src.pipelines.retrieval.db_schema_retrieval import (
     table_retrieval as ask_table_retrieval,
 )
 from src.pipelines.retrieval.historical_question_retrieval import (
@@ -19,10 +27,14 @@ from src.pipelines.retrieval.historical_question_retrieval import (
 from src.pipelines.retrieval.instructions import (
     ScopeFilter,
     default_instructions,
+)
+from src.pipelines.retrieval.instructions import (
     retrieval as instructions_retrieval,
 )
 from src.pipelines.retrieval.sql_pairs_retrieval import (
     count_documents as sql_pairs_count_documents,
+)
+from src.pipelines.retrieval.sql_pairs_retrieval import (
     retrieval as sql_pairs_retrieval,
 )
 
@@ -61,6 +73,23 @@ def test_build_runtime_scope_filters_returns_none_without_scope_or_conditions():
     assert build_runtime_scope_filters("   ") is None
 
 
+def test_resolve_pipeline_runtime_scope_id_prefers_runtime_scope_then_project_bridge():
+    assert (
+        resolve_pipeline_runtime_scope_id(
+            " deploy-1 ",
+            bridge_scope_id="legacy-project-1",
+        )
+        == "deploy-1"
+    )
+    assert (
+        resolve_pipeline_runtime_scope_id(
+            None,
+            bridge_scope_id=" legacy-project-1 ",
+        )
+        == "legacy-project-1"
+    )
+
+
 def test_build_runtime_scope_filters_wraps_legacy_project_field_once():
     assert build_runtime_scope_filters(
         " deploy-1 ",
@@ -70,6 +99,33 @@ def test_build_runtime_scope_filters_wraps_legacy_project_field_once():
         "conditions": [
             {"field": "is_default", "operator": "==", "value": False},
             {"field": "project_id", "operator": "==", "value": "deploy-1"},
+        ],
+    }
+
+
+def test_build_runtime_scope_filters_uses_or_for_multiple_scope_ids():
+    assert build_runtime_scope_filters(
+        " deploy-1, kb-2 ,deploy-1",
+        conditions=[{"field": "is_default", "operator": "==", "value": False}],
+    ) == {
+        "operator": "AND",
+        "conditions": [
+            {"field": "is_default", "operator": "==", "value": False},
+            {
+                "operator": "OR",
+                "conditions": [
+                    {
+                        "field": "project_id",
+                        "operator": "==",
+                        "value": "deploy-1",
+                    },
+                    {
+                        "field": "project_id",
+                        "operator": "==",
+                        "value": "kb-2",
+                    },
+                ],
+            },
         ],
     }
 
@@ -123,7 +179,7 @@ async def test_sql_pairs_retrieval_reuses_scope_filter_helper():
 
     await sql_pairs_retrieval(
         embedding={"embedding": [0.1, 0.2]},
-        project_id=" deploy-1 ",
+        runtime_scope_id=" deploy-1 ",
         retriever=retriever,
     )
 
@@ -141,7 +197,7 @@ async def test_ask_table_retrieval_preserves_type_and_scope_filters():
 
     await ask_table_retrieval(
         embedding={"embedding": [0.1, 0.2]},
-        project_id=" deploy-1 ",
+        runtime_scope_id=" deploy-1 ",
         tables=["orders"],
         table_retriever=retriever,
     )
@@ -169,7 +225,7 @@ async def test_ask_table_retrieval_without_embedding_preserves_name_condition():
 
     await ask_table_retrieval(
         embedding={},
-        project_id=" deploy-1 ",
+        runtime_scope_id=" deploy-1 ",
         tables=["orders"],
         table_retriever=retriever,
     )
@@ -198,7 +254,7 @@ async def test_ask_dbschema_retrieval_preserves_type_or_name_and_scope_filters()
 
     result = await ask_dbschema_retrieval(
         table_retrieval={"documents": [_table_description_document("orders")]},
-        project_id=" deploy-1 ",
+        runtime_scope_id=" deploy-1 ",
         dbschema_retriever=retriever,
     )
 
@@ -228,7 +284,7 @@ async def test_intent_table_retrieval_preserves_type_and_scope_filters():
 
     await intent_table_retrieval(
         embedding={"embedding": [0.1, 0.2]},
-        project_id=" deploy-1 ",
+        runtime_scope_id=" deploy-1 ",
         table_retriever=retriever,
     )
 
@@ -256,7 +312,7 @@ async def test_intent_dbschema_retrieval_preserves_type_or_name_and_scope_filter
     result = await intent_dbschema_retrieval(
         table_retrieval={"documents": [_table_description_document("orders")]},
         embedding={"embedding": [0.1, 0.2]},
-        project_id=" deploy-1 ",
+        runtime_scope_id=" deploy-1 ",
         dbschema_retriever=retriever,
     )
 
@@ -281,12 +337,27 @@ async def test_intent_dbschema_retrieval_preserves_type_or_name_and_scope_filter
 
 
 @pytest.mark.asyncio
+async def test_intent_dbschema_retrieval_short_circuits_when_no_tables_match():
+    retriever = MockRetriever()
+
+    result = await intent_dbschema_retrieval(
+        table_retrieval={"documents": []},
+        embedding={"embedding": [0.1, 0.2]},
+        runtime_scope_id=" deploy-1 ",
+        dbschema_retriever=retriever,
+    )
+
+    assert result == []
+    assert retriever.calls == []
+
+
+@pytest.mark.asyncio
 async def test_instructions_retrieval_preserves_non_default_condition():
     retriever = MockRetriever()
 
     await instructions_retrieval(
         embedding={"embedding": [0.1, 0.2]},
-        project_id=" deploy-1 ",
+        runtime_scope_id=" deploy-1 ",
         retriever=retriever,
     )
 
@@ -329,7 +400,7 @@ async def test_default_instructions_preserve_default_condition_and_scope_filter(
     result = await default_instructions(
         count_documents=2,
         retriever=retriever,
-        project_id=" deploy-1 ",
+        runtime_scope_id=" deploy-1 ",
         scope_filter=ScopeFilter(),
         scope="sql",
     )

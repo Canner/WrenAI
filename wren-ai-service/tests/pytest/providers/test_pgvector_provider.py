@@ -5,6 +5,7 @@ import pytest
 
 from src.providers.document_store.pgvector import (
     PgvectorProvider,
+    PgvectorRetrieverAdapter,
     PgvectorStoreAdapter,
     _filter_supported_store_kwargs,
     _normalize_pgvector_filters,
@@ -86,6 +87,30 @@ class FakeRuntimePgvectorStore:
     ):
         self.last_embedding_filters = filters
         return [FakeDocument("doc-1")]
+
+
+class FakeRuntimePgvectorRetriever:
+    def __init__(self):
+        self.last_query_embedding = None
+        self.last_filters = None
+        self.last_top_k = None
+        self.last_vector_function = None
+
+    def run(self, query_embedding, filters=None, top_k=None, vector_function=None):
+        self.last_query_embedding = query_embedding
+        self.last_filters = filters
+        self.last_top_k = top_k
+        self.last_vector_function = vector_function
+        return {"documents": [FakeDocument("doc-1")]}
+
+
+class FakeUnserializablePgvectorStore:
+    table_name = "kb_docs"
+
+    def to_dict(self):
+        raise ValueError(
+            "Cannot serialize token-based secret. Use an alternative secret type like environment variables."
+        )
 
 
 def test_pgvector_provider_loads_optional_modules_lazily(monkeypatch):
@@ -255,6 +280,28 @@ def test_pgvector_provider_normalizes_meta_filters():
             {"field": "meta.kind", "operator": "==", "value": "sql_pair"},
         ],
     }
+    assert _normalize_pgvector_filters({"runtime_scope_id": "scope-a"}) == {
+        "field": "meta.runtime_scope_id",
+        "operator": "==",
+        "value": "scope-a",
+    }
+    assert _normalize_pgvector_filters(
+        {"runtime_scope_id": "scope-a", "kind": "sql_pair"}
+    ) == {
+        "operator": "AND",
+        "conditions": [
+            {
+                "field": "meta.runtime_scope_id",
+                "operator": "==",
+                "value": "scope-a",
+            },
+            {
+                "field": "meta.kind",
+                "operator": "==",
+                "value": "sql_pair",
+            },
+        ],
+    }
 
 
 @pytest.mark.asyncio
@@ -291,6 +338,51 @@ async def test_pgvector_store_adapter_short_circuits_empty_writes():
     assert store.write_calls == []
 
 
+@pytest.mark.asyncio
+async def test_pgvector_retriever_adapter_is_async_compatible_and_normalizes_filters():
+    retriever = FakeRuntimePgvectorRetriever()
+    store = FakeRuntimePgvectorStore()
+    adapter = PgvectorRetrieverAdapter(retriever, document_store=store)
+
+    result = await adapter.run(
+        query_embedding=[0.1, 0.2],
+        filters={"field": "project_id", "operator": "==", "value": "scope-a"},
+        top_k=5,
+        vector_function="cosine_similarity",
+    )
+
+    assert [doc.id for doc in result["documents"]] == ["doc-1"]
+    assert retriever.last_query_embedding == [0.1, 0.2]
+    assert retriever.last_filters == {
+        "field": "meta.project_id",
+        "operator": "==",
+        "value": "scope-a",
+    }
+    assert retriever.last_top_k == 5
+    assert retriever.last_vector_function == "cosine_similarity"
+
+
+@pytest.mark.asyncio
+async def test_pgvector_retriever_adapter_falls_back_to_filter_lookup_when_embedding_is_empty():
+    retriever = FakeRuntimePgvectorRetriever()
+    store = FakeRuntimePgvectorStore()
+    adapter = PgvectorRetrieverAdapter(retriever, document_store=store)
+
+    result = await adapter.run(
+        query_embedding=[],
+        filters={"field": "project_id", "operator": "==", "value": "scope-a"},
+        top_k=1,
+    )
+
+    assert [doc.id for doc in result["documents"]] == ["doc-1"]
+    assert store.last_filter_documents_filters == {
+        "field": "meta.project_id",
+        "operator": "==",
+        "value": "scope-a",
+    }
+    assert retriever.last_query_embedding is None
+
+
 def test_pgvector_provider_supports_legacy_alias_fields(monkeypatch):
     provider = PgvectorProvider(
         connection_string="postgresql://postgres:postgres@localhost:5432/postgres",
@@ -313,3 +405,15 @@ def test_pgvector_provider_supports_legacy_alias_fields(monkeypatch):
     assert store.kwargs["embedding_dimension"] == 1024
     assert store.kwargs["recreate_table"] is True
     assert store.kwargs["table_name"] == "project_meta"
+
+
+def test_pgvector_store_adapter_to_dict_falls_back_when_native_store_is_not_serializable():
+    adapter = PgvectorStoreAdapter(FakeUnserializablePgvectorStore())
+
+    assert adapter.to_dict() == {
+        "type": "pgvector",
+        "init_parameters": {
+            "table_name": "kb_docs",
+            "index": "kb_docs",
+        },
+    }

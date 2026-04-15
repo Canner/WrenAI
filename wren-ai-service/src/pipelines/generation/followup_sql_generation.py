@@ -12,7 +12,7 @@ from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.pipelines.common import (
     clean_up_new_lines,
-    normalize_runtime_scope_id,
+    resolve_pipeline_runtime_scope_id,
     retrieve_data_source,
 )
 from src.pipelines.generation.utils.sql import (
@@ -135,10 +135,13 @@ async def generate_sql_in_followup(
     generator: Any,
     histories: list[AskHistory],
     generator_name: str,
+    data_source: str,
     sql_knowledge: SqlKnowledge | None = None,
 ) -> dict:
     history_messages = construct_ask_history_messages(histories)
-    current_system_prompt = get_sql_generation_system_prompt(sql_knowledge)
+    current_system_prompt = get_sql_generation_system_prompt(
+        sql_knowledge, data_source
+    )
     return await generator(
         prompt=prompt.get("prompt"),
         history_messages=history_messages,
@@ -151,13 +154,13 @@ async def post_process(
     generate_sql_in_followup: dict,
     post_processor: SQLGenPostProcessor,
     data_source: str,
-    project_id: str | None = None,
+    runtime_scope_id: str | None = None,
     use_dry_plan: bool = False,
     allow_dry_plan_fallback: bool = True,
 ) -> dict:
     return await post_processor.run(
         generate_sql_in_followup.get("replies"),
-        project_id=project_id,
+        runtime_scope_id=runtime_scope_id,
         use_dry_plan=use_dry_plan,
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,
@@ -204,7 +207,7 @@ class FollowUpSQLGeneration(BasicPipeline):
         histories: list[AskHistory],
         sql_samples: list[dict] | None = None,
         instructions: list[dict] | None = None,
-        project_id: str | None = None,
+        runtime_scope_id: str | None = None,
         has_calculated_field: bool = False,
         has_metric: bool = False,
         has_json_field: bool = False,
@@ -212,11 +215,14 @@ class FollowUpSQLGeneration(BasicPipeline):
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
         sql_knowledge: SqlKnowledge | None = None,
+        bridge_scope_id: str | None = None,
     ):
         logger.info("Follow-Up SQL Generation pipeline is running...")
-        runtime_scope_id = normalize_runtime_scope_id(project_id)
+        runtime_scope_id = resolve_pipeline_runtime_scope_id(
+            runtime_scope_id, bridge_scope_id=bridge_scope_id
+        )
 
-        if use_dry_plan:
+        if runtime_scope_id:
             data_source = await retrieve_data_source(runtime_scope_id, self._retriever)
         else:
             data_source = "local_file"
@@ -228,7 +234,7 @@ class FollowUpSQLGeneration(BasicPipeline):
                 "documents": contexts,
                 "sql_generation_reasoning": sql_generation_reasoning,
                 "histories": histories,
-                "project_id": runtime_scope_id,
+                "runtime_scope_id": runtime_scope_id,
                 "sql_samples": sql_samples,
                 "instructions": instructions,
                 "has_calculated_field": has_calculated_field,

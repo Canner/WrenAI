@@ -53,6 +53,8 @@ async def get_prepare_semantics_status(
 @router.delete("/semantics")
 async def delete_semantics(
     delete_semantics_request: DeleteSemanticsRequest | None = Body(default=None),
+    runtime_scope_id: str | None = Query(default=None),
+    runtimeScopeId: str | None = Query(default=None),
     project_id: str | None = Query(default=None),
     projectId: str | None = Query(default=None),
     service_container: ServiceContainer = Depends(get_service_container),
@@ -62,12 +64,14 @@ async def delete_semantics(
         if delete_semantics_request
         else {}
     )
-    payload.setdefault("project_id", project_id or projectId)
+    resolved_runtime_scope_id = runtime_scope_id or runtimeScopeId
+    compatibility_scope_id = project_id or projectId
+    payload.setdefault("runtime_scope_id", resolved_runtime_scope_id)
+    if not payload.get("runtime_scope_id"):
+        payload.setdefault("project_id", compatibility_scope_id)
     request = DeleteSemanticsRequest.model_validate(payload)
-    runtime_scope_id = request.resolve_project_id()
+    runtime_scope_id = request.resolve_runtime_scope_id()
 
     if not runtime_scope_id:
-        raise HTTPException(status_code=400, detail="Project ID is required")
-    await service_container.semantics_preparation_service.delete_semantics(
-        runtime_scope_id
-    )
+        raise HTTPException(status_code=400, detail="Runtime scope is required")
+    await service_container.semantics_preparation_service.delete_semantics(request)

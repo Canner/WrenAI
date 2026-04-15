@@ -2,12 +2,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { Button, Form, Modal, Typography, Alert } from 'antd';
 import { ERROR_TEXTS } from '@/utils/error';
 import { ModalAction } from '@/hooks/useModalAction';
-import { attachLoading } from '@/utils/helper';
-import { parseGraphQLError } from '@/utils/errorHandler';
+import { handleFormSubmitError, parseGraphQLError } from '@/utils/errorHandler';
 import SQLEditor from '@/components/editor/SQLEditor';
 import ErrorCollapse from '@/components/ErrorCollapse';
 import PreviewData from '@/components/dataPreview/PreviewData';
-import { usePreviewSqlMutation } from '@/apollo/client/graphql/sql.generated';
+import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
+import {
+  previewSql,
+  validateSql,
+  type SqlPreviewDataResponse,
+} from '@/utils/sqlPreviewRest';
 
 type Props = ModalAction<{ sql: string; responseId: number }> & {
   loading?: boolean;
@@ -15,68 +19,96 @@ type Props = ModalAction<{ sql: string; responseId: number }> & {
 
 export function FixSQLModal(props: Props) {
   const { visible, defaultValue, loading, onSubmit, onClose } = props;
-  const [previewLoading, setPreviewLoading] = useState(false);
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const [form] = Form.useForm();
-
-  // Handle errors via try/catch blocks rather than onError callback
-  const [previewSqlMutation, previewSqlResult] = usePreviewSqlMutation();
+  const [previewState, setPreviewState] = useState<{
+    loading: boolean;
+    data?: SqlPreviewDataResponse;
+    error?: Error;
+  }>({
+    loading: false,
+  });
 
   const error = useMemo(() => {
-    if (!previewSqlResult.error) return null;
-    const graphQLError = parseGraphQLError(previewSqlResult.error);
-    return { ...graphQLError, shortMessage: 'Invalid SQL syntax' };
-  }, [previewSqlResult.error]);
+    if (!previewState.error) return null;
+    const graphQLError = parseGraphQLError(previewState.error as any);
+    return {
+      ...graphQLError,
+      message: graphQLError?.message || previewState.error.message,
+      shortMessage: 'SQL 语法无效',
+    };
+  }, [previewState.error]);
 
   useEffect(() => {
     if (!visible) return;
     form.setFieldsValue(defaultValue || {});
   }, [form, defaultValue, visible]);
 
-  const validateSql = async () => {
-    const sql = form.getFieldValue('sql');
-    await previewSqlMutation({
-      variables: { data: { sql, limit: 1, dryRun: true } },
-    });
+  const onValidateSql = async (sql: string) => {
+    await validateSql(runtimeScopeNavigation.selector, sql);
   };
 
   const previewData = async () => {
     form
       .validateFields()
       .then(async (values) => {
-        await attachLoading(
-          previewSqlMutation,
-          setPreviewLoading,
-        )({
-          variables: { data: { sql: values.sql, limit: 50 } },
-        });
+        setPreviewState({ loading: true });
+        try {
+          const data = await previewSql(
+            runtimeScopeNavigation.selector,
+            values.sql,
+            50,
+          );
+          setPreviewState({
+            loading: false,
+            data,
+          });
+        } catch (error) {
+          setPreviewState({
+            loading: false,
+            data: undefined,
+            error:
+              error instanceof Error
+                ? error
+                : new Error('预览 SQL 数据失败，请稍后重试。'),
+          });
+        }
       })
-      .catch(console.error);
+      .catch((error) => {
+        handleFormSubmitError(error, '预览 SQL 数据失败，请稍后重试。');
+      });
   };
 
   const reset = () => {
     form.resetFields();
-    previewSqlResult.reset();
+    setPreviewState({ loading: false });
   };
 
   const submit = async () => {
     form
       .validateFields()
       .then(async (values) => {
-        await validateSql();
+        await onValidateSql(values.sql);
+        if (!onSubmit) {
+          return;
+        }
         await onSubmit(values.sql);
         onClose();
       })
-      .catch(console.error);
+      .catch((error) => {
+        handleFormSubmitError(error, '提交修复 SQL 失败，请稍后重试。');
+      });
   };
 
-  const showPreview = previewSqlResult.data || previewSqlResult.loading;
+  const showPreview = previewState.data || previewState.loading;
 
   return (
     <Modal
-      title="Fix SQL"
+      title="修复 SQL"
       width={640}
       visible={visible}
-      okText="Submit"
+      okText="提交"
+      cancelText="取消"
       onOk={submit}
       onCancel={onClose}
       confirmLoading={loading}
@@ -86,11 +118,11 @@ export function FixSQLModal(props: Props) {
       afterClose={reset}
     >
       <Typography.Text className="d-block gray-7 mb-3">
-        The following SQL statement needs to be fixed:
+        以下 SQL 语句需要修复：
       </Typography.Text>
       <Form form={form} preserve={false} layout="vertical">
         <Form.Item
-          label="SQL statement"
+          label="SQL 语句"
           name="sql"
           required
           rules={[
@@ -105,20 +137,20 @@ export function FixSQLModal(props: Props) {
       </Form>
       <div className="my-3">
         <Typography.Text className="d-block gray-7 mb-2">
-          Data preview (50 rows)
+          数据预览（50 行）
         </Typography.Text>
         <Button
           onClick={previewData}
-          loading={previewLoading}
-          disabled={previewLoading}
+          loading={previewState.loading}
+          disabled={previewState.loading}
         >
-          Preview data
+          预览数据
         </Button>
         {showPreview && (
           <div className="my-3">
             <PreviewData
-              loading={previewLoading}
-              previewData={previewSqlResult?.data?.previewSql}
+              loading={previewState.loading}
+              previewData={previewState.data}
               copyable={false}
             />
           </div>
@@ -129,7 +161,7 @@ export function FixSQLModal(props: Props) {
           showIcon
           type="error"
           message={error.shortMessage}
-          description={<ErrorCollapse message={error.message} />}
+          description={<ErrorCollapse message={error.message || ''} />}
         />
       )}
     </Modal>

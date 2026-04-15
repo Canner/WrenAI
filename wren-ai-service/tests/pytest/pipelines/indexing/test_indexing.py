@@ -47,15 +47,15 @@ async def test_document_cleaner():
     store2 = MockDocumentStore(["document 1", "document 2"])
     cleaner = DocumentCleaner(stores=[store1, store2])
 
-    # Test without project_id
+    # Test without runtime_scope_id
     await cleaner.run()
     assert store1.deleted
     assert store2.deleted
     assert store1.deleted_filters[-1] is None
     assert store2.deleted_filters[-1] is None
 
-    # Test with project_id
-    await cleaner.run(project_id="123")
+    # Test with runtime_scope_id
+    await cleaner.run(runtime_scope_id="123")
     assert store1.deleted
     assert store2.deleted
     assert store1.deleted_filters[-1] == build_runtime_scope_filters("123")
@@ -67,7 +67,9 @@ async def test_instructions_cleaner_reuses_scope_filter_helper():
     store = MockDocumentStore()
     cleaner = InstructionsCleaner(store)
 
-    await cleaner.run(instruction_ids=["instruction-1"], project_id=" deploy-1 ")
+    await cleaner.run(
+        instruction_ids=["instruction-1"], runtime_scope_id=" deploy-1 "
+    )
 
     assert store.deleted_filters[-1] == build_runtime_scope_filters(
         "deploy-1",
@@ -78,11 +80,23 @@ async def test_instructions_cleaner_reuses_scope_filter_helper():
 
 
 @pytest.mark.asyncio
+async def test_instructions_cleaner_requires_runtime_scope_id():
+    store = MockDocumentStore()
+    cleaner = InstructionsCleaner(store)
+
+    with pytest.raises(
+        ValueError,
+        match="InstructionsCleaner requires runtime_scope_id",
+    ):
+        await cleaner.run(instruction_ids=[])
+
+
+@pytest.mark.asyncio
 async def test_sql_pairs_cleaner_reuses_scope_filter_helper():
     store = MockDocumentStore()
     cleaner = SqlPairsCleaner(store)
 
-    await cleaner.run(sql_pair_ids=["pair-1"], project_id=" deploy-1 ")
+    await cleaner.run(sql_pair_ids=["pair-1"], runtime_scope_id=" deploy-1 ")
 
     assert store.deleted_filters[-1] == build_runtime_scope_filters(
         "deploy-1",
@@ -97,7 +111,7 @@ def test_instructions_converter_normalizes_runtime_scope_before_meta_write():
 
     result = converter.run(
         instructions=[Instruction(id="instruction-1", instruction="i", question="q")],
-        project_id=" deploy-1 ",
+        runtime_scope_id=" deploy-1 ",
     )
 
     assert result["documents"][0].meta["project_id"] == "deploy-1"
@@ -108,14 +122,16 @@ def test_sql_pairs_converter_normalizes_runtime_scope_before_meta_write():
 
     result = converter.run(
         sql_pairs=[SqlPair(id="pair-1", sql="select 1", question="q")],
-        project_id=" deploy-1 ",
+        runtime_scope_id=" deploy-1 ",
     )
 
     assert result["documents"][0].meta["project_id"] == "deploy-1"
 
 
 def test_project_meta_chunk_normalizes_runtime_scope_before_writing_meta():
-    result = chunk_project_meta({"dataSource": "postgres"}, project_id=" deploy-1 ")
+    result = chunk_project_meta(
+        {"dataSource": "postgres"}, runtime_scope_id=" deploy-1 "
+    )
 
     assert result["documents"][0].meta == {
         "data_source": "postgres",
@@ -127,19 +143,22 @@ def test_project_meta_chunk_normalizes_runtime_scope_before_writing_meta():
 @pytest.mark.parametrize(
     ("pipeline_cls", "run_args", "run_kwargs"),
     [
-        (ProjectMeta, ["{}"], {"project_id": " deploy-1 "}),
-        (TableDescription, ["{}"], {"project_id": " deploy-1 "}),
-        (HistoricalQuestion, ["{}"], {"project_id": " deploy-1 "}),
-        (DBSchema, ["{}"], {"project_id": " deploy-1 "}),
+        (ProjectMeta, ["{}"], {"runtime_scope_id": " deploy-1 "}),
+        (TableDescription, ["{}"], {"runtime_scope_id": " deploy-1 "}),
+        (HistoricalQuestion, ["{}"], {"runtime_scope_id": " deploy-1 "}),
+        (DBSchema, ["{}"], {"runtime_scope_id": " deploy-1 "}),
         (
             Instructions,
             [],
-            {"instructions": [Instruction(id="instruction-1")], "project_id": " deploy-1 "},
+            {
+                "instructions": [Instruction(id="instruction-1")],
+                "runtime_scope_id": " deploy-1 ",
+            },
         ),
         (
             SqlPairs,
             ["{}"],
-            {"project_id": " deploy-1 "},
+            {"runtime_scope_id": " deploy-1 "},
         ),
     ],
 )
@@ -158,8 +177,9 @@ async def test_indexing_pipeline_run_normalizes_runtime_scope_before_execute(
 
     await pipeline.run(*run_args, **run_kwargs)
 
-    assert pipeline._pipe.execute.await_args.kwargs["inputs"]["project_id"] == (
-        "deploy-1"
+    assert (
+        pipeline._pipe.execute.await_args.kwargs["inputs"]["runtime_scope_id"]
+        == "deploy-1"
     )
 
 

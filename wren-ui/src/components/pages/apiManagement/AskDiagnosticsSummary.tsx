@@ -56,10 +56,10 @@ export default function AskDiagnosticsSummary(props: Props) {
             color={shadowCompare.matched ? 'success' : 'warning'}
             className="mr-2 mb-2"
           >
-            {shadowCompare.matched ? 'matched' : 'mismatched'}
+            {shadowCompare.matched ? '已匹配' : '不匹配'}
           </Tag>
         ) : shadowCompare?.executed ? (
-          <Tag className="mr-2 mb-2">executed</Tag>
+          <Tag className="mr-2 mb-2">已执行</Tag>
         ) : null}
         {shadowCompare?.shadowErrorType && (
           <Tag color="error" className="mr-2 mb-2">

@@ -59,17 +59,9 @@ exports.up = async function (knex) {
     ...postgresConnectionInfo,
   ]) {
     const { id, connectionInfo } = project;
-    if (process.env.DB_TYPE === 'pg') {
-      // postgres
-      await knex('project')
-        .where({ id })
-        .update({ connection_info: connectionInfo });
-    } else {
-      // sqlite
-      await knex('project')
-        .where({ id })
-        .update({ connection_info: JSON.stringify(connectionInfo) });
-    }
+    await knex('project')
+      .where({ id })
+      .update({ connection_info: connectionInfo });
   }
 };
 

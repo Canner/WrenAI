@@ -15,7 +15,10 @@ from tqdm import tqdm
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
-from src.pipelines.common import build_runtime_scope_meta, normalize_runtime_scope_id
+from src.pipelines.common import (
+    build_runtime_scope_meta,
+    resolve_pipeline_runtime_scope_id,
+)
 from src.pipelines.indexing import (
     AsyncDocumentWriter,
     DocumentCleaner,
@@ -34,10 +37,8 @@ class DDLChunker:
         self,
         mdl: Dict[str, Any],
         column_batch_size: int,
-        project_id: Optional[str] = None,
+        runtime_scope_id: Optional[str] = None,
     ):
-        runtime_scope_id = normalize_runtime_scope_id(project_id)
-
         def _additional_meta() -> Dict[str, Any]:
             return build_runtime_scope_meta(runtime_scope_id)
 
@@ -98,6 +99,7 @@ class DDLChunker:
             ]
             return {
                 "name": model.get("name", ""),
+                "tableReference": model.get("tableReference"),
                 "properties": model.get("properties", {}),
                 "columns": columns,
                 "primaryKey": model.get("primaryKey", ""),
@@ -132,13 +134,40 @@ class DDLChunker:
         relationships: List[Dict[str, Any]],
         column_batch_size: int,
     ) -> List[Dict[str, str]]:
+        def _resolve_source_binding(model: Dict[str, Any]) -> Dict[str, str]:
+            table_reference = model.get("tableReference") or {}
+            properties = model.get("properties", {}) or {}
+            catalog = table_reference.get("catalog") or properties.get("catalog") or ""
+            schema = table_reference.get("schema") or properties.get("schema") or ""
+            table = table_reference.get("table") or properties.get("table") or ""
+            source_table_identity = ".".join(
+                [part for part in [catalog, schema, table] if part]
+            )
+            return {
+                "catalog": catalog,
+                "schema": schema,
+                "table": table,
+                "source_table_identity": source_table_identity,
+            }
+
         def _model_command(model: Dict[str, Any]) -> dict:
             properties = model.get("properties", {})
+            source_binding = _resolve_source_binding(model)
 
             model_properties = {
                 "alias": clean_display_name(properties.get("displayName", "")),
                 "description": properties.get("description", ""),
             }
+            if source_binding["catalog"]:
+                model_properties["source_catalog"] = source_binding["catalog"]
+            if source_binding["schema"]:
+                model_properties["source_schema"] = source_binding["schema"]
+            if source_binding["table"]:
+                model_properties["source_table"] = source_binding["table"]
+            if source_binding["source_table_identity"]:
+                model_properties["source_table_identity"] = source_binding[
+                    "source_table_identity"
+                ]
             comment = f"\n/* {str(model_properties)} */\n"
 
             table_name = model["name"]
@@ -146,6 +175,26 @@ class DDLChunker:
                 "type": "TABLE",
                 "comment": comment,
                 "name": table_name,
+                **(
+                    {"source_catalog": source_binding["catalog"]}
+                    if source_binding["catalog"]
+                    else {}
+                ),
+                **(
+                    {"source_schema": source_binding["schema"]}
+                    if source_binding["schema"]
+                    else {}
+                ),
+                **(
+                    {"source_table": source_binding["table"]}
+                    if source_binding["table"]
+                    else {}
+                ),
+                **(
+                    {"source_table_identity": source_binding["source_table_identity"]}
+                    if source_binding["source_table_identity"]
+                    else {}
+                ),
             }
             return {"name": table_name, "payload": str(payload)}
 
@@ -307,12 +356,12 @@ async def chunk(
     mdl: Dict[str, Any],
     chunker: DDLChunker,
     column_batch_size: int,
-    project_id: Optional[str] = None,
+    runtime_scope_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     return await chunker.run(
         mdl=mdl,
         column_batch_size=column_batch_size,
-        project_id=normalize_runtime_scope_id(project_id),
+        runtime_scope_id=runtime_scope_id,
     )
 
 
@@ -325,9 +374,9 @@ async def embedding(chunk: Dict[str, Any], embedder: Any) -> Dict[str, Any]:
 async def clean(
     embedding: Dict[str, Any],
     cleaner: DocumentCleaner,
-    project_id: Optional[str] = None,
+    runtime_scope_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    await cleaner.run(project_id=normalize_runtime_scope_id(project_id))
+    await cleaner.run(runtime_scope_id=runtime_scope_id)
     return embedding
 
 
@@ -371,9 +420,14 @@ class DBSchema(BasicPipeline):
 
     @observe(name="DB Schema Indexing")
     async def run(
-        self, mdl_str: str, project_id: Optional[str] = None
+        self,
+        mdl_str: str,
+        runtime_scope_id: Optional[str] = None,
+        bridge_scope_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        runtime_scope_id = normalize_runtime_scope_id(project_id)
+        runtime_scope_id = resolve_pipeline_runtime_scope_id(
+            runtime_scope_id, bridge_scope_id=bridge_scope_id
+        )
         logger.info(
             f"Runtime scope: {runtime_scope_id}, DB Schema Indexing pipeline is running..."
         )
@@ -381,16 +435,22 @@ class DBSchema(BasicPipeline):
             [self._final],
             inputs={
                 "mdl_str": mdl_str,
-                "project_id": runtime_scope_id,
+                "runtime_scope_id": runtime_scope_id,
                 **self._components,
                 **self._configs,
             },
         )
 
     @observe(name="Clean Documents for DB Schema")
-    async def clean(self, project_id: Optional[str] = None) -> None:
+    async def clean(
+        self,
+        runtime_scope_id: Optional[str] = None,
+        bridge_scope_id: Optional[str] = None,
+    ) -> None:
         await clean(
             embedding={"documents": []},
             cleaner=self._components["cleaner"],
-            project_id=normalize_runtime_scope_id(project_id),
+            runtime_scope_id=resolve_pipeline_runtime_scope_id(
+                runtime_scope_id, bridge_scope_id=bridge_scope_id
+            ),
         )

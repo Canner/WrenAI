@@ -135,7 +135,7 @@ def test_table_description_normalizes_runtime_scope_before_writing_meta():
         "metrics": [],
     }
 
-    actual = chunker.run(mdl, project_id=" test-project ")
+    actual = chunker.run(mdl, runtime_scope_id=" test-project ")
 
     document: Document = actual["documents"][0]
     assert document.meta == {
@@ -193,6 +193,8 @@ async def test_pipeline_run(mocker: MockFixture):
         document_store_provider=document_store_provider,
     )
 
-    result = await pipeline.run(orjson.dumps(test_mdl), project_id="test-project")
+    result = await pipeline.run(
+        orjson.dumps(test_mdl), runtime_scope_id="test-project"
+    )
     assert result is not None
     assert result == {"write": {"documents_written": 2}}

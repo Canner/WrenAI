@@ -241,12 +241,5 @@ export const useSidebarTreeState = () => {
 };
 
 export default function SidebarTree(props: TreeProps) {
-  return (
-    <StyledTree
-      blockNode
-      showIcon
-      motion={null} // https://github.com/ant-design/ant-design/issues/16943#issuecomment-859966751
-      {...props}
-    />
-  );
+  return <StyledTree blockNode showIcon {...(props as any)} />;
 }

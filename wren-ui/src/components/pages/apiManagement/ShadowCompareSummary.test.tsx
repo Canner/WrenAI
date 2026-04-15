@@ -53,7 +53,7 @@ describe('ShadowCompareSummary', () => {
     ).toEqual({
       status: 'no_data',
       recommendedMode: 'keep_legacy',
-      reason: 'No shadow compare samples recorded yet.',
+      reason: '还没有记录到影子对比样本。',
       comparableMatchRate: 0,
       comparableMismatchRate: 0,
       errorRate: 0,
@@ -144,17 +144,17 @@ describe('ShadowCompareSummary', () => {
       }),
     );
 
-    expect(html).toContain('Shadow compare rollout');
-    expect(html).toContain('Recommendation: keep_legacy');
-    expect(html).toContain('Shadow compare recorded legacy shadow errors.');
+    expect(html).toContain('影子对比发布看板');
+    expect(html).toContain('建议策略：保留旧链路');
+    expect(html).toContain('影子对比已经记录到旧链路的影子执行错误。');
     expect(html).toContain('75% (6/8)');
     expect(html).toContain('80% (4/5)');
     expect(html).toContain('67% (2/3)');
     expect(html).toContain('skill: 4');
     expect(html).toContain('timeout: 1');
-    expect(html).toContain('Recent trend');
+    expect(html).toContain('最近趋势');
     expect(html).toContain('2026-04-02');
-    expect(html).toContain('total 5 · executed 2 · matched 1');
+    expect(html).toContain('总数 5 · 已执行 2 · 已匹配 1');
   });
 
   it('renders an info alert when current filter is not ask-based', () => {

@@ -29,12 +29,21 @@ describe('AdjustmentBackgroundTaskTracker', () => {
       pollingInterval: 100000,
     });
     tracker.stopPolling();
-    return { tracker, wrenAIAdaptor, askingTaskRepository, threadResponseRepository };
+    return {
+      tracker,
+      wrenAIAdaptor,
+      askingTaskRepository,
+      threadResponseRepository,
+    };
   };
 
   it('persists runtime identity when creating an adjustment task', async () => {
-    const { tracker, wrenAIAdaptor, askingTaskRepository, threadResponseRepository } =
-      createTracker();
+    const {
+      tracker,
+      wrenAIAdaptor,
+      askingTaskRepository,
+      threadResponseRepository,
+    } = createTracker();
 
     wrenAIAdaptor.createAskFeedback.mockResolvedValue({ queryId: 'adjust-1' });
     askingTaskRepository.createOne.mockResolvedValue({ id: 11 });
@@ -45,10 +54,10 @@ describe('AdjustmentBackgroundTaskTracker', () => {
       threadId: 5,
       question: 'why changed',
       originalThreadResponseId: 3,
-      projectId: 42,
       tables: ['orders'],
       sqlGenerationReasoning: 'need filter',
       sql: 'select * from orders',
+      runtimeScopeId: 'scope-1',
       configurations: { language: 'en' },
       runtimeIdentity: {
         projectId: 42,
@@ -59,6 +68,12 @@ describe('AdjustmentBackgroundTaskTracker', () => {
         actorUserId: 'user-1',
       },
     });
+
+    expect(wrenAIAdaptor.createAskFeedback).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runtimeScopeId: 'scope-1',
+      }),
+    );
 
     expect(askingTaskRepository.createOne).toHaveBeenCalledWith({
       queryId: 'adjust-1',
@@ -80,8 +95,12 @@ describe('AdjustmentBackgroundTaskTracker', () => {
   });
 
   it('keeps runtime identity when rerunning an adjustment task', async () => {
-    const { tracker, wrenAIAdaptor, askingTaskRepository, threadResponseRepository } =
-      createTracker();
+    const {
+      tracker,
+      wrenAIAdaptor,
+      askingTaskRepository,
+      threadResponseRepository,
+    } = createTracker();
 
     threadResponseRepository.findOneBy
       .mockResolvedValueOnce({
@@ -107,7 +126,7 @@ describe('AdjustmentBackgroundTaskTracker', () => {
     await tracker.rerunAdjustmentTask({
       threadResponseId: 22,
       threadId: 5,
-      projectId: 42,
+      runtimeScopeId: 'scope-1',
       configurations: { language: 'en' },
       runtimeIdentity: {
         projectId: 42,
@@ -118,6 +137,12 @@ describe('AdjustmentBackgroundTaskTracker', () => {
         actorUserId: 'user-1',
       },
     });
+
+    expect(wrenAIAdaptor.createAskFeedback).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runtimeScopeId: 'scope-1',
+      }),
+    );
 
     expect(askingTaskRepository.updateOne).toHaveBeenCalledWith(11, {
       queryId: 'adjust-2',

@@ -182,13 +182,7 @@ export interface Project {
   questionsError?: object;
 }
 
-export interface IProjectRepository extends IBasicRepository<Project> {
-  /**
-   * @deprecated Compatibility shim for legacy single-project flows only.
-   * New runtime paths must resolve context via RuntimeScopeResolver.
-   */
-  getCurrentProject: () => Promise<Project>;
-}
+export interface IProjectRepository extends IBasicRepository<Project> {}
 
 export class ProjectRepository
   extends BaseRepository<Project>
@@ -200,21 +194,6 @@ export class ProjectRepository
     super({ knexPg, tableName: 'project' });
   }
 
-  /**
-   * @deprecated Compatibility shim for legacy single-project flows only.
-   * New runtime paths must resolve context via RuntimeScopeResolver.
-   */
-  public async getCurrentProject() {
-    const projects = await this.findAll({
-      order: 'id',
-      limit: 1,
-    });
-    if (!projects.length) {
-      throw new Error('No project found');
-    }
-    return projects[0];
-  }
-
   public override transformFromDBData: (data: any) => Project = (data: any) => {
     if (!isPlainObject(data)) {
       throw new Error('Unexpected db data');
@@ -224,8 +203,10 @@ export class ProjectRepository
         // should return {} if value is null / {}, use value ? {} : JSON.parse(value) will throw error when value is null
         return isEmpty(value) ? {} : JSON.parse(value);
       }
-      if (key === 'type') {
-        return DataSourceName[value];
+      if (key === 'type' && typeof value === 'string') {
+        return (
+          (DataSourceName as Record<string, DataSourceName>)[value] ?? value
+        );
       }
       return value;
     });
@@ -235,8 +216,8 @@ export class ProjectRepository
     return camelCaseData as Project;
   };
 
-  public override transformToDBData: (data: Project) => any = (
-    data: Project,
+  public override transformToDBData: (data: Partial<Project>) => any = (
+    data: Partial<Project>,
   ) => {
     if (!isPlainObject(data)) {
       throw new Error('Unexpected db data');

@@ -18,7 +18,8 @@ export interface IdentityProviderConfig {
   createdBy?: string | null;
 }
 
-export interface IIdentityProviderConfigRepository extends IBasicRepository<IdentityProviderConfig> {}
+export interface IIdentityProviderConfigRepository
+  extends IBasicRepository<IdentityProviderConfig> {}
 
 export class IdentityProviderConfigRepository
   extends BaseRepository<IdentityProviderConfig>
@@ -30,7 +31,9 @@ export class IdentityProviderConfigRepository
     super({ knexPg, tableName: 'identity_provider_config' });
   }
 
-  protected override transformFromDBData = (data: any): IdentityProviderConfig => {
+  protected override transformFromDBData = (
+    data: any,
+  ): IdentityProviderConfig => {
     if (!isPlainObject(data)) {
       throw new Error('Unexpected dbdata');
     }
@@ -46,7 +49,9 @@ export class IdentityProviderConfigRepository
     return transformedData as IdentityProviderConfig;
   };
 
-  protected override transformToDBData = (data: Partial<IdentityProviderConfig>) => {
+  protected override transformToDBData = (
+    data: Partial<IdentityProviderConfig>,
+  ) => {
     if (!isPlainObject(data)) {
       throw new Error('Unexpected dbdata');
     }

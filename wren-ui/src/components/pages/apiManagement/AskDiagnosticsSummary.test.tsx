@@ -35,7 +35,7 @@ describe('AskDiagnosticsSummary', () => {
     );
 
     expect(html).toContain('skill');
-    expect(html).toContain('mismatched');
+    expect(html).toContain('不匹配');
     expect(html).toContain('timeout');
     expect(html).toContain('data-kind="tooltip"');
     expect(html).toContain('shadow answer diverged from primary sql result');

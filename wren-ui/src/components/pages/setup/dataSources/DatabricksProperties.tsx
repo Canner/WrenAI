@@ -29,7 +29,7 @@ export default function DatabricksProperties(props: Props) {
   return (
     <>
       <Form.Item
-        label="Display name"
+        label="显示名称"
         name="displayName"
         required
         rules={[
@@ -41,18 +41,18 @@ export default function DatabricksProperties(props: Props) {
       >
         <Input />
       </Form.Item>
-      <Form.Item label="Authentication method" name="databricksType">
+      <Form.Item label="认证方式" name="databricksType">
         <Radio.Group buttonStyle="solid">
           <Radio.Button value={DATABRICKS_AUTH_METHOD.token}>
-            Personal Access Token (PAT)
+            个人访问令牌（PAT）
           </Radio.Button>
           <Radio.Button value={DATABRICKS_AUTH_METHOD.service_principal}>
-            Service Principal
+            服务主体
           </Radio.Button>
         </Radio.Group>
       </Form.Item>
       <Form.Item
-        label="Server hostname"
+        label="服务器主机名"
         name="serverHostname"
         required
         rules={[
@@ -63,12 +63,12 @@ export default function DatabricksProperties(props: Props) {
         ]}
       >
         <Input
-          placeholder="e.g. adb-123456789.12.azuredatabricks.net"
+          placeholder="例如：adb-123456789.12.azuredatabricks.net"
           disabled={isEditMode}
         />
       </Form.Item>
       <Form.Item
-        label="HTTP path"
+        label="HTTP 路径"
         name="httpPath"
         required
         rules={[
@@ -79,13 +79,13 @@ export default function DatabricksProperties(props: Props) {
         ]}
       >
         <Input
-          placeholder="e.g. /sql/1.0/endpoints/abc123"
+          placeholder="例如：/sql/1.0/endpoints/abc123"
           disabled={isEditMode}
         />
       </Form.Item>
       {databricksType === DATABRICKS_AUTH_METHOD.token && (
         <Form.Item
-          label="Access token"
+          label="访问令牌"
           name="accessToken"
           required
           rules={[
@@ -95,13 +95,13 @@ export default function DatabricksProperties(props: Props) {
             },
           ]}
         >
-          <Input.Password placeholder="Enter your Databricks personal access token" />
+          <Input.Password placeholder="请输入 Databricks 个人访问令牌" />
         </Form.Item>
       )}
       {databricksType === DATABRICKS_AUTH_METHOD.service_principal && (
         <>
           <Form.Item
-            label="Client ID"
+            label="客户端 ID"
             name="clientId"
             required
             rules={[
@@ -111,10 +111,10 @@ export default function DatabricksProperties(props: Props) {
               },
             ]}
           >
-            <Input placeholder="Enter your service principal’s Client ID" />
+            <Input placeholder="请输入服务主体的 Client ID" />
           </Form.Item>
           <Form.Item
-            label="Client secret"
+            label="客户端密钥"
             name="clientSecret"
             required
             rules={[
@@ -124,10 +124,10 @@ export default function DatabricksProperties(props: Props) {
               },
             ]}
           >
-            <Input.Password placeholder="Enter your service principal’s Client Secret" />
+            <Input.Password placeholder="请输入服务主体的 Client Secret" />
           </Form.Item>
-          <Form.Item label="Azure tenant ID" name="azureTenantId">
-            <Input placeholder="e.g. 72f988bf-86f1-41af-91ab-2d7cd011db47" />
+          <Form.Item label="Azure 租户 ID" name="azureTenantId">
+            <Input placeholder="例如：72f988bf-86f1-41af-91ab-2d7cd011db47" />
           </Form.Item>
         </>
       )}

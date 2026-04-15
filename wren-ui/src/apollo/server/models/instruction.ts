@@ -1,5 +1,4 @@
 export interface InstructionInput {
-  projectId: number;
   instruction: string;
   questions: string[];
   isDefault: boolean;
@@ -7,7 +6,6 @@ export interface InstructionInput {
 
 export interface UpdateInstructionInput {
   id: number;
-  projectId: number;
   instruction: string;
   questions: string[];
   isDefault: boolean;

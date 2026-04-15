@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react';
+import { message } from 'antd';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { buildRuntimeScopeUrl } from '@/apollo/client/runtimeScope';
 
 type useAskingStreamTaskReturn = [
@@ -11,40 +12,61 @@ export default function useAskingStreamTask() {
   const [loading, setLoading] = useState<boolean>(false);
   const [data, setData] = useState<string>('');
 
-  const reset = () => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current?.close();
-      eventSourceRef.current = null;
+  const closeEventSource = useCallback(() => {
+    if (!eventSourceRef.current) {
+      return;
     }
+
+    eventSourceRef.current.close();
+    eventSourceRef.current = null;
+  }, []);
+
+  const reset = useCallback(() => {
+    closeEventSource();
     setData('');
-  };
+    setLoading(false);
+  }, [closeEventSource]);
 
-  const fetchAskingStreamingTask = (queryId: string) => {
-    setLoading(true);
-    reset();
+  const fetchAskingStreamingTask = useCallback(
+    (queryId: string) => {
+      reset();
+      setLoading(true);
 
-    const eventSource = new EventSource(
-      buildRuntimeScopeUrl('/api/ask_task/streaming', { queryId }),
-    );
+      const eventSource = new EventSource(
+        buildRuntimeScopeUrl('/api/ask_task/streaming', { queryId }),
+      );
+      eventSourceRef.current = eventSource;
 
-    eventSource.onmessage = (event) => {
-      const eventData = JSON.parse(event.data);
-      if (eventData.done) {
-        eventSource.close();
-        setLoading(false);
-      } else {
-        setData((state) => state + (eventData?.message || ''));
-      }
+      eventSource.onmessage = (event) => {
+        let eventData: { done?: boolean; message?: string };
+        try {
+          eventData = JSON.parse(event.data);
+        } catch (_error) {
+          message.error('流式结果解析失败，请重试');
+          reset();
+          return;
+        }
+
+        if (eventData.done) {
+          reset();
+        } else {
+          setData((state) => state + (eventData?.message || ''));
+        }
+      };
+
+      eventSource.onerror = () => {
+        message.error('流式连接已中断，请重试');
+        reset();
+      };
+    },
+    [reset],
+  );
+
+  useEffect(() => {
+    return () => {
+      closeEventSource();
     };
-
-    eventSource.onerror = (error) => {
-      console.error(error);
-      eventSource.close();
-      setLoading(false);
-    };
-
-    eventSourceRef.current = eventSource;
-  };
+  }, [closeEventSource]);
 
   return [
     fetchAskingStreamingTask,

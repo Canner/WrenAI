@@ -41,7 +41,7 @@ spec:
           command: ["/bin/sh", "/app/init.sh"]
       containers:
         - name: wren-engine
-          image: ghcr.io/canner/wren-engine:0.4.4
+          image: wren-engine:local
           ports:
             - containerPort: 8080
             - containerPort: 7432

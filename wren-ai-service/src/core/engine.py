@@ -20,10 +20,10 @@ class Engine(metaclass=ABCMeta):
         self,
         sql: str,
         session: aiohttp.ClientSession,
+        runtime_scope_id: str | None = None,
         dry_run: bool = True,
         **kwargs,
-    ) -> Tuple[bool, Optional[Dict[str, Any]]]:
-        ...
+    ) -> Tuple[bool, Optional[Dict[str, Any]]]: ...
 
 
 def clean_generation_result(result: str) -> str:

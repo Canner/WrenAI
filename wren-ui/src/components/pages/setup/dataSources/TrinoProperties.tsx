@@ -12,7 +12,7 @@ export default function TrinoProperties({ mode }: Props) {
   return (
     <>
       <Form.Item
-        label="Display name"
+        label="显示名称"
         name="displayName"
         required
         rules={[
@@ -25,7 +25,7 @@ export default function TrinoProperties({ mode }: Props) {
         <Input />
       </Form.Item>
       <Form.Item
-        label="Host"
+        label="主机地址"
         name="host"
         required
         rules={[
@@ -38,7 +38,7 @@ export default function TrinoProperties({ mode }: Props) {
         <Input placeholder="10.1.1.1" disabled={isEditMode} />
       </Form.Item>
       <Form.Item
-        label="Port"
+        label="端口"
         name="port"
         required
         rules={[
@@ -51,7 +51,7 @@ export default function TrinoProperties({ mode }: Props) {
         <Input disabled={isEditMode} />
       </Form.Item>
       <Form.Item
-        label="Schemas"
+        label="Schema 列表"
         name="schemas"
         required
         rules={[
@@ -61,10 +61,10 @@ export default function TrinoProperties({ mode }: Props) {
           },
         ]}
       >
-        <Input placeholder="catalog.schema1, catalog.schema2" />
+        <Input placeholder="请输入 catalog.schema1, catalog.schema2" />
       </Form.Item>
       <Form.Item
-        label="Username"
+        label="用户名"
         name="username"
         required
         rules={[
@@ -77,7 +77,7 @@ export default function TrinoProperties({ mode }: Props) {
         <Input />
       </Form.Item>
       <Form.Item
-        label="Password"
+        label="密码"
         name="password"
         required
         rules={[
@@ -87,9 +87,9 @@ export default function TrinoProperties({ mode }: Props) {
           },
         ]}
       >
-        <Input.Password placeholder="Input password" />
+        <Input.Password placeholder="请输入密码" />
       </Form.Item>
-      <Form.Item label="Use SSL" name="ssl" valuePropName="checked">
+      <Form.Item label="启用 SSL" name="ssl" valuePropName="checked">
         <Switch />
       </Form.Item>
     </>

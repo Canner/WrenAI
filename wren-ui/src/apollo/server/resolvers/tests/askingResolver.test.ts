@@ -1,6 +1,17 @@
 import { AskingResolver } from '../askingResolver';
+import { ChartType } from '../../models/adaptor';
 
 describe('AskingResolver', () => {
+  const originalBindingMode = process.env.WREN_AUTHORIZATION_BINDING_MODE;
+
+  afterEach(() => {
+    if (originalBindingMode === undefined) {
+      delete process.env.WREN_AUTHORIZATION_BINDING_MODE;
+    } else {
+      process.env.WREN_AUTHORIZATION_BINDING_MODE = originalBindingMode;
+    }
+  });
+
   const runtimeIdentity = {
     projectId: 42,
     workspaceId: 'workspace-1',
@@ -10,16 +21,34 @@ describe('AskingResolver', () => {
     actorUserId: 'user-1',
   };
 
+  const createAuthorizationActor = () => ({
+    principalType: 'user',
+    principalId: runtimeIdentity.actorUserId,
+    workspaceId: runtimeIdentity.workspaceId,
+    workspaceMemberId: 'member-1',
+    workspaceRoleKeys: ['owner'],
+    permissionScopes: ['workspace:*'],
+    isPlatformAdmin: false,
+    platformRoleKeys: [],
+  });
+
   const createContext = (overrides: Record<string, any> = {}) =>
     ({
       runtimeScope: {
         selector: { runtimeScopeId: 'runtime-scope-1' },
         project: { id: runtimeIdentity.projectId, language: 'EN' },
         workspace: { id: runtimeIdentity.workspaceId },
-        knowledgeBase: { id: runtimeIdentity.knowledgeBaseId },
+        knowledgeBase: {
+          id: runtimeIdentity.knowledgeBaseId,
+          defaultKbSnapshotId: runtimeIdentity.kbSnapshotId,
+        },
         kbSnapshot: { id: runtimeIdentity.kbSnapshotId },
         deployHash: runtimeIdentity.deployHash,
         userId: runtimeIdentity.actorUserId,
+      },
+      authorizationActor: createAuthorizationActor(),
+      auditEventRepository: {
+        createOne: jest.fn(),
       },
       telemetry: { sendEvent: jest.fn() },
       projectService: {
@@ -55,11 +84,17 @@ describe('AskingResolver', () => {
         generateThreadRecommendationQuestions: jest
           .fn()
           .mockResolvedValue(undefined),
+        getThreadRecommendationQuestions: jest.fn().mockResolvedValue({
+          status: 'FINISHED',
+          questions: [],
+          error: null,
+        }),
         getThreadProject: jest.fn().mockResolvedValue({
           id: runtimeIdentity.projectId,
           language: 'EN',
         }),
         getResponsesWithThreadScoped: jest.fn().mockResolvedValue([]),
+        listThreads: jest.fn().mockResolvedValue([]),
         updateThreadScoped: jest.fn().mockResolvedValue({ id: 99 }),
         deleteThreadScoped: jest.fn().mockResolvedValue(undefined),
         updateThreadResponseScoped: jest.fn().mockResolvedValue({ id: 199 }),
@@ -87,6 +122,9 @@ describe('AskingResolver', () => {
         cancelAdjustThreadResponseAnswer: jest
           .fn()
           .mockResolvedValue(undefined),
+        rerunAdjustThreadResponseAnswer: jest
+          .fn()
+          .mockResolvedValue({ queryId: 'adjust-1' }),
         getAdjustmentTaskById: jest.fn().mockResolvedValue({
           queryId: 'task-1',
           status: 'FINISHED',
@@ -124,8 +162,39 @@ describe('AskingResolver', () => {
       sqlPairRepository: {
         findOneBy: jest.fn(),
       },
+      knowledgeBaseRepository: {
+        findOneBy: jest.fn(),
+      },
+      kbSnapshotRepository: {
+        findOneBy: jest.fn(),
+      },
       ...overrides,
     }) as any;
+
+  it('rejects asking task creation without knowledge base read permission', async () => {
+    process.env.WREN_AUTHORIZATION_BINDING_MODE = 'binding_only';
+    const resolver = new AskingResolver();
+    const ctx = createContext({
+      authorizationActor: {
+        ...createAuthorizationActor(),
+        workspaceRoleKeys: ['owner'],
+        permissionScopes: ['workspace:*'],
+        grantedActions: [],
+        workspaceRoleSource: 'legacy',
+        platformRoleSource: 'legacy',
+      },
+    });
+
+    await expect(
+      resolver.createAskingTask(
+        null,
+        { data: { question: 'What happened?' } },
+        ctx,
+      ),
+    ).rejects.toThrow('Knowledge base read permission required');
+
+    expect(ctx.askingService.createAskingTask).not.toHaveBeenCalled();
+  });
 
   it('scopes askingTask lookup to the active runtime identity', async () => {
     const resolver = new AskingResolver();
@@ -136,6 +205,17 @@ describe('AskingResolver', () => {
     expect(ctx.askingService.assertAskingTaskScope).toHaveBeenCalledWith(
       'task-1',
       runtimeIdentity,
+    );
+    expect(ctx.auditEventRepository.createOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'knowledge_base.read',
+        resourceType: 'asking_task',
+        resourceId: 'task-1',
+        result: 'allowed',
+        payloadJson: {
+          operation: 'get_asking_task',
+        },
+      }),
     );
   });
 
@@ -148,6 +228,89 @@ describe('AskingResolver', () => {
     expect(
       ctx.projectService.generateProjectRecommendationQuestions,
     ).toHaveBeenCalledWith(runtimeIdentity.projectId, 'runtime-scope-1');
+  });
+
+  it('passes runtimeScopeId when generating thread response charts', async () => {
+    const resolver = new AskingResolver();
+    const ctx = createContext();
+
+    await resolver.generateThreadResponseChart(null, { responseId: 199 }, ctx);
+
+    expect(
+      ctx.askingService.generateThreadResponseChartScoped,
+    ).toHaveBeenCalledWith(
+      199,
+      runtimeIdentity,
+      { language: 'Simplified Chinese' },
+      'runtime-scope-1',
+    );
+  });
+
+  it('passes runtimeScopeId when adjusting thread response charts', async () => {
+    const resolver = new AskingResolver();
+    const ctx = createContext();
+    const data = { chartType: ChartType.BAR };
+
+    await resolver.adjustThreadResponseChart(
+      null,
+      { responseId: 199, data },
+      ctx,
+    );
+
+    expect(
+      ctx.askingService.adjustThreadResponseChartScoped,
+    ).toHaveBeenCalledWith(
+      199,
+      runtimeIdentity,
+      data,
+      { language: 'Simplified Chinese' },
+      'runtime-scope-1',
+    );
+  });
+
+  it('passes runtimeScopeId when adjusting thread response answers', async () => {
+    const resolver = new AskingResolver();
+    const ctx = createContext();
+    const data = {
+      tables: ['orders'],
+      sqlGenerationReasoning: 'need filter',
+    };
+
+    await resolver.adjustThreadResponse(null, { responseId: 199, data }, ctx);
+
+    expect(
+      ctx.askingService.adjustThreadResponseAnswerScoped,
+    ).toHaveBeenCalledWith(
+      199,
+      runtimeIdentity,
+      {
+        runtimeIdentity,
+        tables: ['orders'],
+        sqlGenerationReasoning: 'need filter',
+      },
+      { language: 'Simplified Chinese' },
+      'runtime-scope-1',
+    );
+  });
+
+  it('passes runtimeScopeId when rerunning thread response adjustments', async () => {
+    const resolver = new AskingResolver();
+    const ctx = createContext();
+
+    await resolver.rerunAdjustThreadResponseAnswer(
+      null,
+      { responseId: 199 },
+      ctx,
+    );
+
+    expect(
+      ctx.askingService.rerunAdjustThreadResponseAnswer,
+    ).toHaveBeenCalledWith(
+      199,
+      runtimeIdentity,
+      { language: 'Simplified Chinese' },
+      'runtime-scope-1',
+    );
   });
 
   it('falls back to deployment.projectId when runtime scope project is absent', async () => {
@@ -221,9 +384,8 @@ describe('AskingResolver', () => {
       expect.objectContaining({
         runtimeScopeId: 'runtime-scope-1',
         runtimeIdentity,
-        actorClaims: null,
         threadId: undefined,
-        language: 'English',
+        language: 'Simplified Chinese',
       }),
     );
   });
@@ -254,7 +416,98 @@ describe('AskingResolver', () => {
     expect(ctx.askingService.createAskingTask).toHaveBeenCalledWith(
       { question: 'What happened?' },
       expect.objectContaining({
-        language: 'English',
+        language: 'Simplified Chinese',
+      }),
+    );
+  });
+
+  it('prefers knowledge base language over project language', async () => {
+    const resolver = new AskingResolver();
+    const ctx = createContext({
+      runtimeScope: {
+        selector: { runtimeScopeId: 'runtime-scope-1' },
+        project: { id: runtimeIdentity.projectId, language: 'EN' },
+        knowledgeBase: {
+          id: runtimeIdentity.knowledgeBaseId,
+          language: 'ZH_TW',
+        },
+        workspace: { id: runtimeIdentity.workspaceId },
+        kbSnapshot: { id: runtimeIdentity.kbSnapshotId },
+        deployHash: runtimeIdentity.deployHash,
+        userId: runtimeIdentity.actorUserId,
+      },
+    });
+
+    await resolver.createAskingTask(
+      null,
+      { data: { question: 'What happened?' } },
+      ctx,
+    );
+
+    expect(ctx.askingService.createAskingTask).toHaveBeenCalledWith(
+      { question: 'What happened?' },
+      expect.objectContaining({
+        language: 'Traditional Chinese',
+      }),
+    );
+  });
+
+  it('rejects asking task creation on outdated snapshots', async () => {
+    const resolver = new AskingResolver();
+    const ctx = createContext({
+      runtimeScope: {
+        selector: { runtimeScopeId: 'runtime-scope-old' },
+        project: { id: runtimeIdentity.projectId, language: 'EN' },
+        workspace: { id: runtimeIdentity.workspaceId },
+        knowledgeBase: {
+          id: runtimeIdentity.knowledgeBaseId,
+          defaultKbSnapshotId: runtimeIdentity.kbSnapshotId,
+        },
+        kbSnapshot: { id: 'snapshot-old' },
+        deployHash: 'deploy-old',
+        userId: runtimeIdentity.actorUserId,
+      },
+    });
+
+    await expect(
+      resolver.createAskingTask(
+        null,
+        { data: { question: 'What happened?' } },
+        ctx,
+      ),
+    ).rejects.toThrow('This snapshot is outdated and cannot be executed');
+    expect(ctx.askingService.createAskingTask).not.toHaveBeenCalled();
+  });
+
+  it('returns sample suggested questions from knowledge base sample dataset', async () => {
+    const resolver = new AskingResolver();
+    const ctx = createContext({
+      runtimeScope: {
+        selector: { runtimeScopeId: 'runtime-scope-1' },
+        project: { id: runtimeIdentity.projectId, language: 'EN' },
+        knowledgeBase: {
+          id: runtimeIdentity.knowledgeBaseId,
+          sampleDataset: 'ECOMMERCE',
+        },
+        workspace: { id: runtimeIdentity.workspaceId },
+        kbSnapshot: { id: runtimeIdentity.kbSnapshotId },
+        deployHash: runtimeIdentity.deployHash,
+        userId: runtimeIdentity.actorUserId,
+      },
+    });
+
+    const result = await resolver.getSuggestedQuestions(null, {}, ctx);
+
+    expect(result.questions.length).toBeGreaterThan(0);
+    expect(ctx.auditEventRepository.createOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'knowledge_base.read',
+        resourceType: 'knowledge_base',
+        resourceId: runtimeIdentity.knowledgeBaseId,
+        result: 'allowed',
+        payloadJson: {
+          operation: 'get_suggested_questions',
+        },
       }),
     );
   });
@@ -359,6 +612,149 @@ describe('AskingResolver', () => {
     expect(
       ctx.askingService.getInstantRecommendedQuestions,
     ).toHaveBeenCalledWith('instant-1', runtimeIdentity);
+    expect(ctx.auditEventRepository.createOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'knowledge_base.read',
+        resourceType: 'asking_task',
+        resourceId: 'instant-1',
+        result: 'allowed',
+        payloadJson: {
+          operation: 'get_instant_recommended_questions',
+        },
+      }),
+    );
+  });
+
+  it('records access audit when reading a thread', async () => {
+    const resolver = new AskingResolver();
+    const ctx = createContext({
+      askingService: {
+        ...createContext().askingService,
+        assertThreadScope: jest.fn().mockResolvedValue({
+          id: 12,
+          summary: 'thread summary',
+          workspaceId: runtimeIdentity.workspaceId,
+          knowledgeBaseId: runtimeIdentity.knowledgeBaseId,
+          knowledgeBaseIds: [runtimeIdentity.knowledgeBaseId],
+          selectedSkillIds: [],
+        }),
+        getResponsesWithThreadScoped: jest.fn().mockResolvedValue([
+          {
+            id: 301,
+            threadId: 12,
+            question: 'What happened?',
+            sql: 'select 1',
+            askingTaskId: 'task-1',
+            breakdownDetail: null,
+            answerDetail: null,
+            chartDetail: null,
+            adjustment: null,
+            viewId: null,
+          },
+        ]),
+      },
+    });
+
+    await resolver.getThread(null, { threadId: 12 }, ctx);
+
+    expect(ctx.askingService.assertThreadScope).toHaveBeenCalledWith(
+      12,
+      runtimeIdentity,
+    );
+    expect(ctx.auditEventRepository.createOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'knowledge_base.read',
+        resourceType: 'thread',
+        resourceId: '12',
+        result: 'allowed',
+        payloadJson: {
+          operation: 'get_thread',
+        },
+      }),
+    );
+  });
+
+  it('records access audit when reading a response and its preview data', async () => {
+    const resolver = new AskingResolver();
+    const ctx = createContext();
+
+    await resolver.getResponse(null, { responseId: 199 }, ctx);
+    await resolver.previewData(
+      null,
+      { where: { responseId: 199, limit: 10 } },
+      ctx,
+    );
+
+    expect(ctx.askingService.getResponseScoped).toHaveBeenCalledWith(
+      199,
+      runtimeIdentity,
+    );
+    expect(ctx.askingService.previewDataScoped).toHaveBeenCalledWith(
+      199,
+      runtimeIdentity,
+      10,
+    );
+    expect(ctx.auditEventRepository.createOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'knowledge_base.read',
+        resourceType: 'thread_response',
+        resourceId: '199',
+        result: 'allowed',
+        payloadJson: {
+          operation: 'get_response',
+        },
+      }),
+    );
+    expect(ctx.auditEventRepository.createOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'knowledge_base.read',
+        resourceType: 'thread_response',
+        resourceId: '199',
+        result: 'allowed',
+        payloadJson: {
+          operation: 'preview_data',
+        },
+      }),
+    );
+  });
+
+  it('records access audit when reading adjustment task and thread recommendations', async () => {
+    const resolver = new AskingResolver();
+    const ctx = createContext();
+
+    await resolver.getAdjustmentTask(null, { taskId: 'task-1' }, ctx);
+    await resolver.getThreadRecommendationQuestions(
+      null,
+      { threadId: 12 },
+      ctx,
+    );
+
+    expect(ctx.askingService.getAdjustmentTask).toHaveBeenCalledWith('task-1');
+    expect(
+      ctx.askingService.getThreadRecommendationQuestions,
+    ).toHaveBeenCalledWith(12);
+    expect(ctx.auditEventRepository.createOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'knowledge_base.read',
+        resourceType: 'asking_task',
+        resourceId: 'task-1',
+        result: 'allowed',
+        payloadJson: {
+          operation: 'get_adjustment_task',
+        },
+      }),
+    );
+    expect(ctx.auditEventRepository.createOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'knowledge_base.read',
+        resourceType: 'thread',
+        resourceId: '12',
+        result: 'allowed',
+        payloadJson: {
+          operation: 'get_thread_recommendation_questions',
+        },
+      }),
+    );
   });
 
   it('hides candidate views and sql pairs outside the active project', async () => {
@@ -417,7 +813,8 @@ describe('AskingResolver', () => {
       runtimeIdentity,
       20,
     );
-    expect(result.candidates).toEqual([
+    expect(result).not.toBeNull();
+    expect(result?.candidates).toEqual([
       expect.objectContaining({
         view: null,
         sqlPair: null,

@@ -7,6 +7,24 @@ import { Model, ModelColumn, RelationInfo } from '../repositories';
 const logger = getLogger('DataSourceSchemaDetector');
 logger.level = 'debug';
 
+const isSchemaChangeType = (value: string): value is SchemaChangeType =>
+  Object.values(SchemaChangeType).includes(value as SchemaChangeType);
+
+const parseLineage = (lineage?: string): number[] => {
+  if (!lineage) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(lineage);
+    return Array.isArray(parsed)
+      ? parsed.filter((value): value is number => typeof value === 'number')
+      : [];
+  } catch {
+    return [];
+  }
+};
+
 export type DataSourceSchema = {
   name: string;
   columns: {
@@ -109,7 +127,12 @@ export default class DataSourceSchemaDetector
   }
 
   public async resolveSchemaChange(type: string) {
-    const schemaChangeType = camelCase(type) as SchemaChangeType;
+    const schemaChangeTypeCandidate = camelCase(type);
+    if (!isSchemaChangeType(schemaChangeTypeCandidate)) {
+      throw new Error('Resolved scheme change type is not supported.');
+    }
+
+    const schemaChangeType = schemaChangeTypeCandidate;
     const supportedTypes = [
       SchemaChangeType.DELETED_TABLES,
       SchemaChangeType.DELETED_COLUMNS,
@@ -122,10 +145,14 @@ export default class DataSourceSchemaDetector
       await this.ctx.schemaChangeRepository.findLastSchemaChange(
         this.projectId,
       );
-    const changes = lastSchemaChange?.change[schemaChangeType];
-    const isResolved = lastSchemaChange?.resolve[schemaChangeType];
+    if (!lastSchemaChange) {
+      throw new Error('Schema change not found.');
+    }
 
-    if (isResolved) {
+    const changes = lastSchemaChange.change[schemaChangeType] || [];
+    const isResolved = lastSchemaChange.resolve[schemaChangeType];
+
+    if (isResolved || changes.length === 0) {
       throw new Error(
         `Schema change "${schemaChangeType}" has nothing to resolve.`,
       );
@@ -163,13 +190,15 @@ export default class DataSourceSchemaDetector
       affectedResources.map(async (resource) => {
         // both DELETED_TABLES and DELETED_COLUMNS need to remove all affected calculated fields
         logger.debug(
-          `Start to remove all affected calculated fields "${resource.calculatedFields.map(
-            (column) => `${column.displayName} (${column.referenceName})`,
-          )}".`,
+          `Start to remove all affected calculated fields "${resource.calculatedFields
+            .map((column) => `${column.displayName} (${column.referenceName})`)
+            .join(', ')}".`,
         );
 
         const columnIds = resource.calculatedFields.map((column) => column.id);
-        await this.ctx.modelColumnRepository.deleteAllByColumnIds(columnIds);
+        if (columnIds.length > 0) {
+          await this.ctx.modelColumnRepository.deleteAllByColumnIds(columnIds);
+        }
 
         // remove columns if SchemaChangeType is DELETED_COLUMNS
         if (schemaChangeType === SchemaChangeType.DELETED_COLUMNS) {
@@ -178,30 +207,32 @@ export default class DataSourceSchemaDetector
           );
 
           logger.debug(
-            `Start to remove columns "${affectedColumnNames}" from model "${resource.referenceName}".`,
+            `Start to remove columns "${affectedColumnNames.join(', ')}" from model "${resource.referenceName}".`,
           );
 
-          await this.ctx.modelColumnRepository.deleteAllBySourceColumnNames(
-            resource.modelId,
-            affectedColumnNames,
-          );
+          if (affectedColumnNames.length > 0) {
+            await this.ctx.modelColumnRepository.deleteAllBySourceColumnNames(
+              resource.modelId,
+              affectedColumnNames,
+            );
+          }
         }
-        return;
       }),
     );
 
     // remove tables if SchemaChangeType is DELETED_TABLES
     if (schemaChangeType === SchemaChangeType.DELETED_TABLES) {
-      // delete models
       const affectedTableNames = changes.map((table) => table.name);
 
       logger.debug(
-        `Start to remove tables "${affectedTableNames}" from models.`,
+        `Start to remove tables "${affectedTableNames.join(', ')}" from models.`,
       );
 
-      await this.ctx.modelRepository.deleteAllBySourceTableNames(
-        affectedTableNames,
-      );
+      if (affectedTableNames.length > 0) {
+        await this.ctx.modelRepository.deleteAllBySourceTableNames(
+          affectedTableNames,
+        );
+      }
     }
 
     // update resolve flag
@@ -221,7 +252,7 @@ export default class DataSourceSchemaDetector
    *    - calculated fields which were affected by affected relationships
    */
   public getAffectedResources(
-    changes: DataSourceSchema[],
+    changes: DataSourceSchema[] = [],
     {
       models,
       modelColumns,
@@ -231,23 +262,25 @@ export default class DataSourceSchemaDetector
       modelColumns: ModelColumn[];
       modelRelationships: RelationInfo[];
     },
-  ) {
-    const affectedModels = models.filter(
-      (model) =>
-        changes.findIndex((table) => table.name === model.sourceTableName) !==
-        -1,
+  ): AffectedResources[] {
+    const affectedModels = models.filter((model) =>
+      changes.some((table) => table.name === model.sourceTableName),
     );
 
-    const affectedResources = affectedModels.map((model) => {
-      const affectedColumns = changes.find(
-        (table) => table.name === model.sourceTableName,
-      ).columns;
+    return affectedModels.map((model) => {
+      const affectedColumns =
+        changes.find((table) => table.name === model.sourceTableName)
+          ?.columns || [];
 
       const allCalculatedFields = modelColumns.filter(
         (column) => column.isCalculated,
       );
 
-      const affectedMaterials = affectedColumns.reduce(
+      const affectedMaterials = affectedColumns.reduce<{
+        columns: AffectedResources['columns'];
+        relationships: AffectedResources['relationships'];
+        calculatedFields: ModelColumn[];
+      }>(
         (result, column) => {
           const affectedColumn = modelColumns.find(
             (modelColumn) =>
@@ -257,16 +290,21 @@ export default class DataSourceSchemaDetector
 
           result.columns.push({
             sourceColumnName: column.name,
-            displayName: affectedColumn.displayName,
+            displayName: affectedColumn?.displayName || column.name,
             type: column.type,
           });
+
+          if (!affectedColumn) {
+            return result;
+          }
 
           // collect affected calculated fields if it's target column
           const affectedCalculatedFieldsByColumnId = allCalculatedFields.filter(
             (calculatedField) => {
-              const lineage = JSON.parse(calculatedField.lineage);
+              const lineage = parseLineage(calculatedField.lineage);
               return (
-                lineage && lineage[lineage.length - 1] === affectedColumn.id
+                lineage.length > 0 &&
+                lineage[lineage.length - 1] === affectedColumn.id
               );
             },
           );
@@ -274,15 +312,12 @@ export default class DataSourceSchemaDetector
           result.calculatedFields.push(...affectedCalculatedFieldsByColumnId);
 
           // collect affected relationships
-          const affectedRelationships = modelRelationships
-            .map((relationship) =>
+          const affectedRelationships = modelRelationships.filter(
+            (relationship) =>
               [relationship.fromColumnId, relationship.toColumnId].includes(
                 affectedColumn.id,
-              )
-                ? relationship
-                : null,
-            )
-            .filter((relationship) => !!relationship);
+              ),
+          );
 
           affectedRelationships.forEach((relationship) => {
             const referenceName =
@@ -291,11 +326,11 @@ export default class DataSourceSchemaDetector
                 : relationship.fromModelName;
 
             const displayName = models.find(
-              (model) => model.referenceName === referenceName,
+              (targetModel) => targetModel.referenceName === referenceName,
             )?.displayName;
 
             result.relationships.push({
-              displayName,
+              displayName: displayName || referenceName,
               id: relationship.id,
               referenceName,
             });
@@ -303,11 +338,11 @@ export default class DataSourceSchemaDetector
             // collect affected calculated fields if the relationship is in use
             const affectedCalculatedFieldsByRelationshipId =
               allCalculatedFields.filter((calculatedField) => {
-                const lineage = JSON.parse(calculatedField.lineage);
+                const lineage = parseLineage(calculatedField.lineage);
 
                 // pop the column ID from the lineage
                 lineage.pop();
-                return lineage && lineage.includes(relationship.id);
+                return lineage.includes(relationship.id);
               });
 
             result.calculatedFields.push(
@@ -317,7 +352,11 @@ export default class DataSourceSchemaDetector
 
           return result;
         },
-        { columns: [], relationships: [], calculatedFields: [] },
+        {
+          columns: [],
+          relationships: [],
+          calculatedFields: [],
+        },
       );
 
       // unique calculated fields by id since it can be duplicated
@@ -332,74 +371,83 @@ export default class DataSourceSchemaDetector
         calculatedFields,
       };
     });
-
-    return affectedResources;
   }
 
-  private async getDiffSchema() {
+  private async getDiffSchema(): Promise<DataSourceSchemaChange | null> {
     logger.info('Start to detect Data Source Schema changes.');
     const currentSchema = await this.getCurrentSchema();
     const latestSchema = await this.getLatestSchema();
 
-    const diffSchema = currentSchema.reduce((result, currentTable) => {
-      const lastestTable = latestSchema.find(
-        (table) => table.name === currentTable.name,
-      );
-      // If the table is not found in the latest schema, it means the table has been deleted.
-      if (!lastestTable) {
-        result[SchemaChangeType.DELETED_TABLES] = [
-          ...(result[SchemaChangeType.DELETED_TABLES] || []),
-          currentTable,
-        ];
-        return result;
-      }
+    const diffSchema = currentSchema.reduce<DataSourceSchemaChange>(
+      (result, currentTable) => {
+        const latestTable = latestSchema.find(
+          (table) => table.name === currentTable.name,
+        );
 
-      // If the table is found in the latest schema, we need to diff the columns.
-      const diffColumns = differenceWith(
-        currentTable.columns,
-        lastestTable.columns,
-        isEqual,
-      );
-      if (diffColumns.length > 0) {
-        const deletedColumnChange = { name: currentTable.name, columns: [] };
-        const modifiedColumnChange = { name: currentTable.name, columns: [] };
+        // If the table is not found in the latest schema, it means the table has been deleted.
+        if (!latestTable) {
+          result[SchemaChangeType.DELETED_TABLES] = [
+            ...(result[SchemaChangeType.DELETED_TABLES] || []),
+            currentTable,
+          ];
+          return result;
+        }
 
-        for (const currentColumn of diffColumns) {
-          const latestColumn = lastestTable.columns.find(
-            (column) => column.name === currentColumn.name,
-          );
-          // If the column is not found in the latest schema, it means the column has been deleted.
-          if (!latestColumn) {
-            deletedColumnChange.columns.push(currentColumn);
-            continue;
+        // If the table is found in the latest schema, we need to diff the columns.
+        const diffColumns = differenceWith(
+          currentTable.columns,
+          latestTable.columns,
+          isEqual,
+        );
+
+        if (diffColumns.length > 0) {
+          const deletedColumnChange: DataSourceSchema = {
+            name: currentTable.name,
+            columns: [],
+          };
+          const modifiedColumnChange: DataSourceSchema = {
+            name: currentTable.name,
+            columns: [],
+          };
+
+          for (const currentColumn of diffColumns) {
+            const latestColumn = latestTable.columns.find(
+              (column) => column.name === currentColumn.name,
+            );
+            // If the column is not found in the latest schema, it means the column has been deleted.
+            if (!latestColumn) {
+              deletedColumnChange.columns.push(currentColumn);
+              continue;
+            }
+            // If the column is found in the latest schema, it means the column has been modified.
+            // save latest column as modified column
+            modifiedColumnChange.columns.push(latestColumn);
           }
-          // If the column is found in the latest schema, it means the column has been modified.
-          // save latest column as modified column
-          modifiedColumnChange.columns.push(latestColumn);
+
+          // If there are any deleted or modified columns, we need to add them to the result.
+          if (deletedColumnChange.columns.length > 0) {
+            result[SchemaChangeType.DELETED_COLUMNS] = [
+              ...(result[SchemaChangeType.DELETED_COLUMNS] || []),
+              deletedColumnChange,
+            ];
+          }
+          if (modifiedColumnChange.columns.length > 0) {
+            result[SchemaChangeType.MODIFIED_COLUMNS] = [
+              ...(result[SchemaChangeType.MODIFIED_COLUMNS] || []),
+              modifiedColumnChange,
+            ];
+          }
         }
 
-        // If there are any deleted or modified columns, we need to add them to the result.
-        if (deletedColumnChange.columns.length > 0) {
-          result[SchemaChangeType.DELETED_COLUMNS] = [
-            ...(result[SchemaChangeType.DELETED_COLUMNS] || []),
-            deletedColumnChange,
-          ];
-        }
-        if (modifiedColumnChange.columns.length > 0) {
-          result[SchemaChangeType.MODIFIED_COLUMNS] = [
-            ...(result[SchemaChangeType.MODIFIED_COLUMNS] || []),
-            modifiedColumnChange,
-          ];
-        }
-      }
-
-      return result;
-    }, {});
+        return result;
+      },
+      {},
+    );
 
     if (!isEmpty(diffSchema)) {
       logger.debug('Diff Schema:', JSON.stringify(diffSchema));
       logger.info('Data Source Schema has changed.');
-      return diffSchema as DataSourceSchemaChange;
+      return diffSchema;
     }
 
     logger.info('No changes in Data Source Schema.');
@@ -407,7 +455,9 @@ export default class DataSourceSchemaDetector
   }
 
   private async addSchemaChange(diffSchema: DataSourceSchemaChange) {
-    const getResolveState = (change) => (!!change ? false : undefined);
+    const getResolveState = (
+      change?: DataSourceSchema[] | null,
+    ): boolean | undefined => (change ? false : undefined);
 
     const lastSchemaChange =
       await this.ctx.schemaChangeRepository.findLastSchemaChange(
@@ -444,53 +494,48 @@ export default class DataSourceSchemaDetector
     const modelIds = models.map((model) => model.id);
     const modelColumns =
       await this.ctx.modelColumnRepository.findColumnsByModelIds(modelIds);
-    const result = models.map((model) => {
-      return {
-        name: model.sourceTableName,
-        columns: modelColumns
-          .filter(
-            (column) => column.modelId === model.id && !column.isCalculated,
-          )
-          .map((column) => ({
-            name: column.sourceColumnName,
-            type: column.type,
-          })),
-      };
-    });
-    return result;
+    return models.map((model) => ({
+      name: model.sourceTableName,
+      columns: modelColumns
+        .filter((column) => column.modelId === model.id && !column.isCalculated)
+        .map((column) => ({
+          name: column.sourceColumnName,
+          type: column.type,
+        })),
+    }));
   }
 
   private async getLatestSchema(): Promise<DataSourceSchema[]> {
     const project = await this.ctx.projectRepository.findOneBy({
       id: this.projectId,
     });
+    if (!project) {
+      throw new Error('Project not found');
+    }
+
     const latestDataSourceTables =
       await this.ctx.projectService.getProjectDataSourceTables(project);
-    const result = latestDataSourceTables.map((table) => {
-      return {
-        name: table.name,
-        columns: table.columns.map((column) => {
-          return {
-            name: column.name,
-            type: column.type,
-          };
-        }),
-      };
-    });
-    return result;
+    return latestDataSourceTables.map((table) => ({
+      name: table.name,
+      columns: table.columns.map((column) => ({
+        name: column.name,
+        type: column.type,
+      })),
+    }));
   }
 
   private async updateResolveToSchemaChange(
     lastSchemaChange: SchemaChange,
     schemaChangeTypes: SchemaChangeType[],
   ) {
+    const resolvePatch = schemaChangeTypes.reduce<
+      Partial<DataSourceSchemaResolve>
+    >((result, type) => ({ ...result, [type]: true }), {});
+
     await this.ctx.schemaChangeRepository.updateOne(lastSchemaChange.id, {
       resolve: {
         ...lastSchemaChange.resolve,
-        ...schemaChangeTypes.reduce(
-          (result, type) => ({ ...result, [type]: true }),
-          {},
-        ),
+        ...resolvePatch,
       },
     });
     logger.info(`Schema change "${schemaChangeTypes}" resolved successfully.`);

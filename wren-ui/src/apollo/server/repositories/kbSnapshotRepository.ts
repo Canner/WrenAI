@@ -17,8 +17,10 @@ export interface KBSnapshot {
   versionLabel?: string | null;
   deployHash: string;
   manifestRef?: Record<string, any> | null;
-  legacyProjectId?: number | null;
+  bridgeProjectId?: number | null;
   status: string;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
 }
 
 export interface IKBSnapshotRepository extends IBasicRepository<KBSnapshot> {}
@@ -28,6 +30,7 @@ export class KBSnapshotRepository
   implements IKBSnapshotRepository
 {
   private readonly jsonColumns = ['manifestRef'];
+  private readonly removedProjectBridgeColumnMatcher = 'legacyprojectid';
 
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'kb_snapshot' });
@@ -45,8 +48,17 @@ export class KBSnapshotRepository
       }
       return value;
     });
+    const normalizedData = {
+      ...(transformedData as Record<string, any>),
+    };
 
-    return transformedData as KBSnapshot;
+    for (const key of Object.keys(normalizedData)) {
+      if (key.toLowerCase() === this.removedProjectBridgeColumnMatcher) {
+        delete normalizedData[key];
+      }
+    }
+
+    return normalizedData as KBSnapshot;
   };
 
   protected override transformToDBData = (data: Partial<KBSnapshot>) => {
@@ -54,7 +66,12 @@ export class KBSnapshotRepository
       throw new Error('Unexpected dbdata');
     }
 
-    const transformedData = mapValues(data, (value, key) => {
+    const normalizedData = {
+      ...(data as Record<string, any>),
+    };
+    delete normalizedData.bridgeProjectId;
+
+    const transformedData = mapValues(normalizedData, (value, key) => {
       if (this.jsonColumns.includes(key) && typeof value !== 'string') {
         return JSON.stringify(value);
       }

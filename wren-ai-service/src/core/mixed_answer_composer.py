@@ -13,20 +13,6 @@ class MixedAnswerComposer:
             },
         }
 
-    def compose_skill(
-        self,
-        result: dict[str, Any],
-        *,
-        skill_result: Any,
-    ) -> dict[str, Any]:
-        result["skill_result"] = (
-            skill_result.model_dump(mode="json", by_alias=True)
-            if hasattr(skill_result, "model_dump")
-            else skill_result
-        )
-        result["metadata"]["type"] = "SKILL"
-        return result
-
     def compose_general(
         self,
         result: dict[str, Any],

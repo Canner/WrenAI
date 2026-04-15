@@ -108,7 +108,7 @@ class AskFeedbackService:
         allow_sql_knowledge_retrieval = self._allow_sql_knowledge_retrieval
 
         try:
-            runtime_scope_id = ask_feedback_request.resolve_project_id()
+            runtime_scope_id = ask_feedback_request.resolve_runtime_scope_id()
             if not self._is_stopped(query_id, self._ask_feedback_results):
                 self._ask_feedback_results[query_id] = AskFeedbackResultResponse(
                     status="searching",
@@ -122,15 +122,15 @@ class AskFeedbackService:
                 ) = await asyncio.gather(
                     self._pipelines["db_schema_retrieval"].run(
                         tables=ask_feedback_request.tables,
-                        project_id=runtime_scope_id,
+                        runtime_scope_id=runtime_scope_id,
                     ),
                     self._pipelines["sql_pairs_retrieval"].run(
                         query=ask_feedback_request.question,
-                        project_id=runtime_scope_id,
+                        runtime_scope_id=runtime_scope_id,
                     ),
                     self._pipelines["instructions_retrieval"].run(
                         query=ask_feedback_request.question,
-                        project_id=runtime_scope_id,
+                        runtime_scope_id=runtime_scope_id,
                         scope="sql",
                     ),
                 )
@@ -138,14 +138,14 @@ class AskFeedbackService:
                 if allow_sql_functions_retrieval:
                     sql_functions = await self._pipelines[
                         "sql_functions_retrieval"
-                    ].run(project_id=runtime_scope_id)
+                    ].run(runtime_scope_id=runtime_scope_id)
                 else:
                     sql_functions = []
 
                 if allow_sql_knowledge_retrieval:
                     sql_knowledge = await self._pipelines[
                         "sql_knowledge_retrieval"
-                    ].run(project_id=runtime_scope_id)
+                    ].run(runtime_scope_id=runtime_scope_id)
 
                 # Extract results from completed tasks
                 _retrieval_result = retrieval_task.get(
@@ -175,7 +175,7 @@ class AskFeedbackService:
                     contexts=table_ddls,
                     sql_generation_reasoning=ask_feedback_request.sql_generation_reasoning,
                     sql=ask_feedback_request.sql,
-                    project_id=runtime_scope_id,
+                    runtime_scope_id=runtime_scope_id,
                     sql_samples=sql_samples,
                     instructions=instructions,
                     has_calculated_field=has_calculated_field,
@@ -235,7 +235,7 @@ class AskFeedbackService:
                                 if allow_sql_diagnosis
                                 else error_message,
                             },
-                            project_id=runtime_scope_id,
+                            runtime_scope_id=runtime_scope_id,
                             sql_functions=sql_functions,
                             sql_knowledge=sql_knowledge,
                         )

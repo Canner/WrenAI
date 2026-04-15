@@ -5,11 +5,11 @@
     "allowJs": true,
     "skipLibCheck": true,
     "skipDefaultLibCheck": true,
-    "strict": false,
+    "strict": true,
     "noEmit": true,
     "esModuleInterop": true,
     "module": "esnext",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "preserve",
@@ -25,7 +25,7 @@
     "paths": {
       "@/*": ["./src/*"],
       "@server": ["./src/apollo/server/index.ts"],
-      "@server/*": ["./src/apollo/server/*"],
+      "@server/*": ["./src/apollo/server/*"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

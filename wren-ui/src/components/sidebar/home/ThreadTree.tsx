@@ -59,8 +59,9 @@ export default function ThreadTree(props: Props) {
   } = props;
 
   const getThreadGroupNode = createTreeGroupNode({
-    groupName: 'Threads',
+    groupName: '历史对话',
     groupKey: 'threads',
+    emptyLabel: '暂无历史对话',
     actions: [
       {
         key: 'new-thread',
@@ -68,9 +69,9 @@ export default function ThreadTree(props: Props) {
           <GroupActionButton
             size="small"
             icon={<PlusOutlined />}
-            onClick={() => runtimeScopeNavigation.push(Path.Home)}
+            onClick={() => runtimeScopeNavigation.pushWorkspace(Path.Home)}
           >
-            New
+            新建
           </GroupActionButton>
         ),
       },

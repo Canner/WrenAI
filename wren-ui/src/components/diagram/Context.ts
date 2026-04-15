@@ -10,10 +10,12 @@ type ContextProps = {
   onMoreClick: (data: ClickPayload) => void;
   onNodeClick: (data: ClickPayload) => void;
   onAddClick: (data: ClickPayload) => void;
+  readOnly?: boolean;
 } | null;
 
 export const DiagramContext = createContext<ContextProps>({
   onMoreClick: () => {},
   onNodeClick: () => {},
   onAddClick: () => {},
+  readOnly: false,
 });

@@ -22,9 +22,12 @@ export const createLineageSelectorNameValidator =
 
 const makeCheckAllowType =
   (functions: ExpressionName[], allowTypes: COLUMN_TYPE[]) =>
-  (expression: ExpressionName, value) => {
+  (
+    expression: ExpressionName,
+    value: { nodeType?: NODE_TYPE; type?: string } | null | undefined,
+  ) => {
     const isField = [NODE_TYPE.FIELD, NODE_TYPE.CALCULATED_FIELD].includes(
-      value.nodeType,
+      value?.nodeType || ('' as NODE_TYPE),
     );
 
     // ignore if not a column or not a string function
@@ -32,7 +35,9 @@ const makeCheckAllowType =
       return true;
     }
 
-    return allowTypes.includes(value.type.toLocaleUpperCase());
+    return allowTypes.includes(
+      (value?.type || '').toLocaleUpperCase() as COLUMN_TYPE,
+    );
   };
 
 export const checkStringFunctionAllowType = makeCheckAllowType(

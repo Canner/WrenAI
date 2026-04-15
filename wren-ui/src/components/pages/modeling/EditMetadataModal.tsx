@@ -1,6 +1,7 @@
 import { Modal, Form } from 'antd';
 import { ModalAction } from '@/hooks/useModalAction';
 import { NODE_TYPE } from '@/utils/enum';
+import { handleFormSubmitError } from '@/utils/errorHandler';
 import { EditableContext } from '@/components/EditableWrapper';
 import EditModelMetadata, {
   Props as EditModelProps,
@@ -22,6 +23,10 @@ const formNamespace = 'metadata';
 export default function EditMetadataModal(props: Props) {
   const { visible, defaultValue, loading, onSubmit, onClose } = props;
   const { nodeType } = defaultValue || {};
+  const { formNamespace: _modelFormNamespace, ...modelMetadataProps } =
+    ((defaultValue as EditModelProps) || {}) as EditModelProps;
+  const { formNamespace: _viewFormNamespace, ...viewMetadataProps } =
+    ((defaultValue as EditViewProps) || {}) as EditViewProps;
 
   const [form] = Form.useForm();
 
@@ -31,18 +36,21 @@ export default function EditMetadataModal(props: Props) {
       .then(async () => {
         // Get the saved metadata values to submit if there is no editing failed
         const values = form.getFieldValue(formNamespace);
-        await onSubmit({ data: values, nodeType });
+        await onSubmit?.({ data: values, nodeType });
         onClose();
       })
-      .catch(console.error);
+      .catch((error) => {
+        handleFormSubmitError(error, '保存元数据失败，请稍后重试。');
+      });
   };
 
   return (
     <Modal
-      title="Edit metadata"
+      title="编辑元数据"
       width={800}
       visible={visible}
-      okText="Submit"
+      okText="保存"
+      cancelText="取消"
       onOk={submit}
       onCancel={onClose}
       confirmLoading={loading}
@@ -56,14 +64,14 @@ export default function EditMetadataModal(props: Props) {
           {nodeType === NODE_TYPE.MODEL && (
             <EditModelMetadata
               formNamespace={formNamespace}
-              {...(defaultValue as EditModelProps)}
+              {...modelMetadataProps}
             />
           )}
 
           {nodeType === NODE_TYPE.VIEW && (
             <EditViewMetadata
               formNamespace={formNamespace}
-              {...(defaultValue as EditViewProps)}
+              {...viewMetadataProps}
             />
           )}
         </Form>

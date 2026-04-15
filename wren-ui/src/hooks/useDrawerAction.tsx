@@ -10,24 +10,28 @@ export interface DrawerAction<TData = any> {
   defaultValue?: TData;
 }
 
-export default function useDrawerAction() {
+export default function useDrawerAction<TData = any>() {
   const [visible, setVisible] = useState(false);
   const [formMode, setFormMode] = useState(FORM_MODE.CREATE);
-  const [defaultValue, setDefaultValue] = useState(null);
+  const [defaultValue, setDefaultValue] = useState<TData | undefined>(
+    undefined,
+  );
 
-  const openDrawer = (value?: any) => {
-    value && setDefaultValue(value);
-    value && setFormMode(FORM_MODE.EDIT);
+  const openDrawer = (value?: TData) => {
+    if (value !== undefined && value !== null) {
+      setDefaultValue(value);
+      setFormMode(FORM_MODE.EDIT);
+    }
     setVisible(true);
   };
 
   const closeDrawer = () => {
     setVisible(false);
-    setDefaultValue(null);
+    setDefaultValue(undefined);
     setFormMode(FORM_MODE.CREATE);
   };
 
-  const updateState = (value?: any) => {
+  const updateState = (value?: TData) => {
     setDefaultValue(value);
   };
 

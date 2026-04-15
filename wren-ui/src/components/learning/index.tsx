@@ -1,12 +1,14 @@
 import {
   ComponentRef,
-  MutableRefObject,
+  RefObject,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from 'react';
 import { sortBy } from 'lodash';
+import { message } from 'antd';
 import styled from 'styled-components';
 import ReadOutlined from '@ant-design/icons/ReadOutlined';
 import RightOutlined from '@ant-design/icons/RightOutlined';
@@ -15,13 +17,15 @@ import LearningGuide from '@/components/learning/guide';
 import { LEARNING } from './guide/utils';
 import { useRouter } from 'next/router';
 import { Path } from '@/utils/enum';
-import {
-  useLearningRecordQuery,
-  useSaveLearningRecordMutation,
-} from '@/apollo/client/graphql/learning.generated';
 import { nextTick } from '@/utils/time';
 import { ProjectLanguage } from '@/apollo/client/graphql/__types__';
-import { useUpdateCurrentProjectMutation } from '@/apollo/client/graphql/settings.generated';
+import { Dispatcher } from '@/components/learning/guide/utils';
+import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
+import {
+  fetchLearningRecord,
+  saveLearningRecord as saveLearningRecordByRest,
+} from '@/utils/learningRest';
+import { updateCurrentProjectLanguage } from '@/utils/settingsRest';
 
 const Progress = styled.div<{ total: number; current: number }>`
   display: block;
@@ -92,7 +96,7 @@ const ListTemplate = (props: IterableComponent<LearningConfig>) => {
   return (
     <List
       className="select-none"
-      finished={finished}
+      finished={Boolean(finished)}
       onClick={onClick}
       as={as}
       {...hrefAttrs}
@@ -114,10 +118,10 @@ interface LearningConfig {
 }
 
 const getData = (
-  $guide: MutableRefObject<ComponentRef<typeof LearningGuide>>,
+  $guide: RefObject<ComponentRef<typeof LearningGuide>>,
   pathname: string,
   saveRecord: (id: LEARNING) => Promise<void>,
-  saveLanguage: (value: ProjectLanguage) => Promise<void>,
+  saveLanguage: NonNullable<Dispatcher['onSaveLanguage']>,
 ) => {
   const getDispatcher = (id: LEARNING) => ({
     onDone: () => saveRecord(id),
@@ -127,7 +131,7 @@ const getData = (
   const modeling = [
     {
       id: LEARNING.DATA_MODELING_GUIDE,
-      title: 'Data modeling guide',
+      title: '数据建模指南',
       onClick: () =>
         $guide?.current?.play(
           LEARNING.DATA_MODELING_GUIDE,
@@ -136,25 +140,25 @@ const getData = (
     },
     {
       id: LEARNING.CREATING_MODEL,
-      title: 'Creating a model',
+      title: '创建模型',
       href: 'https://docs.getwren.ai/oss/guide/modeling/models',
       onClick: () => saveRecord(LEARNING.CREATING_MODEL),
     },
     {
       id: LEARNING.CREATING_VIEW,
-      title: 'Creating a view',
+      title: '创建视图',
       href: 'https://docs.getwren.ai/oss/guide/modeling/views',
       onClick: () => saveRecord(LEARNING.CREATING_VIEW),
     },
     {
       id: LEARNING.WORKING_RELATIONSHIP,
-      title: 'Working on relationship',
+      title: '管理关系',
       href: 'https://docs.getwren.ai/oss/guide/modeling/relationships',
       onClick: () => saveRecord(LEARNING.WORKING_RELATIONSHIP),
     },
     {
       id: LEARNING.CONNECT_OTHER_DATA_SOURCES,
-      title: 'Connect to other data sources',
+      title: '接入其他数据源',
       href: 'https://docs.getwren.ai/oss/guide/connect/overview',
       onClick: () => saveRecord(LEARNING.CONNECT_OTHER_DATA_SOURCES),
     },
@@ -163,7 +167,7 @@ const getData = (
   const home = [
     {
       id: LEARNING.SWITCH_PROJECT_LANGUAGE,
-      title: 'Switch the language',
+      title: '切换对话语言',
       onClick: () =>
         $guide?.current?.play(
           LEARNING.SWITCH_PROJECT_LANGUAGE,
@@ -172,7 +176,7 @@ const getData = (
     },
     {
       id: LEARNING.VIEW_FULL_SQL,
-      title: 'View full SQL',
+      title: '查看完整 SQL',
       href: 'https://docs.getwren.ai/oss/guide/home/answer#view-sqlview-full-sql',
       onClick: () => saveRecord(LEARNING.VIEW_FULL_SQL),
     },
@@ -180,7 +184,8 @@ const getData = (
 
   if (pathname.startsWith(Path.Modeling)) {
     return modeling;
-  } else if (pathname.startsWith(Path.Home)) {
+  }
+  if (pathname.startsWith(Path.Home)) {
     return home;
   }
   return [];
@@ -193,38 +198,100 @@ interface Props {}
 
 export default function SidebarSection(_props: Props) {
   const router = useRouter();
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const [active, setActive] = useState(true);
   const $guide = useRef<ComponentRef<typeof LearningGuide>>(null);
   const $collapseBlock = useRef<HTMLDivElement>(null);
+  const [learningRecordPaths, setLearningRecordPaths] = useState<
+    string[] | null
+  >(null);
 
-  const { data: learningRecordResult } = useLearningRecordQuery();
+  useEffect(() => {
+    if (!runtimeScopeNavigation.hasRuntimeScope) {
+      setLearningRecordPaths([]);
+      return;
+    }
 
-  const [saveLearningRecord] = useSaveLearningRecordMutation({
-    onError: (error) => console.error(error),
-    refetchQueries: ['LearningRecord'],
-  });
+    let cancelled = false;
 
-  const [updateCurrentProject] = useUpdateCurrentProjectMutation({
-    onError: (error) => console.error(error),
-    refetchQueries: ['GetSettings'],
-  });
+    void fetchLearningRecord(runtimeScopeNavigation.selector)
+      .then((payload) => {
+        if (cancelled) {
+          return;
+        }
 
-  const saveRecord = async (path: LEARNING) => {
-    await saveLearningRecord({ variables: { data: { path } } });
-  };
+        setLearningRecordPaths(payload.paths);
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
 
-  const saveLanguage = async (value: ProjectLanguage) => {
-    await updateCurrentProject({ variables: { data: { language: value } } });
-  };
+        message.error(
+          error instanceof Error
+            ? error.message
+            : '加载学习记录失败，请稍后重试。',
+        );
+        setLearningRecordPaths([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [runtimeScopeNavigation.hasRuntimeScope, runtimeScopeNavigation.selector]);
+
+  const saveRecord = useCallback(
+    async (path: LEARNING) => {
+      try {
+        const payload = await saveLearningRecordByRest(
+          runtimeScopeNavigation.selector,
+          path,
+        );
+        setLearningRecordPaths(payload.paths);
+      } catch (error) {
+        message.error(
+          error instanceof Error
+            ? error.message
+            : '保存学习记录失败，请稍后重试。',
+        );
+        throw error;
+      }
+    },
+    [runtimeScopeNavigation.selector],
+  );
+
+  const saveLanguage = useCallback(
+    async (value: ProjectLanguage) => {
+      try {
+        await updateCurrentProjectLanguage(
+          runtimeScopeNavigation.selector,
+          value,
+        );
+      } catch (error) {
+        message.error(
+          error instanceof Error ? error.message : '切换语言失败，请稍后重试。',
+        );
+        throw error;
+      }
+    },
+    [runtimeScopeNavigation.selector],
+  );
+
+  const saveLanguageFromGuide = useCallback(
+    async (value: string) => {
+      await saveLanguage(value as ProjectLanguage);
+    },
+    [saveLanguage],
+  );
 
   const stories = useMemo(() => {
     const learningData = getData(
       $guide,
       router.pathname,
       saveRecord,
-      saveLanguage,
+      saveLanguageFromGuide,
     );
-    const record = learningRecordResult?.learningRecord.paths || [];
+    const record = learningRecordPaths || [];
     return sortBy(
       learningData.map((story) => ({
         ...story,
@@ -232,7 +299,7 @@ export default function SidebarSection(_props: Props) {
       })),
       'finished',
     );
-  }, [learningRecordResult?.learningRecord]);
+  }, [learningRecordPaths, router.pathname, saveRecord, saveLanguageFromGuide]);
 
   const total = useMemo(() => stories.length, [stories]);
   const current = useMemo(
@@ -253,69 +320,76 @@ export default function SidebarSection(_props: Props) {
   };
 
   useEffect(() => {
-    const learningRecord = learningRecordResult?.learningRecord;
-    if (learningRecord) {
-      setActive(
-        stories.some((item) => !learningRecord.paths.includes(item.id)),
-      );
-
-      const routerAction = {
-        [Path.Modeling]: async () => {
-          const isGuideDone = learningRecord.paths.includes(
-            LEARNING.DATA_MODELING_GUIDE,
-          );
-          const isSkipBefore = !!window.sessionStorage.getItem(
-            'skipDataModelingGuide',
-          );
-          if (!(isGuideDone || isSkipBefore)) {
-            await nextTick(1000);
-            $guide.current?.play(LEARNING.DATA_MODELING_GUIDE, {
-              onDone: () => saveRecord(LEARNING.DATA_MODELING_GUIDE),
-            });
-          }
-        },
-        [Path.Home]: async () => {
-          const isGuideDone = learningRecord.paths.includes(
-            LEARNING.SWITCH_PROJECT_LANGUAGE,
-          );
-          const isSkipBefore = !!window.sessionStorage.getItem(
-            'skipSwitchProjectLanguageGuide',
-          );
-          if (!(isGuideDone || isSkipBefore)) {
-            await nextTick(1000);
-            $guide.current?.play(LEARNING.SWITCH_PROJECT_LANGUAGE, {
-              onDone: () => saveRecord(LEARNING.SWITCH_PROJECT_LANGUAGE),
-              onSaveLanguage: saveLanguage,
-            });
-          }
-        },
-        [Path.Thread]: async () => {
-          const isGuideDone = learningRecord.paths.includes(
-            LEARNING.SAVE_TO_KNOWLEDGE,
-          );
-          if (!isGuideDone) {
-            await nextTick(1500);
-            $guide.current?.play(LEARNING.SAVE_TO_KNOWLEDGE, {
-              onDone: () => saveRecord(LEARNING.SAVE_TO_KNOWLEDGE),
-            });
-          }
-        },
-        [Path.KnowledgeQuestionSQLPairs]: async () => {
-          const isGuideDone = learningRecord.paths.includes(
-            LEARNING.KNOWLEDGE_GUIDE,
-          );
-          if (!isGuideDone) {
-            await nextTick(1000);
-            $guide.current?.play(LEARNING.KNOWLEDGE_GUIDE, {
-              onDone: () => saveRecord(LEARNING.KNOWLEDGE_GUIDE),
-            });
-          }
-        },
-      };
-
-      routerAction[router.pathname] && routerAction[router.pathname]();
+    if (!learningRecordPaths) {
+      return;
     }
-  }, [learningRecordResult?.learningRecord, router.pathname]);
+
+    setActive(stories.some((item) => !learningRecordPaths.includes(item.id)));
+
+    const routerActions: Record<string, () => Promise<void>> = {
+      [Path.Modeling]: async () => {
+        const isGuideDone = learningRecordPaths.includes(
+          LEARNING.DATA_MODELING_GUIDE,
+        );
+        const isSkipBefore = !!window.sessionStorage.getItem(
+          'skipDataModelingGuide',
+        );
+        if (!(isGuideDone || isSkipBefore)) {
+          await nextTick(1000);
+          $guide.current?.play(LEARNING.DATA_MODELING_GUIDE, {
+            onDone: () => saveRecord(LEARNING.DATA_MODELING_GUIDE),
+          });
+        }
+      },
+      [Path.Home]: async () => {
+        const isGuideDone = learningRecordPaths.includes(
+          LEARNING.SWITCH_PROJECT_LANGUAGE,
+        );
+        const isSkipBefore = !!window.sessionStorage.getItem(
+          'skipSwitchProjectLanguageGuide',
+        );
+        if (!(isGuideDone || isSkipBefore)) {
+          await nextTick(1000);
+          $guide.current?.play(LEARNING.SWITCH_PROJECT_LANGUAGE, {
+            onDone: () => saveRecord(LEARNING.SWITCH_PROJECT_LANGUAGE),
+            onSaveLanguage: saveLanguageFromGuide,
+          });
+        }
+      },
+      [Path.Thread]: async () => {
+        const isGuideDone = learningRecordPaths.includes(
+          LEARNING.SAVE_TO_KNOWLEDGE,
+        );
+        if (!isGuideDone) {
+          await nextTick(1500);
+          $guide.current?.play(LEARNING.SAVE_TO_KNOWLEDGE, {
+            onDone: () => saveRecord(LEARNING.SAVE_TO_KNOWLEDGE),
+          });
+        }
+      },
+      [Path.Knowledge]: async () => {
+        const isGuideDone = learningRecordPaths.includes(
+          LEARNING.KNOWLEDGE_GUIDE,
+        );
+        if (!isGuideDone) {
+          await nextTick(1000);
+          $guide.current?.play(LEARNING.KNOWLEDGE_GUIDE, {
+            onDone: () => saveRecord(LEARNING.KNOWLEDGE_GUIDE),
+          });
+        }
+      },
+    };
+    const routerAction = Object.entries(routerActions).find(([path]) =>
+      router.pathname.startsWith(path),
+    )?.[1];
+    void routerAction?.();
+  }, [
+    learningRecordPaths,
+    router.pathname,
+    saveLanguageFromGuide,
+    saveRecord,
+    stories,
+  ]);
 
   useEffect(() => {
     collapseBlock(active);
@@ -325,7 +399,6 @@ export default function SidebarSection(_props: Props) {
     setActive(!active);
   };
 
-  // Hide learning section if the page not in whitelist
   return (
     <>
       <LearningGuide ref={$guide} />
@@ -337,7 +410,7 @@ export default function SidebarSection(_props: Props) {
           >
             <div className="flex-grow-1">
               <ReadOutlined className="mr-1" />
-              Learning
+              学习中心
             </div>
             <RightOutlined
               className="text-sm"
@@ -349,7 +422,7 @@ export default function SidebarSection(_props: Props) {
             <div className="px-4 py-2 d-flex align-center">
               <Progress total={total} current={current} />
               <span className="text-xs gray-6 text-nowrap pl-2">
-                {current}/{total} Finished
+                已完成 {current}/{total}
               </span>
             </div>
           </CollapseBlock>

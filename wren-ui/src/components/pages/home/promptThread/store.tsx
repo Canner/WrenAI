@@ -1,5 +1,4 @@
-import { useEffect } from 'react';
-import useStoreContext, { STORE } from '@/hooks/useStoreContext';
+import { createContext, useContext } from 'react';
 import {
   AdjustThreadResponseChartInput,
   DetailedThread,
@@ -48,26 +47,23 @@ export type IPromptThreadStore = {
   onOpenAdjustSQLModal: (data: { responseId: number; sql: string }) => void;
 };
 
-// Register store provider
+const PromptThreadContext = createContext<IPromptThreadStore | null>(null);
+
 export const PromptThreadProvider = (props: {
   children: React.ReactNode;
   value: IPromptThreadStore;
-}) => {
-  const storeContext = useStoreContext();
-  const PromptThreadContext = storeContext.createStore(STORE.PROMPT_THREAD);
-  // clear store when unmount
-  useEffect(() => {
-    return () => storeContext.clearStore(STORE.PROMPT_THREAD);
-  }, []);
-  return (
-    <PromptThreadContext.Provider value={props.value}>
-      {props.children}
-    </PromptThreadContext.Provider>
-  );
-};
+}) => (
+  <PromptThreadContext.Provider value={props.value}>
+    {props.children}
+  </PromptThreadContext.Provider>
+);
 
-// Use store
 export default function usePromptThreadStore() {
-  const storeContext = useStoreContext();
-  return storeContext.useStore(STORE.PROMPT_THREAD) as IPromptThreadStore;
+  const store = useContext(PromptThreadContext);
+
+  if (!store) {
+    throw new Error('PromptThreadProvider is missing');
+  }
+
+  return store;
 }

@@ -23,7 +23,7 @@ export default function FieldTable(props: Props) {
                     <ExpandableRows
                       data={[
                         {
-                          title: 'Description',
+                          title: '描述',
                           value: record.description || '-',
                         },
                       ]}
@@ -32,10 +32,10 @@ export default function FieldTable(props: Props) {
                           <div>
                             <Row wrap={false} className="py-1 px-2">
                               <Col span={6} className="gray-6">
-                                Nested columns
+                                嵌套字段
                               </Col>
                               <Col style={{ wordBreak: 'break-word' }}>
-                                {record.nestedFields.length} column(s)
+                                {record.nestedFields.length} 个字段
                               </Col>
                             </Row>
                             <NestedFieldTable
@@ -49,7 +49,7 @@ export default function FieldTable(props: Props) {
                 );
               },
             }
-          : null
+          : undefined
       }
     />
   );

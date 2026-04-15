@@ -3,6 +3,7 @@ This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next
 ## Start wren-ui from source code
 
 Step 1. Make sure your node version is 18
+
 ```bash
 node -v
 ```
@@ -10,34 +11,28 @@ node -v
 Step 2. Install dependencies:
 
 ```bash
-yarn 
+yarn
 ```
 
-Step 3(Optional). Switching database
+Step 3(Optional). Configure PostgreSQL
 
-Wren-ui uses SQLite as our default database. To use Postgres as the database of wren-ui, you need to set the two environment variable below.
+Wren-ui now uses PostgreSQL by default. When developing against the bundled docker compose stack, the default local connection is:
+
+```bash
+export PG_URL=postgres://postgres:postgres@127.0.0.1:9432/wrenai
+```
+
+If you want to point at another PostgreSQL instance, set `PG_URL` accordingly.
 
 ```bash
 # windows
-SET DB_TYPE=pg
-SET PG_URL=postgres://user:password@localhost:5432/dbname 
+SET PG_URL=postgres://user:password@localhost:5432/dbname
 
 # linux or mac
-export DB_TYPE=pg
 export PG_URL=postgres://user:password@localhost:5432/dbname
 ```
--  `PG_URL` is the connection string of your postgres database.
 
-To switch back to using SQLite, you can reassign the `DB_TYPE` to `sqlite`.
-```
-# windows
-SET DB_TYPE=sqlite
-SET SQLITE_FILE={your_sqlite_file_path} # default is ./db.sqlite3
-
-# linux or mac
-export DB_TYPE=sqlite
-export SQLITE_FILE={your_sqlite_file_path}
-```
+- `PG_URL` is the connection string of your postgres database.
 
 Step 4. Run migrations:
 
@@ -46,7 +41,6 @@ yarn migrate
 # or
 npm run migrate
 ```
-
 
 Step 5. Run the development server:
 
@@ -67,35 +61,39 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-
 ## Development wren-ui module on local
+
 There are many modules in Wren AI, to develop wren-ui, you can start other modules(services) via docker-compose.
 In the [Start wren-ui from source code](#Start-wren-ui-from-source-code) section, you've know how to start wren-ui from the source code to develop.
 To start other modules via docker-compose, you can follow the steps below.
 
 Step 1. Prepare you .env file
-In the WrenAI/docker folder, you can find the .env.example file. You can copy this file to .env.local file.
+In the WrenAI/docker folder, you can find the .env.example file. You can copy this file to .env.
 
 ```bash
 # assume current directory is wren-ui
 cd ../docker
-cp .env.example .env.local
+cp .env.example .env
 ```
-Step 2. Modify your .env.local file
+
+Step 2. Modify your .env file
 You need to fill the `OPENAI_API_KEY` with your OPENAI api key before starting.
 
-You can also change the `WREN_ENGINE_VERSION`, `WREN_AI_SERVICE_VERSION`, `IBIS_SERVER_VERSION` to the version you want to use.
-
+`wren-engine` / `ibis-server` are now built from the vendored `../wren-engine`
+source tree by default. You usually do not need to change their version vars
+unless you want a different telemetry label.
 
 Step 3. Start the services via docker-compose
+
 ```bash
 # current directory is WrenAI/docker
-docker-compose -f docker-compose-dev.yaml --env-file .env.example up
+docker compose --env-file .env up --build -d bootstrap postgres wren-engine ibis-server trino wren-ai-service
 
-# you can add a -d flag to run the services in the background
-docker-compose -f docker-compose-dev.yaml --env-file .env.example up -d
-# then stop the services via
-docker-compose -f docker-compose-dev.yaml --env-file .env.example down
+# for a full local test stack
+docker compose --env-file .env up --build -d
+
+# then stop the stack via
+docker compose --env-file .env down
 ```
 
 Step 4. Start wren-ui from source code
@@ -107,11 +105,14 @@ As mentioned above, you can use docker-compose to start other modules. The same 
 From the perspective of wren-ui, if you want to develop other modules at the same time, you can stop the container then spin up the module from the source code.
 
 eg: If you want to develop ai-service module, you can stop the ai-service container then start the ai-service from the source code.
+
 ```yaml
-# docker/docker-compose-dev.yaml
+# docker/docker-compose.yaml
 wren-engine:
-    image: ghcr.io/canner/wren-engine:${WREN_ENGINE_VERSION}
-    pull_policy: always
+    image: ${WREN_ENGINE_IMAGE_REPO:-wren-engine}:${WREN_ENGINE_IMAGE_TAG:-local}
+    build:
+      context: ../wren-engine
+      dockerfile: docker/wren-engine.Dockerfile
     platform: ${PLATFORM}
     expose:
       - ${WREN_ENGINE_SQL_PORT}
@@ -144,43 +145,51 @@ wren-ai-service:
     networks:
       - wren
     depends_on:
-      - qdrant
+      - postgres
 
 ibis-server:
-    image: ghcr.io/canner/wren-engine-ibis:${IBIS_SERVER_VERSION}
+    image: ${IBIS_SERVER_IMAGE_REPO:-wren-engine-ibis}:${IBIS_SERVER_IMAGE_TAG:-local}
+    build:
+      context: ../wren-engine
+      dockerfile: docker/ibis-server.Dockerfile
     ...
 ```
-Then refer to the README.md or CONTRIBUTION.md file the module for starting the module from the source code. 
+
+Then refer to the README.md or CONTRIBUTION.md file the module for starting the module from the source code.
 
 eg: refer to the [ai-service README](https://github.com/Canner/WrenAI/blob/main/wren-ai-service/README.md#start-the-service-for-development) to start the ai-service from the source code.
 
-
-
 ## FAQ
+
 ### Can I have multiple project at the same time in Wren AI?
+
 We currently do not support multiple projects in Wren AI. You can only have one project at a time.
-But there is a workaround for this. Since Wren Engine is stateless and we store your semantic model in the database(Sqlite or Postgres), 
-you can switch between projects by switching the database and make sure you deploying after server started.
+But there is a workaround for this. Since Wren Engine is stateless and we store your semantic model in PostgreSQL,
+you can switch between projects by switching the target database and make sure you deploy after the server starts.
 
-> Tip: Define the `DB_TYPE` and `SQLITE_FILE` or `PG_URL` variable to specify which database you intend to use.
+> Tip: Point `PG_URL` at the PostgreSQL database you want to use.
 
-eg: 
+eg:
+
 ```bash
-# start your first project using default database(sqlite by defulat)
+# start your first project using one PostgreSQL database
+createdb -h 127.0.0.1 -p 9432 -U postgres wrenai_project_a
+export PG_URL=postgres://postgres:postgres@127.0.0.1:9432/wrenai_project_a
 yarn migrate
 yarn dev
 
-# ... after onboarding and lots of hard work, you want to switch to another project 
+# ... after onboarding and lots of hard work, you want to switch to another project
 # stop the server
 
-# set another sqlite file
-export SQLITE_FILE=./new_project.sqlite
+# point to another PostgreSQL database
+createdb -h 127.0.0.1 -p 9432 -U postgres wrenai_project_b
+export PG_URL=postgres://postgres:postgres@127.0.0.1:9432/wrenai_project_b
 yarn migrate
 yarn dev
 
 # In the Browser, ... after another onboarding process and hard work
-# you can switch back to the first project by setting the first sqlite file
-export SQLITE_FILE=./first_project.sqlite
+# you can switch back to the first project by restoring the first PG_URL
+export PG_URL=postgres://postgres:postgres@127.0.0.1:9432/wrenai_project_a
 
 yarn dev  # no need to do migration again
 

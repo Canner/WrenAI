@@ -1,10 +1,17 @@
 import { Page, expect } from '@playwright/test';
 import * as helper from '../helper';
-import {
-  AskingTask,
-  AskingTaskStatus,
-} from '@/apollo/client/graphql/__types__';
+import { AskingTaskStatus } from '@/apollo/client/graphql/__types__';
 import * as modelingHelper from './modeling';
+
+type AskSuggestionQuestionArgs = {
+  page: Page;
+  suggestedQuestion: string;
+};
+
+type FollowUpQuestionArgs = {
+  page: Page;
+  question: string;
+};
 
 export const checkAskingProcess = async (page: Page, question: string) => {
   // check process state
@@ -123,7 +130,7 @@ const checkThreadResponseBreakdownContent = async (page: Page) => {
 export const askSuggestionQuestionTest = async ({
   page,
   suggestedQuestion,
-}) => {
+}: AskSuggestionQuestionArgs) => {
   await page.goto('/home');
   await expect(page).toHaveURL('/home', { timeout: 60000 });
 
@@ -160,7 +167,10 @@ export const askSuggestionQuestionTest = async ({
   await checkThreadResponseBreakdownContent(page);
 };
 
-export const followUpQuestionTest = async ({ page, question }) => {
+export const followUpQuestionTest = async ({
+  page,
+  question,
+}: FollowUpQuestionArgs) => {
   await page.goto('/home');
   await expect(page).toHaveURL('/home', { timeout: 60000 });
 
@@ -185,7 +195,7 @@ export const followUpQuestionTest = async ({ page, question }) => {
 };
 
 export const saveAsView = async (
-  { page, baseURL }: { page: Page; baseURL: string },
+  { page, baseURL }: { page: Page; baseURL?: string },
   { question, viewName }: { question: string; viewName: string },
 ) => {
   await page.goto('/home');

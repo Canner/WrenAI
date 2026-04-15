@@ -3,12 +3,9 @@ import { Typography } from 'antd';
 export default function FixedSQLFinished() {
   return (
     <>
-      <Typography.Text className="gray-8">
-        User-Provided SQL applied
-      </Typography.Text>
+      <Typography.Text className="gray-8">已应用手动 SQL</Typography.Text>
       <div className="gray-7 text-sm mt-1">
-        System encountered an issue generating SQL. The manually submitted query
-        is now being processed.
+        系统在生成 SQL 时遇到问题，现已改为处理你手动提交的 SQL。
       </div>
     </>
   );

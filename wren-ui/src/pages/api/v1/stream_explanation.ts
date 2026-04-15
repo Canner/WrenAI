@@ -1,8 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
-import { toPersistedRuntimeIdentity } from '@/apollo/server/context/runtimeScope';
+import { getLogger } from '@server/utils';
+import { toCanonicalPersistedRuntimeIdentityFromScope } from '@server/utils/persistedRuntimeIdentity';
 
 const { wrenAIAdaptor, askingService, runtimeScopeResolver } = components;
+const logger = getLogger('API_V1_STREAM_EXPLANATION');
 
 export default async function handler(
   req: NextApiRequest,
@@ -18,7 +20,7 @@ export default async function handler(
     const runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
     await askingService.assertAskingTaskScope(
       queryId as string,
-      toPersistedRuntimeIdentity(runtimeScope),
+      toCanonicalPersistedRuntimeIdentityFromScope(runtimeScope),
     );
 
     res.setHeader('Content-Type', 'text/event-stream');
@@ -42,8 +44,10 @@ export default async function handler(
     req.on('close', () => {
       stream.destroy();
     });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: error.message });
+  } catch (error: unknown) {
+    logger.error('Failed to stream explanation', error);
+    const message =
+      error instanceof Error ? error.message : 'Internal Server Error';
+    res.status(500).json({ error: message });
   }
 }

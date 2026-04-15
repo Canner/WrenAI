@@ -5,7 +5,6 @@ from typing import Any, Dict, List, Optional
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack import Document, component
-from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
 from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
@@ -13,7 +12,7 @@ from src.core.provider import DocumentStoreProvider, EmbedderProvider
 from src.pipelines.common import (
     ScoreFilter,
     build_runtime_scope_filters,
-    normalize_runtime_scope_id,
+    resolve_pipeline_runtime_scope_id,
 )
 
 logger = logging.getLogger("wren-ai-service")
@@ -61,9 +60,9 @@ class ScopeFilter:
 ## Start of Pipeline
 @observe(capture_input=False)
 async def count_documents(
-    store: QdrantDocumentStore, project_id: Optional[str] = None
+    store: Any, runtime_scope_id: Optional[str] = None
 ) -> int:
-    runtime_scope_id = normalize_runtime_scope_id(project_id)
+    runtime_scope_id = resolve_pipeline_runtime_scope_id(runtime_scope_id)
     filters = build_runtime_scope_filters(runtime_scope_id)
     document_count = await store.count_documents(filters=filters)
     return document_count
@@ -78,11 +77,10 @@ async def embedding(count_documents: int, query: str, embedder: Any) -> dict:
 
 
 @observe(capture_input=False)
-async def retrieval(embedding: dict, project_id: str, retriever: Any) -> dict:
+async def retrieval(embedding: dict, runtime_scope_id: str, retriever: Any) -> dict:
     if not embedding:
         return {}
 
-    runtime_scope_id = normalize_runtime_scope_id(project_id)
     filters = build_runtime_scope_filters(
         runtime_scope_id,
         conditions=[
@@ -125,14 +123,13 @@ def filtered_documents(
 async def default_instructions(
     count_documents: int,
     retriever: Any,
-    project_id: str,
+    runtime_scope_id: str,
     scope_filter: ScopeFilter,
     scope: str,
 ) -> list[Document]:
     if not count_documents:
         return []
 
-    runtime_scope_id = normalize_runtime_scope_id(project_id)
     filters = build_runtime_scope_filters(
         runtime_scope_id,
         conditions=[
@@ -201,15 +198,21 @@ class Instructions(BasicPipeline):
 
     @observe(name="Instructions Retrieval")
     async def run(
-        self, query: str, project_id: Optional[str] = None, scope: str = "sql"
+        self,
+        query: str,
+        runtime_scope_id: Optional[str] = None,
+        scope: str = "sql",
+        bridge_scope_id: Optional[str] = None,
     ):
         logger.info("Instructions Retrieval pipeline is running...")
-        runtime_scope_id = normalize_runtime_scope_id(project_id)
+        runtime_scope_id = resolve_pipeline_runtime_scope_id(
+            runtime_scope_id, bridge_scope_id=bridge_scope_id
+        )
         return await self._pipe.execute(
             ["formatted_output"],
             inputs={
                 "query": query,
-                "project_id": runtime_scope_id or "",
+                "runtime_scope_id": runtime_scope_id or "",
                 "scope": scope,
                 **self._components,
                 **self._configs,

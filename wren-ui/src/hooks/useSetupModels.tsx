@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { message } from 'antd';
 import { Path, SETUP } from '@/utils/enum';
 import {
   useListDataSourceTablesQuery,
@@ -12,7 +13,8 @@ export default function useSetupModels() {
 
   const { data, loading: fetching } = useListDataSourceTablesQuery({
     fetchPolicy: 'no-cache',
-    onError: (error) => console.error(error),
+    onError: (error) =>
+      message.error(error.message || '加载数据表失败，请稍后重试'),
   });
 
   // Handle errors via try/catch blocks rather than onError callback
@@ -27,7 +29,9 @@ export default function useSetupModels() {
       });
       runtimeScopeNavigation.push(Path.OnboardingRelationships);
     } catch (error) {
-      console.error(error);
+      message.error(
+        error instanceof Error ? error.message : '保存模型失败，请稍后重试',
+      );
     }
   };
 

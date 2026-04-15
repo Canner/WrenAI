@@ -3,6 +3,8 @@ import {
   IRuntimeScopeResolver,
   RuntimeScope,
 } from '@server/context/runtimeScope';
+import { ResolvedRequestActor } from '@server/context/actorClaims';
+import { AuthorizationActor } from '@server/authz';
 import {
   IIbisAdaptor,
   IWrenAIAdaptor,
@@ -30,8 +32,9 @@ import {
   IKBSnapshotRepository,
   IConnectorRepository,
   ISecretRepository,
-  ISkillBindingRepository,
   ISkillDefinitionRepository,
+  ISkillMarketplaceCatalogRepository,
+  IAuditEventRepository,
   IUserRepository,
   IWorkspaceMemberRepository,
   IWorkspaceRepository,
@@ -59,8 +62,10 @@ import {
   DashboardCacheBackgroundTracker,
 } from '@server/backgrounds';
 import { ISqlPairService } from '../services/sqlPairService';
+import { NextApiRequest } from 'next';
 
 export interface IContext {
+  req?: NextApiRequest;
   config: IConfig;
   // telemetry
   telemetry: ITelemetry;
@@ -88,6 +93,8 @@ export interface IContext {
   scheduleService: IScheduleService;
   runtimeScopeResolver: IRuntimeScopeResolver;
   runtimeScope: RuntimeScope | null;
+  requestActor: ResolvedRequestActor | null;
+  authorizationActor: AuthorizationActor | null;
 
   // repository
   projectRepository: IProjectRepository;
@@ -111,7 +118,8 @@ export interface IContext {
   connectorRepository: IConnectorRepository;
   secretRepository: ISecretRepository;
   skillDefinitionRepository: ISkillDefinitionRepository;
-  skillBindingRepository: ISkillBindingRepository;
+  skillMarketplaceCatalogRepository: ISkillMarketplaceCatalogRepository;
+  auditEventRepository: IAuditEventRepository;
   userRepository: IUserRepository;
   authIdentityRepository: IAuthIdentityRepository;
   authSessionRepository: IAuthSessionRepository;

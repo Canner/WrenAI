@@ -31,7 +31,7 @@ export class ScheduleJobRepository
   extends BaseRepository<ScheduleJob>
   implements IScheduleJobRepository
 {
-  private readonly jsonColumns = [];
+  private readonly jsonColumns: string[] = [];
 
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'schedule_job' });

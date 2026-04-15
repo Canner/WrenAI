@@ -1,11 +1,11 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
 import { ApiType } from '@server/repositories/apiHistoryRepository';
-import * as Errors from '@/apollo/server/utils/error';
 import {
   ApiError,
   respondWithSimple,
   handleApiError,
+  deriveRuntimeExecutionContextFromRequest,
 } from '@/apollo/server/utils/apiUtils';
 import { getLogger } from '@server/utils';
 
@@ -19,7 +19,6 @@ export default async function handler(
   res: NextApiResponse,
 ) {
   const startTime = Date.now();
-  let project;
   let runtimeScope;
 
   try {
@@ -28,16 +27,12 @@ export default async function handler(
       throw new ApiError('Method not allowed', 405);
     }
 
-    runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
-    project = runtimeScope.project;
-    const lastDeploy = runtimeScope.deployment;
-    if (!lastDeploy) {
-      throw new ApiError(
-        'No deployment found, please deploy your project first',
-        400,
-        Errors.GeneralErrorCodes.NO_DEPLOYMENT_FOUND,
-      );
-    }
+    const derivedContext = await deriveRuntimeExecutionContextFromRequest({
+      req,
+      runtimeScopeResolver,
+    });
+    runtimeScope = derivedContext.runtimeScope;
+    const { deployment: lastDeploy } = derivedContext.executionContext;
 
     // Get the MDL from the deployment manifest
     const mdl = lastDeploy.manifest as any;
@@ -57,7 +52,6 @@ export default async function handler(
         relationships,
         views,
       },
-      projectId: project.id,
       runtimeScope,
       apiType: ApiType.GET_MODELS,
       startTime,
@@ -67,7 +61,6 @@ export default async function handler(
     await handleApiError({
       error,
       res,
-      projectId: project?.id,
       runtimeScope,
       apiType: ApiType.GET_MODELS,
       headers: req.headers as Record<string, string>,

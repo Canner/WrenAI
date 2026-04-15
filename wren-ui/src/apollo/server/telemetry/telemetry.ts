@@ -103,7 +103,7 @@ export interface ITelemetry {
 
 export class PostHogTelemetry {
   private readonly posthog: any;
-  private readonly userId: string;
+  private readonly userId: string = userUUID || uuidv4();
 
   constructor() {
     if (telemetryEnabled) {
@@ -115,7 +115,6 @@ export class PostHogTelemetry {
         host: posthogHost || 'https://us.posthog.com',
       });
       this.posthog = client;
-      this.userId = userUUID || uuidv4();
       logger.info(`Telemetry initialized: ${this.userId}`);
       return;
     }

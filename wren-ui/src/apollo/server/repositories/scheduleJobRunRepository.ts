@@ -19,7 +19,10 @@ export interface ScheduleJobRun {
   detailJson?: Record<string, any> | null;
 }
 
-export interface IScheduleJobRunRepository extends IBasicRepository<ScheduleJobRun> {}
+export interface IScheduleJobRunRepository
+  extends IBasicRepository<ScheduleJobRun> {
+  findAllByScheduleJobIds(scheduleJobIds: string[]): Promise<ScheduleJobRun[]>;
+}
 
 export class ScheduleJobRunRepository
   extends BaseRepository<ScheduleJobRun>
@@ -29,6 +32,18 @@ export class ScheduleJobRunRepository
 
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'schedule_job_run' });
+  }
+
+  public async findAllByScheduleJobIds(scheduleJobIds: string[]) {
+    if (scheduleJobIds.length === 0) {
+      return [];
+    }
+
+    const results = await this.knex(this.tableName).whereIn(
+      'schedule_job_id',
+      scheduleJobIds,
+    );
+    return results.map((row) => this.transformFromDBData(row));
   }
 
   protected override transformFromDBData = (data: any): ScheduleJobRun => {

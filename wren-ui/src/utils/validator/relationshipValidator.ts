@@ -58,7 +58,7 @@ export const createRelationshipFromFieldValidator =
     relationships: SelectedRecommendRelations,
     getFieldValue: FormInstance['getFieldValue'],
   ) =>
-  async (_, value: any) => {
+  async (_rule: unknown, value: any) => {
     if (!value || !value.field) {
       return Promise.reject(ERROR_TEXTS.ADD_RELATION.FROM_FIELD.REQUIRED);
     }
@@ -89,7 +89,7 @@ export const createRelationshipToFieldValidator =
     relationships: SelectedRecommendRelations,
     getFieldValue: FormInstance['getFieldValue'],
   ) =>
-  async (_, value: any) => {
+  async (_rule: unknown, value: any) => {
     if (!value || !value.field) {
       return Promise.reject(ERROR_TEXTS.ADD_RELATION.TO_FIELD.REQUIRED);
     }

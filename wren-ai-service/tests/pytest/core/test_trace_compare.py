@@ -1,25 +1,22 @@
 from src.core.trace_compare import build_shadow_compare, summarize_ask_result
 
 
-def test_summarize_ask_result_extracts_text_to_sql_and_skill_fields():
+def test_summarize_ask_result_extracts_only_text_to_sql_summary_fields():
     summary = summarize_ask_result(
         {
             "metadata": {
                 "type": "TEXT_TO_SQL",
                 "ask_path": "nl2sql",
                 "error_type": "",
-                "fallback_reason": "runtime_identity_missing",
+                "fallback_reason": "deepagents_error",
                 "resolved_runtime": "legacy",
                 "ask_runtime_mode": "deepagents",
+                "orchestrator": "legacy",
             },
             "ask_result": [
                 {"sql": "SELECT 1"},
                 {"sql": "SELECT 2"},
             ],
-            "skill_result": {
-                "result_type": "text",
-                "text": "should still be readable",
-            },
         }
     )
 
@@ -27,13 +24,12 @@ def test_summarize_ask_result_extracts_text_to_sql_and_skill_fields():
         "type": "TEXT_TO_SQL",
         "ask_path": "nl2sql",
         "error_type": "",
-        "fallback_reason": "runtime_identity_missing",
+        "fallback_reason": "deepagents_error",
         "resolved_runtime": "legacy",
         "ask_runtime_mode": "deepagents",
+        "orchestrator": "legacy",
         "sql": "SELECT 1",
         "result_count": 2,
-        "skill_result_type": "text",
-        "skill_text": "should still be readable",
     }
 
 
@@ -68,38 +64,28 @@ def test_build_shadow_compare_marks_text_to_sql_match_only_when_sql_and_counts_a
     assert comparison["reason"] is None
 
 
-def test_build_shadow_compare_detects_skill_mismatch_by_result_payload():
+def test_build_shadow_compare_marks_non_text_to_sql_results_as_non_comparable():
     comparison = build_shadow_compare(
         enabled=True,
         executed=True,
         primary_result={
             "metadata": {
-                "type": "SKILL",
-                "ask_path": "skill",
-            },
-            "skill_result": {
-                "result_type": "text",
-                "text": "GMV 128 万",
+                "type": "GENERAL",
+                "ask_path": "general",
             },
         },
         shadow_result={
             "metadata": {
-                "type": "SKILL",
-                "ask_path": "skill",
-            },
-            "skill_result": {
-                "result_type": "text",
-                "text": "GMV 256 万",
+                "type": "GENERAL",
+                "ask_path": "general",
             },
         },
     )
 
-    assert comparison["comparable"] is True
+    assert comparison["comparable"] is False
     assert comparison["matched"] is False
-    assert comparison["primary_type"] == "SKILL"
-    assert comparison["shadow_type"] == "SKILL"
-    assert comparison["primary_ask_path"] == "skill"
-    assert comparison["shadow_ask_path"] == "skill"
+    assert comparison["primary_type"] == "GENERAL"
+    assert comparison["shadow_type"] == "GENERAL"
 
 
 def test_build_shadow_compare_uses_primary_fallback_reason_when_shadow_not_executed():
@@ -110,7 +96,7 @@ def test_build_shadow_compare_uses_primary_fallback_reason_when_shadow_not_execu
             "metadata": {
                 "type": "TEXT_TO_SQL",
                 "ask_path": "nl2sql",
-                "fallback_reason": "primary_fallback",
+                "fallback_reason": "deepagents_error",
             },
             "ask_result": [{"sql": "SELECT 1"}],
         },
@@ -119,28 +105,24 @@ def test_build_shadow_compare_uses_primary_fallback_reason_when_shadow_not_execu
     assert comparison["executed"] is False
     assert comparison["comparable"] is False
     assert comparison["matched"] is False
-    assert comparison["reason"] == "primary_fallback"
+    assert comparison["reason"] == "deepagents_error"
     assert comparison["shadow_type"] is None
     assert comparison["shadow_sql"] is None
 
 
-def test_build_shadow_compare_forces_non_comparable_on_shadow_error_and_sets_reason():
+def test_build_shadow_compare_sets_shadow_error_reason_when_shadow_execution_fails():
     comparison = build_shadow_compare(
         enabled=True,
         executed=True,
         primary_result={
             "metadata": {
-                "type": "GENERAL",
-                "ask_path": "general",
+                "type": "TEXT_TO_SQL",
+                "ask_path": "nl2sql",
             },
-        },
-        shadow_result={
-            "metadata": {
-                "type": "GENERAL",
-                "ask_path": "general",
-            },
+            "ask_result": [{"sql": "SELECT 1"}],
         },
         shadow_error="legacy timeout",
+        reason="shadow_error",
     )
 
     assert comparison["comparable"] is False

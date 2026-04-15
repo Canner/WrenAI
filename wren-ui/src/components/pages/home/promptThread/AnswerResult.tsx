@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { CSSProperties, useEffect, useMemo } from 'react';
 import { isEmpty, debounce } from 'lodash';
 import clsx from 'clsx';
 import { Button, Typography, Tabs, Tag, Tooltip } from 'antd';
@@ -15,6 +15,7 @@ import usePromptThreadStore from './store';
 import { RecommendedQuestionsProps } from '@/components/pages/home/promptThread';
 import RecommendedQuestions, {
   getRecommendedQuestionProps,
+  RecommendedQuestionRenderState,
 } from '@/components/pages/home/RecommendedQuestions';
 import ViewBlock from '@/components/pages/home/promptThread/ViewBlock';
 import ViewSQLTabContent from '@/components/pages/home/promptThread/ViewSQLTabContent';
@@ -24,35 +25,25 @@ import TextBasedAnswer, {
 import ChartAnswer from '@/components/pages/home/promptThread/ChartAnswer';
 import Preparation from '@/components/pages/home/preparation';
 import {
-  AskingTaskType,
   AskingTaskStatus,
   ThreadResponse,
   ThreadResponseAnswerDetail,
   ThreadResponseAnswerStatus,
   ThreadResponseAdjustment,
   ThreadResponseAdjustmentType,
+  ViewInfo,
 } from '@/apollo/client/graphql/__types__';
 
 const { Title, Text } = Typography;
 
 const adjustmentType = {
-  [ThreadResponseAdjustmentType.APPLY_SQL]: 'User-provided SQL applied',
-  [ThreadResponseAdjustmentType.REASONING]: 'Reasoning steps adjusted',
+  [ThreadResponseAdjustmentType.APPLY_SQL]: '已应用手动 SQL',
+  [ThreadResponseAdjustmentType.REASONING]: '已调整推理步骤',
 };
 
 const knowledgeTooltip = (
   <>
-    Store this answer as a Question-SQL pair to help Wren AI improve SQL
-    generation.
-    <br />
-    <Typography.Link
-      className="gray-1 underline"
-      href="https://docs.getwren.ai/oss/guide/knowledge/question-sql-pairs#save-to-knowledge"
-      target="_blank"
-      rel="noopener noreferrer"
-    >
-      Learn more
-    </Typography.Link>
+    将这条回答保存为 <b>SQL 模板</b>，帮助系统持续优化 SQL 生成效果。
   </>
 );
 
@@ -124,10 +115,11 @@ export interface Props {
   threadResponse: ThreadResponse;
   isLastThreadResponse: boolean;
   isOpeningQuestion: boolean;
+  shouldAutoPreview: boolean;
   onInitPreviewDone: () => void;
 }
 
-const QuestionTitle = (props) => {
+const QuestionTitle = (props: { question: string; className?: string }) => {
   const { question, className } = props;
   return (
     <Title
@@ -142,7 +134,7 @@ const QuestionTitle = (props) => {
 
 const renderRecommendedQuestions = (
   isLastThreadResponse: boolean,
-  recommendedQuestionProps,
+  recommendedQuestionProps: RecommendedQuestionRenderState,
   onSelect: RecommendedQuestionsProps['onSelect'],
 ) => {
   if (!isLastThreadResponse || !recommendedQuestionProps.show) return null;
@@ -166,7 +158,7 @@ const AdjustmentInformation = (props: {
       <div className="d-flex align-center gx-2">
         <ShareAltOutlined className="gray-7" />
         <div className="flex-grow-1 gray-7">
-          Adjusted answer
+          已调整回答
           <Tag className="gray-6 border border-gray-5 bg-gray-3 ml-3 text-medium">
             {adjustmentType[adjustment.type]}
           </Tag>
@@ -176,15 +168,27 @@ const AdjustmentInformation = (props: {
   );
 };
 
-const isNeedGenerateAnswer = (answerDetail: ThreadResponseAnswerDetail) => {
-  const isFinished = getAnswerIsFinished(answerDetail?.status);
+const isNeedGenerateAnswer = (
+  answerDetail?: ThreadResponseAnswerDetail | null,
+  sql?: string | null,
+) => {
+  if (!sql?.trim()) {
+    return false;
+  }
+
+  const status = answerDetail?.status || null;
+  const hasQueryId =
+    answerDetail?.queryId !== null &&
+    answerDetail?.queryId !== undefined &&
+    String(answerDetail?.queryId).trim() !== '';
+  const isFinished = getAnswerIsFinished(status);
   // it means the background task has not started yet, but answer is pending for generating
   const isProcessing = [
     ThreadResponseAnswerStatus.NOT_STARTED,
     ThreadResponseAnswerStatus.PREPROCESSING,
     ThreadResponseAnswerStatus.FETCHING_DATA,
-  ].includes(answerDetail?.status);
-  return answerDetail?.queryId === null && !isFinished && !isProcessing;
+  ].includes(status as ThreadResponseAnswerStatus);
+  return !hasQueryId && !isFinished && !isProcessing;
 };
 
 export default function AnswerResult(props: Props) {
@@ -215,9 +219,9 @@ export default function AnswerResult(props: Props) {
     adjustment,
   } = threadResponse;
 
-  const resultStyle = isLastThreadResponse
+  const resultStyle: CSSProperties | undefined = isLastThreadResponse
     ? { minHeight: 'calc(100vh - (194px))' }
-    : null;
+    : undefined;
 
   const isAdjustment = !!adjustment;
 
@@ -226,13 +230,7 @@ export default function AnswerResult(props: Props) {
     showRecommendedQuestions,
   );
 
-  const hasSkillResult = Boolean(
-    threadResponse.skillResult || askingTask?.skillResult,
-  );
-  const isSkillAnswer =
-    hasSkillResult || askingTask?.type === AskingTaskType.SKILL;
-  const isAnswerPrepared =
-    !!answerDetail?.queryId || !!answerDetail?.status || hasSkillResult;
+  const isAnswerPrepared = !!answerDetail?.queryId || !!answerDetail?.status;
   const isBreakdownOnly = useMemo(() => {
     // we support rendering different types of answers now, so we need to check if it's old data.
     // existing thread response's answerDetail is null.
@@ -241,10 +239,10 @@ export default function AnswerResult(props: Props) {
 
   // initialize generate answer
   useEffect(() => {
-    if (isBreakdownOnly || isSkillAnswer) return;
+    if (isBreakdownOnly) return;
     if (
       canGenerateAnswer(askingTask, adjustmentTask) &&
-      isNeedGenerateAnswer(answerDetail)
+      isNeedGenerateAnswer(answerDetail, threadResponse.sql)
     ) {
       const debouncedGenerateAnswer = debounce(
         () => {
@@ -262,7 +260,6 @@ export default function AnswerResult(props: Props) {
     }
   }, [
     isBreakdownOnly,
-    isSkillAnswer,
     askingTask?.status,
     adjustmentTask?.status,
     answerDetail?.status,
@@ -275,13 +272,14 @@ export default function AnswerResult(props: Props) {
   };
 
   const showAnswerTabs =
-    hasSkillResult ||
     askingTask?.status === AskingTaskStatus.FINISHED ||
     isAnswerPrepared ||
     isBreakdownOnly;
 
   const rephrasedQuestion =
     threadResponse?.askingTask?.rephrasedQuestion || question;
+  const normalizedView: ViewInfo | undefined = view || undefined;
+  const sqlText = sql || '';
 
   const questionForSaveAsView = useMemo(() => {
     // use rephrased question for follow-up questions, otherwise use the original question
@@ -310,43 +308,39 @@ export default function AnswerResult(props: Props) {
                 tab={
                   <div className="select-none">
                     <CheckCircleFilled className="mr-2" />
-                    <Text>Answer</Text>
+                    <Text>回答</Text>
                   </div>
                 }
               >
                 <TextBasedAnswer {...props} />
               </Tabs.TabPane>
             )}
-            {!isSkillAnswer && (
-              <Tabs.TabPane
-                key={ANSWER_TAB_KEYS.VIEW_SQL}
-                tab={
-                  <div className="select-none">
-                    <CodeFilled className="mr-2" />
-                    <Text>View SQL</Text>
-                  </div>
-                }
-              >
-                <ViewSQLTabContent {...props} />
-              </Tabs.TabPane>
-            )}
-            {!isSkillAnswer && (
-              <Tabs.TabPane
-                key="chart"
-                tab={
-                  <div className="select-none">
-                    <PieChartFilled className="mr-2" />
-                    <Text>
-                      Chart<Tag className="adm-beta-tag">Beta</Tag>
-                    </Text>
-                  </div>
-                }
-              >
-                <ChartAnswer {...props} />
-              </Tabs.TabPane>
-            )}
+            <Tabs.TabPane
+              key={ANSWER_TAB_KEYS.VIEW_SQL}
+              tab={
+                <div className="select-none">
+                  <CodeFilled className="mr-2" />
+                  <Text>SQL 查询</Text>
+                </div>
+              }
+            >
+              <ViewSQLTabContent {...props} />
+            </Tabs.TabPane>
+            <Tabs.TabPane
+              key="chart"
+              tab={
+                <div className="select-none">
+                  <PieChartFilled className="mr-2" />
+                  <Text>
+                    图表<Tag className="adm-beta-tag">测试版</Tag>
+                  </Text>
+                </div>
+              }
+            >
+              <ChartAnswer {...props} />
+            </Tabs.TabPane>
           </StyledTabs>
-          {(sql || view) && (
+          {(sqlText || normalizedView) && (
             <div className="mt-2 d-flex align-center">
               {sql && (
                 <Tooltip
@@ -360,10 +354,7 @@ export default function AnswerResult(props: Props) {
                     className="mr-2"
                     onClick={() =>
                       onOpenSaveToKnowledgeModal(
-                        {
-                          question: rephrasedQuestion,
-                          sql,
-                        },
+                        { question: rephrasedQuestion, sql },
                         { isCreateMode: true },
                       )
                     }
@@ -371,16 +362,16 @@ export default function AnswerResult(props: Props) {
                   >
                     <div className="d-flex align-center">
                       <RobotSVG className="mr-2" />
-                      Save to knowledge
+                      存为 SQL 模板
                     </div>
                   </Button>
                 </Tooltip>
               )}
               <ViewBlock
-                view={view}
+                view={normalizedView}
                 onClick={() =>
                   onOpenSaveAsViewModal(
-                    { sql, responseId: id },
+                    { sql: sqlText, responseId: id },
                     {
                       rephrasedQuestion: questionForSaveAsView,
                     },

@@ -2,10 +2,12 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
 import { ThreadResponseAnswerStatus } from '@/apollo/server/services/askingService';
 import { TelemetryEvent } from '@/apollo/server/telemetry/telemetry';
-import { toPersistedRuntimeIdentity } from '@/apollo/server/context/runtimeScope';
+import { getLogger } from '@server/utils';
+import { toCanonicalPersistedRuntimeIdentityFromScope } from '@server/utils/persistedRuntimeIdentity';
 
 const { wrenAIAdaptor, askingService, telemetry, runtimeScopeResolver } =
   components;
+const logger = getLogger('API_ASK_TASK_STREAMING_ANSWER');
 
 class ContentMap {
   private contentMap: { [key: string]: string } = {};
@@ -52,7 +54,8 @@ export default async function handler(
   }
   try {
     const runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
-    const runtimeIdentity = toPersistedRuntimeIdentity(runtimeScope);
+    const runtimeIdentity =
+      toCanonicalPersistedRuntimeIdentityFromScope(runtimeScope);
     await askingService.assertResponseScope(
       Number(responseId),
       runtimeIdentity,
@@ -89,7 +92,7 @@ export default async function handler(
       if (match && match[1]) {
         message = match[1];
       } else {
-        console.log(`not able to match: ${chunkString}`);
+        logger.warn(`Failed to parse stream chunk payload: ${chunkString}`);
       }
       contentMap.appendContent(queryId, message);
       res.write(chunk);
@@ -106,7 +109,7 @@ export default async function handler(
           contentMap.getContent(queryId),
         )
         .then(() => {
-          console.log(
+          logger.info(
             'Thread response answer detail status updated to FINISHED',
           );
           contentMap.remove(queryId);
@@ -115,7 +118,7 @@ export default async function handler(
           });
         })
         .catch((error) => {
-          console.error(
+          logger.error(
             'Failed to update thread response answer detail status',
             error,
           );
@@ -143,7 +146,7 @@ export default async function handler(
           contentMap.getContent(queryId),
         )
         .then(() => {
-          console.log(
+          logger.info(
             'Thread response answer detail status updated to INTERRUPTED',
           );
           contentMap.remove(queryId);
@@ -152,7 +155,7 @@ export default async function handler(
           });
         })
         .catch((error) => {
-          console.error(
+          logger.error(
             'Failed to update thread response answer detail status',
             error,
           );
@@ -169,7 +172,7 @@ export default async function handler(
         });
     });
   } catch (error) {
-    console.error(error);
+    logger.error('Failed to stream answer task', error);
     res.status(500).end();
   }
 }

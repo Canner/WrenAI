@@ -14,7 +14,10 @@ from tqdm import tqdm
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
-from src.pipelines.common import build_runtime_scope_meta, normalize_runtime_scope_id
+from src.pipelines.common import (
+    build_runtime_scope_meta,
+    resolve_pipeline_runtime_scope_id,
+)
 from src.pipelines.indexing import AsyncDocumentWriter, DocumentCleaner, MDLValidator
 
 logger = logging.getLogger("wren-ai-service")
@@ -23,9 +26,7 @@ logger = logging.getLogger("wren-ai-service")
 @component
 class TableDescriptionChunker:
     @component.output_types(documents=List[Document])
-    def run(self, mdl: Dict[str, Any], project_id: Optional[str] = None):
-        runtime_scope_id = normalize_runtime_scope_id(project_id)
-
+    def run(self, mdl: Dict[str, Any], runtime_scope_id: Optional[str] = None):
         def _additional_meta() -> Dict[str, Any]:
             return build_runtime_scope_meta(runtime_scope_id)
 
@@ -90,9 +91,9 @@ def validate_mdl(mdl_str: str, validator: MDLValidator) -> Dict[str, Any]:
 def chunk(
     mdl: Dict[str, Any],
     chunker: TableDescriptionChunker,
-    project_id: Optional[str] = None,
+    runtime_scope_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    return chunker.run(mdl=mdl, project_id=normalize_runtime_scope_id(project_id))
+    return chunker.run(mdl=mdl, runtime_scope_id=runtime_scope_id)
 
 
 @observe(capture_input=False, capture_output=False)
@@ -104,9 +105,9 @@ async def embedding(chunk: Dict[str, Any], embedder: Any) -> Dict[str, Any]:
 async def clean(
     embedding: Dict[str, Any],
     cleaner: DocumentCleaner,
-    project_id: Optional[str] = None,
+    runtime_scope_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    await cleaner.run(project_id=normalize_runtime_scope_id(project_id))
+    await cleaner.run(runtime_scope_id=runtime_scope_id)
     return embedding
 
 
@@ -148,9 +149,14 @@ class TableDescription(BasicPipeline):
 
     @observe(name="Table Description Indexing")
     async def run(
-        self, mdl_str: str, project_id: Optional[str] = None
+        self,
+        mdl_str: str,
+        runtime_scope_id: Optional[str] = None,
+        bridge_scope_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        runtime_scope_id = normalize_runtime_scope_id(project_id)
+        runtime_scope_id = resolve_pipeline_runtime_scope_id(
+            runtime_scope_id, bridge_scope_id=bridge_scope_id
+        )
         logger.info(
             f"Runtime scope: {runtime_scope_id}, Table Description Indexing pipeline is running..."
         )
@@ -158,16 +164,22 @@ class TableDescription(BasicPipeline):
             [self._final],
             inputs={
                 "mdl_str": mdl_str,
-                "project_id": runtime_scope_id,
+                "runtime_scope_id": runtime_scope_id,
                 **self._components,
                 **self._configs,
             },
         )
 
     @observe(name="Clean Documents for Table Description")
-    async def clean(self, project_id: Optional[str] = None) -> None:
+    async def clean(
+        self,
+        runtime_scope_id: Optional[str] = None,
+        bridge_scope_id: Optional[str] = None,
+    ) -> None:
         await clean(
             embedding={"documents": []},
             cleaner=self._components["cleaner"],
-            project_id=normalize_runtime_scope_id(project_id),
+            runtime_scope_id=resolve_pipeline_runtime_scope_id(
+                runtime_scope_id, bridge_scope_id=bridge_scope_id
+            ),
         )

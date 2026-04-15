@@ -135,10 +135,8 @@ export const runCli = async (argv: string[]) => {
 
   const config = getConfig();
   const knex = bootstrapKnex({
-    dbType: config.dbType,
     pgUrl: config.pgUrl,
     debug: config.debug,
-    sqliteFile: config.sqliteFile,
   });
 
   try {

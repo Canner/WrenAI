@@ -67,19 +67,19 @@ const ModelEdge = ({
       <EdgeLabelRenderer>
         <CustomPopover
           visible={isPopoverShow}
-          title="Relationship"
+          title="关系详情"
           content={
             <CustomPopover.Row gutter={16}>
-              <CustomPopover.Col title="From" span={12}>
+              <CustomPopover.Col title="来源字段" span={12}>
                 {relation.fromField}
               </CustomPopover.Col>
-              <CustomPopover.Col title="To" span={12}>
+              <CustomPopover.Col title="目标字段" span={12}>
                 {relation.toField}
               </CustomPopover.Col>
-              <CustomPopover.Col title="Type" span={12}>
+              <CustomPopover.Col title="关系类型" span={12}>
                 {relation.joinType}
               </CustomPopover.Col>
-              <CustomPopover.Col title="Description">
+              <CustomPopover.Col title="描述">
                 {relation.description}
               </CustomPopover.Col>
             </CustomPopover.Row>

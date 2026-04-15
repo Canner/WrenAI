@@ -2,7 +2,13 @@ import posthog from 'posthog-js';
 import { NextRouter } from 'next/router';
 import env, { UserConfig } from '@/utils/env';
 
-const setupPostHog = (userConfig) => {
+let telemetryInitialized = false;
+
+const setupPostHog = (userConfig: UserConfig) => {
+  if (telemetryInitialized) {
+    return;
+  }
+
   // Check that PostHog is client-side (used to handle Next.js SSR)
   if (typeof window !== 'undefined') {
     posthog.init(userConfig.telemetryKey, {
@@ -19,16 +25,21 @@ const setupPostHog = (userConfig) => {
       },
       disable_session_recording: env.isDevelopment,
       debug: false,
-      loaded: () => {
-        console.log('PostHog initialized.');
-      },
     });
     // set up distinct id to posthog
     if (userConfig.userUUID) posthog.identify(userConfig.userUUID);
+    telemetryInitialized = true;
   }
 };
 
-export const trackUserTelemetry = (router: NextRouter, config: UserConfig) => {
+export const resetTelemetryStateForTests = () => {
+  telemetryInitialized = false;
+};
+
+export const trackUserTelemetry = (
+  routerEvents: NextRouter['events'],
+  config: UserConfig,
+) => {
   const handlePostHogPageView = () => {
     posthog.capture('$pageview');
   };
@@ -36,10 +47,10 @@ export const trackUserTelemetry = (router: NextRouter, config: UserConfig) => {
   // Track PostHog
   if (config.isTelemetryEnabled) {
     setupPostHog(config);
-    router.events.on('routeChangeComplete', handlePostHogPageView);
+    routerEvents.on('routeChangeComplete', handlePostHogPageView);
   }
 
   return () => {
-    router.events.off('routeChangeComplete', handlePostHogPageView);
+    routerEvents.off('routeChangeComplete', handlePostHogPageView);
   };
 };

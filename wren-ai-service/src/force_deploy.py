@@ -1,5 +1,5 @@
 # This file is only used for OSS, it will force deploy the mdl for the OSS users
-# Since we allow users to customize llm and embedding models, which means qdrant collections may need to be recreated
+# Since we allow users to customize llm and embedding models, which means pgvector-backed indexes may need to be recreated
 # So, this file automates the process of force deploying the mdl
 
 import asyncio

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { Alert, Button, Form, Input, Modal, Typography } from 'antd';
+import { Alert, Button, Form, Input, Modal, Typography, message } from 'antd';
 import { Logo } from '@/components/Logo';
 import InfoCircleOutlined from '@ant-design/icons/InfoCircleOutlined';
 import SelectOutlined from '@ant-design/icons/SelectOutlined';
@@ -9,17 +9,25 @@ import { FORM_MODE } from '@/utils/enum';
 import { getDataSourceName } from '@/utils/dataSourceType';
 import useModalAction, { ModalAction } from '@/hooks/useModalAction';
 import SQLEditor from '@/components/editor/SQLEditor';
-import { parseGraphQLError } from '@/utils/errorHandler';
 import { createSQLPairQuestionValidator } from '@/utils/validator';
 import ErrorCollapse from '@/components/ErrorCollapse';
 import PreviewData from '@/components/dataPreview/PreviewData';
 import ImportDataSourceSQLModal, {
   isSupportSubstitute,
 } from '@/components/modals/ImportDataSourceSQLModal';
-import { usePreviewSqlMutation } from '@/apollo/client/graphql/sql.generated';
-import { useGetSettingsQuery } from '@/apollo/client/graphql/settings.generated';
-import { useGenerateQuestionMutation } from '@/apollo/client/graphql/sql.generated';
-import { SqlPair } from '@/apollo/client/graphql/__types__';
+import {
+  SqlPair,
+  DataSource,
+  DataSourceName,
+} from '@/apollo/client/graphql/__types__';
+import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
+import {
+  previewSql,
+  validateSql,
+  type SqlPreviewDataResponse,
+} from '@/utils/sqlPreviewRest';
+import { fetchSettings } from '@/utils/settingsRest';
+import { generateKnowledgeSqlPairQuestion } from '@/utils/knowledgeRuleSqlRest';
 
 type Props = ModalAction<SqlPair> & {
   loading?: boolean;
@@ -28,15 +36,83 @@ type Props = ModalAction<SqlPair> & {
   };
 };
 
+type ModalErrorState = {
+  message: string;
+  shortMessage: string;
+  code: string;
+  stacktrace?: string[] | string;
+} | null;
+
 const StyledForm = styled(Form)`
+  .ant-form-item {
+    margin-bottom: 18px;
+  }
+
   .adm-question-form-item > div > label {
     width: 100%;
   }
+
+  .ant-form-item-label > label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #4b5563;
+  }
+
+  .ant-input {
+    min-height: 40px;
+    border-radius: 10px;
+    border-color: #dbe2ea;
+    box-shadow: none;
+  }
 `;
 
-const Toolbar = (props: { dataSource: string; onClick: () => void }) => {
+const StyledModal = styled(Modal)`
+  .ant-modal-content {
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 20px 56px rgba(15, 23, 42, 0.12);
+  }
+
+  .ant-modal-header {
+    padding: 18px 20px;
+    border-bottom: 1px solid #eef2f7;
+  }
+
+  .ant-modal-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #111827;
+  }
+
+  .ant-modal-body {
+    padding: 20px;
+  }
+`;
+
+const Footer = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+`;
+
+const FooterHint = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 340px;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.7;
+`;
+
+const Toolbar = (props: {
+  dataSource?: DataSourceName;
+  onClick: () => void;
+}) => {
   const { dataSource, onClick } = props;
-  const name = getDataSourceName(dataSource);
+  const name = dataSource ? getDataSourceName(dataSource) : '数据源';
   return (
     <div className="d-flex justify-space-between align-center px-1">
       <span className="d-flex align-center gx-2">
@@ -44,8 +120,7 @@ const Toolbar = (props: { dataSource: string; onClick: () => void }) => {
         Wren SQL
       </span>
       <Button className="px-0" type="link" size="small" onClick={onClick}>
-        <SelectOutlined />
-        Import from {name} SQL
+        <SelectOutlined />从 {name} SQL 导入
       </Button>
     </div>
   );
@@ -65,66 +140,79 @@ export default function QuestionSQLPairModal(props: Props) {
   // pass payload?.isCreateMode to prevent formMode from being set to Update when passing defaultValue, for the 'Add a SQL pair from an existing answer' scenario use.
   const isCreateMode = formMode === FORM_MODE.CREATE || payload?.isCreateMode;
   const importDataSourceSQLModal = useModalAction();
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
+  const [settings, setSettings] = useState<Awaited<
+    ReturnType<typeof fetchSettings>
+  > | null>(null);
+  const normalizedSettingsDataSource = useMemo<DataSource | undefined>(() => {
+    if (!settings?.dataSource?.type) {
+      return undefined;
+    }
 
-  const { data: settingsResult } = useGetSettingsQuery();
-  const settings = settingsResult?.settings;
+    return {
+      type: settings.dataSource.type,
+      properties: settings.dataSource.properties || {},
+      sampleDataset: settings.dataSource.sampleDataset || undefined,
+    };
+  }, [settings?.dataSource]);
   const dataSource = useMemo(
     () => ({
-      isSupportSubstitute: isSupportSubstitute(settings?.dataSource),
-      type: settings?.dataSource?.type,
+      isSupportSubstitute: isSupportSubstitute(normalizedSettingsDataSource),
+      type: normalizedSettingsDataSource?.type || undefined,
     }),
-    [settings?.dataSource],
+    [normalizedSettingsDataSource],
   );
 
   const [form] = Form.useForm();
-  const [error, setError] =
-    useState<ReturnType<typeof parseGraphQLError>>(null);
+  const [error, setError] = useState<ModalErrorState>(null);
   const [previewing, setPreviewing] = useState<boolean>(false);
+  const [previewData, setPreviewData] = useState<
+    SqlPreviewDataResponse | undefined
+  >(undefined);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [generatingQuestion, setGeneratingQuestion] = useState<boolean>(false);
   const [showPreview, setShowPreview] = useState<boolean>(false);
-
-  // Handle errors via try/catch blocks rather than onError callback
-  const [previewSqlMutation, previewSqlResult] = usePreviewSqlMutation();
-
-  const [generateQuestionMutation] = useGenerateQuestionMutation({
-    onError: (error) => console.error(error),
-  });
 
   const sqlValue = Form.useWatch('sql', form);
 
   useEffect(() => {
     if (visible) {
+      void fetchSettings(runtimeScopeNavigation.selector)
+        .then((payload) => {
+          setSettings(payload);
+        })
+        .catch((error) => {
+          message.error(
+            error instanceof Error
+              ? error.message
+              : '加载系统设置失败，请稍后重试。',
+          );
+        });
       form.setFieldsValue({
         question: defaultValue?.question,
         sql: defaultValue?.sql,
       });
     }
-  }, [visible, defaultValue]);
+  }, [defaultValue, form, runtimeScopeNavigation.selector, visible]);
 
   const handleReset = () => {
-    previewSqlResult.reset();
+    setPreviewData(undefined);
     setShowPreview(false);
     setError(null);
     form.resetFields();
   };
 
   const onValidateSQL = async () => {
-    await previewSqlMutation({
-      variables: {
-        data: {
-          sql: sqlValue,
-          limit: 1,
-          dryRun: true,
-        },
-      },
-    });
+    await validateSql(runtimeScopeNavigation.selector, sqlValue);
   };
 
-  const handleError = (error) => {
-    const graphQLError = parseGraphQLError(error);
-    setError({ ...graphQLError, shortMessage: 'Invalid SQL syntax' });
-    console.error(graphQLError);
+  const handleError = (error: unknown) => {
+    setError({
+      message: error instanceof Error ? error.message : 'SQL 语法无效',
+      shortMessage: 'SQL 语法无效',
+      code: '',
+      stacktrace: undefined,
+    });
   };
 
   const onPreviewData = async () => {
@@ -133,15 +221,11 @@ export default function QuestionSQLPairModal(props: Props) {
     try {
       await onValidateSQL();
       setShowPreview(true);
-      await previewSqlMutation({
-        variables: {
-          data: {
-            sql: sqlValue,
-            limit: 50,
-          },
-        },
-      });
+      const data = await previewSql(runtimeScopeNavigation.selector, sqlValue);
+      setPreviewData(data);
     } catch (error) {
+      setShowPreview(false);
+      setPreviewData(undefined);
       handleError(error);
     } finally {
       setPreviewing(false);
@@ -157,7 +241,9 @@ export default function QuestionSQLPairModal(props: Props) {
       .then(async (values) => {
         try {
           await onValidateSQL();
-          await onSubmit({ data: values, id: defaultValue?.id });
+          if (onSubmit) {
+            await onSubmit({ data: values, id: defaultValue?.id });
+          }
           onClose();
         } catch (error) {
           handleError(error);
@@ -167,22 +253,25 @@ export default function QuestionSQLPairModal(props: Props) {
       })
       .catch((err) => {
         setSubmitting(false);
-        console.error(err);
+        message.error(err?.message || '保存失败，请稍后重试。');
       });
   };
 
   const onGenerateQuestion = async () => {
-    setGeneratingQuestion(true);
-    const { data } = await generateQuestionMutation({
-      variables: {
-        data: {
-          sql: sqlValue,
-        },
-      },
-    });
-
-    form.setFieldsValue({ question: data?.generateQuestion || '' });
-    setGeneratingQuestion(false);
+    try {
+      setGeneratingQuestion(true);
+      const question = await generateKnowledgeSqlPairQuestion(
+        runtimeScopeNavigation.selector,
+        sqlValue,
+      );
+      form.setFieldsValue({ question });
+    } catch (error) {
+      message.error(
+        error instanceof Error ? error.message : '生成问题失败，请稍后重试。',
+      );
+    } finally {
+      setGeneratingQuestion(false);
+    }
   };
 
   const confirmLoading = loading || submitting;
@@ -190,8 +279,8 @@ export default function QuestionSQLPairModal(props: Props) {
 
   return (
     <>
-      <Modal
-        title={`${isCreateMode ? 'Add' : 'Update'} question-SQL pair`}
+      <StyledModal
+        title={isCreateMode ? '新增 SQL 模板' : '更新 SQL 模板'}
         centered
         closable
         confirmLoading={confirmLoading}
@@ -201,42 +290,36 @@ export default function QuestionSQLPairModal(props: Props) {
         visible={visible}
         width={640}
         cancelButtonProps={{ disabled: confirmLoading }}
-        okButtonProps={{ disabled: previewSqlResult.loading }}
+        okButtonProps={{ disabled: previewing }}
         afterClose={() => handleReset()}
         footer={
-          <div className="d-flex justify-space-between align-center">
-            <div
-              className="text-sm ml-2 d-flex justify-space-between align-center"
-              style={{ width: 300 }}
-            >
-              <InfoCircleOutlined className="mr-2 text-sm gray-7" />
-              <Typography.Text
-                type="secondary"
-                className="text-sm gray-7 text-left"
-              >
-                The SQL statement used here follows <b>Wren SQL</b>, which is
-                based on ANSI SQL and optimized for Wren AI.{` `}
+          <Footer>
+            <FooterHint>
+              <InfoCircleOutlined className="mt-1" />
+              <Typography.Text type="secondary" className="text-left">
+                这里使用的是 <b>Wren SQL</b>，它基于 ANSI
+                SQL，并针对当前语义引擎做了优化。{` `}
                 <Typography.Link
                   type="secondary"
                   href="https://docs.getwren.ai/oss/guide/home/wren_sql"
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  Learn more about the syntax.
+                  了解语法说明。
                 </Typography.Link>
               </Typography.Text>
-            </div>
-            <div>
-              <Button onClick={onClose}>Cancel</Button>
+            </FooterHint>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <Button onClick={onClose}>取消</Button>
               <Button
                 type="primary"
                 onClick={onSubmitButton}
                 loading={confirmLoading}
               >
-                Submit
+                提交
               </Button>
             </div>
-          </div>
+          </Footer>
         }
       >
         <StyledForm form={form} preserve={false} layout="vertical">
@@ -247,9 +330,9 @@ export default function QuestionSQLPairModal(props: Props) {
                 className="d-flex justify-space-between"
                 style={{ width: '100%' }}
               >
-                <span>Question</span>
+                <span>问题</span>
                 <div className="gray-8 text-sm">
-                  Let AI create a matching question for this SQL statement.
+                  让 AI 为这条 SQL 自动生成匹配的问题描述。
                   <Button
                     className="ml-2"
                     size="small"
@@ -257,7 +340,7 @@ export default function QuestionSQLPairModal(props: Props) {
                     onClick={onGenerateQuestion}
                     disabled={disabled}
                   >
-                    <span className="text-sm">Generate question</span>
+                    <span className="text-sm">生成问题</span>
                   </Button>
                 </div>
               </div>
@@ -275,7 +358,7 @@ export default function QuestionSQLPairModal(props: Props) {
             <Input />
           </Form.Item>
           <Form.Item
-            label="SQL statement"
+            label="SQL 语句"
             name="sql"
             required
             rules={[
@@ -292,7 +375,7 @@ export default function QuestionSQLPairModal(props: Props) {
                     dataSource={dataSource.type}
                     onClick={() =>
                       importDataSourceSQLModal.openModal({
-                        dataSource: dataSource.type,
+                        dataSource: dataSource.type || DataSourceName.BIG_QUERY,
                       })
                     }
                   />
@@ -305,20 +388,20 @@ export default function QuestionSQLPairModal(props: Props) {
         </StyledForm>
         <div className="my-3">
           <Typography.Text className="d-block gray-7 mb-2">
-            Data preview (50 rows)
+            数据预览（50 行）
           </Typography.Text>
           <Button
             onClick={onPreviewData}
             loading={previewing}
             disabled={disabled}
           >
-            Preview data
+            预览数据
           </Button>
           {showPreview && (
             <div className="my-3">
               <PreviewData
                 loading={previewing}
-                previewData={previewSqlResult?.data?.previewSql}
+                previewData={previewData}
                 copyable={false}
               />
             </div>
@@ -332,7 +415,7 @@ export default function QuestionSQLPairModal(props: Props) {
             description={<ErrorCollapse message={error.message} />}
           />
         )}
-      </Modal>
+      </StyledModal>
       {dataSource.isSupportSubstitute && (
         <ImportDataSourceSQLModal
           {...importDataSourceSQLModal.state}

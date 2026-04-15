@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { message } from 'antd';
 import {
   Path,
   REDSHIFT_AUTH_METHOD,
@@ -16,7 +17,8 @@ export default function useSetupConnectionDataSource() {
 
   const [saveDataSourceMutation, { loading, error }] =
     useSaveDataSourceMutation({
-      onError: (error) => console.error(error),
+      onError: (error) =>
+        message.error(error.message || '保存数据源失败，请稍后重试'),
       onCompleted: () => completedDataSourceSave(),
     });
 
@@ -30,6 +32,10 @@ export default function useSetupConnectionDataSource() {
 
   const saveDataSource = useCallback(
     async (properties?: Record<string, any>) => {
+      if (!selected) {
+        message.error('请先选择数据源类型');
+        return;
+      }
       await saveDataSourceMutation({
         variables: {
           data: {
@@ -58,52 +64,67 @@ export default function useSetupConnectionDataSource() {
 }
 
 export const transformFormToProperties = (
-  properties: Record<string, any>,
-  dataSourceType: DataSourceName,
+  properties?: Record<string, any>,
+  dataSourceType?: DataSourceName,
 ) => {
+  const normalizedProperties = properties || {};
   if (dataSourceType === DataSourceName.DUCKDB) {
-    const configurations = properties.configurations.reduce((acc, cur) => {
-      if (cur.key && cur.value) {
-        acc[cur.key] = cur.value;
-      }
+    const rawConfigurations = Array.isArray(normalizedProperties.configurations)
+      ? normalizedProperties.configurations
+      : [];
+    const configurations = rawConfigurations.reduce(
+      (
+        acc: Record<string, any>,
+        cur: { key?: string; value?: string | number | boolean | null },
+      ) => {
+        if (cur.key && cur.value) {
+          acc[cur.key] = cur.value;
+        }
 
-      return acc;
-    }, {});
+        return acc;
+      },
+      {},
+    );
+    const extensions = Array.isArray(normalizedProperties.extensions)
+      ? normalizedProperties.extensions.filter((value: unknown) =>
+          Boolean(value),
+        )
+      : [];
 
     return {
-      ...properties,
+      ...normalizedProperties,
       configurations,
-      extensions: properties.extensions.filter((i) => i),
+      extensions,
     };
   } else if (dataSourceType === DataSourceName.SNOWFLAKE) {
     return {
-      ...properties,
-      ...getSnowflakeAuthentication(properties),
+      ...normalizedProperties,
+      ...getSnowflakeAuthentication(normalizedProperties),
     };
   } else if (dataSourceType === DataSourceName.DATABRICKS) {
     return {
-      ...properties,
-      ...getDatabricksAuthentication(properties),
+      ...normalizedProperties,
+      ...getDatabricksAuthentication(normalizedProperties),
     };
   } else if (dataSourceType === DataSourceName.ATHENA) {
     return {
-      ...properties,
-      ...getAthenaAuthentication(properties),
+      ...normalizedProperties,
+      ...getAthenaAuthentication(normalizedProperties),
     };
   }
 
   return {
-    ...properties,
+    ...normalizedProperties,
     // remove password placeholder if user doesn't change the password
     password:
-      properties?.password === PASSWORD_PLACEHOLDER
+      normalizedProperties?.password === PASSWORD_PLACEHOLDER
         ? undefined
-        : properties?.password,
+        : normalizedProperties?.password,
 
     awsSecretKey:
-      properties?.awsSecretKey === PASSWORD_PLACEHOLDER
+      normalizedProperties?.awsSecretKey === PASSWORD_PLACEHOLDER
         ? undefined
-        : properties?.awsSecretKey,
+        : normalizedProperties?.awsSecretKey,
   };
 };
 

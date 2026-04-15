@@ -68,7 +68,7 @@ describe('ScheduleWorker', () => {
         id: 'id-1',
         scheduleJobId: 'job-1',
         status: 'running',
-        detailJson: {
+        detailJson: expect.objectContaining({
           targetType: 'dashboard_refresh',
           targetId: 'dashboard-1',
           runtimeIdentity: {
@@ -77,7 +77,7 @@ describe('ScheduleWorker', () => {
             kbSnapshotId: 'snapshot-1',
             deployHash: 'deploy-1',
           },
-        },
+        }),
       }),
     );
     expect(scheduleJobRunRepository.updateOne).toHaveBeenCalledWith(
@@ -108,13 +108,23 @@ describe('ScheduleWorker', () => {
       expect.objectContaining({
         id: 'id-2',
         workspaceId: 'workspace-1',
-        actorUserId: 'user-1',
+        actorType: 'scheduled_job',
+        actorId: 'job-1',
+        actorUserId: null,
         entityType: 'schedule_job',
         entityId: 'job-1',
         eventType: 'schedule_job.succeeded',
         payloadJson: expect.objectContaining({
           traceId: 'trace-1',
           status: 'succeeded',
+          createdByUserId: 'user-1',
+          requestedByUserId: 'user-1',
+          executedBy: 'scheduled_job',
+          authorizationActor: expect.objectContaining({
+            principalType: 'scheduled_job',
+            principalId: 'job-1',
+            workspaceId: 'workspace-1',
+          }),
           runtimeIdentity: {
             workspaceId: 'workspace-1',
             knowledgeBaseId: 'kb-1',
@@ -156,9 +166,19 @@ describe('ScheduleWorker', () => {
     );
     expect(auditEventRepository.createOne).toHaveBeenCalledWith(
       expect.objectContaining({
+        actorType: 'scheduled_job',
+        actorId: 'job-1',
         eventType: 'schedule_job.failed',
         payloadJson: expect.objectContaining({
           status: 'failed',
+          createdByUserId: 'user-1',
+          requestedByUserId: 'user-1',
+          executedBy: 'scheduled_job',
+          authorizationActor: expect.objectContaining({
+            principalType: 'scheduled_job',
+            principalId: 'job-1',
+            workspaceId: 'workspace-1',
+          }),
           runtimeIdentity: {
             workspaceId: 'workspace-1',
             knowledgeBaseId: 'kb-1',

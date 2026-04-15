@@ -13,6 +13,8 @@ export interface Connector {
   workspaceId: string;
   knowledgeBaseId?: string | null;
   type: string;
+  databaseProvider?: string | null;
+  trinoCatalogName?: string | null;
   displayName: string;
   configJson?: Record<string, any> | null;
   secretRecordId?: string | null;

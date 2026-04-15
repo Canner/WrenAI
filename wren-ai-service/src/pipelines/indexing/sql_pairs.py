@@ -17,7 +17,7 @@ from src.core.provider import DocumentStoreProvider, EmbedderProvider
 from src.pipelines.common import (
     build_runtime_scope_filters,
     build_runtime_scope_meta,
-    normalize_runtime_scope_id,
+    resolve_pipeline_runtime_scope_id,
 )
 from src.pipelines.indexing import AsyncDocumentWriter
 
@@ -33,8 +33,8 @@ class SqlPair(BaseModel):
 @component
 class SqlPairsConverter:
     @component.output_types(documents=List[Document])
-    def run(self, sql_pairs: List[SqlPair], project_id: str = ""):
-        runtime_scope_id = normalize_runtime_scope_id(project_id)
+    def run(self, sql_pairs: List[SqlPair], runtime_scope_id: str = ""):
+        runtime_scope_id = resolve_pipeline_runtime_scope_id(runtime_scope_id)
         logger.info(
             f"Runtime scope: {runtime_scope_id} Converting SQL pairs to documents..."
         )
@@ -77,9 +77,9 @@ class SqlPairsCleaner:
 
     @component.output_types()
     async def run(
-        self, sql_pair_ids: List[str], project_id: Optional[str] = None
+        self, sql_pair_ids: List[str], runtime_scope_id: Optional[str] = None
     ) -> None:
-        runtime_scope_id = normalize_runtime_scope_id(project_id)
+        runtime_scope_id = resolve_pipeline_runtime_scope_id(runtime_scope_id)
         filter = build_runtime_scope_filters(
             runtime_scope_id,
             conditions=[
@@ -125,10 +125,12 @@ def sql_pairs(
 def to_documents(
     sql_pairs: List[SqlPair],
     document_converter: SqlPairsConverter,
-    project_id: str = "",
+    runtime_scope_id: str = "",
 ) -> Dict[str, Any]:
-    runtime_scope_id = normalize_runtime_scope_id(project_id)
-    return document_converter.run(sql_pairs=sql_pairs, project_id=runtime_scope_id)
+    runtime_scope_id = resolve_pipeline_runtime_scope_id(runtime_scope_id)
+    return document_converter.run(
+        sql_pairs=sql_pairs, runtime_scope_id=runtime_scope_id
+    )
 
 
 @observe(capture_input=False, capture_output=False)
@@ -144,13 +146,15 @@ async def clean(
     cleaner: SqlPairsCleaner,
     sql_pairs: List[SqlPair],
     embedding: Dict[str, Any] = {},
-    project_id: str = "",
+    runtime_scope_id: str = "",
     delete_all: bool = False,
 ) -> Dict[str, Any]:
-    runtime_scope_id = normalize_runtime_scope_id(project_id)
+    runtime_scope_id = resolve_pipeline_runtime_scope_id(runtime_scope_id)
     sql_pair_ids = [sql_pair.id for sql_pair in sql_pairs]
     if sql_pair_ids or delete_all:
-        await cleaner.run(sql_pair_ids=sql_pair_ids, project_id=runtime_scope_id)
+        await cleaner.run(
+            sql_pair_ids=sql_pair_ids, runtime_scope_id=runtime_scope_id
+        )
 
     return embedding
 
@@ -212,17 +216,20 @@ class SqlPairs(BasicPipeline):
     async def run(
         self,
         mdl_str: str,
-        project_id: str = "",
+        runtime_scope_id: str = "",
         external_pairs: Optional[Dict[str, Any]] = None,
+        bridge_scope_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        runtime_scope_id = normalize_runtime_scope_id(project_id)
+        runtime_scope_id = resolve_pipeline_runtime_scope_id(
+            runtime_scope_id, bridge_scope_id=bridge_scope_id
+        )
         logger.info(
             f"Runtime scope: {runtime_scope_id} SQL Pairs Indexing pipeline is running..."
         )
 
         input = {
             "mdl_str": mdl_str,
-            "project_id": runtime_scope_id,
+            "runtime_scope_id": runtime_scope_id,
             "external_pairs": {
                 **self._external_pairs,
                 **(external_pairs or {}),
@@ -236,13 +243,16 @@ class SqlPairs(BasicPipeline):
     async def clean(
         self,
         sql_pairs: List[SqlPair] = [],
-        project_id: Optional[str] = None,
+        runtime_scope_id: Optional[str] = None,
         delete_all: bool = False,
+        bridge_scope_id: Optional[str] = None,
     ) -> None:
-        runtime_scope_id = normalize_runtime_scope_id(project_id)
+        runtime_scope_id = resolve_pipeline_runtime_scope_id(
+            runtime_scope_id, bridge_scope_id=bridge_scope_id
+        )
         await clean(
             sql_pairs=sql_pairs,
             cleaner=self._components["cleaner"],
-            project_id=runtime_scope_id,
+            runtime_scope_id=runtime_scope_id,
             delete_all=delete_all,
         )

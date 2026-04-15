@@ -25,24 +25,26 @@ export default function ErrorBoundary({ children, error }: Props) {
         <Typography.Text className="gray-8">
           {hasInvalidSql
             ? 'Failed to generate SQL statement'
-            : error.shortMessage}
+            : error.shortMessage || error.message || '回答生成失败'}
         </Typography.Text>
         <div className="gray-7 text-sm mt-1">
           <div>
             {hasInvalidSql
               ? 'We tried to generate SQL based on your question but encountered a small issue. Help us fix it!'
-              : error.message}
+              : error.message || '回答生成失败，请稍后重试。'}
           </div>
           {hasInvalidSql && (
             <>
               <div className="bg-gray-2 p-2 my-4">
-                <ErrorCollapse message={error.message} defaultActive />
+                <ErrorCollapse message={error.message || ''} defaultActive />
               </div>
               <Button
                 className="mt-2 adm-fix-it-btn"
                 icon={<ToolOutlined />}
                 size="small"
-                onClick={() => fixItModal.openModal({ sql: error.invalidSql })}
+                onClick={() =>
+                  fixItModal.openModal({ sql: error.invalidSql || '' })
+                }
               >
                 Fix it
               </Button>
@@ -51,7 +53,7 @@ export default function ErrorBoundary({ children, error }: Props) {
                 loading={error.fixStatementLoading}
                 onClose={fixItModal.closeModal}
                 onSubmit={async (sql: string) => {
-                  await error.fixStatement(sql);
+                  await error.fixStatement?.(sql);
                 }}
               />
             </>

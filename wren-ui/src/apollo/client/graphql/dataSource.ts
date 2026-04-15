@@ -10,6 +10,7 @@ export const LIST_DATA_SOURCE_TABLES = gql`
   query ListDataSourceTables {
     listDataSourceTables {
       name
+      properties
       columns {
         name
         type

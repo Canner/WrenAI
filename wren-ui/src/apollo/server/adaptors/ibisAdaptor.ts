@@ -51,7 +51,7 @@ export interface IbisBigQueryConnectionInfo {
 
 export interface IbisTrinoConnectionInfo {
   host: string;
-  port: number;
+  port: string;
   catalog: string;
   schema: string;
   user: string;
@@ -163,6 +163,23 @@ const dataSourceUrlMap: Record<SupportedDataSource, string> = {
   [SupportedDataSource.REDSHIFT]: 'redshift',
   [SupportedDataSource.DATABRICKS]: 'databricks',
 };
+const resolveDataSourceUrl = (dataSource: DataSourceName) => {
+  const dataSourceUrl =
+    dataSourceUrlMap[dataSource as unknown as SupportedDataSource];
+  if (!dataSourceUrl) {
+    throw new Error(`Unsupported data source: ${dataSource}`);
+  }
+  return dataSourceUrl;
+};
+const resolveErrorMessage = (error: unknown) => {
+  if (axios.isAxiosError(error)) {
+    return error.response?.data || error.message;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+};
 
 export interface TableResponse {
   tables: CompactTable[];
@@ -269,18 +286,19 @@ export class IbisAdaptor implements IIbisAdaptor {
   }
   public async getNativeSql(options: IbisDryPlanOptions): Promise<string> {
     const { dataSource, mdl, sql } = options;
+    const dataSourceUrl = resolveDataSourceUrl(dataSource);
     const body = {
       sql,
       manifestStr: Buffer.from(JSON.stringify(mdl)).toString('base64'),
     };
     try {
       const res = await axios.post(
-        `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.DRY_PLAN)}/connector/${dataSourceUrlMap[dataSource]}/dry-plan`,
+        `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.DRY_PLAN)}/connector/${dataSourceUrl}/dry-plan`,
         body,
       );
       return res.data;
     } catch (e) {
-      logger.debug(`Dry plan error: ${e.response?.data || e.message}`);
+      logger.debug(`Dry plan error: ${resolveErrorMessage(e)}`);
       this.throwError(e, 'Error during dry plan execution');
     }
   }
@@ -290,6 +308,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     options: IbisQueryOptions,
   ): Promise<IbisQueryResponse> {
     const { dataSource, mdl } = options;
+    const dataSourceUrl = resolveDataSourceUrl(dataSource);
     const connectionInfo = this.updateConnectionInfo(options.connectionInfo);
     const ibisConnectionInfo = toIbisConnectionInfo(dataSource, connectionInfo);
     const queryString = this.buildQueryString(options);
@@ -300,7 +319,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     };
     try {
       const res = await axios.post(
-        `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.QUERY)}/connector/${dataSourceUrlMap[dataSource]}/query${queryString}`,
+        `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.QUERY)}/connector/${dataSourceUrl}/query${queryString}`,
         body,
         {
           params: {
@@ -322,7 +341,7 @@ export class IbisAdaptor implements IIbisAdaptor {
         override: res.headers['x-cache-override'] === 'true',
       };
     } catch (e) {
-      logger.debug(`Query error: ${e.response?.data || e.message}`);
+      logger.debug(`Query error: ${resolveErrorMessage(e)}`);
       this.throwError(e, 'Error querying ibis server');
     }
   }
@@ -332,6 +351,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     options: IbisQueryOptions,
   ): Promise<DryRunResponse> {
     const { dataSource, mdl } = options;
+    const dataSourceUrl = resolveDataSourceUrl(dataSource);
     const connectionInfo = this.updateConnectionInfo(options.connectionInfo);
     const ibisConnectionInfo = toIbisConnectionInfo(dataSource, connectionInfo);
     const body = {
@@ -342,7 +362,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     logger.debug(`Dry run sql from ibis with body:`);
     try {
       const response = await axios.post(
-        `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.DRY_RUN)}/connector/${dataSourceUrlMap[dataSource]}/query?dryRun=true`,
+        `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.DRY_RUN)}/connector/${dataSourceUrl}/query?dryRun=true`,
         body,
       );
       logger.debug(`Ibis server Dry run success`);
@@ -351,7 +371,7 @@ export class IbisAdaptor implements IIbisAdaptor {
         processTime: response.headers['x-process-time'],
       };
     } catch (err) {
-      logger.debug(`Dry run error: ${err.response?.data || err.message}`);
+      logger.debug(`Dry run error: ${resolveErrorMessage(err)}`);
       this.throwError(err, 'Error during dry run execution');
     }
   }
@@ -361,13 +381,16 @@ export class IbisAdaptor implements IIbisAdaptor {
     connectionInfo: WREN_AI_CONNECTION_INFO,
   ): Promise<CompactTable[]> {
     try {
-      const getTablesByConnectionInfo = async (ibisConnectionInfo) => {
+      const dataSourceUrl = resolveDataSourceUrl(dataSource);
+      const getTablesByConnectionInfo = async (
+        ibisConnectionInfo: Record<string, unknown>,
+      ) => {
         const body = {
           connectionInfo: ibisConnectionInfo,
         };
         logger.debug(`Getting tables from ibis`);
         const res: AxiosResponse<CompactTable[]> = await axios.post(
-          `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.METADATA)}/connector/${dataSourceUrlMap[dataSource]}/metadata/tables`,
+          `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.METADATA)}/connector/${dataSourceUrl}/metadata/tables`,
           body,
         );
 
@@ -395,7 +418,7 @@ export class IbisAdaptor implements IIbisAdaptor {
       );
       return await getTablesByConnectionInfo(ibisConnectionInfo);
     } catch (e) {
-      logger.debug(`Get tables error: ${e.response?.data || e.message}`);
+      logger.debug(`Get tables error: ${resolveErrorMessage(e)}`);
       this.throwError(e, 'Error getting table from ibis server');
     }
   }
@@ -404,6 +427,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     dataSource: DataSourceName,
     connectionInfo: WREN_AI_CONNECTION_INFO,
   ): Promise<RecommendConstraint[]> {
+    const dataSourceUrl = resolveDataSourceUrl(dataSource);
     connectionInfo = this.updateConnectionInfo(connectionInfo);
     const ibisConnectionInfo = toIbisConnectionInfo(dataSource, connectionInfo);
     const body = {
@@ -412,12 +436,12 @@ export class IbisAdaptor implements IIbisAdaptor {
     try {
       logger.debug(`Getting constraint from ibis`);
       const res: AxiosResponse<RecommendConstraint[]> = await axios.post(
-        `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.METADATA)}/connector/${dataSourceUrlMap[dataSource]}/metadata/constraints`,
+        `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.METADATA)}/connector/${dataSourceUrl}/metadata/constraints`,
         body,
       );
       return res.data;
     } catch (e) {
-      logger.debug(`Get constraints error: ${e.response?.data || e.message}`);
+      logger.debug(`Get constraints error: ${resolveErrorMessage(e)}`);
       this.throwError(e, 'Error getting constraint from ibis server');
     }
   }
@@ -429,6 +453,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     mdl: Manifest,
     parameters: Record<string, any>,
   ): Promise<ValidationResponse> {
+    const dataSourceUrl = resolveDataSourceUrl(dataSource);
     connectionInfo = this.updateConnectionInfo(connectionInfo);
     const ibisConnectionInfo = toIbisConnectionInfo(dataSource, connectionInfo);
     const body = {
@@ -439,13 +464,14 @@ export class IbisAdaptor implements IIbisAdaptor {
     try {
       logger.debug(`Run validation rule "${validationRule}" with ibis`);
       await axios.post(
-        `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.VALIDATION)}/connector/${dataSourceUrlMap[dataSource]}/validate/${snakeCase(validationRule)}`,
+        `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.VALIDATION)}/connector/${dataSourceUrl}/validate/${snakeCase(validationRule)}`,
         body,
       );
       return { valid: true, message: null };
     } catch (e) {
-      logger.debug(`Validation error: ${e.response?.data || e.message}`);
-      return { valid: false, message: e.response?.data || e.message };
+      const errorMessage = resolveErrorMessage(e);
+      logger.debug(`Validation error: ${errorMessage}`);
+      return { valid: false, message: errorMessage };
     }
   }
 
@@ -460,6 +486,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     },
   ): Promise<WrenSQL> {
     const { dataSource, mdl, catalog, schema } = options;
+    const dataSourceUrl = resolveDataSourceUrl(dataSource);
     let connectionInfo = options.connectionInfo;
     connectionInfo = this.updateConnectionInfo(connectionInfo);
     const headers = {
@@ -475,7 +502,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     try {
       logger.debug(`Running model substitution with ibis`);
       const res = await axios.post(
-        `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.MODEL_SUBSTITUTE)}/connector/${dataSourceUrlMap[dataSource]}/model-substitute`,
+        `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.MODEL_SUBSTITUTE)}/connector/${dataSourceUrl}/model-substitute`,
         body,
         {
           headers,
@@ -483,9 +510,7 @@ export class IbisAdaptor implements IIbisAdaptor {
       );
       return res.data as WrenSQL;
     } catch (e) {
-      logger.debug(
-        `Model substitution error: ${e.response?.data || e.message}`,
-      );
+      logger.debug(`Model substitution error: ${resolveErrorMessage(e)}`);
       this.throwError(
         e,
         'Error running model substitution with ibis server',
@@ -498,6 +523,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     dataSource: DataSourceName,
     connectionInfo: WREN_AI_CONNECTION_INFO,
   ): Promise<string> {
+    const dataSourceUrl = resolveDataSourceUrl(dataSource);
     connectionInfo = this.updateConnectionInfo(connectionInfo);
     const ibisConnectionInfo = toIbisConnectionInfo(dataSource, connectionInfo);
     const body = {
@@ -506,12 +532,12 @@ export class IbisAdaptor implements IIbisAdaptor {
     try {
       logger.debug(`Getting version from ibis`);
       const res: AxiosResponse<string> = await axios.post(
-        `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.METADATA)}/connector/${dataSourceUrlMap[dataSource]}/metadata/version`,
+        `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.METADATA)}/connector/${dataSourceUrl}/metadata/version`,
         body,
       );
       return res.data;
     } catch (e) {
-      logger.debug(`Get version error: ${e.response?.data || e.message}`);
+      logger.debug(`Get version error: ${resolveErrorMessage(e)}`);
       this.throwError(e, 'Error getting version from ibis server');
     }
   }
@@ -554,8 +580,11 @@ export class IbisAdaptor implements IIbisAdaptor {
           table.columns = transformedColumns;
         }
         return { ...table, properties };
-      } catch (e) {
-        console.log('e', e);
+      } catch (error) {
+        logger.debug(
+          `Error transforming table properties: ${resolveErrorMessage(error)}`,
+        );
+        return table;
       }
     });
   }
@@ -576,25 +605,26 @@ export class IbisAdaptor implements IIbisAdaptor {
   }
 
   private throwError(
-    e: any,
+    e: unknown,
     defaultMessage: string,
-    errorMessageBuilder?: CallableFunction,
-  ) {
+    errorMessageBuilder?: (message: string) => string,
+  ): never {
+    const axiosError = axios.isAxiosError(e) ? e : null;
+    const resolvedErrorMessage = resolveErrorMessage(e);
     const customMessage =
-      e.response?.data?.message ||
-      e.response?.data ||
-      e.message ||
+      axiosError?.response?.data?.message ||
+      resolvedErrorMessage ||
       defaultMessage;
 
-    const errorData = e.response?.data;
+    const errorData = axiosError?.response?.data;
     throw Errors.create(Errors.GeneralErrorCodes.IBIS_SERVER_ERROR, {
       customMessage: errorMessageBuilder
         ? errorMessageBuilder(customMessage)
         : customMessage,
-      originalError: e,
+      originalError: e instanceof Error ? e : undefined,
       other: {
-        correlationId: e.response?.headers['x-correlation-id'],
-        processTime: e.response?.headers['x-process-time'],
+        correlationId: axiosError?.response?.headers['x-correlation-id'],
+        processTime: axiosError?.response?.headers['x-process-time'],
         ...errorData,
       },
     });

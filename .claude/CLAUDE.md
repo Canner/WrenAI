@@ -32,7 +32,7 @@ yarn rollback           # Knex migration rollback
 yarn generate-gql       # GraphQL codegen from codegen.yaml
 ```
 
-Environment: set `DB_TYPE=sqlite` (default) or `DB_TYPE=pg` with PostgreSQL connection vars. The UI needs `WREN_ENGINE_ENDPOINT`, `WREN_AI_ENDPOINT`, and `IBIS_SERVER_ENDPOINT` to connect to backend services.
+Environment: point `PG_URL` at PostgreSQL. The UI also needs `WREN_ENGINE_ENDPOINT`, `WREN_AI_ENDPOINT`, and `IBIS_SERVER_ENDPOINT` to connect to backend services.
 
 ### wren-ai-service (Python/FastAPI)
 
@@ -40,7 +40,7 @@ Environment: set `DB_TYPE=sqlite` (default) or `DB_TYPE=pg` with PostgreSQL conn
 cd wren-ai-service
 poetry install
 just init               # Creates config.yaml and .env.dev from examples
-just up                 # Start dev Docker services (Qdrant, engine, etc.)
+just up                 # Start dev Docker services (PostgreSQL/pgvector, engine, etc.)
 just start              # Run AI service (poetry run python -m src.__main__)
 just test               # pytest (spins up Docker deps, ignores usecases)
 just test [test_args]   # e.g., just test tests/pytest/pipelines/
@@ -73,7 +73,7 @@ User → Wren UI (Next.js :3000)
        Apollo Server → Wren AI Service (FastAPI :5556) [HTTP REST]
                      → Wren Engine (:8080) [SQL validation/execution]
                      → Ibis Server (:8000) [SQL abstraction for data sources]
-       Wren AI Service → Qdrant (:6333) [vector search for RAG]
+       Wren AI Service → PostgreSQL/pgvector [vector search + retrieval store]
                        → LLM Provider (OpenAI/Azure/etc.) [text-to-SQL generation]
 ```
 
@@ -83,7 +83,7 @@ The Next.js app embeds an Apollo GraphQL server in its API routes (`src/apollo/`
 
 - **`src/apollo/server/resolvers/`** — GraphQL resolvers (asking, model, project, dashboard, etc.)
 - **`src/apollo/server/services/`** — Business logic layer (askingService, deployService, mdlService, queryService, etc.)
-- **`src/apollo/server/repositories/`** — Data access layer using Knex (SQLite or PostgreSQL)
+- **`src/apollo/server/repositories/`** — Data access layer using Knex + PostgreSQL
 - **`src/apollo/server/adaptors/`** — External service adapters (AI service, engine)
 - **`src/apollo/client/`** — Frontend GraphQL operations
 - **`src/components/`** — React components organized by page (home, setup, modeling, knowledge)
@@ -96,8 +96,8 @@ Path aliases: `@/*` → `./src/*`, `@server/*` → `./src/apollo/server/*`
 The Python service uses a pipeline-based architecture:
 
 - **`src/pipelines/`** — RAG pipeline implementations:
-  - `indexing/` — MDL schema, table descriptions, historical questions, SQL pairs → Qdrant
-  - `retrieval/` — Semantic search for relevant context from Qdrant
+  - `indexing/` — MDL schema, table descriptions, historical questions, SQL pairs → pgvector-backed document store
+  - `retrieval/` — Semantic search for relevant context from the pgvector-backed document store
   - `generation/` — SQL generation, chart generation, intent classification
   - `ask/` — Orchestrates retrieval + generation for text-to-SQL
   - `ask_details/` — SQL breakdown and explanation
@@ -115,14 +115,14 @@ Pipelines are configured declaratively in `config.yaml`, wiring LLM providers, e
 1. User submits natural language question in UI
 2. UI sends GraphQL mutation to Apollo Server
 3. Apollo Server calls AI Service REST API
-4. AI Service runs intent classification → retrieves relevant schema/context from Qdrant → generates SQL via LLM
+4. AI Service runs intent classification → retrieves relevant schema/context from the pgvector-backed document store → generates SQL via LLM
 5. Generated SQL is validated against Wren Engine
 6. SQL corrections are attempted if validation fails (up to `max_sql_correction_retries`)
 7. Results returned through the chain back to UI
 
 ### MDL (Metadata Definition Language)
 
-The semantic layer that maps business concepts to database schema. Defines models, columns, relationships, metrics, and calculated fields. MDL is indexed into Qdrant as vector embeddings to provide context for LLM SQL generation. Schema defined in `wren-mdl/mdl.schema.json`.
+The semantic layer that maps business concepts to database schema. Defines models, columns, relationships, metrics, and calculated fields. MDL is indexed into pgvector-backed embeddings to provide context for LLM SQL generation. Schema defined in `wren-mdl/mdl.schema.json`.
 
 ## Docker Development
 

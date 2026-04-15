@@ -11,14 +11,15 @@ import {
 type StepData = {
   dataSource?: DataSourceName;
   template?: SampleDatasetName;
-  properties?: JSON;
+  properties?: Record<string, any>;
 };
 
 export default function useSetupConnection() {
   const [stepKey, setStepKey] = useState(SETUP.STARTER);
   const setupConnectionSampleDataset = useSetupConnectionSampleDataset();
   const setupConnectionDataSource = useSetupConnectionDataSource();
-  const [connectError, setConnectError] = useState(null);
+  const [connectError, setConnectError] =
+    useState<ReturnType<typeof parseGraphQLError>>(null);
 
   const dataSource = setupConnectionDataSource.selected;
   const submitting =
@@ -31,7 +32,11 @@ export default function useSetupConnection() {
   }, [stepKey]);
 
   useEffect(() => {
-    setConnectError(parseGraphQLError(setupConnectionDataSource.error));
+    if (setupConnectionDataSource.error) {
+      setConnectError(parseGraphQLError(setupConnectionDataSource.error));
+      return;
+    }
+    setConnectError(null);
   }, [setupConnectionDataSource.error]);
 
   const onBack = () => {
@@ -42,19 +47,23 @@ export default function useSetupConnection() {
   };
 
   const onNext = (data?: StepData) => {
+    if (!data) {
+      return;
+    }
+
     const dispatchStarter = (data: StepData) => {
       if (data.dataSource) {
         setupConnectionDataSource.selectDataSourceNext({
           dataSource: data.dataSource,
           dispatch: () => setStepKey(SETUP.CREATE_DATA_SOURCE),
         });
-      } else {
+      } else if (data.template) {
         setupConnectionSampleDataset.saveSampleDataset(data.template);
       }
     };
 
     const dispatchCreateDataSource = (data: StepData) => {
-      setupConnectionDataSource.saveDataSource(data.properties);
+      void setupConnectionDataSource.saveDataSource(data.properties);
     };
 
     // Next strategy

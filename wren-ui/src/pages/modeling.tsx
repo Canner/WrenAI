@@ -1,15 +1,16 @@
 import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
-import { forwardRef, useEffect, useMemo, useRef } from 'react';
+import { forwardRef, useEffect, useMemo, useRef, type Key } from 'react';
 import { message } from 'antd';
 import styled from 'styled-components';
-import { MORE_ACTION, NODE_TYPE } from '@/utils/enum';
+import { MORE_ACTION, NODE_TYPE, Path } from '@/utils/enum';
 import { editCalculatedField } from '@/utils/modelingHelper';
-import SiderLayout from '@/components/layouts/SiderLayout';
+import { ComposeDiagram, Diagram as RuntimeDiagram } from '@/utils/data';
 import MetadataDrawer from '@/components/pages/modeling/MetadataDrawer';
 import EditMetadataModal from '@/components/pages/modeling/EditMetadataModal';
 import CalculatedFieldModal from '@/components/modals/CalculatedFieldModal';
 import ModelDrawer from '@/components/pages/modeling/ModelDrawer';
+import ModelingSidebar from '@/components/sidebar/Modeling';
 import RelationModal, {
   RelationFormValues,
 } from '@/components/modals/RelationModal';
@@ -21,10 +22,8 @@ import { convertFormValuesToIdentifier } from '@/hooks/useCombineFieldOptions';
 import { ClickPayload } from '@/components/diagram/Context';
 import { DeployStatusContext } from '@/components/deploy/Context';
 import { DIAGRAM } from '@/apollo/client/graphql/diagram';
-import { LIST_MODELS } from '@/apollo/client/graphql/model';
 import { useDiagramQuery } from '@/apollo/client/graphql/diagram.generated';
 import { useDeployStatusQuery } from '@/apollo/client/graphql/deploy.generated';
-import { useDeleteViewMutation } from '@/apollo/client/graphql/view.generated';
 import {
   useCreateModelMutation,
   useDeleteModelMutation,
@@ -44,28 +43,107 @@ import {
   useDeleteRelationshipMutation,
   useUpdateRelationshipMutation,
 } from '@/apollo/client/graphql/relationship.generated';
+import ConsoleShellLayout from '@/components/reference/ConsoleShellLayout';
 import * as events from '@/utils/events';
+import {
+  HISTORICAL_SNAPSHOT_READONLY_HINT,
+  isHistoricalSnapshotReadonly,
+} from '@/utils/runtimeSnapshot';
+import { deleteViewById } from '@/utils/viewRest';
 import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
+import useRuntimeSelectorState from '@/hooks/useRuntimeSelectorState';
 
 const Diagram = dynamic(() => import('@/components/diagram'), { ssr: false });
 // https://github.com/vercel/next.js/issues/4957#issuecomment-413841689
-const ForwardDiagram = forwardRef(function ForwardDiagram(props: any, ref) {
-  return <Diagram {...props} forwardRef={ref} />;
-});
+type DiagramNode = {
+  id: string;
+  position: {
+    x: number;
+    y: number;
+  };
+  width?: number;
+  height?: number;
+};
+
+type DiagramRefHandle = {
+  fitView: () => void;
+  getNodes: () => DiagramNode[];
+  fitBounds: (bounds: {
+    x: number;
+    y: number;
+    width?: number;
+    height?: number;
+  }) => void;
+};
+
+type NormalizedDiagram = Omit<RuntimeDiagram, 'models' | 'views'> & {
+  models: NonNullable<RuntimeDiagram['models'][number]>[];
+  views: NonNullable<RuntimeDiagram['views'][number]>[];
+};
+
+const ForwardDiagram = forwardRef<DiagramRefHandle, any>(
+  function ForwardDiagram(props, ref) {
+    return <Diagram {...props} forwardRef={ref} />;
+  },
+);
 
 const DiagramWrapper = styled.div`
   position: relative;
   height: 100%;
 `;
 
+const ModelingStage = styled.div`
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  gap: 20px;
+  min-height: calc(100vh - 260px);
+
+  @media (max-width: 1200px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const ModelingSidebarPanel = styled.aside`
+  height: calc(100vh - 260px);
+  min-height: 640px;
+  border-radius: 22px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: linear-gradient(180deg, #fcfbff 0%, #f7f5ff 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  padding: 16px 0;
+  overflow: auto;
+`;
+
+const DiagramPanel = styled.section`
+  height: calc(100vh - 260px);
+  min-height: 640px;
+  border-radius: 22px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: #fbfbff;
+  overflow: hidden;
+`;
+
 export default function Modeling() {
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const runtimeScopePage = useProtectedRuntimeScopePage();
   const searchParams = useSearchParams();
-  const diagramRef = useRef(null);
+  const diagramRef = useRef<DiagramRefHandle | null>(null);
+  const runtimeSelector = useRuntimeSelectorState();
+  const runtimeSelectorState = runtimeSelector.runtimeSelectorState;
+  const isModelingReadonly = isHistoricalSnapshotReadonly({
+    selectorHasRuntime: Boolean(
+      runtimeScopeNavigation.selector.deployHash ||
+        runtimeScopeNavigation.selector.kbSnapshotId ||
+        runtimeScopeNavigation.selector.runtimeScopeId,
+    ),
+    currentKbSnapshotId: runtimeSelectorState?.currentKbSnapshot?.id,
+    defaultKbSnapshotId:
+      runtimeSelectorState?.currentKnowledgeBase?.defaultKbSnapshotId,
+  });
 
-  const { data } = useDiagramQuery({
-    fetchPolicy: 'cache-and-network',
+  const { data, refetch: refetchDiagram } = useDiagramQuery({
+    fetchPolicy: 'cache-first',
+    nextFetchPolicy: 'cache-first',
     skip: !runtimeScopePage.hasRuntimeScope,
     onCompleted: () => {
       diagramRef.current?.fitView();
@@ -73,16 +151,16 @@ export default function Modeling() {
   });
 
   const deployStatusQueryResult = useDeployStatusQuery({
-    pollInterval: 1000,
+    pollInterval: 3000,
     fetchPolicy: 'no-cache',
     skip: !runtimeScopePage.hasRuntimeScope,
   });
 
   const refetchQueries = [{ query: DIAGRAM }];
-  const refetchQueriesForModel = [...refetchQueries, { query: LIST_MODELS }];
-  const getBaseOptions = (options) => {
+  const getBaseOptions = (options: Record<string, any> = {}) => {
     return {
-      onError: (error) => console.error(error),
+      onError: (error: { message?: string }) =>
+        message.error(error?.message || '模型更新失败，请稍后重试'),
       refetchQueries,
       awaitRefetchQueries: true,
       ...options,
@@ -100,7 +178,7 @@ export default function Modeling() {
       getBaseOptions({
         onError: null,
         onCompleted: () => {
-          message.success('Successfully created calculated field.');
+          message.success('已成功创建计算字段。');
         },
       }),
     );
@@ -110,7 +188,7 @@ export default function Modeling() {
       getBaseOptions({
         onError: null,
         onCompleted: () => {
-          message.success('Successfully updated calculated field.');
+          message.success('已成功更新计算字段。');
         },
       }),
     );
@@ -118,7 +196,7 @@ export default function Modeling() {
   const [deleteCalculatedField] = useDeleteCalculatedFieldMutation(
     getBaseOptions({
       onCompleted: () => {
-        message.success('Successfully deleted calculated field.');
+        message.success('已成功删除计算字段。');
       },
     }),
   );
@@ -127,18 +205,18 @@ export default function Modeling() {
     useCreateModelMutation(
       getBaseOptions({
         onCompleted: () => {
-          message.success('Successfully created model.');
+          message.success('已成功创建模型。');
         },
-        refetchQueries: refetchQueriesForModel,
+        refetchQueries,
       }),
     );
 
   const [deleteModelMutation] = useDeleteModelMutation(
     getBaseOptions({
       onCompleted: () => {
-        message.success('Successfully deleted model.');
+        message.success('已成功删除模型。');
       },
-      refetchQueries: refetchQueriesForModel,
+      refetchQueries,
     }),
   );
 
@@ -146,25 +224,17 @@ export default function Modeling() {
     useUpdateModelMutation(
       getBaseOptions({
         onCompleted: () => {
-          message.success('Successfully updated model.');
+          message.success('已成功更新模型。');
         },
-        refetchQueries: refetchQueriesForModel,
+        refetchQueries,
       }),
     );
-
-  const [deleteViewMutation] = useDeleteViewMutation(
-    getBaseOptions({
-      onCompleted: () => {
-        message.success('Successfully deleted view.');
-      },
-    }),
-  );
 
   const [updateModelMetadata, { loading: modelMetadataUpdating }] =
     useUpdateModelMetadataMutation(
       getBaseOptions({
         onCompleted: () => {
-          message.success('Successfully updated model metadata.');
+          message.success('已成功更新模型元数据。');
         },
       }),
     );
@@ -173,7 +243,7 @@ export default function Modeling() {
     useCreateRelationshipMutation(
       getBaseOptions({
         onCompleted: () => {
-          message.success('Successfully created relationship.');
+          message.success('已成功创建关系。');
         },
       }),
     );
@@ -181,7 +251,7 @@ export default function Modeling() {
   const [deleteRelationshipMutation] = useDeleteRelationshipMutation(
     getBaseOptions({
       onCompleted: () => {
-        message.success('Successfully deleted relationship.');
+        message.success('已成功删除关系。');
       },
     }),
   );
@@ -190,7 +260,7 @@ export default function Modeling() {
     useUpdateRelationshipMutation(
       getBaseOptions({
         onCompleted: () => {
-          message.success('Successfully updated relationship.');
+          message.success('已成功更新关系。');
         },
       }),
     );
@@ -199,14 +269,26 @@ export default function Modeling() {
     useUpdateViewMetadataMutation(
       getBaseOptions({
         onCompleted: () => {
-          message.success('Successfully updated view metadata.');
+          message.success('已成功更新视图元数据。');
         },
       }),
     );
 
-  const diagramData = useMemo(() => {
+  const diagramData = useMemo<NormalizedDiagram | null>(() => {
     if (!data) return null;
-    return data?.diagram;
+    const diagram = data.diagram;
+    if (!diagram) return null;
+    return {
+      ...diagram,
+      models: (diagram.models || []).filter(
+        (model): model is NonNullable<RuntimeDiagram['models'][number]> =>
+          Boolean(model),
+      ),
+      views: (diagram.views || []).filter(
+        (view): view is NonNullable<RuntimeDiagram['views'][number]> =>
+          Boolean(view),
+      ),
+    };
   }, [data]);
 
   const metadataDrawer = useDrawerAction();
@@ -230,35 +312,40 @@ export default function Modeling() {
       );
       !!searchedView && metadataDrawer.openDrawer(searchedView);
       // clear query params after opening the drawer
-      runtimeScopeNavigation.replace('/modeling');
+      runtimeScopeNavigation.replaceWorkspace('/modeling');
     }
   }, [queryParams, diagramData]);
 
   useEffect(() => {
-    if (metadataDrawer.state.visible) {
-      const data = metadataDrawer.state.defaultValue;
-      let currentNodeData = null;
-      switch (data.nodeType) {
-        case NODE_TYPE.MODEL: {
-          currentNodeData = diagramData.models.find(
-            (model) => model.modelId === data.modelId,
-          );
-          break;
-        }
-
-        case NODE_TYPE.VIEW: {
-          currentNodeData = diagramData.views.find(
-            (view) => view.viewId === data.viewId,
-          );
-          break;
-        }
-
-        default:
-          break;
+    if (!metadataDrawer.state.visible || !diagramData) {
+      return;
+    }
+    const selectedData = metadataDrawer.state.defaultValue as
+      | ComposeDiagram
+      | undefined;
+    if (!selectedData) {
+      return;
+    }
+    let currentNodeData: ComposeDiagram | undefined;
+    switch (selectedData.nodeType) {
+      case NODE_TYPE.MODEL: {
+        currentNodeData = diagramData.models.find(
+          (model) => model.modelId === selectedData.modelId,
+        );
+        break;
       }
 
-      metadataDrawer.updateState(currentNodeData);
+      case NODE_TYPE.VIEW: {
+        currentNodeData = diagramData.views.find(
+          (view) => view.viewId === selectedData.viewId,
+        );
+        break;
+      }
+
+      default:
+        break;
     }
+    metadataDrawer.updateState(currentNodeData);
   }, [diagramData]);
 
   // register event listener for global
@@ -277,27 +364,58 @@ export default function Modeling() {
     }
   };
 
-  const onSelect = (selectKeys) => {
-    if (diagramRef.current) {
-      const { getNodes, fitBounds } = diagramRef.current;
-      const node = getNodes().find((node) => node.id === selectKeys[0]);
-      const position = {
-        ...node.position,
-        width: node.width,
-        height: node.height,
-      };
-      fitBounds(position);
+  const onSelect = (selectKeys: Key[]) => {
+    const firstSelectedKey = selectKeys[0];
+    if (!diagramRef.current || !firstSelectedKey) {
+      return;
     }
+    const { getNodes, fitBounds } = diagramRef.current;
+    const node = getNodes().find(
+      (candidate) => candidate.id === String(firstSelectedKey),
+    );
+    if (!node) {
+      return;
+    }
+    const position = {
+      ...node.position,
+      width: node.width,
+      height: node.height,
+    };
+    fitBounds(position);
   };
 
   const onNodeClick = async (payload: ClickPayload) => {
     metadataDrawer.openDrawer(payload.data);
   };
 
-  const onMoreClick = (payload) => {
+  const notifyModelingReadonly = () => {
+    message.info(HISTORICAL_SNAPSHOT_READONLY_HINT);
+  };
+
+  const handleDeleteView = async (viewId: number) => {
+    try {
+      await deleteViewById(runtimeScopeNavigation.selector, viewId);
+      await refetchDiagram();
+      await deployStatusQueryResult.refetch();
+      message.success('已成功删除视图。');
+    } catch (error) {
+      message.error(
+        error instanceof Error ? error.message : '删除视图失败，请稍后重试',
+      );
+    }
+  };
+
+  const onMoreClick = (payload: ClickPayload) => {
+    if (!diagramData) {
+      return;
+    }
     const { type, data } = payload;
     const { nodeType } = data;
-    const action = {
+    if (isModelingReadonly) {
+      notifyModelingReadonly();
+      return;
+    }
+    const action: Partial<Record<MORE_ACTION, () => void | Promise<void>>> = {
       [MORE_ACTION.UPDATE_COLUMNS]: () => {
         switch (nodeType) {
           case NODE_TYPE.MODEL:
@@ -328,24 +446,50 @@ export default function Modeling() {
       [MORE_ACTION.DELETE]: async () => {
         switch (nodeType) {
           case NODE_TYPE.MODEL:
+            if (!('modelId' in data) || data.modelId === undefined) {
+              return;
+            }
+            const modelId = Number(data.modelId);
+            if (!Number.isFinite(modelId)) {
+              return;
+            }
             await deleteModelMutation({
-              variables: { where: { id: data.modelId } },
+              variables: { where: { id: modelId } },
             });
             break;
           case NODE_TYPE.CALCULATED_FIELD:
+            if (!('columnId' in data) || data.columnId === undefined) {
+              return;
+            }
+            const columnId = Number(data.columnId);
+            if (!Number.isFinite(columnId)) {
+              return;
+            }
             await deleteCalculatedField({
-              variables: { where: { id: data.columnId } },
+              variables: { where: { id: columnId } },
             });
             break;
           case NODE_TYPE.RELATION:
+            if (!('relationId' in data) || data.relationId === undefined) {
+              return;
+            }
+            const relationId = Number(data.relationId);
+            if (!Number.isFinite(relationId)) {
+              return;
+            }
             await deleteRelationshipMutation({
-              variables: { where: { id: data.relationId } },
+              variables: { where: { id: relationId } },
             });
             break;
           case NODE_TYPE.VIEW:
-            await deleteViewMutation({
-              variables: { where: { id: data.viewId } },
-            });
+            if (!('viewId' in data) || data.viewId === undefined) {
+              return;
+            }
+            const viewId = Number(data.viewId);
+            if (!Number.isFinite(viewId)) {
+              return;
+            }
+            await handleDeleteView(viewId);
             break;
 
           default:
@@ -354,14 +498,24 @@ export default function Modeling() {
         }
       },
     };
-    action[type] && action[type]();
+    const handler = action[type as MORE_ACTION];
+    if (handler) {
+      void handler();
+    }
   };
 
-  const onAddClick = (payload) => {
+  const onAddClick = (payload: ClickPayload) => {
+    if (isModelingReadonly) {
+      notifyModelingReadonly();
+      return;
+    }
     const { targetNodeType, data } = payload;
     switch (targetNodeType) {
       case NODE_TYPE.CALCULATED_FIELD:
-        calculatedFieldModal.openModal(null, {
+        if (!diagramData) {
+          return;
+        }
+        calculatedFieldModal.openModal(undefined, {
           models: diagramData.models,
           sourceModel: data,
         });
@@ -383,33 +537,78 @@ export default function Modeling() {
 
   return (
     <DeployStatusContext.Provider value={{ ...deployStatusQueryResult }}>
-      <SiderLayout
+      <ConsoleShellLayout
+        activeNav="knowledge"
+        title="语义建模"
+        description={`围绕当前知识库维护模型、视图、关系和计算字段，作为问答、SQL 生成与图表展示的统一语义层。${
+          isModelingReadonly ? ` ${HISTORICAL_SNAPSHOT_READONLY_HINT}` : ''
+        }`}
+        sections={[
+          {
+            key: 'overview',
+            label: '知识库概览',
+            onClick: () => runtimeScopeNavigation.pushWorkspace(Path.Knowledge),
+          },
+          {
+            key: 'modeling',
+            label: '语义建模',
+            onClick: () => runtimeScopeNavigation.pushWorkspace(Path.Modeling),
+          },
+        ]}
+        activeSectionKey="modeling"
         loading={runtimeScopePage.guarding || diagramData === null}
-        sidebar={{
-          data: diagramData,
-          onOpenModelDrawer: modelDrawer.openDrawer,
-          onSelect,
-        }}
       >
-        <DiagramWrapper>
-          <ForwardDiagram
-            ref={diagramRef}
-            data={diagramData}
-            onMoreClick={onMoreClick}
-            onNodeClick={onNodeClick}
-            onAddClick={onAddClick}
-          />
-        </DiagramWrapper>
+        <ModelingStage>
+          <ModelingSidebarPanel>
+            {diagramData ? (
+              <ModelingSidebar
+                data={diagramData}
+                onOpenModelDrawer={() => {
+                  if (isModelingReadonly) {
+                    notifyModelingReadonly();
+                    return;
+                  }
+                  modelDrawer.openDrawer();
+                }}
+                onSelect={onSelect}
+                readOnly={isModelingReadonly}
+              />
+            ) : null}
+          </ModelingSidebarPanel>
+          <DiagramPanel>
+            <DiagramWrapper>
+              <ForwardDiagram
+                ref={diagramRef}
+                data={diagramData}
+                onMoreClick={onMoreClick}
+                onNodeClick={onNodeClick}
+                onAddClick={onAddClick}
+                readOnly={isModelingReadonly}
+              />
+            </DiagramWrapper>
+          </DiagramPanel>
+        </ModelingStage>
         <MetadataDrawer
           {...metadataDrawer.state}
           onClose={metadataDrawer.closeDrawer}
-          onEditClick={editMetadataModal.openModal}
+          readOnly={isModelingReadonly}
+          onEditClick={(value) => {
+            if (isModelingReadonly) {
+              notifyModelingReadonly();
+              return;
+            }
+            editMetadataModal.openModal(value);
+          }}
         />
         <EditMetadataModal
           {...editMetadataModal.state}
           onClose={editMetadataModal.closeModal}
           loading={editMetadataLoading}
           onSubmit={async ({ nodeType, data }) => {
+            if (isModelingReadonly) {
+              notifyModelingReadonly();
+              return;
+            }
             const { modelId, viewId, ...metadata } = data;
             switch (nodeType) {
               case NODE_TYPE.MODEL: {
@@ -436,7 +635,12 @@ export default function Modeling() {
           {...modelDrawer.state}
           onClose={modelDrawer.closeDrawer}
           submitting={modelLoading}
+          readOnly={isModelingReadonly}
           onSubmit={async ({ id, data }) => {
+            if (isModelingReadonly) {
+              notifyModelingReadonly();
+              return;
+            }
             if (id) {
               await updateModelMutation({ variables: { where: { id }, data } });
             } else {
@@ -449,6 +653,10 @@ export default function Modeling() {
           onClose={calculatedFieldModal.closeModal}
           loading={calculatedFieldLoading}
           onSubmit={async ({ id, data }) => {
+            if (isModelingReadonly) {
+              notifyModelingReadonly();
+              return;
+            }
             if (id) {
               await updateCalculatedField({
                 variables: { where: { id }, data },
@@ -465,6 +673,10 @@ export default function Modeling() {
           onSubmit={async (
             values: RelationFormValues & { relationId?: number },
           ) => {
+            if (isModelingReadonly) {
+              notifyModelingReadonly();
+              return;
+            }
             const relation = convertFormValuesToIdentifier(values);
             if (values.relationId) {
               await updateRelationshipMutation({
@@ -488,7 +700,7 @@ export default function Modeling() {
             }
           }}
         />
-      </SiderLayout>
+      </ConsoleShellLayout>
     </DeployStatusContext.Provider>
   );
 }

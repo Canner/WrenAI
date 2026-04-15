@@ -42,12 +42,14 @@ export default function Deploy() {
 
   const [deployMutation, { data: deployResult, loading: deploying }] =
     useDeployMutation({
-      onError: (error) => console.error(error),
+      onError: (error) => {
+        message.error(error.message || '部署失败，请稍后重试。');
+      },
       onCompleted: (data) => {
         if (data.deploy?.status === 'FAILED') {
-          console.error('Failed to deploy - ', data.deploy?.error);
           message.error(
-            'Failed to deploy. Please check the log for more details.',
+            data.deploy?.error ||
+              'Failed to deploy. Please check the log for more details.',
           );
         }
       },
@@ -63,7 +65,7 @@ export default function Deploy() {
     }
   }, [deployResult, data]);
 
-  const syncStatus = data?.modelSync.status;
+  const syncStatus = data?.modelSync.status ?? SyncStatus.UNSYNCRONIZED;
 
   const onDeploy = () => {
     deployMutation();

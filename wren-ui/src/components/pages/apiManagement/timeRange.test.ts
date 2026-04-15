@@ -28,17 +28,17 @@ describe('apiManagement timeRange helpers', () => {
     const ranges = getApiHistoryDateRangePresets(now);
 
     expect(Object.keys(ranges)).toEqual([
-      'Last 24 hours',
-      'Last 7 days',
-      'Last 30 days',
+      '最近 24 小时',
+      '最近 7 天',
+      '最近 30 天',
     ]);
-    expect(ranges['Last 24 hours'][0].toISOString()).toBe(
+    expect(ranges['最近 24 小时'][0].toISOString()).toBe(
       '2026-04-02T10:00:00.000Z',
     );
-    expect(ranges['Last 7 days'][0].toISOString()).toBe(
+    expect(ranges['最近 7 天'][0].toISOString()).toBe(
       '2026-03-28T00:00:00.000Z',
     );
-    expect(ranges['Last 30 days'][1].toISOString()).toBe(
+    expect(ranges['最近 30 天'][1].toISOString()).toBe(
       '2026-04-03T23:59:59.999Z',
     );
   });

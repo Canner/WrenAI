@@ -130,6 +130,7 @@ function SelectionTable<T extends Record<string, any>>(
           dataSource={dataSource}
           rowKey={rowKey}
           rowSelection={rowSelection}
+          locale={{ emptyText: '暂无数据' }}
           pagination={{ hideOnSinglePage: true, pageSize: 50, size: 'small' }}
         />
       </Panel>

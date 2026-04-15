@@ -20,11 +20,11 @@ init dev='--dev':
 		fi \
 	fi
 
-up: prepare-files
-	docker compose -f ./tools/dev/docker-compose-dev.yaml --env-file ./tools/dev/.env up -d
+up:
+	docker compose -f ../docker/docker-compose.yaml --env-file ../docker/.env up -d --build bootstrap postgres wren-engine ibis-server trino wren-ui
 
 down:
-	docker compose -f ./tools/dev/docker-compose-dev.yaml --env-file ./tools/dev/.env down
+	docker compose -f ../docker/docker-compose.yaml --env-file ../docker/.env down
 
 start: force_update_config
 	poetry run python -m src.__main__

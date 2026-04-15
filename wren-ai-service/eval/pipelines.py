@@ -284,6 +284,7 @@ class GenerationPipeline(Eval):
         engine_info: dict,
         enable_semantics_comparison: bool,
         component: PipelineComponent,
+        spider_benchmark_db_target: str = "",
     ) -> dict:
         wren_engine_info = engine_info.copy()
         wren_engine_info["api_endpoint"] = WREN_ENGINE_API_URL
@@ -296,8 +297,8 @@ class GenerationPipeline(Eval):
                 ),
                 AnswerRelevancyMetric(engine_info=wren_engine_info),
                 FaithfulnessMetric(engine_info=wren_engine_info),
-                ExactMatchAccuracy(),
-                ExecutionAccuracy(),
+                ExactMatchAccuracy(db_dir=spider_benchmark_db_target),
+                ExecutionAccuracy(db_dir=spider_benchmark_db_target),
                 QuestionToReasoningJudge(**component),
                 ReasoningToSqlJudge(**component),
                 SqlSemanticsJudge(**component),
@@ -415,6 +416,7 @@ class AskPipeline(Eval):
         engine_info: dict,
         enable_semantics_comparison: bool,
         component: PipelineComponent,
+        spider_benchmark_db_target: str = "",
     ) -> dict:
         wren_engine_info = engine_info.copy()
         wren_engine_info["api_endpoint"] = WREN_ENGINE_API_URL
@@ -430,8 +432,8 @@ class AskPipeline(Eval):
                 ContextualRecallMetric(engine_info=wren_engine_info),
                 ContextualRelevancyMetric(),
                 ContextualPrecisionMetric(),
-                ExactMatchAccuracy(),
-                ExecutionAccuracy(),
+                ExactMatchAccuracy(db_dir=spider_benchmark_db_target),
+                ExecutionAccuracy(db_dir=spider_benchmark_db_target),
                 QuestionToReasoningJudge(**component),
                 ReasoningToSqlJudge(**component),
                 SqlSemanticsJudge(**component),
@@ -470,22 +472,30 @@ def metrics_initiator(
     dataset: dict,
     pipe_components: dict[str, PipelineComponent],
     enable_semantics_comparison: bool = True,
-    settings: EvalSettings = EvalSettings(),
+    settings: EvalSettings | None = None,
 ) -> dict:
+    settings = settings or EvalSettings()
     engine_info = engine_config(
         dataset["mdl"],
         pipe_components,
         settings.eval_data_db_path,
     )
+    spider_benchmark_db_target = settings.effective_spider_benchmark_db_target
     component = pipe_components["evaluation"]
     match pipeline:
         case "retrieval":
             return RetrievalPipeline.metrics(engine_info)
         case "generation":
             return GenerationPipeline.metrics(
-                engine_info, enable_semantics_comparison, component
+                engine_info,
+                enable_semantics_comparison,
+                component,
+                spider_benchmark_db_target,
             )
         case "ask":
             return AskPipeline.metrics(
-                engine_info, enable_semantics_comparison, component
+                engine_info,
+                enable_semantics_comparison,
+                component,
+                spider_benchmark_db_target,
             )

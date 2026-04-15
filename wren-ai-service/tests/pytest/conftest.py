@@ -1,4 +1,5 @@
 import importlib
+import os
 from pathlib import Path
 
 import pytest
@@ -20,6 +21,12 @@ def require_pgvector_runtime():
     incompatible_reason = (
         "pgvector runtime is installed but incompatible with the current Haystack/PostgreSQL driver versions"
     )
+    missing_database_reason = (
+        "pgvector runtime requires PG_CONN_STR to point at a reachable PostgreSQL test database"
+    )
+
+    if not os.getenv("PG_CONN_STR"):
+        pytest.skip(missing_database_reason)
 
     for module_name in (
         "psycopg",

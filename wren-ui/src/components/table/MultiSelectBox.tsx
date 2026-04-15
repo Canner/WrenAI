@@ -1,6 +1,6 @@
-import { useState, useMemo, useContext } from 'react';
+import { useState, useMemo, useContext, type ChangeEvent } from 'react';
 import styled from 'styled-components';
-import { isString, difference } from 'lodash';
+import { isString } from 'lodash';
 import { Input, Table } from 'antd';
 import { ColumnsType } from 'antd/lib/table';
 import SearchOutlined from '@ant-design/icons/SearchOutlined';
@@ -30,6 +30,8 @@ const StyledTotal = styled.div`
   padding: 8px 12px;
   border-bottom: 1px var(--gray-3) solid;
 `;
+const MULTI_SELECT_PAGINATION_THRESHOLD = 120;
+const MULTI_SELECT_PAGE_SIZE = 50;
 
 interface Props {
   columns: ColumnsType<any>;
@@ -50,10 +52,27 @@ export default function MultiSelectBox(props: Props) {
   const { status } = formItemContext;
 
   const dataSource = useMemo(() => {
+    const getColumnValue = (item: Record<string, any>, column: any) => {
+      if (!column || typeof column !== 'object' || !('dataIndex' in column)) {
+        return undefined;
+      }
+
+      const dataIndex = column.dataIndex;
+      if (Array.isArray(dataIndex)) {
+        return dataIndex.reduce(
+          (result, segment) =>
+            result && typeof result === 'object' ? result[segment] : undefined,
+          item as unknown,
+        );
+      }
+
+      return typeof dataIndex === 'string' ? item[dataIndex] : undefined;
+    };
+
     return searchValue
       ? items.filter((item) =>
           columns
-            .map((column) => item[column['dataIndex']])
+            .map((column) => getColumnValue(item, column))
             .some((value) => isString(value) && value.includes(searchValue)),
         )
       : items;
@@ -70,8 +89,7 @@ export default function MultiSelectBox(props: Props) {
     onChange && onChange(Array.from(newSelectedRowKey));
   };
 
-  const onSearchChange = (event) => {
-    event.persist();
+  const onSearchChange = (event: ChangeEvent<HTMLInputElement>) => {
     const { value } = event.target;
     setSearchValue(value);
   };
@@ -80,55 +98,46 @@ export default function MultiSelectBox(props: Props) {
     selectedRowKeys.size === 0
       ? items.length
       : `${selectedRowKeys.size}/${items.length}`;
+  const shouldPaginate = dataSource.length > MULTI_SELECT_PAGINATION_THRESHOLD;
 
   return (
     <StyledBox
       className={status ? `multiSelectBox-input-${status}` : undefined}
     >
-      <StyledTotal>{total} table(s)</StyledTotal>
+      <StyledTotal>{total} 张数据表</StyledTotal>
       <div className="p-2">
         <Input
           prefix={<SearchOutlined />}
           onChange={onSearchChange}
-          placeholder="Search here"
+          placeholder="搜索数据表"
           allowClear
         />
       </div>
       <Table
         rowSelection={{
           type: 'checkbox',
+          preserveSelectedRowKeys: true,
           selectedRowKeys: Array.from(selectedRowKeys),
-          onSelect: (record) => onSelect(record['value']),
+          onSelect: (record) => onSelect(record.value),
           onChange(keys) {
-            // deselect all
-            if (keys.length === 0) {
-              const tableKeys = dataSource.map((item) => item.value);
-              const newSelectedRowKeys = difference(
-                [...selectedRowKeys.values()],
-                tableKeys,
-              );
-              const newSelectedRowKeySet = new Set(newSelectedRowKeys);
-              setSelectedRowKeys(newSelectedRowKeySet);
-              onChange && onChange(Array.from(newSelectedRowKeySet));
-              return;
-            }
-            // select all
-            if (keys.length === dataSource.length) {
-              const newSelectedRowKeys = [
-                ...selectedRowKeys,
-                ...(keys as string[]),
-              ];
-              const newSelectedRowKeysSet = new Set(newSelectedRowKeys);
-              setSelectedRowKeys(newSelectedRowKeysSet);
-              onChange && onChange(Array.from(newSelectedRowKeysSet));
-            }
+            const nextSelectedRowKeys = new Set(keys as string[]);
+            setSelectedRowKeys(nextSelectedRowKeys);
+            onChange && onChange(Array.from(nextSelectedRowKeys));
           },
         }}
         rowKey={(record) => record.value}
         columns={columns}
         dataSource={dataSource}
         scroll={{ y: 195 }}
-        pagination={false}
+        pagination={
+          shouldPaginate
+            ? {
+                pageSize: MULTI_SELECT_PAGE_SIZE,
+                showSizeChanger: false,
+                size: 'small',
+              }
+            : false
+        }
         loading={loading}
       />
     </StyledBox>

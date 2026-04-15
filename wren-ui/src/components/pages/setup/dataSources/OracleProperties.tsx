@@ -13,7 +13,7 @@ export default function OracleProperties(props: Props) {
   return (
     <>
       <Form.Item
-        label="Display name"
+        label="显示名称"
         name="displayName"
         required
         rules={[
@@ -26,7 +26,7 @@ export default function OracleProperties(props: Props) {
         <Input />
       </Form.Item>
       <Form.Item
-        label="Host"
+        label="主机地址"
         name="host"
         rules={[
           {
@@ -43,7 +43,7 @@ export default function OracleProperties(props: Props) {
         <Input placeholder="10.1.1.1" disabled={isEditMode} />
       </Form.Item>
       <Form.Item
-        label="Port"
+        label="端口"
         name="port"
         rules={[
           {
@@ -54,7 +54,7 @@ export default function OracleProperties(props: Props) {
         <Input placeholder="1521" disabled={isEditMode} />
       </Form.Item>
       <Form.Item
-        label="Username"
+        label="用户名"
         name="user"
         rules={[
           {
@@ -66,7 +66,7 @@ export default function OracleProperties(props: Props) {
         <Input />
       </Form.Item>
       <Form.Item
-        label="Password"
+        label="密码"
         name="password"
         required
         rules={[
@@ -76,10 +76,10 @@ export default function OracleProperties(props: Props) {
           },
         ]}
       >
-        <Input.Password placeholder="input password" />
+        <Input.Password placeholder="请输入密码" />
       </Form.Item>
       <Form.Item
-        label="Database name"
+        label="数据库名称"
         name="database"
         rules={[
           {
@@ -87,12 +87,12 @@ export default function OracleProperties(props: Props) {
           },
         ]}
       >
-        <Input placeholder="Oracle database name" disabled={isEditMode} />
+        <Input placeholder="请输入 Oracle 数据库名称" disabled={isEditMode} />
       </Form.Item>
       <Form.Item
         label="DSN"
         name="dsn"
-        tooltip="Oracle Data Source Name (DSN) - Alternative to host/port/database configuration"
+        tooltip="Oracle 数据源名称（DSN），可替代主机 / 端口 / 数据库配置。"
       >
         <Input placeholder="(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=host)(PORT=port))(CONNECT_DATA=(SERVICE_NAME=service)))" />
       </Form.Item>

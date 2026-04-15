@@ -1,0 +1,174 @@
+import { DiagramResolver } from '../diagramResolver';
+
+describe('DiagramResolver', () => {
+  const originalBindingMode = process.env.WREN_AUTHORIZATION_BINDING_MODE;
+
+  afterEach(() => {
+    if (originalBindingMode === undefined) {
+      delete process.env.WREN_AUTHORIZATION_BINDING_MODE;
+    } else {
+      process.env.WREN_AUTHORIZATION_BINDING_MODE = originalBindingMode;
+    }
+  });
+
+  const createAuthorizationActor = () => ({
+    principalType: 'user',
+    principalId: 'user-1',
+    workspaceId: 'workspace-1',
+    workspaceMemberId: 'member-1',
+    workspaceRoleKeys: ['owner'],
+    permissionScopes: ['workspace:*'],
+    isPlatformAdmin: false,
+    platformRoleKeys: [],
+  });
+
+  it('builds diagrams from runtime-identity scoped repositories instead of runtimeScope.project', async () => {
+    const resolver = new DiagramResolver();
+    const runtimeIdentity = {
+      projectId: 42,
+      workspaceId: 'workspace-1',
+      knowledgeBaseId: 'kb-1',
+      kbSnapshotId: 'snapshot-1',
+      deployHash: 'deploy-1',
+      actorUserId: 'user-1',
+    };
+    const model = {
+      id: 7,
+      projectId: null,
+      workspaceId: 'workspace-1',
+      knowledgeBaseId: 'kb-1',
+      kbSnapshotId: 'snapshot-1',
+      deployHash: 'deploy-1',
+      displayName: 'Orders',
+      referenceName: 'orders',
+      sourceTableName: 'orders',
+      refSql: 'select * from orders',
+      cached: false,
+      refreshTime: null,
+      properties: JSON.stringify({ description: 'orders table' }),
+    };
+
+    const ctx = {
+      runtimeScope: {
+        project: null,
+        deployment: { hash: 'deploy-1', projectId: 42, manifest: {} },
+        workspace: { id: 'workspace-1' },
+        knowledgeBase: { id: 'kb-1' },
+        kbSnapshot: { id: 'snapshot-1' },
+        deployHash: 'deploy-1',
+        userId: 'user-1',
+      },
+      authorizationActor: createAuthorizationActor(),
+      auditEventRepository: {
+        createOne: jest.fn(),
+      },
+      mdlService: {
+        makeCurrentModelMDLByRuntimeIdentity: jest.fn().mockResolvedValue({
+          project: { id: 42, language: 'EN', type: 'POSTGRES' },
+          manifest: {
+            models: [{ name: 'orders', columns: [] }],
+          },
+        }),
+      },
+      modelRepository: {
+        findAllByRuntimeIdentity: jest.fn().mockResolvedValue([model]),
+      },
+      modelColumnRepository: {
+        findColumnsByModelIds: jest.fn().mockResolvedValue([
+          {
+            id: 1,
+            modelId: 7,
+            isCalculated: false,
+            displayName: 'Order ID',
+            referenceName: 'order_id',
+            type: 'integer',
+            isPk: true,
+            properties: JSON.stringify({}),
+          },
+        ]),
+      },
+      modelNestedColumnRepository: {
+        findNestedColumnsByModelIds: jest.fn().mockResolvedValue([]),
+      },
+      relationRepository: {
+        findRelationInfoBy: jest.fn().mockResolvedValue([]),
+      },
+      viewRepository: {
+        findAllByRuntimeIdentity: jest.fn().mockResolvedValue([]),
+      },
+    } as any;
+
+    const result = await resolver.getDiagram(null, {}, ctx);
+
+    expect(
+      ctx.mdlService.makeCurrentModelMDLByRuntimeIdentity,
+    ).toHaveBeenCalledWith(runtimeIdentity);
+    expect(ctx.modelRepository.findAllByRuntimeIdentity).toHaveBeenCalledWith(
+      runtimeIdentity,
+    );
+    expect(ctx.viewRepository.findAllByRuntimeIdentity).toHaveBeenCalledWith(
+      runtimeIdentity,
+    );
+    expect(ctx.auditEventRepository.createOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'knowledge_base.read',
+        resourceType: 'diagram',
+        resourceId: 'kb-1',
+        result: 'allowed',
+        payloadJson: {
+          operation: 'get_diagram',
+        },
+      }),
+    );
+    expect(result.models).toHaveLength(1);
+    expect(result.models[0].referenceName).toBe('orders');
+  });
+
+  it('rejects diagram access without knowledge base read permission', async () => {
+    process.env.WREN_AUTHORIZATION_BINDING_MODE = 'binding_only';
+    const resolver = new DiagramResolver();
+
+    await expect(
+      resolver.getDiagram(null, {}, {
+        runtimeScope: {
+          project: null,
+          deployment: { hash: 'deploy-1', projectId: 42, manifest: {} },
+          workspace: { id: 'workspace-1' },
+          knowledgeBase: { id: 'kb-1' },
+          kbSnapshot: { id: 'snapshot-1' },
+          deployHash: 'deploy-1',
+          userId: 'user-1',
+        },
+        authorizationActor: {
+          ...createAuthorizationActor(),
+          workspaceRoleKeys: ['owner'],
+          permissionScopes: ['workspace:*'],
+          grantedActions: [],
+          workspaceRoleSource: 'legacy',
+          platformRoleSource: 'legacy',
+        },
+        auditEventRepository: {
+          createOne: jest.fn(),
+        },
+        mdlService: {
+          makeCurrentModelMDLByRuntimeIdentity: jest.fn(),
+        },
+        modelRepository: {
+          findAllByRuntimeIdentity: jest.fn(),
+        },
+        modelColumnRepository: {
+          findColumnsByModelIds: jest.fn(),
+        },
+        modelNestedColumnRepository: {
+          findNestedColumnsByModelIds: jest.fn(),
+        },
+        relationRepository: {
+          findRelationInfoBy: jest.fn(),
+        },
+        viewRepository: {
+          findAllByRuntimeIdentity: jest.fn(),
+        },
+      } as any),
+    ).rejects.toThrow('Knowledge base read permission required');
+  });
+});

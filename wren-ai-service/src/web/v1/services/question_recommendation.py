@@ -72,7 +72,7 @@ class QuestionRecommendation:
         async def _document_retrieval() -> tuple[list[str], bool, bool, bool]:
             retrieval_result = await self._pipelines["db_schema_retrieval"].run(
                 query=candidate["question"],
-                project_id=runtime_scope_id,
+                runtime_scope_id=runtime_scope_id,
             )
             _retrieval_result = retrieval_result.get("construct_retrieval_results", {})
             documents = _retrieval_result.get("retrieval_results", [])
@@ -85,7 +85,7 @@ class QuestionRecommendation:
         async def _sql_pairs_retrieval() -> list[dict]:
             sql_pairs_result = await self._pipelines["sql_pairs_retrieval"].run(
                 query=candidate["question"],
-                project_id=runtime_scope_id,
+                runtime_scope_id=runtime_scope_id,
             )
             sql_samples = sql_pairs_result["formatted_output"].get("documents", [])
             return sql_samples
@@ -93,7 +93,7 @@ class QuestionRecommendation:
         async def _instructions_retrieval() -> list[dict]:
             result = await self._pipelines["instructions_retrieval"].run(
                 query=candidate["question"],
-                project_id=runtime_scope_id,
+                runtime_scope_id=runtime_scope_id,
                 scope="sql",
             )
             instructions = result["formatted_output"].get("instructions", [])
@@ -109,14 +109,14 @@ class QuestionRecommendation:
 
             if self._allow_sql_functions_retrieval:
                 sql_functions = await self._pipelines["sql_functions_retrieval"].run(
-                    project_id=runtime_scope_id,
+                    runtime_scope_id=runtime_scope_id,
                 )
             else:
                 sql_functions = []
 
             if self._allow_sql_knowledge_retrieval:
                 sql_knowledge = await self._pipelines["sql_knowledge_retrieval"].run(
-                    project_id=runtime_scope_id,
+                    runtime_scope_id=runtime_scope_id,
                 )
             else:
                 sql_knowledge = None
@@ -124,7 +124,7 @@ class QuestionRecommendation:
             generated_sql = await self._pipelines["sql_generation"].run(
                 query=candidate["question"],
                 contexts=table_ddls,
-                project_id=runtime_scope_id,
+                runtime_scope_id=runtime_scope_id,
                 sql_samples=sql_samples,
                 instructions=instructions,
                 has_calculated_field=has_calculated_field,
@@ -200,11 +200,11 @@ class QuestionRecommendation:
         trace_id = kwargs.get("trace_id")
 
         try:
-            runtime_scope_id = input.resolve_project_id()
+            runtime_scope_id = input.resolve_runtime_scope_id()
             mdl = orjson.loads(input.mdl)
             retrieval_result = await self._pipelines["db_schema_retrieval"].run(
                 tables=[model["name"] for model in mdl["models"]],
-                project_id=runtime_scope_id,
+                runtime_scope_id=runtime_scope_id,
             )
             _retrieval_result = retrieval_result.get("construct_retrieval_results", {})
             documents = _retrieval_result.get("retrieval_results", [])

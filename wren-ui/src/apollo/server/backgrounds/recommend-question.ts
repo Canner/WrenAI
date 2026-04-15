@@ -9,6 +9,7 @@ import {
 } from '../telemetry/telemetry';
 import { getLogger } from '../utils/logger';
 import { Logger } from 'log4js';
+import { registerShutdownCallback } from '@server/utils/shutdown';
 
 // PRQ background tracker : project recommend question background tracker
 const loggerPrefix = 'PRQBT:';
@@ -26,9 +27,11 @@ export class ProjectRecommendQuestionBackgroundTracker {
   private intervalTime: number;
   private wrenAIAdaptor: IWrenAIAdaptor;
   private projectRepository: IProjectRepository;
-  private runningJobs = new Set();
+  private runningJobs = new Set<number>();
   private telemetry: ITelemetry;
   private logger: Logger;
+  private pollingIntervalId: ReturnType<typeof setInterval> | null = null;
+  private unregisterShutdown?: () => void;
 
   constructor({
     telemetry,
@@ -49,84 +52,96 @@ export class ProjectRecommendQuestionBackgroundTracker {
   }
 
   public start() {
+    if (this.pollingIntervalId) {
+      return;
+    }
     this.logger.info('Recommend question background tracker started');
-    setInterval(() => {
+    this.pollingIntervalId = setInterval(() => {
       const jobs = Object.values(this.tasks).map((project) => async () => {
+        const taskId = this.taskKey(project);
         // check if same job is running
-        if (this.runningJobs.has(this.taskKey(project))) {
+        if (this.runningJobs.has(taskId)) {
           return;
         }
 
         // mark the job as running
-        this.runningJobs.add(this.taskKey(project));
+        this.runningJobs.add(taskId);
 
-        // get the latest result from AI service
-
-        const result =
-          await this.wrenAIAdaptor.getRecommendationQuestionsResult(
-            project.queryId,
-          );
-
-        // check if status change
-        if (
-          project.questionsStatus === result.status &&
-          result.response?.questions.length === (project.questions || []).length
-        ) {
-          // mark the job as finished
-          this.logger.debug(
-            `${loggerPrefix}job ${this.taskKey(project)} status not changed, returning question count: ${result.response?.questions.length || 0}`,
-          );
-          this.runningJobs.delete(this.taskKey(project));
-          return;
-        }
-
-        // update database
-        if (
-          result.status !== project.questionsStatus ||
-          result.response?.questions.length !== (project.questions || []).length
-        ) {
-          this.logger.debug(
-            `${loggerPrefix}job ${this.taskKey(project)} have changes, returning question count: ${result.response?.questions.length || 0}, updating`,
-          );
-          await this.projectRepository.updateOne(project.id, {
-            questionsStatus: result.status.toUpperCase(),
-            questions: result.response?.questions,
-            questionsError: result.error,
-          });
-          project.questionsStatus = result.status;
-          project.questions = result.response?.questions;
-        }
-
-        // remove the task from tracker if it is finalized
-        if (isFinalized(result.status)) {
-          const eventProperties = {
-            projectId: project.id,
-            projectType: project.type,
-            status: result.status,
-            questions: project.questions,
-            error: result.error,
-          };
-          if (result.status === RecommendationQuestionStatus.FINISHED) {
-            this.telemetry.sendEvent(
-              TelemetryEvent.HOME_GENERATE_PROJECT_RECOMMENDATION_QUESTIONS,
-              eventProperties,
+        try {
+          if (!project.queryId) {
+            this.logger.debug(
+              `${loggerPrefix}job ${taskId} missing queryId, removing`,
             );
-          } else {
-            this.telemetry.sendEvent(
-              TelemetryEvent.HOME_GENERATE_PROJECT_RECOMMENDATION_QUESTIONS,
-              eventProperties,
-              WrenService.AI,
-              false,
-            );
+            delete this.tasks[taskId];
+            return;
           }
-          this.logger.debug(
-            `${loggerPrefix}job ${this.taskKey(project)} is finalized, removing`,
-          );
-          delete this.tasks[this.taskKey(project)];
-        }
 
-        // mark the job as finished
-        this.runningJobs.delete(this.taskKey(project));
+          // get the latest result from AI service
+          const result =
+            await this.wrenAIAdaptor.getRecommendationQuestionsResult(
+              project.queryId,
+            );
+
+          // check if status change
+          if (
+            project.questionsStatus === result.status &&
+            result.response?.questions.length ===
+              (project.questions || []).length
+          ) {
+            this.logger.debug(
+              `${loggerPrefix}job ${taskId} status not changed, returning question count: ${result.response?.questions.length || 0}`,
+            );
+            return;
+          }
+
+          // update database
+          if (
+            result.status !== project.questionsStatus ||
+            result.response?.questions.length !==
+              (project.questions || []).length
+          ) {
+            this.logger.debug(
+              `${loggerPrefix}job ${taskId} have changes, returning question count: ${result.response?.questions.length || 0}, updating`,
+            );
+            await this.projectRepository.updateOne(project.id, {
+              questionsStatus: result.status.toUpperCase(),
+              questions: result.response?.questions,
+              questionsError: result.error || undefined,
+            });
+            project.questionsStatus = result.status;
+            project.questions = result.response?.questions;
+          }
+
+          // remove the task from tracker if it is finalized
+          if (isFinalized(result.status)) {
+            const eventProperties = {
+              projectId: project.id,
+              projectType: project.type,
+              status: result.status,
+              questions: project.questions,
+              error: result.error,
+            };
+            if (result.status === RecommendationQuestionStatus.FINISHED) {
+              this.telemetry.sendEvent(
+                TelemetryEvent.HOME_GENERATE_PROJECT_RECOMMENDATION_QUESTIONS,
+                eventProperties,
+              );
+            } else {
+              this.telemetry.sendEvent(
+                TelemetryEvent.HOME_GENERATE_PROJECT_RECOMMENDATION_QUESTIONS,
+                eventProperties,
+                WrenService.AI,
+                false,
+              );
+            }
+            this.logger.debug(
+              `${loggerPrefix}job ${taskId} is finalized, removing`,
+            );
+            delete this.tasks[taskId];
+          }
+        } finally {
+          this.runningJobs.delete(taskId);
+        }
       });
 
       // run the jobs
@@ -139,6 +154,16 @@ export class ProjectRecommendQuestionBackgroundTracker {
         });
       });
     }, this.intervalTime);
+    this.unregisterShutdown = registerShutdownCallback(() => this.stop());
+  }
+
+  public stop() {
+    if (this.pollingIntervalId) {
+      clearInterval(this.pollingIntervalId);
+      this.pollingIntervalId = null;
+    }
+    this.unregisterShutdown?.();
+    this.unregisterShutdown = undefined;
   }
 
   public addTask(project: Project) {
@@ -150,7 +175,9 @@ export class ProjectRecommendQuestionBackgroundTracker {
   }
 
   public async initialize() {
-    const projects = await this.projectRepository.findAll();
+    const projects = await this.projectRepository.findAllBy({
+      questionsStatus: RecommendationQuestionStatus.GENERATING,
+    } as any);
     for (const project of projects) {
       if (
         this.taskKey(project) &&
@@ -176,9 +203,11 @@ export class ThreadRecommendQuestionBackgroundTracker {
   private intervalTime: number;
   private wrenAIAdaptor: IWrenAIAdaptor;
   private threadRepository: IThreadRepository;
-  private runningJobs = new Set();
+  private runningJobs = new Set<number>();
   private telemetry: ITelemetry;
   private logger: Logger;
+  private pollingIntervalId: ReturnType<typeof setInterval> | null = null;
+  private unregisterShutdown?: () => void;
 
   constructor({
     telemetry,
@@ -199,83 +228,95 @@ export class ThreadRecommendQuestionBackgroundTracker {
   }
 
   public start() {
+    if (this.pollingIntervalId) {
+      return;
+    }
     this.logger.info('Recommend question background tracker started');
-    setInterval(() => {
+    this.pollingIntervalId = setInterval(() => {
       const jobs = Object.values(this.tasks).map((thread) => async () => {
+        const taskId = this.taskKey(thread);
         // check if same job is running
-        if (this.runningJobs.has(this.taskKey(thread))) {
+        if (this.runningJobs.has(taskId)) {
           return;
         }
 
         // mark the job as running
-        this.runningJobs.add(this.taskKey(thread));
+        this.runningJobs.add(taskId);
 
-        // get the latest result from AI service
-
-        const result =
-          await this.wrenAIAdaptor.getRecommendationQuestionsResult(
-            thread.queryId,
-          );
-
-        // check if status change
-        if (
-          thread.questionsStatus === result.status &&
-          result.response?.questions.length === (thread.questions || []).length
-        ) {
-          // mark the job as finished
-          this.logger.debug(
-            `${loggerPrefix}job ${this.taskKey(thread)} status not changed, returning question count: ${result.response?.questions.length || 0}`,
-          );
-          this.runningJobs.delete(this.taskKey(thread));
-          return;
-        }
-
-        // update database
-        if (
-          result.status !== thread.questionsStatus ||
-          result.response?.questions.length !== (thread.questions || []).length
-        ) {
-          this.logger.debug(
-            `${loggerPrefix}job ${this.taskKey(thread)} have changes, returning question count: ${result.response?.questions.length || 0}, updating`,
-          );
-          await this.threadRepository.updateOne(thread.id, {
-            questionsStatus: result.status.toUpperCase(),
-            questions: result.response?.questions,
-            questionsError: result.error,
-          });
-          thread.questionsStatus = result.status;
-          thread.questions = result.response?.questions;
-        }
-
-        // remove the task from tracker if it is finalized
-        if (isFinalized(result.status)) {
-          const eventProperties = {
-            thread_id: thread.id,
-            status: result.status,
-            questions: thread.questions,
-            error: result.error,
-          };
-          if (result.status === RecommendationQuestionStatus.FINISHED) {
-            this.telemetry.sendEvent(
-              TelemetryEvent.HOME_GENERATE_THREAD_RECOMMENDATION_QUESTIONS,
-              eventProperties,
+        try {
+          if (!thread.queryId) {
+            this.logger.debug(
+              `${loggerPrefix}job ${taskId} missing queryId, removing`,
             );
-          } else {
-            this.telemetry.sendEvent(
-              TelemetryEvent.HOME_GENERATE_THREAD_RECOMMENDATION_QUESTIONS,
-              eventProperties,
-              WrenService.AI,
-              false,
-            );
+            delete this.tasks[taskId];
+            return;
           }
-          this.logger.debug(
-            `${loggerPrefix}job ${this.taskKey(thread)} is finalized, removing`,
-          );
-          delete this.tasks[this.taskKey(thread)];
-        }
 
-        // mark the job as finished
-        this.runningJobs.delete(this.taskKey(thread));
+          // get the latest result from AI service
+          const result =
+            await this.wrenAIAdaptor.getRecommendationQuestionsResult(
+              thread.queryId,
+            );
+
+          // check if status change
+          if (
+            thread.questionsStatus === result.status &&
+            result.response?.questions.length ===
+              (thread.questions || []).length
+          ) {
+            this.logger.debug(
+              `${loggerPrefix}job ${taskId} status not changed, returning question count: ${result.response?.questions.length || 0}`,
+            );
+            return;
+          }
+
+          // update database
+          if (
+            result.status !== thread.questionsStatus ||
+            result.response?.questions.length !==
+              (thread.questions || []).length
+          ) {
+            this.logger.debug(
+              `${loggerPrefix}job ${taskId} have changes, returning question count: ${result.response?.questions.length || 0}, updating`,
+            );
+            await this.threadRepository.updateOne(thread.id, {
+              questionsStatus: result.status.toUpperCase(),
+              questions: result.response?.questions,
+              questionsError: result.error || undefined,
+            });
+            thread.questionsStatus = result.status;
+            thread.questions = result.response?.questions;
+          }
+
+          // remove the task from tracker if it is finalized
+          if (isFinalized(result.status)) {
+            const eventProperties = {
+              thread_id: thread.id,
+              status: result.status,
+              questions: thread.questions,
+              error: result.error,
+            };
+            if (result.status === RecommendationQuestionStatus.FINISHED) {
+              this.telemetry.sendEvent(
+                TelemetryEvent.HOME_GENERATE_THREAD_RECOMMENDATION_QUESTIONS,
+                eventProperties,
+              );
+            } else {
+              this.telemetry.sendEvent(
+                TelemetryEvent.HOME_GENERATE_THREAD_RECOMMENDATION_QUESTIONS,
+                eventProperties,
+                WrenService.AI,
+                false,
+              );
+            }
+            this.logger.debug(
+              `${loggerPrefix}job ${taskId} is finalized, removing`,
+            );
+            delete this.tasks[taskId];
+          }
+        } finally {
+          this.runningJobs.delete(taskId);
+        }
       });
 
       // run the jobs
@@ -288,6 +329,16 @@ export class ThreadRecommendQuestionBackgroundTracker {
         });
       });
     }, this.intervalTime);
+    this.unregisterShutdown = registerShutdownCallback(() => this.stop());
+  }
+
+  public stop() {
+    if (this.pollingIntervalId) {
+      clearInterval(this.pollingIntervalId);
+      this.pollingIntervalId = null;
+    }
+    this.unregisterShutdown?.();
+    this.unregisterShutdown = undefined;
   }
 
   public addTask(thread: Thread) {
@@ -299,7 +350,9 @@ export class ThreadRecommendQuestionBackgroundTracker {
   }
 
   public async initialize() {
-    const threads = await this.threadRepository.findAll();
+    const threads = await this.threadRepository.findAllBy({
+      questionsStatus: RecommendationQuestionStatus.GENERATING,
+    } as any);
     for (const thread of threads) {
       if (
         !this.tasks[this.taskKey(thread)] &&

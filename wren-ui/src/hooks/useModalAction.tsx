@@ -1,32 +1,38 @@
 import { useState } from 'react';
 import { FORM_MODE } from '@/utils/enum';
 
-export interface ModalAction<TData = any, SData = any> {
+export interface ModalAction<TData = any, SData = any, SPayload = any> {
   visible: boolean;
   onClose: () => void;
   onSubmit?: (values: SData) => Promise<void>;
   formMode?: FORM_MODE;
   defaultValue?: TData;
-  payload?: Record<string, any>;
+  payload?: SPayload;
 }
 
-export default function useModalAction() {
+export default function useModalAction<TData = any, SPayload = any>() {
   const [visible, setVisible] = useState(false);
   const [formMode, setFormMode] = useState(FORM_MODE.CREATE);
-  const [payload, setPayload] = useState(null);
-  const [defaultValue, setDefaultValue] = useState(null);
+  const [payload, setPayload] = useState<SPayload | undefined>(undefined);
+  const [defaultValue, setDefaultValue] = useState<TData | undefined>(
+    undefined,
+  );
 
-  const openModal = (value?: any, payload?: any) => {
-    payload && setPayload(payload);
-    value && setDefaultValue(value);
-    value && setFormMode(FORM_MODE.EDIT);
+  const openModal = (value?: TData, payload?: SPayload) => {
+    if (payload) {
+      setPayload(payload);
+    }
+    if (value !== undefined && value !== null) {
+      setDefaultValue(value);
+      setFormMode(FORM_MODE.EDIT);
+    }
     setVisible(true);
   };
 
   const closeModal = () => {
     setVisible(false);
-    setPayload(null);
-    setDefaultValue(null);
+    setPayload(undefined);
+    setDefaultValue(undefined);
     setFormMode(FORM_MODE.CREATE);
   };
 

@@ -9,6 +9,7 @@ interface Props {
   className?: string;
   marginLeft?: number;
   marginRight?: number;
+  disabled?: boolean;
 }
 
 const makeActionButton = (icon: React.ReactNode) => (props: Props) => {
@@ -21,15 +22,15 @@ const makeActionButton = (icon: React.ReactNode) => (props: Props) => {
     marginRight,
     ...restProps
   } = props;
-  const click = (event) => {
+  const click = (event: React.MouseEvent<HTMLElement>) => {
     onClick && onClick(event);
     event.stopPropagation();
   };
-  const mouseEnter = (event) => {
+  const mouseEnter = (event: React.MouseEvent<HTMLElement>) => {
     onMouseEnter && onMouseEnter(event);
     event.stopPropagation();
   };
-  const mouseLeave = (event) => {
+  const mouseLeave = (event: React.MouseEvent<HTMLElement>) => {
     onMouseLeave && onMouseLeave(event);
     event.stopPropagation();
   };

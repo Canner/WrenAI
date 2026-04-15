@@ -11,6 +11,7 @@ import {
 
 interface Props {
   isSupportCached: boolean;
+  readOnly?: boolean;
   nextScheduleTime?: string;
   schedule?: Schedule;
   onCacheSettings?: () => void;
@@ -30,18 +31,21 @@ const StyledHeader = styled.div`
 export default function DashboardHeader(props: Props) {
   const {
     isSupportCached,
+    readOnly = false,
     nextScheduleTime,
     schedule,
     onCacheSettings,
     onRefreshAll,
   } = props;
 
-  const scheduleTime = getScheduleText(schedule);
+  const scheduleTime = schedule ? getScheduleText(schedule) : '';
 
-  const onMoreClick = async (action: MORE_ACTION) => {
-    if (action === MORE_ACTION.CACHE_SETTINGS) {
+  const onMoreClick = (action: MORE_ACTION | { type: MORE_ACTION }) => {
+    const actionType =
+      typeof action === 'object' && action !== null ? action.type : action;
+    if (actionType === MORE_ACTION.CACHE_SETTINGS) {
       onCacheSettings?.();
-    } else if (action === MORE_ACTION.REFRESH) {
+    } else if (actionType === MORE_ACTION.REFRESH) {
       onRefreshAll?.();
     }
   };
@@ -60,12 +64,12 @@ export default function DashboardHeader(props: Props) {
                     title={
                       <>
                         <div>
-                          <span className="gray-6">Next schedule:</span>{' '}
+                          <span className="gray-6">下次刷新：</span>{' '}
                           {getCompactTime(nextScheduleTime)}
                         </div>
                         {schedule.cron && (
                           <div>
-                            <span className="gray-6">Cron expression:</span>{' '}
+                            <span className="gray-6">Cron 表达式：</span>{' '}
                             {schedule.cron}
                           </div>
                         )}
@@ -82,6 +86,8 @@ export default function DashboardHeader(props: Props) {
             <DashboardDropdown
               onMoreClick={onMoreClick}
               isSupportCached={isSupportCached}
+              disableCacheSettings={readOnly}
+              disableRefresh={readOnly}
             >
               <Button type="text" icon={<MoreIcon className="gray-8" />} />
             </DashboardDropdown>

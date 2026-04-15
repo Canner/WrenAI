@@ -25,7 +25,9 @@ def _metadata_retriever(data_source: str = "postgres") -> SimpleNamespace:
     return SimpleNamespace(
         run=AsyncMock(
             return_value={
-                "documents": [Document(content="metadata", meta={"data_source": data_source})]
+                "documents": [
+                    Document(content="metadata", meta={"data_source": data_source})
+                ]
             }
         )
     )
@@ -38,13 +40,13 @@ def _metadata_retriever(data_source: str = "postgres") -> SimpleNamespace:
         (
             SqlFunctions,
             {
-                "project_id": " deploy-1 ",
+                "runtime_scope_id": " deploy-1 ",
             },
         ),
         (
             SqlKnowledges,
             {
-                "project_id": " deploy-1 ",
+                "runtime_scope_id": " deploy-1 ",
             },
         ),
     ],
@@ -57,13 +59,20 @@ async def test_metadata_retrieval_pipelines_normalize_runtime_scope_and_data_sou
     pipeline._retriever = _metadata_retriever()
     pipeline._cache = {}
     pipeline._components = {}
-    pipeline._pipe = SimpleNamespace(execute=AsyncMock(return_value={"cache": "cached"}))
+    pipeline._pipe = SimpleNamespace(
+        execute=AsyncMock(return_value={"cache": "cached"})
+    )
 
     result = await pipeline.run(**run_kwargs)
 
     assert result == "cached"
-    assert pipeline._pipe.execute.await_args.kwargs["inputs"]["project_id"] == "deploy-1"
-    assert pipeline._pipe.execute.await_args.kwargs["inputs"]["data_source"] == "postgres"
+    assert (
+        pipeline._pipe.execute.await_args.kwargs["inputs"]["runtime_scope_id"]
+        == "deploy-1"
+    )
+    assert (
+        pipeline._pipe.execute.await_args.kwargs["inputs"]["data_source"] == "postgres"
+    )
 
 
 @pytest.mark.asyncio
@@ -75,7 +84,7 @@ async def test_metadata_retrieval_pipelines_normalize_runtime_scope_and_data_sou
             {
                 "query": "q",
                 "contexts": ["ctx"],
-                "project_id": " deploy-1 ",
+                "runtime_scope_id": " deploy-1 ",
                 "use_dry_plan": True,
             },
         ),
@@ -84,7 +93,7 @@ async def test_metadata_retrieval_pipelines_normalize_runtime_scope_and_data_sou
             {
                 "contexts": ["ctx"],
                 "invalid_generation_result": {"sql": "select 1", "error": "boom"},
-                "project_id": " deploy-1 ",
+                "runtime_scope_id": " deploy-1 ",
                 "use_dry_plan": True,
             },
         ),
@@ -95,7 +104,7 @@ async def test_metadata_retrieval_pipelines_normalize_runtime_scope_and_data_sou
                 "contexts": ["ctx"],
                 "sql_generation_reasoning": "reason",
                 "histories": [],
-                "project_id": " deploy-1 ",
+                "runtime_scope_id": " deploy-1 ",
                 "use_dry_plan": True,
             },
         ),
@@ -113,7 +122,7 @@ async def test_sql_pipelines_use_normalized_runtime_scope_for_dry_plan(
     await pipeline.run(**run_kwargs)
 
     inputs = pipeline._pipe.execute.await_args.kwargs["inputs"]
-    assert inputs["project_id"] == "deploy-1"
+    assert inputs["runtime_scope_id"] == "deploy-1"
     assert inputs["data_source"] == "postgres"
 
 
@@ -127,11 +136,12 @@ async def test_sql_regeneration_normalizes_runtime_scope_before_post_process():
         contexts=["ctx"],
         sql_generation_reasoning="reason",
         sql="select 1",
-        project_id=" deploy-1 ",
+        runtime_scope_id=" deploy-1 ",
     )
 
     assert (
-        pipeline._pipe.execute.await_args.kwargs["inputs"]["project_id"] == "deploy-1"
+        pipeline._pipe.execute.await_args.kwargs["inputs"]["runtime_scope_id"]
+        == "deploy-1"
     )
 
 
@@ -143,14 +153,14 @@ async def test_sql_regeneration_normalizes_runtime_scope_before_post_process():
             HistoricalQuestionRetrieval,
             {
                 "query": "q",
-                "project_id": " deploy-1 ",
+                "runtime_scope_id": " deploy-1 ",
             },
         ),
         (
             Instructions,
             {
                 "query": "q",
-                "project_id": " deploy-1 ",
+                "runtime_scope_id": " deploy-1 ",
                 "scope": "sql",
             },
         ),
@@ -158,14 +168,14 @@ async def test_sql_regeneration_normalizes_runtime_scope_before_post_process():
             SqlPairsRetrieval,
             {
                 "query": "q",
-                "project_id": " deploy-1 ",
+                "runtime_scope_id": " deploy-1 ",
             },
         ),
         (
             DbSchemaRetrieval,
             {
                 "query": "q",
-                "project_id": " deploy-1 ",
+                "runtime_scope_id": " deploy-1 ",
                 "tables": ["orders"],
             },
         ),
@@ -173,14 +183,14 @@ async def test_sql_regeneration_normalizes_runtime_scope_before_post_process():
             IntentClassification,
             {
                 "query": "q",
-                "project_id": " deploy-1 ",
+                "runtime_scope_id": " deploy-1 ",
             },
         ),
         (
             SQLExecutor,
             {
                 "sql": "select 1",
-                "project_id": " deploy-1 ",
+                "runtime_scope_id": " deploy-1 ",
             },
         ),
     ],
@@ -196,7 +206,7 @@ async def test_pipeline_run_normalizes_runtime_scope_before_execute(
 
     await pipeline.run(**run_kwargs)
 
-    assert pipeline._pipe.execute.await_args.kwargs["inputs"]["project_id"] == (
+    assert pipeline._pipe.execute.await_args.kwargs["inputs"]["runtime_scope_id"] == (
         "deploy-1"
     )
 
@@ -219,15 +229,13 @@ async def test_sql_gen_post_processor_normalizes_runtime_scope_before_engine_exe
     )
 
     engine = SimpleNamespace(
-        execute_sql=AsyncMock(
-            return_value=(True, [], {"correlation_id": "corr-1"})
-        )
+        execute_sql=AsyncMock(return_value=(True, [], {"correlation_id": "corr-1"}))
     )
     post_processor = SQLGenPostProcessor(engine=engine)
 
     await post_processor.run(
         replies=['{"sql":"select 1"}'],
-        project_id=" deploy-1 ",
+        runtime_scope_id=" deploy-1 ",
     )
 
-    assert engine.execute_sql.await_args.kwargs["project_id"] == "deploy-1"
+    assert engine.execute_sql.await_args.kwargs["runtime_scope_id"] == "deploy-1"

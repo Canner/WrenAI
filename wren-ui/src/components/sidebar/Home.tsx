@@ -2,6 +2,7 @@ import clsx from 'clsx';
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useParams } from 'next/navigation';
+import { message } from 'antd';
 import styled from 'styled-components';
 import { Path } from '@/utils/enum';
 import FundViewOutlined from '@ant-design/icons/FundViewOutlined';
@@ -16,7 +17,7 @@ export interface Props {
   data: {
     threads: ThreadData[];
   };
-  onSelect: (selectKeys) => void;
+  onSelect: (selectKeys: React.Key[]) => void;
   onDelete: (id: string) => Promise<void>;
   onRename: (id: string, newName: string) => Promise<void>;
 }
@@ -56,10 +57,12 @@ export default function Home(props: Props) {
     try {
       await onDelete(threadId);
       if (params?.id == threadId) {
-        runtimeScopeNavigation.push(Path.Home);
+        runtimeScopeNavigation.pushWorkspace(Path.Home);
       }
     } catch (error) {
-      console.error(error);
+      message.error(
+        error instanceof Error ? error.message : '删除对话失败，请稍后重试。',
+      );
     }
   };
 
@@ -77,7 +80,7 @@ export default function Home(props: Props) {
         className={clsx({
           'adm-treeNode--selected': router.pathname === Path.HomeDashboard,
         })}
-        href={runtimeScopeNavigation.href(Path.HomeDashboard)}
+        href={runtimeScopeNavigation.hrefWorkspace(Path.HomeDashboard)}
       >
         <FundViewOutlined className="mr-2" />
         <span className="text-medium">Dashboard</span>

@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react';
+import { message } from 'antd';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { buildRuntimeScopeUrl } from '@/apollo/client/runtimeScope';
 
 type TextBasedAnswerStreamTaskReturn = [
@@ -15,40 +16,61 @@ export default function useTextBasedAnswerStreamTask() {
   const [loading, setLoading] = useState<boolean>(false);
   const [data, setData] = useState<string>('');
 
-  const onReset = () => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current?.close();
-      eventSourceRef.current = null;
+  const closeEventSource = useCallback(() => {
+    if (!eventSourceRef.current) {
+      return;
     }
+
+    eventSourceRef.current.close();
+    eventSourceRef.current = null;
+  }, []);
+
+  const onReset = useCallback(() => {
+    closeEventSource();
     setData('');
-  };
+    setLoading(false);
+  }, [closeEventSource]);
 
-  const fetchAnswerStreamingTask = (responseId: number) => {
-    setLoading(true);
-    onReset();
+  const fetchAnswerStreamingTask = useCallback(
+    (responseId: number) => {
+      onReset();
+      setLoading(true);
 
-    const eventSource = new EventSource(
-      buildRuntimeScopeUrl('/api/ask_task/streaming_answer', { responseId }),
-    );
+      const eventSource = new EventSource(
+        buildRuntimeScopeUrl('/api/ask_task/streaming_answer', { responseId }),
+      );
+      eventSourceRef.current = eventSource;
 
-    eventSource.onmessage = (event) => {
-      const eventData = JSON.parse(event.data);
-      if (eventData.done) {
-        eventSource.close();
-        setLoading(false);
-      } else {
-        setData((state) => state + (eventData?.message || ''));
-      }
+      eventSource.onmessage = (event) => {
+        let eventData: { done?: boolean; message?: string };
+        try {
+          eventData = JSON.parse(event.data);
+        } catch (_error) {
+          message.error('回答流解析失败，请重试');
+          onReset();
+          return;
+        }
+
+        if (eventData.done) {
+          onReset();
+        } else {
+          setData((state) => state + (eventData?.message || ''));
+        }
+      };
+
+      eventSource.onerror = () => {
+        message.error('回答流连接中断，请重试');
+        onReset();
+      };
+    },
+    [onReset],
+  );
+
+  useEffect(() => {
+    return () => {
+      closeEventSource();
     };
-
-    eventSource.onerror = (error) => {
-      console.error(error);
-      eventSource.close();
-      setLoading(false);
-    };
-
-    eventSourceRef.current = eventSource;
-  };
+  }, [closeEventSource]);
 
   return [
     fetchAnswerStreamingTask,

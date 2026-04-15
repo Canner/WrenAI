@@ -9,7 +9,7 @@ import FieldSelect, {
 import { nextTick } from '@/utils/time';
 import { makeIterable } from '@/utils/iteration';
 import { NODE_TYPE } from '@/utils/enum';
-import { compactObject, parseJson } from '@/utils/helper';
+import { parseJson } from '@/utils/helper';
 import {
   FormItemInputContext,
   FormItemStatusContextProps,
@@ -26,7 +26,7 @@ import {
 interface Props {
   sourceModel: DiagramModel;
   onChange?: (value: FieldValue[]) => void;
-  onFetchOptions?: (value: any, index: number) => Promise<FieldOption[]>;
+  onFetchOptions?: (value: FieldValue, index: number) => Promise<FieldOption[]>;
   value?: FieldValue[];
 }
 
@@ -65,7 +65,7 @@ export default function LineageSelector(props: Props) {
     return selectedData;
   }, [sourceModel, value]);
 
-  const change = async (selectValue, index) => {
+  const change = async (selectValue: string, index: number) => {
     const parsePayload = parseJson(selectValue) as FieldValue;
 
     const prevValue = value.slice(0, index);
@@ -99,12 +99,16 @@ export const getLineageOptions = (data: {
   expression: ExpressionName;
   values: FieldValue[];
 }) => {
+  const isNonNullable = <T,>(value: T | null | undefined): value is T =>
+    value != null;
   const { model, sourceModel, expression, values = [] } = data;
-  const hasPrimaryKey = model.fields.some((field) => field.isPrimaryKey);
+  const hasPrimaryKey = (model.fields || []).some(
+    (field) => field?.isPrimaryKey,
+  );
   const isSourceModel = model.modelId === sourceModel.modelId;
 
-  const convertor = (field) => {
-    const value = compactObject(getFieldValue(field));
+  const convertor = (field: FieldValue) => {
+    const value = getFieldValue(field);
     const isRelationship = field.nodeType === NODE_TYPE.RELATION;
     // check if source model's calculated field
     const isSourceModelCalculatedField =
@@ -126,10 +130,10 @@ export const getLineageOptions = (data: {
     let invalidTypeMessage = '';
     if (!checkStringFunctionAllowType(expression, value)) {
       isInvalidType = true;
-      invalidTypeMessage = 'Please select a string type field.';
+      invalidTypeMessage = '请选择字符串类型字段。';
     } else if (!checkNumberFunctionAllowType(expression, value)) {
       isInvalidType = true;
-      invalidTypeMessage = 'Please select a number type field.';
+      invalidTypeMessage = '请选择数值类型字段。';
     }
 
     const disabled =
@@ -141,15 +145,13 @@ export const getLineageOptions = (data: {
 
     let title = undefined;
     if (isSourceModelFieldsWithAggregation) {
-      title =
-        "Aggregation functions don't allow selecting from source model fields to prevent unexpected outcomes.";
+      title = '聚合函数不支持直接选择源模型字段，以避免产生不符合预期的结果。';
     } else if (isRelationshipWithoutPrimaryKey) {
-      title =
-        'Please set a primary key within this model to use it in a calculated field.';
+      title = '请先为当前模型设置主键，才能在计算字段中使用这条关系。';
     } else if (isSourceModelCalculatedField) {
-      title = 'Calculated field from the source model is not supported.';
+      title = '暂不支持直接使用源模型中的计算字段。';
     } else if (isInUsedRelationship) {
-      title = 'This relationship is in use.';
+      title = '这条关系已经被使用。';
     } else if (isInvalidType) {
       title = invalidTypeMessage;
     }
@@ -163,7 +165,7 @@ export const getLineageOptions = (data: {
           )}
           <div
             // only show column full title when it's not disabled
-            title={!disabled ? field.displayName : null}
+            title={!disabled ? field.displayName || undefined : undefined}
             className="text-truncate"
           >
             {field.displayName}
@@ -175,16 +177,22 @@ export const getLineageOptions = (data: {
       disabled,
     };
   };
-  const fields = [...(model?.fields || [])].map(convertor);
-  const calculatedFields = (model?.calculatedFields || []).map(convertor);
-  const relationships = (model?.relationFields || []).map(convertor);
+  const fields = [...(model?.fields || [])]
+    .filter(isNonNullable)
+    .map((field) => convertor(field as FieldValue));
+  const calculatedFields = (model?.calculatedFields || [])
+    .filter(isNonNullable)
+    .map((field) => convertor(field as FieldValue));
+  const relationships = (model?.relationFields || [])
+    .filter(isNonNullable)
+    .map((field) => convertor(field as FieldValue));
   return compact([
     ...fields,
     calculatedFields.length
-      ? { label: 'Calculated fields', options: calculatedFields }
+      ? { label: '计算字段', options: calculatedFields }
       : undefined,
     relationships.length
-      ? { label: 'Relationships', options: relationships }
+      ? { label: '关系', options: relationships }
       : undefined,
   ]);
 };

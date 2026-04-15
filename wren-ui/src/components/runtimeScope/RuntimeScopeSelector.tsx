@@ -1,75 +1,74 @@
 import { useRouter } from 'next/router';
-import { useQuery } from '@apollo/client';
-import { Select, Space, Typography } from 'antd';
-import styled from 'styled-components';
+import { Select, Space } from 'antd';
+import styled, { css } from 'styled-components';
 import {
   buildRuntimeScopeUrl,
   omitRuntimeScopeQuery,
 } from '@/apollo/client/runtimeScope';
-import { RUNTIME_SELECTOR_STATE } from '@/apollo/client/graphql/runtimeScope';
 import useRuntimeScopeTransition from '@/hooks/useRuntimeScopeTransition';
+import useRuntimeSelectorState from '@/hooks/useRuntimeSelectorState';
 import { Path } from '@/utils/enum';
-
-const { Text } = Typography;
+import {
+  getReferenceDisplayKnowledgeName,
+  getReferenceDisplaySnapshotName,
+  getReferenceDisplayWorkspaceName,
+} from '@/utils/referenceDemoKnowledge';
 
 const SelectorGroup = styled(Space)`
-  .runtime-scope-select {
-    min-width: 168px;
-  }
+  ${(props: { $layout?: 'inline' | 'stacked' }) =>
+    props.$layout === 'stacked'
+      ? css`
+          width: 100%;
 
-  .runtime-scope-workspace {
-    max-width: 180px;
-  }
+          .ant-space-item {
+            width: 100%;
+          }
+
+          .runtime-scope-select,
+          .runtime-scope-workspace {
+            width: 100%;
+            min-width: 0;
+          }
+        `
+      : css`
+          .runtime-scope-select {
+            min-width: 168px;
+          }
+
+          .runtime-scope-workspace {
+            min-width: 196px;
+          }
+        `}
 `;
 
-interface RuntimeSelectorWorkspace {
-  id: string;
-  slug: string;
-  name: string;
+interface Props {
+  className?: string;
+  layout?: 'inline' | 'stacked';
+  size?: 'large' | 'middle' | 'small';
+  scope?: 'workspace' | 'knowledge' | 'full';
 }
 
-interface RuntimeSelectorKnowledgeBase {
-  id: string;
-  slug: string;
-  name: string;
-  defaultKbSnapshotId?: string | null;
-}
-
-interface RuntimeSelectorKBSnapshot {
-  id: string;
-  snapshotKey: string;
-  displayName: string;
-  deployHash: string;
-  status: string;
-}
-
-interface RuntimeSelectorStateData {
-  runtimeSelectorState: {
-    currentWorkspace: RuntimeSelectorWorkspace | null;
-    currentKnowledgeBase: RuntimeSelectorKnowledgeBase | null;
-    currentKbSnapshot: RuntimeSelectorKBSnapshot | null;
-    knowledgeBases: RuntimeSelectorKnowledgeBase[];
-    kbSnapshots: RuntimeSelectorKBSnapshot[];
-  } | null;
-}
-
-export default function RuntimeScopeSelector() {
+export default function RuntimeScopeSelector({
+  className,
+  layout = 'inline',
+  size = 'small',
+  scope = 'full',
+}: Props) {
   const router = useRouter();
   const runtimeScopeTransition = useRuntimeScopeTransition();
-  const { data, loading } = useQuery<RuntimeSelectorStateData>(
-    RUNTIME_SELECTOR_STATE,
-    {
-      fetchPolicy: 'network-only',
-      nextFetchPolicy: 'cache-first',
-    },
-  );
-
-  const selectorState = data?.runtimeSelectorState;
+  const runtimeSelector = useRuntimeSelectorState();
+  const selectorState = runtimeSelector.runtimeSelectorState;
+  const loading = runtimeSelector.loading;
   const currentWorkspace = selectorState?.currentWorkspace;
+  const workspaces = selectorState?.workspaces || [];
   const currentKnowledgeBase = selectorState?.currentKnowledgeBase;
   const currentKbSnapshot = selectorState?.currentKbSnapshot;
   const onThreadPage = router.pathname === Path.Thread;
   const baseParams = omitRuntimeScopeQuery(router.query);
+  const showWorkspace =
+    scope === 'workspace' || scope === 'knowledge' || scope === 'full';
+  const showKnowledgeBase = scope === 'knowledge' || scope === 'full';
+  const showKbSnapshot = scope === 'full';
 
   if (!selectorState || !currentWorkspace) {
     return null;
@@ -79,9 +78,10 @@ export default function RuntimeScopeSelector() {
     workspaceId: string;
     knowledgeBaseId?: string;
     kbSnapshotId?: string;
+    targetPath?: string;
   }) => {
     const nextUrl = buildRuntimeScopeUrl(
-      router.pathname,
+      nextSelector.targetPath || router.pathname,
       baseParams,
       nextSelector,
     );
@@ -89,81 +89,114 @@ export default function RuntimeScopeSelector() {
   };
 
   return (
-    <SelectorGroup size={[8, 0]}>
-      <Text
-        className="gray-1 runtime-scope-workspace"
-        ellipsis={{ tooltip: currentWorkspace.name }}
-      >
-        {currentWorkspace.name}
-      </Text>
-      <Select
-        className="runtime-scope-select"
-        size="small"
-        loading={loading}
-        value={currentKnowledgeBase?.id}
-        disabled={
-          loading ||
-          runtimeScopeTransition.transitioning ||
-          onThreadPage ||
-          !selectorState.knowledgeBases.length
-        }
-        options={selectorState.knowledgeBases.map((knowledgeBase) => ({
-          label: knowledgeBase.name,
-          value: knowledgeBase.id,
-        }))}
-        placeholder="Knowledge Base"
-        dropdownMatchSelectWidth={false}
-        onChange={(knowledgeBaseId: string) => {
-          if (
-            !currentWorkspace?.id ||
-            !knowledgeBaseId ||
-            knowledgeBaseId === currentKnowledgeBase?.id
-          ) {
-            return;
+    <SelectorGroup
+      className={className}
+      size={layout === 'stacked' ? [0, 8] : [8, 0]}
+      direction={layout === 'stacked' ? 'vertical' : 'horizontal'}
+      $layout={layout}
+    >
+      {showWorkspace ? (
+        <Select
+          className="runtime-scope-select runtime-scope-workspace"
+          size={size}
+          loading={loading}
+          value={currentWorkspace?.id}
+          disabled={
+            loading ||
+            runtimeScopeTransition.transitioning ||
+            workspaces.length <= 1
           }
+          options={workspaces.map((workspace) => ({
+            label: getReferenceDisplayWorkspaceName(workspace.name),
+            value: workspace.id,
+          }))}
+          placeholder="工作区"
+          dropdownMatchSelectWidth={false}
+          optionLabelProp="label"
+          onChange={(workspaceId: string) => {
+            if (!workspaceId || workspaceId === currentWorkspace?.id) {
+              return;
+            }
 
-          navigateWithSelector({
-            workspaceId: currentWorkspace.id,
-            knowledgeBaseId,
-          });
-        }}
-      />
-      <Select
-        className="runtime-scope-select"
-        size="small"
-        loading={loading}
-        value={currentKbSnapshot?.id}
-        disabled={
-          loading ||
-          runtimeScopeTransition.transitioning ||
-          onThreadPage ||
-          !currentWorkspace?.id ||
-          !currentKnowledgeBase?.id ||
-          !selectorState.kbSnapshots.length
-        }
-        options={selectorState.kbSnapshots.map((kbSnapshot) => ({
-          label: kbSnapshot.displayName,
-          value: kbSnapshot.id,
-        }))}
-        placeholder="Snapshot"
-        dropdownMatchSelectWidth={false}
-        onChange={(kbSnapshotId: string) => {
-          if (
+            navigateWithSelector({
+              workspaceId,
+              ...(onThreadPage ? { targetPath: Path.Home } : {}),
+            });
+          }}
+        />
+      ) : null}
+      {showKnowledgeBase ? (
+        <Select
+          className="runtime-scope-select"
+          size={size}
+          loading={loading}
+          value={currentKnowledgeBase?.id}
+          disabled={
+            loading ||
+            runtimeScopeTransition.transitioning ||
+            onThreadPage ||
+            !selectorState.knowledgeBases.length
+          }
+          options={selectorState.knowledgeBases.map((knowledgeBase) => ({
+            label: getReferenceDisplayKnowledgeName(knowledgeBase.name),
+            value: knowledgeBase.id,
+          }))}
+          placeholder="知识库"
+          dropdownMatchSelectWidth={false}
+          onChange={(knowledgeBaseId: string) => {
+            if (
+              !currentWorkspace?.id ||
+              !knowledgeBaseId ||
+              knowledgeBaseId === currentKnowledgeBase?.id
+            ) {
+              return;
+            }
+
+            navigateWithSelector({
+              workspaceId: currentWorkspace.id,
+              knowledgeBaseId,
+            });
+          }}
+        />
+      ) : null}
+      {showKbSnapshot ? (
+        <Select
+          className="runtime-scope-select"
+          size={size}
+          loading={loading}
+          value={currentKbSnapshot?.id}
+          disabled={
+            loading ||
+            runtimeScopeTransition.transitioning ||
+            onThreadPage ||
             !currentWorkspace?.id ||
             !currentKnowledgeBase?.id ||
-            !kbSnapshotId ||
-            kbSnapshotId === currentKbSnapshot?.id
-          ) {
-            return;
+            !selectorState.kbSnapshots.length
           }
+          options={selectorState.kbSnapshots.map((kbSnapshot) => ({
+            label: getReferenceDisplaySnapshotName(kbSnapshot.displayName),
+            value: kbSnapshot.id,
+          }))}
+          placeholder="快照"
+          dropdownMatchSelectWidth={false}
+          onChange={(kbSnapshotId: string) => {
+            if (
+              !currentWorkspace?.id ||
+              !currentKnowledgeBase?.id ||
+              !kbSnapshotId ||
+              kbSnapshotId === currentKbSnapshot?.id
+            ) {
+              return;
+            }
 
-          navigateWithSelector({
-            workspaceId: currentWorkspace.id,
-            knowledgeBaseId: currentKnowledgeBase.id,
-            kbSnapshotId,
-          });
-        }}
-      />
+            navigateWithSelector({
+              workspaceId: currentWorkspace.id,
+              knowledgeBaseId: currentKnowledgeBase.id,
+              kbSnapshotId,
+            });
+          }}
+        />
+      ) : null}
     </SelectorGroup>
   );
 }

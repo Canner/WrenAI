@@ -7,7 +7,18 @@ type Props = Omit<BaseTableProps, 'onChange'> & {
   onChange?: (value: any) => void;
 };
 
-const EditableCell = (props) => {
+type EditableCellProps = {
+  className?: string;
+  colSpan?: number;
+  title?: string;
+  editable?: boolean;
+  record: any;
+  handleSave: (id: string | number, value: { [key: string]: string }) => void;
+  dataIndex: string;
+  children?: React.ReactNode;
+};
+
+const EditableCell = (props: EditableCellProps) => {
   const {
     className,
     colSpan,
@@ -39,20 +50,29 @@ const EditableCell = (props) => {
 export const makeEditableBaseTable = (BaseTable: React.FC<BaseTableProps>) => {
   const EditableBaseTable = (props: Props) => {
     const { columns, dataSource, onChange, ...restProps } = props;
-    const [data, setData] = useState(dataSource);
+    const [data, setData] = useState<NonNullable<Props['dataSource']>>(
+      dataSource || [],
+    );
     const components = {
       body: { cell: !isEmpty(dataSource) ? EditableCell : undefined },
     };
 
     useEffect(() => {
       onChange && onChange(data);
-    }, [data]);
+    }, [data, onChange]);
 
-    const handleSave = (id: string, value: { [key: string]: string }) => {
+    useEffect(() => {
+      setData(dataSource || []);
+    }, [dataSource]);
+
+    const handleSave = (
+      id: string | number,
+      value: { [key: string]: string },
+    ) => {
       const [dataIndexKey] = Object.keys(value);
 
       // sync value back to data state
-      const newData = cloneDeep(data);
+      const newData = cloneDeep(data || []);
       newData.forEach((item) => {
         if (id === item.id) set(item, dataIndexKey, value[dataIndexKey]);
       });
@@ -60,9 +80,9 @@ export const makeEditableBaseTable = (BaseTable: React.FC<BaseTableProps>) => {
       setData(newData);
     };
 
-    const tableColumns = columns.map((column) => ({
+    const tableColumns = (columns || []).map((column) => ({
       ...column,
-      onCell: (record) => ({
+      onCell: (record: any) => ({
         editable: [COLUMN.ALIAS.title, COLUMN.DESCRIPTION.title].includes(
           column.title as string,
         ),

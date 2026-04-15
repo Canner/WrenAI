@@ -27,7 +27,7 @@ export default function EditBasicMetadata(props: Props) {
       });
   }, [data]);
 
-  const handleSave = (_, value) => {
+  const handleSave = (_: string | number, value: { [key: string]: string }) => {
     const [dataIndexKey] = Object.keys(value);
 
     const newData = cloneDeep(data);
@@ -42,7 +42,7 @@ export default function EditBasicMetadata(props: Props) {
           <Col span={12}>
             <div className="mb-6" data-testid="edit-metadata__name">
               <Typography.Text className="d-block gray-7 mb-2">
-                Name
+                名称
               </Typography.Text>
               <div>{data.referenceName}</div>
             </div>
@@ -50,7 +50,7 @@ export default function EditBasicMetadata(props: Props) {
           <Col span={12} data-testid="edit-metadata__alias">
             <div className="mb-6" data-testid="metadata__name">
               <Typography.Text className="d-block gray-7 mb-2">
-                Alias
+                显示名称
               </Typography.Text>
               <EditableWrapper
                 record={data}
@@ -67,7 +67,7 @@ export default function EditBasicMetadata(props: Props) {
       {isView && (
         <div className="mb-6" data-testid="edit-metadata__name">
           <Typography.Text className="d-block gray-7 mb-2">
-            Name
+            名称
           </Typography.Text>
           <EditableWrapper
             record={data}
@@ -81,9 +81,7 @@ export default function EditBasicMetadata(props: Props) {
       )}
 
       <div className="mb-6" data-testid="edit-metadata__description">
-        <Typography.Text className="d-block gray-7 mb-2">
-          Description
-        </Typography.Text>
+        <Typography.Text className="d-block gray-7 mb-2">描述</Typography.Text>
         <EditableWrapper
           record={data}
           dataIndex="description"

@@ -1,3 +1,0 @@
-[submodule "wren-engine"]
-	path = wren-engine
-	url = git@github.com:Canner/wren-engine.git

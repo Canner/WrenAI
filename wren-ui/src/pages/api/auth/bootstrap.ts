@@ -1,9 +1,37 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
+import { buildAuthResponseUser } from './responseUser';
 import { buildSessionCookie } from './sessionCookie';
+import { resolveBootstrapKnowledgeBaseSelection } from '@server/utils/runtimeSelectorState';
+import { KBSnapshot, KnowledgeBase } from '@server/repositories';
+import { enforceRateLimit } from '@server/utils/rateLimit';
 
 const getString = (value: unknown) =>
   typeof value === 'string' ? value.trim() : '';
+
+const toRuntimeSelector = (
+  workspaceId: string,
+  knowledgeBase: KnowledgeBase | null,
+  snapshot: KBSnapshot | null,
+) => ({
+  workspaceId,
+  knowledgeBaseId: knowledgeBase?.id || null,
+  kbSnapshotId: snapshot?.id || null,
+  deployHash: snapshot?.deployHash || null,
+});
+
+const resolveWorkspaceRuntimeSelector = async (workspaceId: string) => {
+  const knowledgeBases = await components.knowledgeBaseRepository.findAllBy({
+    workspaceId,
+  });
+  const { knowledgeBase, snapshot } =
+    await resolveBootstrapKnowledgeBaseSelection(
+      knowledgeBases,
+      components.kbSnapshotRepository,
+    );
+
+  return toRuntimeSelector(workspaceId, knowledgeBase, snapshot);
+};
 
 export default async function handler(
   req: NextApiRequest,
@@ -18,32 +46,52 @@ export default async function handler(
     const email = getString(req.body?.email);
     const password = getString(req.body?.password);
     const displayName = getString(req.body?.displayName);
-    const workspaceName = getString(req.body?.workspaceName);
-    const workspaceSlug = getString(req.body?.workspaceSlug) || undefined;
     const locale = getString(req.body?.locale) || undefined;
 
-    if (!email || !password || !displayName || !workspaceName) {
+    if (!email || !password || !displayName) {
       return res.status(400).json({
-        error:
-          'email, password, displayName, and workspaceName are required',
+        error: 'email, password, and displayName are required',
       });
+    }
+
+    const rateLimitResult = await enforceRateLimit({
+      req,
+      res,
+      endpoint: 'auth.bootstrap',
+      email,
+      rules: [
+        { kind: 'ip', windowMs: 60 * 60 * 1000, max: 3 },
+        { kind: 'email', windowMs: 60 * 60 * 1000, max: 2 },
+      ],
+    });
+    if (rateLimitResult.limited) {
+      return rateLimitResult.response;
     }
 
     const authResult = await components.authService.bootstrapOwner({
       email,
       password,
       displayName,
-      workspaceName,
-      workspaceSlug,
       locale,
     });
 
-    res.setHeader('Set-Cookie', buildSessionCookie(authResult.sessionToken, req));
+    res.setHeader(
+      'Set-Cookie',
+      buildSessionCookie(authResult.sessionToken, req),
+    );
     return res.status(201).json({
-      user: authResult.user,
+      user: buildAuthResponseUser({
+        user: authResult.user,
+        isPlatformAdmin: Boolean(authResult.actorClaims.isPlatformAdmin),
+      }),
       workspace: authResult.workspace,
       membership: authResult.membership,
       actorClaims: authResult.actorClaims,
+      isPlatformAdmin: Boolean(authResult.actorClaims.isPlatformAdmin),
+      defaultWorkspaceId: authResult.user.defaultWorkspaceId ?? null,
+      runtimeSelector: await resolveWorkspaceRuntimeSelector(
+        authResult.workspace.id,
+      ),
     });
   } catch (error: any) {
     return res.status(400).json({ error: error.message || 'Bootstrap failed' });

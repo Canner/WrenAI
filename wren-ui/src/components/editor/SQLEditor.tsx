@@ -1,9 +1,10 @@
 import clsx from 'clsx';
 import { useState, useContext, useRef, useEffect } from 'react';
 import styled from 'styled-components';
+import { Ace } from 'ace-builds';
 import AceEditor from '@/components/editor/AceEditor';
 import { FormItemInputContext } from 'antd/lib/form/context';
-import useAutoComplete from '@/hooks/useAutoComplete';
+import useAutoComplete, { Completer } from '@/hooks/useAutoComplete';
 
 const Wrapper = styled.div`
   transition: all 0.3s cubic-bezier(0.645, 0.045, 0.355, 1);
@@ -47,9 +48,27 @@ interface Props {
   toolbar?: React.ReactNode;
 }
 
+interface AceLangTools {
+  keyWordCompleter: unknown;
+  snippetCompleter: unknown;
+  textCompleter: unknown;
+  setCompleters: (completers: unknown[]) => void;
+  addCompleter: (completer: {
+    getCompletions: (
+      editor: Ace.Editor,
+      session: Ace.EditSession,
+      pos: Ace.Point,
+      prefix: string,
+      callback: (error: null, results: Completer[]) => void,
+    ) => void;
+  }) => void;
+}
+
 const getLangTools = () => {
-  const { ace } = window as any;
-  return ace ? ace.require('ace/ext/language_tools') : null;
+  const { ace } = window as Window & {
+    ace?: { require?: (name: string) => AceLangTools | null };
+  };
+  return ace?.require?.('ace/ext/language_tools') || null;
 };
 
 export default function SQLEditor(props: Props) {
@@ -80,7 +99,7 @@ export default function SQLEditor(props: Props) {
     if (!autoComplete || completers.length === 0) return;
 
     const langTools = getLangTools();
-    const customCompleter = {
+    const customCompleter: Parameters<AceLangTools['addCompleter']>[0] = {
       getCompletions: (_editor, _session, _pos, _prefix, callback) => {
         callback(null, completers);
       },
@@ -92,7 +111,7 @@ export default function SQLEditor(props: Props) {
 
   const [sql, setSql] = useState(value || '');
 
-  const change = (sql) => {
+  const change = (sql: string) => {
     setSql(sql);
     onChange?.(sql);
   };

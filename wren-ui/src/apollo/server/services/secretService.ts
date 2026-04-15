@@ -1,5 +1,9 @@
 import crypto from 'crypto';
-import { IQueryOptions, ISecretRepository, SecretRecord } from '../repositories';
+import {
+  IQueryOptions,
+  ISecretRepository,
+  SecretRecord,
+} from '../repositories';
 
 const DEFAULT_KEY_VERSION = 1;
 const ENCRYPTION_ALGORITHM = 'aes-256-gcm';

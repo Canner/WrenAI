@@ -44,7 +44,8 @@ export class LearningRepository
     const camelCaseData = mapKeys(data, (_value, key) => camelCase(key));
     const formattedData = mapValues(camelCaseData, (value, key) => {
       if (['paths'].includes(key)) {
-        // The value from Sqlite will be string type, while the value from PG is JSON object
+        // Older stringified payloads are still parsed for compatibility;
+        // PostgreSQL jsonb rows already return objects.
         if (typeof value === 'string') {
           return value ? JSON.parse(value) : value;
         } else {

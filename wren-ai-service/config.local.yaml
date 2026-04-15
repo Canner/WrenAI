@@ -1,0 +1,165 @@
+# Local dev config for running WrenAI from this repo on macOS.
+# - LLM and embedding both route through OpenRouter via LiteLLM
+# - wren-ui runs on the host at port 3002 to avoid the existing port-3000 conflict
+
+type: llm
+provider: litellm_llm
+timeout: 120
+models:
+- model: openrouter/google/gemini-3.1-flash-lite-preview
+  alias: default
+  api_base: https://openrouter.ai/api/v1
+  api_key_name: OPENROUTER_API_KEY
+  timeout: 120
+  kwargs:
+    n: 1
+    temperature: 0
+---
+type: embedder
+provider: litellm_embedder
+models:
+- model: openai/qwen/qwen3-embedding-8b
+  alias: default
+  api_base: https://openrouter.ai/api/v1
+  api_key_name: OPENROUTER_API_KEY
+  timeout: 120
+---
+type: engine
+provider: wren_ui
+endpoint: http://127.0.0.1:3002
+---
+type: engine
+provider: wren_ibis
+endpoint: http://127.0.0.1:8000
+---
+type: document_store
+provider: pgvector
+connection_string_env: PG_CONN_STR
+embedding_dimension: 4096
+timeout: 120
+create_extension: true
+recreate_table: true
+---
+type: pipeline
+pipes:
+- name: db_schema_indexing
+  embedder: litellm_embedder.default
+  document_store: pgvector
+- name: historical_question_indexing
+  embedder: litellm_embedder.default
+  document_store: pgvector
+- name: table_description_indexing
+  embedder: litellm_embedder.default
+  document_store: pgvector
+- name: db_schema_retrieval
+  llm: litellm_llm.default
+  embedder: litellm_embedder.default
+  document_store: pgvector
+- name: historical_question_retrieval
+  embedder: litellm_embedder.default
+  document_store: pgvector
+- name: sql_generation
+  llm: litellm_llm.default
+  engine: wren_ui
+  document_store: pgvector
+- name: sql_correction
+  llm: litellm_llm.default
+  engine: wren_ui
+  document_store: pgvector
+- name: followup_sql_generation
+  llm: litellm_llm.default
+  engine: wren_ui
+  document_store: pgvector
+- name: sql_answer
+  llm: litellm_llm.default
+- name: semantics_description
+  llm: litellm_llm.default
+- name: relationship_recommendation
+  llm: litellm_llm.default
+  engine: wren_ui
+- name: question_recommendation
+  llm: litellm_llm.default
+- name: question_recommendation_db_schema_retrieval
+  llm: litellm_llm.default
+  embedder: litellm_embedder.default
+  document_store: pgvector
+- name: question_recommendation_sql_generation
+  llm: litellm_llm.default
+  engine: wren_ui
+  document_store: pgvector
+- name: intent_classification
+  llm: litellm_llm.default
+  embedder: litellm_embedder.default
+  document_store: pgvector
+- name: misleading_assistance
+  llm: litellm_llm.default
+- name: data_assistance
+  llm: litellm_llm.default
+- name: sql_pairs_indexing
+  document_store: pgvector
+  embedder: litellm_embedder.default
+- name: sql_pairs_retrieval
+  document_store: pgvector
+  embedder: litellm_embedder.default
+  llm: litellm_llm.default
+- name: preprocess_sql_data
+  llm: litellm_llm.default
+- name: sql_executor
+  engine: wren_ui
+- name: user_guide_assistance
+  llm: litellm_llm.default
+- name: chart_generation
+  llm: litellm_llm.default
+- name: chart_adjustment
+  llm: litellm_llm.default
+- name: sql_question_generation
+  llm: litellm_llm.default
+- name: sql_generation_reasoning
+  llm: litellm_llm.default
+- name: followup_sql_generation_reasoning
+  llm: litellm_llm.default
+- name: sql_regeneration
+  llm: litellm_llm.default
+  engine: wren_ui
+- name: instructions_indexing
+  embedder: litellm_embedder.default
+  document_store: pgvector
+- name: instructions_retrieval
+  embedder: litellm_embedder.default
+  document_store: pgvector
+- name: sql_functions_retrieval
+  engine: wren_ibis
+  document_store: pgvector
+- name: project_meta_indexing
+  document_store: pgvector
+- name: sql_tables_extraction
+  llm: litellm_llm.default
+- name: sql_diagnosis
+  llm: litellm_llm.default
+- name: sql_knowledge_retrieval
+  engine: wren_ibis
+  document_store: pgvector
+---
+settings:
+  engine_timeout: 30
+  column_indexing_batch_size: 50
+  table_retrieval_size: 10
+  table_column_retrieval_size: 100
+  allow_intent_classification: true
+  allow_sql_generation_reasoning: true
+  allow_sql_functions_retrieval: true
+  enable_column_pruning: false
+  max_sql_correction_retries: 3
+  query_cache_maxsize: 1000
+  query_cache_ttl: 3600
+  langfuse_host: https://cloud.langfuse.com
+  langfuse_enable: true
+  logging_level: DEBUG
+  development: true
+  historical_question_retrieval_similarity_threshold: 0.9
+  sql_pairs_similarity_threshold: 0.7
+  sql_pairs_retrieval_max_size: 10
+  instructions_similarity_threshold: 0.7
+  instructions_top_k: 10
+  is_oss: true
+  doc_endpoint: https://docs.getwren.ai

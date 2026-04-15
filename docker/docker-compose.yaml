@@ -18,12 +18,18 @@ services:
     command: /bin/sh /app/init.sh
 
   wren-engine:
-    image: ghcr.io/canner/wren-engine:${WREN_ENGINE_VERSION}
+    image: ${WREN_ENGINE_IMAGE_REPO:-wren-engine}:${WREN_ENGINE_IMAGE_TAG:-local}
+    build:
+      context: ../wren-engine
+      dockerfile: docker/wren-engine.Dockerfile
     restart: on-failure
     platform: ${PLATFORM}
     expose:
       - ${WREN_ENGINE_PORT}
       - ${WREN_ENGINE_SQL_PORT}
+    ports:
+      - ${WREN_ENGINE_PORT}:${WREN_ENGINE_PORT}
+      - ${WREN_ENGINE_SQL_PORT}:${WREN_ENGINE_SQL_PORT}
     volumes:
       - data:/usr/src/app/etc
       - ${PROJECT_DIR}/data:/usr/src/app/data
@@ -33,15 +39,37 @@ services:
       - bootstrap
 
   ibis-server:
-    image: ghcr.io/canner/wren-engine-ibis:${IBIS_SERVER_VERSION}
+    image: ${IBIS_SERVER_IMAGE_REPO:-wren-engine-ibis}:${IBIS_SERVER_IMAGE_TAG:-local}
+    build:
+      context: ../wren-engine
+      dockerfile: docker/ibis-server.Dockerfile
+      args:
+        ENV: ${IBIS_SERVER_BUILD_ENV:-prod}
     restart: on-failure
     platform: ${PLATFORM}
     expose:
       - ${IBIS_SERVER_PORT}
+    ports:
+      - ${IBIS_SERVER_PORT}:${IBIS_SERVER_PORT}
     environment:
       WREN_ENGINE_ENDPOINT: http://wren-engine:${WREN_ENGINE_PORT}
     volumes:
       - ${LOCAL_STORAGE:-.}:/usr/src/app/data
+    networks:
+      - wren
+
+  trino:
+    image: trinodb/trino:${TRINO_VERSION:-475}
+    restart: on-failure
+    platform: ${PLATFORM}
+    environment:
+      CATALOG_MANAGEMENT: ${TRINO_CATALOG_MANAGEMENT:-dynamic}
+    expose:
+      - 8080
+    ports:
+      - ${TRINO_FORWARD_PORT:-8081}:8080
+    volumes:
+      - ${PROJECT_DIR}/.trino/catalog:/etc/trino/catalog
     networks:
       - wren
 
@@ -75,6 +103,8 @@ services:
     restart: on-failure
     expose:
       - 5432
+    ports:
+      - ${POSTGRES_FORWARD_PORT:-9432}:5432
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
@@ -89,11 +119,20 @@ services:
     restart: on-failure
     platform: ${PLATFORM}
     environment:
-      DB_TYPE: pg
       PG_URL: ${PG_URL:-postgres://postgres:postgres@postgres:5432/wrenai}
       WREN_ENGINE_ENDPOINT: http://wren-engine:${WREN_ENGINE_PORT}
       WREN_AI_ENDPOINT: http://wren-ai-service:${WREN_AI_SERVICE_PORT}
       IBIS_SERVER_ENDPOINT: http://ibis-server:${IBIS_SERVER_PORT}
+      TRINO_CATALOG_DIR: /app/.trino/catalog
+      TRINO_CATALOG_MANAGEMENT: ${TRINO_CATALOG_MANAGEMENT:-dynamic}
+      TRINO_CATALOG_MANAGEMENT_HOST: trino
+      TRINO_CATALOG_MANAGEMENT_PORT: 8080
+      TRINO_CATALOG_MANAGEMENT_SSL: false
+      TRINO_RUNTIME_HOST: trino
+      TRINO_RUNTIME_PORT: 8080
+      TRINO_RUNTIME_USER: ${TRINO_RUNTIME_USER:-wrenai}
+      TRINO_RUNTIME_PASSWORD: ${TRINO_RUNTIME_PASSWORD:-}
+      TRINO_RUNTIME_SSL: ${TRINO_RUNTIME_SSL:-false}
       # this is for telemetry to know the model, i think ai-service might be able to provide a endpoint to get the information
       GENERATION_MODEL: ${GENERATION_MODEL}
       # telemetry
@@ -118,9 +157,11 @@ services:
       - ${HOST_PORT}:3000
     volumes:
       - data:/app/data
+      - ${PROJECT_DIR}/.trino/catalog:/app/.trino/catalog
     networks:
       - wren
     depends_on:
       - wren-ai-service
       - wren-engine
       - postgres
+      - trino

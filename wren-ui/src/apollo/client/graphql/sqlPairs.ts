@@ -3,7 +3,6 @@ import { gql } from '@apollo/client';
 const SQL_PAIR = gql`
   fragment SqlPair on SqlPair {
     id
-    projectId
     sql
     question
     createdAt

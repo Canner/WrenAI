@@ -1,11 +1,18 @@
 import React, { useState } from 'react';
 import { Select, SelectProps, Space, Typography } from 'antd';
+import { DefaultOptionType } from 'antd/es/select';
 import styled from 'styled-components';
 import { omit } from 'lodash';
 
-interface Props extends SelectProps {
+type DescriptiveOption = DefaultOptionType & {
+  content?: Record<string, any>;
+  options?: DescriptiveOption[];
+  onMouseEnter?: (event: React.MouseEvent<HTMLElement>) => void;
+};
+
+interface Props extends SelectProps<any, DescriptiveOption> {
   listHeight?: number;
-  descriptiveContentRender?: (option: any) => React.ReactNode;
+  descriptiveContentRender?: (option?: Record<string, any>) => React.ReactNode;
   dropdownMatchSelectWidth?: number | boolean;
 }
 
@@ -31,13 +38,13 @@ const defaultDescriptiveContentRender = (content: Record<string, any>) => {
     <Space style={{ width: '100%' }} size={[0, 16]} direction="vertical">
       <div>
         <div style={{ marginBottom: 4 }}>
-          <b>Description</b>
+          <b>描述</b>
         </div>
         {content?.description || '-'}
       </div>
       <div>
         <div style={{ marginBottom: 4 }}>
-          <b>Example</b>
+          <b>示例</b>
         </div>
         {content?.example ? (
           <div className="describeBox-codeBlock">{content?.example}</div>
@@ -60,11 +67,12 @@ export default function DescriptiveSelector(props: Props) {
     placeholder,
     dropdownMatchSelectWidth,
   } = props;
+  const normalizedOptions = (options || []) as DescriptiveOption[];
   // Condition when met group option
-  const [firstOption] = options;
-  const [currentOption, setCurrentOption] = useState<any>(
-    firstOption.options ? firstOption.options[0] : firstOption,
-  );
+  const [firstOption] = normalizedOptions;
+  const [currentOption, setCurrentOption] = useState<
+    DescriptiveOption | undefined
+  >(firstOption?.options ? firstOption.options[0] : firstOption);
   // if descriptiveContentRender is not provided, the maxHeight will auto set for defaultDescriptiveContentRender
   const maxHeight = descriptiveContentRender ? listHeight : 193;
 
@@ -93,32 +101,35 @@ export default function DescriptiveSelector(props: Props) {
           <div style={{ padding: '4px 16px 12px' }}>
             {(descriptiveContentRender
               ? descriptiveContentRender
-              : defaultDescriptiveContentRender)(currentOption?.content)}
+              : defaultDescriptiveContentRender)(currentOption?.content || {})}
           </div>
         </div>
       </DescribeBox>
     );
   };
 
-  const extendOptionMouseEnter = (option) => {
+  const extendOptionMouseEnter = (option: DescriptiveOption) => {
     setCurrentOption(option);
   };
 
-  const getOptionStructure = (option) => ({
+  const getOptionStructure = (
+    option: DescriptiveOption,
+  ): DescriptiveOption => ({
     ...omit(option, ['content']),
+    label: option.label ?? option.value,
     'data-value': option.value,
-    onMouseEnter: (event) => {
+    onMouseEnter: (event: React.MouseEvent<HTMLElement>) => {
       extendOptionMouseEnter(option);
       option.onMouseEnter && option.onMouseEnter(event);
     },
   });
 
-  const mainOptions = options.map((option) => {
+  const mainOptions = normalizedOptions.map((option) => {
     const isOptionGroup = Boolean(option.options);
     return isOptionGroup
-      ? { ...option, options: option.options!.map(getOptionStructure) }
+      ? { ...option, options: (option.options || []).map(getOptionStructure) }
       : getOptionStructure(option);
-  }) as SelectProps['options'];
+  }) as SelectProps<any, DescriptiveOption>['options'];
 
   return (
     <Select

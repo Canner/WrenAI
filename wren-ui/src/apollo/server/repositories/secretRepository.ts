@@ -27,7 +27,7 @@ export class SecretRepository
   extends BaseRepository<SecretRecord>
   implements ISecretRepository
 {
-  private readonly jsonColumns = [];
+  private readonly jsonColumns: string[] = [];
 
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'secret_record' });

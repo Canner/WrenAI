@@ -1,10 +1,10 @@
 import asyncio
-import os
 
 from deepeval.metrics import BaseMetric
 from deepeval.test_case import LLMTestCase
 
 from eval.metrics.spider import Evaluator, build_foreign_key_map_from_json, tokenize
+from eval.metrics.spider.database import build_benchmark_db_target
 from eval.metrics.spider.process_sql import Schema, get_schema
 
 
@@ -29,8 +29,8 @@ class ExactMatchAccuracy(BaseMetric):
             return 0
 
         db_name = test_case.additional_metadata["catalog"]
-        db = os.path.join(self.db_dir, db_name, db_name + ".sqlite")
-        schema = Schema(get_schema(db))
+        db_path = build_benchmark_db_target(self.db_dir, db_name)
+        schema = Schema(get_schema(db_path))
         gold_sql = tokenize(test_case.expected_output, schema, self.kmaps[db_name])
         pred_sql = tokenize(test_case.actual_output, schema, self.kmaps[db_name])
 

@@ -4,7 +4,7 @@
 
 // export { default as Affix } from 'antd/lib/affix';
 // export { default as Anchor } from 'antd/lib/anchor';
-// export { default as AutoComplete } from 'antd/lib/auto-complete';
+export { default as AutoComplete } from 'antd/lib/auto-complete';
 export { default as Alert } from 'antd/lib/alert';
 // export { default as Avatar } from 'antd/lib/avatar';
 // export { default as BackTop } from 'antd/lib/back-top';
@@ -16,7 +16,7 @@ export { default as Card } from 'antd/lib/card';
 export { default as Collapse } from 'antd/lib/collapse';
 // export { default as Carousel } from 'antd/lib/carousel';
 // export { default as Cascader } from 'antd/lib/cascader';
-// export { default as Checkbox } from 'antd/lib/checkbox';
+export { default as Checkbox } from 'antd/lib/checkbox';
 export { default as Col } from 'antd/lib/col';
 // export { default as Comment } from 'antd/lib/comment';
 // export { default as ConfigProvider } from 'antd/lib/config-provider';

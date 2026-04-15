@@ -10,7 +10,7 @@ export default function DuckDBProperties() {
   return (
     <>
       <Form.Item
-        label="Display name"
+        label="显示名称"
         name="displayName"
         rules={[
           {
@@ -22,9 +22,9 @@ export default function DuckDBProperties() {
         <Input placeholder="DuckDB" />
       </Form.Item>
       <Form.Item
-        label="Initial SQL statements"
+        label="初始化 SQL 语句"
         name="initSql"
-        extra="These statements are meant to be executed only once during initialization."
+        extra="这些 SQL 只会在初始化时执行一次。"
         rules={[
           {
             required: true,
@@ -39,17 +39,16 @@ export default function DuckDBProperties() {
       </Form.Item>
 
       <Form.Item
-        label="Configuration options"
+        label="配置项"
         extra={
           <>
-            DuckDB offers various configuration options that can modify the
-            system's behavior.{' '}
+            DuckDB 提供了多种配置项，可用于调整系统行为。{' '}
             <Link
               href="https://duckdb.org/docs/configuration/overview.html"
               target="_blank"
               rel="noopener noreferrer"
             >
-              Learn more
+              了解更多
             </Link>
           </>
         }
@@ -83,7 +82,7 @@ export default function DuckDBProperties() {
                         }),
                       ]}
                     >
-                      <Input placeholder="Key" />
+                      <Input placeholder="配置键" />
                     </Form.Item>
                   </Col>
                   <Col flex="1 0">
@@ -110,7 +109,7 @@ export default function DuckDBProperties() {
                         }),
                       ]}
                     >
-                      <Input placeholder="Value" />
+                      <Input placeholder="配置值" />
                     </Form.Item>
                   </Col>
                   <Col flex="none" className="p-1">
@@ -125,7 +124,7 @@ export default function DuckDBProperties() {
                   block
                   icon={<PlusOutlined />}
                 >
-                  Add an option
+                  添加配置项
                 </Button>
               </Form.Item>
             </>
@@ -133,17 +132,16 @@ export default function DuckDBProperties() {
         </Form.List>
       </Form.Item>
       <Form.Item
-        label="Extensions"
+        label="扩展"
         extra={
           <>
-            DuckDB has an extension mechanism that enables the dynamic loading
-            of extensions.{' '}
+            DuckDB 支持通过扩展机制动态加载能力。{' '}
             <Link
               href="https://duckdb.org/docs/extensions/overview.html"
               target="_blank"
               rel="noopener noreferrer"
             >
-              Learn more
+              了解更多
             </Link>
           </>
         }
@@ -160,7 +158,7 @@ export default function DuckDBProperties() {
                       noStyle
                       style={{ width: '100%' }}
                     >
-                      <Input placeholder="Extension name" />
+                      <Input placeholder="扩展名称" />
                     </Form.Item>
                   </Col>
                   <Col flex="none" className="p-1">
@@ -175,7 +173,7 @@ export default function DuckDBProperties() {
                   block
                   icon={<PlusOutlined />}
                 >
-                  Add an extension
+                  添加扩展
                 </Button>
               </Form.Item>
             </>

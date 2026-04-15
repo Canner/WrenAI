@@ -12,7 +12,7 @@ from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.pipelines.common import (
     clean_up_new_lines,
-    normalize_runtime_scope_id,
+    resolve_pipeline_runtime_scope_id,
     retrieve_data_source,
 )
 from src.pipelines.generation.utils.sql import (
@@ -130,9 +130,12 @@ async def generate_sql(
     prompt: dict,
     generator: Any,
     generator_name: str,
+    data_source: str,
     sql_knowledge: SqlKnowledge | None = None,
 ) -> dict:
-    current_system_prompt = get_sql_generation_system_prompt(sql_knowledge)
+    current_system_prompt = get_sql_generation_system_prompt(
+        sql_knowledge, data_source
+    )
     return await generator(
         prompt=prompt.get("prompt"), current_system_prompt=current_system_prompt
     ), generator_name
@@ -143,14 +146,14 @@ async def post_process(
     generate_sql: dict,
     post_processor: SQLGenPostProcessor,
     data_source: str,
-    project_id: str | None = None,
+    runtime_scope_id: str | None = None,
     use_dry_plan: bool = False,
     allow_dry_plan_fallback: bool = True,
     allow_data_preview: bool = False,
 ) -> dict:
     return await post_processor.run(
         generate_sql.get("replies"),
-        project_id=project_id,
+        runtime_scope_id=runtime_scope_id,
         use_dry_plan=use_dry_plan,
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,
@@ -197,7 +200,7 @@ class SQLGeneration(BasicPipeline):
         sql_generation_reasoning: str | None = None,
         sql_samples: list[dict] | None = None,
         instructions: list[dict] | None = None,
-        project_id: str | None = None,
+        runtime_scope_id: str | None = None,
         has_calculated_field: bool = False,
         has_metric: bool = False,
         has_json_field: bool = False,
@@ -206,11 +209,14 @@ class SQLGeneration(BasicPipeline):
         allow_dry_plan_fallback: bool = True,
         allow_data_preview: bool = False,
         sql_knowledge: SqlKnowledge | None = None,
+        bridge_scope_id: str | None = None,
     ):
         logger.info("SQL Generation pipeline is running...")
-        runtime_scope_id = normalize_runtime_scope_id(project_id)
+        runtime_scope_id = resolve_pipeline_runtime_scope_id(
+            runtime_scope_id, bridge_scope_id=bridge_scope_id
+        )
 
-        if use_dry_plan:
+        if runtime_scope_id:
             data_source = await retrieve_data_source(runtime_scope_id, self._retriever)
         else:
             data_source = "local_file"
@@ -223,7 +229,7 @@ class SQLGeneration(BasicPipeline):
                 "sql_generation_reasoning": sql_generation_reasoning,
                 "sql_samples": sql_samples,
                 "instructions": instructions,
-                "project_id": runtime_scope_id,
+                "runtime_scope_id": runtime_scope_id,
                 "has_calculated_field": has_calculated_field,
                 "has_metric": has_metric,
                 "has_json_field": has_json_field,

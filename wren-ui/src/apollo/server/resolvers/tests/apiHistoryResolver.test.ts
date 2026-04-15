@@ -2,6 +2,27 @@ import { ApiHistoryResolver } from '../apiHistoryResolver';
 import { ApiType } from '../../repositories/apiHistoryRepository';
 
 describe('ApiHistoryResolver', () => {
+  const originalBindingMode = process.env.WREN_AUTHORIZATION_BINDING_MODE;
+
+  afterEach(() => {
+    if (originalBindingMode === undefined) {
+      delete process.env.WREN_AUTHORIZATION_BINDING_MODE;
+    } else {
+      process.env.WREN_AUTHORIZATION_BINDING_MODE = originalBindingMode;
+    }
+  });
+
+  const createAuthorizationActor = () => ({
+    principalType: 'user',
+    principalId: 'user_1',
+    workspaceId: 'ws_1',
+    workspaceMemberId: 'member-1',
+    workspaceRoleKeys: ['owner'],
+    permissionScopes: ['workspace:*'],
+    isPlatformAdmin: false,
+    platformRoleKeys: [],
+  });
+
   describe('getApiHistory', () => {
     it('always scopes history lookup to the active runtime project', async () => {
       const resolver = new ApiHistoryResolver();
@@ -9,6 +30,24 @@ describe('ApiHistoryResolver', () => {
       const findAllWithPagination = jest
         .fn()
         .mockResolvedValue([{ id: 'history-1' }]);
+      const ctx = {
+        runtimeScope: {
+          project: { id: 42 },
+          workspace: { id: 'ws_1' },
+          knowledgeBase: { id: 'kb_1' },
+          kbSnapshot: { id: 'snapshot_1' },
+          deployHash: 'deploy_hash_1',
+          userId: 'user_1',
+        },
+        authorizationActor: createAuthorizationActor(),
+        auditEventRepository: {
+          createOne: jest.fn(),
+        },
+        apiHistoryRepository: {
+          count,
+          findAllWithPagination,
+        },
+      } as any;
 
       const result = await resolver.getApiHistory(
         null,
@@ -19,20 +58,16 @@ describe('ApiHistoryResolver', () => {
           },
           pagination: { offset: 0, limit: 20 },
         },
-        {
-          runtimeScope: {
-            project: { id: 42 },
-          },
-          apiHistoryRepository: {
-            count,
-            findAllWithPagination,
-          },
-        } as any,
+        ctx,
       );
 
       expect(count).toHaveBeenCalledWith(
         {
           projectId: 42,
+          workspaceId: 'ws_1',
+          knowledgeBaseId: 'kb_1',
+          kbSnapshotId: 'snapshot_1',
+          deployHash: 'deploy_hash_1',
           apiType: ApiType.ASK,
           threadId: 'thread-1',
         },
@@ -41,6 +76,10 @@ describe('ApiHistoryResolver', () => {
       expect(findAllWithPagination).toHaveBeenCalledWith(
         {
           projectId: 42,
+          workspaceId: 'ws_1',
+          knowledgeBaseId: 'kb_1',
+          kbSnapshotId: 'snapshot_1',
+          deployHash: 'deploy_hash_1',
           apiType: ApiType.ASK,
           threadId: 'thread-1',
         },
@@ -56,32 +95,98 @@ describe('ApiHistoryResolver', () => {
         total: 1,
         hasMore: false,
       });
+      expect(ctx.auditEventRepository.createOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'knowledge_base.read',
+          resourceType: 'knowledge_base',
+          resourceId: 'kb_1',
+          result: 'allowed',
+          payloadJson: {
+            operation: 'get_api_history',
+          },
+        }),
+      );
     });
 
-    it('rejects projectId filters that try to switch out of the active runtime scope', async () => {
+    it('keeps runtime scoping on workspace / knowledge base even when project bridge is null', async () => {
       const resolver = new ApiHistoryResolver();
+      const count = jest.fn().mockResolvedValue(1);
+      const findAllWithPagination = jest
+        .fn()
+        .mockResolvedValue([{ id: 'history-kb-only' }]);
+      const ctx = {
+        runtimeScope: {
+          project: null,
+          deployment: null,
+          workspace: { id: 'ws_1' },
+          knowledgeBase: { id: 'kb_1' },
+          kbSnapshot: { id: 'snapshot_1' },
+          deployHash: 'deploy_hash_1',
+          userId: 'user_1',
+        },
+        authorizationActor: createAuthorizationActor(),
+        auditEventRepository: {
+          createOne: jest.fn(),
+        },
+        apiHistoryRepository: {
+          count,
+          findAllWithPagination,
+        },
+      } as any;
 
-      await expect(
-        resolver.getApiHistory(
-          null,
-          {
-            filter: {
-              projectId: 7,
-            },
-            pagination: { offset: 0, limit: 20 },
+      const result = await resolver.getApiHistory(
+        null,
+        {
+          filter: {
+            apiType: ApiType.STREAM_ASK,
           },
-          {
-            runtimeScope: {
-              project: { id: 42 },
-            },
-            apiHistoryRepository: {
-              count: jest.fn(),
-              findAllWithPagination: jest.fn(),
-            },
-          } as any,
-        ),
-      ).rejects.toThrow(
-        'apiHistory projectId filter does not match active runtime scope',
+          pagination: { offset: 0, limit: 20 },
+        },
+        ctx,
+      );
+
+      expect(count).toHaveBeenCalledWith(
+        {
+          projectId: null,
+          workspaceId: 'ws_1',
+          knowledgeBaseId: 'kb_1',
+          kbSnapshotId: 'snapshot_1',
+          deployHash: 'deploy_hash_1',
+          apiType: ApiType.STREAM_ASK,
+        },
+        {},
+      );
+      expect(findAllWithPagination).toHaveBeenCalledWith(
+        {
+          projectId: null,
+          workspaceId: 'ws_1',
+          knowledgeBaseId: 'kb_1',
+          kbSnapshotId: 'snapshot_1',
+          deployHash: 'deploy_hash_1',
+          apiType: ApiType.STREAM_ASK,
+        },
+        {},
+        {
+          offset: 0,
+          limit: 20,
+          orderBy: { createdAt: 'desc' },
+        },
+      );
+      expect(result).toEqual({
+        items: [{ id: 'history-kb-only' }],
+        total: 1,
+        hasMore: false,
+      });
+      expect(ctx.auditEventRepository.createOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'knowledge_base.read',
+          resourceType: 'knowledge_base',
+          resourceId: 'kb_1',
+          result: 'allowed',
+          payloadJson: {
+            operation: 'get_api_history',
+          },
+        }),
       );
     });
   });
@@ -125,6 +230,23 @@ describe('ApiHistoryResolver', () => {
           },
         ],
       });
+      const ctx = {
+        runtimeScope: {
+          project: { id: 42 },
+          workspace: { id: 'ws_1' },
+          knowledgeBase: { id: 'kb_1' },
+          kbSnapshot: { id: 'snapshot_1' },
+          deployHash: 'deploy_hash_1',
+          userId: 'user_1',
+        },
+        authorizationActor: createAuthorizationActor(),
+        auditEventRepository: {
+          createOne: jest.fn(),
+        },
+        apiHistoryRepository: {
+          getAskShadowCompareStats,
+        },
+      } as any;
 
       const result = await resolver.getAskShadowCompareStats(
         null,
@@ -135,19 +257,16 @@ describe('ApiHistoryResolver', () => {
             endDate: '2026-04-03T00:00:00.000Z',
           },
         },
-        {
-          runtimeScope: {
-            project: { id: 42 },
-          },
-          apiHistoryRepository: {
-            getAskShadowCompareStats,
-          },
-        } as any,
+        ctx,
       );
 
       expect(getAskShadowCompareStats).toHaveBeenCalledWith(
         {
           projectId: 42,
+          workspaceId: 'ws_1',
+          knowledgeBaseId: 'kb_1',
+          kbSnapshotId: 'snapshot_1',
+          deployHash: 'deploy_hash_1',
           threadId: 'thread-1',
         },
         {
@@ -192,6 +311,17 @@ describe('ApiHistoryResolver', () => {
           },
         ],
       });
+      expect(ctx.auditEventRepository.createOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'knowledge_base.read',
+          resourceType: 'knowledge_base',
+          resourceId: 'kb_1',
+          result: 'allowed',
+          payloadJson: {
+            operation: 'get_ask_shadow_compare_stats',
+          },
+        }),
+      );
     });
 
     it('rejects non-ask apiType filters', async () => {
@@ -208,6 +338,15 @@ describe('ApiHistoryResolver', () => {
           {
             runtimeScope: {
               project: { id: 42 },
+              workspace: { id: 'ws_1' },
+              knowledgeBase: { id: 'kb_1' },
+              kbSnapshot: { id: 'snapshot_1' },
+              deployHash: 'deploy_hash_1',
+              userId: 'user_1',
+            },
+            authorizationActor: createAuthorizationActor(),
+            auditEventRepository: {
+              createOne: jest.fn(),
             },
             apiHistoryRepository: {
               getAskShadowCompareStats: jest.fn(),
@@ -217,6 +356,45 @@ describe('ApiHistoryResolver', () => {
       ).rejects.toThrow(
         'askShadowCompareStats only supports ASK or STREAM_ASK apiType filters',
       );
+    });
+
+    it('rejects access without knowledge base read permission', async () => {
+      process.env.WREN_AUTHORIZATION_BINDING_MODE = 'binding_only';
+      const resolver = new ApiHistoryResolver();
+
+      await expect(
+        resolver.getApiHistory(
+          null,
+          {
+            pagination: { offset: 0, limit: 20 },
+          },
+          {
+            runtimeScope: {
+              project: { id: 42 },
+              workspace: { id: 'ws_1' },
+              knowledgeBase: { id: 'kb_1' },
+              kbSnapshot: { id: 'snapshot_1' },
+              deployHash: 'deploy_hash_1',
+              userId: 'user_1',
+            },
+            authorizationActor: {
+              ...createAuthorizationActor(),
+              workspaceRoleKeys: ['owner'],
+              permissionScopes: ['workspace:*'],
+              grantedActions: [],
+              workspaceRoleSource: 'legacy',
+              platformRoleSource: 'legacy',
+            },
+            auditEventRepository: {
+              createOne: jest.fn(),
+            },
+            apiHistoryRepository: {
+              count: jest.fn(),
+              findAllWithPagination: jest.fn(),
+            },
+          } as any,
+        ),
+      ).rejects.toThrow('Knowledge base read permission required');
     });
   });
 
@@ -242,6 +420,10 @@ describe('ApiHistoryResolver', () => {
         nested.responsePayload({
           apiType: ApiType.GENERATE_VEGA_CHART,
           responsePayload: {
+            canonicalizationVersion: 'chart-canonical-v1',
+            renderHints: {
+              preferredRenderer: 'canvas',
+            },
             vegaSpec: {
               data: {
                 values: [{ x: 1 }, { x: 2 }, { x: 3 }],
@@ -250,6 +432,10 @@ describe('ApiHistoryResolver', () => {
           },
         } as any),
       ).toEqual({
+        canonicalizationVersion: 'chart-canonical-v1',
+        renderHints: {
+          preferredRenderer: 'canvas',
+        },
         vegaSpec: {
           data: {
             values: ['3 data points omitted'],

@@ -1,0 +1,175 @@
+:root {
+  --nova-surface: #ffffff;
+  --nova-surface-soft: #f7f8fa;
+  --nova-surface-strong: #f3f4f6;
+  --nova-surface-floating: rgba(255, 255, 255, 0.96);
+  --nova-panel: rgba(255, 255, 255, 0.98);
+  --nova-panel-solid: #ffffff;
+  --nova-panel-elevated: rgba(255, 255, 255, 1);
+  --nova-outline: rgba(31, 35, 50, 0.12);
+  --nova-outline-soft: rgba(31, 35, 50, 0.08);
+  --nova-text-primary: #1f2332;
+  --nova-text-secondary: #676c7d;
+  --nova-text-muted: #989cad;
+  --nova-primary: #7b57e8;
+  --nova-primary-strong: #6847d7;
+  --nova-primary-soft: rgba(123, 87, 232, 0.08);
+  --nova-primary-ring: rgba(123, 87, 232, 0.14);
+  --nova-radius-panel: 8px;
+  --nova-radius-card: 8px;
+  --nova-radius-chip: 999px;
+  --nova-shadow-soft: 0 4px 12px rgba(31, 35, 50, 0.04);
+  --nova-shadow: 0 8px 20px rgba(31, 35, 50, 0.05);
+  --nova-shadow-strong: 0 12px 32px rgba(31, 35, 50, 0.08);
+}
+
+html,
+body,
+#__next,
+.app {
+  min-height: 100%;
+}
+
+body {
+  background: #ffffff;
+  color: var(--nova-text-primary);
+  text-rendering: optimizeLegibility;
+}
+
+a,
+.ant-typography,
+.ant-alert-message,
+.ant-alert-description,
+.ant-form-item-label > label,
+.ant-form-item-explain,
+.ant-form-item-extra,
+.ant-tabs-tab-btn {
+  color: inherit;
+}
+
+.ant-btn {
+  box-shadow: none !important;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease !important;
+}
+
+.ant-btn-default {
+  background: #fff;
+  border-color: var(--nova-outline-soft);
+  color: var(--nova-text-primary);
+}
+
+.ant-btn-default:hover,
+.ant-btn-default:focus {
+  background: #fff;
+  border-color: var(--nova-primary-ring);
+  color: var(--nova-primary-strong);
+}
+
+.ant-btn-primary,
+.ant-btn-primary:not(:disabled):not(.ant-btn-dangerous) {
+  background: var(--nova-primary);
+  border: 1px solid var(--nova-primary);
+  box-shadow: none !important;
+}
+
+.ant-btn-primary:hover,
+.ant-btn-primary:focus,
+.ant-btn-primary:not(:disabled):hover,
+.ant-btn-primary:not(:disabled):focus {
+  background: var(--nova-primary-strong) !important;
+  border-color: var(--nova-primary-strong) !important;
+  box-shadow: none !important;
+}
+
+.ant-input,
+.ant-input-affix-wrapper,
+.ant-input-password,
+.ant-picker,
+.ant-select-selector {
+  border: 1px solid #dfe3ee !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  box-shadow: none !important;
+}
+
+.ant-input:focus,
+.ant-input-focused,
+.ant-input-affix-wrapper-focused,
+.ant-input-password-focused,
+.ant-select-focused .ant-select-selector {
+  border-color: var(--nova-primary) !important;
+  box-shadow: 0 0 0 2px rgba(123, 87, 232, 0.08) !important;
+}
+
+.ant-input-affix-wrapper > input.ant-input,
+.ant-input-affix-wrapper .ant-input {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.ant-card,
+.ant-modal-content,
+.ant-dropdown-menu,
+.ant-alert {
+  border: 1px solid var(--nova-outline-soft) !important;
+  box-shadow: none !important;
+}
+
+.ant-card,
+.ant-modal-content,
+.ant-dropdown-menu {
+  border-radius: var(--nova-radius-card) !important;
+}
+
+.ant-modal-content {
+  background: #fff !important;
+  box-shadow: var(--nova-shadow-strong) !important;
+}
+
+.ant-alert {
+  background: #fff !important;
+}
+
+.ant-select-dropdown,
+.ant-picker-dropdown .ant-picker-panel-container,
+.ant-dropdown-menu {
+  border-radius: 8px !important;
+  box-shadow: var(--nova-shadow-soft) !important;
+}
+
+.ant-table-wrapper .ant-table,
+.ant-table-wrapper .ant-table-container,
+.ant-table-wrapper .ant-table-content,
+.ant-table-wrapper .ant-table-thead > tr > th,
+.ant-table-wrapper .ant-table-tbody > tr > td {
+  border: 0 !important;
+}
+
+.ant-table-wrapper .ant-table {
+  background: transparent !important;
+}
+
+.ant-table-wrapper .ant-table-thead > tr > th {
+  background: #f8f9fc !important;
+  color: var(--nova-text-secondary);
+  font-weight: 600;
+}
+
+.ant-table-wrapper .ant-table-tbody > tr > td {
+  background: transparent;
+}
+
+.ant-tag {
+  border: 1px solid rgba(123, 87, 232, 0.12);
+  border-radius: var(--nova-radius-chip);
+  padding-inline: 10px;
+  line-height: 24px;
+  font-weight: 600;
+  background: rgba(123, 87, 232, 0.06);
+  color: var(--nova-primary-strong);
+}

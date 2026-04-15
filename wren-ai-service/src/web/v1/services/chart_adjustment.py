@@ -110,7 +110,7 @@ class ChartAdjustmentService:
 
         try:
             query_id = chart_adjustment_request.query_id
-            runtime_scope_id = chart_adjustment_request.resolve_project_id()
+            runtime_scope_id = chart_adjustment_request.resolve_runtime_scope_id()
             execute_sql_error_message = None
 
             self._chart_adjustment_results[query_id] = ChartAdjustmentResultResponse(
@@ -121,7 +121,7 @@ class ChartAdjustmentService:
             execute_sql_result = (
                 await self._pipelines["sql_executor"].run(
                     sql=chart_adjustment_request.sql,
-                    project_id=runtime_scope_id,
+                    runtime_scope_id=runtime_scope_id,
                 )
             )["execute_sql"]
 

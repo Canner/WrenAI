@@ -1,5 +1,12 @@
 import { useRouter } from 'next/router';
-import { createContext, useContext, useEffect, useState } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from 'react';
+import { message } from 'antd';
 import { getUserConfig, UserConfig } from '@/utils/env';
 import { trackUserTelemetry } from '@/utils/telemetry';
 
@@ -8,23 +15,53 @@ type ContextProps = {
 };
 
 const GlobalConfigContext = createContext<ContextProps>({});
+let cachedUserConfigPromise: Promise<UserConfig> | null = null;
 
-export const GlobalConfigProvider = ({ children }) => {
+const loadUserConfigOnce = () => {
+  if (!cachedUserConfigPromise) {
+    cachedUserConfigPromise = getUserConfig().catch((error) => {
+      cachedUserConfigPromise = null;
+      throw error;
+    });
+  }
+
+  return cachedUserConfigPromise;
+};
+
+export const GlobalConfigProvider = ({ children }: { children: ReactNode }) => {
   const router = useRouter();
   const [config, setConfig] = useState<UserConfig | null>(null);
 
   useEffect(() => {
-    getUserConfig()
+    let disposed = false;
+
+    loadUserConfigOnce()
       .then((config) => {
+        if (disposed) {
+          return;
+        }
+
         setConfig(config);
-        // telemetry setup
-        const cleanup = trackUserTelemetry(router, config);
-        return cleanup;
       })
-      .catch((error) => {
-        console.error('Failed to get user config', error);
+      .catch(() => {
+        message.error('加载全局配置失败，请刷新页面重试');
       });
-  }, [router]);
+
+    return () => {
+      disposed = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!config) {
+      return;
+    }
+
+    const cleanupTelemetry = trackUserTelemetry(router.events, config);
+    return () => {
+      cleanupTelemetry();
+    };
+  }, [config, router.events]);
 
   const value = {
     config,

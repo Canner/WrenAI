@@ -11,7 +11,7 @@ function AthenaClassicFields() {
   return (
     <>
       <Form.Item
-        label="AWS access key ID"
+        label="AWS Access Key ID"
         name="awsAccessKey"
         required
         rules={[
@@ -25,7 +25,7 @@ function AthenaClassicFields() {
       </Form.Item>
 
       <Form.Item
-        label="AWS secret access key"
+        label="AWS Secret Access Key"
         name="awsSecretKey"
         required
         rules={[
@@ -47,7 +47,7 @@ function AthenaOIDCFields(props: { isEditMode: boolean }) {
   return (
     <>
       <Form.Item
-        label="Web identity token"
+        label="Web Identity Token"
         name="webIdentityToken"
         required
         rules={[
@@ -58,13 +58,13 @@ function AthenaOIDCFields(props: { isEditMode: boolean }) {
         ]}
       >
         <Input.Password
-          placeholder="OAuth 2.0 access token or OpenID Connect ID token"
+          placeholder="请输入 OAuth 2.0 Access Token 或 OpenID Connect ID Token"
           autoComplete="off"
         />
       </Form.Item>
 
       <Form.Item
-        label="AWS role ARN"
+        label="AWS Role ARN"
         name="roleArn"
         required
         rules={[
@@ -81,11 +81,11 @@ function AthenaOIDCFields(props: { isEditMode: boolean }) {
       </Form.Item>
 
       <Form.Item
-        label="Role session name"
+        label="角色会话名称"
         name="roleSessionName"
-        extra="Optional session name used in AWS STS assume role operation."
+        extra="可选项，用于 AWS STS AssumeRole 操作中的会话名称。"
       >
-        <Input placeholder="session name" />
+        <Input placeholder="请输入会话名称" />
       </Form.Item>
     </>
   );
@@ -126,7 +126,7 @@ export default function AthenaProperties(props: Props) {
   return (
     <>
       <Form.Item
-        label="Display name"
+        label="显示名称"
         name="displayName"
         required
         rules={[
@@ -141,9 +141,9 @@ export default function AthenaProperties(props: Props) {
 
       {/* Common fields */}
       <Form.Item
-        label="Database (schema)"
+        label="数据库（Schema）"
         name="schema"
-        extra="The Athena database (schema) that contains your tables."
+        extra="填写包含目标数据表的 Athena 数据库（Schema）。"
         required
         rules={[
           {
@@ -156,15 +156,15 @@ export default function AthenaProperties(props: Props) {
       </Form.Item>
 
       <Form.Item
-        label="S3 staging directory"
+        label="S3 暂存目录"
         name="s3StagingDir"
         required
         extra={
           <>
-            The S3 path where Athena stores query results and metadata.
+            Athena 会将查询结果和元数据写入这里指定的 S3 路径。
             <br />
-            Find this in Athena console under{' '}
-            <b>Settings → Query result location</b>.
+            可在 Athena 控制台的 <b>Settings → Query result location</b>{' '}
+            中查看。
           </>
         }
         rules={[
@@ -178,7 +178,7 @@ export default function AthenaProperties(props: Props) {
       </Form.Item>
 
       <Form.Item
-        label="AWS region"
+        label="AWS 区域"
         name="awsRegion"
         required
         rules={[
@@ -192,16 +192,16 @@ export default function AthenaProperties(props: Props) {
       </Form.Item>
 
       {/* Authentication method switch */}
-      <Form.Item label="Authentication method" name="athenaAuthType">
+      <Form.Item label="认证方式" name="athenaAuthType">
         <Radio.Group buttonStyle="solid">
           <Radio.Button value={ATHENA_AUTH_METHOD.classic}>
-            AWS credentials
+            AWS 凭证
           </Radio.Button>
           <Radio.Button value={ATHENA_AUTH_METHOD.oidc}>
-            OIDC (web identity token)
+            OIDC（Web Identity Token）
           </Radio.Button>
           <Radio.Button value={ATHENA_AUTH_METHOD.instance_profile}>
-            Instance Profile
+            实例配置（Instance Profile）
           </Radio.Button>
         </Radio.Group>
       </Form.Item>
@@ -217,8 +217,8 @@ export default function AthenaProperties(props: Props) {
 
       {authType === ATHENA_AUTH_METHOD.instance_profile && (
         <div className="gray-8" style={{ fontStyle: 'italic' }}>
-          We will automatically detect AWS credentials from the Instance Profile
-          role assigned to this compute environment (EC2, ECS, EKS).
+          系统会自动检测当前计算环境（EC2、ECS、EKS）所绑定 Instance Profile
+          角色中的 AWS 凭证。
         </div>
       )}
     </>

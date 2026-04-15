@@ -50,6 +50,45 @@ async def test_single_model():
 
 
 @pytest.mark.asyncio
+async def test_single_model_includes_source_binding_metadata_when_table_reference_exists():
+    chunker = DDLChunker()
+    mdl = {
+        "models": [
+            {
+                "name": "orders_model",
+                "properties": {
+                    "description": "Orders model.",
+                    "displayName": "Orders",
+                },
+                "tableReference": {
+                    "catalog": "kb_sales",
+                    "schema": "public",
+                    "table": "orders",
+                },
+            }
+        ],
+        "views": [],
+        "relationships": [],
+        "metrics": [],
+    }
+
+    actual = await chunker.run(mdl, column_batch_size=1)
+    document: Document = actual["documents"][0]
+
+    assert document.content == str(
+        {
+            "type": "TABLE",
+            "comment": "\n/* {'alias': 'Orders', 'description': 'Orders model.', 'source_catalog': 'kb_sales', 'source_schema': 'public', 'source_table': 'orders', 'source_table_identity': 'kb_sales.public.orders'} */\n",
+            "name": "orders_model",
+            "source_catalog": "kb_sales",
+            "source_schema": "public",
+            "source_table": "orders",
+            "source_table_identity": "kb_sales.public.orders",
+        }
+    )
+
+
+@pytest.mark.asyncio
 async def test_multiple_models():
     chunker = DDLChunker()
     mdl = {
@@ -108,7 +147,9 @@ async def test_db_schema_chunker_normalizes_runtime_scope_before_writing_meta():
         "metrics": [],
     }
 
-    actual = await chunker.run(mdl, column_batch_size=1, project_id=" test-project ")
+    actual = await chunker.run(
+        mdl, column_batch_size=1, runtime_scope_id=" test-project "
+    )
 
     document: Document = actual["documents"][0]
     assert document.meta["project_id"] == "test-project"
@@ -632,6 +673,6 @@ async def test_pipeline_run(mocker: MockFixture):
         embedder_provider=embedder_provider,
         document_store_provider=document_store_provider,
     )
-    result = await pipe.run(orjson.dumps(test_mdl), project_id="test-project")
+    result = await pipe.run(orjson.dumps(test_mdl), runtime_scope_id="test-project")
     assert result is not None
     assert result == {"write": {"documents_written": 6}}

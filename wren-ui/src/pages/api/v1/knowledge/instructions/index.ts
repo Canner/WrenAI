@@ -8,11 +8,74 @@ import {
 } from '@/apollo/server/utils/apiUtils';
 import { getLogger } from '@server/utils';
 import { isNil } from 'lodash';
+import * as Errors from '@server/utils/error';
+import {
+  resolvePersistedKnowledgeBaseId,
+  requirePersistedWorkspaceId,
+  toCanonicalPersistedRuntimeIdentityFromScope,
+} from '@server/utils/persistedRuntimeIdentity';
+import {
+  OUTDATED_RUNTIME_SNAPSHOT_MESSAGE,
+  assertLatestExecutableRuntimeScope,
+} from '@/apollo/server/utils/runtimeExecutionContext';
+import {
+  assertAuthorizedWithAudit,
+  buildAuthorizationActorFromRuntimeScope,
+  buildAuthorizationContextFromRequest,
+  recordAuditEvent,
+} from '@server/authz';
 
 const logger = getLogger('API_INSTRUCTIONS');
 logger.level = 'debug';
 
-const { runtimeScopeResolver, instructionService } = components;
+const {
+  runtimeScopeResolver,
+  instructionService,
+  knowledgeBaseRepository,
+  kbSnapshotRepository,
+} = components;
+
+const assertLatestInstructionSnapshot = async (runtimeScope: any) => {
+  try {
+    await assertLatestExecutableRuntimeScope({
+      runtimeScope,
+      knowledgeBaseRepository,
+      kbSnapshotRepository,
+    });
+  } catch (error) {
+    throw new ApiError(
+      error instanceof Error
+        ? error.message
+        : OUTDATED_RUNTIME_SNAPSHOT_MESSAGE,
+      409,
+      Errors.GeneralErrorCodes.OUTDATED_RUNTIME_SNAPSHOT,
+    );
+  }
+};
+
+const buildKnowledgeBaseReadResource = (
+  _runtimeScope: any,
+  runtimeIdentity: any,
+) => ({
+  resourceType: 'knowledge_base' as const,
+  resourceId: resolvePersistedKnowledgeBaseId(
+    runtimeIdentity,
+    undefined,
+    'Knowledge base scope is required',
+  ),
+  workspaceId: requirePersistedWorkspaceId(runtimeIdentity),
+});
+
+const buildKnowledgeBaseWriteResource = (
+  runtimeScope: any,
+  runtimeIdentity: any,
+) => ({
+  ...buildKnowledgeBaseReadResource(runtimeScope, runtimeIdentity),
+  attributes: {
+    workspaceKind: runtimeScope?.workspace?.kind || null,
+    knowledgeBaseKind: runtimeScope?.knowledgeBase?.kind || null,
+  },
+});
 
 /**
  * Instructions API - Supports two types of instructions:
@@ -34,18 +97,31 @@ interface CreateInstructionRequest {
 }
 
 /**
- * Handle GET request - list all instructions for the current project
+ * Handle GET request - list all instructions for the current runtime scope
  */
 const handleGetInstructions = async (
   req: NextApiRequest,
   res: NextApiResponse,
   runtimeScope: any,
-  project: any,
   startTime: number,
 ) => {
-  // Get all instructions for the current project
+  const runtimeIdentity =
+    toCanonicalPersistedRuntimeIdentityFromScope(runtimeScope);
+  const actor = buildAuthorizationActorFromRuntimeScope(runtimeScope);
+  await assertAuthorizedWithAudit({
+    auditEventRepository: components.auditEventRepository,
+    actor,
+    action: 'knowledge_base.read',
+    resource: buildKnowledgeBaseReadResource(runtimeScope, runtimeIdentity),
+    context: buildAuthorizationContextFromRequest({
+      req,
+      sessionId: actor?.sessionId,
+      runtimeScope,
+    }),
+  });
+  // Get all instructions for the current runtime scope
   const instructions = (
-    (await instructionService.getInstructions(project.id)) || []
+    (await instructionService.listInstructions(runtimeIdentity)) || []
   ).map((instruction) => {
     const isGlobalValue =
       typeof instruction.isDefault === 'boolean'
@@ -56,6 +132,8 @@ const handleGetInstructions = async (
       instruction: instruction.instruction,
       questions: instruction.questions,
       isGlobal: isGlobalValue,
+      createdAt: instruction.createdAt ?? null,
+      updatedAt: instruction.updatedAt ?? null,
     };
   });
 
@@ -64,7 +142,6 @@ const handleGetInstructions = async (
     res,
     statusCode: 200,
     responsePayload: instructions,
-    projectId: project.id,
     runtimeScope,
     apiType: ApiType.GET_INSTRUCTIONS,
     startTime,
@@ -80,9 +157,28 @@ const handleCreateInstruction = async (
   req: NextApiRequest,
   res: NextApiResponse,
   runtimeScope: any,
-  project: any,
   startTime: number,
 ) => {
+  await assertLatestInstructionSnapshot(runtimeScope);
+  const runtimeIdentity =
+    toCanonicalPersistedRuntimeIdentityFromScope(runtimeScope);
+  const actor = buildAuthorizationActorFromRuntimeScope(runtimeScope);
+  const auditContext = buildAuthorizationContextFromRequest({
+    req,
+    sessionId: actor?.sessionId,
+    runtimeScope,
+  });
+  const resource = buildKnowledgeBaseWriteResource(
+    runtimeScope,
+    runtimeIdentity,
+  );
+  await assertAuthorizedWithAudit({
+    auditEventRepository: components.auditEventRepository,
+    actor,
+    action: 'knowledge_base.update',
+    resource,
+    context: auditContext,
+  });
   const { instruction, questions, isGlobal } =
     req.body as CreateInstructionRequest;
 
@@ -139,11 +235,26 @@ const handleCreateInstruction = async (
   }
 
   // Create the instruction
-  const newInstruction = await instructionService.createInstruction({
-    instruction,
-    questions: questions || [],
-    isDefault: isGlobal === true,
-    projectId: project.id,
+  const newInstruction = await instructionService.createInstruction(
+    runtimeIdentity,
+    {
+      instruction,
+      questions: questions || [],
+      isDefault: isGlobal === true,
+    },
+  );
+
+  await recordAuditEvent({
+    auditEventRepository: components.auditEventRepository,
+    actor,
+    action: 'knowledge_base.update',
+    resource,
+    result: 'succeeded',
+    context: auditContext,
+    payloadJson: {
+      operation: 'instruction.create',
+    },
+    afterJson: newInstruction as any,
   });
 
   // Return the created instruction directly
@@ -159,8 +270,9 @@ const handleCreateInstruction = async (
       instruction: newInstruction.instruction,
       questions: newInstruction.questions,
       isGlobal: isGlobalValue,
+      createdAt: newInstruction.createdAt ?? null,
+      updatedAt: newInstruction.updatedAt ?? null,
     },
-    projectId: project.id,
     runtimeScope,
     apiType: ApiType.CREATE_INSTRUCTION,
     startTime,
@@ -174,22 +286,20 @@ export default async function handler(
   res: NextApiResponse,
 ) {
   const startTime = Date.now();
-  let project;
   let runtimeScope;
 
   try {
     runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
-    project = runtimeScope.project;
 
     // Handle GET method - list instructions
     if (req.method === 'GET') {
-      await handleGetInstructions(req, res, runtimeScope, project, startTime);
+      await handleGetInstructions(req, res, runtimeScope, startTime);
       return;
     }
 
     // Handle POST method - create instruction
     if (req.method === 'POST') {
-      await handleCreateInstruction(req, res, runtimeScope, project, startTime);
+      await handleCreateInstruction(req, res, runtimeScope, startTime);
       return;
     }
 
@@ -199,7 +309,6 @@ export default async function handler(
     await handleApiError({
       error,
       res,
-      projectId: project?.id,
       runtimeScope,
       apiType:
         req.method === 'GET'

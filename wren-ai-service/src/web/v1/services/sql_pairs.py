@@ -66,10 +66,10 @@ class SqlPairsService:
         trace_id = kwargs.get("trace_id")
 
         try:
-            runtime_scope_id = request.resolve_project_id()
+            runtime_scope_id = request.resolve_runtime_scope_id()
             input = {
                 "mdl_str": '{"models": [{"properties": {"boilerplate": "sql_pairs"}}]}',
-                "project_id": runtime_scope_id,
+                "runtime_scope_id": runtime_scope_id,
                 "external_pairs": {
                     "sql_pairs": [
                         sql_pair.model_dump() for sql_pair in request.sql_pairs
@@ -109,10 +109,10 @@ class SqlPairsService:
         logger.info(f"Request {request.id}: SQL Pairs Deletion process is running...")
 
         try:
-            runtime_scope_id = request.resolve_project_id()
+            runtime_scope_id = request.resolve_runtime_scope_id()
             sql_pairs = [SqlPair(id=id) for id in request.sql_pair_ids]
             await self._pipelines["sql_pairs"].clean(
-                sql_pairs=sql_pairs, project_id=runtime_scope_id
+                sql_pairs=sql_pairs, runtime_scope_id=runtime_scope_id
             )
 
             self._cache[request.id] = self.Event(

@@ -7,7 +7,6 @@ import MinusOutlined from '@ant-design/icons/MinusOutlined';
 import EllipsisWrapper from '@/components/EllipsisWrapper';
 import LoadingOutlined from '@ant-design/icons/LoadingOutlined';
 import { Logo } from '@/components/Logo';
-import { makeIterable } from '@/utils/iteration';
 import { GroupedQuestion } from '@/hooks/useRecommendedQuestionsInstruction';
 
 const CategorySectionBlock = styled.div`
@@ -44,6 +43,12 @@ interface Props {
   loading: boolean;
 }
 
+interface QuestionTemplateProps extends GroupedQuestion {
+  onSelect: (payload: { sql: string; question: string }) => void;
+  loading: boolean;
+  selectedQuestion: string;
+}
+
 const QuestionTemplate = ({
   category,
   sql,
@@ -51,7 +56,7 @@ const QuestionTemplate = ({
   onSelect,
   loading,
   selectedQuestion,
-}) => {
+}: QuestionTemplateProps) => {
   const isSelected = selectedQuestion === question;
   const isDisabled = loading && !isSelected;
 
@@ -87,8 +92,6 @@ const QuestionTemplate = ({
     </Col>
   );
 };
-
-const QuestionColumnIterator = makeIterable(QuestionTemplate);
 
 export default function RecommendedQuestionsPrompt(props: Props) {
   const { onSelect, recommendedQuestions, loading } = props;
@@ -131,12 +134,15 @@ export default function RecommendedQuestionsPrompt(props: Props) {
       >
         <CategorySectionBlock>
           <Row gutter={[16, 16]} className="mt-3">
-            <QuestionColumnIterator
-              data={questionList}
-              onSelect={onSelectQuestion}
-              loading={loading}
-              selectedQuestion={selectedQuestion}
-            />
+            {questionList.map((item, index) => (
+              <QuestionTemplate
+                key={`${item.question}-${index}`}
+                {...item}
+                onSelect={onSelectQuestion}
+                loading={loading}
+                selectedQuestion={selectedQuestion}
+              />
+            ))}
           </Row>
           {showExpandButton && (
             <div className="text-right">

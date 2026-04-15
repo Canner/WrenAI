@@ -14,15 +14,18 @@ export interface WorkspaceMember {
   userId: string;
   roleKey: string;
   status: string;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
 }
 
-export interface IWorkspaceMemberRepository extends IBasicRepository<WorkspaceMember> {}
+export interface IWorkspaceMemberRepository
+  extends IBasicRepository<WorkspaceMember> {}
 
 export class WorkspaceMemberRepository
   extends BaseRepository<WorkspaceMember>
   implements IWorkspaceMemberRepository
 {
-  private readonly jsonColumns = [];
+  private readonly jsonColumns: string[] = [];
 
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'workspace_member' });

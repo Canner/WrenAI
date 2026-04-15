@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { ReactNode, useMemo } from 'react';
 import {
   Modal,
   Button,
@@ -9,6 +9,7 @@ import {
   Tag,
   Popconfirm,
 } from 'antd';
+import type { PopconfirmProps } from 'antd';
 import styled from 'styled-components';
 import WarningOutlined from '@ant-design/icons/WarningOutlined';
 import PlusSquareOutlined from '@ant-design/icons/PlusSquareOutlined';
@@ -20,6 +21,7 @@ import {
   DetailedChangeTable,
   DetailedAffectedCalculatedFields,
   DetailedAffectedRelationships,
+  DetailedChangeColumn,
   NodeType,
   SchemaChange,
   SchemaChangeType,
@@ -71,38 +73,58 @@ type Props = ModalAction<SchemaChange> & {
 
 const nestedColumns = [
   {
-    title: 'Affected Resource',
+    title: '受影响资源',
     dataIndex: 'resourceType',
     width: 200,
     render: (resourceType: NodeType) => {
       if (resourceType === NodeType.CALCULATED_FIELD) {
-        return <Tag className="ant-tag--geekblue">Calculated Field</Tag>;
+        return <Tag className="ant-tag--geekblue">计算字段</Tag>;
       }
 
       if (resourceType === NodeType.RELATION) {
-        return <Tag className="ant-tag--citrus">Relationship</Tag>;
+        return <Tag className="ant-tag--citrus">关系</Tag>;
       }
 
       return null;
     },
   },
   {
-    title: 'Name',
+    title: '名称',
     dataIndex: 'displayName',
   },
 ];
 
-const checkIsExpandable = (record: DetailedChangeTable) =>
-  record.calculatedFields.length + record.relationships.length > 0
+type DetailedChangeTableRow = DetailedChangeTable & {
+  resources: Array<
+    DetailedAffectedCalculatedFields | DetailedAffectedRelationships
+  >;
+  rowKey: string;
+};
+
+const checkIsExpandable = (record: object) =>
+  (record as DetailedChangeTable).calculatedFields.length +
+    (record as DetailedChangeTable).relationships.length >
+  0
     ? ''
     : 'non-expandable';
 
-const PanelHeader = (props) => {
+interface PanelHeaderProps {
+  title: string;
+  count: number;
+  onResolve?: () => void;
+  isResolving?: boolean;
+}
+
+const PanelHeader = (props: PanelHeaderProps) => {
   const { title, count, onResolve, isResolving } = props;
-  const resolve = (event) => {
-    event.stopPropagation();
-    onResolve();
+  const resolve: PopconfirmProps['onConfirm'] = (event) => {
+    event?.stopPropagation();
+    onResolve?.();
   };
+  const handleCancel: PopconfirmProps['onCancel'] = (event) => {
+    event?.stopPropagation();
+  };
+
   return (
     <div
       className="d-flex align-center flex-grow-1"
@@ -110,17 +132,16 @@ const PanelHeader = (props) => {
     >
       <b className="text-medium">{title}</b>
       <span className="flex-grow-1 text-right d-flex justify-end">
-        <Typography.Text className="gray-6">
-          {count} table(s) affected
-        </Typography.Text>
+        <Typography.Text className="gray-6">影响 {count} 张表</Typography.Text>
         <div style={{ width: 150 }}>
           {!!onResolve && (
             <Popconfirm
-              title="Are you sure?"
-              okText="Confirm"
+              title="确认执行修复吗？"
+              okText="确认"
+              cancelText="取消"
               okButtonProps={{ danger: true }}
               onConfirm={resolve}
-              onCancel={(event) => event.stopPropagation()}
+              onCancel={handleCancel}
             >
               <Button
                 type="text"
@@ -130,7 +151,7 @@ const PanelHeader = (props) => {
                 loading={isResolving}
                 icon={<FileDoneOutlined />}
               >
-                Resolve
+                执行修复
               </Button>
             </Popconfirm>
           )}
@@ -141,11 +162,7 @@ const PanelHeader = (props) => {
 };
 
 interface ExpandedRowsProps {
-  record: DetailedChangeTable & {
-    resources: Array<
-      DetailedAffectedCalculatedFields | DetailedAffectedRelationships
-    >;
-  };
+  record: DetailedChangeTableRow;
   tipMessage: string;
 }
 
@@ -225,19 +242,19 @@ export default function SchemaChangeModal(props: Props) {
   }, [schemaChange]);
 
   const columnsOfDeleteTables = [
-    { title: 'Affected model', width: 200, dataIndex: 'displayName' },
-    { title: 'Source table name', dataIndex: 'sourceTableName' },
+    { title: '受影响模型', width: 200, dataIndex: 'displayName' },
+    { title: '源表名称', dataIndex: 'sourceTableName' },
   ];
 
   const columnsOfDeletedColumns = [
-    { title: 'Affected model', width: 200, dataIndex: 'displayName' },
+    { title: '受影响模型', width: 200, dataIndex: 'displayName' },
     {
-      title: 'Deleted columns',
+      title: '已删除字段',
       dataIndex: 'columns',
-      render: (columns) => {
+      render: (columns: DetailedChangeColumn[]) => {
         return (
           <EllipsisWrapper showMoreCount>
-            {columns.map((column) => (
+            {columns.map((column: DetailedChangeColumn) => (
               <Tag className="ant-tag--geekblue" key={column.sourceColumnName}>
                 {column.displayName}
               </Tag>
@@ -249,14 +266,14 @@ export default function SchemaChangeModal(props: Props) {
   ];
 
   const columnsOfModifiedColumns = [
-    { title: 'Affected model', width: 200, dataIndex: 'displayName' },
+    { title: '受影响模型', width: 200, dataIndex: 'displayName' },
     {
-      title: 'Affected columns',
+      title: '受影响字段',
       dataIndex: 'columns',
-      render: (columns) => {
+      render: (columns: DetailedChangeColumn[]) => {
         return (
           <EllipsisWrapper showMoreCount>
-            {columns.map((column) => (
+            {columns.map((column: DetailedChangeColumn) => (
               <Tag className="ant-tag--geekblue" key={column.sourceColumnName}>
                 {column.displayName}
               </Tag>
@@ -272,7 +289,7 @@ export default function SchemaChangeModal(props: Props) {
       title={
         <>
           <WarningOutlined className="orange-5 mr-2" />
-          Schema Changes
+          结构变更提醒
         </>
       }
       width={750}
@@ -282,14 +299,14 @@ export default function SchemaChangeModal(props: Props) {
       footer={null}
     >
       <Typography.Paragraph className="gray-6 mb-4">
-        We have detected schema changes from your connected data source. Please
-        review the impacts of these changes.
+        我们检测到你连接的数据源发生了 Schema
+        变更，请先确认这些变更对当前知识库的影响。
       </Typography.Paragraph>
       <Alert
         showIcon
         type="warning"
         className="gray-8 mb-6"
-        message={`Please note that clicking \"Resolve\" may automatically delete all affected models, relationships, and calculated fields.`}
+        message="请注意：点击“执行修复”后，系统可能会自动删除受影响的模型、关系和计算字段。"
       />
       <StyledCollapse
         expandIcon={(panelProps) =>
@@ -300,7 +317,7 @@ export default function SchemaChangeModal(props: Props) {
           <Collapse.Panel
             header={
               <PanelHeader
-                title="Source table deleted"
+                title="源表已删除"
                 count={deletedTables.length}
                 onResolve={() =>
                   onResolveSchemaChange(SchemaChangeType.DELETED_TABLES)
@@ -322,10 +339,10 @@ export default function SchemaChangeModal(props: Props) {
               }}
               rowClassName={checkIsExpandable}
               expandable={{
-                expandedRowRender: (record: ExpandedRowsProps['record']) => (
+                expandedRowRender: (record: object): ReactNode => (
                   <ExpandedRows
-                    record={record}
-                    tipMessage="The following table shows resources affected by this model and will be deleted when resolving."
+                    record={record as ExpandedRowsProps['record']}
+                    tipMessage="下方列出了受该模型影响的资源；执行修复后，这些资源会被一并删除。"
                   />
                 ),
               }}
@@ -336,7 +353,7 @@ export default function SchemaChangeModal(props: Props) {
           <Collapse.Panel
             header={
               <PanelHeader
-                title="Source column deleted"
+                title="源字段已删除"
                 count={deletedColumns.length}
                 onResolve={() =>
                   onResolveSchemaChange(SchemaChangeType.DELETED_COLUMNS)
@@ -358,10 +375,10 @@ export default function SchemaChangeModal(props: Props) {
               }}
               rowClassName={checkIsExpandable}
               expandable={{
-                expandedRowRender: (record: ExpandedRowsProps['record']) => (
+                expandedRowRender: (record: object): ReactNode => (
                   <ExpandedRows
-                    record={record}
-                    tipMessage="The following table shows resources affected by this column of the model and will be deleted when resolving."
+                    record={record as ExpandedRowsProps['record']}
+                    tipMessage="下方列出了受该字段影响的资源；执行修复后，这些资源会被一并删除。"
                   />
                 ),
               }}
@@ -372,7 +389,7 @@ export default function SchemaChangeModal(props: Props) {
           <Collapse.Panel
             header={
               <PanelHeader
-                title="Source column type changed"
+                title="源字段类型已变更"
                 count={modifiedColumns.length}
               ></PanelHeader>
             }
@@ -390,10 +407,10 @@ export default function SchemaChangeModal(props: Props) {
               }}
               rowClassName={checkIsExpandable}
               expandable={{
-                expandedRowRender: (record: ExpandedRowsProps['record']) => (
+                expandedRowRender: (record: object): ReactNode => (
                   <ExpandedRows
-                    record={record}
-                    tipMessage="The following table shows the resources utilized by this column of the model. Please review each resource and manually update the relevant ones if any changes are required."
+                    record={record as ExpandedRowsProps['record']}
+                    tipMessage="下方列出了使用该字段的资源。请逐项检查，并在需要时手动更新对应配置。"
                   />
                 ),
               }}

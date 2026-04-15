@@ -11,7 +11,7 @@ import {
   mapValues,
   snakeCase,
 } from 'lodash';
-import { AskResultStatus, SkillExecutionResult } from '@server/models/adaptor';
+import { AskResultStatus } from '@server/models/adaptor';
 
 export interface DetailStep {
   summary: string;
@@ -42,7 +42,18 @@ export interface ThreadResponseChartDetail {
   description?: string;
   chartType?: string;
   chartSchema?: Record<string, any>;
+  rawChartSchema?: Record<string, any>;
+  canonicalizationVersion?: string;
+  renderHints?: Record<string, any>;
+  chartDataProfile?: Record<string, any>;
+  validationErrors?: string[];
   adjustment?: boolean;
+  retryCount?: number;
+  nextRetryAt?: string | null;
+  lastPolledAt?: string | null;
+  lastError?: string | null;
+  pollingLeaseOwner?: string | null;
+  pollingLeaseExpiresAt?: string | null;
 }
 
 export enum ThreadResponseAdjustmentType {
@@ -84,9 +95,17 @@ export interface ThreadResponse {
   answerDetail?: ThreadResponseAnswerDetail; // AI generated text-based answer detail
   breakdownDetail?: ThreadResponseBreakdownDetail; // Thread response breakdown detail
   chartDetail?: ThreadResponseChartDetail; // Thread response chart detail
-  skillResult?: SkillExecutionResult | null; // Persisted skill execution result
   adjustment?: ThreadResponseAdjustment; // Thread response adjustment
 }
+
+export type ThreadResponseRuntimeScope = Pick<
+  ThreadResponse,
+  | 'projectId'
+  | 'workspaceId'
+  | 'knowledgeBaseId'
+  | 'kbSnapshotId'
+  | 'deployHash'
+>;
 
 export interface IThreadResponseRepository
   extends IBasicRepository<ThreadResponse> {
@@ -94,6 +113,43 @@ export interface IThreadResponseRepository
     threadId: number,
     limit?: number,
   ): Promise<ThreadResponse[]>;
+  getResponsesWithThreadByScope(
+    threadId: number,
+    scope: ThreadResponseRuntimeScope,
+    limit?: number,
+  ): Promise<ThreadResponse[]>;
+  findOneByIdWithRuntimeScope(
+    id: number,
+    scope: ThreadResponseRuntimeScope,
+  ): Promise<ThreadResponse | null>;
+  findUnfinishedBreakdownResponsesByWorkspaceId(
+    workspaceId: string,
+  ): Promise<ThreadResponse[]>;
+  findUnfinishedBreakdownResponses(): Promise<ThreadResponse[]>;
+  findUnfinishedChartResponses(options?: {
+    adjustment?: boolean;
+  }): Promise<ThreadResponse[]>;
+  claimChartPollingLease?: (
+    id: number,
+    scope: ThreadResponseRuntimeScope,
+    workerId: string,
+    leaseExpiresAt: string,
+    queryOptions?: IQueryOptions,
+  ) => Promise<ThreadResponse | null>;
+  updateOneByIdWithRuntimeScope(
+    id: number,
+    scope: ThreadResponseRuntimeScope,
+    data: Partial<{
+      status: AskResultStatus;
+      sql: string;
+      viewId: number;
+      answerDetail: ThreadResponseAnswerDetail;
+      breakdownDetail: ThreadResponseBreakdownDetail;
+      chartDetail: ThreadResponseChartDetail;
+      adjustment: ThreadResponseAdjustment;
+    }>,
+    queryOptions?: IQueryOptions,
+  ): Promise<ThreadResponse | null>;
 }
 
 export class ThreadResponseRepository
@@ -104,7 +160,6 @@ export class ThreadResponseRepository
     'answerDetail',
     'breakdownDetail',
     'chartDetail',
-    'skillResult',
     'adjustment',
   ];
 
@@ -122,7 +177,170 @@ export class ThreadResponseRepository
       query.orderBy('created_at', 'desc').limit(limit);
     }
 
-    return (await query)
+    return this.transformJoinedResults(await query);
+  }
+
+  public async getResponsesWithThreadByScope(
+    threadId: number,
+    scope: ThreadResponseRuntimeScope,
+    limit?: number,
+  ): Promise<ThreadResponse[]> {
+    const query = this.buildRuntimeScopedQuery(scope).where(
+      `${this.tableName}.thread_id`,
+      threadId,
+    );
+
+    if (limit) {
+      query.orderBy(`${this.tableName}.created_at`, 'desc').limit(limit);
+    }
+
+    return this.transformJoinedResults(await query);
+  }
+
+  public async findOneByIdWithRuntimeScope(
+    id: number,
+    scope: ThreadResponseRuntimeScope,
+  ): Promise<ThreadResponse | null> {
+    const query = this.buildRuntimeScopedQuery(scope).where(
+      `${this.tableName}.id`,
+      id,
+    );
+
+    const result = await query.first();
+    return result ? this.transformFromDBData(result) : null;
+  }
+
+  public async findUnfinishedBreakdownResponsesByWorkspaceId(
+    workspaceId: string,
+  ): Promise<ThreadResponse[]> {
+    const results = await this.buildUnfinishedBreakdownResponsesQuery()
+      .whereRaw(
+        `COALESCE(${this.tableName}.workspace_id, thread.workspace_id) = ?`,
+        [workspaceId],
+      );
+
+    return results.map((result) => this.hydrateJoinedRuntimeScope(result));
+  }
+
+  public async findUnfinishedBreakdownResponses(): Promise<ThreadResponse[]> {
+    const results = await this.buildUnfinishedBreakdownResponsesQuery();
+
+    return results.map((result) => this.hydrateJoinedRuntimeScope(result));
+  }
+
+  public async findUnfinishedChartResponses({
+    adjustment,
+  }: {
+    adjustment?: boolean;
+  } = {}): Promise<ThreadResponse[]> {
+    const query = this.knex(this.tableName)
+      .select(
+        `${this.tableName}.*`,
+        'thread.project_id AS thread_project_id',
+        'thread.workspace_id AS thread_workspace_id',
+        'thread.knowledge_base_id AS thread_knowledge_base_id',
+        'thread.kb_snapshot_id AS thread_kb_snapshot_id',
+        'thread.deploy_hash AS thread_deploy_hash',
+        'thread.actor_user_id AS thread_actor_user_id',
+      )
+      .leftJoin('thread', 'thread.id', `${this.tableName}.thread_id`)
+      .whereNotNull('chart_detail')
+      .whereRaw(`COALESCE(chart_detail->>'status', '') NOT IN (?, ?, ?)`, [
+        AskResultStatus.FAILED,
+        AskResultStatus.FINISHED,
+        AskResultStatus.STOPPED,
+      ]);
+
+    if (adjustment === true) {
+      query.whereRaw(`COALESCE(chart_detail->>'adjustment', 'false') = 'true'`);
+    } else if (adjustment === false) {
+      query.whereRaw(
+        `COALESCE(chart_detail->>'adjustment', 'false') <> 'true'`,
+      );
+    }
+
+    const results = await query;
+    return results.map((result) => this.hydrateJoinedRuntimeScope(result));
+  }
+
+  private buildUnfinishedBreakdownResponsesQuery() {
+    return this.knex(this.tableName)
+      .select(
+        `${this.tableName}.*`,
+        'thread.project_id AS thread_project_id',
+        'thread.workspace_id AS thread_workspace_id',
+        'thread.knowledge_base_id AS thread_knowledge_base_id',
+        'thread.kb_snapshot_id AS thread_kb_snapshot_id',
+        'thread.deploy_hash AS thread_deploy_hash',
+        'thread.actor_user_id AS thread_actor_user_id',
+      )
+      .leftJoin('thread', 'thread.id', `${this.tableName}.thread_id`)
+      .whereNotNull('breakdown_detail')
+      .whereRaw(`COALESCE(breakdown_detail->>'status', '') NOT IN (?, ?, ?)`, [
+        AskResultStatus.FAILED,
+        AskResultStatus.FINISHED,
+        AskResultStatus.STOPPED,
+      ]);
+  }
+
+  private buildRuntimeScopedQuery(scope: ThreadResponseRuntimeScope) {
+    const query = this.knex(this.tableName)
+      .select(`${this.tableName}.*`)
+      .leftJoin('thread', 'thread.id', `${this.tableName}.thread_id`);
+
+    this.applyCoalescedBridgeScope(
+      query,
+      scope.projectId,
+      this.hasCanonicalScope(scope),
+    );
+
+    this.applyCoalescedScopeField(
+      query,
+      'workspace_id',
+      'workspace_id',
+      scope.workspaceId,
+    );
+    this.applyCoalescedScopeField(
+      query,
+      'knowledge_base_id',
+      'knowledge_base_id',
+      scope.knowledgeBaseId,
+    );
+    this.applyCoalescedScopeField(
+      query,
+      'kb_snapshot_id',
+      'kb_snapshot_id',
+      scope.kbSnapshotId,
+    );
+    this.applyCoalescedScopeField(
+      query,
+      'deploy_hash',
+      'deploy_hash',
+      scope.deployHash,
+    );
+
+    return query;
+  }
+
+  private applyCoalescedBridgeScope(
+    query: Knex.QueryBuilder,
+    bridgeProjectId?: number | null,
+    hasCanonicalScope = false,
+  ) {
+    const expr = `COALESCE(${this.tableName}.project_id, thread.project_id)`;
+    if (bridgeProjectId == null) {
+      if (hasCanonicalScope) {
+        return;
+      }
+      query.andWhereRaw(`${expr} IS NULL`);
+      return;
+    }
+
+    query.andWhereRaw(`${expr} = ?`, [bridgeProjectId]);
+  }
+
+  private transformJoinedResults(results: any[]): ThreadResponse[] {
+    return results
       .map((res) => {
         // turn object keys into camelCase
         return mapKeys(res, (_, key) => camelCase(key));
@@ -141,10 +359,6 @@ export class ThreadResponseRepository
           res.chartDetail && typeof res.chartDetail === 'string'
             ? JSON.parse(res.chartDetail)
             : res.chartDetail;
-        const skillResult =
-          res.skillResult && typeof res.skillResult === 'string'
-            ? JSON.parse(res.skillResult)
-            : res.skillResult;
         const adjustment =
           res.adjustment && typeof res.adjustment === 'string'
             ? JSON.parse(res.adjustment)
@@ -154,10 +368,33 @@ export class ThreadResponseRepository
           answerDetail: answerDetail || null,
           breakdownDetail: breakdownDetail || null,
           chartDetail: chartDetail || null,
-          skillResult: skillResult || null,
           adjustment: adjustment || null,
         };
       }) as ThreadResponse[];
+  }
+
+  private applyCoalescedScopeField(
+    query: Knex.QueryBuilder,
+    responseColumn: string,
+    threadColumn: string,
+    value?: string | null,
+  ) {
+    const expr = `COALESCE(${this.tableName}.${responseColumn}, thread.${threadColumn})`;
+    if (value == null) {
+      query.andWhereRaw(`${expr} IS NULL`);
+      return;
+    }
+
+    query.andWhereRaw(`${expr} = ?`, [value]);
+  }
+
+  private hasCanonicalScope(scope: ThreadResponseRuntimeScope) {
+    return Boolean(
+      scope.workspaceId ||
+        scope.knowledgeBaseId ||
+        scope.kbSnapshotId ||
+        scope.deployHash,
+    );
   }
 
   public async updateOne(
@@ -169,7 +406,6 @@ export class ThreadResponseRepository
       answerDetail: ThreadResponseAnswerDetail;
       breakdownDetail: ThreadResponseBreakdownDetail;
       chartDetail: ThreadResponseChartDetail;
-      skillResult: SkillExecutionResult | null;
       adjustment: ThreadResponseAdjustment;
     }>,
     queryOptions?: IQueryOptions,
@@ -180,6 +416,139 @@ export class ThreadResponseRepository
       .update(this.transformToDBData(data as any))
       .returning('*');
     return this.transformFromDBData(result);
+  }
+
+  public async updateOneByIdWithRuntimeScope(
+    id: number,
+    scope: ThreadResponseRuntimeScope,
+    data: Partial<{
+      status: AskResultStatus;
+      sql: string;
+      viewId: number;
+      answerDetail: ThreadResponseAnswerDetail;
+      breakdownDetail: ThreadResponseBreakdownDetail;
+      chartDetail: ThreadResponseChartDetail;
+      adjustment: ThreadResponseAdjustment;
+    }>,
+    queryOptions?: IQueryOptions,
+  ): Promise<ThreadResponse | null> {
+    const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
+    const scopedIdQuery = executer(this.tableName)
+      .select(`${this.tableName}.id`)
+      .leftJoin('thread', 'thread.id', `${this.tableName}.thread_id`)
+      .where(`${this.tableName}.id`, id);
+
+    this.applyCoalescedBridgeScope(
+      scopedIdQuery,
+      scope.projectId,
+      this.hasCanonicalScope(scope),
+    );
+    this.applyCoalescedScopeField(
+      scopedIdQuery,
+      'workspace_id',
+      'workspace_id',
+      scope.workspaceId,
+    );
+    this.applyCoalescedScopeField(
+      scopedIdQuery,
+      'knowledge_base_id',
+      'knowledge_base_id',
+      scope.knowledgeBaseId,
+    );
+    this.applyCoalescedScopeField(
+      scopedIdQuery,
+      'kb_snapshot_id',
+      'kb_snapshot_id',
+      scope.kbSnapshotId,
+    );
+    this.applyCoalescedScopeField(
+      scopedIdQuery,
+      'deploy_hash',
+      'deploy_hash',
+      scope.deployHash,
+    );
+
+    const [result] = await executer(this.tableName)
+      .whereIn('id', scopedIdQuery)
+      .update(this.transformToDBData(data as any))
+      .returning('*');
+
+    return result ? this.transformFromDBData(result) : null;
+  }
+
+  public async claimChartPollingLease(
+    id: number,
+    scope: ThreadResponseRuntimeScope,
+    workerId: string,
+    leaseExpiresAt: string,
+    queryOptions?: IQueryOptions,
+  ): Promise<ThreadResponse | null> {
+    const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
+    const scopedIdQuery = executer(this.tableName)
+      .select(`${this.tableName}.id`)
+      .leftJoin('thread', 'thread.id', `${this.tableName}.thread_id`)
+      .where(`${this.tableName}.id`, id)
+      .whereNotNull(`${this.tableName}.chart_detail`)
+      .whereRaw(
+        `(
+          NULLIF(${this.tableName}.chart_detail->>'pollingLeaseExpiresAt', '')::timestamptz IS NULL
+          OR NULLIF(${this.tableName}.chart_detail->>'pollingLeaseExpiresAt', '')::timestamptz <= now()
+          OR ${this.tableName}.chart_detail->>'pollingLeaseOwner' = ?
+        )`,
+        [workerId],
+      );
+
+    this.applyCoalescedBridgeScope(
+      scopedIdQuery,
+      scope.projectId,
+      this.hasCanonicalScope(scope),
+    );
+    this.applyCoalescedScopeField(
+      scopedIdQuery,
+      'workspace_id',
+      'workspace_id',
+      scope.workspaceId,
+    );
+    this.applyCoalescedScopeField(
+      scopedIdQuery,
+      'knowledge_base_id',
+      'knowledge_base_id',
+      scope.knowledgeBaseId,
+    );
+    this.applyCoalescedScopeField(
+      scopedIdQuery,
+      'kb_snapshot_id',
+      'kb_snapshot_id',
+      scope.kbSnapshotId,
+    );
+    this.applyCoalescedScopeField(
+      scopedIdQuery,
+      'deploy_hash',
+      'deploy_hash',
+      scope.deployHash,
+    );
+
+    const [result] = await executer(this.tableName)
+      .whereIn('id', scopedIdQuery)
+      .update({
+        chart_detail: executer.raw(
+          `jsonb_set(
+            jsonb_set(
+              COALESCE(chart_detail, '{}'::jsonb),
+              '{pollingLeaseOwner}',
+              to_jsonb(?::text),
+              true
+            ),
+            '{pollingLeaseExpiresAt}',
+            to_jsonb(?::text),
+            true
+          )`,
+          [workerId, leaseExpiresAt],
+        ),
+      })
+      .returning('*');
+
+    return result ? this.transformFromDBData(result) : null;
   }
 
   protected override transformToDBData = (data: any) => {
@@ -202,7 +571,8 @@ export class ThreadResponseRepository
     const camelCaseData = mapKeys(data, (_value, key) => camelCase(key));
     const formattedData = mapValues(camelCaseData, (value, key) => {
       if (this.jsonbColumns.includes(key)) {
-        // The value from Sqlite will be string type, while the value from PG is JSON object
+        // Older stringified payloads are still parsed for compatibility;
+        // PostgreSQL jsonb rows already return objects.
         if (typeof value === 'string') {
           return value ? JSON.parse(value) : value;
         } else {
@@ -213,4 +583,36 @@ export class ThreadResponseRepository
     }) as ThreadResponse;
     return formattedData;
   };
+
+  private hydrateJoinedRuntimeScope(data: any): ThreadResponse {
+    const transformed = this.transformFromDBData(data) as ThreadResponse & {
+      threadProjectId?: number | null;
+      threadWorkspaceId?: string | null;
+      threadKnowledgeBaseId?: string | null;
+      threadKbSnapshotId?: string | null;
+      threadDeployHash?: string | null;
+      threadActorUserId?: string | null;
+    };
+
+    const {
+      threadProjectId,
+      threadWorkspaceId,
+      threadKnowledgeBaseId,
+      threadKbSnapshotId,
+      threadDeployHash,
+      threadActorUserId,
+      ...threadResponse
+    } = transformed;
+
+    return {
+      ...threadResponse,
+      projectId: threadResponse.projectId ?? threadProjectId ?? null,
+      workspaceId: threadResponse.workspaceId ?? threadWorkspaceId ?? null,
+      knowledgeBaseId:
+        threadResponse.knowledgeBaseId ?? threadKnowledgeBaseId ?? null,
+      kbSnapshotId: threadResponse.kbSnapshotId ?? threadKbSnapshotId ?? null,
+      deployHash: threadResponse.deployHash ?? threadDeployHash ?? null,
+      actorUserId: threadResponse.actorUserId ?? threadActorUserId ?? null,
+    };
+  }
 }

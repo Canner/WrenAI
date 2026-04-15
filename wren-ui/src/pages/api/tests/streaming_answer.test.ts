@@ -26,12 +26,12 @@ describe('pages/api/ask_task/streaming_answer', () => {
   let consoleErrorSpy: jest.SpyInstance;
 
   const createReq = (query: Record<string, any> = {}) => {
-    const handlers = new Map<string, Function>();
+    const handlers = new Map<string, () => void>();
 
     return {
       method: 'GET',
       query,
-      on: jest.fn((event: string, handler: Function) => {
+      on: jest.fn((event: string, handler: () => void) => {
         handlers.set(event, handler);
       }),
       emitClose: () => handlers.get('close')?.(),
@@ -92,7 +92,7 @@ describe('pages/api/ask_task/streaming_answer', () => {
     stream.destroy = jest.fn();
 
     const runtimeIdentity = {
-      projectId: 42,
+      projectId: null,
       workspaceId: 'workspace-1',
       knowledgeBaseId: 'kb-1',
       kbSnapshotId: 'snapshot-1',
@@ -158,7 +158,9 @@ describe('pages/api/ask_task/streaming_answer', () => {
       deployHash: 'deploy-1',
       userId: 'user-1',
     });
-    mockAssertResponseScope.mockRejectedValue(new Error('response scope mismatch'));
+    mockAssertResponseScope.mockRejectedValue(
+      new Error('response scope mismatch'),
+    );
 
     await handler(req, res);
 

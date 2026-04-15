@@ -6,14 +6,19 @@ const defaultOptions = {} as const;
 export type RuntimeSelectorStateQueryVariables = Types.Exact<{ [key: string]: never; }>;
 
 
-export type RuntimeSelectorStateQuery = { __typename?: 'Query', runtimeSelectorState?: { __typename?: 'RuntimeSelectorState', currentProjectId?: number | null, currentWorkspace?: { __typename?: 'RuntimeSelectorWorkspace', id: string, slug: string, name: string } | null, currentKnowledgeBase?: { __typename?: 'RuntimeSelectorKnowledgeBase', id: string, slug: string, name: string, defaultKbSnapshotId?: string | null } | null, currentKbSnapshot?: { __typename?: 'RuntimeSelectorKBSnapshot', id: string, snapshotKey: string, displayName: string, deployHash: string, status: string } | null, knowledgeBases: Array<{ __typename?: 'RuntimeSelectorKnowledgeBase', id: string, slug: string, name: string, defaultKbSnapshotId?: string | null }>, kbSnapshots: Array<{ __typename?: 'RuntimeSelectorKBSnapshot', id: string, snapshotKey: string, displayName: string, deployHash: string, status: string }> } | null };
+export type RuntimeSelectorStateQuery = { __typename?: 'Query', runtimeSelectorState?: { __typename?: 'RuntimeSelectorState', currentWorkspace?: { __typename?: 'RuntimeSelectorWorkspace', id: string, slug: string, name: string, kind?: string | null } | null, workspaces: Array<{ __typename?: 'RuntimeSelectorWorkspace', id: string, slug: string, name: string }>, currentKnowledgeBase?: { __typename?: 'RuntimeSelectorKnowledgeBase', id: string, slug: string, name: string, kind?: string | null, defaultKbSnapshotId?: string | null } | null, currentKbSnapshot?: { __typename?: 'RuntimeSelectorKBSnapshot', id: string, snapshotKey: string, displayName: string, deployHash: string, status: string } | null, knowledgeBases: Array<{ __typename?: 'RuntimeSelectorKnowledgeBase', id: string, slug: string, name: string, defaultKbSnapshotId?: string | null }>, kbSnapshots: Array<{ __typename?: 'RuntimeSelectorKBSnapshot', id: string, snapshotKey: string, displayName: string, deployHash: string, status: string }> } | null };
 
 
 export const RuntimeSelectorStateDocument = gql`
     query RuntimeSelectorState {
   runtimeSelectorState {
-    currentProjectId
     currentWorkspace {
+      id
+      slug
+      name
+      kind
+    }
+    workspaces {
       id
       slug
       name
@@ -22,6 +27,7 @@ export const RuntimeSelectorStateDocument = gql`
       id
       slug
       name
+      kind
       defaultKbSnapshotId
     }
     currentKbSnapshot {

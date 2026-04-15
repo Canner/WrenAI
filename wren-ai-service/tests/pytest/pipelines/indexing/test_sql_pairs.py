@@ -28,7 +28,7 @@ async def test_sql_pairs_indexing_saving_to_document_store():
     )
     await sql_pairs.run(
         mdl_str='{"models": [{"properties": {"boilerplate": "test"}}]}',
-        project_id="fake-id",
+        runtime_scope_id="fake-id",
     )
 
     assert await store.count_documents() == 2
@@ -58,12 +58,12 @@ async def test_sql_pairs_indexing_saving_to_document_store_with_multiple_project
     )
     await sql_pairs.run(
         mdl_str='{"models": [{"properties": {"boilerplate": "test"}}]}',
-        project_id="fake-id",
+        runtime_scope_id="fake-id",
     )
 
     await sql_pairs.run(
         mdl_str='{"models": [{"properties": {"boilerplate": "test"}}]}',
-        project_id="fake-id-2",
+        runtime_scope_id="fake-id-2",
     )
 
     assert await store.count_documents() == 4
@@ -96,11 +96,11 @@ async def test_sql_pairs_deletion():
     )
     await pipe.run(
         mdl_str='{"models": [{"properties": {"boilerplate": "test"}}]}',
-        project_id="fake-id",
+        runtime_scope_id="fake-id",
     )
 
-    await pipe.clean(sql_pairs=[], project_id="fake-id-2")
+    await pipe.clean(sql_pairs=[], runtime_scope_id="fake-id-2")
     assert await store.count_documents() == 2
 
-    await pipe.clean(sql_pairs=[], project_id="fake-id")
+    await pipe.clean(sql_pairs=[], runtime_scope_id="fake-id")
     assert await store.count_documents() == 2

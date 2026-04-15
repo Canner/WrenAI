@@ -151,20 +151,19 @@ describe('IbisAdaptor', () => {
       DataSourceName.MSSQL,
       mockMSSQLConnectionInfo,
     );
-    const expectConnectionInfo = Object.entries(mockMSSQLConnectionInfo).reduce(
-      (acc, [key, value]) => {
-        if (key === 'trustServerCertificate') {
-          if (value) {
-            acc['kwargs'] = { trustServerCertificate: 'YES' };
-            return acc;
-          }
-        } else {
-          acc[snakeCase(key)] = value;
+    const expectConnectionInfo = Object.entries(mockMSSQLConnectionInfo).reduce<
+      Record<string, unknown>
+    >((acc, [key, value]) => {
+      if (key === 'trustServerCertificate') {
+        if (value) {
+          acc['kwargs'] = { trustServerCertificate: 'YES' };
+          return acc;
         }
-        return acc;
-      },
-      {},
-    );
+      } else {
+        acc[snakeCase(key)] = value;
+      }
+      return acc;
+    }, {});
 
     expect(result).toEqual([]);
     expect(mockedAxios.post).toHaveBeenCalledWith(
@@ -186,7 +185,14 @@ describe('IbisAdaptor', () => {
       mockMySQLConnectionInfo,
     );
     const expectConnectionInfo = Object.entries(mockMySQLConnectionInfo).reduce(
-      (acc, [key, value]) => ((acc[snakeCase(key)] = value), acc),
+      (acc: Record<string, any>, [key, value]) => {
+        if (key === 'ssl') {
+          acc.sslMode = value ? 'REQUIRED' : 'DISABLED';
+          return acc;
+        }
+        acc[snakeCase(key)] = value;
+        return acc;
+      },
       {},
     );
 
@@ -267,7 +273,7 @@ describe('IbisAdaptor', () => {
       catalog,
       host: `https://${host}`,
       password,
-      port,
+      port: String(port),
       schema,
       user: username,
     };
@@ -293,7 +299,10 @@ describe('IbisAdaptor', () => {
     );
     const expectConnectionInfo = Object.entries(
       mockSnowflakeConnectionInfo,
-    ).reduce((acc, [key, value]) => ((acc[snakeCase(key)] = value), acc), {});
+    ).reduce<Record<string, unknown>>(
+      (acc, [key, value]) => ((acc[snakeCase(key)] = value), acc),
+      {},
+    );
 
     expect(result).toEqual([]);
     expect(mockedAxios.post).toHaveBeenCalledWith(
@@ -362,7 +371,7 @@ describe('IbisAdaptor', () => {
     );
     const expectConnectionInfo = Object.entries(
       mockBigQueryConnectionInfo,
-    ).reduce((acc, [key, value]) => {
+    ).reduce<Record<string, unknown>>((acc, [key, value]) => {
       if (key === 'credentials') {
         acc['credentials'] = Buffer.from(
           JSON.stringify(mockBigQueryConnectionInfo.credentials),
@@ -508,9 +517,9 @@ describe('IbisAdaptor', () => {
     expect(res.columns).toEqual(['id']);
     expect(res.dtypes).toEqual({ id: 'integer' });
     expect(res.cacheHit).toEqual(true);
-    expect(new Date(res.cacheCreatedAt).getTime()).toBeGreaterThan(0);
+    expect(new Date(res.cacheCreatedAt ?? 0).getTime()).toBeGreaterThan(0);
     expect(res.override).toEqual(false);
-    expect(new Date(res.cacheOverrodeAt).getTime()).toBeGreaterThan(0);
+    expect(new Date(res.cacheOverrodeAt ?? 0).getTime()).toBeGreaterThan(0);
     expect(mockedAxios.post).toHaveBeenCalledWith(
       `${ibisServerEndpoint}/v3/connector/postgres/query?cacheEnable=true`,
       expect.any(Object),

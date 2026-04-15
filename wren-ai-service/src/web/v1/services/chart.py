@@ -98,7 +98,7 @@ class ChartService:
 
         try:
             query_id = chart_request.query_id
-            runtime_scope_id = chart_request.resolve_project_id()
+            runtime_scope_id = chart_request.resolve_runtime_scope_id()
             execute_sql_error_message = None
 
             if not chart_request.data:
@@ -110,7 +110,7 @@ class ChartService:
                 execute_sql_result = (
                     await self._pipelines["sql_executor"].run(
                         sql=chart_request.sql,
-                        project_id=runtime_scope_id,
+                        runtime_scope_id=runtime_scope_id,
                     )
                 )["execute_sql"]
 

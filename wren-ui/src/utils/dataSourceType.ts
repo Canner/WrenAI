@@ -106,10 +106,14 @@ export const getDataSourceProperties = (dataSource: DATA_SOURCES | string) => {
 };
 
 export const getDataSourceConfig = (dataSource: DATA_SOURCES | string) => {
+  const sourceValue =
+    dataSource in DATA_SOURCES
+      ? DATA_SOURCES[dataSource as keyof typeof DATA_SOURCES]
+      : dataSource;
   return {
     label: getDataSourceName(dataSource),
     logo: getDataSourceImage(dataSource),
-    value: DATA_SOURCES[dataSource],
+    value: sourceValue,
   };
 };
 

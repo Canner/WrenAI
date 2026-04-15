@@ -3,9 +3,11 @@ import path from 'path';
 import { merge } from 'lodash';
 
 export const testDbConfig = {
-  client: 'better-sqlite3',
-  connection: 'testdb.sqlite3',
-  useNullAsDefault: true,
+  client: 'pg',
+  connection:
+    process.env.E2E_PG_URL ||
+    process.env.PG_URL ||
+    'postgres://postgres:postgres@127.0.0.1:9432/wrenai_e2e',
 };
 
 // Replace the default test config with your own e2e.config.json

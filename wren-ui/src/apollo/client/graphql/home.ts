@@ -47,7 +47,12 @@ const COMMON_CHART_DETAIL = gql`
     status
     description
     chartType
+    rawChartSchema
     chartSchema
+    canonicalizationVersion
+    renderHints
+    chartDataProfile
+    validationErrors
     error {
       ...CommonError
     }
@@ -59,7 +64,6 @@ const COMMON_ASKING_TASK = gql`
   fragment CommonAskingTask on AskingTask {
     status
     type
-    skillResult
     candidates {
       sql
       type
@@ -73,7 +77,6 @@ const COMMON_ASKING_TASK = gql`
         id
         question
         sql
-        projectId
       }
     }
     error {
@@ -96,7 +99,6 @@ const COMMON_RESPONSE = gql`
     threadId
     question
     sql
-    skillResult
     view {
       id
       name
@@ -179,6 +181,12 @@ export const THREADS = gql`
     threads {
       id
       summary
+      workspaceId
+      knowledgeBaseId
+      kbSnapshotId
+      deployHash
+      knowledgeBaseIds
+      selectedSkillIds
     }
   }
 `;
@@ -187,6 +195,13 @@ export const THREAD = gql`
   query Thread($threadId: Int!) {
     thread(threadId: $threadId) {
       id
+      summary
+      workspaceId
+      knowledgeBaseId
+      kbSnapshotId
+      deployHash
+      knowledgeBaseIds
+      selectedSkillIds
       responses {
         ...CommonResponse
       }
@@ -230,6 +245,11 @@ export const CREATE_THREAD = gql`
   mutation CreateThread($data: CreateThreadInput!) {
     createThread(data: $data) {
       id
+      summary
+      workspaceId
+      knowledgeBaseId
+      knowledgeBaseIds
+      selectedSkillIds
     }
   }
 `;

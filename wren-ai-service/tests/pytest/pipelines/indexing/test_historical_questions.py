@@ -253,7 +253,7 @@ def test_view_with_historical_queries():
 
 def test_view_with_project_id():
     chunker = ViewChunker()
-    project_id = "test-project"
+    runtime_scope_id = "test-project"
     mdl = {
         "views": [
             {
@@ -268,7 +268,7 @@ def test_view_with_project_id():
         ]
     }
 
-    actual = chunker.run(mdl, project_id=project_id)
+    actual = chunker.run(mdl, runtime_scope_id=runtime_scope_id)
     assert len(actual["documents"]) == 1
 
     document: Document = actual["documents"][0]
@@ -276,7 +276,7 @@ def test_view_with_project_id():
         "summary": "Retrieve the number of books",
         "statement": "SELECT * FROM book",
         "viewId": "fake-id-1",
-        "project_id": project_id,
+        "project_id": runtime_scope_id,
     }
     assert document.content == "How many books are there?"
 
@@ -297,7 +297,7 @@ def test_view_with_project_id_is_normalized():
         ]
     }
 
-    actual = chunker.run(mdl, project_id=" test-project ")
+    actual = chunker.run(mdl, runtime_scope_id=" test-project ")
 
     document: Document = actual["documents"][0]
     assert document.meta["project_id"] == "test-project"
@@ -352,7 +352,7 @@ async def test_pipeline_run(mocker: MockFixture):
         "metrics": [],
     }
 
-    result = await pipeline.run(json.dumps(test_mdl), project_id="test-project")
+    result = await pipeline.run(json.dumps(test_mdl), runtime_scope_id="test-project")
     assert result is not None
     assert result == {"write": {"documents_written": 1}}
 
@@ -387,6 +387,6 @@ async def test_pipeline_run_embedder_error(mocker: MockFixture):
     )
 
     with pytest.raises(Exception) as excinfo:
-        await pipeline.run(json.dumps({}), project_id="test-project")
+        await pipeline.run(json.dumps({}), runtime_scope_id="test-project")
 
     assert str(excinfo.value) == "Embedder error"

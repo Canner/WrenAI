@@ -3,7 +3,7 @@ from typing import Any, List, Optional, Tuple
 
 from haystack import Document, component
 
-LEGACY_PROJECT_SCOPE_FIELD = "project_id"
+PROJECT_BRIDGE_SCOPE_FIELD = "project_id"
 
 
 def normalize_runtime_scope_id(value: str | int | None) -> Optional[str]:
@@ -14,6 +14,47 @@ def normalize_runtime_scope_id(value: str | int | None) -> Optional[str]:
     return normalized or None
 
 
+def normalize_runtime_scope_ids(
+    value: str | int | list[str | int] | tuple[str | int, ...] | None,
+) -> list[str]:
+    if value is None:
+        return []
+
+    if isinstance(value, (list, tuple)):
+        raw_scope_ids = value
+    else:
+        raw_scope_ids = str(value).split(",")
+
+    normalized_scope_ids: list[str] = []
+    for raw_scope_id in raw_scope_ids:
+        normalized_scope_id = normalize_runtime_scope_id(raw_scope_id)
+        if (
+            normalized_scope_id
+            and normalized_scope_id not in normalized_scope_ids
+        ):
+            normalized_scope_ids.append(normalized_scope_id)
+
+    return normalized_scope_ids
+
+
+def resolve_pipeline_runtime_scope_id(
+    runtime_scope_id: str | int | None = None,
+    *,
+    bridge_scope_id: str | int | None = None,
+) -> Optional[str]:
+    """
+    Resolve the canonical runtime scope id used inside pipelines.
+
+    `bridge_scope_id` is the compatibility bridge name for old
+    project-scoped callers while the service surface finishes migrating to
+    runtime-scope-first naming.
+    """
+
+    return normalize_runtime_scope_id(runtime_scope_id) or normalize_runtime_scope_id(
+        bridge_scope_id
+    )
+
+
 def build_runtime_scope_filters(
     scope_id: str | int | None,
     *,
@@ -22,19 +63,33 @@ def build_runtime_scope_filters(
     """
     Build retrieval/indexing filters for the current runtime scope.
 
-    Storage backends still index documents by the legacy `project_id` meta field
-    during the migration window. Keep that compatibility detail localized here so
-    pipelines stop hand-coding the legacy field name.
+    Storage backends still index documents by the `project_id` compatibility meta field
+    during the migration window. Keep that bridge detail localized here so the
+    rest of the pipelines can stay runtime-scope-first.
     """
 
     merged_conditions = list(conditions or [])
-    normalized_scope_id = normalize_runtime_scope_id(scope_id)
-    if normalized_scope_id:
+    normalized_scope_ids = normalize_runtime_scope_ids(scope_id)
+    if len(normalized_scope_ids) == 1:
         merged_conditions.append(
             {
-                "field": LEGACY_PROJECT_SCOPE_FIELD,
+                "field": PROJECT_BRIDGE_SCOPE_FIELD,
                 "operator": "==",
-                "value": normalized_scope_id,
+                "value": normalized_scope_ids[0],
+            }
+        )
+    elif len(normalized_scope_ids) > 1:
+        merged_conditions.append(
+            {
+                "operator": "OR",
+                "conditions": [
+                    {
+                        "field": PROJECT_BRIDGE_SCOPE_FIELD,
+                        "operator": "==",
+                        "value": normalized_scope_id,
+                    }
+                    for normalized_scope_id in normalized_scope_ids
+                ],
             }
         )
 
@@ -52,7 +107,7 @@ def build_runtime_scope_meta(scope_id: str | int | None) -> dict[str, str]:
     if not normalized_scope_id:
         return {}
 
-    return {LEGACY_PROJECT_SCOPE_FIELD: normalized_scope_id}
+    return {PROJECT_BRIDGE_SCOPE_FIELD: normalized_scope_id}
 
 
 def get_engine_supported_data_type(data_type: str) -> str:
@@ -120,7 +175,7 @@ async def retrieve_metadata(scope_id: str | int | None, retriever) -> dict[str, 
     result = await retriever.run(query_embedding=[], filters=filters)
     documents = result["documents"]
 
-    # only one document for a project, thus we can return the first one
+    # only one metadata document is expected for a runtime scope
     if documents:
         doc = documents[0]
         return doc.meta

@@ -1,4 +1,4 @@
-import { NextApiResponse } from 'next';
+import { NextApiRequest, NextApiResponse } from 'next';
 import { v4 as uuidv4 } from 'uuid';
 import {
   ApiType,
@@ -6,10 +6,16 @@ import {
   IApiHistoryRepository,
 } from '@server/repositories/apiHistoryRepository';
 import {
-  PersistedRuntimeIdentity,
+  IRuntimeScopeResolver,
   RuntimeScope,
   toPersistedRuntimeIdentity,
 } from '@server/context/runtimeScope';
+import {
+  OUTDATED_RUNTIME_SNAPSHOT_MESSAGE,
+  assertLatestExecutableRuntimeScope,
+  resolveRuntimeExecutionContext,
+} from '@server/utils/runtimeExecutionContext';
+import { isPersistedRuntimeIdentityMatch } from '@server/utils/persistedRuntimeIdentity';
 import * as Errors from '@server/utils/error';
 import { components } from '@/common';
 import {
@@ -22,14 +28,30 @@ import {
   TextBasedAnswerStatus,
 } from '@/apollo/server/models/adaptor';
 
+const getComponents = () => {
+  if (components) {
+    return components;
+  }
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    return require('@/common')
+      .components as typeof import('@/common').components;
+  } catch (_error) {
+    return components;
+  }
+};
+
 export const MAX_WAIT_TIME = 1000 * 60 * 3; // 3 minutes
+export const DEFAULT_POLL_INTERVAL_MS = 1200;
+export const MAX_POLL_INTERVAL_MS = 3000;
 
 export const isAskResultFinished = (result: AskResult) => {
   return (
     result.status === AskResultStatus.FINISHED ||
     result.status === AskResultStatus.FAILED ||
     result.status === AskResultStatus.STOPPED ||
-    result.error
+    Boolean(result.error)
   );
 };
 
@@ -43,6 +65,10 @@ export const validateAskResult = (
   result: AskResult,
   taskQueryId: string,
 ): void => {
+  const nonSqlQueryMessage =
+    Errors.errorMessages[Errors.GeneralErrorCodes.NON_SQL_QUERY] ||
+    'Query is not supported';
+
   // Check for error in result
   if (result.error) {
     const errorMessage =
@@ -60,8 +86,7 @@ export const validateAskResult = (
   // Check for misleading query type
   if (result.type === AskResultType.MISLEADING_QUERY) {
     throw new ApiError(
-      result.intentReasoning ||
-        Errors.errorMessages[Errors.GeneralErrorCodes.NON_SQL_QUERY],
+      result.intentReasoning || nonSqlQueryMessage,
       400,
       Errors.GeneralErrorCodes.NON_SQL_QUERY,
     );
@@ -70,8 +95,7 @@ export const validateAskResult = (
   // Check for general type response
   if (result.type === AskResultType.GENERAL) {
     throw new ApiError(
-      result.intentReasoning ||
-        Errors.errorMessages[Errors.GeneralErrorCodes.NON_SQL_QUERY],
+      result.intentReasoning || nonSqlQueryMessage,
       400,
       Errors.GeneralErrorCodes.NON_SQL_QUERY,
       { explanationQueryId: taskQueryId },
@@ -143,35 +167,15 @@ export const transformHistoryInput = (histories: ApiHistory[]) => {
     .map((history) => ({
       question: history.requestPayload?.question,
       sql: history.responsePayload?.sql,
-  }));
-};
-
-const isRuntimeIdentityMatch = (
-  history: ApiHistory,
-  runtimeIdentity: PersistedRuntimeIdentity,
-) => {
-  if (history.projectId !== runtimeIdentity.projectId) {
-    return false;
-  }
-
-  return (
-    (!history.workspaceId || history.workspaceId === runtimeIdentity.workspaceId) &&
-    (!history.knowledgeBaseId ||
-      history.knowledgeBaseId === runtimeIdentity.knowledgeBaseId) &&
-    (!history.kbSnapshotId ||
-      history.kbSnapshotId === runtimeIdentity.kbSnapshotId) &&
-    (!history.deployHash || history.deployHash === runtimeIdentity.deployHash)
-  );
+    }));
 };
 
 export const getScopedThreadHistories = async ({
   apiHistoryRepository,
-  projectId,
   threadId,
   runtimeScope,
 }: {
   apiHistoryRepository: Pick<IApiHistoryRepository, 'findAllBy'>;
-  projectId: number;
   threadId?: string;
   runtimeScope?: RuntimeScope | null;
 }): Promise<ApiHistory[]> => {
@@ -180,7 +184,6 @@ export const getScopedThreadHistories = async ({
   }
 
   const histories = await apiHistoryRepository.findAllBy({
-    projectId,
     threadId,
   });
 
@@ -190,37 +193,87 @@ export const getScopedThreadHistories = async ({
 
   const runtimeIdentity = toPersistedRuntimeIdentity(runtimeScope);
   return histories.filter((history) =>
-    isRuntimeIdentityMatch(history, runtimeIdentity),
+    isPersistedRuntimeIdentityMatch(history, runtimeIdentity),
   );
 };
 
 export const createApiHistoryRecord = async ({
-  apiHistoryRepository = components.apiHistoryRepository,
-  projectId,
+  apiHistoryRepository = getComponents().apiHistoryRepository,
   runtimeScope,
   ...record
 }: {
   apiHistoryRepository?: Pick<IApiHistoryRepository, 'createOne'>;
-  projectId: number;
   runtimeScope?: RuntimeScope | null;
 } & Omit<ApiHistory, 'projectId'>) => {
-  const runtimeIdentity =
-    runtimeScope &&
-    (projectId === 0 || runtimeScope.project.id === projectId)
-    ? toPersistedRuntimeIdentity(runtimeScope)
-    : {
-        projectId,
-        workspaceId: null,
-        knowledgeBaseId: null,
-        kbSnapshotId: null,
-        deployHash: null,
-        actorUserId: null,
-      };
+  if (!runtimeScope) {
+    return null;
+  }
 
+  const runtimeIdentity = toPersistedRuntimeIdentity(runtimeScope);
   return await apiHistoryRepository.createOne({
     ...record,
     ...runtimeIdentity,
   });
+};
+
+export const deriveRuntimeExecutionContextFromRequest = async ({
+  req,
+  runtimeScopeResolver = getComponents().runtimeScopeResolver,
+  projectService = getComponents().projectService,
+  knowledgeBaseRepository = getComponents().knowledgeBaseRepository,
+  kbSnapshotRepository = getComponents().kbSnapshotRepository,
+  noDeploymentMessage,
+  requireLatestExecutableSnapshot = false,
+}: {
+  req: NextApiRequest;
+  runtimeScopeResolver?: Pick<IRuntimeScopeResolver, 'resolveRequestScope'>;
+  projectService?: Pick<typeof components.projectService, 'getProjectById'>;
+  knowledgeBaseRepository?: Pick<
+    typeof components.knowledgeBaseRepository,
+    'findOneBy'
+  >;
+  kbSnapshotRepository?: Pick<
+    typeof components.kbSnapshotRepository,
+    'findOneBy'
+  >;
+  noDeploymentMessage?: string;
+  requireLatestExecutableSnapshot?: boolean;
+}) => {
+  const runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
+  if (requireLatestExecutableSnapshot) {
+    try {
+      await assertLatestExecutableRuntimeScope({
+        runtimeScope,
+        knowledgeBaseRepository,
+        kbSnapshotRepository,
+      });
+    } catch (error) {
+      throw new ApiError(
+        error instanceof Error
+          ? error.message
+          : OUTDATED_RUNTIME_SNAPSHOT_MESSAGE,
+        409,
+        Errors.GeneralErrorCodes.OUTDATED_RUNTIME_SNAPSHOT,
+      );
+    }
+  }
+  const executionContext = await resolveRuntimeExecutionContext({
+    runtimeScope,
+    projectService,
+  });
+  if (!executionContext) {
+    throw new ApiError(
+      noDeploymentMessage ||
+        'No deployment found, please deploy your project first',
+      400,
+      Errors.GeneralErrorCodes.NO_DEPLOYMENT_FOUND,
+    );
+  }
+
+  return {
+    runtimeScope,
+    executionContext,
+  };
 };
 
 /**
@@ -233,16 +286,16 @@ export const createApiHistoryRecord = async ({
  */
 export const validateSql = async (
   sql: string,
-  project: any,
-  deployService: any,
+  executionContext: {
+    project: any;
+    manifest: any;
+  },
   queryService: any,
 ) => {
-  const lastDeployment = await deployService.getLastDeployment(project.id);
-  const manifest = lastDeployment.manifest;
   try {
     await queryService.preview(sql, {
-      manifest,
-      project,
+      manifest: executionContext.manifest,
+      project: executionContext.project,
       dryRun: true,
     });
   } catch (err: any) {
@@ -275,6 +328,60 @@ export class ApiError extends Error {
   }
 }
 
+export const sleep = (ms: number) =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+export const pollUntil = async <T>({
+  fetcher,
+  isFinished,
+  timeoutMs = MAX_WAIT_TIME,
+  intervalMs = DEFAULT_POLL_INTERVAL_MS,
+  maxIntervalMs = MAX_POLL_INTERVAL_MS,
+  onTick,
+  timeoutError,
+}: {
+  fetcher: () => Promise<T>;
+  isFinished: (result: T) => boolean;
+  timeoutMs?: number;
+  intervalMs?: number;
+  maxIntervalMs?: number;
+  onTick?: (result: T, attempt: number) => void;
+  timeoutError?: ApiError;
+}): Promise<T> => {
+  const deadline = Date.now() + timeoutMs;
+  let interval = intervalMs;
+  let attempt = 0;
+
+  while (true) {
+    const result = await fetcher();
+    attempt += 1;
+    onTick?.(result, attempt);
+
+    if (isFinished(result)) {
+      return result;
+    }
+
+    if (Date.now() > deadline) {
+      throw (
+        timeoutError ||
+        new ApiError(
+          'Request timeout',
+          500,
+          Errors.GeneralErrorCodes.POLLING_TIMEOUT,
+        )
+      );
+    }
+
+    await sleep(interval);
+    interval = Math.min(
+      maxIntervalMs,
+      Math.max(intervalMs, Math.floor(interval * 1.2)),
+    );
+  }
+};
+
 /**
  * Common response handler for API endpoints that also logs to API history
  */
@@ -282,7 +389,6 @@ export const respondWith = async ({
   res,
   statusCode,
   responsePayload,
-  projectId,
   runtimeScope,
   apiType,
   threadId,
@@ -293,7 +399,6 @@ export const respondWith = async ({
   res: NextApiResponse;
   statusCode: number;
   responsePayload: any;
-  projectId: number;
   runtimeScope?: RuntimeScope | null;
   apiType: ApiType;
   startTime: number;
@@ -305,7 +410,6 @@ export const respondWith = async ({
   const responseId = uuidv4();
   await createApiHistoryRecord({
     id: responseId,
-    projectId,
     runtimeScope,
     apiType,
     threadId,
@@ -330,7 +434,6 @@ export const respondWithSimple = async ({
   res,
   statusCode,
   responsePayload,
-  projectId,
   runtimeScope,
   apiType,
   headers,
@@ -340,7 +443,6 @@ export const respondWithSimple = async ({
   res: NextApiResponse;
   statusCode: number;
   responsePayload: any;
-  projectId: number;
   runtimeScope?: RuntimeScope | null;
   apiType: ApiType;
   startTime: number;
@@ -351,7 +453,6 @@ export const respondWithSimple = async ({
   const responseId = uuidv4();
   await createApiHistoryRecord({
     id: responseId,
-    projectId,
     runtimeScope,
     apiType,
     headers,
@@ -370,7 +471,6 @@ export const respondWithSimple = async ({
 export const handleApiError = async ({
   error,
   res,
-  projectId,
   runtimeScope,
   apiType,
   requestPayload,
@@ -381,7 +481,6 @@ export const handleApiError = async ({
 }: {
   error: any;
   res: NextApiResponse;
-  projectId?: number;
   runtimeScope?: RuntimeScope | null;
   apiType: ApiType;
   requestPayload?: Record<string, any>;
@@ -420,7 +519,6 @@ export const handleApiError = async ({
     res,
     statusCode,
     responsePayload,
-    projectId: projectId || 0,
     runtimeScope,
     apiType,
     startTime,

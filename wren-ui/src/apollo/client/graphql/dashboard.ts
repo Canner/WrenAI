@@ -14,18 +14,51 @@ export const COMMON_DASHBOARD_ITEM = gql`
     detail {
       sql
       chartSchema
+      renderHints
+      canonicalizationVersion
+      chartDataProfile
+      validationErrors
+      sourceResponseId
+      sourceThreadId
+      sourceQuestion
     }
     displayName
   }
 `;
 
 export const DASHBOARD_ITEMS = gql`
-  query DashboardItems {
-    dashboardItems {
+  query DashboardItems($where: DashboardWhereInput) {
+    dashboardItems(where: $where) {
       ...CommonDashboardItem
     }
   }
   ${COMMON_DASHBOARD_ITEM}
+`;
+
+export const DASHBOARDS = gql`
+  query Dashboards {
+    dashboards {
+      id
+      name
+      cacheEnabled
+      nextScheduledAt
+      scheduleFrequency
+    }
+  }
+`;
+
+export const CREATE_DASHBOARD = gql`
+  mutation CreateDashboard($data: CreateDashboardInput!) {
+    createDashboard(data: $data) {
+      id
+      name
+      cacheEnabled
+      nextScheduledAt
+      scheduleFrequency
+      scheduleTimezone
+      scheduleCron
+    }
+  }
 `;
 
 export const CREATE_DASHBOARD_ITEM = gql`
@@ -68,6 +101,7 @@ export const PREVIEW_ITEM_SQL = gql`
   mutation PreviewItemSQL($data: PreviewItemSQLInput!) {
     previewItemSQL(data: $data) {
       data
+      chartDataProfile
       cacheHit
       cacheCreatedAt
       cacheOverrodeAt
@@ -91,8 +125,8 @@ export const SET_DASHBOARD_SCHEDULE = gql`
 `;
 
 export const DASHBOARD = gql`
-  query Dashboard {
-    dashboard {
+  query Dashboard($where: DashboardWhereInput) {
+    dashboard(where: $where) {
       id
       name
       description

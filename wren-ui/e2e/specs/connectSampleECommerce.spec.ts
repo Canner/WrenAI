@@ -4,7 +4,16 @@ import * as homeHelper from '../commonTests/home';
 import * as modelingHelper from '../commonTests/modeling';
 import { sampleDatasets } from '@/apollo/server/data';
 
-const suggestedQuestions = sampleDatasets.ecommerce.questions;
+const suggestedQuestions = sampleDatasets.ecommerce.questions ?? [];
+
+const getRequiredSuggestedQuestion = (index: number) => {
+  const suggestedQuestion = suggestedQuestions[index]?.question;
+  if (!suggestedQuestion) {
+    throw new Error(`Missing suggested question at index ${index}`);
+  }
+
+  return suggestedQuestion;
+};
 
 test.describe('Test E-commerce sample dataset', () => {
   test.beforeAll(async () => {
@@ -33,14 +42,14 @@ test.describe('Test E-commerce sample dataset', () => {
     // select first suggested question
     await homeHelper.askSuggestionQuestionTest({
       page,
-      suggestedQuestion: suggestedQuestions[1].question,
+      suggestedQuestion: getRequiredSuggestedQuestion(1),
     });
   });
 
   test('Follow up question', async ({ page }) => {
     await homeHelper.followUpQuestionTest({
       page,
-      question: suggestedQuestions[2].question,
+      question: getRequiredSuggestedQuestion(2),
     });
   });
 

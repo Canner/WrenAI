@@ -80,17 +80,23 @@ export default function useAutoComplete<T = Completer>(props: Props<T>) {
   const convertor = (props.convertor || convertCompleter) as Convertor<T>;
 
   return useMemo(() => {
-    const models = data?.diagram.models || [];
-    const views = data?.diagram.views || [];
+    const models = (data?.diagram.models || []).filter(
+      (item): item is DiagramModel => item != null,
+    );
+    const views = (data?.diagram.views || []).filter(
+      (item): item is DiagramView => item != null,
+    );
 
     return [...models, ...views].reduce((result, item) => {
       result.push(convertor(item));
       if (includeColumns) {
-        item.fields.forEach((field) => {
-          result.push(convertor({ ...field, parent: item }));
-        });
+        item.fields
+          .filter((field): field is Field => field != null)
+          .forEach((field) => {
+            result.push(convertor({ ...field, parent: item }));
+          });
       }
       return result;
     }, [] as T[]);
-  }, [data?.diagram, includeColumns]);
+  }, [convertor, data?.diagram, includeColumns]);
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Form, Modal, Typography } from 'antd';
+import { Alert, Button, Form, Modal, Typography, message } from 'antd';
+import { ApolloError } from '@apollo/client';
 import InfoCircleOutlined from '@ant-design/icons/InfoCircleOutlined';
 import { ERROR_TEXTS } from '@/utils/error';
 import { ModalAction } from '@/hooks/useModalAction';
@@ -7,7 +8,12 @@ import SQLEditor from '@/components/editor/SQLEditor';
 import { parseGraphQLError } from '@/utils/errorHandler';
 import ErrorCollapse from '@/components/ErrorCollapse';
 import PreviewData from '@/components/dataPreview/PreviewData';
-import { usePreviewSqlMutation } from '@/apollo/client/graphql/sql.generated';
+import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
+import {
+  previewSql,
+  validateSql,
+  type SqlPreviewDataResponse,
+} from '@/utils/sqlPreviewRest';
 
 interface AdjustSQLFormValues {
   responseId: number;
@@ -21,15 +27,16 @@ type Props = ModalAction<AdjustSQLFormValues, AdjustSQLFormValues> & {
 export default function AdjustSQLModal(props: Props) {
   const { defaultValue, loading, onClose, onSubmit, visible } = props;
 
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const [form] = Form.useForm();
   const [error, setError] =
     useState<ReturnType<typeof parseGraphQLError>>(null);
   const [previewing, setPreviewing] = useState<boolean>(false);
+  const [previewData, setPreviewData] = useState<
+    SqlPreviewDataResponse | undefined
+  >(undefined);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [showPreview, setShowPreview] = useState<boolean>(false);
-
-  // Handle errors via try/catch blocks rather than onError callback
-  const [previewSqlMutation, previewSqlResult] = usePreviewSqlMutation();
 
   const sqlValue = Form.useWatch('sql', form);
 
@@ -39,31 +46,36 @@ export default function AdjustSQLModal(props: Props) {
         sql: defaultValue?.sql,
       });
     }
-  }, [visible, defaultValue]);
+  }, [visible, defaultValue, form]);
 
   const handleReset = () => {
-    previewSqlResult.reset();
+    setPreviewData(undefined);
     setShowPreview(false);
     setError(null);
     form.resetFields();
   };
 
   const onValidateSQL = async () => {
-    await previewSqlMutation({
-      variables: {
-        data: {
-          sql: sqlValue,
-          limit: 1,
-          dryRun: true,
-        },
-      },
-    });
+    await validateSql(runtimeScopeNavigation.selector, sqlValue);
   };
 
-  const handleError = (error) => {
-    const graphQLError = parseGraphQLError(error);
-    setError({ ...graphQLError, shortMessage: 'Invalid SQL syntax' });
-    console.error(graphQLError);
+  const handleError = (error: unknown) => {
+    if (error instanceof ApolloError) {
+      const graphQLError = parseGraphQLError(error);
+      setError({
+        message: graphQLError?.message || error.message,
+        shortMessage: 'SQL 语法无效',
+        code: graphQLError?.code || '',
+        stacktrace: graphQLError?.stacktrace,
+      });
+      return;
+    }
+    setError({
+      message: error instanceof Error ? error.message : 'SQL 语法无效',
+      shortMessage: 'SQL 语法无效',
+      code: '',
+      stacktrace: undefined,
+    });
   };
 
   const onPreviewData = async () => {
@@ -72,16 +84,11 @@ export default function AdjustSQLModal(props: Props) {
     try {
       await onValidateSQL();
       setShowPreview(true);
-      await previewSqlMutation({
-        variables: {
-          data: {
-            sql: sqlValue,
-            limit: 50,
-          },
-        },
-      });
+      const data = await previewSql(runtimeScopeNavigation.selector, sqlValue);
+      setPreviewData(data);
     } catch (error) {
       setShowPreview(false);
+      setPreviewData(undefined);
       handleError(error);
     } finally {
       setPreviewing(false);
@@ -97,8 +104,11 @@ export default function AdjustSQLModal(props: Props) {
       .then(async (values) => {
         try {
           await onValidateSQL();
+          if (!onSubmit || !defaultValue?.responseId) {
+            return;
+          }
           await onSubmit({
-            responseId: defaultValue?.responseId,
+            responseId: defaultValue.responseId,
             sql: values.sql,
           });
           onClose();
@@ -110,7 +120,7 @@ export default function AdjustSQLModal(props: Props) {
       })
       .catch((err) => {
         setSubmitting(false);
-        console.error(err);
+        message.error(err?.message || 'SQL 调整失败，请稍后重试。');
       });
   };
 
@@ -119,7 +129,7 @@ export default function AdjustSQLModal(props: Props) {
 
   return (
     <Modal
-      title="Adjust SQL"
+      title="调整 SQL"
       centered
       closable
       confirmLoading={confirmLoading}
@@ -129,7 +139,7 @@ export default function AdjustSQLModal(props: Props) {
       visible={visible}
       width={640}
       cancelButtonProps={{ disabled: confirmLoading }}
-      okButtonProps={{ disabled: previewSqlResult.loading }}
+      okButtonProps={{ disabled: previewing }}
       afterClose={() => handleReset()}
       footer={
         <div className="d-flex justify-space-between align-center">
@@ -142,26 +152,26 @@ export default function AdjustSQLModal(props: Props) {
               type="secondary"
               className="text-sm gray-7 text-left"
             >
-              The SQL statement used here follows <b>Wren SQL</b>, which is
-              based on ANSI SQL and optimized for Wren AI.{` `}
+              这里使用的是 <b>Wren SQL</b>，它基于 ANSI
+              SQL，并针对当前语义引擎做了优化。{` `}
               <Typography.Link
                 type="secondary"
                 href="https://docs.getwren.ai/oss/guide/home/wren_sql"
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Learn more about the syntax.
+                了解语法说明。
               </Typography.Link>
             </Typography.Text>
           </div>
           <div>
-            <Button onClick={onClose}>Cancel</Button>
+            <Button onClick={onClose}>取消</Button>
             <Button
               type="primary"
               onClick={onSubmitButton}
               loading={confirmLoading}
             >
-              Submit
+              提交
             </Button>
           </div>
         </div>
@@ -169,7 +179,7 @@ export default function AdjustSQLModal(props: Props) {
     >
       <Form form={form} preserve={false} layout="vertical">
         <Form.Item
-          label="SQL statement"
+          label="SQL 语句"
           name="sql"
           required
           rules={[
@@ -184,20 +194,20 @@ export default function AdjustSQLModal(props: Props) {
       </Form>
       <div className="my-3">
         <Typography.Text className="d-block gray-7 mb-2">
-          Data preview (50 rows)
+          数据预览（50 行）
         </Typography.Text>
         <Button
           onClick={onPreviewData}
           loading={previewing}
           disabled={disabled}
         >
-          Preview data
+          预览数据
         </Button>
         {showPreview && (
           <div className="my-3">
             <PreviewData
               loading={previewing}
-              previewData={previewSqlResult?.data?.previewSql}
+              previewData={previewData}
               copyable={false}
             />
           </div>

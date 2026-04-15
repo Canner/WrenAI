@@ -13,6 +13,7 @@ const resolveAlias = {
 const nextConfig = withLess({
   output: 'standalone',
   staticPageGenerationTimeout: 1000,
+  transpilePackages: ['rc-util'],
   compiler: {
     // Enables the styled-components SWC transform
     styledComponents: {

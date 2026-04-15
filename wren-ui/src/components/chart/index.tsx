@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { isEmpty } from 'lodash';
 import { Alert, Button, Tooltip } from 'antd';
-import { TopLevelSpec, compile } from 'vega-lite';
-import embed, { EmbedOptions, Result } from 'vega-embed';
-import ChartSpecHandler from './handler';
+import { compile, type Config, type TopLevelSpec } from 'vega-lite';
+import type { EmbedOptions, Result } from 'vega-embed';
+import { chartVegaConfig } from './config';
+import { prepareChartSpecForRender, resolvePreferredRenderer } from './render';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import EditOutlined from '@ant-design/icons/EditOutlined';
 import EyeOutlined from '@ant-design/icons/EyeOutlined';
@@ -12,13 +13,114 @@ import PushPinOutlined from '@ant-design/icons/PushpinOutlined';
 import ErrorCollapse from '@/components/ErrorCollapse';
 
 const embedOptions: EmbedOptions = {
-  mode: 'vega-lite',
+  mode: 'vega',
   renderer: 'svg',
   tooltip: { theme: 'custom' },
   actions: {
     export: true,
     editor: false,
   },
+};
+
+const COMPILED_SPEC_CACHE_VERSION = 'compiled-chart-spec-v1';
+const MAX_COMPILED_SPEC_CACHE_ENTRIES = 100;
+const compiledChartSpecCache = new Map<string, Record<string, any>>();
+
+const hashString = (value: string) => {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+};
+
+const buildDataSignature = (spec: TopLevelSpec) => {
+  const values = Array.isArray((spec as any)?.data?.values)
+    ? ((spec as any).data.values as Record<string, unknown>[])
+    : [];
+  let hash = 2166136261;
+  values.forEach((row) => {
+    const rowText = JSON.stringify(row);
+    for (let index = 0; index < rowText.length; index += 1) {
+      hash ^= rowText.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+  });
+
+  return `${values.length}:${(hash >>> 0).toString(36)}`;
+};
+
+const buildSpecSignature = (spec: TopLevelSpec) => {
+  const specWithoutValues =
+    spec && typeof spec === 'object'
+      ? {
+          ...((spec as unknown as Record<string, unknown>) || {}),
+          data: {
+            ...(((spec as any).data as Record<string, unknown>) || {}),
+            values: '__omitted__',
+          },
+        }
+      : spec;
+  return hashString(JSON.stringify(specWithoutValues));
+};
+
+const buildCompiledChartSpecCacheKey = ({
+  spec,
+  config,
+  cacheKey,
+}: {
+  spec: TopLevelSpec;
+  config?: Config;
+  cacheKey?: string;
+}) =>
+  [
+    COMPILED_SPEC_CACHE_VERSION,
+    cacheKey || 'anonymous',
+    buildSpecSignature(spec),
+    buildDataSignature(spec),
+    hashString(JSON.stringify(config || null)),
+  ].join(':');
+
+const touchCompiledChartSpecCache = (
+  key: string,
+  value: Record<string, any>,
+) => {
+  if (compiledChartSpecCache.has(key)) {
+    compiledChartSpecCache.delete(key);
+  }
+  compiledChartSpecCache.set(key, value);
+  if (compiledChartSpecCache.size > MAX_COMPILED_SPEC_CACHE_ENTRIES) {
+    const oldestKey = compiledChartSpecCache.keys().next().value;
+    if (oldestKey) {
+      compiledChartSpecCache.delete(oldestKey);
+    }
+  }
+};
+
+const compileChartSpecWithCache = ({
+  spec,
+  config,
+  cacheKey,
+}: {
+  spec: TopLevelSpec;
+  config?: Config;
+  cacheKey?: string;
+}) => {
+  const compiledCacheKey = buildCompiledChartSpecCacheKey({
+    spec,
+    config,
+    cacheKey,
+  });
+  const cached = compiledChartSpecCache.get(compiledCacheKey);
+  if (cached) {
+    touchCompiledChartSpecCache(compiledCacheKey, cached);
+    return cached;
+  }
+
+  const compiled = compile(spec, { config }).spec as Record<string, any>;
+  touchCompiledChartSpecCache(compiledCacheKey, compiled);
+  return compiled;
 };
 
 interface VegaLiteProps {
@@ -36,7 +138,33 @@ interface VegaLiteProps {
   onReload?: () => void;
   onEdit?: () => void;
   onPin?: () => void;
+  preferredRenderer?: 'svg' | 'canvas';
+  cacheKey?: string;
+  serverShaped?: boolean;
 }
+
+type ParsedError = {
+  code: string;
+  shortMessage: string;
+  message: string;
+  stacktrace: string[];
+};
+
+const normalizeError = (
+  error: unknown,
+): Pick<ParsedError, 'message' | 'stacktrace'> => {
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      stacktrace: error.stack?.split('\n') || [],
+    };
+  }
+
+  return {
+    message: String(error),
+    stacktrace: [],
+  };
+};
 
 export default function Chart(props: VegaLiteProps) {
   const {
@@ -54,65 +182,138 @@ export default function Chart(props: VegaLiteProps) {
     onReload,
     onEdit,
     onPin,
+    preferredRenderer,
+    cacheKey,
+    serverShaped,
   } = props;
 
-  const [donutInner, setDonutInner] = useState(null);
-  const [parsedSpec, setParsedSpec] =
-    useState<ReturnType<typeof compile>['spec']>(null);
-  const [parsedError, setParsedError] = useState<Record<string, any>>(null);
+  const [donutInner, setDonutInner] = useState<number | false | undefined>(
+    undefined,
+  );
+  const [parsedSpec, setParsedSpec] = useState<Record<string, any> | null>(
+    null,
+  );
+  const [parsedError, setParsedError] = useState<ParsedError | null>(null);
   const [isShowTopCategories, setIsShowTopCategories] = useState(false);
-  const $view = useRef<Result>(null);
+  const $view = useRef<Result | null>(null);
   const $container = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!spec || !values) return;
     try {
-      const specHandler = new ChartSpecHandler(
-        {
-          ...spec,
-          data: { values },
-        },
-        {
+      const renderSpec = prepareChartSpecForRender({
+        spec,
+        values,
+        options: {
+          width,
+          height,
           donutInner,
-          isShowTopCategories: autoFilter || isShowTopCategories,
-          isHideLegend: hideLegend,
-          isHideTitle: hideTitle,
+          autoFilter,
+          isShowTopCategories,
+          hideLegend,
+          hideTitle,
+          serverShaped,
         },
-      );
-      const chartSpec = specHandler.getChartSpec();
-      const isDataEmpty = isEmpty((chartSpec?.data as any)?.values);
-      if (isDataEmpty) {
+      });
+      if (!renderSpec && !autoFilter && !isShowTopCategories) {
+        setParsedSpec(null);
+        setParsedError(null);
+        return;
+      }
+      const chartSpec = renderSpec;
+      if (!chartSpec) {
         setParsedSpec(null);
       } else {
-        const compiled = compile(chartSpec, { config: specHandler.config });
-        setParsedSpec(compiled.spec);
+        const isDataEmpty = isEmpty(
+          (
+            chartSpec.data as {
+              values?: Record<string, any>[];
+            } | null
+          )?.values,
+        );
+        if (isDataEmpty) {
+          setParsedSpec(null);
+          setParsedError(null);
+          return;
+        }
+        const compiled = compileChartSpecWithCache({
+          spec: chartSpec,
+          config: chartVegaConfig,
+          cacheKey,
+        });
+        setParsedSpec(compiled);
       }
+      setParsedError(null);
     } catch (error) {
-      console.error(error);
+      const errorPayload = normalizeError(error);
       setParsedError({
         code: 'CLIENT_PARSE_ERROR',
         shortMessage: 'Failed to render chart visualization',
-        message: error?.message,
-        stacktrace: error?.stack?.split('\n') || [],
+        message: errorPayload.message,
+        stacktrace: errorPayload.stacktrace,
       });
     }
     return () => {
       setParsedSpec(null);
       setParsedError(null);
     };
-  }, [spec, values, isShowTopCategories, donutInner, forceUpdate]);
+  }, [
+    autoFilter,
+    donutInner,
+    forceUpdate,
+    hideLegend,
+    hideTitle,
+    height,
+    isShowTopCategories,
+    spec,
+    cacheKey,
+    serverShaped,
+    values,
+    width,
+  ]);
 
   // initial vega view
   useEffect(() => {
+    let cancelled = false;
+
     if ($container.current && parsedSpec) {
-      embed($container.current, parsedSpec, embedOptions).then((view) => {
-        $view.current = view;
+      const renderer = resolvePreferredRenderer({
+        spec,
+        values,
+        isPinned,
+        preferredRenderer,
       });
+      void import('vega-embed')
+        .then(({ default: embed }) =>
+          embed($container.current!, parsedSpec, {
+            ...embedOptions,
+            renderer,
+          }),
+        )
+        .then((view) => {
+          if (cancelled) {
+            view.finalize();
+            return;
+          }
+
+          $view.current = view;
+        })
+        .catch((error) => {
+          const errorPayload = normalizeError(error);
+          setParsedError({
+            code: 'CLIENT_RENDER_ERROR',
+            shortMessage: 'Failed to render chart visualization',
+            message: errorPayload.message,
+            stacktrace: errorPayload.stacktrace,
+          });
+        });
     }
+
     return () => {
+      cancelled = true;
       if ($view.current) $view.current.finalize();
     };
-  }, [parsedSpec, forceUpdate]);
+  }, [forceUpdate, isPinned, parsedSpec, preferredRenderer, spec, values]);
 
   useEffect(() => {
     if ($container.current) {
@@ -121,11 +322,11 @@ export default function Chart(props: VegaLiteProps) {
   }, [forceUpdate]);
 
   const onShowTopCategories = () => {
-    setIsShowTopCategories(!isShowTopCategories);
+    setIsShowTopCategories((previous) => !previous);
   };
 
   const getChartContent = () => {
-    if (values.length === 0) return <div>No available data</div>;
+    if (!values || values.length === 0) return <div>暂无可用数据</div>;
 
     if (parsedError) {
       return (

@@ -6,14 +6,75 @@ import {
   respondWithSimple,
   handleApiError,
   validateSql,
+  deriveRuntimeExecutionContextFromRequest,
 } from '@/apollo/server/utils/apiUtils';
 import { getLogger } from '@server/utils';
+import * as Errors from '@server/utils/error';
+import {
+  resolvePersistedKnowledgeBaseId,
+  requirePersistedWorkspaceId,
+  toCanonicalPersistedRuntimeIdentityFromScope,
+} from '@server/utils/persistedRuntimeIdentity';
+import {
+  OUTDATED_RUNTIME_SNAPSHOT_MESSAGE,
+  assertLatestExecutableRuntimeScope,
+} from '@/apollo/server/utils/runtimeExecutionContext';
+import {
+  assertAuthorizedWithAudit,
+  buildAuthorizationActorFromRuntimeScope,
+  buildAuthorizationContextFromRequest,
+  recordAuditEvent,
+} from '@server/authz';
 
 const logger = getLogger('API_SQL_PAIR_BY_ID');
 logger.level = 'debug';
 
-const { runtimeScopeResolver, sqlPairService, deployService, queryService } =
-  components;
+const {
+  runtimeScopeResolver,
+  sqlPairService,
+  queryService,
+  knowledgeBaseRepository,
+  kbSnapshotRepository,
+} = components;
+
+const assertLatestSqlPairSnapshot = async (runtimeScope: any) => {
+  try {
+    await assertLatestExecutableRuntimeScope({
+      runtimeScope,
+      knowledgeBaseRepository,
+      kbSnapshotRepository,
+    });
+  } catch (error) {
+    throw new ApiError(
+      error instanceof Error
+        ? error.message
+        : OUTDATED_RUNTIME_SNAPSHOT_MESSAGE,
+      409,
+      Errors.GeneralErrorCodes.OUTDATED_RUNTIME_SNAPSHOT,
+    );
+  }
+};
+
+const buildKnowledgeBaseReadResource = (runtimeIdentity: any) => ({
+  resourceType: 'knowledge_base' as const,
+  resourceId: resolvePersistedKnowledgeBaseId(
+    runtimeIdentity,
+    undefined,
+    'Knowledge base scope is required',
+  ),
+  workspaceId: requirePersistedWorkspaceId(runtimeIdentity),
+});
+
+const buildKnowledgeBaseWriteResource = (
+  runtimeScope: any,
+  runtimeIdentity: any,
+) => ({
+  ...buildKnowledgeBaseReadResource(runtimeIdentity),
+  attributes: {
+    workspaceKind: runtimeScope?.workspace?.kind || null,
+    knowledgeBaseKind: runtimeScope?.knowledgeBase?.kind || null,
+  },
+});
 
 /**
  * SQL Pairs API - Manages SQL query and question pairs for knowledge base
@@ -46,11 +107,31 @@ const handleUpdateSqlPair = async (
   req: NextApiRequest,
   res: NextApiResponse,
   runtimeScope: any,
-  project: any,
+  executionContext: any,
   startTime: number,
 ) => {
+  await assertLatestSqlPairSnapshot(runtimeScope);
   const { id } = req.query;
   const sqlPairId = validateSqlPairId(id);
+  const runtimeIdentity =
+    toCanonicalPersistedRuntimeIdentityFromScope(runtimeScope);
+  const actor = buildAuthorizationActorFromRuntimeScope(runtimeScope);
+  const auditContext = buildAuthorizationContextFromRequest({
+    req,
+    sessionId: actor?.sessionId,
+    runtimeScope,
+  });
+  const resource = buildKnowledgeBaseWriteResource(
+    runtimeScope,
+    runtimeIdentity,
+  );
+  await assertAuthorizedWithAudit({
+    auditEventRepository: components.auditEventRepository,
+    actor,
+    action: 'knowledge_base.update',
+    resource,
+    context: auditContext,
+  });
 
   const { sql, question } = req.body as UpdateSqlPairRequest;
 
@@ -63,7 +144,7 @@ const handleUpdateSqlPair = async (
       throw new ApiError('SQL is too long (max 10000 characters)', 400);
     }
     // Validate SQL syntax and compatibility
-    await validateSql(sql, project, deployService, queryService);
+    await validateSql(sql, executionContext, queryService);
   }
 
   if (question !== undefined) {
@@ -76,8 +157,8 @@ const handleUpdateSqlPair = async (
   }
 
   // Update the SQL pair
-  const updatedSqlPair = await sqlPairService.editSqlPair(
-    project.id,
+  const updatedSqlPair = await sqlPairService.updateSqlPair(
+    runtimeIdentity,
     sqlPairId,
     {
       sql,
@@ -85,12 +166,25 @@ const handleUpdateSqlPair = async (
     },
   );
 
+  await recordAuditEvent({
+    auditEventRepository: components.auditEventRepository,
+    actor,
+    action: 'knowledge_base.update',
+    resource,
+    result: 'succeeded',
+    context: auditContext,
+    afterJson: updatedSqlPair as any,
+    payloadJson: {
+      operation: 'sql_pair.update',
+      sqlPairId,
+    },
+  });
+
   // Return the updated SQL pair directly
   await respondWithSimple({
     res,
     statusCode: 200,
     responsePayload: updatedSqlPair,
-    projectId: project.id,
     runtimeScope,
     apiType: ApiType.UPDATE_SQL_PAIR,
     startTime,
@@ -106,21 +200,51 @@ const handleDeleteSqlPair = async (
   req: NextApiRequest,
   res: NextApiResponse,
   runtimeScope: any,
-  project: any,
   startTime: number,
 ) => {
+  const runtimeIdentity =
+    toCanonicalPersistedRuntimeIdentityFromScope(runtimeScope);
   const { id } = req.query;
   const sqlPairId = validateSqlPairId(id);
+  const actor = buildAuthorizationActorFromRuntimeScope(runtimeScope);
+  const auditContext = buildAuthorizationContextFromRequest({
+    req,
+    sessionId: actor?.sessionId,
+    runtimeScope,
+  });
+  const resource = buildKnowledgeBaseWriteResource(
+    runtimeScope,
+    runtimeIdentity,
+  );
+  await assertAuthorizedWithAudit({
+    auditEventRepository: components.auditEventRepository,
+    actor,
+    action: 'knowledge_base.update',
+    resource,
+    context: auditContext,
+  });
 
   // Delete the SQL pair
-  await sqlPairService.deleteSqlPair(project.id, sqlPairId);
+  await sqlPairService.deleteSqlPair(runtimeIdentity, sqlPairId);
+
+  await recordAuditEvent({
+    auditEventRepository: components.auditEventRepository,
+    actor,
+    action: 'knowledge_base.update',
+    resource,
+    result: 'succeeded',
+    context: auditContext,
+    payloadJson: {
+      operation: 'sql_pair.delete',
+      sqlPairId,
+    },
+  });
 
   // Return 204 No Content with no payload
   await respondWithSimple({
     res,
     statusCode: 204,
     responsePayload: {},
-    projectId: project.id,
     runtimeScope,
     apiType: ApiType.DELETE_SQL_PAIR,
     startTime,
@@ -134,22 +258,34 @@ export default async function handler(
   res: NextApiResponse,
 ) {
   const startTime = Date.now();
-  let project;
   let runtimeScope;
 
   try {
     runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
-    project = runtimeScope.project;
 
     // Handle PUT method - update SQL pair
     if (req.method === 'PUT') {
-      await handleUpdateSqlPair(req, res, runtimeScope, project, startTime);
+      const derivedContext = await deriveRuntimeExecutionContextFromRequest({
+        req,
+        runtimeScopeResolver,
+        noDeploymentMessage:
+          'No deployment found, please deploy your project first',
+        requireLatestExecutableSnapshot: true,
+      });
+      runtimeScope = derivedContext.runtimeScope;
+      await handleUpdateSqlPair(
+        req,
+        res,
+        runtimeScope,
+        derivedContext.executionContext,
+        startTime,
+      );
       return;
     }
 
     // Handle DELETE method - delete SQL pair
     if (req.method === 'DELETE') {
-      await handleDeleteSqlPair(req, res, runtimeScope, project, startTime);
+      await handleDeleteSqlPair(req, res, runtimeScope, startTime);
       return;
     }
 
@@ -159,7 +295,6 @@ export default async function handler(
     await handleApiError({
       error,
       res,
-      projectId: project?.id,
       runtimeScope,
       apiType:
         req.method === 'PUT'

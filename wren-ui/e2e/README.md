@@ -2,6 +2,10 @@
 
 1. Make sure you have start all Wren AI services. ([How to start](https://github.com/Canner/WrenAI/blob/main/docker/README.md#how-to-start))
 
+   > Use a dedicated PostgreSQL database for e2e, for example:
+   > `createdb -h 127.0.0.1 -p 9432 -U postgres wrenai_e2e`
+   > and then `export E2E_PG_URL=postgres://postgres:postgres@127.0.0.1:9432/wrenai_e2e`
+
 2. Create a `e2e.config.json` file under `wren-ui/e2e` folder and replace all data sources needed values in `./config.ts`.
 
    ```ts

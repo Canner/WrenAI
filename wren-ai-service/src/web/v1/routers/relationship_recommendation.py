@@ -41,7 +41,7 @@ async def recommend(
     input = RelationshipRecommendation.Input(
         id=id,
         mdl=request.mdl,
-        project_id=request.resolve_project_id(),
+        runtime_scope_id=request.resolve_runtime_scope_id(),
         runtime_identity=request.runtime_identity,
         configurations=request.configurations,
         request_from=request.request_from,

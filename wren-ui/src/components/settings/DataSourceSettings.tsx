@@ -1,5 +1,5 @@
 import Image from 'next/image';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button, Form, Modal, message, Alert } from 'antd';
 import { makeIterable } from '@/utils/iteration';
 import { DATA_SOURCES, FORM_MODE, Path } from '@/utils/enum';
@@ -10,22 +10,22 @@ import {
   transformFormToProperties,
   transformPropertiesToForm,
 } from '@/hooks/useSetupConnectionDataSource';
-import { parseGraphQLError } from '@/utils/errorHandler';
 import {
-  useStartSampleDatasetMutation,
-  useUpdateDataSourceMutation,
-} from '@/apollo/client/graphql/dataSource.generated';
+  startSampleDataset,
+  updateDataSourceSettings,
+} from '@/utils/settingsRest';
 import {
   DataSourceName,
   SampleDatasetName,
 } from '@/apollo/client/graphql/__types__';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
+import { clearRuntimePagePrefetchCache } from '@/utils/runtimePagePrefetch';
 
 interface Props {
   type: DataSourceName;
   properties: Record<string, any>;
   sampleDataset: SampleDatasetName;
-  refetchSettings: () => void;
+  refetchSettings: () => Promise<unknown>;
   closeModal: () => void;
 }
 
@@ -35,25 +35,29 @@ const SampleDatasetPanel = (props: Props) => {
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const { sampleDataset, closeModal } = props;
   const templates = getTemplates();
-  const [startSampleDataset] = useStartSampleDatasetMutation({
-    onError: (error) => console.error(error),
-    onCompleted: () => {
-      runtimeScopeNavigation.push(Path.Home);
-      closeModal();
-    },
-    refetchQueries: 'active',
-  });
 
   const onSelect = (name: SampleDatasetName) => {
     const isCurrentTemplate = sampleDataset === name;
     if (!isCurrentTemplate) {
       const template = templates.find((item) => item.value === name);
       Modal.confirm({
-        title: `Are you sure you want to change to "${template.label}" dataset?`,
+        title: `Are you sure you want to change to "${template?.label || name}" dataset?`,
         okButtonProps: { danger: true },
         okText: 'Change',
         onOk: async () => {
-          await startSampleDataset({ variables: { data: { name } } });
+          try {
+            await startSampleDataset(runtimeScopeNavigation.selector, name);
+            clearRuntimePagePrefetchCache();
+            runtimeScopeNavigation.pushWorkspace(Path.Home);
+            closeModal();
+          } catch (error) {
+            message.error(
+              error instanceof Error
+                ? error.message
+                : '切换样例数据失败，请稍后重试。',
+            );
+            throw error;
+          }
         },
       });
     }
@@ -79,21 +83,21 @@ const SampleDatasetPanel = (props: Props) => {
 
 const DataSourcePanel = (props: Props) => {
   const { type, properties, refetchSettings } = props;
+  const managedFederatedRuntime = Boolean(
+    properties?.managedFederatedRuntime && type === DataSourceName.TRINO,
+  );
 
   const current = getDataSource(type as unknown as DATA_SOURCES);
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const [form] = Form.useForm();
+  const [updating, setUpdating] = useState(false);
+  const [updateError, setUpdateError] = useState<Error | null>(null);
 
-  const [updateDataSource, { loading, error }] = useUpdateDataSourceMutation({
-    onError: (error) => console.error(error),
-    onCompleted: async () => {
-      refetchSettings();
-      message.success('Successfully update data source.');
-    },
-  });
-
-  const updateError = useMemo(() => parseGraphQLError(error), [error]);
-
-  useEffect(() => properties && reset(), [properties]);
+  useEffect(() => {
+    if (properties) {
+      form.setFieldsValue(transformPropertiesToForm(properties, type));
+    }
+  }, [form, properties, type]);
 
   const reset = () => {
     form.setFieldsValue(transformPropertiesToForm(properties, type));
@@ -102,26 +106,67 @@ const DataSourcePanel = (props: Props) => {
   const submit = () => {
     form
       .validateFields()
-      .then((values) => {
-        updateDataSource({
-          variables: {
-            data: { properties: transformFormToProperties(values, type) },
-          },
-        });
+      .then(async (values) => {
+        try {
+          setUpdating(true);
+          setUpdateError(null);
+          await updateDataSourceSettings(runtimeScopeNavigation.selector, {
+            type,
+            properties: transformFormToProperties(values, type),
+          });
+          await refetchSettings();
+          message.success('Successfully update data source.');
+        } catch (error) {
+          const normalizedError =
+            error instanceof Error
+              ? error
+              : new Error('更新数据源失败，请稍后重试。');
+          setUpdateError(normalizedError);
+          message.error(normalizedError.message);
+        } finally {
+          setUpdating(false);
+        }
       })
-      .catch((error) => {
-        console.error(error);
+      .catch(() => {
+        // form validation errors are displayed by antd fields
       });
   };
 
   if (!type) return <FlexLoading align="center" height={150} />;
+
+  if (managedFederatedRuntime) {
+    return (
+      <>
+        <div className="d-flex align-center">
+          <Image
+            className="mr-2"
+            src={current.logo || ''}
+            alt={current.label}
+            width="24"
+            height="24"
+          />
+          {current.label}
+        </div>
+        <Alert
+          className="mt-4"
+          type="info"
+          showIcon
+          message="联邦运行时由系统自动维护"
+          description={
+            properties?.readonlyReason ||
+            '当前数据源来自多 connector 聚合运行时，请前往知识库 → 连接器维护。'
+          }
+        />
+      </>
+    );
+  }
 
   return (
     <>
       <div className="d-flex align-center">
         <Image
           className="mr-2"
-          src={current.logo}
+          src={current.logo || ''}
           alt={current.label}
           width="24"
           height="24"
@@ -133,7 +178,7 @@ const DataSourcePanel = (props: Props) => {
 
         {updateError && (
           <Alert
-            message={updateError.shortMessage}
+            message="更新数据源失败"
             description={updateError.message}
             type="error"
             showIcon
@@ -149,7 +194,7 @@ const DataSourcePanel = (props: Props) => {
             type="primary"
             style={{ width: 80 }}
             onClick={submit}
-            loading={loading}
+            loading={updating}
           >
             Save
           </Button>

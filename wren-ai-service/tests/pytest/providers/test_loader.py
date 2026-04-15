@@ -3,7 +3,15 @@ from src.providers import loader
 
 def test_import_mods():
     loader.import_mods("src.providers")
-    assert len(loader.PROVIDERS) == 7
+    assert len(loader.PROVIDERS) == 6
+    assert set(loader.PROVIDERS) == {
+        "litellm_llm",
+        "litellm_embedder",
+        "pgvector",
+        "wren_ui",
+        "wren_ibis",
+        "wren_engine",
+    }
 
 
 def test_get_provider():
@@ -18,9 +26,6 @@ def test_get_provider():
     assert provider.__name__ == "LitellmEmbedderProvider"
 
     # document store provider
-    provider = loader.get_provider("qdrant")
-    assert provider.__name__ == "QdrantProvider"
-
     provider = loader.get_provider("pgvector")
     assert provider.__name__ == "PgvectorProvider"
 

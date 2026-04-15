@@ -26,10 +26,8 @@
     #fix:
     WREN_AI_ENDPOINT: "http://wren-ai-service:5555"
 
-    # "pg" for postgres as application database.
-    #fix
-    DB_TYPE: pg
-
     DATA_PATH: "/app/data"
 
-    ### if DB_TYPE = "postgres" you must provide PG_URL string in the *Secret* manifest file (deployment/kustomizations/examples/secret-wren_example.yaml) to connect to postgres
+    ### provide PG_URL string in the *Secret* manifest file
+    ### (deployment/kustomizations/examples/secret-wren_example.yaml)
+    ### to connect wren-ui to PostgreSQL

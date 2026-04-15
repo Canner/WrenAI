@@ -5,7 +5,7 @@ import { DataSourceName } from '@/apollo/client/graphql/__types__';
 
 export interface NativeSQLResult {
   data: string;
-  dataSourceType: DataSourceName;
+  dataSourceType?: DataSourceName;
   hasNativeSQL: boolean;
   loading: boolean;
   nativeSQLMode: boolean;

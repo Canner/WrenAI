@@ -47,30 +47,31 @@ Wren Engine is the backbone of the Wren AI project. The semantic engine for LLMs
 To contribute, please refer to [Wren Engine Contributing Guide](https://github.com/Canner/wren-engine/blob/main/ibis-server/docs/CONTRIBUTING.md)
 
 ## Guide for Contributing to Multiple Services
-We rely on docker-compose to start all services. If you are contributing to multiple services, you could just comment out the services you'd like to start from the source code and change the `env` variables to point to the services you started by yourself.
+We rely on the top-level `docker/docker-compose.yaml` to start all services. If you are contributing to multiple services, use the same compose file and only bring up the dependency services you need while running your target service from source.
 
 ### Example: Contributing to the [Wren UI Service](#wren-ui-service) and [Wren Engine Service](#wren-engine-service)
-If you are contributing to both the [Wren UI Service](#wren-ui-service) and [Wren Engine Service](#wren-engine-service), you should comment out the `wren-engine` service in the `docker/docker-compose-dev.yml` file (note that the UI service is already excluded from `docker/docker-compose-dev.yml`). Then, adjust the environment variables in your `.env` file to point to the services you have started manually. This will ensure that your local development environment correctly interfaces with the services you are working on.
+If you are contributing to both the [Wren UI Service](#wren-ui-service) and [Wren Engine Service](#wren-engine-service), keep using the same `docker/docker-compose.yaml` stack, but only start the dependency services you still want in containers. Then adjust the environment variables in your `.env` file to point to the services you started manually so the rest of the stack talks to your source-run processes.
 
-1. Prepare your `.env` file: In the `WrenAI/docker` folder, use the `.env.example` file as a template. Copy this file to create a `.env.local` file.
+1. Prepare your `.env` file: In the `WrenAI/docker` folder, use the `.env.example` file as a template. Copy this file to create a `.env` file.
     ```sh
     # assuming the current directory is wren-ui
     cd ../docker
-    cp .env.example .env.local
+    cp .env.example .env
     ```
-2. Modify your `.env.local` file: Fill in the `OPENAI_API_KEY` with your OpenAI API keys before starting.
+2. Modify your `.env` file: Fill in the `OPENAI_API_KEY` with your OpenAI API keys before starting.
 3. In the `WrenAI/docker` folder, copy `config.example.yaml` to `config.yaml` for AI service configuration. Also change `http://wren-ui:3000` to `http://host.docker.internal:3000` in `config.yaml`.
 4. Start the UI and engine services from the source code.
-5. Update the `env` variables in the `.env.local` file to point to the services you started manually.
-6. Start the other services using docker-compose:
+5. Update the `env` variables in the `.env` file to point to the services you started manually.
+6. Start the other services using the same docker compose stack:
     ```sh
     # current directory is WrenAI/docker
-    docker-compose -f docker-compose-dev.yaml --env-file .env.example up
+    docker compose --env-file .env up --build -d bootstrap postgres wren-engine ibis-server trino
 
-    # you can add the -d flag to run the services in the background
-    docker-compose -f docker-compose-dev.yaml --env-file .env.example up -d
-    # to stop the services, use
-    docker-compose -f docker-compose-dev.yaml --env-file .env.example down
+    # for a full local test stack, use
+    docker compose --env-file .env up --build -d
+
+    # to stop the stack
+    docker compose --env-file .env down
     ```
 7. Happy coding!
 
@@ -161,4 +162,3 @@ If you prefer to learn by example, you can refer to this Trino [issue](https://g
    - Ensure the new data source appears in the UI
    - Verify that the form works correctly
    - Test the connection to the new data source
-

@@ -2,11 +2,22 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
 import { ApiType } from '@server/repositories/apiHistoryRepository';
 import {
-  ApiError,
   handleApiError,
   respondWithSimple,
+  ApiError,
 } from '@/apollo/server/utils/apiUtils';
 import { getLogger } from '@server/utils';
+import {
+  requirePersistedWorkspaceId,
+  resolvePersistedKnowledgeBaseId,
+  toCanonicalPersistedRuntimeIdentityFromScope,
+} from '@server/utils/persistedRuntimeIdentity';
+import {
+  assertAuthorizedWithAudit,
+  buildAuthorizationActorFromRuntimeScope,
+  buildAuthorizationContextFromRequest,
+  recordAuditEvent,
+} from '@server/authz';
 
 const logger = getLogger('API_CONNECTORS');
 logger.level = 'debug';
@@ -16,41 +27,19 @@ const { runtimeScopeResolver, connectorService } = components;
 interface CreateConnectorRequest {
   knowledgeBaseId?: string | null;
   type: string;
+  databaseProvider?: string | null;
   displayName: string;
   config?: Record<string, any> | null;
   secret?: Record<string, any> | null;
 }
-
-const requireWorkspaceId = (runtimeScope: any) => {
-  const workspaceId = runtimeScope.workspace?.id;
-  if (!workspaceId) {
-    throw new ApiError('Workspace scope is required', 400);
-  }
-
-  return workspaceId as string;
-};
-
-const resolveKnowledgeBaseId = (
-  runtimeScope: any,
-  payload?: { knowledgeBaseId?: string | null },
-) => {
-  const runtimeKnowledgeBaseId = runtimeScope.knowledgeBase?.id;
-  if (runtimeKnowledgeBaseId) {
-    return runtimeKnowledgeBaseId as string;
-  }
-
-  if (payload?.knowledgeBaseId) {
-    return payload.knowledgeBaseId;
-  }
-
-  throw new ApiError('Knowledge base scope is required', 400);
-};
 
 const toConnectorResponse = (connector: any) => ({
   id: connector.id,
   workspaceId: connector.workspaceId,
   knowledgeBaseId: connector.knowledgeBaseId ?? null,
   type: connector.type,
+  databaseProvider: connector.databaseProvider ?? null,
+  trinoCatalogName: connector.trinoCatalogName ?? null,
   displayName: connector.displayName,
   config: connector.configJson ?? null,
   hasSecret: Boolean(connector.secretRecordId),
@@ -80,6 +69,14 @@ const validateConnectorPayload = (
     throw new ApiError('Connector display name cannot be empty', 400);
   }
   if (
+    payload.databaseProvider !== undefined &&
+    payload.databaseProvider !== null &&
+    (typeof payload.databaseProvider !== 'string' ||
+      payload.databaseProvider.trim().length === 0)
+  ) {
+    throw new ApiError('Connector databaseProvider cannot be empty', 400);
+  }
+  if (
     payload.config !== undefined &&
     payload.config !== null &&
     (typeof payload.config !== 'object' || Array.isArray(payload.config))
@@ -99,18 +96,41 @@ const handleListConnectors = async (
   req: NextApiRequest,
   res: NextApiResponse,
   runtimeScope: any,
-  project: any,
   startTime: number,
 ) => {
-  const knowledgeBaseId = resolveKnowledgeBaseId(runtimeScope);
-  const connectors =
-    await connectorService.listConnectorsByKnowledgeBase(knowledgeBaseId);
+  const runtimeIdentity =
+    toCanonicalPersistedRuntimeIdentityFromScope(runtimeScope);
+  const workspaceId = requirePersistedWorkspaceId(runtimeIdentity);
+  const actor = buildAuthorizationActorFromRuntimeScope(runtimeScope);
+  await assertAuthorizedWithAudit({
+    auditEventRepository: components.auditEventRepository,
+    actor,
+    action: 'connector.read',
+    resource: {
+      resourceType: 'workspace',
+      resourceId: workspaceId,
+      workspaceId,
+    },
+    context: buildAuthorizationContextFromRequest({
+      req,
+      sessionId: actor?.sessionId,
+      runtimeScope,
+    }),
+  });
+  const knowledgeBaseId = resolvePersistedKnowledgeBaseId(
+    runtimeIdentity,
+    undefined,
+    'Knowledge base scope is required',
+  );
+  const connectors = await connectorService.listConnectorsByKnowledgeBase(
+    workspaceId,
+    knowledgeBaseId,
+  );
 
   await respondWithSimple({
     res,
     statusCode: 200,
     responsePayload: connectors.map(toConnectorResponse),
-    projectId: project.id,
     runtimeScope,
     apiType: ApiType.GET_CONNECTORS,
     startTime,
@@ -123,29 +143,68 @@ const handleCreateConnector = async (
   req: NextApiRequest,
   res: NextApiResponse,
   runtimeScope: any,
-  project: any,
   startTime: number,
 ) => {
-  const workspaceId = requireWorkspaceId(runtimeScope);
+  const runtimeIdentity =
+    toCanonicalPersistedRuntimeIdentityFromScope(runtimeScope);
+  const workspaceId = requirePersistedWorkspaceId(runtimeIdentity);
+  const actor = buildAuthorizationActorFromRuntimeScope(runtimeScope);
+  const auditContext = buildAuthorizationContextFromRequest({
+    req,
+    sessionId: actor?.sessionId,
+    runtimeScope,
+  });
   const payload = req.body as CreateConnectorRequest;
   validateConnectorPayload(payload, true);
-  const knowledgeBaseId = resolveKnowledgeBaseId(runtimeScope, payload);
+  const knowledgeBaseId = resolvePersistedKnowledgeBaseId(
+    runtimeIdentity,
+    payload,
+  );
+  await assertAuthorizedWithAudit({
+    auditEventRepository: components.auditEventRepository,
+    actor,
+    action: 'connector.create',
+    resource: {
+      resourceType: 'connector',
+      resourceId: 'new',
+      workspaceId,
+      attributes: {
+        workspaceKind: runtimeScope?.workspace?.kind || null,
+        knowledgeBaseKind: runtimeScope?.knowledgeBase?.kind || null,
+      },
+    },
+    context: auditContext,
+  });
 
   const connector = await connectorService.createConnector({
     workspaceId,
     knowledgeBaseId,
     type: payload.type.trim(),
+    databaseProvider: payload.databaseProvider?.trim() || null,
     displayName: payload.displayName.trim(),
     config: payload.config,
     secret: payload.secret,
-    createdBy: runtimeScope.userId || undefined,
+    createdBy: runtimeIdentity.actorUserId || undefined,
+  });
+
+  await recordAuditEvent({
+    auditEventRepository: components.auditEventRepository,
+    actor,
+    action: 'connector.create',
+    resource: {
+      resourceType: 'connector',
+      resourceId: connector.id,
+      workspaceId,
+    },
+    result: 'succeeded',
+    context: auditContext,
+    afterJson: connector as any,
   });
 
   await respondWithSimple({
     res,
     statusCode: 201,
     responsePayload: toConnectorResponse(connector),
-    projectId: project.id,
     runtimeScope,
     apiType: ApiType.CREATE_CONNECTOR,
     startTime,
@@ -159,20 +218,18 @@ export default async function handler(
   res: NextApiResponse,
 ) {
   const startTime = Date.now();
-  let project;
   let runtimeScope;
 
   try {
     runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
-    project = runtimeScope.project;
 
     if (req.method === 'GET') {
-      await handleListConnectors(req, res, runtimeScope, project, startTime);
+      await handleListConnectors(req, res, runtimeScope, startTime);
       return;
     }
 
     if (req.method === 'POST') {
-      await handleCreateConnector(req, res, runtimeScope, project, startTime);
+      await handleCreateConnector(req, res, runtimeScope, startTime);
       return;
     }
 
@@ -181,7 +238,6 @@ export default async function handler(
     await handleApiError({
       error,
       res,
-      projectId: project?.id,
       runtimeScope,
       apiType:
         req.method === 'GET'

@@ -53,6 +53,7 @@ export enum GeneralErrorCodes {
   // api error
   NON_SQL_QUERY = 'NON_SQL_QUERY',
   NO_DEPLOYMENT_FOUND = 'NO_DEPLOYMENT_FOUND',
+  OUTDATED_RUNTIME_SNAPSHOT = 'OUTDATED_RUNTIME_SNAPSHOT',
 
   // vega schema error
   FAILED_TO_GENERATE_VEGA_SCHEMA = 'FAILED_TO_GENERATE_VEGA_SCHEMA',
@@ -62,7 +63,7 @@ export enum GeneralErrorCodes {
   SQL_EXECUTION_ERROR = 'SQL_EXECUTION_ERROR',
 }
 
-export const errorMessages = {
+export const errorMessages: Partial<Record<GeneralErrorCodes, string>> = {
   [GeneralErrorCodes.INTERNAL_SERVER_ERROR]: 'Internal server error',
 
   // AI service errors
@@ -120,6 +121,8 @@ export const errorMessages = {
   [GeneralErrorCodes.NON_SQL_QUERY]: 'Cannot generate SQL from this question.',
   [GeneralErrorCodes.NO_DEPLOYMENT_FOUND]:
     'No deployment found, please deploy your project first',
+  [GeneralErrorCodes.OUTDATED_RUNTIME_SNAPSHOT]:
+    'This snapshot is outdated and cannot be executed',
 
   // vega schema error
   [GeneralErrorCodes.FAILED_TO_GENERATE_VEGA_SCHEMA]:
@@ -130,7 +133,7 @@ export const errorMessages = {
   [GeneralErrorCodes.SQL_EXECUTION_ERROR]: 'SQL execution error',
 };
 
-export const shortMessages = {
+export const shortMessages: Partial<Record<GeneralErrorCodes, string>> = {
   [GeneralErrorCodes.INTERNAL_SERVER_ERROR]: 'Internal server error',
   [GeneralErrorCodes.NO_RELEVANT_DATA]: 'Try a different query',
   [GeneralErrorCodes.NO_RELEVANT_SQL]: 'Clarification needed',
@@ -157,6 +160,7 @@ export const shortMessages = {
   [GeneralErrorCodes.NON_SQL_QUERY]: 'Cannot generate SQL from this question.',
   [GeneralErrorCodes.NO_DEPLOYMENT_FOUND]:
     'No deployment found, please deploy your project first',
+  [GeneralErrorCodes.OUTDATED_RUNTIME_SNAPSHOT]: 'Snapshot outdated',
   [GeneralErrorCodes.FAILED_TO_GENERATE_VEGA_SCHEMA]:
     'Failed to generate Vega spec',
   [GeneralErrorCodes.POLLING_TIMEOUT]: 'Polling timeout',
@@ -176,12 +180,16 @@ export const create = (
   // Default to INTERNAL_SERVER_ERROR if no code is provided
   code = code || GeneralErrorCodes.INTERNAL_SERVER_ERROR;
 
+  const fallbackMessage =
+    errorMessages[GeneralErrorCodes.INTERNAL_SERVER_ERROR] ||
+    'Internal server error';
+
   // Get the error message based on the code
   const message =
     customMessage ||
     originalError?.message ||
     errorMessages[code] ||
-    errorMessages[GeneralErrorCodes.INTERNAL_SERVER_ERROR];
+    fallbackMessage;
 
   // Return the GraphQLError
   const err = new GraphQLError(message, {

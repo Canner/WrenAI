@@ -3,7 +3,6 @@ import { gql } from '@apollo/client';
 const INSTRUCTION = gql`
   fragment Instruction on Instruction {
     id
-    projectId
     instruction
     questions
     isDefault

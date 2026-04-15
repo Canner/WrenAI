@@ -29,16 +29,29 @@ import {
   KBSnapshotRepository,
   ConnectorRepository,
   SecretRepository,
+  ServiceAccountRepository,
+  ApiTokenRepository,
+  SSOSessionRepository,
+  AccessReviewRepository,
+  AccessReviewItemRepository,
+  DirectoryGroupRepository,
+  DirectoryGroupMemberRepository,
+  BreakGlassGrantRepository,
   SkillDefinitionRepository,
-  SkillBindingRepository,
+  SkillMarketplaceCatalogRepository,
   ScheduleJobRepository,
   ScheduleJobRunRepository,
   AuditEventRepository,
+  RoleRepository,
+  PermissionRepository,
+  RolePermissionRepository,
+  PrincipalRoleBindingRepository,
 } from '@server/repositories';
 import {
   WrenEngineAdaptor,
   WrenAIAdaptor,
   IbisAdaptor,
+  TrinoAdaptor,
 } from '@server/adaptors';
 import {
   AuthService,
@@ -47,16 +60,27 @@ import {
   ProjectService,
   DeployService,
   AskingService,
+  ModelService,
   MDLService,
   DashboardService,
   AskingTaskTracker,
   InstructionService,
   WorkspaceService,
+  WorkspaceBootstrapService,
+  KnowledgeBaseService,
   SecretService,
   ConnectorService,
+  FederatedRuntimeProjectService,
   SkillService,
   ScheduleService,
+  AutomationService,
+  IdentityProviderService,
+  GovernanceService,
+  ScimService,
 } from '@server/services';
+import type { IDeployService } from '@server/services/deployService';
+import type { IMDLService } from '@server/services/mdlService';
+import type { IProjectService } from '@server/services/projectService';
 import { PostHogTelemetry } from './apollo/server/telemetry/telemetry';
 import { RuntimeScopeResolver } from './apollo/server/context/runtimeScope';
 import {
@@ -72,10 +96,8 @@ export const serverConfig = getConfig();
 export const initComponents = () => {
   const telemetry = new PostHogTelemetry();
   const knex = bootstrapKnex({
-    dbType: serverConfig.dbType,
     pgUrl: serverConfig.pgUrl,
     debug: serverConfig.debug,
-    sqliteFile: serverConfig.sqliteFile,
   });
 
   // repositories
@@ -101,19 +123,37 @@ export const initComponents = () => {
   const workspaceRepository = new WorkspaceRepository(knex);
   const userRepository = new UserRepository(knex);
   const authIdentityRepository = new AuthIdentityRepository(knex);
-  const identityProviderConfigRepository =
-    new IdentityProviderConfigRepository(knex);
+  const identityProviderConfigRepository = new IdentityProviderConfigRepository(
+    knex,
+  );
   const authSessionRepository = new AuthSessionRepository(knex);
   const workspaceMemberRepository = new WorkspaceMemberRepository(knex);
   const knowledgeBaseRepository = new KnowledgeBaseRepository(knex);
   const kbSnapshotRepository = new KBSnapshotRepository(knex);
   const connectorRepository = new ConnectorRepository(knex);
   const secretRepository = new SecretRepository(knex);
+  const serviceAccountRepository = new ServiceAccountRepository(knex);
+  const apiTokenRepository = new ApiTokenRepository(knex);
+  const ssoSessionRepository = new SSOSessionRepository(knex);
+  const accessReviewRepository = new AccessReviewRepository(knex);
+  const accessReviewItemRepository = new AccessReviewItemRepository(knex);
+  const directoryGroupRepository = new DirectoryGroupRepository(knex);
+  const directoryGroupMemberRepository = new DirectoryGroupMemberRepository(
+    knex,
+  );
+  const breakGlassGrantRepository = new BreakGlassGrantRepository(knex);
   const skillDefinitionRepository = new SkillDefinitionRepository(knex);
-  const skillBindingRepository = new SkillBindingRepository(knex);
+  const skillMarketplaceCatalogRepository =
+    new SkillMarketplaceCatalogRepository(knex);
   const scheduleJobRepository = new ScheduleJobRepository(knex);
   const scheduleJobRunRepository = new ScheduleJobRunRepository(knex);
   const auditEventRepository = new AuditEventRepository(knex);
+  const roleRepository = new RoleRepository(knex);
+  const permissionRepository = new PermissionRepository(knex);
+  const rolePermissionRepository = new RolePermissionRepository(knex);
+  const principalRoleBindingRepository = new PrincipalRoleBindingRepository(
+    knex,
+  );
 
   // adaptors
   const wrenEngineAdaptor = new WrenEngineAdaptor({
@@ -124,6 +164,18 @@ export const initComponents = () => {
   });
   const ibisAdaptor = new IbisAdaptor({
     ibisServerEndpoint: serverConfig.ibisServerEndpoint,
+  });
+  const trinoAdaptor = new TrinoAdaptor({
+    catalogDir: serverConfig.trinoCatalogDir!,
+    managementMode: serverConfig.trinoCatalogManagement,
+    runtimeHost:
+      serverConfig.trinoCatalogManagementHost || serverConfig.trinoRuntimeHost,
+    runtimePort:
+      serverConfig.trinoCatalogManagementPort || serverConfig.trinoRuntimePort,
+    runtimeUser: serverConfig.trinoRuntimeUser,
+    runtimePassword: serverConfig.trinoRuntimePassword,
+    runtimeSsl:
+      serverConfig.trinoCatalogManagementSsl ?? serverConfig.trinoRuntimeSsl,
   });
 
   // services
@@ -140,21 +192,33 @@ export const initComponents = () => {
     wrenAIAdaptor,
     deployLogRepository,
     telemetry,
-  });
+  }) as unknown as IDeployService;
   const mdlService = new MDLService({
     projectRepository,
+    deployLogRepository,
     modelRepository,
     modelColumnRepository,
     modelNestedColumnRepository,
     relationRepository,
     viewRepository,
-  });
+    knowledgeBaseRepository,
+  }) as unknown as IMDLService;
   const projectService = new ProjectService({
     projectRepository,
     metadataService,
     mdlService,
     wrenAIAdaptor,
     telemetry,
+  }) as unknown as IProjectService;
+  const modelService = new ModelService({
+    projectService,
+    modelRepository,
+    modelColumnRepository,
+    relationRepository,
+    viewRepository,
+    mdlService,
+    wrenEngineAdaptor,
+    queryService,
   });
   const askingTaskTracker = new AskingTaskTracker({
     wrenAIAdaptor,
@@ -179,6 +243,60 @@ export const initComponents = () => {
     workspaceRepository,
     workspaceMemberRepository,
     userRepository,
+    roleRepository,
+    principalRoleBindingRepository,
+  });
+  const secretService = new SecretService({
+    secretRepository,
+    encryptionPassword: serverConfig.encryptionPassword,
+    encryptionSalt: serverConfig.encryptionSalt,
+  });
+  const federatedRuntimeProjectService = new FederatedRuntimeProjectService({
+    knowledgeBaseRepository,
+    connectorRepository,
+    projectRepository,
+    deployLogRepository,
+    kbSnapshotRepository,
+    modelRepository,
+    relationRepository,
+    viewRepository,
+    secretService,
+    trinoAdaptor,
+    mdlService,
+    deployService,
+    runtimeHost: serverConfig.trinoRuntimeHost!,
+    runtimePort: serverConfig.trinoRuntimePort!,
+    runtimeUser: serverConfig.trinoRuntimeUser!,
+    runtimePassword: serverConfig.trinoRuntimePassword || '',
+    runtimeSsl: Boolean(serverConfig.trinoRuntimeSsl),
+  });
+  const knowledgeBaseService = new KnowledgeBaseService({
+    workspaceRepository,
+    knowledgeBaseRepository,
+    kbSnapshotRepository,
+    connectorRepository,
+    federatedRuntimeProjectService,
+    projectService,
+    mdlService,
+    deployService,
+    deployLogRepository,
+  });
+  const workspaceBootstrapService = new WorkspaceBootstrapService({
+    workspaceRepository,
+    knowledgeBaseRepository,
+    kbSnapshotRepository,
+    projectRepository,
+    projectService,
+    modelService,
+    modelRepository,
+    modelColumnRepository,
+    modelNestedColumnRepository,
+    relationRepository,
+    deployService,
+    deployLogRepository,
+    mdlService,
+    dashboardService,
+    wrenEngineAdaptor,
   });
   const authService = new AuthService({
     userRepository,
@@ -186,29 +304,71 @@ export const initComponents = () => {
     authSessionRepository,
     workspaceRepository,
     workspaceMemberRepository,
+    roleRepository,
+    principalRoleBindingRepository,
+    directoryGroupRepository,
+    directoryGroupMemberRepository,
+    breakGlassGrantRepository,
+    workspaceBootstrapService,
   });
-  const secretService = new SecretService({
-    secretRepository,
-    encryptionPassword: serverConfig.encryptionPassword,
-    encryptionSalt: serverConfig.encryptionSalt,
-  });
+  const automationService = new AutomationService(
+    workspaceRepository,
+    serviceAccountRepository,
+    apiTokenRepository,
+    roleRepository,
+    principalRoleBindingRepository,
+  );
   const connectorService = new ConnectorService({
     connectorRepository,
     workspaceRepository,
     knowledgeBaseRepository,
     secretService,
+    metadataService,
+    federatedRuntimeProjectService,
   });
   const skillService = new SkillService({
     workspaceRepository,
-    knowledgeBaseRepository,
-    kbSnapshotRepository,
     connectorRepository,
+    secretService,
     skillDefinitionRepository,
-    skillBindingRepository,
+    skillMarketplaceCatalogRepository,
   });
   const scheduleService = new ScheduleService({
     scheduleJobRepository,
   });
+  const identityProviderService = new IdentityProviderService(
+    workspaceRepository,
+    userRepository,
+    authIdentityRepository,
+    identityProviderConfigRepository,
+    ssoSessionRepository,
+    workspaceService,
+    authService,
+  );
+  const governanceService = new GovernanceService(
+    accessReviewRepository,
+    accessReviewItemRepository,
+    workspaceMemberRepository,
+    userRepository,
+    authIdentityRepository,
+    authSessionRepository,
+    workspaceService,
+    authService,
+    directoryGroupRepository,
+    directoryGroupMemberRepository,
+    breakGlassGrantRepository,
+    roleRepository,
+    principalRoleBindingRepository,
+  );
+  const scimService = new ScimService(
+    workspaceRepository,
+    identityProviderConfigRepository,
+    userRepository,
+    authIdentityRepository,
+    workspaceMemberRepository,
+    workspaceService,
+    governanceService,
+  );
   const askingService = new AskingService({
     telemetry,
     wrenAIAdaptor,
@@ -218,15 +378,14 @@ export const initComponents = () => {
     threadRepository,
     threadResponseRepository,
     queryService,
-    mdlService,
     askingTaskTracker,
     askingTaskRepository,
+    knowledgeBaseRepository,
     skillService,
-    connectorService,
+    backgroundTrackerWorkspaceId: serverConfig.backgroundTrackerWorkspaceId,
   });
   const runtimeScopeResolver = new RuntimeScopeResolver({
     projectRepository,
-    deployRepository: deployLogRepository,
     deployService,
     authService,
     workspaceRepository,
@@ -257,7 +416,7 @@ export const initComponents = () => {
     queryService,
     enablePolling: false,
   });
-  new ScheduleWorker({
+  const scheduleWorker = new ScheduleWorker({
     scheduleJobRepository,
     scheduleJobRunRepository,
     auditEventRepository,
@@ -317,16 +476,29 @@ export const initComponents = () => {
     kbSnapshotRepository,
     connectorRepository,
     secretRepository,
+    serviceAccountRepository,
+    apiTokenRepository,
+    ssoSessionRepository,
+    accessReviewRepository,
+    accessReviewItemRepository,
+    directoryGroupRepository,
+    directoryGroupMemberRepository,
+    breakGlassGrantRepository,
     skillDefinitionRepository,
-    skillBindingRepository,
+    skillMarketplaceCatalogRepository,
     scheduleJobRepository,
     scheduleJobRunRepository,
     auditEventRepository,
+    roleRepository,
+    permissionRepository,
+    rolePermissionRepository,
+    principalRoleBindingRepository,
 
     // adaptors
     wrenEngineAdaptor,
     wrenAIAdaptor,
     ibisAdaptor,
+    trinoAdaptor,
 
     // services
     metadataService,
@@ -334,18 +506,27 @@ export const initComponents = () => {
     queryService,
     deployService,
     askingService,
+    modelService,
     mdlService,
     dashboardService,
     sqlPairService,
     instructionService,
     workspaceService,
+    knowledgeBaseService,
+    workspaceBootstrapService,
     authService,
+    automationService,
     secretService,
     connectorService,
+    federatedRuntimeProjectService,
     skillService,
     scheduleService,
+    identityProviderService,
+    governanceService,
+    scimService,
     runtimeScopeResolver,
     askingTaskTracker,
+    scheduleWorker,
 
     // background trackers
     projectRecommendQuestionBackgroundTracker,
@@ -354,5 +535,16 @@ export const initComponents = () => {
   };
 };
 
+type Components = ReturnType<typeof initComponents>;
+
+const globalForComponents = globalThis as typeof globalThis & {
+  __wrenComponents__?: Components;
+};
+
 // singleton components
-export const components = initComponents();
+export const components =
+  globalForComponents.__wrenComponents__ ?? initComponents();
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForComponents.__wrenComponents__ = components;
+}

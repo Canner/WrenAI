@@ -6,6 +6,7 @@ import { Path } from '@/utils/enum';
 import Deploy from '@/components/deploy/Deploy';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import RuntimeScopeSelector from '@/components/runtimeScope/RuntimeScopeSelector';
+import AuthSessionStatus from '@/components/auth/AuthSessionStatus';
 
 const { Header } = Layout;
 
@@ -54,7 +55,7 @@ export default function HeaderBar() {
                 shape="round"
                 size="small"
                 $isHighlight={pathname.startsWith(Path.Home)}
-                onClick={() => runtimeScopeNavigation.push(Path.Home)}
+                onClick={() => runtimeScopeNavigation.pushWorkspace(Path.Home)}
               >
                 Home
               </StyledButton>
@@ -62,7 +63,9 @@ export default function HeaderBar() {
                 shape="round"
                 size="small"
                 $isHighlight={pathname.startsWith(Path.Modeling)}
-                onClick={() => runtimeScopeNavigation.push(Path.Modeling)}
+                onClick={() =>
+                  runtimeScopeNavigation.pushWorkspace(Path.Modeling)
+                }
               >
                 Modeling
               </StyledButton>
@@ -71,7 +74,7 @@ export default function HeaderBar() {
                 size="small"
                 $isHighlight={pathname.startsWith(Path.Knowledge)}
                 onClick={() =>
-                  runtimeScopeNavigation.push(Path.KnowledgeQuestionSQLPairs)
+                  runtimeScopeNavigation.pushWorkspace(Path.Knowledge)
                 }
               >
                 Knowledge
@@ -81,7 +84,9 @@ export default function HeaderBar() {
                 size="small"
                 $isHighlight={pathname.startsWith(Path.APIManagement)}
                 onClick={() =>
-                  runtimeScopeNavigation.push(Path.APIManagementHistory)
+                  runtimeScopeNavigation.pushWorkspace(
+                    Path.APIManagementHistory,
+                  )
                 }
               >
                 API
@@ -91,8 +96,9 @@ export default function HeaderBar() {
         </Space>
         {showNav && (
           <Space size={[16, 0]}>
-            <RuntimeScopeSelector key={asPath} />
+            <RuntimeScopeSelector key={asPath} scope="workspace" />
             {isModeling && <Deploy />}
+            <AuthSessionStatus />
           </Space>
         )}
       </div>

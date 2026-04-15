@@ -12,19 +12,24 @@ import { getNodeTypeIcon } from '@/utils/nodeType';
 
 type TreeNode = DataNode;
 
-const ColumnNode = ({ title, relation, primary }) => {
+const ColumnNode = (props: {
+  title: string;
+  relation: ComposeDiagramField | null;
+  primary?: boolean;
+}) => {
+  const { title, relation, primary } = props;
   const append = (
     <>
       {relation && (
         <span
           className="adm-treeNode--relation"
-          title={`${relation.name}: ${getJoinTypeText(relation.joinType)}`}
+          title={`${relation.displayName}: ${getJoinTypeText(relation.type)}`}
         >
           <RelationshipIcon />
         </span>
       )}
       {primary && (
-        <span className="adm-treeNode--primary" title="Primary Key">
+        <span className="adm-treeNode--primary" title="主键">
           <PrimaryKeyIcon />
         </span>
       )}
@@ -86,6 +91,7 @@ export const getColumnNode = (
 interface GroupSet {
   groupName: string;
   groupKey: string;
+  emptyLabel?: string;
   quotaUsage?: number;
   appendSlot?: React.ReactNode;
   children?: DataNode[];
@@ -97,6 +103,7 @@ export const createTreeGroupNode =
     const {
       groupName = '',
       groupKey = '',
+      emptyLabel,
       quotaUsage,
       actions,
       children = [],
@@ -105,7 +112,7 @@ export const createTreeGroupNode =
 
     const emptyChildren = [
       {
-        title: `No ${lowerCase(groupName)}`,
+        title: emptyLabel || `No ${lowerCase(groupName)}`,
         key: `${groupKey}-empty`,
         selectable: false,
         className: 'adm-treeNode adm-treeNode--empty adm-treeNode--selectNode',

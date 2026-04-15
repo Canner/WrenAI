@@ -8,15 +8,77 @@ import {
   respondWith,
   handleApiError,
   deriveRuntimeExecutionContextFromRequest,
+  pollUntil,
 } from '@/apollo/server/utils/apiUtils';
 import { ChartResult, ChartStatus } from '@/apollo/server/models/adaptor';
 import { PreviewDataResponse } from '@server/services/queryService';
 import { transformToObjects } from '@server/utils/dataUtils';
-import { enhanceVegaSpec } from '@/utils/vegaSpecUtils';
+import { toAskRuntimeIdentity } from '@server/utils/askContext';
+import {
+  canonicalizeChartSchema,
+  shapeChartPreviewData,
+} from '@/utils/chartSpecRuntime';
+import {
+  assertAuthorizedWithAudit,
+  buildAuthorizationActorFromRuntimeScope,
+  buildAuthorizationContextFromRequest,
+} from '@server/authz';
 
-const { runtimeScopeResolver, wrenAIAdaptor, queryService } = components;
+/**
+ * Deprecated compatibility endpoint.
+ *
+ * Removal gate:
+ * 1. API history shows no remaining GENERATE_VEGA_CHART usage for at least one
+ *    release window / observation cycle.
+ * 2. Any external callers have migrated to the ask/chart workflow.
+ * 3. Then delete this route together with ApiType.GENERATE_VEGA_CHART history
+ *    branches, OpenAPI exposure, and related compatibility tests.
+ */
 
-const MAX_WAIT_TIME = 1000 * 60 * 3; // 3 minutes
+const {
+  runtimeScopeResolver,
+  wrenAIAdaptor,
+  queryService,
+  auditEventRepository,
+} = components;
+
+const DEPRECATION_WARNING =
+  '299 - "Deprecated API: use the ask/chart workflow instead of /api/v1/generate_vega_chart."';
+
+const setDeprecatedHeaders = (res: NextApiResponse) => {
+  res.setHeader('Deprecation', 'true');
+  res.setHeader('Warning', DEPRECATION_WARNING);
+};
+
+const assertKnowledgeBaseReadAccess = async ({
+  req,
+  runtimeScope,
+}: {
+  req: NextApiRequest;
+  runtimeScope: any;
+}) => {
+  const actor = buildAuthorizationActorFromRuntimeScope(runtimeScope);
+  await assertAuthorizedWithAudit({
+    auditEventRepository,
+    actor,
+    action: 'knowledge_base.read',
+    resource: {
+      resourceType: runtimeScope?.knowledgeBase ? 'knowledge_base' : 'workspace',
+      resourceId:
+        runtimeScope?.knowledgeBase?.id || runtimeScope?.workspace?.id,
+      workspaceId: runtimeScope?.workspace?.id || null,
+      attributes: {
+        workspaceKind: runtimeScope?.workspace?.kind || null,
+        knowledgeBaseKind: runtimeScope?.knowledgeBase?.kind || null,
+      },
+    },
+    context: buildAuthorizationContextFromRequest({
+      req,
+      sessionId: actor?.sessionId,
+      runtimeScope,
+    }),
+  });
+};
 
 /**
  * Validates the chart generation result and checks for errors
@@ -64,6 +126,8 @@ export default async function handler(
   let runtimeScope;
 
   try {
+    setDeprecatedHeaders(res);
+
     // Only allow POST method
     if (req.method !== 'POST') {
       throw new ApiError('Method not allowed', 405);
@@ -89,8 +153,10 @@ export default async function handler(
     const derivedContext = await deriveRuntimeExecutionContextFromRequest({
       req,
       runtimeScopeResolver,
+      requireLatestExecutableSnapshot: true,
     });
     runtimeScope = derivedContext.runtimeScope;
+    await assertKnowledgeBaseReadAccess({ req, runtimeScope });
     const { project, language, manifest, runtimeIdentity } =
       derivedContext.executionContext;
 
@@ -103,19 +169,19 @@ export default async function handler(
         manifest,
         modelingOnly: false,
       })) as PreviewDataResponse;
-    } catch (queryError) {
+    } catch (queryError: unknown) {
+      const queryErrorMessage =
+        queryError instanceof Error
+          ? queryError.message
+          : 'Error executing SQL query';
       throw new ApiError(
-        queryError.message || 'Error executing SQL query',
+        queryErrorMessage,
         400,
         Errors.GeneralErrorCodes.INVALID_SQL_ERROR,
       );
     }
 
-    // Transform query results to array of objects
-    const dataObjects = transformToObjects(
-      queryResult.columns,
-      queryResult.data,
-    );
+    const askRuntimeIdentity = toAskRuntimeIdentity(runtimeIdentity);
 
     // Ask AI service to generate a Vega spec chart
     const task = await wrenAIAdaptor.generateChart({
@@ -123,7 +189,7 @@ export default async function handler(
       sql,
       data: queryResult,
       runtimeScopeId: runtimeScope.selector.runtimeScopeId || undefined,
-      runtimeIdentity,
+      runtimeIdentity: askRuntimeIdentity,
       configurations: {
         language,
       },
@@ -133,28 +199,17 @@ export default async function handler(
       throw new ApiError('Failed to start Vega spec generation task', 500);
     }
 
-    // Poll for the result
-    const deadline = Date.now() + MAX_WAIT_TIME;
-    let result: ChartResult;
-    while (true) {
-      result = await wrenAIAdaptor.getChartResult(task.queryId);
-      if (
-        result.status === ChartStatus.FINISHED ||
-        result.status === ChartStatus.FAILED
-      ) {
-        break;
-      }
-
-      if (Date.now() > deadline) {
-        throw new ApiError(
-          'Timeout waiting for Vega spec generation',
-          500,
-          Errors.GeneralErrorCodes.POLLING_TIMEOUT,
-        );
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // Poll every second
-    }
+    const result = await pollUntil<ChartResult>({
+      fetcher: () => wrenAIAdaptor.getChartResult(task.queryId),
+      isFinished: (chartResult) =>
+        chartResult.status === ChartStatus.FINISHED ||
+        chartResult.status === ChartStatus.FAILED,
+      timeoutError: new ApiError(
+        'Timeout waiting for Vega spec generation',
+        500,
+        Errors.GeneralErrorCodes.POLLING_TIMEOUT,
+      ),
+    });
 
     // Validate the chart result
     validateChartResult(result);
@@ -162,11 +217,33 @@ export default async function handler(
     // Create a new thread if it's a new question
     const newThreadId = threadId || uuidv4();
 
-    // Get the generated Vega spec
-    const vegaSpec = result?.response?.chartSchema;
-
-    // Enhance the Vega spec with styling and configuration
-    const enhancedVegaSpec = enhanceVegaSpec(vegaSpec, dataObjects);
+    const {
+      canonicalChartSchema,
+      canonicalizationVersion,
+      renderHints,
+      validationErrors,
+    } = canonicalizeChartSchema(
+      result?.response?.chartSchema,
+    );
+    const canonicalChartDetail = {
+      chartSchema: canonicalChartSchema || result?.response?.chartSchema,
+      rawChartSchema: result?.response?.chartSchema,
+      renderHints,
+    };
+    const shapedPreview = shapeChartPreviewData({
+      chartDetail: canonicalChartDetail,
+      previewData: queryResult,
+    });
+    const dataObjects = transformToObjects(
+      shapedPreview.previewData.columns,
+      shapedPreview.previewData.data,
+    );
+    const enhancedVegaSpec = {
+      ...(canonicalChartDetail.chartSchema || result?.response?.chartSchema),
+      data: {
+        values: dataObjects,
+      },
+    };
 
     // Return the Vega spec with data included
     await respondWith({
@@ -175,6 +252,10 @@ export default async function handler(
       responsePayload: {
         vegaSpec: enhancedVegaSpec,
         threadId: newThreadId,
+        canonicalizationVersion,
+        renderHints: shapedPreview.renderHints || renderHints || null,
+        validationErrors,
+        chartDataProfile: shapedPreview.chartDataProfile || null,
       },
       runtimeScope,
       apiType: ApiType.GENERATE_VEGA_CHART,

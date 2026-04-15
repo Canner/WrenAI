@@ -2,7 +2,6 @@ import {
   WrenAIError,
   AskResultStatus,
   AskResultType,
-  SkillExecutionResult,
   RecommendationQuestionStatus,
   ChartAdjustmentOption,
   AskFeedbackStatus,
@@ -30,9 +29,17 @@ import { toPersistedRuntimeIdentity } from '../context/runtimeScope';
 import { TelemetryEvent, WrenService } from '../telemetry/telemetry';
 import { TrackedAskingResult } from '../services';
 import {
+  assertLatestExecutableRuntimeScope,
   resolveProjectLanguage,
+  resolveRuntimeSampleDataset,
   resolveRuntimeProject as resolveScopedRuntimeProject,
 } from '../utils/runtimeExecutionContext';
+import * as Errors from '../utils/error';
+import {
+  assertAuthorizedWithAudit,
+  buildAuthorizationActorFromRuntimeScope,
+  recordAuditEvent,
+} from '@server/authz';
 
 const logger = getLogger('AskingResolver');
 logger.level = 'debug';
@@ -60,7 +67,6 @@ export interface AskingTask {
   candidates: Array<{
     sql: string;
   }>;
-  skillResult?: SkillExecutionResult | null;
   error: WrenAIError | null;
   rephrasedQuestion?: string;
   intentReasoning?: string;
@@ -75,6 +81,13 @@ export interface AskingTask {
 export interface DetailedThread {
   id: number; // ID
   sql: string; // SQL
+  summary?: string;
+  workspaceId?: string | null;
+  knowledgeBaseId?: string | null;
+  kbSnapshotId?: string | null;
+  deployHash?: string | null;
+  knowledgeBaseIds?: string[] | null;
+  selectedSkillIds?: string[] | null;
   responses: ThreadResponse[];
 }
 
@@ -138,6 +151,7 @@ export class AskingResolver {
     _args: any,
     ctx: IContext,
   ): Promise<boolean> {
+    await this.assertKnowledgeBaseReadAccess(ctx);
     const project = await this.getActiveRuntimeProject(ctx);
     await ctx.projectService.generateProjectRecommendationQuestions(
       project.id,
@@ -169,7 +183,16 @@ export class AskingResolver {
     const { threadId } = args;
     const askingService = ctx.askingService;
     await this.ensureThreadScope(ctx, threadId);
-    return askingService.getThreadRecommendationQuestions(threadId);
+    const result =
+      await askingService.getThreadRecommendationQuestions(threadId);
+    await this.recordKnowledgeBaseReadAudit(ctx, {
+      resourceType: 'thread',
+      resourceId: threadId,
+      payloadJson: {
+        operation: 'get_thread_recommendation_questions',
+      },
+    });
+    return result;
   }
 
   public async getSuggestedQuestions(
@@ -177,32 +200,59 @@ export class AskingResolver {
     _args: any,
     ctx: IContext,
   ): Promise<SuggestedQuestionResponse> {
-    const project = await this.getActiveRuntimeProject(ctx);
-    const { sampleDataset } = project;
+    await this.assertKnowledgeBaseReadAccess(ctx);
+    const project = ctx.runtimeScope
+      ? await resolveScopedRuntimeProject(ctx.runtimeScope, ctx.projectService)
+      : null;
+    const sampleDataset = resolveRuntimeSampleDataset(
+      project,
+      ctx.runtimeScope?.knowledgeBase,
+    );
     if (!sampleDataset) {
-      return { questions: [] };
+      const result = { questions: [] };
+      await this.recordKnowledgeBaseReadAudit(ctx, {
+        payloadJson: {
+          operation: 'get_suggested_questions',
+        },
+      });
+      return result;
     }
     const questions = getSampleAskQuestions(sampleDataset as SampleDatasetName);
-    return { questions };
+    const result = { questions: questions || [] };
+    await this.recordKnowledgeBaseReadAudit(ctx, {
+      payloadJson: {
+        operation: 'get_suggested_questions',
+      },
+    });
+    return result;
   }
 
   public async createAskingTask(
     _root: any,
-    args: { data: { question: string; threadId?: number } },
+    args: {
+      data: {
+        question: string;
+        threadId?: number;
+        knowledgeBaseIds?: string[];
+        selectedSkillIds?: string[];
+      };
+    },
     ctx: IContext,
   ): Promise<Task> {
-    const { question, threadId } = args.data;
+    await this.assertKnowledgeBaseReadAccess(ctx);
+    const { question, threadId, knowledgeBaseIds, selectedSkillIds } =
+      args.data;
     if (threadId) {
       await this.ensureThreadScope(ctx, threadId);
     }
+    await this.assertExecutableRuntimeScope(ctx);
 
     const askingService = ctx.askingService;
-    const data = { question };
+    const data = { question, knowledgeBaseIds, selectedSkillIds };
     const task = await askingService.createAskingTask(data, {
       runtimeScopeId: this.getCurrentRuntimeScopeId(ctx),
       runtimeIdentity: this.getCurrentPersistedRuntimeIdentity(ctx),
       threadId,
-      actorClaims: ctx.runtimeScope?.actorClaims || null,
       language: await this.getCurrentLanguage(ctx),
     });
     ctx.telemetry.sendEvent(TelemetryEvent.HOME_ASK_CANDIDATE, {
@@ -228,7 +278,7 @@ export class AskingResolver {
     _root: any,
     args: { taskId: string },
     ctx: IContext,
-  ): Promise<AskingTask> {
+  ): Promise<AskingTask | null> {
     const { taskId } = args;
     const askingService = ctx.askingService;
     await this.ensureAskingTaskScope(ctx, taskId);
@@ -260,7 +310,15 @@ export class AskingResolver {
       );
     }
 
-    return this.transformAskingTask(askResult, ctx);
+    const result = await this.transformAskingTask(askResult, ctx);
+    await this.recordKnowledgeBaseReadAudit(ctx, {
+      resourceType: 'asking_task',
+      resourceId: taskId,
+      payloadJson: {
+        operation: 'get_asking_task',
+      },
+    });
+    return result;
   }
 
   public async createThread(
@@ -271,10 +329,13 @@ export class AskingResolver {
         taskId?: string;
         // if we use recommendation questions, sql will be provided
         sql?: string;
+        knowledgeBaseIds?: string[];
+        selectedSkillIds?: string[];
       };
     },
     ctx: IContext,
   ): Promise<Thread> {
+    await this.assertKnowledgeBaseReadAccess(ctx);
     const { data } = args;
 
     const askingService = ctx.askingService;
@@ -292,6 +353,8 @@ export class AskingResolver {
       threadInput = {
         question: askingTask.question,
         trackedAskingResult: askingTask,
+        knowledgeBaseIds: data.knowledgeBaseIds,
+        selectedSkillIds: data.selectedSkillIds,
       };
     } else {
       // when we use recommendation questions, there's no task to track
@@ -305,7 +368,11 @@ export class AskingResolver {
         this.getCurrentPersistedRuntimeIdentity(ctx),
       );
       ctx.telemetry.sendEvent(eventName, {});
-      return thread;
+      return {
+        ...thread,
+        knowledgeBaseIds: thread.knowledgeBaseIds || [],
+        selectedSkillIds: thread.selectedSkillIds || [],
+      };
     } catch (err: any) {
       ctx.telemetry.sendEvent(
         eventName,
@@ -324,7 +391,7 @@ export class AskingResolver {
     ctx: IContext,
   ): Promise<DetailedThread> {
     const { threadId } = args;
-    await this.ensureThreadScope(ctx, threadId);
+    const scopedThread = await this.ensureThreadScope(ctx, threadId);
     const askingService = ctx.askingService;
     const responses = await askingService.getResponsesWithThreadScoped(
       threadId,
@@ -337,6 +404,13 @@ export class AskingResolver {
         if (!acc.id) {
           acc.id = response.threadId;
           acc.sql = response.sql;
+          acc.summary = scopedThread.summary;
+          acc.workspaceId = scopedThread.workspaceId || null;
+          acc.knowledgeBaseId = scopedThread.knowledgeBaseId || null;
+          acc.kbSnapshotId = scopedThread.kbSnapshotId || null;
+          acc.deployHash = scopedThread.deployHash || null;
+          acc.knowledgeBaseIds = scopedThread.knowledgeBaseIds || [];
+          acc.selectedSkillIds = scopedThread.selectedSkillIds || [];
           acc.responses = [];
         }
 
@@ -358,6 +432,13 @@ export class AskingResolver {
       {} as any,
     );
 
+    await this.recordKnowledgeBaseReadAudit(ctx, {
+      resourceType: 'thread',
+      resourceId: threadId,
+      payloadJson: {
+        operation: 'get_thread',
+      },
+    });
     return thread;
   }
 
@@ -415,10 +496,21 @@ export class AskingResolver {
     _args: any,
     ctx: IContext,
   ): Promise<Thread[]> {
+    await this.assertKnowledgeBaseReadAccess(ctx);
     const threads = await ctx.askingService.listThreads(
       this.getCurrentPersistedRuntimeIdentity(ctx),
     );
-    return threads;
+    const result = threads.map((thread) => ({
+      ...thread,
+      knowledgeBaseIds: thread.knowledgeBaseIds || [],
+      selectedSkillIds: thread.selectedSkillIds || [],
+    }));
+    await this.recordKnowledgeBaseReadAudit(ctx, {
+      payloadJson: {
+        operation: 'list_threads',
+      },
+    });
+    return result;
   }
 
   public async createThreadResponse(
@@ -484,6 +576,7 @@ export class AskingResolver {
   ): Promise<ThreadResponse> {
     const { where, data } = args;
     const askingService = ctx.askingService;
+    await this.ensureResponseScope(ctx, where.id);
     const response = await askingService.updateThreadResponseScoped(
       where.id,
       this.getCurrentPersistedRuntimeIdentity(ctx),
@@ -551,12 +644,13 @@ export class AskingResolver {
       this.getCurrentPersistedRuntimeIdentity(ctx),
       {
         runtimeIdentity: this.getCurrentPersistedRuntimeIdentity(ctx),
-        tables: data.tables,
-        sqlGenerationReasoning: data.sqlGenerationReasoning,
+        tables: data.tables || [],
+        sqlGenerationReasoning: data.sqlGenerationReasoning || '',
       },
       {
         language: await this.getCurrentLanguage(ctx),
       },
+      this.getCurrentRuntimeScopeId(ctx),
     );
   }
 
@@ -586,6 +680,7 @@ export class AskingResolver {
       {
         language: await this.getCurrentLanguage(ctx),
       },
+      this.getCurrentRuntimeScopeId(ctx),
     );
     return true;
   }
@@ -594,21 +689,32 @@ export class AskingResolver {
     _root: any,
     args: { taskId: string },
     ctx: IContext,
-  ): Promise<AdjustmentTask> {
+  ): Promise<AdjustmentTask | null> {
     const { taskId } = args;
     const askingService = ctx.askingService;
     await this.ensureAskingTaskScope(ctx, taskId);
     const adjustmentTask = await askingService.getAdjustmentTask(taskId);
-    return {
-      queryId: adjustmentTask?.queryId,
-      status: adjustmentTask?.status,
-      error: adjustmentTask?.error,
-      sql: adjustmentTask?.response?.[0]?.sql,
-      traceId: adjustmentTask?.traceId,
-      invalidSql: adjustmentTask?.invalidSql
+    if (!adjustmentTask) {
+      return null;
+    }
+    const result = {
+      queryId: adjustmentTask.queryId || '',
+      status: adjustmentTask.status,
+      error: adjustmentTask.error || null,
+      sql: adjustmentTask.response?.[0]?.sql || '',
+      traceId: adjustmentTask.traceId || '',
+      invalidSql: adjustmentTask.invalidSql
         ? safeFormatSQL(adjustmentTask.invalidSql)
-        : null,
+        : undefined,
     };
+    await this.recordKnowledgeBaseReadAudit(ctx, {
+      resourceType: 'asking_task',
+      resourceId: taskId,
+      payloadJson: {
+        operation: 'get_adjustment_task',
+      },
+    });
+    return result;
   }
 
   public async generateThreadResponseBreakdown(
@@ -659,6 +765,7 @@ export class AskingResolver {
       {
         language: await this.getCurrentLanguage(ctx),
       },
+      this.getCurrentRuntimeScopeId(ctx),
     );
   }
 
@@ -677,6 +784,7 @@ export class AskingResolver {
       {
         language: await this.getCurrentLanguage(ctx),
       },
+      this.getCurrentRuntimeScopeId(ctx),
     );
   }
 
@@ -693,6 +801,13 @@ export class AskingResolver {
       this.getCurrentPersistedRuntimeIdentity(ctx),
     );
 
+    await this.recordKnowledgeBaseReadAudit(ctx, {
+      resourceType: 'thread_response',
+      resourceId: responseId,
+      payloadJson: {
+        operation: 'get_response',
+      },
+    });
     return response;
   }
 
@@ -709,6 +824,13 @@ export class AskingResolver {
       this.getCurrentPersistedRuntimeIdentity(ctx),
       limit,
     );
+    await this.recordKnowledgeBaseReadAudit(ctx, {
+      resourceType: 'thread_response',
+      resourceId: responseId,
+      payloadJson: {
+        operation: 'preview_data',
+      },
+    });
     return data;
   }
 
@@ -726,6 +848,14 @@ export class AskingResolver {
       stepIndex,
       limit,
     );
+    await this.recordKnowledgeBaseReadAudit(ctx, {
+      resourceType: 'thread_response',
+      resourceId: responseId,
+      payloadJson: {
+        operation: 'preview_breakdown_data',
+        stepIndex: stepIndex ?? null,
+      },
+    });
     return data;
   }
 
@@ -734,6 +864,7 @@ export class AskingResolver {
     args: { data: { previousQuestions?: string[] } },
     ctx: IContext,
   ): Promise<Task> {
+    await this.assertKnowledgeBaseReadAccess(ctx);
     const { data } = args;
     const askingService = ctx.askingService;
     return askingService.createInstantRecommendedQuestions(
@@ -748,17 +879,26 @@ export class AskingResolver {
     args: { taskId: string },
     ctx: IContext,
   ): Promise<RecommendedQuestionsTask> {
+    await this.assertKnowledgeBaseReadAccess(ctx);
     const { taskId } = args;
     const askingService = ctx.askingService;
     const result = await askingService.getInstantRecommendedQuestions(
       taskId,
       this.getCurrentPersistedRuntimeIdentity(ctx),
     );
-    return {
+    const task = {
       questions: result.response?.questions || [],
       status: result.status,
       error: result.error,
     };
+    await this.recordKnowledgeBaseReadAudit(ctx, {
+      resourceType: 'asking_task',
+      resourceId: taskId,
+      payloadJson: {
+        operation: 'get_instant_recommended_questions',
+      },
+    });
+    return task;
   }
 
   /**
@@ -822,7 +962,7 @@ export class AskingResolver {
       parent: ThreadResponse,
       _args: any,
       ctx: IContext,
-    ): Promise<AdjustmentTask> => {
+    ): Promise<AdjustmentTask | null> => {
       if (!parent.adjustment) {
         return null;
       }
@@ -839,14 +979,14 @@ export class AskingResolver {
       );
       if (!adjustmentTask) return null;
       return {
-        queryId: adjustmentTask?.queryId,
-        status: adjustmentTask?.status,
-        error: adjustmentTask?.error,
-        sql: adjustmentTask?.response?.[0]?.sql,
-        traceId: adjustmentTask?.traceId,
-        invalidSql: adjustmentTask?.invalidSql
+        queryId: adjustmentTask.queryId || '',
+        status: adjustmentTask.status,
+        error: adjustmentTask.error || null,
+        sql: adjustmentTask.response?.[0]?.sql || '',
+        traceId: adjustmentTask.traceId || '',
+        invalidSql: adjustmentTask.invalidSql
           ? safeFormatSQL(adjustmentTask.invalidSql)
-          : null,
+          : undefined,
       };
     },
   });
@@ -898,18 +1038,96 @@ export class AskingResolver {
   }
 
   private async getCurrentLanguage(ctx: IContext) {
-    const project = await this.getActiveRuntimeProject(ctx);
-    return resolveProjectLanguage(project);
+    const project = ctx.runtimeScope
+      ? await resolveScopedRuntimeProject(ctx.runtimeScope, ctx.projectService)
+      : null;
+    return resolveProjectLanguage(project, ctx.runtimeScope?.knowledgeBase);
+  }
+
+  private async assertExecutableRuntimeScope(ctx: IContext) {
+    try {
+      await assertLatestExecutableRuntimeScope({
+        runtimeScope: ctx.runtimeScope!,
+        knowledgeBaseRepository: ctx.knowledgeBaseRepository,
+        kbSnapshotRepository: ctx.kbSnapshotRepository,
+      });
+    } catch (error) {
+      throw Errors.create(Errors.GeneralErrorCodes.OUTDATED_RUNTIME_SNAPSHOT, {
+        customMessage:
+          error instanceof Error ? error.message : 'Snapshot outdated',
+      });
+    }
+  }
+
+  private async assertKnowledgeBaseReadAccess(ctx: IContext) {
+    const { actor, resource } =
+      this.getKnowledgeBaseReadAuthorizationTarget(ctx);
+    await assertAuthorizedWithAudit({
+      auditEventRepository: ctx.auditEventRepository,
+      actor,
+      action: 'knowledge_base.read',
+      resource,
+    });
+  }
+
+  private getKnowledgeBaseReadAuthorizationTarget(ctx: IContext) {
+    const workspaceId = ctx.runtimeScope?.workspace?.id || null;
+    const knowledgeBase = ctx.runtimeScope?.knowledgeBase;
+
+    return {
+      actor:
+        ctx.authorizationActor ||
+        buildAuthorizationActorFromRuntimeScope(ctx.runtimeScope),
+      resource: {
+        resourceType: knowledgeBase ? 'knowledge_base' : 'workspace',
+        resourceId: knowledgeBase?.id || workspaceId,
+        workspaceId,
+        attributes: {
+          workspaceKind: ctx.runtimeScope?.workspace?.kind || null,
+          knowledgeBaseKind: knowledgeBase?.kind || null,
+        },
+      },
+    };
+  }
+
+  private async recordKnowledgeBaseReadAudit(
+    ctx: IContext,
+    {
+      resourceType,
+      resourceId,
+      payloadJson,
+    }: {
+      resourceType?: string;
+      resourceId?: string | number | null;
+      payloadJson?: Record<string, any> | null;
+    },
+  ) {
+    const { actor, resource } =
+      this.getKnowledgeBaseReadAuthorizationTarget(ctx);
+    await recordAuditEvent({
+      auditEventRepository: ctx.auditEventRepository,
+      actor,
+      action: 'knowledge_base.read',
+      resource: {
+        ...resource,
+        resourceType: resourceType || resource.resourceType,
+        resourceId: resourceId ?? resource.resourceId ?? null,
+      },
+      result: 'allowed',
+      payloadJson: payloadJson || undefined,
+    });
   }
 
   private async ensureThreadScope(ctx: IContext, threadId: number) {
-    await ctx.askingService.assertThreadScope(
+    await this.assertKnowledgeBaseReadAccess(ctx);
+    return ctx.askingService.assertThreadScope(
       threadId,
       this.getCurrentPersistedRuntimeIdentity(ctx),
     );
   }
 
   private async ensureResponseScope(ctx: IContext, responseId: number) {
+    await this.assertKnowledgeBaseReadAccess(ctx);
     await ctx.askingService.assertResponseScope(
       responseId,
       this.getCurrentPersistedRuntimeIdentity(ctx),
@@ -917,6 +1135,7 @@ export class AskingResolver {
   }
 
   private async ensureAskingTaskScope(ctx: IContext, taskId: string) {
+    await this.assertKnowledgeBaseReadAccess(ctx);
     await ctx.askingService.assertAskingTaskScope(
       taskId,
       this.getCurrentPersistedRuntimeIdentity(ctx),
@@ -956,7 +1175,6 @@ export class AskingResolver {
       status: askingTask.status,
       error: askingTask.error,
       candidates,
-      skillResult: askingTask.skillResult || null,
       queryId: askingTask.queryId,
       rephrasedQuestion: askingTask.rephrasedQuestion,
       intentReasoning: askingTask.intentReasoning,
@@ -964,7 +1182,7 @@ export class AskingResolver {
       retrievedTables: askingTask.retrievedTables,
       invalidSql: askingTask.invalidSql
         ? safeFormatSQL(askingTask.invalidSql)
-        : null,
+        : undefined,
       traceId: askingTask.traceId,
     };
   }

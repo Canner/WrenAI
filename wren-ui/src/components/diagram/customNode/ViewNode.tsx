@@ -5,7 +5,7 @@ import { MORE_ACTION } from '@/utils/enum';
 import { ComposeDiagram, ComposeDiagramField, DiagramView } from '@/utils/data';
 import { getColumnTypeIcon } from '@/utils/columnType';
 import { Config } from '@/utils/diagram';
-import { makeIterable } from '@/utils/iteration';
+import { IterableComponent, makeIterable } from '@/utils/iteration';
 import { DiagramContext } from '@/components/diagram/Context';
 import {
   CustomNodeProps,
@@ -21,7 +21,12 @@ const { Text } = Typography;
 
 export const ViewNode = ({ data }: CustomNodeProps<DiagramView>) => {
   const context = useContext(DiagramContext);
-  const onMoreClick = (type: MORE_ACTION) => {
+  const readOnly = Boolean(context?.readOnly);
+  const onMoreClick = (
+    payload: MORE_ACTION | { type: MORE_ACTION; data: any },
+  ) => {
+    const type =
+      typeof payload === 'object' && payload !== null ? payload.type : payload;
     context?.onMoreClick({
       type,
       data: data.originalData,
@@ -52,13 +57,17 @@ export const ViewNode = ({ data }: CustomNodeProps<DiagramView>) => {
           </Text>
         </span>
         <span>
-          <ViewDropdown onMoreClick={onMoreClick}>
+          <ViewDropdown
+            onMoreClick={onMoreClick}
+            disableMutationActions={readOnly}
+          >
             <Button
               className="gray-1"
               icon={<MoreIcon />}
               onClick={(event) => event.stopPropagation()}
               type="text"
               size="small"
+              disabled={readOnly}
             />
           </ViewDropdown>
         </span>
@@ -66,7 +75,15 @@ export const ViewNode = ({ data }: CustomNodeProps<DiagramView>) => {
         <MarkerHandle id={data.originalData.id} />
       </NodeHeader>
       <NodeBody draggable={false}>
-        {renderColumns(data.originalData.fields)}
+        {renderColumns(
+          data.originalData.fields.filter(
+            (
+              field,
+            ): field is NonNullable<
+              (typeof data.originalData.fields)[number]
+            > => field != null,
+          ),
+        )}
       </NodeBody>
     </StyledNode>
   );
@@ -74,7 +91,7 @@ export const ViewNode = ({ data }: CustomNodeProps<DiagramView>) => {
 
 export default memo(ViewNode);
 
-const ColumnTemplate = (props) => {
+const ColumnTemplate = (props: IterableComponent<ComposeDiagramField>) => {
   const { id, type } = props;
   return <Column {...props} key={id} icon={getColumnTypeIcon({ type })} />;
 };

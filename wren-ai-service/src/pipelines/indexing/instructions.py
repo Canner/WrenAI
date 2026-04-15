@@ -15,7 +15,7 @@ from src.core.provider import DocumentStoreProvider, EmbedderProvider
 from src.pipelines.common import (
     build_runtime_scope_filters,
     build_runtime_scope_meta,
-    normalize_runtime_scope_id,
+    resolve_pipeline_runtime_scope_id,
 )
 from src.pipelines.indexing import AsyncDocumentWriter
 
@@ -34,8 +34,8 @@ class Instruction(BaseModel):
 @component
 class InstructionsConverter:
     @component.output_types(documents=List[Document])
-    def run(self, instructions: list[Instruction], project_id: str = ""):
-        runtime_scope_id = normalize_runtime_scope_id(project_id)
+    def run(self, instructions: list[Instruction], runtime_scope_id: str = ""):
+        runtime_scope_id = resolve_pipeline_runtime_scope_id(runtime_scope_id)
         logger.info(
             f"Runtime scope: {runtime_scope_id} Converting instructions to documents..."
         )
@@ -69,14 +69,21 @@ class InstructionsCleaner:
 
     @component.output_types()
     async def run(
-        self, instruction_ids: List[str], project_id: Optional[str] = None
+        self, instruction_ids: List[str], runtime_scope_id: Optional[str] = None
     ) -> None:
-        runtime_scope_id = normalize_runtime_scope_id(project_id)
+        runtime_scope_id = resolve_pipeline_runtime_scope_id(runtime_scope_id)
+        if not runtime_scope_id:
+            raise ValueError(
+                "InstructionsCleaner requires runtime_scope_id when deleting documents"
+            )
+        conditions = (
+            [{"field": "instruction_id", "operator": "in", "value": instruction_ids}]
+            if instruction_ids
+            else None
+        )
         filter = build_runtime_scope_filters(
             runtime_scope_id,
-            conditions=[
-                {"field": "instruction_id", "operator": "in", "value": instruction_ids},
-            ],
+            conditions=conditions,
         )
 
         return await self.store.delete_documents(filter)
@@ -89,10 +96,12 @@ class InstructionsCleaner:
 def to_documents(
     instructions: List[Instruction],
     document_converter: InstructionsConverter,
-    project_id: str = "",
+    runtime_scope_id: str = "",
 ) -> Dict[str, Any]:
-    runtime_scope_id = normalize_runtime_scope_id(project_id)
-    return document_converter.run(instructions=instructions, project_id=runtime_scope_id)
+    runtime_scope_id = resolve_pipeline_runtime_scope_id(runtime_scope_id)
+    return document_converter.run(
+        instructions=instructions, runtime_scope_id=runtime_scope_id
+    )
 
 
 @observe(capture_input=False, capture_output=False)
@@ -108,15 +117,15 @@ async def clean(
     cleaner: InstructionsCleaner,
     instructions: List[Instruction],
     embedding: Dict[str, Any] = {},
-    project_id: str = "",
+    runtime_scope_id: str = "",
     delete_all: bool = False,
 ) -> Dict[str, Any]:
-    runtime_scope_id = normalize_runtime_scope_id(project_id)
+    runtime_scope_id = resolve_pipeline_runtime_scope_id(runtime_scope_id)
     instruction_ids = [instruction.id for instruction in instructions]
     if instruction_ids or delete_all:
         await cleaner.run(
             instruction_ids=instruction_ids,
-            project_id=runtime_scope_id,
+            runtime_scope_id=runtime_scope_id,
         )
 
     return embedding
@@ -160,15 +169,18 @@ class Instructions(BasicPipeline):
     async def run(
         self,
         instructions: list[Instruction],
-        project_id: str = "",
+        runtime_scope_id: str = "",
+        bridge_scope_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        runtime_scope_id = normalize_runtime_scope_id(project_id)
+        runtime_scope_id = resolve_pipeline_runtime_scope_id(
+            runtime_scope_id, bridge_scope_id=bridge_scope_id
+        )
         logger.info(
             f"Runtime scope: {runtime_scope_id} Instructions Indexing pipeline is running..."
         )
 
         input = {
-            "project_id": runtime_scope_id,
+            "runtime_scope_id": runtime_scope_id,
             "instructions": instructions,
             **self._components,
         }
@@ -179,13 +191,16 @@ class Instructions(BasicPipeline):
     async def clean(
         self,
         instructions: Optional[List[Instruction]] = None,
-        project_id: Optional[str] = None,
+        runtime_scope_id: Optional[str] = None,
         delete_all: bool = False,
+        bridge_scope_id: Optional[str] = None,
     ) -> None:
-        runtime_scope_id = normalize_runtime_scope_id(project_id)
+        runtime_scope_id = resolve_pipeline_runtime_scope_id(
+            runtime_scope_id, bridge_scope_id=bridge_scope_id
+        )
         await clean(
             instructions=instructions or [],
             cleaner=self._components["cleaner"],
-            project_id=runtime_scope_id,
+            runtime_scope_id=runtime_scope_id,
             delete_all=delete_all,
         )

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Skeleton, Typography } from 'antd';
+import { Alert, Button, Skeleton, Typography, message } from 'antd';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import LoadingOutlined from '@ant-design/icons/LoadingOutlined';
 import CaretDownOutlined from '@ant-design/icons/CaretDownOutlined';
@@ -15,12 +15,8 @@ import { Props as AnswerResultProps } from '@/components/pages/home/promptThread
 import MarkdownBlock from '@/components/editor/MarkdownBlock';
 import PreviewData from '@/components/dataPreview/PreviewData';
 import { AdjustAnswerDropdown } from '@/components/diagram/CustomDropdown';
-import SkillAnswer, { SkillResultPayload } from './SkillAnswer';
-import { usePreviewDataMutation } from '@/apollo/client/graphql/home.generated';
-import {
-  AskingTaskType,
-  ThreadResponseAnswerStatus,
-} from '@/apollo/client/graphql/__types__';
+import { ThreadResponseAnswerStatus } from '@/apollo/client/graphql/__types__';
+import useResponsePreviewData from '@/hooks/useResponsePreviewData';
 
 const { Text } = Typography;
 
@@ -31,14 +27,17 @@ const StyledSkeleton = styled(Skeleton)`
   }
 `;
 
-export const getAnswerIsFinished = (status: ThreadResponseAnswerStatus) =>
+export const getAnswerIsFinished = (
+  status?: ThreadResponseAnswerStatus | null,
+) =>
+  status != null &&
   [
     ThreadResponseAnswerStatus.FINISHED,
     ThreadResponseAnswerStatus.FAILED,
     ThreadResponseAnswerStatus.INTERRUPTED,
   ].includes(status);
 
-const getIsLoadingFinished = (status: ThreadResponseAnswerStatus) =>
+const getIsLoadingFinished = (status?: ThreadResponseAnswerStatus | null) =>
   getAnswerIsFinished(status) ||
   status === ThreadResponseAnswerStatus.STREAMING;
 
@@ -48,7 +47,12 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
     onOpenAdjustReasoningStepsModal,
     onOpenAdjustSQLModal,
   } = usePromptThreadStore();
-  const { isLastThreadResponse, onInitPreviewDone, threadResponse } = props;
+  const {
+    isLastThreadResponse,
+    onInitPreviewDone,
+    shouldAutoPreview,
+    threadResponse,
+  } = props;
   const { id } = threadResponse;
   const { content, error, numRowsUsedInLLM, status } =
     threadResponse?.answerDetail || {};
@@ -60,11 +64,6 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
     useTextBasedAnswerStreamTask();
 
   const answerStreamTask = answerStreamTaskResult.data;
-  const skillResult =
-    (threadResponse.skillResult as SkillResultPayload | null) ||
-    (threadResponse.askingTask?.type === AskingTaskType.SKILL
-      ? (threadResponse.askingTask?.skillResult as SkillResultPayload | null)
-      : null);
 
   const isStreaming = useMemo(
     () => status === ThreadResponseAnswerStatus.STREAMING,
@@ -76,7 +75,7 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
     const { payload } = threadResponse.adjustment || {};
     return {
       responseId: threadResponse.id,
-      sql: threadResponse.sql,
+      sql: threadResponse.sql || '',
       retrievedTables:
         threadResponse.askingTask?.retrievedTables ||
         payload?.retrievedTables ||
@@ -96,9 +95,9 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
 
   useEffect(() => {
     if (isStreaming) {
-      setTextAnswer(answerStreamTask);
+      setTextAnswer(answerStreamTask || '');
     } else {
-      setTextAnswer(content);
+      setTextAnswer(content || '');
     }
   }, [answerStreamTask, isStreaming, content]);
 
@@ -114,37 +113,56 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
     };
   }, []);
 
+  useEffect(() => {
+    setIsPreviewExpanded(false);
+  }, [id]);
+
   const rowsUsed = useMemo(
     () =>
-      status === ThreadResponseAnswerStatus.FINISHED ? numRowsUsedInLLM : 0,
+      status === ThreadResponseAnswerStatus.FINISHED
+        ? numRowsUsedInLLM || 0
+        : 0,
     [numRowsUsedInLLM, status],
   );
 
   const allowPreviewData = useMemo(() => Boolean(rowsUsed > 0), [rowsUsed]);
 
-  const [previewData, previewDataResult] = usePreviewDataMutation({
-    onError: (error) => console.error(error),
-  });
+  const previewDataResult = useResponsePreviewData(id);
+  const { ensureLoaded: ensurePreviewLoaded } = previewDataResult;
+  const [isPreviewExpanded, setIsPreviewExpanded] = useState(false);
   const hasPreviewData = !!previewDataResult.data?.previewData;
 
+  const fetchPreviewData = async () => {
+    await ensurePreviewLoaded();
+  };
+
   const onPreviewData = async () => {
-    await previewData({ variables: { where: { responseId: id } } });
+    const nextExpanded = !isPreviewExpanded;
+    setIsPreviewExpanded(nextExpanded);
+    if (!nextExpanded) return;
+
+    if (!previewDataResult.called && !previewDataResult.loading) {
+      await fetchPreviewData();
+    }
   };
 
   const autoTriggerPreviewDataButton = async () => {
+    setIsPreviewExpanded(true);
     await nextTick();
-    await onPreviewData();
+    await fetchPreviewData();
   };
 
   useEffect(() => {
     if (isLastThreadResponse) {
       if (allowPreviewData) {
-        autoTriggerPreviewDataButton();
+        if (shouldAutoPreview) {
+          autoTriggerPreviewDataButton();
+        }
       }
 
       onInitPreviewDone();
     }
-  }, [isLastThreadResponse, allowPreviewData]);
+  }, [isLastThreadResponse, allowPreviewData, shouldAutoPreview]);
 
   const loading = !getIsLoadingFinished(status);
 
@@ -153,11 +171,15 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
     onGenerateTextBasedAnswer(id);
   };
 
-  const onMoreClick = async (payload: {
-    type: MORE_ACTION;
-    data: typeof adjustAnswerDropdownData;
-  }) => {
-    const { type, data } = payload;
+  const onMoreClick = async (
+    payload: MORE_ACTION | { type: MORE_ACTION; data: any },
+  ) => {
+    const type =
+      typeof payload === 'object' && payload !== null ? payload.type : payload;
+    const data =
+      typeof payload === 'object' && payload !== null && payload.data
+        ? payload.data
+        : adjustAnswerDropdownData;
     if (type === MORE_ACTION.ADJUST_STEPS) {
       onOpenAdjustReasoningStepsModal({
         responseId: data.responseId,
@@ -182,7 +204,7 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
         icon={<EditOutlined />}
         onClick={(event) => event.stopPropagation()}
       >
-        Adjust the answer
+        调整回答
         <CaretDownOutlined
           className="ml-1"
           rotate={adjustResultsDropdown.visible ? 180 : 0}
@@ -208,10 +230,6 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
     );
   }
 
-  if (skillResult) {
-    return <SkillAnswer skillResult={skillResult} />;
-  }
-
   return (
     <StyledSkeleton
       active
@@ -229,10 +247,10 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
               icon={<ReloadOutlined />}
               size="small"
               type="link"
-              title="Regenerate answer"
+              title="重新生成回答"
               onClick={onRegenerateAnswer}
             >
-              Regenerate
+              重新生成
             </Button>
           </div>
         )}
@@ -253,22 +271,26 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
               data-ph-capture="true"
               data-ph-capture-attribute-name="cta_text-answer_preview_data"
             >
-              View results
+              查看结果
             </Button>
 
-            <div className="mt-2 mb-3" data-guideid="text-answer-preview-data">
-              {hasPreviewData && (
-                <Text type="secondary" className="text-sm">
-                  Considering the limit of the context window, we retrieve up to
-                  500 rows of results to generate the answer.
-                </Text>
-              )}
-              <PreviewData
-                error={previewDataResult.error}
-                loading={previewDataResult.loading}
-                previewData={previewDataResult?.data?.previewData}
-              />
-            </div>
+            {isPreviewExpanded && (
+              <div
+                className="mt-2 mb-3"
+                data-guideid="text-answer-preview-data"
+              >
+                {hasPreviewData && (
+                  <Text type="secondary" className="text-sm">
+                    受上下文窗口限制，系统最多会提取 500 行结果来生成本次回答。
+                  </Text>
+                )}
+                <PreviewData
+                  error={previewDataResult.error}
+                  loading={previewDataResult.loading}
+                  previewData={previewDataResult?.data?.previewData}
+                />
+              </div>
+            )}
           </div>
         ) : (
           <>
@@ -276,8 +298,8 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
               <Alert
                 message={
                   <>
-                    Click <b>View SQL</b> to review the step-by-step query logic
-                    and verify why the data is unavailable.
+                    点击 <b>SQL 查询</b>{' '}
+                    查看逐步生成的查询逻辑，并确认当前为何暂无数据。
                   </>
                 }
                 type="info"

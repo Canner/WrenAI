@@ -13,10 +13,13 @@ from src.web.v1.services.chart_adjustment import (
 )
 from src.web.v1.services.instructions import InstructionsService
 from src.web.v1.services.question_recommendation import QuestionRecommendation
+from src.core.runtime_identity import DEPRECATED_BRIDGE_ALIAS_WARNING
+from src.web.v1.services.runtime_models import resolve_request_bridge_scope_id
 from src.web.v1.services.semantics_preparation import (
     DeleteSemanticsRequest,
     SemanticsPreparationRequest,
     SemanticsPreparationService,
+    SemanticsPreparationStatusRequest,
 )
 from src.web.v1.services.sql_corrections import SqlCorrectionService
 from src.web.v1.services.sql_pairs import SqlPairsService
@@ -94,10 +97,10 @@ def make_semantics_service():
 
 class DeleteSemanticsRecorder:
     def __init__(self):
-        self.project_id = None
+        self.request = None
 
-    async def delete_semantics(self, project_id: str):
-        self.project_id = project_id
+    async def delete_semantics(self, request):
+        self.request = request
 
 
 def make_chart_service():
@@ -261,17 +264,58 @@ async def test_ask_uses_runtime_deploy_hash_when_project_id_is_missing():
 
     assert result.status == "finished"
     assert (
-        service._pipelines["historical_question"].run.await_args.kwargs["project_id"]
+        service._pipelines["historical_question"].run.await_args.kwargs["runtime_scope_id"]
         == "deploy-1"
     )
     assert (
-        service._pipelines["db_schema_retrieval"].run.await_args.kwargs["project_id"]
+        service._pipelines["db_schema_retrieval"].run.await_args.kwargs["runtime_scope_id"]
         == "deploy-1"
     )
 
 
 @pytest.mark.asyncio
-async def test_prepare_semantics_prefers_explicit_project_id_over_runtime_identity():
+async def test_ask_retrieval_scope_ids_expand_only_retrieval_pipelines():
+    service = make_ask_service()
+    request = AskRequest.model_validate(
+        {
+            "query": "本月 GMV",
+            "mdl_hash": "mdl-1",
+            "runtimeScopeId": "deploy-1",
+            "retrievalScopeIds": ["kb-2", "kb-3", "deploy-1"],
+        }
+    )
+    request.query_id = "query-retrieval-scope-1"
+
+    await service.ask(request)
+
+    assert (
+        service._pipelines["historical_question"].run.await_args.kwargs[
+            "runtime_scope_id"
+        ]
+        == "deploy-1,kb-2,kb-3"
+    )
+    assert (
+        service._pipelines["sql_pairs_retrieval"].run.await_args.kwargs[
+            "runtime_scope_id"
+        ]
+        == "deploy-1,kb-2,kb-3"
+    )
+    assert (
+        service._pipelines["instructions_retrieval"].run.await_args.kwargs[
+            "runtime_scope_id"
+        ]
+        == "deploy-1,kb-2,kb-3"
+    )
+    assert (
+        service._pipelines["db_schema_retrieval"].run.await_args.kwargs[
+            "runtime_scope_id"
+        ]
+        == "deploy-1"
+    )
+
+
+@pytest.mark.asyncio
+async def test_prepare_semantics_prefers_runtime_identity_over_explicit_project_id():
     service = make_semantics_service()
     request = SemanticsPreparationRequest.model_validate(
         {
@@ -289,7 +333,7 @@ async def test_prepare_semantics_prefers_explicit_project_id_over_runtime_identi
     await service.prepare_semantics(request)
 
     for pipeline in service._pipelines.values():
-        assert pipeline.run.await_args.kwargs["project_id"] == "project-1"
+        assert pipeline.run.await_args.kwargs["runtime_scope_id"] == "deploy-1"
 
 
 @pytest.mark.asyncio
@@ -310,7 +354,7 @@ async def test_prepare_semantics_falls_back_to_deploy_hash_then_mdl_hash():
     await runtime_service.prepare_semantics(runtime_request)
 
     for pipeline in runtime_service._pipelines.values():
-        assert pipeline.run.await_args.kwargs["project_id"] == "deploy-1"
+        assert pipeline.run.await_args.kwargs["runtime_scope_id"] == "deploy-1"
 
     mdl_service = make_semantics_service()
     mdl_request = SemanticsPreparationRequest.model_validate(
@@ -323,7 +367,34 @@ async def test_prepare_semantics_falls_back_to_deploy_hash_then_mdl_hash():
     await mdl_service.prepare_semantics(mdl_request)
 
     for pipeline in mdl_service._pipelines.values():
-        assert pipeline.run.await_args.kwargs["project_id"] == "mdl-2"
+        assert pipeline.run.await_args.kwargs["runtime_scope_id"] == "mdl-2"
+
+
+@pytest.mark.asyncio
+async def test_prepare_semantics_skips_missing_optional_pipelines():
+    service = SemanticsPreparationService(
+        {
+            "db_schema": PipelineStub(),
+            "historical_question": PipelineStub(),
+            "table_description": PipelineStub(),
+        }
+    )
+    request = SemanticsPreparationRequest.model_validate(
+        {
+            "mdl": "{}",
+            "mdl_hash": "mdl-3",
+        }
+    )
+
+    result = await service.prepare_semantics(request)
+    status = service.get_prepare_semantics_status(
+        SemanticsPreparationStatusRequest(mdl_hash="mdl-3")
+    )
+
+    assert result["metadata"]["error_type"] == ""
+    assert status.status == "finished"
+    for pipeline in service._pipelines.values():
+        assert pipeline.run.await_count == 1
 
 
 @pytest.mark.asyncio
@@ -340,12 +411,31 @@ async def test_delete_semantics_route_uses_runtime_identity_when_body_provided()
                 }
             }
         ),
+        runtime_scope_id=None,
+        runtimeScopeId=None,
         project_id=None,
         projectId=None,
         service_container=SimpleNamespace(semantics_preparation_service=recorder),
     )
 
-    assert recorder.project_id == "deploy-1"
+    assert recorder.request.resolve_runtime_scope_id() == "deploy-1"
+
+
+@pytest.mark.asyncio
+async def test_delete_semantics_route_prefers_runtime_scope_query_param():
+    recorder = DeleteSemanticsRecorder()
+
+    await delete_semantics(
+        delete_semantics_request=None,
+        runtime_scope_id="deploy-query",
+        runtimeScopeId=None,
+        project_id="project-1",
+        projectId=None,
+        service_container=SimpleNamespace(semantics_preparation_service=recorder),
+    )
+
+    assert recorder.request.resolve_runtime_scope_id() == "deploy-query"
+    assert recorder.request.resolve_bridge_scope_id() is None
 
 
 @pytest.mark.asyncio
@@ -354,12 +444,14 @@ async def test_delete_semantics_route_keeps_query_param_compatibility():
 
     await delete_semantics(
         delete_semantics_request=None,
+        runtime_scope_id=None,
+        runtimeScopeId=None,
         project_id="project-1",
         projectId=None,
         service_container=SimpleNamespace(semantics_preparation_service=recorder),
     )
 
-    assert recorder.project_id == "project-1"
+    assert recorder.request.resolve_runtime_scope_id() == "project-1"
 
 
 @pytest.mark.asyncio
@@ -381,7 +473,7 @@ async def test_chart_uses_runtime_deploy_hash_when_project_id_is_missing():
     await service.chart(request)
 
     assert (
-        service._pipelines["sql_executor"].run.await_args.kwargs["project_id"]
+        service._pipelines["sql_executor"].run.await_args.kwargs["runtime_scope_id"]
         == "deploy-1"
     )
 
@@ -407,7 +499,7 @@ async def test_chart_adjustment_uses_runtime_deploy_hash_when_project_id_is_miss
     await service.chart_adjustment(request)
 
     assert (
-        service._pipelines["sql_executor"].run.await_args.kwargs["project_id"]
+        service._pipelines["sql_executor"].run.await_args.kwargs["runtime_scope_id"]
         == "deploy-1"
     )
 
@@ -433,33 +525,33 @@ async def test_ask_feedback_uses_runtime_deploy_hash_when_project_id_is_missing(
     await service.ask_feedback(request)
 
     assert (
-        service._pipelines["db_schema_retrieval"].run.await_args.kwargs["project_id"]
+        service._pipelines["db_schema_retrieval"].run.await_args.kwargs["runtime_scope_id"]
         == "deploy-1"
     )
     assert (
-        service._pipelines["sql_pairs_retrieval"].run.await_args.kwargs["project_id"]
+        service._pipelines["sql_pairs_retrieval"].run.await_args.kwargs["runtime_scope_id"]
         == "deploy-1"
     )
     assert (
         service._pipelines["instructions_retrieval"].run.await_args.kwargs[
-            "project_id"
+            "runtime_scope_id"
         ]
         == "deploy-1"
     )
     assert (
         service._pipelines["sql_functions_retrieval"].run.await_args.kwargs[
-            "project_id"
+            "runtime_scope_id"
         ]
         == "deploy-1"
     )
     assert (
         service._pipelines["sql_knowledge_retrieval"].run.await_args.kwargs[
-            "project_id"
+            "runtime_scope_id"
         ]
         == "deploy-1"
     )
     assert (
-        service._pipelines["sql_regeneration"].run.await_args.kwargs["project_id"]
+        service._pipelines["sql_regeneration"].run.await_args.kwargs["runtime_scope_id"]
         == "deploy-1"
     )
 
@@ -484,17 +576,17 @@ async def test_sql_correction_uses_runtime_deploy_hash_when_project_id_is_missin
     await service.correct(request)
 
     assert (
-        service._pipelines["db_schema_retrieval"].run.await_args.kwargs["project_id"]
+        service._pipelines["db_schema_retrieval"].run.await_args.kwargs["runtime_scope_id"]
         == "deploy-1"
     )
     assert (
         service._pipelines["sql_knowledge_retrieval"].run.await_args.kwargs[
-            "project_id"
+            "runtime_scope_id"
         ]
         == "deploy-1"
     )
     assert (
-        service._pipelines["sql_correction"].run.await_args.kwargs["project_id"]
+        service._pipelines["sql_correction"].run.await_args.kwargs["runtime_scope_id"]
         == "deploy-1"
     )
 
@@ -520,34 +612,34 @@ async def test_question_recommendation_uses_runtime_deploy_hash_when_project_id_
 
     assert (
         service._pipelines["db_schema_retrieval"].run.await_args_list[0].kwargs[
-            "project_id"
+            "runtime_scope_id"
         ]
         == "deploy-1"
     )
     assert (
-        service._pipelines["sql_pairs_retrieval"].run.await_args.kwargs["project_id"]
+        service._pipelines["sql_pairs_retrieval"].run.await_args.kwargs["runtime_scope_id"]
         == "deploy-1"
     )
     assert (
         service._pipelines["instructions_retrieval"].run.await_args.kwargs[
-            "project_id"
+            "runtime_scope_id"
         ]
         == "deploy-1"
     )
     assert (
         service._pipelines["sql_functions_retrieval"].run.await_args.kwargs[
-            "project_id"
+            "runtime_scope_id"
         ]
         == "deploy-1"
     )
     assert (
         service._pipelines["sql_knowledge_retrieval"].run.await_args.kwargs[
-            "project_id"
+            "runtime_scope_id"
         ]
         == "deploy-1"
     )
     assert (
-        service._pipelines["sql_generation"].run.await_args.kwargs["project_id"]
+        service._pipelines["sql_generation"].run.await_args.kwargs["runtime_scope_id"]
         == "deploy-1"
     )
 
@@ -585,8 +677,8 @@ async def test_instructions_index_delete_use_runtime_deploy_hash_when_project_id
     await service.index(index_request)
     await service.delete(delete_request)
 
-    assert pipeline.run.await_args.kwargs["project_id"] == "deploy-1"
-    assert pipeline.clean.await_args.kwargs["project_id"] == "deploy-1"
+    assert pipeline.run.await_args.kwargs["runtime_scope_id"] == "deploy-1"
+    assert pipeline.clean.await_args.kwargs["runtime_scope_id"] == "deploy-1"
 
 
 @pytest.mark.asyncio
@@ -622,5 +714,27 @@ async def test_sql_pairs_index_delete_use_runtime_deploy_hash_when_project_id_is
     await service.index(index_request)
     await service.delete(delete_request)
 
-    assert pipeline.run.await_args.kwargs["project_id"] == "deploy-1"
-    assert pipeline.clean.await_args.kwargs["project_id"] == "deploy-1"
+    assert pipeline.run.await_args.kwargs["runtime_scope_id"] == "deploy-1"
+    assert pipeline.clean.await_args.kwargs["runtime_scope_id"] == "deploy-1"
+
+
+def test_request_project_bridge_alias_supports_project_bridge_id_keyword():
+    assert (
+        resolve_request_bridge_scope_id(bridge_scope_id="bridge-1")
+        == "bridge-1"
+    )
+
+
+def test_base_request_ignores_project_bridge_aliases_after_wave_1_cutover():
+    with pytest.warns(DeprecationWarning, match=DEPRECATED_BRIDGE_ALIAS_WARNING):
+        request = DeleteSemanticsRequest.model_validate({"projectBridgeId": "bridge-2"})
+
+    assert request.bridge_scope_id is None
+    assert request.resolve_bridge_scope_id() is None
+
+
+def test_base_request_prefers_bridge_scope_aliases():
+    request = DeleteSemanticsRequest.model_validate({"bridgeScopeId": "bridge-3"})
+
+    assert request.bridge_scope_id == "bridge-3"
+    assert request.resolve_bridge_scope_id() == "bridge-3"

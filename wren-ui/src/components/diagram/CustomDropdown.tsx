@@ -59,17 +59,18 @@ const makeDropdown =
   };
 
 export const ModelDropdown = makeDropdown((props: Props) => {
-  const { onMoreClick } = props;
+  const { onMoreClick, disableMutationActions } = props;
 
   const items: ItemType[] = [
     {
       label: (
         <>
           <EditOutlined className="mr-2" />
-          Update Columns
+          更新字段
         </>
       ),
       key: MORE_ACTION.UPDATE_COLUMNS,
+      disabled: Boolean(disableMutationActions),
       onClick: () => onMoreClick(MORE_ACTION.UPDATE_COLUMNS),
     },
     {
@@ -78,6 +79,7 @@ export const ModelDropdown = makeDropdown((props: Props) => {
       ),
       className: 'red-5',
       key: MORE_ACTION.DELETE,
+      disabled: Boolean(disableMutationActions),
       onClick: ({ domEvent }) => domEvent.stopPropagation(),
     },
   ];
@@ -86,7 +88,7 @@ export const ModelDropdown = makeDropdown((props: Props) => {
 });
 
 export const ViewDropdown = makeDropdown((props: Props) => {
-  const { onMoreClick } = props;
+  const { onMoreClick, disableMutationActions } = props;
   const items: ItemType[] = [
     {
       label: (
@@ -94,6 +96,7 @@ export const ViewDropdown = makeDropdown((props: Props) => {
       ),
       className: 'red-5',
       key: MORE_ACTION.DELETE,
+      disabled: Boolean(disableMutationActions),
       onClick: ({ domEvent }) => domEvent.stopPropagation(),
     },
   ];
@@ -101,24 +104,24 @@ export const ViewDropdown = makeDropdown((props: Props) => {
 });
 
 export const ColumnDropdown = makeDropdown((props: Props) => {
-  const { onMoreClick, data } = props;
+  const { onMoreClick, data, disableMutationActions } = props;
   const { nodeType } = data;
 
   const DeleteColumnModal =
-    {
-      [NODE_TYPE.CALCULATED_FIELD]: DeleteCalculatedFieldModal,
-      [NODE_TYPE.RELATION]: DeleteRelationshipModal,
-    }[nodeType] || DeleteCalculatedFieldModal;
+    nodeType === NODE_TYPE.RELATION
+      ? DeleteRelationshipModal
+      : DeleteCalculatedFieldModal;
 
   const items: ItemType[] = [
     {
       label: (
         <>
           <EditOutlined className="mr-2" />
-          Edit
+          编辑
         </>
       ),
       key: MORE_ACTION.EDIT,
+      disabled: Boolean(disableMutationActions),
       onClick: () => onMoreClick(MORE_ACTION.EDIT),
     },
     {
@@ -127,6 +130,7 @@ export const ColumnDropdown = makeDropdown((props: Props) => {
       ),
       className: 'red-5',
       key: MORE_ACTION.DELETE,
+      disabled: Boolean(disableMutationActions),
       onClick: ({ domEvent }) => domEvent.stopPropagation(),
     },
   ];
@@ -135,26 +139,29 @@ export const ColumnDropdown = makeDropdown((props: Props) => {
 });
 
 export const DashboardDropdown = makeDropdown((props: Props) => {
-  const { onMoreClick, isSupportCached } = props;
+  const { onMoreClick, isSupportCached, disableCacheSettings, disableRefresh } =
+    props;
   const items: ItemType[] = [
     isSupportCached && {
       label: (
         <>
           <DatabaseOutlined className="mr-2" />
-          Cache settings
+          缓存设置
         </>
       ),
       key: MORE_ACTION.CACHE_SETTINGS,
+      disabled: Boolean(disableCacheSettings),
       onClick: () => onMoreClick(MORE_ACTION.CACHE_SETTINGS),
     },
     {
       label: (
         <>
           <ReloadOutlined className="mr-2" />
-          {isSupportCached ? 'Refresh all caches' : 'Refresh all'}
+          {isSupportCached ? '刷新全部缓存' : '全部刷新'}
         </>
       ),
       key: MORE_ACTION.REFRESH,
+      disabled: Boolean(disableRefresh),
       onClick: () => onMoreClick(MORE_ACTION.REFRESH),
     },
   ].filter(Boolean);
@@ -162,18 +169,24 @@ export const DashboardDropdown = makeDropdown((props: Props) => {
 });
 
 export const DashboardItemDropdown = makeDropdown((props: Props) => {
-  const { onMoreClick, isHideLegend, isSupportCached } = props;
+  const {
+    onMoreClick,
+    isHideLegend,
+    isSupportCached,
+    disableRefresh,
+    disableDelete,
+  } = props;
   const items: ItemType[] = [
     {
       label: isHideLegend ? (
         <>
           <EyeOutlined className="mr-2" />
-          Show categories
+          显示分类
         </>
       ) : (
         <>
           {<EyeInvisibleOutlined className="mr-2" />}
-          Hide categories
+          隐藏分类
         </>
       ),
       key: MORE_ACTION.HIDE_CATEGORY,
@@ -183,10 +196,11 @@ export const DashboardItemDropdown = makeDropdown((props: Props) => {
       label: (
         <>
           <ReloadOutlined className="mr-2" />
-          {isSupportCached ? 'Refresh cache' : 'Refresh'}
+          {isSupportCached ? '刷新缓存' : '刷新'}
         </>
       ),
       key: MORE_ACTION.REFRESH,
+      disabled: Boolean(disableRefresh),
       onClick: () => onMoreClick(MORE_ACTION.REFRESH),
     },
     {
@@ -197,6 +211,7 @@ export const DashboardItemDropdown = makeDropdown((props: Props) => {
       ),
       className: 'red-5',
       key: MORE_ACTION.DELETE,
+      disabled: Boolean(disableDelete),
       onClick: ({ domEvent }) => domEvent.stopPropagation(),
     },
   ];
@@ -209,13 +224,13 @@ export const SQLPairDropdown = makeDropdown(
       onMoreClick: (payload: { type: MORE_ACTION; data: any }) => void;
     },
   ) => {
-    const { onMoreClick, data } = props;
+    const { onMoreClick, data, disableEdit, disableDelete } = props;
     const items: ItemType[] = [
       {
         label: (
           <>
             <EyeOutlined className="mr-2" />
-            View
+            查看
           </>
         ),
         key: MORE_ACTION.VIEW_SQL_PAIR,
@@ -229,10 +244,11 @@ export const SQLPairDropdown = makeDropdown(
         label: (
           <>
             <EditOutlined className="mr-2" />
-            Edit
+            编辑
           </>
         ),
         key: MORE_ACTION.EDIT,
+        disabled: Boolean(disableEdit),
         onClick: () =>
           onMoreClick({
             type: MORE_ACTION.EDIT,
@@ -255,6 +271,7 @@ export const SQLPairDropdown = makeDropdown(
         ),
         className: 'red-5',
         key: MORE_ACTION.DELETE,
+        disabled: Boolean(disableDelete),
         onClick: ({ domEvent }) => domEvent.stopPropagation(),
       },
     ];
@@ -268,13 +285,13 @@ export const InstructionDropdown = makeDropdown(
       onMoreClick: (payload: { type: MORE_ACTION; data: any }) => void;
     },
   ) => {
-    const { onMoreClick, data } = props;
+    const { onMoreClick, data, disableEdit, disableDelete } = props;
     const items: ItemType[] = [
       {
         label: (
           <>
             <EyeOutlined className="mr-2" />
-            View
+            查看
           </>
         ),
         key: MORE_ACTION.VIEW_INSTRUCTION,
@@ -288,10 +305,11 @@ export const InstructionDropdown = makeDropdown(
         label: (
           <>
             <EditOutlined className="mr-2" />
-            Edit
+            编辑
           </>
         ),
         key: MORE_ACTION.EDIT,
+        disabled: Boolean(disableEdit),
         onClick: () =>
           onMoreClick({
             type: MORE_ACTION.EDIT,
@@ -314,6 +332,7 @@ export const InstructionDropdown = makeDropdown(
         ),
         className: 'red-5',
         key: MORE_ACTION.DELETE,
+        disabled: Boolean(disableDelete),
         onClick: ({ domEvent }) => domEvent.stopPropagation(),
       },
     ];
@@ -330,7 +349,7 @@ export const AdjustAnswerDropdown = makeDropdown(
     const { onMoreClick, data } = props;
     const items: ItemType[] = [
       {
-        label: 'Adjust steps',
+        label: '调整步骤',
         icon: <EditSVG />,
         disabled: !data.sqlGenerationReasoning,
         key: 'adjust-steps',
@@ -341,7 +360,7 @@ export const AdjustAnswerDropdown = makeDropdown(
           }),
       },
       {
-        label: 'Adjust SQL',
+        label: '调整 SQL',
         icon: <CodeFilled className="text-base" />,
         disabled: !data.sql,
         key: 'adjust-sql',

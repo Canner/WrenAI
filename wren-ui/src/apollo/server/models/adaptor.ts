@@ -72,7 +72,7 @@ export interface ProjectConfigurations {
 }
 
 export interface AskRuntimeIdentity {
-  // legacy bridge only; prefer workspace/knowledgeBase/kbSnapshot/deployHash
+  // compatibility fallback only; prefer workspace/knowledgeBase/kbSnapshot/deployHash
   projectId?: number;
   workspaceId?: string | null;
   knowledgeBaseId?: string | null;
@@ -95,54 +95,23 @@ export interface DeleteSqlPairsInput {
   runtimeIdentity?: AskRuntimeIdentity | null;
 }
 
-export interface AskActorClaims {
-  userId?: string | null;
-  workspaceMemberId?: string | null;
-  roleKeys?: string[];
-  permissionScopes?: string[];
-}
-
-export interface AskSkillConnector {
-  id: string;
-  type: string;
-  displayName?: string | null;
-  config?: Record<string, any>;
-  metadata?: Record<string, any>;
-}
-
-export interface AskSkillSecret {
-  id: string;
-  name?: string | null;
-  values?: Record<string, any>;
-  redactedKeys?: string[];
-}
+export type SkillExecutionMode = 'inject_only';
 
 export interface AskSkillCandidate {
   skillId?: string | null;
   skillName?: string | null;
-  runtimeKind?: string;
-  sourceType?: string;
-  sourceRef?: string | null;
-  entrypoint?: string | null;
-  skillConfig?: Record<string, any>;
-  limits?: {
-    timeoutMs?: number;
-    maxMemoryMb?: number | null;
-    networkAllowlist?: string[];
-  };
+  instruction?: string | null;
+  executionMode?: SkillExecutionMode;
 }
 
 export interface AskInput {
   query: string;
   deployId: string;
   runtimeScopeId?: string;
+  retrievalScopeIds?: string[];
   histories?: ThreadResponse[];
   configurations?: ProjectConfigurations;
   runtimeIdentity?: AskRuntimeIdentity;
-  actorClaims?: AskActorClaims;
-  connectors?: AskSkillConnector[];
-  secrets?: AskSkillSecret[];
-  skillConfig?: Record<string, any>;
   skills?: AskSkillCandidate[];
 }
 
@@ -165,7 +134,6 @@ export enum AskResultType {
   GENERAL = 'GENERAL',
   TEXT_TO_SQL = 'TEXT_TO_SQL',
   MISLEADING_QUERY = 'MISLEADING_QUERY',
-  SKILL = 'SKILL',
 }
 
 // if it's view, viewId will be returned as well. It means the candidate is originally saved in mdl as a view.
@@ -182,47 +150,6 @@ export interface AskResponse<R, S> {
   status: S;
   response: R | null;
   error: WrenAIError | null;
-}
-
-export enum SkillResultType {
-  TABULAR_FRAME = 'tabular_frame',
-  METRIC_SERIES = 'metric_series',
-  TEXT = 'text',
-  CHART_SPEC = 'chart_spec',
-  CITATION_BUNDLE = 'citation_bundle',
-  ERROR = 'error',
-}
-
-export interface SkillResultColumn {
-  name: string;
-  type?: string | null;
-  description?: string | null;
-}
-
-export interface SkillCitation {
-  title?: string | null;
-  url?: string | null;
-  snippet?: string | null;
-  metadata?: Record<string, any>;
-}
-
-export interface SkillExecutionTrace {
-  skillRunId?: string | null;
-  runnerJobId?: string | null;
-  traceId?: string | null;
-  metadata?: Record<string, any>;
-}
-
-export interface SkillExecutionResult {
-  resultType: SkillResultType | string;
-  rows?: Array<Record<string, any>>;
-  columns?: SkillResultColumn[];
-  series?: Array<Record<string, any>>;
-  text?: string | null;
-  chartSpec?: Record<string, any> | null;
-  citations?: SkillCitation[];
-  metadata?: Record<string, any>;
-  trace?: SkillExecutionTrace | null;
 }
 
 export interface AskShadowCompare {
@@ -277,7 +204,6 @@ export type AskResult = AskResponse<
   intentReasoning?: string;
   sqlGenerationReasoning?: string;
   retrievedTables?: string[];
-  skillResult?: SkillExecutionResult | null;
   askPath?: string | null;
   shadowCompare?: AskShadowCompare | null;
   invalidSql?: string;
@@ -326,6 +252,8 @@ export interface TextBasedAnswerInput {
   sqlData: any;
   threadId?: string;
   userId?: string;
+  runtimeScopeId?: string;
+  runtimeIdentity?: AskRuntimeIdentity | null;
   configurations?: ProjectConfigurations;
 }
 
@@ -382,6 +310,7 @@ export interface ChartAdjustmentInput {
   sql: string;
   adjustmentOption: ChartAdjustmentOption;
   chartSchema: Record<string, any>;
+  runtimeScopeId?: string;
   runtimeIdentity?: AskRuntimeIdentity | null;
   configurations?: ProjectConfigurations;
 }
@@ -460,6 +389,7 @@ export interface AskFeedbackInput {
   tables: string[];
   sqlGenerationReasoning: string;
   sql: string;
+  runtimeScopeId?: string;
   runtimeIdentity?: AskRuntimeIdentity | null;
   configurations?: ProjectConfigurations;
 }

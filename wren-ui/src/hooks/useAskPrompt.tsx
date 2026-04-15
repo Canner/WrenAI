@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cloneDeep, uniq } from 'lodash';
+import { message } from 'antd';
 import {
   AdjustmentTask,
   AskingTask,
@@ -21,16 +22,22 @@ import {
 import useAskingStreamTask from './useAskingStreamTask';
 import { THREAD } from '@/apollo/client/graphql/home';
 import { ApolloClient, NormalizedCacheObject } from '@apollo/client';
-import { nextTick } from '@/utils/time';
+import type {
+  ThreadDetailQueryData,
+  UpdateThreadDetailQuery,
+} from './useThreadDetail';
 
 export interface AskPromptData {
   originalQuestion: string;
-  askingTask?: AskingTask;
+  askingTask?: AskingTask | null;
   askingStreamTask?: string;
-  recommendedQuestions?: RecommendedQuestionsTask;
+  recommendedQuestions?: RecommendedQuestionsTask | null;
 }
 
-export const getIsFinished = (status: AskingTaskStatus) =>
+type NullableAskingTask = AskingTask | null | undefined;
+
+export const getIsFinished = (status?: AskingTaskStatus | null) =>
+  status != null &&
   [
     AskingTaskStatus.FINISHED,
     AskingTaskStatus.FAILED,
@@ -38,30 +45,27 @@ export const getIsFinished = (status: AskingTaskStatus) =>
   ].includes(status);
 
 export const canGenerateAnswer = (
-  askingTask: AskingTask,
-  adjustmentTask: AdjustmentTask,
+  askingTask: NullableAskingTask,
+  adjustmentTask?: AdjustmentTask | null,
 ) =>
   (askingTask === null && adjustmentTask === null) ||
   (askingTask?.status === AskingTaskStatus.FINISHED &&
-    askingTask?.type !== AskingTaskType.SKILL) ||
+    askingTask?.type === AskingTaskType.TEXT_TO_SQL) ||
   adjustmentTask?.status === AskingTaskStatus.FINISHED;
 
-export const canFetchThreadResponse = (askingTask: AskingTask) =>
+export const canFetchThreadResponse = (askingTask: NullableAskingTask) =>
   askingTask !== null &&
   askingTask?.status !== AskingTaskStatus.FAILED &&
-  askingTask?.status !== AskingTaskStatus.STOPPED &&
-  !(
-    askingTask?.type === AskingTaskType.SKILL &&
-    askingTask?.status === AskingTaskStatus.FINISHED
-  );
+  askingTask?.status !== AskingTaskStatus.STOPPED;
 
-export const isReadyToThreadResponse = (askingTask: AskingTask) =>
-  (askingTask?.status === AskingTaskStatus.SEARCHING &&
-    askingTask?.type === AskingTaskType.TEXT_TO_SQL) ||
-  (askingTask?.status === AskingTaskStatus.FINISHED &&
-    askingTask?.type === AskingTaskType.SKILL);
+export const isReadyToThreadResponse = (askingTask: NullableAskingTask) =>
+  askingTask?.status === AskingTaskStatus.SEARCHING &&
+  askingTask?.type === AskingTaskType.TEXT_TO_SQL;
 
-export const isRecommendedFinished = (status: RecommendedQuestionsTaskStatus) =>
+export const isRecommendedFinished = (
+  status?: RecommendedQuestionsTaskStatus | null,
+) =>
+  status != null &&
   [
     RecommendedQuestionsTaskStatus.FINISHED,
     RecommendedQuestionsTaskStatus.FAILED,
@@ -70,26 +74,66 @@ export const isRecommendedFinished = (status: RecommendedQuestionsTaskStatus) =>
     RecommendedQuestionsTaskStatus.NOT_STARTED,
   ].includes(status);
 
-const isNeedRecommendedQuestions = (askingTask: AskingTask) => {
-  const isGeneralOrMisleadingQuery = [
-    AskingTaskType.GENERAL,
-    AskingTaskType.MISLEADING_QUERY,
-  ].includes(askingTask?.type);
+const isNeedRecommendedQuestions = (askingTask: NullableAskingTask) => {
+  const isGeneralOrMisleadingQuery =
+    askingTask?.type === AskingTaskType.GENERAL ||
+    askingTask?.type === AskingTaskType.MISLEADING_QUERY;
   const isFailed =
     askingTask?.type !== AskingTaskType.TEXT_TO_SQL &&
     askingTask?.status === AskingTaskStatus.FAILED;
   return isGeneralOrMisleadingQuery || isFailed;
 };
 
-const isNeedPreparing = (askingTask: AskingTask) =>
+const isNeedPreparing = (askingTask: NullableAskingTask) =>
   askingTask?.type === AskingTaskType.TEXT_TO_SQL;
+
+const ASKING_TASK_POLL_INTERVAL_MS = 1500;
+const ASKING_TASK_POLL_TIMEOUT_MS = 45_000;
+const INSTANT_RECOMMEND_POLL_INTERVAL_MS = 1500;
+const INSTANT_RECOMMEND_POLL_TIMEOUT_MS = 20_000;
+
+export const buildRecommendedQuestionHistory = (
+  threadQuestions: string[],
+  originalQuestion: string,
+) =>
+  Array.from(
+    new Set(
+      [...uniq(threadQuestions).slice(-5), originalQuestion].filter(Boolean),
+    ),
+  );
 
 const handleUpdateThreadCache = (
   threadId: number,
-  askingTask: AskingTask,
+  askingTask: NullableAskingTask,
   client: ApolloClient<NormalizedCacheObject>,
+  updateThreadQuery?: UpdateThreadDetailQuery,
 ) => {
   if (!askingTask) return;
+
+  const updater = (
+    existingData: ThreadDetailQueryData | null,
+  ): ThreadDetailQueryData | null => {
+    if (!existingData?.thread) {
+      return existingData;
+    }
+
+    return {
+      thread: {
+        ...existingData.thread,
+        responses: existingData.thread.responses.map(
+          (response: DetailedThread['responses'][number]) => {
+            if (response.askingTask?.queryId === askingTask?.queryId) {
+              return {
+                ...response,
+                askingTask: cloneDeep(askingTask),
+              };
+            }
+            return response;
+          },
+        ),
+      },
+    };
+  };
 
   const result = client.cache.readQuery<{ thread: DetailedThread }>({
     query: THREAD,
@@ -103,32 +147,55 @@ const handleUpdateThreadCache = (
         variables: { threadId },
       },
       (existingData) => {
-        return {
-          thread: {
-            ...existingData.thread,
-            responses: existingData.thread.responses.map((response) => {
-              if (response.askingTask?.queryId === askingTask?.queryId) {
-                return {
-                  ...response,
-                  askingTask: cloneDeep(askingTask),
-                };
-              }
-              return response;
-            }),
-          },
-        };
+        return updater(existingData as ThreadDetailQueryData) as {
+          thread: DetailedThread;
+        } | null;
       },
     );
   }
+
+  updateThreadQuery?.((existingData) => {
+    return updater(existingData) || existingData;
+  });
 };
 
 const handleUpdateRerunAskingTaskCache = (
   threadId: number,
   threadResponseId: number,
-  askingTask: AskingTask,
+  askingTask: NullableAskingTask,
   client: ApolloClient<NormalizedCacheObject>,
+  updateThreadQuery?: UpdateThreadDetailQuery,
 ) => {
   if (!askingTask) return;
+
+  const task = cloneDeep(askingTask);
+  // bypass understanding status to thread response
+  if (task.status === AskingTaskStatus.UNDERSTANDING) {
+    task.status = AskingTaskStatus.SEARCHING;
+    task.type = AskingTaskType.TEXT_TO_SQL;
+  }
+
+  const updater = (
+    existingData: ThreadDetailQueryData | null,
+  ): ThreadDetailQueryData | null => {
+    if (!existingData?.thread) {
+      return existingData;
+    }
+
+    return {
+      thread: {
+        ...existingData.thread,
+        responses: existingData.thread.responses.map(
+          (response: DetailedThread['responses'][number]) => {
+            if (response.id === threadResponseId) {
+              return { ...response, askingTask: task };
+            }
+            return response;
+          },
+        ),
+      },
+    };
+  };
 
   const result = client.cache.readQuery<{ thread: DetailedThread }>({
     query: THREAD,
@@ -136,58 +203,120 @@ const handleUpdateRerunAskingTaskCache = (
   });
 
   if (result?.thread) {
-    const task = cloneDeep(askingTask);
-    // bypass understanding status to thread response
-    if (task.status === AskingTaskStatus.UNDERSTANDING) {
-      task.status = AskingTaskStatus.SEARCHING;
-      task.type = AskingTaskType.TEXT_TO_SQL;
-    }
     client.cache.updateQuery(
       {
         query: THREAD,
         variables: { threadId },
       },
       (existingData) => {
-        return {
-          thread: {
-            ...existingData.thread,
-            responses: existingData.thread.responses.map((response) => {
-              if (response.id === threadResponseId) {
-                return { ...response, askingTask: task };
-              }
-              return response;
-            }),
-          },
-        };
+        return updater(existingData as ThreadDetailQueryData) as {
+          thread: DetailedThread;
+        } | null;
       },
     );
   }
+
+  updateThreadQuery?.((existingData) => {
+    return updater(existingData) || existingData;
+  });
 };
 
-export default function useAskPrompt(threadId?: number) {
+export interface AskPromptSubmitDefaults {
+  knowledgeBaseIds?: string[];
+  selectedSkillIds?: string[];
+}
+
+export default function useAskPrompt(
+  threadId?: number,
+  submitDefaults?: AskPromptSubmitDefaults,
+  updateThreadQuery?: UpdateThreadDetailQuery,
+) {
   const [originalQuestion, setOriginalQuestion] = useState<string>('');
   const [threadQuestions, setThreadQuestions] = useState<string[]>([]);
+  const submitInFlightRef = useRef(false);
+  const askingTaskPollingTimeoutRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+  const instantRecommendPollingTimeoutRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
   // Handle errors via try/catch blocks rather than onError callback
   const [createAskingTask, createAskingTaskResult] =
     useCreateAskingTaskMutation();
   const [cancelAskingTask] = useCancelAskingTaskMutation({
-    onError: (error) => console.error(error),
+    onError: () => {
+      message.error('停止问答任务失败，请稍后重试');
+    },
   });
   const [rerunAskingTask] = useRerunAskingTaskMutation({
-    onError: (error) => console.error(error),
+    onError: () => {
+      message.error('重新执行问答任务失败，请稍后重试');
+    },
   });
   const [fetchAskingTask, askingTaskResult] = useAskingTaskLazyQuery({
-    pollInterval: 1000,
+    pollInterval: ASKING_TASK_POLL_INTERVAL_MS,
   });
   const [fetchAskingStreamTask, askingStreamTaskResult] = useAskingStreamTask();
   const [createInstantRecommendedQuestions] =
     useCreateInstantRecommendedQuestionsMutation({
-      onError: (error) => console.error(error),
+      onError: () => {
+        message.error('生成推荐问题失败，请稍后重试');
+      },
     });
   const [fetchInstantRecommendedQuestions, instantRecommendedQuestionsResult] =
     useInstantRecommendedQuestionsLazyQuery({
-      pollInterval: 1000,
+      pollInterval: INSTANT_RECOMMEND_POLL_INTERVAL_MS,
     });
+  const stopAskingTaskPolling = askingTaskResult.stopPolling;
+  const stopInstantRecommendPolling =
+    instantRecommendedQuestionsResult.stopPolling;
+
+  const clearAskingTaskPollingTimeout = useCallback(() => {
+    if (askingTaskPollingTimeoutRef.current) {
+      clearTimeout(askingTaskPollingTimeoutRef.current);
+      askingTaskPollingTimeoutRef.current = null;
+    }
+  }, []);
+
+  const clearInstantRecommendPollingTimeout = useCallback(() => {
+    if (instantRecommendPollingTimeoutRef.current) {
+      clearTimeout(instantRecommendPollingTimeoutRef.current);
+      instantRecommendPollingTimeoutRef.current = null;
+    }
+  }, []);
+
+  const scheduleAskingTaskPollingStop = useCallback(() => {
+    clearAskingTaskPollingTimeout();
+    askingTaskPollingTimeoutRef.current = setTimeout(() => {
+      stopAskingTaskPolling();
+      message.warning('问答任务轮询超时，请稍后重试');
+    }, ASKING_TASK_POLL_TIMEOUT_MS);
+  }, [clearAskingTaskPollingTimeout, stopAskingTaskPolling]);
+
+  const scheduleInstantRecommendPollingStop = useCallback(() => {
+    clearInstantRecommendPollingTimeout();
+    instantRecommendPollingTimeoutRef.current = setTimeout(() => {
+      stopInstantRecommendPolling();
+    }, INSTANT_RECOMMEND_POLL_TIMEOUT_MS);
+  }, [clearInstantRecommendPollingTimeout, stopInstantRecommendPolling]);
+
+  const fetchAskingTaskWithGuard = useCallback(
+    async (taskId: string) => {
+      clearAskingTaskPollingTimeout();
+      stopAskingTaskPolling();
+      const result = await fetchAskingTask({
+        variables: { taskId },
+      });
+      scheduleAskingTaskPollingStop();
+      return result;
+    },
+    [
+      clearAskingTaskPollingTimeout,
+      fetchAskingTask,
+      scheduleAskingTaskPollingStop,
+      stopAskingTaskPolling,
+    ],
+  );
 
   const askingTask = useMemo(
     () => askingTaskResult.data?.askingTask || null,
@@ -202,7 +331,8 @@ export default function useAskPrompt(threadId?: number) {
     [instantRecommendedQuestionsResult.data],
   );
 
-  const loading = askingStreamTaskResult.loading;
+  const loading =
+    createAskingTaskResult.loading || askingStreamTaskResult.loading;
 
   const data = useMemo(
     () => ({
@@ -215,138 +345,281 @@ export default function useAskPrompt(threadId?: number) {
   );
 
   const startRecommendedQuestions = useCallback(async () => {
-    const previousQuestions = [
-      // slice the last 5 questions in threadQuestions
-      ...uniq(threadQuestions).slice(-5),
+    const previousQuestions = buildRecommendedQuestionHistory(
+      threadQuestions,
       originalQuestion,
-    ];
-    const response = await createInstantRecommendedQuestions({
-      variables: { data: { previousQuestions } },
-    });
-    fetchInstantRecommendedQuestions({
-      variables: { taskId: response.data.createInstantRecommendedQuestions.id },
-    });
-  }, [originalQuestion]);
+    );
+    if (previousQuestions.length === 0) {
+      return;
+    }
+
+    try {
+      const response = await createInstantRecommendedQuestions({
+        variables: { data: { previousQuestions } },
+      });
+      const taskId = response.data?.createInstantRecommendedQuestions?.id;
+      if (!taskId) {
+        return;
+      }
+
+      fetchInstantRecommendedQuestions({
+        variables: { taskId },
+      });
+      scheduleInstantRecommendPollingStop();
+    } catch (_error) {
+      message.error('生成推荐问题失败，请稍后重试');
+    }
+  }, [
+    createInstantRecommendedQuestions,
+    fetchInstantRecommendedQuestions,
+    originalQuestion,
+    scheduleInstantRecommendPollingStop,
+    threadQuestions,
+  ]);
 
   const checkFetchAskingStreamTask = useCallback(
-    (task: AskingTask) => {
-      if (!askingStreamTask && task.status === AskingTaskStatus.PLANNING) {
-        fetchAskingStreamTask(task.queryId);
+    (task: NullableAskingTask) => {
+      if (
+        !task ||
+        askingStreamTask ||
+        task.status !== AskingTaskStatus.PLANNING ||
+        !task.queryId
+      ) {
+        return;
       }
+
+      fetchAskingStreamTask(task.queryId);
     },
-    [askingStreamTask],
+    [askingStreamTask, fetchAskingStreamTask],
   );
 
   useEffect(() => {
     const isFinished = getIsFinished(askingTask?.status);
-    if (isFinished) askingTaskResult.stopPolling();
+    if (isFinished) {
+      askingTaskResult.stopPolling();
+      clearAskingTaskPollingTimeout();
+    }
 
     // handle update cache for preparing component
     if (isNeedPreparing(askingTask)) {
       if (threadId) {
-        handleUpdateThreadCache(threadId, askingTask, askingTaskResult.client);
+        handleUpdateThreadCache(
+          threadId,
+          askingTask,
+          askingTaskResult.client,
+          updateThreadQuery,
+        );
         checkFetchAskingStreamTask(askingTask);
       }
     }
-  }, [askingTask?.status, threadId, checkFetchAskingStreamTask]);
+  }, [
+    askingTask,
+    threadId,
+    checkFetchAskingStreamTask,
+    clearAskingTaskPollingTimeout,
+    updateThreadQuery,
+  ]);
 
   useEffect(() => {
     // handle instant recommended questions
     if (isNeedRecommendedQuestions(askingTask)) {
-      startRecommendedQuestions();
+      void startRecommendedQuestions();
     }
-  }, [askingTask?.type]);
+  }, [askingTask?.status, askingTask?.type, startRecommendedQuestions]);
 
   useEffect(() => {
-    if (isRecommendedFinished(recommendedQuestions?.status))
-      instantRecommendedQuestionsResult.stopPolling();
-  }, [recommendedQuestions]);
+    if (isRecommendedFinished(recommendedQuestions?.status)) {
+      stopInstantRecommendPolling();
+      clearInstantRecommendPollingTimeout();
+    }
+  }, [
+    clearInstantRecommendPollingTimeout,
+    recommendedQuestions,
+    stopInstantRecommendPolling,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      clearAskingTaskPollingTimeout();
+      clearInstantRecommendPollingTimeout();
+    };
+  }, [clearAskingTaskPollingTimeout, clearInstantRecommendPollingTimeout]);
 
   useEffect(() => {
     const taskId = createAskingTaskResult.data?.createAskingTask.id;
     if (taskId && askingTaskType === AskingTaskType.GENERAL) {
       fetchAskingStreamTask(taskId);
     }
-  }, [askingTaskType, createAskingTaskResult.data]);
+  }, [
+    askingTaskType,
+    createAskingTaskResult.data?.createAskingTask.id,
+    fetchAskingStreamTask,
+  ]);
 
-  const onStop = async (queryId?: string) => {
-    const taskId = queryId || createAskingTaskResult.data?.createAskingTask.id;
-    if (taskId) {
-      await cancelAskingTask({ variables: { taskId } }).catch((error) =>
-        console.error(error),
-      );
-      // waiting for polling fetching stop
-      await nextTick(1000);
-    }
-  };
-
-  const onReRun = async (threadResponse: ThreadResponse) => {
-    askingStreamTaskResult.reset();
-    setOriginalQuestion(threadResponse.question);
-    try {
-      const response = await rerunAskingTask({
-        variables: { responseId: threadResponse.id },
-      });
-      const { data } = await fetchAskingTask({
-        variables: { taskId: response.data.rerunAskingTask.id },
-      });
-      // update the asking task in cache manually
-      handleUpdateRerunAskingTaskCache(
-        threadId,
-        threadResponse.id,
-        data.askingTask,
-        askingTaskResult.client,
-      );
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  const onSubmit = async (value) => {
-    askingStreamTaskResult.reset();
-    setOriginalQuestion(value);
-    try {
-      const response = await createAskingTask({
-        variables: { data: { question: value, threadId } },
-      });
-      await fetchAskingTask({
-        variables: { taskId: response.data.createAskingTask.id },
-      });
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  const onFetching = async (queryId: string) => {
-    await fetchAskingTask({
-      variables: { taskId: queryId },
-    });
-  };
-
-  const onStopPolling = () => askingTaskResult.stopPolling();
-
-  const onStopStreaming = () => askingStreamTaskResult.reset();
-
-  const onStopRecommend = () => instantRecommendedQuestionsResult.stopPolling();
-
-  const onStoreThreadQuestions = (questions: string[]) =>
-    setThreadQuestions(questions);
-
-  return {
-    data,
-    loading,
-    onStop,
-    onReRun,
-    onSubmit,
-    onFetching,
-    onStopPolling,
-    onStopStreaming,
-    onStopRecommend,
-    onStoreThreadQuestions,
-    inputProps: {
-      placeholder: threadId
-        ? 'Ask follow-up questions to explore your data'
-        : 'Ask to explore your data',
+  const onStop = useCallback(
+    async (queryId?: string) => {
+      const taskId =
+        queryId || createAskingTaskResult.data?.createAskingTask.id;
+      if (taskId) {
+        await cancelAskingTask({ variables: { taskId } }).catch(
+          () => undefined,
+        );
+        stopAskingTaskPolling();
+        clearAskingTaskPollingTimeout();
+      }
     },
-  };
+    [
+      cancelAskingTask,
+      clearAskingTaskPollingTimeout,
+      createAskingTaskResult.data?.createAskingTask.id,
+      stopAskingTaskPolling,
+    ],
+  );
+
+  const onReRun = useCallback(
+    async (threadResponse: ThreadResponse) => {
+      askingStreamTaskResult.reset();
+      setOriginalQuestion(threadResponse.question);
+      try {
+        const response = await rerunAskingTask({
+          variables: { responseId: threadResponse.id },
+        });
+        const rerunTaskId = response.data?.rerunAskingTask?.id;
+        if (!rerunTaskId) {
+          message.error('重新执行失败，请稍后重试');
+          return;
+        }
+
+        const { data } = await fetchAskingTaskWithGuard(rerunTaskId);
+        if (!threadId || !data?.askingTask) {
+          return;
+        }
+        // update the asking task in cache manually
+        handleUpdateRerunAskingTaskCache(
+          threadId,
+          threadResponse.id,
+          data.askingTask,
+          askingTaskResult.client,
+          updateThreadQuery,
+        );
+      } catch (_error) {
+        message.error('重新执行失败，请稍后重试');
+      }
+    },
+    [
+      askingStreamTaskResult,
+      askingTaskResult.client,
+      fetchAskingTaskWithGuard,
+      rerunAskingTask,
+      threadId,
+      updateThreadQuery,
+    ],
+  );
+
+  const onSubmit = useCallback(
+    async (value: string) => {
+      if (submitInFlightRef.current) {
+        return;
+      }
+
+      submitInFlightRef.current = true;
+      askingStreamTaskResult.reset();
+      setOriginalQuestion(value);
+      try {
+        const response = await createAskingTask({
+          variables: {
+            data: {
+              question: value,
+              threadId,
+              knowledgeBaseIds: submitDefaults?.knowledgeBaseIds,
+              selectedSkillIds: submitDefaults?.selectedSkillIds,
+            },
+          },
+        });
+        const askingTaskId = response.data?.createAskingTask?.id;
+        if (!askingTaskId) {
+          message.error('提交问题失败，请稍后重试');
+          return;
+        }
+
+        await fetchAskingTaskWithGuard(askingTaskId);
+      } catch (_error) {
+        message.error('提交问题失败，请稍后重试');
+      } finally {
+        submitInFlightRef.current = false;
+      }
+    },
+    [
+      askingStreamTaskResult,
+      createAskingTask,
+      fetchAskingTaskWithGuard,
+      submitDefaults?.knowledgeBaseIds,
+      submitDefaults?.selectedSkillIds,
+      threadId,
+    ],
+  );
+
+  const onFetching = useCallback(
+    async (queryId: string) => {
+      await fetchAskingTaskWithGuard(queryId);
+    },
+    [fetchAskingTaskWithGuard],
+  );
+
+  const onStopPolling = useCallback(() => {
+    clearAskingTaskPollingTimeout();
+    stopAskingTaskPolling();
+  }, [clearAskingTaskPollingTimeout, stopAskingTaskPolling]);
+
+  const onStopStreaming = useCallback(
+    () => askingStreamTaskResult.reset(),
+    [askingStreamTaskResult],
+  );
+
+  const onStopRecommend = useCallback(() => {
+    clearInstantRecommendPollingTimeout();
+    stopInstantRecommendPolling();
+  }, [clearInstantRecommendPollingTimeout, stopInstantRecommendPolling]);
+
+  const onStoreThreadQuestions = useCallback((questions: string[]) => {
+    setThreadQuestions(questions);
+  }, []);
+
+  const inputProps = useMemo(
+    () => ({
+      placeholder: threadId
+        ? '继续追问以深入分析你的数据'
+        : '输入问题开始探索你的数据',
+    }),
+    [threadId],
+  );
+
+  return useMemo(
+    () => ({
+      data,
+      loading,
+      onStop,
+      onReRun,
+      onSubmit,
+      onFetching,
+      onStopPolling,
+      onStopStreaming,
+      onStopRecommend,
+      onStoreThreadQuestions,
+      inputProps,
+    }),
+    [
+      data,
+      inputProps,
+      loading,
+      onFetching,
+      onReRun,
+      onStop,
+      onStopPolling,
+      onStopRecommend,
+      onStopStreaming,
+      onStoreThreadQuestions,
+      onSubmit,
+    ],
+  );
 }

@@ -1,8 +1,9 @@
 # Deployment of Wren AI to Kubernetes with Kustomization
 1. Ensure you satisfy the dependencies required to deploy Wren AI.
 2. Adjust the values and manifests accordingly to fit your Kubernetes environment.
-3. Deploy Secrets separately.
-4. Deploy the inflated kustomized app.
+3. Build and publish your own `wren-engine` / `wren-engine-ibis` images from the vendored `./wren-engine` source in this repo before deploying.
+4. Deploy Secrets separately.
+5. Deploy the inflated kustomized app.
 Note: Without authentication, once you publish this on the internet, anyone can access your app, see your data, and modify your settings!
 
 ## Dependencies used in this kustomization:
@@ -22,6 +23,15 @@ The `deployment/kustomizations` folder contains a `kustomization.yaml` file that
 git clone https://github.com/Canner/WrenAI.git
 cd WrenAI
 
+# Build local engine images from the vendored source tree.
+# For a local cluster (kind / minikube), you can keep the default `:local` tags.
+./docker/build-local-engine-images.sh
+
+# If you deploy to a remote cluster, push those two images to your own registry
+# first, then edit deployment/kustomizations/kustomization.yaml and replace:
+#   wren-engine -> <your-registry>/wren-engine
+#   wren-engine-ibis -> <your-registry>/wren-engine-ibis
+
 # Inflate the manifest with kustomization
 kubectl kustomize deployment/kustomizations --enable-helm > deployment/kustomizations/wrenai.kustomized.yaml
 
@@ -31,7 +41,7 @@ kubectl create namespace wren
 # !!!!!!!!!!!!
 # MODIFY secret-wren_example.yaml manifest file FIRST
 # OPENAI_API_KEY is REQUIRED: without a valid key the wren-ai-service-deployment pod will not start
-# You must update PG_URL, otherwise wren-ui will not work
+# You must update PG_URL and PG_CONN_STR, otherwise wren-ui / wren-ai-service will not work
 #vi deployment/kustomizations/examples/secret-wren_example.yaml
 kubectl apply -f deployment/kustomizations/examples/secret-wren_example.yaml -n wren
 
@@ -42,18 +52,18 @@ kubectl get pods -n wren
 ```
 
 ### Notes on kustomization:
-- `deployment/kustomizations/kustomization.yaml` is the main file responsible for versions of other apps such as Qdrant and PostgreSQL, version of your Wren AI app. It also combines resourses from the manifest such as ConfigMaps, Deployments, and Services. And example Ingress, Certificates and Secrets.
+- `deployment/kustomizations/kustomization.yaml` is the main file responsible for versions of other apps such as PostgreSQL and your Wren AI app. It also combines resourses from the manifest such as ConfigMaps, Deployments, and Services. And example Ingress, Certificates and Secrets.
+- `wren-engine` and `wren-engine-ibis` no longer default to Canner's GHCR images in this repo. The base manifests expect images built from the vendored `./wren-engine` source, tagged as `wren-engine:local` and `wren-engine-ibis:local` unless you override them in `kustomization.yaml`.
 - `deployment/kustomizations/base` is the base folder that contains the core Wren AI manifests, its less likely you need to modify them, but check just in case
 - `deployment/kustomizations/examples` is a place with examples of manifests must take a look and adjust to your k8s environment and your needs.
 - `deployment/kustomizations/examples/secret-wren_example.yaml` is the file you would not normally include in the kustomization file as its not a best practice and especially not a good idea to include in your GitOps repo as it contains cleartext passwords. We recommend to deploy it separately. Thant's why its commented in the `kustomization.yaml` file.
 - `deployment/kustomizations/examples/wrenai-ingress-example.yaml` is an example of how to deploy Ingress. You can use this as a template for your own Ingress. It contains dependancy of extarnal-dns to add your dns name to your DNS records automatically, otherwise you'll need to add it manually. Also it assumes you are using nginx.ingress, it increases timeouts, disables the owasp and modsecurity that might be enabled globaly and prevent your UI from working properly. Comment the TLS section if you do not wish to use `https` encryption. Note: without authentication, enyone can acess your app, see your data and modify your settings!
 - `deployment/kustomizations/examples/certificate-wren_example.yaml` is an example of how to deploy certificates for your ingress for the Wren-UI. You can use this as a template for your own certificate. It contains dependancy of cert-manager to add your certificates automatically, otherwise you'll need to add it manually. The certificate will be used by your Ingress.
-- `deployment/kustomizations/examples/certificate-qdrant_example.yaml` is an example of how to deploy certificates for your ingress for Qdrant. This is included just in case and is not required, usually you would not be publishing your Vector Database publically in internet. That's why it's commented in the `kustomization.yaml` file. You can use this as a template for your own certificate. It contains dependancy of cert-manager to add your certificates automatically, otherwise you'll need to add it manually.
 - `deployment/kustomizations/patches` folder is empty, feel free to add your own patches & overlays there.
 
 #### Wren-UI Database
 Starting with wren-ui version 0.6.0 by default the postgres database is used for wren-ui in this kubernetes kustomization and will be installed in the same namespace as wren-ai.
-- `postgres`: Database that will be installed in the same namespace as wren-ai. You *must* update `PG_URL` in the Secret manifest `deployment/kustomizations/examples/secret-wren_example.yaml`.
+- `postgres`: Database that will be installed in the same namespace as wren-ai. You *must* update `PG_URL` and `PG_CONN_STR` in the Secret manifest `deployment/kustomizations/examples/secret-wren_example.yaml`.
 
 Example: `PG_URL: "postgres://postgres:postgres@wrenai-postgresql:5432/admin_ui"`
 - `postgres://`        This is the protocol. It tells the system that you’re connecting to a PostgreSQL database.

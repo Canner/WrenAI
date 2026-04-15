@@ -72,6 +72,9 @@ Please read the [documentation](https://docs.getwren.ai/oss/concept/wren_ai_serv
    just up
    ```
 
+   This uses the repo's single Docker stack (`../docker/docker-compose.yaml`)
+   and starts only the dependencies needed for running `wren-ai-service` from source.
+
 2. **Launch the AI Service**:
 
    ```bash

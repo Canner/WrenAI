@@ -25,19 +25,19 @@ export default function RelationTable(props: Props) {
                 <ExpandableRows
                   data={[
                     {
-                      title: 'From',
+                      title: '来源字段',
                       value: `${record.fromModelDisplayName}.${record.fromColumnDisplayName}`,
                     },
                     {
-                      title: 'To',
+                      title: '目标字段',
                       value: `${record.toModelDisplayName}.${record.toColumnDisplayName}`,
                     },
-                    { title: 'Description', value: record.description || '-' },
+                    { title: '描述', value: record.description || '-' },
                   ]}
                 />
               ),
             }
-          : null
+          : undefined
       }
     />
   );

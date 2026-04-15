@@ -4,11 +4,17 @@ import {
   IBasicRepository,
   IQueryOptions,
 } from './baseRepository';
+import { PersistedRuntimeIdentity } from '@server/context/runtimeScope';
 import { RelationData } from '../types';
 
 export interface Relation {
   id: number; // ID
-  projectId: number; // Reference to project.id
+  projectId?: number | null; // Reference to project.id
+  workspaceId?: string | null;
+  knowledgeBaseId?: string | null;
+  kbSnapshotId?: string | null;
+  deployHash?: string | null;
+  actorUserId?: string | null;
   name: string; // Relation name
   joinType: string; // Join type, eg:"MANY_TO_ONE", "ONE_TO_MANY", "MANY_TO_MANY"
   condition: string; // Join condition, ex: "OrdersModel.custkey = CustomerModel.custkey"
@@ -33,6 +39,10 @@ export interface ExtraRelationInfo {
 export type RelationInfo = Relation & ExtraRelationInfo;
 
 export interface IRelationRepository extends IBasicRepository<Relation> {
+  findOneByIdWithRuntimeIdentity(
+    id: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ): Promise<Relation | null>;
   findRelationsBy(
     filter: { columnIds?: number[]; modelIds?: number[] },
     queryOptions?: IQueryOptions,
@@ -62,12 +72,34 @@ export class RelationRepository
   extends BaseRepository<Relation>
   implements IRelationRepository
 {
+  private readonly canonicalScopeFields: (
+    | 'workspaceId'
+    | 'knowledgeBaseId'
+    | 'kbSnapshotId'
+    | 'deployHash'
+  )[] = ['workspaceId', 'knowledgeBaseId', 'kbSnapshotId', 'deployHash'];
+
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'relation' });
   }
 
+  public async findOneByIdWithRuntimeIdentity(
+    id: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ) {
+    const query = this.buildRuntimeScopedQuery(runtimeIdentity).where({ id });
+    const row = await query.first();
+    return row ? this.transformFromDBData(row) : null;
+  }
+
   public async findRelationsBy(
-    { columnIds, modelIds },
+    {
+      columnIds,
+      modelIds,
+    }: {
+      columnIds?: number[];
+      modelIds?: number[];
+    },
     queryOptions?: IQueryOptions,
   ) {
     let executer = this.knex;
@@ -139,8 +171,15 @@ export class RelationRepository
       .delete();
   }
 
-  public async findRelationInfoBy(filter, queryOptions) {
-    const { projectId, columnIds, modelIds } = filter;
+  public async findRelationInfoBy(
+    filter: {
+      projectId?: number;
+      columnIds?: number[];
+      modelIds?: number[];
+    },
+    queryOptions?: IQueryOptions,
+  ) {
+    const { projectId: bridgeProjectId, columnIds, modelIds } = filter;
     let executer = this.knex;
     if (queryOptions && queryOptions.tx) {
       const { tx } = queryOptions;
@@ -163,8 +202,8 @@ export class RelationRepository
       .join('model AS fm', 'fmc.model_id', '=', 'fm.id')
       .join('model AS tm', 'tmc.model_id', '=', 'tm.id');
 
-    if (projectId) {
-      builder.where(`${this.tableName}.project_id`, projectId);
+    if (bridgeProjectId) {
+      builder.where(`${this.tableName}.project_id`, bridgeProjectId);
     } else if (columnIds && columnIds.length > 0) {
       builder
         .whereIn(`${this.tableName}.from_column_id`, columnIds)
@@ -219,5 +258,77 @@ export class RelationRepository
       .select(`${this.tableName}.*`);
     const result = await query;
     return result.map((r) => this.transformFromDBData(r)) as RelationInfo[];
+  }
+
+  private buildRuntimeScopedQuery(runtimeIdentity: PersistedRuntimeIdentity) {
+    const query = this.knex(this.tableName);
+
+    this.applyBridgeScopeField(
+      query,
+      runtimeIdentity.projectId ?? null,
+      this.hasCanonicalRuntimeScope(runtimeIdentity),
+    );
+    this.applyScopeField(
+      query,
+      'workspaceId',
+      runtimeIdentity.workspaceId ?? null,
+    );
+    this.applyScopeField(
+      query,
+      'knowledgeBaseId',
+      runtimeIdentity.knowledgeBaseId ?? null,
+    );
+    this.applyScopeField(
+      query,
+      'kbSnapshotId',
+      runtimeIdentity.kbSnapshotId ?? null,
+    );
+    this.applyScopeField(
+      query,
+      'deployHash',
+      runtimeIdentity.deployHash ?? null,
+    );
+
+    return query;
+  }
+
+  private hasCanonicalRuntimeScope(runtimeIdentity: PersistedRuntimeIdentity) {
+    return this.canonicalScopeFields.some(
+      (field) => runtimeIdentity[field] != null,
+    );
+  }
+
+  private applyBridgeScopeField(
+    query: Knex.QueryBuilder,
+    bridgeProjectId?: number | null,
+    hasCanonicalScope = false,
+  ) {
+    if (hasCanonicalScope) {
+      return;
+    }
+
+    if (bridgeProjectId == null) {
+      query.whereNull('project_id');
+      return;
+    }
+
+    query.andWhere('project_id', bridgeProjectId);
+  }
+
+  private applyScopeField(
+    query: Knex.QueryBuilder,
+    field: 'workspaceId' | 'knowledgeBaseId' | 'kbSnapshotId' | 'deployHash',
+    value?: string | null,
+  ) {
+    const column = field.replace(
+      /[A-Z]/g,
+      (letter) => `_${letter.toLowerCase()}`,
+    );
+    if (value == null) {
+      query.whereNull(column);
+      return;
+    }
+
+    query.andWhere(column, value);
   }
 }

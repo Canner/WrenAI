@@ -3,15 +3,69 @@ import {
   ApiHistory,
   AskShadowCompareStats,
 } from '@server/repositories/apiHistoryRepository';
+import { toPersistedRuntimeIdentity } from '@server/context/runtimeScope';
 import { IContext } from '@server/types';
+import {
+  assertAuthorizedWithAudit,
+  buildAuthorizationActorFromRuntimeScope,
+  recordAuditEvent,
+} from '@server/authz';
 
 const ASK_SHADOW_COMPARE_API_TYPES = [ApiType.ASK, ApiType.STREAM_ASK];
+
+const requireAuthorizationActor = (ctx: IContext) =>
+  ctx.authorizationActor ||
+  buildAuthorizationActorFromRuntimeScope(ctx.runtimeScope);
+
+const assertKnowledgeBaseReadAccess = async (ctx: IContext) => {
+  const { actor, resource } = getKnowledgeBaseReadAuthorizationTarget(ctx);
+  await assertAuthorizedWithAudit({
+    auditEventRepository: ctx.auditEventRepository,
+    actor,
+    action: 'knowledge_base.read',
+    resource,
+  });
+};
+
+const getKnowledgeBaseReadAuthorizationTarget = (ctx: IContext) => {
+  const runtimeIdentity = toPersistedRuntimeIdentity(ctx.runtimeScope!);
+  const workspaceId =
+    ctx.runtimeScope?.workspace?.id || runtimeIdentity.workspaceId || null;
+  const knowledgeBase = ctx.runtimeScope?.knowledgeBase;
+
+  return {
+    actor: requireAuthorizationActor(ctx),
+    resource: {
+      resourceType: knowledgeBase ? 'knowledge_base' : 'workspace',
+      resourceId: knowledgeBase?.id || workspaceId,
+      workspaceId,
+      attributes: {
+        workspaceKind: ctx.runtimeScope?.workspace?.kind || null,
+        knowledgeBaseKind: knowledgeBase?.kind || null,
+      },
+    },
+  };
+};
+
+const recordKnowledgeBaseReadAudit = async (
+  ctx: IContext,
+  payloadJson?: Record<string, any> | null,
+) => {
+  const { actor, resource } = getKnowledgeBaseReadAuthorizationTarget(ctx);
+  await recordAuditEvent({
+    auditEventRepository: ctx.auditEventRepository,
+    actor,
+    action: 'knowledge_base.read',
+    resource,
+    result: 'allowed',
+    payloadJson: payloadJson || undefined,
+  });
+};
 
 export interface ApiHistoryFilter {
   apiType?: ApiType;
   statusCode?: number;
   threadId?: string;
-  projectId?: number;
   startDate?: string;
   endDate?: string;
 }
@@ -36,10 +90,15 @@ const toDateFilter = (filter?: ApiHistoryFilter) => {
 
 const toScopedFilterCriteria = (
   filter: ApiHistoryFilter | undefined,
-  activeProjectId: number,
+  runtimeIdentity: ReturnType<typeof toPersistedRuntimeIdentity>,
 ) => {
+  const runtimeProjectBridgeId = runtimeIdentity.projectId ?? null;
   const filterCriteria: Partial<ApiHistory> = {
-    projectId: activeProjectId,
+    projectId: runtimeProjectBridgeId,
+    workspaceId: runtimeIdentity.workspaceId ?? null,
+    knowledgeBaseId: runtimeIdentity.knowledgeBaseId ?? null,
+    kbSnapshotId: runtimeIdentity.kbSnapshotId ?? null,
+    deployHash: runtimeIdentity.deployHash ?? null,
   };
 
   if (!filter) {
@@ -52,12 +111,6 @@ const toScopedFilterCriteria = (
 
   if (filter.threadId) {
     filterCriteria.threadId = filter.threadId;
-  }
-
-  if (filter.projectId && filter.projectId !== activeProjectId) {
-    throw new Error(
-      'apiHistory projectId filter does not match active runtime scope',
-    );
   }
 
   return filterCriteria;
@@ -115,10 +168,11 @@ export class ApiHistoryResolver {
     },
     ctx: IContext,
   ) {
+    await assertKnowledgeBaseReadAccess(ctx);
     const { filter, pagination } = args;
     const { offset, limit } = pagination;
-    const activeProjectId = ctx.runtimeScope!.project.id;
-    const filterCriteria = toScopedFilterCriteria(filter, activeProjectId);
+    const runtimeIdentity = toPersistedRuntimeIdentity(ctx.runtimeScope!);
+    const filterCriteria = toScopedFilterCriteria(filter, runtimeIdentity);
     const dateFilter = toDateFilter(filter);
 
     if (filter?.apiType) {
@@ -150,6 +204,10 @@ export class ApiHistoryResolver {
       },
     );
 
+    await recordKnowledgeBaseReadAudit(ctx, {
+      operation: 'get_api_history',
+    });
+
     return {
       items,
       total,
@@ -164,17 +222,22 @@ export class ApiHistoryResolver {
     },
     ctx: IContext,
   ): Promise<AskShadowCompareStats> {
+    await assertKnowledgeBaseReadAccess(ctx);
     const filter = args?.filter;
-    const activeProjectId = ctx.runtimeScope!.project.id;
-    const filterCriteria = toScopedFilterCriteria(filter, activeProjectId);
+    const runtimeIdentity = toPersistedRuntimeIdentity(ctx.runtimeScope!);
+    const filterCriteria = toScopedFilterCriteria(filter, runtimeIdentity);
     const dateFilter = toDateFilter(filter);
     const apiTypes = this.getAskShadowCompareApiTypes(filter?.apiType);
 
-    return await ctx.apiHistoryRepository.getAskShadowCompareStats(
+    const result = await ctx.apiHistoryRepository.getAskShadowCompareStats(
       filterCriteria,
       dateFilter,
       apiTypes,
     );
+    await recordKnowledgeBaseReadAudit(ctx, {
+      operation: 'get_ask_shadow_compare_stats',
+    });
+    return result;
   }
 
   private getAskShadowCompareApiTypes(apiType?: ApiType): ApiType[] {
@@ -190,6 +253,7 @@ export class ApiHistoryResolver {
 
     return [apiType];
   }
+
   /**
    * Resolver for ApiHistoryResponse fields
    */

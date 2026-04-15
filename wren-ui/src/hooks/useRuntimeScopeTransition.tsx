@@ -1,9 +1,15 @@
-import { useApolloClient } from '@apollo/client';
 import { useRouter } from 'next/router';
 import { useCallback, useState } from 'react';
 
+const resolvePathname = (url: string) => {
+  try {
+    return new URL(url, 'http://wren.local').pathname;
+  } catch {
+    return '';
+  }
+};
+
 export default function useRuntimeScopeTransition() {
-  const client = useApolloClient();
   const router = useRouter();
   const [transitioning, setTransitioning] = useState(false);
 
@@ -15,17 +21,25 @@ export default function useRuntimeScopeTransition() {
 
       setTransitioning(true);
       try {
-        const navigated = await router.push(nextUrl);
+        const currentPathname = resolvePathname(router.asPath);
+        const nextPathname = resolvePathname(nextUrl);
+        const samePathname =
+          Boolean(currentPathname) &&
+          Boolean(nextPathname) &&
+          currentPathname === nextPathname;
+        const navigate = samePathname ? router.replace : router.push;
+        const navigated = await navigate(nextUrl, undefined, {
+          scroll: false,
+          shallow: samePathname,
+        });
         if (!navigated) {
           return;
         }
-
-        await client.resetStore();
       } finally {
         setTransitioning(false);
       }
     },
-    [client, router],
+    [router],
   );
 
   return {

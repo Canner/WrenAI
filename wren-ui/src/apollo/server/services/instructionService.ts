@@ -1,7 +1,9 @@
 import { pick } from 'lodash';
 import { IWrenAIAdaptor } from '@server/adaptors';
 import { InstructionInput, UpdateInstructionInput } from '@server/models';
+import { PersistedRuntimeIdentity } from '@server/context/runtimeScope';
 import {
+  AskRuntimeIdentity,
   InstructionResult,
   InstructionStatus,
   GenerateInstructionInput,
@@ -9,13 +11,45 @@ import {
 import { IInstructionRepository, Instruction } from '@server/repositories';
 import * as Errors from '@server/utils/error';
 import { GeneralErrorCodes } from '@server/utils/error';
+import { toPersistedRuntimeIdentityPatch } from '@server/utils/persistedRuntimeIdentity';
+
+const toAskRuntimeIdentity = (
+  runtimeIdentity: PersistedRuntimeIdentity,
+): AskRuntimeIdentity => ({
+  projectId:
+    typeof runtimeIdentity.projectId === 'number'
+      ? runtimeIdentity.projectId
+      : undefined,
+  workspaceId: runtimeIdentity.workspaceId ?? null,
+  knowledgeBaseId: runtimeIdentity.knowledgeBaseId ?? null,
+  kbSnapshotId: runtimeIdentity.kbSnapshotId ?? null,
+  deployHash: runtimeIdentity.deployHash ?? null,
+  actorUserId: runtimeIdentity.actorUserId ?? null,
+});
 export interface IInstructionService {
-  getInstructions(projectId: number): Promise<Instruction[]>;
-  getInstruction(id: number): Promise<Instruction>;
-  createInstruction(instruction: InstructionInput): Promise<Instruction>;
-  createInstructions(instructions: InstructionInput[]): Promise<Instruction[]>;
-  updateInstruction(instruction: UpdateInstructionInput): Promise<Instruction>;
-  deleteInstruction(id: number, projectId: number): Promise<void>;
+  listInstructions(
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ): Promise<Instruction[]>;
+  getInstruction(
+    runtimeIdentity: PersistedRuntimeIdentity,
+    id: number,
+  ): Promise<Instruction | null>;
+  createInstruction(
+    runtimeIdentity: PersistedRuntimeIdentity,
+    instruction: InstructionInput,
+  ): Promise<Instruction>;
+  createInstructions(
+    runtimeIdentity: PersistedRuntimeIdentity,
+    instructions: InstructionInput[],
+  ): Promise<Instruction[]>;
+  updateInstruction(
+    runtimeIdentity: PersistedRuntimeIdentity,
+    instruction: UpdateInstructionInput,
+  ): Promise<Instruction>;
+  deleteInstruction(
+    id: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ): Promise<void>;
 }
 
 export class InstructionService implements IInstructionService {
@@ -32,15 +66,24 @@ export class InstructionService implements IInstructionService {
     this.wrenAIAdaptor = wrenAIAdaptor;
   }
 
-  public async getInstructions(projectId: number): Promise<Instruction[]> {
-    return this.instructionRepository.findAllBy({ projectId });
+  public async listInstructions(
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ): Promise<Instruction[]> {
+    return this.instructionRepository.findAllByRuntimeIdentity(runtimeIdentity);
   }
 
-  public async getInstruction(id: number): Promise<Instruction> {
-    return this.instructionRepository.findOneBy({ id });
+  public async getInstruction(
+    runtimeIdentity: PersistedRuntimeIdentity,
+    id: number,
+  ): Promise<Instruction | null> {
+    return this.instructionRepository.findOneByIdWithRuntimeIdentity(
+      id,
+      runtimeIdentity,
+    );
   }
 
   public async createInstruction(
+    runtimeIdentity: PersistedRuntimeIdentity,
     input: InstructionInput,
   ): Promise<Instruction> {
     const tx = await this.instructionRepository.transaction();
@@ -49,6 +92,7 @@ export class InstructionService implements IInstructionService {
       const newInstruction = await this.instructionRepository.createOne(
         {
           ...input,
+          ...toPersistedRuntimeIdentityPatch(runtimeIdentity),
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         },
@@ -56,9 +100,10 @@ export class InstructionService implements IInstructionService {
           tx,
         },
       );
-      const { queryId } = await this.wrenAIAdaptor.generateInstruction([
-        this.pickGenerateInstructionInput(newInstruction),
-      ]);
+      const { queryId } = await this.wrenAIAdaptor.generateInstruction({
+        instructions: [this.pickGenerateInstructionInput(newInstruction)],
+        runtimeIdentity: toAskRuntimeIdentity(runtimeIdentity),
+      });
       const res = await this.waitDeployInstruction(queryId);
       if (res.error) {
         await tx.rollback();
@@ -75,6 +120,7 @@ export class InstructionService implements IInstructionService {
   }
 
   public async createInstructions(
+    runtimeIdentity: PersistedRuntimeIdentity,
     inputs: InstructionInput[],
   ): Promise<Instruction[]> {
     const tx = await this.instructionRepository.transaction();
@@ -83,6 +129,7 @@ export class InstructionService implements IInstructionService {
       const newInstructions = await this.instructionRepository.createMany(
         inputs.map((input) => ({
           ...input,
+          ...toPersistedRuntimeIdentityPatch(runtimeIdentity),
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         })),
@@ -90,9 +137,10 @@ export class InstructionService implements IInstructionService {
           tx,
         },
       );
-      const { queryId } = await this.wrenAIAdaptor.generateInstruction(
-        newInstructions.map(this.pickGenerateInstructionInput),
-      );
+      const { queryId } = await this.wrenAIAdaptor.generateInstruction({
+        instructions: newInstructions.map(this.pickGenerateInstructionInput),
+        runtimeIdentity: toAskRuntimeIdentity(runtimeIdentity),
+      });
       const res = await this.waitDeployInstruction(queryId);
       if (res.error) {
         await tx.rollback();
@@ -109,17 +157,17 @@ export class InstructionService implements IInstructionService {
   }
 
   public async updateInstruction(
+    runtimeIdentity: PersistedRuntimeIdentity,
     input: UpdateInstructionInput,
   ): Promise<Instruction> {
     const tx = await this.instructionRepository.transaction();
     try {
       this.validateInstructionInput(input);
-      const instruction = await this.instructionRepository.findOneBy(
-        { id: input.id, projectId: input.projectId },
-        {
-          tx,
-        },
-      );
+      const instruction =
+        await this.instructionRepository.findOneByIdWithRuntimeIdentity(
+          input.id,
+          runtimeIdentity,
+        );
       if (!instruction) {
         throw new Error('Instruction not found');
       }
@@ -133,9 +181,10 @@ export class InstructionService implements IInstructionService {
         instructionData,
         { tx },
       );
-      const { queryId } = await this.wrenAIAdaptor.generateInstruction([
-        this.pickGenerateInstructionInput(updatedInstruction),
-      ]);
+      const { queryId } = await this.wrenAIAdaptor.generateInstruction({
+        instructions: [this.pickGenerateInstructionInput(updatedInstruction)],
+        runtimeIdentity: toAskRuntimeIdentity(runtimeIdentity),
+      });
       const res = await this.waitDeployInstruction(queryId);
       if (res.error) {
         await tx.rollback();
@@ -150,18 +199,25 @@ export class InstructionService implements IInstructionService {
       throw new Error(`Failed to update instruction: ${e}`);
     }
   }
-  async deleteInstruction(id: number, projectId: number): Promise<void> {
+  async deleteInstruction(
+    id: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ): Promise<void> {
     const tx = await this.instructionRepository.transaction();
     try {
-      const instruction = await this.instructionRepository.findOneBy(
-        { id, projectId },
-        { tx },
-      );
+      const instruction =
+        await this.instructionRepository.findOneByIdWithRuntimeIdentity(
+          id,
+          runtimeIdentity,
+        );
       if (!instruction) {
         throw new Error('Instruction not found');
       }
       await this.instructionRepository.deleteOne(id, { tx });
-      await this.wrenAIAdaptor.deleteInstructions([id], instruction.projectId);
+      await this.wrenAIAdaptor.deleteInstructions({
+        ids: [id],
+        runtimeIdentity: toAskRuntimeIdentity(runtimeIdentity),
+      });
       await tx.commit();
     } catch (e: any) {
       await tx.rollback();
@@ -198,13 +254,7 @@ export class InstructionService implements IInstructionService {
   private pickGenerateInstructionInput(
     instruction: Instruction,
   ): GenerateInstructionInput {
-    return pick(instruction, [
-      'id',
-      'projectId',
-      'instruction',
-      'questions',
-      'isDefault',
-    ]);
+    return pick(instruction, ['id', 'instruction', 'questions', 'isDefault']);
   }
 
   private validateInstructionInput(input: InstructionInput): void {

@@ -1,9 +1,12 @@
+import { useCallback } from 'react';
 import { Button, Form, Input, Modal, Typography } from 'antd';
 import InfoCircleOutlined from '@ant-design/icons/InfoCircleOutlined';
 import { ModalAction } from '@/hooks/useModalAction';
+import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
+import { handleFormSubmitError } from '@/utils/errorHandler';
 import { createViewNameValidator } from '@/utils/validator';
+import { validateViewName } from '@/utils/viewRest';
 import SQLCodeBlock from '@/components/code/SQLCodeBlock';
-import { useValidateViewMutation } from '@/apollo/client/graphql/view.generated';
 
 const { Text } = Typography;
 
@@ -16,14 +19,22 @@ type Props = ModalAction<{ sql: string }> & {
 export default function SaveAsViewModal(props: Props) {
   const { visible, loading, onSubmit, onClose, defaultValue, payload } = props;
   const [form] = Form.useForm();
-  const [validateViewMutation] = useValidateViewMutation({
-    fetchPolicy: 'no-cache',
-  });
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
+  const validateViewNameRequest = useCallback(
+    (name: string) =>
+      validateViewName(runtimeScopeNavigation.selector, {
+        name,
+      }),
+    [runtimeScopeNavigation.selector],
+  );
 
   const submit = () => {
     form
       .validateFields()
       .then(async (values) => {
+        if (!onSubmit) {
+          return;
+        }
         await onSubmit({
           responseId: defaultValue.responseId,
           ...payload,
@@ -31,14 +42,16 @@ export default function SaveAsViewModal(props: Props) {
         });
         onClose();
       })
-      .catch(console.error);
+      .catch((error) => {
+        handleFormSubmitError(error, '保存视图失败，请稍后重试。');
+      });
   };
 
   const sql = defaultValue ? defaultValue.sql : '';
 
   return (
     <Modal
-      title="Save as View"
+      title="保存为视图"
       centered
       closable
       destroyOnClose
@@ -55,14 +68,13 @@ export default function SaveAsViewModal(props: Props) {
           >
             <InfoCircleOutlined className="mr-2 text-sm gray-6" />
             <Text type="secondary" className="text-sm gray-6 text-left">
-              After saving, make sure you go to "Modeling Page" to deploy all
-              saved views.
+              保存后，请前往“建模页”统一部署所有已保存视图。
             </Text>
           </div>
           <div>
-            <Button onClick={onClose}>Cancel</Button>
+            <Button onClick={onClose}>取消</Button>
             <Button type="primary" onClick={submit} loading={loading}>
-              Save
+              保存
             </Button>
           </div>
         </div>
@@ -70,19 +82,19 @@ export default function SaveAsViewModal(props: Props) {
     >
       <Form form={form} preserve={false} layout="vertical">
         <Form.Item
-          label="Name"
+          label="名称"
           name="name"
           required
           rules={[
             {
               required: true,
-              validator: createViewNameValidator(validateViewMutation),
+              validator: createViewNameValidator(validateViewNameRequest),
             },
           ]}
         >
           <Input />
         </Form.Item>
-        <Form.Item label="SQL Statement">
+        <Form.Item label="SQL 语句">
           <SQLCodeBlock code={sql} showLineNumbers maxHeight="300" />
         </Form.Item>
       </Form>

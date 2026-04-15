@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List, Literal, Optional
+from typing import Dict, List, Literal, Optional
 
 from cachetools import TTLCache
 from langfuse.decorators import observe
@@ -9,12 +9,6 @@ from src.core import (
     DeepAgentsAskOrchestrator,
     LegacyAskTool,
     MixedAnswerComposer,
-    SkillActorClaims,
-    SkillConnector,
-    SkillExecutionResult,
-    SkillRunnerClient,
-    SkillRunnerLimits,
-    SkillSecret,
     ToolRouter,
 )
 from src.core.pipeline import BasicPipeline
@@ -24,7 +18,6 @@ from src.web.v1.services import BaseRequest, SSEEvent
 logger = logging.getLogger("wren-ai-service")
 AskPath = Literal[
     "historical",
-    "skill",
     "sql_pairs",
     "instructions",
     "nl2sql",
@@ -48,24 +41,11 @@ class AskSkillCandidate(BaseModel):
         default=None,
         validation_alias=AliasChoices("skill_name", "skillName"),
     )
-    runtime_kind: str = Field(
-        default="isolated_python",
-        validation_alias=AliasChoices("runtime_kind", "runtimeKind"),
+    instruction: Optional[str] = None
+    execution_mode: Literal["inject_only"] = Field(
+        default="inject_only",
+        validation_alias=AliasChoices("execution_mode", "executionMode"),
     )
-    source_type: str = Field(
-        default="inline",
-        validation_alias=AliasChoices("source_type", "sourceType"),
-    )
-    source_ref: Optional[str] = Field(
-        default=None,
-        validation_alias=AliasChoices("source_ref", "sourceRef"),
-    )
-    entrypoint: Optional[str] = None
-    skill_config: dict[str, Any] = Field(
-        default_factory=dict,
-        validation_alias=AliasChoices("skill_config", "skillConfig"),
-    )
-    limits: SkillRunnerLimits = Field(default_factory=SkillRunnerLimits)
 
 
 # POST /v1/asks
@@ -80,16 +60,6 @@ class AskRequest(BaseRequest):
     use_dry_plan: bool = False
     allow_dry_plan_fallback: bool = True
     custom_instruction: Optional[str] = None
-    actor_claims: Optional[SkillActorClaims] = Field(
-        default=None,
-        validation_alias=AliasChoices("actor_claims", "actorClaims"),
-    )
-    connectors: list[SkillConnector] = Field(default_factory=list)
-    secrets: list[SkillSecret] = Field(default_factory=list)
-    skill_config: dict[str, Any] = Field(
-        default_factory=dict,
-        validation_alias=AliasChoices("skill_config", "skillConfig"),
-    )
     skills: list[AskSkillCandidate] = Field(default_factory=list)
 
 
@@ -190,10 +160,9 @@ class _AskResultResponse(BaseModel):
     rephrased_question: Optional[str] = None
     intent_reasoning: Optional[str] = None
     sql_generation_reasoning: Optional[str] = None
-    type: Optional[Literal["GENERAL", "TEXT_TO_SQL", "SKILL"]] = None
+    type: Optional[Literal["GENERAL", "TEXT_TO_SQL"]] = None
     retrieved_tables: Optional[List[str]] = None
     response: Optional[List[AskResult]] = None
-    skill_result: Optional[SkillExecutionResult] = None
     ask_path: Optional[AskPath] = None
     invalid_sql: Optional[str] = None
     error: Optional[AskError] = None
@@ -226,7 +195,7 @@ class AskService:
         enable_column_pruning: bool = False,
         max_sql_correction_retries: int = 3,
         max_histories: int = 5,
-        skill_runner_client: Optional[SkillRunnerClient] = None,
+        ask_shadow_compare_sample_rate: float = 0.1,
         deepagents_orchestrator: Optional[DeepAgentsAskOrchestrator] = None,
         legacy_ask_tool: Optional[LegacyAskTool] = None,
         mixed_answer_composer: Optional[MixedAnswerComposer] = None,
@@ -243,8 +212,15 @@ class AskService:
         self._max_histories = max_histories
         self._deepagents_orchestrator = deepagents_orchestrator or (
             DeepAgentsAskOrchestrator(
-                skill_runner_client=skill_runner_client,
+                pipelines=pipelines,
                 mixed_answer_composer=mixed_answer_composer,
+                allow_intent_classification=allow_intent_classification,
+                allow_sql_generation_reasoning=allow_sql_generation_reasoning,
+                allow_sql_functions_retrieval=allow_sql_functions_retrieval,
+                allow_sql_diagnosis=allow_sql_diagnosis,
+                allow_sql_knowledge_retrieval=allow_sql_knowledge_retrieval,
+                enable_column_pruning=enable_column_pruning,
+                max_sql_correction_retries=max_sql_correction_retries,
             )
         )
         self._legacy_ask_tool = legacy_ask_tool or LegacyAskTool(
@@ -262,6 +238,7 @@ class AskService:
             legacy_ask_tool=self._legacy_ask_tool,
             deepagents_orchestrator=self._deepagents_orchestrator,
             ask_shadow_compare_enabled=ask_shadow_compare_enabled,
+            ask_shadow_compare_sample_rate=ask_shadow_compare_sample_rate,
         )
 
     def _is_stopped(self, query_id: str, container: dict):
@@ -323,6 +300,24 @@ class AskService:
             shadow_compare.reason,
         )
 
+    def _record_shadow_compare_for_query(
+        self,
+        query_id: str,
+        shadow_compare_payload: dict,
+    ) -> None:
+        validated_shadow_compare = AskShadowCompare.model_validate(
+            shadow_compare_payload
+        )
+        self._record_shadow_compare(validated_shadow_compare)
+
+        cached_result = self._ask_results.get(query_id)
+        if cached_result is None:
+            return
+
+        self._ask_results[query_id] = cached_result.model_copy(
+            update={"shadow_compare": validated_shadow_compare}
+        )
+
     def get_shadow_compare_stats(self) -> AskShadowCompareStats:
         return self._shadow_compare_stats.model_copy(deep=True)
 
@@ -380,7 +375,10 @@ class AskService:
         histories = ask_request.histories[: self._max_histories][
             ::-1
         ]  # reverse the order of histories
-        runtime_scope_id = ask_request.resolve_project_id(
+        runtime_scope_id = ask_request.resolve_runtime_scope_id(
+            fallback_id=ask_request.mdl_hash,
+        )
+        retrieval_scope_ids = ask_request.resolve_retrieval_scope_ids(
             fallback_id=ask_request.mdl_hash,
         )
         is_followup = bool(histories)
@@ -391,28 +389,24 @@ class AskService:
             trace_id=trace_id,
             histories=histories,
             runtime_scope_id=runtime_scope_id,
+            retrieval_scope_id=",".join(retrieval_scope_ids)
+            if retrieval_scope_ids
+            else None,
             is_followup=is_followup,
             is_stopped=lambda: self._is_stopped(query_id, self._ask_results),
             set_result=lambda **payload: self._set_ask_result(query_id, **payload),
             build_ask_result=lambda **payload: AskResult(**payload),
             build_ask_error=lambda **payload: AskError(**payload),
+            on_shadow_compare=lambda shadow_compare: self._record_shadow_compare_for_query(
+                query_id, shadow_compare
+            ),
         )
         metadata = result.get("metadata", {})
-        shadow_compare = metadata.get("shadow_compare")
         ask_path = metadata.get("ask_path")
-        validated_shadow_compare = None
-        if shadow_compare:
-            validated_shadow_compare = AskShadowCompare.model_validate(shadow_compare)
-            self._record_shadow_compare(validated_shadow_compare)
         cached_result = self._ask_results.get(query_id)
-        if cached_result is not None and (validated_shadow_compare or ask_path):
-            updates = {}
-            if validated_shadow_compare:
-                updates["shadow_compare"] = validated_shadow_compare
-            if ask_path:
-                updates["ask_path"] = ask_path
+        if cached_result is not None and ask_path:
             self._ask_results[query_id] = cached_result.model_copy(
-                update=updates
+                update={"ask_path": ask_path}
             )
         return result
 

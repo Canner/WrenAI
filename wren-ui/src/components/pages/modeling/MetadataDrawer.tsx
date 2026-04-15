@@ -14,13 +14,23 @@ type Metadata = {
 } & ModelMetadataProps &
   ViewMetadataProps;
 
-type Props = DrawerAction<Metadata> & { onEditClick: (value?: any) => void };
+type Props = DrawerAction<Metadata> & {
+  onEditClick: (value?: any) => void;
+  readOnly?: boolean;
+};
 
 export default function MetadataDrawer(props: Props) {
-  const { visible, defaultValue, onClose, onEditClick } = props;
+  const {
+    visible,
+    defaultValue,
+    onClose,
+    onEditClick,
+    readOnly = false,
+  } = props;
   const { displayName, nodeType = NODE_TYPE.MODEL } = defaultValue || {};
   const isModel = nodeType === NODE_TYPE.MODEL;
   const isView = nodeType === NODE_TYPE.VIEW;
+  const metadata = defaultValue || undefined;
 
   return (
     <Drawer
@@ -34,13 +44,18 @@ export default function MetadataDrawer(props: Props) {
         <Button
           icon={<EditOutlined />}
           onClick={() => onEditClick(defaultValue)}
+          disabled={readOnly}
         >
-          Edit
+          编辑元数据
         </Button>
       }
     >
-      {isModel && <ModelMetadata {...defaultValue} />}
-      {isView && <ViewMetadata {...defaultValue} />}
+      {isModel && metadata ? (
+        <ModelMetadata {...metadata} readOnly={readOnly} />
+      ) : null}
+      {isView && metadata ? (
+        <ViewMetadata {...metadata} readOnly={readOnly} />
+      ) : null}
     </Drawer>
   );
 }

@@ -25,48 +25,52 @@ import {
   useTriggerDataSourceDetectionMutation,
 } from '@/apollo/client/graphql/dataSource.generated';
 import { DIAGRAM } from '@/apollo/client/graphql/diagram';
-import { LIST_MODELS } from '@/apollo/client/graphql/model';
 import { getRelativeTime } from '@/utils/time';
 
 interface Props {
   [key: string]: any;
   models: DiagramModel[];
   onOpenModelDrawer: () => void;
+  readOnly?: boolean;
 }
 
-const getHasSchemaChange = (schemaChange: SchemaChange) => {
+const getHasSchemaChange = (schemaChange?: SchemaChange | null) => {
   return [
     schemaChange?.deletedTables,
     schemaChange?.deletedColumns,
     schemaChange?.modifiedColumns,
-  ].some((changes) => !!changes);
+  ].some((changes) => (changes?.length || 0) > 0);
 };
 
 export default function ModelTree(props: Props) {
-  const { onOpenModelDrawer, models } = props;
+  const { onOpenModelDrawer, models, readOnly = false } = props;
 
   const schemaChangeModal = useModalAction();
   const [triggerDataSourceDetection, { loading: isDetecting }] =
     useTriggerDataSourceDetectionMutation({
-      onError: (error) => console.error(error),
+      onError: (error) => {
+        message.error(error.message || '检测结构变更失败，请稍后重试。');
+      },
       onCompleted: async (data) => {
         if (data.triggerDataSourceDetection) {
-          message.warning('Schema change detected.');
+          message.warning('检测到结构变更。');
         } else {
-          message.success('There is no schema change.');
+          message.success('当前没有结构变更。');
         }
         await refetchSchemaChange();
       },
     });
   const [resolveSchemaChange, { loading: isResolving }] =
     useResolveSchemaChangeMutation({
-      onError: (error) => console.error(error),
+      onError: (error) => {
+        message.error(error.message || '修复结构变更失败，请稍后重试。');
+      },
       onCompleted: async (_, options) => {
-        const { type } = options.variables?.where;
+        const type = options?.variables?.where?.type;
         if (type === SchemaChangeType.DELETED_TABLES) {
-          message.success('Source table deleted resolved successfully.');
+          message.success('已完成源表删除影响修复。');
         } else if (type === SchemaChangeType.DELETED_COLUMNS) {
-          message.success('Source column deleted resolved successfully.');
+          message.success('已完成源字段删除影响修复。');
         }
 
         const { data } = await refetchSchemaChange();
@@ -75,7 +79,7 @@ export default function ModelTree(props: Props) {
           schemaChangeModal.closeModal();
         }
       },
-      refetchQueries: [{ query: DIAGRAM }, { query: LIST_MODELS }],
+      refetchQueries: [{ query: DIAGRAM }],
     });
   const { data: schemaChangeData, refetch: refetchSchemaChange } =
     useSchemaChangeQuery({
@@ -93,23 +97,28 @@ export default function ModelTree(props: Props) {
   };
 
   const getModelGroupNode = createTreeGroupNode({
-    groupName: 'Models',
+    groupName: '数据模型',
     groupKey: 'models',
+    emptyLabel: '暂无数据模型',
     actions: [
       {
         key: 'trigger-schema-detection',
-        disabled: isDetecting,
         icon: () => (
           <ReloadOutlined
             spin={isDetecting}
             title={
               schemaChangeData?.schemaChange.lastSchemaChangeTime
-                ? `Last refresh ${getRelativeTime(schemaChangeData?.schemaChange.lastSchemaChangeTime)}`
+                ? `上次检测：${getRelativeTime(schemaChangeData?.schemaChange.lastSchemaChangeTime)}`
                 : ''
             }
-            onClick={() => triggerDataSourceDetection()}
+            onClick={() => {
+              if (!readOnly) {
+                triggerDataSourceDetection();
+              }
+            }}
           />
         ),
+        disabled: isDetecting || readOnly,
       },
       {
         key: 'add-model',
@@ -119,9 +128,10 @@ export default function ModelTree(props: Props) {
             data-testid="add-model"
             icon={<PlusOutlined />}
             size="small"
+            disabled={readOnly}
             onClick={() => onOpenModelDrawer()}
           >
-            New
+            新增
           </GroupActionButton>
         ),
       },
@@ -136,21 +146,20 @@ export default function ModelTree(props: Props) {
         quotaUsage: models.length,
         appendSlot: hasSchemaChange && (
           <span className="adm-actionIcon mx-2" onClick={onOpenSchemaChange}>
-            <WarningOutlined
-              className="orange-5"
-              title="Review schema change impacts"
-            />
+            <WarningOutlined className="orange-5" title="查看结构变更影响" />
           </span>
         ),
         children: models.map((model) => {
           const nodeKey = model.id;
 
-          const children = [
-            ...getColumnNode(nodeKey, [
-              ...model.fields,
-              ...model.calculatedFields,
-            ]),
-          ];
+          const modelFields = [
+            ...model.fields,
+            ...model.calculatedFields,
+          ].filter(
+            (field): field is NonNullable<(typeof model.fields)[number]> =>
+              field != null,
+          );
+          const children = [...getColumnNode(nodeKey, modelFields)];
 
           return {
             children,
@@ -165,7 +174,7 @@ export default function ModelTree(props: Props) {
         }),
       }),
     );
-  }, [models, hasSchemaChange, schemaChangeData, isDetecting]);
+  }, [models, hasSchemaChange, schemaChangeData, isDetecting, readOnly]);
 
   return (
     <>

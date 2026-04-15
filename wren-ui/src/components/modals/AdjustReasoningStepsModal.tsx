@@ -1,13 +1,14 @@
 import { useEffect, useMemo } from 'react';
 import { keyBy } from 'lodash';
 import styled from 'styled-components';
-import { Form, Modal, Select, Tag } from 'antd';
+import { Form, Modal, Select, Tag, type SelectProps } from 'antd';
 import QuestionCircleOutlined from '@ant-design/icons/QuestionCircleOutlined';
 import { ERROR_TEXTS } from '@/utils/error';
+import { handleFormSubmitError } from '@/utils/errorHandler';
 import useAutoComplete, { convertMention } from '@/hooks/useAutoComplete';
 import { ModalAction } from '@/hooks/useModalAction';
 import MarkdownEditor from '@/components/editor/MarkdownEditor';
-import { useListModelsQuery } from '@/apollo/client/graphql/model.generated';
+import useModelList from '@/hooks/useModelList';
 
 const MultiSelect = styled(Select)`
   .ant-select-selector {
@@ -41,22 +42,21 @@ export default function AdjustReasoningStepsModal(props: Props) {
     includeColumns: true,
     skip: !visible,
   });
-  const listModelsResult = useListModelsQuery({ skip: !visible });
-  const modelNameMap = keyBy(
-    listModelsResult.data?.listModels,
-    'referenceName',
-  );
+  const { data: modelListData } = useModelList({
+    enabled: visible,
+  });
+  const listModels = modelListData || [];
+  const modelNameMap = keyBy(listModels, 'referenceName');
   const modelOptions = useMemo(() => {
-    return listModelsResult.data?.listModels.map((model) => ({
+    return listModels.map((model) => ({
       label: model.displayName,
       value: model.referenceName,
     }));
-  }, [listModelsResult.data?.listModels]);
+  }, [listModels]);
 
   useEffect(() => {
     if (!visible) return;
-    const listModels = listModelsResult.data?.listModels || [];
-    const retrievedTables = listModels.reduce((result, model) => {
+    const retrievedTables = listModels.reduce<string[]>((result, model) => {
       if (defaultValue?.retrievedTables.includes(model.referenceName)) {
         result.push(model.referenceName);
       }
@@ -66,11 +66,17 @@ export default function AdjustReasoningStepsModal(props: Props) {
       tables: retrievedTables,
       sqlGenerationReasoning: defaultValue?.sqlGenerationReasoning,
     });
-  }, [form, defaultValue, visible, listModelsResult.data?.listModels]);
+  }, [form, defaultValue, visible, listModels]);
 
-  const tagRender = (props) => {
+  const tagRender: SelectProps['tagRender'] = (props) => {
+    if (!props) {
+      return <span />;
+    }
     const { value, closable, onClose } = props;
-    const model = modelNameMap[value];
+    const model = modelNameMap[value as string];
+    if (!model) {
+      return <span />;
+    }
     return (
       <Tag
         onMouseDown={(e) => e.stopPropagation()}
@@ -102,21 +108,27 @@ export default function AdjustReasoningStepsModal(props: Props) {
     form
       .validateFields()
       .then(async (values) => {
+        if (!defaultValue || !onSubmit) {
+          return;
+        }
         await onSubmit({
           responseId: defaultValue.responseId,
           data: values,
         });
         onClose();
       })
-      .catch(console.error);
+      .catch((error) => {
+        handleFormSubmitError(error, '调整步骤失败，请稍后重试。');
+      });
   };
 
   return (
     <Modal
-      title="Adjust steps"
+      title="调整步骤"
       width={640}
       visible={visible}
-      okText="Regenerate answer"
+      okText="重新生成回答"
+      cancelText="取消"
       onOk={submit}
       onCancel={onClose}
       confirmLoading={loading}
@@ -127,7 +139,7 @@ export default function AdjustReasoningStepsModal(props: Props) {
     >
       <Form form={form} preserve={false} layout="vertical">
         <Form.Item
-          label="Selected models"
+          label="已选模型"
           name="tables"
           required={false}
           rules={[
@@ -138,33 +150,30 @@ export default function AdjustReasoningStepsModal(props: Props) {
           ]}
           extra={
             <div className="text-sm gray-6 mt-1">
-              Select the tables needed to answer your question.{' '}
-              <span className="gray-7">
-                Tables not selected won't be used in SQL generation.
-              </span>
+              选择回答当前问题所需的数据模型。{' '}
+              <span className="gray-7">未选中的模型不会参与 SQL 生成。</span>
             </div>
           }
         >
           <MultiSelect
             mode="multiple"
-            placeholder="Select models"
+            placeholder="请选择模型"
             options={modelOptions}
             tagRender={tagRender}
           />
         </Form.Item>
         <Form.Item
-          label="Reasoning steps"
+          label="推理步骤"
           className="pb-0"
           extra={
             <div className="text-sm gray-6 mt-1">
               <QuestionCircleOutlined className="mr-1" />
-              Protip: Use @ to choose model in the textarea.
+              提示：可在文本框中输入 @ 来插入模型。
             </div>
           }
         >
           <div className="text-sm gray-6 mb-1">
-            Edit the reasoning logic below. Each step should build toward
-            answering the question accurately.
+            编辑下面的分析逻辑，让每一步都更贴近问题目标并帮助生成更准确的回答。
           </div>
           <Form.Item
             noStyle

@@ -5,12 +5,8 @@ export interface IConfig {
   otherServiceUsingDocker: boolean;
 
   // database
-  dbType: string;
-  // pg
   pgUrl?: string;
   debug?: boolean;
-  // sqlite
-  sqliteFile?: string;
 
   persistCredentialDir?: string;
 
@@ -24,6 +20,18 @@ export interface IConfig {
   // ibis server
   experimentalEngineRustVersion?: boolean;
   ibisServerEndpoint: string;
+
+  // trino federation runtime
+  trinoCatalogDir?: string;
+  trinoCatalogManagement?: 'static' | 'dynamic';
+  trinoCatalogManagementHost?: string;
+  trinoCatalogManagementPort?: number;
+  trinoCatalogManagementSsl?: boolean;
+  trinoRuntimeHost?: string;
+  trinoRuntimePort?: number;
+  trinoRuntimeUser?: string;
+  trinoRuntimePassword?: string;
+  trinoRuntimeSsl?: boolean;
 
   // encryption
   encryptionPassword: string;
@@ -46,6 +54,9 @@ export interface IConfig {
   projectRecommendationQuestionsMaxQuestions?: number;
   threadRecommendationQuestionMaxCategories?: number;
   threadRecommendationQuestionsMaxQuestions?: number;
+
+  // background tracker scope
+  backgroundTrackerWorkspaceId?: string;
 }
 
 const defaultConfig = {
@@ -53,14 +64,8 @@ const defaultConfig = {
   otherServiceUsingDocker: false,
 
   // database
-  dbType: 'sqlite',
-
-  // pg
-  pgUrl: 'postgres://postgres:postgres@localhost:5432/admin_ui',
+  pgUrl: 'postgres://postgres:postgres@127.0.0.1:9432/wrenai',
   debug: false,
-
-  // sqlite
-  sqliteFile: './db.sqlite3',
 
   persistCredentialDir: `${process.cwd()}/.tmp`,
 
@@ -68,11 +73,23 @@ const defaultConfig = {
   wrenEngineEndpoint: 'http://localhost:8080',
 
   // wren AI
-  wrenAIEndpoint: 'http://localhost:5555',
+  wrenAIEndpoint: 'http://127.0.0.1:5555',
 
   // ibis server
   experimentalEngineRustVersion: true,
   ibisServerEndpoint: 'http://127.0.0.1:8000',
+
+  // trino federation runtime
+  trinoCatalogDir: `${process.cwd()}/.trino/catalog`,
+  trinoCatalogManagement: 'static' as const,
+  trinoCatalogManagementHost: '127.0.0.1',
+  trinoCatalogManagementPort: 8081,
+  trinoCatalogManagementSsl: false,
+  trinoRuntimeHost: '127.0.0.1',
+  trinoRuntimePort: 8081,
+  trinoRuntimeUser: 'wrenai',
+  trinoRuntimePassword: '',
+  trinoRuntimeSsl: false,
 
   // encryption
   encryptionPassword: 'sementic',
@@ -84,12 +101,8 @@ const config = {
   otherServiceUsingDocker: process.env.OTHER_SERVICE_USING_DOCKER === 'true',
 
   // database
-  dbType: process.env.DB_TYPE,
-  // pg
   pgUrl: process.env.PG_URL,
   debug: process.env.DEBUG === 'true',
-  // sqlite
-  sqliteFile: process.env.SQLITE_FILE,
 
   persistCredentialDir: (() => {
     if (
@@ -112,6 +125,32 @@ const config = {
   experimentalEngineRustVersion:
     process.env.EXPERIMENTAL_ENGINE_RUST_VERSION === 'true',
   ibisServerEndpoint: process.env.IBIS_SERVER_ENDPOINT,
+
+  // trino federation runtime
+  trinoCatalogDir:
+    process.env.TRINO_CATALOG_DIR || process.env.NEXT_PUBLIC_TRINO_CATALOG_DIR,
+  trinoCatalogManagement:
+    process.env.TRINO_CATALOG_MANAGEMENT?.toLowerCase() === 'dynamic'
+      ? 'dynamic'
+      : process.env.TRINO_CATALOG_MANAGEMENT?.toLowerCase() === 'static'
+        ? 'static'
+        : undefined,
+  trinoCatalogManagementHost: process.env.TRINO_CATALOG_MANAGEMENT_HOST,
+  trinoCatalogManagementPort: process.env.TRINO_CATALOG_MANAGEMENT_PORT
+    ? parseInt(process.env.TRINO_CATALOG_MANAGEMENT_PORT)
+    : undefined,
+  trinoCatalogManagementSsl:
+    process.env.TRINO_CATALOG_MANAGEMENT_SSL &&
+    process.env.TRINO_CATALOG_MANAGEMENT_SSL.toLowerCase() === 'true',
+  trinoRuntimeHost: process.env.TRINO_RUNTIME_HOST,
+  trinoRuntimePort: process.env.TRINO_RUNTIME_PORT
+    ? parseInt(process.env.TRINO_RUNTIME_PORT)
+    : undefined,
+  trinoRuntimeUser: process.env.TRINO_RUNTIME_USER,
+  trinoRuntimePassword: process.env.TRINO_RUNTIME_PASSWORD,
+  trinoRuntimeSsl:
+    process.env.TRINO_RUNTIME_SSL &&
+    process.env.TRINO_RUNTIME_SSL.toLowerCase() === 'true',
 
   // encryption
   encryptionPassword: process.env.ENCRYPTION_PASSWORD,
@@ -148,6 +187,10 @@ const config = {
     .THREAD_RECOMMENDATION_QUESTIONS_MAX_QUESTIONS
     ? parseInt(process.env.THREAD_RECOMMENDATION_QUESTIONS_MAX_QUESTIONS)
     : 1,
+
+  // background tracker scope
+  backgroundTrackerWorkspaceId:
+    process.env.BACKGROUND_TRACKER_WORKSPACE_ID || undefined,
 };
 
 export function getConfig(): IConfig {

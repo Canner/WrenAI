@@ -3,17 +3,22 @@ import { DataSourceName } from '../../types';
 import { QueryService } from '../queryService';
 
 describe('QueryService', () => {
-  let mockIbisAdaptor;
-  let mockWrenEngineAdaptor;
-  let mockTelemetry;
-  let queryService;
+  let mockIbisAdaptor: any;
+  let mockWrenEngineAdaptor: any;
+  let mockTelemetry: any;
+  let queryService: any;
 
   beforeEach(() => {
     mockIbisAdaptor = {
       query: jest.fn(),
       dryRun: jest.fn(),
     };
-    mockWrenEngineAdaptor = {};
+    mockWrenEngineAdaptor = {
+      prepareDuckDB: jest.fn().mockResolvedValue(undefined),
+      patchConfig: jest.fn().mockResolvedValue(undefined),
+      dryRun: jest.fn().mockResolvedValue([]),
+      previewData: jest.fn().mockResolvedValue({ data: [], columns: [] }),
+    };
     mockTelemetry = new MockTelemetry();
 
     queryService = new QueryService({
@@ -71,7 +76,7 @@ describe('QueryService', () => {
         manifest: {},
         dryRun: true,
       });
-    } catch (e) {
+    } catch (e: any) {
       expect(e.message).toEqual('Error message');
       expect(e.extensions.other.correlationId).toEqual('123');
       expect(e.extensions.other.processTime).toEqual('1s');
@@ -160,6 +165,92 @@ describe('QueryService', () => {
       actionSuccess: false,
       service: undefined,
     });
+  });
+
+  it('prepares duckdb runtime before dryRun preview', async () => {
+    await queryService.preview('SELECT * FROM test', {
+      project: {
+        type: DataSourceName.DUCKDB,
+        connectionInfo: {
+          initSql: 'CREATE TABLE test AS SELECT 1 AS id;',
+          extensions: ['httpfs'],
+          configurations: { timezone: 'UTC' },
+        },
+      },
+      manifest: {},
+      dryRun: true,
+    });
+
+    expect(mockWrenEngineAdaptor.prepareDuckDB).toHaveBeenCalledWith({
+      initSql: 'INSTALL httpfs;\nCREATE TABLE test AS SELECT 1 AS id;',
+      sessionProps: { timezone: 'UTC' },
+    });
+    expect(mockWrenEngineAdaptor.patchConfig).toHaveBeenCalledWith({
+      'wren.datasource.type': 'duckdb',
+    });
+    expect(mockWrenEngineAdaptor.dryRun).toHaveBeenCalledWith(
+      'SELECT * FROM test',
+      {
+        manifest: {},
+        limit: undefined,
+      },
+    );
+  });
+
+  it('reuses duckdb runtime when connection settings stay the same', async () => {
+    const project = {
+      type: DataSourceName.DUCKDB,
+      connectionInfo: {
+        initSql: 'CREATE TABLE test AS SELECT 1 AS id;',
+        extensions: [],
+        configurations: {},
+      },
+    };
+
+    await queryService.preview('SELECT * FROM test', {
+      project,
+      manifest: {},
+      dryRun: true,
+    });
+    await queryService.preview('SELECT * FROM test LIMIT 10', {
+      project,
+      manifest: {},
+      dryRun: true,
+    });
+
+    expect(mockWrenEngineAdaptor.prepareDuckDB).toHaveBeenCalledTimes(1);
+    expect(mockWrenEngineAdaptor.patchConfig).toHaveBeenCalledTimes(1);
+    expect(mockWrenEngineAdaptor.dryRun).toHaveBeenCalledTimes(2);
+  });
+
+  it('re-prepares duckdb runtime after switching to a different initSql', async () => {
+    await queryService.preview('SELECT 1', {
+      project: {
+        type: DataSourceName.DUCKDB,
+        connectionInfo: {
+          initSql: 'CREATE TABLE test_a AS SELECT 1 AS id;',
+          extensions: [],
+          configurations: {},
+        },
+      },
+      manifest: {},
+      dryRun: true,
+    });
+    await queryService.preview('SELECT 2', {
+      project: {
+        type: DataSourceName.DUCKDB,
+        connectionInfo: {
+          initSql: 'CREATE TABLE test_b AS SELECT 2 AS id;',
+          extensions: [],
+          configurations: {},
+        },
+      },
+      manifest: {},
+      dryRun: true,
+    });
+
+    expect(mockWrenEngineAdaptor.prepareDuckDB).toHaveBeenCalledTimes(2);
+    expect(mockWrenEngineAdaptor.patchConfig).toHaveBeenCalledTimes(2);
   });
 });
 

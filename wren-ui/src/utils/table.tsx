@@ -3,14 +3,31 @@ import moment from 'moment';
 import { Input, Button, Space, DatePicker, Divider } from 'antd';
 import SearchOutlined from '@ant-design/icons/SearchOutlined';
 import CalendarOutlined from '@ant-design/icons/CalendarOutlined';
+import { Key } from 'react';
 
-export const getColumnSearchProps = (props: {
+type FilterDropdownRenderProps = {
+  setSelectedKeys: (selectedKeys: Key[]) => void;
+  selectedKeys: Key[];
+  confirm: () => void;
+  clearFilters?: () => void;
+  visible?: boolean;
+};
+
+type SearchColumnProps = {
   dataIndex: string;
   placeholder?: string;
   onFilter?: (value: string, record: any) => boolean;
-  filteredValue?: any[];
-}) => ({
-  filterDropdown: (filters: any) => {
+  filteredValue?: string[];
+};
+
+type DateColumnProps = {
+  dataIndex: string;
+  onFilter?: (value: string, record: any) => boolean;
+  filteredValue?: [string, string] | null;
+};
+
+export const getColumnSearchProps = (props: SearchColumnProps) => ({
+  filterDropdown: (filters: FilterDropdownRenderProps) => {
     return <SearchFilter {...filters} {...props} />;
   },
   filterIcon: (filtered: boolean) => (
@@ -21,12 +38,8 @@ export const getColumnSearchProps = (props: {
   filteredValue: props.filteredValue,
 });
 
-export const getColumnDateFilterProps = (props: {
-  dataIndex: string;
-  onFilter?: (value: any, record: any) => boolean;
-  filteredValue?: [string, string] | null;
-}) => ({
-  filterDropdown: (filters) => {
+export const getColumnDateFilterProps = (props: DateColumnProps) => ({
+  filterDropdown: (filters: FilterDropdownRenderProps) => {
     return <DateFilter {...filters} {...props} />;
   },
   filterIcon: (filtered: boolean) => (
@@ -46,17 +59,17 @@ const SearchFilter = ({
   dataIndex,
   placeholder,
   filteredValue,
-}) => {
+}: FilterDropdownRenderProps & SearchColumnProps) => {
   useEffect(() => {
     if (!visible && selectedKeys.length === 0) confirm();
-  }, [visible]);
+  }, [confirm, selectedKeys.length, visible]);
   return (
     <>
       <Space className="p-2">
         <Input
           size="small"
-          placeholder={`Search ${placeholder || dataIndex}`}
-          value={selectedKeys[0]}
+          placeholder={`搜索${placeholder || dataIndex}`}
+          value={selectedKeys[0] as string | undefined}
           onChange={(e) =>
             setSelectedKeys(e.target.value ? [e.target.value] : [])
           }
@@ -68,14 +81,14 @@ const SearchFilter = ({
       <Space className="d-flex justify-end p-2">
         <Button
           type="link"
-          onClick={() => clearFilters()}
+          onClick={() => clearFilters?.()}
           size="small"
-          disabled={!filteredValue}
+          disabled={!filteredValue?.length}
         >
-          Reset
+          重置
         </Button>
         <Button type="primary" onClick={() => confirm()} size="small">
-          Search
+          搜索
         </Button>
       </Space>
     </>
@@ -89,22 +102,25 @@ const DateFilter = ({
   confirm,
   clearFilters,
   visible,
-}) => {
+}: FilterDropdownRenderProps & Pick<DateColumnProps, 'filteredValue'>) => {
   useEffect(() => {
     if (!visible && selectedKeys.length === 0) confirm();
-  }, [visible]);
+  }, [confirm, selectedKeys.length, visible]);
   return (
     <>
       <Space className="p-2">
         <DatePicker.RangePicker
-          placeholder={['Start Date', 'End Date']}
+          placeholder={['开始日期', '结束日期']}
           value={[
-            selectedKeys[0] ? moment(selectedKeys[0]) : null,
-            selectedKeys[1] ? moment(selectedKeys[1]) : null,
+            selectedKeys[0] ? moment(String(selectedKeys[0])) : null,
+            selectedKeys[1] ? moment(String(selectedKeys[1])) : null,
           ]}
           onChange={(dates) => {
             const values = dates
-              ? [dates[0]?.format('YYYY-MM-DD'), dates[1]?.format('YYYY-MM-DD')]
+              ? [
+                  dates[0]?.format('YYYY-MM-DD'),
+                  dates[1]?.format('YYYY-MM-DD'),
+                ].filter((value): value is string => Boolean(value))
               : [];
             setSelectedKeys(values);
           }}
@@ -115,14 +131,14 @@ const DateFilter = ({
       <Space className="d-flex justify-end p-2">
         <Button
           type="link"
-          onClick={() => clearFilters()}
+          onClick={() => clearFilters?.()}
           size="small"
-          disabled={!filteredValue}
+          disabled={!filteredValue?.length}
         >
-          Reset
+          重置
         </Button>
         <Button type="primary" onClick={() => confirm()} size="small">
-          OK
+          确定
         </Button>
       </Space>
     </>

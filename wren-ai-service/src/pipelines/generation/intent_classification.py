@@ -17,7 +17,7 @@ from src.pipelines.common import (
     build_runtime_scope_filters,
     build_table_ddl,
     clean_up_new_lines,
-    normalize_runtime_scope_id,
+    resolve_pipeline_runtime_scope_id,
 )
 from src.pipelines.generation.utils.sql import construct_instructions
 from src.utils import trace_cost
@@ -180,9 +180,8 @@ async def embedding(query: str, embedder: Any, histories: list[AskHistory]) -> d
 
 @observe(capture_input=False)
 async def table_retrieval(
-    embedding: dict, project_id: str, table_retriever: Any
+    embedding: dict, runtime_scope_id: str, table_retriever: Any
 ) -> dict:
-    runtime_scope_id = normalize_runtime_scope_id(project_id)
     filters = build_runtime_scope_filters(
         runtime_scope_id,
         conditions=[
@@ -198,9 +197,11 @@ async def table_retrieval(
 
 @observe(capture_input=False)
 async def dbschema_retrieval(
-    table_retrieval: dict, embedding: dict, project_id: str, dbschema_retriever: Any
+    table_retrieval: dict,
+    embedding: dict,
+    runtime_scope_id: str,
+    dbschema_retriever: Any,
 ) -> list[Document]:
-    runtime_scope_id = normalize_runtime_scope_id(project_id)
     tables = table_retrieval.get("documents", [])
     table_names = []
     for table in tables:
@@ -213,6 +214,9 @@ async def dbschema_retrieval(
         {"field": "name", "operator": "==", "value": table_name}
         for table_name in table_names
     ]
+
+    if not table_name_conditions:
+        return []
 
     filters = build_runtime_scope_filters(
         runtime_scope_id,
@@ -375,19 +379,22 @@ class IntentClassification(BasicPipeline):
     async def run(
         self,
         query: str,
-        project_id: Optional[str] = None,
+        runtime_scope_id: Optional[str] = None,
         histories: Optional[list[AskHistory]] = None,
         sql_samples: Optional[list[dict]] = None,
         instructions: Optional[list[dict]] = None,
         configuration: Configuration = Configuration(),
+        bridge_scope_id: Optional[str] = None,
     ):
         logger.info("Intent Classification pipeline is running...")
-        runtime_scope_id = normalize_runtime_scope_id(project_id)
+        runtime_scope_id = resolve_pipeline_runtime_scope_id(
+            runtime_scope_id, bridge_scope_id=bridge_scope_id
+        )
         return await self._pipe.execute(
             ["post_process"],
             inputs={
                 "query": query,
-                "project_id": runtime_scope_id or "",
+                "runtime_scope_id": runtime_scope_id or "",
                 "histories": histories or [],
                 "sql_samples": sql_samples or [],
                 "instructions": instructions or [],

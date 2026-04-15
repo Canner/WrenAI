@@ -25,9 +25,9 @@
 ################################
 
 import json
-import sqlite3
 
 import nltk
+from eval.metrics.spider.database import get_schema as get_db_schema
 
 nltk.download("punkt_tab")
 
@@ -112,20 +112,7 @@ def get_schema(db):
     :return: schema dict
     """
 
-    schema = {}
-    conn = sqlite3.connect(db)
-    cursor = conn.cursor()
-
-    # fetch table names
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-    tables = [str(table[0].lower()) for table in cursor.fetchall()]
-
-    # fetch table info
-    for table in tables:
-        cursor.execute("PRAGMA table_info({})".format(table))
-        schema[table] = [str(col[1].lower()) for col in cursor.fetchall()]
-
-    return schema
+    return get_db_schema(db)
 
 
 def get_schema_from_json(fpath):

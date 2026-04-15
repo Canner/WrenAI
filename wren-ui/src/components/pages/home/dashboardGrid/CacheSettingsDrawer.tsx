@@ -18,6 +18,7 @@ import {
 import { browserTimeZone } from '@/utils/time';
 import { DrawerAction } from '@/hooks/useDrawerAction';
 import { ERROR_TEXTS } from '@/utils/error';
+import { handleFormSubmitError } from '@/utils/errorHandler';
 import { isValidCronLength, cronValidator } from '@/utils/validator';
 import { CacheScheduleDayEnum } from '@/apollo/client/graphql/__types__';
 
@@ -57,20 +58,26 @@ const DAY_OF_WEEK = [
 const getDayOfWeekText = (day: CacheScheduleDayEnum) => {
   return (
     {
-      [CacheScheduleDayEnum.MON]: 'Monday',
-      [CacheScheduleDayEnum.TUE]: 'Tuesday',
-      [CacheScheduleDayEnum.WED]: 'Wednesday',
-      [CacheScheduleDayEnum.THU]: 'Thursday',
-      [CacheScheduleDayEnum.FRI]: 'Friday',
-      [CacheScheduleDayEnum.SAT]: 'Saturday',
-      [CacheScheduleDayEnum.SUN]: 'Sunday',
+      [CacheScheduleDayEnum.MON]: '周一',
+      [CacheScheduleDayEnum.TUE]: '周二',
+      [CacheScheduleDayEnum.WED]: '周三',
+      [CacheScheduleDayEnum.THU]: '周四',
+      [CacheScheduleDayEnum.FRI]: '周五',
+      [CacheScheduleDayEnum.SAT]: '周六',
+      [CacheScheduleDayEnum.SUN]: '周日',
     }[day] || ''
   );
 };
 
 const getFrequencyText = (frequency: string) => {
-  if (frequency === FREQUENCY.NEVER) return 'Manual refresh only';
-  return capitalize(frequency);
+  if (frequency === FREQUENCY.NEVER) return '仅手动刷新';
+  return (
+    {
+      [FREQUENCY.DAILY]: '每天',
+      [FREQUENCY.WEEKLY]: '每周',
+      [FREQUENCY.CUSTOM]: '自定义',
+    }[frequency] || capitalize(frequency)
+  );
 };
 
 const getInitialSchedule = (frequency: string) => {
@@ -125,17 +132,17 @@ export const getScheduleText = (schedule: Schedule): string => {
   switch (frequency) {
     case FREQUENCY.DAILY: {
       const time = convertTime(schedule);
-      return `Cache refreshes daily at ${time}`;
+      return `缓存每天 ${time} 自动刷新`;
     }
     case FREQUENCY.WEEKLY: {
       const time = convertTime(schedule);
-      return `Cache refreshes every ${getDayOfWeekText(schedule.day as CacheScheduleDayEnum)} at ${time}`;
+      return `缓存每周${getDayOfWeekText(schedule.day as CacheScheduleDayEnum)} ${time} 自动刷新`;
     }
     case FREQUENCY.CUSTOM: {
-      return `Cache refreshes on custom schedule`;
+      return '缓存按自定义计划刷新';
     }
     case FREQUENCY.NEVER: {
-      return 'Cache refresh: manual only';
+      return '缓存仅支持手动刷新';
     }
     default: {
       return '';
@@ -223,6 +230,9 @@ export default function CacheSettingsDrawer(props: Props) {
     form
       .validateFields()
       .then(async (values) => {
+        if (!onSubmit) {
+          return;
+        }
         const { schedule } = values;
         await onSubmit({
           ...values,
@@ -239,13 +249,15 @@ export default function CacheSettingsDrawer(props: Props) {
         });
         onClose();
       })
-      .catch(console.error);
+      .catch((error) => {
+        handleFormSubmitError(error, '保存缓存设置失败，请稍后重试。');
+      });
   };
 
   return (
     <Drawer
       visible={visible}
-      title="Cache settings"
+      title="缓存设置"
       width={410}
       closable
       destroyOnClose
@@ -255,7 +267,7 @@ export default function CacheSettingsDrawer(props: Props) {
       footer={
         <Space className="d-flex justify-end">
           <Button onClick={onClose} disabled={loading}>
-            Cancel
+            取消
           </Button>
           <Button
             type="primary"
@@ -263,17 +275,17 @@ export default function CacheSettingsDrawer(props: Props) {
             loading={loading}
             disabled={loading}
           >
-            Submit
+            保存
           </Button>
         </Space>
       }
     >
       <Form form={form} layout="vertical">
         <Form.Item
-          label="Enable caching"
+          label="启用缓存"
           name="cacheEnabled"
           valuePropName="checked"
-          extra="Enable caching to speed up dashboard loading by reusing recent results. Choose a refresh schedule that fits your needs below."
+          extra="启用缓存后会复用最近一次结果，加快仪表板加载速度。你可以在下方配置合适的刷新计划。"
         >
           <Switch />
         </Form.Item>
@@ -300,13 +312,13 @@ function Schedule() {
 
   return (
     <>
-      <Divider className="gray-6 text-sm">Refresh settings</Divider>
-      <Form.Item label="Frequency" name={['schedule', 'frequency']}>
+      <Divider className="gray-6 text-sm">刷新计划</Divider>
+      <Form.Item label="刷新频率" name={['schedule', 'frequency']}>
         <Select
-          placeholder="Select frequency"
-          options={Object.keys(FREQUENCY).map((key) => ({
-            label: getFrequencyText(key),
-            value: FREQUENCY[key],
+          placeholder="选择刷新频率"
+          options={Object.values(FREQUENCY).map((frequencyValue) => ({
+            label: getFrequencyText(frequencyValue),
+            value: frequencyValue,
           }))}
           onChange={onFrequencyChange}
         />
@@ -316,11 +328,11 @@ function Schedule() {
       {frequency === FREQUENCY.WEEKLY && <WeeklyTimeSelection />}
       {frequency === FREQUENCY.CUSTOM && (
         <Form.Item
-          label="Cron expression"
+          label="Cron 表达式"
           name={['schedule', 'cron']}
           required={false}
           rules={[{ validator: cronValidator }]}
-          extra="Cron expression will be executed in UTC timezone (e.g. '0 0 * * *' for daily at midnight UTC)"
+          extra="Cron 表达式会按 UTC 时区执行，例如 `0 0 * * *` 表示每天 UTC 零点刷新。"
         >
           <Input style={{ maxWidth: 200 }} placeholder="* * * * *" />
         </Form.Item>
@@ -328,7 +340,7 @@ function Schedule() {
 
       {nextSchedule && (
         <div className="gray-7">
-          Next scheduled refresh:
+          下次计划刷新时间：
           <div className="gray-8">
             {nextSchedule} {browserTimeZone && <span>({browserTimeZone})</span>}
           </div>
@@ -342,7 +354,7 @@ function DailyTimeSelection() {
   return (
     <>
       <Form.Item
-        label="Time"
+        label="时间"
         name={['schedule', 'time']}
         required={false}
         rules={[
@@ -364,7 +376,7 @@ function WeeklyTimeSelection() {
       <Row gutter={16}>
         <Col>
           <Form.Item
-            label="Day"
+            label="日期"
             name={['schedule', 'day']}
             required={false}
             rules={[
@@ -380,13 +392,13 @@ function WeeklyTimeSelection() {
                 label: getDayOfWeekText(value),
                 value,
               }))}
-              placeholder="Select day"
+              placeholder="选择日期"
             />
           </Form.Item>
         </Col>
         <Col>
           <Form.Item
-            label="Time"
+            label="时间"
             name={['schedule', 'time']}
             required={false}
             rules={[

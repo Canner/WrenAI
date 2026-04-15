@@ -59,15 +59,25 @@ const ColumnContext = memo((props: { text: string; copyable: boolean }) => {
   );
 });
 
-const getPreviewColumns = (cols, { copyable }) =>
-  cols.map(({ name, type }: Record<string, any>) => {
+type PreviewColumn = {
+  name: string;
+  type: string;
+};
+
+const getPreviewColumns = (
+  cols: PreviewColumn[],
+  { copyable }: { copyable: boolean },
+) =>
+  cols.map(({ name, type }: PreviewColumn) => {
     return {
       dataIndex: name,
       titleText: name,
       key: name,
       ellipsis: true,
       title: <ColumnTitle name={name} type={type} />,
-      render: (text) => <ColumnContext text={text} copyable={copyable} />,
+      render: (text: unknown) => (
+        <ColumnContext text={String(text ?? '')} copyable={copyable} />
+      ),
       onCell: () => ({ style: { lineHeight: '24px' } }),
     };
   });
@@ -81,29 +91,37 @@ interface Props {
     }>;
   };
   loading: boolean;
-  error?: ApolloError;
+  error?: ApolloError | Error | null;
   locale?: { emptyText: React.ReactNode };
   copyable?: boolean;
 }
 
 export default function PreviewData(props: Props) {
   const { previewData, loading, error, locale, copyable = true } = props;
+  const mergedLocale = useMemo(
+    () => ({ emptyText: '暂无数据', ...locale }),
+    [locale],
+  );
 
   const columns = useMemo(
     () =>
-      previewData?.columns &&
-      getPreviewColumns(previewData.columns, { copyable }),
+      previewData?.columns
+        ? getPreviewColumns(previewData.columns, { copyable })
+        : [],
     [previewData?.columns, copyable],
   );
 
   const hasErrorMessage = error && error.message;
   if (!loading && hasErrorMessage) {
-    const { message, shortMessage } = parseGraphQLError(error);
+    const parsedError =
+      error instanceof ApolloError ? parseGraphQLError(error) : null;
+    const messageText = parsedError?.message || error.message;
+    const shortMessage = parsedError?.shortMessage || '查询失败';
 
     return (
       <Alert
         message={shortMessage}
-        description={message}
+        description={messageText}
         type="error"
         showIcon
       />
@@ -115,7 +133,7 @@ export default function PreviewData(props: Props) {
       columns={columns}
       data={previewData?.data || []}
       loading={loading}
-      locale={locale}
+      locale={mergedLocale}
     />
   );
 }

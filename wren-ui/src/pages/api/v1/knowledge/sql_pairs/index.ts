@@ -6,14 +6,46 @@ import {
   respondWithSimple,
   handleApiError,
   validateSql,
+  deriveRuntimeExecutionContextFromRequest,
 } from '@/apollo/server/utils/apiUtils';
 import { getLogger } from '@server/utils';
+import {
+  resolvePersistedKnowledgeBaseId,
+  requirePersistedWorkspaceId,
+  toCanonicalPersistedRuntimeIdentityFromScope,
+} from '@server/utils/persistedRuntimeIdentity';
+import {
+  assertAuthorizedWithAudit,
+  buildAuthorizationActorFromRuntimeScope,
+  buildAuthorizationContextFromRequest,
+  recordAuditEvent,
+} from '@server/authz';
 
 const logger = getLogger('API_SQL_PAIRS');
 logger.level = 'debug';
 
-const { runtimeScopeResolver, sqlPairService, deployService, queryService } =
-  components;
+const { runtimeScopeResolver, sqlPairService, queryService } = components;
+
+const buildKnowledgeBaseReadResource = (runtimeIdentity: any) => ({
+  resourceType: 'knowledge_base' as const,
+  resourceId: resolvePersistedKnowledgeBaseId(
+    runtimeIdentity,
+    undefined,
+    'Knowledge base scope is required',
+  ),
+  workspaceId: requirePersistedWorkspaceId(runtimeIdentity),
+});
+
+const buildKnowledgeBaseWriteResource = (
+  runtimeScope: any,
+  runtimeIdentity: any,
+) => ({
+  ...buildKnowledgeBaseReadResource(runtimeIdentity),
+  attributes: {
+    workspaceKind: runtimeScope?.workspace?.kind || null,
+    knowledgeBaseKind: runtimeScope?.knowledgeBase?.kind || null,
+  },
+});
 
 /**
  * SQL Pairs API - Manages SQL query and question pairs for knowledge base
@@ -24,24 +56,36 @@ interface CreateSqlPairRequest {
 }
 
 /**
- * Handle GET request - list all SQL pairs for the current project
+ * Handle GET request - list all SQL pairs for the current runtime scope
  */
 const handleGetSqlPairs = async (
   req: NextApiRequest,
   res: NextApiResponse,
   runtimeScope: any,
-  project: any,
   startTime: number,
 ) => {
-  // Get all SQL pairs for the current project
-  const sqlPairs = await sqlPairService.getProjectSqlPairs(project.id);
+  const runtimeIdentity =
+    toCanonicalPersistedRuntimeIdentityFromScope(runtimeScope);
+  const actor = buildAuthorizationActorFromRuntimeScope(runtimeScope);
+  await assertAuthorizedWithAudit({
+    auditEventRepository: components.auditEventRepository,
+    actor,
+    action: 'knowledge_base.read',
+    resource: buildKnowledgeBaseReadResource(runtimeIdentity),
+    context: buildAuthorizationContextFromRequest({
+      req,
+      sessionId: actor?.sessionId,
+      runtimeScope,
+    }),
+  });
+  // Get all SQL pairs for the current runtime scope
+  const sqlPairs = await sqlPairService.listSqlPairs(runtimeIdentity);
 
   // Return the SQL pairs array directly
   await respondWithSimple({
     res,
     statusCode: 200,
     responsePayload: sqlPairs,
-    projectId: project.id,
     runtimeScope,
     apiType: ApiType.GET_SQL_PAIRS,
     startTime,
@@ -57,10 +101,29 @@ const handleCreateSqlPair = async (
   req: NextApiRequest,
   res: NextApiResponse,
   runtimeScope: any,
-  project: any,
+  executionContext: any,
   startTime: number,
 ) => {
   const { sql, question } = req.body as CreateSqlPairRequest;
+  const runtimeIdentity =
+    toCanonicalPersistedRuntimeIdentityFromScope(runtimeScope);
+  const actor = buildAuthorizationActorFromRuntimeScope(runtimeScope);
+  const auditContext = buildAuthorizationContextFromRequest({
+    req,
+    sessionId: actor?.sessionId,
+    runtimeScope,
+  });
+  const resource = buildKnowledgeBaseWriteResource(
+    runtimeScope,
+    runtimeIdentity,
+  );
+  await assertAuthorizedWithAudit({
+    auditEventRepository: components.auditEventRepository,
+    actor,
+    action: 'knowledge_base.update',
+    resource,
+    context: auditContext,
+  });
 
   // Input validation
   if (!sql) {
@@ -80,12 +143,25 @@ const handleCreateSqlPair = async (
   }
 
   // Validate SQL syntax and compatibility
-  await validateSql(sql, project, deployService, queryService);
+  await validateSql(sql, executionContext, queryService);
 
   // Create the SQL pair
-  const newSqlPair = await sqlPairService.createSqlPair(project.id, {
+  const newSqlPair = await sqlPairService.createSqlPair(runtimeIdentity, {
     sql,
     question,
+  });
+
+  await recordAuditEvent({
+    auditEventRepository: components.auditEventRepository,
+    actor,
+    action: 'knowledge_base.update',
+    resource,
+    result: 'succeeded',
+    context: auditContext,
+    afterJson: newSqlPair as any,
+    payloadJson: {
+      operation: 'sql_pair.create',
+    },
   });
 
   // Return the created SQL pair directly
@@ -93,7 +169,6 @@ const handleCreateSqlPair = async (
     res,
     statusCode: 201,
     responsePayload: newSqlPair,
-    projectId: project.id,
     runtimeScope,
     apiType: ApiType.CREATE_SQL_PAIR,
     startTime,
@@ -107,22 +182,34 @@ export default async function handler(
   res: NextApiResponse,
 ) {
   const startTime = Date.now();
-  let project;
   let runtimeScope;
 
   try {
     runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
-    project = runtimeScope.project;
 
     // Handle GET method - list SQL pairs
     if (req.method === 'GET') {
-      await handleGetSqlPairs(req, res, runtimeScope, project, startTime);
+      await handleGetSqlPairs(req, res, runtimeScope, startTime);
       return;
     }
 
     // Handle POST method - create SQL pair
     if (req.method === 'POST') {
-      await handleCreateSqlPair(req, res, runtimeScope, project, startTime);
+      const derivedContext = await deriveRuntimeExecutionContextFromRequest({
+        req,
+        runtimeScopeResolver,
+        noDeploymentMessage:
+          'No deployment found, please deploy your project first',
+        requireLatestExecutableSnapshot: true,
+      });
+      runtimeScope = derivedContext.runtimeScope;
+      await handleCreateSqlPair(
+        req,
+        res,
+        runtimeScope,
+        derivedContext.executionContext,
+        startTime,
+      );
       return;
     }
 
@@ -132,7 +219,6 @@ export default async function handler(
     await handleApiError({
       error,
       res,
-      projectId: project?.id,
       runtimeScope,
       apiType:
         req.method === 'GET' ? ApiType.GET_SQL_PAIRS : ApiType.CREATE_SQL_PAIR,

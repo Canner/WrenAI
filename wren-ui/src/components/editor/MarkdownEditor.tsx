@@ -1,7 +1,7 @@
 import clsx from 'clsx';
 import { Button, Mentions, Typography } from 'antd';
 import styled from 'styled-components';
-import { useState, useContext, useRef } from 'react';
+import { useState, useContext, useRef, type ComponentProps } from 'react';
 import ReadOutlined from '@ant-design/icons/ReadOutlined';
 import EditOutlined from '@ant-design/icons/EditOutlined';
 import { nextTick } from '@/utils/time';
@@ -109,7 +109,16 @@ export default function MarkdownEditor(props: Props) {
     onChange?.(targetValue);
   };
 
-  const select = (option: Mention) => {
+  const select: NonNullable<ComponentProps<typeof Mentions>['onSelect']> = (
+    selectedValue,
+  ) => {
+    const option = (mentions || []).find(
+      (item) => item.value === selectedValue,
+    );
+    if (!option) {
+      return;
+    }
+
     const textarea = $textarea.current?.textarea;
     if (!textarea) return;
 
@@ -229,19 +238,19 @@ export default function MarkdownEditor(props: Props) {
       </div>
       <OverflowContainer className={clsx({ 'p-4': isPreviewMode })}>
         {isPreviewMode ? (
-          <MarkdownBlock content={value} />
+          <MarkdownBlock content={value || ''} />
         ) : (
           <StyledTextArea
             ref={$textarea}
             rows={13}
             autoFocus={autoFocus}
-            getPopupContainer={() => $wrapper?.current}
+            getPopupContainer={() => $wrapper.current ?? document.body}
             onChange={change}
             onSelect={select}
             onKeyDown={keydown}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
-            value={value}
+            value={value || ''}
             prefix={MENTION_PREFIX}
             maxLength={maxLength}
           >

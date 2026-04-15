@@ -1,22 +1,32 @@
 import { Button, Drawer, Form, Space } from 'antd';
 import { FORM_MODE } from '@/utils/enum';
+import { handleFormSubmitError } from '@/utils/errorHandler';
 import { DrawerAction } from '@/hooks/useDrawerAction';
 import ModelForm from './form/ModelForm';
 
 type Props = DrawerAction & {
   submitting: boolean;
+  readOnly?: boolean;
 };
 
 const getDrawerTitle = (formMode: FORM_MODE, name?: string) =>
   ({
-    [FORM_MODE.CREATE]: 'Create a data model',
+    [FORM_MODE.CREATE]: '创建数据模型',
     [FORM_MODE.EDIT]: name,
   })[formMode];
 
 export default function ModelDrawer(props: Props) {
-  const { visible, formMode, defaultValue, submitting, onClose, onSubmit } =
-    props;
+  const {
+    visible,
+    formMode,
+    defaultValue,
+    submitting,
+    onClose,
+    onSubmit,
+    readOnly = false,
+  } = props;
   const [form] = Form.useForm();
+  const currentFormMode = formMode || FORM_MODE.CREATE;
 
   const afterVisibleChange = (visible: boolean) => {
     if (!visible) {
@@ -28,16 +38,21 @@ export default function ModelDrawer(props: Props) {
     form
       .validateFields()
       .then(async (values) => {
+        if (!onSubmit) {
+          return;
+        }
         await onSubmit({ data: values, id: defaultValue?.modelId });
         onClose();
       })
-      .catch(console.error);
+      .catch((error) => {
+        handleFormSubmitError(error, '保存数据模型失败，请稍后重试。');
+      });
   };
 
   return (
     <Drawer
       visible={visible}
-      title={getDrawerTitle(formMode, defaultValue?.displayName)}
+      title={getDrawerTitle(currentFormMode, defaultValue?.displayName)}
       width={750}
       closable
       destroyOnClose
@@ -46,20 +61,24 @@ export default function ModelDrawer(props: Props) {
       footer={
         <Space className="d-flex justify-end">
           <Button onClick={onClose} disabled={submitting}>
-            Cancel
+            取消
           </Button>
           <Button
             type="primary"
             onClick={submit}
             loading={submitting}
-            disabled={submitting}
+            disabled={submitting || readOnly}
           >
-            Submit
+            保存
           </Button>
         </Space>
       }
     >
-      <ModelForm formMode={formMode} form={form} defaultValue={defaultValue} />
+      <ModelForm
+        formMode={currentFormMode}
+        form={form}
+        defaultValue={defaultValue}
+      />
     </Drawer>
   );
 }

@@ -327,6 +327,7 @@ def build_question_sql_pairs_by_db_using_bird(destination_path: Path):
         destination_path / "minidev/MINIDEV/dev_databases"
     )
 
+    # Upstream BIRD publishes this file under the "mini_dev_sqlite.json" name.
     ground_truths_by_db = get_ground_truths_by_db(
         destination_path / "minidev/MINIDEV/mini_dev_sqlite.json", "db_id"
     )

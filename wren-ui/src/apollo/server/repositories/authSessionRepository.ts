@@ -18,6 +18,8 @@ export interface AuthSession {
   lastSeenAt?: Date | null;
   ipAddress?: string | null;
   userAgent?: string | null;
+  impersonatorUserId?: string | null;
+  impersonationReason?: string | null;
 }
 
 export interface IAuthSessionRepository extends IBasicRepository<AuthSession> {}
@@ -26,7 +28,7 @@ export class AuthSessionRepository
   extends BaseRepository<AuthSession>
   implements IAuthSessionRepository
 {
-  private readonly jsonColumns = [];
+  private readonly jsonColumns: string[] = [];
 
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'auth_session' });

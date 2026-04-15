@@ -9,7 +9,7 @@ from haystack import Document, component
 from haystack.components.writers import DocumentWriter
 from haystack.document_stores.types import DocumentStore, DuplicatePolicy
 
-from src.pipelines.common import build_runtime_scope_filters, normalize_runtime_scope_id
+from src.pipelines.common import build_runtime_scope_filters
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -25,11 +25,10 @@ class DocumentCleaner:
         self._stores = stores
 
     @component.output_types()
-    async def run(self, project_id: Optional[str] = None) -> None:
+    async def run(self, runtime_scope_id: Optional[str] = None) -> None:
         async def _clear_documents(
-            store: DocumentStore, project_id: Optional[str] = None
+            store: DocumentStore, runtime_scope_id: Optional[str] = None
         ) -> None:
-            runtime_scope_id = normalize_runtime_scope_id(project_id)
             store_name = (
                 store.to_dict().get("init_parameters", {}).get("index", "unknown")
             )
@@ -40,7 +39,7 @@ class DocumentCleaner:
             await store.delete_documents(filters)
 
         await asyncio.gather(
-            *[_clear_documents(store, project_id) for store in self._stores]
+            *[_clear_documents(store, runtime_scope_id) for store in self._stores]
         )
 
 

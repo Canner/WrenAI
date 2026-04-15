@@ -13,7 +13,7 @@ function RedshiftPasswordFields(props: { isEditMode: boolean }) {
   return (
     <>
       <Form.Item
-        label="Host"
+        label="主机地址"
         name="host"
         required
         rules={[
@@ -29,7 +29,7 @@ function RedshiftPasswordFields(props: { isEditMode: boolean }) {
         />
       </Form.Item>
       <Form.Item
-        label="Port"
+        label="端口"
         name="port"
         required
         rules={[
@@ -42,7 +42,7 @@ function RedshiftPasswordFields(props: { isEditMode: boolean }) {
         <Input placeholder="5439" />
       </Form.Item>
       <Form.Item
-        label="Username"
+        label="用户名"
         name="user"
         rules={[
           {
@@ -54,7 +54,7 @@ function RedshiftPasswordFields(props: { isEditMode: boolean }) {
         <Input />
       </Form.Item>
       <Form.Item
-        label="Password"
+        label="密码"
         name="password"
         required
         rules={[
@@ -64,10 +64,10 @@ function RedshiftPasswordFields(props: { isEditMode: boolean }) {
           },
         ]}
       >
-        <Input.Password placeholder="input password" />
+        <Input.Password placeholder="请输入密码" />
       </Form.Item>
       <Form.Item
-        label="Database"
+        label="数据库"
         name="database"
         required
         rules={[
@@ -88,7 +88,7 @@ function RedshiftIAMFields(props: { isEditMode: boolean }) {
   return (
     <>
       <Form.Item
-        label="Cluster identifier"
+        label="集群标识"
         name="clusterIdentifier"
         required
         rules={[
@@ -101,9 +101,9 @@ function RedshiftIAMFields(props: { isEditMode: boolean }) {
         <Input placeholder="redshift-cluster-1" disabled={isEditMode} />
       </Form.Item>
       <Form.Item
-        label="Username"
+        label="用户名"
         name="user"
-        extra="The Redshift database username specified in DB user permissions."
+        extra="填写数据库权限中配置的 Redshift 用户名。"
         rules={[
           {
             required: true,
@@ -114,7 +114,7 @@ function RedshiftIAMFields(props: { isEditMode: boolean }) {
         <Input />
       </Form.Item>
       <Form.Item
-        label="Database"
+        label="数据库"
         name="database"
         required
         rules={[
@@ -127,7 +127,7 @@ function RedshiftIAMFields(props: { isEditMode: boolean }) {
         <Input disabled={isEditMode} />
       </Form.Item>
       <Form.Item
-        label="AWS region"
+        label="AWS 区域"
         name="awsRegion"
         required
         rules={[
@@ -140,7 +140,7 @@ function RedshiftIAMFields(props: { isEditMode: boolean }) {
         <Input placeholder="us-east-1" disabled={isEditMode} />
       </Form.Item>
       <Form.Item
-        label="AWS access key ID"
+        label="AWS Access Key ID"
         name="awsAccessKey"
         required
         rules={[
@@ -153,7 +153,7 @@ function RedshiftIAMFields(props: { isEditMode: boolean }) {
         <Input />
       </Form.Item>
       <Form.Item
-        label="AWS secret access key"
+        label="AWS Secret Access Key"
         name="awsSecretKey"
         required
         rules={[
@@ -205,7 +205,7 @@ export default function RedshiftProperties(props: Props) {
   return (
     <>
       <Form.Item
-        label="Display name"
+        label="显示名称"
         name="displayName"
         required
         rules={[
@@ -217,13 +217,13 @@ export default function RedshiftProperties(props: Props) {
       >
         <Input />
       </Form.Item>
-      <Form.Item label="Authentication method" name="redshiftType">
+      <Form.Item label="认证方式" name="redshiftType">
         <Radio.Group buttonStyle="solid">
           <Radio.Button value={REDSHIFT_AUTH_METHOD.redshift}>
-            Username and password
+            用户名和密码
           </Radio.Button>
           <Radio.Button value={REDSHIFT_AUTH_METHOD.redshift_iam}>
-            AWS credentials
+            AWS 凭证
           </Radio.Button>
         </Radio.Group>
       </Form.Item>

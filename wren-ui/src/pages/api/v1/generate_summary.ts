@@ -7,16 +7,17 @@ import {
   ApiError,
   respondWith,
   handleApiError,
-  MAX_WAIT_TIME,
   validateSummaryResult,
+  deriveRuntimeExecutionContextFromRequest,
+  pollUntil,
 } from '@/apollo/server/utils/apiUtils';
 import {
   TextBasedAnswerInput,
   TextBasedAnswerResult,
   TextBasedAnswerStatus,
-  WrenAILanguage,
 } from '@/apollo/server/models/adaptor';
 import { getLogger } from '@server/utils';
+import { toAskRuntimeIdentity } from '@server/utils/askContext';
 
 const logger = getLogger('API_GENERATE_SUMMARY');
 logger.level = 'debug';
@@ -33,7 +34,6 @@ interface GenerateSummaryRequest {
   knowledgeBaseId?: string;
   kbSnapshotId?: string;
   deployHash?: string;
-  projectId?: number;
 }
 
 export default async function handler(
@@ -43,7 +43,6 @@ export default async function handler(
   const { question, sql, sampleSize, language, threadId } =
     req.body as GenerateSummaryRequest;
   const startTime = Date.now();
-  let project;
   let runtimeScope;
 
   try {
@@ -61,16 +60,18 @@ export default async function handler(
       throw new ApiError('SQL is required', 400);
     }
 
-    runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
-    project = runtimeScope.project;
-    const lastDeploy = runtimeScope.deployment;
-    if (!lastDeploy) {
-      throw new ApiError(
-        'No deployment found, please deploy your project first',
-        400,
-        Errors.GeneralErrorCodes.NO_DEPLOYMENT_FOUND,
-      );
-    }
+    const derivedContext = await deriveRuntimeExecutionContextFromRequest({
+      req,
+      runtimeScopeResolver,
+      requireLatestExecutableSnapshot: true,
+    });
+    runtimeScope = derivedContext.runtimeScope;
+    const {
+      project,
+      manifest,
+      language: runtimeLanguage,
+      runtimeIdentity,
+    } = derivedContext.executionContext;
 
     // Create a new thread if it's a new question
     const newThreadId = threadId || uuidv4();
@@ -81,17 +82,23 @@ export default async function handler(
       const queryResult = await queryService.preview(sql, {
         project,
         limit: sampleSize || 500,
-        manifest: lastDeploy.manifest,
+        manifest,
         modelingOnly: false,
       });
       sqlData = queryResult;
-    } catch (queryError) {
+    } catch (queryError: unknown) {
+      const queryErrorMessage =
+        queryError instanceof Error
+          ? queryError.message
+          : 'Error executing SQL query';
       throw new ApiError(
-        queryError.message || 'Error executing SQL query',
+        queryErrorMessage,
         400,
         Errors.GeneralErrorCodes.INVALID_SQL_ERROR,
       );
     }
+
+    const askRuntimeIdentity = toAskRuntimeIdentity(runtimeIdentity);
 
     // Create text-based answer input for summary generation
     const textBasedAnswerInput: TextBasedAnswerInput = {
@@ -100,9 +107,10 @@ export default async function handler(
       sqlData,
       threadId: newThreadId,
       userId: runtimeScope.userId || undefined,
+      runtimeScopeId: runtimeScope.selector.runtimeScopeId || undefined,
+      runtimeIdentity: askRuntimeIdentity,
       configurations: {
-        language:
-          language || WrenAILanguage[project.language] || WrenAILanguage.EN,
+        language: language || runtimeLanguage,
       },
     };
 
@@ -114,28 +122,17 @@ export default async function handler(
       throw new ApiError('Failed to start summary generation task', 500);
     }
 
-    // Poll for the result
-    const deadline = Date.now() + MAX_WAIT_TIME;
-    let result: TextBasedAnswerResult;
-    while (true) {
-      result = await wrenAIAdaptor.getTextBasedAnswerResult(task.queryId);
-      if (
-        result.status === TextBasedAnswerStatus.SUCCEEDED ||
-        result.status === TextBasedAnswerStatus.FAILED
-      ) {
-        break;
-      }
-
-      if (Date.now() > deadline) {
-        throw new ApiError(
-          'Timeout waiting for summary generation',
-          500,
-          Errors.GeneralErrorCodes.POLLING_TIMEOUT,
-        );
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // Poll every second
-    }
+    const result = await pollUntil<TextBasedAnswerResult>({
+      fetcher: () => wrenAIAdaptor.getTextBasedAnswerResult(task.queryId),
+      isFinished: (nextResult) =>
+        nextResult.status === TextBasedAnswerStatus.SUCCEEDED ||
+        nextResult.status === TextBasedAnswerStatus.FAILED,
+      timeoutError: new ApiError(
+        'Timeout waiting for summary generation',
+        500,
+        Errors.GeneralErrorCodes.POLLING_TIMEOUT,
+      ),
+    });
 
     // Validate the summary result
     validateSummaryResult(result);
@@ -181,7 +178,6 @@ export default async function handler(
         summary,
         threadId: newThreadId,
       },
-      projectId: project.id,
       runtimeScope,
       apiType: ApiType.GENERATE_SUMMARY,
       startTime,
@@ -193,7 +189,6 @@ export default async function handler(
     await handleApiError({
       error,
       res,
-      projectId: project?.id,
       runtimeScope,
       apiType: ApiType.GENERATE_SUMMARY,
       requestPayload: req.body,

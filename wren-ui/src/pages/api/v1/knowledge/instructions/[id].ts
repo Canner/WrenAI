@@ -7,11 +7,71 @@ import {
   handleApiError,
 } from '@/apollo/server/utils/apiUtils';
 import { getLogger } from '@server/utils';
+import * as Errors from '@server/utils/error';
+import {
+  resolvePersistedKnowledgeBaseId,
+  requirePersistedWorkspaceId,
+  toCanonicalPersistedRuntimeIdentityFromScope,
+} from '@server/utils/persistedRuntimeIdentity';
+import {
+  OUTDATED_RUNTIME_SNAPSHOT_MESSAGE,
+  assertLatestExecutableRuntimeScope,
+} from '@/apollo/server/utils/runtimeExecutionContext';
+import {
+  assertAuthorizedWithAudit,
+  buildAuthorizationActorFromRuntimeScope,
+  buildAuthorizationContextFromRequest,
+  recordAuditEvent,
+} from '@server/authz';
 
 const logger = getLogger('API_INSTRUCTION_BY_ID');
 logger.level = 'debug';
 
-const { runtimeScopeResolver, instructionService } = components;
+const {
+  runtimeScopeResolver,
+  instructionService,
+  knowledgeBaseRepository,
+  kbSnapshotRepository,
+} = components;
+
+const assertLatestInstructionSnapshot = async (runtimeScope: any) => {
+  try {
+    await assertLatestExecutableRuntimeScope({
+      runtimeScope,
+      knowledgeBaseRepository,
+      kbSnapshotRepository,
+    });
+  } catch (error) {
+    throw new ApiError(
+      error instanceof Error
+        ? error.message
+        : OUTDATED_RUNTIME_SNAPSHOT_MESSAGE,
+      409,
+      Errors.GeneralErrorCodes.OUTDATED_RUNTIME_SNAPSHOT,
+    );
+  }
+};
+
+const buildKnowledgeBaseReadResource = (runtimeIdentity: any) => ({
+  resourceType: 'knowledge_base' as const,
+  resourceId: resolvePersistedKnowledgeBaseId(
+    runtimeIdentity,
+    undefined,
+    'Knowledge base scope is required',
+  ),
+  workspaceId: requirePersistedWorkspaceId(runtimeIdentity),
+});
+
+const buildKnowledgeBaseWriteResource = (
+  runtimeScope: any,
+  runtimeIdentity: any,
+) => ({
+  ...buildKnowledgeBaseReadResource(runtimeIdentity),
+  attributes: {
+    workspaceKind: runtimeScope?.workspace?.kind || null,
+    knowledgeBaseKind: runtimeScope?.knowledgeBase?.kind || null,
+  },
+});
 
 /**
  * Instructions API - Supports two types of instructions:
@@ -55,20 +115,41 @@ const handleUpdateInstruction = async (
   req: NextApiRequest,
   res: NextApiResponse,
   runtimeScope: any,
-  project: any,
   startTime: number,
 ) => {
+  await assertLatestInstructionSnapshot(runtimeScope);
   const { id } = req.query;
   const instructionId = validateInstructionId(id);
+  const runtimeIdentity =
+    toCanonicalPersistedRuntimeIdentityFromScope(runtimeScope);
+  const actor = buildAuthorizationActorFromRuntimeScope(runtimeScope);
+  const auditContext = buildAuthorizationContextFromRequest({
+    req,
+    sessionId: actor?.sessionId,
+    runtimeScope,
+  });
+  const resource = buildKnowledgeBaseWriteResource(
+    runtimeScope,
+    runtimeIdentity,
+  );
+  await assertAuthorizedWithAudit({
+    auditEventRepository: components.auditEventRepository,
+    actor,
+    action: 'knowledge_base.update',
+    resource,
+    context: auditContext,
+  });
 
   const { instruction, questions, isGlobal } =
     req.body as UpdateInstructionRequest;
 
   // Get the original instruction
-  const existingInstruction =
-    await instructionService.getInstruction(instructionId);
+  const existingInstruction = await instructionService.getInstruction(
+    runtimeIdentity,
+    instructionId,
+  );
 
-  if (!existingInstruction || existingInstruction.projectId !== project.id) {
+  if (!existingInstruction) {
     throw new ApiError('Instruction not found', 404);
   }
 
@@ -85,12 +166,29 @@ const handleUpdateInstruction = async (
   }
 
   // Update the instruction
-  const updatedInstruction = await instructionService.updateInstruction({
-    id: instructionId,
-    instruction: mergedInstruction.instruction,
-    questions: mergedInstruction.questions,
-    isDefault: mergedInstruction.isGlobal,
-    projectId: project.id,
+  const updatedInstruction = await instructionService.updateInstruction(
+    runtimeIdentity,
+    {
+      id: instructionId,
+      instruction: mergedInstruction.instruction,
+      questions: mergedInstruction.questions,
+      isDefault: mergedInstruction.isGlobal,
+    },
+  );
+
+  await recordAuditEvent({
+    auditEventRepository: components.auditEventRepository,
+    actor,
+    action: 'knowledge_base.update',
+    resource,
+    result: 'succeeded',
+    context: auditContext,
+    beforeJson: existingInstruction as any,
+    afterJson: updatedInstruction as any,
+    payloadJson: {
+      operation: 'instruction.update',
+      instructionId,
+    },
   });
 
   // Return the updated instruction directly
@@ -106,8 +204,9 @@ const handleUpdateInstruction = async (
       instruction: updatedInstruction.instruction,
       questions: updatedInstruction.questions,
       isGlobal: isGlobalValue,
+      createdAt: updatedInstruction.createdAt ?? null,
+      updatedAt: updatedInstruction.updatedAt ?? null,
     },
-    projectId: project.id,
     runtimeScope,
     apiType: ApiType.UPDATE_INSTRUCTION,
     startTime,
@@ -123,21 +222,60 @@ const handleDeleteInstruction = async (
   req: NextApiRequest,
   res: NextApiResponse,
   runtimeScope: any,
-  project: any,
   startTime: number,
 ) => {
+  await assertLatestInstructionSnapshot(runtimeScope);
   const { id } = req.query;
   const instructionId = validateInstructionId(id);
+  const runtimeIdentity =
+    toCanonicalPersistedRuntimeIdentityFromScope(runtimeScope);
+  const actor = buildAuthorizationActorFromRuntimeScope(runtimeScope);
+  const auditContext = buildAuthorizationContextFromRequest({
+    req,
+    sessionId: actor?.sessionId,
+    runtimeScope,
+  });
+  const resource = buildKnowledgeBaseWriteResource(
+    runtimeScope,
+    runtimeIdentity,
+  );
+  await assertAuthorizedWithAudit({
+    auditEventRepository: components.auditEventRepository,
+    actor,
+    action: 'knowledge_base.update',
+    resource,
+    context: auditContext,
+  });
+  const existingInstruction = await instructionService.getInstruction(
+    runtimeIdentity,
+    instructionId,
+  );
+  if (!existingInstruction) {
+    throw new ApiError('Instruction not found', 404);
+  }
 
   // Delete the instruction
-  await instructionService.deleteInstruction(instructionId, project.id);
+  await instructionService.deleteInstruction(instructionId, runtimeIdentity);
+
+  await recordAuditEvent({
+    auditEventRepository: components.auditEventRepository,
+    actor,
+    action: 'knowledge_base.update',
+    resource,
+    result: 'succeeded',
+    context: auditContext,
+    beforeJson: existingInstruction as any,
+    payloadJson: {
+      operation: 'instruction.delete',
+      instructionId,
+    },
+  });
 
   // Return 204 No Content with no payload
   await respondWithSimple({
     res,
     statusCode: 204,
     responsePayload: {},
-    projectId: project.id,
     runtimeScope,
     apiType: ApiType.DELETE_INSTRUCTION,
     startTime,
@@ -151,28 +289,35 @@ export default async function handler(
   res: NextApiResponse,
 ) {
   const startTime = Date.now();
-  let project;
   let runtimeScope;
 
   try {
     runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
-    project = runtimeScope.project;
+    const runtimeIdentity =
+      toCanonicalPersistedRuntimeIdentityFromScope(runtimeScope);
+    const actor = buildAuthorizationActorFromRuntimeScope(runtimeScope);
+    const auditContext = buildAuthorizationContextFromRequest({
+      req,
+      sessionId: actor?.sessionId,
+      runtimeScope,
+    });
 
     // Handle PUT method - update instruction
     if (req.method === 'PUT') {
-      await handleUpdateInstruction(req, res, runtimeScope, project, startTime);
+      await handleUpdateInstruction(req, res, runtimeScope, startTime);
       return;
     }
 
     // Handle DELETE method - delete instruction
     if (req.method === 'DELETE') {
-      await handleDeleteInstruction(
-        req,
-        res,
-        runtimeScope,
-        project,
-        startTime,
-      );
+      await assertAuthorizedWithAudit({
+        auditEventRepository: components.auditEventRepository,
+        actor,
+        action: 'knowledge_base.read',
+        resource: buildKnowledgeBaseReadResource(runtimeIdentity),
+        context: auditContext,
+      });
+      await handleDeleteInstruction(req, res, runtimeScope, startTime);
       return;
     }
 
@@ -182,7 +327,6 @@ export default async function handler(
     await handleApiError({
       error,
       res,
-      projectId: project?.id,
       runtimeScope,
       apiType:
         req.method === 'PUT'

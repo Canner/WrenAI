@@ -154,7 +154,39 @@ def _normalize_pgvector_filters(filters):
             ],
         }
 
-    return dict(filters)
+    conditions = []
+    for field, value in filters.items():
+        normalized_field = field
+        if (
+            isinstance(field, str)
+            and not field.startswith("meta.")
+            and field not in _PGVECTOR_NATIVE_COLUMNS
+        ):
+            normalized_field = f"meta.{field}"
+
+        if isinstance(value, Mapping) and "operator" in value:
+            conditions.append(
+                {
+                    "field": normalized_field,
+                    **value,
+                }
+            )
+        else:
+            conditions.append(
+                {
+                    "field": normalized_field,
+                    "operator": "==",
+                    "value": value,
+                }
+            )
+
+    if len(conditions) == 1:
+        return conditions[0]
+
+    return {
+        "operator": "AND",
+        "conditions": conditions,
+    }
 
 
 def _table_scoped_index_name(table_name: str, base_name: str) -> str:
@@ -209,27 +241,57 @@ class PgvectorStoreAdapter:
 
     def to_dict(self):
         if hasattr(self._store, "to_dict"):
-            return self._store.to_dict()
+            try:
+                return self._store.to_dict()
+            except ValueError:
+                table_name = (
+                    getattr(self._store, "table_name", None)
+                    or getattr(self._store, "_table_name", None)
+                    or getattr(self._store, "index", None)
+                    or "unknown"
+                )
+                return {
+                    "type": "pgvector",
+                    "init_parameters": {
+                        "table_name": table_name,
+                        "index": table_name,
+                    },
+                }
         return {}
 
 
 class PgvectorRetrieverAdapter:
-    def __init__(self, retriever):
+    def __init__(self, retriever, document_store=None):
         self._retriever = retriever
+        self._document_store = document_store
 
     def __getattr__(self, item):
         return getattr(self._retriever, item)
 
-    def run(
+    async def run(
         self,
         query_embedding,
         filters=None,
         top_k=None,
         vector_function=None,
     ):
+        normalized_filters = _normalize_pgvector_filters(filters)
+        if not query_embedding:
+            if not self._document_store or not hasattr(
+                self._document_store, "filter_documents"
+            ):
+                raise ValueError("query_embedding must be a non-empty list of floats")
+
+            documents = self._document_store.filter_documents(
+                filters=normalized_filters
+            )
+            if top_k is not None:
+                documents = documents[:top_k]
+            return {"documents": documents}
+
         return self._retriever.run(
             query_embedding=query_embedding,
-            filters=_normalize_pgvector_filters(filters),
+            filters=normalized_filters,
             top_k=top_k,
             vector_function=vector_function,
         )
@@ -380,7 +442,8 @@ class PgvectorProvider(DocumentStoreProvider):
                 PgvectorEmbeddingRetriever(
                     document_store=native_store,
                     top_k=top_k,
-                )
+                ),
+                document_store=document_store,
             )
         except ModuleNotFoundError as exc:
             raise RuntimeError(_PGVECTOR_DEPENDENCY_HINT) from exc

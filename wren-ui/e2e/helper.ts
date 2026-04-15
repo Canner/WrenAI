@@ -1,4 +1,3 @@
-import fs from 'fs';
 import knex from 'knex';
 import { testDbConfig } from './config';
 import { Page } from '@playwright/test';
@@ -10,10 +9,10 @@ export const migrateDatabase = async () => {
 
 export const removeDatabase = async () => {
   const db = knex(testDbConfig);
-  await db.migrate.rollback().then(() => db.destroy());
-  const isDBFileExist = fs.existsSync(testDbConfig.connection);
-  if (isDBFileExist) {
-    fs.unlinkSync(testDbConfig.connection);
+  try {
+    await db.migrate.rollback(undefined, true);
+  } finally {
+    await db.destroy();
   }
 };
 

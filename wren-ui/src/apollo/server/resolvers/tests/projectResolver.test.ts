@@ -1,7 +1,40 @@
-import { ProjectResolver } from '../projectResolver';
-import { RelationType } from '../../types';
+import {
+  MANAGED_FEDERATED_RUNTIME_READONLY_MESSAGE,
+  ProjectResolver,
+} from '../projectResolver';
+import { DataSourceName, RelationType } from '../../types';
 
 describe('ProjectResolver', () => {
+  const originalBindingMode = process.env.WREN_AUTHORIZATION_BINDING_MODE;
+
+  afterEach(() => {
+    if (originalBindingMode === undefined) {
+      delete process.env.WREN_AUTHORIZATION_BINDING_MODE;
+    } else {
+      process.env.WREN_AUTHORIZATION_BINDING_MODE = originalBindingMode;
+    }
+  });
+
+  const createAuthorizationActor = () => ({
+    principalType: 'user',
+    principalId: 'user-1',
+    workspaceId: 'workspace-1',
+    workspaceMemberId: 'member-1',
+    workspaceRoleKeys: ['owner'],
+    permissionScopes: ['workspace:*'],
+    isPlatformAdmin: false,
+    platformRoleKeys: [],
+  });
+
+  const withAuthorizedContext = <T extends Record<string, any>>(ctx: T) =>
+    ({
+      authorizationActor: createAuthorizationActor(),
+      auditEventRepository: {
+        createOne: jest.fn(),
+      },
+      ...ctx,
+    }) as any;
+
   describe('getProjectRecommendationQuestions', () => {
     it('falls back to deployment project id when runtime scope project is absent', async () => {
       const resolver = new ProjectResolver();
@@ -14,7 +47,7 @@ describe('ProjectResolver', () => {
       const result = await resolver.getProjectRecommendationQuestions(
         null,
         null,
-        {
+        withAuthorizedContext({
           runtimeScope: {
             project: null,
             deployment: { projectId: 42 },
@@ -23,7 +56,7 @@ describe('ProjectResolver', () => {
             getProjectById: jest.fn().mockResolvedValue({ id: 42 }),
             getProjectRecommendationQuestions,
           },
-        } as any,
+        }),
       );
 
       expect(getProjectRecommendationQuestions).toHaveBeenCalledWith(42);
@@ -46,7 +79,7 @@ describe('ProjectResolver', () => {
       const result = await resolver.getProjectRecommendationQuestions(
         null,
         null,
-        {
+        withAuthorizedContext({
           runtimeScope: {
             project: { id: 42 },
           },
@@ -54,7 +87,7 @@ describe('ProjectResolver', () => {
             getCurrentProject,
             getProjectRecommendationQuestions,
           },
-        } as any,
+        }),
       );
 
       expect(getCurrentProject).not.toHaveBeenCalled();
@@ -86,6 +119,39 @@ describe('ProjectResolver', () => {
 
       expect(getProjectRecommendationQuestions).not.toHaveBeenCalled();
     });
+
+    it('rejects project recommendation reads in binding-only mode without granted actions', async () => {
+      process.env.WREN_AUTHORIZATION_BINDING_MODE = 'binding_only';
+      const resolver = new ProjectResolver();
+      const getProjectRecommendationQuestions = jest.fn();
+
+      await expect(
+        resolver.getProjectRecommendationQuestions(
+          null,
+          null,
+          withAuthorizedContext({
+            runtimeScope: {
+              project: { id: 42 },
+              workspace: { id: 'workspace-1' },
+              knowledgeBase: { id: 'kb-1' },
+            },
+            authorizationActor: {
+              ...createAuthorizationActor(),
+              workspaceRoleKeys: ['owner'],
+              permissionScopes: ['workspace:*'],
+              grantedActions: [],
+              workspaceRoleSource: 'legacy',
+              platformRoleSource: 'legacy',
+            },
+            projectService: {
+              getProjectRecommendationQuestions,
+            },
+          }),
+        ),
+      ).rejects.toThrow('Knowledge base read permission required');
+
+      expect(getProjectRecommendationQuestions).not.toHaveBeenCalled();
+    });
   });
 
   describe('scoped read requirements', () => {
@@ -111,11 +177,18 @@ describe('ProjectResolver', () => {
     it('resolves onboarding status from deployment project when runtime scope project is absent', async () => {
       const resolver = new ProjectResolver();
       const findAllBy = jest.fn().mockResolvedValue([]);
-      const ctx = {
+      const createOne = jest.fn();
+      const ctx = withAuthorizedContext({
         runtimeScope: {
           project: null,
+          workspace: { id: 'workspace-1' },
+          knowledgeBase: {
+            id: 'kb-1',
+            defaultKbSnapshotId: 'snapshot-1',
+          },
           deployment: { projectId: 42 },
         },
+        auditEventRepository: { createOne },
         projectService: {
           getProjectById: jest.fn().mockResolvedValue({
             id: 42,
@@ -125,7 +198,7 @@ describe('ProjectResolver', () => {
         modelRepository: {
           findAllBy,
         },
-      } as any;
+      });
 
       await expect(
         resolver.getOnboardingStatus(null, null, ctx),
@@ -134,33 +207,113 @@ describe('ProjectResolver', () => {
       });
       expect(ctx.projectService.getProjectById).toHaveBeenCalledWith(42);
       expect(findAllBy).toHaveBeenCalledWith({ projectId: 42 });
+      expect(createOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'knowledge_base.read',
+          resourceType: 'knowledge_base',
+          resourceId: 'kb-1',
+          result: 'allowed',
+          payloadJson: { operation: 'get_onboarding_status' },
+        }),
+      );
     });
 
-    it('keeps onboarding status bootstrap-compatible when runtime scope is missing', async () => {
+    it('prefers runtime knowledge base sample dataset when resolving onboarding status', async () => {
       const resolver = new ProjectResolver();
-      const getCurrentProject = jest
-        .fn()
-        .mockRejectedValue(new Error('missing'));
-      const ctx = {
-        runtimeScope: null,
-        projectService: {
-          getCurrentProject,
+      const findAllBy = jest.fn();
+      const ctx = withAuthorizedContext({
+        runtimeScope: {
+          project: { id: 42, sampleDataset: null },
+          workspace: { id: 'workspace-1' },
+          knowledgeBase: {
+            id: 'kb-1',
+            sampleDataset: 'ECOMMERCE',
+          },
         },
-      } as any;
+        modelRepository: {
+          findAllBy,
+        },
+      });
 
       await expect(
         resolver.getOnboardingStatus(null, null, ctx),
       ).resolves.toEqual({
-        status: 'NOT_STARTED',
+        status: 'WITH_SAMPLE_DATASET',
       });
-      expect(getCurrentProject).not.toHaveBeenCalled();
+      expect(findAllBy).not.toHaveBeenCalled();
+    });
+
+    it('treats a connector-backed knowledge base without project bridge as datasource saved', async () => {
+      const resolver = new ProjectResolver();
+      const findAllBy = jest.fn();
+      const createOne = jest.fn();
+      const ctx = withAuthorizedContext({
+        runtimeScope: {
+          project: null,
+          workspace: { id: 'workspace-1' },
+          knowledgeBase: {
+            id: 'kb-1',
+            primaryConnectorId: 'connector-1',
+            sampleDataset: null,
+          },
+        },
+        auditEventRepository: { createOne },
+        modelRepository: {
+          findAllBy,
+        },
+      });
+
+      await expect(
+        resolver.getOnboardingStatus(null, null, ctx),
+      ).resolves.toEqual({
+        status: 'DATASOURCE_SAVED',
+      });
+      expect(findAllBy).not.toHaveBeenCalled();
+      expect(createOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'knowledge_base.read',
+          resourceType: 'knowledge_base',
+          resourceId: 'kb-1',
+          result: 'allowed',
+          payloadJson: { operation: 'get_onboarding_status' },
+        }),
+      );
+    });
+
+    it('rejects onboarding status reads in binding-only mode without granted actions', async () => {
+      process.env.WREN_AUTHORIZATION_BINDING_MODE = 'binding_only';
+      const resolver = new ProjectResolver();
+      const findAllBy = jest.fn();
+
+      await expect(
+        resolver.getOnboardingStatus(
+          null,
+          null,
+          withAuthorizedContext({
+            runtimeScope: {
+              project: { id: 42, sampleDataset: null },
+              workspace: { id: 'workspace-1' },
+              knowledgeBase: { id: 'kb-1', defaultKbSnapshotId: 'snapshot-1' },
+            },
+            authorizationActor: {
+              ...createAuthorizationActor(),
+              grantedActions: [],
+              workspaceRoleSource: 'legacy',
+              platformRoleSource: 'legacy',
+            },
+            modelRepository: { findAllBy },
+          }),
+        ),
+      ).rejects.toThrow('Knowledge base read permission required');
+
+      expect(findAllBy).not.toHaveBeenCalled();
     });
   });
 
   describe('saveRelations', () => {
     it('rejects relation saves when referenced models are outside the active project', async () => {
       const resolver = new ProjectResolver();
-      const ctx = {
+      const ctx = withAuthorizedContext({
         runtimeScope: {
           project: { id: 42 },
         },
@@ -174,7 +327,7 @@ describe('ProjectResolver', () => {
         modelService: {
           saveRelations: jest.fn(),
         },
-      } as any;
+      });
 
       await expect(
         resolver.saveRelations(
@@ -203,9 +356,10 @@ describe('ProjectResolver', () => {
   describe('mutation scope requirements', () => {
     it('resolves settings from deployment project when runtime scope project is absent', async () => {
       const resolver = new ProjectResolver();
-      const ctx = {
+      const ctx = withAuthorizedContext({
         runtimeScope: {
           project: null,
+          workspace: { id: 'workspace-1' },
           deployment: { projectId: 42 },
         },
         config: {},
@@ -219,7 +373,7 @@ describe('ProjectResolver', () => {
           }),
           getGeneralConnectionInfo: jest.fn().mockReturnValue({ host: 'db' }),
         },
-      } as any;
+      });
 
       await expect(resolver.getSettings(null, null, ctx)).resolves.toEqual({
         productVersion: '',
@@ -234,11 +388,142 @@ describe('ProjectResolver', () => {
         language: 'EN',
       });
       expect(ctx.projectService.getProjectById).toHaveBeenCalledWith(42);
+      expect(ctx.auditEventRepository.createOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'knowledge_base.read',
+          result: 'allowed',
+          payloadJson: {
+            operation: 'get_settings',
+          },
+        }),
+      );
+    });
+
+    it('prefers runtime knowledge base language and sample dataset in settings', async () => {
+      const resolver = new ProjectResolver();
+      const ctx = withAuthorizedContext({
+        runtimeScope: {
+          project: null,
+          workspace: { id: 'workspace-1' },
+          deployment: { projectId: 42 },
+          knowledgeBase: {
+            id: 'kb-1',
+            language: 'ZH_CN',
+            sampleDataset: 'ECOMMERCE',
+          },
+        },
+        config: {},
+        projectService: {
+          getProjectById: jest.fn().mockResolvedValue({
+            id: 42,
+            type: 'POSTGRES',
+            displayName: 'Warehouse',
+            sampleDataset: null,
+            language: 'EN',
+          }),
+          getGeneralConnectionInfo: jest.fn().mockReturnValue({ host: 'db' }),
+        },
+      });
+
+      await expect(resolver.getSettings(null, null, ctx)).resolves.toEqual({
+        productVersion: '',
+        dataSource: {
+          type: 'POSTGRES',
+          properties: {
+            displayName: 'Warehouse',
+            host: 'db',
+          },
+          sampleDataset: 'ECOMMERCE',
+        },
+        language: 'ZH_CN',
+      });
+    });
+
+    it('masks internal federated runtime display name and marks settings as managed', async () => {
+      const resolver = new ProjectResolver();
+      const ctx = withAuthorizedContext({
+        runtimeScope: {
+          project: null,
+          workspace: { id: 'workspace-1' },
+          deployment: { projectId: 42 },
+          knowledgeBase: {
+            id: 'kb-1',
+            name: '销售知识库',
+            runtimeProjectId: 42,
+            sampleDataset: null,
+            language: 'ZH_CN',
+          },
+        },
+        config: {},
+        projectService: {
+          getProjectById: jest.fn().mockResolvedValue({
+            id: 42,
+            type: 'TRINO',
+            displayName: '[internal] Sales KB federated runtime',
+            sampleDataset: null,
+            language: 'EN',
+          }),
+          getGeneralConnectionInfo: jest.fn().mockReturnValue({
+            host: 'trino',
+            port: 8080,
+            schemas: 'catalog_a.public',
+          }),
+        },
+      });
+
+      await expect(resolver.getSettings(null, null, ctx)).resolves.toEqual({
+        productVersion: '',
+        dataSource: {
+          type: 'TRINO',
+          properties: {
+            displayName: '销售知识库',
+            host: 'trino',
+            port: 8080,
+            schemas: 'catalog_a.public',
+            managedFederatedRuntime: true,
+            readonlyReason: MANAGED_FEDERATED_RUNTIME_READONLY_MESSAGE,
+          },
+          sampleDataset: null,
+        },
+        language: 'ZH_CN',
+      });
+    });
+
+    it('rejects settings reads in binding-only mode without granted actions', async () => {
+      process.env.WREN_AUTHORIZATION_BINDING_MODE = 'binding_only';
+      const resolver = new ProjectResolver();
+      const ctx = withAuthorizedContext({
+        runtimeScope: {
+          project: { id: 42, type: 'POSTGRES', displayName: 'Warehouse' },
+          workspace: { id: 'workspace-1' },
+          knowledgeBase: { id: 'kb-1' },
+        },
+        config: {},
+        authorizationActor: {
+          ...createAuthorizationActor(),
+          workspaceRoleKeys: ['owner'],
+          permissionScopes: ['workspace:*'],
+          grantedActions: [],
+          workspaceRoleSource: 'legacy',
+          platformRoleSource: 'legacy',
+        },
+        projectService: {
+          getGeneralConnectionInfo: jest.fn(),
+        },
+      });
+
+      await expect(resolver.getSettings(null, null, ctx)).rejects.toThrow(
+        'Knowledge base read permission required',
+      );
+
+      expect(
+        ctx.projectService.getGeneralConnectionInfo,
+      ).not.toHaveBeenCalled();
     });
 
     it('rejects updateCurrentProject when runtime scope is missing', async () => {
       const resolver = new ProjectResolver();
-      const ctx = {
+      const ctx = withAuthorizedContext({
         runtimeScope: null,
         projectRepository: {
           updateOne: jest.fn(),
@@ -246,7 +531,7 @@ describe('ProjectResolver', () => {
         projectService: {
           generateProjectRecommendationQuestions: jest.fn(),
         },
-      } as any;
+      });
 
       await expect(
         resolver.updateCurrentProject(null, { data: { language: 'EN' } }, ctx),
@@ -260,15 +545,190 @@ describe('ProjectResolver', () => {
       ).not.toHaveBeenCalled();
     });
 
+    it('records allowed audit when listing data source tables', async () => {
+      const resolver = new ProjectResolver();
+      const getProjectDataSourceTables = jest
+        .fn()
+        .mockResolvedValue([{ name: 'orders' }]);
+      const ctx = withAuthorizedContext({
+        runtimeScope: {
+          project: { id: 42, type: 'POSTGRES' },
+          workspace: { id: 'workspace-1' },
+          knowledgeBase: { id: 'kb-1' },
+        },
+        projectService: {
+          getProjectDataSourceTables,
+        },
+      });
+
+      await expect(
+        resolver.listDataSourceTables(null, null, ctx),
+      ).resolves.toEqual([{ name: 'orders' }]);
+
+      expect(ctx.auditEventRepository.createOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'knowledge_base.read',
+          resourceType: 'project',
+          resourceId: '42',
+          result: 'allowed',
+          payloadJson: {
+            operation: 'list_data_source_tables',
+          },
+        }),
+      );
+    });
+
+    it('records allowed audit when fetching schema change summary', async () => {
+      const resolver = new ProjectResolver();
+      const ctx = withAuthorizedContext({
+        runtimeScope: {
+          project: { id: 42, type: 'POSTGRES' },
+          workspace: { id: 'workspace-1' },
+          knowledgeBase: { id: 'kb-1' },
+        },
+        schemaChangeRepository: {
+          findLastSchemaChange: jest.fn().mockResolvedValue(null),
+        },
+      });
+
+      await expect(resolver.getSchemaChange(null, null, ctx)).resolves.toEqual({
+        deletedTables: null,
+        deletedColumns: null,
+        modifiedColumns: null,
+        lastSchemaChangeTime: null,
+      });
+
+      expect(ctx.auditEventRepository.createOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'knowledge_base.read',
+          resourceType: 'project',
+          resourceId: '42',
+          result: 'allowed',
+          payloadJson: {
+            operation: 'get_schema_change',
+          },
+        }),
+      );
+    });
+
+    it('rejects direct datasource edits for managed federated runtime projects', async () => {
+      const resolver = new ProjectResolver();
+      const ctx = withAuthorizedContext({
+        runtimeScope: {
+          project: {
+            id: 42,
+            type: 'TRINO',
+            displayName: '[internal] Sales KB federated runtime',
+            connectionInfo: {
+              host: 'trino',
+              port: 8080,
+            },
+          },
+          knowledgeBase: {
+            id: 'kb-1',
+            name: '销售知识库',
+            runtimeProjectId: 42,
+          },
+        },
+        projectRepository: {
+          updateOne: jest.fn(),
+        },
+        projectService: {
+          getProjectDataSourceTables: jest.fn(),
+        },
+      });
+
+      await expect(
+        resolver.updateDataSource(
+          null,
+          {
+            data: {
+              type: DataSourceName.TRINO,
+              properties: {
+                displayName: 'custom',
+                host: 'new-host',
+              },
+            },
+          },
+          ctx,
+        ),
+      ).rejects.toThrow(MANAGED_FEDERATED_RUNTIME_READONLY_MESSAGE);
+
+      expect(ctx.projectRepository.updateOne).not.toHaveBeenCalled();
+      expect(
+        ctx.projectService.getProjectDataSourceTables,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('dual-writes knowledge base language while preserving project-side recommendation generation', async () => {
+      const resolver = new ProjectResolver();
+      const ctx = withAuthorizedContext({
+        runtimeScope: {
+          project: { id: 42, sampleDataset: null },
+          knowledgeBase: {
+            id: 'kb-1',
+            sampleDataset: null,
+          },
+          selector: { runtimeScopeId: 'kb-1' },
+        },
+        projectRepository: {
+          updateOne: jest.fn().mockResolvedValue(undefined),
+        },
+        knowledgeBaseRepository: {
+          updateOne: jest.fn().mockResolvedValue(undefined),
+        },
+        projectService: {
+          generateProjectRecommendationQuestions: jest
+            .fn()
+            .mockResolvedValue(undefined),
+        },
+      });
+
+      await expect(
+        resolver.updateCurrentProject(
+          null,
+          { data: { language: 'ZH_CN' } },
+          ctx,
+        ),
+      ).resolves.toBe(true);
+
+      expect(ctx.projectRepository.updateOne).toHaveBeenCalledWith(42, {
+        language: 'ZH_CN',
+      });
+      expect(ctx.knowledgeBaseRepository.updateOne).toHaveBeenCalledWith(
+        'kb-1',
+        {
+          language: 'ZH_CN',
+        },
+      );
+      expect(
+        ctx.projectService.generateProjectRecommendationQuestions,
+      ).toHaveBeenCalledWith(42, 'kb-1');
+      expect(ctx.auditEventRepository.createOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'knowledge_base.update',
+          resourceType: 'knowledge_base',
+          resourceId: 'kb-1',
+          result: 'succeeded',
+          afterJson: {
+            language: 'ZH_CN',
+          },
+          payloadJson: {
+            operation: 'update_current_project',
+          },
+        }),
+      );
+    });
+
     it('keeps resetCurrentProject scoped and does not fall back to current project', async () => {
       const resolver = new ProjectResolver();
       const getCurrentProject = jest.fn();
-      const ctx = {
+      const ctx = withAuthorizedContext({
         runtimeScope: null,
         projectService: {
           getCurrentProject,
         },
-      } as any;
+      });
 
       await expect(resolver.resetCurrentProject(null, null, ctx)).resolves.toBe(
         true,
@@ -279,7 +739,7 @@ describe('ProjectResolver', () => {
 
     it('passes runtime identity when deleting semantics during reset', async () => {
       const resolver = new ProjectResolver();
-      const ctx = {
+      const ctx = withAuthorizedContext({
         runtimeScope: {
           project: { id: 42, type: 'POSTGRES' },
           workspace: { id: 'workspace-1' },
@@ -308,22 +768,21 @@ describe('ProjectResolver', () => {
         wrenAIAdaptor: {
           delete: jest.fn().mockResolvedValue(undefined),
         },
-      } as any;
+      });
 
       await expect(resolver.resetCurrentProject(null, null, ctx)).resolves.toBe(
         true,
       );
 
-      expect(ctx.wrenAIAdaptor.delete).toHaveBeenCalledWith({
-        runtimeIdentity: expect.objectContaining({
-          projectId: null,
-          workspaceId: 'workspace-1',
-          knowledgeBaseId: 'kb-1',
-          kbSnapshotId: 'snapshot-1',
-          deployHash: 'deploy-1',
-          actorUserId: 'user-1',
-        }),
+      const deleteArg = ctx.wrenAIAdaptor.delete.mock.calls[0][0];
+      expect(deleteArg.runtimeIdentity).toMatchObject({
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snapshot-1',
+        deployHash: 'deploy-1',
+        actorUserId: 'user-1',
       });
+      expect(deleteArg.runtimeIdentity.projectId).toBeUndefined();
     });
 
     it('passes runtime identity when deploying onboarding changes', async () => {
@@ -373,7 +832,7 @@ describe('ProjectResolver', () => {
 
     it('keeps resetCurrentProject using scoped runtime identity only', async () => {
       const resolver = new ProjectResolver();
-      const ctx = {
+      const ctx = withAuthorizedContext({
         runtimeScope: {
           project: { id: 42, type: 'POSTGRES' },
           workspace: { id: 'workspace-1' },
@@ -402,19 +861,15 @@ describe('ProjectResolver', () => {
         wrenAIAdaptor: {
           delete: jest.fn().mockResolvedValue(undefined),
         },
-      } as any;
+      });
 
       await resolver.resetCurrentProject(null, null, ctx);
 
-      expect(ctx.wrenAIAdaptor.delete).toHaveBeenCalledWith({
-        runtimeIdentity: expect.objectContaining({
-          projectId: null,
-          deployHash: 'deploy-1',
-        }),
+      const deleteArg = ctx.wrenAIAdaptor.delete.mock.calls[0][0];
+      expect(deleteArg.runtimeIdentity).toMatchObject({
+        deployHash: 'deploy-1',
       });
-      expect(ctx.wrenAIAdaptor.delete).not.toHaveBeenCalledWith({
-        runtimeIdentity: { projectId: 42 },
-      });
+      expect(deleteArg.runtimeIdentity.projectId).toBeUndefined();
     });
   });
 
@@ -441,9 +896,10 @@ describe('ProjectResolver', () => {
       resolver.buildRelationInput = jest.fn().mockReturnValue([]);
       resolver.deploy = jest.fn().mockResolvedValue(undefined);
 
-      const ctx = {
+      const ctx = withAuthorizedContext({
         runtimeScope: {
           project: { id: 42 },
+          workspace: { id: 'workspace-1' },
         },
         telemetry: { sendEvent: jest.fn() },
         projectService: {
@@ -476,7 +932,7 @@ describe('ProjectResolver', () => {
         projectRepository: {
           updateOne: jest.fn().mockResolvedValue(updatedProject),
         },
-      } as any;
+      });
 
       await expect(
         resolver.startSampleDataset(null, { data: { name: 'HR' } }, ctx),
@@ -502,13 +958,25 @@ describe('ProjectResolver', () => {
         models,
         columns,
       );
-      expect(resolver.deploy).toHaveBeenCalledWith(
-        ctx,
-        updatedProject,
-      );
+      expect(resolver.deploy).toHaveBeenCalledWith(ctx, updatedProject);
       expect(ctx.modelService.saveRelations).toHaveBeenCalledWith([]);
       expect(ctx.modelRepository.findAll).not.toHaveBeenCalled();
       expect(ctx.modelColumnRepository.findAll).not.toHaveBeenCalled();
+      expect(ctx.auditEventRepository.createOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'knowledge_base.update',
+          resourceType: 'project',
+          resourceId: '42',
+          result: 'succeeded',
+          afterJson: {
+            sampleDataset: 'HR',
+          },
+          payloadJson: {
+            operation: 'start_sample_dataset',
+            datasetName: 'HR',
+          },
+        }),
+      );
     });
   });
 });

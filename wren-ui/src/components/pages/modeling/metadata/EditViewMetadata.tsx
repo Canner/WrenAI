@@ -1,4 +1,4 @@
-import { useContext } from 'react';
+import { useCallback, useContext } from 'react';
 import { Typography } from 'antd';
 import { NODE_TYPE } from '@/utils/enum';
 import FieldTable from '@/components/table/FieldTable';
@@ -6,8 +6,9 @@ import { makeEditableBaseTable } from '@/components/table/EditableBaseTable';
 import { createViewNameValidator } from '@/utils/validator';
 import { COLUMN } from '@/components/table/BaseTable';
 import { EditableContext } from '@/components/EditableWrapper';
+import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
+import { validateViewName } from '@/utils/viewRest';
 import EditBasicMetadata from './EditBasicMetadata';
-import { useValidateViewMutation } from '@/apollo/client/graphql/view.generated';
 
 export interface Props {
   formNamespace: string;
@@ -36,12 +37,20 @@ export default function EditViewMetadata(props: Props) {
   } = props || {};
 
   const form = useContext(EditableContext);
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
+  const validateViewNameRequest = useCallback(
+    (name: string) =>
+      validateViewName(runtimeScopeNavigation.selector, {
+        name,
+      }),
+    [runtimeScopeNavigation.selector],
+  );
 
-  const [validateViewMutation] = useValidateViewMutation({
-    fetchPolicy: 'no-cache',
-  });
+  const onChange = (value: Record<string, unknown>) => {
+    if (!form) {
+      return;
+    }
 
-  const onChange = (value) => {
     form.setFieldsValue({
       [formNamespace]: {
         ...(form.getFieldValue(formNamespace) || {}),
@@ -74,7 +83,7 @@ export default function EditViewMetadata(props: Props) {
           displayName: [
             {
               required: true,
-              validator: createViewNameValidator(validateViewMutation),
+              validator: createViewNameValidator(validateViewNameRequest),
             },
           ],
         }}
@@ -82,7 +91,7 @@ export default function EditViewMetadata(props: Props) {
 
       <div className="mb-6">
         <Typography.Text className="d-block gray-7 mb-2">
-          Columns ({fields.length})
+          字段（{fields.length}）
         </Typography.Text>
         <FieldEditableTable
           dataSource={fields}

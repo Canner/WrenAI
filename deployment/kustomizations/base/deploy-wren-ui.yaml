@@ -17,11 +17,6 @@ spec:
         - name: wren-ui
           image: ghcr.io/canner/wren-ui:0.5.6
           env:
-            - name: DB_TYPE
-              valueFrom:
-                configMapKeyRef:
-                  name: wren-config
-                  key: WREN_UI_DB_TYPE
             - name: WREN_ENGINE_ENDPOINT
               valueFrom:
                 configMapKeyRef:

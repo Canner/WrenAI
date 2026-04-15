@@ -21,13 +21,14 @@ interface Attributes {
 
 export default forwardRef<Attributes, Props>(function Guide(_props, ref) {
   const router = useRouter();
-  const $driver = useRef<DriverObj>(null);
+  const $driver = useRef<DriverObj | null>(null);
 
   const { data: settingsResult } = useGetSettingsQuery();
   const storyPayload = useMemo(() => {
     return {
-      sampleDataset: settingsResult?.settings?.dataSource.sampleDataset,
-      language: settingsResult?.settings?.language,
+      sampleDataset:
+        settingsResult?.settings?.dataSource.sampleDataset || undefined,
+      language: settingsResult?.settings?.language || undefined,
     };
   }, [settingsResult?.settings]);
 
@@ -35,12 +36,15 @@ export default forwardRef<Attributes, Props>(function Guide(_props, ref) {
     if ($driver.current !== null) return;
     $driver.current = driver();
     return () => {
-      $driver.current.destroy();
+      $driver.current?.destroy();
       $driver.current = null;
     };
   }, []);
 
   const play = (id: string, dispatcher: Dispatcher) => {
+    if (!$driver.current) {
+      return;
+    }
     const playStoryWithId = makeStoriesPlayer(
       $driver.current,
       router,
@@ -49,11 +53,7 @@ export default forwardRef<Attributes, Props>(function Guide(_props, ref) {
     playStoryWithId(id, dispatcher);
   };
 
-  useImperativeHandle(ref, () => ({ play }), [
-    $driver.current,
-    storyPayload,
-    router,
-  ]);
+  useImperativeHandle(ref, () => ({ play }), [router, storyPayload]);
 
   return null;
 });

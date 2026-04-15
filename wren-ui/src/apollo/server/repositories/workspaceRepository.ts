@@ -13,6 +13,7 @@ export interface Workspace {
   slug: string;
   name: string;
   status: string;
+  kind?: string;
   settings?: Record<string, any> | null;
   createdBy?: string | null;
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Modal, Form, Input, Typography, Button, Alert } from 'antd';
+import { Modal, Form, Input, Typography, Button, Alert, message } from 'antd';
 import LinkOutlined from '@ant-design/icons/LinkOutlined';
 import { FORM_MODE } from '@/utils/enum';
 import { ERROR_TEXTS } from '@/utils/error';
@@ -65,7 +65,10 @@ export default function AddCalculatedFieldModal(props: Props) {
 
   const [validateCalculatedField] = useValidateCalculatedFieldMutation();
   const validateCalculatedFieldName = useCallback(
-    async (name: string) =>
+    async (name: string) => {
+      if (!sourceModel) {
+        return;
+      }
       await validateCalculatedField({
         variables: {
           data: {
@@ -74,7 +77,8 @@ export default function AddCalculatedFieldModal(props: Props) {
             columnId: defaultValue?.columnId,
           },
         },
-      }),
+      });
+    },
     [sourceModel, defaultValue],
   );
 
@@ -84,9 +88,12 @@ export default function AddCalculatedFieldModal(props: Props) {
   }, [form, defaultValue, visible]);
 
   const fetchOptions = useCallback(
-    async (value) => {
+    async (value: FieldValue) => {
+      if (!sourceModel) {
+        return [];
+      }
       const selectedModel = models.find(
-        (model) => model.referenceName === value.referenceName,
+        (model: DiagramModel) => model.referenceName === value.referenceName,
       );
       // use current model options when initial
       return getLineageOptions({
@@ -109,6 +116,9 @@ export default function AddCalculatedFieldModal(props: Props) {
     form
       .validateFields()
       .then(async (values) => {
+        if (!sourceModel || !onSubmit) {
+          return;
+        }
         const id = defaultValue?.columnId;
         const modelId = !id ? sourceModel.modelId : undefined;
 
@@ -120,7 +130,7 @@ export default function AddCalculatedFieldModal(props: Props) {
             name: values.name,
             // lineage output example: [relationId1, relationId2, columnId], the last item is always a columnId
             lineage: values.lineage.map(
-              (field) => field.relationId || field.columnId,
+              (field: FieldValue) => field.relationId || field.columnId,
             ),
           },
         });
@@ -128,16 +138,20 @@ export default function AddCalculatedFieldModal(props: Props) {
       })
       .catch((err) => {
         const graphQLError = parseGraphQLError(err);
+        if (!graphQLError) {
+          return;
+        }
         if (graphQLError.code === ERROR_CODES.INVALID_CALCULATED_FIELD) {
           setError(graphQLError);
+          return;
         }
-        console.error(err);
+        message.error(graphQLError.message || '保存计算字段失败，请稍后重试。');
       });
   };
 
   return (
     <Modal
-      title={`${isEditMode ? 'Update' : 'Add'} calculated field`}
+      title={`${isEditMode ? '编辑' : '新增'}计算字段`}
       width={750}
       visible={visible}
       onCancel={onClose}
@@ -155,13 +169,13 @@ export default function AddCalculatedFieldModal(props: Props) {
               target="_blank"
               rel="noopener noreferrer"
             >
-              How to set primary key in a model.
+              如何为模型设置主键
             </Typography.Link>
           </div>
           <div>
-            <Button onClick={onClose}>Cancel</Button>
+            <Button onClick={onClose}>取消</Button>
             <Button type="primary" onClick={submit} loading={loading}>
-              Save
+              保存
             </Button>
           </div>
         </div>
@@ -169,7 +183,7 @@ export default function AddCalculatedFieldModal(props: Props) {
     >
       <Form form={form} preserve={false} layout="vertical">
         <Form.Item
-          label="Name"
+          label="名称"
           name="name"
           required
           rules={[
@@ -184,7 +198,7 @@ export default function AddCalculatedFieldModal(props: Props) {
         </Form.Item>
 
         <Form.Item
-          label="Select an expression"
+          label="选择表达式"
           name="expression"
           required
           rules={[
@@ -195,7 +209,7 @@ export default function AddCalculatedFieldModal(props: Props) {
           ]}
         >
           <DescriptiveSelector
-            placeholder="Select an expression"
+            placeholder="请选择表达式"
             options={expressionOptions}
             descriptiveContentRender={(content) => {
               return (

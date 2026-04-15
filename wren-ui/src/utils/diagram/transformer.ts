@@ -35,15 +35,34 @@ export const Config = {
   viewNodePreservedHeight: 32 * 1,
 };
 
-const convertBooleanToNumber = (value) => (value ? 1 : 0);
+const convertBooleanToNumber = (value: boolean) => (value ? 1 : 0);
 
-const getLimitedColumnsLengthProps = (columns: any[] = []) => {
-  const isOverLimit = columns.length > Config.columnsLimit;
-  const limitedLength = isOverLimit ? Config.columnsLimit : columns.length;
+const getPresentArray = <T>(
+  columns?: ReadonlyArray<T | null | undefined> | null,
+): T[] => (columns || []).filter((column): column is T => Boolean(column));
+
+const getNonNullLength = (
+  columns?: ReadonlyArray<unknown | null | undefined> | null,
+): number => {
+  let count = 0;
+  for (const column of columns || []) {
+    if (column !== null && column !== undefined) {
+      count += 1;
+    }
+  }
+  return count;
+};
+
+const getLimitedColumnsLengthProps = (
+  columns?: ReadonlyArray<unknown | null | undefined> | null,
+) => {
+  const columnsLength = getNonNullLength(columns);
+  const isOverLimit = columnsLength > Config.columnsLimit;
+  const limitedLength = isOverLimit ? Config.columnsLimit : columnsLength;
   return {
     isOverLimit,
     limitedLength,
-    originalLength: columns.length,
+    originalLength: columnsLength,
   };
 };
 
@@ -74,8 +93,8 @@ export class Transformer {
   };
 
   constructor(data: Diagram) {
-    this.models = data?.models || [];
-    this.views = data?.views || [];
+    this.models = getPresentArray(data?.models);
+    this.views = getPresentArray(data?.views);
     this.init();
   }
 
@@ -114,21 +133,21 @@ export class Transformer {
         ...this.views,
       ].slice(lastFloorIndex, lastFloorIndex + 4);
 
-      const modelWithMostColumns = composeDiagrams.reduce((prev, current) => {
-        const prevColumns = [
-          ...prev.fields,
-          ...(prev?.calculatedFields || []),
-          ...(current?.relationFields || []),
-        ];
-        const currentColumns = [
-          ...current.fields,
-          ...(current?.calculatedFields || []),
-          ...(current?.relationFields || []),
-        ];
-        return prevColumns.length > currentColumns.length ? prev : current;
-      }, composeDiagrams[0]);
+      if (composeDiagrams.length > 0) {
+        const modelWithMostColumns = composeDiagrams.reduce((prev, current) => {
+          const prevColumnsLength =
+            getNonNullLength(prev.fields) +
+            getNonNullLength(prev.calculatedFields) +
+            getNonNullLength(prev.relationFields);
+          const currentColumnsLength =
+            getNonNullLength(current.fields) +
+            getNonNullLength(current.calculatedFields) +
+            getNonNullLength(current.relationFields);
+          return prevColumnsLength > currentColumnsLength ? prev : current;
+        }, composeDiagrams[0]);
 
-      floorHeight = this.getNodeHeight(modelWithMostColumns) + marginY;
+        floorHeight = this.getNodeHeight(modelWithMostColumns) + marginY;
+      }
     }
 
     this.start.x = this.start.x + width + marginX;
@@ -166,7 +185,7 @@ export class Transformer {
   }
 
   private addModelEdge(data: DiagramModel) {
-    const { relationFields } = data;
+    const relationFields = getPresentArray(data.relationFields);
     for (const relationField of relationFields) {
       // check if edge already exist
       const hasEdgeExist = this.edges.some((edge) => {
@@ -190,15 +209,16 @@ export class Transformer {
 
       const targetField = targetModel.relationFields.find(
         (field) =>
+          Boolean(field) &&
           [
-            `${field.fromModelName}.${field.fromColumnName}`,
-            `${field.toModelName}.${field.toColumnName}`,
+            `${field?.fromModelName}.${field?.fromColumnName}`,
+            `${field?.toModelName}.${field?.toColumnName}`,
           ].toString() ===
-          [
-            `${relationField.fromModelName}.${relationField.fromColumnName}`,
-            `${relationField.toModelName}.${relationField.toColumnName}`,
-          ].toString(),
-      );
+            [
+              `${relationField.fromModelName}.${relationField.fromColumnName}`,
+              `${relationField.toModelName}.${relationField.toColumnName}`,
+            ].toString(),
+      ) as DiagramModelRelationField | undefined;
 
       // check what source and target relation order
       const relationModels = [
@@ -212,19 +232,18 @@ export class Transformer {
         (name) => name === targetModel?.referenceName,
       );
 
-      targetModel &&
-        this.edges.push(
-          this.createEdge({
-            type: EDGE_TYPE.MODEL,
-            joinType: relationField.type,
-            sourceModel: data,
-            sourceField: relationField,
-            sourceJoinIndex,
-            targetModel,
-            targetField,
-            targetJoinIndex,
-          }),
-        );
+      this.edges.push(
+        this.createEdge({
+          type: EDGE_TYPE.MODEL,
+          joinType: relationField.type,
+          sourceModel: data,
+          sourceField: relationField,
+          sourceJoinIndex,
+          targetModel,
+          targetField,
+          targetJoinIndex,
+        }),
+      );
     }
   }
 
@@ -256,8 +275,16 @@ export class Transformer {
     const sourceHandle = `${sourceField?.id || source}_${sourcePos}`;
     const targetHandle = `${targetField?.id || target}_${targetPos}`;
 
-    const markerStart = this.getMarker(joinType!, sourceJoinIndex!, sourcePos);
-    const markerEnd = this.getMarker(joinType!, targetJoinIndex!, targetPos);
+    const markerStart = this.getMarker(
+      joinType || JOIN_TYPE.ONE_TO_ONE,
+      sourceJoinIndex ?? 0,
+      sourcePos,
+    );
+    const markerEnd = this.getMarker(
+      joinType || JOIN_TYPE.ONE_TO_ONE,
+      targetJoinIndex ?? 1,
+      targetPos,
+    );
 
     return {
       id: `${sourceHandle}_${targetHandle}`,
@@ -282,14 +309,14 @@ export class Transformer {
   }
 
   private detectEdgePosition(source: string, target: string) {
-    const position = [];
+    const position: [Position, Position] = [Position.Left, Position.Left];
     const [sourceIndex, targetIndex] = [...this.models].reduce(
       (result, current, index) => {
         if (current.id === source) result[0] = index;
         if (current.id === target) result[1] = index;
         return result;
       },
-      [-1, -1],
+      [-1, -1] as [number, number],
     );
     const sourceFloorIndex = this.getFloorIndex(sourceIndex);
     const targetFloorIndex = this.getFloorIndex(targetIndex);
@@ -312,13 +339,13 @@ export class Transformer {
     joinIndex: number,
     position?: Position,
   ) {
-    const markers =
+    const markers: string[] =
       {
         [JOIN_TYPE.ONE_TO_ONE]: [MARKER_TYPE.ONE, MARKER_TYPE.ONE],
         [JOIN_TYPE.ONE_TO_MANY]: [MARKER_TYPE.ONE, MARKER_TYPE.MANY],
         [JOIN_TYPE.MANY_TO_ONE]: [MARKER_TYPE.MANY, MARKER_TYPE.ONE],
       }[joinType] || [];
-    return markers[joinIndex] + (position ? `_${position}` : '');
+    return (markers[joinIndex] || '') + (position ? `_${position}` : '');
   }
 
   private getNodeWidth() {
@@ -336,11 +363,12 @@ export class Transformer {
     } = this.config;
 
     // get preserved height setting
-    const preservedHeightMap = {
+    const preservedHeightMap: Partial<Record<NODE_TYPE, number>> = {
       [NODE_TYPE.MODEL]: modelNodePreservedHeight,
       [NODE_TYPE.VIEW]: viewNodePreservedHeight,
     };
-    const preservedHeight = preservedHeightMap[composeDiagram.nodeType];
+    const preservedHeight =
+      preservedHeightMap[composeDiagram.nodeType as NODE_TYPE] || 0;
 
     // check if columns limit is reached
     const { limitedLength: fieldsLength, isOverLimit: isFieldsOverLimit } =

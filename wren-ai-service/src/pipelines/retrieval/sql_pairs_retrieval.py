@@ -5,7 +5,6 @@ from typing import Any, Dict, List, Optional
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack import Document, component
-from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
 from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
@@ -13,7 +12,7 @@ from src.core.provider import DocumentStoreProvider, EmbedderProvider
 from src.pipelines.common import (
     ScoreFilter,
     build_runtime_scope_filters,
-    normalize_runtime_scope_id,
+    resolve_pipeline_runtime_scope_id,
 )
 
 logger = logging.getLogger("wren-ai-service")
@@ -40,9 +39,9 @@ class OutputFormatter:
 ## Start of Pipeline
 @observe(capture_input=False)
 async def count_documents(
-    store: QdrantDocumentStore, project_id: Optional[str] = None
+    store: Any, runtime_scope_id: Optional[str] = None
 ) -> int:
-    runtime_scope_id = normalize_runtime_scope_id(project_id)
+    runtime_scope_id = resolve_pipeline_runtime_scope_id(runtime_scope_id)
     filters = build_runtime_scope_filters(runtime_scope_id)
     document_count = await store.count_documents(filters=filters)
     return document_count
@@ -57,9 +56,8 @@ async def embedding(count_documents: int, query: str, embedder: Any) -> dict:
 
 
 @observe(capture_input=False)
-async def retrieval(embedding: dict, project_id: str, retriever: Any) -> dict:
+async def retrieval(embedding: dict, runtime_scope_id: str, retriever: Any) -> dict:
     if embedding:
-        runtime_scope_id = normalize_runtime_scope_id(project_id)
         res = await retriever.run(
             query_embedding=embedding.get("embedding"),
             filters=build_runtime_scope_filters(runtime_scope_id),
@@ -129,14 +127,21 @@ class SqlPairsRetrieval(BasicPipeline):
         )
 
     @observe(name="SqlPairs Retrieval")
-    async def run(self, query: str, project_id: Optional[str] = None):
+    async def run(
+        self,
+        query: str,
+        runtime_scope_id: Optional[str] = None,
+        bridge_scope_id: Optional[str] = None,
+    ):
         logger.info("SqlPairs Retrieval pipeline is running...")
-        runtime_scope_id = normalize_runtime_scope_id(project_id)
+        runtime_scope_id = resolve_pipeline_runtime_scope_id(
+            runtime_scope_id, bridge_scope_id=bridge_scope_id
+        )
         return await self._pipe.execute(
             ["formatted_output"],
             inputs={
                 "query": query,
-                "project_id": runtime_scope_id or "",
+                "runtime_scope_id": runtime_scope_id or "",
                 **self._components,
                 **self._configs,
             },

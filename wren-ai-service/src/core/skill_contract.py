@@ -46,46 +46,6 @@ class SkillRuntimeIdentity(SkillContractModel):
     )
 
 
-class SkillActorClaims(SkillContractModel):
-    user_id: Optional[str] = Field(
-        default=None,
-        validation_alias=AliasChoices("user_id", "userId"),
-    )
-    workspace_member_id: Optional[str] = Field(
-        default=None,
-        validation_alias=AliasChoices("workspace_member_id", "workspaceMemberId"),
-    )
-    role_keys: list[str] = Field(
-        default_factory=list,
-        validation_alias=AliasChoices("role_keys", "roleKeys"),
-    )
-    permission_scopes: list[str] = Field(
-        default_factory=list,
-        validation_alias=AliasChoices("permission_scopes", "permissionScopes"),
-    )
-
-
-class SkillConnector(SkillContractModel):
-    id: str
-    type: str
-    display_name: Optional[str] = Field(
-        default=None,
-        validation_alias=AliasChoices("display_name", "displayName"),
-    )
-    config: dict[str, Any] = Field(default_factory=dict)
-    metadata: dict[str, Any] = Field(default_factory=dict)
-
-
-class SkillSecret(SkillContractModel):
-    id: str
-    name: Optional[str] = None
-    values: dict[str, Any] = Field(default_factory=dict)
-    redacted_keys: list[str] = Field(
-        default_factory=list,
-        validation_alias=AliasChoices("redacted_keys", "redactedKeys"),
-    )
-
-
 class SkillHistoryEntry(SkillContractModel):
     role: Literal["system", "user", "assistant", "tool"] = "user"
     content: str
@@ -152,18 +112,8 @@ class SkillExecutionRequest(SkillContractModel):
     runtime_identity: SkillRuntimeIdentity = Field(
         validation_alias=AliasChoices("runtime_identity", "runtimeIdentity")
     )
-    actor_claims: Optional[SkillActorClaims] = Field(
-        default=None,
-        validation_alias=AliasChoices("actor_claims", "actorClaims"),
-    )
-    connectors: list[SkillConnector] = Field(default_factory=list)
-    secrets: list[SkillSecret] = Field(default_factory=list)
     history_window: list[SkillHistoryEntry] = Field(
         default_factory=list,
         validation_alias=AliasChoices("history_window", "historyWindow"),
-    )
-    skill_config: dict[str, Any] = Field(
-        default_factory=dict,
-        validation_alias=AliasChoices("skill_config", "skillConfig"),
     )
     metadata: dict[str, Any] = Field(default_factory=dict)

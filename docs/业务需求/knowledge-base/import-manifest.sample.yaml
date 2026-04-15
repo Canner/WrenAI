@@ -1,0 +1,34 @@
+version: v1
+root: docs/业务需求/knowledge-base
+parser:
+  front_matter: yaml
+  sql_section_heading: "## SQL 模板"
+  instruction_section_heading: "## 规则内容"
+  question_section_heading: "## 建议问题（可转为 sql_pair.question）"
+
+sql_pairs:
+  include_globs:
+    - sql-templates/T*.md
+  only_status:
+    - draft_sql
+  skip_ids:
+    - T05
+    - T07
+    - T14
+    - T15
+  defaults:
+    dialect: tidb_mysql8
+    parameter_style: colon_named
+
+instructions:
+  include_globs:
+    - analysis-rules/R*.md
+  only_status:
+    - draft
+  defaults:
+    scope_fallback: question_match
+
+notes:
+  - 单文件 Markdown 是导入权威来源
+  - blocked 模板先不导入，等数据源/模型补齐后再放开
+  - 导入时优先读取 front matter，再抽取正文中的 SQL / instruction 主体

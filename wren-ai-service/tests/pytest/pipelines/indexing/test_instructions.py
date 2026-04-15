@@ -37,7 +37,7 @@ async def test_instructions_indexing():
     ]
 
     await instructions.run(
-        project_id="fake-id",
+        runtime_scope_id="fake-id",
         instructions=test_instructions,
     )
 
@@ -73,12 +73,12 @@ async def test_instructions_indexing_with_multiple_project_ids():
     ]
 
     await instructions.run(
-        project_id="fake-id",
+        runtime_scope_id="fake-id",
         instructions=test_instructions,
     )
 
     await instructions.run(
-        project_id="fake-id-2",
+        runtime_scope_id="fake-id-2",
         instructions=test_instructions,
     )
 
@@ -121,25 +121,25 @@ async def test_instructions_deletion():
     ]
 
     await instructions.run(
-        project_id="fake-id",
+        runtime_scope_id="fake-id",
         instructions=test_instructions,
     )
 
     await instructions.clean(
         instructions=[Instruction(id="test-id-1")],
-        project_id="fake-id-2",
+        runtime_scope_id="fake-id-2",
     )
     assert await store.count_documents() == 2
 
     await instructions.clean(
         instructions=[Instruction(id="test-id-1")],
-        project_id="fake-id",
+        runtime_scope_id="fake-id",
     )
     assert await store.count_documents() == 1
 
     await instructions.clean(
         instructions=[],
         delete_all=True,
-        project_id="fake-id",
+        runtime_scope_id="fake-id",
     )
     assert await store.count_documents() == 0

@@ -227,57 +227,5 @@
       "isFollowup": true
     },
     "allowed_variance": "必须使用 followup 分支，而不是普通 sql_generation。"
-  },
-  {
-    "name": "skill_first_text",
-    "query": "本月 API 里的实时 GMV",
-    "runtimeIdentity": {
-      "workspaceId": "workspace-1",
-      "knowledgeBaseId": "kb-1",
-      "deployHash": "deploy-1"
-    },
-    "actorClaims": {
-      "userId": "user-1"
-    },
-    "skillConfig": {
-      "mode": "skill-first"
-    },
-    "skills": [
-      {
-        "skillId": "skill-1",
-        "skillName": "realtime_gmv_skill",
-        "sourceType": "inline",
-        "runtimeKind": "isolated_python",
-        "entrypoint": "main.py"
-      }
-    ],
-    "scenario": {
-      "skill_runner": {
-        "enabled": true,
-        "run_response": {
-          "execution_id": "exec-1",
-          "status": "accepted"
-        },
-        "result_response": {
-          "execution_id": "exec-1",
-          "status": "succeeded",
-          "result": {
-            "result_type": "text",
-            "text": "实时 GMV 为 128 万",
-            "trace": {
-              "skillRunId": "run-1"
-            }
-          }
-        }
-      }
-    },
-    "expected": {
-      "path": "skill",
-      "type": "SKILL",
-      "status": "finished",
-      "skillResultType": "text",
-      "skillText": "实时 GMV 为 128 万"
-    },
-    "allowed_variance": "skill trace metadata 可扩展，但 skill-first 命中后不应再回落到 NL2SQL。"
   }
 ]

@@ -20,7 +20,6 @@ def _list_items(payload: Any) -> list[Any]:
 def summarize_ask_result(result: Optional[dict[str, Any]]) -> dict[str, Any]:
     metadata = _read_value(result, "metadata", {}) or {}
     ask_results = _list_items(_read_value(result, "ask_result", []))
-    skill_result = _read_value(result, "skill_result", {}) or {}
 
     return {
         "type": _read_value(metadata, "type"),
@@ -29,10 +28,9 @@ def summarize_ask_result(result: Optional[dict[str, Any]]) -> dict[str, Any]:
         "fallback_reason": _read_value(metadata, "fallback_reason"),
         "resolved_runtime": _read_value(metadata, "resolved_runtime"),
         "ask_runtime_mode": _read_value(metadata, "ask_runtime_mode"),
+        "orchestrator": _read_value(metadata, "orchestrator"),
         "sql": _read_value(ask_results[0], "sql") if ask_results else None,
         "result_count": len(ask_results),
-        "skill_result_type": _read_value(skill_result, "result_type"),
-        "skill_text": _read_value(skill_result, "text"),
     }
 
 
@@ -58,15 +56,6 @@ def _match_summaries(
             and primary_summary["result_count"] == shadow_summary["result_count"]
         )
 
-    if primary_summary["type"] == "SKILL":
-        return (
-            primary_summary["skill_result_type"] == shadow_summary["skill_result_type"]
-            and primary_summary["skill_text"] == shadow_summary["skill_text"]
-        )
-
-    if primary_summary["type"] == "GENERAL":
-        return primary_summary["ask_path"] == shadow_summary["ask_path"]
-
     return False
 
 
@@ -80,7 +69,7 @@ def _is_comparable(
     return bool(
         executed
         and not shadow_error
-        and primary_summary["type"]
+        and primary_summary["type"] == "TEXT_TO_SQL"
         and primary_summary["type"] == shadow_summary["type"]
     )
 

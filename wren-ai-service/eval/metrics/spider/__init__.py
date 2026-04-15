@@ -3,7 +3,6 @@ import itertools
 import os
 import random
 import re
-import sqlite3
 from collections import defaultdict
 from itertools import chain, product
 from typing import Any, Iterator, List, Set, Tuple
@@ -11,6 +10,12 @@ from typing import Any, Iterator, List, Set, Tuple
 import sqlparse
 import tqdm
 
+from eval.metrics.spider.database import (
+    close_cursor,
+    get_cursor_from_target,
+    is_postgres_target,
+    normalize_postgres_query_for_execution,
+)
 from eval.metrics.spider.process_sql import get_sql
 
 # Flag to disable value evaluation
@@ -785,32 +790,28 @@ def replace_cur_year(query: str) -> str:
     )
 
 
-# get the database cursor for a sqlite database path
-def get_cursor_from_path(sqlite_path: str):
+# get the database cursor for a benchmark source database path
+def get_cursor_from_path(db_path: str):
     try:
-        if not os.path.exists(sqlite_path):
-            print("Openning a new connection %s" % sqlite_path)
-        connection = sqlite3.connect(sqlite_path)
+        _, cursor = get_cursor_from_target(db_path)
     except Exception as e:
-        print(sqlite_path)
+        print(db_path)
         raise e
-    connection.text_factory = lambda b: b.decode(errors="ignore")
-    cursor = connection.cursor()
     return cursor
 
 
-async def exec_on_db_(sqlite_path: str, query: str) -> Tuple[str, Any]:
+async def exec_on_db_(db_path: str, query: str) -> Tuple[str, Any]:
     query = replace_cur_year(query)
-    cursor = get_cursor_from_path(sqlite_path)
+    if is_postgres_target(db_path):
+        query = normalize_postgres_query_for_execution(query)
+    cursor = get_cursor_from_path(db_path)
     try:
         cursor.execute(query)
         result = cursor.fetchall()
-        cursor.close()
-        cursor.connection.close()
+        close_cursor(cursor)
         return "result", result
     except Exception as e:
-        cursor.close()
-        cursor.connection.close()
+        close_cursor(cursor)
         return "exception", e
 
 
@@ -818,10 +819,10 @@ TIMEOUT = 60
 
 
 async def exec_on_db(
-    sqlite_path: str, query: str, process_id: str = "", timeout: int = TIMEOUT
+    db_path: str, query: str, process_id: str = "", timeout: int = TIMEOUT
 ) -> Tuple[str, Any]:
     try:
-        return await asyncio.wait_for(exec_on_db_(sqlite_path, query), timeout)
+        return await asyncio.wait_for(exec_on_db_(db_path, query), timeout)
     except asyncio.TimeoutError:
         return ("exception", TimeoutError)
     except Exception as e:
@@ -960,12 +961,9 @@ async def eval_exec_match(
     order_matters = "order by" in g_str.lower()
 
     # find all databases in the same directory
-    db_dir = os.path.dirname(db)
-    db_paths = [
-        os.path.join(db_dir, basename)
-        for basename in os.listdir(db_dir)
-        if ".sqlite" in basename
-    ]
+    from eval.metrics.spider.database import resolve_execution_targets
+
+    db_paths = resolve_execution_targets(db)
 
     preds = [p_str]
     # if plug in value (i.e. we do not consider value prediction correctness)

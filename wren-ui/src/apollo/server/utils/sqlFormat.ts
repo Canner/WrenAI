@@ -9,13 +9,14 @@ export function safeFormatSQL(
 ): string {
   try {
     return format(sql, options);
-  } catch (err) {
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
     try {
       logger.debug(`Fallback to Trino dialect for SQL formatting...`);
       // Try using Trino as the fallback dialect
       return format(sql, { ...options, language: 'trino' });
     } catch (_fallbackError) {
-      logger.error(`Failed to format SQL: ${err.message}`);
+      logger.error(`Failed to format SQL: ${errorMessage}`);
       return sql;
     }
   }

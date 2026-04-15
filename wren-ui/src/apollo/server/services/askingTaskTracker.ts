@@ -14,6 +14,8 @@ import {
 } from '@server/repositories';
 import { IWrenAIAdaptor } from '../adaptors';
 import * as Errors from '@server/utils/error';
+import { toPersistedRuntimeIdentityPatch } from '@server/utils/persistedRuntimeIdentity';
+import { registerShutdownCallback } from '@server/utils/shutdown';
 
 const logger = getLogger('AskingTaskTracker');
 logger.level = 'debug';
@@ -47,6 +49,9 @@ export interface IAskingTaskTracker {
   createAskingTask(input: CreateAskingTaskInput): Promise<{ queryId: string }>;
   getAskingResult(queryId: string): Promise<TrackedAskingResult | null>;
   getAskingResultById(id: number): Promise<TrackedAskingResult | null>;
+  getTrackedRuntimeIdentity?(
+    queryId: string,
+  ): Promise<PersistedRuntimeIdentity | null>;
   cancelAskingTask(queryId: string): Promise<void>;
   bindThreadResponse(
     id: number,
@@ -63,10 +68,11 @@ export class AskingTaskTracker implements IAskingTaskTracker {
   private trackedTasksById: Map<number, TrackedTask> = new Map();
   private pollingInterval: number;
   private memoryRetentionTime: number;
-  private pollingIntervalId: NodeJS.Timeout;
+  private pollingIntervalId: NodeJS.Timeout | null = null;
   private runningJobs = new Set<string>();
   private threadResponseRepository: IThreadResponseRepository;
   private viewRepository: IViewRepository;
+  private unregisterShutdown?: () => void;
 
   constructor({
     wrenAIAdaptor,
@@ -121,6 +127,16 @@ export class AskingTaskTracker implements IAskingTaskTracker {
       } as TrackedTask;
       this.trackedTasks.set(queryId, task);
 
+      if (!input.rerunFromCancelled) {
+        task.result = {
+          type: null,
+          status: AskResultStatus.UNDERSTANDING,
+          response: [],
+          error: null,
+        };
+        await this.updateTaskInDatabase({ queryId }, task);
+      }
+
       // if rerun from cancelled, we update the query id to the previous task
       if (
         input.rerunFromCancelled &&
@@ -144,7 +160,9 @@ export class AskingTaskTracker implements IAskingTaskTracker {
         // update the query id in database
         await this.askingTaskRepository.updateOne(input.previousTaskId, {
           queryId,
-          ...(input.runtimeIdentity || {}),
+          ...(input.runtimeIdentity
+            ? toPersistedRuntimeIdentityPatch(input.runtimeIdentity)
+            : {}),
         });
       }
 
@@ -166,7 +184,7 @@ export class AskingTaskTracker implements IAskingTaskTracker {
       return {
         ...trackedTask.result,
         queryId,
-        question: trackedTask.question,
+        question: trackedTask.question || '',
         taskId: trackedTask.taskId,
       };
     }
@@ -186,6 +204,12 @@ export class AskingTaskTracker implements IAskingTaskTracker {
     return this.getAskingResultFromDB({ taskId: id });
   }
 
+  public async getTrackedRuntimeIdentity(
+    queryId: string,
+  ): Promise<PersistedRuntimeIdentity | null> {
+    return this.trackedTasks.get(queryId)?.runtimeIdentity || null;
+  }
+
   public async cancelAskingTask(queryId: string): Promise<void> {
     await this.wrenAIAdaptor.cancelAsk(queryId);
   }
@@ -194,6 +218,8 @@ export class AskingTaskTracker implements IAskingTaskTracker {
     if (this.pollingIntervalId) {
       clearInterval(this.pollingIntervalId);
     }
+    this.unregisterShutdown?.();
+    this.unregisterShutdown = undefined;
   }
 
   public async bindThreadResponse(
@@ -224,6 +250,9 @@ export class AskingTaskTracker implements IAskingTaskTracker {
     this.pollingIntervalId = setInterval(() => {
       this.pollTasks();
     }, this.pollingInterval);
+    this.unregisterShutdown = registerShutdownCallback(() =>
+      this.stopPolling(),
+    );
   }
 
   private async pollTasks(): Promise<void> {
@@ -263,7 +292,7 @@ export class AskingTaskTracker implements IAskingTaskTracker {
             task.lastPolled = now;
 
             // if result is not changed, we don't need to update the database
-            if (!this.isResultChanged(task.result, result)) {
+            if (!task.result || !this.isResultChanged(task.result, result)) {
               this.runningJobs.delete(queryId);
               return;
             }
@@ -290,10 +319,14 @@ export class AskingTaskTracker implements IAskingTaskTracker {
                   result.type === AskResultType.GENERAL
                     ? Errors.GeneralErrorCodes.IDENTIED_AS_GENERAL
                     : Errors.GeneralErrorCodes.IDENTIED_AS_MISLEADING_QUERY;
+                const errorMessage =
+                  Errors.errorMessages[errorCode] ?? 'Unknown error';
+                const shortMessage =
+                  Errors.shortMessages[errorCode] ?? 'Unknown error';
                 const error = {
                   code: errorCode,
-                  message: Errors.errorMessages[errorCode],
-                  shortMessage: Errors.shortMessages[errorCode],
+                  message: errorMessage,
+                  shortMessage,
                 };
                 await this.updateTaskInDatabase(
                   { queryId },
@@ -335,7 +368,7 @@ export class AskingTaskTracker implements IAskingTaskTracker {
 
             // Mark the job as finished
             this.runningJobs.delete(queryId);
-          } catch (err) {
+          } catch (err: any) {
             this.runningJobs.delete(queryId);
             logger.error(err.stack);
             throw err;
@@ -370,16 +403,11 @@ export class AskingTaskTracker implements IAskingTaskTracker {
     task: TrackedTask,
   ): Promise<void> {
     const response = task?.result?.response?.[0];
-    const skillResult = task?.result?.skillResult;
-    if (!response && !skillResult) {
+    if (!response) {
       return;
     }
 
     const updatePayload: Record<string, any> = {};
-
-    if (skillResult) {
-      updatePayload.skillResult = skillResult;
-    }
 
     // if the generated response of asking task is not null, update the thread response
     if (response?.viewId) {
@@ -387,12 +415,18 @@ export class AskingTaskTracker implements IAskingTaskTracker {
       const view = await this.viewRepository.findOneBy({
         id: response.viewId,
       });
+      if (!view) {
+        return;
+      }
       updatePayload.sql = view.statement;
       updatePayload.viewId = response.viewId;
     } else if (response?.sql) {
       updatePayload.sql = response.sql;
     }
 
+    if (!task.threadResponseId) {
+      return;
+    }
     await this.threadResponseRepository.updateOne(
       task.threadResponseId,
       updatePayload,
@@ -420,7 +454,7 @@ export class AskingTaskTracker implements IAskingTaskTracker {
     return {
       ...(taskRecord?.detail as AskResult),
       queryId: queryId || taskRecord?.queryId,
-      question: taskRecord?.question,
+      question: taskRecord?.question || '',
       taskId: taskRecord?.id,
     };
   }
@@ -443,10 +477,12 @@ export class AskingTaskTracker implements IAskingTaskTracker {
         queryId,
         question: trackedTask.question,
         detail: trackedTask.result,
-        ...(trackedTask.runtimeIdentity || {}),
+        ...(trackedTask.runtimeIdentity
+          ? toPersistedRuntimeIdentityPatch(trackedTask.runtimeIdentity)
+          : {}),
       });
       // update the task id in memory
-      let existingTask: TrackedTask;
+      let existingTask: TrackedTask | undefined;
       if (queryId) {
         existingTask = this.trackedTasks.get(queryId);
       } else if (taskId) {
@@ -461,7 +497,9 @@ export class AskingTaskTracker implements IAskingTaskTracker {
     // update the task
     await this.askingTaskRepository.updateOne(taskRecord.id, {
       detail: trackedTask.result,
-      ...(trackedTask.runtimeIdentity || {}),
+      ...(trackedTask.runtimeIdentity
+        ? toPersistedRuntimeIdentityPatch(trackedTask.runtimeIdentity)
+        : {}),
     });
   }
 

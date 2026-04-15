@@ -71,13 +71,13 @@ export class MDLBuilder implements IMDLBuilder {
     } = builderOptions;
     this.project = project;
     this.models = models.sort((a, b) => a.id - b.id);
-    this.columns = columns.sort((a, b) => a.id - b.id);
-    this.nestedColumns = nestedColumns;
-    this.relations = relations.sort((a, b) => a.id - b.id);
+    this.columns = (columns || []).sort((a, b) => a.id - b.id);
+    this.nestedColumns = nestedColumns || [];
+    this.relations = (relations || []).sort((a, b) => a.id - b.id);
     this.views = views || [];
-    this.relatedModels = relatedModels;
-    this.relatedColumns = relatedColumns;
-    this.relatedRelations = relatedRelations;
+    this.relatedModels = relatedModels || [];
+    this.relatedColumns = relatedColumns || [];
+    this.relatedRelations = relatedRelations || [];
 
     // init manifest
     this.manifest = {};
@@ -136,7 +136,7 @@ export class MDLBuilder implements IMDLBuilder {
       return;
     }
     this.manifest.views = this.views.map((view: View) => {
-      const properties = JSON.parse(view.properties) || {};
+      const properties = JSON.parse(view.properties || '{}') || {};
 
       // filter out properties that are not null or undefined
       // and are in the list of properties that are allowed
@@ -162,8 +162,9 @@ export class MDLBuilder implements IMDLBuilder {
   }
 
   public addNormalField(): void {
+    const manifestModels = this.manifest.models;
     // should addModel first
-    if (isEmpty(this.manifest.models)) {
+    if (!manifestModels || isEmpty(manifestModels)) {
       logger.debug('No model in manifest, should build model first');
       return;
     }
@@ -180,9 +181,15 @@ export class MDLBuilder implements IMDLBuilder {
           );
           return;
         }
-        const model = this.manifest.models.find(
+        const model = manifestModels.find(
           (model: any) => model.name === modelRefName,
         );
+        if (!model) {
+          logger.debug(
+            `Build MDL Column Error: model "${modelRefName}" not found in manifest`,
+          );
+          return;
+        }
 
         // modify model primary key
         if (column.isPk) {
@@ -229,8 +236,9 @@ export class MDLBuilder implements IMDLBuilder {
   }
 
   public addCalculatedField(): void {
+    const manifestModels = this.manifest.models;
     // should addModel first
-    if (isEmpty(this.manifest.models)) {
+    if (!manifestModels || isEmpty(manifestModels)) {
       logger.debug('No model in manifest, should build model first');
       return;
     }
@@ -241,7 +249,13 @@ export class MDLBuilder implements IMDLBuilder {
         const relatedModel = this.relatedModels.find(
           (model: any) => model.id === column.modelId,
         );
-        const model = this.manifest.models.find(
+        if (!relatedModel) {
+          logger.debug(
+            `Build MDL Column Error: related model not found, modelId "${column.modelId}", columnId: "${column.id}"`,
+          );
+          return;
+        }
+        const model = manifestModels.find(
           (model: any) => model.name === relatedModel.referenceName,
         );
         if (!model) {
@@ -257,8 +271,9 @@ export class MDLBuilder implements IMDLBuilder {
           isCalculated: true,
           expression,
           notNull: column.notNull ? true : false,
-          properties: JSON.parse(column.properties),
+          properties: JSON.parse(column.properties || '{}'),
         };
+        model.columns = model.columns || [];
         model.columns.push(columnValue);
       });
   }
@@ -267,13 +282,18 @@ export class MDLBuilder implements IMDLBuilder {
     modelName: string,
     calculatedField: ModelColumn,
   ) {
-    const model = this.manifest.models.find(
-      (model: any) => model.name === modelName,
-    );
+    const manifestModels = this.manifest.models;
+    if (!manifestModels) {
+      logger.debug('Can not find models in manifest to add calculated field');
+      return;
+    }
+
+    const model = manifestModels.find((model: any) => model.name === modelName);
     if (!model) {
       logger.debug(`Can not find model "${modelName}" to add calculated field`);
       return;
     }
+    model.columns = model.columns || [];
     // if calculated field is already in the model, skip
     if (
       model.columns.find(
@@ -289,7 +309,7 @@ export class MDLBuilder implements IMDLBuilder {
       isCalculated: true,
       expression,
       notNull: calculatedField.notNull ? true : false,
-      properties: JSON.parse(calculatedField.properties),
+      properties: JSON.parse(calculatedField.properties || '{}'),
     };
     model.columns.push(columnValue);
   }
@@ -349,9 +369,13 @@ export class MDLBuilder implements IMDLBuilder {
       relation: string;
     },
   ) {
-    const model = this.manifest.models.find(
-      (model: any) => model.name === modelName,
-    );
+    const manifestModels = this.manifest.models;
+    if (!manifestModels) {
+      logger.debug('Can not find models in manifest to add relation column');
+      return;
+    }
+
+    const model = manifestModels.find((model: any) => model.name === modelName);
     if (!model) {
       logger.debug(`Can not find model "${modelName}" to add relation column`);
       return;
@@ -368,7 +392,7 @@ export class MDLBuilder implements IMDLBuilder {
         ? `${columnData.modelReferenceName}_${columnData.columnReferenceName}`
         : columnData.modelReferenceName,
       type: columnData.modelReferenceName,
-      properties: null,
+      properties: {},
       relationship: columnData.relation,
       isCalculated: false,
       notNull: false,
@@ -389,9 +413,12 @@ export class MDLBuilder implements IMDLBuilder {
       return '';
     }
     // calculated field
+    if (!column.lineage) {
+      return '';
+    }
     const lineage = JSON.parse(column.lineage) as number[];
     // lineage = [relationId1, relationId2, ..., columnId]
-    const fieldExpression = Object.entries<number>(lineage).reduce(
+    const fieldExpression = Object.entries<number>(lineage).reduce<string[]>(
       (acc, [index, id]) => {
         const isLast = parseInt(index) == lineage.length - 1;
         if (isLast) {
@@ -406,15 +433,21 @@ export class MDLBuilder implements IMDLBuilder {
         const usedRelation = this.relatedRelations.find(
           (relatedRelation) => relatedRelation.id === id,
         );
+        if (!usedRelation || !currentModel?.columns) {
+          return acc;
+        }
         const relationColumnName = currentModel!.columns.find(
           (c) => c.relationship === usedRelation.name,
-        ).name;
+        )?.name;
+        if (!relationColumnName) {
+          return acc;
+        }
         // move to next model
         const nextModelName =
           currentModel.name === usedRelation.fromModelName
             ? usedRelation.toModelName
             : usedRelation.fromModelName;
-        const nextModel = this.manifest.models.find(
+        const nextModel = this.manifest.models?.find(
           (model) => model.name === nextModelName,
         );
         currentModel = nextModel;
@@ -451,7 +484,7 @@ export class MDLBuilder implements IMDLBuilder {
     if (this.useRustWrenEngine()) {
       // 1. remove all the key that the value is null
       this.manifest.models = this.manifest.models?.map((model) => {
-        model.columns.map((column) => {
+        model.columns?.map((column) => {
           column.properties = pickBy(
             column.properties,
             (value) => value !== null,
@@ -486,7 +519,7 @@ export class MDLBuilder implements IMDLBuilder {
   private useRustWrenEngine(): boolean {
     return !!config.experimentalEngineRustVersion;
   }
-  private buildDataSource(): WrenEngineDataSourceType {
+  private buildDataSource(): WrenEngineDataSourceType | undefined {
     const type = this.project.type;
     if (!type) {
       return;

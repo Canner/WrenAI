@@ -11,7 +11,7 @@ from src.core.engine import (
     Engine,
     clean_generation_result,
 )
-from src.pipelines.common import normalize_runtime_scope_id
+from src.pipelines.common import resolve_pipeline_runtime_scope_id
 from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
 from src.web.v1.services.ask import AskHistory
 
@@ -30,14 +30,17 @@ class SQLGenPostProcessor:
     async def run(
         self,
         replies: List[str] | List[List[str]],
-        project_id: str | None = None,
+        runtime_scope_id: str | None = None,
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
         data_source: str = "",
         allow_data_preview: bool = False,
+        bridge_scope_id: str | None = None,
     ) -> dict:
         try:
-            runtime_scope_id = normalize_runtime_scope_id(project_id)
+            runtime_scope_id = resolve_pipeline_runtime_scope_id(
+                runtime_scope_id, bridge_scope_id=bridge_scope_id
+            )
             cleaned_generation_result = clean_generation_result(replies[0])
 
             # test if cleaned_generation_result in string format is actually a dictionary with key 'sql'
@@ -51,7 +54,7 @@ class SQLGenPostProcessor:
                 invalid_generation_result,
             ) = await self._classify_generation_result(
                 cleaned_generation_result,
-                project_id=runtime_scope_id,
+                runtime_scope_id=runtime_scope_id,
                 use_dry_plan=use_dry_plan,
                 allow_dry_plan_fallback=allow_dry_plan_fallback,
                 data_source=data_source,
@@ -73,13 +76,12 @@ class SQLGenPostProcessor:
     async def _classify_generation_result(
         self,
         generation_result: str,
-        project_id: str | None = None,
+        runtime_scope_id: str | None = None,
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
         data_source: str = "",
         allow_data_preview: bool = False,
     ) -> Dict[str, str]:
-        runtime_scope_id = normalize_runtime_scope_id(project_id)
         valid_generation_result = {}
         invalid_generation_result = {}
         use_dry_run = not allow_data_preview
@@ -111,7 +113,7 @@ class SQLGenPostProcessor:
                 success, _, addition = await self._engine.execute_sql(
                     generation_result,
                     session,
-                    project_id=runtime_scope_id,
+                    runtime_scope_id=runtime_scope_id,
                     limit=1,
                     dry_run=True,
                 )
@@ -136,7 +138,7 @@ class SQLGenPostProcessor:
                 has_data, _, addition = await self._engine.execute_sql(
                     generation_result,
                     session,
-                    project_id=runtime_scope_id,
+                    runtime_scope_id=runtime_scope_id,
                     limit=1,
                     dry_run=False,
                 )
@@ -223,6 +225,17 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - You can only add "ORDER BY" and "LIMIT" to the final "UNION" result.
 - For the ranking problem, you must use the ranking function, `DENSE_RANK()` to rank the results and then use `WHERE` clause to filter the results.
 - For the ranking problem, you must add the ranking column to the final SELECT clause.
+"""
+
+_TRINO_TEXT_TO_SQL_RULES = """
+### TRINO DIALECT RULES ###
+- The runtime engine is Trino. Use Trino-compatible SQL syntax and functions.
+- Use the logical table names shown in the `CREATE TABLE` statements in DATABASE SCHEMA for the final SQL query.
+- If a table comment exposes `source_catalog`, `source_schema`, or `source_table_identity`, treat them as origin hints for reasoning and disambiguation.
+- Use `CAST(<expr> AS <type>)` instead of PostgreSQL-style `::<type>` casts.
+- Do not use PostgreSQL-only features such as `ILIKE` or `DISTINCT ON`.
+- Do not use BigQuery-only features such as backtick identifiers, `SAFE_CAST`, or `QUALIFY`.
+- Prefer Trino-compatible date/time helpers such as `date_trunc`, `current_date`, and `current_timestamp`.
 """
 
 
@@ -464,13 +477,26 @@ def _extract_from_sql_knowledge(
     return value if value and value.strip() else default_value
 
 
-def get_text_to_sql_rules(sql_knowledge: SqlKnowledge | None = None) -> str:
+def _with_data_source_specific_rules(base_rules: str, data_source: str | None) -> str:
+    if (data_source or "").strip().lower() == "trino":
+        return f"{base_rules}\n\n{_TRINO_TEXT_TO_SQL_RULES}"
+
+    return base_rules
+
+
+def get_text_to_sql_rules(
+    sql_knowledge: SqlKnowledge | None = None,
+    data_source: str | None = None,
+) -> str:
     if sql_knowledge is not None:
-        return _extract_from_sql_knowledge(
+        return _with_data_source_specific_rules(
+            _extract_from_sql_knowledge(
             sql_knowledge, "text_to_sql_rule", _DEFAULT_TEXT_TO_SQL_RULES
+            ),
+            data_source,
         )
 
-    return _DEFAULT_TEXT_TO_SQL_RULES
+    return _with_data_source_specific_rules(_DEFAULT_TEXT_TO_SQL_RULES, data_source)
 
 
 def get_calculated_field_instructions(sql_knowledge: SqlKnowledge | None = None) -> str:
@@ -502,8 +528,11 @@ def get_json_field_instructions(sql_knowledge: SqlKnowledge | None = None) -> st
     return _DEFAULT_JSON_FIELD_INSTRUCTIONS
 
 
-def get_sql_generation_system_prompt(sql_knowledge: SqlKnowledge | None = None) -> str:
-    text_to_sql_rules = get_text_to_sql_rules(sql_knowledge)
+def get_sql_generation_system_prompt(
+    sql_knowledge: SqlKnowledge | None = None,
+    data_source: str | None = None,
+) -> str:
+    text_to_sql_rules = get_text_to_sql_rules(sql_knowledge, data_source)
 
     return f"""
 You are a helpful assistant that converts natural language queries into ANSI SQL queries.

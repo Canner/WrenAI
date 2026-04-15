@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Modal, Layout, Button } from 'antd';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Modal, Layout, Button, message } from 'antd';
 import styled from 'styled-components';
 import { SETTINGS } from '@/utils/enum';
 import { makeIterable } from '@/utils/iteration';
@@ -9,10 +9,11 @@ import InfoCircleOutlined from '@ant-design/icons/InfoCircleOutlined';
 import DataSourceSettings from './DataSourceSettings';
 import ProjectSettings from './ProjectSettings';
 import { getSettingMenu } from './utils';
+import { fetchSettings, type SettingsData } from '@/utils/settingsRest';
 import {
-  useGetSettingsLazyQuery,
-  GetSettingsQuery,
-} from '@/apollo/client/graphql/settings.generated';
+  DataSourceName,
+  SampleDatasetName,
+} from '@/apollo/client/graphql/__types__';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 
 const { Sider, Content } = Layout;
@@ -54,28 +55,45 @@ const DynamicComponent = ({
   closeModal,
 }: {
   menu: SETTINGS;
-  data?: GetSettingsQuery['settings'];
-  refetch: () => void;
+  data?: SettingsData | null;
+  refetch: () => Promise<SettingsData | null>;
   closeModal: () => void;
 }) => {
+  if (!data) {
+    return null;
+  }
+
   const { dataSource, language } = data || {};
   return (
     {
       [SETTINGS.DATA_SOURCE]: (
         <DataSourceSettings
-          type={dataSource?.type}
-          sampleDataset={dataSource?.sampleDataset}
-          properties={dataSource?.properties}
+          type={dataSource?.type as DataSourceName}
+          sampleDataset={
+            (dataSource?.sampleDataset || null) as SampleDatasetName
+          }
+          properties={dataSource?.properties || {}}
           refetchSettings={refetch}
           closeModal={closeModal}
         />
       ),
-      [SETTINGS.PROJECT]: <ProjectSettings data={{ language }} />,
+      [SETTINGS.PROJECT]: (
+        <ProjectSettings
+          data={{ language: String(language || '') }}
+          refetchSettings={refetch}
+        />
+      ),
     }[menu] || null
   );
 };
 
-const MenuTemplate = ({ currentMenu, value, onClick }) => {
+type MenuTemplateProps = {
+  currentMenu: SETTINGS;
+  value: SETTINGS;
+  onClick: (payload: { value: SETTINGS }) => void;
+};
+
+const MenuTemplate = ({ currentMenu, value, onClick }: MenuTemplateProps) => {
   const current = getSettingMenu(value);
   return (
     <StyledButton
@@ -96,26 +114,44 @@ export default function Settings(props: Props) {
   const { onClose, visible } = props;
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const [menu, setMenu] = useState<SETTINGS>(SETTINGS.DATA_SOURCE);
+  const [settings, setSettings] = useState<SettingsData | null>(null);
   const current = getSettingMenu(menu);
-  const menuList = Object.keys(SETTINGS).map((key) => ({
-    key,
-    value: SETTINGS[key],
+  const menuList = Object.values(SETTINGS).map((value) => ({
+    key: value,
+    value: value as SETTINGS,
   }));
-  const [fetchSettings, { data, refetch }] = useGetSettingsLazyQuery({
-    fetchPolicy: 'cache-and-network',
-  });
+
+  const loadSettings = useCallback(async () => {
+    if (!runtimeScopeNavigation.hasRuntimeScope) {
+      setSettings(null);
+      return null;
+    }
+
+    try {
+      const nextSettings = await fetchSettings(runtimeScopeNavigation.selector);
+      setSettings(nextSettings);
+      return nextSettings;
+    } catch (error) {
+      message.error(
+        error instanceof Error
+          ? error.message
+          : '加载系统设置失败，请稍后重试。',
+      );
+      return null;
+    }
+  }, [runtimeScopeNavigation.hasRuntimeScope, runtimeScopeNavigation.selector]);
 
   const productVersion = useMemo(() => {
-    return data?.settings?.productVersion;
-  }, [data?.settings]);
+    return settings?.productVersion;
+  }, [settings?.productVersion]);
 
   useEffect(() => {
     if (visible && runtimeScopeNavigation.hasRuntimeScope) {
-      fetchSettings();
+      void loadSettings();
     }
-  }, [fetchSettings, runtimeScopeNavigation.hasRuntimeScope, visible]);
+  }, [loadSettings, runtimeScopeNavigation.hasRuntimeScope, visible]);
 
-  const onMenuClick = ({ value }) => setMenu(value);
+  const onMenuClick = ({ value }: { value: SETTINGS }) => setMenu(value);
 
   return (
     <StyledModal
@@ -131,7 +167,7 @@ export default function Settings(props: Props) {
         <StyledSider width={310} className="border-r border-gray-4">
           <div className="gray-9 text-bold py-3 px-5">
             <SettingOutlined className="mr-2" />
-            Settings
+            系统设置
           </div>
           <div className="p-3 flex-grow-1">
             <MenuIterator
@@ -143,7 +179,7 @@ export default function Settings(props: Props) {
           {!!productVersion && (
             <div className="gray-7 d-flex align-center p-3 px-5">
               <InfoCircleOutlined className="mr-2 text-sm" />
-              Wren AI version: {productVersion}
+              引擎版本：{productVersion}
             </div>
           )}
         </StyledSider>
@@ -155,8 +191,8 @@ export default function Settings(props: Props) {
           <div className="flex-grow-1" style={{ overflowY: 'auto' }}>
             <DynamicComponent
               menu={menu}
-              data={data?.settings}
-              refetch={refetch}
+              data={settings}
+              refetch={loadSettings}
               closeModal={onClose}
             />
           </div>

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { ReactNode, useMemo } from 'react';
 import { Table, TableProps, Row, Col } from 'antd';
 import EllipsisWrapper from '@/components/EllipsisWrapper';
 import SQLCodeBlock from '@/components/code/SQLCodeBlock';
@@ -8,69 +8,71 @@ import { makeIterable } from '@/utils/iteration';
 
 export const COLUMN = {
   ALIAS: {
-    title: 'Alias',
+    title: '显示名称',
     dataIndex: 'displayName',
     key: 'alias',
     ellipsis: true,
-    render: (name) => name || '-',
+    render: (name: string | null | undefined) => name || '-',
   },
   NAME: {
-    title: 'Name',
+    title: '名称',
     dataIndex: 'referenceName',
     key: 'referenceName',
     ellipsis: true,
-    render: (name) => name || '-',
+    render: (name: string | null | undefined) => name || '-',
   },
   TYPE: {
-    title: 'Type',
+    title: '类型',
     dataIndex: 'type',
-    render: (type) => {
+    render: (type: string | null | undefined) => {
       return (
         <div className="d-flex align-center">
-          {getColumnTypeIcon({ type }, { className: 'mr-2' })}
+          {getColumnTypeIcon({ type: type || '' }, { className: 'mr-2' })}
           {type}
         </div>
       );
     },
   },
   EXPRESSION: {
-    title: 'Expression',
+    title: '表达式',
     dataIndex: 'expression',
     key: 'expression',
-    render: (expression) => {
+    render: (expression: string | null | undefined) => {
+      const code = expression || '';
       return (
-        <EllipsisWrapper text={expression}>
-          <SQLCodeBlock code={expression} inline />
+        <EllipsisWrapper text={code}>
+          <SQLCodeBlock code={code} inline />
         </EllipsisWrapper>
       );
     },
   },
   RELATION_FROM: {
-    title: 'From',
+    title: '来源字段',
     key: 'fromField',
     ellipsis: true,
-    render: (relation) =>
-      `${relation.fromModelDisplayName}.${relation.fromColumnDisplayName}`,
+    render: (relation: Partial<ComposeDiagramField>) =>
+      `${relation.fromModelDisplayName || ''}.${relation.fromColumnDisplayName || ''}`,
   },
   RELATION_TO: {
-    title: 'To',
+    title: '目标字段',
     key: 'toField',
     ellipsis: true,
-    render: (relation) =>
-      `${relation.toModelDisplayName}.${relation.toColumnDisplayName}`,
+    render: (relation: Partial<ComposeDiagramField>) =>
+      `${relation.toModelDisplayName || ''}.${relation.toColumnDisplayName || ''}`,
   },
   RELATION: {
-    title: 'Type',
+    title: '关系类型',
     dataIndex: 'type',
     key: 'joinType',
-    render: (joinType) => getJoinTypeText(joinType),
+    render: (joinType: string | null | undefined) =>
+      getJoinTypeText((joinType || '') as never),
   },
   DESCRIPTION: {
-    title: 'Description',
+    title: '描述',
     dataIndex: 'description',
     key: 'description',
     ellipsis: true,
-    render: (text) => text || '-',
+    render: (text: string | null | undefined) => text || '-',
   },
 };
 
@@ -104,6 +106,7 @@ export default function BaseTable(props: Props) {
       dataSource={tableData}
       showHeader={tableData.length > 0}
       columns={tableColumns}
+      locale={{ emptyText: '暂无数据', ...restProps.locale }}
       pagination={{
         hideOnSinglePage: true,
         pageSize: 10,
@@ -113,22 +116,32 @@ export default function BaseTable(props: Props) {
   );
 }
 
-const ExpandableRowIterator = makeIterable((props) => {
-  const { title, value, index } = props;
-  return (
-    <>
-      {index > 0 && <div className="border-b border-gray-5" />}
-      <Row wrap={false} className="py-1 px-2">
-        <Col span={6} className="gray-6">
-          {title}
-        </Col>
-        <Col style={{ wordBreak: 'break-word' }}>{value}</Col>
-      </Row>
-    </>
-  );
-});
+type ExpandableRowItem = {
+  title: ReactNode;
+  value: ReactNode;
+};
 
-export function ExpandableRows(props) {
+const ExpandableRowIterator = makeIterable(
+  (props: ExpandableRowItem & { index: number }) => {
+    const { title, value, index } = props;
+    return (
+      <>
+        {index > 0 && <div className="border-b border-gray-5" />}
+        <Row wrap={false} className="py-1 px-2">
+          <Col span={6} className="gray-6">
+            {title}
+          </Col>
+          <Col style={{ wordBreak: 'break-word' }}>{value}</Col>
+        </Row>
+      </>
+    );
+  },
+);
+
+export function ExpandableRows(props: {
+  data: ExpandableRowItem[];
+  extra?: ReactNode;
+}) {
   const { data, extra } = props;
   return (
     <div className="pl-12 text-sm gray-8 -my-1">

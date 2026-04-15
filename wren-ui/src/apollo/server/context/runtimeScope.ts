@@ -21,12 +21,6 @@ const BODY_KEYS = {
   knowledgeBaseId: ['knowledgeBaseId', 'knowledge_base_id'],
   kbSnapshotId: ['kbSnapshotId', 'kb_snapshot_id'],
   deployHash: ['deployHash', 'deploy_hash'],
-  projectId: [
-    'projectId',
-    'project_id',
-    'legacyProjectId',
-    'legacy_project_id',
-  ],
 } as const;
 
 const HEADER_KEYS = {
@@ -35,7 +29,6 @@ const HEADER_KEYS = {
   knowledgeBaseId: ['x-wren-knowledge-base-id', 'x-knowledge-base-id'],
   kbSnapshotId: ['x-wren-kb-snapshot-id', 'x-kb-snapshot-id'],
   deployHash: ['x-wren-deploy-hash', 'x-deploy-hash'],
-  projectId: ['x-wren-project-id', 'x-project-id'],
 } as const;
 
 const readValueFromObject = (
@@ -97,11 +90,11 @@ export interface RuntimeScopeSelector {
   knowledgeBaseId?: string | null;
   kbSnapshotId?: string | null;
   deployHash?: string | null;
-  legacyProjectId?: number | null;
+  bridgeProjectId?: number | null;
 }
 
 export interface RuntimeScope {
-  source: 'explicit-request' | 'legacy-project-shim';
+  source: 'explicit-request' | 'compatibility-runtime-shim';
   selector: RuntimeScopeSelector;
   project: Project | null;
   deployment: Deploy | null;
@@ -133,9 +126,13 @@ class RuntimeScopeResolutionError extends Error {
 }
 
 export const toPersistedRuntimeIdentity = (
-  runtimeScope: RuntimeScope,
-): PersistedRuntimeIdentity =>
-  toPersistedRuntimeIdentityFromSource({
+  runtimeScope?: RuntimeScope | null,
+): PersistedRuntimeIdentity => {
+  if (!runtimeScope) {
+    throw new Error('Runtime scope is required for this operation');
+  }
+
+  return toPersistedRuntimeIdentityFromSource({
     projectId:
       runtimeScope.deployment?.projectId ?? runtimeScope.project?.id ?? null,
     workspaceId: runtimeScope.workspace?.id || null,
@@ -144,6 +141,7 @@ export const toPersistedRuntimeIdentity = (
     deployHash: runtimeScope.deployHash || null,
     actorUserId: runtimeScope.userId || null,
   });
+};
 
 export interface IRuntimeScopeResolver {
   resolveRequestScope(req: NextApiRequest): Promise<RuntimeScope>;
@@ -231,6 +229,9 @@ export class RuntimeScopeResolver implements IRuntimeScopeResolver {
       actorClaims: null,
       userId: null,
       workspaceId: null,
+      isPlatformAdmin: false,
+      authorizationActor: null,
+      sessionId: null,
     };
 
     const selectorCandidates: RuntimeScopeSelector[] = [
@@ -239,9 +240,9 @@ export class RuntimeScopeResolver implements IRuntimeScopeResolver {
       { knowledgeBaseId: normalizedScopeId },
       { workspaceId: normalizedScopeId },
     ];
-    const legacyProjectId = coerceInteger(normalizedScopeId);
-    if (legacyProjectId) {
-      selectorCandidates.push({ legacyProjectId });
+    const bridgeProjectId = coerceInteger(normalizedScopeId);
+    if (bridgeProjectId) {
+      selectorCandidates.push({ bridgeProjectId });
     }
 
     let lastError: unknown = null;
@@ -310,20 +311,13 @@ export class RuntimeScopeResolver implements IRuntimeScopeResolver {
 
     return {
       ...selector,
-      legacyProjectId: this.hasModernSelector(selector)
-        ? null
-        : coerceInteger(
-            readValueFromObject(body, BODY_KEYS.projectId) ||
-              readValueFromObject(bodyVariables, BODY_KEYS.projectId) ||
-              readValueFromObject(query, BODY_KEYS.projectId) ||
-              readHeaderValue(req.headers, HEADER_KEYS.projectId),
-          ),
+      bridgeProjectId: null,
     };
   }
 
   private hasExplicitSelector(selector: RuntimeScopeSelector): boolean {
     return Boolean(
-      this.hasModernSelector(selector) || selector.legacyProjectId,
+      this.hasModernSelector(selector) || selector.bridgeProjectId,
     );
   }
 
@@ -348,12 +342,6 @@ export class RuntimeScopeResolver implements IRuntimeScopeResolver {
       kbSnapshot = await this.kbSnapshotRepository.findOneBy({
         knowledgeBaseId: selector.knowledgeBaseId,
         deployHash: selector.deployHash,
-      });
-    }
-
-    if (!kbSnapshot && selector.legacyProjectId) {
-      kbSnapshot = await this.kbSnapshotRepository.findOneBy({
-        legacyProjectId: selector.legacyProjectId,
       });
     }
 
@@ -429,7 +417,7 @@ export class RuntimeScopeResolver implements IRuntimeScopeResolver {
       resolvedDeployHash ||
         selector.kbSnapshotId ||
         selector.knowledgeBaseId ||
-        selector.legacyProjectId,
+        selector.bridgeProjectId,
     );
     const deployment = shouldResolveDeployment
       ? await this.resolveDeploymentForScope(
@@ -450,24 +438,17 @@ export class RuntimeScopeResolver implements IRuntimeScopeResolver {
       throw new Error('deploy_hash does not match the requested kb_snapshot');
     }
 
-    const project = await this.resolveProjectForScope(
-      selector,
-      kbSnapshot,
-      deployment,
-    );
+    const project = await this.resolveProjectForScope(selector, deployment);
 
     return {
       source: 'explicit-request',
-      selector: {
-        runtimeScopeId: selector.runtimeScopeId || null,
+      selector: this.buildResolvedSelector({
+        selector,
         workspaceId: workspace?.id || null,
         knowledgeBaseId: knowledgeBase?.id || null,
         kbSnapshotId: kbSnapshot?.id || null,
         deployHash: deployment?.hash || resolvedDeployHash || null,
-        legacyProjectId: this.hasModernSelector(selector)
-          ? null
-          : selector.legacyProjectId || null,
-      },
+      }),
       project,
       deployment,
       deployHash: deployment?.hash || resolvedDeployHash || null,
@@ -481,22 +462,11 @@ export class RuntimeScopeResolver implements IRuntimeScopeResolver {
 
   private async resolveProjectForScope(
     selector: RuntimeScopeSelector,
-    kbSnapshot: KBSnapshot | null,
     deployment: Deploy | null,
   ): Promise<Project | null> {
-    const legacyProjectId =
-      selector.legacyProjectId || kbSnapshot?.legacyProjectId;
+    const bridgeProjectId = this.resolveBridgeProjectId(selector);
 
     if (deployment) {
-      if (
-        kbSnapshot?.legacyProjectId &&
-        kbSnapshot.legacyProjectId !== deployment.projectId
-      ) {
-        throw new Error(
-          'deploy_hash does not match the requested kb_snapshot project bridge',
-        );
-      }
-
       if (!this.hasModernSelector(selector)) {
         return await this.projectRepository.findOneBy({
           id: deployment.projectId,
@@ -506,8 +476,8 @@ export class RuntimeScopeResolver implements IRuntimeScopeResolver {
       return null;
     }
 
-    if (legacyProjectId) {
-      return await this.projectRepository.findOneBy({ id: legacyProjectId });
+    if (bridgeProjectId) {
+      return await this.projectRepository.findOneBy({ id: bridgeProjectId });
     }
 
     return null;
@@ -518,17 +488,58 @@ export class RuntimeScopeResolver implements IRuntimeScopeResolver {
     kbSnapshot: KBSnapshot | null,
     deployHash?: string | null,
   ): Promise<Deploy | null> {
-    const shouldUseLegacyProjectBridge = !this.hasModernSelector(selector);
+    return await this.deployService.getDeploymentByRuntimeIdentity(
+      this.buildDeploymentLookupIdentity(selector, kbSnapshot, deployHash),
+    );
+  }
 
-    return await this.deployService.getDeploymentByRuntimeIdentity({
+  private buildResolvedSelector({
+    selector,
+    workspaceId,
+    knowledgeBaseId,
+    kbSnapshotId,
+    deployHash,
+  }: {
+    selector: RuntimeScopeSelector;
+    workspaceId: string | null;
+    knowledgeBaseId: string | null;
+    kbSnapshotId: string | null;
+    deployHash: string | null;
+  }): RuntimeScopeSelector {
+    return {
+      runtimeScopeId: selector.runtimeScopeId || null,
+      workspaceId,
+      knowledgeBaseId,
+      kbSnapshotId,
+      deployHash,
+      bridgeProjectId: this.hasModernSelector(selector)
+        ? null
+        : selector.bridgeProjectId || null,
+    };
+  }
+
+  private resolveBridgeProjectId(
+    selector: RuntimeScopeSelector,
+  ): number | null {
+    return selector.bridgeProjectId || null;
+  }
+
+  private buildDeploymentLookupIdentity(
+    selector: RuntimeScopeSelector,
+    kbSnapshot: KBSnapshot | null,
+    deployHash?: string | null,
+  ) {
+    const shouldUseProjectBridgeFallback = !this.hasModernSelector(selector);
+
+    return {
       workspaceId: selector.workspaceId || null,
       knowledgeBaseId:
         selector.knowledgeBaseId || kbSnapshot?.knowledgeBaseId || null,
       kbSnapshotId: selector.kbSnapshotId || kbSnapshot?.id || null,
-      projectId: shouldUseLegacyProjectBridge
-        ? selector.legacyProjectId || kbSnapshot?.legacyProjectId || null
+      projectId: shouldUseProjectBridgeFallback
+        ? this.resolveBridgeProjectId(selector)
         : null,
       deployHash,
-    });
+    };
   }
 }

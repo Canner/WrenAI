@@ -16,12 +16,12 @@ describe('pages/api/v1/stream_explanation', () => {
   let consoleErrorSpy: jest.SpyInstance;
 
   const createReq = (query: Record<string, any> = {}) => {
-    const handlers = new Map<string, Function>();
+    const handlers = new Map<string, () => void>();
 
     return {
       method: 'GET',
       query,
-      on: jest.fn((event: string, handler: Function) => {
+      on: jest.fn((event: string, handler: () => void) => {
         handlers.set(event, handler);
       }),
       emitClose: () => handlers.get('close')?.(),
@@ -96,7 +96,7 @@ describe('pages/api/v1/stream_explanation', () => {
     await handler(req, res);
 
     expect(mockAssertAskingTaskScope).toHaveBeenCalledWith('query-1', {
-      projectId: 42,
+      projectId: null,
       workspaceId: 'workspace-1',
       knowledgeBaseId: 'kb-1',
       kbSnapshotId: 'snapshot-1',

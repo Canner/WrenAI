@@ -19,7 +19,7 @@ const Layout = styled.div`
   overflow: hidden;
 `;
 
-const MENU_KEY_MAP = {
+const MENU_KEY_MAP: Record<string, MENU_KEY> = {
   [Path.APIManagementHistory]: MENU_KEY.API_HISTORY,
 };
 
@@ -35,7 +35,7 @@ export default function APIManagement() {
       label: (
         <Link
           style={linkStyle}
-          href={runtimeScopeNavigation.href(Path.APIManagementHistory)}
+          href={runtimeScopeNavigation.hrefWorkspace(Path.APIManagementHistory)}
         >
           API history
         </Link>
@@ -66,7 +66,9 @@ export default function APIManagement() {
     <Layout>
       <SidebarMenu
         items={menuItems}
-        selectedKeys={MENU_KEY_MAP[router.pathname]}
+        selectedKeys={
+          MENU_KEY_MAP[router.pathname] ? [MENU_KEY_MAP[router.pathname]] : []
+        }
       />
     </Layout>
   );

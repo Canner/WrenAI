@@ -140,7 +140,10 @@ export const createCodeBlock = (HighlightRules: any) => {
     }, [code]);
 
     const lines = (code || '').split('\n').map((line, index) => {
-      const tokens = tokenizer.getLineTokens(line).tokens;
+      const tokens = tokenizer.getLineTokens(line).tokens as Array<{
+        type: string;
+        value: string;
+      }>;
       const children = tokens.map((token, index) => {
         const classNames = token.type.split('.').map((name) => `ace_${name}`);
         return (

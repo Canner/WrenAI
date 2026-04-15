@@ -20,6 +20,25 @@ export const SKILL_CONTROL_PLANE = gql`
         displayName
       }
     }
+    marketplaceCatalogSkills {
+      id
+      slug
+      name
+      description
+      category
+      author
+      version
+      runtimeKind
+      sourceType
+      sourceRef
+      entrypoint
+      defaultInstruction
+      defaultExecutionMode
+      manifest
+      isBuiltin
+      isFeatured
+      installCount
+    }
     skillDefinitions {
       id
       workspaceId
@@ -28,17 +47,17 @@ export const SKILL_CONTROL_PLANE = gql`
       sourceType
       sourceRef
       entrypoint
-      manifest
-      createdBy
-    }
-    skillBindings {
-      id
-      knowledgeBaseId
-      kbSnapshotId
-      skillDefinitionId
+      catalogId
+      instruction
+      isEnabled
+      executionMode
       connectorId
-      bindingConfig
-      enabled
+      runtimeConfig
+      kbSuggestionIds
+      installedFrom
+      migrationSourceBindingId
+      manifest
+      hasSecret
       createdBy
     }
   }
@@ -69,27 +88,33 @@ export const DELETE_SKILL_DEFINITION = gql`
   }
 `;
 
-export const CREATE_SKILL_BINDING = gql`
-  mutation CreateSkillBinding($data: CreateSkillBindingInput!) {
-    createSkillBinding(data: $data) {
+export const INSTALL_SKILL_FROM_MARKETPLACE = gql`
+  mutation InstallSkillFromMarketplace($catalogId: String!) {
+    installSkillFromMarketplace(catalogId: $catalogId) {
       id
     }
   }
 `;
 
-export const UPDATE_SKILL_BINDING = gql`
-  mutation UpdateSkillBinding(
-    $where: SkillBindingWhereUniqueInput!
-    $data: UpdateSkillBindingInput!
+export const TOGGLE_SKILL_ENABLED = gql`
+  mutation ToggleSkillEnabled($skillDefinitionId: String!, $enabled: Boolean!) {
+    toggleSkillEnabled(
+      skillDefinitionId: $skillDefinitionId
+      enabled: $enabled
+    ) {
+      id
+      isEnabled
+    }
+  }
+`;
+
+export const UPDATE_SKILL_DEFINITION_RUNTIME = gql`
+  mutation UpdateSkillDefinitionRuntime(
+    $where: SkillDefinitionWhereUniqueInput!
+    $data: UpdateSkillDefinitionRuntimeInput!
   ) {
-    updateSkillBinding(where: $where, data: $data) {
+    updateSkillDefinitionRuntime(where: $where, data: $data) {
       id
     }
-  }
-`;
-
-export const DELETE_SKILL_BINDING = gql`
-  mutation DeleteSkillBinding($where: SkillBindingWhereUniqueInput!) {
-    deleteSkillBinding(where: $where)
   }
 `;

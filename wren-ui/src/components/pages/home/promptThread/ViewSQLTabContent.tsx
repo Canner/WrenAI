@@ -3,7 +3,6 @@ import Image from 'next/image';
 import { useEffect } from 'react';
 import styled from 'styled-components';
 import {
-  Alert,
   Button,
   Divider,
   Empty,
@@ -23,7 +22,7 @@ import { Logo } from '@/components/Logo';
 import { Props as AnswerResultProps } from '@/components/pages/home/promptThread/AnswerResult';
 import usePromptThreadStore from '@/components/pages/home/promptThread/store';
 import PreviewData from '@/components/dataPreview/PreviewData';
-import { usePreviewDataMutation } from '@/apollo/client/graphql/home.generated';
+import useResponsePreviewData from '@/hooks/useResponsePreviewData';
 
 const SQLCodeBlock = dynamic(() => import('@/components/code/SQLCodeBlock'), {
   ssr: false,
@@ -47,16 +46,20 @@ const StyledToolBar = styled.div`
 `;
 
 export default function ViewSQLTabContent(props: AnswerResultProps) {
-  const { isLastThreadResponse, onInitPreviewDone, threadResponse } = props;
+  const {
+    isLastThreadResponse,
+    onInitPreviewDone,
+    shouldAutoPreview,
+    threadResponse,
+  } = props;
 
   const { onOpenAdjustSQLModal } = usePromptThreadStore();
   const { fetchNativeSQL, nativeSQLResult } = useNativeSQL();
-  const [previewData, previewDataResult] = usePreviewDataMutation({
-    onError: (error) => console.error(error),
-  });
+  const previewDataResult = useResponsePreviewData(threadResponse.id);
+  const { ensureLoaded: ensurePreviewLoaded } = previewDataResult;
 
   const onPreviewData = async () => {
-    await previewData({ variables: { where: { responseId: id } } });
+    await ensurePreviewLoaded();
   };
 
   const autoTriggerPreviewDataButton = async () => {
@@ -68,20 +71,25 @@ export default function ViewSQLTabContent(props: AnswerResultProps) {
 
   // when is the last step of the last thread response, auto trigger preview data button
   useEffect(() => {
-    if (isLastThreadResponse) {
+    if (isLastThreadResponse && shouldAutoPreview) {
       autoTriggerPreviewDataButton();
     }
-  }, [isLastThreadResponse]);
+  }, [isLastThreadResponse, shouldAutoPreview]);
 
   const { id, sql } = threadResponse;
+  const sqlText = sql ?? '';
 
   const { hasNativeSQL, dataSourceType } = nativeSQLResult;
   const showNativeSQL = hasNativeSQL;
+  const dataSourceOption =
+    dataSourceType && DATA_SOURCE_OPTIONS[dataSourceType]
+      ? DATA_SOURCE_OPTIONS[dataSourceType]
+      : null;
 
   const sqls =
     nativeSQLResult.nativeSQLMode && nativeSQLResult.loading === false
       ? nativeSQLResult.data
-      : sql;
+      : sqlText;
 
   const onChangeNativeSQL = async (checked: boolean) => {
     nativeSQLResult.setNativeSQLMode(checked);
@@ -92,12 +100,12 @@ export default function ViewSQLTabContent(props: AnswerResultProps) {
     if (!nativeSQLResult.nativeSQLMode) {
       message.success(
         <>
-          You copied Wren SQL. This dialect is for the Wren Engine and may not
-          run directly on your database.
+          你复制的是 Wren SQL。该方言用于 Wren
+          Engine，可能无法直接在你的数据库中运行。
           {hasNativeSQL && (
             <>
               {' '}
-              Click “<b>Show original SQL</b>” to get the executable version.
+              点击“<b>显示原始 SQL</b>”即可切换到可直接执行的版本。
             </>
           )}
         </>,
@@ -107,40 +115,22 @@ export default function ViewSQLTabContent(props: AnswerResultProps) {
 
   return (
     <div className="text-md gray-10 p-6 pb-4">
-      <Alert
-        banner
-        className="mb-3 adm-alert-info"
-        message={
-          <>
-            You’re viewing Wren SQL by default. If you want to run this query on
-            your own database, click “Show original SQL” to get the exact
-            syntax.
-            <Typography.Link
-              className="underline ml-1"
-              href="https://docs.getwren.ai/oss/guide/home/wren_sql"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learn more about Wren SQL
-            </Typography.Link>
-          </>
-        }
-        type="info"
-      />
       <StyledPre className="p-0 mb-3">
         <StyledToolBar className="d-flex align-center justify-space-between text-family-base">
           <div>
             {nativeSQLResult.nativeSQLMode ? (
               <>
-                <Image
-                  className="mr-2"
-                  src={DATA_SOURCE_OPTIONS[dataSourceType].logo}
-                  alt={DATA_SOURCE_OPTIONS[dataSourceType].label}
-                  width="22"
-                  height="22"
-                />
+                {dataSourceOption?.logo ? (
+                  <Image
+                    className="mr-2"
+                    src={dataSourceOption.logo}
+                    alt={dataSourceOption.label}
+                    width="22"
+                    height="22"
+                  />
+                ) : null}
                 <Text className="gray-8 text-medium text-sm">
-                  {DATA_SOURCE_OPTIONS[dataSourceType].label}
+                  {dataSourceOption?.label || '数据源 SQL'}
                 </Text>
               </>
             ) : (
@@ -167,7 +157,7 @@ export default function ViewSQLTabContent(props: AnswerResultProps) {
                   loading={nativeSQLResult.loading}
                 />
                 <Text className="gray-8 text-medium text-base">
-                  Show original SQL
+                  显示原始 SQL
                 </Text>
               </div>
             )}
@@ -177,9 +167,11 @@ export default function ViewSQLTabContent(props: AnswerResultProps) {
               data-ph-capture-attribute-name="view_sql_copy_sql"
               icon={<CodeFilled />}
               size="small"
-              onClick={() => onOpenAdjustSQLModal({ sql, responseId: id })}
+              onClick={() =>
+                onOpenAdjustSQLModal({ sql: sqlText, responseId: id })
+              }
             >
-              Adjust SQL
+              调整 SQL
             </Button>
           </Space>
         </StyledToolBar>
@@ -208,7 +200,7 @@ export default function ViewSQLTabContent(props: AnswerResultProps) {
           data-ph-capture="true"
           data-ph-capture-attribute-name="view_sql_preview_data"
         >
-          View results
+          查看结果
         </Button>
         {previewDataResult?.data?.previewData && (
           <div className="mt-2 mb-3">
@@ -220,13 +212,13 @@ export default function ViewSQLTabContent(props: AnswerResultProps) {
                 emptyText: (
                   <Empty
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description="Sorry, we couldn't find any records that match your search criteria."
+                    description="未找到符合当前查询条件的数据记录。"
                   />
                 ),
               }}
             />
             <div className="text-right">
-              <Text className="text-base gray-6">Showing up to 500 rows</Text>
+              <Text className="text-base gray-6">最多展示 500 行</Text>
             </div>
           </div>
         )}

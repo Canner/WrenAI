@@ -19,7 +19,7 @@ from src.pipelines.common import (
     build_table_ddl,
     clean_up_new_lines,
     get_engine_supported_data_type,
-    normalize_runtime_scope_id,
+    resolve_pipeline_runtime_scope_id,
 )
 from src.utils import trace_cost
 from src.web.v1.services.ask import AskHistory
@@ -140,9 +140,11 @@ async def embedding(query: str, embedder: Any, histories: list[AskHistory]) -> d
 
 @observe(capture_input=False)
 async def table_retrieval(
-    embedding: dict, project_id: str, tables: list[str], table_retriever: Any
+    embedding: dict,
+    runtime_scope_id: str,
+    tables: list[str],
+    table_retriever: Any,
 ) -> dict:
-    runtime_scope_id = normalize_runtime_scope_id(project_id)
     conditions = [
         {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
     ]
@@ -167,9 +169,8 @@ async def table_retrieval(
 
 @observe(capture_input=False)
 async def dbschema_retrieval(
-    table_retrieval: dict, project_id: str, dbschema_retriever: Any
+    table_retrieval: dict, runtime_scope_id: str, dbschema_retriever: Any
 ) -> list[Document]:
-    runtime_scope_id = normalize_runtime_scope_id(project_id)
     tables = table_retrieval.get("documents", [])
     table_names = []
     for table in tables:
@@ -493,18 +494,21 @@ class DbSchemaRetrieval(BasicPipeline):
         self,
         query: str = "",
         tables: Optional[list[str]] = None,
-        project_id: Optional[str] = None,
+        runtime_scope_id: Optional[str] = None,
         histories: Optional[list[AskHistory]] = None,
         enable_column_pruning: bool = False,
+        bridge_scope_id: Optional[str] = None,
     ):
         logger.info("Ask Retrieval pipeline is running...")
-        runtime_scope_id = normalize_runtime_scope_id(project_id)
+        runtime_scope_id = resolve_pipeline_runtime_scope_id(
+            runtime_scope_id, bridge_scope_id=bridge_scope_id
+        )
         return await self._pipe.execute(
             ["construct_retrieval_results"],
             inputs={
                 "query": query,
                 "tables": tables,
-                "project_id": runtime_scope_id or "",
+                "runtime_scope_id": runtime_scope_id or "",
                 "histories": histories or [],
                 "enable_column_pruning": enable_column_pruning,
                 **self._components,

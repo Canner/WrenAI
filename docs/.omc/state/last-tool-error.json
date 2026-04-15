@@ -1,7 +1,0 @@
-{
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"python /Users/liyi/.claude/plugins/cache/anthropic-agent-skills/document-skills/98669c11ca63/skills/pptx/scripts/office/soffice.py --headless --convert-to pdf xdai-v1-ppt.pptx 2>&1\",\"timeo...",
-  "error": "Exit code 1\nTraceback (most recent call last):\n  File \"/Users/liyi/.claude/plugins/cache/anthropic-agent-skills/document-skills/98669c11ca63/skills/pptx/scripts/office/soffice.py\", line 182, in <module>\n    result = run_soffice(sys.argv[1:])\n             ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/liyi/.claude/plugins/cache/anthropic-agent-skills/document-skills/98669c11ca63/skills/pptx/scripts/office/soffice.py\", line 37, in run_soffice\n    return subprocess.run([\"soffice\"] + args, env=env, **kwar...",
-  "timestamp": "2026-04-03T09:44:18.511Z",
-  "retry_count": 1
-}

@@ -20,11 +20,21 @@ import { CronExpressionParser } from 'cron-parser';
 const logger = getLogger('DashboardService');
 logger.level = 'debug';
 
+const toErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : String(error);
+
 export interface CreateDashboardItemInput {
   dashboardId: number;
   type: DashboardItemType;
   sql: string;
   chartSchema: DashboardItemDetail['chartSchema'];
+  renderHints?: DashboardItemDetail['renderHints'];
+  canonicalizationVersion?: DashboardItemDetail['canonicalizationVersion'];
+  chartDataProfile?: DashboardItemDetail['chartDataProfile'];
+  validationErrors?: DashboardItemDetail['validationErrors'];
+  sourceResponseId?: number | null;
+  sourceThreadId?: number | null;
+  sourceQuestion?: string | null;
 }
 
 export interface UpdateDashboardItemInput {
@@ -43,15 +53,29 @@ export type UpdateDashboardItemLayouts = (DashboardItemLayout & {
 })[];
 
 export interface IDashboardService {
+  listDashboardsForScope(
+    bridgeProjectId: number | null,
+    binding?: DashboardRuntimeBinding,
+  ): Promise<Dashboard[]>;
+  getDashboardForScope(
+    dashboardId: number,
+    bridgeProjectId: number | null,
+    binding?: DashboardRuntimeBinding,
+  ): Promise<Dashboard | null>;
+  createDashboardForScope(
+    input: { name: string },
+    bridgeProjectId: number | null,
+    binding?: DashboardRuntimeBinding,
+  ): Promise<Dashboard>;
   initDashboard(
-    projectId: number,
+    bridgeProjectId: number | null,
     binding?: DashboardRuntimeBinding,
   ): Promise<Dashboard>;
-  getCurrentDashboard(projectId: number): Promise<Dashboard>;
+  getCurrentDashboard(bridgeProjectId: number): Promise<Dashboard>;
   getCurrentDashboardForScope(
-    projectId: number,
+    bridgeProjectId: number | null,
     binding?: DashboardRuntimeBinding,
-  ): Promise<Dashboard>;
+  ): Promise<Dashboard | null>;
   syncDashboardRuntimeBinding(
     dashboardId: number,
     binding: DashboardRuntimeBinding,
@@ -105,7 +129,7 @@ export class DashboardService implements IDashboardService {
       if (!dashboard) {
         throw new Error(`Dashboard with id ${dashboardId} not found`);
       }
-      if (!cacheEnabled) {
+      if (!cacheEnabled || !schedule) {
         return await this.dashboardRepository.updateOne(dashboardId, {
           cacheEnabled: false,
           scheduleFrequency: null,
@@ -119,9 +143,11 @@ export class DashboardService implements IDashboardService {
       let nextScheduledAt: Date | null = null;
 
       // Process schedule if caching is enabled
-      if (cacheEnabled && schedule.frequency !== ScheduleFrequencyEnum.NEVER) {
+      if (schedule.frequency !== ScheduleFrequencyEnum.NEVER) {
         cronExpression = this.generateCronExpression(schedule);
-        nextScheduledAt = this.calculateNextRunTime(cronExpression);
+        nextScheduledAt = cronExpression
+          ? this.calculateNextRunTime(cronExpression)
+          : null;
       }
 
       // Update dashboard with new schedule
@@ -132,14 +158,16 @@ export class DashboardService implements IDashboardService {
         scheduleCron: cronExpression,
         nextScheduledAt,
       });
-    } catch (error) {
-      logger.error(`Failed to set dashboard schedule: ${error.message}`);
+    } catch (error: unknown) {
+      logger.error(
+        `Failed to set dashboard schedule: ${toErrorMessage(error)}`,
+      );
       throw error;
     }
   }
 
   public async initDashboard(
-    projectId: number,
+    bridgeProjectId: number | null,
     binding?: DashboardRuntimeBinding,
   ): Promise<Dashboard> {
     const scopedKnowledgeBaseId = binding?.knowledgeBaseId || null;
@@ -155,29 +183,101 @@ export class DashboardService implements IDashboardService {
       }
     }
 
-    const legacyDashboard = binding
-      ? await this.findUnboundProjectDashboard(projectId)
-      : await this.findLegacyProjectDashboard(projectId);
-    if (legacyDashboard) {
-      return binding
-        ? await this.syncDashboardRuntimeBinding(legacyDashboard.id, binding)
-        : legacyDashboard;
+    if (bridgeProjectId != null) {
+      const projectDashboard = binding
+        ? await this.findUnboundProjectDashboard(bridgeProjectId)
+        : await this.findProjectDashboardByProjectBridge(bridgeProjectId);
+      if (projectDashboard) {
+        return binding
+          ? await this.syncDashboardRuntimeBinding(projectDashboard.id, binding)
+          : projectDashboard;
+      }
     }
 
-    return await this.createDashboard(projectId, binding);
+    return await this.createDashboard(bridgeProjectId, binding);
   }
 
-  public async getCurrentDashboard(projectId: number): Promise<Dashboard> {
-    const dashboard = await this.dashboardRepository.findOneBy({
-      projectId,
+  public async listDashboardsForScope(
+    bridgeProjectId: number | null,
+    binding?: DashboardRuntimeBinding,
+  ): Promise<Dashboard[]> {
+    const scopedKnowledgeBaseId = binding?.knowledgeBaseId || null;
+    let dashboards: Dashboard[] = [];
+
+    if (scopedKnowledgeBaseId != null) {
+      dashboards = await this.dashboardRepository.findAllBy({
+        knowledgeBaseId: scopedKnowledgeBaseId,
+      });
+      if (dashboards.length === 0) {
+        const fallbackDashboard = await this.getCurrentDashboardForScope(
+          bridgeProjectId,
+          binding,
+        );
+        dashboards = fallbackDashboard ? [fallbackDashboard] : [];
+      }
+    } else if (bridgeProjectId != null) {
+      dashboards = await this.dashboardRepository.findAllBy({
+        projectId: bridgeProjectId,
+      });
+    }
+
+    if (dashboards.length === 0) {
+      return [await this.initDashboard(bridgeProjectId, binding)];
+    }
+
+    return dashboards.sort((left, right) => {
+      if (left.id === right.id) {
+        return 0;
+      }
+      return left.id - right.id;
     });
-    return { ...dashboard };
+  }
+
+  public async getDashboardForScope(
+    dashboardId: number,
+    bridgeProjectId: number | null,
+    binding?: DashboardRuntimeBinding,
+  ): Promise<Dashboard | null> {
+    const dashboards = await this.listDashboardsForScope(
+      bridgeProjectId,
+      binding,
+    );
+    const matched = dashboards.find(
+      (dashboard) => dashboard.id === dashboardId,
+    );
+    if (!matched) {
+      return null;
+    }
+
+    return binding
+      ? await this.syncDashboardRuntimeBinding(matched.id, binding)
+      : matched;
+  }
+
+  public async createDashboardForScope(
+    input: { name: string },
+    bridgeProjectId: number | null,
+    binding?: DashboardRuntimeBinding,
+  ): Promise<Dashboard> {
+    return await this.createDashboard(bridgeProjectId, binding, input.name);
+  }
+
+  public async getCurrentDashboard(
+    bridgeProjectId: number,
+  ): Promise<Dashboard> {
+    const dashboard = await this.dashboardRepository.findOneBy({
+      projectId: bridgeProjectId,
+    });
+    if (!dashboard) {
+      throw new Error(`Dashboard for project ${bridgeProjectId} not found`);
+    }
+    return dashboard;
   }
 
   public async getCurrentDashboardForScope(
-    projectId: number,
+    bridgeProjectId: number | null,
     binding?: DashboardRuntimeBinding,
-  ): Promise<Dashboard> {
+  ): Promise<Dashboard | null> {
     const scopedKnowledgeBaseId = binding?.knowledgeBaseId || null;
     const scopedDashboard = scopedKnowledgeBaseId
       ? await this.dashboardRepository.findOneBy({
@@ -192,18 +292,23 @@ export class DashboardService implements IDashboardService {
       );
     }
 
-    const legacyDashboard = await this.findUnboundProjectDashboard(projectId);
-    if (legacyDashboard) {
+    if (bridgeProjectId == null) {
+      return binding ? await this.createDashboard(null, binding) : null;
+    }
+
+    const projectDashboard =
+      await this.findUnboundProjectDashboard(bridgeProjectId);
+    if (projectDashboard) {
       return binding
-        ? await this.syncDashboardRuntimeBinding(legacyDashboard.id, binding)
-        : legacyDashboard;
+        ? await this.syncDashboardRuntimeBinding(projectDashboard.id, binding)
+        : projectDashboard;
     }
 
     if (!binding) {
-      return await this.getCurrentDashboard(projectId);
+      return await this.getCurrentDashboard(bridgeProjectId);
     }
 
-    return await this.createDashboard(projectId, binding);
+    return await this.createDashboard(bridgeProjectId, binding);
   }
 
   public async syncDashboardRuntimeBinding(
@@ -255,6 +360,13 @@ export class DashboardService implements IDashboardService {
       detail: {
         sql: input.sql,
         chartSchema: input.chartSchema,
+        renderHints: input.renderHints,
+        canonicalizationVersion: input.canonicalizationVersion ?? null,
+        chartDataProfile: input.chartDataProfile || undefined,
+        validationErrors: input.validationErrors || [],
+        sourceResponseId: input.sourceResponseId ?? null,
+        sourceThreadId: input.sourceThreadId ?? null,
+        sourceQuestion: input.sourceQuestion ?? null,
       },
       layout,
     });
@@ -352,29 +464,35 @@ export class DashboardService implements IDashboardService {
     return patch;
   }
 
-  private async findLegacyProjectDashboard(
-    projectId: number,
+  private async findProjectDashboardByProjectBridge(
+    bridgeProjectId: number,
   ): Promise<Dashboard | null> {
-    const dashboards = await this.dashboardRepository.findAllBy({ projectId });
-    return dashboards.find((dashboard) => dashboard.projectId === projectId) || null;
-  }
-
-  private async findUnboundProjectDashboard(
-    projectId: number,
-  ): Promise<Dashboard | null> {
-    const dashboards = await this.dashboardRepository.findAllBy({ projectId });
+    const dashboards = await this.dashboardRepository.findAllBy({
+      projectId: bridgeProjectId,
+    });
     return (
-      dashboards.find((dashboard) => !dashboard.knowledgeBaseId) || null
+      dashboards.find((dashboard) => dashboard.projectId === bridgeProjectId) ||
+      null
     );
   }
 
+  private async findUnboundProjectDashboard(
+    bridgeProjectId: number,
+  ): Promise<Dashboard | null> {
+    const dashboards = await this.dashboardRepository.findAllBy({
+      projectId: bridgeProjectId,
+    });
+    return dashboards.find((dashboard) => !dashboard.knowledgeBaseId) || null;
+  }
+
   private async createDashboard(
-    projectId: number,
+    bridgeProjectId: number | null,
     binding?: DashboardRuntimeBinding,
+    name = 'Dashboard',
   ): Promise<Dashboard> {
     return await this.dashboardRepository.createOne({
-      name: 'Dashboard',
-      projectId,
+      name,
+      projectId: bridgeProjectId ?? null,
       knowledgeBaseId: binding?.knowledgeBaseId ?? null,
       kbSnapshotId: binding?.kbSnapshotId ?? null,
       deployHash: binding?.deployHash ?? null,
@@ -562,8 +680,8 @@ export class DashboardService implements IDashboardService {
         currentDate: new Date(),
       });
       return interval.next().toDate();
-    } catch (error) {
-      logger.error(`Failed to parse cron expression: ${error.message}`);
+    } catch (error: unknown) {
+      logger.error(`Failed to parse cron expression: ${toErrorMessage(error)}`);
       return null;
     }
   }
@@ -619,23 +737,25 @@ export class DashboardService implements IDashboardService {
   }
 
   public parseCronExpression(dashboard: Dashboard): DashboardSchedule {
+    const frequency =
+      dashboard.scheduleFrequency || ScheduleFrequencyEnum.NEVER;
     if (!dashboard.scheduleCron) {
       return {
-        frequency: dashboard.scheduleFrequency,
+        frequency,
         hour: 0,
         minute: 0,
-        day: null,
+        day: CacheScheduleDayEnum.SUN,
         timezone: dashboard.scheduleTimezone || '',
         cron: '',
-      } as DashboardSchedule;
+      };
     }
-    switch (dashboard.scheduleFrequency) {
+    switch (frequency) {
       case ScheduleFrequencyEnum.CUSTOM:
         return {
           frequency: ScheduleFrequencyEnum.CUSTOM,
           hour: 0,
           minute: 0,
-          day: null,
+          day: CacheScheduleDayEnum.SUN,
           timezone: dashboard.scheduleTimezone || '',
           cron: dashboard.scheduleCron,
         };
@@ -647,26 +767,26 @@ export class DashboardService implements IDashboardService {
         }
         const [minute, hour, , , dayOfWeek] = parts;
         return this.toTimezone({
-          frequency: dashboard.scheduleFrequency,
+          frequency,
           hour: parseInt(hour, 10),
           minute: parseInt(minute, 10),
           day:
-            dashboard.scheduleFrequency === ScheduleFrequencyEnum.WEEKLY
+            frequency === ScheduleFrequencyEnum.WEEKLY
               ? (dayOfWeek as CacheScheduleDayEnum)
-              : null,
+              : CacheScheduleDayEnum.SUN,
           timezone: dashboard.scheduleTimezone || '',
-          cron: null,
-        } as DashboardSchedule);
+          cron: '',
+        });
       }
       case ScheduleFrequencyEnum.NEVER: {
         return {
           frequency: ScheduleFrequencyEnum.NEVER,
-          hour: null,
-          minute: null,
-          day: null,
+          hour: 0,
+          minute: 0,
+          day: CacheScheduleDayEnum.SUN,
           timezone: dashboard.scheduleTimezone || '',
-          cron: null,
-        } as DashboardSchedule;
+          cron: '',
+        };
       }
       default: {
         throw new Error('Invalid schedule frequency');

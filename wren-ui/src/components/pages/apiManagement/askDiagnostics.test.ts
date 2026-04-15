@@ -1,8 +1,5 @@
 import { ApiType } from '@/apollo/client/graphql/__types__';
-import {
-  getAskDiagnostics,
-  isAskApiHistoryType,
-} from './askDiagnostics';
+import { getAskDiagnostics, isAskApiHistoryType } from './askDiagnostics';
 
 describe('apiManagement askDiagnostics helpers', () => {
   it('recognizes ask-based api types only', () => {

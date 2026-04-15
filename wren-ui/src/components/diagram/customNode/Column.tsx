@@ -48,6 +48,7 @@ type ColumnProps = {
   type: string;
   displayName: string;
   style?: React.CSSProperties;
+  className?: string;
   icon: React.ReactNode;
   extra?: React.ReactNode;
   onMouseEnter?: (event: React.MouseEvent) => void;
@@ -68,12 +69,14 @@ export default function Column(props: ColumnProps) {
     onMouseLeave,
     displayName,
     style = {},
+    className,
     icon,
     extra,
   } = props;
 
   const nodeColumn = (
     <NodeColumn
+      className={className}
       style={style}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
@@ -93,7 +96,9 @@ export default function Column(props: ColumnProps) {
 }
 
 const MoreColumnTip = (props: { count: number }) => {
-  return <div className="text-sm gray-7 px-3 py-1">and {props.count} more</div>;
+  return (
+    <div className="text-sm gray-7 px-3 py-1">还有 {props.count} 个字段</div>
+  );
 };
 
 const ColumnTitle = (props: ColumnTitleProps) => {

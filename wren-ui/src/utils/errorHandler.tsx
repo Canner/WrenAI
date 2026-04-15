@@ -2,6 +2,10 @@ import { GraphQLError } from 'graphql';
 import { ErrorResponse } from '@apollo/client/link/error';
 import { ApolloError } from '@apollo/client';
 import { message } from 'antd';
+import {
+  shouldRecoverRuntimeScopeFromErrorCode,
+  triggerRuntimeScopeRecovery,
+} from '@/apollo/client/runtimeScope';
 
 // Refer to backend GeneralErrorCodes for mapping
 export const ERROR_CODES = {
@@ -70,7 +74,7 @@ class CreateAskingTaskErrorHandler extends ErrorHandler {
   public getErrorMessage(error: GraphQLError) {
     switch (error.extensions?.code) {
       default:
-        return 'Failed to create asking task.';
+        return '创建问答任务失败，请稍后重试。';
     }
   }
 }
@@ -79,7 +83,7 @@ class CreateThreadErrorHandler extends ErrorHandler {
   public getErrorMessage(error: GraphQLError) {
     switch (error.extensions?.code) {
       default:
-        return 'Failed to create thread.';
+        return '创建对话失败，请稍后重试。';
     }
   }
 }
@@ -88,7 +92,7 @@ class UpdateThreadErrorHandler extends ErrorHandler {
   public getErrorMessage(error: GraphQLError) {
     switch (error.extensions?.code) {
       default:
-        return 'Failed to update thread.';
+        return '更新对话失败。';
     }
   }
 }
@@ -97,7 +101,7 @@ class DeleteThreadErrorHandler extends ErrorHandler {
   public getErrorMessage(error: GraphQLError) {
     switch (error.extensions?.code) {
       default:
-        return 'Failed to delete thread.';
+        return '删除对话失败。';
     }
   }
 }
@@ -453,12 +457,193 @@ errorHandlers.set('CreateInstruction', new CreateInstructionErrorHandler());
 errorHandlers.set('UpdateInstruction', new UpdateInstructionErrorHandler());
 errorHandlers.set('DeleteInstruction', new DeleteInstructionErrorHandler());
 
+const OFFLINE_NETWORK_ERROR_PATTERNS = [
+  'failed to fetch',
+  'network request failed',
+  'load failed',
+  'networkerror',
+  'fetch failed',
+  'econnrefused',
+];
+
+const RUNTIME_SCOPE_NETWORK_ERROR_PATTERNS = [
+  'runtime scope',
+  'knowledge base',
+  'kb_snapshot',
+  'deploy_hash',
+  'workspace scope',
+  'no deployment found',
+  'does not belong to the requested workspace',
+];
+
+const normalizeErrorText = (value?: string | null) =>
+  (value || '').trim().toLowerCase();
+
+type NetworkErrorLike = {
+  statusCode?: number;
+  response?: {
+    status?: number;
+  } | null;
+  result?: {
+    errors?: Array<{
+      message?: string;
+      extensions?: {
+        code?: string;
+      };
+    }>;
+  } | null;
+  bodyText?: string;
+};
+
+const toNetworkErrorLike = (networkError: unknown): NetworkErrorLike | null => {
+  if (!networkError || typeof networkError !== 'object') {
+    return null;
+  }
+
+  return networkError as NetworkErrorLike;
+};
+
+const readNetworkStatusCode = (networkError: unknown): number | null => {
+  const normalizedNetworkError = toNetworkErrorLike(networkError);
+  if (!normalizedNetworkError) {
+    return null;
+  }
+
+  const statusCode = normalizedNetworkError.statusCode;
+  if (typeof statusCode === 'number') {
+    return statusCode;
+  }
+
+  const responseStatus = normalizedNetworkError.response?.status;
+  return typeof responseStatus === 'number' ? responseStatus : null;
+};
+
+const readNetworkGraphQLErrorMessage = (
+  networkError: unknown,
+): string | null => {
+  const normalizedNetworkError = toNetworkErrorLike(networkError);
+  if (!normalizedNetworkError) {
+    return null;
+  }
+
+  const resultErrors = normalizedNetworkError.result?.errors;
+  if (
+    Array.isArray(resultErrors) &&
+    typeof resultErrors[0]?.message === 'string'
+  ) {
+    return resultErrors[0].message;
+  }
+
+  const bodyText = normalizedNetworkError.bodyText;
+  if (typeof bodyText !== 'string' || !bodyText.trim()) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(bodyText);
+    return Array.isArray(parsed?.errors) &&
+      typeof parsed.errors[0]?.message === 'string'
+      ? parsed.errors[0].message
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+const readNetworkGraphQLErrorCode = (networkError: unknown): string | null => {
+  const normalizedNetworkError = toNetworkErrorLike(networkError);
+  if (!normalizedNetworkError) {
+    return null;
+  }
+
+  const resultErrors = normalizedNetworkError.result?.errors;
+  if (
+    Array.isArray(resultErrors) &&
+    typeof resultErrors[0]?.extensions?.code === 'string'
+  ) {
+    return resultErrors[0].extensions.code;
+  }
+
+  const bodyText = normalizedNetworkError.bodyText;
+  if (typeof bodyText !== 'string' || !bodyText.trim()) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(bodyText);
+    return Array.isArray(parsed?.errors) &&
+      typeof parsed.errors[0]?.extensions?.code === 'string'
+      ? parsed.errors[0].extensions.code
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+const isNavigatorOffline = () =>
+  typeof navigator !== 'undefined' &&
+  typeof navigator.onLine === 'boolean' &&
+  navigator.onLine === false;
+
+export const resolveNetworkErrorMessage = (
+  networkError?: ErrorResponse['networkError'] | null,
+) => {
+  if (!networkError) {
+    return null;
+  }
+
+  const statusCode = readNetworkStatusCode(networkError);
+  const graphQLErrorCode = readNetworkGraphQLErrorCode(networkError);
+  const networkMessage = normalizeErrorText(
+    `${(networkError as Error)?.message || ''} ${readNetworkGraphQLErrorMessage(networkError) || ''}`,
+  );
+
+  if (
+    isNavigatorOffline() ||
+    statusCode === 0 ||
+    OFFLINE_NETWORK_ERROR_PATTERNS.some((pattern) =>
+      networkMessage.includes(pattern),
+    )
+  ) {
+    return '网络不可用，请检查连接后重试。';
+  }
+
+  if (statusCode === 401 || statusCode === 403) {
+    return '登录已过期或无访问权限，请重新登录后重试。';
+  }
+
+  if (shouldRecoverRuntimeScopeFromErrorCode(graphQLErrorCode)) {
+    triggerRuntimeScopeRecovery();
+  }
+
+  if (graphQLErrorCode === 'NO_DEPLOYMENT_FOUND') {
+    return '当前知识库运行时不可用，请刷新或重新选择知识库后重试。';
+  }
+
+  if (graphQLErrorCode === 'OUTDATED_RUNTIME_SNAPSHOT') {
+    return '当前知识库快照已过期，请刷新或重新选择知识库后重试。';
+  }
+
+  if (
+    RUNTIME_SCOPE_NETWORK_ERROR_PATTERNS.some((pattern) =>
+      networkMessage.includes(pattern),
+    )
+  ) {
+    return '当前工作空间上下文不可用，请刷新或重新选择知识库后重试。';
+  }
+
+  if (statusCode !== null && statusCode >= 500) {
+    return '服务暂时不可用，请稍后重试。';
+  }
+
+  return '请求失败，请重试。';
+};
+
 const errorHandler = (error: ErrorResponse) => {
-  // networkError
-  if (error.networkError) {
-    message.error(
-      'No internet. Please check your network connection and try again.',
-    );
+  const networkErrorMessage = resolveNetworkErrorMessage(error.networkError);
+  if (networkErrorMessage) {
+    message.error(networkErrorMessage);
+    return;
   }
 
   const operationName = error?.operation?.operationName || '';
@@ -481,4 +666,23 @@ export const parseGraphQLError = (error: ApolloError) => {
     code: extensions.code as string,
     stacktrace: extensions?.stacktrace as Array<string> | undefined,
   };
+};
+
+export const isAntdFormValidationError = (error: unknown) => {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  return Array.isArray((error as { errorFields?: unknown[] }).errorFields);
+};
+
+export const handleFormSubmitError = (
+  error: unknown,
+  fallbackMessage = '操作失败，请稍后重试。',
+) => {
+  if (isAntdFormValidationError(error)) {
+    return;
+  }
+
+  message.error(fallbackMessage);
 };

@@ -9,7 +9,10 @@ import orjson
 
 from src.config import settings
 from src.core.engine import Engine, remove_limit_statement
-from src.core.runtime_identity import resolve_legacy_project_id
+from src.core.runtime_identity import (
+    resolve_bridge_scope_id,
+    resolve_runtime_scope_id,
+)
 from src.providers.loader import provider
 
 logger = logging.getLogger("wren-ai-service")
@@ -28,16 +31,21 @@ class WrenUI(Engine):
         self,
         sql: str,
         session: aiohttp.ClientSession,
-        project_id: str | None = None,
+        runtime_scope_id: str | None = None,
+        bridge_scope_id: str | None = None,
         dry_run: bool = True,
         timeout: float = settings.engine_timeout,
         limit: int = 500,
         **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
-        runtime_scope_id = resolve_legacy_project_id(project_id=project_id)
+        bridge_scope_id = resolve_bridge_scope_id(project_id=bridge_scope_id)
+        runtime_scope_id = resolve_runtime_scope_id(
+            runtime_scope_id=runtime_scope_id,
+            project_id=bridge_scope_id,
+        )
         data = {
             "sql": remove_limit_statement(sql),
-            "projectId": runtime_scope_id,
+            "runtimeScopeId": runtime_scope_id,
         }
         if dry_run:
             data["dryRun"] = True
@@ -48,6 +56,9 @@ class WrenUI(Engine):
         try:
             async with session.post(
                 f"{self._endpoint}/api/graphql",
+                headers={
+                    "x-wren-ai-service-internal": "1",
+                },
                 json={
                     "query": "mutation PreviewSql($data: PreviewSQLDataInput) { previewSql(data: $data) }",
                     "variables": {"data": data},

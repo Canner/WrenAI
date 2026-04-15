@@ -69,6 +69,7 @@ const resolvers = {
       projectResolver.getProjectRecommendationQuestions,
 
     // Dashboard
+    dashboards: dashboardResolver.getDashboards,
     dashboardItems: dashboardResolver.getDashboardItems,
     dashboard: dashboardResolver.getDashboard,
 
@@ -86,7 +87,8 @@ const resolvers = {
 
     // Skills
     skillDefinitions: skillResolver.getSkillDefinitions,
-    skillBindings: skillResolver.getSkillBindings,
+    availableSkills: skillResolver.getAvailableSkills,
+    marketplaceCatalogSkills: skillResolver.getMarketplaceCatalogSkills,
   },
   Mutation: {
     deploy: modelResolver.deploy,
@@ -172,6 +174,7 @@ const resolvers = {
       askingResolver.generateProjectRecommendationQuestions,
 
     // Dashboard
+    createDashboard: dashboardResolver.createDashboard,
     updateDashboardItemLayouts: dashboardResolver.updateDashboardItemLayouts,
     createDashboardItem: dashboardResolver.createDashboardItem,
     updateDashboardItem: dashboardResolver.updateDashboardItem,
@@ -193,10 +196,10 @@ const resolvers = {
     // Skills
     createSkillDefinition: skillResolver.createSkillDefinition,
     updateSkillDefinition: skillResolver.updateSkillDefinition,
+    installSkillFromMarketplace: skillResolver.installSkillFromMarketplace,
+    toggleSkillEnabled: skillResolver.toggleSkillEnabled,
+    updateSkillDefinitionRuntime: skillResolver.updateSkillDefinitionRuntime,
     deleteSkillDefinition: skillResolver.deleteSkillDefinition,
-    createSkillBinding: skillResolver.createSkillBinding,
-    updateSkillBinding: skillResolver.updateSkillBinding,
-    deleteSkillBinding: skillResolver.deleteSkillBinding,
   },
   ThreadResponse: askingResolver.getThreadResponseNestedResolver(),
   DetailStep: askingResolver.getDetailStepNestedResolver(),

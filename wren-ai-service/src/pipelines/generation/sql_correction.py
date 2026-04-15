@@ -13,7 +13,7 @@ from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.pipelines.common import (
     clean_up_new_lines,
-    normalize_runtime_scope_id,
+    resolve_pipeline_runtime_scope_id,
     retrieve_data_source,
 )
 from src.pipelines.generation.utils.sql import (
@@ -29,8 +29,11 @@ from src.utils import trace_cost
 logger = logging.getLogger("wren-ai-service")
 
 
-def get_sql_correction_system_prompt(sql_knowledge: SqlKnowledge | None = None) -> str:
-    text_to_sql_rules = get_text_to_sql_rules(sql_knowledge)
+def get_sql_correction_system_prompt(
+    sql_knowledge: SqlKnowledge | None = None,
+    data_source: str | None = None,
+) -> str:
+    text_to_sql_rules = get_text_to_sql_rules(sql_knowledge, data_source)
 
     return f"""
 ### TASK ###
@@ -111,9 +114,12 @@ async def generate_sql_correction(
     prompt: dict,
     generator: Any,
     generator_name: str,
+    data_source: str,
     sql_knowledge: SqlKnowledge | None = None,
 ) -> dict:
-    current_system_prompt = get_sql_correction_system_prompt(sql_knowledge)
+    current_system_prompt = get_sql_correction_system_prompt(
+        sql_knowledge, data_source
+    )
     return await generator(
         prompt=prompt.get("prompt"), current_system_prompt=current_system_prompt
     ), generator_name
@@ -124,13 +130,13 @@ async def post_process(
     generate_sql_correction: dict,
     post_processor: SQLGenPostProcessor,
     data_source: str,
-    project_id: str | None = None,
+    runtime_scope_id: str | None = None,
     use_dry_plan: bool = False,
     allow_dry_plan_fallback: bool = True,
 ) -> dict:
     return await post_processor.run(
         generate_sql_correction.get("replies"),
-        project_id=project_id,
+        runtime_scope_id=runtime_scope_id,
         use_dry_plan=use_dry_plan,
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,
@@ -175,15 +181,18 @@ class SQLCorrection(BasicPipeline):
         invalid_generation_result: Dict[str, str],
         instructions: list[dict] | None = None,
         sql_functions: list[SqlFunction] | None = None,
-        project_id: str | None = None,
+        runtime_scope_id: str | None = None,
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
         sql_knowledge: SqlKnowledge | None = None,
+        bridge_scope_id: str | None = None,
     ):
         logger.info("SQLCorrection pipeline is running...")
-        runtime_scope_id = normalize_runtime_scope_id(project_id)
+        runtime_scope_id = resolve_pipeline_runtime_scope_id(
+            runtime_scope_id, bridge_scope_id=bridge_scope_id
+        )
 
-        if use_dry_plan:
+        if runtime_scope_id:
             data_source = await retrieve_data_source(runtime_scope_id, self._retriever)
         else:
             data_source = "local_file"
@@ -195,7 +204,7 @@ class SQLCorrection(BasicPipeline):
                 "documents": contexts,
                 "instructions": instructions,
                 "sql_functions": sql_functions,
-                "project_id": runtime_scope_id,
+                "runtime_scope_id": runtime_scope_id,
                 "use_dry_plan": use_dry_plan,
                 "allow_dry_plan_fallback": allow_dry_plan_fallback,
                 "data_source": data_source,

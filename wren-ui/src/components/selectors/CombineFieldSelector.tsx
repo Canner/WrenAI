@@ -65,7 +65,7 @@ export default function CombineFieldSelector(props: Props) {
         style={{ width: '35%' }}
         options={modelOptions}
         onChange={changeModel}
-        placeholder="Model"
+        placeholder="选择模型"
         value={value?.model || modelValue}
         disabled={modelDisabled}
         showSearch
@@ -76,7 +76,7 @@ export default function CombineFieldSelector(props: Props) {
         className="flex-grow-1"
         options={fieldOptions}
         onChange={changeField}
-        placeholder="Field"
+        placeholder="选择字段"
         value={value?.field || fieldValue}
         disabled={fieldDisabled}
         showSearch

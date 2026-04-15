@@ -49,7 +49,6 @@ export type AdjustmentTask = {
 export type ApiHistoryFilterInput = {
   apiType?: InputMaybe<ApiType>;
   endDate?: InputMaybe<Scalars['String']>;
-  projectId?: InputMaybe<Scalars['Int']>;
   startDate?: InputMaybe<Scalars['String']>;
   statusCode?: InputMaybe<Scalars['Int']>;
   threadId?: InputMaybe<Scalars['String']>;
@@ -74,7 +73,6 @@ export type ApiHistoryResponse = {
   durationMs?: Maybe<Scalars['Int']>;
   headers?: Maybe<Scalars['JSON']>;
   id: Scalars['String'];
-  projectId: Scalars['Int'];
   requestPayload?: Maybe<Scalars['JSON']>;
   responsePayload?: Maybe<Scalars['JSON']>;
   statusCode?: Maybe<Scalars['Int']>;
@@ -82,21 +80,50 @@ export type ApiHistoryResponse = {
   updatedAt: Scalars['String'];
 };
 
+export enum ApiType {
+  ASK = 'ASK',
+  CREATE_CONNECTOR = 'CREATE_CONNECTOR',
+  CREATE_INSTRUCTION = 'CREATE_INSTRUCTION',
+  CREATE_KNOWLEDGE_BASE = 'CREATE_KNOWLEDGE_BASE',
+  CREATE_SKILL = 'CREATE_SKILL',
+  CREATE_SQL_PAIR = 'CREATE_SQL_PAIR',
+  CREATE_VIEW = 'CREATE_VIEW',
+  DELETE_VIEW = 'DELETE_VIEW',
+  DELETE_CONNECTOR = 'DELETE_CONNECTOR',
+  DELETE_INSTRUCTION = 'DELETE_INSTRUCTION',
+  DELETE_SKILL = 'DELETE_SKILL',
+  DELETE_SQL_PAIR = 'DELETE_SQL_PAIR',
+  DELETE_THREAD = 'DELETE_THREAD',
+  GENERATE_SQL = 'GENERATE_SQL',
+  GENERATE_SUMMARY = 'GENERATE_SUMMARY',
+  GENERATE_VEGA_CHART = 'GENERATE_VEGA_CHART',
+  GET_API_HISTORY = 'GET_API_HISTORY',
+  GET_CONNECTORS = 'GET_CONNECTORS',
+  GET_INSTRUCTIONS = 'GET_INSTRUCTIONS',
+  GET_KNOWLEDGE_BASES = 'GET_KNOWLEDGE_BASES',
+  GET_MODELS = 'GET_MODELS',
+  GET_SKILLS = 'GET_SKILLS',
+  GET_SQL_PAIRS = 'GET_SQL_PAIRS',
+  GET_THREADS = 'GET_THREADS',
+  PREVIEW_MODEL_DATA = 'PREVIEW_MODEL_DATA',
+  PREVIEW_VIEW_DATA = 'PREVIEW_VIEW_DATA',
+  REENCRYPT_SECRETS = 'REENCRYPT_SECRETS',
+  RUN_SQL = 'RUN_SQL',
+  STREAM_ASK = 'STREAM_ASK',
+  STREAM_GENERATE_SQL = 'STREAM_GENERATE_SQL',
+  TEST_CONNECTOR = 'TEST_CONNECTOR',
+  UPDATE_CONNECTOR = 'UPDATE_CONNECTOR',
+  UPDATE_INSTRUCTION = 'UPDATE_INSTRUCTION',
+  UPDATE_KNOWLEDGE_BASE = 'UPDATE_KNOWLEDGE_BASE',
+  UPDATE_SKILL = 'UPDATE_SKILL',
+  UPDATE_SQL_PAIR = 'UPDATE_SQL_PAIR',
+  UPDATE_THREAD = 'UPDATE_THREAD',
+}
+
 export type AskShadowCompareBucket = {
   __typename?: 'AskShadowCompareBucket';
   count: Scalars['Int'];
   key: Scalars['String'];
-};
-
-export type AskShadowCompareTrendBucket = {
-  __typename?: 'AskShadowCompareTrendBucket';
-  comparable: Scalars['Int'];
-  date: Scalars['String'];
-  errorCount: Scalars['Int'];
-  executed: Scalars['Int'];
-  matched: Scalars['Int'];
-  mismatched: Scalars['Int'];
-  total: Scalars['Int'];
 };
 
 export type AskShadowCompareStats = {
@@ -114,24 +141,16 @@ export type AskShadowCompareStats = {
   withDiagnostics: Scalars['Int'];
 };
 
-export enum ApiType {
-  ASK = 'ASK',
-  CREATE_INSTRUCTION = 'CREATE_INSTRUCTION',
-  CREATE_SQL_PAIR = 'CREATE_SQL_PAIR',
-  DELETE_INSTRUCTION = 'DELETE_INSTRUCTION',
-  DELETE_SQL_PAIR = 'DELETE_SQL_PAIR',
-  GENERATE_SQL = 'GENERATE_SQL',
-  GENERATE_SUMMARY = 'GENERATE_SUMMARY',
-  GENERATE_VEGA_CHART = 'GENERATE_VEGA_CHART',
-  GET_INSTRUCTIONS = 'GET_INSTRUCTIONS',
-  GET_MODELS = 'GET_MODELS',
-  GET_SQL_PAIRS = 'GET_SQL_PAIRS',
-  RUN_SQL = 'RUN_SQL',
-  STREAM_ASK = 'STREAM_ASK',
-  STREAM_GENERATE_SQL = 'STREAM_GENERATE_SQL',
-  UPDATE_INSTRUCTION = 'UPDATE_INSTRUCTION',
-  UPDATE_SQL_PAIR = 'UPDATE_SQL_PAIR',
-}
+export type AskShadowCompareTrendBucket = {
+  __typename?: 'AskShadowCompareTrendBucket';
+  comparable: Scalars['Int'];
+  date: Scalars['String'];
+  errorCount: Scalars['Int'];
+  executed: Scalars['Int'];
+  matched: Scalars['Int'];
+  mismatched: Scalars['Int'];
+  total: Scalars['Int'];
+};
 
 export type AskingTask = {
   __typename?: 'AskingTask';
@@ -142,7 +161,6 @@ export type AskingTask = {
   queryId?: Maybe<Scalars['String']>;
   rephrasedQuestion?: Maybe<Scalars['String']>;
   retrievedTables?: Maybe<Array<Scalars['String']>>;
-  skillResult?: Maybe<Scalars['JSON']>;
   sqlGenerationReasoning?: Maybe<Scalars['String']>;
   status: AskingTaskStatus;
   traceId?: Maybe<Scalars['String']>;
@@ -150,7 +168,9 @@ export type AskingTask = {
 };
 
 export type AskingTaskInput = {
+  knowledgeBaseIds?: InputMaybe<Array<Scalars['String']>>;
   question: Scalars['String'];
+  selectedSkillIds?: InputMaybe<Array<Scalars['String']>>;
   threadId?: InputMaybe<Scalars['Int']>;
 };
 
@@ -168,7 +188,6 @@ export enum AskingTaskStatus {
 export enum AskingTaskType {
   GENERAL = 'GENERAL',
   MISLEADING_QUERY = 'MISLEADING_QUERY',
-  SKILL = 'SKILL',
   TEXT_TO_SQL = 'TEXT_TO_SQL',
 }
 
@@ -234,7 +253,12 @@ export type CreateCalculatedFieldInput = {
   name: Scalars['String'];
 };
 
+export type CreateDashboardInput = {
+  name: Scalars['String'];
+};
+
 export type CreateDashboardItemInput = {
+  dashboardId?: InputMaybe<Scalars['Int']>;
   itemType: DashboardItemType;
   responseId: Scalars['Int'];
 };
@@ -264,13 +288,25 @@ export type CreateSimpleMetricInput = {
   timeGrain: Array<TimeGrainInput>;
 };
 
+export type CreateSkillDefinitionInput = {
+  entrypoint?: InputMaybe<Scalars['String']>;
+  manifest?: InputMaybe<Scalars['JSON']>;
+  name: Scalars['String'];
+  runtimeKind?: InputMaybe<Scalars['String']>;
+  secret?: InputMaybe<Scalars['JSON']>;
+  sourceRef?: InputMaybe<Scalars['String']>;
+  sourceType?: InputMaybe<Scalars['String']>;
+};
+
 export type CreateSqlPairInput = {
   question: Scalars['String'];
   sql: Scalars['String'];
 };
 
 export type CreateThreadInput = {
+  knowledgeBaseIds?: InputMaybe<Array<Scalars['String']>>;
   question?: InputMaybe<Scalars['String']>;
+  selectedSkillIds?: InputMaybe<Array<Scalars['String']>>;
   sql?: InputMaybe<Scalars['String']>;
   taskId?: InputMaybe<Scalars['String']>;
 };
@@ -315,8 +351,15 @@ export type DashboardItem = {
 
 export type DashboardItemDetail = {
   __typename?: 'DashboardItemDetail';
+  canonicalizationVersion?: Maybe<Scalars['String']>;
+  chartDataProfile?: Maybe<Scalars['JSON']>;
   chartSchema?: Maybe<Scalars['JSON']>;
+  renderHints?: Maybe<Scalars['JSON']>;
+  sourceQuestion?: Maybe<Scalars['String']>;
+  sourceResponseId?: Maybe<Scalars['Int']>;
+  sourceThreadId?: Maybe<Scalars['Int']>;
   sql: Scalars['String'];
+  validationErrors?: Maybe<Array<Scalars['String']>>;
 };
 
 export type DashboardItemLayout = {
@@ -351,6 +394,10 @@ export type DashboardSchedule = {
   hour?: Maybe<Scalars['Int']>;
   minute?: Maybe<Scalars['Int']>;
   timezone?: Maybe<Scalars['String']>;
+};
+
+export type DashboardWhereInput = {
+  id: Scalars['Int'];
 };
 
 export type DataSource = {
@@ -488,8 +535,15 @@ export type DetailedRelation = {
 
 export type DetailedThread = {
   __typename?: 'DetailedThread';
+  deployHash?: Maybe<Scalars['String']>;
   id: Scalars['Int'];
+  kbSnapshotId?: Maybe<Scalars['String']>;
+  knowledgeBaseId?: Maybe<Scalars['String']>;
+  knowledgeBaseIds: Array<Scalars['String']>;
   responses: Array<ThreadResponse>;
+  selectedSkillIds: Array<Scalars['String']>;
+  summary?: Maybe<Scalars['String']>;
+  workspaceId?: Maybe<Scalars['String']>;
 };
 
 export type Diagram = {
@@ -658,7 +712,6 @@ export type Instruction = {
   id: Scalars['Int'];
   instruction: Scalars['String'];
   isDefault: Scalars['Boolean'];
-  projectId: Scalars['Int'];
   questions: Array<Scalars['String']>;
   updatedAt: Scalars['String'];
 };
@@ -722,11 +775,13 @@ export type Mutation = {
   cancelAskingTask: Scalars['Boolean'];
   createAskingTask: Task;
   createCalculatedField: Scalars['JSON'];
+  createDashboard: Dashboard;
   createDashboardItem: DashboardItem;
   createInstantRecommendedQuestions: Task;
   createInstruction: Instruction;
   createModel: Scalars['JSON'];
   createRelation: Scalars['JSON'];
+  createSkillDefinition: SkillDefinition;
   createSqlPair: SqlPair;
   createThread: Thread;
   createThreadResponse: ThreadResponse;
@@ -736,6 +791,7 @@ export type Mutation = {
   deleteInstruction: Scalars['Boolean'];
   deleteModel: Scalars['Boolean'];
   deleteRelation: Scalars['Boolean'];
+  deleteSkillDefinition: Scalars['Boolean'];
   deleteSqlPair: Scalars['Boolean'];
   deleteThread: Scalars['Boolean'];
   deleteView: Scalars['Boolean'];
@@ -746,6 +802,7 @@ export type Mutation = {
   generateThreadResponseAnswer: ThreadResponse;
   generateThreadResponseBreakdown: ThreadResponse;
   generateThreadResponseChart: ThreadResponse;
+  installSkillFromMarketplace: SkillDefinition;
   modelSubstitute: Scalars['String'];
   previewBreakdownData: Scalars['JSON'];
   previewData: Scalars['JSON'];
@@ -763,6 +820,7 @@ export type Mutation = {
   saveTables: Scalars['JSON'];
   setDashboardSchedule: Dashboard;
   startSampleDataset: Scalars['JSON'];
+  toggleSkillEnabled: SkillDefinition;
   triggerDataSourceDetection: Scalars['Boolean'];
   updateCalculatedField: Scalars['JSON'];
   updateCurrentProject: Scalars['Boolean'];
@@ -773,6 +831,8 @@ export type Mutation = {
   updateModel: Scalars['JSON'];
   updateModelMetadata: Scalars['Boolean'];
   updateRelation: Scalars['JSON'];
+  updateSkillDefinition: SkillDefinition;
+  updateSkillDefinitionRuntime: SkillDefinition;
   updateSqlPair: SqlPair;
   updateThread: Thread;
   updateThreadResponse: ThreadResponse;
@@ -807,6 +867,10 @@ export type MutationCreateCalculatedFieldArgs = {
   data: CreateCalculatedFieldInput;
 };
 
+export type MutationCreateDashboardArgs = {
+  data: CreateDashboardInput;
+};
+
 export type MutationCreateDashboardItemArgs = {
   data: CreateDashboardItemInput;
 };
@@ -825,6 +889,10 @@ export type MutationCreateModelArgs = {
 
 export type MutationCreateRelationArgs = {
   data: RelationInput;
+};
+
+export type MutationCreateSkillDefinitionArgs = {
+  data: CreateSkillDefinitionInput;
 };
 
 export type MutationCreateSqlPairArgs = {
@@ -864,6 +932,10 @@ export type MutationDeleteRelationArgs = {
   where: WhereIdInput;
 };
 
+export type MutationDeleteSkillDefinitionArgs = {
+  where: SkillDefinitionWhereUniqueInput;
+};
+
 export type MutationDeleteSqlPairArgs = {
   where: SqlPairWhereUniqueInput;
 };
@@ -898,6 +970,10 @@ export type MutationGenerateThreadResponseBreakdownArgs = {
 
 export type MutationGenerateThreadResponseChartArgs = {
   responseId: Scalars['Int'];
+};
+
+export type MutationInstallSkillFromMarketplaceArgs = {
+  catalogId: Scalars['String'];
 };
 
 export type MutationModelSubstituteArgs = {
@@ -964,6 +1040,11 @@ export type MutationStartSampleDatasetArgs = {
   data: SampleDatasetInput;
 };
 
+export type MutationToggleSkillEnabledArgs = {
+  enabled: Scalars['Boolean'];
+  skillDefinitionId: Scalars['String'];
+};
+
 export type MutationUpdateCalculatedFieldArgs = {
   data: UpdateCalculatedFieldInput;
   where: UpdateCalculatedFieldWhere;
@@ -1004,6 +1085,16 @@ export type MutationUpdateModelMetadataArgs = {
 export type MutationUpdateRelationArgs = {
   data: UpdateRelationInput;
   where: WhereIdInput;
+};
+
+export type MutationUpdateSkillDefinitionArgs = {
+  data: UpdateSkillDefinitionInput;
+  where: SkillDefinitionWhereUniqueInput;
+};
+
+export type MutationUpdateSkillDefinitionRuntimeArgs = {
+  data: UpdateSkillDefinitionRuntimeInput;
+  where: SkillDefinitionWhereUniqueInput;
 };
 
 export type MutationUpdateSqlPairArgs = {
@@ -1077,6 +1168,7 @@ export type PreviewItemResponse = {
   cacheCreatedAt?: Maybe<Scalars['String']>;
   cacheHit: Scalars['Boolean'];
   cacheOverrodeAt?: Maybe<Scalars['String']>;
+  chartDataProfile?: Maybe<Scalars['JSON']>;
   data: Scalars['JSON'];
   override: Scalars['Boolean'];
 };
@@ -1090,7 +1182,7 @@ export type PreviewItemSqlInput = {
 export type PreviewSqlDataInput = {
   dryRun?: InputMaybe<Scalars['Boolean']>;
   limit?: InputMaybe<Scalars['Int']>;
-  projectId?: InputMaybe<Scalars['String']>;
+  runtimeScopeId?: InputMaybe<Scalars['String']>;
   sql: Scalars['String'];
 };
 
@@ -1121,12 +1213,14 @@ export enum ProjectLanguage {
 export type Query = {
   __typename?: 'Query';
   adjustmentTask?: Maybe<AdjustmentTask>;
-  askShadowCompareStats: AskShadowCompareStats;
   apiHistory: ApiHistoryPaginatedResponse;
+  askShadowCompareStats: AskShadowCompareStats;
   askingTask?: Maybe<AskingTask>;
   autoGenerateRelation: Array<RecommendRelations>;
+  availableSkills: Array<SkillDefinition>;
   dashboard: DetailedDashboard;
   dashboardItems: Array<DashboardItem>;
+  dashboards: Array<Dashboard>;
   diagram: Diagram;
   getMDL: GetMdlResult;
   getProjectRecommendationQuestions: RecommendedQuestionsTask;
@@ -1137,12 +1231,15 @@ export type Query = {
   listDataSourceTables: Array<CompactTable>;
   listModels: Array<ModelInfo>;
   listViews: Array<ViewInfo>;
+  marketplaceCatalogSkills: Array<SkillMarketplaceCatalog>;
   model: DetailedModel;
   modelSync: ModelSyncResponse;
   nativeSql: Scalars['String'];
   onboardingStatus: OnboardingStatusResponse;
+  runtimeSelectorState?: Maybe<RuntimeSelectorState>;
   schemaChange: SchemaChange;
   settings: Settings;
+  skillDefinitions: Array<SkillDefinition>;
   sqlPairs: Array<Maybe<SqlPair>>;
   suggestedQuestions: SuggestedQuestionResponse;
   thread: DetailedThread;
@@ -1155,17 +1252,21 @@ export type QueryAdjustmentTaskArgs = {
   taskId: Scalars['String'];
 };
 
-export type QueryAskShadowCompareStatsArgs = {
-  filter?: InputMaybe<ApiHistoryFilterInput>;
-};
-
 export type QueryApiHistoryArgs = {
   filter?: InputMaybe<ApiHistoryFilterInput>;
   pagination: ApiHistoryPaginationInput;
 };
 
+export type QueryAskShadowCompareStatsArgs = {
+  filter?: InputMaybe<ApiHistoryFilterInput>;
+};
+
 export type QueryAskingTaskArgs = {
   taskId: Scalars['String'];
+};
+
+export type QueryDashboardArgs = {
+  where?: InputMaybe<DashboardWhereInput>;
 };
 
 export type QueryGetMdlArgs = {
@@ -1280,6 +1381,42 @@ export type ResultQuestion = {
   sql: Scalars['String'];
 };
 
+export type RuntimeSelectorKbSnapshot = {
+  __typename?: 'RuntimeSelectorKBSnapshot';
+  deployHash: Scalars['String'];
+  displayName: Scalars['String'];
+  id: Scalars['String'];
+  snapshotKey: Scalars['String'];
+  status: Scalars['String'];
+};
+
+export type RuntimeSelectorKnowledgeBase = {
+  __typename?: 'RuntimeSelectorKnowledgeBase';
+  defaultKbSnapshotId?: Maybe<Scalars['String']>;
+  id: Scalars['String'];
+  kind?: Maybe<Scalars['String']>;
+  name: Scalars['String'];
+  slug: Scalars['String'];
+};
+
+export type RuntimeSelectorState = {
+  __typename?: 'RuntimeSelectorState';
+  currentKbSnapshot?: Maybe<RuntimeSelectorKbSnapshot>;
+  currentKnowledgeBase?: Maybe<RuntimeSelectorKnowledgeBase>;
+  currentWorkspace?: Maybe<RuntimeSelectorWorkspace>;
+  kbSnapshots: Array<RuntimeSelectorKbSnapshot>;
+  knowledgeBases: Array<RuntimeSelectorKnowledgeBase>;
+  workspaces: Array<RuntimeSelectorWorkspace>;
+};
+
+export type RuntimeSelectorWorkspace = {
+  __typename?: 'RuntimeSelectorWorkspace';
+  id: Scalars['String'];
+  kind?: Maybe<Scalars['String']>;
+  name: Scalars['String'];
+  slug: Scalars['String'];
+};
+
 export type SampleDatasetInput = {
   name: SampleDatasetName;
 };
@@ -1353,11 +1490,58 @@ export type SimpleMeasureInput = {
   type: Scalars['String'];
 };
 
+export type SkillDefinition = {
+  __typename?: 'SkillDefinition';
+  catalogId?: Maybe<Scalars['String']>;
+  connectorId?: Maybe<Scalars['String']>;
+  createdBy?: Maybe<Scalars['String']>;
+  entrypoint?: Maybe<Scalars['String']>;
+  executionMode?: Maybe<Scalars['String']>;
+  hasSecret: Scalars['Boolean'];
+  id: Scalars['String'];
+  installedFrom?: Maybe<Scalars['String']>;
+  instruction?: Maybe<Scalars['String']>;
+  isEnabled?: Maybe<Scalars['Boolean']>;
+  kbSuggestionIds?: Maybe<Array<Scalars['String']>>;
+  manifest?: Maybe<Scalars['JSON']>;
+  migrationSourceBindingId?: Maybe<Scalars['String']>;
+  name: Scalars['String'];
+  runtimeConfig?: Maybe<Scalars['JSON']>;
+  runtimeKind: Scalars['String'];
+  sourceRef?: Maybe<Scalars['String']>;
+  sourceType: Scalars['String'];
+  workspaceId: Scalars['String'];
+};
+
+export type SkillDefinitionWhereUniqueInput = {
+  id: Scalars['String'];
+};
+
+export type SkillMarketplaceCatalog = {
+  __typename?: 'SkillMarketplaceCatalog';
+  author?: Maybe<Scalars['String']>;
+  category?: Maybe<Scalars['String']>;
+  defaultExecutionMode?: Maybe<Scalars['String']>;
+  defaultInstruction?: Maybe<Scalars['String']>;
+  description?: Maybe<Scalars['String']>;
+  entrypoint?: Maybe<Scalars['String']>;
+  id: Scalars['String'];
+  installCount?: Maybe<Scalars['Int']>;
+  isBuiltin?: Maybe<Scalars['Boolean']>;
+  isFeatured?: Maybe<Scalars['Boolean']>;
+  manifest?: Maybe<Scalars['JSON']>;
+  name: Scalars['String'];
+  runtimeKind: Scalars['String'];
+  slug: Scalars['String'];
+  sourceRef?: Maybe<Scalars['String']>;
+  sourceType: Scalars['String'];
+  version: Scalars['String'];
+};
+
 export type SqlPair = {
   __typename?: 'SqlPair';
   createdAt?: Maybe<Scalars['String']>;
   id: Scalars['Int'];
-  projectId: Scalars['Int'];
   question: Scalars['String'];
   sql: Scalars['String'];
   updatedAt?: Maybe<Scalars['String']>;
@@ -1391,8 +1575,14 @@ export type Task = {
 
 export type Thread = {
   __typename?: 'Thread';
+  deployHash?: Maybe<Scalars['String']>;
   id: Scalars['Int'];
+  kbSnapshotId?: Maybe<Scalars['String']>;
+  knowledgeBaseId?: Maybe<Scalars['String']>;
+  knowledgeBaseIds: Array<Scalars['String']>;
+  selectedSkillIds: Array<Scalars['String']>;
   summary: Scalars['String'];
+  workspaceId?: Maybe<Scalars['String']>;
 };
 
 export type ThreadResponse = {
@@ -1406,7 +1596,6 @@ export type ThreadResponse = {
   id: Scalars['Int'];
   question: Scalars['String'];
   sql?: Maybe<Scalars['String']>;
-  skillResult?: Maybe<Scalars['JSON']>;
   threadId: Scalars['Int'];
   view?: Maybe<ViewInfo>;
 };
@@ -1453,12 +1642,17 @@ export type ThreadResponseBreakdownDetail = {
 export type ThreadResponseChartDetail = {
   __typename?: 'ThreadResponseChartDetail';
   adjustment?: Maybe<Scalars['Boolean']>;
+  canonicalizationVersion?: Maybe<Scalars['String']>;
+  chartDataProfile?: Maybe<Scalars['JSON']>;
   chartSchema?: Maybe<Scalars['JSON']>;
   chartType?: Maybe<ChartType>;
   description?: Maybe<Scalars['String']>;
   error?: Maybe<Error>;
   queryId?: Maybe<Scalars['String']>;
+  rawChartSchema?: Maybe<Scalars['JSON']>;
+  renderHints?: Maybe<Scalars['JSON']>;
   status: ChartTaskStatus;
+  validationErrors?: Maybe<Array<Scalars['String']>>;
 };
 
 export type ThreadResponseUniqueWhereInput = {
@@ -1545,6 +1739,25 @@ export type UpdateRelationInput = {
 export type UpdateRelationshipMetadataInput = {
   description?: InputMaybe<Scalars['String']>;
   id: Scalars['Int'];
+};
+
+export type UpdateSkillDefinitionInput = {
+  entrypoint?: InputMaybe<Scalars['String']>;
+  manifest?: InputMaybe<Scalars['JSON']>;
+  name?: InputMaybe<Scalars['String']>;
+  runtimeKind?: InputMaybe<Scalars['String']>;
+  secret?: InputMaybe<Scalars['JSON']>;
+  sourceRef?: InputMaybe<Scalars['String']>;
+  sourceType?: InputMaybe<Scalars['String']>;
+};
+
+export type UpdateSkillDefinitionRuntimeInput = {
+  connectorId?: InputMaybe<Scalars['String']>;
+  executionMode?: InputMaybe<Scalars['String']>;
+  instruction?: InputMaybe<Scalars['String']>;
+  isEnabled?: InputMaybe<Scalars['Boolean']>;
+  kbSuggestionIds?: InputMaybe<Array<Scalars['String']>>;
+  runtimeConfig?: InputMaybe<Scalars['JSON']>;
 };
 
 export type UpdateSqlPairInput = {

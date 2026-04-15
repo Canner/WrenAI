@@ -57,15 +57,15 @@ describe('DetailsDrawer', () => {
           responsePayload: {
             askDiagnostics: {
               traceId: 'trace-1',
-              askPath: 'skill',
+              askPath: 'instructions',
               shadowCompare: {
                 enabled: true,
                 executed: true,
                 comparable: true,
                 matched: false,
-                primaryAskPath: 'skill',
+                primaryAskPath: 'instructions',
                 shadowAskPath: 'nl2sql',
-                primaryType: 'SKILL',
+                primaryType: 'TEXT_TO_SQL',
                 shadowType: 'TEXT_TO_SQL',
                 primaryResultCount: 1,
                 shadowResultCount: 0,
@@ -83,11 +83,11 @@ describe('DetailsDrawer', () => {
       } as any),
     );
 
-    expect(html).toContain('Ask diagnostics');
+    expect(html).toContain('问答诊断');
     expect(html).toContain('trace-1');
-    expect(html).toContain('skill');
-    expect(html).toContain('Shadow compare');
-    expect(html).toContain('mismatched');
+    expect(html).toContain('instructions');
+    expect(html).toContain('影子对比');
+    expect(html).toContain('不匹配');
     expect(html).toContain('nl2sql');
     expect(html).toContain('TEXT_TO_SQL');
     expect(html).toContain('timeout');

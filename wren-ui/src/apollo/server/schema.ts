@@ -19,6 +19,27 @@ export const typeDefs = gql`
     DELETE_SQL_PAIR
     GET_SQL_PAIRS
     GET_MODELS
+    GET_THREADS
+    GET_API_HISTORY
+    UPDATE_THREAD
+    DELETE_THREAD
+    CREATE_VIEW
+    DELETE_VIEW
+    PREVIEW_VIEW_DATA
+    PREVIEW_MODEL_DATA
+    GET_SKILLS
+    CREATE_SKILL
+    UPDATE_SKILL
+    DELETE_SKILL
+    GET_CONNECTORS
+    CREATE_CONNECTOR
+    UPDATE_CONNECTOR
+    DELETE_CONNECTOR
+    TEST_CONNECTOR
+    REENCRYPT_SECRETS
+    GET_KNOWLEDGE_BASES
+    CREATE_KNOWLEDGE_BASE
+    UPDATE_KNOWLEDGE_BASE
     STREAM_ASK
     STREAM_GENERATE_SQL
   }
@@ -27,7 +48,6 @@ export const typeDefs = gql`
     apiType: ApiType
     statusCode: Int
     threadId: String
-    projectId: Int
     startDate: String
     endDate: String
   }
@@ -39,7 +59,6 @@ export const typeDefs = gql`
 
   type ApiHistoryResponse {
     id: String!
-    projectId: Int!
     apiType: ApiType!
     threadId: String
     headers: JSON
@@ -635,6 +654,8 @@ export const typeDefs = gql`
     question: String!
     # Used for follow-up questions
     threadId: Int
+    knowledgeBaseIds: [String!]
+    selectedSkillIds: [String!]
   }
 
   enum AskingTaskStatus {
@@ -652,7 +673,6 @@ export const typeDefs = gql`
     GENERAL
     TEXT_TO_SQL
     MISLEADING_QUERY
-    SKILL
   }
 
   enum ChartTaskStatus {
@@ -691,7 +711,6 @@ export const typeDefs = gql`
     type: AskingTaskType
     error: Error
     candidates: [ResultCandidate!]!
-    skillResult: JSON
     rephrasedQuestion: String
     intentReasoning: String
     sqlGenerationReasoning: String
@@ -729,6 +748,8 @@ export const typeDefs = gql`
     question: String
     sql: String
     taskId: String
+    knowledgeBaseIds: [String!]
+    selectedSkillIds: [String!]
   }
 
   input CreateThreadResponseInput {
@@ -815,7 +836,12 @@ export const typeDefs = gql`
     error: Error
     description: String
     chartType: ChartType
+    rawChartSchema: JSON
     chartSchema: JSON
+    canonicalizationVersion: String
+    renderHints: JSON
+    chartDataProfile: JSON
+    validationErrors: [String!]
     adjustment: Boolean
   }
 
@@ -843,7 +869,6 @@ export const typeDefs = gql`
     threadId: Int!
     question: String!
     sql: String
-    skillResult: JSON
     view: ViewInfo
     breakdownDetail: ThreadResponseBreakdownDetail
     answerDetail: ThreadResponseAnswerDetail
@@ -857,11 +882,24 @@ export const typeDefs = gql`
   type Thread {
     id: Int!
     summary: String!
+    workspaceId: String
+    knowledgeBaseId: String
+    kbSnapshotId: String
+    deployHash: String
+    knowledgeBaseIds: [String!]!
+    selectedSkillIds: [String!]!
   }
 
   # Detailed thread consists of thread and thread responses
   type DetailedThread {
     id: Int!
+    summary: String
+    workspaceId: String
+    knowledgeBaseId: String
+    kbSnapshotId: String
+    deployHash: String
+    knowledgeBaseIds: [String!]!
+    selectedSkillIds: [String!]!
     responses: [ThreadResponse!]!
   }
 
@@ -896,9 +934,9 @@ export const typeDefs = gql`
 
   input PreviewSQLDataInput {
     sql: String!
-    projectId: String
     limit: Int
     dryRun: Boolean
+    runtimeScopeId: String
   }
 
   # Schema Change
@@ -967,10 +1005,19 @@ export const typeDefs = gql`
   input CreateDashboardItemInput {
     itemType: DashboardItemType!
     responseId: Int!
+    dashboardId: Int
+  }
+
+  input CreateDashboardInput {
+    name: String!
   }
 
   input UpdateDashboardItemInput {
     displayName: String!
+  }
+
+  input DashboardWhereInput {
+    id: Int!
   }
 
   input ItemLayoutInput {
@@ -997,6 +1044,7 @@ export const typeDefs = gql`
 
   type PreviewItemResponse {
     data: JSON!
+    chartDataProfile: JSON
     cacheHit: Boolean!
     cacheCreatedAt: String
     cacheOverrodeAt: String
@@ -1053,6 +1101,13 @@ export const typeDefs = gql`
   type DashboardItemDetail {
     sql: String!
     chartSchema: JSON
+    renderHints: JSON
+    canonicalizationVersion: String
+    chartDataProfile: JSON
+    validationErrors: [String!]
+    sourceResponseId: Int
+    sourceThreadId: Int
+    sourceQuestion: String
   }
 
   type DashboardItem {
@@ -1066,7 +1121,6 @@ export const typeDefs = gql`
 
   type Dashboard {
     id: Int!
-    projectId: Int! @deprecated(reason: "Legacy bridge field. Runtime-scoped dashboard flows should not rely on projectId.")
     name: String!
     cacheEnabled: Boolean!
     scheduleFrequency: ScheduleFrequencyEnum
@@ -1087,7 +1141,6 @@ export const typeDefs = gql`
 
   type SqlPair {
     id: Int!
-    projectId: Int!
     sql: String!
     question: String!
     createdAt: String
@@ -1118,7 +1171,6 @@ export const typeDefs = gql`
 
   type Instruction {
     id: Int!
-    projectId: Int!
     instruction: String!
     questions: [String!]!
     isDefault: Boolean!
@@ -1150,8 +1202,38 @@ export const typeDefs = gql`
     sourceType: String!
     sourceRef: String
     entrypoint: String
+    catalogId: String
+    instruction: String
+    isEnabled: Boolean
+    executionMode: String
+    connectorId: String
+    runtimeConfig: JSON
+    kbSuggestionIds: [String!]
+    installedFrom: String
+    migrationSourceBindingId: String
     manifest: JSON
+    hasSecret: Boolean!
     createdBy: String
+  }
+
+  type SkillMarketplaceCatalog {
+    id: String!
+    slug: String!
+    name: String!
+    description: String
+    category: String
+    author: String
+    version: String!
+    runtimeKind: String!
+    sourceType: String!
+    sourceRef: String
+    entrypoint: String
+    defaultInstruction: String
+    defaultExecutionMode: String
+    manifest: JSON
+    isBuiltin: Boolean
+    isFeatured: Boolean
+    installCount: Int
   }
 
   input CreateSkillDefinitionInput {
@@ -1161,6 +1243,7 @@ export const typeDefs = gql`
     sourceRef: String
     entrypoint: String
     manifest: JSON
+    secret: JSON
   }
 
   input UpdateSkillDefinitionInput {
@@ -1170,39 +1253,19 @@ export const typeDefs = gql`
     sourceRef: String
     entrypoint: String
     manifest: JSON
+    secret: JSON
+  }
+
+  input UpdateSkillDefinitionRuntimeInput {
+    instruction: String
+    isEnabled: Boolean
+    executionMode: String
+    connectorId: String
+    runtimeConfig: JSON
+    kbSuggestionIds: [String!]
   }
 
   input SkillDefinitionWhereUniqueInput {
-    id: String!
-  }
-
-  type SkillBinding {
-    id: String!
-    knowledgeBaseId: String!
-    kbSnapshotId: String
-    skillDefinitionId: String!
-    connectorId: String
-    bindingConfig: JSON
-    enabled: Boolean!
-    createdBy: String
-  }
-
-  input CreateSkillBindingInput {
-    kbSnapshotId: String
-    skillDefinitionId: String!
-    connectorId: String
-    bindingConfig: JSON
-    enabled: Boolean
-  }
-
-  input UpdateSkillBindingInput {
-    kbSnapshotId: String
-    connectorId: String
-    bindingConfig: JSON
-    enabled: Boolean
-  }
-
-  input SkillBindingWhereUniqueInput {
     id: String!
   }
 
@@ -1210,12 +1273,14 @@ export const typeDefs = gql`
     id: String!
     slug: String!
     name: String!
+    kind: String
   }
 
   type RuntimeSelectorKnowledgeBase {
     id: String!
     slug: String!
     name: String!
+    kind: String
     defaultKbSnapshotId: String
   }
 
@@ -1228,8 +1293,8 @@ export const typeDefs = gql`
   }
 
   type RuntimeSelectorState {
-    currentProjectId: Int
     currentWorkspace: RuntimeSelectorWorkspace
+    workspaces: [RuntimeSelectorWorkspace!]!
     currentKnowledgeBase: RuntimeSelectorKnowledgeBase
     currentKbSnapshot: RuntimeSelectorKBSnapshot
     knowledgeBases: [RuntimeSelectorKnowledgeBase!]!
@@ -1281,7 +1346,8 @@ export const typeDefs = gql`
 
     # Dashboard
     dashboardItems: [DashboardItem!]!
-    dashboard: DetailedDashboard!
+    dashboards: [Dashboard!]!
+    dashboard(where: DashboardWhereInput): DetailedDashboard!
 
     # SQL Pairs
     sqlPairs: [SqlPair]!
@@ -1290,7 +1356,8 @@ export const typeDefs = gql`
 
     # Skills
     skillDefinitions: [SkillDefinition!]!
-    skillBindings: [SkillBinding!]!
+    availableSkills: [SkillDefinition!]!
+    marketplaceCatalogSkills: [SkillMarketplaceCatalog!]!
 
     # Api History
     apiHistory(
@@ -1421,6 +1488,7 @@ export const typeDefs = gql`
     updateDashboardItemLayouts(
       data: UpdateDashboardItemLayoutsInput!
     ): [DashboardItem!]!
+    createDashboard(data: CreateDashboardInput!): Dashboard!
     createDashboardItem(data: CreateDashboardItemInput!): DashboardItem!
     updateDashboardItem(
       where: DashboardItemWhereInput!
@@ -1453,12 +1521,15 @@ export const typeDefs = gql`
       where: SkillDefinitionWhereUniqueInput!
       data: UpdateSkillDefinitionInput!
     ): SkillDefinition!
+    installSkillFromMarketplace(catalogId: String!): SkillDefinition!
+    toggleSkillEnabled(
+      skillDefinitionId: String!
+      enabled: Boolean!
+    ): SkillDefinition!
+    updateSkillDefinitionRuntime(
+      where: SkillDefinitionWhereUniqueInput!
+      data: UpdateSkillDefinitionRuntimeInput!
+    ): SkillDefinition!
     deleteSkillDefinition(where: SkillDefinitionWhereUniqueInput!): Boolean!
-    createSkillBinding(data: CreateSkillBindingInput!): SkillBinding!
-    updateSkillBinding(
-      where: SkillBindingWhereUniqueInput!
-      data: UpdateSkillBindingInput!
-    ): SkillBinding!
-    deleteSkillBinding(where: SkillBindingWhereUniqueInput!): Boolean!
   }
 `;

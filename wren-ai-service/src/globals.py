@@ -6,7 +6,6 @@ import toml
 from src.config import Settings
 from src.core.pipeline import PipelineComponent
 from src.core.provider import EmbedderProvider, LLMProvider
-from src.core.skill_runner import SkillRunnerClient
 from src.pipelines import generation, indexing, retrieval
 from src.utils import fetch_wren_ai_docs
 from src.web.v1 import services
@@ -16,7 +15,6 @@ logger = logging.getLogger("wren-ai-service")
 
 @dataclass
 class ServiceContainer:
-    skill_runner_client: SkillRunnerClient
     ask_service: services.AskService
     ask_feedback_service: services.AskFeedbackService
     question_recommendation: services.QuestionRecommendation
@@ -84,14 +82,7 @@ def create_service_container(
     _sql_diagnosis_pipeline = generation.SQLDiagnosis(
         **pipe_components["sql_diagnosis"],
     )
-    skill_runner_client = SkillRunnerClient(
-        endpoint=settings.skill_runner_endpoint,
-        timeout=settings.skill_runner_timeout,
-        enabled=settings.skill_runner_enabled,
-    )
-
     return ServiceContainer(
-        skill_runner_client=skill_runner_client,
         semantics_description=services.SemanticsDescription(
             pipelines={
                 "semantics_description": generation.SemanticsDescription(
@@ -164,6 +155,7 @@ def create_service_container(
             },
             ask_runtime_mode=settings.ask_runtime_mode,
             ask_shadow_compare_enabled=settings.ask_shadow_compare_enabled,
+            ask_shadow_compare_sample_rate=settings.ask_shadow_compare_sample_rate,
             allow_intent_classification=settings.allow_intent_classification,
             allow_sql_generation_reasoning=settings.allow_sql_generation_reasoning,
             allow_sql_functions_retrieval=settings.allow_sql_functions_retrieval,
@@ -172,7 +164,6 @@ def create_service_container(
             max_histories=settings.max_histories,
             enable_column_pruning=settings.enable_column_pruning,
             max_sql_correction_retries=settings.max_sql_correction_retries,
-            skill_runner_client=skill_runner_client,
             **query_cache,
         ),
         ask_feedback_service=services.AskFeedbackService(

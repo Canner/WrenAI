@@ -13,7 +13,10 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider
-from src.pipelines.common import build_runtime_scope_meta, normalize_runtime_scope_id
+from src.pipelines.common import (
+    build_runtime_scope_meta,
+    resolve_pipeline_runtime_scope_id,
+)
 from src.pipelines.indexing import AsyncDocumentWriter, DocumentCleaner, MDLValidator
 
 logger = logging.getLogger("wren-ai-service")
@@ -30,14 +33,19 @@ def validate_mdl(mdl_str: str, validator: MDLValidator) -> dict[str, Any]:
 @observe(capture_input=False)
 def chunk(
     mdl: dict[str, Any],
-    project_id: Optional[str] = None,
+    runtime_scope_id: Optional[str] = None,
 ) -> dict[str, Any]:
-    addition = build_runtime_scope_meta(project_id)
+    addition = build_runtime_scope_meta(runtime_scope_id)
     data_source = mdl.get("dataSource", "local_file").lower()
 
     if data_source == "duckdb":
         # fix duckdb to local_file due to wren-ibis implementation at the moment
         data_source = "local_file"
+    elif data_source == "trino":
+        # Intentionally passthrough. Unlike duckdb, Trino is a first-class
+        # runtime data source in the indexing / generation pipeline and should
+        # stay tagged as "trino" for downstream dialect-specific behavior.
+        pass
 
     document = Document(
         id=str(uuid.uuid4()),
@@ -50,9 +58,9 @@ def chunk(
 async def clean(
     chunk: dict[str, Any],
     cleaner: DocumentCleaner,
-    project_id: Optional[str] = None,
+    runtime_scope_id: Optional[str] = None,
 ) -> dict[str, Any]:
-    await cleaner.run(project_id=normalize_runtime_scope_id(project_id))
+    await cleaner.run(runtime_scope_id=runtime_scope_id)
     return chunk
 
 
@@ -88,9 +96,14 @@ class ProjectMeta(BasicPipeline):
 
     @observe(name="Project Meta Indexing")
     async def run(
-        self, mdl_str: str, project_id: Optional[str] = None
+        self,
+        mdl_str: str,
+        runtime_scope_id: Optional[str] = None,
+        bridge_scope_id: Optional[str] = None,
     ) -> dict[str, Any]:
-        runtime_scope_id = normalize_runtime_scope_id(project_id)
+        runtime_scope_id = resolve_pipeline_runtime_scope_id(
+            runtime_scope_id, bridge_scope_id=bridge_scope_id
+        )
         logger.info(
             f"Runtime scope: {runtime_scope_id}, Project Meta Indexing pipeline is running..."
         )
@@ -98,13 +111,19 @@ class ProjectMeta(BasicPipeline):
             [self._final],
             inputs={
                 "mdl_str": mdl_str,
-                "project_id": runtime_scope_id,
+                "runtime_scope_id": runtime_scope_id,
                 **self._components,
             },
         )
 
     @observe(name="Clean Documents for Project Meta")
-    async def clean(self, project_id: Optional[str] = None) -> None:
+    async def clean(
+        self,
+        runtime_scope_id: Optional[str] = None,
+        bridge_scope_id: Optional[str] = None,
+    ) -> None:
         await self._components["cleaner"].run(
-            project_id=normalize_runtime_scope_id(project_id)
+            runtime_scope_id=resolve_pipeline_runtime_scope_id(
+                runtime_scope_id, bridge_scope_id=bridge_scope_id
+            )
         )

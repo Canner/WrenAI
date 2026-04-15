@@ -15,6 +15,7 @@ import {
 import { IWrenAIAdaptor } from '../adaptors';
 import { TelemetryEvent, WrenService } from '../telemetry/telemetry';
 import { PostHogTelemetry } from '../telemetry/telemetry';
+import { registerShutdownCallback } from '@server/utils/shutdown';
 
 const logger = getLogger('AdjustmentTaskTracker');
 logger.level = 'debug';
@@ -47,14 +48,15 @@ export type CreateAdjustmentTaskInput = AskFeedbackInput & {
   question: string;
   originalThreadResponseId: number;
   configurations: { language: string };
+  runtimeScopeId?: string | null;
   runtimeIdentity?: PersistedRuntimeIdentity;
 };
 
 export type RerunAdjustmentTaskInput = {
   threadResponseId: number;
   threadId: number;
-  projectId: number;
   configurations: { language: string };
+  runtimeScopeId?: string | null;
   runtimeIdentity?: PersistedRuntimeIdentity;
 };
 
@@ -79,10 +81,11 @@ export class AdjustmentBackgroundTaskTracker
   private trackedTasksById: Map<number, TrackedTask> = new Map();
   private pollingInterval: number;
   private memoryRetentionTime: number;
-  private pollingIntervalId: NodeJS.Timeout;
+  private pollingIntervalId?: NodeJS.Timeout;
   private runningJobs = new Set<string>();
   private threadResponseRepository: IThreadResponseRepository;
   private telemetry: PostHogTelemetry;
+  private unregisterShutdown?: () => void;
 
   constructor({
     telemetry,
@@ -113,8 +116,7 @@ export class AdjustmentBackgroundTaskTracker
   ): Promise<{ queryId: string; createdThreadResponse: ThreadResponse }> {
     try {
       // Call the AI service to create a task
-      const { runtimeIdentity: _runtimeIdentity, ...adaptorInput } = input;
-      const response = await this.wrenAIAdaptor.createAskFeedback(adaptorInput);
+      const response = await this.wrenAIAdaptor.createAskFeedback(input);
       const queryId = response.queryId;
 
       // create a new asking task
@@ -126,7 +128,7 @@ export class AdjustmentBackgroundTaskTracker
           adjustment: true,
           status: AskFeedbackStatus.UNDERSTANDING,
           response: [],
-          error: null,
+          error: undefined,
         },
         ...(input.runtimeIdentity || {}),
       });
@@ -212,12 +214,22 @@ export class AdjustmentBackgroundTaskTracker
     }
 
     // call createAskFeedback on AI service
-    const { runtimeIdentity: _runtimeIdentity, ...adaptorInput } = input;
+    const retrievedTables = adjustment.payload?.retrievedTables || [];
+    const sqlGenerationReasoning =
+      adjustment.payload?.sqlGenerationReasoning || '';
+    const originalSql = originalThreadResponse.sql || '';
+    if (!currentThreadResponse.askingTaskId) {
+      throw new Error(
+        `Thread response ${input.threadResponseId} has no asking task id`,
+      );
+    }
+
     const response = await this.wrenAIAdaptor.createAskFeedback({
-      ...adaptorInput,
-      tables: adjustment.payload?.retrievedTables,
-      sqlGenerationReasoning: adjustment.payload?.sqlGenerationReasoning,
-      sql: originalThreadResponse.sql,
+      runtimeScopeId: input.runtimeScopeId || undefined,
+      configurations: input.configurations,
+      tables: retrievedTables,
+      sqlGenerationReasoning,
+      sql: originalSql,
       question: originalThreadResponse.question,
     });
     const queryId = response.queryId;
@@ -233,7 +245,7 @@ export class AdjustmentBackgroundTaskTracker
           adjustment: true,
           status: AskFeedbackStatus.UNDERSTANDING,
           response: [],
-          error: null,
+          error: undefined,
         },
         ...(input.runtimeIdentity || {}),
       },
@@ -252,8 +264,8 @@ export class AdjustmentBackgroundTaskTracker
       runtimeIdentity: input.runtimeIdentity,
       adjustmentPayload: {
         originalThreadResponseId: originalThreadResponse.id,
-        retrievedTables: adjustment.payload?.retrievedTables,
-        sqlGenerationReasoning: adjustment.payload?.sqlGenerationReasoning,
+        retrievedTables,
+        sqlGenerationReasoning,
       },
     } as TrackedTask;
     this.trackedTasks.set(queryId, task);
@@ -306,12 +318,17 @@ export class AdjustmentBackgroundTaskTracker
     if (this.pollingIntervalId) {
       clearInterval(this.pollingIntervalId);
     }
+    this.unregisterShutdown?.();
+    this.unregisterShutdown = undefined;
   }
 
   private startPolling(): void {
     this.pollingIntervalId = setInterval(() => {
       this.pollTasks();
     }, this.pollingInterval);
+    this.unregisterShutdown = registerShutdownCallback(() =>
+      this.stopPolling(),
+    );
   }
 
   private async pollTasks(): Promise<void> {
@@ -406,7 +423,8 @@ export class AdjustmentBackgroundTaskTracker
             this.runningJobs.delete(queryId);
           } catch (err) {
             this.runningJobs.delete(queryId);
-            logger.error(err.stack);
+            const errorMessage = err instanceof Error ? err.stack : String(err);
+            logger.error(errorMessage);
             throw err;
           }
         },
@@ -507,7 +525,7 @@ export class AdjustmentBackgroundTaskTracker
   }
 
   private isResultChanged(
-    previousResult: AskFeedbackResult,
+    previousResult: AskFeedbackResult | undefined,
     newResult: AskFeedbackResult,
   ): boolean {
     // check status change

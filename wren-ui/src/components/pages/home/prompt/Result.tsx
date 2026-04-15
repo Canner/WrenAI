@@ -41,13 +41,17 @@ const StyledResult = styled.div`
 interface Props {
   processState: PROCESS_STATE;
   data: {
-    type: AskingTaskType;
+    type?: AskingTaskType | null;
     originalQuestion: string;
-    askingStreamTask: string;
-    recommendedQuestions: RecommendedQuestionsTask;
+    askingStreamTask?: string;
+    recommendedQuestions?: RecommendedQuestionsTask | null;
     intentReasoning: string;
   };
-  error?: any;
+  error?: {
+    message?: string | null;
+    shortMessage?: string | null;
+    stacktrace?: (string | null)[] | null;
+  } | null;
   onIntentSQLAnswer: () => void;
   onSelectRecommendedQuestion: ({
     question,
@@ -61,7 +65,7 @@ interface Props {
   loading?: boolean;
 }
 
-const Wrapper = ({ children }) => {
+const Wrapper = ({ children }: { children: ReactNode }) => {
   return (
     <StyledResult
       className="border border-gray-3 rounded p-4"
@@ -93,7 +97,7 @@ const makeProcessing = (text: string) => (props: Props) => {
           disabled={loading}
         >
           <StopOutlined className="-mr-1" />
-          Stop
+          停止
         </Button>
       </div>
     </Wrapper>
@@ -105,7 +109,7 @@ const makeProcessingError =
   (props: Props) => {
     const { onClose, onSelectRecommendedQuestion, data, error } = props;
     const { message, shortMessage, stacktrace } = error || {};
-    const hasStacktrace = !!stacktrace;
+    const hasStacktrace = !!stacktrace?.length;
 
     const recommendedQuestionProps = getRecommendedQuestionProps(
       data?.recommendedQuestions,
@@ -125,14 +129,17 @@ const makeProcessingError =
             onClick={onClose}
           >
             <CloseOutlined className="-mr-1" />
-            Close
+            关闭
           </Button>
         </div>
         <div className="gray-7">
           {config.description || data.intentReasoning || message}
         </div>
         {hasStacktrace && (
-          <ErrorCollapse className="mt-2" message={stacktrace.join('\n')} />
+          <ErrorCollapse
+            className="mt-2"
+            message={stacktrace?.filter(Boolean).join('\n')}
+          />
         )}
 
         {recommendedQuestionProps.show && (
@@ -152,7 +159,7 @@ const Failed = makeProcessingError({
   icon: <ErrorIcon />,
 });
 
-const Understanding = makeProcessing('Understanding question');
+const Understanding = makeProcessing('正在理解问题');
 
 const IntentionFinished = (props: Props) => {
   const { data, onIntentSQLAnswer, processState } = props;
@@ -160,10 +167,7 @@ const IntentionFinished = (props: Props) => {
 
   useEffect(() => {
     // create an empty response first if this is a text to sql task
-    if (
-      type === AskingTaskType.TEXT_TO_SQL ||
-      (type === AskingTaskType.SKILL && processState === PROCESS_STATE.FINISHED)
-    ) {
+    if (type === AskingTaskType.TEXT_TO_SQL) {
       onIntentSQLAnswer && onIntentSQLAnswer();
     }
   }, [onIntentSQLAnswer, processState, type]);
@@ -212,14 +216,14 @@ const GeneralAnswer = (props: Props) => {
           onClick={onClose}
         >
           <CloseOutlined className="-mr-1" />
-          Close
+          关闭
         </Button>
       </div>
       <div className="py-3">
         <div className="bg-gray-2 gray-6 py-2 px-3">
           <div className="d-flex align-center">
             <BrainSVG className="mr-2 adm-brain-svg" />
-            <span className="text-medium ">User Intent Recognized</span>
+            <span className="text-medium ">已识别用户意图</span>
           </div>
           <div style={{ paddingLeft: 22 }}>{data.intentReasoning}</div>
         </div>
@@ -229,11 +233,11 @@ const GeneralAnswer = (props: Props) => {
           className="py-2 px-3"
           style={{ maxHeight: 'calc(100vh - 480px)', overflowY: 'auto' }}
         >
-          <MarkdownBlock content={askingStreamTask} />
+          <MarkdownBlock content={askingStreamTask || ''} />
           {isDone && (
             <div className="gray-6">
               <InfoCircleOutlined className="mr-2" />
-              For the most accurate semantics, please visit the modeling page.
+              若需最准确的语义定义，请前往建模页完善模型配置。
             </div>
           )}
         </div>
@@ -251,38 +255,41 @@ const GeneralAnswer = (props: Props) => {
 
 const MisleadingQuery = makeProcessingError({
   icon: <WarningOutlined className="mr-2 text-lg gold-6" />,
-  title: 'Clarification needed',
+  title: '需要补充澄清',
 });
 
 const getGeneralAnswerStateComponent = (state: PROCESS_STATE) => {
-  return (
-    {
-      [PROCESS_STATE.FINISHED]: GeneralAnswer,
-    }[state] || null
-  );
+  const stateMap: Partial<
+    Record<PROCESS_STATE, (props: Props) => JSX.Element>
+  > = {
+    [PROCESS_STATE.FINISHED]: GeneralAnswer,
+  };
+  return stateMap[state] || null;
 };
 
 const getMisleadingQueryStateComponent = (state: PROCESS_STATE) => {
-  return (
-    {
-      [PROCESS_STATE.FINISHED]: MisleadingQuery,
-    }[state] || null
-  );
+  const stateMap: Partial<
+    Record<PROCESS_STATE, (props: Props) => JSX.Element>
+  > = {
+    [PROCESS_STATE.FINISHED]: MisleadingQuery,
+  };
+  return stateMap[state] || null;
 };
 
 const getDefaultStateComponent = (state: PROCESS_STATE) => {
-  return (
-    {
-      [PROCESS_STATE.UNDERSTANDING]: Understanding,
-      // Polling AI status for every 1 second might skip the searching state.
-      [PROCESS_STATE.SEARCHING]: IntentionFinished,
-      [PROCESS_STATE.PLANNING]: IntentionFinished,
-      [PROCESS_STATE.GENERATING]: IntentionFinished,
-      // The finished status will respond by AI directly if viewId found, so we need to handle with intention finished.
-      [PROCESS_STATE.FINISHED]: IntentionFinished,
-      [PROCESS_STATE.FAILED]: Failed,
-    }[state] || null
-  );
+  const stateMap: Partial<
+    Record<PROCESS_STATE, (props: Props) => JSX.Element>
+  > = {
+    [PROCESS_STATE.UNDERSTANDING]: Understanding,
+    // Polling AI status for every 1 second might skip the searching state.
+    [PROCESS_STATE.SEARCHING]: IntentionFinished,
+    [PROCESS_STATE.PLANNING]: IntentionFinished,
+    [PROCESS_STATE.GENERATING]: IntentionFinished,
+    // The finished status will respond by AI directly if viewId found, so we need to handle with intention finished.
+    [PROCESS_STATE.FINISHED]: IntentionFinished,
+    [PROCESS_STATE.FAILED]: Failed,
+  };
+  return stateMap[state] || null;
 };
 
 const makeProcessStateStrategy = (type: AskingTaskType) => {
@@ -297,7 +304,9 @@ const makeProcessStateStrategy = (type: AskingTaskType) => {
 export default memo(function PromptResult(props: Props) {
   const { processState, data } = props;
 
-  const getProcessStateComponent = makeProcessStateStrategy(data?.type);
+  const getProcessStateComponent = makeProcessStateStrategy(
+    data?.type || AskingTaskType.TEXT_TO_SQL,
+  );
   const StateComponent = getProcessStateComponent(processState);
 
   if (StateComponent === null) return null;

@@ -1,14 +1,27 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { keyBy } from 'lodash';
-import { Col, Row, Typography, Button } from 'antd';
+import { Alert, Col, Row, Typography, Button, message } from 'antd';
 import FieldTable from '@/components/table/FieldTable';
 import CalculatedFieldTable from '@/components/table/CalculatedFieldTable';
 import RelationTable from '@/components/table/RelationTable';
 import PreviewData from '@/components/dataPreview/PreviewData';
 import { DiagramModel } from '@/utils/data';
-import { usePreviewModelDataMutation } from '@/apollo/client/graphql/model.generated';
+import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
+import {
+  DiagramModelField,
+  DiagramModelRelationField,
+} from '@/apollo/client/graphql/__types__';
+import {
+  previewModelData,
+  type ModelPreviewDataResponse,
+} from '@/utils/modelRest';
 
-export type Props = DiagramModel;
+export type Props = DiagramModel & {
+  readOnly?: boolean;
+};
+
+const isNonNullable = <T,>(value: T | null | undefined): value is T =>
+  value != null;
 
 export default function ModelMetadata(props: Props) {
   const {
@@ -19,26 +32,76 @@ export default function ModelMetadata(props: Props) {
     calculatedFields = [],
     relationFields = [],
     description,
+    readOnly = false,
   } = props || {};
-
-  const [previewModelData, previewModelDataResult] =
-    usePreviewModelDataMutation({
-      onError: (error) => console.error(error),
-    });
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
+  const [previewDataResult, setPreviewDataResult] = useState<{
+    loading: boolean;
+    data?: ModelPreviewDataResponse;
+    error?: Error;
+  }>({
+    loading: false,
+  });
 
   // Model preview data should show alias as column name.
-  const fieldsMap = useMemo(() => keyBy(fields, 'referenceName'), [fields]);
-  const previewData = useMemo(() => {
-    const previewModelData = previewModelDataResult.data?.previewModelData;
-    const columns = (previewModelData?.columns || []).map((column) => {
-      const alias = fieldsMap[column.name]?.displayName;
-      return { ...column, name: alias || column.name };
-    });
-    return { ...previewModelData, columns };
-  }, [fieldsMap, previewModelDataResult.data]);
+  const normalizedFields = useMemo(
+    () => (fields || []).filter(isNonNullable) as DiagramModelField[],
+    [fields],
+  );
+  const normalizedCalculatedFields = useMemo(
+    () => (calculatedFields || []).filter(isNonNullable) as DiagramModelField[],
+    [calculatedFields],
+  );
+  const normalizedRelationFields = useMemo(
+    () =>
+      (relationFields || []).filter(
+        isNonNullable,
+      ) as DiagramModelRelationField[],
+    [relationFields],
+  );
 
-  const onPreviewData = () => {
-    previewModelData({ variables: { where: { id: modelId } } });
+  const fieldsMap = useMemo(
+    () => keyBy(normalizedFields, 'referenceName'),
+    [normalizedFields],
+  );
+  const previewData = useMemo(() => {
+    const rawPreviewData = previewDataResult.data;
+    const columns = (rawPreviewData?.columns || []).map(
+      (column: { name: string; type: string }) => {
+        const alias = fieldsMap[column.name]?.displayName;
+        return { ...column, name: alias || column.name };
+      },
+    );
+    return rawPreviewData ? { ...rawPreviewData, columns } : undefined;
+  }, [fieldsMap, previewDataResult.data]);
+
+  const onPreviewData = async () => {
+    setPreviewDataResult((previous) => ({
+      ...previous,
+      loading: true,
+      error: undefined,
+    }));
+    try {
+      const data = await previewModelData(
+        runtimeScopeNavigation.selector,
+        modelId,
+      );
+      setPreviewDataResult({
+        loading: false,
+        data,
+      });
+    } catch (error) {
+      const nextError =
+        error instanceof Error
+          ? error
+          : new Error('预览模型数据失败，请稍后重试。');
+      message.error(nextError.message || '预览模型数据失败，请稍后重试。');
+      setPreviewDataResult({
+        loading: false,
+        data: undefined,
+        error: nextError,
+      });
+    }
   };
 
   return (
@@ -46,63 +109,73 @@ export default function ModelMetadata(props: Props) {
       <Row className="mb-6">
         <Col span={12} data-testid="metadata__name">
           <Typography.Text className="d-block gray-7 mb-2">
-            Name
+            名称
           </Typography.Text>
           <div>{referenceName || '-'}</div>
         </Col>
         <Col span={12} data-testid="metadata__alias">
           <Typography.Text className="d-block gray-7 mb-2">
-            Alias
+            显示名称
           </Typography.Text>
           <div>{displayName || '-'}</div>
         </Col>
       </Row>
       <div className="mb-6" data-testid="metadata__description">
-        <Typography.Text className="d-block gray-7 mb-2">
-          Description
-        </Typography.Text>
+        <Typography.Text className="d-block gray-7 mb-2">描述</Typography.Text>
         <div>{description || '-'}</div>
       </div>
 
       <div className="mb-6" data-testid="metadata__columns">
         <Typography.Text className="d-block gray-7 mb-2">
-          Columns ({fields.length})
+          字段（{normalizedFields.length}）
         </Typography.Text>
-        <FieldTable dataSource={fields} showExpandable />
+        <FieldTable dataSource={normalizedFields} showExpandable />
       </div>
 
-      {!!calculatedFields.length && (
+      {!!normalizedCalculatedFields.length && (
         <div className="mb-6" data-testid="metadata__calculated-fields">
           <Typography.Text className="d-block gray-7 mb-2">
-            Calculated fields ({calculatedFields.length})
+            计算字段（{normalizedCalculatedFields.length}）
           </Typography.Text>
-          <CalculatedFieldTable dataSource={calculatedFields} showExpandable />
+          <CalculatedFieldTable
+            dataSource={normalizedCalculatedFields}
+            showExpandable
+          />
         </div>
       )}
 
-      {!!relationFields.length && (
+      {!!normalizedRelationFields.length && (
         <div className="mb-6" data-testid="metadata__relationships">
           <Typography.Text className="d-block gray-7 mb-2">
-            Relationships ({relationFields.length})
+            关系（{normalizedRelationFields.length}）
           </Typography.Text>
-          <RelationTable dataSource={relationFields} showExpandable />
+          <RelationTable dataSource={normalizedRelationFields} showExpandable />
         </div>
       )}
 
       <div className="mb-6" data-testid="metadata__preview-data">
         <Typography.Text className="d-block gray-7 mb-2">
-          Data preview (100 rows)
+          数据预览（100 行）
         </Typography.Text>
         <Button
           onClick={onPreviewData}
-          loading={previewModelDataResult.loading}
+          loading={previewDataResult.loading}
+          disabled={readOnly}
         >
-          Preview data
+          预览数据
         </Button>
+        {readOnly ? (
+          <Alert
+            className="mt-3"
+            showIcon
+            type="info"
+            message="历史快照下不支持数据预览。"
+          />
+        ) : null}
         <div className="my-3">
           <PreviewData
-            error={previewModelDataResult.error}
-            loading={previewModelDataResult.loading}
+            error={previewDataResult.error}
+            loading={previewDataResult.loading}
             previewData={previewData}
           />
         </div>

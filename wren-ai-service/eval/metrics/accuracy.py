@@ -1,10 +1,10 @@
 import asyncio
 import re
 import traceback
+from typing import Any
 
 import orjson
 import pandas as pd
-from deepeval.evaluate import TestResult
 from deepeval.metrics import BaseMetric
 from deepeval.test_case import LLMTestCase
 from deprecated import deprecated
@@ -180,7 +180,7 @@ class AccuracyMultiCandidateMetric(BaseMetric):
         self.score = 0
         self._questions = {}
 
-    def collect(self, test_case: LLMTestCase, result: TestResult):
+    def collect(self, test_case: LLMTestCase, result: Any):
         for metric in result.metrics_data:
             if metric.name != "Accuracy(column-based)":
                 continue

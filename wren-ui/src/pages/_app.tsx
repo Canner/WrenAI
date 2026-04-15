@@ -8,8 +8,12 @@ import {
   buildRuntimeScopeStateKey,
   readRuntimeScopeSelectorFromUrl,
 } from '@/apollo/client/runtimeScope';
+import PersistentConsoleShell, {
+  shouldKeyRuntimeScopePage,
+} from '@/components/reference/PersistentConsoleShell';
 import RuntimeScopeBootstrap from '@/components/runtimeScope/RuntimeScopeBootstrap';
 import { GlobalConfigProvider } from '@/hooks/useGlobalConfig';
+import { RuntimeSelectorStateProvider } from '@/hooks/useRuntimeSelectorState';
 import { PostHogProvider } from 'posthog-js/react';
 import { ApolloProvider } from '@apollo/client';
 import { defaultIndicator } from '@/components/PageLoading';
@@ -26,20 +30,31 @@ function App({ Component, pageProps, router }: AppProps) {
       )}`,
     [router.asPath, router.pathname],
   );
+  const componentKey = useMemo(
+    () =>
+      shouldKeyRuntimeScopePage(router.pathname)
+        ? runtimeScopePageKey
+        : undefined,
+    [router.pathname, runtimeScopePageKey],
+  );
 
   return (
     <>
       <Head>
-        <title>Wren AI</title>
+        <title>Nova</title>
         <link rel="icon" href="/favicon.ico" />
       </Head>
       <GlobalConfigProvider>
         <ApolloProvider client={apolloClient}>
           <PostHogProvider client={posthog}>
             <RuntimeScopeBootstrap>
-              <main className="app">
-                <Component key={runtimeScopePageKey} {...pageProps} />
-              </main>
+              <RuntimeSelectorStateProvider>
+                <main className="app">
+                  <PersistentConsoleShell>
+                    <Component key={componentKey} {...pageProps} />
+                  </PersistentConsoleShell>
+                </main>
+              </RuntimeSelectorStateProvider>
             </RuntimeScopeBootstrap>
           </PostHogProvider>
         </ApolloProvider>

@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: wren-ibis
-          image: ghcr.io/canner/wren-engine-ibis:0.5.0
+          image: wren-engine-ibis:local
           env:
             - name: WREN_ENGINE_ENDPOINT
               valueFrom:

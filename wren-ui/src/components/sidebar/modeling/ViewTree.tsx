@@ -18,26 +18,27 @@ import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 interface Props {
   [key: string]: any;
   views: DiagramView[];
+  readOnly?: boolean;
 }
 
 export default function ViewTree(props: Props) {
-  const { views } = props;
+  const { views, readOnly = false } = props;
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
 
   const onAddView = () => {
     Modal.info({
-      title: 'How to create a View?',
+      title: '如何创建视图？',
       content: (
         <div>
-          Pose your questions at{' '}
+          请先前往
           <Link
-            href={runtimeScopeNavigation.href(Path.Home)}
+            href={runtimeScopeNavigation.hrefWorkspace(Path.Home)}
             data-ph-capture="true"
             data-ph-capture-attribute-name="cta_add_view_navigate_to_home"
           >
-            homepage
+            首页
           </Link>
-          , and get some helpful answers to save as views.
+          提问，并将有价值的结果保存为视图。
         </div>
       ),
       okButtonProps: {
@@ -48,8 +49,9 @@ export default function ViewTree(props: Props) {
   };
 
   const getViewGroupNode = createTreeGroupNode({
-    groupName: 'Views',
+    groupName: '视图',
     groupKey: 'views',
+    emptyLabel: '暂无视图',
     actions: [
       {
         key: 'add-view-info',
@@ -57,11 +59,12 @@ export default function ViewTree(props: Props) {
           <GroupActionButton
             icon={<PlusOutlined />}
             size="small"
+            disabled={readOnly}
             onClick={onAddView}
             data-ph-capture="true"
             data-ph-capture-attribute-name="cta_add_view"
           >
-            New
+            新增
           </GroupActionButton>
         ),
       },
@@ -76,7 +79,11 @@ export default function ViewTree(props: Props) {
         quotaUsage: views.length,
         children: views.map((view) => {
           const nodeKey = view.id;
-          const children = getColumnNode(nodeKey, view.fields || []);
+          const viewFields = (view.fields || []).filter(
+            (field): field is NonNullable<(typeof view.fields)[number]> =>
+              field != null,
+          );
+          const children = getColumnNode(nodeKey, viewFields);
 
           return {
             children,

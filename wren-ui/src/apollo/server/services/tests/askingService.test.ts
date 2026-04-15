@@ -1,7 +1,11 @@
-import { AskingService, constructCteSql } from '../askingService';
+import {
+  AskingService,
+  RecommendQuestionResultStatus,
+  constructCteSql,
+} from '../askingService';
 import {
   RecommendationQuestionStatus,
-  SkillResultType,
+  WrenAILanguage,
 } from '../../models/adaptor';
 
 describe('AskingService', () => {
@@ -142,7 +146,9 @@ describe('AskingService', () => {
 
       expect(service.threadRepository.createOne).toHaveBeenCalledWith({
         ...runtimeIdentity,
+        knowledgeBaseIds: ['kb-1'],
         projectId: null,
+        selectedSkillIds: null,
         summary: 'what happened yesterday',
       });
       expect(service.threadResponseRepository.createOne).toHaveBeenCalledWith({
@@ -156,7 +162,6 @@ describe('AskingService', () => {
         question: 'what happened yesterday',
         sql: undefined,
         askingTaskId: 9,
-        skillResult: null,
       });
       expect(service.askingTaskTracker.bindThreadResponse).toHaveBeenCalledWith(
         9,
@@ -210,60 +215,85 @@ describe('AskingService', () => {
         question: 'follow up',
         sql: undefined,
         askingTaskId: 9,
-        skillResult: null,
       });
     });
+  });
 
-    it('persists skill results onto thread responses when present', async () => {
+  describe('previewData shaping', () => {
+    it('applies chart preview shaping on the server and persists chart data profile', async () => {
       const service = Object.create(AskingService.prototype) as any;
-      service.threadRepository = {
-        findOneBy: jest.fn().mockResolvedValue({
-          id: 101,
-          projectId: 42,
-          workspaceId: 'workspace-1',
-          knowledgeBaseId: 'kb-1',
-          kbSnapshotId: 'snapshot-1',
-          deployHash: 'deploy-1',
-          actorUserId: 'user-1',
-        }),
-      };
-      service.threadResponseRepository = {
-        createOne: jest.fn().mockResolvedValue({ id: 202 }),
-      };
-      service.askingTaskTracker = {
-        bindThreadResponse: jest.fn(),
-      };
-
-      const skillResult = {
-        resultType: SkillResultType.TEXT,
-        text: '本月 GMV 为 128 万',
-      };
-
-      await service.createThreadResponse(
-        {
-          question: 'follow up',
-          trackedAskingResult: {
-            taskId: 9,
-            queryId: 'query-9',
-            skillResult,
-          },
-        },
-        101,
-      );
-
-      expect(service.threadResponseRepository.createOne).toHaveBeenCalledWith({
-        projectId: 42,
+      const runtimeIdentity = {
+        projectId: null,
         workspaceId: 'workspace-1',
         knowledgeBaseId: 'kb-1',
         kbSnapshotId: 'snapshot-1',
         deployHash: 'deploy-1',
-        actorUserId: 'user-1',
-        threadId: 101,
-        question: 'follow up',
-        sql: undefined,
-        askingTaskId: 9,
-        skillResult,
+      };
+      service.getResponse = jest.fn().mockResolvedValue({
+        id: 55,
+        sql: 'select * from sales',
+        chartDetail: {
+          chartSchema: {
+            mark: 'bar',
+            encoding: {
+              x: { field: 'category', type: 'nominal' },
+              y: { field: 'sales', type: 'quantitative' },
+            },
+          },
+          renderHints: { preferredRenderer: 'svg' },
+        },
       });
+      service.getThreadResponseRuntimeIdentity = jest
+        .fn()
+        .mockResolvedValue(runtimeIdentity);
+      service.getExecutionResources = jest.fn().mockResolvedValue({
+        project: { id: 1, type: 'view' },
+        manifest: '{}',
+      });
+      service.queryService = {
+        preview: jest.fn().mockResolvedValue({
+          columns: [
+            { name: 'category', type: 'string' },
+            { name: 'sales', type: 'number' },
+          ],
+          data: Array.from({ length: 30 }, (_, index) => [
+            `c-${index}`,
+            100 - index,
+          ]),
+        }),
+      };
+      service.threadResponseRepository = {
+        updateOneByIdWithRuntimeScope: jest.fn().mockResolvedValue({ id: 55 }),
+      };
+      service.telemetry = {
+        sendEvent: jest.fn(),
+      };
+
+      const result = await service.previewData(55, undefined, runtimeIdentity);
+
+      expect(result.data).toHaveLength(26);
+      expect(result.chartDataProfile).toMatchObject({
+        sourceRowCount: 30,
+        resultRowCount: 26,
+      });
+      expect(
+        service.threadResponseRepository.updateOneByIdWithRuntimeScope,
+      ).toHaveBeenCalledWith(
+        55,
+        runtimeIdentity,
+        expect.objectContaining({
+          chartDetail: expect.objectContaining({
+            chartDataProfile: expect.objectContaining({
+              sourceRowCount: 30,
+              resultRowCount: 26,
+            }),
+            renderHints: expect.objectContaining({
+              categoryCount: 30,
+              isLargeCategory: true,
+            }),
+          }),
+        }),
+      );
     });
   });
 
@@ -307,23 +337,26 @@ describe('AskingService', () => {
         },
       );
 
-      expect(service.askingTaskTracker.createAskingTask).toHaveBeenCalledWith({
-        query: 'follow up',
-        histories: [],
-        deployId: 'deploy-1',
-        configurations: { language: 'en' },
-        rerunFromCancelled: undefined,
-        previousTaskId: undefined,
-        threadResponseId: undefined,
-        runtimeIdentity: {
-          projectId: 42,
-          workspaceId: 'workspace-1',
-          knowledgeBaseId: 'kb-1',
-          kbSnapshotId: 'snapshot-1',
-          deployHash: 'deploy-1',
-          actorUserId: 'user-1',
-        },
-      });
+      expect(service.askingTaskTracker.createAskingTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          query: 'follow up',
+          histories: [],
+          deployId: 'deploy-1',
+          configurations: { language: 'en' },
+          rerunFromCancelled: undefined,
+          previousTaskId: undefined,
+          threadResponseId: undefined,
+          runtimeIdentity: {
+            projectId: 42,
+            workspaceId: 'workspace-1',
+            knowledgeBaseId: 'kb-1',
+            kbSnapshotId: 'snapshot-1',
+            deployHash: 'deploy-1',
+            actorUserId: 'user-1',
+          },
+          retrievalScopeIds: ['deploy-1'],
+        }),
+      );
       expect(
         service.deployService.getLastDeploymentByRuntimeIdentity,
       ).not.toHaveBeenCalled();
@@ -393,6 +426,133 @@ describe('AskingService', () => {
       );
     });
 
+    it('pins runtime identity to selected knowledge base when scope is workspace-only', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      service.threadRepository = {
+        findOneBy: jest.fn(),
+      };
+      service.askingTaskTracker = {
+        createAskingTask: jest
+          .fn()
+          .mockResolvedValue({ queryId: 'query-workspace-scope' }),
+      };
+      service.getAskingHistory = jest.fn();
+      service.getDeployId =
+        AskingService.prototype['getDeployId'].bind(service);
+      service.resolveAskingRuntimeIdentity =
+        AskingService.prototype['resolveAskingRuntimeIdentity'].bind(service);
+      service.deployService = {
+        getLastDeploymentByRuntimeIdentity: jest
+          .fn()
+          .mockResolvedValue({ hash: 'deploy-kb-2' }),
+      };
+      service.skillService = {};
+
+      await service.createAskingTask(
+        {
+          question: 'workspace scoped ask',
+          knowledgeBaseIds: ['kb-2'],
+        },
+        {
+          runtimeIdentity: {
+            projectId: null,
+            workspaceId: 'workspace-1',
+            knowledgeBaseId: null,
+            kbSnapshotId: null,
+            deployHash: null,
+            actorUserId: 'user-1',
+          },
+          language: 'zh-CN',
+        },
+      );
+
+      expect(
+        service.deployService.getLastDeploymentByRuntimeIdentity,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-2',
+          kbSnapshotId: null,
+          deployHash: null,
+          projectId: null,
+        }),
+      );
+      expect(service.askingTaskTracker.createAskingTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          deployId: 'deploy-kb-2',
+          runtimeIdentity: {
+            projectId: null,
+            workspaceId: 'workspace-1',
+            knowledgeBaseId: 'kb-2',
+            kbSnapshotId: null,
+            deployHash: 'deploy-kb-2',
+            actorUserId: 'user-1',
+          },
+          retrievalScopeIds: ['deploy-kb-2'],
+        }),
+      );
+    });
+
+    it('persists a placeholder asking task record immediately for first asks', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      service.threadRepository = {
+        findOneBy: jest.fn(),
+      };
+      service.askingTaskTracker = {
+        createAskingTask: jest.fn().mockResolvedValue({ queryId: 'query-2a' }),
+      };
+      service.askingTaskRepository = {
+        findByQueryId: jest.fn().mockResolvedValue(null),
+        createOne: jest.fn().mockResolvedValue({ id: 9, queryId: 'query-2a' }),
+      };
+      service.getAskingHistory = jest.fn();
+      service.getDeployId =
+        AskingService.prototype['getDeployId'].bind(service);
+      service.deployService = {
+        getLastDeploymentByRuntimeIdentity: jest
+          .fn()
+          .mockResolvedValue({ hash: 'deploy-2' }),
+      };
+      service.resolveAskingRuntimeIdentity =
+        AskingService.prototype['resolveAskingRuntimeIdentity'].bind(service);
+
+      await service.createAskingTask(
+        { question: 'fresh ask' },
+        {
+          runtimeScopeId: 'legacy-runtime-42',
+          runtimeIdentity: {
+            projectId: 42,
+            workspaceId: 'workspace-1',
+            knowledgeBaseId: 'kb-1',
+            kbSnapshotId: 'snapshot-1',
+            actorUserId: 'user-1',
+          },
+          language: 'en',
+        },
+      );
+
+      expect(service.askingTaskRepository.findByQueryId).toHaveBeenCalledWith(
+        'query-2a',
+      );
+      expect(service.askingTaskRepository.createOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          queryId: 'query-2a',
+          question: 'fresh ask',
+          projectId: null,
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snapshot-1',
+          deployHash: 'deploy-2',
+          detail: {
+            type: null,
+            status: 'UNDERSTANDING',
+            response: [],
+            error: null,
+          },
+        }),
+      );
+    });
+
     it('allows first asks to proceed with deployHash-only runtime identity', async () => {
       const service = Object.create(AskingService.prototype) as any;
       service.threadRepository = {
@@ -406,12 +566,7 @@ describe('AskingService', () => {
       service.getAskingHistory = jest.fn();
       service.resolveAskingRuntimeIdentity =
         AskingService.prototype['resolveAskingRuntimeIdentity'].bind(service);
-      service.skillService = {
-        listSkillBindingsByKnowledgeBase: jest.fn().mockResolvedValue([]),
-      };
-      service.connectorService = {
-        getResolvedConnector: jest.fn(),
-      };
+      service.skillService = {};
 
       await service.createAskingTask(
         { question: 'fresh ask with deploy only' },
@@ -424,32 +579,31 @@ describe('AskingService', () => {
             deployHash: 'deploy-42',
             actorUserId: 'user-1',
           },
-          actorClaims: null,
           language: 'en',
         },
       );
 
-      expect(service.askingTaskTracker.createAskingTask).toHaveBeenCalledWith({
-        actorClaims: undefined,
-        query: 'fresh ask with deploy only',
-        histories: null,
-        deployId: 'deploy-42',
-        configurations: { language: 'en' },
-        rerunFromCancelled: undefined,
-        previousTaskId: undefined,
-        threadResponseId: undefined,
-        runtimeIdentity: {
-          projectId: null,
-          workspaceId: 'workspace-1',
-          knowledgeBaseId: 'kb-1',
-          kbSnapshotId: 'snapshot-1',
-          deployHash: 'deploy-42',
-          actorUserId: 'user-1',
-        },
-        connectors: [],
-        secrets: [],
-        skills: [],
-      });
+      expect(service.askingTaskTracker.createAskingTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          query: 'fresh ask with deploy only',
+          histories: null,
+          deployId: 'deploy-42',
+          configurations: { language: 'en' },
+          rerunFromCancelled: undefined,
+          previousTaskId: undefined,
+          threadResponseId: undefined,
+          runtimeIdentity: {
+            projectId: null,
+            workspaceId: 'workspace-1',
+            knowledgeBaseId: 'kb-1',
+            kbSnapshotId: 'snapshot-1',
+            deployHash: 'deploy-42',
+            actorUserId: 'user-1',
+          },
+          skills: [],
+          retrievalScopeIds: ['deploy-42'],
+        }),
+      );
     });
 
     it('resolves first asks from canonical runtime scope without a project bridge when deployment history exists', async () => {
@@ -470,13 +624,7 @@ describe('AskingService', () => {
       };
       service.resolveAskingRuntimeIdentity =
         AskingService.prototype['resolveAskingRuntimeIdentity'].bind(service);
-      service.skillService = {
-        listSkillBindingsByKnowledgeBase: jest.fn().mockResolvedValue([]),
-      };
-      service.connectorService = {
-        getResolvedConnector: jest.fn(),
-      };
-
+      service.skillService = {};
       await service.createAskingTask(
         { question: 'fresh ask from runtime scope' },
         {
@@ -929,7 +1077,9 @@ describe('AskingService', () => {
         actorUserId: 'user-1',
       });
 
-      expect(threads.map((thread) => thread.id)).toEqual([1, 3]);
+      expect(threads.map((thread: { id: number }) => thread.id)).toEqual([
+        1, 3,
+      ]);
       expect(
         service.threadRepository.listAllTimeDescOrderByScope,
       ).toHaveBeenCalledWith({
@@ -1106,6 +1256,40 @@ describe('AskingService', () => {
       expect(service.askingTaskRepository.findByQueryId).not.toHaveBeenCalled();
     });
 
+    it('accepts asking task access when a newly created task is still only tracked in memory', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      service.askingTaskRepository = {
+        findByQueryIdWithRuntimeScope: jest.fn().mockResolvedValue(null),
+        findByQueryId: jest.fn().mockResolvedValue(null),
+      };
+      service.askingTaskTracker = {
+        getTrackedRuntimeIdentity: jest.fn().mockResolvedValue({
+          projectId: null,
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snapshot-1',
+          deployHash: 'deploy-1',
+          actorUserId: 'user-1',
+        }),
+      };
+
+      await expect(
+        service.assertAskingTaskScope('query-1', {
+          projectId: 42,
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snapshot-1',
+          deployHash: 'deploy-1',
+          actorUserId: 'user-1',
+        }),
+      ).resolves.toBeUndefined();
+
+      expect(
+        service.askingTaskTracker.getTrackedRuntimeIdentity,
+      ).toHaveBeenCalledWith('query-1');
+      expect(service.askingTaskRepository.findByQueryId).not.toHaveBeenCalled();
+    });
+
     it('rejects asking task access outside current runtime scope', async () => {
       const service = Object.create(AskingService.prototype) as any;
       service.askingTaskRepository = {
@@ -1272,6 +1456,9 @@ describe('AskingService', () => {
         expect.objectContaining({
           manifest: { models: ['thread'] },
           runtimeScopeId: '4',
+          configuration: {
+            language: WrenAILanguage.ZH_CN,
+          },
           runtimeIdentity: {
             projectId: null,
             workspaceId: 'workspace-1',
@@ -1283,6 +1470,62 @@ describe('AskingService', () => {
           previousQuestions: ['q2', 'q1'],
         }),
       );
+    });
+
+    it('regenerates finished thread recommendations when Chinese is preferred but cached questions are non-Chinese', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      const thread = {
+        id: 101,
+        projectId: null,
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snapshot-1',
+        deployHash: 'deploy-thread',
+        actorUserId: 'user-1',
+        queryId: 'recommend-1',
+        questionsStatus: RecommendationQuestionStatus.FINISHED,
+        questions: [
+          {
+            category: 'Comparative Questions',
+            question:
+              'How does the scoring distribution differ by home/away games?',
+            sql: 'select 1',
+          },
+        ],
+        questionsError: null,
+      };
+      service.threadRepository = {
+        findOneBy: jest.fn().mockResolvedValue(thread),
+      };
+      service.knowledgeBaseRepository = {
+        findOneBy: jest.fn().mockResolvedValue({
+          id: 'kb-1',
+          language: null,
+        }),
+      };
+      service.getExecutionResources = jest.fn().mockResolvedValue({
+        project: { id: 42, language: 'EN' },
+      });
+      service.generateThreadRecommendationQuestions = jest
+        .fn()
+        .mockResolvedValue(undefined);
+      service.isLikelyNonChineseQuestions =
+        AskingService.prototype['isLikelyNonChineseQuestions'].bind(service);
+      service.shouldForceChineseThreadRecommendation =
+        AskingService.prototype['shouldForceChineseThreadRecommendation'].bind(
+          service,
+        );
+
+      const result = await service.getThreadRecommendationQuestions(101);
+
+      expect(
+        service.generateThreadRecommendationQuestions,
+      ).toHaveBeenCalledWith(101);
+      expect(result).toEqual({
+        status: RecommendQuestionResultStatus.GENERATING,
+        questions: [],
+        error: null,
+      });
     });
   });
 
@@ -1566,6 +1809,359 @@ describe('AskingService', () => {
       expect(service.instantRecommendedQuestionTasks.has('instant-1')).toBe(
         false,
       );
+    });
+  });
+
+  describe('chart runtime scope forwarding', () => {
+    const runtimeIdentity = {
+      projectId: 42,
+      workspaceId: 'workspace-1',
+      knowledgeBaseId: 'kb-1',
+      kbSnapshotId: 'snapshot-1',
+      deployHash: 'deploy-1',
+      actorUserId: 'user-1',
+    };
+
+    it('passes runtimeScopeId when generating thread response charts', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      service.assertResponseScope = jest.fn().mockResolvedValue(undefined);
+      service.getExecutionResources = jest.fn().mockResolvedValue({
+        project: { id: 42 },
+        manifest: { models: [] },
+      });
+      service.queryService = {
+        preview: jest.fn().mockResolvedValue({
+          columns: [{ name: 'value', type: 'number' }],
+          data: [[1]],
+        }),
+      };
+      service.threadResponseRepository = {
+        findOneBy: jest.fn().mockResolvedValue({
+          id: 11,
+          threadId: 9,
+          question: 'chart it',
+          sql: 'select 1',
+        }),
+        updateOne: jest.fn().mockResolvedValue({ id: 11 }),
+      };
+      service.wrenAIAdaptor = {
+        generateChart: jest.fn().mockResolvedValue({ queryId: 'chart-1' }),
+      };
+      service.chartBackgroundTracker = {
+        addTask: jest.fn(),
+      };
+
+      const result = await service.generateThreadResponseChartScoped(
+        11,
+        runtimeIdentity,
+        { language: 'English' },
+        'scope-1',
+      );
+
+      expect(service.wrenAIAdaptor.generateChart).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            columns: [{ name: 'value', type: 'number' }],
+            data: [[1]],
+          }),
+          runtimeScopeId: 'scope-1',
+          runtimeIdentity,
+        }),
+      );
+      expect(service.chartBackgroundTracker.addTask).toHaveBeenCalledWith(
+        result,
+      );
+    });
+
+    it('applies deterministic chart adjustments locally without calling AI', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      service.assertResponseScope = jest.fn().mockResolvedValue(undefined);
+      service.threadResponseRepository = {
+        findOneBy: jest.fn().mockResolvedValue({
+          id: 12,
+          threadId: 9,
+          question: 'adjust it',
+          sql: 'select 1',
+          chartDetail: {
+            status: 'FINISHED',
+            chartType: 'BAR',
+            chartSchema: {
+              mark: 'bar',
+              encoding: {
+                x: { field: 'category', type: 'nominal' },
+                y: { field: 'value', type: 'quantitative' },
+              },
+            },
+          },
+        }),
+        updateOne: jest.fn().mockResolvedValue({ id: 12, chartDetail: {} }),
+      };
+      service.wrenAIAdaptor = {
+        adjustChart: jest.fn(),
+      };
+
+      const result = await service.adjustThreadResponseChartScoped(
+        12,
+        runtimeIdentity,
+        { chartType: 'line' as any, xAxis: 'category', yAxis: 'value' },
+        { language: 'English' },
+      );
+
+      expect(service.wrenAIAdaptor.adjustChart).not.toHaveBeenCalled();
+      expect(service.threadResponseRepository.updateOne).toHaveBeenCalledWith(
+        12,
+        expect.objectContaining({
+          chartDetail: expect.objectContaining({
+            chartType: 'LINE',
+            chartSchema: expect.objectContaining({
+              mark: expect.objectContaining({ type: 'line' }),
+            }),
+          }),
+        }),
+      );
+      expect(result).toEqual({ id: 12, chartDetail: {} });
+    });
+  });
+
+  describe('initialize', () => {
+    it('hydrates the breakdown tracker from repository-filtered unfinished responses', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      service.backgroundTrackerWorkspaceId = 'workspace-1';
+      service.threadResponseRepository = {
+        findUnfinishedBreakdownResponsesByWorkspaceId: jest
+          .fn()
+          .mockResolvedValue([
+            { id: 11, breakdownDetail: { status: 'UNDERSTANDING' } },
+            { id: 12, breakdownDetail: { status: 'GENERATING' } },
+          ]),
+        findUnfinishedBreakdownResponses: jest.fn(),
+        findUnfinishedChartResponses: jest.fn().mockResolvedValue([]),
+      };
+      service.knowledgeBaseRepository = {
+        findAll: jest.fn(),
+      };
+      service.breakdownBackgroundTracker = {
+        addTask: jest.fn(),
+      };
+      service.chartBackgroundTracker = {
+        addTask: jest.fn(),
+      };
+      service.chartAdjustmentBackgroundTracker = {
+        addTask: jest.fn(),
+      };
+
+      await service.initialize();
+
+      expect(
+        service.threadResponseRepository
+          .findUnfinishedBreakdownResponsesByWorkspaceId,
+      ).toHaveBeenCalledTimes(1);
+      expect(
+        service.threadResponseRepository
+          .findUnfinishedBreakdownResponsesByWorkspaceId,
+      ).toHaveBeenCalledWith('workspace-1');
+      expect(
+        service.threadResponseRepository.findUnfinishedBreakdownResponses,
+      ).not.toHaveBeenCalled();
+      expect(
+        service.threadResponseRepository.findUnfinishedChartResponses,
+      ).toHaveBeenNthCalledWith(1, { adjustment: false });
+      expect(
+        service.threadResponseRepository.findUnfinishedChartResponses,
+      ).toHaveBeenNthCalledWith(2, { adjustment: true });
+      expect(
+        service.breakdownBackgroundTracker.addTask,
+      ).toHaveBeenNthCalledWith(1, {
+        id: 11,
+        breakdownDetail: { status: 'UNDERSTANDING' },
+      });
+      expect(
+        service.breakdownBackgroundTracker.addTask,
+      ).toHaveBeenNthCalledWith(2, {
+        id: 12,
+        breakdownDetail: { status: 'GENERATING' },
+      });
+    });
+
+    it('hydrates unfinished breakdown responses across all workspaces when no explicit background workspace is configured', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      service.backgroundTrackerWorkspaceId = null;
+      service.threadResponseRepository = {
+        findUnfinishedBreakdownResponsesByWorkspaceId: jest.fn(),
+        findUnfinishedBreakdownResponses: jest.fn().mockResolvedValue([
+          { id: 21, breakdownDetail: { status: 'UNDERSTANDING' } },
+          { id: 22, breakdownDetail: { status: 'GENERATING' } },
+        ]),
+        findUnfinishedChartResponses: jest.fn().mockResolvedValue([]),
+      };
+      service.knowledgeBaseRepository = {
+        findAll: jest
+          .fn()
+          .mockResolvedValue([
+            { workspaceId: 'workspace-1' },
+            { workspaceId: 'workspace-2' },
+          ]),
+      };
+      service.breakdownBackgroundTracker = {
+        addTask: jest.fn(),
+      };
+      service.chartBackgroundTracker = {
+        addTask: jest.fn(),
+      };
+      service.chartAdjustmentBackgroundTracker = {
+        addTask: jest.fn(),
+      };
+
+      await service.initialize();
+
+      expect(
+        service.threadResponseRepository
+          .findUnfinishedBreakdownResponsesByWorkspaceId,
+      ).not.toHaveBeenCalled();
+      expect(
+        service.threadResponseRepository.findUnfinishedBreakdownResponses,
+      ).toHaveBeenCalledTimes(1);
+      expect(
+        service.threadResponseRepository.findUnfinishedChartResponses,
+      ).toHaveBeenNthCalledWith(1, { adjustment: false });
+      expect(
+        service.threadResponseRepository.findUnfinishedChartResponses,
+      ).toHaveBeenNthCalledWith(2, { adjustment: true });
+      expect(service.breakdownBackgroundTracker.addTask).toHaveBeenNthCalledWith(
+        1,
+        { id: 21, breakdownDetail: { status: 'UNDERSTANDING' } },
+      );
+      expect(service.breakdownBackgroundTracker.addTask).toHaveBeenNthCalledWith(
+        2,
+        { id: 22, breakdownDetail: { status: 'GENERATING' } },
+      );
+    });
+
+    it('rehydrates unfinished chart jobs into the matching chart trackers', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      service.backgroundTrackerWorkspaceId = null;
+      service.threadResponseRepository = {
+        findUnfinishedBreakdownResponsesByWorkspaceId: jest.fn(),
+        findUnfinishedBreakdownResponses: jest.fn().mockResolvedValue([]),
+        findUnfinishedChartResponses: jest
+          .fn()
+          .mockResolvedValueOnce([{ id: 31, chartDetail: { adjustment: false } }])
+          .mockResolvedValueOnce([{ id: 32, chartDetail: { adjustment: true } }]),
+      };
+      service.knowledgeBaseRepository = {
+        findAll: jest.fn().mockResolvedValue([]),
+      };
+      service.breakdownBackgroundTracker = {
+        addTask: jest.fn(),
+      };
+      service.chartBackgroundTracker = {
+        addTask: jest.fn(),
+      };
+      service.chartAdjustmentBackgroundTracker = {
+        addTask: jest.fn(),
+      };
+
+      await service.initialize();
+
+      expect(
+        service.threadResponseRepository.findUnfinishedChartResponses,
+      ).toHaveBeenNthCalledWith(1, { adjustment: false });
+      expect(
+        service.threadResponseRepository.findUnfinishedChartResponses,
+      ).toHaveBeenNthCalledWith(2, { adjustment: true });
+      expect(service.chartBackgroundTracker.addTask).toHaveBeenCalledWith({
+        id: 31,
+        chartDetail: { adjustment: false },
+      });
+      expect(service.chartAdjustmentBackgroundTracker.addTask).toHaveBeenCalledWith(
+        {
+          id: 32,
+          chartDetail: { adjustment: true },
+        },
+      );
+    });
+  });
+
+  describe('adjustment runtime scope forwarding', () => {
+    const runtimeIdentity = {
+      projectId: 42,
+      workspaceId: 'workspace-1',
+      knowledgeBaseId: 'kb-1',
+      kbSnapshotId: 'snapshot-1',
+      deployHash: 'deploy-1',
+      actorUserId: 'user-1',
+    };
+
+    it('passes runtimeScopeId when adjusting thread response answers', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      service.assertResponseScope = jest.fn().mockResolvedValue(undefined);
+      service.threadResponseRepository = {
+        findOneBy: jest.fn().mockResolvedValue({
+          id: 13,
+          threadId: 9,
+          question: 'adjust reasoning',
+          sql: 'select 1',
+        }),
+      };
+      service.adjustmentBackgroundTracker = {
+        createAdjustmentTask: jest.fn().mockResolvedValue({
+          createdThreadResponse: { id: 13 },
+        }),
+      };
+
+      const result = await service.adjustThreadResponseAnswerScoped(
+        13,
+        runtimeIdentity,
+        {
+          runtimeIdentity,
+          tables: ['orders'],
+          sqlGenerationReasoning: 'need filter',
+        },
+        { language: 'English' },
+        'scope-1',
+      );
+
+      expect(
+        service.adjustmentBackgroundTracker.createAdjustmentTask,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          runtimeScopeId: 'scope-1',
+          runtimeIdentity,
+        }),
+      );
+      expect(result).toEqual({ id: 13 });
+    });
+
+    it('falls back to persisted runtime identity when runtimeScopeId is omitted for rerun adjustments', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      service.threadResponseRepository = {
+        findOneBy: jest.fn().mockResolvedValue({
+          id: 14,
+          threadId: 9,
+        }),
+      };
+      service.adjustmentBackgroundTracker = {
+        rerunAdjustmentTask: jest.fn().mockResolvedValue({
+          queryId: 'adjust-1',
+        }),
+      };
+
+      const result = await service.rerunAdjustThreadResponseAnswer(
+        14,
+        runtimeIdentity,
+        { language: 'English' },
+      );
+
+      expect(
+        service.adjustmentBackgroundTracker.rerunAdjustmentTask,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          threadResponseId: 14,
+          runtimeScopeId: 'deploy-1',
+          runtimeIdentity,
+        }),
+      );
+      expect(result).toEqual({ queryId: 'adjust-1' });
     });
   });
 });

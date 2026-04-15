@@ -1,5 +1,10 @@
 import { NextApiRequest } from 'next';
 import { ActorClaims, IAuthService } from '@server/services/authService';
+import { IAutomationService } from '@server/services/automationService';
+import {
+  AuthorizationActor,
+  buildAuthorizationActorFromValidatedSession,
+} from '@server/authz';
 
 const SESSION_COOKIE_NAMES = [
   'wren_session',
@@ -36,7 +41,9 @@ const parseCookieHeader = (
       }
 
       const key = decodeURIComponent(segment.slice(0, separatorIndex).trim());
-      const value = decodeURIComponent(segment.slice(separatorIndex + 1).trim());
+      const value = decodeURIComponent(
+        segment.slice(separatorIndex + 1).trim(),
+      );
       cookies[key] = value;
       return cookies;
     }, {});
@@ -47,6 +54,12 @@ export interface ResolvedRequestActor {
   actorClaims: ActorClaims | null;
   userId: string | null;
   workspaceId: string | null;
+  principalType?: string | null;
+  serviceAccountId?: string | null;
+  apiTokenId?: string | null;
+  isPlatformAdmin?: boolean;
+  authorizationActor?: AuthorizationActor | null;
+  sessionId?: string | null;
 }
 
 export const getSessionTokenFromRequest = (
@@ -77,10 +90,12 @@ export const getSessionTokenFromRequest = (
 export const resolveRequestActor = async ({
   req,
   authService,
+  automationService,
   workspaceId,
 }: {
   req: NextApiRequest;
   authService: IAuthService;
+  automationService?: IAutomationService;
   workspaceId?: string | null;
 }): Promise<ResolvedRequestActor> => {
   const sessionToken = getSessionTokenFromRequest(req);
@@ -90,6 +105,12 @@ export const resolveRequestActor = async ({
       actorClaims: null,
       userId: null,
       workspaceId: workspaceId || null,
+      principalType: null,
+      serviceAccountId: null,
+      apiTokenId: null,
+      isPlatformAdmin: false,
+      authorizationActor: null,
+      sessionId: null,
     };
   }
 
@@ -99,6 +120,31 @@ export const resolveRequestActor = async ({
   );
 
   if (!validatedSession) {
+    const authorizationHeader = coerceHeaderValue(req.headers.authorization);
+    const isBearerToken = authorizationHeader
+      ?.toLowerCase()
+      .startsWith('bearer ');
+    if (isBearerToken && automationService) {
+      const validatedApiToken = await automationService.validateApiToken(
+        sessionToken,
+        workspaceId || undefined,
+      );
+      if (validatedApiToken) {
+        return {
+          sessionToken,
+          actorClaims: null,
+          userId: null,
+          workspaceId: validatedApiToken.workspaceId,
+          principalType: 'service_account',
+          serviceAccountId: validatedApiToken.serviceAccount.id,
+          apiTokenId: validatedApiToken.token.id,
+          isPlatformAdmin: false,
+          authorizationActor: validatedApiToken.authorizationActor,
+          sessionId: null,
+        };
+      }
+    }
+
     throw new Error('Invalid or expired session');
   }
 
@@ -107,5 +153,12 @@ export const resolveRequestActor = async ({
     actorClaims: validatedSession.actorClaims,
     userId: validatedSession.user.id,
     workspaceId: validatedSession.workspace.id,
+    principalType: 'user',
+    serviceAccountId: null,
+    apiTokenId: null,
+    isPlatformAdmin: Boolean(validatedSession.actorClaims.isPlatformAdmin),
+    authorizationActor:
+      buildAuthorizationActorFromValidatedSession(validatedSession),
+    sessionId: validatedSession.session.id,
   };
 };

@@ -28,18 +28,51 @@ import {
 } from '../utils/model';
 import { CompactTable, PreviewDataResponse } from '@server/services';
 import { TelemetryEvent } from '../telemetry/telemetry';
+import { PersistedRuntimeIdentity } from '../context/runtimeScope';
 import {
-  PersistedRuntimeIdentity,
-  toPersistedRuntimeIdentity,
-} from '../context/runtimeScope';
-import {
-  getRuntimeProjectBridgeId,
+  assertLatestExecutableRuntimeScope,
   resolveRuntimeExecutionContext,
   resolveRuntimeProject,
 } from '../utils/runtimeExecutionContext';
+import { syncLatestExecutableKnowledgeBaseSnapshot } from '../utils/knowledgeBaseRuntime';
+import * as Errors from '../utils/error';
+import {
+  assertAuthorizedWithAudit,
+  buildAuthorizationActorFromRuntimeScope,
+  recordAuditEvent,
+} from '@server/authz';
+import {
+  hasCanonicalRuntimeIdentity,
+  normalizeCanonicalPersistedRuntimeIdentity,
+  resolvePersistedProjectBridgeId,
+  toCanonicalPersistedRuntimeIdentityFromScope,
+  toPersistedRuntimeIdentityPatch,
+} from '../utils/persistedRuntimeIdentity';
 
 const logger = getLogger('ModelResolver');
 logger.level = 'debug';
+
+const parseJsonObject = (value?: string | null): Record<string, any> => {
+  if (!value) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+type ViewMetadataColumn = {
+  name: string;
+  properties?: Record<string, any>;
+};
+
+type ViewMetadataProperties = Record<string, any> & {
+  columns?: ViewMetadataColumn[];
+};
 
 export enum SyncStatusEnum {
   IN_PROGRESS = 'IN_PROGRESS',
@@ -91,6 +124,8 @@ export class ModelResolver {
     args: { data: RelationData },
     ctx: IContext,
   ) {
+    await this.assertExecutableRuntimeScope(ctx);
+    await this.assertKnowledgeBaseWriteAccess(ctx);
     const { data } = args;
     const { runtimeIdentity } = this.getRuntimeSelection(ctx);
     await this.ensureModelsScope(ctx, [data.fromModelId, data.toModelId]);
@@ -102,6 +137,14 @@ export class ModelResolver {
         data,
       );
       ctx.telemetry.sendEvent(eventName, { data });
+      await this.recordKnowledgeBaseWriteAudit(ctx, {
+        resourceType: 'relation',
+        resourceId: relation?.id ?? null,
+        afterJson: relation as any,
+        payloadJson: {
+          operation: 'create_relation',
+        },
+      });
       return relation;
     } catch (err: any) {
       ctx.telemetry.sendEvent(
@@ -119,6 +162,8 @@ export class ModelResolver {
     args: { data: UpdateRelationData; where: { id: number } },
     ctx: IContext,
   ) {
+    await this.assertExecutableRuntimeScope(ctx);
+    await this.assertKnowledgeBaseWriteAccess(ctx);
     const { data, where } = args;
     const { runtimeIdentity } = this.getRuntimeSelection(ctx);
     await this.ensureRelationScope(ctx, where.id);
@@ -130,6 +175,14 @@ export class ModelResolver {
         where.id,
       );
       ctx.telemetry.sendEvent(eventName, { data });
+      await this.recordKnowledgeBaseWriteAudit(ctx, {
+        resourceType: 'relation',
+        resourceId: where.id,
+        afterJson: relation as any,
+        payloadJson: {
+          operation: 'update_relation',
+        },
+      });
       return relation;
     } catch (err: any) {
       ctx.telemetry.sendEvent(
@@ -147,6 +200,8 @@ export class ModelResolver {
     args: { where: { id: number } },
     ctx: IContext,
   ) {
+    await this.assertExecutableRuntimeScope(ctx);
+    await this.assertKnowledgeBaseWriteAccess(ctx);
     const { runtimeIdentity } = this.getRuntimeSelection(ctx);
     const relationId = args.where.id;
     await this.ensureRelationScope(ctx, relationId);
@@ -154,6 +209,13 @@ export class ModelResolver {
       runtimeIdentity,
       relationId,
     );
+    await this.recordKnowledgeBaseWriteAudit(ctx, {
+      resourceType: 'relation',
+      resourceId: relationId,
+      payloadJson: {
+        operation: 'delete_relation',
+      },
+    });
     return true;
   }
 
@@ -162,6 +224,8 @@ export class ModelResolver {
     _args: { data: CreateCalculatedFieldData },
     ctx: IContext,
   ) {
+    await this.assertExecutableRuntimeScope(ctx);
+    await this.assertKnowledgeBaseWriteAccess(ctx);
     const { runtimeIdentity } = this.getRuntimeSelection(ctx);
     await this.ensureModelScope(ctx, _args.data.modelId);
     const eventName = TelemetryEvent.MODELING_CREATE_CF;
@@ -172,6 +236,14 @@ export class ModelResolver {
           _args.data,
         );
       ctx.telemetry.sendEvent(eventName, { data: _args.data });
+      await this.recordKnowledgeBaseWriteAudit(ctx, {
+        resourceType: 'calculated_field',
+        resourceId: column?.id ?? null,
+        afterJson: column as any,
+        payloadJson: {
+          operation: 'create_calculated_field',
+        },
+      });
       return column;
     } catch (err: any) {
       ctx.telemetry.sendEvent(
@@ -185,6 +257,7 @@ export class ModelResolver {
   }
 
   public async validateCalculatedField(_root: any, args: any, ctx: IContext) {
+    await this.assertKnowledgeBaseWriteAccess(ctx);
     const { name, modelId, columnId } = args.data;
     await this.ensureModelScope(ctx, modelId);
     if (!isNil(columnId)) {
@@ -202,6 +275,8 @@ export class ModelResolver {
     _args: { data: UpdateCalculatedFieldData; where: { id: number } },
     ctx: IContext,
   ) {
+    await this.assertExecutableRuntimeScope(ctx);
+    await this.assertKnowledgeBaseWriteAccess(ctx);
     const { data, where } = _args;
     const { runtimeIdentity } = this.getRuntimeSelection(ctx);
     const column = await this.ensureColumnScope(
@@ -222,6 +297,14 @@ export class ModelResolver {
           where.id,
         );
       ctx.telemetry.sendEvent(eventName, { data });
+      await this.recordKnowledgeBaseWriteAudit(ctx, {
+        resourceType: 'calculated_field',
+        resourceId: where.id,
+        afterJson: column as any,
+        payloadJson: {
+          operation: 'update_calculated_field',
+        },
+      });
       return column;
     } catch (err: any) {
       ctx.telemetry.sendEvent(
@@ -235,6 +318,8 @@ export class ModelResolver {
   }
 
   public async deleteCalculatedField(_root: any, args: any, ctx: IContext) {
+    await this.assertExecutableRuntimeScope(ctx);
+    await this.assertKnowledgeBaseWriteAccess(ctx);
     const columnId = args.where.id;
     const column = await this.ensureColumnScope(
       ctx,
@@ -245,20 +330,23 @@ export class ModelResolver {
       throw new Error('Calculated field not found');
     }
     await ctx.modelColumnRepository.deleteOne(columnId);
+    await this.recordKnowledgeBaseWriteAudit(ctx, {
+      resourceType: 'calculated_field',
+      resourceId: columnId,
+      payloadJson: {
+        operation: 'delete_calculated_field',
+      },
+    });
     return true;
   }
 
   public async checkModelSync(_root: any, _args: any, ctx: IContext) {
+    await this.assertKnowledgeBaseReadAccess(ctx);
     const runtimeIdentity = this.getCurrentRuntimeIdentity(ctx);
-    const useRuntimeIdentity =
-      this.hasCanonicalRuntimeIdentity(runtimeIdentity);
-    const { manifest, project } = useRuntimeIdentity
-      ? await ctx.mdlService.makeCurrentModelMDLByRuntimeIdentity(
-          runtimeIdentity,
-        )
-      : await ctx.mdlService.makeCurrentModelMDL(
-          runtimeIdentity.projectId as number,
-        );
+    const { manifest, project } =
+      await ctx.mdlService.makeCurrentModelMDLByRuntimeIdentity(
+        runtimeIdentity,
+      );
     const currentHash = ctx.deployService.createMDLHashByRuntimeIdentity(
       manifest,
       runtimeIdentity,
@@ -274,8 +362,22 @@ export class ModelResolver {
         runtimeIdentity,
       );
     if (inProgressDeployment) {
+      await this.recordKnowledgeBaseReadAudit(ctx, {
+        resourceType: 'project',
+        resourceId: project.id,
+        payloadJson: {
+          operation: 'check_model_sync',
+        },
+      });
       return { status: SyncStatusEnum.IN_PROGRESS };
     }
+    await this.recordKnowledgeBaseReadAudit(ctx, {
+      resourceType: 'project',
+      resourceId: project.id,
+      payloadJson: {
+        operation: 'check_model_sync',
+      },
+    });
     return currentHash == lastDeployHash
       ? { status: SyncStatusEnum.SYNCRONIZED }
       : { status: SyncStatusEnum.UNSYNCRONIZED };
@@ -286,16 +388,18 @@ export class ModelResolver {
     args: { force: boolean },
     ctx: IContext,
   ): Promise<DeployResponse> {
-    const { projectBridgeId, runtimeIdentity } = this.getRuntimeSelection(ctx);
-    const useRuntimeIdentity =
-      this.hasCanonicalRuntimeIdentity(runtimeIdentity);
-    const mdlResult = useRuntimeIdentity
-      ? await ctx.mdlService.makeCurrentModelMDLByRuntimeIdentity(
-          runtimeIdentity,
-        )
-      : await ctx.mdlService.makeCurrentModelMDL(projectBridgeId as number);
+    await this.assertKnowledgeBaseWriteAccess(ctx);
+    const { runtimeIdentity } = this.getRuntimeSelection(ctx);
+    const mdlResult =
+      await ctx.mdlService.makeCurrentModelMDLByRuntimeIdentity(
+        runtimeIdentity,
+      );
     const project =
-      mdlResult.project || (await this.getRuntimeProject(ctx, projectBridgeId));
+      mdlResult.project ||
+      (await this.getRuntimeProject(
+        ctx,
+        this.resolveBridgeProjectIdFallback(runtimeIdentity),
+      ));
     const resolvedProjectId = project.id;
     if (!project.version && project.type !== DataSourceName.DUCKDB) {
       const version =
@@ -314,6 +418,24 @@ export class ModelResolver {
       args.force,
     );
 
+    if (deployRes.status === 'SUCCESS') {
+      const knowledgeBaseId =
+        ctx.runtimeScope?.knowledgeBase?.id || runtimeIdentity.knowledgeBaseId;
+      const knowledgeBase = knowledgeBaseId
+        ? await ctx.knowledgeBaseRepository.findOneBy({ id: knowledgeBaseId })
+        : null;
+      await syncLatestExecutableKnowledgeBaseSnapshot({
+        knowledgeBase,
+        knowledgeBaseRepository: ctx.knowledgeBaseRepository,
+        kbSnapshotRepository: ctx.kbSnapshotRepository,
+        deployLogRepository: ctx.deployRepository,
+        deployService: ctx.deployService,
+        modelRepository: ctx.modelRepository,
+        relationRepository: ctx.relationRepository,
+        viewRepository: ctx.viewRepository,
+      });
+    }
+
     // only generating for user's data source
     if (project.sampleDataset === null) {
       await ctx.projectService.generateProjectRecommendationQuestions(
@@ -321,11 +443,26 @@ export class ModelResolver {
         this.getCurrentRuntimeScopeId(ctx),
       );
     }
+    await this.recordKnowledgeBaseWriteAudit(ctx, {
+      resourceType: 'project',
+      resourceId: resolvedProjectId,
+      afterJson: deployRes as any,
+      payloadJson: {
+        operation: 'deploy',
+      },
+    });
     return deployRes;
   }
 
   public async getMDL(_root: any, args: { hash: string }, ctx: IContext) {
+    await this.assertKnowledgeBaseReadAccess(ctx);
     const mdl = await ctx.deployService.getMDLByHash(args.hash);
+    await this.recordKnowledgeBaseReadAudit(ctx, {
+      payloadJson: {
+        operation: 'get_mdl',
+        hash: args.hash,
+      },
+    });
     return {
       hash: args.hash,
       mdl,
@@ -333,6 +470,7 @@ export class ModelResolver {
   }
 
   public async listModels(_root: any, _args: any, ctx: IContext) {
+    await this.assertKnowledgeBaseReadAccess(ctx);
     const { runtimeIdentity } = this.getRuntimeSelection(ctx);
     const models =
       await ctx.modelService.listModelsByRuntimeIdentity(runtimeIdentity);
@@ -349,7 +487,7 @@ export class ModelResolver {
         .filter((c) => c.modelId === model.id)
         .map((c) => ({
           ...c,
-          properties: JSON.parse(c.properties),
+          properties: parseJsonObject(c.properties),
           nestedColumns: c.type.includes('STRUCT')
             ? modelNestedColumnList.filter((nc) => nc.columnId === c.id)
             : undefined,
@@ -361,14 +499,20 @@ export class ModelResolver {
         fields,
         calculatedFields,
         properties: {
-          ...JSON.parse(model.properties),
+          ...parseJsonObject(model.properties),
         },
       });
     }
+    await this.recordKnowledgeBaseReadAudit(ctx, {
+      payloadJson: {
+        operation: 'list_models',
+      },
+    });
     return result;
   }
 
   public async getModel(_root: any, args: any, ctx: IContext) {
+    await this.assertKnowledgeBaseReadAccess(ctx);
     const modelId = args.where.id;
     const model = await this.ensureModelScope(ctx, modelId);
 
@@ -381,7 +525,7 @@ export class ModelResolver {
 
     const columns = modelColumns.map((c) => ({
       ...c,
-      properties: JSON.parse(c.properties),
+      properties: parseJsonObject(c.properties),
       nestedColumns: c.type.includes('STRUCT')
         ? modelNestedColumns.filter((nc) => nc.columnId === c.id)
         : undefined,
@@ -396,15 +540,23 @@ export class ModelResolver {
       properties: r.properties ? JSON.parse(r.properties) : {},
     }));
 
-    return {
+    const result = {
       ...model,
       fields: columns.filter((c) => !c.isCalculated),
       calculatedFields: columns.filter((c) => c.isCalculated),
       relations,
       properties: {
-        ...JSON.parse(model.properties),
+        ...parseJsonObject(model.properties),
       },
     };
+    await this.recordKnowledgeBaseReadAudit(ctx, {
+      resourceType: 'model',
+      resourceId: model.id,
+      payloadJson: {
+        operation: 'get_model',
+      },
+    });
+    return result;
   }
 
   public async createModel(
@@ -412,6 +564,8 @@ export class ModelResolver {
     args: { data: CreateModelData },
     ctx: IContext,
   ) {
+    await this.assertExecutableRuntimeScope(ctx);
+    await this.assertKnowledgeBaseWriteAccess(ctx);
     const { sourceTableName, fields, primaryKey } = args.data;
     try {
       const model = await this.handleCreateModel(
@@ -422,6 +576,14 @@ export class ModelResolver {
       );
       ctx.telemetry.sendEvent(TelemetryEvent.MODELING_CREATE_MODEL, {
         data: args.data,
+      });
+      await this.recordKnowledgeBaseWriteAudit(ctx, {
+        resourceType: 'model',
+        resourceId: model?.id ?? null,
+        afterJson: model as any,
+        payloadJson: {
+          operation: 'create_model',
+        },
       });
       return model;
     } catch (error: any) {
@@ -441,8 +603,11 @@ export class ModelResolver {
     fields: [string],
     primaryKey: string,
   ) {
-    const { projectBridgeId, runtimeIdentity } = this.getRuntimeSelection(ctx);
-    const project = await this.getRuntimeProject(ctx, projectBridgeId);
+    const { runtimeIdentity } = this.getRuntimeSelection(ctx);
+    const project = await this.getRuntimeProject(
+      ctx,
+      this.resolveBridgeProjectIdFallback(runtimeIdentity),
+    );
     const dataSourceTables =
       await ctx.projectService.getProjectDataSourceTables(project);
     this.validateTableExist(sourceTableName, dataSourceTables);
@@ -456,17 +621,10 @@ export class ModelResolver {
       throw new Error('Table not found in the data source');
     }
     const properties = dataSourceTable?.properties;
-    const persistedProjectId = this.getPersistedProjectBridge(
-      runtimeIdentity,
-      projectBridgeId,
-    );
     const modelValue = {
-      projectId: persistedProjectId,
-      workspaceId: runtimeIdentity.workspaceId ?? null,
-      knowledgeBaseId: runtimeIdentity.knowledgeBaseId ?? null,
-      kbSnapshotId: runtimeIdentity.kbSnapshotId ?? null,
-      deployHash: runtimeIdentity.deployHash ?? null,
-      actorUserId: runtimeIdentity.actorUserId ?? null,
+      ...this.buildPersistedRuntimeIdentityPayload(runtimeIdentity, {
+        projectId: project.id,
+      }),
       displayName: sourceTableName, //use table name as displayName, referenceName and tableName
       referenceName: replaceInvalidReferenceName(sourceTableName),
       sourceTableName: sourceTableName,
@@ -521,11 +679,21 @@ export class ModelResolver {
     args: { data: UpdateModelData; where: { id: number } },
     ctx: IContext,
   ) {
+    await this.assertExecutableRuntimeScope(ctx);
+    await this.assertKnowledgeBaseWriteAccess(ctx);
     const { fields, primaryKey } = args.data;
     try {
       const model = await this.handleUpdateModel(ctx, args, fields, primaryKey);
       ctx.telemetry.sendEvent(TelemetryEvent.MODELING_UPDATE_MODEL, {
         data: args.data,
+      });
+      await this.recordKnowledgeBaseWriteAudit(ctx, {
+        resourceType: 'model',
+        resourceId: args.where.id,
+        afterJson: model as any,
+        payloadJson: {
+          operation: 'update_model',
+        },
       });
       return model;
     } catch (err: any) {
@@ -545,8 +713,11 @@ export class ModelResolver {
     fields: [string],
     primaryKey: string,
   ) {
-    const { projectBridgeId } = this.getRuntimeSelection(ctx);
-    const project = await this.getRuntimeProject(ctx, projectBridgeId);
+    const { runtimeIdentity } = this.getRuntimeSelection(ctx);
+    const project = await this.getRuntimeProject(
+      ctx,
+      this.resolveBridgeProjectIdFallback(runtimeIdentity),
+    );
     const dataSourceTables =
       await ctx.projectService.getProjectDataSourceTables(project);
     const model = await this.ensureModelScope(ctx, args.where.id);
@@ -558,9 +729,9 @@ export class ModelResolver {
     this.validateTableExist(sourceTableName, dataSourceTables);
     this.validateColumnsExist(sourceTableName, fields, dataSourceTables);
 
-    const sourceTableColumns = dataSourceTables.find(
-      (table) => table.name === sourceTableName,
-    )?.columns;
+    const sourceTableColumns =
+      dataSourceTables.find((table) => table.name === sourceTableName)
+        ?.columns ?? [];
     const { toDeleteColumnIds, toCreateColumns, toUpdateColumns } =
       findColumnsToUpdate(fields, existingColumns, sourceTableColumns);
     await updateModelPrimaryKey(
@@ -602,6 +773,10 @@ export class ModelResolver {
         const column = columns.find(
           (c) => c.sourceColumnName === compactColumn.name,
         );
+        if (!column) {
+          return [];
+        }
+
         return handleNestedColumns(compactColumn, {
           modelId: column.modelId,
           columnId: column.id,
@@ -621,6 +796,9 @@ export class ModelResolver {
           const sourceColumn = sourceTableColumns.find(
             (sourceColumn) => sourceColumn.name === sourceColumnName,
           );
+          if (!sourceColumn) {
+            continue;
+          }
           await ctx.modelNestedColumnRepository.deleteAllBy({
             columnId: column.id,
           });
@@ -641,11 +819,20 @@ export class ModelResolver {
 
   // delete model
   public async deleteModel(_root: any, args: any, ctx: IContext) {
+    await this.assertExecutableRuntimeScope(ctx);
+    await this.assertKnowledgeBaseWriteAccess(ctx);
     const modelId = args.where.id;
     await this.ensureModelScope(ctx, modelId);
 
     // related columns and relationships will be deleted in cascade
     await ctx.modelRepository.deleteOne(modelId);
+    await this.recordKnowledgeBaseWriteAudit(ctx, {
+      resourceType: 'model',
+      resourceId: modelId,
+      payloadJson: {
+        operation: 'delete_model',
+      },
+    });
     return true;
   }
 
@@ -655,6 +842,8 @@ export class ModelResolver {
     args: { where: { id: number }; data: UpdateModelMetadataInput },
     ctx: IContext,
   ): Promise<boolean> {
+    await this.assertExecutableRuntimeScope(ctx);
+    await this.assertKnowledgeBaseWriteAccess(ctx);
     const modelId = args.where.id;
     const data = args.data;
 
@@ -687,6 +876,13 @@ export class ModelResolver {
       }
 
       ctx.telemetry.sendEvent(eventName, { data });
+      await this.recordKnowledgeBaseWriteAudit(ctx, {
+        resourceType: 'model',
+        resourceId: modelId,
+        payloadJson: {
+          operation: 'update_model_metadata',
+        },
+      });
       return true;
     } catch (err: any) {
       ctx.telemetry.sendEvent(
@@ -736,6 +932,9 @@ export class ModelResolver {
       await ctx.relationRepository.findRelationsByIds(relationshipIds);
     for (const rel of relationships) {
       const requestedMetadata = data.relationships.find((r) => r.id === rel.id);
+      if (!requestedMetadata) {
+        continue;
+      }
 
       const relationMetadata: any = {};
 
@@ -764,6 +963,9 @@ export class ModelResolver {
       const requestedMetadata = data.calculatedFields.find(
         (c) => c.id === col.id,
       );
+      if (!requestedMetadata) {
+        continue;
+      }
 
       const columnMetadata: any = {};
       // check if description is empty
@@ -792,6 +994,9 @@ export class ModelResolver {
       await ctx.modelColumnRepository.findColumnsByIds(columnIds);
     for (const col of modelColumns) {
       const requestedMetadata = data.columns.find((c) => c.id === col.id);
+      if (!requestedMetadata) {
+        continue;
+      }
 
       // update metadata
       const columnMetadata: any = {};
@@ -827,6 +1032,9 @@ export class ModelResolver {
       );
     for (const col of modelNestedColumns) {
       const requestedMetadata = data.nestedColumns.find((c) => c.id === col.id);
+      if (!requestedMetadata) {
+        continue;
+      }
 
       const nestedColumnMetadata: any = {};
 
@@ -856,34 +1064,50 @@ export class ModelResolver {
 
   // list views
   public async listViews(_root: any, _args: any, ctx: IContext) {
+    await this.assertKnowledgeBaseReadAccess(ctx);
     const { runtimeIdentity } = this.getRuntimeSelection(ctx);
     const views =
       await ctx.modelService.getViewsByRuntimeIdentity(runtimeIdentity);
-    return views.map((view) => ({
+    const result = views.map((view) => ({
       ...view,
-      displayName: view.properties
-        ? JSON.parse(view.properties)?.displayName
-        : view.name,
+      displayName: parseJsonObject(view.properties)?.displayName ?? view.name,
     }));
+    await this.recordKnowledgeBaseReadAudit(ctx, {
+      payloadJson: {
+        operation: 'list_views',
+      },
+    });
+    return result;
   }
 
   public async getView(_root: any, args: any, ctx: IContext) {
+    await this.assertKnowledgeBaseReadAccess(ctx);
     const viewId = args.where.id;
     const view = await this.ensureViewScope(ctx, viewId);
-    const displayName = view.properties
-      ? JSON.parse(view.properties)?.displayName
-      : view.name;
-    return { ...view, displayName };
+    const displayName =
+      parseJsonObject(view.properties)?.displayName ?? view.name;
+    const result = { ...view, displayName };
+    await this.recordKnowledgeBaseReadAudit(ctx, {
+      resourceType: 'view',
+      resourceId: view.id,
+      payloadJson: {
+        operation: 'get_view',
+      },
+    });
+    return result;
   }
 
   // validate a view name
   public async validateView(_root: any, args: any, ctx: IContext) {
+    await this.assertKnowledgeBaseWriteAccess(ctx);
     const { name } = args.data;
     return this.validateViewName(name, ctx);
   }
 
   // create view from sql of a response
   public async createView(_root: any, args: any, ctx: IContext) {
+    await this.assertExecutableRuntimeScope(ctx);
+    await this.assertKnowledgeBaseWriteAccess(ctx);
     const { name: displayName, responseId, rephrasedQuestion } = args.data;
     const { runtimeIdentity } = this.getRuntimeSelection(ctx);
     await ctx.askingService.assertResponseScope(responseId, runtimeIdentity);
@@ -906,10 +1130,13 @@ export class ModelResolver {
     if (!response) {
       throw new Error(`Thread response ${responseId} not found`);
     }
+    if (!response.sql) {
+      throw new Error(`Thread response ${responseId} has no SQL`);
+    }
     const { project, manifest } = await this.getResponseExecutionContext(
       ctx,
       this.toExecutionRuntimeIdentitySource({
-        projectBridgeId: response.projectId ?? null,
+        bridgeProjectId: response.projectId ?? null,
         deployHash: response.deployHash ?? null,
       }),
     );
@@ -939,7 +1166,6 @@ export class ModelResolver {
       question: rephrasedQuestion,
     };
 
-    const persistedProjectId = this.getPersistedProjectBridge(runtimeIdentity);
     const eventName = TelemetryEvent.HOME_CREATE_VIEW;
     const eventProperties = {
       statement,
@@ -949,12 +1175,7 @@ export class ModelResolver {
     try {
       const name = replaceAllowableSyntax(displayName);
       const view = await ctx.viewRepository.createOne({
-        projectId: persistedProjectId,
-        workspaceId: runtimeIdentity.workspaceId ?? null,
-        knowledgeBaseId: runtimeIdentity.knowledgeBaseId ?? null,
-        kbSnapshotId: runtimeIdentity.kbSnapshotId ?? null,
-        deployHash: runtimeIdentity.deployHash ?? null,
-        actorUserId: runtimeIdentity.actorUserId ?? null,
+        ...this.buildPersistedRuntimeIdentityPayload(runtimeIdentity),
         name,
         statement,
         properties: JSON.stringify(properties),
@@ -962,6 +1183,14 @@ export class ModelResolver {
 
       // telemetry
       ctx.telemetry.sendEvent(eventName, eventProperties);
+      await this.recordKnowledgeBaseWriteAudit(ctx, {
+        resourceType: 'view',
+        resourceId: view?.id ?? null,
+        afterJson: { ...view, displayName } as any,
+        payloadJson: {
+          operation: 'create_view',
+        },
+      });
 
       return { ...view, displayName };
     } catch (err: any) {
@@ -981,20 +1210,31 @@ export class ModelResolver {
 
   // delete view
   public async deleteView(_root: any, args: any, ctx: IContext) {
+    await this.assertExecutableRuntimeScope(ctx);
+    await this.assertKnowledgeBaseWriteAccess(ctx);
     const viewId = args.where.id;
     await this.ensureViewScope(ctx, viewId);
     await ctx.viewRepository.deleteOne(viewId);
+    await this.recordKnowledgeBaseWriteAudit(ctx, {
+      resourceType: 'view',
+      resourceId: viewId,
+      payloadJson: {
+        operation: 'delete_view',
+      },
+    });
     return true;
   }
 
   public async previewModelData(_root: any, args: any, ctx: IContext) {
+    await this.assertExecutableRuntimeScope(ctx);
+    await this.assertKnowledgeBaseReadAccess(ctx);
     const modelId = args.where.id;
     const model = await this.ensureModelScope(ctx, modelId);
     const { runtimeIdentity } = this.getRuntimeSelection(ctx);
     const { project, manifest } = await this.getResponseExecutionContext(
       ctx,
       this.toExecutionRuntimeIdentitySource({
-        projectBridgeId: model.projectId ?? null,
+        bridgeProjectId: model.projectId ?? null,
         deployHash: model.deployHash ?? runtimeIdentity.deployHash ?? null,
       }),
     );
@@ -1009,17 +1249,26 @@ export class ModelResolver {
       manifest,
     })) as PreviewDataResponse;
 
+    await this.recordKnowledgeBaseReadAudit(ctx, {
+      resourceType: 'model',
+      resourceId: model.id,
+      payloadJson: {
+        operation: 'preview_model_data',
+      },
+    });
     return data;
   }
 
   public async previewViewData(_root: any, args: any, ctx: IContext) {
+    await this.assertExecutableRuntimeScope(ctx);
+    await this.assertKnowledgeBaseReadAccess(ctx);
     const { id: viewId, limit } = args.where;
     const view = await this.ensureViewScope(ctx, viewId);
     const { runtimeIdentity } = this.getRuntimeSelection(ctx);
     const { project, manifest } = await this.getResponseExecutionContext(
       ctx,
       this.toExecutionRuntimeIdentitySource({
-        projectBridgeId: view.projectId ?? null,
+        bridgeProjectId: view.projectId ?? null,
         deployHash: view.deployHash ?? runtimeIdentity.deployHash ?? null,
       }),
     );
@@ -1030,6 +1279,13 @@ export class ModelResolver {
       manifest,
       modelingOnly: false,
     })) as PreviewDataResponse;
+    await this.recordKnowledgeBaseReadAudit(ctx, {
+      resourceType: 'view',
+      resourceId: view.id,
+      payloadJson: {
+        operation: 'preview_view_data',
+      },
+    });
     return data;
   }
 
@@ -1044,6 +1300,10 @@ export class ModelResolver {
     const runtimeScope = runtimeScopeId
       ? await ctx.runtimeScopeResolver.resolveRuntimeScopeId(runtimeScopeId)
       : ctx.runtimeScope!;
+    await this.assertExecutableRuntimeScope(ctx, runtimeScope);
+    if (!this.isInternalAiServicePreviewRequest(ctx, runtimeScopeId)) {
+      await this.assertKnowledgeBaseReadAccess(ctx, runtimeScope);
+    }
     const executionContext = await resolveRuntimeExecutionContext({
       runtimeScope,
       projectService: ctx.projectService,
@@ -1052,13 +1312,37 @@ export class ModelResolver {
       throw new Error('No deployment found, please deploy your project first');
     }
     const { project, manifest } = executionContext;
-    return await ctx.queryService.preview(sql, {
+    const result = await ctx.queryService.preview(sql, {
       project,
       limit: limit,
       modelingOnly: false,
       manifest,
       dryRun,
     });
+    await this.recordKnowledgeBaseReadAudit(ctx, {
+      runtimeScope,
+      payloadJson: {
+        operation: 'preview_sql',
+      },
+    });
+    return result;
+  }
+
+  private isInternalAiServicePreviewRequest(
+    ctx: IContext,
+    runtimeScopeId?: string | null,
+  ): boolean {
+    if (!runtimeScopeId) {
+      return false;
+    }
+
+    const internalHeader = (ctx as any)?.req?.headers?.[
+      'x-wren-ai-service-internal'
+    ] as string | string[] | undefined;
+
+    return Array.isArray(internalHeader)
+      ? internalHeader.includes('1')
+      : internalHeader === '1';
   }
 
   public async getNativeSql(
@@ -1067,6 +1351,7 @@ export class ModelResolver {
     ctx: IContext,
   ): Promise<string> {
     const { responseId } = args;
+    await this.assertKnowledgeBaseReadAccess(ctx);
     const { runtimeIdentity } = this.getRuntimeSelection(ctx);
     await ctx.askingService.assertResponseScope(responseId, runtimeIdentity);
 
@@ -1078,10 +1363,13 @@ export class ModelResolver {
     if (!response) {
       throw new Error(`Thread response ${responseId} not found`);
     }
+    if (!response.sql) {
+      throw new Error(`Thread response ${responseId} has no SQL`);
+    }
     const { project, manifest } = await this.getResponseExecutionContext(
       ctx,
       this.toExecutionRuntimeIdentitySource({
-        projectBridgeId: response.projectId ?? null,
+        bridgeProjectId: response.projectId ?? null,
         deployHash: response.deployHash ?? null,
       }),
     );
@@ -1108,6 +1396,13 @@ export class ModelResolver {
       });
     }
     const language = project.type === DataSourceName.MSSQL ? 'tsql' : undefined;
+    await this.recordKnowledgeBaseReadAudit(ctx, {
+      resourceType: 'thread_response',
+      resourceId: responseId,
+      payloadJson: {
+        operation: 'get_native_sql',
+      },
+    });
     return safeFormatSQL(nativeSql, { language });
   }
 
@@ -1116,13 +1411,17 @@ export class ModelResolver {
     args: { where: { id: number }; data: UpdateViewMetadataInput },
     ctx: IContext,
   ): Promise<boolean> {
+    await this.assertExecutableRuntimeScope(ctx);
+    await this.assertKnowledgeBaseWriteAccess(ctx);
     const viewId = args.where.id;
     const data = args.data;
 
     const view = await this.ensureViewScope(ctx, viewId);
 
     // update view metadata
-    const properties = JSON.parse(view.properties);
+    const properties = parseJsonObject(
+      view.properties,
+    ) as ViewMetadataProperties;
     let newName = view.name;
     // if displayName is not null, or undefined, update the displayName
     if (!isNil(data.displayName)) {
@@ -1138,11 +1437,16 @@ export class ModelResolver {
 
     // view column metadata
     if (!isEmpty(data.columns)) {
-      const viewColumns = properties.columns;
+      const viewColumns = Array.isArray(properties.columns)
+        ? properties.columns
+        : [];
       for (const col of viewColumns) {
         const requestedMetadata = data.columns.find(
           (c) => c.referenceName === col.name,
         );
+        if (!requestedMetadata) {
+          continue;
+        }
 
         if (!isNil(requestedMetadata.description)) {
           col.properties = col.properties || {};
@@ -1158,6 +1462,16 @@ export class ModelResolver {
     await ctx.viewRepository.updateOne(viewId, {
       name: newName,
       properties: JSON.stringify(properties),
+    });
+    await this.recordKnowledgeBaseWriteAudit(ctx, {
+      resourceType: 'view',
+      resourceId: viewId,
+      payloadJson: {
+        operation: 'update_view_metadata',
+      },
+      afterJson: {
+        name: newName,
+      },
     });
 
     return true;
@@ -1205,8 +1519,9 @@ export class ModelResolver {
     const tableColumns = dataSourceTables.find(
       (c) => c.name === tableName,
     )?.columns;
+    const existingColumns = tableColumns ?? [];
     for (const field of fields) {
-      if (!tableColumns.find((c) => c.name === field)) {
+      if (!existingColumns.find((c) => c.name === field)) {
         throw new Error(
           `Column "${field}" not found in table "${tableName}" in the data Source`,
         );
@@ -1215,45 +1530,183 @@ export class ModelResolver {
   }
 
   private getCurrentRuntimeIdentity(ctx: IContext) {
-    return this.normalizeRuntimeIdentity(
-      toPersistedRuntimeIdentity(ctx.runtimeScope!),
-    );
+    return toCanonicalPersistedRuntimeIdentityFromScope(ctx.runtimeScope!);
   }
 
   private getRuntimeSelection(ctx: IContext) {
-    const runtimeIdentity = this.getCurrentRuntimeIdentity(ctx);
     return {
-      runtimeIdentity,
-      projectBridgeId: getRuntimeProjectBridgeId(
-        ctx.runtimeScope!,
-        runtimeIdentity.projectId ?? null,
-      ),
+      runtimeIdentity: this.getCurrentRuntimeIdentity(ctx),
     };
+  }
+
+  private async assertKnowledgeBaseWriteAccess(ctx: IContext) {
+    const { actor, resource } =
+      this.getKnowledgeBaseWriteAuthorizationTarget(ctx);
+    await assertAuthorizedWithAudit({
+      auditEventRepository: ctx.auditEventRepository,
+      actor,
+      action: 'knowledge_base.update',
+      resource,
+    });
+  }
+
+  private async assertKnowledgeBaseReadAccess(
+    ctx: IContext,
+    runtimeScope = ctx.runtimeScope!,
+  ) {
+    const { actor, resource } = this.getKnowledgeBaseReadAuthorizationTarget(
+      ctx,
+      runtimeScope,
+    );
+    await assertAuthorizedWithAudit({
+      auditEventRepository: ctx.auditEventRepository,
+      actor,
+      action: 'knowledge_base.read',
+      resource,
+    });
+  }
+
+  private getKnowledgeBaseReadAuthorizationTarget(
+    ctx: IContext,
+    runtimeScope = ctx.runtimeScope!,
+  ) {
+    const runtimeIdentity =
+      toCanonicalPersistedRuntimeIdentityFromScope(runtimeScope);
+    const workspaceId =
+      runtimeScope?.workspace?.id || runtimeIdentity.workspaceId || null;
+    const knowledgeBase = runtimeScope?.knowledgeBase;
+
+    return {
+      actor:
+        ctx.authorizationActor ||
+        buildAuthorizationActorFromRuntimeScope(runtimeScope),
+      resource: {
+        resourceType: knowledgeBase ? 'knowledge_base' : 'workspace',
+        resourceId: knowledgeBase?.id || workspaceId,
+        workspaceId,
+        attributes: {
+          workspaceKind: runtimeScope?.workspace?.kind || null,
+          knowledgeBaseKind: knowledgeBase?.kind || null,
+        },
+      },
+    };
+  }
+
+  private getKnowledgeBaseWriteAuthorizationTarget(ctx: IContext) {
+    const { runtimeIdentity } = this.getRuntimeSelection(ctx);
+    const workspaceId =
+      ctx.runtimeScope?.workspace?.id || runtimeIdentity.workspaceId || null;
+    const knowledgeBase = ctx.runtimeScope?.knowledgeBase;
+
+    return {
+      actor:
+        ctx.authorizationActor ||
+        buildAuthorizationActorFromRuntimeScope(ctx.runtimeScope),
+      resource: {
+        resourceType: knowledgeBase ? 'knowledge_base' : 'workspace',
+        resourceId: knowledgeBase?.id || workspaceId,
+        workspaceId,
+        attributes: {
+          workspaceKind: ctx.runtimeScope?.workspace?.kind || null,
+          knowledgeBaseKind: knowledgeBase?.kind || null,
+        },
+      },
+    };
+  }
+
+  private async recordKnowledgeBaseWriteAudit(
+    ctx: IContext,
+    {
+      resourceType,
+      resourceId,
+      afterJson,
+      payloadJson,
+    }: {
+      resourceType: string;
+      resourceId?: string | number | null;
+      afterJson?: Record<string, any> | null;
+      payloadJson?: Record<string, any> | null;
+    },
+  ) {
+    const { actor, resource } =
+      this.getKnowledgeBaseWriteAuthorizationTarget(ctx);
+    await recordAuditEvent({
+      auditEventRepository: ctx.auditEventRepository,
+      actor,
+      action: 'knowledge_base.update',
+      resource: {
+        ...resource,
+        resourceType,
+        resourceId: resourceId ?? resource.resourceId ?? null,
+      },
+      result: 'succeeded',
+      afterJson: afterJson || undefined,
+      payloadJson: payloadJson || undefined,
+    });
+  }
+
+  private async recordKnowledgeBaseReadAudit(
+    ctx: IContext,
+    {
+      runtimeScope = ctx.runtimeScope!,
+      resourceType,
+      resourceId,
+      payloadJson,
+    }: {
+      runtimeScope?: IContext['runtimeScope'];
+      resourceType?: string | null;
+      resourceId?: string | number | null;
+      payloadJson?: Record<string, any> | null;
+    },
+  ) {
+    const { actor, resource } = this.getKnowledgeBaseReadAuthorizationTarget(
+      ctx,
+      runtimeScope!,
+    );
+    await recordAuditEvent({
+      auditEventRepository: ctx.auditEventRepository,
+      actor,
+      action: 'knowledge_base.read',
+      resource: {
+        ...resource,
+        resourceType: resourceType || resource.resourceType,
+        resourceId: resourceId ?? resource.resourceId ?? null,
+      },
+      result: 'allowed',
+      payloadJson: payloadJson || undefined,
+    });
+  }
+
+  private async assertExecutableRuntimeScope(
+    ctx: IContext,
+    runtimeScope = ctx.runtimeScope!,
+  ) {
+    try {
+      await assertLatestExecutableRuntimeScope({
+        runtimeScope,
+        knowledgeBaseRepository: ctx.knowledgeBaseRepository,
+        kbSnapshotRepository: ctx.kbSnapshotRepository,
+      });
+    } catch (error) {
+      throw Errors.create(Errors.GeneralErrorCodes.OUTDATED_RUNTIME_SNAPSHOT, {
+        customMessage:
+          error instanceof Error ? error.message : 'Snapshot outdated',
+      });
+    }
   }
 
   private getCurrentRuntimeScopeId(ctx: IContext) {
     return ctx.runtimeScope?.selector?.runtimeScopeId || null;
   }
 
-  private hasCanonicalRuntimeIdentity(
-    runtimeIdentity: PersistedRuntimeIdentity,
-  ) {
-    return Boolean(
-      runtimeIdentity.workspaceId ||
-        runtimeIdentity.knowledgeBaseId ||
-        runtimeIdentity.kbSnapshotId ||
-        runtimeIdentity.deployHash,
-    );
-  }
-
   private async getRuntimeProject(
     ctx: IContext,
-    fallbackProjectBridgeId?: number | null,
+    fallbackBridgeProjectId?: number | null,
   ) {
     const project = await resolveRuntimeProject(
       ctx.runtimeScope!,
       ctx.projectService,
-      fallbackProjectBridgeId,
+      fallbackBridgeProjectId,
     );
     if (!project) {
       throw new Error('No project found for the active runtime scope');
@@ -1264,7 +1717,7 @@ export class ModelResolver {
 
   private toExecutionRuntimeIdentitySource(
     source?: {
-      projectBridgeId?: number | null;
+      bridgeProjectId?: number | null;
       workspaceId?: string | null;
       knowledgeBaseId?: string | null;
       kbSnapshotId?: string | null;
@@ -1277,8 +1730,8 @@ export class ModelResolver {
     }
 
     const runtimeSource: Partial<PersistedRuntimeIdentity> = {};
-    if (Object.prototype.hasOwnProperty.call(source, 'projectBridgeId')) {
-      runtimeSource.projectId = source.projectBridgeId ?? null;
+    if (Object.prototype.hasOwnProperty.call(source, 'bridgeProjectId')) {
+      runtimeSource.projectId = source.bridgeProjectId ?? null;
     }
     if (Object.prototype.hasOwnProperty.call(source, 'workspaceId')) {
       runtimeSource.workspaceId = source.workspaceId ?? null;
@@ -1307,7 +1760,7 @@ export class ModelResolver {
     const hasField = <K extends keyof PersistedRuntimeIdentity>(field: K) =>
       source != null && Object.prototype.hasOwnProperty.call(source, field);
 
-    return this.normalizeRuntimeIdentity({
+    return normalizeCanonicalPersistedRuntimeIdentity({
       projectId: hasField('projectId')
         ? source?.projectId ?? null
         : runtimeIdentity.projectId ?? null,
@@ -1329,28 +1782,32 @@ export class ModelResolver {
     });
   }
 
-  private normalizeRuntimeIdentity(
+  private resolveBridgeProjectIdFallback(
     runtimeIdentity: PersistedRuntimeIdentity,
-  ): PersistedRuntimeIdentity {
-    if (!this.hasCanonicalRuntimeIdentity(runtimeIdentity)) {
-      return runtimeIdentity;
-    }
-
-    return {
-      ...runtimeIdentity,
-      projectId: null,
-    };
-  }
-
-  private getPersistedProjectBridge(
-    runtimeIdentity: PersistedRuntimeIdentity,
-    fallbackProjectBridgeId?: number | null,
+    fallbackBridgeProjectId?: number | null,
   ) {
-    if (this.hasCanonicalRuntimeIdentity(runtimeIdentity)) {
+    if (hasCanonicalRuntimeIdentity(runtimeIdentity)) {
       return null;
     }
 
-    return runtimeIdentity.projectId ?? fallbackProjectBridgeId ?? null;
+    return resolvePersistedProjectBridgeId(
+      runtimeIdentity,
+      fallbackBridgeProjectId,
+    );
+  }
+
+  private buildPersistedRuntimeIdentityPayload(
+    runtimeIdentity: PersistedRuntimeIdentity,
+    overrides?: Partial<PersistedRuntimeIdentity>,
+  ) {
+    return toPersistedRuntimeIdentityPatch({
+      ...runtimeIdentity,
+      ...overrides,
+      projectId: this.resolveBridgeProjectIdFallback(
+        runtimeIdentity,
+        overrides?.projectId ?? null,
+      ),
+    });
   }
 
   private async getResponseExecutionContext(

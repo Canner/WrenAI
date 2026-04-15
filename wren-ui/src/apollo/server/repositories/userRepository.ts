@@ -15,6 +15,10 @@ export interface User {
   locale?: string | null;
   status: string;
   lastLoginAt?: Date | null;
+  isPlatformAdmin?: boolean;
+  defaultWorkspaceId?: string | null;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
 }
 
 export interface IUserRepository extends IBasicRepository<User> {}
@@ -23,7 +27,7 @@ export class UserRepository
   extends BaseRepository<User>
   implements IUserRepository
 {
-  private readonly jsonColumns = [];
+  private readonly jsonColumns: string[] = [];
 
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'user' });

@@ -6,6 +6,7 @@ import CloseCircleOutlined from '@ant-design/icons/CloseCircleOutlined';
 import JsonCodeBlock from '@/components/code/JsonCodeBlock';
 import { ApiHistoryResponse } from '@/apollo/client/graphql/__types__';
 import { getAskDiagnostics } from './askDiagnostics';
+import { formatApiTypeLabel } from './apiTypeLabels';
 
 type Props = DrawerAction<ApiHistoryResponse> & {
   loading?: boolean;
@@ -40,7 +41,7 @@ const renderStateTag = (
   },
 ) => {
   const activeLabel = options?.activeLabel || label;
-  const inactiveLabel = options?.inactiveLabel || `not ${label}`;
+  const inactiveLabel = options?.inactiveLabel || `未${label}`;
 
   return (
     <Tag color={active ? 'success' : 'default'} className="mr-2 mb-2">
@@ -81,7 +82,7 @@ export default function DetailsDrawer(props: Props) {
     <Drawer
       visible={visible}
       className="gray-8"
-      title="API details"
+      title="API 调用详情"
       width={760}
       closable
       destroyOnClose
@@ -91,15 +92,15 @@ export default function DetailsDrawer(props: Props) {
       <Row className="mb-6">
         <Col span={12}>
           <Typography.Text className="d-block gray-7 mb-2">
-            API type
+            API 类型
           </Typography.Text>
           <div>
-            <Tag className="gray-8">{apiType?.toLowerCase()}</Tag>
+            <Tag className="gray-8">{formatApiTypeLabel(apiType)}</Tag>
           </div>
         </Col>
         <Col span={12}>
           <Typography.Text className="d-block gray-7 mb-2">
-            Thread ID
+            线程 ID
           </Typography.Text>
           <div>{threadId || '-'}</div>
         </Col>
@@ -107,13 +108,13 @@ export default function DetailsDrawer(props: Props) {
       <Row className="mb-6">
         <Col span={12}>
           <Typography.Text className="d-block gray-7 mb-2">
-            Created at
+            创建时间
           </Typography.Text>
-          <div>{getAbsoluteTime(createdAt)}</div>
+          <div>{createdAt ? getAbsoluteTime(createdAt) : '-'}</div>
         </Col>
         <Col span={12}>
           <Typography.Text className="d-block gray-7 mb-2">
-            Duration
+            耗时
           </Typography.Text>
           <div>{durationMs} ms</div>
         </Col>
@@ -121,15 +122,15 @@ export default function DetailsDrawer(props: Props) {
       <Row className="mb-6">
         <Col span={12}>
           <Typography.Text className="d-block gray-7 mb-2">
-            Status code
+            状态码
           </Typography.Text>
-          <div>{getStatusTag(statusCode)}</div>
+          <div>{statusCode ? getStatusTag(statusCode) : '-'}</div>
         </Col>
       </Row>
 
       <div className="mb-6">
         <Typography.Text className="d-block gray-7 mb-2">
-          Headers
+          请求头
         </Typography.Text>
         <JsonCodeBlock
           code={headers}
@@ -141,7 +142,7 @@ export default function DetailsDrawer(props: Props) {
 
       <div className="mb-6">
         <Typography.Text className="d-block gray-7 mb-2">
-          Request payload
+          请求载荷
         </Typography.Text>
         <JsonCodeBlock
           code={requestPayload}
@@ -154,7 +155,7 @@ export default function DetailsDrawer(props: Props) {
       {askDiagnostics && (
         <div className="mb-6">
           <Typography.Text className="d-block gray-7 mb-2">
-            Ask diagnostics
+            问答诊断
           </Typography.Text>
           <Row className="mb-4">
             <Col span={12}>
@@ -165,7 +166,7 @@ export default function DetailsDrawer(props: Props) {
             </Col>
             <Col span={12}>
               <Typography.Text className="d-block gray-7 mb-2">
-                Ask path
+                问答路径
               </Typography.Text>
               {askDiagnostics.askPath ? (
                 <Tag className="gray-8">{askDiagnostics.askPath}</Tag>
@@ -179,16 +180,18 @@ export default function DetailsDrawer(props: Props) {
             <>
               <div className="mb-4">
                 <Typography.Text className="d-block gray-7 mb-2">
-                  Shadow compare
+                  影子对比
                 </Typography.Text>
                 <div>
-                  {renderStateTag('enabled', shadowCompare.enabled)}
-                  {renderStateTag('executed', shadowCompare.executed)}
-                  {renderStateTag('comparable', shadowCompare.comparable)}
+                  {renderStateTag('启用', shadowCompare.enabled)}
+                  {renderStateTag('执行', shadowCompare.executed)}
+                  {renderStateTag('可比对', shadowCompare.comparable, {
+                    inactiveLabel: '不可比对',
+                  })}
                   {shadowCompare.comparable !== undefined &&
-                    renderStateTag('matched', shadowCompare.matched, {
-                      activeLabel: 'matched',
-                      inactiveLabel: 'mismatched',
+                    renderStateTag('匹配', shadowCompare.matched, {
+                      activeLabel: '已匹配',
+                      inactiveLabel: '不匹配',
                     })}
                 </div>
               </div>
@@ -196,13 +199,13 @@ export default function DetailsDrawer(props: Props) {
               <Row className="mb-4">
                 <Col span={12}>
                   <Typography.Text className="d-block gray-7 mb-2">
-                    Primary path
+                    主链路路径
                   </Typography.Text>
                   {renderTextValue(shadowCompare.primaryAskPath)}
                 </Col>
                 <Col span={12}>
                   <Typography.Text className="d-block gray-7 mb-2">
-                    Shadow path
+                    影子链路路径
                   </Typography.Text>
                   {renderTextValue(shadowCompare.shadowAskPath)}
                 </Col>
@@ -211,13 +214,13 @@ export default function DetailsDrawer(props: Props) {
               <Row className="mb-4">
                 <Col span={12}>
                   <Typography.Text className="d-block gray-7 mb-2">
-                    Primary type
+                    主链路类型
                   </Typography.Text>
                   {renderTextValue(shadowCompare.primaryType)}
                 </Col>
                 <Col span={12}>
                   <Typography.Text className="d-block gray-7 mb-2">
-                    Shadow type
+                    影子链路类型
                   </Typography.Text>
                   {renderTextValue(shadowCompare.shadowType)}
                 </Col>
@@ -226,13 +229,13 @@ export default function DetailsDrawer(props: Props) {
               <Row className="mb-4">
                 <Col span={12}>
                   <Typography.Text className="d-block gray-7 mb-2">
-                    Primary result count
+                    主链路结果数
                   </Typography.Text>
                   {renderTextValue(shadowCompare.primaryResultCount)}
                 </Col>
                 <Col span={12}>
                   <Typography.Text className="d-block gray-7 mb-2">
-                    Shadow result count
+                    影子链路结果数
                   </Typography.Text>
                   {renderTextValue(shadowCompare.shadowResultCount)}
                 </Col>
@@ -241,13 +244,13 @@ export default function DetailsDrawer(props: Props) {
               <Row className="mb-4">
                 <Col span={12}>
                   <Typography.Text className="d-block gray-7 mb-2">
-                    Primary error type
+                    主链路错误类型
                   </Typography.Text>
                   {renderTextValue(shadowCompare.primaryErrorType)}
                 </Col>
                 <Col span={12}>
                   <Typography.Text className="d-block gray-7 mb-2">
-                    Shadow error type
+                    影子链路错误类型
                   </Typography.Text>
                   {renderTextValue(shadowCompare.shadowErrorType)}
                 </Col>
@@ -256,7 +259,7 @@ export default function DetailsDrawer(props: Props) {
               <Row className="mb-4">
                 <Col span={24}>
                   <Typography.Text className="d-block gray-7 mb-2">
-                    Reason
+                    原因
                   </Typography.Text>
                   {renderTextValue(shadowCompare.reason)}
                 </Col>
@@ -265,7 +268,7 @@ export default function DetailsDrawer(props: Props) {
               <Row className="mb-4">
                 <Col span={24}>
                   <Typography.Text className="d-block gray-7 mb-2">
-                    Shadow error
+                    影子链路错误详情
                   </Typography.Text>
                   {renderTextValue(shadowCompare.shadowError)}
                 </Col>
@@ -277,7 +280,7 @@ export default function DetailsDrawer(props: Props) {
 
       <div className="mb-6">
         <Typography.Text className="d-block gray-7 mb-2">
-          Response payload
+          响应载荷
         </Typography.Text>
         <JsonCodeBlock
           code={responsePayload}
