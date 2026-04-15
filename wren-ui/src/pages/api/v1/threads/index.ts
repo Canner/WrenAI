@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
+import { AskingResolver } from '@server/resolvers/askingResolver';
 import { ApiType } from '@server/repositories/apiHistoryRepository';
 import {
   ApiError,
@@ -8,6 +9,7 @@ import {
 } from '@/apollo/server/utils/apiUtils';
 import { getLogger } from '@server/utils';
 import { toCanonicalPersistedRuntimeIdentityFromScope } from '@server/utils/persistedRuntimeIdentity';
+import { buildResolverContextFromRequest } from '../resolverContext';
 import {
   assertAuthorizedWithAudit,
   buildAuthorizationActorFromRuntimeScope,
@@ -17,6 +19,7 @@ import {
 
 const logger = getLogger('API_THREADS');
 logger.level = 'debug';
+const askingResolver = new AskingResolver();
 
 const { runtimeScopeResolver, askingService, auditEventRepository } =
   components;
@@ -100,11 +103,52 @@ export default async function handler(
   let runtimeScope;
 
   try {
-    if (req.method !== 'GET') {
+    if (req.method !== 'GET' && req.method !== 'POST') {
       throw new ApiError('Method not allowed', 405);
     }
 
     runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
+
+    if (req.method === 'POST') {
+      const ctx = await buildResolverContextFromRequest({ req, runtimeScope });
+      const thread = await askingResolver.createThread(
+        null,
+        {
+          data: {
+            question:
+              typeof req.body?.question === 'string'
+                ? req.body.question
+                : undefined,
+            taskId:
+              typeof req.body?.taskId === 'string'
+                ? req.body.taskId
+                : undefined,
+            sql: typeof req.body?.sql === 'string' ? req.body.sql : undefined,
+            knowledgeBaseIds: Array.isArray(req.body?.knowledgeBaseIds)
+              ? req.body.knowledgeBaseIds
+              : undefined,
+            selectedSkillIds: Array.isArray(req.body?.selectedSkillIds)
+              ? req.body.selectedSkillIds
+              : undefined,
+          },
+        },
+        ctx,
+      );
+
+      await respondWithSimple({
+        res,
+        statusCode: 201,
+        responsePayload: thread,
+        runtimeScope,
+        apiType: ApiType.ASK,
+        requestPayload:
+          req.body && typeof req.body === 'object' ? req.body : {},
+        headers: req.headers as Record<string, string>,
+        startTime,
+      });
+      return;
+    }
+
     const { actor, resource } = await assertKnowledgeBaseReadAccess({
       req,
       runtimeScope,
@@ -130,8 +174,11 @@ export default async function handler(
       error,
       res,
       runtimeScope,
-      apiType: ApiType.GET_THREADS,
-      requestPayload: {},
+      apiType: req.method === 'POST' ? ApiType.ASK : ApiType.GET_THREADS,
+      requestPayload:
+        req.method === 'POST' && req.body && typeof req.body === 'object'
+          ? req.body
+          : {},
       headers: req.headers as Record<string, string>,
       startTime,
       logger,

@@ -5,8 +5,8 @@ import {
   REDSHIFT_AUTH_METHOD,
   DATABRICKS_AUTH_METHOD,
 } from '@/utils/enum';
-import { useSaveDataSourceMutation } from '@/apollo/client/graphql/dataSource.generated';
 import { DataSourceName } from '@/apollo/client/graphql/__types__';
+import { saveDataSource as saveDataSourceRest } from '@/utils/modelingRest';
 import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
 
 const PASSWORD_PLACEHOLDER = '************';
@@ -14,13 +14,11 @@ const PASSWORD_PLACEHOLDER = '************';
 export default function useSetupConnectionDataSource() {
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const [selected, setSelected] = useState<DataSourceName>();
-
-  const [saveDataSourceMutation, { loading, error }] =
-    useSaveDataSourceMutation({
-      onError: (error) =>
-        message.error(error.message || '保存数据源失败，请稍后重试'),
-      onCompleted: () => completedDataSourceSave(),
-    });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+  const completedDataSourceSave = useCallback(async () => {
+    runtimeScopeNavigation.push(Path.OnboardingModels);
+  }, [runtimeScopeNavigation]);
 
   const selectDataSourceNext = useCallback(
     (payload: { dataSource: DataSourceName; dispatch?: () => void }) => {
@@ -36,21 +34,27 @@ export default function useSetupConnectionDataSource() {
         message.error('请先选择数据源类型');
         return;
       }
-      await saveDataSourceMutation({
-        variables: {
-          data: {
-            type: selected,
-            properties: transformFormToProperties(properties, selected),
-          },
-        },
-      });
+      setLoading(true);
+      setError(null);
+      try {
+        await saveDataSourceRest(runtimeScopeNavigation.selector, {
+          type: selected,
+          properties: transformFormToProperties(properties, selected),
+        });
+        await completedDataSourceSave();
+      } catch (nextError) {
+        const resolvedError =
+          nextError instanceof Error
+            ? nextError
+            : new Error('保存数据源失败，请稍后重试');
+        setError(resolvedError);
+        message.error(resolvedError.message || '保存数据源失败，请稍后重试');
+      } finally {
+        setLoading(false);
+      }
     },
-    [selected, saveDataSourceMutation],
+    [completedDataSourceSave, runtimeScopeNavigation.selector, selected],
   );
-
-  const completedDataSourceSave = useCallback(async () => {
-    runtimeScopeNavigation.push(Path.OnboardingModels);
-  }, [runtimeScopeNavigation]);
 
   return {
     loading,

@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react';
-import { DeployStatusQueryHookResult } from '@/apollo/client/graphql/deploy.generated';
+import type { DeployStatusResult } from '@/hooks/useDeployStatusRest';
 
-type ContextProps = DeployStatusQueryHookResult;
+type ContextProps = DeployStatusResult;
 
 export const DeployStatusContext = createContext<ContextProps>(
   {} as ContextProps,

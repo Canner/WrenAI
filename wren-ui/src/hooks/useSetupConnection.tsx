@@ -33,7 +33,19 @@ export default function useSetupConnection() {
 
   useEffect(() => {
     if (setupConnectionDataSource.error) {
-      setConnectError(parseGraphQLError(setupConnectionDataSource.error));
+      const nextError = setupConnectionDataSource.error;
+      const parsedError =
+        'graphQLErrors' in nextError
+          ? parseGraphQLError(
+              nextError as Parameters<typeof parseGraphQLError>[0],
+            )
+          : {
+              message: nextError.message,
+              shortMessage: nextError.message,
+              code: '',
+              stacktrace: undefined,
+            };
+      setConnectError(parsedError);
       return;
     }
     setConnectError(null);

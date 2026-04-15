@@ -299,10 +299,7 @@ const Sidebar = styled(Sider)`
     .ant-menu-inline > .ant-menu-item-selected {
       background: #f3f4f6;
       color: #111827;
-    }
-
-    .ant-menu-inline > .ant-menu-item-selected::after {
-      display: none;
+      box-shadow: inset 2px 0 0 #d6dbe3;
     }
 
     .ant-menu-inline-collapsed > .ant-menu-item,
@@ -429,21 +426,24 @@ const FooterNavSection = styled.div`
   flex-shrink: 0;
 `;
 
-const FooterControlCluster = styled.div`
+const FooterControlCluster = styled.div<{ $collapsed?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 8px;
-  border: 1px solid #edf0f5;
-  border-radius: 14px;
-  background: #fbfcfe;
+  padding: ${(props) => (props.$collapsed ? '0' : '8px')};
+  border: ${(props) => (props.$collapsed ? '0' : '1px solid #f1f4f8')};
+  border-radius: ${(props) => (props.$collapsed ? '0' : '14px')};
+  background: ${(props) =>
+    props.$collapsed
+      ? 'transparent'
+      : 'linear-gradient(180deg, #fcfdff 0%, #fafbfd 100%)'};
 `;
 
 const SidebarWorkspaceSwitcher = styled.div`
   flex-shrink: 0;
   min-height: 34px;
   padding-top: 6px;
-  border-top: 1px solid #eef1f5;
+  border-top: 1px solid #f3f5f8;
 
   && {
     .runtime-scope-select.runtime-scope-workspace {
@@ -458,8 +458,8 @@ const SidebarWorkspaceSwitcher = styled.div`
     .ant-select-selector {
       height: 34px !important;
       border-radius: 10px !important;
-      border-color: #e5e7eb !important;
-      background: #fafbfc !important;
+      border-color: #edf1f5 !important;
+      background: #f6f8fb !important;
       box-shadow: none !important;
       padding: 0 11px !important;
       transition:
@@ -471,12 +471,12 @@ const SidebarWorkspaceSwitcher = styled.div`
       display: flex;
       align-items: center;
       font-size: 12px;
-      color: #374151;
+      color: #6b7280;
     }
 
     .ant-select:hover .ant-select-selector,
     .ant-select-focused .ant-select-selector {
-      border-color: #d7dbe4 !important;
+      border-color: #e3e7ed !important;
       background: #ffffff !important;
     }
 
@@ -553,13 +553,16 @@ const HistoryButton = styled(Button)<{ $active?: boolean }>`
     padding: 3px 8px;
     border-radius: 8px;
     border: 0;
-    background: ${(props) => (props.$active ? '#f3f4f6' : 'transparent')};
+    background: ${(props) => (props.$active ? '#f7f8fb' : 'transparent')};
     color: #111827;
     text-align: left;
+    transition:
+      background 0.18s ease,
+      color 0.18s ease;
 
     &:hover,
     &:focus {
-      background: #f3f4f6;
+      background: #f7f8fb;
       color: #111827;
     }
 
@@ -619,11 +622,12 @@ const AccountButton = styled.button<{ $collapsed?: boolean }>`
   cursor: pointer;
   transition:
     border-color 0.2s ease,
-    background 0.2s ease;
+    background 0.2s ease,
+    color 0.2s ease;
 
   &:hover {
     border-color: #d7dbe4;
-    background: #ffffff;
+    background: #f7f8fb;
   }
 `;
 
@@ -711,7 +715,7 @@ const DolaAppShellFrame = memo(function DolaAppShellFrame({
     const seen = new Set<string>();
 
     return historyItems.filter((item) => {
-      const key = item.id.trim() || item.title.trim().toLowerCase();
+      const key = item.id.trim();
       if (!key || seen.has(key)) {
         return false;
       }
@@ -1392,7 +1396,7 @@ const DolaAppShellFrame = memo(function DolaAppShellFrame({
         )}
 
         <Footer>
-          <FooterControlCluster>
+          <FooterControlCluster $collapsed={collapsed}>
             {footerMenuItems.length > 0 ? (
               <FooterNavSection>
                 <Menu

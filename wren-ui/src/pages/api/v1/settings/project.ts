@@ -29,7 +29,11 @@ export default async function handler(
     }
 
     if (req.method === 'DELETE') {
-      const success = await projectResolver.resetCurrentProject(null, null, ctx);
+      const success = await projectResolver.resetCurrentProject(
+        null,
+        null,
+        ctx,
+      );
       return res.status(200).json({ success });
     }
 

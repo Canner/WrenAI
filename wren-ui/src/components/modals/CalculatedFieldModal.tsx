@@ -17,8 +17,9 @@ import LineageSelector, {
 } from '@/components/selectors/lineageSelector';
 import DescriptiveSelector from '@/components/selectors/DescriptiveSelector';
 import ErrorCollapse from '@/components/ErrorCollapse';
-import { useValidateCalculatedFieldMutation } from '@/apollo/client/graphql/calculatedField.generated';
 import { CreateCalculatedFieldInput } from '@/apollo/client/graphql/__types__';
+import { validateCalculatedField as validateCalculatedFieldRest } from '@/utils/modelingRest';
+import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 
 export type CalculatedFieldValue = {
   name: string;
@@ -59,27 +60,32 @@ export default function AddCalculatedFieldModal(props: Props) {
   const lineage = Form.useWatch('lineage', form);
 
   const expressionOptions = useExpressionFieldOptions();
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
 
   const models = useMemo(() => payload?.models, [payload]);
   const sourceModel = useMemo(() => payload?.sourceModel, [payload]);
 
-  const [validateCalculatedField] = useValidateCalculatedFieldMutation();
   const validateCalculatedFieldName = useCallback(
     async (name: string) => {
       if (!sourceModel) {
         return;
       }
-      await validateCalculatedField({
-        variables: {
-          data: {
-            name,
-            modelId: sourceModel.modelId,
-            columnId: defaultValue?.columnId,
-          },
+      const result = await validateCalculatedFieldRest(
+        runtimeScopeNavigation.selector,
+        {
+          name,
+          modelId: sourceModel.modelId,
+          columnId: defaultValue?.columnId,
         },
-      });
+      );
+
+      return {
+        data: {
+          validateCalculatedField: result,
+        },
+      };
     },
-    [sourceModel, defaultValue],
+    [defaultValue?.columnId, runtimeScopeNavigation.selector, sourceModel],
   );
 
   useEffect(() => {

@@ -20,7 +20,7 @@ import useNativeSQL from '@/hooks/useNativeSQL';
 import { DATA_SOURCE_OPTIONS } from '@/components/pages/setup/utils';
 import { Logo } from '@/components/Logo';
 import { Props as AnswerResultProps } from '@/components/pages/home/promptThread/AnswerResult';
-import usePromptThreadStore from '@/components/pages/home/promptThread/store';
+import { usePromptThreadActionsStore } from '@/components/pages/home/promptThread/store';
 import PreviewData from '@/components/dataPreview/PreviewData';
 import useResponsePreviewData from '@/hooks/useResponsePreviewData';
 
@@ -53,7 +53,7 @@ export default function ViewSQLTabContent(props: AnswerResultProps) {
     threadResponse,
   } = props;
 
-  const { onOpenAdjustSQLModal } = usePromptThreadStore();
+  const { onOpenAdjustSQLModal } = usePromptThreadActionsStore();
   const { fetchNativeSQL, nativeSQLResult } = useNativeSQL();
   const previewDataResult = useResponsePreviewData(threadResponse.id);
   const { ensureLoaded: ensurePreviewLoaded } = previewDataResult;

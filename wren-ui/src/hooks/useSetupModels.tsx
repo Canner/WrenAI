@@ -1,37 +1,55 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { message } from 'antd';
 import { Path, SETUP } from '@/utils/enum';
-import {
-  useListDataSourceTablesQuery,
-  useSaveTablesMutation,
-} from '@/apollo/client/graphql/dataSource.generated';
+import type { ListDataSourceTablesQuery } from '@/apollo/client/graphql/dataSource.generated';
+import { listDataSourceTables, saveSetupTables } from '@/utils/modelingRest';
 import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
 
 export default function useSetupModels() {
   const [stepKey] = useState(SETUP.SELECT_MODELS);
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
+  const [tables, setTables] = useState<
+    ListDataSourceTablesQuery['listDataSourceTables']
+  >([]);
+  const [fetching, setFetching] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  const { data, loading: fetching } = useListDataSourceTablesQuery({
-    fetchPolicy: 'no-cache',
-    onError: (error) =>
-      message.error(error.message || '加载数据表失败，请稍后重试'),
-  });
+  useEffect(() => {
+    let cancelled = false;
+    setFetching(true);
+    void listDataSourceTables(runtimeScopeNavigation.selector)
+      .then((nextTables) => {
+        if (!cancelled) {
+          setTables(nextTables || []);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          message.error(error.message || '加载数据表失败，请稍后重试');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setFetching(false);
+        }
+      });
 
-  // Handle errors via try/catch blocks rather than onError callback
-  const [saveTablesMutation, { loading: submitting }] = useSaveTablesMutation();
+    return () => {
+      cancelled = true;
+    };
+  }, [runtimeScopeNavigation.selector]);
 
   const submitModels = async (tables: string[]) => {
     try {
-      await saveTablesMutation({
-        variables: {
-          data: { tables },
-        },
-      });
+      setSubmitting(true);
+      await saveSetupTables(runtimeScopeNavigation.selector, tables);
       runtimeScopeNavigation.push(Path.OnboardingRelationships);
     } catch (error) {
       message.error(
         error instanceof Error ? error.message : '保存模型失败，请稍后重试',
       );
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -49,6 +67,6 @@ export default function useSetupModels() {
     stepKey,
     onBack,
     onNext,
-    tables: data?.listDataSourceTables || [],
+    tables,
   };
 }

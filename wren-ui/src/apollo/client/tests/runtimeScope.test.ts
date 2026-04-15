@@ -170,6 +170,37 @@ describe('apollo client runtime scope helpers', () => {
     });
   });
 
+  it('reuses cached resolved selector when location and storage are unchanged', () => {
+    const storage = createStorage({
+      'wren.runtimeScope': JSON.stringify({
+        workspaceId: 'ws-1',
+        knowledgeBaseId: 'kb-1',
+      }),
+    });
+    const getItemSpy = jest.spyOn(storage, 'getItem');
+    const windowObject = createWindowLike('', storage);
+
+    expect(
+      resolveClientRuntimeScopeSelector({
+        windowObject,
+      }),
+    ).toEqual({
+      workspaceId: 'ws-1',
+      knowledgeBaseId: 'kb-1',
+    });
+    getItemSpy.mockClear();
+    expect(
+      resolveClientRuntimeScopeSelector({
+        windowObject,
+      }),
+    ).toEqual({
+      workspaceId: 'ws-1',
+      knowledgeBaseId: 'kb-1',
+    });
+
+    expect(getItemSpy).not.toHaveBeenCalled();
+  });
+
   it('reads and writes persisted runtime scope selectors without routing through query params', () => {
     const storage = createStorage();
     const windowObject = createWindowLike('', storage);

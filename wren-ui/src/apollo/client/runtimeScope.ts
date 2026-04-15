@@ -48,6 +48,12 @@ export interface RuntimeScopeBootstrapCandidate {
 }
 
 const STORAGE_KEY = 'wren.runtimeScope';
+let cachedResolvedSelectorSnapshot: {
+  windowObject: RuntimeScopeWindowLike | null;
+  search: string;
+  storedRaw: string;
+  selector: ClientRuntimeScopeSelector;
+} | null = null;
 export const RUNTIME_SCOPE_RECOVERY_EVENT = 'wren:runtime-scope-recovery';
 const RECOVERABLE_RUNTIME_SCOPE_ERROR_CODES = new Set([
   'NO_DEPLOYMENT_FOUND',
@@ -292,6 +298,18 @@ const getPreferredStorage = (
   }
 
   return windowObject.sessionStorage || windowObject.localStorage || null;
+};
+
+const readStoredRuntimeScopeRaw = (storage?: StorageLike | null): string => {
+  if (!storage) {
+    return '';
+  }
+
+  try {
+    return storage.getItem(STORAGE_KEY) || '';
+  } catch (_error) {
+    return '';
+  }
 };
 
 export const readRuntimeScopeSelectorFromSearch = (
@@ -569,13 +587,14 @@ export const shouldDeferRuntimeScopeUrlSync = ({
 
 const readStoredRuntimeScopeSelector = (
   storage?: StorageLike | null,
+  rawValue?: string,
 ): ClientRuntimeScopeSelector => {
   if (!storage) {
     return {};
   }
 
   try {
-    const raw = storage.getItem(STORAGE_KEY);
+    const raw = rawValue ?? readStoredRuntimeScopeRaw(storage);
     if (!raw) {
       return {};
     }
@@ -606,10 +625,18 @@ const persistRuntimeScopeSelector = (
   try {
     if (!hasExplicitRuntimeScopeSelector(normalizedSelector)) {
       storage.removeItem?.(STORAGE_KEY);
+      cachedResolvedSelectorSnapshot = null;
       return;
     }
 
-    storage.setItem(STORAGE_KEY, JSON.stringify(normalizedSelector));
+    const serializedSelector = JSON.stringify(normalizedSelector);
+    storage.setItem(STORAGE_KEY, serializedSelector);
+    cachedResolvedSelectorSnapshot = {
+      windowObject: null,
+      search: '',
+      storedRaw: serializedSelector,
+      selector: normalizedSelector,
+    };
   } catch (_error) {
     // ignore storage write failures in restricted browsers
   }
@@ -653,19 +680,41 @@ export const resolveClientRuntimeScopeSelector = ({
     return {};
   }
 
-  const selectorFromQuery = readRuntimeScopeSelectorFromSearch(
-    windowObject.location?.search,
-  );
+  const preferredStorage = getPreferredStorage(windowObject);
+  const currentSearch = windowObject.location?.search || '';
+
+  if (
+    cachedResolvedSelectorSnapshot &&
+    cachedResolvedSelectorSnapshot.windowObject === windowObject &&
+    cachedResolvedSelectorSnapshot.search === currentSearch
+  ) {
+    return cachedResolvedSelectorSnapshot.selector;
+  }
+
+  const selectorFromQuery = readRuntimeScopeSelectorFromSearch(currentSearch);
 
   if (hasExplicitRuntimeScopeSelector(selectorFromQuery)) {
-    persistRuntimeScopeSelector(
-      getPreferredStorage(windowObject),
-      selectorFromQuery,
-    );
+    persistRuntimeScopeSelector(preferredStorage, selectorFromQuery);
+    cachedResolvedSelectorSnapshot = {
+      windowObject,
+      search: currentSearch,
+      storedRaw: readStoredRuntimeScopeRaw(preferredStorage),
+      selector: selectorFromQuery,
+    };
     return selectorFromQuery;
   }
 
-  return readStoredRuntimeScopeSelector(getPreferredStorage(windowObject));
+  const resolvedSelector = readStoredRuntimeScopeSelector(
+    preferredStorage,
+    readStoredRuntimeScopeRaw(preferredStorage),
+  );
+  cachedResolvedSelectorSnapshot = {
+    windowObject,
+    search: currentSearch,
+    storedRaw: readStoredRuntimeScopeRaw(preferredStorage),
+    selector: resolvedSelector,
+  };
+  return resolvedSelector;
 };
 
 export const buildRuntimeScopeHeaders = (

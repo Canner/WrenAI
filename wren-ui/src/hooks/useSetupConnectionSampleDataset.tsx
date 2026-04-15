@@ -34,7 +34,9 @@ export default function useSetupConnectionSampleDataset() {
             ? error
             : new Error('导入样例数据失败，请稍后重试');
         setError(normalizedError);
-        message.error(normalizedError.message || '导入样例数据失败，请稍后重试');
+        message.error(
+          normalizedError.message || '导入样例数据失败，请稍后重试',
+        );
       } finally {
         setLoading(false);
       }

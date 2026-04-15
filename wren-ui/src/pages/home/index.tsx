@@ -28,7 +28,6 @@ import ToolOutlined from '@ant-design/icons/ToolOutlined';
 import styled from 'styled-components';
 import { Path } from '@/utils/enum';
 import {
-  buildRuntimeScopeHeaders,
   buildRuntimeScopeUrl,
   ClientRuntimeScopeSelector,
 } from '@/apollo/client/runtimeScope';
@@ -36,10 +35,11 @@ import Prompt from '@/components/pages/home/prompt';
 import useHomeSidebar from '@/hooks/useHomeSidebar';
 import useAskPrompt from '@/hooks/useAskPrompt';
 import {
-  useSuggestedQuestionsQuery,
-  useCreateAskingTaskMutation,
-  useCreateThreadMutation,
-} from '@/apollo/client/graphql/home.generated';
+  createAskingTask,
+  createThread,
+  fetchSuggestedQuestions,
+  type SuggestedQuestionsPayload,
+} from '@/utils/homeRest';
 import { CreateThreadInput } from '@/apollo/client/graphql/__types__';
 import DolaAppShell from '@/components/reference/DolaAppShell';
 import {
@@ -94,6 +94,12 @@ type HomeSkillOption = {
 
 const HOME_SKILL_OPTIONS_STORAGE_PREFIX = 'wren.homeSkillOptions';
 const HOME_SKILL_OPTIONS_CACHE_TTL_MS = 2 * 60 * 1000;
+
+type HomeRecommendationCard = {
+  question: string;
+  description: string;
+  badge: string;
+};
 
 type HomeSkillOptionsCacheRecord = {
   value: HomeSkillOption[];
@@ -755,6 +761,8 @@ export default function Home() {
   const [skillOptionSource, setSkillOptionSource] = useState<HomeSkillOption[]>(
     [],
   );
+  const [suggestedQuestionsData, setSuggestedQuestionsData] =
+    useState<SuggestedQuestionsPayload | null>(null);
   const [skillOptionsLoading, setSkillOptionsLoading] = useState(false);
   const [skillOptionsError, setSkillOptionsError] = useState<string | null>(
     null,
@@ -787,26 +795,6 @@ export default function Home() {
         runtimeSelectorState?.currentKnowledgeBase?.defaultKbSnapshotId,
     });
   }, [runtimeSelectorState, selectorHasRuntime]);
-  const { data: suggestedQuestionsData } = useSuggestedQuestionsQuery({
-    fetchPolicy: 'cache-first',
-    nextFetchPolicy: 'cache-first',
-    skip: !runtimeScopePage.hasRuntimeScope || !hasExecutableRuntime,
-  });
-  const [createThread] = useCreateThreadMutation({
-    onError: (error) => reportHomeError(error, '创建对话失败，请稍后重试'),
-    onCompleted: () => {
-      if (persistentShellEmbedded) {
-        void refetchPersistentShellHistory();
-        return;
-      }
-
-      void homeSidebar.refetch();
-    },
-  });
-  const [createAskingTask] = useCreateAskingTaskMutation({
-    onError: (error) => reportHomeError(error, '创建问答任务失败，请稍后重试'),
-  });
-
   const currentKnowledgeBases = runtimeSelectorState?.knowledgeBases || [];
   const skillOptions = useMemo(
     () =>
@@ -832,14 +820,63 @@ export default function Home() {
         ),
     [selectedKnowledgeBaseIds, skillOptionSource],
   );
-  const askPrompt = useAskPrompt(undefined, {
-    knowledgeBaseIds:
-      selectedKnowledgeBaseIds.length > 0
-        ? selectedKnowledgeBaseIds
-        : undefined,
-    selectedSkillIds:
-      selectedSkillIds.length > 0 ? selectedSkillIds : undefined,
-  });
+  const askRuntimeSelector = useMemo(
+    () =>
+      resolveAskRuntimeSelector({
+        currentSelector: runtimeScopeNavigation.selector,
+        selectedKnowledgeBaseIds,
+        workspaceId: runtimeSelectorState?.currentWorkspace?.id,
+      }),
+    [
+      runtimeScopeNavigation.selector,
+      runtimeSelectorState?.currentWorkspace?.id,
+      selectedKnowledgeBaseIds,
+    ],
+  );
+  const askPrompt = useAskPrompt(
+    undefined,
+    {
+      knowledgeBaseIds:
+        selectedKnowledgeBaseIds.length > 0
+          ? selectedKnowledgeBaseIds
+          : undefined,
+      selectedSkillIds:
+        selectedSkillIds.length > 0 ? selectedSkillIds : undefined,
+    },
+    undefined,
+    askRuntimeSelector,
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!runtimeScopePage.hasRuntimeScope || !hasExecutableRuntime) {
+      setSuggestedQuestionsData(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    void fetchSuggestedQuestions(runtimeScopeNavigation.selector)
+      .then((payload) => {
+        if (!cancelled) {
+          setSuggestedQuestionsData(payload);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSuggestedQuestionsData(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    hasExecutableRuntime,
+    runtimeScopeNavigation.selector,
+    runtimeScopePage.hasRuntimeScope,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -908,6 +945,7 @@ export default function Home() {
         if (!cancelled) {
           setSkillOptionSource([]);
           setSkillOptionsError('加载技能列表失败，请稍后重试。');
+          message.error('加载技能列表失败，请稍后重试。');
         }
       } finally {
         if (skillOptionsRequestRef.current === request) {
@@ -1002,11 +1040,11 @@ export default function Home() {
   );
 
   const sampleQuestions = useMemo(
-    () => suggestedQuestionsData?.suggestedQuestions.questions || [],
+    () => suggestedQuestionsData?.questions || [],
     [suggestedQuestionsData],
   );
 
-  const recommendationCards = useMemo(() => {
+  const recommendationCards = useMemo<HomeRecommendationCard[]>(() => {
     if (matchedDemoKnowledge) {
       const primaryQuestions = matchedDemoKnowledge.suggestedQuestions;
       const fallbackQuestion =
@@ -1044,16 +1082,21 @@ export default function Home() {
           item !== null,
       )
       .slice(0, 3)
-      .map((item, index) => ({
-        question: item.question,
-        description:
-          index === 0
-            ? '快速查看关键指标、变化原因与接下来的建议追问。'
-            : index === 1
-              ? '围绕当前知识库中的重点数据表，生成可直接发起的分析问题。'
-              : '把复杂问题拆成可执行的问题入口，降低首次提问门槛。',
-        badge: index === 1 ? '最新' : '热门',
-      }));
+      .map(
+        (
+          item: NonNullable<(typeof sampleQuestions)[number]>,
+          index: number,
+        ) => ({
+          question: item.question,
+          description:
+            index === 0
+              ? '快速查看关键指标、变化原因与接下来的建议追问。'
+              : index === 1
+                ? '围绕当前知识库中的重点数据表，生成可直接发起的分析问题。'
+                : '把复杂问题拆成可执行的问题入口，降低首次提问门槛。',
+          badge: index === 1 ? '最新' : '热门',
+        }),
+      );
   }, [matchedDemoKnowledge, sampleQuestions]);
 
   const recommendationSourceHint = useMemo(() => {
@@ -1094,26 +1137,6 @@ export default function Home() {
           Boolean(item),
       );
   }, [currentKnowledgeBases, selectedKnowledgeBaseIds]);
-  const askRuntimeSelector = useMemo(
-    () =>
-      resolveAskRuntimeSelector({
-        currentSelector: runtimeScopeNavigation.selector,
-        selectedKnowledgeBaseIds,
-        workspaceId: runtimeSelectorState?.currentWorkspace?.id,
-      }),
-    [
-      runtimeScopeNavigation.selector,
-      runtimeSelectorState?.currentWorkspace?.id,
-      selectedKnowledgeBaseIds,
-    ],
-  );
-  const askRuntimeMutationContext = useMemo(
-    () => ({
-      skipRuntimeScopeHeaders: true,
-      headers: buildRuntimeScopeHeaders(askRuntimeSelector),
-    }),
-    [askRuntimeSelector],
-  );
   const filteredKnowledgeBases = useMemo(() => {
     const query = knowledgeKeyword.trim().toLowerCase();
     const knowledgeBases = currentKnowledgeBases;
@@ -1348,41 +1371,37 @@ export default function Home() {
 
       askPrompt.onStopPolling();
 
-      const askingTaskResponse = await createAskingTask({
-        variables: {
-          data: {
-            question: normalizedQuestion,
-            ...(selectedKnowledgeBaseIds.length > 0
-              ? { knowledgeBaseIds: selectedKnowledgeBaseIds }
-              : {}),
-            ...(selectedSkillIds.length > 0 ? { selectedSkillIds } : {}),
-          },
-        },
-        context: askRuntimeMutationContext,
+      const askingTaskResponse = await createAskingTask(askRuntimeSelector, {
+        question: normalizedQuestion,
+        ...(selectedKnowledgeBaseIds.length > 0
+          ? { knowledgeBaseIds: selectedKnowledgeBaseIds }
+          : {}),
+        ...(selectedSkillIds.length > 0 ? { selectedSkillIds } : {}),
       });
-      const taskId = askingTaskResponse.data?.createAskingTask?.id;
+      const taskId = askingTaskResponse.id;
 
       if (!taskId) {
         throw new Error('创建问答任务失败');
       }
 
-      const response = await createThread({
-        variables: {
-          data: {
-            question: normalizedQuestion,
-            taskId,
-            ...(selectedKnowledgeBaseIds.length > 0
-              ? { knowledgeBaseIds: selectedKnowledgeBaseIds }
-              : {}),
-            ...(selectedSkillIds.length > 0 ? { selectedSkillIds } : {}),
-          },
-        },
-        context: askRuntimeMutationContext,
+      const response = await createThread(askRuntimeSelector, {
+        question: normalizedQuestion,
+        taskId,
+        ...(selectedKnowledgeBaseIds.length > 0
+          ? { knowledgeBaseIds: selectedKnowledgeBaseIds }
+          : {}),
+        ...(selectedSkillIds.length > 0 ? { selectedSkillIds } : {}),
       });
-      const threadId = response.data?.createThread?.id;
+      const threadId = response.id;
 
       if (!threadId) {
         throw new Error('创建对话失败');
+      }
+
+      if (persistentShellEmbedded) {
+        void refetchPersistentShellHistory();
+      } else {
+        void homeSidebar.refetch();
       }
 
       await runtimeScopeNavigation.push(
@@ -1404,21 +1423,21 @@ export default function Home() {
   const onCreateResponse = async (payload: CreateThreadInput) => {
     try {
       askPrompt.onStopPolling();
-      const response = await createThread({
-        variables: {
-          data: {
-            ...payload,
-            ...(selectedKnowledgeBaseIds.length > 0
-              ? { knowledgeBaseIds: selectedKnowledgeBaseIds }
-              : {}),
-            ...(selectedSkillIds.length > 0 ? { selectedSkillIds } : {}),
-          },
-        },
-        context: askRuntimeMutationContext,
+      const response = await createThread(askRuntimeSelector, {
+        ...payload,
+        ...(selectedKnowledgeBaseIds.length > 0
+          ? { knowledgeBaseIds: selectedKnowledgeBaseIds }
+          : {}),
+        ...(selectedSkillIds.length > 0 ? { selectedSkillIds } : {}),
       });
-      const threadId = response.data?.createThread?.id;
+      const threadId = response.id;
       if (!threadId) {
         throw new Error('创建对话失败');
+      }
+      if (persistentShellEmbedded) {
+        void refetchPersistentShellHistory();
+      } else {
+        void homeSidebar.refetch();
       }
       await runtimeScopeNavigation.push(
         `${Path.Home}/${threadId}`,

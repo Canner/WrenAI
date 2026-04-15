@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Alert, Button, Form, Modal, Typography, message } from 'antd';
-import { ApolloError } from '@apollo/client';
 import InfoCircleOutlined from '@ant-design/icons/InfoCircleOutlined';
 import { ERROR_TEXTS } from '@/utils/error';
 import { ModalAction } from '@/hooks/useModalAction';
 import SQLEditor from '@/components/editor/SQLEditor';
-import { parseGraphQLError } from '@/utils/errorHandler';
+import { isApolloLikeError, parseGraphQLError } from '@/utils/errorHandler';
 import ErrorCollapse from '@/components/ErrorCollapse';
 import PreviewData from '@/components/dataPreview/PreviewData';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
@@ -60,7 +59,7 @@ export default function AdjustSQLModal(props: Props) {
   };
 
   const handleError = (error: unknown) => {
-    if (error instanceof ApolloError) {
+    if (isApolloLikeError(error)) {
       const graphQLError = parseGraphQLError(error);
       setError({
         message: graphQLError?.message || error.message,

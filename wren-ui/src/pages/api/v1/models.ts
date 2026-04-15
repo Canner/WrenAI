@@ -1,5 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
+import type { CreateModelData } from '@server/models/model';
+import { ModelResolver } from '@server/resolvers/modelResolver';
 import { ApiType } from '@server/repositories/apiHistoryRepository';
 import {
   ApiError,
@@ -8,9 +10,11 @@ import {
   deriveRuntimeExecutionContextFromRequest,
 } from '@/apollo/server/utils/apiUtils';
 import { getLogger } from '@server/utils';
+import { buildResolverContextFromRequest } from './resolverContext';
 
 const logger = getLogger('API_MODELS');
 logger.level = 'debug';
+const modelResolver = new ModelResolver();
 
 const { runtimeScopeResolver } = components;
 
@@ -22,9 +26,39 @@ export default async function handler(
   let runtimeScope;
 
   try {
-    // Only allow GET method
-    if (req.method !== 'GET') {
+    if (req.method !== 'GET' && req.method !== 'POST') {
       throw new ApiError('Method not allowed', 405);
+    }
+
+    if (req.method === 'POST') {
+      const fields = Array.isArray(req.body?.fields) ? req.body.fields : [];
+      const sourceTableName = String(req.body?.sourceTableName || '').trim();
+      const primaryKey = String(req.body?.primaryKey || '').trim();
+      if (!sourceTableName || fields.length === 0 || !primaryKey) {
+        throw new ApiError('Model payload is invalid', 400);
+      }
+
+      runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
+      const ctx = await buildResolverContextFromRequest({ req, runtimeScope });
+      const data: CreateModelData = {
+        sourceTableName,
+        fields: fields as [string],
+        primaryKey,
+      };
+      const model = await modelResolver.createModel(null, { data }, ctx);
+
+      await respondWithSimple({
+        res,
+        statusCode: 201,
+        responsePayload: model,
+        runtimeScope,
+        apiType: ApiType.GET_MODELS,
+        startTime,
+        requestPayload:
+          req.body && typeof req.body === 'object' ? req.body : {},
+        headers: req.headers as Record<string, string>,
+      });
+      return;
     }
 
     const derivedContext = await deriveRuntimeExecutionContextFromRequest({

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Divider } from 'antd';
 import styled from 'styled-components';
 import { nextTick } from '@/utils/time';
-import usePromptThreadStore from './store';
+import { usePromptThreadDataStore } from './store';
 import AnswerResult from './AnswerResult';
 import { makeIterable, IterableComponent } from '@/utils/iteration';
 import { getIsFinished } from '@/hooks/useAskPrompt';
@@ -109,8 +109,7 @@ export default function PromptThread() {
   const divRef = useRef<HTMLDivElement>(null);
   const initialBlockedPreviewResponseIdRef = useRef<number | null>(null);
   const previousResponsesLengthRef = useRef(0);
-  const store = usePromptThreadStore();
-  const { data } = store;
+  const { data } = usePromptThreadDataStore();
   const [visibleResponseCount, setVisibleResponseCount] = useState(
     THREAD_INITIAL_VISIBLE_RESPONSE_COUNT,
   );

@@ -14,11 +14,7 @@ const redirectRoute = {
   [OnboardingStatus.WITH_SAMPLE_DATASET]: Path.Modeling,
 };
 
-const useOnboardingStatusState = ({
-  skip,
-}: {
-  skip: boolean;
-}) => {
+const useOnboardingStatusState = ({ skip }: { skip: boolean }) => {
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const [onboardingStatus, setOnboardingStatus] = useState<
     OnboardingStatus | undefined
@@ -36,7 +32,9 @@ const useOnboardingStatusState = ({
 
     setLoading(true);
     try {
-      const payload = await fetchOnboardingStatus(runtimeScopeNavigation.selector);
+      const payload = await fetchOnboardingStatus(
+        runtimeScopeNavigation.selector,
+      );
       const status = payload.status || undefined;
       setOnboardingStatus(status);
       setError(null);
@@ -126,7 +124,12 @@ export const useWithOnboarding = () => {
         return;
       }
     }
-  }, [authSession.authenticated, onboardingStatus, router.pathname, runtimeScopeNavigation]);
+  }, [
+    authSession.authenticated,
+    onboardingStatus,
+    router.pathname,
+    runtimeScopeNavigation,
+  ]);
 
   return {
     loading: authSession.loading || loading,

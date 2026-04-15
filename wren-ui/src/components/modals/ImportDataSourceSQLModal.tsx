@@ -1,14 +1,14 @@
-import { useMemo } from 'react';
+import { useState } from 'react';
 import { Modal, Form, Alert } from 'antd';
 import { ModalAction } from '@/hooks/useModalAction';
 import { getDataSourceImage, getDataSourceName } from '@/utils/dataSourceType';
 import { DATA_SOURCES } from '@/utils/enum';
 import { ERROR_TEXTS } from '@/utils/error';
-import { handleFormSubmitError, parseGraphQLError } from '@/utils/errorHandler';
 import SQLEditor from '@/components/editor/SQLEditor';
 import ErrorCollapse from '@/components/ErrorCollapse';
-import { useModelSubstituteMutation } from '@/apollo/client/graphql/sql.generated';
 import { DataSource, DataSourceName } from '@/apollo/client/graphql/__types__';
+import { substituteDialectSql } from '@/utils/modelingRest';
+import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 
 type Props = ModalAction<{ dataSource: DATA_SOURCES }>;
 
@@ -36,54 +36,56 @@ export const isSupportSubstitute = (dataSource?: DataSource) => {
 
 export default function ImportDataSourceSQLModal(props: Props) {
   const { visible, defaultValue, onSubmit, onClose } = props;
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const selectedDataSource = defaultValue?.dataSource;
   const name = selectedDataSource
     ? getDataSourceName(selectedDataSource) || '数据源'
     : '数据源';
-
-  // Handle errors via try/catch blocks rather than onError callback
-  const [substituteDialectSQL, modelSubstitudeResult] =
-    useModelSubstituteMutation();
-
-  const error = useMemo(() => {
-    if (!modelSubstitudeResult.error) {
-      return null;
-    }
-
-    const parsedError = parseGraphQLError(modelSubstitudeResult.error);
-    return {
-      message: parsedError?.message || modelSubstitudeResult.error.message,
-      shortMessage: `${name} SQL 语法无效`,
-      code: parsedError?.code || '',
-      stacktrace: parsedError?.stacktrace,
-    };
-  }, [modelSubstitudeResult.error, name]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<{
+    message: string;
+    shortMessage: string;
+  } | null>(null);
 
   const [form] = Form.useForm();
 
   const reset = () => {
     form.resetFields();
-    modelSubstitudeResult.reset();
+    setError(null);
   };
 
   const submit = async () => {
-    form
-      .validateFields()
-      .then(async (values) => {
-        const response = await substituteDialectSQL({
-          variables: { data: { sql: values.dialectSql } },
-        });
-        if (onSubmit && response.data?.modelSubstitute) {
-          await onSubmit(response.data.modelSubstitute);
-        }
-        onClose();
-      })
-      .catch((error) => {
-        handleFormSubmitError(error, `${name} SQL 导入失败，请稍后重试。`);
+    setError(null);
+    try {
+      const values = await form.validateFields();
+      setLoading(true);
+      const substitutedSql = await substituteDialectSql(
+        runtimeScopeNavigation.selector,
+        values.dialectSql,
+      );
+      if (onSubmit) {
+        await onSubmit(substitutedSql);
+      }
+      onClose();
+    } catch (nextError) {
+      if (
+        nextError &&
+        typeof nextError === 'object' &&
+        'errorFields' in nextError
+      ) {
+        return;
+      }
+      setError({
+        message:
+          nextError instanceof Error
+            ? nextError.message
+            : `${name} SQL 导入失败，请稍后重试。`,
+        shortMessage: `${name} SQL 语法无效`,
       });
+    } finally {
+      setLoading(false);
+    }
   };
-
-  const loading = modelSubstitudeResult.loading;
 
   return (
     <Modal

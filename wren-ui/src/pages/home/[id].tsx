@@ -155,13 +155,13 @@ const reportThreadError = (_error: unknown, fallbackMessage: string) => {
 };
 
 const ThreadScene = styled.div`
-  width: min(100%, 880px);
+  width: min(100%, 920px);
   margin: 0 auto;
   display: flex;
   flex-direction: column;
   min-height: calc(100vh - 72px);
-  gap: 12px;
-  padding: 4px 0 20px;
+  gap: 16px;
+  padding: 6px 0 24px;
 `;
 
 const ConversationPane = styled.section`
@@ -905,7 +905,7 @@ export default function HomeThread() {
     ],
   );
 
-  const providerValue = useMemo<IPromptThreadStore | null>(() => {
+  const providerDataValue = useMemo(() => {
     if (!thread) {
       return null;
     }
@@ -916,6 +916,11 @@ export default function HomeThread() {
         (recommendedQuestions as IPromptThreadStore['recommendedQuestions']) ||
         null,
       showRecommendedQuestions,
+    };
+  }, [recommendedQuestions, showRecommendedQuestions, thread]);
+
+  const providerPreparationValue = useMemo(
+    () => ({
       preparation: {
         askingStreamTask: askPrompt.data?.askingStreamTask,
         onStopAskingTask: askPrompt.onStop,
@@ -925,6 +930,20 @@ export default function HomeThread() {
         onFixSQLStatement,
         fixStatementLoading: threadResponseUpdating,
       },
+    }),
+    [
+      adjustAnswer.onReRun,
+      adjustAnswer.onStop,
+      askPrompt.data?.askingStreamTask,
+      askPrompt.onReRun,
+      askPrompt.onStop,
+      onFixSQLStatement,
+      threadResponseUpdating,
+    ],
+  );
+
+  const providerActionsValue = useMemo(
+    () => ({
       onOpenSaveAsViewModal: saveAsViewModal.openModal,
       onSelectRecommendedQuestion: onCreateResponse,
       onGenerateThreadRecommendedQuestions,
@@ -934,28 +953,19 @@ export default function HomeThread() {
       onOpenSaveToKnowledgeModal: questionSqlPairModal.openModal,
       onOpenAdjustReasoningStepsModal: adjustReasoningStepsModal.openModal,
       onOpenAdjustSQLModal: adjustSqlModal.openModal,
-    };
-  }, [
-    adjustAnswer.onReRun,
-    adjustAnswer.onStop,
-    askPrompt.data?.askingStreamTask,
-    askPrompt.onReRun,
-    askPrompt.onStop,
-    onAdjustThreadResponseChart,
-    onCreateResponse,
-    onFixSQLStatement,
-    onGenerateThreadRecommendedQuestions,
-    onGenerateThreadResponseAnswer,
-    onGenerateThreadResponseChart,
-    questionSqlPairModal.openModal,
-    recommendedQuestions,
-    saveAsViewModal.openModal,
-    showRecommendedQuestions,
-    thread,
-    threadResponseUpdating,
-    adjustReasoningStepsModal.openModal,
-    adjustSqlModal.openModal,
-  ]);
+    }),
+    [
+      onAdjustThreadResponseChart,
+      onCreateResponse,
+      onGenerateThreadRecommendedQuestions,
+      onGenerateThreadResponseAnswer,
+      onGenerateThreadResponseChart,
+      questionSqlPairModal.openModal,
+      saveAsViewModal.openModal,
+      adjustReasoningStepsModal.openModal,
+      adjustSqlModal.openModal,
+    ],
+  );
 
   const latestResponse = responses[responses.length - 1] || null;
   const shouldForceReferencePreview = useMemo(() => {
@@ -975,17 +985,19 @@ export default function HomeThread() {
       latestResponse?.question ||
       `对话 #${threadId}`;
   const threadPageLoading =
-    runtimeScopePage.guarding || threadLoading || !providerValue;
+    runtimeScopePage.guarding || threadLoading || !providerDataValue;
 
-  if (!providerValue) {
+  if (!providerDataValue) {
     return (
       <ConsoleShellLayout
+        activeNav="home"
         activeHistoryId={threadId ? String(threadId) : null}
         title={primaryQuestion}
         hideHeader
         contentBorderless
         loading={threadPageLoading}
         navItems={buildNovaShellNavItems({
+          activeKey: 'home',
           onNavigate: runtimeScopeNavigation.pushWorkspace,
         })}
       />
@@ -993,14 +1005,20 @@ export default function HomeThread() {
   }
 
   return (
-    <PromptThreadProvider value={providerValue}>
+    <PromptThreadProvider
+      dataValue={providerDataValue}
+      preparationValue={providerPreparationValue}
+      actionsValue={providerActionsValue}
+    >
       <ConsoleShellLayout
+        activeNav="home"
         activeHistoryId={threadId ? String(threadId) : null}
         title={primaryQuestion}
         hideHeader
         contentBorderless
         loading={threadPageLoading}
         navItems={buildNovaShellNavItems({
+          activeKey: 'home',
           onNavigate: runtimeScopeNavigation.pushWorkspace,
         })}
       >
@@ -1133,24 +1151,26 @@ function ReferenceConversationPreview({
       <InlinePreviewCard>
         <InlineCardMeta>
           <Text strong>数据预览</Text>
-          <Text type="secondary">每个供应商单个产品成本趋势是什么？</Text>
+          <Text type="secondary">
+            会基于当前线程的真实运行时上下文返回预览结果
+          </Text>
         </InlineCardMeta>
         <SubtleBadge>示例结果</SubtleBadge>
       </InlinePreviewCard>
 
       <InsightBlock>
         <p>
-          本次分析使用了 <b>供应商信息</b>、<b>产品信息</b> 与
-          <b>生产成本记录</b> 来识别每个供应商在不同批次下的单件成本变化。
+          当前示例会根据问题 <b>「{question}」</b> 生成结构化结果、图表建议
+          与后续追问入口，这里展示的是线程页在实时模式下的占位参考态。
         </p>
         <p>
-          当前样例中，成本趋势以散点方式呈现：每个点代表一个 SKU
-          在某个批次下的单位成本， 方便快速识别高成本批次与波动异常。
+          当真实数据返回后，页面会展示对应的 SQL、数据预览、文本总结与图表；
+          如果图表正在生成中，这一段会被实际的进度、推理与结果卡片替换。
         </p>
         <ul style={{ marginBottom: 0, paddingLeft: 20 }}>
-          <li>供应商 1：SKU67 约 7.06，SKU52 约 9.17，SKU56 约 12.84</li>
-          <li>供应商 2：SKU99 约 38.07，SKU9 约 47.96，SKU45 约 66.31</li>
-          <li>供应商 3：不同 SKU 分布更分散，建议继续按批次筛选追问</li>
+          <li>先展示与当前线程绑定的知识库和运行时上下文</li>
+          <li>再依次呈现可解释的分析过程、数据预览与最终结论</li>
+          <li>最后给出可继续点击的推荐追问，帮助快速深入分析</li>
         </ul>
       </InsightBlock>
 

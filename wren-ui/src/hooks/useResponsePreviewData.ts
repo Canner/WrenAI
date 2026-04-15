@@ -1,27 +1,25 @@
-import { ApolloError, useApolloClient } from '@apollo/client';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
 import {
-  PreviewDataDocument,
-  type PreviewDataMutation,
-  type PreviewDataMutationVariables,
-} from '@/apollo/client/graphql/home.generated';
+  getThreadResponsePreviewData,
+  type PreviewDataPayload,
+} from '@/utils/homeRest';
 
-type PreviewDataPayload = PreviewDataMutation['previewData'];
 type PreviewDataEnvelope = {
   previewData?: PreviewDataPayload;
 };
 
 type CacheEntry = {
   data?: PreviewDataPayload;
-  error?: ApolloError;
+  error?: Error;
   loading: boolean;
-  promise?: Promise<PreviewDataPayload>;
+  promise?: Promise<PreviewDataPayload | undefined>;
   listeners: Set<() => void>;
   updatedAt?: number;
   lastAccessedAt: number;
 };
 
-const cache = new Map<number, CacheEntry>();
+const cache = new Map<string, CacheEntry>();
 const PREVIEW_CACHE_TTL_MS = 5 * 60 * 1000;
 const MAX_PREVIEW_CACHE_ENTRIES = 50;
 
@@ -36,7 +34,7 @@ const pruneCache = () => {
   }
 
   while (cache.size > MAX_PREVIEW_CACHE_ENTRIES) {
-    let oldestKey: number | null = null;
+    let oldestKey: string | null = null;
     let oldestAccess = Number.POSITIVE_INFINITY;
     for (const [key, entry] of cache.entries()) {
       if (entry.loading || entry.promise) {
@@ -47,50 +45,69 @@ const pruneCache = () => {
         oldestKey = key;
       }
     }
-    if (oldestKey == null) {
+    if (!oldestKey) {
       break;
     }
     cache.delete(oldestKey);
   }
 };
 
-const getOrCreateEntry = (responseId: number): CacheEntry => {
+const getCacheKey = (workspaceId: string | undefined, responseId: number) =>
+  `${workspaceId || 'global'}:${responseId}`;
+
+const getOrCreateEntry = (cacheKey: string): CacheEntry => {
   pruneCache();
-  const existing = cache.get(responseId);
+  const existing = cache.get(cacheKey);
   if (existing) {
     existing.lastAccessedAt = Date.now();
     return existing;
   }
+
   const next: CacheEntry = {
     loading: false,
     listeners: new Set(),
     lastAccessedAt: Date.now(),
   };
-  cache.set(responseId, next);
+  cache.set(cacheKey, next);
   return next;
 };
 
-const emit = (responseId: number) => {
-  const entry = cache.get(responseId);
+const emit = (cacheKey: string) => {
+  const entry = cache.get(cacheKey);
   if (!entry) return;
   entry.listeners.forEach((listener) => listener());
 };
 
-export const clearResponsePreviewDataCache = (responseId?: number) => {
+export const clearResponsePreviewDataCache = (
+  responseId?: number,
+  workspaceId?: string,
+) => {
   if (typeof responseId === 'number') {
-    cache.delete(responseId);
+    if (workspaceId) {
+      cache.delete(getCacheKey(workspaceId, responseId));
+      return;
+    }
+
+    Array.from(cache.keys())
+      .filter((key) => key.endsWith(`:${responseId}`))
+      .forEach((key) => cache.delete(key));
     return;
   }
+
   cache.clear();
 };
 
 export default function useResponsePreviewData(responseId?: number | null) {
-  const client = useApolloClient();
-  const cacheKey = typeof responseId === 'number' ? responseId : null;
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
+  const workspaceId = runtimeScopeNavigation.selector.workspaceId;
+  const cacheKey =
+    typeof responseId === 'number'
+      ? getCacheKey(workspaceId, responseId)
+      : null;
   const [, forceUpdate] = useState(0);
 
   useEffect(() => {
-    if (cacheKey == null) return;
+    if (!cacheKey) return;
     const entry = getOrCreateEntry(cacheKey);
     const listener = () => forceUpdate((value) => value + 1);
     entry.listeners.add(listener);
@@ -106,9 +123,10 @@ export default function useResponsePreviewData(responseId?: number | null) {
 
   const runFetch = useCallback(
     async (force = false) => {
-      if (cacheKey == null) {
+      if (cacheKey == null || responseId == null) {
         return undefined;
       }
+
       const target = getOrCreateEntry(cacheKey);
       if (!force && target.data && !isExpired(target)) {
         return target.data;
@@ -124,16 +142,12 @@ export default function useResponsePreviewData(responseId?: number | null) {
       target.error = undefined;
       emit(cacheKey);
 
-      const mutationPromise = client
-        .mutate<PreviewDataMutation, PreviewDataMutationVariables>({
-          mutation: PreviewDataDocument,
-          variables: {
-            where: { responseId: cacheKey },
-          },
-          fetchPolicy: force ? 'no-cache' : 'network-only',
-        })
-        .then((result) => {
-          target.data = result.data?.previewData;
+      const request = getThreadResponsePreviewData(
+        runtimeScopeNavigation.selector,
+        responseId,
+      )
+        .then((payload) => {
+          target.data = payload;
           target.loading = false;
           target.promise = undefined;
           target.updatedAt = Date.now();
@@ -144,9 +158,9 @@ export default function useResponsePreviewData(responseId?: number | null) {
         })
         .catch((error) => {
           target.error =
-            error instanceof ApolloError
+            error instanceof Error
               ? error
-              : new ApolloError({ errorMessage: String(error) });
+              : new Error(String(error || '加载预览数据失败，请稍后重试。'));
           target.loading = false;
           target.promise = undefined;
           target.lastAccessedAt = Date.now();
@@ -154,10 +168,10 @@ export default function useResponsePreviewData(responseId?: number | null) {
           throw target.error;
         });
 
-      target.promise = mutationPromise;
-      return mutationPromise;
+      target.promise = request;
+      return request;
     },
-    [cacheKey, client],
+    [cacheKey, responseId, runtimeScopeNavigation.selector],
   );
 
   return {

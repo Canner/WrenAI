@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { message } from 'antd';
 import { DataNode } from 'antd/es/tree';
 import { DiagramModel } from '@/utils/data';
@@ -20,18 +20,19 @@ import {
   SchemaChangeType,
 } from '@/apollo/client/graphql/__types__';
 import {
-  useResolveSchemaChangeMutation,
-  useSchemaChangeQuery,
-  useTriggerDataSourceDetectionMutation,
-} from '@/apollo/client/graphql/dataSource.generated';
-import { DIAGRAM } from '@/apollo/client/graphql/diagram';
+  fetchSchemaChanges,
+  resolveSchemaChange,
+  triggerSchemaChangeDetection,
+} from '@/utils/modelingRest';
 import { getRelativeTime } from '@/utils/time';
+import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 
 interface Props {
   [key: string]: any;
   models: DiagramModel[];
   onOpenModelDrawer: () => void;
   readOnly?: boolean;
+  onRefresh?: () => Promise<unknown>;
 }
 
 const getHasSchemaChange = (schemaChange?: SchemaChange | null) => {
@@ -43,57 +44,87 @@ const getHasSchemaChange = (schemaChange?: SchemaChange | null) => {
 };
 
 export default function ModelTree(props: Props) {
-  const { onOpenModelDrawer, models, readOnly = false } = props;
+  const { onOpenModelDrawer, models, readOnly = false, onRefresh } = props;
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
 
   const schemaChangeModal = useModalAction();
-  const [triggerDataSourceDetection, { loading: isDetecting }] =
-    useTriggerDataSourceDetectionMutation({
-      onError: (error) => {
-        message.error(error.message || '检测结构变更失败，请稍后重试。');
-      },
-      onCompleted: async (data) => {
-        if (data.triggerDataSourceDetection) {
-          message.warning('检测到结构变更。');
-        } else {
-          message.success('当前没有结构变更。');
-        }
-        await refetchSchemaChange();
-      },
-    });
-  const [resolveSchemaChange, { loading: isResolving }] =
-    useResolveSchemaChangeMutation({
-      onError: (error) => {
-        message.error(error.message || '修复结构变更失败，请稍后重试。');
-      },
-      onCompleted: async (_, options) => {
-        const type = options?.variables?.where?.type;
-        if (type === SchemaChangeType.DELETED_TABLES) {
-          message.success('已完成源表删除影响修复。');
-        } else if (type === SchemaChangeType.DELETED_COLUMNS) {
-          message.success('已完成源字段删除影响修复。');
-        }
+  const [schemaChangeData, setSchemaChangeData] = useState<SchemaChange | null>(
+    null,
+  );
+  const [isDetecting, setIsDetecting] = useState(false);
+  const [isResolving, setIsResolving] = useState(false);
+  const refetchSchemaChange = useCallback(async () => {
+    const nextSchemaChange = await fetchSchemaChanges(
+      runtimeScopeNavigation.selector,
+    );
+    setSchemaChangeData(nextSchemaChange);
+    return nextSchemaChange;
+  }, [runtimeScopeNavigation.selector]);
 
-        const { data } = await refetchSchemaChange();
-        // if all schema changes are resolved, close the modal
-        if (!getHasSchemaChange(data.schemaChange)) {
-          schemaChangeModal.closeModal();
-        }
-      },
-      refetchQueries: [{ query: DIAGRAM }],
+  useEffect(() => {
+    void refetchSchemaChange().catch((error) => {
+      message.error(
+        error instanceof Error
+          ? error.message
+          : '加载结构变更失败，请稍后重试。',
+      );
     });
-  const { data: schemaChangeData, refetch: refetchSchemaChange } =
-    useSchemaChangeQuery({
-      fetchPolicy: 'cache-and-network',
-    });
+  }, [refetchSchemaChange]);
+
   const hasSchemaChange = useMemo(
-    () => getHasSchemaChange(schemaChangeData?.schemaChange),
+    () => getHasSchemaChange(schemaChangeData),
     [schemaChangeData],
   );
   const onOpenSchemaChange = () => {
     schemaChangeModal.openModal();
   };
-  const onResolveSchemaChange = (type: SchemaChangeType) => {
-    resolveSchemaChange({ variables: { where: { type } } });
+  const onResolveSchemaChange = async (type: SchemaChangeType) => {
+    setIsResolving(true);
+    try {
+      await resolveSchemaChange(runtimeScopeNavigation.selector, { type });
+      if (type === SchemaChangeType.DELETED_TABLES) {
+        message.success('已完成源表删除影响修复。');
+      } else if (type === SchemaChangeType.DELETED_COLUMNS) {
+        message.success('已完成源字段删除影响修复。');
+      }
+
+      const nextSchemaChange = await refetchSchemaChange();
+      await onRefresh?.();
+      if (!getHasSchemaChange(nextSchemaChange)) {
+        schemaChangeModal.closeModal();
+      }
+    } catch (error) {
+      message.error(
+        error instanceof Error
+          ? error.message
+          : '修复结构变更失败，请稍后重试。',
+      );
+    } finally {
+      setIsResolving(false);
+    }
+  };
+
+  const onTriggerSchemaChangeDetection = async () => {
+    setIsDetecting(true);
+    try {
+      const hasChanges = await triggerSchemaChangeDetection(
+        runtimeScopeNavigation.selector,
+      );
+      if (hasChanges) {
+        message.warning('检测到结构变更。');
+      } else {
+        message.success('当前没有结构变更。');
+      }
+      await refetchSchemaChange();
+    } catch (error) {
+      message.error(
+        error instanceof Error
+          ? error.message
+          : '检测结构变更失败，请稍后重试。',
+      );
+    } finally {
+      setIsDetecting(false);
+    }
   };
 
   const getModelGroupNode = createTreeGroupNode({
@@ -107,13 +138,13 @@ export default function ModelTree(props: Props) {
           <ReloadOutlined
             spin={isDetecting}
             title={
-              schemaChangeData?.schemaChange.lastSchemaChangeTime
-                ? `上次检测：${getRelativeTime(schemaChangeData?.schemaChange.lastSchemaChangeTime)}`
+              schemaChangeData?.lastSchemaChangeTime
+                ? `上次检测：${getRelativeTime(schemaChangeData.lastSchemaChangeTime)}`
                 : ''
             }
             onClick={() => {
               if (!readOnly) {
-                triggerDataSourceDetection();
+                void onTriggerSchemaChangeDetection();
               }
             }}
           />
@@ -181,7 +212,7 @@ export default function ModelTree(props: Props) {
       <StyledSidebarTree {...props} treeData={tree} />
       <SchemaChangeModal
         {...schemaChangeModal.state}
-        defaultValue={schemaChangeData?.schemaChange}
+        defaultValue={schemaChangeData || undefined}
         payload={{ onResolveSchemaChange, isResolving }}
         onClose={schemaChangeModal.closeModal}
       />

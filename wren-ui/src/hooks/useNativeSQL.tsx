@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { useGetSettingsQuery } from '@/apollo/client/graphql/settings.generated';
-import { useGetNativeSqlLazyQuery } from '@/apollo/client/graphql/home.generated';
+import { useCallback, useEffect, useState } from 'react';
 import { DataSourceName } from '@/apollo/client/graphql/__types__';
+import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
+import { fetchSettings } from '@/utils/settingsRest';
+import { getThreadResponseNativeSql } from '@/utils/homeRest';
 
 export interface NativeSQLResult {
   data: string;
@@ -14,10 +15,37 @@ export interface NativeSQLResult {
 
 // we assume that not having a sample dataset means supporting native SQL
 function useNativeSQLInfo() {
-  const { data: settingsQueryResult } = useGetSettingsQuery();
-  const settings = settingsQueryResult?.settings;
-  const dataSourceType = settings?.dataSource.type;
-  const sampleDataset = settings?.dataSource.sampleDataset;
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
+  const [dataSourceType, setDataSourceType] = useState<DataSourceName>();
+  const [sampleDataset, setSampleDataset] = useState<string | null | undefined>(
+    undefined,
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void fetchSettings(runtimeScopeNavigation.selector)
+      .then((settings) => {
+        if (cancelled) {
+          return;
+        }
+
+        setDataSourceType(settings?.dataSource?.type || undefined);
+        setSampleDataset(settings?.dataSource?.sampleDataset || null);
+      })
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+
+        setDataSourceType(undefined);
+        setSampleDataset(undefined);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [runtimeScopeNavigation.selector]);
 
   return {
     hasNativeSQL: !Boolean(sampleDataset),
@@ -27,21 +55,45 @@ function useNativeSQLInfo() {
 
 export default function useNativeSQL() {
   const nativeSQLInfo = useNativeSQLInfo();
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
 
   const [nativeSQLMode, setNativeSQLMode] = useState<boolean>(false);
+  const [data, setData] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const [fetchNativeSQL, { data, loading }] = useGetNativeSqlLazyQuery({
-    fetchPolicy: 'cache-and-network',
-  });
-
-  const nativeSQL = data?.nativeSql || '';
   const nativeSQLResult: NativeSQLResult = {
     ...nativeSQLInfo,
-    data: nativeSQL,
+    data,
     loading,
     nativeSQLMode,
     setNativeSQLMode,
   };
+
+  const fetchNativeSQL = useCallback(
+    async (options: { variables: { responseId: number } }) => {
+      const responseId = options?.variables?.responseId;
+      if (!Number.isFinite(responseId)) {
+        return { data: { nativeSql: '' } };
+      }
+
+      setLoading(true);
+      try {
+        const nativeSql = await getThreadResponseNativeSql(
+          runtimeScopeNavigation.selector,
+          responseId,
+        );
+        setData(nativeSql);
+        return {
+          data: {
+            nativeSql,
+          },
+        };
+      } finally {
+        setLoading(false);
+      }
+    },
+    [runtimeScopeNavigation.selector],
+  );
 
   return {
     fetchNativeSQL,

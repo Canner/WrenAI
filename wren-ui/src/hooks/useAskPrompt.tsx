@@ -2,30 +2,28 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cloneDeep, uniq } from 'lodash';
 import { message } from 'antd';
 import {
+  resolveClientRuntimeScopeSelector,
+  type ClientRuntimeScopeSelector,
+} from '@/apollo/client/runtimeScope';
+import {
   AdjustmentTask,
   AskingTask,
   AskingTaskStatus,
   AskingTaskType,
-  DetailedThread,
   RecommendedQuestionsTask,
   RecommendedQuestionsTaskStatus,
   ThreadResponse,
 } from '@/apollo/client/graphql/__types__';
 import {
-  useAskingTaskLazyQuery,
-  useCancelAskingTaskMutation,
-  useCreateAskingTaskMutation,
-  useRerunAskingTaskMutation,
-  useCreateInstantRecommendedQuestionsMutation,
-  useInstantRecommendedQuestionsLazyQuery,
-} from '@/apollo/client/graphql/home.generated';
+  cancelAskingTask as cancelAskingTaskRest,
+  createAskingTask as createAskingTaskRest,
+  createInstantRecommendedQuestions as createInstantRecommendedQuestionsRest,
+  getAskingTask as getAskingTaskRest,
+  getInstantRecommendedQuestions as getInstantRecommendedQuestionsRest,
+  rerunAskingTask as rerunAskingTaskRest,
+} from '@/utils/homeRest';
 import useAskingStreamTask from './useAskingStreamTask';
-import { THREAD } from '@/apollo/client/graphql/home';
-import { ApolloClient, NormalizedCacheObject } from '@apollo/client';
-import type {
-  ThreadDetailQueryData,
-  UpdateThreadDetailQuery,
-} from './useThreadDetail';
+import type { UpdateThreadDetailQuery } from './useThreadDetail';
 
 export interface AskPromptData {
   originalQuestion: string;
@@ -69,8 +67,6 @@ export const isRecommendedFinished = (
   [
     RecommendedQuestionsTaskStatus.FINISHED,
     RecommendedQuestionsTaskStatus.FAILED,
-
-    // for existing thread response & existing projects that are not executed to generate recommendation questions
     RecommendedQuestionsTaskStatus.NOT_STARTED,
   ].includes(status);
 
@@ -103,16 +99,14 @@ export const buildRecommendedQuestionHistory = (
   );
 
 const handleUpdateThreadCache = (
-  threadId: number,
   askingTask: NullableAskingTask,
-  client: ApolloClient<NormalizedCacheObject>,
   updateThreadQuery?: UpdateThreadDetailQuery,
 ) => {
-  if (!askingTask) return;
+  if (!askingTask || !updateThreadQuery) {
+    return;
+  }
 
-  const updater = (
-    existingData: ThreadDetailQueryData | null,
-  ): ThreadDetailQueryData | null => {
+  updateThreadQuery((existingData) => {
     if (!existingData?.thread) {
       return existingData;
     }
@@ -120,64 +114,40 @@ const handleUpdateThreadCache = (
     return {
       thread: {
         ...existingData.thread,
-        responses: existingData.thread.responses.map(
-          (response: DetailedThread['responses'][number]) => {
-            if (response.askingTask?.queryId === askingTask?.queryId) {
-              return {
-                ...response,
-                askingTask: cloneDeep(askingTask),
-              };
-            }
-            return response;
-          },
-        ),
+        responses: existingData.thread.responses.map((response) => {
+          if (response.askingTask?.queryId === askingTask.queryId) {
+            return {
+              ...response,
+              askingTask: cloneDeep(askingTask),
+            };
+          }
+          return response;
+        }),
       },
     };
-  };
-
-  const result = client.cache.readQuery<{ thread: DetailedThread }>({
-    query: THREAD,
-    variables: { threadId },
-  });
-
-  if (result?.thread) {
-    client.cache.updateQuery(
-      {
-        query: THREAD,
-        variables: { threadId },
-      },
-      (existingData) => {
-        return updater(existingData as ThreadDetailQueryData) as {
-          thread: DetailedThread;
-        } | null;
-      },
-    );
-  }
-
-  updateThreadQuery?.((existingData) => {
-    return updater(existingData) || existingData;
   });
 };
 
-const handleUpdateRerunAskingTaskCache = (
-  threadId: number,
-  threadResponseId: number,
-  askingTask: NullableAskingTask,
-  client: ApolloClient<NormalizedCacheObject>,
-  updateThreadQuery?: UpdateThreadDetailQuery,
-) => {
-  if (!askingTask) return;
+const handleUpdateRerunAskingTaskCache = ({
+  threadResponseId,
+  askingTask,
+  updateThreadQuery,
+}: {
+  threadResponseId: number;
+  askingTask: NullableAskingTask;
+  updateThreadQuery?: UpdateThreadDetailQuery;
+}) => {
+  if (!askingTask || !updateThreadQuery) {
+    return;
+  }
 
   const task = cloneDeep(askingTask);
-  // bypass understanding status to thread response
   if (task.status === AskingTaskStatus.UNDERSTANDING) {
     task.status = AskingTaskStatus.SEARCHING;
     task.type = AskingTaskType.TEXT_TO_SQL;
   }
 
-  const updater = (
-    existingData: ThreadDetailQueryData | null,
-  ): ThreadDetailQueryData | null => {
+  updateThreadQuery((existingData) => {
     if (!existingData?.thread) {
       return existingData;
     }
@@ -185,39 +155,14 @@ const handleUpdateRerunAskingTaskCache = (
     return {
       thread: {
         ...existingData.thread,
-        responses: existingData.thread.responses.map(
-          (response: DetailedThread['responses'][number]) => {
-            if (response.id === threadResponseId) {
-              return { ...response, askingTask: task };
-            }
-            return response;
-          },
-        ),
+        responses: existingData.thread.responses.map((response) => {
+          if (response.id === threadResponseId) {
+            return { ...response, askingTask: task };
+          }
+          return response;
+        }),
       },
     };
-  };
-
-  const result = client.cache.readQuery<{ thread: DetailedThread }>({
-    query: THREAD,
-    variables: { threadId },
-  });
-
-  if (result?.thread) {
-    client.cache.updateQuery(
-      {
-        query: THREAD,
-        variables: { threadId },
-      },
-      (existingData) => {
-        return updater(existingData as ThreadDetailQueryData) as {
-          thread: DetailedThread;
-        } | null;
-      },
-    );
-  }
-
-  updateThreadQuery?.((existingData) => {
-    return updater(existingData) || existingData;
   });
 };
 
@@ -226,122 +171,113 @@ export interface AskPromptSubmitDefaults {
   selectedSkillIds?: string[];
 }
 
+const resolveRuntimeScopeSelector = (selector?: ClientRuntimeScopeSelector) =>
+  selector || resolveClientRuntimeScopeSelector();
+
 export default function useAskPrompt(
   threadId?: number,
   submitDefaults?: AskPromptSubmitDefaults,
   updateThreadQuery?: UpdateThreadDetailQuery,
+  runtimeScopeSelector?: ClientRuntimeScopeSelector,
 ) {
   const [originalQuestion, setOriginalQuestion] = useState<string>('');
   const [threadQuestions, setThreadQuestions] = useState<string[]>([]);
+  const [askingTask, setAskingTask] = useState<AskingTask | null>(null);
+  const [recommendedQuestions, setRecommendedQuestions] =
+    useState<RecommendedQuestionsTask | null>(null);
+  const [askingTaskLoading, setAskingTaskLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const submitInFlightRef = useRef(false);
   const askingTaskPollingTimeoutRef = useRef<ReturnType<
     typeof setTimeout
   > | null>(null);
+  const askingTaskPollingRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const askingTaskPollingSessionRef = useRef(0);
   const instantRecommendPollingTimeoutRef = useRef<ReturnType<
     typeof setTimeout
   > | null>(null);
-  // Handle errors via try/catch blocks rather than onError callback
-  const [createAskingTask, createAskingTaskResult] =
-    useCreateAskingTaskMutation();
-  const [cancelAskingTask] = useCancelAskingTaskMutation({
-    onError: () => {
-      message.error('停止问答任务失败，请稍后重试');
-    },
-  });
-  const [rerunAskingTask] = useRerunAskingTaskMutation({
-    onError: () => {
-      message.error('重新执行问答任务失败，请稍后重试');
-    },
-  });
-  const [fetchAskingTask, askingTaskResult] = useAskingTaskLazyQuery({
-    pollInterval: ASKING_TASK_POLL_INTERVAL_MS,
-  });
+  const instantRecommendPollingRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+  const instantRecommendPollingSessionRef = useRef(0);
+  const lastTaskIdRef = useRef<string | null>(null);
   const [fetchAskingStreamTask, askingStreamTaskResult] = useAskingStreamTask();
-  const [createInstantRecommendedQuestions] =
-    useCreateInstantRecommendedQuestionsMutation({
-      onError: () => {
-        message.error('生成推荐问题失败，请稍后重试');
-      },
-    });
-  const [fetchInstantRecommendedQuestions, instantRecommendedQuestionsResult] =
-    useInstantRecommendedQuestionsLazyQuery({
-      pollInterval: INSTANT_RECOMMEND_POLL_INTERVAL_MS,
-    });
-  const stopAskingTaskPolling = askingTaskResult.stopPolling;
-  const stopInstantRecommendPolling =
-    instantRecommendedQuestionsResult.stopPolling;
 
-  const clearAskingTaskPollingTimeout = useCallback(() => {
+  const stopAskingTaskPolling = useCallback(() => {
+    askingTaskPollingSessionRef.current += 1;
+    if (askingTaskPollingRef.current) {
+      clearTimeout(askingTaskPollingRef.current);
+      askingTaskPollingRef.current = null;
+    }
     if (askingTaskPollingTimeoutRef.current) {
       clearTimeout(askingTaskPollingTimeoutRef.current);
       askingTaskPollingTimeoutRef.current = null;
     }
   }, []);
 
-  const clearInstantRecommendPollingTimeout = useCallback(() => {
+  const stopInstantRecommendPolling = useCallback(() => {
+    instantRecommendPollingSessionRef.current += 1;
+    if (instantRecommendPollingRef.current) {
+      clearTimeout(instantRecommendPollingRef.current);
+      instantRecommendPollingRef.current = null;
+    }
     if (instantRecommendPollingTimeoutRef.current) {
       clearTimeout(instantRecommendPollingTimeoutRef.current);
       instantRecommendPollingTimeoutRef.current = null;
     }
   }, []);
 
-  const scheduleAskingTaskPollingStop = useCallback(() => {
-    clearAskingTaskPollingTimeout();
-    askingTaskPollingTimeoutRef.current = setTimeout(() => {
-      stopAskingTaskPolling();
-      message.warning('问答任务轮询超时，请稍后重试');
-    }, ASKING_TASK_POLL_TIMEOUT_MS);
-  }, [clearAskingTaskPollingTimeout, stopAskingTaskPolling]);
-
-  const scheduleInstantRecommendPollingStop = useCallback(() => {
-    clearInstantRecommendPollingTimeout();
-    instantRecommendPollingTimeoutRef.current = setTimeout(() => {
-      stopInstantRecommendPolling();
-    }, INSTANT_RECOMMEND_POLL_TIMEOUT_MS);
-  }, [clearInstantRecommendPollingTimeout, stopInstantRecommendPolling]);
-
   const fetchAskingTaskWithGuard = useCallback(
     async (taskId: string) => {
-      clearAskingTaskPollingTimeout();
+      const selector = resolveRuntimeScopeSelector(runtimeScopeSelector);
       stopAskingTaskPolling();
-      const result = await fetchAskingTask({
-        variables: { taskId },
-      });
-      scheduleAskingTaskPollingStop();
-      return result;
+      const sessionId = askingTaskPollingSessionRef.current;
+      lastTaskIdRef.current = taskId;
+
+      askingTaskPollingTimeoutRef.current = setTimeout(() => {
+        if (askingTaskPollingSessionRef.current !== sessionId) {
+          return;
+        }
+        stopAskingTaskPolling();
+        message.warning('问答任务轮询超时，请稍后重试');
+      }, ASKING_TASK_POLL_TIMEOUT_MS);
+
+      const run = async (): Promise<AskingTask | null> => {
+        setAskingTaskLoading(true);
+        try {
+          const nextTask = await getAskingTaskRest(selector, taskId);
+          if (askingTaskPollingSessionRef.current !== sessionId) {
+            return nextTask;
+          }
+
+          setAskingTask(nextTask);
+          if (!getIsFinished(nextTask?.status)) {
+            askingTaskPollingRef.current = setTimeout(() => {
+              void run().catch((error) => {
+                message.error(
+                  error instanceof Error
+                    ? error.message
+                    : '加载问答任务失败，请稍后重试',
+                );
+              });
+            }, ASKING_TASK_POLL_INTERVAL_MS);
+          } else if (askingTaskPollingTimeoutRef.current) {
+            clearTimeout(askingTaskPollingTimeoutRef.current);
+            askingTaskPollingTimeoutRef.current = null;
+          }
+          return nextTask;
+        } finally {
+          if (askingTaskPollingSessionRef.current === sessionId) {
+            setAskingTaskLoading(false);
+          }
+        }
+      };
+
+      return run();
     },
-    [
-      clearAskingTaskPollingTimeout,
-      fetchAskingTask,
-      scheduleAskingTaskPollingStop,
-      stopAskingTaskPolling,
-    ],
-  );
-
-  const askingTask = useMemo(
-    () => askingTaskResult.data?.askingTask || null,
-    [askingTaskResult.data],
-  );
-  const askingTaskType = useMemo(() => askingTask?.type, [askingTask?.type]);
-  const askingStreamTask = askingStreamTaskResult.data;
-  const recommendedQuestions = useMemo(
-    () =>
-      instantRecommendedQuestionsResult.data?.instantRecommendedQuestions ||
-      null,
-    [instantRecommendedQuestionsResult.data],
-  );
-
-  const loading =
-    createAskingTaskResult.loading || askingStreamTaskResult.loading;
-
-  const data = useMemo(
-    () => ({
-      originalQuestion,
-      askingTask,
-      askingStreamTask,
-      recommendedQuestions,
-    }),
-    [originalQuestion, askingTask, askingStreamTask, recommendedQuestions],
+    [runtimeScopeSelector, stopAskingTaskPolling],
   );
 
   const startRecommendedQuestions = useCallback(async () => {
@@ -353,27 +289,57 @@ export default function useAskPrompt(
       return;
     }
 
+    const selector = resolveRuntimeScopeSelector(runtimeScopeSelector);
     try {
-      const response = await createInstantRecommendedQuestions({
-        variables: { data: { previousQuestions } },
+      const task = await createInstantRecommendedQuestionsRest(selector, {
+        previousQuestions,
       });
-      const taskId = response.data?.createInstantRecommendedQuestions?.id;
+      const taskId = task.id;
       if (!taskId) {
         return;
       }
 
-      fetchInstantRecommendedQuestions({
-        variables: { taskId },
-      });
-      scheduleInstantRecommendPollingStop();
+      stopInstantRecommendPolling();
+      const sessionId = instantRecommendPollingSessionRef.current;
+      instantRecommendPollingTimeoutRef.current = setTimeout(() => {
+        if (instantRecommendPollingSessionRef.current !== sessionId) {
+          return;
+        }
+        stopInstantRecommendPolling();
+      }, INSTANT_RECOMMEND_POLL_TIMEOUT_MS);
+
+      const run = async (): Promise<RecommendedQuestionsTask | null> => {
+        const payload = await getInstantRecommendedQuestionsRest(
+          selector,
+          taskId,
+        );
+        if (instantRecommendPollingSessionRef.current !== sessionId) {
+          return payload || null;
+        }
+
+        const nextQuestions = payload || null;
+        setRecommendedQuestions(nextQuestions);
+        if (!isRecommendedFinished(nextQuestions?.status)) {
+          instantRecommendPollingRef.current = setTimeout(() => {
+            void run().catch(() => {
+              message.error('生成推荐问题失败，请稍后重试');
+            });
+          }, INSTANT_RECOMMEND_POLL_INTERVAL_MS);
+        } else if (instantRecommendPollingTimeoutRef.current) {
+          clearTimeout(instantRecommendPollingTimeoutRef.current);
+          instantRecommendPollingTimeoutRef.current = null;
+        }
+        return nextQuestions;
+      };
+
+      await run();
     } catch (_error) {
       message.error('生成推荐问题失败，请稍后重试');
     }
   }, [
-    createInstantRecommendedQuestions,
-    fetchInstantRecommendedQuestions,
     originalQuestion,
-    scheduleInstantRecommendPollingStop,
+    runtimeScopeSelector,
+    stopInstantRecommendPolling,
     threadQuestions,
   ]);
 
@@ -381,7 +347,7 @@ export default function useAskPrompt(
     (task: NullableAskingTask) => {
       if (
         !task ||
-        askingStreamTask ||
+        askingStreamTaskResult.data ||
         task.status !== AskingTaskStatus.PLANNING ||
         !task.queryId
       ) {
@@ -390,38 +356,26 @@ export default function useAskPrompt(
 
       fetchAskingStreamTask(task.queryId);
     },
-    [askingStreamTask, fetchAskingStreamTask],
+    [askingStreamTaskResult.data, fetchAskingStreamTask],
   );
 
   useEffect(() => {
-    const isFinished = getIsFinished(askingTask?.status);
-    if (isFinished) {
-      askingTaskResult.stopPolling();
-      clearAskingTaskPollingTimeout();
+    if (getIsFinished(askingTask?.status)) {
+      stopAskingTaskPolling();
     }
 
-    // handle update cache for preparing component
     if (isNeedPreparing(askingTask)) {
-      if (threadId) {
-        handleUpdateThreadCache(
-          threadId,
-          askingTask,
-          askingTaskResult.client,
-          updateThreadQuery,
-        );
-        checkFetchAskingStreamTask(askingTask);
-      }
+      handleUpdateThreadCache(askingTask, updateThreadQuery);
+      checkFetchAskingStreamTask(askingTask);
     }
   }, [
     askingTask,
-    threadId,
     checkFetchAskingStreamTask,
-    clearAskingTaskPollingTimeout,
+    stopAskingTaskPolling,
     updateThreadQuery,
   ]);
 
   useEffect(() => {
-    // handle instant recommended questions
     if (isNeedRecommendedQuestions(askingTask)) {
       void startRecommendedQuestions();
     }
@@ -430,88 +384,87 @@ export default function useAskPrompt(
   useEffect(() => {
     if (isRecommendedFinished(recommendedQuestions?.status)) {
       stopInstantRecommendPolling();
-      clearInstantRecommendPollingTimeout();
     }
-  }, [
-    clearInstantRecommendPollingTimeout,
-    recommendedQuestions,
-    stopInstantRecommendPolling,
-  ]);
+  }, [recommendedQuestions?.status, stopInstantRecommendPolling]);
 
   useEffect(() => {
     return () => {
-      clearAskingTaskPollingTimeout();
-      clearInstantRecommendPollingTimeout();
+      stopAskingTaskPolling();
+      stopInstantRecommendPolling();
     };
-  }, [clearAskingTaskPollingTimeout, clearInstantRecommendPollingTimeout]);
+  }, [stopAskingTaskPolling, stopInstantRecommendPolling]);
 
-  useEffect(() => {
-    const taskId = createAskingTaskResult.data?.createAskingTask.id;
-    if (taskId && askingTaskType === AskingTaskType.GENERAL) {
-      fetchAskingStreamTask(taskId);
-    }
-  }, [
-    askingTaskType,
-    createAskingTaskResult.data?.createAskingTask.id,
-    fetchAskingStreamTask,
-  ]);
+  const data = useMemo(
+    () => ({
+      originalQuestion,
+      askingTask,
+      askingStreamTask: askingStreamTaskResult.data,
+      recommendedQuestions,
+    }),
+    [
+      askingStreamTaskResult.data,
+      askingTask,
+      originalQuestion,
+      recommendedQuestions,
+    ],
+  );
+
+  const loading =
+    submitting || askingTaskLoading || askingStreamTaskResult.loading;
 
   const onStop = useCallback(
     async (queryId?: string) => {
-      const taskId =
-        queryId || createAskingTaskResult.data?.createAskingTask.id;
-      if (taskId) {
-        await cancelAskingTask({ variables: { taskId } }).catch(
-          () => undefined,
-        );
+      const selector = resolveRuntimeScopeSelector(runtimeScopeSelector);
+      const taskId = queryId || lastTaskIdRef.current;
+      if (!taskId) {
+        return;
+      }
+
+      try {
+        await cancelAskingTaskRest(selector, taskId);
+      } catch (_error) {
+        message.error('停止问答任务失败，请稍后重试');
+      } finally {
         stopAskingTaskPolling();
-        clearAskingTaskPollingTimeout();
       }
     },
-    [
-      cancelAskingTask,
-      clearAskingTaskPollingTimeout,
-      createAskingTaskResult.data?.createAskingTask.id,
-      stopAskingTaskPolling,
-    ],
+    [runtimeScopeSelector, stopAskingTaskPolling],
   );
 
   const onReRun = useCallback(
     async (threadResponse: ThreadResponse) => {
+      const selector = resolveRuntimeScopeSelector(runtimeScopeSelector);
       askingStreamTaskResult.reset();
       setOriginalQuestion(threadResponse.question);
       try {
-        const response = await rerunAskingTask({
-          variables: { responseId: threadResponse.id },
-        });
-        const rerunTaskId = response.data?.rerunAskingTask?.id;
+        const rerunTask = await rerunAskingTaskRest(
+          selector,
+          threadResponse.id,
+        );
+        const rerunTaskId = rerunTask.id;
         if (!rerunTaskId) {
           message.error('重新执行失败，请稍后重试');
           return;
         }
 
-        const { data } = await fetchAskingTaskWithGuard(rerunTaskId);
-        if (!threadId || !data?.askingTask) {
-          return;
+        const nextTask = await fetchAskingTaskWithGuard(rerunTaskId);
+        if (nextTask?.type === AskingTaskType.GENERAL) {
+          fetchAskingStreamTask(rerunTaskId);
         }
-        // update the asking task in cache manually
-        handleUpdateRerunAskingTaskCache(
-          threadId,
-          threadResponse.id,
-          data.askingTask,
-          askingTaskResult.client,
+        handleUpdateRerunAskingTaskCache({
+          threadResponseId: threadResponse.id,
+          askingTask: nextTask,
           updateThreadQuery,
-        );
+        });
       } catch (_error) {
         message.error('重新执行失败，请稍后重试');
       }
     },
     [
       askingStreamTaskResult,
-      askingTaskResult.client,
+      fetchAskingStreamTask,
       fetchAskingTaskWithGuard,
-      rerunAskingTask,
-      threadId,
+      runtimeScopeSelector,
       updateThreadQuery,
     ],
   );
@@ -522,37 +475,46 @@ export default function useAskPrompt(
         return;
       }
 
+      const normalizedQuestion = value.trim();
+      if (!normalizedQuestion) {
+        return;
+      }
+
       submitInFlightRef.current = true;
+      setSubmitting(true);
       askingStreamTaskResult.reset();
-      setOriginalQuestion(value);
+      setOriginalQuestion(normalizedQuestion);
+
+      const selector = resolveRuntimeScopeSelector(runtimeScopeSelector);
       try {
-        const response = await createAskingTask({
-          variables: {
-            data: {
-              question: value,
-              threadId,
-              knowledgeBaseIds: submitDefaults?.knowledgeBaseIds,
-              selectedSkillIds: submitDefaults?.selectedSkillIds,
-            },
-          },
+        const task = await createAskingTaskRest(selector, {
+          question: normalizedQuestion,
+          threadId,
+          knowledgeBaseIds: submitDefaults?.knowledgeBaseIds,
+          selectedSkillIds: submitDefaults?.selectedSkillIds,
         });
-        const askingTaskId = response.data?.createAskingTask?.id;
+        const askingTaskId = task.id;
         if (!askingTaskId) {
           message.error('提交问题失败，请稍后重试');
           return;
         }
 
-        await fetchAskingTaskWithGuard(askingTaskId);
+        const nextTask = await fetchAskingTaskWithGuard(askingTaskId);
+        if (nextTask?.type === AskingTaskType.GENERAL) {
+          fetchAskingStreamTask(askingTaskId);
+        }
       } catch (_error) {
         message.error('提交问题失败，请稍后重试');
       } finally {
         submitInFlightRef.current = false;
+        setSubmitting(false);
       }
     },
     [
       askingStreamTaskResult,
-      createAskingTask,
+      fetchAskingStreamTask,
       fetchAskingTaskWithGuard,
+      runtimeScopeSelector,
       submitDefaults?.knowledgeBaseIds,
       submitDefaults?.selectedSkillIds,
       threadId,
@@ -567,9 +529,8 @@ export default function useAskPrompt(
   );
 
   const onStopPolling = useCallback(() => {
-    clearAskingTaskPollingTimeout();
     stopAskingTaskPolling();
-  }, [clearAskingTaskPollingTimeout, stopAskingTaskPolling]);
+  }, [stopAskingTaskPolling]);
 
   const onStopStreaming = useCallback(
     () => askingStreamTaskResult.reset(),
@@ -577,9 +538,8 @@ export default function useAskPrompt(
   );
 
   const onStopRecommend = useCallback(() => {
-    clearInstantRecommendPollingTimeout();
     stopInstantRecommendPolling();
-  }, [clearInstantRecommendPollingTimeout, stopInstantRecommendPolling]);
+  }, [stopInstantRecommendPolling]);
 
   const onStoreThreadQuestions = useCallback((questions: string[]) => {
     setThreadQuestions(questions);

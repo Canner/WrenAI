@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Skeleton, Typography, message } from 'antd';
+import { Alert, Button, Skeleton, Typography } from 'antd';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import LoadingOutlined from '@ant-design/icons/LoadingOutlined';
 import CaretDownOutlined from '@ant-design/icons/CaretDownOutlined';
@@ -8,7 +8,7 @@ import styled from 'styled-components';
 import { BinocularsIcon } from '@/utils/icons';
 import { nextTick } from '@/utils/time';
 import { MORE_ACTION } from '@/utils/enum';
-import usePromptThreadStore from './store';
+import { usePromptThreadActionsStore } from './store';
 import useDropdown from '@/hooks/useDropdown';
 import useTextBasedAnswerStreamTask from '@/hooks/useTextBasedAnswerStreamTask';
 import { Props as AnswerResultProps } from '@/components/pages/home/promptThread/AnswerResult';
@@ -46,7 +46,7 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
     onGenerateTextBasedAnswer,
     onOpenAdjustReasoningStepsModal,
     onOpenAdjustSQLModal,
-  } = usePromptThreadStore();
+  } = usePromptThreadActionsStore();
   const {
     isLastThreadResponse,
     onInitPreviewDone,

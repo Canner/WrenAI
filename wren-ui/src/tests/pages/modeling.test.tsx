@@ -4,9 +4,10 @@ import ModelingPage from '../../pages/modeling';
 
 const mockUseProtectedRuntimeScopePage = jest.fn();
 const mockUseRuntimeScopeNavigation = jest.fn();
-const mockUseRuntimeSelectorStateQuery = jest.fn();
-const mockUseDiagramQuery = jest.fn();
-const mockUseDeployStatusQuery = jest.fn();
+const mockUseRuntimeSelectorState = jest.fn();
+const mockUseDeployStatusRest = jest.fn();
+const mockBuildKnowledgeDiagramUrl = jest.fn();
+const mockLoadKnowledgeDiagramPayload = jest.fn();
 const mockUseSearchParams = jest.fn();
 const mockUseDrawerAction = jest.fn();
 const mockUseModalAction = jest.fn();
@@ -15,6 +16,18 @@ const mockUseRelationshipModal = jest.fn();
 let capturedSidebarProps: any = null;
 let capturedDiagramProps: any = null;
 let capturedMetadataDrawerProps: any = null;
+
+const setModelingStateOverrides = (overrides: Partial<Record<number, any>>) => {
+  let callIndex = 0;
+  const spy = jest.spyOn(React, 'useState' as any) as jest.SpyInstance;
+  return spy.mockImplementation(((initial: any) => {
+    callIndex += 1;
+    if (Object.prototype.hasOwnProperty.call(overrides, callIndex)) {
+      return [overrides[callIndex], jest.fn()];
+    }
+    return [typeof initial === 'function' ? initial() : initial, jest.fn()];
+  }) as any);
+};
 
 jest.mock('next/dynamic', () => {
   const React = jest.requireActual('react');
@@ -106,6 +119,16 @@ jest.mock('@/hooks/useRuntimeScopeNavigation', () => ({
   default: () => mockUseRuntimeScopeNavigation(),
 }));
 
+jest.mock('@/hooks/useRuntimeSelectorState', () => ({
+  __esModule: true,
+  default: () => mockUseRuntimeSelectorState(),
+}));
+
+jest.mock('@/hooks/useDeployStatusRest', () => ({
+  __esModule: true,
+  default: () => mockUseDeployStatusRest(),
+}));
+
 jest.mock('@/hooks/useDrawerAction', () => ({
   __esModule: true,
   default: () => mockUseDrawerAction(),
@@ -121,48 +144,16 @@ jest.mock('@/hooks/useRelationshipModal', () => ({
   default: () => mockUseRelationshipModal(),
 }));
 
-jest.mock('@/apollo/client/graphql/runtimeScope.generated', () => ({
-  useRuntimeSelectorStateQuery: (...args: any[]) =>
-    mockUseRuntimeSelectorStateQuery(...args),
-}));
-
-jest.mock('@/apollo/client/graphql/diagram.generated', () => ({
-  useDiagramQuery: (...args: any[]) => mockUseDiagramQuery(...args),
-}));
-
-jest.mock('@/apollo/client/graphql/deploy.generated', () => ({
-  useDeployStatusQuery: (...args: any[]) => mockUseDeployStatusQuery(...args),
-}));
-
-jest.mock('@/apollo/client/graphql/model.generated', () => ({
-  useCreateModelMutation: () => [jest.fn(), { loading: false }],
-  useDeleteModelMutation: () => [jest.fn()],
-  useUpdateModelMutation: () => [jest.fn(), { loading: false }],
-}));
-
-jest.mock('@/apollo/client/graphql/metadata.generated', () => ({
-  useUpdateModelMetadataMutation: () => [jest.fn(), { loading: false }],
-  useUpdateViewMetadataMutation: () => [jest.fn(), { loading: false }],
-}));
-
-jest.mock('@/apollo/client/graphql/calculatedField.generated', () => ({
-  useCreateCalculatedFieldMutation: () => [jest.fn(), { loading: false }],
-  useUpdateCalculatedFieldMutation: () => [jest.fn(), { loading: false }],
-  useDeleteCalculatedFieldMutation: () => [jest.fn()],
-}));
-
-jest.mock('@/apollo/client/graphql/relationship.generated', () => ({
-  useCreateRelationshipMutation: () => [jest.fn(), { loading: false }],
-  useDeleteRelationshipMutation: () => [jest.fn()],
-  useUpdateRelationshipMutation: () => [jest.fn(), { loading: false }],
+jest.mock('@/utils/knowledgeDiagramRest', () => ({
+  buildKnowledgeDiagramUrl: (...args: any[]) =>
+    mockBuildKnowledgeDiagramUrl(...args),
+  loadKnowledgeDiagramPayload: (...args: any[]) =>
+    mockLoadKnowledgeDiagramPayload(...args),
 }));
 
 jest.mock('@/utils/viewRest', () => ({
   deleteViewById: jest.fn(),
 }));
-
-const renderPage = () =>
-  renderToStaticMarkup(React.createElement(ModelingPage));
 
 describe('modeling page', () => {
   beforeEach(() => {
@@ -181,6 +172,7 @@ describe('modeling page', () => {
     mockUseRuntimeScopeNavigation.mockReturnValue({
       push: jest.fn(),
       replace: jest.fn(),
+      pushWorkspace: jest.fn(),
       selector: {
         workspaceId: 'ws-1',
         runtimeScopeId: 'scope-1',
@@ -188,34 +180,43 @@ describe('modeling page', () => {
         deployHash: 'deploy-1',
       },
     });
-    mockUseRuntimeSelectorStateQuery.mockReturnValue({
-      data: {
-        runtimeSelectorState: {
-          currentKnowledgeBase: {
-            id: 'kb-1',
-            name: '订单分析知识库',
-            defaultKbSnapshotId: 'snap-1',
-          },
-          currentKbSnapshot: {
-            id: 'snap-1',
-            displayName: '默认快照',
-            deployHash: 'deploy-1',
-            status: 'READY',
-          },
+    mockUseRuntimeSelectorState.mockReturnValue({
+      provided: true,
+      loading: false,
+      refetch: jest.fn(),
+      runtimeSelectorState: {
+        currentKnowledgeBase: {
+          id: 'kb-1',
+          name: '订单分析知识库',
+          defaultKbSnapshotId: 'snap-1',
+        },
+        currentKbSnapshot: {
+          id: 'snap-1',
+          displayName: '默认快照',
+          deployHash: 'deploy-1',
+          status: 'READY',
         },
       },
     });
-    mockUseDiagramQuery.mockReturnValue({
-      data: {
-        diagram: {
-          models: [],
-          views: [],
+    mockUseDeployStatusRest.mockReturnValue({
+      data: undefined,
+      loading: false,
+      refetch: jest.fn().mockResolvedValue({
+        data: {
+          modelSync: {
+            status: 'SYNCRONIZED',
+          },
         },
-      },
-      refetch: jest.fn(),
+      }),
+      startPolling: jest.fn(),
+      stopPolling: jest.fn(),
     });
-    mockUseDeployStatusQuery.mockReturnValue({
-      refetch: jest.fn(),
+    mockBuildKnowledgeDiagramUrl.mockReturnValue('/api/v1/knowledge/diagram');
+    mockLoadKnowledgeDiagramPayload.mockResolvedValue({
+      diagram: {
+        models: [],
+        views: [],
+      },
     });
     mockUseDrawerAction.mockReturnValue({
       state: { visible: false, defaultValue: null },
@@ -236,46 +237,80 @@ describe('modeling page', () => {
   });
 
   it('keeps modeling editable on the latest snapshot', () => {
-    const markup = renderPage();
-
-    expect(markup).not.toContain(
-      '当前正在查看历史快照，仅支持浏览，不支持编辑或执行。',
-    );
-    expect(capturedSidebarProps?.readOnly).toBe(false);
-    expect(capturedDiagramProps?.readOnly).toBe(false);
-    expect(capturedMetadataDrawerProps?.readOnly).toBe(false);
-    expect(markup).toContain('SidebarWritable');
-    expect(markup).toContain('DiagramWritable');
-  });
-
-  it('marks modeling as readonly on historical snapshots', () => {
-    mockUseRuntimeSelectorStateQuery.mockReturnValue({
-      data: {
-        runtimeSelectorState: {
-          currentKnowledgeBase: {
-            id: 'kb-1',
-            name: '订单分析知识库',
-            defaultKbSnapshotId: 'snap-latest',
-          },
-          currentKbSnapshot: {
-            id: 'snap-old',
-            displayName: '旧快照',
-            deployHash: 'deploy-old',
-            status: 'READY',
-          },
+    const useStateSpy = setModelingStateOverrides({
+      1: {
+        diagram: {
+          models: [],
+          views: [],
         },
       },
     });
 
-    const markup = renderPage();
+    const markup = renderToStaticMarkup(<ModelingPage />);
 
-    expect(markup).toContain(
+    expect(capturedSidebarProps?.readOnly).toBe(false);
+    expect(capturedDiagramProps?.readOnly).toBe(false);
+    expect(capturedMetadataDrawerProps?.readOnly).toBe(false);
+    expect(markup).not.toContain(
       '当前正在查看历史快照，仅支持浏览，不支持编辑或执行。',
     );
+    expect(markup).toContain('SidebarWritable');
+    expect(markup).toContain('DiagramWritable');
+
+    useStateSpy.mockRestore();
+  });
+
+  it('marks modeling as readonly on historical snapshots', () => {
+    mockUseRuntimeSelectorState.mockReturnValue({
+      provided: true,
+      loading: false,
+      refetch: jest.fn(),
+      runtimeSelectorState: {
+        currentKnowledgeBase: {
+          id: 'kb-1',
+          name: '订单分析知识库',
+          defaultKbSnapshotId: 'snap-latest',
+        },
+        currentKbSnapshot: {
+          id: 'snap-old',
+          displayName: '旧快照',
+          deployHash: 'deploy-old',
+          status: 'READY',
+        },
+      },
+    });
+    mockUseRuntimeScopeNavigation.mockReturnValue({
+      push: jest.fn(),
+      replace: jest.fn(),
+      pushWorkspace: jest.fn(),
+      selector: {
+        workspaceId: 'ws-1',
+        runtimeScopeId: 'scope-1',
+        kbSnapshotId: 'snap-old',
+        deployHash: 'deploy-old',
+      },
+    });
+
+    const useStateSpy = setModelingStateOverrides({
+      1: {
+        diagram: {
+          models: [],
+          views: [],
+        },
+      },
+    });
+
+    const markup = renderToStaticMarkup(<ModelingPage />);
+
     expect(capturedSidebarProps?.readOnly).toBe(true);
     expect(capturedDiagramProps?.readOnly).toBe(true);
     expect(capturedMetadataDrawerProps?.readOnly).toBe(true);
+    expect(markup).toContain(
+      '当前正在查看历史快照，仅支持浏览，不支持编辑或执行。',
+    );
     expect(markup).toContain('SidebarReadonly');
     expect(markup).toContain('DiagramReadonly');
+
+    useStateSpy.mockRestore();
   });
 });

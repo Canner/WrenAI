@@ -1,10 +1,9 @@
 import { memo, useMemo } from 'react';
 import { Alert, Typography, Button } from 'antd';
-import { ApolloError } from '@apollo/client';
 import styled from 'styled-components';
 import { getColumnTypeIcon } from '@/utils/columnType';
 import PreviewDataContent from '@/components/dataPreview/PreviewDataContent';
-import { parseGraphQLError } from '@/utils/errorHandler';
+import { isApolloLikeError, parseGraphQLError } from '@/utils/errorHandler';
 
 const { Text } = Typography;
 
@@ -91,7 +90,7 @@ interface Props {
     }>;
   };
   loading: boolean;
-  error?: ApolloError | Error | null;
+  error?: Error | null;
   locale?: { emptyText: React.ReactNode };
   copyable?: boolean;
 }
@@ -113,8 +112,9 @@ export default function PreviewData(props: Props) {
 
   const hasErrorMessage = error && error.message;
   if (!loading && hasErrorMessage) {
-    const parsedError =
-      error instanceof ApolloError ? parseGraphQLError(error) : null;
+    const parsedError = isApolloLikeError(error)
+      ? parseGraphQLError(error)
+      : null;
     const messageText = parsedError?.message || error.message;
     const shortMessage = parsedError?.shortMessage || '查询失败';
 

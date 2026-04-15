@@ -11,7 +11,11 @@ import ShareAltOutlined from '@ant-design/icons/ShareAltOutlined';
 import { RobotSVG } from '@/utils/svgs';
 import { ANSWER_TAB_KEYS } from '@/utils/enum';
 import { canGenerateAnswer } from '@/hooks/useAskPrompt';
-import usePromptThreadStore from './store';
+import {
+  usePromptThreadActionsStore,
+  usePromptThreadDataStore,
+  usePromptThreadPreparationStore,
+} from './store';
 import { RecommendedQuestionsProps } from '@/components/pages/home/promptThread';
 import RecommendedQuestions, {
   getRecommendedQuestionProps,
@@ -199,13 +203,15 @@ export default function AnswerResult(props: Props) {
     onGenerateThreadRecommendedQuestions,
     onGenerateTextBasedAnswer,
     onGenerateChartAnswer,
+    onSelectRecommendedQuestion,
     onOpenSaveToKnowledgeModal,
+  } = usePromptThreadActionsStore();
+  const {
     // recommend questions
     recommendedQuestions,
     showRecommendedQuestions,
-    onSelectRecommendedQuestion,
-    preparation,
-  } = usePromptThreadStore();
+  } = usePromptThreadDataStore();
+  const { preparation } = usePromptThreadPreparationStore();
 
   const {
     askingTask,

@@ -2,7 +2,6 @@ import clsx from 'clsx';
 import dynamic from 'next/dynamic';
 import styled from 'styled-components';
 import { useEffect, useMemo, useState, type ComponentType } from 'react';
-import { useMutation, useQuery } from '@apollo/client';
 import { Alert, Form, Button, Skeleton, Modal, Select, message } from 'antd';
 import { attachLoading } from '@/utils/helper';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
@@ -21,12 +20,14 @@ import {
   getChartSpecOptionValues,
 } from '@/components/chart/meta';
 import {
-  CREATE_DASHBOARD_ITEM,
-  DASHBOARDS,
-} from '@/apollo/client/graphql/dashboard';
+  loadDashboardListPayload,
+  type DashboardListItem,
+} from '@/utils/dashboardRest';
 import { DashboardItemType } from '@/apollo/server/repositories';
-import usePromptThreadStore from './store';
+import { usePromptThreadActionsStore } from './store';
 import useResponsePreviewData from '@/hooks/useResponsePreviewData';
+import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
+import { createDashboardItem } from '@/utils/homeRest';
 
 const Chart = dynamic(() => import('@/components/chart'), {
   ssr: false,
@@ -96,21 +97,7 @@ const isCompatibleFieldName = (targetField: string, sourceField: string) => {
   return targetAliases.some((alias) => sourceAliases.has(alias));
 };
 
-type DashboardOption = {
-  id: number;
-  name: string;
-};
-
-type DashboardsQuery = {
-  dashboards: DashboardOption[];
-};
-
-type CreateDashboardItemMutation = {
-  createDashboardItem: {
-    id: number;
-    dashboardId: number;
-  };
-};
+type DashboardOption = Pick<DashboardListItem, 'id' | 'name'>;
 
 const toPreferredRenderer = (value: unknown): 'svg' | 'canvas' | undefined =>
   value === 'svg' || value === 'canvas' ? value : undefined;
@@ -145,7 +132,9 @@ const getDynamicProperties = (chartType?: ChartType | null) => {
 };
 
 export default function ChartAnswer(props: AnswerResultProps) {
-  const { onGenerateChartAnswer, onAdjustChartAnswer } = usePromptThreadStore();
+  const { onGenerateChartAnswer, onAdjustChartAnswer } =
+    usePromptThreadActionsStore();
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const { shouldAutoPreview, threadResponse } = props;
   const [regenerating, setRegenerating] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -166,46 +155,45 @@ export default function ChartAnswer(props: AnswerResultProps) {
 
   const previewDataResult = useResponsePreviewData(threadResponse.id);
   const { ensureLoaded: ensurePreviewLoaded } = previewDataResult;
-
-  const { data: dashboardsData, loading: dashboardsLoading } =
-    useQuery<DashboardsQuery>(DASHBOARDS, {
-      fetchPolicy: 'cache-and-network',
-      onError: (error) => {
-        message.error(error.message || '加载看板列表失败。');
-      },
-    });
-
-  const dashboardOptions = useMemo(
-    () => dashboardsData?.dashboards || [],
-    [dashboardsData?.dashboards],
+  const [dashboardsLoading, setDashboardsLoading] = useState(false);
+  const [dashboardOptions, setDashboardOptions] = useState<DashboardOption[]>(
+    [],
   );
+  const [pinSubmitting, setPinSubmitting] = useState(false);
 
-  const [createDashboardItem, createDashboardItemResult] = useMutation<
-    CreateDashboardItemMutation,
-    {
-      data: {
-        itemType: DashboardItemType;
-        responseId: number;
-        dashboardId?: number;
-      };
-    }
-  >(CREATE_DASHBOARD_ITEM, {
-    onError: (error) => {
-      message.error(error.message || '固定到看板失败。');
-    },
-    onCompleted: (payload) => {
-      const targetDashboard = dashboardOptions.find(
-        (dashboard) => dashboard.id === payload.createDashboardItem.dashboardId,
-      )?.name;
-      message.success(
-        targetDashboard
-          ? `已将图表加入看板「${targetDashboard}」。`
-          : `已将图表加入看板「看板 #${payload.createDashboardItem.dashboardId}」。`,
-      );
-      setIsPinModalOpen(false);
-      setPinTargetDashboardId(null);
-    },
-  });
+  useEffect(() => {
+    let cancelled = false;
+    setDashboardsLoading(true);
+
+    void loadDashboardListPayload({
+      selector: runtimeScopeNavigation.selector,
+      useCache: true,
+    })
+      .then((payload) => {
+        if (cancelled) {
+          return;
+        }
+        setDashboardOptions(payload);
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+        message.error(
+          error instanceof Error ? error.message : '加载看板列表失败。',
+        );
+        setDashboardOptions([]);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setDashboardsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [runtimeScopeNavigation.selector]);
 
   const chartSpec = useMemo(() => {
     if (
@@ -278,17 +266,19 @@ export default function ChartAnswer(props: AnswerResultProps) {
 
   const validationErrors = useMemo(
     () =>
-      (chartDetail?.validationErrors || []).filter(
-        (error): error is string => Boolean(error),
+      (chartDetail?.validationErrors || []).filter((error): error is string =>
+        Boolean(error),
       ),
     [chartDetail?.validationErrors],
   );
 
   const previewChartDataProfile = useMemo(
     () =>
-      ((previewDataResult.data?.previewData || {}) as {
-        chartDataProfile?: Record<string, unknown>;
-      }).chartDataProfile,
+      (
+        (previewDataResult.data?.previewData || {}) as {
+          chartDataProfile?: Record<string, unknown>;
+        }
+      ).chartDataProfile,
     [previewDataResult.data],
   );
   const hasServerShaping = Boolean(
@@ -526,22 +516,47 @@ export default function ChartAnswer(props: AnswerResultProps) {
           setIsPinModalOpen(false);
           setPinTargetDashboardId(null);
         }}
-        confirmLoading={createDashboardItemResult.loading}
+        confirmLoading={pinSubmitting}
         okText="固定"
         cancelText="取消"
         onOk={async () => {
-          await createDashboardItem({
-            variables: {
-              data: {
-                // DashboardItemType is compatible with ChartType
-                itemType: chartType as unknown as DashboardItemType,
+          setPinSubmitting(true);
+          try {
+            const itemType = String(
+              chartType || chartOptionValues.chartType || '',
+            ).toUpperCase() as DashboardItemType;
+            if (!Object.values(DashboardItemType).includes(itemType)) {
+              throw new Error('当前图表类型暂不支持固定到看板。');
+            }
+
+            const payload = await createDashboardItem(
+              runtimeScopeNavigation.selector,
+              {
+                itemType,
                 responseId: threadResponse.id,
                 ...(pinTargetDashboardId != null
                   ? { dashboardId: pinTargetDashboardId }
                   : {}),
               },
-            },
-          });
+            );
+            const targetDashboard = dashboardOptions.find(
+              (dashboard) => dashboard.id === payload.dashboardId,
+            );
+            message.success(
+              targetDashboard
+                ? `已固定到看板「${targetDashboard.name}」`
+                : '已固定到默认看板。',
+            );
+            setIsPinModalOpen(false);
+            setPinTargetDashboardId(null);
+          } catch (error) {
+            message.error(
+              error instanceof Error ? error.message : '固定到看板失败。',
+            );
+            return;
+          } finally {
+            setPinSubmitting(false);
+          }
         }}
       >
         <div className="gray-7" style={{ marginBottom: 12 }}>

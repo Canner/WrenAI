@@ -10,14 +10,18 @@ import { Loading } from '@/components/PageLoading';
 import TableTransfer, {
   defaultColumns,
 } from '@/components/table/TableTransfer';
-import { useListDataSourceTablesQuery } from '@/apollo/client/graphql/dataSource.generated';
-import { CompactTable, CompactColumn } from '@/apollo/client/graphql/__types__';
+import { resolveClientRuntimeScopeSelector } from '@/apollo/client/runtimeScope';
+import type {
+  CompactTable,
+  CompactColumn,
+} from '@/apollo/client/graphql/__types__';
 import {
   getCompactTableCatalogLabel,
   getCompactTableQualifiedName,
   getCompactTableScopedName,
 } from '@/utils/compactTable';
 import useModelList from '@/hooks/useModelList';
+import { listDataSourceTables } from '@/utils/modelingRest';
 
 const { Option, OptGroup } = Select;
 
@@ -44,11 +48,17 @@ const primaryKeyValidator =
 
 export default function ModelForm(props: Props) {
   const { defaultValue, form, formMode } = props;
+  const runtimeScopeSelector = useMemo(
+    () => resolveClientRuntimeScopeSelector(),
+    [],
+  );
 
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
   const [sourceTableName, setSourceTableName] = useState<string | undefined>(
     undefined,
   );
+  const [dataSourceTables, setDataSourceTables] = useState<CompactTable[]>([]);
+  const [fetching, setFetching] = useState(false);
   const sourceTableFieldValue = Form.useWatch(FormFieldKey.SOURCE_TABLE, form);
 
   const isUpdateMode = formMode === FORM_MODE.EDIT;
@@ -63,14 +73,30 @@ export default function ModelForm(props: Props) {
   );
   const existingModels = modelListData || [];
 
-  const { data, loading: fetching } = useListDataSourceTablesQuery({
-    fetchPolicy: 'cache-and-network',
-    onError: (error) => {
-      message.error(error.message || '加载数据源表失败，请稍后重试。');
-    },
-  });
+  useEffect(() => {
+    let cancelled = false;
+    setFetching(true);
+    void listDataSourceTables(runtimeScopeSelector)
+      .then((tables) => {
+        if (!cancelled) {
+          setDataSourceTables(tables || []);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          message.error(error.message || '加载数据源表失败，请稍后重试。');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setFetching(false);
+        }
+      });
 
-  const dataSourceTables = data?.listDataSourceTables || [];
+    return () => {
+      cancelled = true;
+    };
+  }, [runtimeScopeSelector]);
   const inUsedModelList = useMemo(
     () => existingModels.map((model) => model.sourceTableName),
     [existingModels],

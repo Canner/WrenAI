@@ -47,19 +47,79 @@ export type IPromptThreadStore = {
   onOpenAdjustSQLModal: (data: { responseId: number; sql: string }) => void;
 };
 
-const PromptThreadContext = createContext<IPromptThreadStore | null>(null);
+type PromptThreadDataStore = Pick<
+  IPromptThreadStore,
+  'data' | 'recommendedQuestions' | 'showRecommendedQuestions'
+>;
+
+type PromptThreadPreparationStore = Pick<IPromptThreadStore, 'preparation'>;
+
+type PromptThreadActionsStore = Omit<
+  IPromptThreadStore,
+  'data' | 'recommendedQuestions' | 'showRecommendedQuestions' | 'preparation'
+>;
+
+const PromptThreadDataContext = createContext<PromptThreadDataStore | null>(
+  null,
+);
+const PromptThreadPreparationContext =
+  createContext<PromptThreadPreparationStore | null>(null);
+const PromptThreadActionsContext =
+  createContext<PromptThreadActionsStore | null>(null);
 
 export const PromptThreadProvider = (props: {
   children: React.ReactNode;
-  value: IPromptThreadStore;
+  dataValue: PromptThreadDataStore;
+  preparationValue: PromptThreadPreparationStore;
+  actionsValue: PromptThreadActionsStore;
 }) => (
-  <PromptThreadContext.Provider value={props.value}>
-    {props.children}
-  </PromptThreadContext.Provider>
+  <PromptThreadDataContext.Provider value={props.dataValue}>
+    <PromptThreadPreparationContext.Provider value={props.preparationValue}>
+      <PromptThreadActionsContext.Provider value={props.actionsValue}>
+        {props.children}
+      </PromptThreadActionsContext.Provider>
+    </PromptThreadPreparationContext.Provider>
+  </PromptThreadDataContext.Provider>
 );
 
 export default function usePromptThreadStore() {
-  const store = useContext(PromptThreadContext);
+  const dataStore = useContext(PromptThreadDataContext);
+  const preparationStore = useContext(PromptThreadPreparationContext);
+  const actionsStore = useContext(PromptThreadActionsContext);
+
+  if (!dataStore || !preparationStore || !actionsStore) {
+    throw new Error('PromptThreadProvider is missing');
+  }
+
+  return {
+    ...dataStore,
+    ...preparationStore,
+    ...actionsStore,
+  };
+}
+
+export function usePromptThreadDataStore() {
+  const store = useContext(PromptThreadDataContext);
+
+  if (!store) {
+    throw new Error('PromptThreadProvider is missing');
+  }
+
+  return store;
+}
+
+export function usePromptThreadPreparationStore() {
+  const store = useContext(PromptThreadPreparationContext);
+
+  if (!store) {
+    throw new Error('PromptThreadProvider is missing');
+  }
+
+  return store;
+}
+
+export function usePromptThreadActionsStore() {
+  const store = useContext(PromptThreadActionsContext);
 
   if (!store) {
     throw new Error('PromptThreadProvider is missing');

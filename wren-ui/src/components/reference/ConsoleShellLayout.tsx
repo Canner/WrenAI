@@ -146,6 +146,7 @@ const ContentStage = styled.div<{ $borderless?: boolean }>`
     props.$borderless ? '0' : '1px solid var(--nova-outline-soft)'};
   background: ${(props) => (props.$borderless ? 'transparent' : '#fff')};
   padding: ${(props) => (props.$borderless ? '0' : '24px')};
+  width: 100%;
 
   .console-grid {
     display: grid;
@@ -307,7 +308,9 @@ export default function ConsoleShellLayout({
   );
 
   useEffect(() => {
-    const threadIds = (homeSidebar.data?.threads || []).map((thread) => thread.id);
+    const threadIds = (homeSidebar.data?.threads || []).map(
+      (thread) => thread.id,
+    );
 
     if (!activeHistoryId || embedded || threadIds.includes(activeHistoryId)) {
       attemptedActiveHistoryRefetchRef.current = activeHistoryId || null;

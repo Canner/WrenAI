@@ -1,11 +1,12 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, Space, Typography, message } from 'antd';
 import CheckCircleOutlined from '@ant-design/icons/CheckCircleOutlined';
 import LoadingOutlined from '@ant-design/icons/LoadingOutlined';
 import WarningOutlined from '@ant-design/icons/WarningOutlined';
 import { SyncStatus } from '@/apollo/client/graphql/__types__';
-import { useDeployMutation } from '@/apollo/client/graphql/deploy.generated';
 import { useDeployStatusContext } from '@/components/deploy/Context';
+import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
+import { deployCurrentRuntime } from '@/utils/modelingRest';
 
 const { Text } = Typography;
 
@@ -37,39 +38,45 @@ const getDeployStatus = (deploying: boolean, status: SyncStatus) => {
 };
 
 export default function Deploy() {
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const deployContext = useDeployStatusContext();
   const { data, loading, startPolling, stopPolling } = deployContext;
-
-  const [deployMutation, { data: deployResult, loading: deploying }] =
-    useDeployMutation({
-      onError: (error) => {
-        message.error(error.message || '部署失败，请稍后重试。');
-      },
-      onCompleted: (data) => {
-        if (data.deploy?.status === 'FAILED') {
-          message.error(
-            data.deploy?.error ||
-              'Failed to deploy. Please check the log for more details.',
-          );
-        }
-      },
-    });
+  const [messageApi, contextHolder] = message.useMessage();
+  const [deploying, setDeploying] = useState(false);
+  const [deployFailed, setDeployFailed] = useState(false);
 
   useEffect(() => {
     // Stop polling deploy status if deploy failed
-    if (
-      deployResult?.deploy?.status === 'FAILED' &&
-      data?.modelSync.status === SyncStatus.UNSYNCRONIZED
-    ) {
+    if (deployFailed && data?.modelSync.status === SyncStatus.UNSYNCRONIZED) {
       stopPolling();
     }
-  }, [deployResult, data]);
+  }, [data, deployFailed, stopPolling]);
 
   const syncStatus = data?.modelSync.status ?? SyncStatus.UNSYNCRONIZED;
 
-  const onDeploy = () => {
-    deployMutation();
+  const onDeploy = async () => {
+    setDeploying(true);
+    setDeployFailed(false);
     startPolling(1000);
+    try {
+      const result = await deployCurrentRuntime(
+        runtimeScopeNavigation.selector,
+      );
+      if (result?.status === 'FAILED') {
+        setDeployFailed(true);
+        messageApi.error(
+          result.error ||
+            'Failed to deploy. Please check the log for more details.',
+        );
+      }
+    } catch (error) {
+      setDeployFailed(true);
+      messageApi.error(
+        error instanceof Error ? error.message : '部署失败，请稍后重试。',
+      );
+    } finally {
+      setDeploying(false);
+    }
   };
 
   useEffect(() => {
@@ -82,17 +89,20 @@ export default function Deploy() {
     [SyncStatus.SYNCRONIZED, SyncStatus.IN_PROGRESS].includes(syncStatus);
 
   return (
-    <Space size={[8, 0]}>
-      {getDeployStatus(deploying, syncStatus)}
-      <Button
-        className={`adm-modeling-header-btn ${disabled ? '' : 'gray-10'}`}
-        disabled={disabled}
-        onClick={() => onDeploy()}
-        size="small"
-        data-guideid="deploy-model"
-      >
-        Deploy
-      </Button>
-    </Space>
+    <>
+      {contextHolder}
+      <Space size={[8, 0]}>
+        {getDeployStatus(deploying, syncStatus)}
+        <Button
+          className={`adm-modeling-header-btn ${disabled ? '' : 'gray-10'}`}
+          disabled={disabled}
+          onClick={() => onDeploy()}
+          size="small"
+          data-guideid="deploy-model"
+        >
+          Deploy
+        </Button>
+      </Space>
+    </>
   );
 }

@@ -1,6 +1,6 @@
 import { GraphQLError } from 'graphql';
-import { ErrorResponse } from '@apollo/client/link/error';
-import { ApolloError } from '@apollo/client';
+import type { ErrorResponse } from '@apollo/client/link/error';
+import type { ApolloError } from '@apollo/client';
 import { message } from 'antd';
 import {
   shouldRecoverRuntimeScopeFromErrorCode,
@@ -656,7 +656,19 @@ const errorHandler = (error: ErrorResponse) => {
 
 export default errorHandler;
 
-export const parseGraphQLError = (error: ApolloError) => {
+type ApolloLikeError = Pick<ApolloError, 'graphQLErrors' | 'message'>;
+
+export const isApolloLikeError = (error: unknown): error is ApolloLikeError => {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  return Array.isArray((error as ApolloLikeError).graphQLErrors);
+};
+
+export const parseGraphQLError = (
+  error: ApolloLikeError | null | undefined,
+) => {
   if (!error) return null;
   const graphQLErrors: GraphQLError = error.graphQLErrors?.[0];
   const extensions = graphQLErrors?.extensions || {};

@@ -11,8 +11,8 @@ export default async function handler(
   res: NextApiResponse,
 ) {
   try {
-    if (req.method !== 'PATCH') {
-      res.setHeader('Allow', 'PATCH');
+    if (req.method !== 'PATCH' && req.method !== 'POST') {
+      res.setHeader('Allow', 'PATCH, POST');
       throw new Error('Method not allowed');
     }
 
@@ -24,14 +24,21 @@ export default async function handler(
       throw new ApiError('Data source properties are required', 400);
     }
 
-    const dataSource = await projectResolver.updateDataSource(
-      null,
-      { data: { type, properties } },
-      ctx,
-    );
+    const dataSource =
+      req.method === 'POST'
+        ? await projectResolver.saveDataSource(
+            null,
+            { data: { type, properties } },
+            ctx,
+          )
+        : await projectResolver.updateDataSource(
+            null,
+            { data: { type, properties } },
+            ctx,
+          );
 
-    return res.status(200).json(dataSource);
+    return res.status(req.method === 'POST' ? 201 : 200).json(dataSource);
   } catch (error) {
-    return sendRestApiError(res, error, '更新数据源失败，请稍后重试。');
+    return sendRestApiError(res, error, '保存数据源失败，请稍后重试。');
   }
 }

@@ -40,6 +40,8 @@ import {
 import { fetchSettings, type SettingsData } from '@/utils/settingsRest';
 
 const DashboardWorkbench = styled.div`
+  width: min(100%, 1480px);
+  margin: 0 auto;
   display: grid;
   grid-template-columns: 312px minmax(0, 1fr);
   gap: 20px;
@@ -109,7 +111,7 @@ const DashboardStage = styled.section`
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 `;
 
 const DashboardStageHeader = styled.div`

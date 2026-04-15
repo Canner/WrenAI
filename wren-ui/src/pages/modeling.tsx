@@ -1,6 +1,14 @@
 import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
-import { forwardRef, useEffect, useMemo, useRef, type Key } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Key,
+} from 'react';
 import { message } from 'antd';
 import styled from 'styled-components';
 import { MORE_ACTION, NODE_TYPE, Path } from '@/utils/enum';
@@ -21,28 +29,6 @@ import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import { convertFormValuesToIdentifier } from '@/hooks/useCombineFieldOptions';
 import { ClickPayload } from '@/components/diagram/Context';
 import { DeployStatusContext } from '@/components/deploy/Context';
-import { DIAGRAM } from '@/apollo/client/graphql/diagram';
-import { useDiagramQuery } from '@/apollo/client/graphql/diagram.generated';
-import { useDeployStatusQuery } from '@/apollo/client/graphql/deploy.generated';
-import {
-  useCreateModelMutation,
-  useDeleteModelMutation,
-  useUpdateModelMutation,
-} from '@/apollo/client/graphql/model.generated';
-import {
-  useUpdateModelMetadataMutation,
-  useUpdateViewMetadataMutation,
-} from '@/apollo/client/graphql/metadata.generated';
-import {
-  useCreateCalculatedFieldMutation,
-  useUpdateCalculatedFieldMutation,
-  useDeleteCalculatedFieldMutation,
-} from '@/apollo/client/graphql/calculatedField.generated';
-import {
-  useCreateRelationshipMutation,
-  useDeleteRelationshipMutation,
-  useUpdateRelationshipMutation,
-} from '@/apollo/client/graphql/relationship.generated';
 import ConsoleShellLayout from '@/components/reference/ConsoleShellLayout';
 import * as events from '@/utils/events';
 import {
@@ -52,6 +38,24 @@ import {
 import { deleteViewById } from '@/utils/viewRest';
 import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
 import useRuntimeSelectorState from '@/hooks/useRuntimeSelectorState';
+import {
+  buildKnowledgeDiagramUrl,
+  loadKnowledgeDiagramPayload,
+} from '@/utils/knowledgeDiagramRest';
+import {
+  createCalculatedField,
+  createModel,
+  createRelationship,
+  deleteCalculatedField,
+  deleteModel,
+  deleteRelationship,
+  updateCalculatedField,
+  updateModel,
+  updateModelMetadata,
+  updateRelationship,
+  updateViewMetadata,
+} from '@/utils/modelingRest';
+import useDeployStatusRest from '@/hooks/useDeployStatusRest';
 
 const Diagram = dynamic(() => import('@/components/diagram'), { ssr: false });
 // https://github.com/vercel/next.js/issues/4957#issuecomment-413841689
@@ -141,142 +145,74 @@ export default function Modeling() {
       runtimeSelectorState?.currentKnowledgeBase?.defaultKbSnapshotId,
   });
 
-  const { data, refetch: refetchDiagram } = useDiagramQuery({
-    fetchPolicy: 'cache-first',
-    nextFetchPolicy: 'cache-first',
-    skip: !runtimeScopePage.hasRuntimeScope,
-    onCompleted: () => {
-      diagramRef.current?.fitView();
+  const deployStatusQueryResult = useDeployStatusRest();
+  const [diagramPayload, setDiagramPayload] = useState<{
+    diagram: RuntimeDiagram;
+  } | null>(null);
+  const [_diagramLoading, setDiagramLoading] = useState(false);
+  const [calculatedFieldLoading, setCalculatedFieldLoading] = useState(false);
+  const [editMetadataLoading, setEditMetadataLoading] = useState(false);
+  const [modelLoading, setModelLoading] = useState(false);
+  const [relationshipLoading, setRelationshipLoading] = useState(false);
+  const diagramRequestUrl = useMemo(
+    () =>
+      runtimeScopePage.hasRuntimeScope
+        ? buildKnowledgeDiagramUrl(runtimeScopeNavigation.selector)
+        : null,
+    [runtimeScopeNavigation.selector, runtimeScopePage.hasRuntimeScope],
+  );
+
+  const refetchDiagram = useCallback(async () => {
+    if (!diagramRequestUrl) {
+      setDiagramPayload(null);
+      setDiagramLoading(false);
+      return null;
+    }
+
+    setDiagramLoading(true);
+    try {
+      const payload = await loadKnowledgeDiagramPayload({
+        requestUrl: diagramRequestUrl,
+        useCache: false,
+      });
+      setDiagramPayload(payload);
+      return payload;
+    } finally {
+      setDiagramLoading(false);
+    }
+  }, [diagramRequestUrl]);
+
+  const refreshModelingData = useCallback(
+    async ({ fitView = false }: { fitView?: boolean } = {}) => {
+      const [nextDiagram] = await Promise.all([
+        refetchDiagram(),
+        deployStatusQueryResult.refetch(),
+      ]);
+      if (fitView) {
+        diagramRef.current?.fitView();
+      }
+      return nextDiagram;
     },
-  });
-
-  const deployStatusQueryResult = useDeployStatusQuery({
-    pollInterval: 3000,
-    fetchPolicy: 'no-cache',
-    skip: !runtimeScopePage.hasRuntimeScope,
-  });
-
-  const refetchQueries = [{ query: DIAGRAM }];
-  const getBaseOptions = (options: Record<string, any> = {}) => {
-    return {
-      onError: (error: { message?: string }) =>
-        message.error(error?.message || '模型更新失败，请稍后重试'),
-      refetchQueries,
-      awaitRefetchQueries: true,
-      ...options,
-      onCompleted: () => {
-        // refetch to get latest deploy status
-        deployStatusQueryResult.refetch();
-
-        options.onCompleted && options.onCompleted();
-      },
-    };
-  };
-
-  const [createCalculatedField, { loading: calculatedFieldCreating }] =
-    useCreateCalculatedFieldMutation(
-      getBaseOptions({
-        onError: null,
-        onCompleted: () => {
-          message.success('已成功创建计算字段。');
-        },
-      }),
-    );
-
-  const [updateCalculatedField, { loading: calculatedFieldUpdating }] =
-    useUpdateCalculatedFieldMutation(
-      getBaseOptions({
-        onError: null,
-        onCompleted: () => {
-          message.success('已成功更新计算字段。');
-        },
-      }),
-    );
-
-  const [deleteCalculatedField] = useDeleteCalculatedFieldMutation(
-    getBaseOptions({
-      onCompleted: () => {
-        message.success('已成功删除计算字段。');
-      },
-    }),
+    [deployStatusQueryResult, refetchDiagram],
   );
 
-  const [createModelMutation, { loading: modelCreating }] =
-    useCreateModelMutation(
-      getBaseOptions({
-        onCompleted: () => {
-          message.success('已成功创建模型。');
-        },
-        refetchQueries,
-      }),
-    );
+  useEffect(() => {
+    if (!runtimeScopePage.hasRuntimeScope) {
+      setDiagramPayload(null);
+      setDiagramLoading(false);
+      return;
+    }
 
-  const [deleteModelMutation] = useDeleteModelMutation(
-    getBaseOptions({
-      onCompleted: () => {
-        message.success('已成功删除模型。');
-      },
-      refetchQueries,
-    }),
-  );
-
-  const [updateModelMutation, { loading: modelUpdating }] =
-    useUpdateModelMutation(
-      getBaseOptions({
-        onCompleted: () => {
-          message.success('已成功更新模型。');
-        },
-        refetchQueries,
-      }),
-    );
-
-  const [updateModelMetadata, { loading: modelMetadataUpdating }] =
-    useUpdateModelMetadataMutation(
-      getBaseOptions({
-        onCompleted: () => {
-          message.success('已成功更新模型元数据。');
-        },
-      }),
-    );
-
-  const [createRelationshipMutation, { loading: relationshipCreating }] =
-    useCreateRelationshipMutation(
-      getBaseOptions({
-        onCompleted: () => {
-          message.success('已成功创建关系。');
-        },
-      }),
-    );
-
-  const [deleteRelationshipMutation] = useDeleteRelationshipMutation(
-    getBaseOptions({
-      onCompleted: () => {
-        message.success('已成功删除关系。');
-      },
-    }),
-  );
-
-  const [updateRelationshipMutation, { loading: relationshipUpdating }] =
-    useUpdateRelationshipMutation(
-      getBaseOptions({
-        onCompleted: () => {
-          message.success('已成功更新关系。');
-        },
-      }),
-    );
-
-  const [updateViewMetadata, { loading: viewMetadataUpdating }] =
-    useUpdateViewMetadataMutation(
-      getBaseOptions({
-        onCompleted: () => {
-          message.success('已成功更新视图元数据。');
-        },
-      }),
-    );
+    void refreshModelingData({ fitView: true }).catch((error) => {
+      message.error(
+        error instanceof Error ? error.message : '加载图谱失败，请稍后重试',
+      );
+    });
+  }, [refreshModelingData, runtimeScopePage.hasRuntimeScope]);
 
   const diagramData = useMemo<NormalizedDiagram | null>(() => {
-    if (!data) return null;
-    const diagram = data.diagram;
+    if (!diagramPayload) return null;
+    const diagram = diagramPayload.diagram;
     if (!diagram) return null;
     return {
       ...diagram,
@@ -289,13 +225,30 @@ export default function Modeling() {
           Boolean(view),
       ),
     };
-  }, [data]);
+  }, [diagramPayload]);
 
   const metadataDrawer = useDrawerAction();
   const modelDrawer = useDrawerAction();
   const editMetadataModal = useModalAction();
   const calculatedFieldModal = useModalAction();
   const relationshipModal = useRelationshipModal(diagramData);
+
+  const runDiagramMutation = useCallback(
+    async <T,>(
+      setLoadingState: (loading: boolean) => void,
+      action: () => Promise<T>,
+    ) => {
+      setLoadingState(true);
+      try {
+        const result = await action();
+        await refreshModelingData();
+        return result;
+      } finally {
+        setLoadingState(false);
+      }
+    },
+    [refreshModelingData],
+  );
 
   const queryParams = {
     viewId: searchParams.get('viewId'),
@@ -453,9 +406,13 @@ export default function Modeling() {
             if (!Number.isFinite(modelId)) {
               return;
             }
-            await deleteModelMutation({
-              variables: { where: { id: modelId } },
-            });
+            await runDiagramMutation(
+              () => undefined,
+              async () => {
+                await deleteModel(runtimeScopeNavigation.selector, modelId);
+                message.success('已成功删除模型。');
+              },
+            );
             break;
           case NODE_TYPE.CALCULATED_FIELD:
             if (!('columnId' in data) || data.columnId === undefined) {
@@ -465,9 +422,16 @@ export default function Modeling() {
             if (!Number.isFinite(columnId)) {
               return;
             }
-            await deleteCalculatedField({
-              variables: { where: { id: columnId } },
-            });
+            await runDiagramMutation(
+              () => undefined,
+              async () => {
+                await deleteCalculatedField(
+                  runtimeScopeNavigation.selector,
+                  columnId,
+                );
+                message.success('已成功删除计算字段。');
+              },
+            );
             break;
           case NODE_TYPE.RELATION:
             if (!('relationId' in data) || data.relationId === undefined) {
@@ -477,9 +441,16 @@ export default function Modeling() {
             if (!Number.isFinite(relationId)) {
               return;
             }
-            await deleteRelationshipMutation({
-              variables: { where: { id: relationId } },
-            });
+            await runDiagramMutation(
+              () => undefined,
+              async () => {
+                await deleteRelationship(
+                  runtimeScopeNavigation.selector,
+                  relationId,
+                );
+                message.success('已成功删除关系。');
+              },
+            );
             break;
           case NODE_TYPE.VIEW:
             if (!('viewId' in data) || data.viewId === undefined) {
@@ -500,7 +471,11 @@ export default function Modeling() {
     };
     const handler = action[type as MORE_ACTION];
     if (handler) {
-      void handler();
+      void Promise.resolve(handler()).catch((error) => {
+        message.error(
+          error instanceof Error ? error.message : '建模操作失败，请稍后重试。',
+        );
+      });
     }
   };
 
@@ -528,12 +503,6 @@ export default function Modeling() {
         break;
     }
   };
-
-  const calculatedFieldLoading =
-    calculatedFieldCreating || calculatedFieldUpdating;
-  const editMetadataLoading = modelMetadataUpdating || viewMetadataUpdating;
-  const modelLoading = modelCreating || modelUpdating;
-  const relationshipLoading = relationshipUpdating || relationshipCreating;
 
   return (
     <DeployStatusContext.Provider value={{ ...deployStatusQueryResult }}>
@@ -572,6 +541,7 @@ export default function Modeling() {
                 }}
                 onSelect={onSelect}
                 readOnly={isModelingReadonly}
+                onRefresh={refreshModelingData}
               />
             ) : null}
           </ModelingSidebarPanel>
@@ -612,15 +582,23 @@ export default function Modeling() {
             const { modelId, viewId, ...metadata } = data;
             switch (nodeType) {
               case NODE_TYPE.MODEL: {
-                await updateModelMetadata({
-                  variables: { where: { id: modelId }, data: metadata },
+                await runDiagramMutation(setEditMetadataLoading, async () => {
+                  await updateModelMetadata(
+                    runtimeScopeNavigation.selector,
+                    Number(modelId),
+                    metadata,
+                  );
                 });
                 break;
               }
 
               case NODE_TYPE.VIEW: {
-                await updateViewMetadata({
-                  variables: { where: { id: viewId }, data: metadata },
+                await runDiagramMutation(setEditMetadataLoading, async () => {
+                  await updateViewMetadata(
+                    runtimeScopeNavigation.selector,
+                    Number(viewId),
+                    metadata,
+                  );
                 });
                 break;
               }
@@ -642,9 +620,13 @@ export default function Modeling() {
               return;
             }
             if (id) {
-              await updateModelMutation({ variables: { where: { id }, data } });
+              await runDiagramMutation(setModelLoading, async () => {
+                await updateModel(runtimeScopeNavigation.selector, id, data);
+              });
             } else {
-              await createModelMutation({ variables: { data } });
+              await runDiagramMutation(setModelLoading, async () => {
+                await createModel(runtimeScopeNavigation.selector, data);
+              });
             }
           }}
         />
@@ -658,11 +640,20 @@ export default function Modeling() {
               return;
             }
             if (id) {
-              await updateCalculatedField({
-                variables: { where: { id }, data },
+              await runDiagramMutation(setCalculatedFieldLoading, async () => {
+                await updateCalculatedField(
+                  runtimeScopeNavigation.selector,
+                  id,
+                  data,
+                );
               });
             } else {
-              await createCalculatedField({ variables: { data } });
+              await runDiagramMutation(setCalculatedFieldLoading, async () => {
+                await createCalculatedField(
+                  runtimeScopeNavigation.selector,
+                  data,
+                );
+              });
             }
           }}
         />
@@ -678,24 +669,24 @@ export default function Modeling() {
               return;
             }
             const relation = convertFormValuesToIdentifier(values);
-            if (values.relationId) {
-              await updateRelationshipMutation({
-                variables: {
-                  where: { id: values.relationId },
-                  data: { type: relation.type },
-                },
+            const relationId = values.relationId;
+            if (relationId != null) {
+              await runDiagramMutation(setRelationshipLoading, async () => {
+                await updateRelationship(
+                  runtimeScopeNavigation.selector,
+                  relationId,
+                  { type: relation.type },
+                );
               });
             } else {
-              await createRelationshipMutation({
-                variables: {
-                  data: {
-                    fromModelId: Number(relation.fromField.modelId),
-                    fromColumnId: Number(relation.fromField.fieldId),
-                    toModelId: Number(relation.toField.modelId),
-                    toColumnId: Number(relation.toField.fieldId),
-                    type: relation.type,
-                  },
-                },
+              await runDiagramMutation(setRelationshipLoading, async () => {
+                await createRelationship(runtimeScopeNavigation.selector, {
+                  fromModelId: Number(relation.fromField.modelId),
+                  fromColumnId: Number(relation.fromField.fieldId),
+                  toModelId: Number(relation.toField.modelId),
+                  toColumnId: Number(relation.toField.fieldId),
+                  type: relation.type,
+                });
               });
             }
           }}

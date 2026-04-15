@@ -1,6 +1,5 @@
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import apolloClient from '@/apollo/client';
 import { FlexLoading } from '@/components/PageLoading';
 import {
   buildRuntimeScopeBootstrapCandidates,
@@ -20,20 +19,14 @@ import {
   shouldDeferRuntimeScopeUrlSync,
   writePersistedRuntimeScopeSelector,
 } from '@/apollo/client/runtimeScope';
-import { RUNTIME_SELECTOR_STATE } from '@/apollo/client/graphql/runtimeScope';
 import useAuthSession from '@/hooks/useAuthSession';
 import { Path } from '@/utils/enum';
-
-interface RuntimeSelectorStateQueryData {
-  runtimeSelectorState: RuntimeSelectorStateBootstrapData | null;
-}
 
 interface Props {
   children: React.ReactNode;
 }
 
 const RUNTIME_SCOPE_BOOTSTRAP_HEADER = 'x-wren-runtime-bootstrap';
-const RUNTIME_SCOPE_BOOTSTRAP_FETCH_POLICY = 'no-cache';
 
 export default function RuntimeScopeBootstrap({ children }: Props) {
   const router = useRouter();
@@ -215,27 +208,36 @@ export default function RuntimeScopeBootstrap({ children }: Props) {
         }
 
         try {
-          const { data } =
-            await apolloClient.query<RuntimeSelectorStateQueryData>({
-              query: RUNTIME_SELECTOR_STATE,
-              fetchPolicy: RUNTIME_SCOPE_BOOTSTRAP_FETCH_POLICY,
-              context: {
-                skipRuntimeScopeHeaders: true,
-                headers: {
-                  ...buildRuntimeScopeHeaders(candidate.selector),
-                  [RUNTIME_SCOPE_BOOTSTRAP_HEADER]: '1',
-                },
+          const response = await fetch(
+            buildRuntimeScopeUrl(
+              '/api/v1/runtime/scope/current',
+              {},
+              candidate.selector,
+            ),
+            {
+              headers: {
+                ...buildRuntimeScopeHeaders(candidate.selector),
+                [RUNTIME_SCOPE_BOOTSTRAP_HEADER]: '1',
               },
-            });
+              cache: 'no-store',
+            },
+          );
+          if (!response.ok) {
+            throw new Error(`Runtime bootstrap failed (${response.status})`);
+          }
 
+          const runtimeSelectorState = (await response
+            .json()
+            .catch(() => null)) as RuntimeSelectorStateBootstrapData | null;
           if (cancelled) {
             return;
           }
 
           const selectorFromServer =
             buildRuntimeScopeSelectorFromRuntimeSelectorState(
-              data?.runtimeSelectorState,
+              runtimeSelectorState,
             );
+
           const resolvedSelector = resolveRuntimeScopeBootstrapSelector({
             candidate,
             selectorFromServer,

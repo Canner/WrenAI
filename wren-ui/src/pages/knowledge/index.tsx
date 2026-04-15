@@ -99,8 +99,8 @@ export default function KnowledgeHomePage() {
   const authSession = useAuthSession();
   const persistentShellEmbedded = usePersistentShellEmbedded();
   const homeSidebar = useHomeSidebar({
-    deferInitialLoad: true,
-    loadOnIntent: true,
+    deferInitialLoad: false,
+    loadOnIntent: false,
     disabled: persistentShellEmbedded,
   });
   const [knowledgeTab, setKnowledgeTab] = useState('workspace');
@@ -680,6 +680,7 @@ export default function KnowledgeHomePage() {
         onNavigate: runtimeScopeNavigation.pushWorkspace,
       })}
       historyItems={historyItems}
+      historyLoading={homeSidebar.loading && historyItems.length === 0}
       onHistoryIntent={homeSidebar.ensureLoaded}
     >
       {pageContent}

@@ -3,7 +3,6 @@ import { AppProps } from 'next/app';
 import Head from 'next/head';
 import { Spin } from 'antd';
 import posthog from 'posthog-js';
-import apolloClient from '@/apollo/client';
 import {
   buildRuntimeScopeStateKey,
   readRuntimeScopeSelectorFromUrl,
@@ -15,7 +14,6 @@ import RuntimeScopeBootstrap from '@/components/runtimeScope/RuntimeScopeBootstr
 import { GlobalConfigProvider } from '@/hooks/useGlobalConfig';
 import { RuntimeSelectorStateProvider } from '@/hooks/useRuntimeSelectorState';
 import { PostHogProvider } from 'posthog-js/react';
-import { ApolloProvider } from '@apollo/client';
 import { defaultIndicator } from '@/components/PageLoading';
 
 require('../styles/index.less');
@@ -45,19 +43,17 @@ function App({ Component, pageProps, router }: AppProps) {
         <link rel="icon" href="/favicon.ico" />
       </Head>
       <GlobalConfigProvider>
-        <ApolloProvider client={apolloClient}>
-          <PostHogProvider client={posthog}>
-            <RuntimeScopeBootstrap>
-              <RuntimeSelectorStateProvider>
-                <main className="app">
-                  <PersistentConsoleShell>
-                    <Component key={componentKey} {...pageProps} />
-                  </PersistentConsoleShell>
-                </main>
-              </RuntimeSelectorStateProvider>
-            </RuntimeScopeBootstrap>
-          </PostHogProvider>
-        </ApolloProvider>
+        <PostHogProvider client={posthog}>
+          <RuntimeScopeBootstrap>
+            <RuntimeSelectorStateProvider>
+              <main className="app">
+                <PersistentConsoleShell>
+                  <Component key={componentKey} {...pageProps} />
+                </PersistentConsoleShell>
+              </main>
+            </RuntimeSelectorStateProvider>
+          </RuntimeScopeBootstrap>
+        </PostHogProvider>
       </GlobalConfigProvider>
     </>
   );

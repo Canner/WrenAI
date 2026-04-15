@@ -3,17 +3,30 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import ModelForm from './ModelForm';
 import { FORM_MODE } from '@/utils/enum';
 
-const mockUseListDataSourceTablesQuery = jest.fn();
 const mockUseModelList = jest.fn();
+const mockListDataSourceTables = jest.fn();
 
-jest.mock('@/apollo/client/graphql/dataSource.generated', () => ({
-  useListDataSourceTablesQuery: (...args: any[]) =>
-    mockUseListDataSourceTablesQuery(...args),
-}));
+const setModelFormStateOverrides = (
+  overrides: Partial<Record<number, any>>,
+) => {
+  let callIndex = 0;
+  const spy = jest.spyOn(React, 'useState' as any) as jest.SpyInstance;
+  return spy.mockImplementation(((initial: any) => {
+    callIndex += 1;
+    if (Object.prototype.hasOwnProperty.call(overrides, callIndex)) {
+      return [overrides[callIndex], jest.fn()];
+    }
+    return [typeof initial === 'function' ? initial() : initial, jest.fn()];
+  }) as any);
+};
 
 jest.mock('@/hooks/useModelList', () => ({
   __esModule: true,
   default: (...args: any[]) => mockUseModelList(...args),
+}));
+
+jest.mock('@/utils/modelingRest', () => ({
+  listDataSourceTables: (...args: any[]) => mockListDataSourceTables(...args),
 }));
 
 jest.mock('@/components/PageLoading', () => ({
@@ -52,6 +65,9 @@ jest.mock('antd', () => {
   return {
     Form,
     Select,
+    message: {
+      error: jest.fn(),
+    },
   };
 });
 
@@ -67,54 +83,80 @@ describe('ModelForm', () => {
       data: [{ sourceTableName: 'catalog_beta.sales.orders' }],
       loading: false,
     });
-    mockUseListDataSourceTablesQuery.mockReturnValue({
-      data: {
-        listDataSourceTables: [
-          {
-            name: 'catalog_beta.sales.orders',
-            properties: {
-              catalog: 'catalog_beta',
-              schema: 'sales',
-              table: 'orders',
-            },
-            columns: [],
-          },
-          {
-            name: 'catalog_alpha.public.customers',
-            properties: {
-              catalog: 'catalog_alpha',
-              schema: 'public',
-              table: 'customers',
-            },
-            columns: [],
-          },
-          {
-            name: 'legacy_metrics',
-            properties: null,
-            columns: [],
-          },
-        ],
+    mockListDataSourceTables.mockResolvedValue([
+      {
+        name: 'catalog_beta.sales.orders',
+        properties: {
+          catalog: 'catalog_beta',
+          schema: 'sales',
+          table: 'orders',
+        },
+        columns: [],
       },
-      loading: false,
-    });
+      {
+        name: 'catalog_alpha.public.customers',
+        properties: {
+          catalog: 'catalog_alpha',
+          schema: 'public',
+          table: 'customers',
+        },
+        columns: [],
+      },
+      {
+        name: 'legacy_metrics',
+        properties: null,
+        columns: [],
+      },
+    ]);
   });
 
   it('groups tables by catalog and keeps legacy tables in a fallback group', () => {
-    const html = renderToStaticMarkup(
+    const useStateSpy = setModelFormStateOverrides({
+      3: [
+        {
+          name: 'catalog_beta.sales.orders',
+          properties: {
+            catalog: 'catalog_beta',
+            schema: 'sales',
+            table: 'orders',
+          },
+          columns: [],
+        },
+        {
+          name: 'catalog_alpha.public.customers',
+          properties: {
+            catalog: 'catalog_alpha',
+            schema: 'public',
+            table: 'customers',
+          },
+          columns: [],
+        },
+        {
+          name: 'legacy_metrics',
+          properties: null,
+          columns: [],
+        },
+      ],
+      4: false,
+    });
+
+    const markup = renderToStaticMarkup(
       React.createElement(ModelForm, {
         form,
         formMode: FORM_MODE.CREATE,
       }),
     );
 
-    expect(html).toContain('optgroup label="catalog_alpha"');
-    expect(html).toContain('optgroup label="catalog_beta"');
-    expect(html).toContain('optgroup label="默认 catalog"');
-    expect(html).toContain('title="catalog_alpha.public.customers"');
-    expect(html).toContain('>public.customers<');
-    expect(html).toContain('title="legacy_metrics"');
-    expect(html).toContain(
+    expect(markup).toContain('optgroup label="catalog_alpha"');
+    expect(markup).toContain('optgroup label="catalog_beta"');
+    expect(markup).toContain('optgroup label="默认 catalog"');
+    expect(markup).toContain('title="catalog_alpha.public.customers"');
+    expect(markup).toContain('>public.customers<');
+    expect(markup).toContain('title="legacy_metrics"');
+    expect(markup).toContain(
       'value="catalog_beta.sales.orders" disabled="" title="catalog_beta.sales.orders"',
     );
+
+    useStateSpy.mockRestore();
   });
 });

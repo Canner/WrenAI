@@ -26,7 +26,11 @@ const inferStatusCode = (error: unknown) => {
     return 404;
   }
 
-  if (/required|invalid|unsupported|readonly|read-only|cannot|failed/i.test(message)) {
+  if (
+    /required|invalid|unsupported|readonly|read-only|cannot|failed/i.test(
+      message,
+    )
+  ) {
     return 400;
   }
 

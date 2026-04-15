@@ -22,10 +22,11 @@ export interface Props {
   onOpenModelDrawer: () => void;
   onSelect: (selectKeys: React.Key[]) => void;
   readOnly?: boolean;
+  onRefresh?: () => Promise<unknown>;
 }
 
 export default function Modeling(props: Props) {
-  const { data, onSelect, onOpenModelDrawer, readOnly } = props;
+  const { data, onSelect, onOpenModelDrawer, readOnly, onRefresh } = props;
   const { models = [], views = [] } = data || {};
   const filteredModels = models.filter(
     (model): model is DiagramModel => model != null,
@@ -42,6 +43,7 @@ export default function Modeling(props: Props) {
         selectedKeys={[]}
         onOpenModelDrawer={onOpenModelDrawer}
         readOnly={readOnly}
+        onRefresh={onRefresh}
       />
       <ViewTree
         views={filteredViews}

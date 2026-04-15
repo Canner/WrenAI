@@ -1,6 +1,6 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { capitalize } from 'lodash';
-import { useDiagramQuery } from '@/apollo/client/graphql/diagram.generated';
+import type { DiagramQuery } from '@/apollo/client/graphql/diagram.generated';
 import { getNodeTypeIcon } from '@/utils/nodeType';
 import {
   DiagramModel,
@@ -8,6 +8,12 @@ import {
   DiagramModelField,
   DiagramViewField,
 } from '@/apollo/client/graphql/__types__';
+import {
+  buildKnowledgeDiagramUrl,
+  loadKnowledgeDiagramPayload,
+  peekKnowledgeDiagramPayload,
+} from '@/utils/knowledgeDiagramRest';
+import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
 
 type Model = DiagramModel | DiagramView;
 type Field = DiagramModelField | DiagramViewField;
@@ -74,7 +80,47 @@ export type Completer = ReturnType<typeof convertCompleter>;
 
 export default function useAutoComplete<T = Completer>(props: Props<T>) {
   const { includeColumns, skip } = props;
-  const { data } = useDiagramQuery({ skip });
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
+  const requestUrl = useMemo(
+    () =>
+      skip ? null : buildKnowledgeDiagramUrl(runtimeScopeNavigation.selector),
+    [runtimeScopeNavigation.selector, skip],
+  );
+  const [data, setData] = useState<DiagramQuery | null>(
+    requestUrl ? peekKnowledgeDiagramPayload({ requestUrl }) : null,
+  );
+
+  useEffect(() => {
+    if (!requestUrl) {
+      setData(null);
+      return;
+    }
+
+    let cancelled = false;
+    const cached = peekKnowledgeDiagramPayload({ requestUrl });
+    if (cached) {
+      setData(cached);
+    }
+
+    void loadKnowledgeDiagramPayload({
+      requestUrl,
+      useCache: true,
+    })
+      .then((payload) => {
+        if (!cancelled) {
+          setData(payload);
+        }
+      })
+      .catch(() => {
+        if (!cancelled && !cached) {
+          setData(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [requestUrl]);
 
   // Defined convertor
   const convertor = (props.convertor || convertCompleter) as Convertor<T>;

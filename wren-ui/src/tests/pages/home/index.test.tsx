@@ -12,12 +12,14 @@ const mockUseHomeSidebar = jest.fn();
 const mockUseAskPrompt = jest.fn();
 const mockUseProtectedRuntimeScopePage = jest.fn();
 const mockUseRuntimeScopeNavigation = jest.fn();
+const mockUseRuntimeSelectorState = jest.fn();
 const mockUseSuggestedQuestionsQuery = jest.fn();
 const mockUseRuntimeSelectorStateQuery = jest.fn();
 const mockUseCreateAskingTaskMutation = jest.fn();
 const mockUseCreateThreadMutation = jest.fn();
 const mockBuildRuntimeScopeHeaders = jest.fn();
 const mockBuildRuntimeScopeUrl = jest.fn();
+const mockResolveClientRuntimeScopeSelector = jest.fn();
 const mockUseAuthSession = jest.fn();
 
 let capturedPromptProps: any = null;
@@ -116,6 +118,11 @@ jest.mock('@/hooks/useRuntimeScopeNavigation', () => ({
   default: () => mockUseRuntimeScopeNavigation(),
 }));
 
+jest.mock('@/hooks/useRuntimeSelectorState', () => ({
+  __esModule: true,
+  default: () => mockUseRuntimeSelectorState(),
+}));
+
 jest.mock('@/hooks/useAuthSession', () => ({
   __esModule: true,
   default: (...args: any[]) => mockUseAuthSession(...args),
@@ -125,6 +132,8 @@ jest.mock('@/apollo/client/runtimeScope', () => ({
   buildRuntimeScopeHeaders: (...args: any[]) =>
     mockBuildRuntimeScopeHeaders(...args),
   buildRuntimeScopeUrl: (...args: any[]) => mockBuildRuntimeScopeUrl(...args),
+  resolveClientRuntimeScopeSelector: (...args: any[]) =>
+    mockResolveClientRuntimeScopeSelector(...args),
 }));
 
 jest.mock('@/apollo/client/graphql/home.generated', () => ({
@@ -165,6 +174,13 @@ describe('home index page', () => {
     jest.clearAllMocks();
     clearHomeSkillOptionsCacheForTests();
     capturedPromptProps = null;
+    mockResolveClientRuntimeScopeSelector.mockReturnValue({
+      workspaceId: 'ws-1',
+      knowledgeBaseId: 'kb-1',
+      kbSnapshotId: 'snap-1',
+      deployHash: 'deploy-1',
+      runtimeScopeId: 'scope-1',
+    });
     mockBuildRuntimeScopeHeaders.mockImplementation((selector: any) => {
       const headers: Record<string, string> = {};
       if (selector?.workspaceId) {
@@ -227,6 +243,37 @@ describe('home index page', () => {
           displayName: 'Nova User',
           email: 'nova@example.com',
         },
+      },
+    });
+    mockUseRuntimeSelectorState.mockReturnValue({
+      provided: true,
+      loading: false,
+      refetch: jest.fn(),
+      runtimeSelectorState: {
+        currentWorkspace: { id: 'ws-1', name: '系统工作空间' },
+        currentKnowledgeBase: {
+          id: 'kb-1',
+          name: '订单分析知识库',
+          defaultKbSnapshotId: 'snap-1',
+        },
+        currentKbSnapshot: {
+          id: 'snap-1',
+          displayName: '默认快照',
+          deployHash: 'deploy-1',
+          status: 'READY',
+        },
+        knowledgeBases: [
+          {
+            id: 'kb-1',
+            name: '订单分析知识库',
+            defaultKbSnapshotId: 'snap-1',
+          },
+          {
+            id: 'kb-2',
+            name: '客户经营知识库',
+            defaultKbSnapshotId: 'snap-2',
+          },
+        ],
       },
     });
     mockUseSuggestedQuestionsQuery.mockReturnValue({
@@ -301,6 +348,24 @@ describe('home index page', () => {
         });
       }
 
+      if (url.includes('/api/v1/asking-tasks?')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            id: 'task-1',
+          }),
+        });
+      }
+
+      if (url.includes('/api/v1/threads?')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            id: 'thread-2',
+          }),
+        });
+      }
+
       return Promise.reject(new Error(`Unexpected fetch: ${url}`));
     }) as any;
   });
@@ -358,6 +423,13 @@ describe('home index page', () => {
   it('shows sample-runtime source hint when selected knowledge base has no demo mapping', () => {
     const useStateSpy = setHomeStateOverrides({
       3: ['kb-2'],
+      9: {
+        questions: [
+          { question: '最近 30 天 GMV 趋势' },
+          { question: '订单量波动最大的类目' },
+          { question: '复购率最高的用户群体' },
+        ],
+      },
     });
 
     const markup = renderPage();
@@ -368,27 +440,28 @@ describe('home index page', () => {
   });
 
   it('shows selected knowledge-base demo source hint when pin matches demo mapping', () => {
-    mockUseRuntimeSelectorStateQuery.mockReturnValue({
-      data: {
-        runtimeSelectorState: {
-          currentWorkspace: { id: 'ws-1', name: '系统工作空间' },
-          currentKnowledgeBase: {
+    mockUseRuntimeSelectorState.mockReturnValue({
+      provided: true,
+      loading: false,
+      refetch: jest.fn(),
+      runtimeSelectorState: {
+        currentWorkspace: { id: 'ws-1', name: '系统工作空间' },
+        currentKnowledgeBase: {
+          id: 'kb-1',
+          name: '订单分析知识库',
+        },
+        knowledgeBases: [
+          {
             id: 'kb-1',
             name: '订单分析知识库',
+            defaultKbSnapshotId: 'snap-1',
           },
-          knowledgeBases: [
-            {
-              id: 'kb-1',
-              name: '订单分析知识库',
-              defaultKbSnapshotId: 'snap-1',
-            },
-            {
-              id: 'kb-2',
-              name: '人力资源数据（HR）',
-              defaultKbSnapshotId: 'snap-2',
-            },
-          ],
-        },
+          {
+            id: 'kb-2',
+            name: '人力资源数据（HR）',
+            defaultKbSnapshotId: 'snap-2',
+          },
+        ],
       },
     });
 
@@ -418,47 +491,46 @@ describe('home index page', () => {
     });
 
     renderPage();
-    expect(mockUseAskPrompt).toHaveBeenCalledWith(undefined, {
-      knowledgeBaseIds: undefined,
-      selectedSkillIds: undefined,
-    });
+    expect(mockUseAskPrompt).toHaveBeenCalledWith(
+      undefined,
+      {
+        knowledgeBaseIds: undefined,
+        selectedSkillIds: undefined,
+      },
+      undefined,
+      expect.objectContaining({
+        workspaceId: 'ws-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snap-1',
+        deployHash: 'deploy-1',
+        runtimeScopeId: 'scope-1',
+      }),
+    );
 
     await capturedPromptProps.onSubmit('测试问题');
 
     expect(mockOnStopPolling).toHaveBeenCalled();
-    expect(mockCreateAskingTask).toHaveBeenCalledWith({
-      variables: {
-        data: {
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      1,
+      '/api/v1/asking-tasks?workspaceId=ws-1&knowledgeBaseId=kb-1',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
           question: '测试问题',
-        },
-      },
-      context: {
-        skipRuntimeScopeHeaders: true,
-        headers: {
-          'x-wren-workspace-id': 'ws-1',
-          'x-wren-knowledge-base-id': 'kb-1',
-          'x-wren-kb-snapshot-id': 'snap-1',
-          'x-wren-deploy-hash': 'deploy-1',
-        },
-      },
-    });
-    expect(mockCreateThread).toHaveBeenCalledWith({
-      variables: {
-        data: {
+        }),
+      }),
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      '/api/v1/threads?workspaceId=ws-1&knowledgeBaseId=kb-1',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
           question: '测试问题',
           taskId: 'task-1',
-        },
-      },
-      context: {
-        skipRuntimeScopeHeaders: true,
-        headers: {
-          'x-wren-workspace-id': 'ws-1',
-          'x-wren-knowledge-base-id': 'kb-1',
-          'x-wren-kb-snapshot-id': 'snap-1',
-          'x-wren-deploy-hash': 'deploy-1',
-        },
-      },
-    });
+        }),
+      }),
+    );
     expect(mockPush).toHaveBeenCalledWith(
       '/home/thread-2',
       {},
@@ -481,6 +553,27 @@ describe('home index page', () => {
         runtimeScopeId: 'scope-1',
       },
     });
+    mockUseRuntimeSelectorState.mockReturnValue({
+      provided: true,
+      loading: false,
+      refetch: jest.fn(),
+      runtimeSelectorState: {
+        currentWorkspace: { id: 'ws-1', name: '系统工作空间' },
+        currentKnowledgeBase: {
+          id: 'kb-1',
+          name: '订单分析知识库',
+          defaultKbSnapshotId: undefined,
+        },
+        currentKbSnapshot: undefined,
+        knowledgeBases: [
+          {
+            id: 'kb-1',
+            name: '订单分析知识库',
+            defaultKbSnapshotId: undefined,
+          },
+        ],
+      },
+    });
 
     renderPage();
     await capturedPromptProps.onSubmit('帮我查 GMV');
@@ -489,6 +582,7 @@ describe('home index page', () => {
       '当前没有可用的知识库运行范围。',
     );
     expect(mockAskSubmit).not.toHaveBeenCalled();
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it('blocks asking with historical snapshot readonly hint', async () => {
@@ -503,42 +597,39 @@ describe('home index page', () => {
         runtimeScopeId: 'scope-1',
       },
     });
-    mockUseRuntimeSelectorStateQuery.mockReturnValue({
-      data: {
-        runtimeSelectorState: {
-          currentWorkspace: { id: 'ws-1', name: '系统工作空间' },
-          currentKnowledgeBase: {
+    mockUseRuntimeSelectorState.mockReturnValue({
+      provided: true,
+      loading: false,
+      refetch: jest.fn(),
+      runtimeSelectorState: {
+        currentWorkspace: { id: 'ws-1', name: '系统工作空间' },
+        currentKnowledgeBase: {
+          id: 'kb-1',
+          name: '订单分析知识库',
+          defaultKbSnapshotId: 'snap-latest',
+        },
+        currentKbSnapshot: {
+          id: 'snap-history',
+          displayName: '历史快照',
+        },
+        knowledgeBases: [
+          {
             id: 'kb-1',
             name: '订单分析知识库',
             defaultKbSnapshotId: 'snap-latest',
           },
-          currentKbSnapshot: {
-            id: 'snap-history',
-            displayName: '历史快照',
-          },
-          knowledgeBases: [
-            {
-              id: 'kb-1',
-              name: '订单分析知识库',
-              defaultKbSnapshotId: 'snap-latest',
-            },
-          ],
-        },
+        ],
       },
     });
 
     renderPage();
     await capturedPromptProps.onSubmit('帮我查 GMV');
 
-    expect(mockUseSuggestedQuestionsQuery).toHaveBeenCalledWith(
-      expect.objectContaining({
-        skip: true,
-      }),
-    );
     expect((globalThis as any).__homeIndexMessage.warning).toHaveBeenCalledWith(
       HISTORICAL_SNAPSHOT_READONLY_HINT,
     );
     expect(mockAskSubmit).not.toHaveBeenCalled();
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it('persists selected skills together with multi knowledge-base scope', async () => {
@@ -549,33 +640,34 @@ describe('home index page', () => {
 
     renderPage();
 
-    expect(mockUseAskPrompt).toHaveBeenCalledWith(undefined, {
-      knowledgeBaseIds: ['kb-1', 'kb-2'],
-      selectedSkillIds: ['skill-1', 'skill-2'],
-    });
+    expect(mockUseAskPrompt).toHaveBeenCalledWith(
+      undefined,
+      {
+        knowledgeBaseIds: ['kb-1', 'kb-2'],
+        selectedSkillIds: ['skill-1', 'skill-2'],
+      },
+      undefined,
+      expect.objectContaining({
+        workspaceId: 'ws-1',
+        knowledgeBaseId: 'kb-1',
+      }),
+    );
 
     await capturedPromptProps.onCreateResponse({
       question: '调用技能分析异常订单',
     });
 
-    expect(mockCreateThread).toHaveBeenCalledWith({
-      variables: {
-        data: {
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/v1/threads?workspaceId=ws-1&knowledgeBaseId=kb-1',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
           question: '调用技能分析异常订单',
           knowledgeBaseIds: ['kb-1', 'kb-2'],
           selectedSkillIds: ['skill-1', 'skill-2'],
-        },
-      },
-      context: {
-        skipRuntimeScopeHeaders: true,
-        headers: {
-          'x-wren-workspace-id': 'ws-1',
-          'x-wren-knowledge-base-id': 'kb-1',
-          'x-wren-kb-snapshot-id': 'snap-1',
-          'x-wren-deploy-hash': 'deploy-1',
-        },
-      },
-    });
+        }),
+      }),
+    );
 
     useStateSpy.mockRestore();
   });
@@ -601,39 +693,27 @@ describe('home index page', () => {
     renderPage();
     await capturedPromptProps.onSubmit('帮我看 HR 指标');
 
-    expect(mockCreateAskingTask).toHaveBeenCalledWith(
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      1,
+      '/api/v1/asking-tasks?workspaceId=ws-1&knowledgeBaseId=kb-2',
       expect.objectContaining({
-        variables: {
-          data: {
-            question: '帮我看 HR 指标',
-            knowledgeBaseIds: ['kb-2'],
-          },
-        },
-        context: {
-          skipRuntimeScopeHeaders: true,
-          headers: {
-            'x-wren-workspace-id': 'ws-1',
-            'x-wren-knowledge-base-id': 'kb-2',
-          },
-        },
+        method: 'POST',
+        body: JSON.stringify({
+          question: '帮我看 HR 指标',
+          knowledgeBaseIds: ['kb-2'],
+        }),
       }),
     );
-    expect(mockCreateThread).toHaveBeenCalledWith(
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      '/api/v1/threads?workspaceId=ws-1&knowledgeBaseId=kb-2',
       expect.objectContaining({
-        variables: {
-          data: {
-            question: '帮我看 HR 指标',
-            taskId: 'task-1',
-            knowledgeBaseIds: ['kb-2'],
-          },
-        },
-        context: {
-          skipRuntimeScopeHeaders: true,
-          headers: {
-            'x-wren-workspace-id': 'ws-1',
-            'x-wren-knowledge-base-id': 'kb-2',
-          },
-        },
+        method: 'POST',
+        body: JSON.stringify({
+          question: '帮我看 HR 指标',
+          taskId: 'task-1',
+          knowledgeBaseIds: ['kb-2'],
+        }),
       }),
     );
     expect(mockPush).toHaveBeenCalledWith(
