@@ -36,7 +36,7 @@ import {
   ThreadResponseAdjustment,
   ThreadResponseAdjustmentType,
   ViewInfo,
-} from '@/apollo/client/graphql/__types__';
+} from '@/types/api';
 
 const { Title, Text } = Typography;
 

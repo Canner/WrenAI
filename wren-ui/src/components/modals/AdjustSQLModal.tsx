@@ -216,8 +216,12 @@ export default function AdjustSQLModal(props: Props) {
         <Alert
           showIcon
           type="error"
-          message={error.shortMessage}
-          description={<ErrorCollapse message={error.message} />}
+          message={error.shortMessage || '调整 SQL 失败'}
+          description={
+            <ErrorCollapse
+              message={error.message || '未知错误，请稍后重试。'}
+            />
+          }
         />
       )}
     </Modal>

@@ -3,7 +3,7 @@ import { Button } from 'antd';
 import FileDoneOutlined from '@ant-design/icons/FileDoneOutlined';
 import SaveOutlined from '@ant-design/icons/SaveOutlined';
 import { Path } from '@/utils/enum';
-import { ViewInfo } from '@/apollo/client/graphql/__types__';
+import { ViewInfo } from '@/types/api';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 
 interface Props {

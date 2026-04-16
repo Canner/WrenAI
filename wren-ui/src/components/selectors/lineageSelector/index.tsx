@@ -17,7 +17,7 @@ import {
 import { DiagramModel } from '@/utils/data';
 import { getNodeTypeIcon } from '@/utils/nodeType';
 import { aggregations } from '@/utils/expressionType';
-import { ExpressionName } from '@/apollo/client/graphql/__types__';
+import { ExpressionName } from '@/types/api';
 import {
   checkStringFunctionAllowType,
   checkNumberFunctionAllowType,

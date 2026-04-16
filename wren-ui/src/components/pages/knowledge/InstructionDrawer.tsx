@@ -4,7 +4,7 @@ import { getCompactTime } from '@/utils/time';
 import QuestionOutlined from '@ant-design/icons/QuestionOutlined';
 import { DrawerAction } from '@/hooks/useDrawerAction';
 import GlobalLabel from '@/components/pages/knowledge/GlobalLabel';
-import { Instruction } from '@/apollo/client/graphql/__types__';
+import { Instruction } from '@/types/api';
 
 const { Text } = Typography;
 

@@ -7,7 +7,7 @@ import { makeIterable } from '@/utils/iteration';
 import {
   RecommendedQuestionsTask,
   RecommendedQuestionsTaskStatus,
-} from '@/apollo/client/graphql/__types__';
+} from '@/types/api';
 
 export interface SelectQuestionProps {
   question: string;

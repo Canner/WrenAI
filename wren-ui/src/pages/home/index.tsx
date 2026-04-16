@@ -40,7 +40,7 @@ import {
   fetchSuggestedQuestions,
   type SuggestedQuestionsPayload,
 } from '@/utils/homeRest';
-import { CreateThreadInput } from '@/apollo/client/graphql/__types__';
+import { CreateThreadInput } from '@/types/api';
 import DolaAppShell from '@/components/reference/DolaAppShell';
 import {
   usePersistentShellEmbedded,

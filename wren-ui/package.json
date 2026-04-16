@@ -19,18 +19,14 @@
     "migrate:3001": "PG_URL=postgres://postgres:postgres@127.0.0.1:9432/wrenai yarn knex migrate:latest",
     "rollback": "yarn knex migrate:rollback",
     "backfill:principal-role-bindings": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/backfill_principal_role_bindings.ts",
-    "generate-gql": "yarn graphql-codegen --config codegen.yaml",
     "re-encrypt-secrets": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/re_encrypt_secrets.ts"
   },
   "dependencies": {
     "@google-cloud/bigquery": "^6.0.3",
     "@google-cloud/storage": "^6.10.1",
-    "apollo-server-micro": "^3.10.2",
     "axios": "^1.13.5",
     "bcryptjs": "^2.4.3",
     "cron-parser": "^5.1.1",
-    "graphql": "^16.6.0",
-    "graphql-type-json": "^0.3.2",
     "knex": "^3.1.0",
     "lodash": "^4.17.23",
     "log4js": "^6.9.1",
@@ -44,13 +40,6 @@
     "uuid": "^11.1.0"
   },
   "devDependencies": {
-    "@apollo/client": "^3.6.9",
-    "@graphql-codegen/cli": "2.12.0",
-    "@graphql-codegen/introspection": "2.2.1",
-    "@graphql-codegen/near-operation-file-preset": "^2.4.1",
-    "@graphql-codegen/typescript": "2.7.3",
-    "@graphql-codegen/typescript-operations": "^2.5.3",
-    "@graphql-codegen/typescript-react-apollo": "3.3.3",
     "@next/bundle-analyzer": "^15.3.0",
     "@playwright/test": "^1.55.2",
     "@testing-library/react": "14.0.0",

@@ -5,10 +5,7 @@ import Icon from '@/import/icon';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import { CopilotSVG } from '@/utils/svgs';
 import { isRecommendedFinished } from '@/hooks/useAskPrompt';
-import {
-  ResultQuestion,
-  RecommendedQuestionsTaskStatus,
-} from '@/apollo/client/graphql/__types__';
+import { ResultQuestion, RecommendedQuestionsTaskStatus } from '@/types/api';
 import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
 import {
   generateProjectRecommendationQuestions,

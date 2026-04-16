@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { DataSourceName } from '@/apollo/client/graphql/__types__';
+import { DataSourceName } from '@/types/api';
 import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
 import { fetchSettings } from '@/utils/settingsRest';
 import { getThreadResponseNativeSql } from '@/utils/homeRest';

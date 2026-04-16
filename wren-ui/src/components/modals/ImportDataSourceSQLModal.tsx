@@ -6,7 +6,7 @@ import { DATA_SOURCES } from '@/utils/enum';
 import { ERROR_TEXTS } from '@/utils/error';
 import SQLEditor from '@/components/editor/SQLEditor';
 import ErrorCollapse from '@/components/ErrorCollapse';
-import { DataSource, DataSourceName } from '@/apollo/client/graphql/__types__';
+import { DataSource, DataSourceName } from '@/types/api';
 import { substituteDialectSql } from '@/utils/modelingRest';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 

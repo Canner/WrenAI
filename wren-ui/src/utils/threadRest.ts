@@ -6,7 +6,7 @@ import type {
   AdjustThreadResponseChartInput,
   CreateThreadResponseInput,
   ThreadResponse,
-} from '@/apollo/client/graphql/__types__';
+} from '@/types/api';
 
 type ErrorPayload = {
   error?: string;
@@ -18,9 +18,7 @@ export const parseThreadRestResponse = async <TPayload>(
 ): Promise<TPayload> => {
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(
-      (payload as ErrorPayload | null)?.error || fallbackMessage,
-    );
+    throw new Error((payload as ErrorPayload | null)?.error || fallbackMessage);
   }
 
   return payload as TPayload;
@@ -29,12 +27,14 @@ export const parseThreadRestResponse = async <TPayload>(
 export const buildThreadResponsesCollectionUrl = (
   threadId: number,
   selector: ClientRuntimeScopeSelector,
-) => buildRuntimeScopeUrl(`/api/v1/threads/${threadId}/responses`, {}, selector);
+) =>
+  buildRuntimeScopeUrl(`/api/v1/threads/${threadId}/responses`, {}, selector);
 
 export const buildThreadResponseItemUrl = (
   responseId: number,
   selector: ClientRuntimeScopeSelector,
-) => buildRuntimeScopeUrl(`/api/v1/thread-responses/${responseId}`, {}, selector);
+) =>
+  buildRuntimeScopeUrl(`/api/v1/thread-responses/${responseId}`, {}, selector);
 
 export const buildGenerateThreadResponseAnswerUrl = (
   responseId: number,
@@ -81,11 +81,14 @@ export const createThreadResponse = async (
   threadId: number,
   data: CreateThreadResponseInput,
 ) => {
-  const response = await fetch(buildThreadResponsesCollectionUrl(threadId, selector), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
+  const response = await fetch(
+    buildThreadResponsesCollectionUrl(threadId, selector),
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    },
+  );
 
   return parseThreadRestResponse<ThreadResponse>(
     response,
@@ -98,11 +101,14 @@ export const updateThreadResponseSql = async (
   responseId: number,
   data: { sql: string },
 ) => {
-  const response = await fetch(buildThreadResponseItemUrl(responseId, selector), {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
+  const response = await fetch(
+    buildThreadResponseItemUrl(responseId, selector),
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    },
+  );
 
   return parseThreadRestResponse<ThreadResponse>(
     response,

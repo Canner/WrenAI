@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { DiagramQuery } from '@/apollo/client/graphql/diagram.generated';
+import type { DiagramQuery } from '@/types/api';
 import {
   getReferenceDisplayAssetDescription,
   getReferenceDisplayAssetName,

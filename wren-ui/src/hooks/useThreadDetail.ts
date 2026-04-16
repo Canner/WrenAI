@@ -3,7 +3,7 @@ import {
   buildRuntimeScopeUrl,
   type ClientRuntimeScopeSelector,
 } from '@/apollo/client/runtimeScope';
-import type { DetailedThread } from '@/apollo/client/graphql/__types__';
+import type { DetailedThread } from '@/types/api';
 import {
   peekThreadOverview,
   primeThreadOverview,

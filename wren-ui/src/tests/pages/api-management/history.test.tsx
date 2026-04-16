@@ -2,14 +2,13 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import moment from 'moment';
 import APIHistory from '../../../pages/api-management/history';
-import { ApiType } from '@/apollo/client/graphql/__types__';
+import { ApiType } from '@/types/api';
 import { API_HISTORY_FILTER_TYPES } from '@/components/pages/apiManagement/apiTypeLabels';
 
 const mockUseRouter = jest.fn();
 const mockUseProtectedRuntimeScopePage = jest.fn();
 const mockUseDrawerAction = jest.fn();
-const mockUseApiHistoryQuery = jest.fn();
-const mockUseAskShadowCompareStatsQuery = jest.fn();
+const mockUseApiHistoryList = jest.fn();
 
 let mockCapturedTableProps: any;
 let mockCapturedRangePickerProps: any;
@@ -69,10 +68,9 @@ jest.mock('@/hooks/useDrawerAction', () => ({
   default: () => mockUseDrawerAction(),
 }));
 
-jest.mock('@/apollo/client/graphql/apiManagement.generated', () => ({
-  useApiHistoryQuery: (args: any) => mockUseApiHistoryQuery(args),
-  useAskShadowCompareStatsQuery: (args: any) =>
-    mockUseAskShadowCompareStatsQuery(args),
+jest.mock('@/hooks/useApiHistoryList', () => ({
+  __esModule: true,
+  default: (args: any) => mockUseApiHistoryList(args),
 }));
 
 jest.mock('@/components/reference/ConsoleShellLayout', () => ({
@@ -169,14 +167,9 @@ describe('APIHistory page URL sync', () => {
       openDrawer: jest.fn(),
       closeDrawer: jest.fn(),
     });
-    mockUseApiHistoryQuery.mockReturnValue({
-      data: { apiHistory: { items: [], total: 0 } },
+    mockUseApiHistoryList.mockReturnValue({
+      data: { items: [], total: 0, hasMore: false },
       loading: false,
-    });
-    mockUseAskShadowCompareStatsQuery.mockReturnValue({
-      data: { askShadowCompareStats: null },
-      loading: false,
-      error: undefined,
     });
   });
 
@@ -204,17 +197,22 @@ describe('APIHistory page URL sync', () => {
       .endOf('day')
       .toISOString();
 
-    expect(mockUseApiHistoryQuery).toHaveBeenCalledWith(
+    expect(mockUseApiHistoryList).toHaveBeenCalledWith(
       expect.objectContaining({
-        variables: expect.objectContaining({
-          pagination: { offset: 20, limit: 10 },
-          filter: expect.objectContaining({
-            apiType: ApiType.STREAM_ASK,
-            statusCode: 400,
-            threadId: 'thread-123',
-            startDate: expectedStartDate,
-            endDate: expectedEndDate,
-          }),
+        enabled: true,
+        pagination: { offset: 20, limit: 10 },
+        filter: expect.objectContaining({
+          apiType: ApiType.STREAM_ASK,
+          statusCode: 400,
+          threadId: 'thread-123',
+          startDate: expectedStartDate,
+          endDate: expectedEndDate,
+        }),
+        runtimeScopeSelector: expect.objectContaining({
+          workspaceId: 'ws-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snap-1',
+          deployHash: 'hash-1',
         }),
       }),
     );

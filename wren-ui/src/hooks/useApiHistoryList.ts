@@ -3,7 +3,7 @@ import {
   buildRuntimeScopeUrl,
   ClientRuntimeScopeSelector,
 } from '@/apollo/client/runtimeScope';
-import { ApiType } from '@/apollo/client/graphql/__types__';
+import { ApiType } from '@/types/api';
 
 export type ApiHistoryListItem = {
   id: string;

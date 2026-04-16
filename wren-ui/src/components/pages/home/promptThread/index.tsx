@@ -8,10 +8,7 @@ import AnswerResult from './AnswerResult';
 import { makeIterable, IterableComponent } from '@/utils/iteration';
 import { getIsFinished } from '@/hooks/useAskPrompt';
 import { getAnswerIsFinished } from '@/components/pages/home/promptThread/TextBasedAnswer';
-import {
-  RecommendedQuestionsTask,
-  ThreadResponse,
-} from '@/apollo/client/graphql/__types__';
+import { RecommendedQuestionsTask, ThreadResponse } from '@/types/api';
 import { SelectQuestionProps } from '@/components/pages/home/RecommendedQuestions';
 import { resolveShouldAutoPreviewThreadResponse } from './autoPreview';
 const THREAD_INITIAL_VISIBLE_RESPONSE_COUNT = 24;

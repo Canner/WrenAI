@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { capitalize } from 'lodash';
-import type { DiagramQuery } from '@/apollo/client/graphql/diagram.generated';
+import type { DiagramQuery } from '@/types/api';
 import { getNodeTypeIcon } from '@/utils/nodeType';
 import {
   DiagramModel,
   DiagramView,
   DiagramModelField,
   DiagramViewField,
-} from '@/apollo/client/graphql/__types__';
+} from '@/types/api';
 import {
   buildKnowledgeDiagramUrl,
   loadKnowledgeDiagramPayload,

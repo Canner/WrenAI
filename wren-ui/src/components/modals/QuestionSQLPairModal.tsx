@@ -15,11 +15,7 @@ import PreviewData from '@/components/dataPreview/PreviewData';
 import ImportDataSourceSQLModal, {
   isSupportSubstitute,
 } from '@/components/modals/ImportDataSourceSQLModal';
-import {
-  SqlPair,
-  DataSource,
-  DataSourceName,
-} from '@/apollo/client/graphql/__types__';
+import { SqlPair, DataSource, DataSourceName } from '@/types/api';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import {
   previewSql,

@@ -13,7 +13,7 @@ import {
   RecommendedQuestionsTask,
   RecommendedQuestionsTaskStatus,
   ThreadResponse,
-} from '@/apollo/client/graphql/__types__';
+} from '@/types/api';
 import {
   cancelAskingTask as cancelAskingTaskRest,
   createAskingTask as createAskingTaskRest,

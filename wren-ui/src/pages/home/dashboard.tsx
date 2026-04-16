@@ -14,7 +14,7 @@ import DashboardHeader from '@/components/pages/home/dashboardGrid/DashboardHead
 import CacheSettingsDrawer, {
   Schedule,
 } from '@/components/pages/home/dashboardGrid/CacheSettingsDrawer';
-import { DataSourceName } from '@/apollo/client/graphql/__types__';
+import { DataSourceName } from '@/types/api';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
 import useRuntimeSelectorState from '@/hooks/useRuntimeSelectorState';
@@ -44,7 +44,7 @@ const DashboardWorkbench = styled.div`
   margin: 0 auto;
   display: grid;
   grid-template-columns: 312px minmax(0, 1fr);
-  gap: 20px;
+  gap: 18px;
   align-items: start;
 
   @media (max-width: 1080px) {
@@ -55,21 +55,21 @@ const DashboardWorkbench = styled.div`
 const DashboardRail = styled.aside`
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
 `;
 
 const DashboardRailCard = styled.section`
-  border-radius: 20px;
+  border-radius: 18px;
   border: 1px solid var(--nova-outline-soft);
   background: rgba(255, 255, 255, 0.96);
   box-shadow: var(--nova-shadow-soft);
-  padding: 16px;
+  padding: 18px;
 `;
 
 const DashboardRailList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   margin-top: 12px;
 `;
 
@@ -78,12 +78,12 @@ const DashboardRailItem = styled.button<{ $active?: boolean }>`
   border: 1px solid
     ${(props) =>
       props.$active ? 'rgba(141, 101, 225, 0.18)' : 'var(--nova-outline-soft)'};
-  border-radius: 18px;
+  border-radius: 16px;
   background: ${(props) =>
     props.$active
       ? 'linear-gradient(180deg, rgba(238, 233, 252, 0.92) 0%, rgba(255, 255, 255, 0.98) 100%)'
       : 'rgba(255, 255, 255, 0.94)'};
-  padding: 14px;
+  padding: 13px 14px;
   text-align: left;
   cursor: pointer;
   transition: all 0.18s ease;
@@ -119,7 +119,11 @@ const DashboardStageHeader = styled.div`
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  padding: 4px 2px 0;
+  padding: 18px 20px;
+  border-radius: 18px;
+  border: 1px solid var(--nova-outline-soft);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: var(--nova-shadow-soft);
 
   @media (max-width: 960px) {
     flex-direction: column;
@@ -132,8 +136,8 @@ const DashboardStageHeading = styled.div`
 
 const DashboardStageTitle = styled.h1`
   margin: 0;
-  font-size: 28px;
-  line-height: 1.15;
+  font-size: 30px;
+  line-height: 1.2;
   font-weight: 700;
   color: var(--nova-text-primary);
 `;
@@ -147,7 +151,7 @@ const DashboardStageMeta = styled.div`
 const DashboardStageCanvas = styled.div<{ $empty?: boolean }>`
   min-width: 0;
   min-height: ${(props) => (props.$empty ? '560px' : '0')};
-  border-radius: var(--nova-radius-card);
+  border-radius: 18px;
   border: 1px solid var(--nova-outline-soft);
   background: rgba(255, 255, 255, 0.98);
   box-shadow: var(--nova-shadow-soft);
@@ -159,6 +163,23 @@ const DashboardQuickActions = styled.div`
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 14px;
+`;
+
+const WorkbenchActionButton = styled(Button)`
+  && {
+    height: 36px;
+    border-radius: 10px;
+    padding-inline: 14px;
+    font-weight: 500;
+    box-shadow: none;
+  }
+`;
+
+const WorkbenchPrimaryActionButton = styled(WorkbenchActionButton)`
+  && {
+    border-color: transparent;
+    box-shadow: 0 8px 18px rgba(111, 71, 255, 0.14);
+  }
 `;
 
 const DashboardStageActions = styled.div`
@@ -176,7 +197,7 @@ const DashboardStageActions = styled.div`
 const DashboardDetailStack = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   margin-top: 12px;
 `;
 
@@ -796,13 +817,13 @@ export default function Dashboard() {
                 style={{ marginTop: 12 }}
               />
               <DashboardQuickActions>
-                <Button
+                <WorkbenchPrimaryActionButton
                   type="primary"
                   disabled={isDashboardReadonly}
                   onClick={() => setCreateDashboardOpen(true)}
                 >
                   新建看板
-                </Button>
+                </WorkbenchPrimaryActionButton>
               </DashboardQuickActions>
               <DashboardRailList>
                 {filteredDashboards.length === 0 ? (
@@ -922,7 +943,7 @@ export default function Dashboard() {
                     </DashboardDetailRow>
                   ) : null}
                   <DashboardQuickActions>
-                    <Button
+                    <WorkbenchActionButton
                       onClick={() =>
                         dashboardGridRef?.current?.focusItem(
                           selectedDashboardItem.id,
@@ -930,8 +951,8 @@ export default function Dashboard() {
                       }
                     >
                       定位到画布
-                    </Button>
-                    <Button
+                    </WorkbenchActionButton>
+                    <WorkbenchActionButton
                       onClick={() =>
                         void goToSourceThread(
                           selectedDashboardItem.detail?.sourceThreadId,
@@ -940,14 +961,14 @@ export default function Dashboard() {
                       }
                     >
                       回到来源线程
-                    </Button>
-                    <Button
+                    </WorkbenchActionButton>
+                    <WorkbenchActionButton
                       danger
                       disabled={isDashboardReadonly}
                       onClick={() => void onDelete(selectedDashboardItem.id)}
                     >
                       删除当前卡片
-                    </Button>
+                    </WorkbenchActionButton>
                   </DashboardQuickActions>
                 </DashboardDetailStack>
               ) : (
@@ -976,27 +997,27 @@ export default function Dashboard() {
                 </DashboardStageMeta>
               </DashboardStageHeading>
               <DashboardStageActions>
-                <Button
+                <WorkbenchPrimaryActionButton
                   type="primary"
                   onClick={() =>
                     runtimeScopeNavigation.pushWorkspace(Path.Home)
                   }
                 >
                   去新对话生成图表
-                </Button>
-                <Button
+                </WorkbenchPrimaryActionButton>
+                <WorkbenchActionButton
                   onClick={() => void refreshActiveDashboard()}
                   disabled={isDashboardReadonly}
                 >
                   刷新看板
-                </Button>
+                </WorkbenchActionButton>
                 {canShowCacheSettings ? (
-                  <Button
+                  <WorkbenchActionButton
                     onClick={() => void openCacheSettings()}
                     disabled={isDashboardReadonly}
                   >
                     缓存与调度
-                  </Button>
+                  </WorkbenchActionButton>
                 ) : null}
               </DashboardStageActions>
             </DashboardStageHeader>

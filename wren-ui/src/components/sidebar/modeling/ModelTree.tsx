@@ -15,10 +15,7 @@ import WarningOutlined from '@ant-design/icons/WarningOutlined';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import { StyledSidebarTree } from '@/components/sidebar/Modeling';
 import SchemaChangeModal from '@/components/modals/SchemaChangeModal';
-import {
-  SchemaChange,
-  SchemaChangeType,
-} from '@/apollo/client/graphql/__types__';
+import { SchemaChange, SchemaChangeType } from '@/types/api';
 import {
   fetchSchemaChanges,
   resolveSchemaChange,
@@ -54,9 +51,9 @@ export default function ModelTree(props: Props) {
   const [isDetecting, setIsDetecting] = useState(false);
   const [isResolving, setIsResolving] = useState(false);
   const refetchSchemaChange = useCallback(async () => {
-    const nextSchemaChange = await fetchSchemaChanges(
+    const nextSchemaChange = (await fetchSchemaChanges(
       runtimeScopeNavigation.selector,
-    );
+    )) as SchemaChange | null;
     setSchemaChangeData(nextSchemaChange);
     return nextSchemaChange;
   }, [runtimeScopeNavigation.selector]);

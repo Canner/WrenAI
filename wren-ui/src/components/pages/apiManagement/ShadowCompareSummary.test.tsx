@@ -4,7 +4,7 @@ import {
   deriveShadowCompareRolloutReadiness,
   default as ShadowCompareSummary,
 } from './ShadowCompareSummary';
-import { ApiType } from '@/apollo/client/graphql/__types__';
+import { ApiType } from '@/types/api';
 
 jest.mock('antd', () => {
   const React = jest.requireActual('react');

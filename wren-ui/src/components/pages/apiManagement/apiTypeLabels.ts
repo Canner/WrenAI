@@ -1,4 +1,4 @@
-import { ApiType } from '@/apollo/client/graphql/__types__';
+import { ApiType } from '@/types/api';
 
 export const API_HISTORY_FILTER_TYPES = Object.values(ApiType) as ApiType[];
 

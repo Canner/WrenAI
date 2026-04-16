@@ -7,7 +7,7 @@ import type {
   CreateSqlPairInput,
   Instruction,
   SqlPair,
-} from '@/apollo/client/graphql/__types__';
+} from '@/types/api';
 
 type InstructionRestPayload = Partial<
   Pick<

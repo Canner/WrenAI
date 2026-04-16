@@ -1,4 +1,4 @@
-import { ExpressionName } from '@/apollo/client/graphql/__types__';
+import { ExpressionName } from '@/types/api';
 import { JOIN_TYPE } from '@/utils/enum';
 
 const DefaultText = '未知';

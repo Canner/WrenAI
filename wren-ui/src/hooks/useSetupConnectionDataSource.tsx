@@ -5,7 +5,7 @@ import {
   REDSHIFT_AUTH_METHOD,
   DATABRICKS_AUTH_METHOD,
 } from '@/utils/enum';
-import { DataSourceName } from '@/apollo/client/graphql/__types__';
+import { DataSourceName } from '@/types/api';
 import { saveDataSource as saveDataSourceRest } from '@/utils/modelingRest';
 import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
 

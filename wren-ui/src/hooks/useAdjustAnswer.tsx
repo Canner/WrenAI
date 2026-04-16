@@ -5,10 +5,7 @@ import {
   resolveClientRuntimeScopeSelector,
   type ClientRuntimeScopeSelector,
 } from '@/apollo/client/runtimeScope';
-import {
-  AskingTaskStatus,
-  ThreadResponse,
-} from '@/apollo/client/graphql/__types__';
+import { AskingTaskStatus, ThreadResponse } from '@/types/api';
 import {
   adjustThreadResponseAnswer,
   cancelAdjustmentTask,

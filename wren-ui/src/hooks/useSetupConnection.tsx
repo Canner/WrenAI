@@ -3,10 +3,7 @@ import { SETUP } from '@/utils/enum';
 import { parseGraphQLError } from '@/utils/errorHandler';
 import useSetupConnectionDataSource from './useSetupConnectionDataSource';
 import useSetupConnectionSampleDataset from './useSetupConnectionSampleDataset';
-import {
-  DataSourceName,
-  SampleDatasetName,
-} from '@/apollo/client/graphql/__types__';
+import { DataSourceName, SampleDatasetName } from '@/types/api';
 
 type StepData = {
   dataSource?: DataSourceName;

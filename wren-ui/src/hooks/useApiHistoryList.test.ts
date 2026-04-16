@@ -2,7 +2,7 @@ import {
   buildApiHistoryListUrl,
   normalizeApiHistoryListPayload,
 } from './useApiHistoryList';
-import { ApiType } from '@/apollo/client/graphql/__types__';
+import { ApiType } from '@/types/api';
 
 describe('useApiHistoryList helpers', () => {
   it('builds the REST api history url with pagination, filters, and runtime scope', () => {

@@ -1,4 +1,4 @@
-import { ApiType } from '@/apollo/client/graphql/__types__';
+import { ApiType } from '@/types/api';
 import { API_HISTORY_FILTER_TYPES, formatApiTypeLabel } from './apiTypeLabels';
 
 describe('apiManagement apiTypeLabels', () => {

@@ -1,4 +1,4 @@
-import { ExpressionName } from '@/apollo/client/graphql/__types__';
+import { ExpressionName } from '@/types/api';
 
 export const aggregations = [
   ExpressionName.AVG,

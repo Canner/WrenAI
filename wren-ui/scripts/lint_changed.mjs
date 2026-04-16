@@ -43,12 +43,9 @@ const IGNORED_RELATIVE_PATHS = [
   'coverage/',
   'playwright-report/',
   'test-results/',
-  'src/apollo/client/graphql/__types__.ts',
 ];
 
-const GENERATED_FILE_PATTERNS = [
-  /^src\/apollo\/client\/graphql\/.*\.generated\.ts$/,
-];
+const GENERATED_FILE_PATTERNS = [];
 
 function printHelp() {
   console.log(`Usage: node scripts/lint_changed.mjs [options]

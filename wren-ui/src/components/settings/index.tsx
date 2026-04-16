@@ -10,10 +10,7 @@ import DataSourceSettings from './DataSourceSettings';
 import ProjectSettings from './ProjectSettings';
 import { getSettingMenu } from './utils';
 import { fetchSettings, type SettingsData } from '@/utils/settingsRest';
-import {
-  DataSourceName,
-  SampleDatasetName,
-} from '@/apollo/client/graphql/__types__';
+import { DataSourceName, SampleDatasetName } from '@/types/api';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 
 const { Sider, Content } = Layout;

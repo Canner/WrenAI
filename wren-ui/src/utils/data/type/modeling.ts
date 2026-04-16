@@ -4,14 +4,14 @@ import {
   DiagramModelRelationField,
   DiagramView,
   DiagramViewField,
-} from '@/apollo/client/graphql/__types__';
+} from '@/types/api';
 export type {
   Diagram,
   DiagramModel,
   DiagramModelField,
   DiagramModelRelationField,
   DiagramView,
-} from '@/apollo/client/graphql/__types__';
+} from '@/types/api';
 
 export type ComposeDiagram = (DiagramModel | DiagramView) &
   Partial<

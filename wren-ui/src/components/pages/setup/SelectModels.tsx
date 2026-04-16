@@ -4,7 +4,7 @@ import styled from 'styled-components';
 import type { ColumnsType } from 'antd/es/table';
 import { ERROR_TEXTS } from '@/utils/error';
 import MultiSelectBox from '@/components/table/MultiSelectBox';
-import { CompactTable } from '@/apollo/client/graphql/__types__';
+import { CompactTable } from '@/types/api';
 import {
   getCompactTableBaseName,
   getCompactTableCatalogLabel,

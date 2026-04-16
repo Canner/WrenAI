@@ -4,7 +4,7 @@ import { DrawerAction } from '@/hooks/useDrawerAction';
 import CheckCircleOutlined from '@ant-design/icons/CheckCircleOutlined';
 import CloseCircleOutlined from '@ant-design/icons/CloseCircleOutlined';
 import JsonCodeBlock from '@/components/code/JsonCodeBlock';
-import { ApiHistoryResponse } from '@/apollo/client/graphql/__types__';
+import { ApiHistoryResponse } from '@/types/api';
 import { getAskDiagnostics } from './askDiagnostics';
 import { formatApiTypeLabel } from './apiTypeLabels';
 

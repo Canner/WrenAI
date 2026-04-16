@@ -1,7 +1,4 @@
-import {
-  ChartType,
-  ThreadResponseChartDetail,
-} from '@/apollo/client/graphql/__types__';
+import { ChartType, ThreadResponseChartDetail } from '@/types/api';
 import { isNil } from 'lodash';
 
 type EncodingChannel = 'x' | 'y' | 'color' | 'xOffset' | 'theta';
@@ -93,4 +90,3 @@ export const getChartSpecFieldTitleMap = (encoding?: EncodingSpec | null) => {
     {},
   );
 };
-

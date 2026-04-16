@@ -1,5 +1,5 @@
 import moment from 'moment';
-import { ApiType } from '@/apollo/client/graphql/__types__';
+import { ApiType } from '@/types/api';
 import {
   buildApiHistoryQueryParams,
   normalizeApiHistoryTableFilters,

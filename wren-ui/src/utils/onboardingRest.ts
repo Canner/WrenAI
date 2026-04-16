@@ -3,7 +3,7 @@ import {
   resolveClientRuntimeScopeSelector,
   type ClientRuntimeScopeSelector,
 } from '@/apollo/client/runtimeScope';
-import type { OnboardingStatus } from '@/apollo/client/graphql/__types__';
+import type { OnboardingStatus } from '@/types/api';
 import { parseRestJsonResponse } from './rest';
 
 export type OnboardingStatusResponse = {

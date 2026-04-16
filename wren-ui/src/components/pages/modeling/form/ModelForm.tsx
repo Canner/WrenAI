@@ -11,10 +11,7 @@ import TableTransfer, {
   defaultColumns,
 } from '@/components/table/TableTransfer';
 import { resolveClientRuntimeScopeSelector } from '@/apollo/client/runtimeScope';
-import type {
-  CompactTable,
-  CompactColumn,
-} from '@/apollo/client/graphql/__types__';
+import type { CompactTable, CompactColumn } from '@/types/api';
 import {
   getCompactTableCatalogLabel,
   getCompactTableQualifiedName,

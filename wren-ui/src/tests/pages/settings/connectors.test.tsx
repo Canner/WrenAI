@@ -17,18 +17,12 @@ import {
 } from '../../../pages/settings/connectors';
 
 const mockUseProtectedRuntimeScopePage = jest.fn();
-const mockUseQuery = jest.fn();
 const mockBuildRuntimeScopeUrl = jest.fn();
 const mockUseAuthSession = jest.fn();
 const mockUseRuntimeSelectorState = jest.fn();
 const mockUseRuntimeScopeNavigation = jest.fn();
 
 let capturedTableProps: any;
-
-jest.mock('@apollo/client', () => ({
-  gql: (strings: TemplateStringsArray) => strings.join(''),
-  useQuery: (...args: any[]) => mockUseQuery(...args),
-}));
 
 jest.mock('@/apollo/client/runtimeScope', () => ({
   buildRuntimeScopeUrl: (...args: any[]) => mockBuildRuntimeScopeUrl(...args),
@@ -163,14 +157,6 @@ describe('knowledge/connectors page', () => {
       runtimeSelectorState: {
         currentWorkspace: { id: 'ws-1', name: 'Workspace Alpha' },
         currentKnowledgeBase: { id: 'kb-1', name: 'Knowledge Base A' },
-      },
-    });
-    mockUseQuery.mockReturnValue({
-      data: {
-        runtimeSelectorState: {
-          currentWorkspace: { id: 'ws-1', name: 'Workspace Alpha' },
-          currentKnowledgeBase: { id: 'kb-1', name: 'Knowledge Base A' },
-        },
       },
     });
   });

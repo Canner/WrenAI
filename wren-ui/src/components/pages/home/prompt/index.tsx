@@ -14,10 +14,7 @@ import useAskProcessState, {
   getIsProcessing,
 } from '@/hooks/useAskProcessState';
 import { AskPromptData } from '@/hooks/useAskPrompt';
-import {
-  CreateThreadInput,
-  CreateThreadResponseInput,
-} from '@/apollo/client/graphql/__types__';
+import { CreateThreadInput, CreateThreadResponseInput } from '@/types/api';
 
 interface Props {
   onCreateResponse: (

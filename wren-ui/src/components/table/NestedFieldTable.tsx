@@ -1,6 +1,6 @@
 import { COLUMN } from '@/components/table/BaseTable';
 import { Table, TableProps } from 'antd';
-import { DiagramModelNestedField } from '@/apollo/client/graphql/__types__';
+import { DiagramModelNestedField } from '@/types/api';
 
 type Props = TableProps<DiagramModelNestedField>;
 

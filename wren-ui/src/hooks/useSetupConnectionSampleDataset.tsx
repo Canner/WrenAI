@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { message } from 'antd';
 import { Path } from '@/utils/enum';
-import { SampleDatasetName } from '@/apollo/client/graphql/__types__';
+import { SampleDatasetName } from '@/types/api';
 import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
 import { startSampleDataset } from '@/utils/settingsRest';
 import { clearRuntimePagePrefetchCache } from '@/utils/runtimePagePrefetch';

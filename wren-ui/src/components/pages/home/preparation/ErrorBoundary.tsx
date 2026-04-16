@@ -4,7 +4,7 @@ import ToolOutlined from '@ant-design/icons/ToolOutlined';
 import useModalAction from '@/hooks/useModalAction';
 import ErrorCollapse from '@/components/ErrorCollapse';
 import { FixSQLModal } from '@/components/modals/FixSQLModal';
-import { Error } from '@/apollo/client/graphql/__types__';
+import { Error } from '@/types/api';
 
 export interface Props {
   children: React.ReactNode;

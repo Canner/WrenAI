@@ -4,7 +4,7 @@ import styled from 'styled-components';
 import Icon from '@/import/icon';
 import { IterableComponent } from '@/utils/iteration';
 import { ButtonOption } from './utils';
-import { SampleDatasetName } from '@/apollo/client/graphql/__types__';
+import { SampleDatasetName } from '@/types/api';
 
 const { Text } = Typography;
 

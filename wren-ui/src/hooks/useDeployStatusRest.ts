@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ModelSyncResponse } from '@/apollo/client/graphql/__types__';
+import type { ModelSyncResponse } from '@/types/api';
 import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
 import { fetchDeployStatus } from '@/utils/modelingRest';
 

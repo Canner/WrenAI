@@ -4,11 +4,7 @@ import {
   canGenerateAnswer,
   isReadyToThreadResponse,
 } from './useAskPrompt';
-import {
-  AskingTask,
-  AskingTaskStatus,
-  AskingTaskType,
-} from '@/apollo/client/graphql/__types__';
+import { AskingTask, AskingTaskStatus, AskingTaskType } from '@/types/api';
 
 describe('useAskPrompt helpers', () => {
   it('only triggers text answer generation for finished text-to-sql tasks', () => {

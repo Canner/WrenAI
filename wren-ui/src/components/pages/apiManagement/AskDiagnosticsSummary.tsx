@@ -1,5 +1,5 @@
 import { Tag, Tooltip } from 'antd';
-import { ApiType } from '@/apollo/client/graphql/__types__';
+import { ApiType } from '@/types/api';
 import {
   getAskDiagnostics,
   isAskApiHistoryType,

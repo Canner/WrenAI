@@ -18,7 +18,7 @@ import { LEARNING } from './guide/utils';
 import { useRouter } from 'next/router';
 import { Path } from '@/utils/enum';
 import { nextTick } from '@/utils/time';
-import { ProjectLanguage } from '@/apollo/client/graphql/__types__';
+import { ProjectLanguage } from '@/types/api';
 import { Dispatcher } from '@/components/learning/guide/utils';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import {

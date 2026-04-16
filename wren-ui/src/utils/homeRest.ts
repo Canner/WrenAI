@@ -11,13 +11,13 @@ import type {
   Task,
   Thread,
   ThreadResponse,
-} from '@/apollo/client/graphql/__types__';
+} from '@/types/api';
 import type {
   GetProjectRecommendationQuestionsQuery,
   InstantRecommendedQuestionsQuery,
   PreviewDataMutation,
   SuggestedQuestionsQuery,
-} from '@/apollo/client/graphql/home.generated';
+} from '@/types/api';
 import { parseRestJsonResponse } from './rest';
 
 type AdjustThreadResponseAnswerInput = {

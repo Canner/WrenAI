@@ -1,4 +1,4 @@
-import type { Instruction } from '@/apollo/client/graphql/__types__';
+import type { Instruction } from '@/types/api';
 import {
   parseInstructionDraft,
   shouldUseRuleSqlListCache,

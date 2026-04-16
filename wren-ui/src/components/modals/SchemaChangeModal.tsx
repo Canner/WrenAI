@@ -25,7 +25,7 @@ import {
   NodeType,
   SchemaChange,
   SchemaChangeType,
-} from '@/apollo/client/graphql/__types__';
+} from '@/types/api';
 
 const StyledCollapse = styled(Collapse)`
   border: none;

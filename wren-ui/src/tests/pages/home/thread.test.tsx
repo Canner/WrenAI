@@ -16,18 +16,17 @@ const mockUseModalAction = jest.fn();
 const mockUseRuntimeScopeNavigation = jest.fn();
 const mockUseProtectedRuntimeScopePage = jest.fn();
 const mockUseThreadDetail = jest.fn();
-const mockUseCreateThreadResponseMutation = jest.fn();
 const mockUseThreadResponsePolling = jest.fn();
-const mockUseUpdateThreadResponseMutation = jest.fn();
-const mockUseGenerateThreadRecommendationQuestionsMutation = jest.fn();
 const mockUseThreadRecommendedQuestionsPolling = jest.fn();
-const mockUseGenerateThreadResponseAnswerMutation = jest.fn();
-const mockUseGenerateThreadResponseChartMutation = jest.fn();
-const mockUseAdjustThreadResponseChartMutation = jest.fn();
-const mockUsePreviewDataMutation = jest.fn();
 const mockUseRuntimeSelectorState = jest.fn();
 const mockCreateKnowledgeSqlPair = jest.fn();
 const mockCreateViewFromResponse = jest.fn();
+const mockCreateThreadResponse = jest.fn();
+const mockUpdateThreadResponseSql = jest.fn();
+const mockTriggerThreadRecommendationQuestions = jest.fn();
+const mockTriggerThreadResponseAnswer = jest.fn();
+const mockTriggerThreadResponseChart = jest.fn();
+const mockAdjustThreadResponseChart = jest.fn();
 
 let mockThread: any;
 
@@ -212,21 +211,18 @@ jest.mock('@/hooks/useThreadRecommendedQuestionsPolling', () => ({
     mockUseThreadRecommendedQuestionsPolling(...args),
 }));
 
-jest.mock('@/apollo/client/graphql/home.generated', () => ({
-  useCreateThreadResponseMutation: (...args: any[]) =>
-    mockUseCreateThreadResponseMutation(...args),
-  useUpdateThreadResponseMutation: (...args: any[]) =>
-    mockUseUpdateThreadResponseMutation(...args),
-  useGenerateThreadRecommendationQuestionsMutation: (...args: any[]) =>
-    mockUseGenerateThreadRecommendationQuestionsMutation(...args),
-  useGenerateThreadResponseAnswerMutation: (...args: any[]) =>
-    mockUseGenerateThreadResponseAnswerMutation(...args),
-  useGenerateThreadResponseChartMutation: (...args: any[]) =>
-    mockUseGenerateThreadResponseChartMutation(...args),
-  useAdjustThreadResponseChartMutation: (...args: any[]) =>
-    mockUseAdjustThreadResponseChartMutation(...args),
-  usePreviewDataMutation: (...args: any[]) =>
-    mockUsePreviewDataMutation(...args),
+jest.mock('@/utils/threadRest', () => ({
+  createThreadResponse: (...args: any[]) => mockCreateThreadResponse(...args),
+  updateThreadResponseSql: (...args: any[]) =>
+    mockUpdateThreadResponseSql(...args),
+  triggerThreadRecommendationQuestions: (...args: any[]) =>
+    mockTriggerThreadRecommendationQuestions(...args),
+  triggerThreadResponseAnswer: (...args: any[]) =>
+    mockTriggerThreadResponseAnswer(...args),
+  triggerThreadResponseChart: (...args: any[]) =>
+    mockTriggerThreadResponseChart(...args),
+  adjustThreadResponseChart: (...args: any[]) =>
+    mockAdjustThreadResponseChart(...args),
 }));
 
 jest.mock('@/hooks/useRuntimeSelectorState', () => ({
@@ -307,31 +303,22 @@ describe('home/[id] thread shell', () => {
       loading: false,
       updateQuery: jest.fn(),
     });
-    mockUseCreateThreadResponseMutation.mockReturnValue([jest.fn()]);
+    mockCreateThreadResponse.mockResolvedValue({});
     mockUseThreadResponsePolling.mockReturnValue({
       data: null,
       fetchById: jest.fn(),
       stopPolling: jest.fn(),
     });
-    mockUseUpdateThreadResponseMutation.mockReturnValue([
-      jest.fn(),
-      { loading: false },
-    ]);
-    mockUseGenerateThreadRecommendationQuestionsMutation.mockReturnValue([
-      jest.fn(),
-    ]);
+    mockUpdateThreadResponseSql.mockResolvedValue({});
+    mockTriggerThreadRecommendationQuestions.mockResolvedValue({});
     mockUseThreadRecommendedQuestionsPolling.mockReturnValue({
       data: null,
       fetchByThreadId: jest.fn(),
       stopPolling: jest.fn(),
     });
-    mockUseGenerateThreadResponseAnswerMutation.mockReturnValue([jest.fn()]);
-    mockUseGenerateThreadResponseChartMutation.mockReturnValue([jest.fn()]);
-    mockUseAdjustThreadResponseChartMutation.mockReturnValue([jest.fn()]);
-    mockUsePreviewDataMutation.mockReturnValue([
-      jest.fn(),
-      { data: undefined, loading: false },
-    ]);
+    mockTriggerThreadResponseAnswer.mockResolvedValue({});
+    mockTriggerThreadResponseChart.mockResolvedValue({});
+    mockAdjustThreadResponseChart.mockResolvedValue({});
     mockUseRuntimeSelectorState.mockReturnValue({
       runtimeSelectorState: {
         currentWorkspace: { id: 'ws-1', name: '系统工作空间' },

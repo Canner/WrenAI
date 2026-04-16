@@ -47,7 +47,7 @@ import {
   DetailedThread,
   ThreadResponse,
   CreateSqlPairInput,
-} from '@/apollo/client/graphql/__types__';
+} from '@/types/api';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
 import useRuntimeSelectorState from '@/hooks/useRuntimeSelectorState';

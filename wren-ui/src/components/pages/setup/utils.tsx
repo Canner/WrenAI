@@ -7,7 +7,7 @@ import Starter from './Starter';
 import ConnectDataSource from './ConnectDataSource';
 import SelectModels from './SelectModels';
 import DefineRelations from './DefineRelations';
-import { SampleDatasetName } from '@/apollo/client/graphql/__types__';
+import { SampleDatasetName } from '@/types/api';
 import { ERROR_CODES } from '@/utils/errorHandler';
 import {
   getDataSourceConfig,

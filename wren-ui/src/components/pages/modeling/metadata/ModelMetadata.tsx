@@ -7,10 +7,7 @@ import RelationTable from '@/components/table/RelationTable';
 import PreviewData from '@/components/dataPreview/PreviewData';
 import { DiagramModel } from '@/utils/data';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
-import {
-  DiagramModelField,
-  DiagramModelRelationField,
-} from '@/apollo/client/graphql/__types__';
+import { DiagramModelField, DiagramModelRelationField } from '@/types/api';
 import {
   previewModelData,
   type ModelPreviewDataResponse,

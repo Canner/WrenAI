@@ -4,10 +4,7 @@ import styled from 'styled-components';
 import { getDataSources, getTemplates } from './utils';
 import { makeIterable } from '@/utils/iteration';
 import ButtonItem from './ButtonItem';
-import {
-  DataSourceName,
-  SampleDatasetName,
-} from '@/apollo/client/graphql/__types__';
+import { DataSourceName, SampleDatasetName } from '@/types/api';
 
 const { Paragraph, Text, Title } = Typography;
 

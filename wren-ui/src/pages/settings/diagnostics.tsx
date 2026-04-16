@@ -17,7 +17,7 @@ import styled from 'styled-components';
 import SQLCodeBlock from '@/components/code/SQLCodeBlock';
 import DetailsDrawer from '@/components/pages/apiManagement/DetailsDrawer';
 import AskDiagnosticsSummary from '@/components/pages/apiManagement/AskDiagnosticsSummary';
-import { ApiType } from '@/apollo/client/graphql/__types__';
+import { ApiType } from '@/types/api';
 import {
   buildRuntimeScopeUrl,
   omitRuntimeScopeQuery,

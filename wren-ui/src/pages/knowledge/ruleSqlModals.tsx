@@ -3,7 +3,7 @@ import { Form, Input, Typography } from 'antd';
 import ArrowLeftOutlined from '@ant-design/icons/ArrowLeftOutlined';
 import CloseOutlined from '@ant-design/icons/CloseOutlined';
 import type { FormInstance } from 'antd';
-import type { Instruction, SqlPair } from '@/apollo/client/graphql/__types__';
+import type { Instruction, SqlPair } from '@/types/api';
 import type {
   RuleDetailFormValues,
   SqlTemplateFormValues,

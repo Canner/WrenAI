@@ -1,5 +1,30 @@
-import { GraphQLError } from 'graphql';
 import { WrenService } from '../telemetry/telemetry';
+
+type WrenErrorExtensions = {
+  originalError?: Error;
+  code?: GeneralErrorCodes;
+  message?: string;
+  service?: WrenService;
+  shortMessage?: string;
+  other?: any;
+  exception?: {
+    stacktrace?: string[];
+  };
+};
+
+export class WrenError extends Error {
+  extensions: WrenErrorExtensions;
+  locations?: unknown;
+  path?: unknown;
+
+  constructor(message: string, extensions: WrenErrorExtensions = {}) {
+    super(message, {
+      cause: extensions.originalError,
+    });
+    this.name = 'WrenError';
+    this.extensions = extensions;
+  }
+}
 
 export enum GeneralErrorCodes {
   INTERNAL_SERVER_ERROR = 'INTERNAL_SERVER_ERROR',
@@ -175,7 +200,7 @@ export const create = (
     service?: WrenService;
     other?: any;
   },
-): GraphQLError => {
+): WrenError => {
   const { customMessage, originalError, service } = options || {};
   // Default to INTERNAL_SERVER_ERROR if no code is provided
   code = code || GeneralErrorCodes.INTERNAL_SERVER_ERROR;
@@ -191,18 +216,21 @@ export const create = (
     errorMessages[code] ||
     fallbackMessage;
 
-  // Return the GraphQLError
-  const err = new GraphQLError(message, {
-    extensions: {
-      originalError,
-      code,
-      message,
-      service,
-      shortMessage:
-        shortMessages[code] ||
-        shortMessages[GeneralErrorCodes.INTERNAL_SERVER_ERROR],
-      other: options?.other,
-    },
+  const stacktrace =
+    typeof originalError?.stack === 'string'
+      ? originalError.stack.split('\n')
+      : undefined;
+
+  const err = new WrenError(message, {
+    originalError,
+    code,
+    message,
+    service,
+    shortMessage:
+      shortMessages[code] ||
+      shortMessages[GeneralErrorCodes.INTERNAL_SERVER_ERROR],
+    other: options?.other,
+    exception: stacktrace ? { stacktrace } : undefined,
   });
 
   return err;
@@ -235,24 +263,25 @@ export const create = (
  * it will easily cause `Converting circular structure to JSON` error.
  * Thus, we only pick required fields to reformat the error.
  */
-export const defaultApolloErrorHandler = (error: GraphQLError) => {
-  if (error instanceof GraphQLError) {
-    const code = (error.extensions?.code ||
-      GeneralErrorCodes.INTERNAL_SERVER_ERROR) as GeneralErrorCodes;
-    return {
-      locations: error.locations,
-      path: error.path,
+export const defaultApolloErrorHandler = (
+  error: Error & {
+    locations?: unknown;
+    path?: unknown;
+    extensions?: WrenErrorExtensions;
+  },
+) => {
+  const code = (error.extensions?.code ||
+    GeneralErrorCodes.INTERNAL_SERVER_ERROR) as GeneralErrorCodes;
+  return {
+    locations: error.locations,
+    path: error.path,
+    message: error.message,
+    extensions: {
+      code,
       message: error.message,
-      extensions: {
-        code,
-        message: error.message,
-        shortMessage: shortMessages[code],
-        stacktrace: error.extensions?.exception?.stacktrace,
-        other: error.extensions?.other,
-      },
-    };
-  }
-
-  // Return the original error if it's not a GraphQLError
-  return error;
+      shortMessage: shortMessages[code],
+      stacktrace: error.extensions?.exception?.stacktrace,
+      other: error.extensions?.other,
+    },
+  };
 };

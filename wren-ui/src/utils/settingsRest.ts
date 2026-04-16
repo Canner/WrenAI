@@ -3,10 +3,7 @@ import {
   resolveClientRuntimeScopeSelector,
   type ClientRuntimeScopeSelector,
 } from '@/apollo/client/runtimeScope';
-import type {
-  DataSourceName,
-  SampleDatasetName,
-} from '@/apollo/client/graphql/__types__';
+import type { DataSourceName, SampleDatasetName } from '@/types/api';
 import { parseRestJsonResponse } from './rest';
 
 export type SettingsData = {

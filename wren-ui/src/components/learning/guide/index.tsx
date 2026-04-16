@@ -12,10 +12,7 @@ import { Dispatcher, DriverObj } from './utils';
 import { makeStoriesPlayer } from './stories';
 import { fetchSettings } from '@/utils/settingsRest';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
-import {
-  ProjectLanguage,
-  SampleDatasetName,
-} from '@/apollo/client/graphql/__types__';
+import { ProjectLanguage, SampleDatasetName } from '@/types/api';
 
 import 'driver.js/dist/driver.css';
 

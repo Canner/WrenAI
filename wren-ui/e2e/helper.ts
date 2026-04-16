@@ -33,19 +33,24 @@ export const resetDatabase = async () => {
   });
 };
 
-export const waitForGraphQLResponse = async (
+export const waitForJsonResponse = async (
   { page }: { page: Page },
-  queryKey: string,
-  validateResponseData = (data: any) => data !== undefined,
+  {
+    urlIncludes,
+    validateResponseData = (data: any) => data !== undefined,
+  }: {
+    urlIncludes: string;
+    validateResponseData?: (data: any) => boolean;
+  },
 ) => {
   await page.waitForResponse(
     async (response) => {
       try {
         const responseBody = await response.json();
-        const responseData = responseBody?.data?.[queryKey];
+        const responseData = responseBody;
 
         return (
-          response.url().includes('/api/graphql') &&
+          response.url().includes(urlIncludes) &&
           response.status() === 200 &&
           responseBody &&
           validateResponseData(responseData)

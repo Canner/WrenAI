@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { DiagramQuery } from '@/apollo/client/graphql/diagram.generated';
+import type { DiagramQuery } from '@/types/api';
 import {
   KNOWLEDGE_DIAGRAM_QUERY_FETCH_POLICY,
   buildKnowledgeDiagramUrl,

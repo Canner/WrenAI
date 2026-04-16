@@ -1,5 +1,5 @@
 import Image from 'next/image';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, Form, Modal, message, Alert } from 'antd';
 import { makeIterable } from '@/utils/iteration';
 import { DATA_SOURCES, FORM_MODE, Path } from '@/utils/enum';
@@ -14,10 +14,7 @@ import {
   startSampleDataset,
   updateDataSourceSettings,
 } from '@/utils/settingsRest';
-import {
-  DataSourceName,
-  SampleDatasetName,
-} from '@/apollo/client/graphql/__types__';
+import { DataSourceName, SampleDatasetName } from '@/types/api';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import { clearRuntimePagePrefetchCache } from '@/utils/runtimePagePrefetch';
 

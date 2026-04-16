@@ -2,19 +2,14 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ChartAnswer from './ChartAnswer';
 
-const mockUseQuery = jest.fn();
-const mockUseMutation = jest.fn();
 const mockCreateDashboardItem = jest.fn();
-const mockUsePromptThreadStore = jest.fn();
+const mockUsePromptThreadActionsStore = jest.fn();
 const mockEnsureLoaded = jest.fn();
+const mockLoadDashboardListPayload = jest.fn();
+const mockPushWorkspace = jest.fn();
 let capturedChartProps: any = null;
 
 let capturedModalProps: any = null;
-
-jest.mock('@apollo/client', () => ({
-  useQuery: (...args: any[]) => mockUseQuery(...args),
-  useMutation: (...args: any[]) => mockUseMutation(...args),
-}));
 
 jest.mock('next/dynamic', () => () => {
   const React = jest.requireActual('react');
@@ -99,12 +94,24 @@ jest.mock('@/hooks/useResponsePreviewData', () => ({
 
 jest.mock('@/components/pages/home/promptThread/store', () => ({
   __esModule: true,
-  default: () => mockUsePromptThreadStore(),
+  usePromptThreadActionsStore: () => mockUsePromptThreadActionsStore(),
 }));
 
-jest.mock('@/apollo/client/graphql/dashboard', () => ({
-  CREATE_DASHBOARD_ITEM: 'CREATE_DASHBOARD_ITEM',
-  DASHBOARDS: 'DASHBOARDS',
+jest.mock('@/utils/dashboardRest', () => ({
+  loadDashboardListPayload: (...args: any[]) =>
+    mockLoadDashboardListPayload(...args),
+}));
+
+jest.mock('@/utils/homeRest', () => ({
+  createDashboardItem: (...args: any[]) => mockCreateDashboardItem(...args),
+}));
+
+jest.mock('@/hooks/useRuntimeScopeNavigation', () => ({
+  __esModule: true,
+  default: () => ({
+    selector: { workspaceId: 'ws-1' },
+    pushWorkspace: mockPushWorkspace,
+  }),
 }));
 
 const setStateOverrides = (overrides: Partial<Record<number, any>>) => {
@@ -124,24 +131,21 @@ describe('ChartAnswer', () => {
     jest.clearAllMocks();
     capturedModalProps = null;
     capturedChartProps = null;
-    mockEnsureLoaded.mockResolvedValue({ previewData: { data: [], columns: [] } });
-    mockUsePromptThreadStore.mockReturnValue({
+    mockEnsureLoaded.mockResolvedValue({
+      previewData: { data: [], columns: [] },
+    });
+    mockUsePromptThreadActionsStore.mockReturnValue({
       onGenerateChartAnswer: jest.fn(),
       onAdjustChartAnswer: jest.fn(),
     });
-    mockUseQuery.mockReturnValue({
-      data: {
-        dashboards: [
-          { id: 11, name: '经营总览' },
-          { id: 12, name: '销售看板' },
-        ],
-      },
-      loading: false,
-    });
-    mockUseMutation.mockReturnValue([
-      mockCreateDashboardItem,
-      { loading: false },
+    mockLoadDashboardListPayload.mockResolvedValue([
+      { id: 11, name: '经营总览' },
+      { id: 12, name: '销售看板' },
     ]);
+    mockCreateDashboardItem.mockResolvedValue({
+      id: 901,
+      dashboardId: 11,
+    });
   });
 
   it('submits createDashboardItem with selected dashboard id when pinning a chart', async () => {
@@ -173,15 +177,14 @@ describe('ChartAnswer', () => {
 
     await capturedModalProps.onOk();
 
-    expect(mockCreateDashboardItem).toHaveBeenCalledWith({
-      variables: {
-        data: {
-          itemType: 'LINE',
-          responseId: 91,
-          dashboardId: 11,
-        },
+    expect(mockCreateDashboardItem).toHaveBeenCalledWith(
+      { workspaceId: 'ws-1' },
+      {
+        itemType: 'LINE',
+        responseId: 91,
+        dashboardId: 11,
       },
-    });
+    );
 
     useStateSpy.mockRestore();
   });

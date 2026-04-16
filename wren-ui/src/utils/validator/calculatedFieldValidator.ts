@@ -1,7 +1,7 @@
 import { COLUMN_TYPE, NODE_TYPE } from '@/utils/enum';
 import { ERROR_TEXTS } from '@/utils/error';
 import { mathFunctions, stringFunctions } from '@/utils/expressionType';
-import { ExpressionName } from '@/apollo/client/graphql/__types__';
+import { ExpressionName } from '@/types/api';
 
 export const createLineageSelectorNameValidator =
   (validateCalculatedField: any) => async (_rule: any, value: string) => {

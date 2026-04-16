@@ -1,4 +1,4 @@
-import { CompactTable } from '@/apollo/client/graphql/__types__';
+import { CompactTable } from '@/types/api';
 
 type CompactTableLike = Pick<CompactTable, 'name' | 'properties'>;
 

@@ -17,10 +17,7 @@ import RecommendedQuestions, {
   getRecommendedQuestionProps,
 } from '@/components/pages/home/RecommendedQuestions';
 import MarkdownBlock from '@/components/editor/MarkdownBlock';
-import {
-  AskingTaskType,
-  RecommendedQuestionsTask,
-} from '@/apollo/client/graphql/__types__';
+import { AskingTaskType, RecommendedQuestionsTask } from '@/types/api';
 
 const StyledResult = styled.div`
   position: absolute;

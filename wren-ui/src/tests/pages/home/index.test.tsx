@@ -13,10 +13,7 @@ const mockUseAskPrompt = jest.fn();
 const mockUseProtectedRuntimeScopePage = jest.fn();
 const mockUseRuntimeScopeNavigation = jest.fn();
 const mockUseRuntimeSelectorState = jest.fn();
-const mockUseSuggestedQuestionsQuery = jest.fn();
-const mockUseRuntimeSelectorStateQuery = jest.fn();
-const mockUseCreateAskingTaskMutation = jest.fn();
-const mockUseCreateThreadMutation = jest.fn();
+const mockFetchSuggestedQuestions = jest.fn();
 const mockBuildRuntimeScopeHeaders = jest.fn();
 const mockBuildRuntimeScopeUrl = jest.fn();
 const mockResolveClientRuntimeScopeSelector = jest.fn();
@@ -136,19 +133,14 @@ jest.mock('@/apollo/client/runtimeScope', () => ({
     mockResolveClientRuntimeScopeSelector(...args),
 }));
 
-jest.mock('@/apollo/client/graphql/home.generated', () => ({
-  useSuggestedQuestionsQuery: (...args: any[]) =>
-    mockUseSuggestedQuestionsQuery(...args),
-  useCreateAskingTaskMutation: (...args: any[]) =>
-    mockUseCreateAskingTaskMutation(...args),
-  useCreateThreadMutation: (...args: any[]) =>
-    mockUseCreateThreadMutation(...args),
-}));
-
-jest.mock('@/apollo/client/graphql/runtimeScope.generated', () => ({
-  useRuntimeSelectorStateQuery: (...args: any[]) =>
-    mockUseRuntimeSelectorStateQuery(...args),
-}));
+jest.mock('@/utils/homeRest', () => {
+  const actual = jest.requireActual('@/utils/homeRest');
+  return {
+    ...actual,
+    fetchSuggestedQuestions: (...args: any[]) =>
+      mockFetchSuggestedQuestions(...args),
+  };
+});
 
 const renderPage = () => renderToStaticMarkup(React.createElement(HomePage));
 
@@ -165,8 +157,6 @@ const setHomeStateOverrides = (overrides: Partial<Record<number, any>>) => {
 };
 
 describe('home index page', () => {
-  const mockCreateAskingTask = jest.fn();
-  const mockCreateThread = jest.fn();
   const mockAskSubmit = jest.fn();
   const mockOnStopPolling = jest.fn();
 
@@ -276,60 +266,13 @@ describe('home index page', () => {
         ],
       },
     });
-    mockUseSuggestedQuestionsQuery.mockReturnValue({
-      data: {
-        suggestedQuestions: {
-          questions: [
-            { question: '最近 30 天 GMV 趋势' },
-            { question: '订单量波动最大的类目' },
-            { question: '复购率最高的用户群体' },
-          ],
-        },
-      },
+    mockFetchSuggestedQuestions.mockResolvedValue({
+      questions: [
+        { question: '最近 30 天 GMV 趋势' },
+        { question: '订单量波动最大的类目' },
+        { question: '复购率最高的用户群体' },
+      ],
     });
-    mockUseRuntimeSelectorStateQuery.mockReturnValue({
-      data: {
-        runtimeSelectorState: {
-          currentWorkspace: { id: 'ws-1', name: '系统工作空间' },
-          currentKnowledgeBase: {
-            id: 'kb-1',
-            name: '订单分析知识库',
-          },
-          knowledgeBases: [
-            {
-              id: 'kb-1',
-              name: '订单分析知识库',
-              defaultKbSnapshotId: 'snap-1',
-            },
-            {
-              id: 'kb-2',
-              name: '客户经营知识库',
-              defaultKbSnapshotId: 'snap-2',
-            },
-          ],
-        },
-      },
-    });
-    mockUseCreateThreadMutation.mockReturnValue([
-      mockCreateThread.mockResolvedValue({
-        data: {
-          createThread: {
-            id: 'thread-2',
-          },
-        },
-      }),
-      { loading: false },
-    ]);
-    mockUseCreateAskingTaskMutation.mockReturnValue([
-      mockCreateAskingTask.mockResolvedValue({
-        data: {
-          createAskingTask: {
-            id: 'task-1',
-          },
-        },
-      }),
-      { loading: false },
-    ]);
     global.fetch = jest.fn().mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes('/api/v1/skills/available?')) {

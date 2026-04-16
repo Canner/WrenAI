@@ -17,7 +17,7 @@ import LineageSelector, {
 } from '@/components/selectors/lineageSelector';
 import DescriptiveSelector from '@/components/selectors/DescriptiveSelector';
 import ErrorCollapse from '@/components/ErrorCollapse';
-import { CreateCalculatedFieldInput } from '@/apollo/client/graphql/__types__';
+import { CreateCalculatedFieldInput } from '@/types/api';
 import { validateCalculatedField as validateCalculatedFieldRest } from '@/utils/modelingRest';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 
@@ -253,8 +253,12 @@ export default function AddCalculatedFieldModal(props: Props) {
         <Alert
           showIcon
           type="error"
-          message={error.shortMessage}
-          description={<ErrorCollapse message={error.message} />}
+          message={error.shortMessage || '计算字段校验失败'}
+          description={
+            <ErrorCollapse
+              message={error.message || '未知错误，请稍后重试。'}
+            />
+          }
         />
       )}
     </Modal>

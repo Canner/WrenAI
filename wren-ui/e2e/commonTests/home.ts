@@ -1,6 +1,6 @@
 import { Page, expect } from '@playwright/test';
 import * as helper from '../helper';
-import { AskingTaskStatus } from '@/apollo/client/graphql/__types__';
+import { AskingTaskStatus } from '@/types/api';
 import * as modelingHelper from './modeling';
 
 type AskSuggestionQuestionArgs = {
@@ -24,8 +24,15 @@ export const checkAskingProcess = async (page: Page, question: string) => {
 };
 
 export const waitingForAskingTask = async (page: Page) => {
-  await helper.waitForGraphQLResponse({ page }, 'askingTask', (data) =>
-    [AskingTaskStatus.FAILED, AskingTaskStatus.FINISHED].includes(data?.status),
+  await helper.waitForJsonResponse(
+    { page },
+    {
+      urlIncludes: '/api/v1/asking-tasks/',
+      validateResponseData: (data) =>
+        [AskingTaskStatus.FAILED, AskingTaskStatus.FINISHED].includes(
+          data?.status,
+        ),
+    },
   );
 };
 

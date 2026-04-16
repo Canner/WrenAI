@@ -1,10 +1,6 @@
 import { useState } from 'react';
 import { PROCESS_STATE } from '@/utils/enum';
-import {
-  AskingTask,
-  AskingTaskStatus,
-  AskingTaskType,
-} from '@/apollo/client/graphql/__types__';
+import { AskingTask, AskingTaskStatus, AskingTaskType } from '@/types/api';
 
 export const getIsProcessing = (status: PROCESS_STATE) =>
   [

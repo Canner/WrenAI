@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { message } from 'antd';
 import { Path, SETUP } from '@/utils/enum';
-import type { ListDataSourceTablesQuery } from '@/apollo/client/graphql/dataSource.generated';
+import type { ListDataSourceTablesQuery } from '@/types/api';
 import { listDataSourceTables, saveSetupTables } from '@/utils/modelingRest';
 import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
 

@@ -1,4 +1,4 @@
-import { ProjectLanguage } from '@/apollo/client/graphql/__types__';
+import { ProjectLanguage } from '@/types/api';
 
 export const getLanguageText = (language: ProjectLanguage) =>
   ({

@@ -1,4 +1,4 @@
-import { ApiType } from '@/apollo/client/graphql/__types__';
+import { ApiType } from '@/types/api';
 
 export type AskShadowCompareDiagnostics = {
   enabled?: boolean;

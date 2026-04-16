@@ -11,7 +11,7 @@ import {
 } from 'react';
 import { Space } from 'antd';
 import DeleteOutlined from '@ant-design/icons/DeleteOutlined';
-import type { Instruction, SqlPair } from '@/apollo/client/graphql/__types__';
+import type { Instruction, SqlPair } from '@/types/api';
 import { resolveKnowledgeNavBadgeCount } from '@/hooks/useKnowledgePageHelpers';
 import type { KnowledgeSidebarItem } from '@/hooks/useKnowledgeSidebarData';
 import {

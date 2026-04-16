@@ -12,7 +12,7 @@ import {
   AskingTaskStatus,
   AskingTask,
   AdjustmentTask,
-} from '@/apollo/client/graphql/__types__';
+} from '@/types/api';
 
 export type Props = IPromptThreadStore['preparation'] & {
   className?: string;

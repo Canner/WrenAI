@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import { OnboardingStatus } from '@/apollo/client/graphql/__types__';
+import { OnboardingStatus } from '@/types/api';
 import { buildAuthPathWithRedirect } from '@/utils/authRedirect';
 import { Path } from '@/utils/enum';
 import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';

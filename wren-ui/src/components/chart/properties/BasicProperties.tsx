@@ -1,6 +1,6 @@
 import { capitalize } from 'lodash';
 import { Form, Row, Col, Select } from 'antd';
-import { ChartType } from '@/apollo/client/graphql/__types__';
+import { ChartType } from '@/types/api';
 
 export const getChartTypeOptions = () => {
   return Object.entries(ChartType).map(([key, value]) => ({

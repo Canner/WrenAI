@@ -3,7 +3,7 @@ import {
   buildRuntimeScopeUrl,
   type ClientRuntimeScopeSelector,
 } from '@/apollo/client/runtimeScope';
-import type { ThreadResponse } from '@/apollo/client/graphql/__types__';
+import type { ThreadResponse } from '@/types/api';
 
 export const buildThreadResponseDetailUrl = ({
   responseId,

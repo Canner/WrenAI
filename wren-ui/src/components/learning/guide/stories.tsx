@@ -14,10 +14,7 @@ import {
   LEARNING,
 } from './utils';
 import { Path } from '@/utils/enum';
-import {
-  ProjectLanguage,
-  SampleDatasetName,
-} from '@/apollo/client/graphql/__types__';
+import { ProjectLanguage, SampleDatasetName } from '@/types/api';
 import { buildRuntimeScopeUrl } from '@/apollo/client/runtimeScope';
 import { TEMPLATE_OPTIONS as SAMPLE_DATASET_INFO } from '@/components/pages/setup/utils';
 import { getLanguageText } from '@/utils/language';

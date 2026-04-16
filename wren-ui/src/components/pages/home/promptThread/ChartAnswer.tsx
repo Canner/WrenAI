@@ -13,7 +13,7 @@ import LineProperties from '@/components/chart/properties/LineProperties';
 import StackedBarProperties from '@/components/chart/properties/StackedBarProperties';
 import GroupedBarProperties from '@/components/chart/properties/GroupedBarProperties';
 import { Props as AnswerResultProps } from '@/components/pages/home/promptThread/AnswerResult';
-import { ChartTaskStatus, ChartType } from '@/apollo/client/graphql/__types__';
+import { ChartTaskStatus, ChartType } from '@/types/api';
 import { isEmpty, isEqual } from 'lodash';
 import {
   getChartSpecFieldTitleMap,
@@ -62,6 +62,15 @@ const Toolbar = styled.div`
   transition: top 0.2s ease-out;
   &.isEditMode {
     top: 0;
+  }
+`;
+
+const ResultActionButton = styled(Button)`
+  && {
+    height: 34px;
+    border-radius: 10px;
+    padding-inline: 12px;
+    font-weight: 500;
   }
 `;
 
@@ -391,9 +400,9 @@ export default function ChartAnswer(props: AnswerResultProps) {
 
   const regenerateBtn = (
     <div className="text-center mt-4">
-      <Button icon={<ReloadOutlined />} onClick={onReload}>
+      <ResultActionButton icon={<ReloadOutlined />} onClick={onReload}>
         重新生成
-      </Button>
+      </ResultActionButton>
     </div>
   );
 
@@ -476,16 +485,19 @@ export default function ChartAnswer(props: AnswerResultProps) {
                   </div>
                   {isAdjusted && (
                     <div className="d-flex flex-column">
-                      <Button className="ml-4 mb-2" onClick={onResetAdjustment}>
+                      <ResultActionButton
+                        className="ml-4 mb-2"
+                        onClick={onResetAdjustment}
+                      >
                         重置
-                      </Button>
-                      <Button
+                      </ResultActionButton>
+                      <ResultActionButton
                         className="ml-4"
                         type="primary"
                         onClick={onAdjustChart}
                       >
                         应用调整
-                      </Button>
+                      </ResultActionButton>
                     </div>
                   )}
                 </div>

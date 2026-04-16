@@ -2,7 +2,7 @@ import {
   buildRuntimeScopeUrl,
   type ClientRuntimeScopeSelector,
 } from '@/apollo/client/runtimeScope';
-import type { CreateViewInput } from '@/apollo/client/graphql/__types__';
+import type { CreateViewInput } from '@/types/api';
 
 type ViewResponse = {
   id: number;

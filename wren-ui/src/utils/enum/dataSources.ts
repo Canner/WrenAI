@@ -1,7 +1,7 @@
 export {
   RedshiftConnectionType as REDSHIFT_AUTH_METHOD,
   DatabricksConnectionType as DATABRICKS_AUTH_METHOD,
-} from '@/apollo/client/graphql/__types__';
+} from '@/types/api';
 
 export enum DATA_SOURCES {
   BIG_QUERY = 'BIG_QUERY',

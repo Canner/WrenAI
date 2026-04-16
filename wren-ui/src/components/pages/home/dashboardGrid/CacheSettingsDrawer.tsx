@@ -20,7 +20,7 @@ import { DrawerAction } from '@/hooks/useDrawerAction';
 import { ERROR_TEXTS } from '@/utils/error';
 import { handleFormSubmitError } from '@/utils/errorHandler';
 import { isValidCronLength, cronValidator } from '@/utils/validator';
-import { CacheScheduleDayEnum } from '@/apollo/client/graphql/__types__';
+import { CacheScheduleDayEnum } from '@/types/api';
 
 type Props = DrawerAction & {
   loading?: boolean;

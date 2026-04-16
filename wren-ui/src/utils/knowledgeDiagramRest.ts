@@ -3,7 +3,7 @@ import {
   resolveClientRuntimeScopeSelector,
   type ClientRuntimeScopeSelector,
 } from '@/apollo/client/runtimeScope';
-import type { DiagramQuery } from '@/apollo/client/graphql/diagram.generated';
+import type { DiagramQuery } from '@/types/api';
 import { parseRestJsonResponse } from './rest';
 
 type TimedDiagramCacheEntry = {

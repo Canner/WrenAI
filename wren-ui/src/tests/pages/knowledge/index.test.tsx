@@ -1,6 +1,5 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-const mockApolloQuery = jest.fn();
 import KnowledgeHomePage, {
   canShowKnowledgeLifecycleAction,
   getKnowledgeLifecycleActionLabel,
@@ -22,14 +21,7 @@ const mockUseRuntimeScopeNavigation = jest.fn();
 const mockUseRuntimeScopeTransition = jest.fn();
 const mockUseHomeSidebar = jest.fn();
 const mockUseAuthSession = jest.fn();
-
-const mockCreateInstruction = jest.fn();
-const mockUpdateInstruction = jest.fn();
-const mockDeleteInstruction = jest.fn();
-const mockCreateSqlPair = jest.fn();
-const mockUpdateSqlPair = jest.fn();
-const mockDeleteSqlPair = jest.fn();
-const mockRuntimeSelectorRefetch = jest.fn();
+const mockUseRuntimeSelectorState = jest.fn();
 
 jest.mock('antd', () => {
   const React = jest.requireActual('react');
@@ -38,16 +30,6 @@ jest.mock('antd', () => {
   return {
     ...actual,
     Modal: ({ children }: any) => React.createElement('div', null, children),
-  };
-});
-
-jest.mock('@apollo/client', () => {
-  const actual = jest.requireActual('@apollo/client');
-  return {
-    ...actual,
-    useApolloClient: () => ({
-      query: (...args: any[]) => mockApolloQuery(...args),
-    }),
   };
 });
 
@@ -63,61 +45,6 @@ jest.mock('@/apollo/client/runtimeScope', () => ({
     mockReadRuntimeScopeSelectorFromObject(...args),
   resolveClientRuntimeScopeSelector: (...args: any[]) =>
     mockResolveClientRuntimeScopeSelector(...args),
-}));
-
-jest.mock('@/apollo/client/graphql/runtimeScope.generated', () => ({
-  useRuntimeSelectorStateQuery: () => ({
-    data: {
-      runtimeSelectorState: {
-        currentWorkspace: { id: 'ws-1', name: '业务工作空间', kind: 'regular' },
-        currentKnowledgeBase: {
-          id: 'kb-1',
-          name: '订单分析知识库',
-          kind: 'regular',
-        },
-        currentKbSnapshot: {
-          id: 'snap-1',
-          displayName: '默认快照',
-          deployHash: 'deploy-1',
-          status: 'READY',
-        },
-      },
-    },
-    refetch: (...args: any[]) => mockRuntimeSelectorRefetch(...args),
-  }),
-}));
-
-jest.mock('@/apollo/client/graphql/diagram.generated', () => ({
-  DiagramDocument: 'DiagramDocument',
-}));
-
-jest.mock('@/apollo/client/graphql/instructions.generated', () => ({
-  useInstructionsQuery: () => ({
-    data: { instructions: [] },
-    refetch: jest.fn(),
-  }),
-  useCreateInstructionMutation: () => [
-    mockCreateInstruction,
-    { loading: false },
-  ],
-  useUpdateInstructionMutation: () => [
-    mockUpdateInstruction,
-    { loading: false },
-  ],
-  useDeleteInstructionMutation: () => [
-    mockDeleteInstruction,
-    { loading: false },
-  ],
-}));
-
-jest.mock('@/apollo/client/graphql/sqlPairs.generated', () => ({
-  useSqlPairsQuery: () => ({
-    data: { sqlPairs: [] },
-    refetch: jest.fn(),
-  }),
-  useCreateSqlPairMutation: () => [mockCreateSqlPair, { loading: false }],
-  useUpdateSqlPairMutation: () => [mockUpdateSqlPair, { loading: false }],
-  useDeleteSqlPairMutation: () => [mockDeleteSqlPair, { loading: false }],
 }));
 
 jest.mock('@/components/reference/DolaAppShell', () => ({
@@ -136,6 +63,11 @@ jest.mock('@/hooks/useHomeSidebar', () => ({
 jest.mock('@/hooks/useAuthSession', () => ({
   __esModule: true,
   default: () => mockUseAuthSession(),
+}));
+
+jest.mock('@/hooks/useRuntimeSelectorState', () => ({
+  __esModule: true,
+  default: () => mockUseRuntimeSelectorState(),
 }));
 
 jest.mock('@/hooks/useProtectedRuntimeScopePage', () => ({
@@ -168,16 +100,6 @@ describe('knowledge index page', () => {
       kbSnapshotId: 'snap-1',
       deployHash: 'deploy-1',
     }));
-    mockRuntimeSelectorRefetch.mockResolvedValue({
-      data: {
-        runtimeSelectorState: {
-          currentKnowledgeBase: { id: 'kb-1', name: '订单分析知识库' },
-        },
-      },
-    });
-    mockApolloQuery.mockResolvedValue({
-      data: { diagram: { views: [] } },
-    });
     mockUseRouter.mockReturnValue({
       query: {},
       replace: jest.fn(),
@@ -200,6 +122,42 @@ describe('knowledge index page', () => {
         },
       },
       refresh: jest.fn(),
+    });
+    mockUseRuntimeSelectorState.mockReturnValue({
+      provided: true,
+      loading: false,
+      runtimeSelectorState: {
+        currentWorkspace: { id: 'ws-1', name: '业务工作空间', kind: 'regular' },
+        currentKnowledgeBase: {
+          id: 'kb-1',
+          name: '订单分析知识库',
+          kind: 'regular',
+        },
+        currentKbSnapshot: {
+          id: 'snap-1',
+          displayName: '默认快照',
+          deployHash: 'deploy-1',
+          status: 'READY',
+        },
+        knowledgeBases: [
+          {
+            id: 'kb-1',
+            name: '订单分析知识库',
+            defaultKbSnapshotId: 'snap-1',
+          },
+        ],
+        kbSnapshots: [
+          {
+            id: 'snap-1',
+            snapshotKey: 'snap-1',
+            displayName: '默认快照',
+            deployHash: 'deploy-1',
+            status: 'READY',
+          },
+        ],
+        workspaces: [{ id: 'ws-1', slug: 'ws-1', name: '业务工作空间' }],
+      },
+      refetch: jest.fn(),
     });
     mockUseProtectedRuntimeScopePage.mockReturnValue({
       guarding: false,

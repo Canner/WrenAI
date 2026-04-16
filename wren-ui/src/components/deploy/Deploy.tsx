@@ -3,7 +3,7 @@ import { Button, Space, Typography, message } from 'antd';
 import CheckCircleOutlined from '@ant-design/icons/CheckCircleOutlined';
 import LoadingOutlined from '@ant-design/icons/LoadingOutlined';
 import WarningOutlined from '@ant-design/icons/WarningOutlined';
-import { SyncStatus } from '@/apollo/client/graphql/__types__';
+import { SyncStatus } from '@/types/api';
 import { useDeployStatusContext } from '@/components/deploy/Context';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import { deployCurrentRuntime } from '@/utils/modelingRest';

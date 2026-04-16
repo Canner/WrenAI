@@ -15,7 +15,7 @@ import { Props as AnswerResultProps } from '@/components/pages/home/promptThread
 import MarkdownBlock from '@/components/editor/MarkdownBlock';
 import PreviewData from '@/components/dataPreview/PreviewData';
 import { AdjustAnswerDropdown } from '@/components/diagram/CustomDropdown';
-import { ThreadResponseAnswerStatus } from '@/apollo/client/graphql/__types__';
+import { ThreadResponseAnswerStatus } from '@/types/api';
 import useResponsePreviewData from '@/hooks/useResponsePreviewData';
 
 const { Text } = Typography;
@@ -24,6 +24,15 @@ const StyledSkeleton = styled(Skeleton)`
   padding: 16px;
   .ant-skeleton-paragraph {
     margin-bottom: 0;
+  }
+`;
+
+const ResultActionButton = styled(Button)`
+  && {
+    height: 34px;
+    border-radius: 10px;
+    padding-inline: 12px;
+    font-weight: 500;
   }
 `;
 
@@ -243,7 +252,7 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
         {isStreaming && <LoadingOutlined className="geekblue-6" spin />}
         {status === ThreadResponseAnswerStatus.INTERRUPTED && (
           <div className="mt-2 text-right">
-            <Button
+            <ResultActionButton
               icon={<ReloadOutlined />}
               size="small"
               type="link"
@@ -251,12 +260,12 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
               onClick={onRegenerateAnswer}
             >
               重新生成
-            </Button>
+            </ResultActionButton>
           </div>
         )}
         {allowPreviewData ? (
           <div className="mt-6">
-            <Button
+            <ResultActionButton
               size="small"
               icon={
                 <BinocularsIcon
@@ -272,7 +281,7 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
               data-ph-capture-attribute-name="cta_text-answer_preview_data"
             >
               查看结果
-            </Button>
+            </ResultActionButton>
 
             {isPreviewExpanded && (
               <div

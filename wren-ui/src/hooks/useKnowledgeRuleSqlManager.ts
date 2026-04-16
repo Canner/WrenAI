@@ -5,7 +5,7 @@ import type {
   CreateSqlPairInput,
   Instruction,
   SqlPair,
-} from '@/apollo/client/graphql/__types__';
+} from '@/types/api';
 
 export type RuleDetailFormValues = {
   summary: string;

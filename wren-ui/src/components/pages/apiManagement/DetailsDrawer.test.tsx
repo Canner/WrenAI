@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import DetailsDrawer from './DetailsDrawer';
-import { ApiType } from '@/apollo/client/graphql/__types__';
+import { ApiType } from '@/types/api';
 
 jest.mock('antd', () => {
   const React = jest.requireActual('react');

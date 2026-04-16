@@ -4,7 +4,7 @@ import {
   DetailedThread,
   RecommendedQuestionsTask,
   ThreadResponse,
-} from '@/apollo/client/graphql/__types__';
+} from '@/types/api';
 import { SelectQuestionProps } from '@/components/pages/home/RecommendedQuestions';
 
 export type IPromptThreadStore = {

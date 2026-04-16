@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button, Modal, Select, Row, Col, Form, message } from 'antd';
 import { Path } from '@/utils/enum';
 import { getLanguageText } from '@/utils/language';
-import { ProjectLanguage } from '@/apollo/client/graphql/__types__';
+import { ProjectLanguage } from '@/types/api';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import {
   resetCurrentProject,

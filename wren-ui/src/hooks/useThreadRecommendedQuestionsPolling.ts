@@ -3,7 +3,7 @@ import {
   buildRuntimeScopeUrl,
   type ClientRuntimeScopeSelector,
 } from '@/apollo/client/runtimeScope';
-import type { RecommendedQuestionsTask } from '@/apollo/client/graphql/__types__';
+import type { RecommendedQuestionsTask } from '@/types/api';
 
 export const buildThreadRecommendationQuestionsUrl = ({
   threadId,

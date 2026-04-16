@@ -8,7 +8,7 @@ import { FORM_MODE } from '@/utils/enum';
 import { ERROR_TEXTS } from '@/utils/error';
 import { handleFormSubmitError } from '@/utils/errorHandler';
 import { ModalAction } from '@/hooks/useModalAction';
-import { Instruction } from '@/apollo/client/graphql/__types__';
+import { Instruction } from '@/types/api';
 
 const MAX_QUESTIONS = 100;
 
