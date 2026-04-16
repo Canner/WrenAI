@@ -1,5 +1,5 @@
 import logging
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 
 import toml
 
@@ -322,7 +322,7 @@ def create_service_metadata(
         return {**llm_metadata, **embedding_metadata}
 
     pipes_metadata = {
-        pipe_name: _convert_pipe_metadata(**asdict(component))
+        pipe_name: _convert_pipe_metadata(**dict(component))
         for pipe_name, component in pipe_components.items()
     }
 

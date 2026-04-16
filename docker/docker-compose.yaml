@@ -70,7 +70,7 @@ services:
       - qdrant
 
   qdrant:
-    image: qdrant/qdrant:v1.11.0
+    image: qdrant/qdrant:v1.15.0
     restart: on-failure
     expose:
       - 6333
