@@ -3,7 +3,7 @@ from src.providers import loader
 
 def test_import_mods():
     loader.import_mods("src.providers")
-    assert len(loader.PROVIDERS) == 6
+    assert len(loader.PROVIDERS) == 7
 
 
 def test_get_provider():
@@ -12,6 +12,10 @@ def test_get_provider():
     # llm provider
     provider = loader.get_provider("litellm_llm")
     assert provider.__name__ == "LitellmLLMProvider"
+
+    # minimax llm provider
+    provider = loader.get_provider("minimax_llm")
+    assert provider.__name__ == "MiniMaxLLMProvider"
 
     # embedder provider
     provider = loader.get_provider("litellm_embedder")
