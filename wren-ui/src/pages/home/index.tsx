@@ -18,6 +18,7 @@ import {
   Typography,
   message,
 } from 'antd';
+import type { CreateThreadInput, Thread } from '@/types/home';
 import BookOutlined from '@ant-design/icons/BookOutlined';
 import CloseOutlined from '@ant-design/icons/CloseOutlined';
 import DatabaseOutlined from '@ant-design/icons/DatabaseOutlined';
@@ -30,7 +31,7 @@ import { Path } from '@/utils/enum';
 import {
   buildRuntimeScopeUrl,
   ClientRuntimeScopeSelector,
-} from '@/apollo/client/runtimeScope';
+} from '@/runtime/client/runtimeScope';
 import Prompt from '@/components/pages/home/prompt';
 import useHomeSidebar from '@/hooks/useHomeSidebar';
 import useAskPrompt from '@/hooks/useAskPrompt';
@@ -40,7 +41,7 @@ import {
   fetchSuggestedQuestions,
   type SuggestedQuestionsPayload,
 } from '@/utils/homeRest';
-import { CreateThreadInput } from '@/types/api';
+
 import DolaAppShell from '@/components/reference/DolaAppShell';
 import {
   usePersistentShellEmbedded,
@@ -728,6 +729,87 @@ export const resolveAskRuntimeSelector = ({
   };
 };
 
+export const resolveCreatedThreadRuntimeSelector = ({
+  fallbackSelector,
+  thread,
+}: {
+  fallbackSelector: ClientRuntimeScopeSelector;
+  thread?: Partial<Thread> | null;
+}): ClientRuntimeScopeSelector => {
+  const workspaceId = thread?.workspaceId || fallbackSelector.workspaceId;
+  const knowledgeBaseId =
+    thread?.knowledgeBaseId || fallbackSelector.knowledgeBaseId;
+  const kbSnapshotId = thread?.kbSnapshotId || fallbackSelector.kbSnapshotId;
+  const deployHash = thread?.deployHash || fallbackSelector.deployHash;
+
+  return {
+    ...(workspaceId ? { workspaceId } : {}),
+    ...(knowledgeBaseId ? { knowledgeBaseId } : {}),
+    ...(kbSnapshotId ? { kbSnapshotId } : {}),
+    ...(deployHash ? { deployHash } : {}),
+  };
+};
+
+type AskRuntimeKnowledgeBase = {
+  id: string;
+  defaultKbSnapshotId?: string | null;
+};
+
+export const resolveAskRuntimeAvailability = ({
+  currentSelector,
+  selectedKnowledgeBaseIds,
+  knowledgeBases,
+  currentKnowledgeBase,
+  currentKbSnapshot,
+}: {
+  currentSelector: ClientRuntimeScopeSelector;
+  selectedKnowledgeBaseIds: string[];
+  knowledgeBases: AskRuntimeKnowledgeBase[];
+  currentKnowledgeBase?: AskRuntimeKnowledgeBase | null;
+  currentKbSnapshot?: { id?: string | null; deployHash?: string | null } | null;
+}) => {
+  const primaryKnowledgeBaseId = selectedKnowledgeBaseIds[0];
+  const selectedKnowledgeBase =
+    (primaryKnowledgeBaseId
+      ? knowledgeBases.find(
+          (knowledgeBase) => knowledgeBase.id === primaryKnowledgeBaseId,
+        )
+      : null) ||
+    currentKnowledgeBase ||
+    null;
+  const switchingKnowledgeBase = Boolean(
+    primaryKnowledgeBaseId &&
+      primaryKnowledgeBaseId !== currentSelector.knowledgeBaseId,
+  );
+
+  if (switchingKnowledgeBase) {
+    return {
+      hasExecutableRuntime: Boolean(selectedKnowledgeBase?.defaultKbSnapshotId),
+      isHistoricalRuntimeReadonly: false,
+    };
+  }
+
+  const selectorHasRuntime = Boolean(
+    currentSelector.deployHash ||
+      currentSelector.kbSnapshotId ||
+      currentKbSnapshot?.deployHash ||
+      currentKbSnapshot?.id,
+  );
+
+  return {
+    hasExecutableRuntime: hasLatestExecutableSnapshot({
+      selectorHasRuntime,
+      currentKbSnapshotId: currentKbSnapshot?.id,
+      defaultKbSnapshotId: selectedKnowledgeBase?.defaultKbSnapshotId,
+    }),
+    isHistoricalRuntimeReadonly: isHistoricalSnapshotReadonly({
+      selectorHasRuntime,
+      currentKbSnapshotId: currentKbSnapshot?.id,
+      defaultKbSnapshotId: selectedKnowledgeBase?.defaultKbSnapshotId,
+    }),
+  };
+};
+
 export default function Home() {
   const $prompt = useRef<ComponentRef<typeof Prompt>>(null);
   const composerShellRef = useRef<HTMLDivElement>(null);
@@ -773,29 +855,27 @@ export default function Home() {
 
   const runtimeSelector = useRuntimeSelectorState();
   const runtimeSelectorState = runtimeSelector.runtimeSelectorState;
-  const selectorHasRuntime = Boolean(
-    runtimeScopeNavigation.selector.deployHash ||
-      runtimeScopeNavigation.selector.kbSnapshotId ||
-      runtimeSelectorState?.currentKbSnapshot?.deployHash ||
-      runtimeSelectorState?.currentKbSnapshot?.id,
-  );
-  const hasExecutableRuntime = useMemo(() => {
-    return hasLatestExecutableSnapshot({
-      selectorHasRuntime,
-      currentKbSnapshotId: runtimeSelectorState?.currentKbSnapshot?.id,
-      defaultKbSnapshotId:
-        runtimeSelectorState?.currentKnowledgeBase?.defaultKbSnapshotId,
-    });
-  }, [runtimeSelectorState, selectorHasRuntime]);
-  const isHistoricalRuntimeReadonly = useMemo(() => {
-    return isHistoricalSnapshotReadonly({
-      selectorHasRuntime,
-      currentKbSnapshotId: runtimeSelectorState?.currentKbSnapshot?.id,
-      defaultKbSnapshotId:
-        runtimeSelectorState?.currentKnowledgeBase?.defaultKbSnapshotId,
-    });
-  }, [runtimeSelectorState, selectorHasRuntime]);
   const currentKnowledgeBases = runtimeSelectorState?.knowledgeBases || [];
+  const {
+    hasExecutableRuntime: hasExecutableAskRuntime,
+    isHistoricalRuntimeReadonly: isAskRuntimeHistoricalReadonly,
+  } = useMemo(
+    () =>
+      resolveAskRuntimeAvailability({
+        currentSelector: runtimeScopeNavigation.selector,
+        selectedKnowledgeBaseIds,
+        knowledgeBases: currentKnowledgeBases,
+        currentKnowledgeBase: runtimeSelectorState?.currentKnowledgeBase,
+        currentKbSnapshot: runtimeSelectorState?.currentKbSnapshot,
+      }),
+    [
+      currentKnowledgeBases,
+      runtimeScopeNavigation.selector,
+      runtimeSelectorState?.currentKbSnapshot,
+      runtimeSelectorState?.currentKnowledgeBase,
+      selectedKnowledgeBaseIds,
+    ],
+  );
   const skillOptions = useMemo(
     () =>
       skillOptionSource
@@ -850,14 +930,14 @@ export default function Home() {
   useEffect(() => {
     let cancelled = false;
 
-    if (!runtimeScopePage.hasRuntimeScope || !hasExecutableRuntime) {
+    if (!runtimeScopePage.hasRuntimeScope || !hasExecutableAskRuntime) {
       setSuggestedQuestionsData(null);
       return () => {
         cancelled = true;
       };
     }
 
-    void fetchSuggestedQuestions(runtimeScopeNavigation.selector)
+    void fetchSuggestedQuestions(askRuntimeSelector)
       .then((payload) => {
         if (!cancelled) {
           setSuggestedQuestionsData(payload);
@@ -873,8 +953,8 @@ export default function Home() {
       cancelled = true;
     };
   }, [
-    hasExecutableRuntime,
-    runtimeScopeNavigation.selector,
+    askRuntimeSelector,
+    hasExecutableAskRuntime,
     runtimeScopePage.hasRuntimeScope,
   ]);
 
@@ -883,7 +963,7 @@ export default function Home() {
     const workspaceId = runtimeScopeNavigation.selector.workspaceId;
     const cachedSkillOptions = getCachedHomeSkillOptions(workspaceId);
 
-    if (!workspaceId || !hasExecutableRuntime) {
+    if (!workspaceId || !hasExecutableAskRuntime) {
       setSkillOptionSource([]);
       setSelectedSkillIds([]);
       setSkillOptionsLoading(false);
@@ -901,7 +981,7 @@ export default function Home() {
     if (
       !shouldLoadHomeSkillOptions({
         workspaceId,
-        hasExecutableRuntime,
+        hasExecutableRuntime: hasExecutableAskRuntime,
         skillPickerOpen,
         selectedSkillCount: selectedSkillIds.length,
       })
@@ -964,7 +1044,7 @@ export default function Home() {
       cancelled = true;
     };
   }, [
-    hasExecutableRuntime,
+    hasExecutableAskRuntime,
     selectedSkillIds.length,
     skillPickerOpen,
     runtimeScopeNavigation.selector.workspaceId,
@@ -1124,9 +1204,9 @@ export default function Home() {
         id: thread.id,
         title: getReferenceDisplayThreadTitle(thread.name),
         active: false,
-        onClick: () => homeSidebar.onSelect([thread.id], thread.selector),
+        selector: thread.selector,
       })),
-    [homeSidebar],
+    [homeSidebar.data?.threads],
   );
 
   const selectedKnowledgeBases = useMemo(() => {
@@ -1353,9 +1433,9 @@ export default function Home() {
       return;
     }
 
-    if (!hasExecutableRuntime) {
+    if (!hasExecutableAskRuntime) {
       message.warning(
-        isHistoricalRuntimeReadonly
+        isAskRuntimeHistoricalReadonly
           ? HISTORICAL_SNAPSHOT_READONLY_HINT
           : '当前没有可用的知识库运行范围。',
       );
@@ -1393,6 +1473,10 @@ export default function Home() {
         ...(selectedSkillIds.length > 0 ? { selectedSkillIds } : {}),
       });
       const threadId = response.id;
+      const threadRuntimeSelector = resolveCreatedThreadRuntimeSelector({
+        fallbackSelector: askRuntimeSelector,
+        thread: response,
+      });
 
       if (!threadId) {
         throw new Error('创建对话失败');
@@ -1411,7 +1495,7 @@ export default function Home() {
             ? { knowledgeBaseIds: selectedKnowledgeBaseIds.join(',') }
             : {}),
         },
-        askRuntimeSelector,
+        threadRuntimeSelector,
       );
     } catch (error) {
       reportHomeError(error, '创建对话失败，请稍后重试');
@@ -1431,6 +1515,10 @@ export default function Home() {
         ...(selectedSkillIds.length > 0 ? { selectedSkillIds } : {}),
       });
       const threadId = response.id;
+      const threadRuntimeSelector = resolveCreatedThreadRuntimeSelector({
+        fallbackSelector: askRuntimeSelector,
+        thread: response,
+      });
       if (!threadId) {
         throw new Error('创建对话失败');
       }
@@ -1446,7 +1534,7 @@ export default function Home() {
             ? { knowledgeBaseIds: selectedKnowledgeBaseIds.join(',') }
             : {}),
         },
-        askRuntimeSelector,
+        threadRuntimeSelector,
       );
     } catch (error) {
       reportHomeError(error, '创建对话失败，请稍后重试');

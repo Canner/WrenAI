@@ -1,5 +1,6 @@
-import { CSSProperties, useEffect, useMemo } from 'react';
-import { isEmpty, debounce } from 'lodash';
+import { ViewInfo } from '@/types/modeling';
+import { CSSProperties, useEffect, useMemo, useRef } from 'react';
+import { isEmpty } from 'lodash';
 import clsx from 'clsx';
 import { Button, Typography, Tabs, Tag, Tooltip } from 'antd';
 import styled from 'styled-components';
@@ -10,12 +11,17 @@ import MessageOutlined from '@ant-design/icons/MessageOutlined';
 import ShareAltOutlined from '@ant-design/icons/ShareAltOutlined';
 import { RobotSVG } from '@/utils/svgs';
 import { ANSWER_TAB_KEYS } from '@/utils/enum';
-import { canGenerateAnswer } from '@/hooks/useAskPrompt';
 import {
   usePromptThreadActionsStore,
   usePromptThreadDataStore,
   usePromptThreadPreparationStore,
 } from './store';
+import {
+  AskingTaskStatus,
+  ThreadResponse,
+  ThreadResponseAdjustment,
+  ThreadResponseAdjustmentType,
+} from '@/types/home';
 import { RecommendedQuestionsProps } from '@/components/pages/home/promptThread';
 import RecommendedQuestions, {
   getRecommendedQuestionProps,
@@ -23,20 +29,13 @@ import RecommendedQuestions, {
 } from '@/components/pages/home/RecommendedQuestions';
 import ViewBlock from '@/components/pages/home/promptThread/ViewBlock';
 import ViewSQLTabContent from '@/components/pages/home/promptThread/ViewSQLTabContent';
-import TextBasedAnswer, {
-  getAnswerIsFinished,
-} from '@/components/pages/home/promptThread/TextBasedAnswer';
+import TextBasedAnswer from '@/components/pages/home/promptThread/TextBasedAnswer';
 import ChartAnswer from '@/components/pages/home/promptThread/ChartAnswer';
 import Preparation from '@/components/pages/home/preparation';
 import {
-  AskingTaskStatus,
-  ThreadResponse,
-  ThreadResponseAnswerDetail,
-  ThreadResponseAnswerStatus,
-  ThreadResponseAdjustment,
-  ThreadResponseAdjustmentType,
-  ViewInfo,
-} from '@/types/api';
+  scheduleAutoGenerateAnswer,
+  shouldAutoGenerateAnswer,
+} from './answerGeneration';
 
 const { Title, Text } = Typography;
 
@@ -172,29 +171,6 @@ const AdjustmentInformation = (props: {
   );
 };
 
-const isNeedGenerateAnswer = (
-  answerDetail?: ThreadResponseAnswerDetail | null,
-  sql?: string | null,
-) => {
-  if (!sql?.trim()) {
-    return false;
-  }
-
-  const status = answerDetail?.status || null;
-  const hasQueryId =
-    answerDetail?.queryId !== null &&
-    answerDetail?.queryId !== undefined &&
-    String(answerDetail?.queryId).trim() !== '';
-  const isFinished = getAnswerIsFinished(status);
-  // it means the background task has not started yet, but answer is pending for generating
-  const isProcessing = [
-    ThreadResponseAnswerStatus.NOT_STARTED,
-    ThreadResponseAnswerStatus.PREPROCESSING,
-    ThreadResponseAnswerStatus.FETCHING_DATA,
-  ].includes(status as ThreadResponseAnswerStatus);
-  return !hasQueryId && !isFinished && !isProcessing;
-};
-
 export default function AnswerResult(props: Props) {
   const { threadResponse, isLastThreadResponse, isOpeningQuestion } = props;
 
@@ -243,32 +219,42 @@ export default function AnswerResult(props: Props) {
     return answerDetail === null && !isEmpty(breakdownDetail);
   }, [answerDetail, breakdownDetail]);
 
+  const shouldInitializeAnswer = useMemo(
+    () =>
+      shouldAutoGenerateAnswer({
+        isBreakdownOnly,
+        askingTask,
+        adjustmentTask,
+        answerDetail,
+        sql,
+      }),
+    [isBreakdownOnly, askingTask, adjustmentTask, answerDetail, sql],
+  );
+  const autoGenerateRequestKey = useMemo(
+    () => `${id}:${sql || ''}`,
+    [id, sql],
+  );
+  const autoGenerateRequestRef = useRef<string | null>(null);
+
   // initialize generate answer
   useEffect(() => {
-    if (isBreakdownOnly) return;
-    if (
-      canGenerateAnswer(askingTask, adjustmentTask) &&
-      isNeedGenerateAnswer(answerDetail, threadResponse.sql)
-    ) {
-      const debouncedGenerateAnswer = debounce(
-        () => {
-          onGenerateTextBasedAnswer(id);
-          onGenerateThreadRecommendedQuestions();
-        },
-        250,
-        { leading: false, trailing: true },
-      );
-      debouncedGenerateAnswer();
+    if (!shouldInitializeAnswer) return;
+    if (autoGenerateRequestRef.current === autoGenerateRequestKey) return;
 
-      return () => {
-        debouncedGenerateAnswer.cancel();
-      };
-    }
+    return scheduleAutoGenerateAnswer({
+      requestRef: autoGenerateRequestRef,
+      requestKey: autoGenerateRequestKey,
+      onGenerate: () => {
+        onGenerateTextBasedAnswer(id);
+        onGenerateThreadRecommendedQuestions();
+      },
+    });
   }, [
-    isBreakdownOnly,
-    askingTask?.status,
-    adjustmentTask?.status,
-    answerDetail?.status,
+    shouldInitializeAnswer,
+    autoGenerateRequestKey,
+    id,
+    onGenerateTextBasedAnswer,
+    onGenerateThreadRecommendedQuestions,
   ]);
 
   const onTabClick = (activeKey: string) => {

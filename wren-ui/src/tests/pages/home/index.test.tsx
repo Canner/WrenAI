@@ -3,7 +3,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import HomePage, {
   clearHomeSkillOptionsCacheForTests,
   normalizeHomeSkillOptions,
+  resolveAskRuntimeAvailability,
   resolveAskRuntimeSelector,
+  resolveCreatedThreadRuntimeSelector,
   shouldLoadHomeSkillOptions,
 } from '../../../pages/home';
 import { HISTORICAL_SNAPSHOT_READONLY_HINT } from '../../../utils/runtimeSnapshot';
@@ -125,7 +127,7 @@ jest.mock('@/hooks/useAuthSession', () => ({
   default: (...args: any[]) => mockUseAuthSession(...args),
 }));
 
-jest.mock('@/apollo/client/runtimeScope', () => ({
+jest.mock('@/runtime/client/runtimeScope', () => ({
   buildRuntimeScopeHeaders: (...args: any[]) =>
     mockBuildRuntimeScopeHeaders(...args),
   buildRuntimeScopeUrl: (...args: any[]) => mockBuildRuntimeScopeUrl(...args),
@@ -324,7 +326,7 @@ describe('home index page', () => {
     expect(markup).toContain('我是你的数据AI助手，我能为你做什么？');
     expect(markup).toContain('指定知识库');
     expect(markup).toContain('输入关键词搜索知识库');
-    expect(markup).toContain('电商订单数据（E-commerce）');
+    expect(markup).toContain('订单分析知识库');
     expect(markup).toContain('客户经营知识库');
     expect(markup).toContain('0 张表');
     expect(markup).toContain('案例广场');
@@ -528,6 +530,95 @@ describe('home index page', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  it('navigates to the created thread with the canonical runtime scope returned by the server', async () => {
+    const mockPush = jest.fn();
+    const useStateSpy = setHomeStateOverrides({
+      3: ['kb-2'],
+    });
+
+    mockUseRuntimeScopeNavigation.mockReturnValue({
+      push: mockPush,
+      pushWorkspace: mockPush,
+      selector: {
+        workspaceId: 'ws-1',
+        knowledgeBaseId: 'kb-1',
+      },
+    });
+    mockUseRuntimeSelectorState.mockReturnValue({
+      provided: true,
+      loading: false,
+      refetch: jest.fn(),
+      runtimeSelectorState: {
+        currentWorkspace: { id: 'ws-1', name: '系统工作空间' },
+        currentKnowledgeBase: {
+          id: 'kb-1',
+          name: '订单分析知识库',
+          defaultKbSnapshotId: undefined,
+        },
+        currentKbSnapshot: undefined,
+        knowledgeBases: [
+          {
+            id: 'kb-1',
+            name: '订单分析知识库',
+            defaultKbSnapshotId: undefined,
+          },
+          {
+            id: 'kb-2',
+            name: '客户经营知识库',
+            defaultKbSnapshotId: 'snap-2',
+          },
+        ],
+      },
+    });
+    global.fetch = jest.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/v1/asking-tasks?')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            id: 'task-1',
+          }),
+        });
+      }
+
+      if (url.includes('/api/v1/threads?')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            id: 'thread-2',
+            workspaceId: 'ws-1',
+            knowledgeBaseId: 'kb-2',
+            kbSnapshotId: 'snap-2',
+            deployHash: 'deploy-2',
+            knowledgeBaseIds: ['kb-2'],
+            selectedSkillIds: [],
+            summary: '客户经营线程',
+          }),
+        });
+      }
+
+      return Promise.reject(new Error(`Unexpected fetch: ${url}`));
+    }) as any;
+
+    renderPage();
+    await capturedPromptProps.onSubmit('帮我看客户经营情况');
+
+    expect(mockPush).toHaveBeenCalledWith(
+      '/home/thread-2',
+      {
+        knowledgeBaseIds: 'kb-2',
+      },
+      {
+        workspaceId: 'ws-1',
+        knowledgeBaseId: 'kb-2',
+        kbSnapshotId: 'snap-2',
+        deployHash: 'deploy-2',
+      },
+    );
+
+    useStateSpy.mockRestore();
+  });
+
   it('blocks asking with historical snapshot readonly hint', async () => {
     mockUseRuntimeScopeNavigation.mockReturnValue({
       push: jest.fn(),
@@ -673,6 +764,76 @@ describe('home index page', () => {
     useStateSpy.mockRestore();
   });
 
+  it('uses the selected knowledge base runtime when the current knowledge base has no executable snapshot', async () => {
+    const mockPush = jest.fn();
+    const useStateSpy = setHomeStateOverrides({
+      3: ['kb-2'],
+    });
+
+    mockUseRuntimeScopeNavigation.mockReturnValue({
+      push: mockPush,
+      pushWorkspace: mockPush,
+      selector: {
+        workspaceId: 'ws-1',
+        knowledgeBaseId: 'kb-1',
+      },
+    });
+    mockUseRuntimeSelectorState.mockReturnValue({
+      provided: true,
+      loading: false,
+      refetch: jest.fn(),
+      runtimeSelectorState: {
+        currentWorkspace: { id: 'ws-1', name: '系统工作空间' },
+        currentKnowledgeBase: {
+          id: 'kb-1',
+          name: '订单分析知识库',
+          defaultKbSnapshotId: undefined,
+        },
+        currentKbSnapshot: undefined,
+        knowledgeBases: [
+          {
+            id: 'kb-1',
+            name: '订单分析知识库',
+            defaultKbSnapshotId: undefined,
+          },
+          {
+            id: 'kb-2',
+            name: '客户经营知识库',
+            defaultKbSnapshotId: 'snap-2',
+          },
+        ],
+      },
+    });
+
+    renderPage();
+    await capturedPromptProps.onSubmit('帮我看客户经营情况');
+
+    expect((globalThis as any).__homeIndexMessage.warning).not.toHaveBeenCalled();
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      1,
+      '/api/v1/asking-tasks?workspaceId=ws-1&knowledgeBaseId=kb-2',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          question: '帮我看客户经营情况',
+          knowledgeBaseIds: ['kb-2'],
+        }),
+      }),
+    );
+    expect(mockPush).toHaveBeenCalledWith(
+      '/home/thread-2',
+      {
+        knowledgeBaseIds: 'kb-2',
+      },
+      {
+        workspaceId: 'ws-1',
+        knowledgeBaseId: 'kb-2',
+      },
+    );
+
+    useStateSpy.mockRestore();
+  });
+
   it('prefers the first selected knowledge base as the ask runtime scope', () => {
     expect(
       resolveAskRuntimeSelector({
@@ -706,6 +867,49 @@ describe('home index page', () => {
       knowledgeBaseId: 'kb-1',
       kbSnapshotId: 'snap-1',
       deployHash: 'deploy-1',
+    });
+  });
+
+  it('prefers the created thread runtime scope when the server returns a canonical selector', () => {
+    expect(
+      resolveCreatedThreadRuntimeSelector({
+        fallbackSelector: {
+          workspaceId: 'ws-1',
+          knowledgeBaseId: 'kb-2',
+        },
+        thread: {
+          workspaceId: 'ws-1',
+          knowledgeBaseId: 'kb-2',
+          kbSnapshotId: 'snap-2',
+          deployHash: 'deploy-2',
+        } as any,
+      }),
+    ).toEqual({
+      workspaceId: 'ws-1',
+      knowledgeBaseId: 'kb-2',
+      kbSnapshotId: 'snap-2',
+      deployHash: 'deploy-2',
+    });
+  });
+
+  it('treats a switched selected knowledge base with a default snapshot as executable', () => {
+    expect(
+      resolveAskRuntimeAvailability({
+        currentSelector: {
+          workspaceId: 'ws-1',
+          knowledgeBaseId: 'kb-1',
+        },
+        selectedKnowledgeBaseIds: ['kb-2'],
+        knowledgeBases: [
+          { id: 'kb-1', defaultKbSnapshotId: undefined },
+          { id: 'kb-2', defaultKbSnapshotId: 'snap-2' },
+        ],
+        currentKnowledgeBase: { id: 'kb-1', defaultKbSnapshotId: undefined },
+        currentKbSnapshot: undefined,
+      }),
+    ).toEqual({
+      hasExecutableRuntime: true,
+      isHistoricalRuntimeReadonly: false,
     });
   });
 
