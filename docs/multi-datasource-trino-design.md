@@ -1,5 +1,7 @@
 # 多数据源 Knowledge Base — Trino 联邦方案（修订版）
 
+> 历史说明（2026-04-16）：本文保留的是 Apollo/GraphQL 时代的设计、排障或执行记录。当前 `wren-ui` 运行时前端已经切到 REST，代码目录也已收口到 `src/server/*` 与 `src/pages/api/v1/*`；文中的旧 GraphQL 入口、resolver 与 Apollo 上下文描述仅作历史背景，不再代表当前主链路。
+
 ## 1. 背景与已确认决策
 
 WrenAI 当前执行链路的核心边界不是“KB 下有多少个 connector”，而是：
@@ -269,7 +271,7 @@ Trino 层需要一个适配器负责：
 建议新建：
 
 ```text
-wren-ui/src/apollo/server/adaptors/trinoAdaptor.ts
+wren-ui/src/server/adaptors/trinoAdaptor.ts
 ```
 
 注意：本文不假定某个特定 Trino 版本一定存在“动态 REST catalog API”。  
@@ -336,7 +338,7 @@ wren-ui/src/apollo/server/adaptors/trinoAdaptor.ts
 建议新增一个内部服务，例如：
 
 ```text
-wren-ui/src/apollo/server/services/federatedRuntimeProjectService.ts
+wren-ui/src/server/services/federatedRuntimeProjectService.ts
 ```
 
 职责：
@@ -532,14 +534,14 @@ connector 新增、删除、修改连接信息后：
   - `knowledge_base.runtime_project_id`
   - `connector.database_provider`
   - `connector.trino_catalog_name`
-- `wren-ui/src/apollo/server/adaptors/trinoAdaptor.ts`
-- `wren-ui/src/apollo/server/services/federatedRuntimeProjectService.ts`
-- `wren-ui/src/apollo/server/services/connectorService.ts`
-- `wren-ui/src/apollo/server/services/knowledgeBaseService.ts`
-- `wren-ui/src/apollo/server/services/queryService.ts`
-- `wren-ui/src/apollo/server/services/metadataService.ts`
-- `wren-ui/src/apollo/server/services/sqlPairService.ts`
-- `wren-ui/src/apollo/server/dataSource.ts`
+- `wren-ui/src/server/adaptors/trinoAdaptor.ts`
+- `wren-ui/src/server/services/federatedRuntimeProjectService.ts`
+- `wren-ui/src/server/services/connectorService.ts`
+- `wren-ui/src/server/services/knowledgeBaseService.ts`
+- `wren-ui/src/server/services/queryService.ts`
+- `wren-ui/src/server/services/metadataService.ts`
+- `wren-ui/src/server/services/sqlPairService.ts`
+- `wren-ui/src/server/dataSource.ts`
 
 UI：
 

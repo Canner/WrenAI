@@ -1,9 +1,19 @@
 import {
+  resolveKnowledgeInitialSourceType,
+  resolveKnowledgeSourceOptions,
   resolveKnowledgeConnectorScopeKey,
   shouldLoadKnowledgeConnectors,
 } from './useKnowledgeConnectors';
 
 describe('useKnowledgeConnectors helpers', () => {
+  const createSourceOption = (key: string, category: 'demo' | 'connector') => ({
+    key,
+    category,
+    label: key,
+    meta: category,
+    icon: null,
+  });
+
   it('resolves connector scope key by active knowledge base + snapshot', () => {
     expect(
       resolveKnowledgeConnectorScopeKey({
@@ -32,8 +42,8 @@ describe('useKnowledgeConnectors helpers', () => {
 
   it('loads connectors only when modal is open and source category is connector', () => {
     const sourceOptions = [
-      { key: 'demo_ecommerce', category: 'demo' as const },
-      { key: 'database', category: 'connector' as const },
+      createSourceOption('demo_ecommerce', 'demo'),
+      createSourceOption('database', 'connector'),
     ];
 
     expect(
@@ -62,5 +72,37 @@ describe('useKnowledgeConnectors helpers', () => {
         sourceOptions,
       }),
     ).toBe(false);
+  });
+
+  it('filters out sample asset sources for regular workspaces', () => {
+    const sourceOptions = [
+      createSourceOption('demo_ecommerce', 'demo'),
+      createSourceOption('demo_hr', 'demo'),
+      createSourceOption('database', 'connector'),
+      createSourceOption('api', 'connector'),
+    ];
+
+    expect(
+      resolveKnowledgeSourceOptions({
+        workspaceKind: 'regular',
+        sourceOptions,
+      }).map((option) => option.key),
+    ).toEqual(['database', 'api']);
+
+    expect(
+      resolveKnowledgeSourceOptions({
+        workspaceKind: 'default',
+        sourceOptions,
+      }).map((option) => option.key),
+    ).toEqual(['demo_ecommerce', 'demo_hr', 'database', 'api']);
+
+    expect(
+      resolveKnowledgeInitialSourceType(
+        resolveKnowledgeSourceOptions({
+          workspaceKind: 'regular',
+          sourceOptions,
+        }),
+      ),
+    ).toBe('database');
   });
 });

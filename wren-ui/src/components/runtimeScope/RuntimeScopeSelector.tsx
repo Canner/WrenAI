@@ -4,7 +4,7 @@ import styled, { css } from 'styled-components';
 import {
   buildRuntimeScopeUrl,
   omitRuntimeScopeQuery,
-} from '@/apollo/client/runtimeScope';
+} from '@/runtime/client/runtimeScope';
 import useRuntimeScopeTransition from '@/hooks/useRuntimeScopeTransition';
 import useRuntimeSelectorState from '@/hooks/useRuntimeSelectorState';
 import { Path } from '@/utils/enum';
@@ -59,6 +59,7 @@ export default function RuntimeScopeSelector({
   const runtimeSelector = useRuntimeSelectorState();
   const selectorState = runtimeSelector.runtimeSelectorState;
   const loading = runtimeSelector.loading;
+  const initialLoading = runtimeSelector.initialLoading;
   const currentWorkspace = selectorState?.currentWorkspace;
   const workspaces = selectorState?.workspaces || [];
   const currentKnowledgeBase = selectorState?.currentKnowledgeBase;
@@ -99,10 +100,10 @@ export default function RuntimeScopeSelector({
         <Select
           className="runtime-scope-select runtime-scope-workspace"
           size={size}
-          loading={loading}
+          loading={initialLoading}
           value={currentWorkspace?.id}
           disabled={
-            loading ||
+            initialLoading ||
             runtimeScopeTransition.transitioning ||
             workspaces.length <= 1
           }

@@ -1,11 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { ModelResolver } from '@server/resolvers/modelResolver';
+import { ModelController } from '@server/controllers/modelController';
 import { ExpressionName } from '@server/models/model';
-import { ApiError } from '@/apollo/server/utils/apiUtils';
-import { buildResolverContextFromRequest } from '../resolverContext';
+import { ApiError } from '@/server/utils/apiUtils';
+import { buildApiContextFromRequest } from '../apiContext';
 import { sendRestApiError } from '../restApi';
 
-const modelResolver = new ModelResolver();
+const modelController = new ModelController();
 
 const parseColumnId = (value: string | string[] | undefined) => {
   const raw = Array.isArray(value) ? value[0] : value;
@@ -22,7 +22,7 @@ export default async function handler(
 ) {
   try {
     const columnId = parseColumnId(req.query.id);
-    const ctx = await buildResolverContextFromRequest({ req });
+    const ctx = await buildApiContextFromRequest({ req });
 
     if (req.method === 'PATCH') {
       const { expression, lineage, name } = req.body || {};
@@ -39,27 +39,20 @@ export default async function handler(
         throw new ApiError('Calculated field expression is invalid', 400);
       }
 
-      const column = await modelResolver.updateCalculatedField(
-        null,
-        {
-          where: { id: columnId },
-          data: {
-            expression: expression as ExpressionName,
-            lineage,
-            name,
-          },
+      const column = await modelController.updateCalculatedField({
+        columnId,
+        data: {
+          expression: expression as ExpressionName,
+          lineage,
+          name,
         },
         ctx,
-      );
+      });
       return res.status(200).json(column);
     }
 
     if (req.method === 'DELETE') {
-      await modelResolver.deleteCalculatedField(
-        null,
-        { where: { id: columnId } },
-        ctx,
-      );
+      await modelController.deleteCalculatedField({ columnId, ctx });
       return res.status(200).json({ success: true });
     }
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
-import { ClientRuntimeScopeSelector } from '@/apollo/client/runtimeScope';
+import { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 
 interface AuthSessionUser {
   id: string;

@@ -1,6 +1,6 @@
 import { capitalize } from 'lodash';
 import { Form, Row, Col, Select } from 'antd';
-import { ChartType } from '@/types/api';
+import { ChartType } from '@/types/home';
 
 export const getChartTypeOptions = () => {
   return Object.entries(ChartType).map(([key, value]) => ({

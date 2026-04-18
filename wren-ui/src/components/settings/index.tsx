@@ -1,16 +1,22 @@
+import { SampleDatasetName, DataSourceName } from '@/types/dataSource';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Modal, Layout, Button, message } from 'antd';
 import styled from 'styled-components';
+import { hasExecutableRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import { SETTINGS } from '@/utils/enum';
 import { makeIterable } from '@/utils/iteration';
 import { ModalAction } from '@/hooks/useModalAction';
 import SettingOutlined from '@ant-design/icons/SettingOutlined';
 import InfoCircleOutlined from '@ant-design/icons/InfoCircleOutlined';
-import DataSourceSettings from './DataSourceSettings';
+import ConnectionSettings from './ConnectionSettings';
 import ProjectSettings from './ProjectSettings';
 import { getSettingMenu } from './utils';
-import { fetchSettings, type SettingsData } from '@/utils/settingsRest';
-import { DataSourceName, SampleDatasetName } from '@/types/api';
+import {
+  fetchSettings,
+  resolveSettingsConnection,
+  type SettingsData,
+} from '@/utils/settingsRest';
+
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 
 const { Sider, Content } = Layout;
@@ -60,16 +66,17 @@ const DynamicComponent = ({
     return null;
   }
 
-  const { dataSource, language } = data || {};
+  const connection = resolveSettingsConnection(data);
+  const { language } = data || {};
   return (
     {
-      [SETTINGS.DATA_SOURCE]: (
-        <DataSourceSettings
-          type={dataSource?.type as DataSourceName}
+      [SETTINGS.CONNECTION]: (
+        <ConnectionSettings
+          type={connection?.type as DataSourceName}
           sampleDataset={
-            (dataSource?.sampleDataset || null) as SampleDatasetName
+            (connection?.sampleDataset || null) as SampleDatasetName
           }
-          properties={dataSource?.properties || {}}
+          properties={connection?.properties || {}}
           refetchSettings={refetch}
           closeModal={closeModal}
         />
@@ -110,7 +117,7 @@ const MenuIterator = makeIterable(MenuTemplate);
 export default function Settings(props: Props) {
   const { onClose, visible } = props;
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
-  const [menu, setMenu] = useState<SETTINGS>(SETTINGS.DATA_SOURCE);
+  const [menu, setMenu] = useState<SETTINGS>(SETTINGS.CONNECTION);
   const [settings, setSettings] = useState<SettingsData | null>(null);
   const current = getSettingMenu(menu);
   const menuList = Object.values(SETTINGS).map((value) => ({
@@ -120,6 +127,11 @@ export default function Settings(props: Props) {
 
   const loadSettings = useCallback(async () => {
     if (!runtimeScopeNavigation.hasRuntimeScope) {
+      setSettings(null);
+      return null;
+    }
+
+    if (!hasExecutableRuntimeScopeSelector(runtimeScopeNavigation.selector)) {
       setSettings(null);
       return null;
     }

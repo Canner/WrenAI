@@ -20,11 +20,12 @@ import {
   formatDateTime,
   sourceDetailColor,
 } from '@/components/pages/settings/workspaceGovernanceShared';
-import { buildRuntimeScopeUrl } from '@/apollo/client/runtimeScope';
+import { buildRuntimeScopeUrl } from '@/runtime/client/runtimeScope';
 import useAuthSession from '@/hooks/useAuthSession';
 import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import useRuntimeSelectorState from '@/hooks/useRuntimeSelectorState';
+import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { Path } from '@/utils/enum';
 import { getReferenceDisplayWorkspaceName } from '@/utils/referenceDemoKnowledge';
 
@@ -111,7 +112,13 @@ export default function SettingsAutomationPage() {
       }
       setWorkspaceOverview(payload as WorkspaceGovernanceOverview);
     } catch (error: any) {
-      message.error(error?.message || '加载自动化身份失败');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '加载自动化身份失败',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setLoading(false);
     }
@@ -165,7 +172,13 @@ export default function SettingsAutomationPage() {
       setServiceAccountRoleKey('admin');
       await loadWorkspaceOverview();
     } catch (error: any) {
-      message.error(error?.message || '创建服务账号失败');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '创建服务账号失败',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setServiceAccountLoading(false);
     }
@@ -213,10 +226,13 @@ export default function SettingsAutomationPage() {
       }
       await loadWorkspaceOverview();
     } catch (error: any) {
-      message.error(
-        error?.message ||
-          (action === 'delete' ? '删除服务账号失败' : '更新服务账号失败'),
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        action === 'delete' ? '删除服务账号失败' : '更新服务账号失败',
       );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setServiceAccountLoading(false);
     }
@@ -257,7 +273,13 @@ export default function SettingsAutomationPage() {
       message.success('API Token 已创建，请立即复制保存');
       await loadWorkspaceOverview();
     } catch (error: any) {
-      message.error(error?.message || '创建 API Token 失败');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '创建 API Token 失败',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setApiTokenLoading(false);
     }
@@ -281,7 +303,13 @@ export default function SettingsAutomationPage() {
       message.success('API Token 已吊销');
       await loadWorkspaceOverview();
     } catch (error: any) {
-      message.error(error?.message || '吊销 API Token 失败');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '吊销 API Token 失败',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setApiTokenLoading(false);
     }

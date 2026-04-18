@@ -1,10 +1,10 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { ApiType } from '@/types/apiHistory';
 import {
-  deriveShadowCompareRolloutReadiness,
   default as ShadowCompareSummary,
+  deriveShadowCompareRolloutReadiness,
 } from './ShadowCompareSummary';
-import { ApiType } from '@/types/api';
 
 jest.mock('antd', () => {
   const React = jest.requireActual('react');

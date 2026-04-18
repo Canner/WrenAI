@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import DetailsDrawer from './DetailsDrawer';
-import { ApiType } from '@/types/api';
+import { ApiType } from '@/types/apiHistory';
 
 jest.mock('antd', () => {
   const React = jest.requireActual('react');

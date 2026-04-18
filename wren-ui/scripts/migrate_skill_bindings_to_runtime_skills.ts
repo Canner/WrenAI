@@ -1,8 +1,8 @@
 import crypto from 'crypto';
 import process from 'process';
 import { Knex } from 'knex';
-import { getConfig } from '../src/apollo/server/config';
-import { bootstrapKnex } from '../src/apollo/server/utils/knex';
+import { getConfig } from '../src/server/config';
+import { bootstrapKnex } from '../src/server/utils/knex';
 
 type InstalledFrom =
   | 'custom'

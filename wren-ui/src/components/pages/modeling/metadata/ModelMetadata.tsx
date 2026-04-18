@@ -7,7 +7,8 @@ import RelationTable from '@/components/table/RelationTable';
 import PreviewData from '@/components/dataPreview/PreviewData';
 import { DiagramModel } from '@/utils/data';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
-import { DiagramModelField, DiagramModelRelationField } from '@/types/api';
+import { resolveAbortSafeErrorMessage } from '@/utils/abort';
+import { DiagramModelField, DiagramModelRelationField } from '@/types/modeling';
 import {
   previewModelData,
   type ModelPreviewDataResponse,
@@ -92,7 +93,13 @@ export default function ModelMetadata(props: Props) {
         error instanceof Error
           ? error
           : new Error('预览模型数据失败，请稍后重试。');
-      message.error(nextError.message || '预览模型数据失败，请稍后重试。');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        nextError,
+        '预览模型数据失败，请稍后重试。',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
       setPreviewDataResult({
         loading: false,
         data: undefined,

@@ -1,5 +1,5 @@
-import { buildRuntimeScopeUrl } from '@/apollo/client/runtimeScope';
-import type { ClientRuntimeScopeSelector } from '@/apollo/client/runtimeScope';
+import { buildRuntimeScopeUrl } from '@/runtime/client/runtimeScope';
+import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import { loadDashboardListPayload } from '@/utils/dashboardRest';
 import { loadKnowledgeDiagramPayload } from '@/utils/knowledgeDiagramRest';
 
@@ -157,6 +157,17 @@ export const loadKnowledgeBaseList = async <T = unknown>(
 export const peekKnowledgeBaseList = <T = unknown>(url: string): T | null =>
   getFreshCachedValue<T>(knowledgeOverviewCache, url);
 
+export const invalidateKnowledgeBaseList = (url?: string | null) => {
+  if (!url) {
+    knowledgeOverviewCache.clear();
+    knowledgeOverviewRequestCache.clear();
+    return;
+  }
+
+  knowledgeOverviewCache.delete(url);
+  knowledgeOverviewRequestCache.delete(url);
+};
+
 export const peekThreadOverview = <T = unknown>(threadId: number): T | null => {
   return getFreshThreadCachedValue<T>(threadId);
 };
@@ -180,7 +191,7 @@ export const loadKnowledgeConnectors = async <T = unknown>(
     cache: knowledgeOverviewCache,
     requestCache: knowledgeOverviewRequestCache,
     fetcher,
-    errorMessage: '加载数据源失败',
+    errorMessage: '加载连接器失败',
   });
 
 export const prefetchKnowledgeOverview = async ({

@@ -1,5 +1,7 @@
 # User / Role / Permission 实施计划
 
+> 历史说明（2026-04-16）：本文保留的是 Apollo/GraphQL 时代的设计、排障或执行记录。当前 `wren-ui` 运行时前端已经切到 REST，代码目录也已收口到 `src/server/*` 与 `src/pages/api/v1/*`；文中的旧 GraphQL 入口、resolver 与 Apollo 上下文描述仅作历史背景，不再代表当前主链路。
+
 更新时间：2026-04-13
 
 > 本文档是 `docs/user-role-permission-architecture.md` 的落地实施说明。
@@ -14,7 +16,7 @@
 1. **Workspace 是唯一租户边界**
    - 不引入第二套 tenant / org / account 边界
 2. **Phase 1 先统一授权入口，不先推翻 service 层接口**
-   - 先在 route / resolver 收口
+   - 先在 route / controller / 历史 resolver 收口
    - service 层继续负责资源归属与 invariant 校验
 3. **复用现有表与字段，不平地起高楼**
    - 复用 `user.is_platform_admin`
@@ -41,8 +43,8 @@
   - `wren-ui/src/pages/api/auth/register.ts`
   - `wren-ui/src/pages/api/auth/bootstrap.ts`
 - 会话校验与 actor claims
-  - `wren-ui/src/apollo/server/services/authService.ts`
-  - `wren-ui/src/apollo/server/context/actorClaims.ts`
+  - `wren-ui/src/server/services/authService.ts`
+  - `wren-ui/src/server/context/actorClaims.ts`
 - 平台 admin 兼容字段
   - `user.is_platform_admin`
 - workspace 级成员关系
@@ -53,12 +55,12 @@
 - 审计基础表
   - `audit_event`
 - 背景任务执行链路
-  - `wren-ui/src/apollo/server/backgrounds/scheduleWorker.ts`
+  - `wren-ui/src/server/backgrounds/scheduleWorker.ts`
 
 ### 2.2 当前缺口
 
 - 没有统一 `authorize()` 服务
-- 权限判断散落在 route / resolver / util 中
+- 权限判断散落在 route / controller / 历史 resolver / util 中
 - `permissionScopes` 仍是粗粒度兼容值，不是细粒度 permission registry
 - `audit_event` 字段还不足以承载完整授权审计
 - `/api/auth/login`、`/api/auth/bootstrap`、`/api/auth/register` 缺少限流/防暴破
@@ -99,7 +101,7 @@
 建议新增目录：
 
 ```text
-wren-ui/src/apollo/server/authz/
+wren-ui/src/server/authz/
 ```
 
 建议文件：
@@ -186,7 +188,7 @@ type AuthorizationActor = {
 6. schedule / connector / KB 必须属于当前 workspace
 7. 敏感读也要经过授权，不只写操作
 
-### 4.5 Phase 1 的 route / resolver 接入顺序
+### 4.5 Phase 1 的入口接入顺序（REST route/controller 优先，历史 resolver 次之）
 
 #### 第一批：直接写接口
 
@@ -213,9 +215,9 @@ type AuthorizationActor = {
 - `wren-ui/src/pages/api/v1/skills/index.ts`
 - `wren-ui/src/pages/api/v1/skills/[id].ts`
 
-#### 第三批：GraphQL resolver
+#### 第三批：历史 GraphQL resolver（迁移期存量入口）
 
-优先接入存在管理动作的 resolver：
+优先补齐仍带管理动作的历史 resolver：
 
 - dashboard / schedule
 - skill
@@ -232,7 +234,7 @@ Phase 1 不强推把以下 service 全改成 actor-aware：
 
 策略是：
 
-1. route / resolver 先做统一授权
+1. route / controller 先做统一授权，历史 resolver 同步补齐
 2. service 保留原有归属校验
 3. 高风险高复用 service 再补 `authorize()` wrapper
 
@@ -314,7 +316,7 @@ Phase 1 不强推把以下 service 全改成 actor-aware：
 新增统一限流工具，建议位置：
 
 ```text
-wren-ui/src/apollo/server/utils/rateLimit.ts
+wren-ui/src/server/utils/rateLimit.ts
 ```
 
 #### 技术选型
@@ -380,7 +382,7 @@ V1 方案建议：
 - `wren-ui/src/pages/api/tests/auth_api.test.ts`
 - `wren-ui/src/pages/api/tests/workspace_api.test.ts`
 - `wren-ui/src/pages/api/tests/workspace_schedule_actions_api.test.ts`
-- 新增 `wren-ui/src/apollo/server/authz/*.test.ts`
+- 新增 `wren-ui/src/server/authz/*.test.ts`
 
 至少覆盖：
 
@@ -635,18 +637,20 @@ Phase 5 之后，前端信息架构应明确收敛为：
 
 - `wren-ui/src/common.ts`
   - 注册新的 authz service / rate limiter / audit wrapper
-- `wren-ui/src/apollo/server/services/authService.ts`
+- `wren-ui/src/server/services/authService.ts`
   - 继续作为 session / local auth / actorClaims 来源
-- `wren-ui/src/apollo/server/context/actorClaims.ts`
+- `wren-ui/src/server/context/actorClaims.ts`
   - 补充统一 actor 构造 helper 的接线
-- `wren-ui/src/pages/api/graphql.ts`
-  - Apollo context 中注入 GraphQL 专用 `AuthorizationActor` 构造入口
-- `wren-ui/src/apollo/server/utils/workspaceAccess.ts`
+- `wren-ui/src/pages/api/v1/**` / `wren-ui/src/server/context/**`
+  - 当前 REST route / server context 中注入 `AuthorizationActor` 并完成授权前置装配
+- （历史）GraphQL gateway / resolver 接入方案
+  - 仅作为迁移背景保留，不再代表当前主链实现
+- `wren-ui/src/server/utils/workspaceAccess.ts`
   - Phase 1 迁入 `authz/`，最终收敛为**兼容薄封装或废弃**
 - `wren-ui/src/utils/workspaceGovernance.ts`
   - 保留“workspace / KB 类型治理常量与纯计算 helper”
   - 不再继续承载角色/权限判断
-- `wren-ui/src/apollo/server/backgrounds/scheduleWorker.ts`
+- `wren-ui/src/server/backgrounds/scheduleWorker.ts`
   - system / scheduled_job actor 收敛
 
 ### 9.1.1 `workspaceAccess.ts` / `workspaceGovernance.ts` 的去向
@@ -664,8 +668,8 @@ Phase 5 之后，前端信息架构应明确收敛为：
 
 目标状态：
 
-1. 将规则迁入 `wren-ui/src/apollo/server/authz/rules/`
-2. route / resolver 改为调用 `authorize()`
+1. 将规则迁入 `wren-ui/src/server/authz/rules/`
+2. route / controller 改为调用 `authorize()`，历史 resolver 迁移期继续调用 `authorize()`
 3. `workspaceAccess.ts` 仅保留短期兼容导出，或在 Phase 1 收口后删除
 
 一句话：
@@ -694,28 +698,34 @@ Phase 5 之后，前端信息架构应明确收敛为：
 
 - **`workspaceGovernance.ts` 保留为治理/常量模块，不保留为权限判定模块。**
 
-### 9.1.2 GraphQL resolver 的授权接入路径
+### 9.1.2 历史 resolver 授权接入路径（仅保留迁移背景）
 
-Wave C 明确采用**Apollo context 注入 + resolver 入口显式调用**，不做 directive 方案。
+Wave C 当时采用**请求上下文注入 + resolver 入口显式调用**，不做 directive 方案。
 
-原因：
+当前状态：
 
-- 当前 GraphQL 已经在 `wren-ui/src/pages/api/graphql.ts` 里构造：
+- 运行时主链已经改为 REST route / controller / server context 接入
+- `AuthorizationActor` 的组装与读取应以 `src/pages/api/v1/**`、`src/server/context/**`、`src/server/authz/**` 为准
+- 下面这段 GraphQL / resolver 方案仅用于说明当时为什么没有选择 directive
+
+当时的决策原因：
+
+- 历史 GraphQL gateway 已经会构造：
   - `runtimeScope`
   - `requestActor`
-- 直接复用现有 context 形态，改动最小
-- directive 需要额外 schema 装饰与 resolver 包装，超出 Phase 1 范围
+- 直接复用当时的 request context 形态，改动最小
+- directive 需要额外 schema 装饰与 resolver 包装，超出当时 Phase 1 范围
 
-实施方式：
+历史实施方式摘要：
 
-1. 由于当前 `ctx.requestActor` 只有：
+1. 当时 `ctx.requestActor` 只有：
    - `sessionToken`
    - `actorClaims`
    - `userId`
    - `workspaceId`
    并**不包含 `isPlatformAdmin`**
-2. 因此 Phase 1 明确采用：
-   - 在 `wren-ui/src/pages/api/graphql.ts` context 构造阶段新增 `authorizationActor`
+2. 因此当时的 GraphQL 方案是：
+   - 在 request context 构造阶段新增 `authorizationActor`
    - 不让 resolver 自己重复拼装
 3. `authorizationActor` 的来源：
    - 复用已有 session 解析结果
@@ -726,14 +736,14 @@ Wave C 明确采用**Apollo context 注入 + resolver 入口显式调用**，不
 5. resolver 侧统一读取：
    - `ctx.authorizationActor`
    - 不直接拼 `ctx.requestActor`
-6. GraphQL mutation / 敏感 query 在 resolver 入口先调用：
+6. 历史 GraphQL mutation / 敏感 query 在 resolver 入口先调用：
    - `authorize({ actor, action, resource, context })`
 7. resolver 通过授权后，再进入现有 service
 
 不采用：
 
 - schema directive
-- resolver 外自动反射式授权
+- resolver 外自动反射式授权（未采用）
 - 在 Phase 1 强制所有 service actor-aware
 
 ### 9.2 首批需要接授权的 API
@@ -799,7 +809,7 @@ Phase 1 替换现有手写：
 
 策略：
 
-1. 在被改造的 route / resolver 中：
+1. 在被改造的 route / controller / 历史 resolver 中：
    - 先执行新 `authorize()`
    - 同时保留旧 inline check
 2. 在过渡期：
@@ -814,7 +824,7 @@ Phase 1 替换现有手写：
 说明：
 
 - 不单独建设“shadow compare 平台”
-- 只在被改造的 endpoint / resolver 局部双判定
+- 只在被改造的 endpoint / controller / 历史 resolver 局部双判定
 - 目标是降低 Wave A/B/C 的静默授权回归风险
 
 ---
@@ -838,7 +848,7 @@ Phase 1 替换现有手写：
 ### Wave C
 
 - 接 KB / connector / skill 管理接口
-- 补 GraphQL 管理 mutation
+- 补历史 GraphQL 管理 mutation（仅迁移期存量）
 
 ### Wave D
 

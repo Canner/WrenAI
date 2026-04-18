@@ -1,10 +1,11 @@
 import { createContext, useContext } from 'react';
-import {
+import type {
   AdjustThreadResponseChartInput,
   DetailedThread,
   RecommendedQuestionsTask,
   ThreadResponse,
-} from '@/types/api';
+} from '@/types/home';
+
 import { SelectQuestionProps } from '@/components/pages/home/RecommendedQuestions';
 
 export type IPromptThreadStore = {

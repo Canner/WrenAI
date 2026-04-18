@@ -15,16 +15,16 @@ test.describe('Test DuckDB data source', () => {
 
     await page.locator('button').filter({ hasText: 'DuckDB' }).click();
 
-    await page.getByLabel('Display name').click();
-    await page.getByLabel('Display name').fill('test-duckdb');
-    await page.getByLabel('Initial SQL statements').click();
+    await page.getByLabel('显示名称').click();
+    await page.getByLabel('显示名称').fill('test-duckdb');
+    await page.getByLabel('初始化 SQL 语句').click();
     await page
-      .getByLabel('Initial SQL statements')
+      .getByLabel('初始化 SQL 语句')
       .fill(
         `CREATE TABLE ontime AS FROM read_csv('${testConfig.duckDb.sqlCsvPath}');`,
       );
     await page.getByRole('button', { name: 'Next' }).click();
-    await expect(page).toHaveURL('/setup/models', { timeout: 60000 });
+    await helper.expectPathname({ page, pathname: '/setup/models' });
   });
 
   test('Setup all models', onboarding.setupModels);

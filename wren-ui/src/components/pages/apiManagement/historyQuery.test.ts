@@ -1,5 +1,5 @@
 import moment from 'moment';
-import { ApiType } from '@/types/api';
+import { ApiType } from '@/types/apiHistory';
 import {
   buildApiHistoryQueryParams,
   normalizeApiHistoryTableFilters,

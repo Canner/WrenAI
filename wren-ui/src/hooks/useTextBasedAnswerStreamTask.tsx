@@ -1,6 +1,8 @@
 import { message } from 'antd';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { buildRuntimeScopeUrl } from '@/apollo/client/runtimeScope';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
+import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
+import { buildThreadResponseAnswerStreamUrl } from '@/utils/threadRest';
 
 type TextBasedAnswerStreamTaskReturn = [
   (responseId: number) => void,
@@ -11,10 +13,25 @@ type TextBasedAnswerStreamTaskReturn = [
   },
 ];
 
-export default function useTextBasedAnswerStreamTask() {
+export default function useTextBasedAnswerStreamTask(
+  selectorOverride?: ClientRuntimeScopeSelector,
+) {
   const eventSourceRef = useRef<EventSource | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [data, setData] = useState<string>('');
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
+
+  const selector = useMemo(
+    () => selectorOverride || runtimeScopeNavigation.selector,
+    [
+      runtimeScopeNavigation.selector.deployHash,
+      runtimeScopeNavigation.selector.kbSnapshotId,
+      runtimeScopeNavigation.selector.knowledgeBaseId,
+      runtimeScopeNavigation.selector.runtimeScopeId,
+      runtimeScopeNavigation.selector.workspaceId,
+      selectorOverride,
+    ],
+  );
 
   const closeEventSource = useCallback(() => {
     if (!eventSourceRef.current) {
@@ -37,7 +54,7 @@ export default function useTextBasedAnswerStreamTask() {
       setLoading(true);
 
       const eventSource = new EventSource(
-        buildRuntimeScopeUrl('/api/ask_task/streaming_answer', { responseId }),
+        buildThreadResponseAnswerStreamUrl(responseId, selector),
       );
       eventSourceRef.current = eventSource;
 
@@ -63,7 +80,7 @@ export default function useTextBasedAnswerStreamTask() {
         onReset();
       };
     },
-    [onReset],
+    [onReset, selector],
   );
 
   useEffect(() => {

@@ -17,12 +17,13 @@ import styled from 'styled-components';
 import SQLCodeBlock from '@/components/code/SQLCodeBlock';
 import DetailsDrawer from '@/components/pages/apiManagement/DetailsDrawer';
 import AskDiagnosticsSummary from '@/components/pages/apiManagement/AskDiagnosticsSummary';
-import { ApiType } from '@/types/api';
+import { ApiType } from '@/types/apiHistory';
+
 import {
   buildRuntimeScopeUrl,
   omitRuntimeScopeQuery,
   readRuntimeScopeSelectorFromObject,
-} from '@/apollo/client/runtimeScope';
+} from '@/runtime/client/runtimeScope';
 import useAuthSession from '@/hooks/useAuthSession';
 import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
 import useDrawerAction from '@/hooks/useDrawerAction';
@@ -43,6 +44,7 @@ import {
   API_HISTORY_FILTER_TYPES,
   formatApiTypeLabel,
 } from '@/components/pages/apiManagement/apiTypeLabels';
+import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { Path } from '@/utils/enum';
 import { getColumnSearchProps } from '@/utils/table';
 import { getAbsoluteTime } from '@/utils/time';
@@ -152,7 +154,13 @@ export default function SettingsDiagnosticsPage() {
     },
     runtimeScopeSelector,
     onError: (error) => {
-      message.error(error.message || '加载调用历史失败，请稍后重试。');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '加载调用历史失败，请稍后重试。',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     },
   });
 

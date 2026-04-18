@@ -344,10 +344,10 @@ export default function DefineRelations(props: Props) {
       <HeaderMeta>
         <Badge>Step 3 / 定义关系</Badge>
         <Title level={2} style={{ margin: 0, fontSize: 30 }}>
-          定义表关系
+          定义资产关系
         </Title>
         <Paragraph style={{ marginBottom: 0, fontSize: 15, lineHeight: 1.8 }}>
-          你可以为已选择的数据表建立关系。系统会基于主键、外键自动给出推荐关系，并把最终确认的关系写入语义模型。
+          你可以为已选择的资产建立关系。系统会基于主键、外键自动给出推荐关系，并把最终确认的关系写入语义模型。
         </Paragraph>
       </HeaderMeta>
 

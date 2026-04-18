@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
 import { ApiType } from '@server/repositories/apiHistoryRepository';
-import * as Errors from '@/apollo/server/utils/error';
+import * as Errors from '@/server/utils/error';
 import { v4 as uuidv4 } from 'uuid';
 import {
   ApiError,
@@ -9,8 +9,8 @@ import {
   handleApiError,
   deriveRuntimeExecutionContextFromRequest,
   pollUntil,
-} from '@/apollo/server/utils/apiUtils';
-import { ChartResult, ChartStatus } from '@/apollo/server/models/adaptor';
+} from '@/server/utils/apiUtils';
+import { ChartResult, ChartStatus } from '@/server/models/adaptor';
 import { PreviewDataResponse } from '@server/services/queryService';
 import { transformToObjects } from '@server/utils/dataUtils';
 import { toAskRuntimeIdentity } from '@server/utils/askContext';
@@ -63,7 +63,9 @@ const assertKnowledgeBaseReadAccess = async ({
     actor,
     action: 'knowledge_base.read',
     resource: {
-      resourceType: runtimeScope?.knowledgeBase ? 'knowledge_base' : 'workspace',
+      resourceType: runtimeScope?.knowledgeBase
+        ? 'knowledge_base'
+        : 'workspace',
       resourceId:
         runtimeScope?.knowledgeBase?.id || runtimeScope?.workspace?.id,
       workspaceId: runtimeScope?.workspace?.id || null,
@@ -222,9 +224,7 @@ export default async function handler(
       canonicalizationVersion,
       renderHints,
       validationErrors,
-    } = canonicalizeChartSchema(
-      result?.response?.chartSchema,
-    );
+    } = canonicalizeChartSchema(result?.response?.chartSchema);
     const canonicalChartDetail = {
       chartSchema: canonicalChartSchema || result?.response?.chartSchema,
       rawChartSchema: result?.response?.chartSchema,

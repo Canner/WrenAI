@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
 import { ApiType } from '@server/repositories/apiHistoryRepository';
-import * as Errors from '@/apollo/server/utils/error';
+import * as Errors from '@/server/utils/error';
 import { v4 as uuidv4 } from 'uuid';
 import {
   ApiError,
@@ -13,7 +13,7 @@ import {
   buildAskDiagnostics,
   deriveRuntimeExecutionContextFromRequest,
   pollUntil,
-} from '@/apollo/server/utils/apiUtils';
+} from '@/server/utils/apiUtils';
 import { buildAskRuntimeContext } from '@server/utils/askContext';
 import {
   assertAuthorizedWithAudit,
@@ -29,7 +29,7 @@ import {
   TextBasedAnswerStatus,
   WrenAIError,
   AskResultType,
-} from '@/apollo/server/models/adaptor';
+} from '@/server/models/adaptor';
 import { getLogger } from '@server/utils';
 import {
   EventType,
@@ -45,7 +45,7 @@ import {
   sendError,
   getSqlGenerationState,
   endStream,
-} from '@/apollo/server/utils';
+} from '@/server/utils';
 const logger = getLogger('API_STREAM_ASK');
 logger.level = 'debug';
 

@@ -32,7 +32,7 @@ export { default as Input } from 'antd/lib/input';
 // export { default as Image } from 'antd/lib/image';
 // export { default as InputNumber } from 'antd/lib/input-number';
 export { default as Layout } from 'antd/lib/layout';
-// export { default as List } from 'antd/lib/list';
+export { default as List } from 'antd/lib/list';
 export { default as message } from 'antd/lib/message';
 export { default as Menu } from 'antd/lib/menu';
 export { default as Mentions } from 'antd/lib/mentions';

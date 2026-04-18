@@ -1,5 +1,5 @@
 import { getConfig } from '@server/config';
-import { bootstrapKnex } from './apollo/server/utils/knex';
+import { bootstrapKnex } from './server/utils/knex';
 import {
   AuthIdentityRepository,
   AuthSessionRepository,
@@ -55,7 +55,7 @@ import {
 } from '@server/adaptors';
 import {
   AuthService,
-  DataSourceMetadataService,
+  ConnectionMetadataService,
   QueryService,
   ProjectService,
   DeployService,
@@ -81,15 +81,15 @@ import {
 import type { IDeployService } from '@server/services/deployService';
 import type { IMDLService } from '@server/services/mdlService';
 import type { IProjectService } from '@server/services/projectService';
-import { PostHogTelemetry } from './apollo/server/telemetry/telemetry';
-import { RuntimeScopeResolver } from './apollo/server/context/runtimeScope';
+import { PostHogTelemetry } from './server/telemetry/telemetry';
+import { RuntimeScopeResolver } from './server/context/runtimeScope';
 import {
   ProjectRecommendQuestionBackgroundTracker,
   ThreadRecommendQuestionBackgroundTracker,
   DashboardCacheBackgroundTracker,
   ScheduleWorker,
-} from './apollo/server/backgrounds';
-import { SqlPairService } from './apollo/server/services/sqlPairService';
+} from './server/backgrounds';
+import { SqlPairService } from './server/services/sqlPairService';
 
 export const serverConfig = getConfig();
 
@@ -179,7 +179,7 @@ export const initComponents = () => {
   });
 
   // services
-  const metadataService = new DataSourceMetadataService({
+  const metadataService = new ConnectionMetadataService({
     ibisAdaptor,
     wrenEngineAdaptor,
   });
@@ -536,15 +536,21 @@ export const initComponents = () => {
 };
 
 type Components = ReturnType<typeof initComponents>;
+const COMPONENTS_RUNTIME_VERSION = 2;
 
 const globalForComponents = globalThis as typeof globalThis & {
   __wrenComponents__?: Components;
+  __wrenComponentsVersion__?: number;
 };
 
 // singleton components
 export const components =
-  globalForComponents.__wrenComponents__ ?? initComponents();
+  globalForComponents.__wrenComponents__ &&
+  globalForComponents.__wrenComponentsVersion__ === COMPONENTS_RUNTIME_VERSION
+    ? globalForComponents.__wrenComponents__
+    : initComponents();
 
 if (process.env.NODE_ENV !== 'production') {
   globalForComponents.__wrenComponents__ = components;
+  globalForComponents.__wrenComponentsVersion__ = COMPONENTS_RUNTIME_VERSION;
 }

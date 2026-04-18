@@ -25,7 +25,7 @@ class WrenUI(Engine):
         endpoint: str = os.getenv("WREN_UI_ENDPOINT"),
         **_,
     ):
-        self._endpoint = endpoint
+        self._endpoint = os.getenv("WREN_UI_ENDPOINT") or endpoint
 
     async def execute_sql(
         self,
@@ -55,19 +55,17 @@ class WrenUI(Engine):
 
         try:
             async with session.post(
-                f"{self._endpoint}/api/graphql",
+                f"{self._endpoint}/api/v1/internal/sql/preview",
                 headers={
                     "x-wren-ai-service-internal": "1",
                 },
-                json={
-                    "query": "mutation PreviewSql($data: PreviewSQLDataInput) { previewSql(data: $data) }",
-                    "variables": {"data": data},
-                },
+                json=data,
                 timeout=aiohttp.ClientTimeout(total=timeout),
             ) as response:
                 res_json = await response.json()
-                if res_data := res_json.get("data"):
-                    res = res_data.get("previewSql", {}) if res_data else {}
+                response_status = getattr(response, "status", 200)
+                if response_status < 400:
+                    res = res_json.get("data", {}) if res_json else {}
                     if dry_run:
                         return (
                             True,
@@ -95,34 +93,11 @@ class WrenUI(Engine):
                         },
                     )
 
-                error_message = res_json.get("errors", [{}])[0].get(
-                    "message", "Unknown error"
-                )
+                error_payload = res_json.get("error", {}) if res_json else {}
+                error_message = error_payload.get("message", "Unknown error")
                 logger.error(f"Error executing SQL: {error_message}")
-                dialect_sql = (
-                    (
-                        (
-                            (res_json.get("errors", [{}])[0] or {}).get(
-                                "extensions", {}
-                            )
-                            or {}
-                        ).get("other", {})
-                        or {}
-                    ).get("metadata", {})
-                    or {}
-                ).get("dialectSql", "") or ""
-                planned_sql = (
-                    (
-                        (
-                            (res_json.get("errors", [{}])[0] or {}).get(
-                                "extensions", {}
-                            )
-                            or {}
-                        ).get("other", {})
-                        or {}
-                    ).get("metadata", {})
-                    or {}
-                ).get("plannedSql", "") or ""
+                dialect_sql = error_payload.get("dialectSql", "") or ""
+                planned_sql = error_payload.get("plannedSql", "") or ""
 
                 return (
                     False,
@@ -130,18 +105,7 @@ class WrenUI(Engine):
                     {
                         "error_message": error_message,
                         "error_sql": dialect_sql or planned_sql or sql,
-                        "correlation_id": (
-                            (
-                                (
-                                    (res_json.get("errors", [{}])[0] or {}).get(
-                                        "extensions", {}
-                                    )
-                                    or {}
-                                ).get("other", {})
-                                or {}
-                            ).get("correlationId")
-                            or ""
-                        ),
+                        "correlation_id": res_json.get("correlationId", ""),
                     },
                 )
         except asyncio.TimeoutError:
@@ -162,11 +126,17 @@ class WrenIbis(Engine):
         connection_info: str = os.getenv("WREN_IBIS_CONNECTION_INFO"),
         **_,
     ):
-        self._endpoint = endpoint
-        self._source = source
-        self._manifest = manifest
+        self._endpoint = os.getenv("WREN_IBIS_ENDPOINT") or endpoint
+        self._source = os.getenv("WREN_IBIS_SOURCE") or source
+        self._manifest = os.getenv("WREN_IBIS_MANIFEST") or manifest
         self._connection_info = (
-            orjson.loads(base64.b64decode(connection_info)) if connection_info else {}
+            orjson.loads(
+                base64.b64decode(
+                    os.getenv("WREN_IBIS_CONNECTION_INFO") or connection_info
+                )
+            )
+            if (os.getenv("WREN_IBIS_CONNECTION_INFO") or connection_info)
+            else {}
         )
 
     async def execute_sql(

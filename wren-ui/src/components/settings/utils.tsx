@@ -4,12 +4,12 @@ import ProjectOutlined from '@ant-design/icons/ProjectOutlined';
 
 export const getSettingMenu = (menu: SETTINGS) =>
   ({
-    [SETTINGS.DATA_SOURCE]: {
+    [SETTINGS.CONNECTION]: {
       icon: DatabaseOutlined,
-      label: 'Data source settings',
+      label: '连接设置',
     },
     [SETTINGS.PROJECT]: {
       icon: ProjectOutlined,
-      label: 'Project settings',
+      label: '知识库设置',
     },
   })[menu] || null;

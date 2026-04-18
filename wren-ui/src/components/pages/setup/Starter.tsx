@@ -1,23 +1,16 @@
-import { ComponentProps, useState } from 'react';
+import { DataSourceName } from '@/types/dataSource';
+import { ComponentProps } from 'react';
 import { Col, Row, Typography } from 'antd';
 import styled from 'styled-components';
-import { getDataSources, getTemplates } from './utils';
+import { getConnectionTypes } from './utils';
 import { makeIterable } from '@/utils/iteration';
 import ButtonItem from './ButtonItem';
-import { DataSourceName, SampleDatasetName } from '@/types/api';
 
-const { Paragraph, Text, Title } = Typography;
+const { Paragraph, Title } = Typography;
 
 const Section = styled.section`
   display: flex;
   flex-direction: column;
-  gap: 18px;
-`;
-
-const SectionHeader = styled.div`
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
   gap: 18px;
 `;
 
@@ -41,21 +34,6 @@ const Badge = styled.div`
   align-items: center;
 `;
 
-const HintCard = styled.div`
-  width: min(100%, 280px);
-  border-radius: 20px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: linear-gradient(180deg, #fff 0%, #faf9ff 100%);
-  padding: 18px;
-  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.05);
-`;
-
-const Divider = styled.div`
-  height: 1px;
-  background: rgba(15, 23, 42, 0.08);
-  margin: 6px 0 2px;
-`;
-
 const ButtonTemplate = (props: ComponentProps<typeof ButtonItem>) => {
   return (
     <Col xs={24} md={12} xl={8} key={props.label}>
@@ -64,85 +42,39 @@ const ButtonTemplate = (props: ComponentProps<typeof ButtonItem>) => {
   );
 };
 
-const DataSourceIterator = makeIterable(ButtonTemplate);
-const TemplatesIterator = makeIterable(ButtonTemplate);
-
+const ConnectionTypeIterator = makeIterable(ButtonTemplate);
 interface StarterProps {
-  onNext?: (value: { dataSource?: DataSourceName; template?: string }) => void;
+  onNext?: (value: { connectionType?: DataSourceName }) => void;
   submitting: boolean;
 }
 
 export default function Starter(props: StarterProps) {
   const { onNext, submitting } = props;
 
-  const [template, setTemplate] = useState<SampleDatasetName>();
+  const connectionTypes = getConnectionTypes();
 
-  const dataSources = getDataSources();
-  const templates = getTemplates();
-
-  const onSelectDataSource = (value: DataSourceName) => {
-    onNext && onNext({ dataSource: value });
-  };
-
-  const onSelectTemplate = (value: string) => {
-    setTemplate(value as SampleDatasetName);
-    onNext && onNext({ template: value });
+  const onSelectConnectionType = (value: DataSourceName) => {
+    onNext && onNext({ connectionType: value });
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 34 }}>
-      <Section>
-        <SectionHeader>
-          <HeaderMeta>
-            <Badge>Step 1 / 接入方式</Badge>
-            <Title level={2} style={{ margin: 0, fontSize: 28 }}>
-              连接真实数据源
-            </Title>
-            <Paragraph
-              style={{ marginBottom: 0, fontSize: 15, lineHeight: 1.8 }}
-            >
-              为知识库接入数据库、数仓或外部分析系统。完成后会进入资产选择与关系配置，快速形成可问答的语义层。
-            </Paragraph>
-          </HeaderMeta>
-          <HintCard>
-            <Text strong style={{ display: 'block', marginBottom: 6 }}>
-              推荐路径
-            </Text>
-            <Text type="secondary" style={{ lineHeight: 1.7 }}>
-              先用真实数据源完成接入；如果只想快速预览效果，可直接选择下方的两套系统样例数据。
-            </Text>
-          </HintCard>
-        </SectionHeader>
-
-        <Row gutter={[18, 18]}>
-          <DataSourceIterator
-            data={dataSources}
-            onSelect={onSelectDataSource}
-            submitting={submitting}
-          />
-        </Row>
-      </Section>
-
-      <Divider />
-
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
       <Section>
         <HeaderMeta>
-          <Badge>Step 1 / 样例体验</Badge>
+          <Badge>Step 1 / 连接方式</Badge>
           <Title level={2} style={{ margin: 0, fontSize: 28 }}>
-            或者先体验内置样例数据
+            创建知识库连接
           </Title>
           <Paragraph style={{ marginBottom: 0, fontSize: 15, lineHeight: 1.8 }}>
-            推荐优先体验“电商订单数据”和“人力资源数据”两套样例，便于快速验证问数、分析规则和
-            SQL 模板效果。
+            为当前知识库选择连接类型并填写真实业务系统的访问信息。保存后会创建或更新该知识库的主连接，随后进入资产选择与关系配置。
           </Paragraph>
         </HeaderMeta>
 
         <Row gutter={[18, 18]}>
-          <TemplatesIterator
-            data={templates}
-            onSelect={onSelectTemplate}
+          <ConnectionTypeIterator
+            data={connectionTypes}
+            onSelect={onSelectConnectionType}
             submitting={submitting}
-            selectedTemplate={template}
           />
         </Row>
       </Section>

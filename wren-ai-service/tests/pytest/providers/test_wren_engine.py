@@ -22,16 +22,18 @@ class FakeSession:
         self._payload = payload
         self.calls = []
 
-    def post(self, url, json, timeout):
-        self.calls.append({"url": url, "json": json, "timeout": timeout})
+    def post(self, url, headers, json, timeout):
+        self.calls.append(
+            {"url": url, "headers": headers, "json": json, "timeout": timeout}
+        )
         return FakeResponse(self._payload)
 
 
 @pytest.mark.asyncio
-async def test_wren_ui_execute_sql_normalizes_runtime_scope_before_graphql_request():
+async def test_wren_ui_execute_sql_normalizes_runtime_scope_before_rest_request():
     session = FakeSession(
         {
-            "data": {"previewSql": {"data": [{"id": 1}]}},
+            "data": {"data": [{"id": 1}]},
             "correlationId": "corr-1",
         }
     )
@@ -48,8 +50,11 @@ async def test_wren_ui_execute_sql_normalizes_runtime_scope_before_graphql_reque
     assert result == {"data": [{"id": 1}]}
     assert metadata == {"correlation_id": "corr-1"}
     assert len(session.calls) == 1
-    assert session.calls[0]["url"] == "http://wren-ui/api/graphql"
-    assert session.calls[0]["json"]["variables"]["data"] == {
+    assert session.calls[0]["url"] == "http://wren-ui/api/v1/internal/sql/preview"
+    assert session.calls[0]["headers"] == {
+        "x-wren-ai-service-internal": "1",
+    }
+    assert session.calls[0]["json"] == {
         "sql": "SELECT 1",
         "runtimeScopeId": "deploy-1",
         "limit": 500,
@@ -60,7 +65,7 @@ async def test_wren_ui_execute_sql_normalizes_runtime_scope_before_graphql_reque
 async def test_wren_ui_execute_sql_accepts_explicit_project_bridge_id_kwarg():
     session = FakeSession(
         {
-            "data": {"previewSql": {"data": [{"id": 1}]}},
+            "data": {"data": [{"id": 1}]},
             "correlationId": "corr-2",
         }
     )
@@ -76,17 +81,14 @@ async def test_wren_ui_execute_sql_accepts_explicit_project_bridge_id_kwarg():
     assert success is True
     assert result == {"data": [{"id": 1}]}
     assert metadata == {"correlation_id": "corr-2"}
-    assert (
-        session.calls[0]["json"]["variables"]["data"]["runtimeScopeId"]
-        == "legacy-project-2"
-    )
+    assert session.calls[0]["json"]["runtimeScopeId"] == "legacy-project-2"
 
 
 @pytest.mark.asyncio
 async def test_wren_ui_execute_sql_prefers_runtime_scope_over_legacy_project_bridge():
     session = FakeSession(
         {
-            "data": {"previewSql": {"data": [{"id": 1}]}},
+            "data": {"data": [{"id": 1}]},
             "correlationId": "corr-3",
         }
     )
@@ -103,4 +105,12 @@ async def test_wren_ui_execute_sql_prefers_runtime_scope_over_legacy_project_bri
     assert success is True
     assert result == {"data": [{"id": 1}]}
     assert metadata == {"correlation_id": "corr-3"}
-    assert session.calls[0]["json"]["variables"]["data"]["runtimeScopeId"] == "deploy-3"
+    assert session.calls[0]["json"]["runtimeScopeId"] == "deploy-3"
+
+
+def test_wren_ui_prefers_runtime_endpoint_env_over_config(monkeypatch):
+    monkeypatch.setenv("WREN_UI_ENDPOINT", "http://env-wren-ui")
+
+    engine = WrenUI(endpoint="http://config-wren-ui")
+
+    assert engine._endpoint == "http://env-wren-ui"

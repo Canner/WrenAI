@@ -4,7 +4,7 @@ import { message } from 'antd';
 import {
   resolveClientRuntimeScopeSelector,
   type ClientRuntimeScopeSelector,
-} from '@/apollo/client/runtimeScope';
+} from '@/runtime/client/runtimeScope';
 import {
   AdjustmentTask,
   AskingTask,
@@ -13,7 +13,7 @@ import {
   RecommendedQuestionsTask,
   RecommendedQuestionsTaskStatus,
   ThreadResponse,
-} from '@/types/api';
+} from '@/types/home';
 import {
   cancelAskingTask as cancelAskingTaskRest,
   createAskingTask as createAskingTaskRest,
@@ -23,7 +23,7 @@ import {
   rerunAskingTask as rerunAskingTaskRest,
 } from '@/utils/homeRest';
 import useAskingStreamTask from './useAskingStreamTask';
-import type { UpdateThreadDetailQuery } from './useThreadDetail';
+import type { UpdateThreadDetailState } from './useThreadDetail';
 
 export interface AskPromptData {
   originalQuestion: string;
@@ -100,7 +100,7 @@ export const buildRecommendedQuestionHistory = (
 
 const handleUpdateThreadCache = (
   askingTask: NullableAskingTask,
-  updateThreadQuery?: UpdateThreadDetailQuery,
+  updateThreadQuery?: UpdateThreadDetailState,
 ) => {
   if (!askingTask || !updateThreadQuery) {
     return;
@@ -135,7 +135,7 @@ const handleUpdateRerunAskingTaskCache = ({
 }: {
   threadResponseId: number;
   askingTask: NullableAskingTask;
-  updateThreadQuery?: UpdateThreadDetailQuery;
+  updateThreadQuery?: UpdateThreadDetailState;
 }) => {
   if (!askingTask || !updateThreadQuery) {
     return;
@@ -177,7 +177,7 @@ const resolveRuntimeScopeSelector = (selector?: ClientRuntimeScopeSelector) =>
 export default function useAskPrompt(
   threadId?: number,
   submitDefaults?: AskPromptSubmitDefaults,
-  updateThreadQuery?: UpdateThreadDetailQuery,
+  updateThreadQuery?: UpdateThreadDetailState,
   runtimeScopeSelector?: ClientRuntimeScopeSelector,
 ) {
   const [originalQuestion, setOriginalQuestion] = useState<string>('');
@@ -203,7 +203,8 @@ export default function useAskPrompt(
   > | null>(null);
   const instantRecommendPollingSessionRef = useRef(0);
   const lastTaskIdRef = useRef<string | null>(null);
-  const [fetchAskingStreamTask, askingStreamTaskResult] = useAskingStreamTask();
+  const [fetchAskingStreamTask, askingStreamTaskResult] =
+    useAskingStreamTask(runtimeScopeSelector);
 
   const stopAskingTaskPolling = useCallback(() => {
     askingTaskPollingSessionRef.current += 1;

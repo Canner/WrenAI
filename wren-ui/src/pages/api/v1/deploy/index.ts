@@ -1,9 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { ModelResolver } from '@server/resolvers/modelResolver';
-import { buildResolverContextFromRequest } from '../resolverContext';
+import { ModelController } from '@server/controllers/modelController';
+import { buildApiContextFromRequest } from '../apiContext';
 import { sendRestApiError } from '../restApi';
 
-const modelResolver = new ModelResolver();
+const modelController = new ModelController();
 
 export default async function handler(
   req: NextApiRequest,
@@ -15,12 +15,8 @@ export default async function handler(
       throw new Error('Method not allowed');
     }
 
-    const ctx = await buildResolverContextFromRequest({ req });
-    const deployResult = await modelResolver.deploy(
-      null,
-      { force: false },
-      ctx,
-    );
+    const ctx = await buildApiContextFromRequest({ req });
+    const deployResult = await modelController.deploy({ force: false, ctx });
 
     return res.status(200).json(deployResult);
   } catch (error) {

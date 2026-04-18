@@ -10,7 +10,7 @@ import {
   message,
 } from 'antd';
 import styled from 'styled-components';
-import { buildRuntimeScopeUrl } from '@/apollo/client/runtimeScope';
+import { buildRuntimeScopeUrl } from '@/runtime/client/runtimeScope';
 import ConsoleShellLayout from '@/components/reference/ConsoleShellLayout';
 import { buildNovaSettingsNavItems } from '@/components/reference/novaShellNavigation';
 import useAuthSession from '@/hooks/useAuthSession';

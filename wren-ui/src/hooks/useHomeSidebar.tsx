@@ -3,7 +3,8 @@ import { message } from 'antd';
 import {
   buildRuntimeScopeUrl,
   ClientRuntimeScopeSelector,
-} from '@/apollo/client/runtimeScope';
+} from '@/runtime/client/runtimeScope';
+import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { Path } from '@/utils/enum';
 import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
 
@@ -285,8 +286,8 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
     getCachedHomeSidebarThreads(scopeKey),
   );
   const [loading, setLoading] = useState(false);
-  const [initialized, setInitialized] = useState(() =>
-    getCachedHomeSidebarThreads(scopeKey).length > 0,
+  const [initialized, setInitialized] = useState(
+    () => getCachedHomeSidebarThreads(scopeKey).length > 0,
   );
   const pendingLoadThreadsRef = useRef<{
     scopeKey: string;
@@ -407,7 +408,13 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
         })
         .then((payload) => syncThreads(payload))
         .catch((error) => {
-          message.error(error.message || '加载历史对话失败，请稍后重试');
+          const errorMessage = resolveAbortSafeErrorMessage(
+            error,
+            '加载历史对话失败，请稍后重试',
+          );
+          if (errorMessage) {
+            message.error(errorMessage);
+          }
           return getCachedHomeSidebarThreads(scopeKey);
         })
         .finally(() => {
@@ -502,7 +509,13 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
 
         await safeRefetch();
       } catch (error: any) {
-        message.error(error?.message || '更新对话失败，请稍后重试');
+        const errorMessage = resolveAbortSafeErrorMessage(
+          error,
+          '更新对话失败，请稍后重试',
+        );
+        if (errorMessage) {
+          message.error(errorMessage);
+        }
       }
     },
     [safeRefetch, sidebarHeaderSelector],
@@ -524,7 +537,13 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
 
         await safeRefetch();
       } catch (error: any) {
-        message.error(error?.message || '删除对话失败，请稍后重试');
+        const errorMessage = resolveAbortSafeErrorMessage(
+          error,
+          '删除对话失败，请稍后重试',
+        );
+        if (errorMessage) {
+          message.error(errorMessage);
+        }
       }
     },
     [safeRefetch, sidebarHeaderSelector],

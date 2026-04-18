@@ -4,14 +4,14 @@ import {
   DiagramModelRelationField,
   DiagramView,
   DiagramViewField,
-} from '@/types/api';
+} from '@/types/modeling';
 export type {
   Diagram,
   DiagramModel,
   DiagramModelField,
   DiagramModelRelationField,
   DiagramView,
-} from '@/types/api';
+} from '@/types/modeling';
 
 export type ComposeDiagram = (DiagramModel | DiagramView) &
   Partial<

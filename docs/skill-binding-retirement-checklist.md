@@ -23,7 +23,7 @@
 - `bash misc/scripts/check-skill-binding-main-path.sh`
 - `bash misc/scripts/inventory-skill-binding-residuals.sh > docs/skill-binding-retirement-inventory.md`
 - `cd wren-ui && yarn test tests/migrations/20260410122000_drop_legacy_skill_binding.test.js --runInBand`
-- `cd wren-ui && yarn test src/pages/api/tests/skills_api.test.ts src/pages/api/tests/graphql.test.ts --runInBand`
+- `cd wren-ui && yarn test src/pages/api/tests/skills_api.test.ts src/runtime/client/tests/runtimeScope.test.ts --runInBand`
 - `bash misc/scripts/skill-binding-retirement-audit.sh "$PG_URL"`
 - `bash misc/scripts/skill-binding-retirement-rehearsal.sh "$PG_URL"`
 - `bash misc/scripts/skill-binding-retirement-apply.sh "$PG_URL"`
@@ -145,8 +145,8 @@
      - `migration_source_binding_id` 是否唯一
      - 仍保留 legacy binding 的原始 `skill_definition` 是否都已写回 runtime fields
 4. **线程 / preview / ask 的历史兼容已验证**
-   - `cd wren-ui && yarn test src/pages/api/tests/skills_api.test.ts src/pages/api/tests/graphql.test.ts --runInBand`
-   - 已显式覆盖 skills REST 与 GraphQL 主路径回归
+   - `cd wren-ui && yarn test src/pages/api/tests/skills_api.test.ts src/runtime/client/tests/runtimeScope.test.ts --runInBand`
+   - 已显式覆盖 skills REST 与 runtime scope 主路径回归
    - 若还存在历史数据样本，需额外做一次真实库 spot-check
 5. **drop migration 的门禁测试已通过**
    - `cd wren-ui && yarn test tests/migrations/20260410122000_drop_legacy_skill_binding.test.js --runInBand`

@@ -1,11 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { ProjectResolver } from '@server/resolvers/projectResolver';
-import { SchemaChangeType } from '@server/managers/dataSourceSchemaDetector';
-import { ApiError } from '@/apollo/server/utils/apiUtils';
-import { buildResolverContextFromRequest } from '../resolverContext';
+import { ProjectController } from '@server/controllers/projectController';
+import { SchemaChangeType } from '@server/managers/connectionSchemaDetector';
+import { ApiError } from '@/server/utils/apiUtils';
+import { buildApiContextFromRequest } from '../apiContext';
 import { sendRestApiError } from '../restApi';
 
-const projectResolver = new ProjectResolver();
+const projectController = new ProjectController();
 
 export default async function handler(
   req: NextApiRequest,
@@ -25,8 +25,8 @@ export default async function handler(
       throw new ApiError('Schema change type is required', 400);
     }
 
-    const ctx = await buildResolverContextFromRequest({ req });
-    await projectResolver.resolveSchemaChange(
+    const ctx = await buildApiContextFromRequest({ req });
+    await projectController.resolveSchemaChange(
       null,
       { where: { type: type as SchemaChangeType } },
       ctx,

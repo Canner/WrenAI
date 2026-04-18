@@ -1,4 +1,4 @@
-import { ApiType } from '@/types/api';
+import { ApiType } from '@/types/apiHistory';
 
 export type AskShadowCompareDiagnostics = {
   enabled?: boolean;

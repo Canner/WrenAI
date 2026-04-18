@@ -69,4 +69,3 @@ export const chartVegaConfig: Config = {
   },
   point: { size: 60, color: DEFAULT_COLOR },
 };
-

@@ -1,11 +1,16 @@
 import { test, expect } from '@playwright/test';
-import { getTestConfig } from '../config';
+import { getTestConfig, hasConnectorE2EConfig } from '../config';
 import * as helper from '../helper';
 import * as onboarding from '../commonTests/onboarding';
 
 const testConfig = getTestConfig();
 
 test.describe('Test ClickHouse data source', () => {
+  test.skip(
+    !hasConnectorE2EConfig('clickhouse'),
+    'ClickHouse E2E requires real connector settings in e2e/e2e.config.json.',
+  );
+
   test.beforeAll(async () => {
     await helper.resetDatabase();
   });
@@ -15,26 +20,26 @@ test.describe('Test ClickHouse data source', () => {
 
     await page.locator('button').filter({ hasText: 'ClickHouse' }).click();
 
-    await page.getByLabel('Display name').click();
-    await page.getByLabel('Display name').fill('test-clickhouse');
-    await page.getByLabel('Host').click();
-    await page.getByLabel('Host').fill(testConfig.clickhouse.host);
-    await page.getByLabel('Port').click();
-    await page.getByLabel('Port').fill(testConfig.clickhouse.port);
-    await page.getByLabel('Username').click();
-    await page.getByLabel('Username').fill(testConfig.clickhouse.username);
-    await page.getByLabel('Password').click();
-    await page.getByLabel('Password').fill(testConfig.clickhouse.password);
-    await page.getByLabel('Database name').click();
-    await page.getByLabel('Database name').fill(testConfig.clickhouse.database);
+    await page.getByLabel('显示名称').click();
+    await page.getByLabel('显示名称').fill('test-clickhouse');
+    await page.getByLabel('主机地址').click();
+    await page.getByLabel('主机地址').fill(testConfig.clickhouse.host);
+    await page.getByLabel('端口').click();
+    await page.getByLabel('端口').fill(testConfig.clickhouse.port);
+    await page.getByLabel('用户名').click();
+    await page.getByLabel('用户名').fill(testConfig.clickhouse.username);
+    await page.getByLabel('密码').click();
+    await page.getByLabel('密码').fill(testConfig.clickhouse.password);
+    await page.getByLabel('数据库名称').click();
+    await page.getByLabel('数据库名称').fill(testConfig.clickhouse.database);
 
-    // Check the "Use SSL" checkbox if needed
+    // Check the SSL switch if needed
     if (testConfig.clickhouse.ssl) {
-      await page.getByLabel('Use SSL').click();
+      await page.getByLabel('启用 SSL').click();
     }
 
     await page.getByRole('button', { name: 'Next' }).click();
-    await expect(page).toHaveURL('/setup/models', { timeout: 60000 });
+    await helper.expectPathname({ page, pathname: '/setup/models' });
   });
 
   test('Setup all models', onboarding.setupModels);

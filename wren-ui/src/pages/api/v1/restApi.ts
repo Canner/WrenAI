@@ -1,15 +1,30 @@
 import type { NextApiResponse } from 'next';
-import { ApiError } from '@/apollo/server/utils/apiUtils';
+import { ApiError } from '@/server/utils/apiUtils';
 import { AuthorizationError } from '@server/authz/authorize';
 import { OUTDATED_RUNTIME_SNAPSHOT_MESSAGE } from '@server/utils/runtimeExecutionContext';
 
-const inferStatusCode = (error: unknown) => {
+const isBadRequestMessage = (message: string) =>
+  [
+    /\b(required|invalid|unsupported)\b/i,
+    /read[- ]?only/i,
+    /\bcannot be\b/i,
+    /\bmust (?:be|provide)\b/i,
+  ].some((pattern) => pattern.test(message));
+
+export const inferRestApiStatusCode = (error: unknown) => {
   if (error instanceof ApiError) {
     return error.statusCode;
   }
 
   if (error instanceof AuthorizationError) {
     return error.statusCode;
+  }
+
+  if (
+    typeof (error as { statusCode?: unknown } | null | undefined)
+      ?.statusCode === 'number'
+  ) {
+    return (error as { statusCode: number }).statusCode;
   }
 
   const message = error instanceof Error ? error.message : String(error || '');
@@ -26,11 +41,7 @@ const inferStatusCode = (error: unknown) => {
     return 404;
   }
 
-  if (
-    /required|invalid|unsupported|readonly|read-only|cannot|failed/i.test(
-      message,
-    )
-  ) {
+  if (isBadRequestMessage(message)) {
     return 400;
   }
 
@@ -42,7 +53,7 @@ export const sendRestApiError = (
   error: unknown,
   fallbackMessage: string,
 ) => {
-  const statusCode = inferStatusCode(error);
+  const statusCode = inferRestApiStatusCode(error);
   const message =
     error instanceof Error && error.message ? error.message : fallbackMessage;
 

@@ -258,12 +258,12 @@ describe('chartSpecRuntime', () => {
     });
 
     const [firstDate] = result.previewData.data[0] as string[];
-    const [lastDate] = result.previewData.data[result.previewData.data.length - 1] as string[];
+    const [lastDate] = result.previewData.data[
+      result.previewData.data.length - 1
+    ] as string[];
     expect(firstDate <= lastDate).toBe(true);
     expect(result.chartDataProfile).toMatchObject({
-      appliedShaping: [
-        expect.objectContaining({ type: 'time_downsample' }),
-      ],
+      appliedShaping: [expect.objectContaining({ type: 'time_downsample' })],
     });
   });
 });

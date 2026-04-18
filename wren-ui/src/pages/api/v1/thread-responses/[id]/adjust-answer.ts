@@ -1,12 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { AskingResolver } from '@server/resolvers/askingResolver';
-import { ApiError } from '@/apollo/server/utils/apiUtils';
+import { AskingController } from '@server/controllers/askingController';
+import { ApiError } from '@/server/utils/apiUtils';
 import { toCanonicalPersistedRuntimeIdentityFromScope } from '@server/utils/persistedRuntimeIdentity';
-import { buildResolverContextFromRequest } from '../../resolverContext';
+import { buildApiContextFromRequest } from '../../apiContext';
 import { sendRestApiError } from '../../restApi';
 import { serializeThreadResponsePayload } from '../../threadPayloadSerializers';
 
-const askingResolver = new AskingResolver();
+const askingController = new AskingController();
 
 const parseResponseId = (value: string | string[] | undefined) => {
   const raw = Array.isArray(value) ? value[0] : value;
@@ -28,8 +28,8 @@ export default async function handler(
     }
 
     const responseId = parseResponseId(req.query.id);
-    const ctx = await buildResolverContextFromRequest({ req });
-    const response = await askingResolver.adjustThreadResponse(
+    const ctx = await buildApiContextFromRequest({ req });
+    const response = await askingController.adjustThreadResponse(
       null,
       {
         responseId,

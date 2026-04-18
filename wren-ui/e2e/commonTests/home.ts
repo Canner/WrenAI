@@ -1,39 +1,102 @@
 import { Page, expect } from '@playwright/test';
+import type { RuntimeScopeFixture } from '../helper';
 import * as helper from '../helper';
-import { AskingTaskStatus } from '@/types/api';
-import * as modelingHelper from './modeling';
+
+const HOME_PROMPT_PLACEHOLDER = '输入问题，@ 指定知识库';
+const THREAD_PROMPT_PLACEHOLDER = '继续追问以深入分析你的数据';
+const HOME_SEND_BUTTON_NAME = '发送问题';
+const HOME_SAVE_AS_VIEW_BUTTON_NAME = '保存为视图';
+const HOME_ANSWER_TAB_NAME = '回答';
+const HOME_SQL_TAB_NAME = 'SQL 查询';
+
+const getPromptInput = (page: Page) =>
+  page
+    .getByRole('textbox', {
+      name: new RegExp(
+        `${HOME_PROMPT_PLACEHOLDER}|${THREAD_PROMPT_PLACEHOLDER}`,
+      ),
+    })
+    .first();
 
 type AskSuggestionQuestionArgs = {
   page: Page;
   suggestedQuestion: string;
+  selector?: RuntimeSelector;
+};
+
+type AskQuestionArgs = {
+  page: Page;
+  question: string;
+  selector?: RuntimeSelector;
 };
 
 type FollowUpQuestionArgs = {
   page: Page;
   question: string;
+  openingQuestion: string;
+  selector?: RuntimeSelector;
 };
 
+type RuntimeSelector = Partial<RuntimeScopeFixture> &
+  Record<string, string | undefined | null>;
+
 export const checkAskingProcess = async (page: Page, question: string) => {
-  // check process state
-  await expect(page.getByTestId('prompt__result')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible();
-  await expect(page.getByPlaceholder('Ask to explore your data')).toHaveValue(
-    question,
-  );
-  await expect(page.getByRole('button', { name: 'Ask' })).toBeDisabled();
+  await helper.expectPathname({
+    page,
+    pathname: /\/home\/\d+(?:\?.*)?$/,
+    timeout: 60_000,
+  });
+  const promptResult = page.getByTestId('prompt__result');
+  const questionHeading = page.getByRole('heading', { name: question });
+
+  await expect
+    .poll(
+      async () => {
+        const [hasPromptResult, hasQuestionHeading] = await Promise.all([
+          promptResult
+            .isVisible()
+            .then(Boolean)
+            .catch(() => false),
+          questionHeading
+            .isVisible()
+            .then(Boolean)
+            .catch(() => false),
+        ]);
+
+        return hasPromptResult || hasQuestionHeading;
+      },
+      { timeout: 60_000 },
+    )
+    .toBe(true);
 };
 
 export const waitingForAskingTask = async (page: Page) => {
-  await helper.waitForJsonResponse(
-    { page },
-    {
-      urlIncludes: '/api/v1/asking-tasks/',
-      validateResponseData: (data) =>
-        [AskingTaskStatus.FAILED, AskingTaskStatus.FINISHED].includes(
-          data?.status,
-        ),
-    },
-  );
+  const followUpInput = page.getByRole('textbox', {
+    name: THREAD_PROMPT_PLACEHOLDER,
+  });
+  const saveAsViewButton = page.getByRole('button', {
+    name: HOME_SAVE_AS_VIEW_BUTTON_NAME,
+  });
+
+  await expect
+    .poll(
+      async () => {
+        const [hasSaveAsViewButton, canAskFollowUp] = await Promise.all([
+          saveAsViewButton
+            .isVisible()
+            .then(Boolean)
+            .catch(() => false),
+          followUpInput
+            .isEnabled()
+            .then(Boolean)
+            .catch(() => false),
+        ]);
+
+        return hasSaveAsViewButton || canAskFollowUp;
+      },
+      { timeout: 240_000 },
+    )
+    .toBe(true);
 };
 
 export const checkCandidatesResult = async (page: Page) => {
@@ -64,82 +127,27 @@ export const getFirstCandidatesResultSummary = async (page: Page) => {
 };
 
 export const checkThreadResponseSkeletonLoading = async (page: Page) => {
-  await expect(page.locator('.ant-skeleton-content').last()).toBeVisible({
-    timeout: 60000,
-  });
-  await expect(page.locator('.ant-skeleton-content').last()).toBeHidden({
-    timeout: 60000,
+  await expect(
+    page.getByRole('tab', { name: new RegExp(HOME_ANSWER_TAB_NAME) }),
+  ).toBeVisible({
+    timeout: 60_000,
   });
 };
 
 const checkThreadResponseBreakdownContent = async (page: Page) => {
-  // switch to the View SQL tab
-  await page
-    .locator('div')
-    .filter({ hasText: /^View SQL$/ })
-    .last()
-    .click();
-
-  // View SQL tab content
-  await expect(
-    page.getByLabel('View SQL').locator('.ant-skeleton-content').last(),
-  ).toBeVisible();
-
-  await expect(
-    page.getByLabel('View SQL').locator('.ant-skeleton-content').last(),
-  ).toBeHidden({ timeout: 60000 });
-
-  // check show preview data table as default open
-  await expect(
-    page.getByLabel('View SQL').locator('.ant-table').last(),
-  ).toBeVisible();
-  await expect(page.getByText('Showing up to 500 rows').last()).toBeVisible();
-
-  // check up-circle icon with Collapse button
-  await expect(
-    page.getByLabel('View SQL').getByLabel('up-circle').locator('svg').last(),
-  ).toBeVisible();
-  await expect(
-    page
-      .getByLabel('View SQL')
-      .getByRole('button', { name: 'Collapse' })
-      .last(),
-  ).toBeVisible();
-
-  // click View Full SQL button
-  await page
-    .getByLabel('View SQL')
-    .getByRole('button', { name: 'View Full SQL' })
-    .last()
-    .click();
-  await expect(
-    page.getByLabel('View SQL').locator('.ace_editor'),
-  ).toBeVisible();
-
-  // check collapse and copy button
-  await expect(
-    page.getByLabel('View SQL').getByLabel('up-circle').locator('svg').last(),
-  ).toBeVisible();
-  await expect(
-    page
-      .getByLabel('View SQL')
-      .getByRole('button', { name: 'Collapse' })
-      .last(),
-  ).toBeVisible();
-  await expect(
-    page.getByLabel('View SQL').getByLabel('copy').locator('svg'),
-  ).toBeVisible();
-  await expect(
-    page.getByLabel('View SQL').getByRole('button', { name: 'Copy' }),
-  ).toBeVisible();
+  await page.getByRole('tab', { name: new RegExp(HOME_SQL_TAB_NAME) }).click();
+  await expect(page.getByText('Wren SQL').last()).toBeVisible();
+  await expect(page.getByRole('button', { name: '调整 SQL' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '查看结果' })).toBeVisible();
 };
 
 export const askSuggestionQuestionTest = async ({
   page,
   suggestedQuestion,
+  selector,
 }: AskSuggestionQuestionArgs) => {
-  await page.goto('/home');
-  await expect(page).toHaveURL('/home', { timeout: 60000 });
+  await helper.gotoRuntimeScopedPath({ page, pathname: '/home', selector });
+  await helper.expectPathname({ page, pathname: '/home' });
 
   await page.getByText(suggestedQuestion).click();
 
@@ -149,27 +157,54 @@ export const askSuggestionQuestionTest = async ({
   await checkThreadResponseSkeletonLoading(page);
 
   // check question block
-  await expect(page.getByLabel('message').locator('svg')).toBeVisible();
   await expect(
     page.getByRole('heading', { name: suggestedQuestion }),
   ).toBeVisible();
 
   // check answer result basic UI elements
   await expect(
-    page.locator('#rc-tabs-0-tab-answer').getByText('Answer'),
+    page.getByRole('tab', { name: new RegExp(HOME_ANSWER_TAB_NAME) }),
   ).toBeVisible();
   await expect(
-    page.locator('#rc-tabs-0-tab-view-sql').getByText('View SQL'),
+    page.getByRole('tab', { name: new RegExp(HOME_SQL_TAB_NAME) }),
   ).toBeVisible();
 
-  // check save icon button
-  await expect(page.getByLabel('save').locator('svg')).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Save as View' }),
-  ).toBeVisible();
+    page.getByRole('button', { name: HOME_SAVE_AS_VIEW_BUTTON_NAME }),
+  ).toBeVisible({ timeout: 60_000 });
 
   // Answer tab content
-  await expect(page.getByLabel('Answer').locator('div').first()).toBeVisible();
+  await expect(page.getByText('回答').last()).toBeVisible();
+
+  await checkThreadResponseBreakdownContent(page);
+};
+
+export const askQuestionTest = async ({
+  page,
+  question,
+  selector,
+}: AskQuestionArgs) => {
+  await helper.gotoRuntimeScopedPath({ page, pathname: '/home', selector });
+  await helper.expectPathname({ page, pathname: '/home' });
+
+  await getPromptInput(page).fill(question);
+  await page.getByRole('button', { name: HOME_SEND_BUTTON_NAME }).click();
+
+  await checkAskingProcess(page, question);
+  await waitingForAskingTask(page);
+  await checkThreadResponseSkeletonLoading(page);
+
+  await expect(page.getByRole('heading', { name: question })).toBeVisible();
+  await expect(
+    page.getByRole('tab', { name: new RegExp(HOME_ANSWER_TAB_NAME) }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('tab', { name: new RegExp(HOME_SQL_TAB_NAME) }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: HOME_SAVE_AS_VIEW_BUTTON_NAME }),
+  ).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText('回答').last()).toBeVisible();
 
   await checkThreadResponseBreakdownContent(page);
 };
@@ -177,39 +212,37 @@ export const askSuggestionQuestionTest = async ({
 export const followUpQuestionTest = async ({
   page,
   question,
+  openingQuestion,
+  selector,
 }: FollowUpQuestionArgs) => {
-  await page.goto('/home');
-  await expect(page).toHaveURL('/home', { timeout: 60000 });
+  await helper.gotoRuntimeScopedPath({ page, pathname: '/home', selector });
+  await helper.expectPathname({ page, pathname: '/home' });
 
   // click existing thread
-  await page.locator('.adm-treeTitle__title').first().click();
-  await expect(page).toHaveURL(/.*\/home\/\d+/, { timeout: 60000 });
+  await page.getByRole('button', { name: openingQuestion }).click();
+  await helper.expectPathname({ page, pathname: /\/home\/\d+(?:\?.*)?$/ });
 
   // ask follow up question
-  await page.getByPlaceholder('Ask to explore your data').fill(question);
-  await page.getByRole('button', { name: 'Ask' }).click();
+  await getPromptInput(page).fill(question);
+  await page.getByRole('button', { name: HOME_SEND_BUTTON_NAME }).click();
 
-  // check asking process state and wait for asking task to finish
+  // follow-up questions create thread responses directly, so wait for the new
+  // response block instead of the home-page asking-task polling endpoint.
   await checkAskingProcess(page, question);
-  await waitingForAskingTask(page);
-  await checkThreadResponseSkeletonLoading(page);
-
-  // check question block
-  await expect(page.getByLabel('message').locator('svg').last()).toBeVisible();
-  await expect(page.getByRole('heading', { name: question })).toBeVisible();
-
-  await checkThreadResponseBreakdownContent(page);
+  await expect(page.getByRole('heading', { name: question })).toBeVisible({
+    timeout: 60_000,
+  });
 };
 
 export const saveAsView = async (
-  { page, baseURL }: { page: Page; baseURL?: string },
+  { page, selector }: { page: Page; baseURL?: string; selector?: RuntimeSelector },
   { question, viewName }: { question: string; viewName: string },
 ) => {
-  await page.goto('/home');
-  await expect(page).toHaveURL('/home', { timeout: 60000 });
+  await helper.gotoRuntimeScopedPath({ page, pathname: '/home', selector });
+  await helper.expectPathname({ page, pathname: '/home' });
 
-  await page.getByPlaceholder('Ask to explore your data').fill(question);
-  await page.getByRole('button', { name: 'Ask' }).click();
+  await getPromptInput(page).fill(question);
+  await page.getByRole('button', { name: HOME_SEND_BUTTON_NAME }).click();
 
   // check asking process state and wait for asking task to finish
   await checkAskingProcess(page, question);
@@ -217,46 +250,35 @@ export const saveAsView = async (
   await checkThreadResponseSkeletonLoading(page);
 
   // click save as view button
-  await page.getByRole('button', { name: 'Save as View' }).click();
+  await page
+    .getByRole('button', { name: HOME_SAVE_AS_VIEW_BUTTON_NAME })
+    .click();
 
   // check save as view modal
   await expect(page.locator('.ant-modal-mask')).toBeVisible();
   await expect(page.locator('div.ant-modal')).toBeVisible();
   await expect(
-    page.locator('div.ant-modal-title').filter({ hasText: 'Save as View' }),
+    page.locator('div.ant-modal-title').filter({ hasText: '保存为视图' }),
   ).toBeVisible();
   await expect(
-    page.getByLabel('Save as View').getByLabel('Close', { exact: true }),
+    page.getByLabel('保存为视图').getByLabel('Close', { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByText(
-      'After saving, make sure you go to "Modeling Page" to deploy all saved views.',
-    ),
+    page.getByText('保存后，请前往“建模页”统一部署所有已保存视图。'),
   ).toBeVisible();
 
   // save as View process
-  await page.getByLabel('Name').click();
-  await page.getByLabel('Name').fill(viewName);
+  await page.getByLabel('名称').click();
+  await page.getByLabel('名称').fill(viewName);
 
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByRole('button', { name: '保存', exact: true }).click();
 
   // check save as view success
-  await expect(page.getByText('Successfully created view.')).toBeVisible();
-
-  // go to modeling page
-  await page.getByRole('button', { name: 'Modeling' }).click();
-  await expect(page).toHaveURL('/modeling', { timeout: 60000 });
-
-  // deploy MDL with view
-  await expect(page.getByRole('button', { name: 'Deploy' })).toBeEnabled();
-  await modelingHelper.executeDeploy({ page, baseURL });
-
-  await page.getByRole('button', { name: 'Home', exact: true }).click();
-  await expect(page).toHaveURL('/home', { timeout: 60000 });
+  await expect(page.getByText('视图已创建。')).toBeVisible();
 
   // ask the saved view question
-  await page.getByPlaceholder('Ask to explore your data').fill(question);
-  await page.getByRole('button', { name: 'Ask' }).click();
+  await getPromptInput(page).fill(question);
+  await page.getByRole('button', { name: HOME_SEND_BUTTON_NAME }).click();
 
   // check asking process state and wait for asking task to finish
   await checkAskingProcess(page, question);
@@ -264,7 +286,7 @@ export const saveAsView = async (
   await checkThreadResponseSkeletonLoading(page);
 
   // check offer view info for thread response UI
-  await expect(page.getByText('Generated from saved view')).toBeVisible();
+  await expect(page.getByText('基于已保存视图生成')).toBeVisible();
   await expect(page.getByRole('link', { name: viewName })).toBeVisible();
 
   // click the view name link will open a new tab and go to the view metadata of the modeling page

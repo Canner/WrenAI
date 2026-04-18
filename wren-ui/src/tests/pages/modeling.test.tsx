@@ -1,6 +1,6 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import ModelingPage from '../../pages/modeling';
+import ModelingWorkspace from '../../components/pages/modeling/ModelingWorkspace';
 
 const mockUseProtectedRuntimeScopePage = jest.fn();
 const mockUseRuntimeScopeNavigation = jest.fn();
@@ -155,7 +155,7 @@ jest.mock('@/utils/viewRest', () => ({
   deleteViewById: jest.fn(),
 }));
 
-describe('modeling page', () => {
+describe('modeling workspace', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     capturedSidebarProps = null;
@@ -246,7 +246,7 @@ describe('modeling page', () => {
       },
     });
 
-    const markup = renderToStaticMarkup(<ModelingPage />);
+    const markup = renderToStaticMarkup(<ModelingWorkspace />);
 
     expect(capturedSidebarProps?.readOnly).toBe(false);
     expect(capturedDiagramProps?.readOnly).toBe(false);
@@ -300,7 +300,7 @@ describe('modeling page', () => {
       },
     });
 
-    const markup = renderToStaticMarkup(<ModelingPage />);
+    const markup = renderToStaticMarkup(<ModelingWorkspace />);
 
     expect(capturedSidebarProps?.readOnly).toBe(true);
     expect(capturedDiagramProps?.readOnly).toBe(true);

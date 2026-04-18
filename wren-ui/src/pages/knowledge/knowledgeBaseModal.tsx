@@ -2,7 +2,7 @@ import CloseOutlined from '@ant-design/icons/CloseOutlined';
 import { Form, Input } from 'antd';
 import type { FormInstance } from 'antd';
 import { memo } from 'react';
-import { REFERENCE_MODAL_MASK_STYLE } from './constants';
+import { REFERENCE_MODAL_MASK_STYLE } from '@/features/knowledgePage/constants';
 import {
   DarkButton,
   LightButton,
@@ -15,8 +15,8 @@ import {
   ModalTitle,
   ReferenceModal,
   TitleGroup,
-} from './index.styles';
-import type { KnowledgeBaseRecord } from './types';
+} from '@/features/knowledgePage/index.styles';
+import type { KnowledgeBaseRecord } from '@/features/knowledgePage/types';
 
 type KnowledgeBaseFormValues = {
   name: string;

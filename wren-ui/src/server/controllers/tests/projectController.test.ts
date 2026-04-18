@@ -231,7 +231,7 @@ describe('ProjectController', () => {
 
       await expect(resolver.getSettings({ ctx })).resolves.toEqual({
         productVersion: '1.2.3',
-        dataSource: null,
+        connection: null,
         language: null,
       });
 
@@ -278,7 +278,7 @@ describe('ProjectController', () => {
       });
 
       await expect(resolver.getOnboardingStatus({ ctx })).resolves.toEqual({
-        status: 'DATASOURCE_SAVED',
+        status: 'CONNECTION_SAVED',
       });
       expect(ctx.projectService.getProjectById).toHaveBeenCalledWith(42);
       expect(findAllBy).toHaveBeenCalledWith({ projectId: 42 });
@@ -316,7 +316,7 @@ describe('ProjectController', () => {
       expect(findAllBy).not.toHaveBeenCalled();
     });
 
-    it('treats a connector-backed knowledge base without project bridge as datasource saved', async () => {
+    it('treats a connector-backed knowledge base without project bridge as connection saved', async () => {
       const resolver = new ProjectController();
       const findAllBy = jest.fn();
       const createOne = jest.fn();
@@ -337,7 +337,7 @@ describe('ProjectController', () => {
       });
 
       await expect(resolver.getOnboardingStatus({ ctx })).resolves.toEqual({
-        status: 'DATASOURCE_SAVED',
+        status: 'CONNECTION_SAVED',
       });
       expect(findAllBy).not.toHaveBeenCalled();
       expect(createOne).toHaveBeenCalledWith(
@@ -564,6 +564,9 @@ describe('ProjectController', () => {
           deployment: { projectId: 42 },
         },
         config: {},
+        connectorRepository: {
+          findAllBy: jest.fn().mockResolvedValue([]),
+        },
         projectService: {
           getProjectById: jest.fn().mockResolvedValue({
             id: 42,
@@ -578,7 +581,7 @@ describe('ProjectController', () => {
 
       await expect(resolver.getSettings({ ctx })).resolves.toEqual({
         productVersion: '',
-        dataSource: {
+        connection: {
           type: 'POSTGRES',
           properties: {
             displayName: 'Warehouse',
@@ -614,6 +617,9 @@ describe('ProjectController', () => {
           },
         },
         config: {},
+        connectorRepository: {
+          findAllBy: jest.fn().mockResolvedValue([]),
+        },
         projectService: {
           getProjectById: jest.fn().mockResolvedValue({
             id: 42,
@@ -628,7 +634,7 @@ describe('ProjectController', () => {
 
       await expect(resolver.getSettings({ ctx })).resolves.toEqual({
         productVersion: '',
-        dataSource: {
+        connection: {
           type: 'POSTGRES',
           properties: {
             displayName: 'Warehouse',
@@ -656,6 +662,9 @@ describe('ProjectController', () => {
           },
         },
         config: {},
+        connectorRepository: {
+          findAllBy: jest.fn().mockResolvedValue([]),
+        },
         projectService: {
           getProjectById: jest.fn().mockResolvedValue({
             id: 42,
@@ -674,7 +683,7 @@ describe('ProjectController', () => {
 
       await expect(resolver.getSettings({ ctx })).resolves.toEqual({
         productVersion: '',
-        dataSource: {
+        connection: {
           type: 'TRINO',
           properties: {
             displayName: '销售知识库',
@@ -683,6 +692,72 @@ describe('ProjectController', () => {
             schemas: 'catalog_a.public',
             managedFederatedRuntime: true,
             readonlyReason: MANAGED_FEDERATED_RUNTIME_READONLY_MESSAGE,
+          },
+          sampleDataset: null,
+        },
+        language: 'ZH_CN',
+      });
+    });
+
+    it('prefers primary connector settings over internal runtime project settings', async () => {
+      const resolver = new ProjectController();
+      const ctx = withAuthorizedContext({
+        runtimeScope: {
+          project: null,
+          workspace: { id: 'workspace-1' },
+          deployment: { projectId: 42 },
+          knowledgeBase: {
+            id: 'kb-1',
+            workspaceId: 'workspace-1',
+            primaryConnectorId: 'connector-1',
+            runtimeProjectId: 42,
+            sampleDataset: null,
+            language: 'ZH_CN',
+          },
+        },
+        config: {},
+        connectorRepository: {
+          findOneBy: jest.fn().mockResolvedValue({
+            id: 'connector-1',
+            workspaceId: 'workspace-1',
+            knowledgeBaseId: 'kb-1',
+            type: 'database',
+            databaseProvider: 'postgres',
+            displayName: 'Primary Warehouse',
+            configJson: {
+              host: 'pg.internal',
+              port: 5432,
+              database: 'warehouse',
+              user: 'postgres',
+              ssl: false,
+            },
+          }),
+        },
+        projectService: {
+          getProjectById: jest.fn().mockResolvedValue({
+            id: 42,
+            type: 'TRINO',
+            displayName: '[internal] Sales KB federated runtime',
+            sampleDataset: null,
+            language: 'EN',
+          }),
+          getGeneralConnectionInfo: jest.fn().mockReturnValue({
+            host: 'trino',
+          }),
+        },
+      });
+
+      await expect(resolver.getSettings({ ctx })).resolves.toEqual({
+        productVersion: '',
+        connection: {
+          type: 'POSTGRES',
+          properties: {
+            displayName: 'Primary Warehouse',
+            host: 'pg.internal',
+            port: 5432,
+            database: 'warehouse',
+            user: 'postgres',
+            ssl: false,
           },
           sampleDataset: null,
         },
@@ -746,9 +821,9 @@ describe('ProjectController', () => {
       ).not.toHaveBeenCalled();
     });
 
-    it('records allowed audit when listing data source tables', async () => {
+    it('records allowed audit when listing connection tables', async () => {
       const resolver = new ProjectController();
-      const getProjectDataSourceTables = jest
+      const getProjectConnectionTables = jest
         .fn()
         .mockResolvedValue([{ name: 'orders' }]);
       const ctx = withAuthorizedContext({
@@ -758,11 +833,11 @@ describe('ProjectController', () => {
           knowledgeBase: { id: 'kb-1' },
         },
         projectService: {
-          getProjectDataSourceTables,
+          getProjectConnectionTables,
         },
       });
 
-      await expect(resolver.listDataSourceTables({ ctx })).resolves.toEqual([
+      await expect(resolver.listConnectionTables({ ctx })).resolves.toEqual([
         { name: 'orders' },
       ]);
 
@@ -781,7 +856,7 @@ describe('ProjectController', () => {
 
     it('returns an empty table list when workspace scope has no active runtime project yet', async () => {
       const resolver = new ProjectController();
-      const getProjectDataSourceTables = jest.fn();
+      const getProjectConnectionTables = jest.fn();
       const ctx = withAuthorizedContext({
         runtimeScope: {
           project: null,
@@ -790,12 +865,12 @@ describe('ProjectController', () => {
           deployment: null,
         },
         projectService: {
-          getProjectDataSourceTables,
+          getProjectConnectionTables,
         },
       });
 
-      await expect(resolver.listDataSourceTables({ ctx })).resolves.toEqual([]);
-      expect(getProjectDataSourceTables).not.toHaveBeenCalled();
+      await expect(resolver.listConnectionTables({ ctx })).resolves.toEqual([]);
+      expect(getProjectConnectionTables).not.toHaveBeenCalled();
       expect(ctx.auditEventRepository.createOne).toHaveBeenCalledWith(
         expect.objectContaining({
           action: 'knowledge_base.read',
@@ -809,13 +884,13 @@ describe('ProjectController', () => {
       );
     });
 
-    it('lists data source tables through the linked knowledge base runtime project in draft canonical scope', async () => {
+    it('lists connection tables through the linked knowledge base runtime project in draft canonical scope', async () => {
       const resolver = new ProjectController();
       const getProjectById = jest.fn().mockResolvedValue({
         id: 42,
         type: 'POSTGRES',
       });
-      const getProjectDataSourceTables = jest
+      const getProjectConnectionTables = jest
         .fn()
         .mockResolvedValue([{ name: 'orders' }]);
       const ctx = withAuthorizedContext({
@@ -831,16 +906,16 @@ describe('ProjectController', () => {
         },
         projectService: {
           getProjectById,
-          getProjectDataSourceTables,
+          getProjectConnectionTables,
         },
       });
 
-      await expect(resolver.listDataSourceTables({ ctx })).resolves.toEqual([
+      await expect(resolver.listConnectionTables({ ctx })).resolves.toEqual([
         { name: 'orders' },
       ]);
 
       expect(getProjectById).toHaveBeenCalledWith(42);
-      expect(getProjectDataSourceTables).toHaveBeenCalledWith({
+      expect(getProjectConnectionTables).toHaveBeenCalledWith({
         id: 42,
         type: 'POSTGRES',
       });
@@ -955,7 +1030,7 @@ describe('ProjectController', () => {
       );
     });
 
-    it('rejects direct datasource edits for managed federated runtime projects', async () => {
+    it('rejects direct connection edits for managed federated runtime projects', async () => {
       const resolver = new ProjectController();
       const ctx = withAuthorizedContext({
         runtimeScope: {
@@ -974,16 +1049,19 @@ describe('ProjectController', () => {
             runtimeProjectId: 42,
           },
         },
+        connectorRepository: {
+          findAllBy: jest.fn().mockResolvedValue([]),
+        },
         projectRepository: {
           updateOne: jest.fn(),
         },
         projectService: {
-          getProjectDataSourceTables: jest.fn(),
+          getProjectConnectionTables: jest.fn(),
         },
       });
 
       await expect(
-        resolver.updateDataSource(
+        resolver.updateConnection(
           null,
           {
             data: {
@@ -1000,7 +1078,183 @@ describe('ProjectController', () => {
 
       expect(ctx.projectRepository.updateOne).not.toHaveBeenCalled();
       expect(
-        ctx.projectService.getProjectDataSourceTables,
+        ctx.projectService.getProjectConnectionTables,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('saveConnection backfills connector state before creating the runtime bridge project', async () => {
+      const resolver = new ProjectController();
+      const upsertKnowledgeBaseConnectorForConnectionSpy = jest
+        .spyOn(
+          resolver as any,
+          'upsertKnowledgeBaseConnectorForConnection',
+        )
+        .mockResolvedValue({
+          id: 'connector-1',
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          type: 'database',
+          databaseProvider: 'postgres',
+          displayName: 'Warehouse',
+          configJson: {
+            host: 'db.internal',
+            port: 5432,
+            database: 'warehouse',
+            user: 'postgres',
+            ssl: false,
+          },
+        });
+      const createProjectFromConnectionSpy = jest
+        .spyOn(resolver as any, 'createProjectFromConnection')
+        .mockResolvedValue({
+          id: 42,
+          type: 'POSTGRES',
+          displayName: 'Warehouse',
+          connectionInfo: {},
+        });
+      const ctx = withAuthorizedContext({
+        runtimeScope: {
+          workspace: { id: 'workspace-1' },
+          knowledgeBase: {
+            id: 'kb-1',
+            workspaceId: 'workspace-1',
+            primaryConnectorId: null,
+          },
+          userId: 'user-1',
+        },
+        knowledgeBaseRepository: {
+          updateOne: jest.fn().mockResolvedValue(undefined),
+        },
+      });
+
+      await expect(
+        resolver.saveConnection(
+          null,
+          {
+            data: {
+              type: DataSourceName.POSTGRES,
+              properties: {
+                displayName: 'Warehouse',
+                host: 'db.internal',
+                port: 5432,
+                database: 'warehouse',
+                user: 'postgres',
+                password: 'secret',
+              },
+            },
+          },
+          ctx,
+        ),
+      ).resolves.toEqual({
+        type: 'POSTGRES',
+        properties: {
+          displayName: 'Warehouse',
+          host: 'db.internal',
+          port: 5432,
+          database: 'warehouse',
+          user: 'postgres',
+          ssl: false,
+        },
+      });
+
+      expect(upsertKnowledgeBaseConnectorForConnectionSpy).toHaveBeenCalled();
+      expect(createProjectFromConnectionSpy).toHaveBeenCalled();
+      expect(ctx.knowledgeBaseRepository.updateOne).toHaveBeenCalledWith(
+        'kb-1',
+        {
+          primaryConnectorId: 'connector-1',
+        },
+      );
+    });
+
+    it('updates managed federated runtimes through the primary connector without mutating the internal trino project', async () => {
+      const resolver = new ProjectController();
+      jest
+        .spyOn(
+          resolver as any,
+          'upsertKnowledgeBaseConnectorForConnection',
+        )
+        .mockResolvedValue({
+          id: 'connector-1',
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          type: 'database',
+          databaseProvider: 'postgres',
+          displayName: 'Warehouse',
+          configJson: {
+            host: 'db.internal',
+            port: 5432,
+            database: 'warehouse',
+            user: 'postgres',
+            ssl: true,
+          },
+        });
+      const ctx = withAuthorizedContext({
+        runtimeScope: {
+          project: {
+            id: 42,
+            type: 'TRINO',
+            displayName: '[internal] Sales KB federated runtime',
+            connectionInfo: {
+              host: 'trino',
+              port: 8080,
+            },
+          },
+          knowledgeBase: {
+            id: 'kb-1',
+            workspaceId: 'workspace-1',
+            runtimeProjectId: 42,
+            primaryConnectorId: 'connector-1',
+          },
+        },
+        connectorRepository: {
+          findOneBy: jest.fn().mockResolvedValue({
+            id: 'connector-1',
+            workspaceId: 'workspace-1',
+            knowledgeBaseId: 'kb-1',
+          }),
+        },
+        projectRepository: {
+          updateOne: jest.fn(),
+        },
+        projectService: {
+          getProjectConnectionTables: jest.fn(),
+        },
+      });
+
+      await expect(
+        resolver.updateConnection(
+          null,
+          {
+            data: {
+              type: DataSourceName.POSTGRES,
+              properties: {
+                displayName: 'Warehouse',
+                host: 'db.internal',
+                port: 5432,
+                database: 'warehouse',
+                user: 'postgres',
+                ssl: true,
+              },
+            },
+          },
+          ctx,
+        ),
+      ).resolves.toEqual({
+        type: 'POSTGRES',
+        properties: {
+          displayName: 'Warehouse',
+          host: 'db.internal',
+          port: 5432,
+          database: 'warehouse',
+          user: 'postgres',
+          ssl: true,
+        },
+      });
+
+      expect(ctx.projectRepository.updateOne).not.toHaveBeenCalled();
+      expect(
+        ctx.projectService.getProjectConnectionTables,
       ).not.toHaveBeenCalled();
     });
 
@@ -1304,7 +1558,7 @@ describe('ProjectController', () => {
           result: 'succeeded',
           payloadJson: {
             operation: 'reset_current_project',
-            dataSourceType: 'POSTGRES',
+            connectionType: 'POSTGRES',
           },
         }),
       );
@@ -1312,7 +1566,7 @@ describe('ProjectController', () => {
   });
 
   describe('draft runtime project linkage', () => {
-    it('links a newly saved data source project to the active knowledge base', async () => {
+    it('links a newly saved connection project to the active knowledge base', async () => {
       const resolver = new ProjectController() as any;
       resolver.resetCurrentProject = jest.fn().mockResolvedValue(undefined);
 
@@ -1334,10 +1588,10 @@ describe('ProjectController', () => {
         },
         projectService: {
           createProject: jest.fn().mockResolvedValue(project),
-          getProjectDataSourceTables: jest
+          getProjectConnectionTables: jest
             .fn()
             .mockResolvedValue([{ name: 'orders' }]),
-          getProjectDataSourceVersion: jest.fn().mockResolvedValue('15.0'),
+          getProjectConnectionVersion: jest.fn().mockResolvedValue('15.0'),
           updateProject: jest.fn().mockResolvedValue(undefined),
         },
         knowledgeBaseRepository: {
@@ -1349,7 +1603,7 @@ describe('ProjectController', () => {
       });
 
       await expect(
-        resolver.createProjectFromDataSource(
+        resolver.createProjectFromConnection(
           {
             type: DataSourceName.POSTGRES,
             properties: {
@@ -1385,7 +1639,7 @@ describe('ProjectController', () => {
           deleteAllModelsByProjectId: jest.fn().mockResolvedValue(undefined),
         },
         projectService: {
-          getProjectDataSourceTables: jest.fn().mockResolvedValue([
+          getProjectConnectionTables: jest.fn().mockResolvedValue([
             {
               name: 'orders',
               columns: [
@@ -1452,7 +1706,7 @@ describe('ProjectController', () => {
       ).rejects.toMatchObject({
         statusCode: 403,
         message:
-          '系统样例已集中到系统样例空间，业务工作区不再支持导入样例数据，请直接连接真实数据源。',
+          '系统样例已集中到系统样例空间，业务工作区不再支持导入样例数据，请直接配置真实数据库连接。',
       });
     });
 
@@ -1469,7 +1723,7 @@ describe('ProjectController', () => {
         { id: 101, modelId: 11, referenceName: 'dept_no' },
       ];
 
-      resolver.createProjectFromDataSource = jest
+      resolver.createProjectFromConnection = jest
         .fn()
         .mockResolvedValue(project);
       resolver.overwriteModelsAndColumns = jest
@@ -1491,7 +1745,7 @@ describe('ProjectController', () => {
           getCurrentProject: jest.fn(() => {
             throw new Error('should not call projectService.getCurrentProject');
           }),
-          getProjectDataSourceTables: jest
+          getProjectConnectionTables: jest
             .fn()
             .mockResolvedValue([
               { name: 'employees' },
@@ -1527,7 +1781,7 @@ describe('ProjectController', () => {
         runtimeScopeId: '42',
       });
 
-      expect(resolver.createProjectFromDataSource).toHaveBeenCalledWith(
+      expect(resolver.createProjectFromConnection).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'DUCKDB',
         }),
@@ -1536,7 +1790,7 @@ describe('ProjectController', () => {
       expect(resolver.assertKnowledgeBaseWriteAccess).toHaveBeenCalledWith(ctx);
       expect(ctx.projectService.getCurrentProject).not.toHaveBeenCalled();
       expect(
-        ctx.projectService.getProjectDataSourceTables,
+        ctx.projectService.getProjectConnectionTables,
       ).toHaveBeenCalledWith(project);
 
       expect(resolver.buildRelationInput).toHaveBeenCalledWith(

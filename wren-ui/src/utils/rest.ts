@@ -12,7 +12,9 @@ export const parseRestJsonResponse = async <TPayload>(
     | null;
 
   if (!response.ok) {
-    throw new Error((payload as RestErrorPayload | null)?.error || fallbackMessage);
+    throw new Error(
+      (payload as RestErrorPayload | null)?.error || fallbackMessage,
+    );
   }
 
   return payload as TPayload;

@@ -1,14 +1,14 @@
 import { Knex } from 'knex';
 import crypto from 'crypto';
-import { getConfig } from '../src/apollo/server/config';
+import { getConfig } from '../src/server/config';
 import {
   PLATFORM_ADMIN_ROLE_NAME,
   PLATFORM_SCOPE_ID,
   toStructuredWorkspaceRoleName,
-} from '../src/apollo/server/authz/roleMapping';
-import { PrincipalRoleBindingRepository } from '../src/apollo/server/repositories/principalRoleBindingRepository';
-import { RoleRepository } from '../src/apollo/server/repositories/roleRepository';
-import { bootstrapKnex } from '../src/apollo/server/utils/knex';
+} from '../src/server/authz/roleMapping';
+import { PrincipalRoleBindingRepository } from '../src/server/repositories/principalRoleBindingRepository';
+import { RoleRepository } from '../src/server/repositories/roleRepository';
+import { bootstrapKnex } from '../src/server/utils/knex';
 
 interface CliOptions {
   execute: boolean;

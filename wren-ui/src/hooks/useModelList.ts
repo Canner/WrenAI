@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import {
   buildRuntimeScopeUrl,
+  hasExecutableRuntimeScopeSelector,
   type ClientRuntimeScopeSelector,
-} from '@/apollo/client/runtimeScope';
+} from '@/runtime/client/runtimeScope';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
+import { parseRestJsonResponse } from '@/utils/rest';
+import useRestRequest from './useRestRequest';
 
 export type ModelListField = {
   id: number;
@@ -55,71 +58,40 @@ export default function useModelList({
   onError?: (error: Error) => void;
 }) {
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
-  const [data, setData] = useState<ModelListItem[] | null>(null);
-  const [loading, setLoading] = useState(false);
 
   const requestUrl = useMemo(() => {
-    if (!enabled) {
+    if (
+      !enabled ||
+      !hasExecutableRuntimeScopeSelector(runtimeScopeNavigation.selector)
+    ) {
       return null;
     }
 
     return buildModelListUrl(runtimeScopeNavigation.selector);
-  }, [enabled, runtimeScopeNavigation.selector]);
+  }, [
+    enabled,
+    runtimeScopeNavigation.selector.deployHash,
+    runtimeScopeNavigation.selector.kbSnapshotId,
+    runtimeScopeNavigation.selector.knowledgeBaseId,
+    runtimeScopeNavigation.selector.runtimeScopeId,
+    runtimeScopeNavigation.selector.workspaceId,
+  ]);
 
-  useEffect(() => {
-    if (!requestUrl) {
-      setData(null);
-      setLoading(false);
-      return;
-    }
-
-    const controller = new AbortController();
-    let cancelled = false;
-
-    setLoading(true);
-
-    void fetch(requestUrl, {
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        const payload = await response.json().catch(() => null);
-        if (!response.ok) {
-          throw new Error(payload?.error || '加载模型列表失败，请稍后重试。');
-        }
-
-        return normalizeModelListPayload(payload);
-      })
-      .then((payload) => {
-        if (cancelled) {
-          return;
-        }
-
-        setData(payload);
-      })
-      .catch((error) => {
-        if (cancelled || controller.signal.aborted) {
-          return;
-        }
-
-        onError?.(
-          error instanceof Error
-            ? error
-            : new Error('加载模型列表失败，请稍后重试。'),
-        );
-      })
-      .finally(() => {
-        if (cancelled || controller.signal.aborted) {
-          return;
-        }
-
-        setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
-  }, [onError, requestUrl]);
+  const { data, loading } = useRestRequest<ModelListItem[] | null>({
+    enabled: Boolean(requestUrl),
+    auto: true,
+    initialData: null,
+    requestKey: requestUrl,
+    request: async ({ signal }) => {
+      const response = await fetch(requestUrl as string, { signal });
+      const payload = await parseRestJsonResponse<unknown>(
+        response,
+        '加载模型列表失败，请稍后重试。',
+      );
+      return normalizeModelListPayload(payload);
+    },
+    onError,
+  });
 
   return {
     data,

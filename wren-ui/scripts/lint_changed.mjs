@@ -32,8 +32,6 @@ const PRETTIER_EXTENSIONS = new Set([
   '.scss',
   '.less',
   '.html',
-  '.graphql',
-  '.gql',
 ]);
 
 const IGNORED_RELATIVE_PATHS = [

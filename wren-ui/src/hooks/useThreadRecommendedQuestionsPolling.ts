@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   buildRuntimeScopeUrl,
   type ClientRuntimeScopeSelector,
-} from '@/apollo/client/runtimeScope';
-import type { RecommendedQuestionsTask } from '@/types/api';
+} from '@/runtime/client/runtimeScope';
+import type { RecommendedQuestionsTask } from '@/types/home';
 
 export const buildThreadRecommendationQuestionsUrl = ({
   threadId,

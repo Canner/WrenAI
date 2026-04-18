@@ -61,7 +61,7 @@ jest.mock('@/common', () => ({
   },
 }));
 
-jest.mock('@/apollo/server/utils/apiUtils', () => ({
+jest.mock('@/server/utils/apiUtils', () => ({
   ApiError: MockApiError,
   respondWithSimple: mockRespondWithSimple,
   handleApiError: mockHandleApiError,

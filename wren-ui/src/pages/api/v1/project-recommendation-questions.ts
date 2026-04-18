@@ -1,21 +1,21 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { AskingResolver } from '@server/resolvers/askingResolver';
-import { ProjectResolver } from '@server/resolvers/projectResolver';
-import { buildResolverContextFromRequest } from './resolverContext';
+import { AskingController } from '@server/controllers/askingController';
+import { ProjectController } from '@server/controllers/projectController';
+import { buildApiContextFromRequest } from './apiContext';
 import { sendRestApiError } from './restApi';
 
-const projectResolver = new ProjectResolver();
-const askingResolver = new AskingResolver();
+const projectController = new ProjectController();
+const askingController = new AskingController();
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
   try {
-    const ctx = await buildResolverContextFromRequest({ req });
+    const ctx = await buildApiContextFromRequest({ req });
 
     if (req.method === 'GET') {
-      const result = await projectResolver.getProjectRecommendationQuestions(
+      const result = await projectController.getProjectRecommendationQuestions(
         null,
         null,
         ctx,
@@ -24,7 +24,7 @@ export default async function handler(
     }
 
     if (req.method === 'POST') {
-      await askingResolver.generateProjectRecommendationQuestions(
+      await askingController.generateProjectRecommendationQuestions(
         null,
         null,
         ctx,

@@ -1,0 +1,5 @@
+﻿user_segment,segment_sort,game_type_id,game_type_name,bet_user_count,bet_times,valid_bet_amount,avg_bet_amount,win_loss_amount,kill_rate,bet_share_in_segment
+TOP3,1,990032,体育,3,6,3900,650.0000,330,0.084615,0.557143
+TOP3,1,990031,电子,1,3,1600,533.3333,160,0.100000,0.228571
+TOP3,1,990033,棋牌,1,2,1500,750.0000,110,0.073333,0.214286
+非TOP3,2,990031,电子,2,2,300,150.0000,-20,-0.066667,1.000000

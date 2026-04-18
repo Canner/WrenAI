@@ -1,6 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ModelSyncResponse } from '@/types/api';
+import { useCallback, useEffect, useRef } from 'react';
+import {
+  buildRuntimeScopeStateKey,
+  hasExecutableRuntimeScopeSelector,
+} from '@/runtime/client/runtimeScope';
+import type { ModelSyncResponse } from '@/types/project';
+
 import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
+import useRestRequest from './useRestRequest';
 import { fetchDeployStatus } from '@/utils/modelingRest';
 
 export type DeployStatusResult = {
@@ -17,13 +23,42 @@ export type DeployStatusResult = {
   stopPolling: () => void;
 };
 
+const UNSYNCHRONIZED_RESULT = {
+  data: {
+    modelSync: {
+      status: 'UNSYNCRONIZED',
+    } as ModelSyncResponse,
+  },
+};
+
 export default function useDeployStatusRest(): DeployStatusResult {
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollIntervalRef = useRef<number | null>(null);
-  const requestIdRef = useRef(0);
-  const [data, setData] = useState<{ modelSync: ModelSyncResponse }>();
-  const [loading, setLoading] = useState(false);
+  const hasExecutableScope = hasExecutableRuntimeScopeSelector(
+    runtimeScopeNavigation.selector,
+  );
+  const requestKey = hasExecutableScope
+    ? buildRuntimeScopeStateKey(runtimeScopeNavigation.selector)
+    : null;
+
+  const {
+    data,
+    loading,
+    refetch: refetchState,
+    setData,
+  } = useRestRequest<
+    { modelSync: ModelSyncResponse } | undefined,
+    ModelSyncResponse
+  >({
+    enabled: hasExecutableScope,
+    auto: true,
+    initialData: undefined,
+    requestKey,
+    request: ({ signal }) =>
+      fetchDeployStatus(runtimeScopeNavigation.selector, { signal }),
+    mapResult: (modelSync) => ({ modelSync }),
+  });
 
   const stopPolling = useCallback(() => {
     pollIntervalRef.current = null;
@@ -34,24 +69,21 @@ export default function useDeployStatusRest(): DeployStatusResult {
   }, []);
 
   const refetch = useCallback(async () => {
-    const requestId = requestIdRef.current + 1;
-    requestIdRef.current = requestId;
-    setLoading(true);
-    try {
-      const modelSync = await fetchDeployStatus(
-        runtimeScopeNavigation.selector,
-      );
-      const result = { data: { modelSync } };
-      if (requestIdRef.current === requestId) {
-        setData(result.data);
-      }
-      return result;
-    } finally {
-      if (requestIdRef.current === requestId) {
-        setLoading(false);
-      }
+    if (!hasExecutableScope) {
+      stopPolling();
+      setData(undefined);
+      return UNSYNCHRONIZED_RESULT;
     }
-  }, [runtimeScopeNavigation.selector]);
+
+    const nextData = await refetchState();
+    return {
+      data:
+        nextData ||
+        ({
+          modelSync: UNSYNCHRONIZED_RESULT.data.modelSync,
+        } as { modelSync: ModelSyncResponse }),
+    };
+  }, [hasExecutableScope, refetchState, setData, stopPolling]);
 
   const schedulePoll = useCallback(() => {
     if (!pollIntervalRef.current) {
@@ -76,10 +108,6 @@ export default function useDeployStatusRest(): DeployStatusResult {
     },
     [schedulePoll, stopPolling],
   );
-
-  useEffect(() => {
-    void refetch().catch(() => null);
-  }, [refetch]);
 
   useEffect(() => {
     return () => {

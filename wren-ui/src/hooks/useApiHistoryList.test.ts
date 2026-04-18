@@ -2,7 +2,7 @@ import {
   buildApiHistoryListUrl,
   normalizeApiHistoryListPayload,
 } from './useApiHistoryList';
-import { ApiType } from '@/types/api';
+import { ApiType } from '@/types/apiHistory';
 
 describe('useApiHistoryList helpers', () => {
   it('builds the REST api history url with pagination, filters, and runtime scope', () => {

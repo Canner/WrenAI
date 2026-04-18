@@ -5,11 +5,12 @@ import UserOutlined from '@ant-design/icons/UserOutlined';
 import styled from 'styled-components';
 import ConsoleShellLayout from '@/components/reference/ConsoleShellLayout';
 import { buildNovaSettingsNavItems } from '@/components/reference/novaShellNavigation';
-import { buildRuntimeScopeUrl } from '@/apollo/client/runtimeScope';
+import { buildRuntimeScopeUrl } from '@/runtime/client/runtimeScope';
 import useAuthSession from '@/hooks/useAuthSession';
 import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import useRuntimeSelectorState from '@/hooks/useRuntimeSelectorState';
+import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { Path } from '@/utils/enum';
 import { getReferenceDisplayWorkspaceName } from '@/utils/referenceDemoKnowledge';
 
@@ -213,7 +214,13 @@ export default function SettingsPage() {
         buildRuntimeScopeUrl(Path.Home, {}, payload.runtimeSelector),
       );
     } catch (error: any) {
-      message.error(error?.message || '停止代理登录失败');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '停止代理登录失败',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setStoppingImpersonation(false);
     }
@@ -278,7 +285,10 @@ export default function SettingsPage() {
       message.success('密码已更新');
       resetPasswordForm();
     } catch (error: any) {
-      message.error(error?.message || '修改密码失败');
+      const errorMessage = resolveAbortSafeErrorMessage(error, '修改密码失败');
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setSavingPassword(false);
     }

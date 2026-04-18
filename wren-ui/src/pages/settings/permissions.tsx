@@ -22,10 +22,11 @@ import {
   formatDateTime,
   formatUserLabel,
 } from '@/components/pages/settings/workspaceGovernanceShared';
-import { buildRuntimeScopeUrl } from '@/apollo/client/runtimeScope';
+import { buildRuntimeScopeUrl } from '@/runtime/client/runtimeScope';
 import useAuthSession from '@/hooks/useAuthSession';
 import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
+import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { Path } from '@/utils/enum';
 const { Text } = Typography;
 
@@ -133,7 +134,13 @@ export default function SettingsPermissionsPage() {
       }
       setWorkspaceOverview(payload as WorkspaceGovernanceOverview);
     } catch (error: any) {
-      message.error(error?.message || '加载权限管理失败');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '加载权限管理失败',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
     }
   }, [authSession.authenticated, workspaceOverviewUrl]);
@@ -170,7 +177,13 @@ export default function SettingsPermissionsPage() {
           : [],
       );
     } catch (error: any) {
-      message.error(error?.message || '加载角色目录失败');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '加载角色目录失败',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setRoleCatalogLoading(false);
     }
@@ -263,7 +276,13 @@ export default function SettingsPermissionsPage() {
       setAccessReviewTitle('');
       await loadWorkspaceOverview();
     } catch (error: any) {
-      message.error(error?.message || '发起访问复核失败');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '发起访问复核失败',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setAccessReviewLoading(false);
     }
@@ -295,7 +314,13 @@ export default function SettingsPermissionsPage() {
       );
       await loadWorkspaceOverview();
     } catch (error: any) {
-      message.error(error?.message || '更新访问复核失败');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '更新访问复核失败',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setReviewActionLoading(null);
     }
@@ -338,7 +363,13 @@ export default function SettingsPermissionsPage() {
       setBreakGlassDurationMinutes('60');
       await loadWorkspaceOverview();
     } catch (error: any) {
-      message.error(error?.message || '创建 break-glass 授权失败');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '创建 break-glass 授权失败',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setBreakGlassLoading(false);
     }
@@ -362,7 +393,13 @@ export default function SettingsPermissionsPage() {
       message.success('break-glass 授权已撤销');
       await loadWorkspaceOverview();
     } catch (error: any) {
-      message.error(error?.message || '撤销 break-glass 授权失败');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '撤销 break-glass 授权失败',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setBreakGlassLoading(false);
     }
@@ -400,7 +437,13 @@ export default function SettingsPermissionsPage() {
         buildRuntimeScopeUrl(Path.Home, {}, payload.runtimeSelector),
       );
     } catch (error: any) {
-      message.error(error?.message || '发起代理登录失败');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '发起代理登录失败',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setImpersonationLoading(false);
     }
@@ -438,7 +481,13 @@ export default function SettingsPermissionsPage() {
       setRolePermissionNames([]);
       await loadRoleCatalog();
     } catch (error: any) {
-      message.error(error?.message || '创建自定义角色失败');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '创建自定义角色失败',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setRoleActionLoading(null);
     }
@@ -462,7 +511,13 @@ export default function SettingsPermissionsPage() {
       message.success('自定义角色已删除');
       await loadRoleCatalog();
     } catch (error: any) {
-      message.error(error?.message || '删除自定义角色失败');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '删除自定义角色失败',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setRoleActionLoading(null);
     }
@@ -498,7 +553,13 @@ export default function SettingsPermissionsPage() {
       setBindingRoleId(null);
       await loadRoleCatalog();
     } catch (error: any) {
-      message.error(error?.message || '创建角色绑定失败');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '创建角色绑定失败',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setBindingActionLoading(null);
     }
@@ -522,7 +583,13 @@ export default function SettingsPermissionsPage() {
       message.success('角色绑定已删除');
       await loadRoleCatalog();
     } catch (error: any) {
-      message.error(error?.message || '删除角色绑定失败');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '删除角色绑定失败',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setBindingActionLoading(null);
     }
@@ -570,7 +637,10 @@ export default function SettingsPermissionsPage() {
       setExplainResult(payload as WorkspaceAuthorizationExplainResponse);
       message.success('权限解释完成');
     } catch (error: any) {
-      message.error(error?.message || '权限解释失败');
+      const errorMessage = resolveAbortSafeErrorMessage(error, '权限解释失败');
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setExplainLoading(false);
     }

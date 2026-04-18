@@ -1,11 +1,14 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { groupBy, orderBy, flatMap } from 'lodash';
 import { message } from 'antd';
+import { hasExecutableRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
+import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import Icon from '@/import/icon';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import { CopilotSVG } from '@/utils/svgs';
 import { isRecommendedFinished } from '@/hooks/useAskPrompt';
-import { ResultQuestion, RecommendedQuestionsTaskStatus } from '@/types/api';
+import { ResultQuestion, RecommendedQuestionsTaskStatus } from '@/types/home';
+
 import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
 import {
   generateProjectRecommendationQuestions,
@@ -61,10 +64,19 @@ export default function useRecommendedQuestionsInstruction(enabled = true) {
   const stopPolling = useCallback(() => {
     clearTimers();
   }, [clearTimers]);
+  const hasExecutableRuntime = hasExecutableRuntimeScopeSelector(
+    runtimeScopeNavigation.selector,
+  );
 
   const readRecommendationQuestions = useCallback(async () => {
+    if (!hasExecutableRuntime) {
+      return {
+        status: RecommendedQuestionsTaskStatus.FINISHED,
+        questions: [],
+      };
+    }
     return getProjectRecommendationQuestions(runtimeScopeNavigation.selector);
-  }, [runtimeScopeNavigation.selector]);
+  }, [hasExecutableRuntime, runtimeScopeNavigation.selector]);
 
   const pollRecommendationQuestions = useCallback(async () => {
     const task = await readRecommendationQuestions();
@@ -116,7 +128,11 @@ export default function useRecommendedQuestionsInstruction(enabled = true) {
   }, [clearTimers, stopPolling]);
 
   useEffect(() => {
-    if (!enabled) {
+    if (!enabled || !hasExecutableRuntime) {
+      clearTimers();
+      setGenerating(false);
+      setShowRecommendedQuestionsPromptMode(false);
+      setRecommendedQuestions([]);
       return;
     }
 
@@ -139,6 +155,7 @@ export default function useRecommendedQuestionsInstruction(enabled = true) {
       .catch(() => null);
   }, [
     enabled,
+    hasExecutableRuntime,
     pollRecommendationQuestions,
     readRecommendationQuestions,
     schedulePollingTimeout,
@@ -146,7 +163,7 @@ export default function useRecommendedQuestionsInstruction(enabled = true) {
   ]);
 
   const onGetRecommendationQuestions = useCallback(async () => {
-    if (!enabled) {
+    if (!enabled || !hasExecutableRuntime) {
       return;
     }
 
@@ -162,12 +179,17 @@ export default function useRecommendedQuestionsInstruction(enabled = true) {
     } catch (error) {
       stopPolling();
       setGenerating(false);
-      message.error(
-        error instanceof Error ? error.message : '生成推荐问题失败，请稍后重试',
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '生成推荐问题失败，请稍后重试',
       );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     }
   }, [
     enabled,
+    hasExecutableRuntime,
     pollRecommendationQuestions,
     runtimeScopeNavigation.selector,
     schedulePollingTimeout,

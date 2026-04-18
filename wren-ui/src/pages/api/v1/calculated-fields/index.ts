@@ -1,11 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { ModelResolver } from '@server/resolvers/modelResolver';
+import { ModelController } from '@server/controllers/modelController';
 import { ExpressionName } from '@server/models/model';
-import { ApiError } from '@/apollo/server/utils/apiUtils';
-import { buildResolverContextFromRequest } from '../resolverContext';
+import { ApiError } from '@/server/utils/apiUtils';
+import { buildApiContextFromRequest } from '../apiContext';
 import { sendRestApiError } from '../restApi';
 
-const modelResolver = new ModelResolver();
+const modelController = new ModelController();
 
 export default async function handler(
   req: NextApiRequest,
@@ -30,19 +30,16 @@ export default async function handler(
       throw new ApiError('Calculated field expression is invalid', 400);
     }
 
-    const ctx = await buildResolverContextFromRequest({ req });
-    const column = await modelResolver.createCalculatedField(
-      null,
-      {
-        data: {
-          modelId: Number(modelId),
-          expression: expression as ExpressionName,
-          lineage,
-          name,
-        },
+    const ctx = await buildApiContextFromRequest({ req });
+    const column = await modelController.createCalculatedField({
+      data: {
+        modelId: Number(modelId),
+        expression: expression as ExpressionName,
+        lineage,
+        name,
       },
       ctx,
-    );
+    });
 
     return res.status(201).json(column);
   } catch (error) {

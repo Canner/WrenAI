@@ -14,7 +14,7 @@ module.exports = {
   },
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
-    '^@server/(.*)$': '<rootDir>/src/apollo/server/$1',
+    '^@server/(.*)$': '<rootDir>/src/server/$1',
   },
   modulePathIgnorePatterns: [
     '<rootDir>/e2e/',

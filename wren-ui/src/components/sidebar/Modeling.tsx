@@ -1,4 +1,6 @@
 import styled from 'styled-components';
+import { hasExecutableRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
+import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import SidebarTree, { sidebarCommonStyle } from './SidebarTree';
 import ModelTree from './modeling/ModelTree';
 import { Diagram, DiagramModel, DiagramView } from '@/utils/data';
@@ -27,6 +29,10 @@ export interface Props {
 
 export default function Modeling(props: Props) {
   const { data, onSelect, onOpenModelDrawer, readOnly, onRefresh } = props;
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
+  const schemaChangeEnabled = hasExecutableRuntimeScopeSelector(
+    runtimeScopeNavigation.selector,
+  );
   const { models = [], views = [] } = data || {};
   const filteredModels = models.filter(
     (model): model is DiagramModel => model != null,
@@ -43,6 +49,7 @@ export default function Modeling(props: Props) {
         selectedKeys={[]}
         onOpenModelDrawer={onOpenModelDrawer}
         readOnly={readOnly}
+        schemaChangeEnabled={schemaChangeEnabled}
         onRefresh={onRefresh}
       />
       <ViewTree

@@ -1,5 +1,6 @@
 import { Tag, Tooltip } from 'antd';
-import { ApiType } from '@/types/api';
+import { ApiType } from '@/types/apiHistory';
+
 import {
   getAskDiagnostics,
   isAskApiHistoryType,

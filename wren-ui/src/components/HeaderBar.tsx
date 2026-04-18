@@ -5,6 +5,10 @@ import LogoBar from '@/components/LogoBar';
 import { Path } from '@/utils/enum';
 import Deploy from '@/components/deploy/Deploy';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
+import {
+  buildKnowledgeWorkbenchParams,
+  isKnowledgeModelingRoute,
+} from '@/utils/knowledgeWorkbench';
 import RuntimeScopeSelector from '@/components/runtimeScope/RuntimeScopeSelector';
 import AuthSessionStatus from '@/components/auth/AuthSessionStatus';
 
@@ -37,9 +41,12 @@ const StyledHeader = styled(Header)`
 export default function HeaderBar() {
   const router = useRouter();
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
-  const { asPath, pathname } = router;
+  const { asPath, pathname, query } = router;
   const showNav = !pathname.startsWith(Path.Onboarding);
-  const isModeling = pathname.startsWith(Path.Modeling);
+  const isKnowledgeModeling = isKnowledgeModelingRoute({ pathname, query });
+  const isModeling = pathname.startsWith(Path.Modeling) || isKnowledgeModeling;
+  const isKnowledge =
+    pathname.startsWith(Path.Knowledge) && !isKnowledgeModeling;
 
   return (
     <StyledHeader>
@@ -62,9 +69,12 @@ export default function HeaderBar() {
               <StyledButton
                 shape="round"
                 size="small"
-                $isHighlight={pathname.startsWith(Path.Modeling)}
+                $isHighlight={isModeling}
                 onClick={() =>
-                  runtimeScopeNavigation.pushWorkspace(Path.Modeling)
+                  runtimeScopeNavigation.pushWorkspace(
+                    Path.Knowledge,
+                    buildKnowledgeWorkbenchParams('modeling'),
+                  )
                 }
               >
                 Modeling
@@ -72,7 +82,7 @@ export default function HeaderBar() {
               <StyledButton
                 shape="round"
                 size="small"
-                $isHighlight={pathname.startsWith(Path.Knowledge)}
+                $isHighlight={isKnowledge}
                 onClick={() =>
                   runtimeScopeNavigation.pushWorkspace(Path.Knowledge)
                 }

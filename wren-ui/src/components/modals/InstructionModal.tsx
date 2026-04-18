@@ -5,10 +5,11 @@ import PlusOutlined from '@ant-design/icons/PlusOutlined';
 import { isEmpty } from 'lodash';
 import styled from 'styled-components';
 import { FORM_MODE } from '@/utils/enum';
+import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { ERROR_TEXTS } from '@/utils/error';
 import { handleFormSubmitError } from '@/utils/errorHandler';
 import { ModalAction } from '@/hooks/useModalAction';
-import { Instruction } from '@/types/api';
+import type { Instruction } from '@/types/knowledge';
 
 const MAX_QUESTIONS = 100;
 
@@ -132,8 +133,9 @@ export default function InstructionModal(props: Props) {
         onClose();
       })
       .catch((error) => {
-        if (error instanceof Error && error.message) {
-          message.error(error.message);
+        const errorMessage = resolveAbortSafeErrorMessage(error);
+        if (errorMessage) {
+          message.error(errorMessage);
           return;
         }
         handleFormSubmitError(error, '提交规则失败，请稍后重试。');

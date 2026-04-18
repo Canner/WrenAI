@@ -1,5 +1,6 @@
 import { Alert, Card, Col, Row, Tag, Typography } from 'antd';
-import { ApiType } from '@/types/api';
+import { ApiType } from '@/types/apiHistory';
+
 import { formatApiTypeLabel } from './apiTypeLabels';
 
 export interface AskShadowCompareBucket {

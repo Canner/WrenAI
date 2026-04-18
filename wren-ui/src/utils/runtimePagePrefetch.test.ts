@@ -1,6 +1,7 @@
 import {
   buildThreadOverviewUrl,
   clearRuntimePagePrefetchCache,
+  invalidateKnowledgeBaseList,
   loadKnowledgeBaseList,
   loadKnowledgeConnectors,
   loadWorkspaceOverview,
@@ -162,6 +163,32 @@ describe('runtimePagePrefetch', () => {
     expect(
       peekKnowledgeBaseList('/api/v1/knowledge/bases?workspaceId=ws-1'),
     ).toEqual([{ id: 'kb-1', name: '订单分析知识库' }]);
+  });
+
+  it('invalidates a cached knowledge-base list so the next load refetches', async () => {
+    const firstFetcher = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [{ id: 'kb-1', name: '订单分析知识库' }],
+    } as Response);
+    const secondFetcher = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [{ id: 'kb-2', name: '新知识库' }],
+    } as Response);
+    const url = '/api/v1/knowledge/bases?workspaceId=ws-1';
+
+    await loadKnowledgeBaseList(url, { fetcher: firstFetcher });
+    expect(peekKnowledgeBaseList(url)).toEqual([
+      { id: 'kb-1', name: '订单分析知识库' },
+    ]);
+
+    invalidateKnowledgeBaseList(url);
+    expect(peekKnowledgeBaseList(url)).toBeNull();
+
+    const refreshed = await loadKnowledgeBaseList(url, {
+      fetcher: secondFetcher,
+    });
+    expect(refreshed).toEqual([{ id: 'kb-2', name: '新知识库' }]);
+    expect(secondFetcher).toHaveBeenCalledTimes(1);
   });
 
   it('prefetches knowledge list, connectors and diagram into caches', async () => {

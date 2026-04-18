@@ -8,12 +8,21 @@ import {
 } from './useKnowledgePageHelpers';
 
 describe('useKnowledgePageHelpers', () => {
-  it('switches knowledge base in-place without route transition', () => {
+  it('routes when switching to a different knowledge base', () => {
     expect(
       shouldRouteSwitchKnowledgeBase(
         {
           id: 'kb-2',
           defaultKbSnapshot: { id: 'snap-2', deployHash: 'deploy-2' },
+        },
+        'kb-1',
+      ),
+    ).toBe(true);
+    expect(
+      shouldRouteSwitchKnowledgeBase(
+        {
+          id: 'kb-1',
+          defaultKbSnapshot: { id: 'snap-1', deployHash: 'deploy-1' },
         },
         'kb-1',
       ),
@@ -46,6 +55,16 @@ describe('useKnowledgePageHelpers', () => {
         diagramLoading: true,
         hasDiagramData: false,
         routeRuntimeSyncing: false,
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldShowKnowledgeAssetsLoading({
+        activeKnowledgeBaseUsesRuntime: true,
+        assetCount: 3,
+        diagramLoading: false,
+        hasDiagramData: true,
+        routeRuntimeSyncing: true,
       }),
     ).toBe(true);
   });

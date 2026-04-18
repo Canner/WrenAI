@@ -2,7 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { Button, Form, Modal, Typography, Alert } from 'antd';
 import { ERROR_TEXTS } from '@/utils/error';
 import { ModalAction } from '@/hooks/useModalAction';
-import { handleFormSubmitError, parseGraphQLError } from '@/utils/errorHandler';
+import {
+  handleFormSubmitError,
+  parseOperationError,
+} from '@/utils/errorHandler';
+import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import SQLEditor from '@/components/editor/SQLEditor';
 import ErrorCollapse from '@/components/ErrorCollapse';
 import PreviewData from '@/components/dataPreview/PreviewData';
@@ -31,10 +35,17 @@ export function FixSQLModal(props: Props) {
 
   const error = useMemo(() => {
     if (!previewState.error) return null;
-    const graphQLError = parseGraphQLError(previewState.error as any);
+    const errorMessage = resolveAbortSafeErrorMessage(
+      previewState.error,
+      '预览 SQL 数据失败，请稍后重试。',
+    );
+    if (!errorMessage) {
+      return null;
+    }
+    const operationError = parseOperationError(previewState.error as any);
     return {
-      ...graphQLError,
-      message: graphQLError?.message || previewState.error.message,
+      ...operationError,
+      message: operationError?.message || errorMessage,
       shortMessage: 'SQL 语法无效',
     };
   }, [previewState.error]);

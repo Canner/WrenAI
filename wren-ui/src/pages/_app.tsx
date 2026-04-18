@@ -6,7 +6,7 @@ import posthog from 'posthog-js';
 import {
   buildRuntimeScopeStateKey,
   readRuntimeScopeSelectorFromUrl,
-} from '@/apollo/client/runtimeScope';
+} from '@/runtime/client/runtimeScope';
 import PersistentConsoleShell, {
   shouldKeyRuntimeScopePage,
 } from '@/components/reference/PersistentConsoleShell';
@@ -15,6 +15,12 @@ import { GlobalConfigProvider } from '@/hooks/useGlobalConfig';
 import { RuntimeSelectorStateProvider } from '@/hooks/useRuntimeSelectorState';
 import { PostHogProvider } from 'posthog-js/react';
 import { defaultIndicator } from '@/components/PageLoading';
+import {
+  NOVA_APP_NAME,
+  NOVA_DEFAULT_DESCRIPTION,
+  NOVA_SOCIAL_IMAGE_PATH,
+  resolveNovaPageTitle,
+} from '@/utils/brandMeta';
 
 require('../styles/index.less');
 
@@ -35,12 +41,33 @@ function App({ Component, pageProps, router }: AppProps) {
         : undefined,
     [router.pathname, runtimeScopePageKey],
   );
+  const pageTitle = useMemo(
+    () => resolveNovaPageTitle(router.pathname),
+    [router.pathname],
+  );
 
   return (
     <>
       <Head>
-        <title>Nova</title>
-        <link rel="icon" href="/favicon.ico" />
+        <title>{pageTitle}</title>
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <link rel="alternate icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <link rel="manifest" href="/site.webmanifest" />
+        <meta name="application-name" content={NOVA_APP_NAME} />
+        <meta name="apple-mobile-web-app-title" content={NOVA_APP_NAME} />
+        <meta name="theme-color" content="#6D4AFF" />
+        <meta name="description" content={NOVA_DEFAULT_DESCRIPTION} />
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content={NOVA_APP_NAME} />
+        <meta property="og:title" content={pageTitle} />
+        <meta property="og:description" content={NOVA_DEFAULT_DESCRIPTION} />
+        <meta property="og:image" content={NOVA_SOCIAL_IMAGE_PATH} />
+        <meta property="og:image:alt" content="Nova 品牌分享图" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={pageTitle} />
+        <meta name="twitter:description" content={NOVA_DEFAULT_DESCRIPTION} />
+        <meta name="twitter:image" content={NOVA_SOCIAL_IMAGE_PATH} />
       </Head>
       <GlobalConfigProvider>
         <PostHogProvider client={posthog}>

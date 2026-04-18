@@ -1,4 +1,5 @@
-import { ChartType, ThreadResponseChartDetail } from '@/types/api';
+import { ChartType, ThreadResponseChartDetail } from '@/types/home';
+
 import { isNil } from 'lodash';
 
 type EncodingChannel = 'x' | 'y' | 'color' | 'xOffset' | 'theta';

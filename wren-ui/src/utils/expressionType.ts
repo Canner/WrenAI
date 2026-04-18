@@ -1,4 +1,4 @@
-import { ExpressionName } from '@/types/api';
+import { ExpressionName } from '@/types/calculatedField';
 
 export const aggregations = [
   ExpressionName.AVG,

@@ -1,4 +1,4 @@
-import { ExpressionName } from '@/types/api';
+import { ExpressionName } from '@/types/calculatedField';
 import { JOIN_TYPE } from '@/utils/enum';
 
 const DefaultText = '未知';

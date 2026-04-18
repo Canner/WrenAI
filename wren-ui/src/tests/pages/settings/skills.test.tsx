@@ -19,7 +19,7 @@ const mockUseAuthSession = jest.fn();
 let capturedTables: any[] = [];
 let capturedSelectProps: any[] = [];
 
-jest.mock('@/apollo/client/runtimeScope', () => ({
+jest.mock('@/runtime/client/runtimeScope', () => ({
   buildRuntimeScopeUrl: (...args: any[]) => mockBuildRuntimeScopeUrl(...args),
 }));
 

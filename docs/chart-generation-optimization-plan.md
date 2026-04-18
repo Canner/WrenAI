@@ -1,5 +1,7 @@
 # 图表生成优化方案
 
+> 历史说明（2026-04-16）：本文保留的是 Apollo/GraphQL 时代的设计、排障或执行记录。当前 `wren-ui` 运行时前端已经切到 REST，代码目录也已收口到 `src/server/*` 与 `src/pages/api/v1/*`；文中的旧 GraphQL 入口、resolver 与 Apollo 上下文描述仅作历史背景，不再代表当前主链路。
+
 更新时间：2026-04-15
 
 > 本文档面向当前 WrenAI V1 的问答页 / Dashboard 图表生成链路，目标是把现有“可用但偏前端补救式”的实现，收敛为一套**服务端产出可渲染 canonical spec、前端负责展示与轻量交互、后台任务可恢复、编辑模型分层清晰**的稳定方案。
@@ -44,9 +46,9 @@
   - `wren-ui/src/components/pages/home/promptThread/AnswerResult.tsx`
 - 前端发起 chart 任务 / 轮询结果：
   - `wren-ui/src/pages/home/[id].tsx`
-  - `wren-ui/src/apollo/server/services/askingService.ts`
+  - `wren-ui/src/server/services/askingService.ts`
 - 后台 chart tracker：
-  - `wren-ui/src/apollo/server/backgrounds/chart.ts`
+  - `wren-ui/src/server/backgrounds/chart.ts`
 - 前后端图表规范化 / compile / render：
   - `wren-ui/src/utils/chartSpecRuntime.ts`
   - `wren-ui/src/components/chart/index.tsx`
@@ -729,7 +731,7 @@ interface ThreadResponseChartDetail {
 3. 删除时一并收口以下残留：
    - `wren-ui/src/pages/api/v1/generate_vega_chart.ts`
    - `wren-ui/openapi.yaml` 中 `/generate_vega_chart`
-   - `ApiType.GENERATE_VEGA_CHART` 及其 GraphQL / schema 暴露
+   - `ApiType.GENERATE_VEGA_CHART` 及其旧 GraphQL / schema 暴露
    - API history 中针对 `vegaSpec.data.values` 的兼容脱敏分支
    - 相关兼容测试
 
@@ -741,8 +743,8 @@ interface ThreadResponseChartDetail {
 
 ### 后端 / BFF
 
-- `wren-ui/src/apollo/server/services/askingService.ts`
-- `wren-ui/src/apollo/server/backgrounds/chart.ts`
+- `wren-ui/src/server/services/askingService.ts`
+- `wren-ui/src/server/backgrounds/chart.ts`
 - `wren-ui/src/pages/api/v1/generate_vega_chart.ts`
 - `wren-ui/src/utils/chartSpecRuntime.ts`
 

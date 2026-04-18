@@ -4,19 +4,17 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
-  useRef,
-  useState,
 } from 'react';
 import {
   buildRuntimeScopeUrl,
   resolveClientRuntimeScopeSelector,
   type ClientRuntimeScopeSelector,
-} from '@/apollo/client/runtimeScope';
+} from '@/runtime/client/runtimeScope';
 import { parseRestJsonResponse } from '@/utils/rest';
 import { Path } from '@/utils/enum';
 import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
+import useRestRequest from './useRestRequest';
 
 export type RuntimeSelectorState = {
   currentWorkspace?: {
@@ -69,6 +67,7 @@ type RuntimeSelectorStateValue = {
   provided: boolean;
   runtimeSelectorState: RuntimeSelectorState | null;
   loading: boolean;
+  initialLoading: boolean;
   refetch: () => Promise<RuntimeSelectorStateRefetchResult>;
 };
 
@@ -90,12 +89,38 @@ const fallbackRefetch = async () =>
     data: { runtimeSelectorState: null },
   }) as RuntimeSelectorStateRefetchResult;
 
+export const resolveRuntimeSelectorInitialLoading = ({
+  loading,
+  runtimeSelectorState,
+}: {
+  loading: boolean;
+  runtimeSelectorState: RuntimeSelectorState | null;
+}) => loading && runtimeSelectorState === null;
+
 const RuntimeSelectorStateContext = createContext<RuntimeSelectorStateValue>({
   provided: false,
   runtimeSelectorState: null,
   loading: false,
+  initialLoading: false,
   refetch: fallbackRefetch,
 });
+
+const fetchRuntimeSelectorState = async ({
+  requestUrl,
+  signal,
+}: {
+  requestUrl: string;
+  signal: AbortSignal;
+}) => {
+  const response = await fetch(
+    requestUrl,
+    buildRuntimeSelectorRequestOptions({ signal }),
+  );
+  return parseRestJsonResponse<RuntimeSelectorState | null>(
+    response,
+    '加载运行时范围失败，请稍后重试。',
+  );
+};
 
 const useRuntimeSelectorStateRequest = ({
   skip,
@@ -118,69 +143,36 @@ const useRuntimeSelectorStateRequest = ({
     selector.workspaceId,
     skip,
   ]);
-  const initialState = useMemo(
-    () => ({
-      runtimeSelectorState: null as RuntimeSelectorState | null,
-      loading: Boolean(requestUrl),
-    }),
-    [requestUrl],
-  );
-  const [runtimeSelectorState, setRuntimeSelectorState] = useState(
-    initialState.runtimeSelectorState,
-  );
-  const [loading, setLoading] = useState(initialState.loading);
-  const requestIdRef = useRef(0);
+
+  const {
+    data: runtimeSelectorState,
+    loading,
+    refetch: refetchState,
+  } = useRestRequest<RuntimeSelectorState | null>({
+    enabled: Boolean(requestUrl),
+    auto: Boolean(requestUrl),
+    initialData: null,
+    requestKey: requestUrl,
+    request: ({ signal }) =>
+      fetchRuntimeSelectorState({ requestUrl: requestUrl as string, signal }),
+  });
 
   const refetch = useCallback(async () => {
-    if (!requestUrl) {
-      setRuntimeSelectorState(null);
-      setLoading(false);
-      return fallbackRefetch();
-    }
-
-    const requestId = requestIdRef.current + 1;
-    requestIdRef.current = requestId;
-    setLoading(true);
-
-    try {
-      const response = await fetch(
-        requestUrl,
-        buildRuntimeSelectorRequestOptions({}),
-      );
-      const payload = await parseRestJsonResponse<RuntimeSelectorState | null>(
-        response,
-        '加载运行时范围失败，请稍后重试。',
-      );
-
-      if (requestIdRef.current === requestId) {
-        setRuntimeSelectorState(payload);
-      }
-
-      return {
-        data: {
-          runtimeSelectorState: payload,
-        },
-      } as RuntimeSelectorStateRefetchResult;
-    } finally {
-      if (requestIdRef.current === requestId) {
-        setLoading(false);
-      }
-    }
-  }, [requestUrl]);
-
-  useEffect(() => {
-    if (!requestUrl) {
-      setRuntimeSelectorState(null);
-      setLoading(false);
-      return;
-    }
-
-    void refetch().catch(() => null);
-  }, [refetch, requestUrl]);
+    const nextRuntimeSelectorState = await refetchState();
+    return {
+      data: {
+        runtimeSelectorState: nextRuntimeSelectorState,
+      },
+    } as RuntimeSelectorStateRefetchResult;
+  }, [refetchState]);
 
   return {
     runtimeSelectorState,
     loading,
+    initialLoading: resolveRuntimeSelectorInitialLoading({
+      loading,
+      runtimeSelectorState,
+    }),
     refetch,
   };
 };
@@ -208,9 +200,11 @@ export const RuntimeSelectorStateProvider = ({
       provided: true,
       runtimeSelectorState: requestState.runtimeSelectorState,
       loading: skip ? false : requestState.loading,
+      initialLoading: skip ? false : requestState.initialLoading,
       refetch: requestState.refetch,
     }),
     [
+      requestState.initialLoading,
       requestState.loading,
       requestState.refetch,
       requestState.runtimeSelectorState,
@@ -240,6 +234,7 @@ export default function useRuntimeSelectorState() {
     provided: false,
     runtimeSelectorState: fallbackRequest.runtimeSelectorState,
     loading: fallbackRequest.loading,
+    initialLoading: fallbackRequest.initialLoading,
     refetch: fallbackRequest.refetch,
   };
 }

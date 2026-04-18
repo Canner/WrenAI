@@ -1,5 +1,5 @@
 import moment from 'moment';
-import { ApiType } from '@/types/api';
+import { ApiType } from '@/types/apiHistory';
 import { ApiHistoryDateRange } from './timeRange';
 
 const PAGE_QUERY_KEY = 'page';

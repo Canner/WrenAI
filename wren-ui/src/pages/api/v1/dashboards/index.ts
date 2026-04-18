@@ -1,20 +1,24 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { DashboardResolver } from '@server/resolvers/dashboardResolver';
-import { ApiError } from '@/apollo/server/utils/apiUtils';
-import { buildResolverContextFromRequest } from '../resolverContext';
+import { DashboardController } from '@server/controllers/dashboardController';
+import { ApiError } from '@/server/utils/apiUtils';
+import { buildApiContextFromRequest } from '../apiContext';
 import { sendRestApiError } from '../restApi';
 
-const dashboardResolver = new DashboardResolver();
+const dashboardController = new DashboardController();
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
   try {
-    const ctx = await buildResolverContextFromRequest({ req });
+    const ctx = await buildApiContextFromRequest({ req });
 
     if (req.method === 'GET') {
-      const dashboards = await dashboardResolver.getDashboards(null, null, ctx);
+      const dashboards = await dashboardController.getDashboards(
+        null,
+        null,
+        ctx,
+      );
       return res.status(200).json(dashboards);
     }
 
@@ -24,7 +28,7 @@ export default async function handler(
         throw new ApiError('Dashboard name is required', 400);
       }
 
-      const dashboard = await dashboardResolver.createDashboard(
+      const dashboard = await dashboardController.createDashboard(
         null,
         { data: { name } },
         ctx,

@@ -4,7 +4,8 @@ import StopOutlined from '@ant-design/icons/StopOutlined';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import { attachLoading } from '@/utils/helper';
 import { getIsFinished } from '@/hooks/useAskPrompt';
-import { AskingTaskStatus } from '@/types/api';
+import { AskingTaskStatus } from '@/types/home';
+
 import type { PreparedTask, Props } from './index';
 
 export default function PreparationStatus(

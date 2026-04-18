@@ -59,7 +59,7 @@ export default function useKnowledgeDataLoaders<TKnowledgeBase, TConnector>({
   );
 
   const handleConnectorLoadError = useCallback((error: unknown) => {
-    message.error(resolveKnowledgeLoadErrorMessage(error, '加载数据源失败'));
+    message.error(resolveKnowledgeLoadErrorMessage(error, '加载连接器失败'));
   }, []);
 
   return {

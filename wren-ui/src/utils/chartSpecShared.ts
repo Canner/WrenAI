@@ -13,7 +13,9 @@ export type EncodingFieldSpec = {
   [key: string]: unknown;
 };
 
-export type EncodingSpec = Partial<Record<EncodingChannel, EncodingFieldSpec>> & {
+export type EncodingSpec = Partial<
+  Record<EncodingChannel, EncodingFieldSpec>
+> & {
   opacity?: Record<string, unknown>;
   [key: string]: unknown;
 };
@@ -126,7 +128,8 @@ export const ensureColorFallback = (encoding: EncodingSpec) => {
   }
 
   const nominalChannel = (['x', 'y'] as const).find(
-    (channel) => encoding[channel]?.type === 'nominal' && encoding[channel]?.field,
+    (channel) =>
+      encoding[channel]?.type === 'nominal' && encoding[channel]?.field,
   );
 
   if (!nominalChannel) {
@@ -298,7 +301,8 @@ export const transformTemporalRows = (
   encoding?: EncodingSpec,
 ) => {
   const temporalChannels = (['x', 'y'] as const).filter(
-    (channel) => encoding?.[channel]?.type === 'temporal' && encoding?.[channel]?.field,
+    (channel) =>
+      encoding?.[channel]?.type === 'temporal' && encoding?.[channel]?.field,
   );
   if (temporalChannels.length === 0) {
     return values;

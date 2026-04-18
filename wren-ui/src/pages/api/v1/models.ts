@@ -1,20 +1,20 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
 import type { CreateModelData } from '@server/models/model';
-import { ModelResolver } from '@server/resolvers/modelResolver';
+import { ModelController } from '@server/controllers/modelController';
 import { ApiType } from '@server/repositories/apiHistoryRepository';
 import {
   ApiError,
   respondWithSimple,
   handleApiError,
   deriveRuntimeExecutionContextFromRequest,
-} from '@/apollo/server/utils/apiUtils';
+} from '@/server/utils/apiUtils';
 import { getLogger } from '@server/utils';
-import { buildResolverContextFromRequest } from './resolverContext';
+import { buildApiContextFromRequest } from './apiContext';
 
 const logger = getLogger('API_MODELS');
 logger.level = 'debug';
-const modelResolver = new ModelResolver();
+const modelController = new ModelController();
 
 const { runtimeScopeResolver } = components;
 
@@ -39,13 +39,13 @@ export default async function handler(
       }
 
       runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
-      const ctx = await buildResolverContextFromRequest({ req, runtimeScope });
+      const ctx = await buildApiContextFromRequest({ req, runtimeScope });
       const data: CreateModelData = {
         sourceTableName,
         fields: fields as [string],
         primaryKey,
       };
-      const model = await modelResolver.createModel(null, { data }, ctx);
+      const model = await modelController.createModel({ data, ctx });
 
       await respondWithSimple({
         res,

@@ -58,6 +58,27 @@ describe('useKnowledgeRuntimeContext helpers', () => {
     });
   });
 
+  it('does not reuse a current snapshot when the route points to a different knowledge base', () => {
+    expect(
+      resolveKnowledgeEffectiveRuntimeSelector({
+        routeRuntimeSelector: {
+          workspaceId: 'ws-route',
+          knowledgeBaseId: 'kb-route',
+        },
+        currentWorkspaceId: 'ws-current',
+        currentKnowledgeBaseId: 'kb-current',
+        currentKbSnapshotId: 'snap-current',
+        currentKbSnapshotDeployHash: 'deploy-current',
+      }),
+    ).toEqual({
+      workspaceId: 'ws-route',
+      knowledgeBaseId: 'kb-route',
+      kbSnapshotId: undefined,
+      deployHash: undefined,
+      runtimeScopeId: undefined,
+    });
+  });
+
   it('returns null sync scope key when route not ready or runtime scope disabled', () => {
     expect(
       resolveKnowledgeRuntimeSyncScopeKey({

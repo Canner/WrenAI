@@ -1,11 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { DashboardResolver } from '@server/resolvers/dashboardResolver';
+import { DashboardController } from '@server/controllers/dashboardController';
 import { DashboardItemType } from '@server/repositories/dashboardItemRepository';
-import { ApiError } from '@/apollo/server/utils/apiUtils';
-import { buildResolverContextFromRequest } from '../resolverContext';
+import { ApiError } from '@/server/utils/apiUtils';
+import { buildApiContextFromRequest } from '../apiContext';
 import { sendRestApiError } from '../restApi';
 
-const dashboardResolver = new DashboardResolver();
+const dashboardController = new DashboardController();
 
 export default async function handler(
   req: NextApiRequest,
@@ -32,8 +32,8 @@ export default async function handler(
       throw new ApiError('Dashboard item type is required', 400);
     }
 
-    const ctx = await buildResolverContextFromRequest({ req });
-    const item = await dashboardResolver.createDashboardItem(
+    const ctx = await buildApiContextFromRequest({ req });
+    const item = await dashboardController.createDashboardItem(
       null,
       {
         data: {

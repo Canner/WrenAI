@@ -2,7 +2,7 @@ import {
   buildRuntimeScopeUrl,
   resolveClientRuntimeScopeSelector,
   type ClientRuntimeScopeSelector,
-} from '@/apollo/client/runtimeScope';
+} from '@/runtime/client/runtimeScope';
 import type {
   AskingTask,
   AskingTaskInput,
@@ -11,13 +11,12 @@ import type {
   Task,
   Thread,
   ThreadResponse,
-} from '@/types/api';
-import type {
-  GetProjectRecommendationQuestionsQuery,
-  InstantRecommendedQuestionsQuery,
-  PreviewDataMutation,
-  SuggestedQuestionsQuery,
-} from '@/types/api';
+  ProjectRecommendationQuestionsResponse,
+  InstantRecommendedQuestionsResponse,
+  PreviewDataResponse,
+  SuggestedQuestionsResponse,
+} from '@/types/home';
+
 import { parseRestJsonResponse } from './rest';
 
 type AdjustThreadResponseAnswerInput = {
@@ -26,12 +25,13 @@ type AdjustThreadResponseAnswerInput = {
   sql?: string;
 };
 
-type PreviewDataPayload = PreviewDataMutation['previewData'];
-type SuggestedQuestionsPayload = SuggestedQuestionsQuery['suggestedQuestions'];
+type PreviewDataPayload = PreviewDataResponse['previewData'];
+type SuggestedQuestionsPayload =
+  SuggestedQuestionsResponse['suggestedQuestions'];
 type ProjectRecommendationQuestionsPayload =
-  GetProjectRecommendationQuestionsQuery['getProjectRecommendationQuestions'];
+  ProjectRecommendationQuestionsResponse['getProjectRecommendationQuestions'];
 type InstantRecommendedQuestionsPayload =
-  InstantRecommendedQuestionsQuery['instantRecommendedQuestions'];
+  InstantRecommendedQuestionsResponse['instantRecommendedQuestions'];
 
 export const buildSuggestedQuestionsUrl = (
   selector = resolveClientRuntimeScopeSelector(),
@@ -64,6 +64,12 @@ export const buildAskingTaskCancelUrl = (
   selector = resolveClientRuntimeScopeSelector(),
 ) =>
   buildRuntimeScopeUrl(`/api/v1/asking-tasks/${taskId}/cancel`, {}, selector);
+
+export const buildAskingTaskStreamUrl = (
+  taskId: string,
+  selector = resolveClientRuntimeScopeSelector(),
+) =>
+  buildRuntimeScopeUrl(`/api/v1/asking-tasks/${taskId}/stream`, {}, selector);
 
 export const buildInstantRecommendedQuestionsCollectionUrl = (
   selector = resolveClientRuntimeScopeSelector(),

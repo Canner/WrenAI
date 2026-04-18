@@ -6,7 +6,6 @@ import TeamOutlined from '@ant-design/icons/TeamOutlined';
 import SettingOutlined from '@ant-design/icons/SettingOutlined';
 import ApiOutlined from '@ant-design/icons/ApiOutlined';
 import SafetyCertificateOutlined from '@ant-design/icons/SafetyCertificateOutlined';
-import ApartmentOutlined from '@ant-design/icons/ApartmentOutlined';
 import LockOutlined from '@ant-design/icons/LockOutlined';
 import AuditOutlined from '@ant-design/icons/AuditOutlined';
 import CodeOutlined from '@ant-design/icons/CodeOutlined';
@@ -44,171 +43,143 @@ export const resolveDashboardNavParams = () => {
 
 export const buildNovaShellNavItems = ({
   activeKey,
-  onNavigate,
 }: {
   activeKey?: NovaShellNavKey;
-  onNavigate: (path: string, params?: NovaNavParams) => void;
+  onNavigate?: (path: string, params?: NovaNavParams) => void;
 }): DolaShellNavItem[] => [
   {
     key: 'home',
     label: '新对话',
     icon: <PlusOutlined />,
+    iconKey: 'home',
     active: activeKey === 'home',
-    onClick: activeKey === 'home' ? undefined : () => onNavigate(Path.Home),
-  },
-  {
-    key: 'knowledge',
-    label: '我的知识库',
-    icon: <BookOutlined />,
-    placement: 'bottom',
-    active: activeKey === 'knowledge',
-    onClick:
-      activeKey === 'knowledge' ? undefined : () => onNavigate(Path.Knowledge),
+    path: activeKey === 'home' ? undefined : Path.Home,
   },
   {
     key: 'dashboard',
     label: '数据看板',
     icon: <FundViewOutlined />,
+    iconKey: 'dashboard',
     active: activeKey === 'dashboard',
-    onClick:
-      activeKey === 'dashboard'
-        ? undefined
-        : () => onNavigate(Path.HomeDashboard, resolveDashboardNavParams()),
+    path: activeKey === 'dashboard' ? undefined : Path.HomeDashboard,
+    params: activeKey === 'dashboard' ? undefined : resolveDashboardNavParams(),
+  },
+  {
+    key: 'knowledge',
+    label: '我的知识库',
+    icon: <BookOutlined />,
+    iconKey: 'knowledge',
+    active: activeKey === 'knowledge',
+    path: activeKey === 'knowledge' ? undefined : Path.Knowledge,
   },
 ];
 
 export const buildNovaSettingsNavItems = ({
   activeKey,
-  onNavigate,
-  showPlatformAdmin = false,
 }: {
   activeKey?: NovaShellNavKey;
-  onNavigate: (path: string, params?: NovaNavParams) => void;
+  onNavigate?: (path: string, params?: NovaNavParams) => void;
   showPlatformAdmin?: boolean;
 }): DolaShellNavItem[] => [
-  {
-    key: 'settingsWorkspace',
-    label: '工作空间管理',
-    icon: <TeamOutlined />,
-    sectionLabel: '工作空间',
-    active: activeKey === 'settingsWorkspace',
-    onClick:
-      activeKey === 'settingsWorkspace'
-        ? undefined
-        : () => onNavigate(Path.SettingsWorkspace),
-  },
-  {
-    key: 'settingsConnectors',
-    label: '数据连接器',
-    icon: <ApiOutlined />,
-    sectionLabel: '工作空间',
-    active: activeKey === 'settingsConnectors',
-    onClick:
-      activeKey === 'settingsConnectors'
-        ? undefined
-        : () => onNavigate(Path.SettingsConnectors),
-  },
-  {
-    key: 'settingsSkills',
-    label: '技能管理',
-    icon: <CodeOutlined />,
-    sectionLabel: '工作空间',
-    active: activeKey === 'settingsSkills',
-    onClick:
-      activeKey === 'settingsSkills'
-        ? undefined
-        : () => onNavigate(Path.SettingsSkills),
-  },
   {
     key: 'settingsProfile',
     label: '个人资料',
     icon: <SettingOutlined />,
+    iconKey: 'settingsProfile',
     sectionLabel: '账户设置',
     active: activeKey === 'settingsProfile',
-    onClick:
-      activeKey === 'settingsProfile'
-        ? undefined
-        : () => onNavigate(Path.Settings),
+    path: activeKey === 'settingsProfile' ? undefined : Path.Settings,
   },
   {
     key: 'settingsUsers',
     label: '用户管理',
     icon: <SafetyCertificateOutlined />,
+    iconKey: 'settingsUsers',
     sectionLabel: '组织与安全',
     active: activeKey === 'settingsUsers',
-    onClick:
-      activeKey === 'settingsUsers'
-        ? undefined
-        : () => onNavigate(Path.SettingsUsers),
+    path: activeKey === 'settingsUsers' ? undefined : Path.SettingsUsers,
   },
   {
     key: 'settingsPermissions',
     label: '权限管理',
     icon: <SafetyCertificateOutlined />,
+    iconKey: 'settingsPermissions',
     sectionLabel: '组织与安全',
     active: activeKey === 'settingsPermissions',
-    onClick:
+    path:
       activeKey === 'settingsPermissions'
         ? undefined
-        : () => onNavigate(Path.SettingsPermissions),
+        : Path.SettingsPermissions,
   },
   {
     key: 'settingsIdentity',
     label: '身份与目录',
     icon: <LockOutlined />,
+    iconKey: 'settingsIdentity',
     sectionLabel: '组织与安全',
     active: activeKey === 'settingsIdentity',
-    onClick:
-      activeKey === 'settingsIdentity'
-        ? undefined
-        : () => onNavigate(Path.SettingsIdentity),
+    path: activeKey === 'settingsIdentity' ? undefined : Path.SettingsIdentity,
   },
   {
     key: 'settingsAudit',
     label: '审计日志',
     icon: <AuditOutlined />,
+    iconKey: 'settingsAudit',
     sectionLabel: '组织与安全',
     active: activeKey === 'settingsAudit',
-    onClick:
-      activeKey === 'settingsAudit'
-        ? undefined
-        : () => onNavigate(Path.SettingsAudit),
+    path: activeKey === 'settingsAudit' ? undefined : Path.SettingsAudit,
+  },
+  {
+    key: 'settingsWorkspace',
+    label: '工作空间管理',
+    icon: <TeamOutlined />,
+    iconKey: 'settingsWorkspace',
+    sectionLabel: '工作空间',
+    active: activeKey === 'settingsWorkspace',
+    path:
+      activeKey === 'settingsWorkspace' ? undefined : Path.SettingsWorkspace,
+  },
+  {
+    key: 'settingsConnectors',
+    label: '数据连接器',
+    icon: <ApiOutlined />,
+    iconKey: 'settingsConnectors',
+    sectionLabel: '业务与配置',
+    active: activeKey === 'settingsConnectors',
+    path:
+      activeKey === 'settingsConnectors' ? undefined : Path.SettingsConnectors,
+  },
+  {
+    key: 'settingsSkills',
+    label: '技能管理',
+    icon: <CodeOutlined />,
+    iconKey: 'settingsSkills',
+    sectionLabel: '业务与配置',
+    active: activeKey === 'settingsSkills',
+    path: activeKey === 'settingsSkills' ? undefined : Path.SettingsSkills,
   },
   {
     key: 'settingsDiagnostics',
     label: '调用诊断',
     icon: <ApiOutlined />,
-    sectionLabel: '业务配置',
+    iconKey: 'settingsDiagnostics',
+    sectionLabel: '业务与配置',
     active: activeKey === 'settingsDiagnostics',
-    onClick:
+    path:
       activeKey === 'settingsDiagnostics'
         ? undefined
-        : () => onNavigate(Path.SettingsDiagnostics),
+        : Path.SettingsDiagnostics,
   },
-  ...(showPlatformAdmin
-    ? [
-        {
-          key: 'settingsPlatform' as const,
-          label: '平台治理',
-          icon: <ApartmentOutlined />,
-          sectionLabel: '平台管理',
-          active: activeKey === 'settingsPlatform',
-          onClick:
-            activeKey === 'settingsPlatform'
-              ? undefined
-              : () => onNavigate(Path.SettingsPlatform),
-        },
-      ]
-    : []),
   {
     key: 'settingsSystemTasks',
     label: '系统任务',
     icon: <ScheduleOutlined />,
-    sectionLabel: '业务配置',
+    iconKey: 'settingsSystemTasks',
+    sectionLabel: '业务与配置',
     active: activeKey === 'settingsSystemTasks',
-    onClick:
+    path:
       activeKey === 'settingsSystemTasks'
         ? undefined
-        : () => onNavigate(Path.SettingsSystemTasks),
+        : Path.SettingsSystemTasks,
   },
 ];

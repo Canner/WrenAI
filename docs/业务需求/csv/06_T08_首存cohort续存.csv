@@ -1,0 +1,4 @@
+﻿first_deposit_date,channel_id,register_user_count,first_deposit_user_count,first_deposit_rate,first_deposit_avg_amount,second_deposit_user_count,second_deposit_rate,second_deposit_avg_amount,third_deposit_user_count,third_deposit_rate,third_deposit_avg_amount,fourth_deposit_user_count,fourth_deposit_rate,fourth_deposit_avg_amount,fifth_deposit_user_count,fifth_deposit_rate,fifth_deposit_avg_amount,sixth_deposit_user_count,sixth_deposit_rate,sixth_deposit_avg_amount
+2026-04-01,990011,2,2,1.0000,15.00,2,1.0000,65.00,2,1.0000,125.00,1,0.5000,100.00,1,0.5000,200.00,1,0.5000,300.00
+2026-04-02,990011,2,2,1.0000,1025.00,1,0.5000,100.00,0,0.0000,,0,0.0000,,0,0.0000,,0,0.0000,
+2026-04-03,990011,1,1,1.0000,88.00,0,0.0000,,0,0.0000,,0,0.0000,,0,0.0000,,0,0.0000,

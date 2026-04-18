@@ -1,66 +1,100 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/router';
-import { OnboardingStatus } from '@/types/api';
+import { OnboardingStatus } from '@/types/project';
+
 import { buildAuthPathWithRedirect } from '@/utils/authRedirect';
 import { Path } from '@/utils/enum';
 import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
 import useAuthSession from './useAuthSession';
 import { fetchOnboardingStatus } from '@/utils/onboardingRest';
+import { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
+import {
+  buildKnowledgeWorkbenchParams,
+  isKnowledgeModelingRoute,
+} from '@/utils/knowledgeWorkbench';
+import useRestRequest from './useRestRequest';
+import { buildRuntimeScopeStateKey } from '@/runtime/client/runtimeScope';
 
-const redirectRoute = {
-  [OnboardingStatus.DATASOURCE_SAVED]: Path.OnboardingModels,
-  [OnboardingStatus.NOT_STARTED]: Path.OnboardingConnection,
-  [OnboardingStatus.ONBOARDING_FINISHED]: Path.Modeling,
-  [OnboardingStatus.WITH_SAMPLE_DATASET]: Path.Modeling,
-};
+const redirectRoute: Partial<
+  Record<
+    OnboardingStatus,
+    { path: Path; params?: Record<string, string | number | boolean> }
+  >
+> = {
+  [OnboardingStatus.CONNECTION_SAVED]: { path: Path.OnboardingModels },
+  [OnboardingStatus.NOT_STARTED]: { path: Path.OnboardingConnection },
+  [OnboardingStatus.ONBOARDING_FINISHED]: {
+    path: Path.Knowledge,
+    params: buildKnowledgeWorkbenchParams('modeling'),
+  },
+  [OnboardingStatus.WITH_SAMPLE_DATASET]: {
+    path: Path.Knowledge,
+    params: buildKnowledgeWorkbenchParams('modeling'),
+  },
+} as const;
+
+const resolveRedirectParams = (target: {
+  path: Path;
+  params?: Record<string, string | number | boolean>;
+}) =>
+  target.path === Path.Knowledge
+    ? buildKnowledgeWorkbenchParams('modeling')
+    : undefined;
+
+export const buildOnboardingStatusSelector = (
+  selector: ClientRuntimeScopeSelector,
+): ClientRuntimeScopeSelector => ({
+  ...(selector.workspaceId ? { workspaceId: selector.workspaceId } : {}),
+  ...(selector.knowledgeBaseId
+    ? { knowledgeBaseId: selector.knowledgeBaseId }
+    : {}),
+  ...(selector.kbSnapshotId ? { kbSnapshotId: selector.kbSnapshotId } : {}),
+  ...(selector.deployHash ? { deployHash: selector.deployHash } : {}),
+  ...(selector.runtimeScopeId
+    ? { runtimeScopeId: selector.runtimeScopeId }
+    : {}),
+});
 
 const useOnboardingStatusState = ({ skip }: { skip: boolean }) => {
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
-  const [onboardingStatus, setOnboardingStatus] = useState<
-    OnboardingStatus | undefined
-  >(undefined);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
+  const onboardingSelector = useMemo(
+    () => buildOnboardingStatusSelector(runtimeScopeNavigation.selector),
+    [
+      runtimeScopeNavigation.selector.workspaceId,
+      runtimeScopeNavigation.selector.knowledgeBaseId,
+      runtimeScopeNavigation.selector.kbSnapshotId,
+      runtimeScopeNavigation.selector.deployHash,
+      runtimeScopeNavigation.selector.runtimeScopeId,
+    ],
+  );
+  const requestKey = useMemo(
+    () =>
+      skip || Object.keys(onboardingSelector).length === 0
+        ? null
+        : buildRuntimeScopeStateKey(onboardingSelector),
+    [onboardingSelector, skip],
+  );
+
+  const {
+    data: onboardingStatus,
+    loading,
+    error,
+    refetch: refetchStatus,
+  } = useRestRequest<OnboardingStatus | undefined>({
+    enabled: !skip,
+    auto: !skip,
+    initialData: undefined,
+    requestKey,
+    request: ({ signal }) =>
+      fetchOnboardingStatus(onboardingSelector, { signal }).then(
+        (payload) => payload.status ?? undefined,
+      ),
+  });
 
   const refetch = useCallback(async () => {
-    if (skip) {
-      setOnboardingStatus(undefined);
-      setError(null);
-      setLoading(false);
-      return { status: undefined };
-    }
-
-    setLoading(true);
-    try {
-      const payload = await fetchOnboardingStatus(
-        runtimeScopeNavigation.selector,
-      );
-      const status = payload.status || undefined;
-      setOnboardingStatus(status);
-      setError(null);
-      return { status };
-    } catch (error) {
-      const normalizedError =
-        error instanceof Error
-          ? error
-          : new Error('加载引导状态失败，请稍后重试。');
-      setError(normalizedError);
-      throw normalizedError;
-    } finally {
-      setLoading(false);
-    }
-  }, [runtimeScopeNavigation.selector, skip]);
-
-  useEffect(() => {
-    if (skip) {
-      setOnboardingStatus(undefined);
-      setError(null);
-      setLoading(false);
-      return;
-    }
-
-    void refetch().catch(() => null);
-  }, [refetch, skip]);
+    const status = await refetchStatus();
+    return { status };
+  }, [refetchStatus]);
 
   return {
     loading,
@@ -73,6 +107,7 @@ const useOnboardingStatusState = ({ skip }: { skip: boolean }) => {
 export const useWithOnboarding = () => {
   const router = useRouter();
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
+  const pushRuntimeScope = runtimeScopeNavigation.push;
   const authSession = useAuthSession();
   const { onboardingStatus, loading } = useOnboardingStatusState({
     skip: !authSession.authenticated,
@@ -96,11 +131,20 @@ export const useWithOnboarding = () => {
     }
 
     if (onboardingStatus) {
-      const newPath = redirectRoute[onboardingStatus];
+      const target = redirectRoute[onboardingStatus];
       const pathname = router.pathname;
 
-      if (newPath && newPath !== Path.Modeling) {
-        if (newPath === pathname) {
+      if (!target) {
+        return;
+      }
+
+      const isCurrentTarget =
+        target.path === Path.Knowledge
+          ? isKnowledgeModelingRoute({ pathname, query: router.query })
+          : pathname === target.path;
+
+      if (target.path !== Path.Knowledge) {
+        if (isCurrentTarget) {
           return;
         }
 
@@ -111,24 +155,29 @@ export const useWithOnboarding = () => {
           return;
         }
 
-        runtimeScopeNavigation.push(newPath);
+        pushRuntimeScope(target.path, resolveRedirectParams(target));
         return;
       }
 
       if (pathname === '/') {
-        runtimeScopeNavigation.push(newPath);
+        pushRuntimeScope(target.path, resolveRedirectParams(target));
         return;
       }
 
       if (pathname.startsWith(Path.Onboarding)) {
         return;
       }
+
+      if (!isCurrentTarget) {
+        pushRuntimeScope(target.path, resolveRedirectParams(target));
+      }
     }
   }, [
     authSession.authenticated,
     onboardingStatus,
+    pushRuntimeScope,
     router.pathname,
-    runtimeScopeNavigation,
+    router.query,
   ]);
 
   return {

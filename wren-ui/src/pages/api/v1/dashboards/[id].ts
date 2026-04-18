@@ -1,10 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { DashboardResolver } from '@server/resolvers/dashboardResolver';
-import { ApiError } from '@/apollo/server/utils/apiUtils';
-import { buildResolverContextFromRequest } from '../resolverContext';
+import { DashboardController } from '@server/controllers/dashboardController';
+import { ApiError } from '@/server/utils/apiUtils';
+import { buildApiContextFromRequest } from '../apiContext';
 import { sendRestApiError } from '../restApi';
 
-const dashboardResolver = new DashboardResolver();
+const dashboardController = new DashboardController();
 
 const parseDashboardId = (value: string | string[] | undefined) => {
   const raw = Array.isArray(value) ? value[0] : value;
@@ -26,8 +26,8 @@ export default async function handler(
     }
 
     const dashboardId = parseDashboardId(req.query.id);
-    const ctx = await buildResolverContextFromRequest({ req });
-    const dashboard = await dashboardResolver.getDashboard(
+    const ctx = await buildApiContextFromRequest({ req });
+    const dashboard = await dashboardController.getDashboard(
       null,
       { where: { id: dashboardId } },
       ctx,

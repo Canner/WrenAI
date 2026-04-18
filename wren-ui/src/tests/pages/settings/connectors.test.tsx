@@ -24,7 +24,7 @@ const mockUseRuntimeScopeNavigation = jest.fn();
 
 let capturedTableProps: any;
 
-jest.mock('@/apollo/client/runtimeScope', () => ({
+jest.mock('@/runtime/client/runtimeScope', () => ({
   buildRuntimeScopeUrl: (...args: any[]) => mockBuildRuntimeScopeUrl(...args),
 }));
 
@@ -90,13 +90,14 @@ jest.mock('@ant-design/icons/ApiOutlined', () => () => 'api-icon');
 
 jest.mock('@/components/reference/ConsoleShellLayout', () => ({
   __esModule: true,
-  default: ({ title, description, titleExtra, children }: any) => {
+  default: ({ title, description, titleExtra, hideHeader, children }: any) => {
     const React = jest.requireActual('react');
     return React.createElement(
       'div',
       null,
       title,
       description,
+      hideHeader ? 'hide-header' : null,
       titleExtra,
       children,
     );
@@ -152,13 +153,9 @@ describe('knowledge/connectors page', () => {
     });
     mockUseRuntimeScopeNavigation.mockReturnValue({
       pushWorkspace: jest.fn(),
+      workspaceSelector: { workspaceId: 'ws-1' },
     });
-    mockUseRuntimeSelectorState.mockReturnValue({
-      runtimeSelectorState: {
-        currentWorkspace: { id: 'ws-1', name: 'Workspace Alpha' },
-        currentKnowledgeBase: { id: 'kb-1', name: 'Knowledge Base A' },
-      },
-    });
+    mockUseRuntimeSelectorState.mockReturnValue({});
   });
 
   it('builds runtime-scoped connector urls and exposes stable connector types', () => {
@@ -177,6 +174,16 @@ describe('knowledge/connectors page', () => {
     expect(CONNECTOR_CLEAR_SECRET_LABEL).toContain('清空现有密钥');
     expect(CONNECTOR_TEST_HINT).toContain('database 类型支持连接测试');
     expect(CONNECTOR_SECRET_ROTATION_HINT).toContain('不会暴露明文');
+  });
+
+  it('renders the connectors workspace without header and without workspace/context metric cards', () => {
+    const markup = renderPage();
+
+    expect(markup).toContain('hide-header');
+    expect(markup).toContain('连接器目录');
+    expect(markup).not.toContain('当前工作区');
+    expect(markup).not.toContain('当前上下文');
+    expect(markup).not.toContain('Workspace Connectors');
   });
 
   it('preserves existing secret on edit when secret json is left blank', () => {
@@ -421,15 +428,14 @@ describe('knowledge/connectors page', () => {
     ).toThrow('目标 key version 必须是正整数');
   });
 
-  it('renders runtime selector labels and connector table shell', () => {
+  it('renders the connector management shell without the removed summary cards', () => {
     const markup = renderPage();
 
     expect(markup).toContain('数据连接器');
     expect(markup).toContain('批量轮换密钥');
-    expect(markup).toContain('Workspace Alpha');
-    expect(markup).toContain('Knowledge Base A');
-    expect(markup).toContain('已配置密钥');
     expect(markup).toContain('当前仅 database 类型支持连接测试');
+    expect(markup).not.toContain('当前工作区');
+    expect(markup).not.toContain('当前上下文');
     expect(capturedTableProps).toBeDefined();
     expect(capturedTableProps.dataSource).toEqual([]);
   });

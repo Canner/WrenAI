@@ -4,7 +4,7 @@ import ModelForm from './ModelForm';
 import { FORM_MODE } from '@/utils/enum';
 
 const mockUseModelList = jest.fn();
-const mockListDataSourceTables = jest.fn();
+const mockListConnectionTables = jest.fn();
 
 const setModelFormStateOverrides = (
   overrides: Partial<Record<number, any>>,
@@ -25,8 +25,19 @@ jest.mock('@/hooks/useModelList', () => ({
   default: (...args: any[]) => mockUseModelList(...args),
 }));
 
+jest.mock('@/hooks/useRuntimeScopeNavigation', () => ({
+  __esModule: true,
+  default: () => ({
+    selector: {
+      workspaceId: 'workspace-1',
+      knowledgeBaseId: 'kb-1',
+    },
+  }),
+}));
+
 jest.mock('@/utils/modelingRest', () => ({
-  listDataSourceTables: (...args: any[]) => mockListDataSourceTables(...args),
+  listConnectionTables: (...args: any[]) =>
+    mockListConnectionTables(...args),
 }));
 
 jest.mock('@/components/PageLoading', () => ({
@@ -83,7 +94,7 @@ describe('ModelForm', () => {
       data: [{ sourceTableName: 'catalog_beta.sales.orders' }],
       loading: false,
     });
-    mockListDataSourceTables.mockResolvedValue([
+    mockListConnectionTables.mockResolvedValue([
       {
         name: 'catalog_beta.sales.orders',
         properties: {

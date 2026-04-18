@@ -88,11 +88,9 @@ export default async function handler(
             : undefined,
       },
       roleRepository: components.roleRepository,
-      principalRoleBindingRepository:
-        components.principalRoleBindingRepository,
+      principalRoleBindingRepository: components.principalRoleBindingRepository,
       directoryGroupRepository: components.directoryGroupRepository,
-      directoryGroupMemberRepository:
-        components.directoryGroupMemberRepository,
+      directoryGroupMemberRepository: components.directoryGroupMemberRepository,
     });
 
     await recordAuditEvent({

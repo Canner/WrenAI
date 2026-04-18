@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
 import { ApiType } from '@server/repositories/apiHistoryRepository';
-import * as Errors from '@/apollo/server/utils/error';
+import * as Errors from '@/server/utils/error';
 import { v4 as uuidv4 } from 'uuid';
 import {
   ApiError,
@@ -12,12 +12,12 @@ import {
   validateAskResult,
   deriveRuntimeExecutionContextFromRequest,
   pollUntil,
-} from '@/apollo/server/utils/apiUtils';
+} from '@/server/utils/apiUtils';
 import {
   buildAskRuntimeContext,
   toAskRuntimeIdentity,
 } from '@server/utils/askContext';
-import { AskResult, AskResultStatus } from '@/apollo/server/models/adaptor';
+import { AskResult, AskResultStatus } from '@/server/models/adaptor';
 import { getLogger } from '@server/utils';
 import {
   StateType,
@@ -27,7 +27,7 @@ import {
   sendError,
   getSqlGenerationState,
   endStream,
-} from '@/apollo/server/utils';
+} from '@/server/utils';
 
 const logger = getLogger('API_STREAM_GENERATE_SQL');
 logger.level = 'debug';

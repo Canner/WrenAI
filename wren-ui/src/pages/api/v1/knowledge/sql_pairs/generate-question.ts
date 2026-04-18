@@ -1,10 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { ApiError } from '@/apollo/server/utils/apiUtils';
-import { SqlPairResolver } from '@server/resolvers/sqlPairResolver';
-import { buildResolverContextFromRequest } from '../../resolverContext';
+import { ApiError } from '@/server/utils/apiUtils';
+import { SqlPairController } from '@server/controllers/sqlPairController';
+import { buildApiContextFromRequest } from '../../apiContext';
 import { sendRestApiError } from '../../restApi';
 
-const sqlPairResolver = new SqlPairResolver();
+const sqlPairController = new SqlPairController();
 
 export default async function handler(
   req: NextApiRequest,
@@ -21,8 +21,8 @@ export default async function handler(
       throw new ApiError('SQL is required', 400);
     }
 
-    const ctx = await buildResolverContextFromRequest({ req });
-    const question = await sqlPairResolver.generateQuestion(
+    const ctx = await buildApiContextFromRequest({ req });
+    const question = await sqlPairController.generateQuestion(
       null,
       { data: { sql } },
       ctx,

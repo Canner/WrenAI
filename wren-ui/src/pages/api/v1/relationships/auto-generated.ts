@@ -1,9 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { ProjectResolver } from '@server/resolvers/projectResolver';
-import { buildResolverContextFromRequest } from '../resolverContext';
+import { ProjectController } from '@server/controllers/projectController';
+import { buildApiContextFromRequest } from '../apiContext';
 import { sendRestApiError } from '../restApi';
 
-const projectResolver = new ProjectResolver();
+const projectController = new ProjectController();
 
 export default async function handler(
   req: NextApiRequest,
@@ -15,12 +15,8 @@ export default async function handler(
       throw new Error('Method not allowed');
     }
 
-    const ctx = await buildResolverContextFromRequest({ req });
-    const relations = await projectResolver.autoGenerateRelation(
-      null,
-      null,
-      ctx,
-    );
+    const ctx = await buildApiContextFromRequest({ req });
+    const relations = await projectController.autoGenerateRelation({ ctx });
     return res.status(200).json(relations);
   } catch (error) {
     return sendRestApiError(res, error, '加载推荐关系失败，请稍后重试。');

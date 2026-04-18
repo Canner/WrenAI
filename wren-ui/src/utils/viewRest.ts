@@ -1,8 +1,8 @@
 import {
   buildRuntimeScopeUrl,
   type ClientRuntimeScopeSelector,
-} from '@/apollo/client/runtimeScope';
-import type { CreateViewInput } from '@/types/api';
+} from '@/runtime/client/runtimeScope';
+import type { CreateViewInput } from '@/types/modeling';
 
 type ViewResponse = {
   id: number;

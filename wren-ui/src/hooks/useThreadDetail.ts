@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   buildRuntimeScopeUrl,
   type ClientRuntimeScopeSelector,
-} from '@/apollo/client/runtimeScope';
-import type { DetailedThread } from '@/types/api';
+} from '@/runtime/client/runtimeScope';
+import type { DetailedThread } from '@/types/home';
 import {
   peekThreadOverview,
   primeThreadOverview,
@@ -13,11 +13,11 @@ const EMPTY_THREAD_DETAIL_RETRY_INTERVAL_MS = 500;
 const EMPTY_THREAD_DETAIL_MAX_RETRIES = 8;
 
 export type ThreadDetailData = DetailedThread;
-export type ThreadDetailQueryData = {
+export type ThreadDetailStateData = {
   thread: ThreadDetailData;
 };
-export type UpdateThreadDetailQuery = (
-  updater: (prev: ThreadDetailQueryData) => ThreadDetailQueryData,
+export type UpdateThreadDetailState = (
+  updater: (prev: ThreadDetailStateData) => ThreadDetailStateData,
 ) => void;
 
 const threadDetailRequests = new Map<string, Promise<ThreadDetailData>>();
@@ -67,7 +67,7 @@ const getCachedThreadDetail = (threadId?: number | null) => {
     return null;
   }
 
-  return peekThreadOverview<ThreadDetailQueryData>(threadId);
+  return peekThreadOverview<ThreadDetailStateData>(threadId);
 };
 
 export const loadThreadDetailPayload = async ({
@@ -113,7 +113,7 @@ export const loadThreadDetailPayload = async ({
 
       primeThreadOverview(threadId, {
         thread: normalized,
-      } satisfies ThreadDetailQueryData);
+      } satisfies ThreadDetailStateData);
       return normalized;
     })
     .finally(() => {
@@ -203,7 +203,7 @@ export default function useThreadDetail({
     () => shouldRefetchEmptyThreadDetail(prefetchedData?.thread),
     [prefetchedData],
   );
-  const [data, setData] = useState<ThreadDetailQueryData | null>(
+  const [data, setData] = useState<ThreadDetailStateData | null>(
     prefetchedData,
   );
   const [loading, setLoading] = useState(
@@ -270,7 +270,7 @@ export default function useThreadDetail({
     };
   }, [prefetchedData, requestUrl, shouldRevalidatePrefetchedData, threadId]);
 
-  const updateQuery = useCallback<UpdateThreadDetailQuery>(
+  const updateQuery = useCallback<UpdateThreadDetailState>(
     (updater) => {
       setData((previousData) => {
         const baseData =

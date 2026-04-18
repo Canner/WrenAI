@@ -1,0 +1,6 @@
+﻿tenant_plat_id,channel_id,player_id,total_valid_bet_amount,total_win_loss_amount,total_bet_times,bet_rank,ranked_user_count,user_segment,is_top_n
+990001,990011,990101,3000,300,6,1,5,TOP3,1
+990001,990011,990102,2500,180,3,2,5,TOP3,1
+990001,990011,990103,1500,120,2,3,5,TOP3,1
+990001,990011,990104,200,-30,1,4,5,非TOP3,0
+990001,990011,990105,100,10,1,5,5,非TOP3,0

@@ -8,7 +8,7 @@ import {
   ApiError,
   handleApiError,
   respondWithSimple,
-} from '@/apollo/server/utils/apiUtils';
+} from '@/server/utils/apiUtils';
 import { getLogger } from '@server/utils';
 import { toCanonicalPersistedRuntimeIdentityFromScope } from '@server/utils/persistedRuntimeIdentity';
 import {
@@ -220,11 +220,21 @@ export default async function handler(
     );
 
     const filterCriteria: Partial<ApiHistory> = {
-      projectId: runtimeIdentity.projectId ?? null,
-      workspaceId: runtimeIdentity.workspaceId ?? null,
-      knowledgeBaseId: runtimeIdentity.knowledgeBaseId ?? null,
-      kbSnapshotId: runtimeIdentity.kbSnapshotId ?? null,
-      deployHash: runtimeIdentity.deployHash ?? null,
+      ...(runtimeIdentity.projectId != null
+        ? { projectId: runtimeIdentity.projectId }
+        : {}),
+      ...(runtimeIdentity.workspaceId
+        ? { workspaceId: runtimeIdentity.workspaceId }
+        : {}),
+      ...(runtimeIdentity.knowledgeBaseId
+        ? { knowledgeBaseId: runtimeIdentity.knowledgeBaseId }
+        : {}),
+      ...(runtimeIdentity.kbSnapshotId
+        ? { kbSnapshotId: runtimeIdentity.kbSnapshotId }
+        : {}),
+      ...(runtimeIdentity.deployHash
+        ? { deployHash: runtimeIdentity.deployHash }
+        : {}),
       ...(apiType ? { apiType } : {}),
       ...(statusCode !== undefined ? { statusCode } : {}),
       ...(threadId ? { threadId } : {}),

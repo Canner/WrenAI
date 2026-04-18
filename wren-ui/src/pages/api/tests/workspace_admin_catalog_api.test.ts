@@ -198,7 +198,8 @@ describe('workspace admin catalog api routes', () => {
   });
 
   it('POST /workspace/role-bindings creates role binding', async () => {
-    const handler = (await import('../v1/workspace/role-bindings/index')).default;
+    const handler = (await import('../v1/workspace/role-bindings/index'))
+      .default;
     const req = createReq({
       method: 'POST',
       query: { workspaceId: 'workspace-1' },
@@ -219,7 +220,8 @@ describe('workspace admin catalog api routes', () => {
   });
 
   it('GET /workspace/audit-events returns events', async () => {
-    const handler = (await import('../v1/workspace/audit-events/index')).default;
+    const handler = (await import('../v1/workspace/audit-events/index'))
+      .default;
     const req = createReq({
       method: 'GET',
       query: { workspaceId: 'workspace-1', result: 'denied' },
@@ -237,9 +239,8 @@ describe('workspace admin catalog api routes', () => {
   });
 
   it('POST /workspace/authorization/explain returns authorization explanation', async () => {
-    const handler = (
-      await import('../v1/workspace/authorization/explain')
-    ).default;
+    const handler = (await import('../v1/workspace/authorization/explain'))
+      .default;
     const req = createReq({
       method: 'POST',
       query: { workspaceId: 'workspace-1' },

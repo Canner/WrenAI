@@ -5,8 +5,8 @@ import type {
   Thread,
 } from '@server/repositories';
 import type { View } from '@server/repositories/viewRepository';
-import type { TrackedAskingResult } from '@/apollo/server/services/askingTaskTracker';
-import type { TrackedAdjustmentResult } from '@/apollo/server/backgrounds/adjustmentBackgroundTracker';
+import type { TrackedAskingResult } from '@/server/services/askingTaskTracker';
+import type { TrackedAdjustmentResult } from '@/server/backgrounds/adjustmentBackgroundTracker';
 import { safeFormatSQL } from '@server/utils/sqlFormat';
 
 const constructCteSql = (

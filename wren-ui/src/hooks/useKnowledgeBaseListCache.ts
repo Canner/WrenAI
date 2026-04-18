@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { buildRuntimeScopeUrl } from '@/apollo/client/runtimeScope';
+import { buildRuntimeScopeUrl } from '@/runtime/client/runtimeScope';
 import { peekKnowledgeBaseList } from '@/utils/runtimePagePrefetch';
 
 export const resolveKnowledgeBaseListSelector = ({

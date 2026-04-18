@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ApiType } from '@/types/apiHistory';
 import {
   buildRuntimeScopeUrl,
   ClientRuntimeScopeSelector,
-} from '@/apollo/client/runtimeScope';
-import { ApiType } from '@/types/api';
+} from '@/runtime/client/runtimeScope';
+import { abortWithReason, isAbortRequestError } from '@/utils/abort';
 
 export type ApiHistoryListItem = {
   id: string;
@@ -153,7 +154,11 @@ export default function useApiHistoryList({
         setData(payload);
       })
       .catch((error) => {
-        if (cancelled || controller.signal.aborted) {
+        if (
+          cancelled ||
+          controller.signal.aborted ||
+          isAbortRequestError(error)
+        ) {
           return;
         }
 
@@ -173,7 +178,7 @@ export default function useApiHistoryList({
 
     return () => {
       cancelled = true;
-      controller.abort();
+      abortWithReason(controller, 'api-history-request-cancelled');
     };
   }, [onError, requestUrl]);
 

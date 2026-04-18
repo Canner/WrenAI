@@ -14,9 +14,9 @@ type KnowledgeBaseRecordLite = {
 };
 
 export const shouldRouteSwitchKnowledgeBase = (
-  _knowledgeBase: KnowledgeBaseRecordLite,
-  _currentKnowledgeBaseId?: string | null,
-) => false;
+  knowledgeBase: KnowledgeBaseRecordLite,
+  currentKnowledgeBaseId?: string | null,
+) => Boolean(knowledgeBase.id) && knowledgeBase.id !== currentKnowledgeBaseId;
 
 export const resolveVisibleKnowledgeBaseId = ({
   activeKnowledgeBaseId,
@@ -55,8 +55,8 @@ export const shouldShowKnowledgeAssetsLoading = ({
   routeRuntimeSyncing: boolean;
 }) =>
   activeKnowledgeBaseUsesRuntime &&
-  assetCount === 0 &&
-  (routeRuntimeSyncing || (diagramLoading && !hasDiagramData));
+  (routeRuntimeSyncing ||
+    (assetCount === 0 && diagramLoading && !hasDiagramData));
 
 export const resolveKnowledgeNavBadgeCount = ({
   navKnowledgeBaseId,

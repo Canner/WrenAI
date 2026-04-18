@@ -3,7 +3,7 @@ import styled from 'styled-components';
 import { getCompactTime } from '@/utils/time';
 import { DrawerAction } from '@/hooks/useDrawerAction';
 import SQLCodeBlock from '@/components/code/SQLCodeBlock';
-import { SqlPair } from '@/types/api';
+import type { SqlPair } from '@/types/knowledge';
 
 const StyledDrawer = styled(Drawer)`
   .ant-drawer-header {

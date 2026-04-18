@@ -4,7 +4,8 @@ import styled from 'styled-components';
 import type { ColumnsType } from 'antd/es/table';
 import { ERROR_TEXTS } from '@/utils/error';
 import MultiSelectBox from '@/components/table/MultiSelectBox';
-import { CompactTable } from '@/types/api';
+import type { CompactTable } from '@/types/dataSource';
+
 import {
   getCompactTableBaseName,
   getCompactTableCatalogLabel,
@@ -145,13 +146,13 @@ export default function SelectModels(props: Props) {
   return (
     <PageSection>
       <HeaderMeta>
-        <Badge>Step 2 / 模型表选择</Badge>
+        <Badge>Step 2 / 资产选择</Badge>
         <Title level={2} style={{ margin: 0, fontSize: 30 }}>
-          选择要建模的数据表
+          选择要纳入的资产
         </Title>
         <Paragraph style={{ marginBottom: 0, fontSize: 15, lineHeight: 1.8 }}>
-          系统会基于你选择的数据表创建语义模型，帮助 AI
-          更准确理解当前知识库的数据结构。你也可以在后续建模页继续增减表与字段。
+          系统会基于你选择的资产创建语义模型，帮助 AI
+          更准确理解当前知识库的数据结构。你也可以在后续建模页继续增减资产与字段。
           <br />
           <Link
             href="https://docs.getwren.ai/oss/guide/modeling/overview"
@@ -185,7 +186,7 @@ export default function SelectModels(props: Props) {
 
       <FooterRow>
         <Text type="secondary" style={{ fontSize: 13 }}>
-          至少选择一张表后即可进入关系配置。若当前数据源中表很多，建议先只保留本次问答最核心的主题表。
+          至少选择一项资产后即可进入关系配置。若当前连接中的表很多，建议先只保留本次问答最核心的主题表。
         </Text>
         <Space size={12}>
           <LightButton onClick={onBack} disabled={submitting}>

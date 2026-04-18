@@ -1,12 +1,5 @@
-import Image from 'next/image';
+import NovaWordmark from '@/components/brand/NovaWordmark';
 
 export default function LogoBar() {
-  return (
-    <Image
-      src="/images/logo-white-with-text.svg"
-      alt="Nova"
-      width={125}
-      height={30}
-    />
-  );
+  return <NovaWordmark tone="light" markSize={28} textSize={22} gap={10} />;
 }

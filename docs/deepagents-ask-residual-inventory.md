@@ -1,5 +1,7 @@
 # DeepAgents Ask 收口后残留盘点
 
+> 历史说明（2026-04-16）：本文保留的是 Apollo/GraphQL 时代的设计、排障或执行记录。当前 `wren-ui` 运行时前端已经切到 REST，代码目录也已收口到 `src/server/*` 与 `src/pages/api/v1/*`；文中的旧 GraphQL 入口、resolver 与 Apollo 上下文描述仅作历史背景，不再代表当前主链路。
+
 更新时间：2026-04-12
 
 ## 结论
@@ -31,10 +33,10 @@
 
 ### 1.2 BFF / adaptor / ask context
 
-- `wren-ui/src/apollo/server/utils/askContext.ts`
-- `wren-ui/src/apollo/server/adaptors/wrenAIAdaptor.ts`
-- `wren-ui/src/apollo/server/services/askingService.ts`
-- `wren-ui/src/apollo/server/resolvers/askingResolver.ts`
+- `wren-ui/src/server/utils/askContext.ts`
+- `wren-ui/src/server/adaptors/wrenAIAdaptor.ts`
+- `wren-ui/src/server/services/askingService.ts`
+- 历史 asking resolver 层记录（当前 UI ask 主链已收口到 REST route / controller / service）
 
 ### 1.3 持久化
 

@@ -6,6 +6,7 @@ import { COLUMN } from '@/components/table/BaseTable';
 import FieldTable from '@/components/table/FieldTable';
 import { DiagramView } from '@/utils/data';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
+import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import {
   previewViewData,
   type ViewPreviewDataResponse,
@@ -56,7 +57,13 @@ export default function ViewMetadata(props: Props) {
         error instanceof Error
           ? error
           : new Error('预览视图数据失败，请稍后重试。');
-      message.error(nextError.message || '预览视图数据失败，请稍后重试。');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        nextError,
+        '预览视图数据失败，请稍后重试。',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
       setPreviewDataResult({
         loading: false,
         data: undefined,

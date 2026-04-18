@@ -24,9 +24,10 @@ import useRuntimeSelectorState, {
   type RuntimeSelectorState,
 } from '@/hooks/useRuntimeSelectorState';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
-import { buildRuntimeScopeUrl } from '@/apollo/client/runtimeScope';
+import { buildRuntimeScopeUrl } from '@/runtime/client/runtimeScope';
 import useSkillsControlPlaneData from '@/hooks/useSkillsControlPlaneData';
 import { Path } from '@/utils/enum';
+import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import {
   getReferenceDisplayKnowledgeName,
   getReferenceDisplayWorkspaceName,
@@ -250,7 +251,13 @@ export default function ManageSkills() {
     | 'kbSnapshots'
   > | null;
   const handleControlPlaneLoadError = useCallback((error: Error) => {
-    message.error(error.message || '加载技能失败，请稍后重试。');
+    const errorMessage = resolveAbortSafeErrorMessage(
+      error,
+      '加载技能失败，请稍后重试。',
+    );
+    if (errorMessage) {
+      message.error(errorMessage);
+    }
   }, []);
   const { data, loading, refetch } = useSkillsControlPlaneData({
     enabled: runtimeScopePage.hasRuntimeScope,
@@ -434,7 +441,10 @@ export default function ManageSkills() {
       if (error?.errorFields) {
         return;
       }
-      message.error(error.message || '保存技能失败。');
+      const errorMessage = resolveAbortSafeErrorMessage(error, '保存技能失败。');
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setDefinitionSubmitting(false);
     }
@@ -454,7 +464,10 @@ export default function ManageSkills() {
       message.success('技能已安装。');
       await refresh();
     } catch (error: any) {
-      message.error(error.message || '安装技能失败。');
+      const errorMessage = resolveAbortSafeErrorMessage(error, '安装技能失败。');
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setInstallingCatalogId(null);
     }
@@ -479,7 +492,13 @@ export default function ManageSkills() {
       );
       await refresh();
     } catch (error: any) {
-      message.error(error.message || '切换技能状态失败。');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '切换技能状态失败。',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setTogglingSkillId(null);
     }
@@ -499,7 +518,10 @@ export default function ManageSkills() {
       message.success('技能已删除。');
       await refresh();
     } catch (error: any) {
-      message.error(error.message || '删除技能失败。');
+      const errorMessage = resolveAbortSafeErrorMessage(error, '删除技能失败。');
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setDeletingSkillId(null);
     }

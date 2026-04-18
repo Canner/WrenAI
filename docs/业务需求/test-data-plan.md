@@ -8,6 +8,12 @@
 2. 校验业务口径是否符合文档；
 3. 给后续知识库导入后的联调留一套固定回归样例。
 
+### 配套文件
+
+- 造数脚本：[`seed.sql`](./seed.sql)
+- 预期结果：[`expected-results.md`](./expected-results.md)
+- 执行手册：[`test-runbook.md`](./test-runbook.md)
+
 ---
 
 ## 2. 本轮建议覆盖范围
@@ -323,4 +329,3 @@
 1. 先执行 **`seed.sql` 样例脚本**；
 2. 再补一份 **每个模板的预期结果样例表**；
 3. 然后把 11 个 `draft_sql` 接到系统里做真实 datasource 校验。
-

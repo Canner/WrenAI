@@ -2,9 +2,10 @@ import { message } from 'antd';
 import {
   shouldRecoverRuntimeScopeFromErrorCode,
   triggerRuntimeScopeRecovery,
-} from '@/apollo/client/runtimeScope';
+} from '@/runtime/client/runtimeScope';
+import { isAbortRequestError } from '@/utils/abort';
 
-type GraphQLErrorLike = {
+type ApiOperationError = {
   message?: string;
   extensions?: {
     code?: string;
@@ -22,7 +23,35 @@ type ErrorResponseLike = {
   operation?: {
     operationName?: string;
   } | null;
-  graphQLErrors?: GraphQLErrorLike[] | null;
+  errors?: ApiOperationError[] | null;
+};
+
+const LEGACY_OPERATION_ERRORS_KEY = ['graph', 'QLErrors'].join('');
+
+const readOperationErrors = (
+  error:
+    | {
+        errors?: ApiOperationError[] | null;
+      }
+    | Record<string, unknown>
+    | null
+    | undefined,
+): ApiOperationError[] => {
+  if (!error || typeof error !== 'object') {
+    return [];
+  }
+
+  const directErrors = (error as { errors?: unknown }).errors;
+  if (Array.isArray(directErrors)) {
+    return directErrors as ApiOperationError[];
+  }
+
+  const legacyErrors = (error as Record<string, unknown>)[
+    LEGACY_OPERATION_ERRORS_KEY
+  ];
+  return Array.isArray(legacyErrors)
+    ? (legacyErrors as ApiOperationError[])
+    : [];
 };
 
 // Refer to backend GeneralErrorCodes for mapping
@@ -36,11 +65,11 @@ export const ERROR_CODES = {
  * Replace the token %{s} in the message with the detail message.
  * For example:
  *
- *  Input: ('Failed to update %{data source}.')
- *  Output: Failed to update data source.
+ *  Input: ('Failed to update %{connection}.')
+ *  Output: Failed to update connection.
  *
- *  Input: ('Failed to update %{data source}.', 'The data source is not found.')
- *  Output: Failed to update - The data source is not found.
+ *  Input: ('Failed to update %{connection}.', 'The connection is not found.')
+ *  Output: Failed to update - The connection is not found.
  *
  * @param message The default message with replace token %{s}.
  * @param detailMessage The detail message.
@@ -60,18 +89,18 @@ const replaceMessage = (message: string, detailMessage?: string) => {
 };
 
 abstract class ErrorHandler {
-  public handle(error: GraphQLErrorLike) {
+  public handle(error: ApiOperationError) {
     const errorMessage = this.getErrorMessage(error);
     if (errorMessage) message.error(errorMessage);
   }
 
-  abstract getErrorMessage(error: GraphQLErrorLike): string | null;
+  abstract getErrorMessage(error: ApiOperationError): string | null;
 }
 
 const errorHandlers = new Map<string, ErrorHandler>();
 
 class SaveTablesErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return 'Failed to create model(s).';
@@ -80,7 +109,7 @@ class SaveTablesErrorHandler extends ErrorHandler {
 }
 
 class SaveRelationsErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return 'Failed to define relations.';
@@ -89,7 +118,7 @@ class SaveRelationsErrorHandler extends ErrorHandler {
 }
 
 class CreateAskingTaskErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return '创建问答任务失败，请稍后重试。';
@@ -98,7 +127,7 @@ class CreateAskingTaskErrorHandler extends ErrorHandler {
 }
 
 class CreateThreadErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return '创建对话失败，请稍后重试。';
@@ -107,7 +136,7 @@ class CreateThreadErrorHandler extends ErrorHandler {
 }
 
 class UpdateThreadErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return '更新对话失败。';
@@ -116,7 +145,7 @@ class UpdateThreadErrorHandler extends ErrorHandler {
 }
 
 class DeleteThreadErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return '删除对话失败。';
@@ -125,7 +154,7 @@ class DeleteThreadErrorHandler extends ErrorHandler {
 }
 
 class CreateThreadResponseErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return 'Failed to create thread response.';
@@ -134,7 +163,7 @@ class CreateThreadResponseErrorHandler extends ErrorHandler {
 }
 
 class UpdateThreadResponseErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return 'Failed to update thread response.';
@@ -143,7 +172,7 @@ class UpdateThreadResponseErrorHandler extends ErrorHandler {
 }
 
 class GenerateThreadResponseAnswerErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return 'Failed to generate thread response answer.';
@@ -152,7 +181,7 @@ class GenerateThreadResponseAnswerErrorHandler extends ErrorHandler {
 }
 
 class AdjustThreadResponseErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return 'Failed to adjust thread response answer.';
@@ -161,7 +190,7 @@ class AdjustThreadResponseErrorHandler extends ErrorHandler {
 }
 
 class CreateViewErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return 'Failed to create view.';
@@ -169,20 +198,17 @@ class CreateViewErrorHandler extends ErrorHandler {
   }
 }
 
-class UpdateDataSourceErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+class UpdateConnectionErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
-        return replaceMessage(
-          `Failed to update %{data source}.`,
-          error.message,
-        );
+        return replaceMessage(`Failed to update %{connection}.`, error.message);
     }
   }
 }
 
 class CreateModelErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return 'Failed to create model.';
@@ -191,7 +217,7 @@ class CreateModelErrorHandler extends ErrorHandler {
 }
 
 class UpdateModelErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return 'Failed to update model.';
@@ -200,7 +226,7 @@ class UpdateModelErrorHandler extends ErrorHandler {
 }
 
 class DeleteModelErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return 'Failed to delete model.';
@@ -209,7 +235,7 @@ class DeleteModelErrorHandler extends ErrorHandler {
 }
 
 class UpdateModelMetadataErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return 'Failed to update model metadata.';
@@ -218,7 +244,7 @@ class UpdateModelMetadataErrorHandler extends ErrorHandler {
 }
 
 class CreateCalculatedFieldErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return 'Failed to create calculated field.';
@@ -227,7 +253,7 @@ class CreateCalculatedFieldErrorHandler extends ErrorHandler {
 }
 
 class UpdateCalculatedFieldErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return 'Failed to update calculated field.';
@@ -236,7 +262,7 @@ class UpdateCalculatedFieldErrorHandler extends ErrorHandler {
 }
 
 class DeleteCalculatedFieldErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return 'Failed to delete calculated field.';
@@ -245,7 +271,7 @@ class DeleteCalculatedFieldErrorHandler extends ErrorHandler {
 }
 
 class CreateRelationshipErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return 'Failed to create relationship.';
@@ -254,7 +280,7 @@ class CreateRelationshipErrorHandler extends ErrorHandler {
 }
 
 class UpdateRelationshipErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return 'Failed to update relationship.';
@@ -263,7 +289,7 @@ class UpdateRelationshipErrorHandler extends ErrorHandler {
 }
 
 class DeleteRelationshipErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return 'Failed to delete relationship.';
@@ -272,7 +298,7 @@ class DeleteRelationshipErrorHandler extends ErrorHandler {
 }
 
 class UpdateViewMetadataErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return 'Failed to update view metadata.';
@@ -280,17 +306,17 @@ class UpdateViewMetadataErrorHandler extends ErrorHandler {
   }
 }
 
-class TriggerDataSourceDetectionErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+class TriggerConnectionDetectionErrorHandler extends ErrorHandler {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
-        return 'Failed to scan data source.';
+        return 'Failed to scan connection schema.';
     }
   }
 }
 
 class ResolveSchemaChangeErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return 'Failed to resolve schema change.';
@@ -299,7 +325,7 @@ class ResolveSchemaChangeErrorHandler extends ErrorHandler {
 }
 
 class CreateDashboardItemErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return 'Failed to create dashboard item.';
@@ -308,7 +334,7 @@ class CreateDashboardItemErrorHandler extends ErrorHandler {
 }
 
 class UpdateDashboardItemErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return 'Failed to update dashboard item.';
@@ -317,7 +343,7 @@ class UpdateDashboardItemErrorHandler extends ErrorHandler {
 }
 
 class UpdateDashboardItemLayoutsErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return 'Failed to update dashboard item layouts.';
@@ -326,7 +352,7 @@ class UpdateDashboardItemLayoutsErrorHandler extends ErrorHandler {
 }
 
 class DeleteDashboardItemErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return 'Failed to delete dashboard item.';
@@ -335,7 +361,7 @@ class DeleteDashboardItemErrorHandler extends ErrorHandler {
 }
 
 class SetDashboardScheduleErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return 'Failed to set dashboard schedule.';
@@ -344,7 +370,7 @@ class SetDashboardScheduleErrorHandler extends ErrorHandler {
 }
 
 class CreateSqlPairErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return 'Failed to create question-sql pair.';
@@ -353,7 +379,7 @@ class CreateSqlPairErrorHandler extends ErrorHandler {
 }
 
 class UpdateSqlPairErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return 'Failed to update question-sql pair.';
@@ -362,7 +388,7 @@ class UpdateSqlPairErrorHandler extends ErrorHandler {
 }
 
 class DeleteSqlPairErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return 'Failed to delete question-sql pair.';
@@ -371,7 +397,7 @@ class DeleteSqlPairErrorHandler extends ErrorHandler {
 }
 
 class CreateInstructionErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return 'Failed to create instruction.';
@@ -380,7 +406,7 @@ class CreateInstructionErrorHandler extends ErrorHandler {
 }
 
 class UpdateInstructionErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return 'Failed to update instruction.';
@@ -389,7 +415,7 @@ class UpdateInstructionErrorHandler extends ErrorHandler {
 }
 
 class DeleteInstructionErrorHandler extends ErrorHandler {
-  public getErrorMessage(error: GraphQLErrorLike) {
+  public getErrorMessage(error: ApiOperationError) {
     switch (error.extensions?.code) {
       default:
         return 'Failed to delete instruction.';
@@ -421,7 +447,7 @@ errorHandlers.set(
 );
 
 errorHandlers.set('CreateView', new CreateViewErrorHandler());
-errorHandlers.set('UpdateDataSource', new UpdateDataSourceErrorHandler());
+errorHandlers.set('UpdateConnection', new UpdateConnectionErrorHandler());
 errorHandlers.set('CreateModel', new CreateModelErrorHandler());
 errorHandlers.set('UpdateModel', new UpdateModelErrorHandler());
 errorHandlers.set('DeleteModel', new DeleteModelErrorHandler());
@@ -447,8 +473,8 @@ errorHandlers.set('DeleteRelationship', new DeleteRelationshipErrorHandler());
 
 // Schema change
 errorHandlers.set(
-  'TriggerDataSourceDetection',
-  new TriggerDataSourceDetectionErrorHandler(),
+  'TriggerConnectionDetection',
+  new TriggerConnectionDetectionErrorHandler(),
 );
 errorHandlers.set('ResolveSchemaChange', new ResolveSchemaChangeErrorHandler());
 
@@ -482,6 +508,13 @@ const OFFLINE_NETWORK_ERROR_PATTERNS = [
   'networkerror',
   'fetch failed',
   'econnrefused',
+];
+
+const ABORT_NETWORK_ERROR_PATTERNS = [
+  'aborterror',
+  'signal is aborted without reason',
+  'the operation was aborted',
+  'request was aborted',
 ];
 
 const RUNTIME_SCOPE_NETWORK_ERROR_PATTERNS = [
@@ -536,7 +569,7 @@ const readNetworkStatusCode = (networkError: unknown): number | null => {
   return typeof responseStatus === 'number' ? responseStatus : null;
 };
 
-const readNetworkGraphQLErrorMessage = (
+const readNetworkOperationErrorMessage = (
   networkError: unknown,
 ): string | null => {
   const normalizedNetworkError = toNetworkErrorLike(networkError);
@@ -568,7 +601,9 @@ const readNetworkGraphQLErrorMessage = (
   }
 };
 
-const readNetworkGraphQLErrorCode = (networkError: unknown): string | null => {
+const readNetworkOperationErrorCode = (
+  networkError: unknown,
+): string | null => {
   const normalizedNetworkError = toNetworkErrorLike(networkError);
   if (!normalizedNetworkError) {
     return null;
@@ -610,11 +645,23 @@ export const resolveNetworkErrorMessage = (
     return null;
   }
 
+  if (isAbortRequestError(networkError)) {
+    return null;
+  }
+
   const statusCode = readNetworkStatusCode(networkError);
-  const graphQLErrorCode = readNetworkGraphQLErrorCode(networkError);
+  const operationErrorCode = readNetworkOperationErrorCode(networkError);
   const networkMessage = normalizeErrorText(
-    `${(networkError as Error)?.message || ''} ${readNetworkGraphQLErrorMessage(networkError) || ''}`,
+    `${(networkError as Error)?.message || ''} ${readNetworkOperationErrorMessage(networkError) || ''}`,
   );
+
+  if (
+    ABORT_NETWORK_ERROR_PATTERNS.some((pattern) =>
+      networkMessage.includes(pattern),
+    )
+  ) {
+    return null;
+  }
 
   if (
     isNavigatorOffline() ||
@@ -630,15 +677,15 @@ export const resolveNetworkErrorMessage = (
     return '登录已过期或无访问权限，请重新登录后重试。';
   }
 
-  if (shouldRecoverRuntimeScopeFromErrorCode(graphQLErrorCode)) {
+  if (shouldRecoverRuntimeScopeFromErrorCode(operationErrorCode)) {
     triggerRuntimeScopeRecovery();
   }
 
-  if (graphQLErrorCode === 'NO_DEPLOYMENT_FOUND') {
+  if (operationErrorCode === 'NO_DEPLOYMENT_FOUND') {
     return '当前知识库运行时不可用，请刷新或重新选择知识库后重试。';
   }
 
-  if (graphQLErrorCode === 'OUTDATED_RUNTIME_SNAPSHOT') {
+  if (operationErrorCode === 'OUTDATED_RUNTIME_SNAPSHOT') {
     return '当前知识库快照已过期，请刷新或重新选择知识库后重试。';
   }
 
@@ -665,34 +712,34 @@ const errorHandler = (error: ErrorResponseLike) => {
   }
 
   const operationName = error?.operation?.operationName || '';
-  if (error.graphQLErrors) {
-    for (const err of error.graphQLErrors) {
-      errorHandlers.get(operationName)?.handle(err);
-    }
+  for (const operationError of readOperationErrors(error)) {
+    errorHandlers.get(operationName)?.handle(operationError);
   }
 };
 
 export default errorHandler;
 
-type ApolloLikeError = {
-  graphQLErrors?: GraphQLErrorLike[];
+type OperationClientError = {
+  errors?: ApiOperationError[];
   message?: string;
 };
 
-export const isApolloLikeError = (error: unknown): error is ApolloLikeError => {
+export const isOperationClientError = (
+  error: unknown,
+): error is OperationClientError => {
   if (!error || typeof error !== 'object') {
     return false;
   }
 
-  return Array.isArray((error as ApolloLikeError).graphQLErrors);
+  return readOperationErrors(error as Record<string, unknown>).length > 0;
 };
 
-export const parseGraphQLError = (
-  error: ApolloLikeError | null | undefined,
+export const parseOperationError = (
+  error: OperationClientError | Record<string, unknown> | null | undefined,
 ) => {
-  if (!error) return null;
-  const graphQLErrors = error.graphQLErrors?.[0];
-  const extensions = graphQLErrors?.extensions || {};
+  const operationError = readOperationErrors(error)?.[0];
+  if (!operationError) return null;
+  const extensions = operationError.extensions || {};
   return {
     message: extensions.message as string | undefined,
     shortMessage: extensions.shortMessage as string | undefined,

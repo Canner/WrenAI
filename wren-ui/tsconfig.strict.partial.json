@@ -5,7 +5,7 @@
     "allowJs": false
   },
   "include": [
-    "src/apollo/client/runtimeScope.ts",
+    "src/runtime/client/runtimeScope.ts",
     "src/hooks/useAskProcessState.tsx",
     "src/hooks/useAskPrompt.tsx",
     "src/hooks/useAskingStreamTask.tsx",
@@ -20,7 +20,7 @@
     "src/hooks/useKnowledgePageActions.ts",
     "src/hooks/useKnowledgePageHelpers.ts",
     "src/hooks/useKnowledgeRuleSqlManager.ts",
-    "src/hooks/useKnowledgeRuleSqlMutations.ts",
+    "src/hooks/useKnowledgeRuleSqlActions.ts",
     "src/hooks/useRecommendedQuestionsInstruction.tsx",
     "src/hooks/useKnowledgeRuntimeContext.ts",
     "src/hooks/useRuntimeScopeNavigation.tsx",

@@ -97,9 +97,9 @@ export default function PersistentConsoleShell({ children }: Props) {
         id: thread.id,
         title: getReferenceDisplayThreadTitle(thread.name),
         active: activeHistoryId ? thread.id === activeHistoryId : false,
-        onClick: () => homeSidebar.onSelect([thread.id], thread.selector),
+        selector: thread.selector,
       })),
-    [activeHistoryId, homeSidebar],
+    [activeHistoryId, homeSidebar.data?.threads],
   );
   const contextValue = useMemo(
     () => ({

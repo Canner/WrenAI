@@ -8,10 +8,12 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
 const resolveAlias = {
   antd$: path.resolve(__dirname, 'src/import/antd'),
 };
+const distDir = process.env.NEXT_DIST_DIR || './.next';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = withLess({
   output: 'standalone',
+  distDir,
   staticPageGenerationTimeout: 1000,
   transpilePackages: ['rc-util'],
   compiler: {

@@ -65,8 +65,7 @@ export default async function handler(
       workspaceId: validatedSession.workspace.id,
       bindingId,
       roleRepository: components.roleRepository,
-      principalRoleBindingRepository:
-        components.principalRoleBindingRepository,
+      principalRoleBindingRepository: components.principalRoleBindingRepository,
     });
 
     await recordAuditEvent({

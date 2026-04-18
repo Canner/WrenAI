@@ -1,5 +1,7 @@
 # Workspace / Knowledge Base 实施计划
 
+> 历史说明（2026-04-16）：本文保留的是 Apollo/GraphQL 时代的设计、排障或执行记录。当前 `wren-ui` 运行时前端已经切到 REST，代码目录也已收口到 `src/server/*` 与 `src/pages/api/v1/*`；文中的旧 GraphQL 入口、resolver 与 Apollo 上下文描述仅作历史背景，不再代表当前主链路。
+
 更新时间：2026-04-12
 
 > 本文档是 `docs/workspace-kb-design.md` 的落地实施说明。
@@ -370,26 +372,26 @@ bootstrap 流程改为**幂等初始化**：
 优先改这些模块：
 
 ### 后端 / API
-- `wren-ui/src/apollo/server/services/authService.ts`
-- `wren-ui/src/apollo/server/services/workspaceService.ts`
-- `wren-ui/src/apollo/server/services/knowledgeBaseService.ts`
+- `wren-ui/src/server/services/authService.ts`
+- `wren-ui/src/server/services/workspaceService.ts`
+- `wren-ui/src/server/services/knowledgeBaseService.ts`
 - `wren-ui/src/pages/api/auth/*`
 - `wren-ui/src/pages/api/v1/workspace/*`
 - `wren-ui/src/pages/api/v1/knowledge/bases/*`
 
 ### Runtime / 前端
-- `wren-ui/src/apollo/client/runtimeScope.ts`
+- `wren-ui/src/runtime/client/runtimeScope.ts`
 - `wren-ui/src/components/runtimeScope/RuntimeScopeBootstrap.tsx`
-- `wren-ui/src/apollo/server/resolvers/runtimeSelectorResolver.ts`
+- `wren-ui/src/pages/api/v1/runtime/scope/current.ts`
 - `wren-ui/src/hooks/useAuthSession.ts`
 - `wren-ui/src/pages/workspace.tsx`
 - `wren-ui/src/pages/knowledge/index.tsx`
 
 ### Migration / Repository
 - `wren-ui/migrations/*`
-- `wren-ui/src/apollo/server/repositories/userRepository.ts`
-- `wren-ui/src/apollo/server/repositories/workspaceRepository.ts`
-- `wren-ui/src/apollo/server/repositories/knowledgeBaseRepository.ts`
+- `wren-ui/src/server/repositories/userRepository.ts`
+- `wren-ui/src/server/repositories/workspaceRepository.ts`
+- `wren-ui/src/server/repositories/knowledgeBaseRepository.ts`
 
 ---
 

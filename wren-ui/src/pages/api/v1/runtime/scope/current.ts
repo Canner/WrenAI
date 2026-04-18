@@ -1,9 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { RuntimeSelectorResolver } from '@server/resolvers/runtimeSelectorResolver';
-import { buildResolverContextFromRequest } from '../../resolverContext';
+import { RuntimeSelectorController } from '@server/controllers/runtimeSelectorController';
+import { buildApiContextFromRequest } from '../../apiContext';
 import { sendRestApiError } from '../../restApi';
 
-const runtimeSelectorResolver = new RuntimeSelectorResolver();
+const runtimeSelectorController = new RuntimeSelectorController();
 
 export default async function handler(
   req: NextApiRequest,
@@ -15,12 +15,10 @@ export default async function handler(
       throw new Error('Method not allowed');
     }
 
-    const ctx = await buildResolverContextFromRequest({ req });
-    const result = await runtimeSelectorResolver.getRuntimeSelectorState(
-      null,
-      null,
+    const ctx = await buildApiContextFromRequest({ req });
+    const result = await runtimeSelectorController.getRuntimeSelectorState({
       ctx,
-    );
+    });
 
     return res.status(200).json(result);
   } catch (error) {

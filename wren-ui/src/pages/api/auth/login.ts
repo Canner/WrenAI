@@ -50,6 +50,7 @@ const resolveWorkspaceRuntimeSelector = async (workspaceId: string) => {
     await resolveBootstrapKnowledgeBaseSelection(
       knowledgeBases,
       components.kbSnapshotRepository,
+      components.deployLogRepository,
     );
 
   return toRuntimeSelector(workspaceId, knowledgeBase, snapshot);

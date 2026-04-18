@@ -286,7 +286,7 @@ BFF / API / 前端侧同步收口：
 - `AskResultType.SKILL` 删除
 - `/api/v1/ask`、`/api/v1/stream/ask` 不再返回 `SKILL_QUERY`
 - `SkillAnswer` 不再作为 ask 主结果渲染分支
-- tracker / repository / GraphQL generated types 不再读写 `skillResult`
+- tracker / repository / 历史 GraphQL generated types 不再读写 `skillResult`
 
 ### 5.4 `skill_result` 持久化字段处理原则
 

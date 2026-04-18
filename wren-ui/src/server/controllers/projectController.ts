@@ -16,6 +16,7 @@ import {
   handleNestedColumns,
 } from '@server/utils';
 import {
+  Connector,
   DUCKDB_CONNECTION_INFO,
   KnowledgeBase,
   Model,
@@ -34,9 +35,9 @@ import { CompactTable, ProjectData } from '../services';
 import { DuckDBPrepareOptions } from '@server/adaptors/wrenEngineAdaptor';
 import { AskRuntimeIdentity } from '@server/models/adaptor';
 import { PersistedRuntimeIdentity } from '@server/context/runtimeScope';
-import DataSourceSchemaDetector, {
+import ConnectionSchemaDetector, {
   SchemaChangeType,
-} from '@server/managers/dataSourceSchemaDetector';
+} from '@server/managers/connectionSchemaDetector';
 import { encryptConnectionInfo } from '../dataSource';
 import { TelemetryEvent } from '../telemetry/telemetry';
 import { resolveRuntimeProject as resolveScopedRuntimeProject } from '../utils/runtimeExecutionContext';
@@ -52,39 +53,38 @@ import {
   recordAuditEvent,
 } from '@server/authz';
 import { ApiError } from '@server/utils/apiUtils';
+import { OnboardingStatus } from '@/types/project';
 import {
   canImportSampleDatasetInWorkspace,
   getSampleDatasetImportRestrictionReason,
 } from '@/utils/workspaceGovernance';
+import {
+  buildConnectionSettingsFromConnector,
+  buildConnectorBridgeFromConnection,
+  canBridgeConnectionTypeToConnector,
+} from '@server/utils/connectionConnectorBridge';
 
 const logger = getLogger('ProjectController');
 logger.level = 'debug';
 
-export enum OnboardingStatusEnum {
-  NOT_STARTED = 'NOT_STARTED',
-  DATASOURCE_SAVED = 'DATASOURCE_SAVED',
-  ONBOARDING_FINISHED = 'ONBOARDING_FINISHED',
-  WITH_SAMPLE_DATASET = 'WITH_SAMPLE_DATASET',
-}
-
 export const MANAGED_FEDERATED_RUNTIME_READONLY_MESSAGE =
-  '当前为系统自动维护的联邦运行时，请前往知识库 → 连接器维护数据源。';
+  '当前为系统自动维护的联邦运行时，请前往知识库 → 连接器维护连接。';
 
 export class ProjectController {
   constructor() {
     this.getSettings = this.getSettings.bind(this);
     this.updateCurrentProject = this.updateCurrentProject.bind(this);
     this.resetCurrentProject = this.resetCurrentProject.bind(this);
-    this.saveDataSource = this.saveDataSource.bind(this);
-    this.updateDataSource = this.updateDataSource.bind(this);
-    this.listDataSourceTables = this.listDataSourceTables.bind(this);
+    this.saveConnection = this.saveConnection.bind(this);
+    this.updateConnection = this.updateConnection.bind(this);
+    this.listConnectionTables = this.listConnectionTables.bind(this);
     this.saveTables = this.saveTables.bind(this);
     this.autoGenerateRelation = this.autoGenerateRelation.bind(this);
     this.saveRelations = this.saveRelations.bind(this);
     this.getOnboardingStatus = this.getOnboardingStatus.bind(this);
     this.startSampleDataset = this.startSampleDataset.bind(this);
-    this.triggerDataSourceDetection =
-      this.triggerDataSourceDetection.bind(this);
+    this.triggerConnectionDetection =
+      this.triggerConnectionDetection.bind(this);
     this.getSchemaChange = this.getSchemaChange.bind(this);
     this.getProjectRecommendationQuestions =
       this.getProjectRecommendationQuestions.bind(this);
@@ -100,25 +100,42 @@ export class ProjectController {
       this.resolveActiveRuntimeKnowledgeBase(ctx),
     ]);
     await this.assertKnowledgeBaseReadAccess(ctx);
+    const connector = await this.resolveKnowledgeBaseConnectionConnector(
+      ctx,
+      knowledgeBase,
+    );
     const generalConnectionInfo = project
       ? ctx.projectService.getGeneralConnectionInfo(project)
       : null;
-    const dataSourceType = project?.type ?? null;
+    const connectionType = project?.type ?? null;
+    const connectorBackedConnection = connector
+      ? buildConnectionSettingsFromConnector({
+          displayName: connector.displayName,
+          databaseProvider: connector.databaseProvider,
+          config: connector.configJson,
+        })
+      : null;
+
+    const connection = connectorBackedConnection
+      ? {
+          ...connectorBackedConnection,
+          sampleDataset: knowledgeBase?.sampleDataset ?? null,
+        }
+      : project
+      ? {
+          type: connectionType,
+          properties: this.buildConnectionSettingsProperties({
+            project,
+            knowledgeBase,
+            generalConnectionInfo: generalConnectionInfo || {},
+          }) as DataSourceProperties,
+          sampleDataset: knowledgeBase?.sampleDataset ?? project.sampleDataset,
+        }
+      : null;
 
     const result = {
       productVersion: ctx.config.wrenProductVersion || '',
-      dataSource: project
-        ? {
-            type: dataSourceType,
-            properties: this.buildDataSourceSettingsProperties({
-              project,
-              knowledgeBase,
-              generalConnectionInfo: generalConnectionInfo || {},
-            }) as DataSourceProperties,
-            sampleDataset:
-              knowledgeBase?.sampleDataset ?? project.sampleDataset,
-          }
-        : null,
+      connection,
       language: knowledgeBase?.language ?? project?.language ?? null,
     };
     await this.recordKnowledgeBaseReadAudit(ctx, {
@@ -209,7 +226,7 @@ export class ProjectController {
         : Promise.resolve(null),
     ]);
 
-    // only generating for user's data source
+    // only generate for user-managed connections
     if (
       project &&
       (knowledgeBase?.sampleDataset ?? project.sampleDataset) === null
@@ -272,20 +289,20 @@ export class ProjectController {
       // telemetry
       ctx.telemetry.sendEvent(eventName, {
         projectId: id,
-        dataSourceType: project.type,
+        connectionType: project.type,
       });
       await this.recordKnowledgeBaseWriteAudit(ctx, {
         resourceType: 'project',
         resourceId: id,
         payloadJson: {
           operation: 'reset_current_project',
-          dataSourceType: project.type,
+          connectionType: project.type,
         },
       });
     } catch (err: any) {
       ctx.telemetry.sendEvent(
         eventName,
-        { dataSourceType: project.type, error: err.message },
+        { connectionType: project.type, error: err.message },
         err.extensions?.service,
         false,
       );
@@ -323,25 +340,25 @@ export class ProjectController {
       datasetName: name,
     };
     try {
-      // create duckdb datasource
+      // create the DuckDB sample connection
       const initSql = buildInitSql(name as SampleDatasetName);
-      const duckdbDatasourceProperties = {
+      const duckdbConnectionProperties = {
         displayName: name,
         initSql,
         extensions: [],
         configurations: {},
       };
-      const project = await this.createProjectFromDataSource(
+      const project = await this.createProjectFromConnection(
         {
           type: DataSourceName.DUCKDB,
-          properties: duckdbDatasourceProperties,
+          properties: duckdbConnectionProperties,
         },
         ctx,
       );
 
-      // list all the tables in the data source
+      // list all the tables visible through the connection
       const tables =
-        await ctx.projectService.getProjectDataSourceTables(project);
+        await ctx.projectService.getProjectConnectionTables(project);
       const tableNames = tables.map((table) => table.name);
 
       // save tables as model and modelColumns
@@ -420,7 +437,7 @@ export class ProjectController {
         },
       });
       return {
-        status: OnboardingStatusEnum.WITH_SAMPLE_DATASET,
+        status: OnboardingStatus.WITH_SAMPLE_DATASET,
       };
     }
 
@@ -437,7 +454,7 @@ export class ProjectController {
           },
         });
         return {
-          status: OnboardingStatusEnum.DATASOURCE_SAVED,
+          status: OnboardingStatus.CONNECTION_SAVED,
         };
       }
 
@@ -449,7 +466,7 @@ export class ProjectController {
         },
       });
       return {
-        status: OnboardingStatusEnum.NOT_STARTED,
+        status: OnboardingStatus.NOT_STARTED,
       };
     }
 
@@ -464,7 +481,7 @@ export class ProjectController {
         },
       });
       return {
-        status: OnboardingStatusEnum.DATASOURCE_SAVED,
+        status: OnboardingStatus.CONNECTION_SAVED,
       };
     } else {
       await this.recordKnowledgeBaseReadAudit(ctx, {
@@ -475,12 +492,12 @@ export class ProjectController {
         },
       });
       return {
-        status: OnboardingStatusEnum.ONBOARDING_FINISHED,
+        status: OnboardingStatus.ONBOARDING_FINISHED,
       };
     }
   }
 
-  public async saveDataSource(
+  public async saveConnection(
     _root: any,
     args: {
       data: DataSource;
@@ -488,29 +505,67 @@ export class ProjectController {
     ctx: IContext,
   ) {
     await this.assertKnowledgeBaseWriteAccess(ctx);
-    const project = await this.createProjectFromDataSource(args.data, ctx);
+    const knowledgeBase = await this.resolveActiveRuntimeKnowledgeBase(ctx);
+    const supportsConnectorBridge =
+      Boolean(knowledgeBase) &&
+      canBridgeConnectionTypeToConnector(args.data.type as DataSourceName);
+    let connectorResource: Connector | null = null;
+
+    if (knowledgeBase && supportsConnectorBridge) {
+      connectorResource = await this.upsertKnowledgeBaseConnectorForConnection({
+        ctx,
+        knowledgeBase,
+        connection: args.data,
+        mode: 'save',
+      });
+    }
+
+    const project = await this.createProjectFromConnection(args.data, ctx);
+    if (knowledgeBase && connectorResource && !knowledgeBase.primaryConnectorId) {
+      await ctx.knowledgeBaseRepository.updateOne(knowledgeBase.id, {
+        primaryConnectorId: connectorResource.id,
+      });
+    }
     await this.recordKnowledgeBaseWriteAudit(ctx, {
-      resourceType: 'project',
-      resourceId: project.id,
+      resourceType: knowledgeBase ? 'knowledge_base' : 'project',
+      resourceId: knowledgeBase?.id || project.id,
       afterJson: {
         type: project.type,
         displayName: project.displayName,
+        ...(connectorResource
+          ? {
+              primaryConnectorId: connectorResource.id,
+              databaseProvider: connectorResource.databaseProvider,
+            }
+          : {}),
       },
       payloadJson: {
-        operation: 'save_data_source',
+        operation: 'save_connection',
       },
     });
 
-    return {
-      type: project.type,
-      properties: {
-        displayName: project.displayName,
-        ...ctx.projectService.getGeneralConnectionInfo(project),
-      },
-    };
+    return connectorResource
+      ? (buildConnectionSettingsFromConnector({
+          displayName: connectorResource.displayName,
+          databaseProvider: connectorResource.databaseProvider,
+          config: connectorResource.configJson,
+        }) ?? {
+          type: project.type,
+          properties: {
+            displayName: project.displayName,
+            ...ctx.projectService.getGeneralConnectionInfo(project),
+          },
+        })
+      : {
+          type: project.type,
+          properties: {
+            displayName: project.displayName,
+            ...ctx.projectService.getGeneralConnectionInfo(project),
+          },
+        };
   }
 
-  public async updateDataSource(
+  public async updateConnection(
     _root: any,
     args: { data: DataSource },
     ctx: IContext,
@@ -520,18 +575,75 @@ export class ProjectController {
     const { displayName, ...connectionInfo } = properties;
     const project = await this.getActiveRuntimeProjectOrThrow(ctx);
     await this.assertKnowledgeBaseWriteAccess(ctx);
-    if (this.isManagedFederatedRuntimeProject(project, knowledgeBase)) {
+    const supportsConnectorBridge =
+      Boolean(knowledgeBase) &&
+      canBridgeConnectionTypeToConnector(args.data.type as DataSourceName);
+    const existingConnector = knowledgeBase
+      ? await this.resolveKnowledgeBaseConnectionConnector(ctx, knowledgeBase)
+      : null;
+    let connectorResource: Connector | null = null;
+    const managedFederatedRuntime = this.isManagedFederatedRuntimeProject(
+      project,
+      knowledgeBase,
+    );
+
+    if (managedFederatedRuntime && !existingConnector) {
       throw new Error(MANAGED_FEDERATED_RUNTIME_READONLY_MESSAGE);
     }
-    const dataSourceType = project.type;
+
+    if (
+      knowledgeBase &&
+      supportsConnectorBridge &&
+      (existingConnector || !managedFederatedRuntime)
+    ) {
+      connectorResource = await this.upsertKnowledgeBaseConnectorForConnection({
+        ctx,
+        knowledgeBase,
+        connection: args.data,
+        mode: 'update',
+      });
+    }
+
+    if (!connectorResource && managedFederatedRuntime) {
+      throw new Error(MANAGED_FEDERATED_RUNTIME_READONLY_MESSAGE);
+    }
+    if (connectorResource && managedFederatedRuntime) {
+      await this.recordKnowledgeBaseWriteAudit(ctx, {
+        resourceType: knowledgeBase ? 'knowledge_base' : 'project',
+        resourceId: knowledgeBase?.id || project.id,
+        afterJson: {
+          type: args.data.type,
+          displayName: connectorResource.displayName,
+          primaryConnectorId:
+            knowledgeBase?.primaryConnectorId || connectorResource.id,
+          databaseProvider: connectorResource.databaseProvider,
+        },
+        payloadJson: {
+          operation: 'update_connection',
+          runtimeMode: 'connector_managed',
+        },
+      });
+
+      return (
+        buildConnectionSettingsFromConnector({
+          displayName: connectorResource.displayName,
+          databaseProvider: connectorResource.databaseProvider,
+          config: connectorResource.configJson,
+        }) || {
+          type: args.data.type,
+          properties,
+        }
+      );
+    }
+    const connectionType = project.type;
 
     // only new connection info needed to encrypt
     const toUpdateConnectionInfo = encryptConnectionInfo(
-      dataSourceType,
+      connectionType,
       connectionInfo as any,
     );
 
-    if (dataSourceType === DataSourceName.DUCKDB) {
+    if (connectionType === DataSourceName.DUCKDB) {
       // prepare duckdb environment in wren-engine
       const { initSql, extensions, configurations } =
         toUpdateConnectionInfo as DUCKDB_CONNECTION_INFO;
@@ -550,34 +662,57 @@ export class ProjectController {
         },
       } as Project;
 
-      await ctx.projectService.getProjectDataSourceTables(updatedProject);
-      logger.debug(`Data source tables fetched`);
+      await ctx.projectService.getProjectConnectionTables(updatedProject);
+      logger.debug(`Connection tables fetched`);
     }
     const updatedProject = await ctx.projectRepository.updateOne(project.id, {
       displayName,
       connectionInfo: { ...project.connectionInfo, ...toUpdateConnectionInfo },
     });
+    if (knowledgeBase && connectorResource && !knowledgeBase.primaryConnectorId) {
+      await ctx.knowledgeBaseRepository.updateOne(knowledgeBase.id, {
+        primaryConnectorId: connectorResource.id,
+      });
+    }
     await this.recordKnowledgeBaseWriteAudit(ctx, {
-      resourceType: 'project',
-      resourceId: updatedProject.id,
+      resourceType: knowledgeBase ? 'knowledge_base' : 'project',
+      resourceId: knowledgeBase?.id || updatedProject.id,
       afterJson: {
         type: updatedProject.type,
         displayName: updatedProject.displayName,
+        ...(connectorResource
+          ? {
+              primaryConnectorId: connectorResource.id,
+              databaseProvider: connectorResource.databaseProvider,
+            }
+          : {}),
       },
       payloadJson: {
-        operation: 'update_data_source',
+        operation: 'update_connection',
       },
     });
-    return {
-      type: updatedProject.type,
-      properties: {
-        displayName: updatedProject.displayName,
-        ...ctx.projectService.getGeneralConnectionInfo(updatedProject),
-      },
-    };
+    return connectorResource
+      ? (buildConnectionSettingsFromConnector({
+          displayName: connectorResource.displayName,
+          databaseProvider: connectorResource.databaseProvider,
+          config: connectorResource.configJson,
+        }) ?? {
+          type: updatedProject.type,
+          properties: {
+            displayName: updatedProject.displayName,
+            ...ctx.projectService.getGeneralConnectionInfo(updatedProject),
+          },
+        })
+      : {
+          type: updatedProject.type,
+          properties: {
+            displayName: updatedProject.displayName,
+            ...ctx.projectService.getGeneralConnectionInfo(updatedProject),
+          },
+        };
   }
 
-  public async listDataSourceTables({ ctx }: { ctx: IContext }) {
+  public async listConnectionTables({ ctx }: { ctx: IContext }) {
     await this.assertKnowledgeBaseReadAccess(ctx);
     const project = await this.resolveActiveRuntimeProject(ctx);
     const knowledgeBase = await this.resolveActiveRuntimeKnowledgeBase(ctx);
@@ -593,7 +728,7 @@ export class ProjectController {
       return [];
     }
 
-    const result = await ctx.projectService.getProjectDataSourceTables(project);
+    const result = await ctx.projectService.getProjectConnectionTables(project);
     await this.recordKnowledgeBaseReadAudit(ctx, {
       resourceType: 'project',
       resourceId: project.id,
@@ -625,7 +760,7 @@ export class ProjectController {
       );
       // telemetry
       ctx.telemetry.sendEvent(eventName, {
-        dataSourceType: project.type,
+        connectionType: project.type,
         tablesCount: models.length,
         columnsCount: columns.length,
       });
@@ -649,7 +784,7 @@ export class ProjectController {
     } catch (err: any) {
       ctx.telemetry.sendEvent(
         eventName,
-        { dataSourceType: project.type, error: err.message },
+        { connectionType: project.type, error: err.message },
         err.extensions?.service,
         false,
       );
@@ -861,7 +996,7 @@ export class ProjectController {
       modelIds,
     });
 
-    const schemaDetector = new DataSourceSchemaDetector({
+    const schemaDetector = new ConnectionSchemaDetector({
       ctx,
       projectId: project.id,
     });
@@ -900,14 +1035,14 @@ export class ProjectController {
     return result;
   }
 
-  public async triggerDataSourceDetection(
+  public async triggerConnectionDetection(
     _root: any,
     _arg: any,
     ctx: IContext,
   ) {
     const project = await this.getActiveRuntimeProjectOrThrow(ctx);
     await this.assertKnowledgeBaseWriteAccess(ctx);
-    const schemaDetector = new DataSourceSchemaDetector({
+    const schemaDetector = new ConnectionSchemaDetector({
       ctx,
       projectId: project.id,
     });
@@ -919,7 +1054,7 @@ export class ProjectController {
         resourceType: 'project',
         resourceId: project.id,
         payloadJson: {
-          operation: 'trigger_data_source_detection',
+          operation: 'trigger_connection_detection',
           hasSchemaChange,
         },
       });
@@ -943,7 +1078,7 @@ export class ProjectController {
     const { type } = arg.where;
     const project = await this.getActiveRuntimeProjectOrThrow(ctx);
     await this.assertKnowledgeBaseWriteAccess(ctx);
-    const schemaDetector = new DataSourceSchemaDetector({
+    const schemaDetector = new ConnectionSchemaDetector({
       ctx,
       projectId: project.id,
     });
@@ -971,11 +1106,11 @@ export class ProjectController {
     return true;
   }
 
-  private async createProjectFromDataSource(
-    dataSource: DataSource,
+  private async createProjectFromConnection(
+    connection: DataSource,
     ctx: IContext,
   ): Promise<Project> {
-    const { type, properties } = dataSource;
+    const { type, properties } = connection;
     // Currently only can create one project
     await this.resetCurrentProject({ ctx });
 
@@ -999,10 +1134,10 @@ export class ProjectController {
 
     const eventName = TelemetryEvent.CONNECTION_SAVE_DATA_SOURCE;
     const eventProperties = {
-      dataSourceType: type,
+      connectionType: type,
     };
 
-    // try to connect to the data source
+    // try to connect to the target connection
     try {
       // handle duckdb connection
       if (type === DataSourceName.DUCKDB) {
@@ -1014,14 +1149,14 @@ export class ProjectController {
           configurations: duckdbConnectionInfo.configurations || {},
         });
       } else {
-        // handle other data source
-        await ctx.projectService.getProjectDataSourceTables(project);
+        // handle other database connections
+        await ctx.projectService.getProjectConnectionTables(project);
         const version =
-          await ctx.projectService.getProjectDataSourceVersion(project);
+          await ctx.projectService.getProjectConnectionVersion(project);
         await ctx.projectService.updateProject(project.id, {
           version,
         });
-        logger.debug(`Data source tables fetched`);
+        logger.debug(`Connection tables fetched`);
       }
 
       const knowledgeBase = await this.resolveActiveRuntimeKnowledgeBase(ctx);
@@ -1059,7 +1194,7 @@ export class ProjectController {
       false,
     );
 
-    // only generating for user's data source
+    // only generate for user-managed connections
     if (project.sampleDataset === null) {
       await ctx.projectService.generateProjectRecommendationQuestions(
         project.id,
@@ -1088,7 +1223,7 @@ export class ProjectController {
     return ctx.runtimeScope?.selector?.runtimeScopeId || null;
   }
 
-  private buildDataSourceSettingsProperties({
+  private buildConnectionSettingsProperties({
     project,
     knowledgeBase,
     generalConnectionInfo,
@@ -1127,6 +1262,106 @@ export class ProjectController {
         project.id === knowledgeBase.runtimeProjectId &&
         project.type === DataSourceName.TRINO,
     );
+  }
+
+  private async resolveKnowledgeBaseConnectionConnector(
+    ctx: IContext,
+    knowledgeBase?: KnowledgeBase | null,
+  ): Promise<Connector | null> {
+    if (!knowledgeBase) {
+      return null;
+    }
+
+    if (knowledgeBase.primaryConnectorId) {
+      const primaryConnector = await ctx.connectorRepository.findOneBy({
+        id: knowledgeBase.primaryConnectorId,
+      });
+
+      if (
+        primaryConnector &&
+        primaryConnector.workspaceId === knowledgeBase.workspaceId &&
+        primaryConnector.knowledgeBaseId === knowledgeBase.id
+      ) {
+        return primaryConnector;
+      }
+    }
+
+    const connectors = await ctx.connectorRepository.findAllBy({
+      workspaceId: knowledgeBase.workspaceId,
+      knowledgeBaseId: knowledgeBase.id,
+    });
+
+    return connectors[0] || null;
+  }
+
+  private async upsertKnowledgeBaseConnectorForConnection({
+    ctx,
+    knowledgeBase,
+    connection,
+    mode,
+  }: {
+    ctx: IContext;
+    knowledgeBase: KnowledgeBase;
+    connection: DataSource;
+    mode: 'save' | 'update';
+  }): Promise<Connector | null> {
+    const bridgePayload = buildConnectorBridgeFromConnection(connection);
+    if (!bridgePayload) {
+      return null;
+    }
+
+    await ctx.connectorService.testConnectorConnection({
+      workspaceId: knowledgeBase.workspaceId,
+      knowledgeBaseId: knowledgeBase.id,
+      type: bridgePayload.type,
+      databaseProvider: bridgePayload.databaseProvider,
+      config: bridgePayload.config,
+      ...(Object.prototype.hasOwnProperty.call(bridgePayload, 'secret')
+        ? { secret: bridgePayload.secret ?? null }
+        : {}),
+    });
+
+    const existingConnector =
+      await this.resolveKnowledgeBaseConnectionConnector(ctx, knowledgeBase);
+
+    if (existingConnector && mode === 'update') {
+      return await ctx.connectorService.updateConnector(existingConnector.id, {
+        knowledgeBaseId: knowledgeBase.id,
+        type: bridgePayload.type,
+        databaseProvider: bridgePayload.databaseProvider,
+        displayName: bridgePayload.displayName,
+        config: bridgePayload.config,
+        ...(Object.prototype.hasOwnProperty.call(bridgePayload, 'secret')
+          ? { secret: bridgePayload.secret ?? null }
+          : {}),
+      });
+    }
+
+    if (existingConnector && mode === 'save') {
+      return await ctx.connectorService.updateConnector(existingConnector.id, {
+        knowledgeBaseId: knowledgeBase.id,
+        type: bridgePayload.type,
+        databaseProvider: bridgePayload.databaseProvider,
+        displayName: bridgePayload.displayName,
+        config: bridgePayload.config,
+        ...(Object.prototype.hasOwnProperty.call(bridgePayload, 'secret')
+          ? { secret: bridgePayload.secret ?? null }
+          : {}),
+      });
+    }
+
+    return await ctx.connectorService.createConnector({
+      workspaceId: knowledgeBase.workspaceId,
+      knowledgeBaseId: knowledgeBase.id,
+      type: bridgePayload.type,
+      databaseProvider: bridgePayload.databaseProvider,
+      displayName: bridgePayload.displayName,
+      config: bridgePayload.config,
+      ...(Object.prototype.hasOwnProperty.call(bridgePayload, 'secret')
+        ? { secret: bridgePayload.secret ?? null }
+        : {}),
+      createdBy: ctx.runtimeScope?.userId || null,
+    });
   }
 
   private async getActiveRuntimeProjectOrThrow(
@@ -1426,7 +1661,7 @@ export class ProjectController {
     await ctx.modelService.deleteAllModelsByProjectId(project.id);
 
     const compactTables: CompactTable[] =
-      await ctx.projectService.getProjectDataSourceTables(project);
+      await ctx.projectService.getProjectConnectionTables(project);
 
     const selectedTables = compactTables.filter((table) =>
       tables.includes(table.name),

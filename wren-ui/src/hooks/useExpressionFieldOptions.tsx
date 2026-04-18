@@ -1,4 +1,4 @@
-import { ExpressionName } from '@/types/api';
+import { ExpressionName } from '@/types/calculatedField';
 import { getExpressionTexts } from '@/utils/data';
 import {
   aggregations,

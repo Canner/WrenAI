@@ -18,7 +18,7 @@ import { getCompactTime, nextTick } from '@/utils/time';
 import { LoadingWrapper } from '@/components/PageLoading';
 import { DashboardItemDropdown } from '@/components/diagram/CustomDropdown';
 import EditableWrapper, { EditableContext } from '@/components/EditableWrapper';
-import type { ClientRuntimeScopeSelector } from '@/apollo/client/runtimeScope';
+import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import {
   previewDashboardItem,
   updateDashboardItem,

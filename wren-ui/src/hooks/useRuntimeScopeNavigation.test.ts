@@ -1,8 +1,11 @@
 import {
+  resolveScopedNavigationSelector,
   resolveRuntimeNavigationSelector,
   resolveWorkspaceNavigationSelector,
+  shouldPreserveKnowledgeRuntimeScope,
   shouldNavigateRuntimeScope,
 } from './useRuntimeScopeNavigation';
+import { Path } from '@/utils/enum';
 
 describe('shouldNavigateRuntimeScope', () => {
   it('skips navigation when the next url is empty or unchanged', () => {
@@ -52,6 +55,63 @@ describe('resolveWorkspaceNavigationSelector', () => {
         knowledgeBaseId: 'kb-1',
       }),
     ).toEqual({});
+  });
+});
+
+describe('shouldPreserveKnowledgeRuntimeScope', () => {
+  it('preserves the full runtime selector for knowledge-scoped destinations', () => {
+    expect(shouldPreserveKnowledgeRuntimeScope(Path.Knowledge)).toBe(true);
+    expect(shouldPreserveKnowledgeRuntimeScope(Path.Modeling)).toBe(true);
+    expect(shouldPreserveKnowledgeRuntimeScope(Path.HomeDashboard)).toBe(true);
+    expect(
+      shouldPreserveKnowledgeRuntimeScope(`${Path.Knowledge}?section=modeling`),
+    ).toBe(true);
+  });
+
+  it('keeps workspace-only navigation for non knowledge destinations', () => {
+    expect(shouldPreserveKnowledgeRuntimeScope(Path.Home)).toBe(false);
+    expect(shouldPreserveKnowledgeRuntimeScope(Path.Settings)).toBe(false);
+  });
+});
+
+describe('resolveScopedNavigationSelector', () => {
+  const fullSelector = {
+    workspaceId: 'ws-1',
+    knowledgeBaseId: 'kb-1',
+    kbSnapshotId: 'snap-1',
+    deployHash: 'hash-1',
+  };
+
+  it('preserves the full selector when navigating to knowledge workbench pages', () => {
+    expect(
+      resolveScopedNavigationSelector({
+        selector: fullSelector,
+        path: Path.Knowledge,
+      }),
+    ).toEqual(fullSelector);
+
+    expect(
+      resolveScopedNavigationSelector({
+        selector: fullSelector,
+        path: Path.Modeling,
+      }),
+    ).toEqual(fullSelector);
+
+    expect(
+      resolveScopedNavigationSelector({
+        selector: fullSelector,
+        path: Path.HomeDashboard,
+      }),
+    ).toEqual(fullSelector);
+  });
+
+  it('falls back to workspace-only selector for non knowledge pages', () => {
+    expect(
+      resolveScopedNavigationSelector({
+        selector: fullSelector,
+        path: Path.Home,
+      }),
+    ).toEqual({ workspaceId: 'ws-1' });
   });
 });
 

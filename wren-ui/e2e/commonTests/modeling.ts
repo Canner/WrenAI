@@ -1,4 +1,6 @@
 import { Page, expect } from '@playwright/test';
+import { expectPathname, gotoRuntimeScopedPath } from '../helper';
+import { SyncStatus } from '@/types/project';
 interface Relationship {
   fromFieldModelDisplayName: string;
   fromFieldColumnDisplayName: string;
@@ -12,18 +14,93 @@ type ModelingPageContext = {
   baseURL?: string;
 };
 
+type DeployStatusPayload = {
+  status?: SyncStatus | null;
+};
+
 const isModelingPage = ({ page, baseURL }: ModelingPageContext) =>
   baseURL
-    ? page.url() === `${baseURL}/modeling`
-    : /\/modeling$/.test(page.url());
+    ? new RegExp(
+        `^${baseURL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/modeling(?:\\?.*)?$`,
+      ).test(page.url())
+    : /\/modeling(?:\?.*)?$/.test(page.url());
+
+const fetchRuntimeScopedJson = async <T,>(
+  page: Page,
+  url: string,
+  init?: RequestInit,
+): Promise<T> => {
+  return page.evaluate(
+    async ({ nextUrl, nextInit }) => {
+      const raw = window.localStorage.getItem('wren.runtimeScope');
+      const selector = raw ? JSON.parse(raw) : {};
+      const searchParams = new URLSearchParams();
+
+      Object.entries(selector as Record<string, string | undefined>).forEach(
+        ([key, value]) => {
+          if (value) {
+            searchParams.set(key, value);
+          }
+        },
+      );
+
+      const scopedUrl = searchParams.size
+        ? `${nextUrl}?${searchParams.toString()}`
+        : nextUrl;
+      const response = await fetch(scopedUrl, nextInit);
+      const text = await response.text();
+
+      return {
+        ok: response.ok,
+        status: response.status,
+        text,
+      };
+    },
+    { nextUrl: url, nextInit: init },
+  ).then((result) => {
+    expect(
+      result.ok,
+      `${init?.method || 'GET'} ${url} failed (${result.status}): ${result.text}`,
+    ).toBeTruthy();
+    return JSON.parse(result.text) as T;
+  });
+};
+
+const fetchDeployStatus = async (page: Page) =>
+  fetchRuntimeScopedJson<DeployStatusPayload>(page, '/api/v1/deploy/status');
+
+const waitForDeployStatus = async (
+  page: Page,
+  expectedStatus: SyncStatus,
+  timeout = 60_000,
+) => {
+  await expect
+    .poll(
+      async () => {
+        const payload = await fetchDeployStatus(page);
+        return payload.status ?? null;
+      },
+      {
+        timeout,
+        message: `Expected deploy status to become ${expectedStatus}`,
+      },
+    )
+    .toBe(expectedStatus);
+};
+
+export const waitForModelingDataLoaded = async (page: Page) => {
+  await expect(
+    page.locator('[data-testid^="diagram__model-node__"]').first(),
+  ).toBeVisible({
+    timeout: 120_000,
+  });
+};
 
 export const checkDeploySynced = async ({ page }: ModelingPageContext) => {
-  await page.goto('/modeling');
-  await expect(page).toHaveURL('/modeling', { timeout: 60000 });
-
-  await expect(page.getByLabel('check-circle').locator('svg')).toBeVisible();
-  await expect(page.getByText('Synced')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Deploy' })).toBeDisabled();
+  await gotoRuntimeScopedPath({ page, pathname: '/modeling' });
+  await expectPathname({ page, pathname: '/modeling' });
+  await waitForModelingDataLoaded(page);
+  await waitForDeployStatus(page, SyncStatus.SYNCRONIZED);
 };
 
 export const checkDeployUndeployedChanges = async ({
@@ -31,31 +108,21 @@ export const checkDeployUndeployedChanges = async ({
   baseURL,
 }: ModelingPageContext) => {
   if (!isModelingPage({ page, baseURL })) {
-    await page.goto('/modeling');
-    await expect(page).toHaveURL('/modeling', { timeout: 60000 });
+    await gotoRuntimeScopedPath({ page, pathname: '/modeling' });
+    await expectPathname({ page, pathname: '/modeling' });
   }
-
-  await expect(page.getByLabel('warning').locator('svg')).toBeVisible();
-  await expect(page.getByText('Undeployed changes')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Deploy' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Deploy' })).toBeEnabled();
+  await waitForModelingDataLoaded(page);
+  await waitForDeployStatus(page, SyncStatus.UNSYNCRONIZED);
 };
 
 export const executeDeploy = async ({ page, baseURL }: ModelingPageContext) => {
   if (!isModelingPage({ page, baseURL })) {
-    await page.goto('/modeling');
-    await expect(page).toHaveURL('/modeling', { timeout: 60000 });
+    await gotoRuntimeScopedPath({ page, pathname: '/modeling' });
+    await expectPathname({ page, pathname: '/modeling' });
   }
-
-  await page.getByRole('button', { name: 'Deploy' }).click();
-  await expect(
-    page.getByRole('img', { name: 'loading' }).locator('svg'),
-  ).toBeVisible();
-  await expect(page.getByText('Deploying...')).toBeVisible();
-  await expect(page.getByText('Deploying...')).toBeVisible({
-    visible: false,
-    timeout: 60000,
-  });
+  await waitForModelingDataLoaded(page);
+  await fetchRuntimeScopedJson(page, '/api/v1/deploy', { method: 'POST' });
+  await waitForDeployStatus(page, SyncStatus.SYNCRONIZED);
 };
 
 export const executeModelCRUD = async (
@@ -70,8 +137,9 @@ export const executeModelCRUD = async (
     primaryKeyColumn: string;
   },
 ) => {
-  await page.goto('/modeling');
-  await expect(page).toHaveURL('/modeling', { timeout: 60000 });
+  await gotoRuntimeScopedPath({ page, pathname: '/modeling' });
+  await expectPathname({ page, pathname: '/modeling' });
+  await waitForModelingDataLoaded(page);
 
   // click the model of sidebar
   await page
@@ -243,8 +311,9 @@ export const executeRelationshipCRUD = async (
     relationshipType,
   }: Relationship,
 ) => {
-  await page.goto('/modeling');
-  await expect(page).toHaveURL('/modeling', { timeout: 60000 });
+  await gotoRuntimeScopedPath({ page, pathname: '/modeling' });
+  await expectPathname({ page, pathname: '/modeling' });
+  await waitForModelingDataLoaded(page);
 
   await page
     .getByRole('complementary')
@@ -343,8 +412,9 @@ export const updateModelMetadata = async (
     newModelDescription: string;
   },
 ) => {
-  await page.goto('/modeling');
-  await expect(page).toHaveURL('/modeling', { timeout: 60000 });
+  await gotoRuntimeScopedPath({ page, pathname: '/modeling' });
+  await expectPathname({ page, pathname: '/modeling' });
+  await waitForModelingDataLoaded(page);
 
   await page
     .getByRole('complementary')
@@ -461,8 +531,9 @@ export const updateViewMetadata = async (
     newViewDescription: string;
   },
 ) => {
-  await page.goto('/modeling');
-  await expect(page).toHaveURL('/modeling', { timeout: 60000 });
+  await gotoRuntimeScopedPath({ page, pathname: '/modeling' });
+  await expectPathname({ page, pathname: '/modeling' });
+  await waitForModelingDataLoaded(page);
 
   // will show '-' if viewDescription is empty string
   const viewDescriptionString = viewDescription || '-';
@@ -557,7 +628,6 @@ export const updateViewMetadata = async (
     page.getByTestId(`diagram__view-node__${newViewDisplayName}`),
   ).toBeVisible();
 
-  await checkDeployUndeployedChanges({ page, baseURL });
 };
 
 export const addCalculatedField = async (

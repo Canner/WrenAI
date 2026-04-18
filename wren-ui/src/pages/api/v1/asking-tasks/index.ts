@@ -1,10 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { AskingResolver } from '@server/resolvers/askingResolver';
-import { ApiError } from '@/apollo/server/utils/apiUtils';
-import { buildResolverContextFromRequest } from '../resolverContext';
+import { AskingController } from '@server/controllers/askingController';
+import { ApiError } from '@/server/utils/apiUtils';
+import { buildApiContextFromRequest } from '../apiContext';
 import { sendRestApiError } from '../restApi';
 
-const askingResolver = new AskingResolver();
+const askingController = new AskingController();
 
 export default async function handler(
   req: NextApiRequest,
@@ -21,8 +21,8 @@ export default async function handler(
       throw new ApiError('Question is required', 400);
     }
 
-    const ctx = await buildResolverContextFromRequest({ req });
-    const task = await askingResolver.createAskingTask(
+    const ctx = await buildApiContextFromRequest({ req });
+    const task = await askingController.createAskingTask(
       null,
       {
         data: {

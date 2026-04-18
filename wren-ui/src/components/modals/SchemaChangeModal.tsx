@@ -1,32 +1,31 @@
 import { ReactNode, useMemo } from 'react';
 import {
-  Modal,
-  Button,
-  Table,
-  Typography,
-  Collapse,
   Alert,
-  Tag,
+  Button,
+  Collapse,
+  Modal,
   Popconfirm,
+  Table,
+  Tag,
+  Typography,
 } from 'antd';
 import type { PopconfirmProps } from 'antd';
 import styled from 'styled-components';
-import WarningOutlined from '@ant-design/icons/WarningOutlined';
-import PlusSquareOutlined from '@ant-design/icons/PlusSquareOutlined';
-import LineOutlined from '@ant-design/icons/LineOutlined';
 import FileDoneOutlined from '@ant-design/icons/FileDoneOutlined';
-import { ModalAction } from '@/hooks/useModalAction';
+import LineOutlined from '@ant-design/icons/LineOutlined';
+import PlusSquareOutlined from '@ant-design/icons/PlusSquareOutlined';
+import WarningOutlined from '@ant-design/icons/WarningOutlined';
 import EllipsisWrapper from '@/components/EllipsisWrapper';
-import {
-  DetailedChangeTable,
+import { ModalAction } from '@/hooks/useModalAction';
+import { NodeType } from '@/types/modeling';
+import type {
   DetailedAffectedCalculatedFields,
   DetailedAffectedRelationships,
   DetailedChangeColumn,
-  NodeType,
+  DetailedChangeTable,
   SchemaChange,
-  SchemaChangeType,
-} from '@/types/api';
-
+} from '@/types/schemaChange';
+import { SchemaChangeType } from '@/types/schemaChange';
 const StyledCollapse = styled(Collapse)`
   border: none;
   background-color: white;
@@ -299,7 +298,7 @@ export default function SchemaChangeModal(props: Props) {
       footer={null}
     >
       <Typography.Paragraph className="gray-6 mb-4">
-        我们检测到你连接的数据源发生了 Schema
+        我们检测到当前连接对应的数据库结构发生了 Schema
         变更，请先确认这些变更对当前知识库的影响。
       </Typography.Paragraph>
       <Alert

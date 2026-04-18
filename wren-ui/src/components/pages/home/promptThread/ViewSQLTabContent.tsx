@@ -17,7 +17,7 @@ import CodeFilled from '@ant-design/icons/CodeFilled';
 import { BinocularsIcon } from '@/utils/icons';
 import { nextTick } from '@/utils/time';
 import useNativeSQL from '@/hooks/useNativeSQL';
-import { DATA_SOURCE_OPTIONS } from '@/components/pages/setup/utils';
+import { CONNECTION_TYPE_OPTIONS } from '@/components/pages/setup/utils';
 import { Logo } from '@/components/Logo';
 import { Props as AnswerResultProps } from '@/components/pages/home/promptThread/AnswerResult';
 import { usePromptThreadActionsStore } from '@/components/pages/home/promptThread/store';
@@ -79,11 +79,11 @@ export default function ViewSQLTabContent(props: AnswerResultProps) {
   const { id, sql } = threadResponse;
   const sqlText = sql ?? '';
 
-  const { hasNativeSQL, dataSourceType } = nativeSQLResult;
+  const { connectionType, hasNativeSQL } = nativeSQLResult;
   const showNativeSQL = hasNativeSQL;
-  const dataSourceOption =
-    dataSourceType && DATA_SOURCE_OPTIONS[dataSourceType]
-      ? DATA_SOURCE_OPTIONS[dataSourceType]
+  const connectionTypeOption =
+    connectionType && CONNECTION_TYPE_OPTIONS[connectionType]
+      ? CONNECTION_TYPE_OPTIONS[connectionType]
       : null;
 
   const sqls =
@@ -120,17 +120,17 @@ export default function ViewSQLTabContent(props: AnswerResultProps) {
           <div>
             {nativeSQLResult.nativeSQLMode ? (
               <>
-                {dataSourceOption?.logo ? (
+                {connectionTypeOption?.logo ? (
                   <Image
                     className="mr-2"
-                    src={dataSourceOption.logo}
-                    alt={dataSourceOption.label}
+                    src={connectionTypeOption.logo}
+                    alt={connectionTypeOption.label}
                     width="22"
                     height="22"
                   />
                 ) : null}
                 <Text className="gray-8 text-medium text-sm">
-                  {dataSourceOption?.label || '数据源 SQL'}
+                  {connectionTypeOption?.label || '原始 SQL'}
                 </Text>
               </>
             ) : (

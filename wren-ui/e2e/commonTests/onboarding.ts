@@ -1,4 +1,5 @@
-import { Page, expect } from '@playwright/test';
+import { Page } from '@playwright/test';
+import { expectPathname } from '../helper';
 
 type OnboardingPageContext = {
   page: Page;
@@ -11,7 +12,7 @@ export const setupModels = async ({ page }: OnboardingPageContext) => {
   await page.locator('th').first().click();
 
   await page.getByRole('button', { name: 'Next' }).click();
-  await expect(page).toHaveURL('/setup/relationships', { timeout: 60000 });
+  await expectPathname({ page, pathname: '/setup/relationships' });
 };
 
 export const saveRecommendedRelationships = async ({
@@ -20,5 +21,5 @@ export const saveRecommendedRelationships = async ({
   await page.goto('/setup/relationships');
 
   await page.getByRole('button', { name: 'Finish' }).click();
-  await expect(page).toHaveURL('/modeling', { timeout: 60000 });
+  await expectPathname({ page, pathname: '/modeling' });
 };

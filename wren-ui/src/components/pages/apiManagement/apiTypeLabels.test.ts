@@ -1,4 +1,4 @@
-import { ApiType } from '@/types/api';
+import { ApiType } from '@/types/apiHistory';
 import { API_HISTORY_FILTER_TYPES, formatApiTypeLabel } from './apiTypeLabels';
 
 describe('apiManagement apiTypeLabels', () => {

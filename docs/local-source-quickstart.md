@@ -109,33 +109,11 @@ Show total orders by status as a table
 ### thread recommendation
 
 ```bash
-python - <<'PY'
-import requests
-url='http://127.0.0.1:3001/api/graphql?runtimeScopeId=4'
-q='''query GetThreadRecommendationQuestions($threadId: Int!) {
-  getThreadRecommendationQuestions(threadId: $threadId) {
-    status
-    questions { question category sql }
-    error { code message shortMessage }
-  }
-}'''
-print(requests.post(url, json={'query': q, 'variables': {'threadId': 22}}).text)
-PY
+curl 'http://127.0.0.1:3001/api/v1/thread-recommendation-questions/22?runtimeScopeId=4'
 ```
 
 ### project recommendation
 
 ```bash
-python - <<'PY'
-import requests
-url='http://127.0.0.1:3001/api/graphql?runtimeScopeId=4'
-q='''query GetProjectRecommendationQuestions {
-  getProjectRecommendationQuestions {
-    status
-    questions { question category sql }
-    error { code message shortMessage }
-  }
-}'''
-print(requests.post(url, json={'query': q, 'variables': {}}).text)
-PY
+curl 'http://127.0.0.1:3001/api/v1/project-recommendation-questions?runtimeScopeId=4'
 ```

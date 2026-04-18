@@ -5,7 +5,6 @@ import {
   cloneChartSpec,
   DEFAULT_CANONICAL_AUTOSIZE,
   DEFAULT_CANONICAL_DIMENSION,
-  EncodingChannel,
   EncodingSpec,
   ensureBarEncodingDefaults,
   ensureColorFallback,
@@ -66,10 +65,9 @@ const filterTopCategories = (
     const value = row[quantitativeField];
     return isNumber(value) ? -value : 0;
   });
-  const topCategories = uniq(sortedValues.map((row) => row[categoryField])).slice(
-    0,
-    categoriesLimit,
-  );
+  const topCategories = uniq(
+    sortedValues.map((row) => row[categoryField]),
+  ).slice(0, categoriesLimit);
   return values.filter((row) => topCategories.includes(row[categoryField]));
 };
 
@@ -111,7 +109,11 @@ export const prepareChartSpecForRender = ({
 
   const filteredValues =
     !renderOptions.serverShaped && categoryCount > renderOptions.categoriesLimit
-      ? filterTopCategories(values, clonedSpec.encoding, renderOptions.categoriesLimit)
+      ? filterTopCategories(
+          values,
+          clonedSpec.encoding,
+          renderOptions.categoriesLimit,
+        )
       : values;
 
   clonedSpec.data = {
@@ -119,14 +121,19 @@ export const prepareChartSpecForRender = ({
   };
   clonedSpec.width = renderOptions.width;
   clonedSpec.height = renderOptions.height;
-  clonedSpec.autosize = clonedSpec.autosize || { ...DEFAULT_CANONICAL_AUTOSIZE };
+  clonedSpec.autosize = clonedSpec.autosize || {
+    ...DEFAULT_CANONICAL_AUTOSIZE,
+  };
   clonedSpec.mark = normalizeMarkSpec(clonedSpec.mark, {
     donutInner: renderOptions.donutInner,
   });
   clonedSpec.encoding = clonedSpec.encoding || {};
   ensureColorFallback(clonedSpec.encoding);
   ensureEncodingTitles(clonedSpec.encoding);
-  ensureBarEncodingDefaults(getMarkType(clonedSpec.mark)?.toLowerCase() || null, clonedSpec.encoding);
+  ensureBarEncodingDefaults(
+    getMarkType(clonedSpec.mark)?.toLowerCase() || null,
+    clonedSpec.encoding,
+  );
 
   if (renderOptions.hideTitle) {
     (clonedSpec as any).title = null;
@@ -162,7 +169,9 @@ export const resolvePreferredRenderer = ({
   if (preferredRenderer) {
     return preferredRenderer;
   }
-  const markType = getMarkType((spec as ChartRenderSpec | null)?.mark)?.toLowerCase();
+  const markType = getMarkType(
+    (spec as ChartRenderSpec | null)?.mark,
+  )?.toLowerCase();
   const pointCount = values?.length || 0;
   if (markType === 'line' || markType === 'area') {
     return pointCount > 120 || isPinned ? 'canvas' : 'svg';

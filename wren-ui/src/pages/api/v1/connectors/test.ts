@@ -5,11 +5,11 @@ import {
   handleApiError,
   respondWithSimple,
   ApiError,
-} from '@/apollo/server/utils/apiUtils';
+} from '@/server/utils/apiUtils';
 import { getLogger } from '@server/utils';
 import {
   requirePersistedWorkspaceId,
-  resolvePersistedKnowledgeBaseId,
+  resolveOptionalPersistedKnowledgeBaseId,
   toCanonicalPersistedRuntimeIdentityFromScope,
 } from '@server/utils/persistedRuntimeIdentity';
 import {
@@ -81,13 +81,14 @@ const validatePayload = (payload: TestConnectorRequest) => {
 const ensureScopedConnector = async (
   connectorId: string,
   workspaceId: string,
-  knowledgeBaseId: string,
+  knowledgeBaseId?: string | null,
 ) => {
   const connector = await connectorService.getConnectorById(connectorId);
   if (
     !connector ||
     connector.workspaceId !== workspaceId ||
-    connector.knowledgeBaseId !== knowledgeBaseId
+    (knowledgeBaseId !== undefined &&
+      connector.knowledgeBaseId !== (knowledgeBaseId ?? null))
   ) {
     throw new ApiError('Connector not found', 404);
   }
@@ -109,7 +110,8 @@ export default async function handler(
     const runtimeIdentity =
       toCanonicalPersistedRuntimeIdentityFromScope(runtimeScope);
     const workspaceId = requirePersistedWorkspaceId(runtimeIdentity);
-    const knowledgeBaseId = resolvePersistedKnowledgeBaseId(runtimeIdentity);
+    const knowledgeBaseId =
+      resolveOptionalPersistedKnowledgeBaseId(runtimeIdentity);
     const actor = buildAuthorizationActorFromRuntimeScope(runtimeScope);
     const auditContext = buildAuthorizationContextFromRequest({
       req,

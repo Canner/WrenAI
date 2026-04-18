@@ -1,5 +1,7 @@
 # User / Role / Permission 目标态剩余工作清单（Backlog）
 
+> 历史说明（2026-04-16）：本文保留的是 Apollo/GraphQL 时代的设计、排障或执行记录。当前 `wren-ui` 运行时前端已经切到 REST，代码目录也已收口到 `src/server/*` 与 `src/pages/api/v1/*`；文中的旧 GraphQL 入口、resolver 与 Apollo 上下文描述仅作历史背景，不再代表当前主链路。
+
 更新时间：2026-04-15  
 状态：Closed / Implemented
 
@@ -14,7 +16,7 @@
 本轮 backlog 的主目标已全部收口：
 
 1. **`principal_role_binding + role_permission` 成为主授权真相源**
-2. **敏感 REST / GraphQL / service / background actor 统一走 `authorize() + audit`**
+2. **敏感 REST / 历史 GraphQL / service / background actor 统一走 `authorize() + audit`**
 3. **`/settings/access` 成为独立的访问治理中心**
 4. **角色目录 / 角色绑定 / 审计中心 / Explain/Simulate 已产品可见**
 5. **企业身份与机器身份治理已经进入可运营状态**
@@ -27,7 +29,7 @@
 | 优先级 | 主题 | 状态 | 结果 |
 | --- | --- | --- | --- |
 | P0 | 授权真相源统一 | ✅ | Session claims / AuthorizationActor / current workspace overview 全部以结构化 binding + grantedActions 为主语义 |
-| P0 | 授权覆盖补齐 | ✅ | REST / GraphQL / service / background actor 统一授权路径已收口 |
+| P0 | 授权覆盖补齐 | ✅ | REST / 历史 GraphQL / service / background actor 统一授权路径已收口 |
 | P0 | `/settings/access` 收口为治理中心 | ✅ | 成员、企业身份、目录组、access review、break-glass、impersonation、service account、API token、角色目录、绑定、审计、Explain 全部可在该页完成 |
 | P0 | legacy 表达清理 | ✅ | legacy 字段降级为兼容/展示用途，不再决定在线授权结果；workspace/current 不再展示 legacy fallback 来源 |
 | P1 | 审计中心 | ✅ | `/api/v1/workspace/audit-events` + `/settings/access` 审计面板已落地 |
@@ -44,12 +46,12 @@
 
 ### 3.1 授权真相源与会话收口
 
-- `wren-ui/src/apollo/server/services/authService.ts`
-- `wren-ui/src/apollo/server/authz/authorizationActor.ts`
-- `wren-ui/src/apollo/server/authz/authorize.ts`
+- `wren-ui/src/server/services/authService.ts`
+- `wren-ui/src/server/authz/authorizationActor.ts`
+- `wren-ui/src/server/authz/authorize.ts`
 - `wren-ui/src/pages/api/auth/session.ts`
 - `wren-ui/src/pages/api/v1/workspace/current.ts`
-- `wren-ui/src/apollo/server/authz/bindingSync.ts`
+- `wren-ui/src/server/authz/bindingSync.ts`
 - `wren-ui/scripts/backfill_principal_role_bindings.ts`
 
 结果：
@@ -74,8 +76,8 @@
 
 ### 3.3 审计 / 角色 / Explain
 
-- `wren-ui/src/apollo/server/authz/adminCatalog.ts`
-- `wren-ui/src/apollo/server/repositories/auditEventRepository.ts`
+- `wren-ui/src/server/authz/adminCatalog.ts`
+- `wren-ui/src/server/repositories/auditEventRepository.ts`
 - `wren-ui/src/pages/api/v1/workspace/roles/index.ts`
 - `wren-ui/src/pages/api/v1/workspace/roles/[id].ts`
 - `wren-ui/src/pages/api/v1/workspace/role-bindings/index.ts`
@@ -92,10 +94,10 @@
 
 ### 3.4 Background / automation / identity hardening
 
-- `wren-ui/src/apollo/server/backgrounds/recommend-question.ts`
-- `wren-ui/src/apollo/server/services/automationService.ts`
-- `wren-ui/src/apollo/server/services/governanceService.ts`
-- `wren-ui/src/apollo/server/authz/rules.ts`
+- `wren-ui/src/server/backgrounds/recommend-question.ts`
+- `wren-ui/src/server/services/automationService.ts`
+- `wren-ui/src/server/services/governanceService.ts`
+- `wren-ui/src/server/authz/rules.ts`
 
 结果：
 
@@ -147,13 +149,13 @@
 
 ### 5.2 定向回归
 
-- ✅ `cd wren-ui && yarn jest --runInBand src/pages/api/tests/auth_api.test.ts src/apollo/server/authz/authorize.test.ts src/apollo/server/services/tests/authService.test.ts src/apollo/server/backgrounds/tests/recommendQuestionBackgroundTracker.test.ts src/pages/api/tests/workspace_api.test.ts src/pages/api/tests/workspace_governance_api.test.ts src/pages/api/tests/workspace_admin_catalog_api.test.ts src/tests/pages/settings/access.test.tsx src/tests/pages/workspace/index.test.tsx src/tests/pages/workspace/schedules.test.tsx src/tests/pages/settings/platform.test.tsx src/pages/api/tests/secret_reencrypt_api.test.ts src/pages/api/tests/scim_api.test.ts src/pages/api/tests/graphql.test.ts`
+- ✅ `cd wren-ui && yarn jest --runInBand src/pages/api/tests/auth_api.test.ts src/server/authz/authorize.test.ts src/server/services/tests/authService.test.ts src/server/backgrounds/tests/recommendQuestionBackgroundTracker.test.ts src/pages/api/tests/workspace_api.test.ts src/pages/api/tests/workspace_governance_api.test.ts src/pages/api/tests/workspace_admin_catalog_api.test.ts src/tests/pages/settings/access.test.tsx src/tests/pages/workspace/index.test.tsx src/tests/pages/workspace/schedules.test.tsx src/tests/pages/settings/platform.test.tsx src/pages/api/tests/secret_reencrypt_api.test.ts src/pages/api/tests/scim_api.test.ts src/runtime/client/tests/runtimeScope.test.ts`
 - 结果：**14 suites passed / 90 tests passed**
 
 ### 5.3 重点覆盖面
 
 - ✅ auth session / SSO callback / impersonation
-- ✅ GraphQL bootstrap / runtime scope context
+- ✅ runtime scope bootstrap / REST context
 - ✅ authorize / binding-only 授权判断
 - ✅ authService 结构化 claims
 - ✅ workspace current / governance API / admin catalog API

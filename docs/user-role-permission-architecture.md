@@ -824,7 +824,7 @@ const legacyRolePolicyMap = {
 - 所有 deny 都可审计
 - 任何 fallback 都不能绕过它
 
-### 9.5 Phase 1 的落点：先在 route / resolver 收口，不强推全量 service 注入 actor
+### 9.5 Phase 1 的落点：先在 route / controller 收口，历史 resolver 仅补迁移期存量
 
 当前代码库的 service 层普遍以：
 
@@ -838,7 +838,7 @@ const legacyRolePolicyMap = {
 
 V1 推荐策略：
 
-1. **先在 route / resolver / mutation 入口构造 `AuthorizationActor`**
+1. **先在 route / controller / mutation 入口构造 `AuthorizationActor`，历史 resolver 迁移期同步补齐**
 2. 在进入 service 前调用统一 `authorize()`
 3. service 层继续保留：
    - 租户一致性校验
@@ -933,7 +933,7 @@ V1 语义建议：
 
 1. `permission registry`
 2. `authorize()` 服务
-3. 将核心 API / resolver 接入统一授权层
+3. 将核心 API / controller 入口接入统一授权层（历史 resolver 仅保留迁移期补齐）
 4. 基于现有 `audit_event` 扩展审计模型
 5. 敏感管理动作落审计
 6. `AuthorizationActor` 过渡模型（显式包含 `isPlatformAdmin`）
@@ -943,7 +943,7 @@ V1 语义建议：
 
 Phase 1 的实现边界：
 
-- 以 **route / resolver 入口统一授权** 为主
+- 以 **route / controller 入口统一授权** 为主（历史 resolver 仅作迁移期兼容）
 - 不要求所有 service 同步改成 actor-aware
 - service 继续承担资源归属与 invariant 校验
 

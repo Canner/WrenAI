@@ -1,3 +1,4 @@
+import { SampleDatasetName } from '@/types/dataSource';
 import { driver } from 'driver.js';
 import { useRouter } from 'next/router';
 import {
@@ -8,11 +9,12 @@ import {
   useRef,
   useState,
 } from 'react';
+import { ProjectLanguage } from '@/types/project';
+import { hasExecutableRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import { Dispatcher, DriverObj } from './utils';
 import { makeStoriesPlayer } from './stories';
-import { fetchSettings } from '@/utils/settingsRest';
+import { fetchSettings, resolveSettingsConnection } from '@/utils/settingsRest';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
-import { ProjectLanguage, SampleDatasetName } from '@/types/api';
 
 import 'driver.js/dist/driver.css';
 
@@ -31,7 +33,7 @@ export default forwardRef<Attributes, Props>(function Guide(_props, ref) {
   > | null>(null);
 
   const storyPayload = useMemo(() => {
-    const sampleDataset = settingsResult?.dataSource?.sampleDataset;
+    const sampleDataset = resolveSettingsConnection(settingsResult)?.sampleDataset;
     const language = settingsResult?.language;
 
     return {
@@ -48,9 +50,14 @@ export default forwardRef<Attributes, Props>(function Guide(_props, ref) {
           ? (language as ProjectLanguage)
           : undefined,
     };
-  }, [settingsResult?.dataSource?.sampleDataset, settingsResult?.language]);
+  }, [settingsResult, settingsResult?.language]);
 
   useEffect(() => {
+    if (!hasExecutableRuntimeScopeSelector(runtimeScopeNavigation.selector)) {
+      setSettingsResult(null);
+      return;
+    }
+
     void fetchSettings(runtimeScopeNavigation.selector)
       .then((payload) => {
         setSettingsResult(payload);

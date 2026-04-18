@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { ApiError } from '@/apollo/server/utils/apiUtils';
-import { buildResolverContextFromRequest } from '../../resolverContext';
+import { ApiError } from '@/server/utils/apiUtils';
+import { buildApiContextFromRequest } from '../../apiContext';
 import { sendRestApiError } from '../../restApi';
 import { updateDashboardScheduleWithSync } from '../../dashboardRestShared';
 
@@ -24,7 +24,7 @@ export default async function handler(
     }
 
     const dashboardId = parseDashboardId(req.query.id);
-    const ctx = await buildResolverContextFromRequest({ req });
+    const ctx = await buildApiContextFromRequest({ req });
     const dashboard = await updateDashboardScheduleWithSync({
       ctx,
       dashboardId,

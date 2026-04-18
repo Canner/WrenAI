@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { ClientRuntimeScopeSelector } from '@/apollo/client/runtimeScope';
+import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import {
   getReferenceAssetCountByKnowledgeName,
   getReferenceDisplayKnowledgeName,
@@ -15,6 +15,9 @@ type ThreadLike = {
 type KnowledgeBaseLike = {
   id: string;
   name: string;
+  kind?: string | null;
+  sampleDataset?: string | null;
+  slug?: string | null;
   snapshotCount?: number;
 };
 
@@ -48,16 +51,11 @@ export default function useKnowledgeSidebarData<
   TKnowledgeBase extends KnowledgeBaseLike,
 >({
   threads,
-  onSelectThread,
   knowledgeBases,
   activeKnowledgeBase,
   knowledgeTab,
 }: {
   threads: ThreadLike[];
-  onSelectThread: (
-    threadId: string,
-    selector?: ClientRuntimeScopeSelector,
-  ) => void;
   knowledgeBases: TKnowledgeBase[];
   activeKnowledgeBase?: TKnowledgeBase | null;
   knowledgeTab: string;
@@ -68,9 +66,9 @@ export default function useKnowledgeSidebarData<
         id: thread.id,
         title: getReferenceDisplayThreadTitle(thread.name || ''),
         active: false,
-        onClick: () => onSelectThread(thread.id, thread.selector),
+        selector: thread.selector,
       })),
-    [onSelectThread, threads],
+    [threads],
   );
 
   const kbList = useMemo<KnowledgeSidebarItem<TKnowledgeBase>[]>(() => {
@@ -82,14 +80,12 @@ export default function useKnowledgeSidebarData<
           : [];
 
     return baseList.map((kb) => {
-      const displayName = getReferenceDisplayKnowledgeName(kb.name);
+      const displayName = getReferenceDisplayKnowledgeName(kb);
       return {
         id: kb.id,
         name: displayName,
         assetCount:
-          getReferenceAssetCountByKnowledgeName(displayName) ??
-          getReferenceAssetCountByKnowledgeName(kb.name) ??
-          kb.snapshotCount,
+          getReferenceAssetCountByKnowledgeName(kb) ?? kb.snapshotCount,
         record: kb,
       };
     });

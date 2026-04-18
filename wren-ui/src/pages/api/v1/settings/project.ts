@@ -1,17 +1,17 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { ProjectResolver } from '@server/resolvers/projectResolver';
-import { ApiError } from '@/apollo/server/utils/apiUtils';
-import { buildResolverContextFromRequest } from '../resolverContext';
+import { ProjectController } from '@server/controllers/projectController';
+import { ApiError } from '@/server/utils/apiUtils';
+import { buildApiContextFromRequest } from '../apiContext';
 import { sendRestApiError } from '../restApi';
 
-const projectResolver = new ProjectResolver();
+const projectController = new ProjectController();
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
   try {
-    const ctx = await buildResolverContextFromRequest({ req });
+    const ctx = await buildApiContextFromRequest({ req });
 
     if (req.method === 'PATCH') {
       const language = String(req.body?.language || '').trim();
@@ -19,21 +19,16 @@ export default async function handler(
         throw new ApiError('Language is required', 400);
       }
 
-      const success = await projectResolver.updateCurrentProject(
-        null,
-        { data: { language } },
+      const success = await projectController.updateCurrentProject({
+        language,
         ctx,
-      );
+      });
 
       return res.status(200).json({ success });
     }
 
     if (req.method === 'DELETE') {
-      const success = await projectResolver.resetCurrentProject(
-        null,
-        null,
-        ctx,
-      );
+      const success = await projectController.resetCurrentProject({ ctx });
       return res.status(200).json({ success });
     }
 

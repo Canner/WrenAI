@@ -3,7 +3,11 @@ import { Alert, Typography, Button } from 'antd';
 import styled from 'styled-components';
 import { getColumnTypeIcon } from '@/utils/columnType';
 import PreviewDataContent from '@/components/dataPreview/PreviewDataContent';
-import { isApolloLikeError, parseGraphQLError } from '@/utils/errorHandler';
+import {
+  isOperationClientError,
+  parseOperationError,
+} from '@/utils/errorHandler';
+import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 
 const { Text } = Typography;
 
@@ -110,12 +114,13 @@ export default function PreviewData(props: Props) {
     [previewData?.columns, copyable],
   );
 
-  const hasErrorMessage = error && error.message;
-  if (!loading && hasErrorMessage) {
-    const parsedError = isApolloLikeError(error)
-      ? parseGraphQLError(error)
+  const errorMessage = resolveAbortSafeErrorMessage(error);
+  const hasErrorMessage = !loading && !!errorMessage;
+  if (hasErrorMessage) {
+    const parsedError = isOperationClientError(error)
+      ? parseOperationError(error)
       : null;
-    const messageText = parsedError?.message || error.message;
+    const messageText = parsedError?.message || errorMessage;
     const shortMessage = parsedError?.shortMessage || '查询失败';
 
     return (

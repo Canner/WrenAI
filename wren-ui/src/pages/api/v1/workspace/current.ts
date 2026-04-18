@@ -2,10 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
 import { getSessionTokenFromRequest } from '@server/context/actorClaims';
 import { WORKSPACE_KINDS } from '@/utils/workspaceGovernance';
-import {
-  PLATFORM_SCOPE_ID,
-  toLegacyWorkspaceRoleKey,
-} from '@server/authz';
+import { PLATFORM_SCOPE_ID, toLegacyWorkspaceRoleKey } from '@server/authz';
 import {
   AuthorizationAction,
   assertAuthorizedWithAudit,

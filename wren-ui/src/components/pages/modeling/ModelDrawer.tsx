@@ -74,11 +74,14 @@ export default function ModelDrawer(props: Props) {
         </Space>
       }
     >
-      <ModelForm
-        formMode={currentFormMode}
-        form={form}
-        defaultValue={defaultValue}
-      />
+      {visible ? (
+        <ModelForm
+          formMode={currentFormMode}
+          form={form}
+          defaultValue={defaultValue}
+          active={visible}
+        />
+      ) : null}
     </Drawer>
   );
 }

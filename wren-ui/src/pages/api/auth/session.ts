@@ -16,6 +16,8 @@ import {
 } from '@server/authz';
 
 const logger = getLogger('API_AUTH_SESSION');
+const SESSION_REFRESH_RUNTIME_SEED_MODE =
+  process.env.NODE_ENV === 'test' ? 'metadata_only' : 'background_all';
 
 const getQueryString = (value: string | string[] | undefined) =>
   Array.isArray(value) ? value[0] : value;
@@ -60,7 +62,7 @@ export default async function handler(
     try {
       await components.workspaceBootstrapService?.ensureDefaultWorkspaceWithSamples?.(
         {
-          runtimeSeedMode: 'all',
+          runtimeSeedMode: SESSION_REFRESH_RUNTIME_SEED_MODE,
         },
       );
     } catch (error: any) {
@@ -110,6 +112,7 @@ export default async function handler(
       await resolveBootstrapKnowledgeBaseSelection(
         knowledgeBases,
         components.kbSnapshotRepository,
+        components.deployLogRepository,
       );
 
     return res.status(200).json({

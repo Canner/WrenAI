@@ -19,6 +19,7 @@
     "migrate:3001": "PG_URL=postgres://postgres:postgres@127.0.0.1:9432/wrenai yarn knex migrate:latest",
     "rollback": "yarn knex migrate:rollback",
     "backfill:principal-role-bindings": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/backfill_principal_role_bindings.ts",
+    "backfill:legacy-project-connectors": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/backfill_legacy_projects_to_connectors.ts",
     "re-encrypt-secrets": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/re_encrypt_secrets.ts"
   },
   "dependencies": {
@@ -106,7 +107,7 @@
     "minimatch": "4.2.5"
   },
   "_moduleAliases": {
-    "@server": "src/apollo/server"
+    "@server": "src/server"
   },
   "packageManager": "yarn@4.5.3"
 }

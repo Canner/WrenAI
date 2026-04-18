@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { getConfig } from '@/apollo/server/config';
+import { getConfig } from '@/server/config';
 
 export default function handler(_: NextApiRequest, res: NextApiResponse) {
   const config = getConfig();

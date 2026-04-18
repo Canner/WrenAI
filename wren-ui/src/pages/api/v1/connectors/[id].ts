@@ -5,11 +5,11 @@ import {
   handleApiError,
   respondWithSimple,
   ApiError,
-} from '@/apollo/server/utils/apiUtils';
+} from '@/server/utils/apiUtils';
 import { getLogger } from '@server/utils';
 import {
   requirePersistedWorkspaceId,
-  resolvePersistedKnowledgeBaseId,
+  resolveOptionalPersistedKnowledgeBaseId,
   toCanonicalPersistedRuntimeIdentityFromScope,
 } from '@server/utils/persistedRuntimeIdentity';
 import {
@@ -91,13 +91,14 @@ const validateConnectorPayload = (payload: UpdateConnectorRequest) => {
 const getScopedConnector = async (
   id: string,
   workspaceId: string,
-  knowledgeBaseId: string,
+  knowledgeBaseId?: string | null,
 ) => {
   const connector = await connectorService.getConnectorById(id);
   if (
     !connector ||
     connector.workspaceId !== workspaceId ||
-    connector.knowledgeBaseId !== knowledgeBaseId
+    (knowledgeBaseId !== undefined &&
+      connector.knowledgeBaseId !== (knowledgeBaseId ?? null))
   ) {
     throw new ApiError('Connector not found', 404);
   }
@@ -114,7 +115,8 @@ const handleGetConnector = async (
   const runtimeIdentity =
     toCanonicalPersistedRuntimeIdentityFromScope(runtimeScope);
   const workspaceId = requirePersistedWorkspaceId(runtimeIdentity);
-  const knowledgeBaseId = resolvePersistedKnowledgeBaseId(runtimeIdentity);
+  const knowledgeBaseId =
+    resolveOptionalPersistedKnowledgeBaseId(runtimeIdentity);
   const actor = buildAuthorizationActorFromRuntimeScope(runtimeScope);
   const connector = await getScopedConnector(
     validateConnectorId(req.query.id),
@@ -166,7 +168,7 @@ const handleUpdateConnector = async (
   });
   const payload = req.body as UpdateConnectorRequest;
   validateConnectorPayload(payload);
-  const knowledgeBaseId = resolvePersistedKnowledgeBaseId(
+  const knowledgeBaseId = resolveOptionalPersistedKnowledgeBaseId(
     runtimeIdentity,
     payload,
   );
@@ -246,7 +248,8 @@ const handleDeleteConnector = async (
     sessionId: actor?.sessionId,
     runtimeScope,
   });
-  const knowledgeBaseId = resolvePersistedKnowledgeBaseId(runtimeIdentity);
+  const knowledgeBaseId =
+    resolveOptionalPersistedKnowledgeBaseId(runtimeIdentity);
   const connectorId = validateConnectorId(req.query.id);
   await assertAuthorizedWithAudit({
     auditEventRepository: components.auditEventRepository,

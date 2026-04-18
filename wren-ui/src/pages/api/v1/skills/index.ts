@@ -5,7 +5,7 @@ import {
   handleApiError,
   respondWithSimple,
   ApiError,
-} from '@/apollo/server/utils/apiUtils';
+} from '@/server/utils/apiUtils';
 import { getLogger } from '@server/utils';
 import {
   requirePersistedWorkspaceId,

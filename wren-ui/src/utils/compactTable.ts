@@ -1,4 +1,4 @@
-import { CompactTable } from '@/types/api';
+import { CompactTable } from '@/types/dataSource';
 
 type CompactTableLike = Pick<CompactTable, 'name' | 'properties'>;
 

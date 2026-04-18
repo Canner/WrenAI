@@ -3,7 +3,9 @@ import { Button, Space, Typography, message } from 'antd';
 import CheckCircleOutlined from '@ant-design/icons/CheckCircleOutlined';
 import LoadingOutlined from '@ant-design/icons/LoadingOutlined';
 import WarningOutlined from '@ant-design/icons/WarningOutlined';
-import { SyncStatus } from '@/types/api';
+import { SyncStatus } from '@/types/project';
+import { resolveAbortSafeErrorMessage } from '@/utils/abort';
+
 import { useDeployStatusContext } from '@/components/deploy/Context';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import { deployCurrentRuntime } from '@/utils/modelingRest';
@@ -71,9 +73,13 @@ export default function Deploy() {
       }
     } catch (error) {
       setDeployFailed(true);
-      messageApi.error(
-        error instanceof Error ? error.message : '部署失败，请稍后重试。',
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '部署失败，请稍后重试。',
       );
+      if (errorMessage) {
+        messageApi.error(errorMessage);
+      }
     } finally {
       setDeploying(false);
     }

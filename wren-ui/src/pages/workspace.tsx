@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { Alert, Button, Input, Space, Tag, Typography, message } from 'antd';
 import styled from 'styled-components';
-import { buildRuntimeScopeUrl } from '@/apollo/client/runtimeScope';
+import { buildRuntimeScopeUrl } from '@/runtime/client/runtimeScope';
 import ConsoleShellLayout from '@/components/reference/ConsoleShellLayout';
 import { buildNovaSettingsNavItems } from '@/components/reference/novaShellNavigation';
 import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
@@ -188,11 +188,6 @@ const WORKSPACE_KIND_LABELS: Record<string, string> = {
   default: '系统样例空间',
 };
 
-const WORKSPACE_KIND_DESCRIPTIONS: Record<string, string> = {
-  regular: '支持邀请成员与申请加入，承载真实业务数据与知识库。',
-  default: '系统预置样例空间，自动加入，仅用于浏览与体验样例数据。',
-};
-
 const IDENTITY_PROVIDER_LABELS: Record<string, string> = {
   oidc: 'OIDC',
   saml: 'SAML',
@@ -304,23 +299,6 @@ const QueuePreviewCard = styled.div`
   border: 1px solid var(--nova-outline-soft);
   background: rgba(248, 246, 251, 0.96);
   padding: 12px 14px;
-`;
-
-const SummaryList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-`;
-
-const SummaryRow = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.88);
-  border: 1px solid var(--nova-outline-soft);
 `;
 
 const GovernanceGrid = styled.div`
@@ -558,9 +536,6 @@ export default function WorkspacePage() {
   const defaultWorkspaceId =
     data?.defaultWorkspaceId || data?.user?.defaultWorkspaceId || null;
   const isPlatformAdmin = canCreateWorkspace || Boolean(data?.isPlatformAdmin);
-  const actorWorkspaceRoles =
-    data?.authorization?.actor?.workspaceRoleKeys || [];
-  const actorPlatformRoles = data?.authorization?.actor?.platformRoleKeys || [];
   const identityProviders = useMemo(
     () => data?.identityProviders || [],
     [data?.identityProviders],
@@ -713,11 +688,6 @@ export default function WorkspacePage() {
     await router.replace(nextUrl);
   };
 
-  const openWorkspacePath = async (workspaceId: string, path: string) => {
-    const nextUrl = buildRuntimeScopeUrl(path, {}, { workspaceId });
-    await router.replace(nextUrl);
-  };
-
   const handleWorkspaceAction = async (
     workspaceId: string,
     action: 'join' | 'apply',
@@ -787,6 +757,10 @@ export default function WorkspacePage() {
         hideHeader
         contentBorderless
         loading
+        sidebarBackAction={{
+          label: '返回主菜单',
+          onClick: () => runtimeScopeNavigation.pushWorkspace(Path.Home),
+        }}
       />
     );
   }
@@ -801,6 +775,10 @@ export default function WorkspacePage() {
       title="工作空间"
       hideHeader
       contentBorderless
+      sidebarBackAction={{
+        label: '返回主菜单',
+        onClick: () => runtimeScopeNavigation.pushWorkspace(Path.Home),
+      }}
     >
       {error ? (
         <Alert
@@ -839,24 +817,6 @@ export default function WorkspacePage() {
 
       <PanelGrid>
         <section className="console-panel">
-          <div className="console-panel-header">
-            <div>
-              <div className="console-panel-title">
-                {activeTab === 'mine'
-                  ? '我可访问的工作空间'
-                  : activeTab === 'discover'
-                    ? '发现工作空间'
-                    : '申请记录'}
-              </div>
-              <div className="console-panel-subtitle">
-                {activeTab === 'mine'
-                  ? '聚焦工作空间切换、默认进入偏好与常用入口。'
-                  : activeTab === 'discover'
-                    ? '发现其他业务工作空间并提交加入申请。'
-                    : '跟踪邀请、申请与审批结果，并在收到邀请后直接接受。'}
-              </div>
-            </div>
-          </div>
           <FlatSearchInput
             allowClear
             value={searchKeyword}
@@ -891,13 +851,6 @@ export default function WorkspacePage() {
                         </Space>
                         <Text type="secondary">{item.slug || item.id}</Text>
                       </WorkspaceCardMeta>
-                      <WorkspaceSummary>
-                        <Text type="secondary">
-                          {isCurrent
-                            ? '当前所有一级工作台都会跟随此工作空间切换。'
-                            : '可快速切换后进入当前工作空间的知识库、看板与调度。'}
-                        </Text>
-                      </WorkspaceSummary>
                       <WorkspaceActionRow>
                         <Button
                           size="small"
@@ -905,33 +858,6 @@ export default function WorkspacePage() {
                           onClick={() => void switchWorkspace(item.id)}
                         >
                           {isCurrent ? '进入当前工作空间' : '切换到此工作空间'}
-                        </Button>
-                        <Button
-                          size="small"
-                          onClick={() =>
-                            void openWorkspacePath(item.id, Path.Knowledge)
-                          }
-                        >
-                          查看知识库
-                        </Button>
-                        <Button
-                          size="small"
-                          onClick={() =>
-                            void openWorkspacePath(item.id, Path.HomeDashboard)
-                          }
-                        >
-                          查看数据看板
-                        </Button>
-                        <Button
-                          size="small"
-                          onClick={() =>
-                            void openWorkspacePath(
-                              item.id,
-                              Path.SettingsSystemTasks,
-                            )
-                          }
-                        >
-                          查看系统任务
                         </Button>
                         {item.id !== defaultWorkspaceId ? (
                           <Button
@@ -973,9 +899,6 @@ export default function WorkspacePage() {
                         </Space>
                         <Text type="secondary">{item.slug || item.id}</Text>
                       </WorkspaceCardMeta>
-                      <Text type="secondary">
-                        {WORKSPACE_KIND_DESCRIPTIONS[item.kind || 'regular']}
-                      </Text>
                       <WorkspaceActionRow>
                         <Button
                           size="small"
@@ -1022,12 +945,6 @@ export default function WorkspacePage() {
                       </Tag>
                     ) : null}
                   </Space>
-                  <WorkspaceSummary>
-                    <Text type="secondary">
-                      最近更新时间：
-                      {formatDateTime(item.updatedAt || item.createdAt)}
-                    </Text>
-                  </WorkspaceSummary>
                   {item.status === 'invited' ? (
                     <WorkspaceActionRow>
                       <Button
@@ -1053,13 +970,6 @@ export default function WorkspacePage() {
 
         <section className="console-panel">
           <AsideStack>
-            <div>
-              <div className="console-panel-title">工作空间运营摘要</div>
-              <div className="console-panel-subtitle">
-                当前页只保留运营信息、默认进入与常用入口。
-              </div>
-            </div>
-
             {samlCertificateAlertSummary ? (
               <Alert
                 type={samlCertificateAlertSummary.type}
@@ -1082,174 +992,6 @@ export default function WorkspacePage() {
                 }
               />
             ) : null}
-
-            {isPlatformAdmin ? (
-              <Alert
-                type="info"
-                showIcon
-                message="平台治理"
-                description="创建工作空间、平台级治理与高风险操作入口统一从这里进入。"
-                action={
-                  <Button
-                    size="small"
-                    onClick={() =>
-                      runtimeScopeNavigation.pushWorkspace(
-                        Path.SettingsPlatform,
-                      )
-                    }
-                  >
-                    打开平台治理
-                  </Button>
-                }
-              />
-            ) : null}
-
-            <SummaryList>
-              <SummaryRow>
-                <Text type="secondary">空间类型</Text>
-                <Tag color={workspaceKindColor(data?.workspace?.kind)}>
-                  {WORKSPACE_KIND_LABELS[data?.workspace?.kind || 'regular']}
-                </Tag>
-              </SummaryRow>
-              <SummaryRow>
-                <Text type="secondary">默认进入</Text>
-                <Text strong>
-                  {data?.workspace?.id === defaultWorkspaceId ? '是' : '否'}
-                </Text>
-              </SummaryRow>
-              <SummaryRow>
-                <Text type="secondary">我的角色</Text>
-                <Text strong>
-                  {ROLE_LABELS[data?.membership?.roleKey || 'member'] || '成员'}
-                </Text>
-              </SummaryRow>
-              <SummaryRow>
-                <Text type="secondary">授权角色</Text>
-                <Space size={6} wrap>
-                  {(actorWorkspaceRoles.length > 0
-                    ? actorWorkspaceRoles
-                    : [data?.membership?.roleKey || 'member']
-                  ).map((roleKey) => (
-                    <Tag key={roleKey} color="blue">
-                      {ROLE_LABELS[roleKey] || roleKey}
-                    </Tag>
-                  ))}
-                  {actorPlatformRoles.map((roleKey) => (
-                    <Tag key={roleKey} color="purple">
-                      {roleKey === 'platform_admin' ? '平台管理员' : roleKey}
-                    </Tag>
-                  ))}
-                </Space>
-              </SummaryRow>
-              <SummaryRow>
-                <Text type="secondary">知识库</Text>
-                <Text strong>{data?.stats.knowledgeBaseCount ?? 0}</Text>
-              </SummaryRow>
-              <SummaryRow>
-                <Text type="secondary">成员数</Text>
-                <Text strong>{data?.stats.memberCount ?? 0}</Text>
-              </SummaryRow>
-              <SummaryRow>
-                <Text type="secondary">待处理申请</Text>
-                <Text strong>
-                  {data?.stats.reviewQueueCount ?? reviewQueue.length}
-                </Text>
-              </SummaryRow>
-            </SummaryList>
-
-            <div>
-              <div className="console-panel-title" style={{ fontSize: 15 }}>
-                常用入口
-              </div>
-              <div className="console-panel-subtitle" style={{ marginTop: 4 }}>
-                直接跳到具体功能页，不在这里堆治理详情。
-              </div>
-              <WorkspaceActionRow>
-                <Button
-                  onClick={() =>
-                    runtimeScopeNavigation.pushWorkspace(Path.Knowledge)
-                  }
-                >
-                  查看我的知识库
-                </Button>
-                <Button
-                  onClick={() =>
-                    runtimeScopeNavigation.pushWorkspace(Path.HomeDashboard)
-                  }
-                >
-                  查看数据看板
-                </Button>
-                <Button
-                  onClick={() =>
-                    runtimeScopeNavigation.pushWorkspace(
-                      Path.SettingsSystemTasks,
-                    )
-                  }
-                >
-                  查看系统任务
-                </Button>
-                {governanceCenterVisible ? (
-                  <Button
-                    onClick={() =>
-                      runtimeScopeNavigation.pushWorkspace(Path.SettingsUsers)
-                    }
-                  >
-                    打开用户管理
-                  </Button>
-                ) : null}
-                {governanceCenterVisible ? (
-                  <Button
-                    onClick={() =>
-                      runtimeScopeNavigation.pushWorkspace(
-                        Path.SettingsPermissions,
-                      )
-                    }
-                  >
-                    打开权限管理
-                  </Button>
-                ) : null}
-                {canReadIdentityProviders ? (
-                  <Button
-                    onClick={() =>
-                      runtimeScopeNavigation.pushWorkspace(
-                        Path.SettingsIdentity,
-                      )
-                    }
-                  >
-                    打开身份与目录
-                  </Button>
-                ) : null}
-                {permissionActions['audit.read'] ? (
-                  <Button
-                    onClick={() =>
-                      runtimeScopeNavigation.pushWorkspace(Path.SettingsAudit)
-                    }
-                  >
-                    打开审计日志
-                  </Button>
-                ) : null}
-                {isPlatformAdmin ? (
-                  <Button
-                    onClick={() =>
-                      runtimeScopeNavigation.pushWorkspace(
-                        Path.SettingsPlatform,
-                      )
-                    }
-                  >
-                    打开平台治理
-                  </Button>
-                ) : null}
-                {data?.workspace?.id !== defaultWorkspaceId ? (
-                  <Button
-                    onClick={() =>
-                      void handleSetDefaultWorkspace(data!.workspace.id)
-                    }
-                  >
-                    设为默认进入
-                  </Button>
-                ) : null}
-              </WorkspaceActionRow>
-            </div>
 
             {canManageMembers ? (
               <div>
@@ -1421,18 +1163,6 @@ export default function WorkspacePage() {
                       >
                         打开权限管理
                       </Button>
-                      {isPlatformAdmin ? (
-                        <Button
-                          size="small"
-                          onClick={() =>
-                            runtimeScopeNavigation.pushWorkspace(
-                              Path.SettingsPlatform,
-                            )
-                          }
-                        >
-                          打开平台治理
-                        </Button>
-                      ) : null}
                     </WorkspaceActionRow>
                   </WorkspaceCard>
                 </GovernanceGrid>

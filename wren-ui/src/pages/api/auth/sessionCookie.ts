@@ -3,7 +3,27 @@ import type { NextApiRequest } from 'next';
 const SESSION_COOKIE_NAME = 'wren_session';
 const ONE_WEEK_SECONDS = 60 * 60 * 24 * 7;
 
+const isLoopbackHost = (hostHeader?: string | string[]) => {
+  const host = Array.isArray(hostHeader) ? hostHeader[0] : hostHeader;
+  const normalizedHost = host?.toLowerCase().trim();
+
+  if (!normalizedHost) {
+    return false;
+  }
+
+  return (
+    normalizedHost.startsWith('127.0.0.1') ||
+    normalizedHost.startsWith('localhost') ||
+    normalizedHost.startsWith('[::1]') ||
+    normalizedHost.startsWith('::1')
+  );
+};
+
 const isSecureRequest = (req?: NextApiRequest) => {
+  if (isLoopbackHost(req?.headers.host)) {
+    return false;
+  }
+
   if (process.env.NODE_ENV === 'production') {
     return true;
   }

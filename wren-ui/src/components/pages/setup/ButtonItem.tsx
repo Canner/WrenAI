@@ -4,7 +4,7 @@ import styled from 'styled-components';
 import Icon from '@/import/icon';
 import { IterableComponent } from '@/utils/iteration';
 import { ButtonOption } from './utils';
-import { SampleDatasetName } from '@/types/api';
+import { SampleDatasetName } from '@/types/dataSource';
 
 const { Text } = Typography;
 
@@ -12,7 +12,7 @@ const StyledButton = styled(Button)`
   &.ant-btn {
     width: 100%;
     height: 100%;
-    min-height: 148px;
+    min-height: 124px;
     border-radius: 24px;
     border: 1px solid rgba(15, 23, 42, 0.08);
     background: linear-gradient(
@@ -96,7 +96,6 @@ const StyledIcon = styled(Icon)`
 const Meta = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 6px;
 `;
 
 const ComingSoon = styled.div`
@@ -128,7 +127,6 @@ export default function ButtonItem(props: IterableComponent<Props>) {
     label,
     onSelect,
     selectedTemplate,
-    guide,
   } = props;
 
   const isSelected = selectedTemplate === value;
@@ -156,11 +154,6 @@ export default function ButtonItem(props: IterableComponent<Props>) {
         <Meta>
           <Text strong style={{ fontSize: 16, color: '#1f2435' }}>
             {label}
-          </Text>
-          <Text type="secondary" style={{ fontSize: 13, lineHeight: 1.7 }}>
-            {guide
-              ? '支持快速接入并在后续步骤完成资产选择与语义建模。'
-              : '点击后会直接开始当前方式的接入流程。'}
           </Text>
         </Meta>
       </ButtonInner>

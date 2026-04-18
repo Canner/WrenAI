@@ -1,5 +1,7 @@
 # `projectId / project_id` 盘点（2026-04-09）
 
+> 历史说明（2026-04-16）：本文保留的是 Apollo/GraphQL 时代的设计、排障或执行记录。当前 `wren-ui` 运行时前端已经切到 REST，代码目录也已收口到 `src/server/*` 与 `src/pages/api/v1/*`；文中的旧 GraphQL 入口、resolver 与 Apollo 上下文描述仅作历史背景，不再代表当前主链路。
+
 ## 结论
 
 - **主链路状态**：runtime identity 主链路已经是 `runtime_scope_id / workspace / knowledge_base / deploy_hash` 优先，`misc/scripts/scan-runtime-identity.sh` 当前可通过。
@@ -25,7 +27,7 @@
 | 类别 | hit count | 处理建议 | 含义 |
 | --- | ---: | --- | --- |
 | 兼容桥 / legacy selector / project bridge | 1 | 仅剩持久化 key 映射 | AI service 的 bridge alias 接收与前端 legacy query alias 已切除，剩余只在存储兼容边界 |
-| project 域 / 持久化锚点 | 43 | 暂留 | `project` 表、`ProjectService`、`projectResolver`、各业务表 `project_id` |
+| project 域 / 持久化锚点 | 43 | 暂留 | `project` 表、`ProjectService`、历史项目解析层记录、各业务表 `project_id` |
 | 外部数据源语义 | 4 | 不该删 | BigQuery / GCP / dbt connector 的真实 `project_id` |
 
 ## 剩余兼容边界
@@ -36,7 +38,7 @@ Wave 1 / Wave 2 已完成：AI service 不再接收旧 bridge alias，前端 run
 
 剩余 1 个 implementation hit 当前固定在以下 1 个文件：
 
-- `wren-ui/src/apollo/server/repositories/kbSnapshotRepository.ts`  
+- `wren-ui/src/server/repositories/kbSnapshotRepository.ts`  
   保留 `legacyProjectId -> legacy_project_id` 存储映射
 
 判断口径：
@@ -59,9 +61,9 @@ Wave 1 / Wave 2 已完成：AI service 不再接收旧 bridge alias，前端 run
 
 代表路径：
 
-- `wren-ui/src/apollo/server/services/projectService.ts`
-- `wren-ui/src/apollo/server/repositories/projectRepository.ts`
-- `wren-ui/src/apollo/server/resolvers/projectResolver.ts`
+- `wren-ui/src/server/services/projectService.ts`
+- `wren-ui/src/server/repositories/projectRepository.ts`
+- 历史 project resolver 记录（当前主链已收口到 REST route + server service/repository）
 - `wren-ui/migrations/20240125070643_create_project_table.js`
 - `wren-ui/migrations/20240125071855_create_model_table.js`
 - `wren-ui/migrations/20250102074255_create_dashboard_table.js`
@@ -79,7 +81,7 @@ Wave 1 / Wave 2 已完成：AI service 不再接收旧 bridge alias，前端 run
 
 代表路径：
 
-- `wren-ui/src/components/pages/setup/dataSources/BigQueryProperties.tsx`
+- `wren-ui/src/components/pages/setup/connections/BigQueryProperties.tsx`
 - `wren-engine/ibis-server/app/model/__init__.py`
 - `wren-launcher/commands/dbt/data_source.go`
 

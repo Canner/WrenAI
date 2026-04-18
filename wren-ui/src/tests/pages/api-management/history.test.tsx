@@ -2,7 +2,8 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import moment from 'moment';
 import APIHistory from '../../../pages/api-management/history';
-import { ApiType } from '@/types/api';
+import { ApiType } from '@/types/apiHistory';
+
 import { API_HISTORY_FILTER_TYPES } from '@/components/pages/apiManagement/apiTypeLabels';
 
 const mockUseRouter = jest.fn();

@@ -1,20 +1,20 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { LearningResolver } from '@server/resolvers/learningResolver';
-import { ApiError } from '@/apollo/server/utils/apiUtils';
-import { buildResolverContextFromRequest } from '../resolverContext';
+import { LearningController } from '@server/controllers/learningController';
+import { ApiError } from '@/server/utils/apiUtils';
+import { buildApiContextFromRequest } from '../apiContext';
 import { sendRestApiError } from '../restApi';
 
-const learningResolver = new LearningResolver();
+const learningController = new LearningController();
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
   try {
-    const ctx = await buildResolverContextFromRequest({ req });
+    const ctx = await buildApiContextFromRequest({ req });
 
     if (req.method === 'GET') {
-      const result = await learningResolver.getLearningRecord(null, null, ctx);
+      const result = await learningController.getLearningRecord({ ctx });
       return res.status(200).json(result);
     }
 
@@ -24,11 +24,7 @@ export default async function handler(
         throw new ApiError('Learning path is required', 400);
       }
 
-      const result = await learningResolver.saveLearningRecord(
-        null,
-        { data: { path } },
-        ctx,
-      );
+      const result = await learningController.saveLearningRecord({ path, ctx });
       return res.status(200).json(result);
     }
 

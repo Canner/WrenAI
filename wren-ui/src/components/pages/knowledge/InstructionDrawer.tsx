@@ -4,7 +4,7 @@ import { getCompactTime } from '@/utils/time';
 import QuestionOutlined from '@ant-design/icons/QuestionOutlined';
 import { DrawerAction } from '@/hooks/useDrawerAction';
 import GlobalLabel from '@/components/pages/knowledge/GlobalLabel';
-import { Instruction } from '@/types/api';
+import type { Instruction } from '@/types/knowledge';
 
 const { Text } = Typography;
 

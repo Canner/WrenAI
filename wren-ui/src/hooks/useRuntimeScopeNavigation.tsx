@@ -6,7 +6,8 @@ import {
   hasExplicitRuntimeScopeSelector,
   readRuntimeScopeSelectorFromObject,
   resolveClientRuntimeScopeSelector,
-} from '@/apollo/client/runtimeScope';
+} from '@/runtime/client/runtimeScope';
+import { Path } from '@/utils/enum';
 
 type RouteParams = Record<string, string | number | boolean | null | undefined>;
 
@@ -29,6 +30,35 @@ export const resolveWorkspaceNavigationSelector = (
   }
 
   return {};
+};
+
+const normalizeNavigationPath = (path?: string | null) =>
+  (path || '').split('?')[0].split('#')[0];
+
+export const shouldPreserveKnowledgeRuntimeScope = (path?: string | null) => {
+  const normalizedPath = normalizeNavigationPath(path);
+  return (
+    normalizedPath === Path.Knowledge ||
+    normalizedPath === Path.Modeling ||
+    normalizedPath === Path.HomeDashboard
+  );
+};
+
+export const resolveScopedNavigationSelector = ({
+  selector,
+  path,
+}: {
+  selector: ClientRuntimeScopeSelector;
+  path?: string | null;
+}): ClientRuntimeScopeSelector => {
+  if (
+    shouldPreserveKnowledgeRuntimeScope(path) &&
+    hasExplicitRuntimeScopeSelector(selector)
+  ) {
+    return selector;
+  }
+
+  return resolveWorkspaceNavigationSelector(selector);
 };
 
 export const resolveRuntimeNavigationSelector = ({
@@ -113,20 +143,24 @@ export default function useRuntimeScopeNavigation() {
 
   const hrefWorkspace = useCallback(
     (path: string, params: RouteParams = {}) =>
-      href(path, params, workspaceSelector),
-    [href, workspaceSelector],
+      href(path, params, resolveScopedNavigationSelector({ selector, path })),
+    [href, selector],
   );
 
   const pushWorkspace = useCallback(
     (path: string, params: RouteParams = {}) =>
-      push(path, params, workspaceSelector),
-    [push, workspaceSelector],
+      push(path, params, resolveScopedNavigationSelector({ selector, path })),
+    [push, selector],
   );
 
   const replaceWorkspace = useCallback(
     (path: string, params: RouteParams = {}) =>
-      replace(path, params, workspaceSelector),
-    [replace, workspaceSelector],
+      replace(
+        path,
+        params,
+        resolveScopedNavigationSelector({ selector, path }),
+      ),
+    [replace, selector],
   );
 
   return {

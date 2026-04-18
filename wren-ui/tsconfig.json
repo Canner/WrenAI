@@ -24,10 +24,9 @@
     ],
     "paths": {
       "@/*": ["./src/*"],
-      "@server": ["./src/apollo/server/index.ts"],
-      "@server/*": ["./src/apollo/server/*"]
+      "@server/*": ["./src/server/*"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "tmp", ".omc", "wren-ui", "output"]
 }

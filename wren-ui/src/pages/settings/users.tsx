@@ -22,10 +22,11 @@ import {
   formatUserLabel,
   sourceDetailColor,
 } from '@/components/pages/settings/workspaceGovernanceShared';
-import { buildRuntimeScopeUrl } from '@/apollo/client/runtimeScope';
+import { buildRuntimeScopeUrl } from '@/runtime/client/runtimeScope';
 import useAuthSession from '@/hooks/useAuthSession';
 import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
+import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { Path } from '@/utils/enum';
 
 const { Text } = Typography;
@@ -136,7 +137,13 @@ export default function SettingsUsersPage() {
       }
       setWorkspaceOverview(payload as WorkspaceGovernanceOverview);
     } catch (error: any) {
-      message.error(error?.message || '加载用户管理失败');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '加载用户管理失败',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setLoading(false);
     }
@@ -197,7 +204,10 @@ export default function SettingsUsersPage() {
       setInviteRole('member');
       await loadWorkspaceOverview();
     } catch (error: any) {
-      message.error(error?.message || '邀请成员失败');
+      const errorMessage = resolveAbortSafeErrorMessage(error, '邀请成员失败');
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setInviteLoading(false);
     }
@@ -251,7 +261,10 @@ export default function SettingsUsersPage() {
       );
       await loadWorkspaceOverview();
     } catch (error: any) {
-      message.error(error?.message || '成员操作失败');
+      const errorMessage = resolveAbortSafeErrorMessage(error, '成员操作失败');
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setMemberAction(null);
     }

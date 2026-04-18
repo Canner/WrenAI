@@ -2,7 +2,7 @@ import {
   buildRuntimeScopeUrl,
   resolveClientRuntimeScopeSelector,
   type ClientRuntimeScopeSelector,
-} from '@/apollo/client/runtimeScope';
+} from '@/runtime/client/runtimeScope';
 import { parseRestJsonResponse } from './rest';
 
 export type DashboardScheduleData = {
@@ -75,9 +75,15 @@ type TimedCacheEntry<TPayload> = {
 };
 
 const DASHBOARD_CACHE_TTL_MS = 30_000;
-const dashboardListCache = new Map<string, TimedCacheEntry<DashboardListItem[]>>();
+const dashboardListCache = new Map<
+  string,
+  TimedCacheEntry<DashboardListItem[]>
+>();
 const dashboardListRequests = new Map<string, Promise<DashboardListItem[]>>();
-const dashboardDetailCache = new Map<string, TimedCacheEntry<DashboardDetailData>>();
+const dashboardDetailCache = new Map<
+  string,
+  TimedCacheEntry<DashboardDetailData>
+>();
 const dashboardDetailRequests = new Map<string, Promise<DashboardDetailData>>();
 
 const getFreshCachedValue = <TPayload>(
@@ -116,7 +122,12 @@ export const buildDashboardDetailUrl = (
 export const buildDashboardScheduleUrl = (
   dashboardId: number,
   selector = resolveClientRuntimeScopeSelector(),
-) => buildRuntimeScopeUrl(`/api/v1/dashboards/${dashboardId}/schedule`, {}, selector);
+) =>
+  buildRuntimeScopeUrl(
+    `/api/v1/dashboards/${dashboardId}/schedule`,
+    {},
+    selector,
+  );
 
 export const buildDashboardItemLayoutsUrl = (
   selector = resolveClientRuntimeScopeSelector(),
@@ -130,7 +141,12 @@ export const buildDashboardItemUrl = (
 export const buildDashboardItemPreviewUrl = (
   itemId: number,
   selector = resolveClientRuntimeScopeSelector(),
-) => buildRuntimeScopeUrl(`/api/v1/dashboard-items/${itemId}/preview`, {}, selector);
+) =>
+  buildRuntimeScopeUrl(
+    `/api/v1/dashboard-items/${itemId}/preview`,
+    {},
+    selector,
+  );
 
 export const peekDashboardListPayload = ({
   selector,
@@ -170,7 +186,9 @@ export const peekDashboardDetailPayload = ({
 }) => {
   const resolvedRequestUrl =
     requestUrl ||
-    (dashboardId != null ? buildDashboardDetailUrl(dashboardId, selector) : null);
+    (dashboardId != null
+      ? buildDashboardDetailUrl(dashboardId, selector)
+      : null);
   if (!resolvedRequestUrl) {
     return null;
   }
@@ -191,7 +209,9 @@ export const primeDashboardDetailPayload = ({
 }) => {
   const resolvedRequestUrl =
     requestUrl ||
-    (dashboardId != null ? buildDashboardDetailUrl(dashboardId, selector) : null);
+    (dashboardId != null
+      ? buildDashboardDetailUrl(dashboardId, selector)
+      : null);
   if (!resolvedRequestUrl) {
     return;
   }
@@ -327,11 +347,14 @@ export const updateDashboardSchedule = async (
     schedule?: DashboardScheduleData | null;
   },
 ) => {
-  const response = await fetch(buildDashboardScheduleUrl(dashboardId, selector), {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
+  const response = await fetch(
+    buildDashboardScheduleUrl(dashboardId, selector),
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    },
+  );
 
   return parseRestJsonResponse<DashboardListItem & Record<string, any>>(
     response,

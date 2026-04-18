@@ -7,7 +7,7 @@ import {
   deriveRuntimeExecutionContextFromRequest,
   handleApiError,
   respondWithSimple,
-} from '@/apollo/server/utils/apiUtils';
+} from '@/server/utils/apiUtils';
 import { getLogger } from '@server/utils';
 import { replaceAllowableSyntax } from '@server/utils/regex';
 import { safeFormatSQL } from '@server/utils/sqlFormat';

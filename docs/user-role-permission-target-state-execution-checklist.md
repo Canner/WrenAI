@@ -1,5 +1,7 @@
 # User / Role / Permission 目标态执行清单
 
+> 历史说明（2026-04-16）：本文保留的是 Apollo/GraphQL 时代的设计、排障或执行记录。当前 `wren-ui` 运行时前端已经切到 REST，代码目录也已收口到 `src/server/*` 与 `src/pages/api/v1/*`；文中的旧 GraphQL 入口、resolver 与 Apollo 上下文描述仅作历史背景，不再代表当前主链路。
+
 更新时间：2026-04-15  
 状态：Closed / Verified
 
@@ -23,7 +25,7 @@
 
 - [x] 固定回归命令集合
 - [x] 固定 authz / audit / SSO / service account 核心测试集
-- [x] 盘点 REST / GraphQL / service / background actor 入口
+- [x] 盘点 REST / 历史 GraphQL / service / background actor 入口
 - [x] 盘点 legacy 依赖路径（`is_platform_admin` / `workspace_member.role_key`）
 - [x] 盘点 `/workspace` vs `/settings/access` 职责边界
 - [x] 明确后续文件级改造范围
@@ -51,12 +53,12 @@
 
 关键文件：
 
-- [x] `wren-ui/src/apollo/server/services/authService.ts`
-- [x] `wren-ui/src/apollo/server/authz/authorizationActor.ts`
-- [x] `wren-ui/src/apollo/server/authz/authorize.ts`
+- [x] `wren-ui/src/server/services/authService.ts`
+- [x] `wren-ui/src/server/authz/authorizationActor.ts`
+- [x] `wren-ui/src/server/authz/authorize.ts`
 - [x] `wren-ui/src/pages/api/auth/session.ts`
 - [x] `wren-ui/src/pages/api/v1/workspace/current.ts`
-- [x] `wren-ui/src/apollo/server/authz/bindingSync.ts`
+- [x] `wren-ui/src/server/authz/bindingSync.ts`
 - [x] `wren-ui/scripts/backfill_principal_role_bindings.ts`
 
 ---
@@ -65,7 +67,7 @@
 
 - [x] REST 管理写接口统一接 `authorize()`
 - [x] REST 敏感读接口统一接 `authorize()`
-- [x] GraphQL 管理/敏感 resolver 统一接 `authorize()`
+- [x] 历史 GraphQL 管理/敏感 resolver 统一接 `authorize()`
 - [x] service / background actor 明确 principalType / scope
 - [x] system / scheduled job 主路径不再依赖 legacy 角色判断
 - [x] 敏感写操作统一补审计
@@ -77,11 +79,11 @@
 
 - [x] `wren-ui/src/pages/api/v1/**`
 - [x] `wren-ui/src/pages/api/auth/**`
-- [x] `wren-ui/src/apollo/server/resolvers/*.ts`
-- [x] `wren-ui/src/apollo/server/services/*.ts`
-- [x] `wren-ui/src/apollo/server/backgrounds/**`
-- [x] `wren-ui/src/apollo/server/authz/rules.ts`
-- [x] `wren-ui/src/apollo/server/repositories/auditEventRepository.ts`
+- [x] `wren-ui/src/server/controllers/**`
+- [x] `wren-ui/src/server/services/*.ts`
+- [x] `wren-ui/src/server/backgrounds/**`
+- [x] `wren-ui/src/server/authz/rules.ts`
+- [x] `wren-ui/src/server/repositories/auditEventRepository.ts`
 
 ---
 
@@ -121,7 +123,7 @@
 
 关键文件：
 
-- [x] `wren-ui/src/apollo/server/authz/adminCatalog.ts`
+- [x] `wren-ui/src/server/authz/adminCatalog.ts`
 - [x] `wren-ui/src/pages/api/v1/workspace/roles/index.ts`
 - [x] `wren-ui/src/pages/api/v1/workspace/roles/[id].ts`
 - [x] `wren-ui/src/pages/api/v1/workspace/role-bindings/index.ts`
@@ -144,11 +146,11 @@
 
 关键文件：
 
-- [x] `wren-ui/src/apollo/server/services/automationService.ts`
-- [x] `wren-ui/src/apollo/server/services/governanceService.ts`
+- [x] `wren-ui/src/server/services/automationService.ts`
+- [x] `wren-ui/src/server/services/governanceService.ts`
 - [x] `wren-ui/src/pages/api/v1/workspace/service-accounts/**`
 - [x] `wren-ui/src/pages/api/v1/workspace/api-tokens/**`
-- [x] `wren-ui/src/apollo/server/backgrounds/recommend-question.ts`
+- [x] `wren-ui/src/server/backgrounds/recommend-question.ts`
 
 ---
 
@@ -165,9 +167,9 @@
 
 关键文件：
 
-- [x] `wren-ui/src/apollo/server/authz/permissionRegistry.ts`
-- [x] `wren-ui/src/apollo/server/authz/adminCatalog.ts`
-- [x] `wren-ui/src/apollo/server/authz/rules.ts`
+- [x] `wren-ui/src/server/authz/permissionRegistry.ts`
+- [x] `wren-ui/src/server/authz/adminCatalog.ts`
+- [x] `wren-ui/src/server/authz/rules.ts`
 - [x] `wren-ui/src/pages/api/v1/workspace/authorization/explain.ts`
 - [x] `wren-ui/src/pages/settings/access.tsx`
 
@@ -181,7 +183,7 @@
 
 ### 9.2 重点回归
 
-- [x] `cd wren-ui && yarn jest --runInBand src/pages/api/tests/auth_api.test.ts src/apollo/server/authz/authorize.test.ts src/apollo/server/services/tests/authService.test.ts src/apollo/server/backgrounds/tests/recommendQuestionBackgroundTracker.test.ts src/pages/api/tests/workspace_api.test.ts src/pages/api/tests/workspace_governance_api.test.ts src/pages/api/tests/workspace_admin_catalog_api.test.ts src/tests/pages/settings/access.test.tsx src/tests/pages/workspace/index.test.tsx src/tests/pages/workspace/schedules.test.tsx src/tests/pages/settings/platform.test.tsx src/pages/api/tests/secret_reencrypt_api.test.ts src/pages/api/tests/scim_api.test.ts src/pages/api/tests/graphql.test.ts`
+- [x] `cd wren-ui && yarn jest --runInBand src/pages/api/tests/auth_api.test.ts src/server/authz/authorize.test.ts src/server/services/tests/authService.test.ts src/server/backgrounds/tests/recommendQuestionBackgroundTracker.test.ts src/pages/api/tests/workspace_api.test.ts src/pages/api/tests/workspace_governance_api.test.ts src/pages/api/tests/workspace_admin_catalog_api.test.ts src/tests/pages/settings/access.test.tsx src/tests/pages/workspace/index.test.tsx src/tests/pages/workspace/schedules.test.tsx src/tests/pages/settings/platform.test.tsx src/pages/api/tests/secret_reencrypt_api.test.ts src/pages/api/tests/scim_api.test.ts src/runtime/client/tests/runtimeScope.test.ts`
 - [x] 结果：**14 suites passed / 90 tests passed**
 
 ### 9.3 覆盖面说明
@@ -192,7 +194,7 @@
 - [x] group binding 场景
 - [x] impersonation / break-glass 场景
 - [x] auth session / SSO / session cookie 场景
-- [x] GraphQL bootstrap / runtime scope 场景
+- [x] runtime scope bootstrap / REST 场景
 - [x] secret reencrypt / SCIM 治理接口
 - [x] UI：settings/access、workspace、workspace/schedules
 - [x] UI：settings/platform

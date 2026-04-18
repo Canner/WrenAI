@@ -1,0 +1,4 @@
+﻿tenant_plat_id,channel_id,game_type_id,game_type_name,bet_times,valid_bet_amount,avg_bet_amount,win_loss_amount,kill_rate,bet_share
+990001,990011,990032,体育,6,3900,650.0000,330,0.084615,0.534247
+990001,990011,990031,电子,5,1900,380.0000,140,0.073684,0.260274
+990001,990011,990033,棋牌,2,1500,750.0000,110,0.073333,0.205479

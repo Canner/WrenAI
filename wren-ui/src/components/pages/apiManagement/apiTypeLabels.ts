@@ -1,4 +1,4 @@
-import { ApiType } from '@/types/api';
+import { ApiType } from '@/types/apiHistory';
 
 export const API_HISTORY_FILTER_TYPES = Object.values(ApiType) as ApiType[];
 

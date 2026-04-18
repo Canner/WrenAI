@@ -1,6 +1,8 @@
+import { SchemaChangeType, SchemaChange } from '@/types/schemaChange';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { message } from 'antd';
 import { DataNode } from 'antd/es/tree';
+import { hasExecutableRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import { DiagramModel } from '@/utils/data';
 import { getNodeTypeIcon } from '@/utils/nodeType';
 import {
@@ -15,7 +17,7 @@ import WarningOutlined from '@ant-design/icons/WarningOutlined';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import { StyledSidebarTree } from '@/components/sidebar/Modeling';
 import SchemaChangeModal from '@/components/modals/SchemaChangeModal';
-import { SchemaChange, SchemaChangeType } from '@/types/api';
+
 import {
   fetchSchemaChanges,
   resolveSchemaChange,
@@ -29,6 +31,7 @@ interface Props {
   models: DiagramModel[];
   onOpenModelDrawer: () => void;
   readOnly?: boolean;
+  schemaChangeEnabled?: boolean;
   onRefresh?: () => Promise<unknown>;
 }
 
@@ -41,7 +44,13 @@ const getHasSchemaChange = (schemaChange?: SchemaChange | null) => {
 };
 
 export default function ModelTree(props: Props) {
-  const { onOpenModelDrawer, models, readOnly = false, onRefresh } = props;
+  const {
+    onOpenModelDrawer,
+    models,
+    readOnly = false,
+    schemaChangeEnabled = true,
+    onRefresh,
+  } = props;
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
 
   const schemaChangeModal = useModalAction();
@@ -51,12 +60,20 @@ export default function ModelTree(props: Props) {
   const [isDetecting, setIsDetecting] = useState(false);
   const [isResolving, setIsResolving] = useState(false);
   const refetchSchemaChange = useCallback(async () => {
+    if (
+      !schemaChangeEnabled ||
+      !hasExecutableRuntimeScopeSelector(runtimeScopeNavigation.selector)
+    ) {
+      setSchemaChangeData(null);
+      return null;
+    }
+
     const nextSchemaChange = (await fetchSchemaChanges(
       runtimeScopeNavigation.selector,
     )) as SchemaChange | null;
     setSchemaChangeData(nextSchemaChange);
     return nextSchemaChange;
-  }, [runtimeScopeNavigation.selector]);
+  }, [runtimeScopeNavigation.selector, schemaChangeEnabled]);
 
   useEffect(() => {
     void refetchSchemaChange().catch((error) => {
@@ -76,6 +93,10 @@ export default function ModelTree(props: Props) {
     schemaChangeModal.openModal();
   };
   const onResolveSchemaChange = async (type: SchemaChangeType) => {
+    if (!schemaChangeEnabled) {
+      return;
+    }
+
     setIsResolving(true);
     try {
       await resolveSchemaChange(runtimeScopeNavigation.selector, { type });
@@ -102,6 +123,10 @@ export default function ModelTree(props: Props) {
   };
 
   const onTriggerSchemaChangeDetection = async () => {
+    if (!schemaChangeEnabled) {
+      return;
+    }
+
     setIsDetecting(true);
     try {
       const hasChanges = await triggerSchemaChangeDetection(
@@ -129,25 +154,29 @@ export default function ModelTree(props: Props) {
     groupKey: 'models',
     emptyLabel: '暂无数据模型',
     actions: [
-      {
-        key: 'trigger-schema-detection',
-        icon: () => (
-          <ReloadOutlined
-            spin={isDetecting}
-            title={
-              schemaChangeData?.lastSchemaChangeTime
-                ? `上次检测：${getRelativeTime(schemaChangeData.lastSchemaChangeTime)}`
-                : ''
-            }
-            onClick={() => {
-              if (!readOnly) {
-                void onTriggerSchemaChangeDetection();
-              }
-            }}
-          />
-        ),
-        disabled: isDetecting || readOnly,
-      },
+      ...(schemaChangeEnabled
+        ? [
+            {
+              key: 'trigger-schema-detection',
+              icon: () => (
+                <ReloadOutlined
+                  spin={isDetecting}
+                  title={
+                    schemaChangeData?.lastSchemaChangeTime
+                      ? `上次检测：${getRelativeTime(schemaChangeData.lastSchemaChangeTime)}`
+                      : ''
+                  }
+                  onClick={() => {
+                    if (!readOnly) {
+                      void onTriggerSchemaChangeDetection();
+                    }
+                  }}
+                />
+              ),
+              disabled: isDetecting || readOnly,
+            },
+          ]
+        : []),
       {
         key: 'add-model',
         render: () => (
@@ -172,7 +201,7 @@ export default function ModelTree(props: Props) {
     setTree((_tree) =>
       getModelGroupNode({
         quotaUsage: models.length,
-        appendSlot: hasSchemaChange && (
+        appendSlot: schemaChangeEnabled && hasSchemaChange && (
           <span className="adm-actionIcon mx-2" onClick={onOpenSchemaChange}>
             <WarningOutlined className="orange-5" title="查看结构变更影响" />
           </span>
@@ -202,7 +231,14 @@ export default function ModelTree(props: Props) {
         }),
       }),
     );
-  }, [models, hasSchemaChange, schemaChangeData, isDetecting, readOnly]);
+  }, [
+    models,
+    hasSchemaChange,
+    schemaChangeData,
+    isDetecting,
+    readOnly,
+    schemaChangeEnabled,
+  ]);
 
   return (
     <>

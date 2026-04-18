@@ -1,10 +1,12 @@
 import { useCallback, useState } from 'react';
 import { message } from 'antd';
 import { Path } from '@/utils/enum';
-import { SampleDatasetName } from '@/types/api';
+import { SampleDatasetName } from '@/types/dataSource';
+
 import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
 import { startSampleDataset } from '@/utils/settingsRest';
 import { clearRuntimePagePrefetchCache } from '@/utils/runtimePagePrefetch';
+import { buildKnowledgeWorkbenchParams } from '@/utils/knowledgeWorkbench';
 
 export default function useSetupConnectionSampleDataset() {
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
@@ -16,18 +18,12 @@ export default function useSetupConnectionSampleDataset() {
       try {
         setLoading(true);
         setError(null);
-        const data = await startSampleDataset(
-          runtimeScopeNavigation.selector,
-          template,
-        );
+        await startSampleDataset(runtimeScopeNavigation.selector, template);
         clearRuntimePagePrefetchCache();
-        const runtimeScopeId = data?.runtimeScopeId;
-        if (runtimeScopeId) {
-          await runtimeScopeNavigation.push(Path.Modeling, { runtimeScopeId });
-          return;
-        }
-
-        await runtimeScopeNavigation.push(Path.Modeling);
+        await runtimeScopeNavigation.push(
+          Path.Knowledge,
+          buildKnowledgeWorkbenchParams('modeling'),
+        );
       } catch (error) {
         const normalizedError =
           error instanceof Error

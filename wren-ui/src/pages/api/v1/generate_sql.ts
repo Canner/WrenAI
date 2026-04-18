@@ -1,8 +1,8 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
 import { ApiType } from '@server/repositories/apiHistoryRepository';
-import { AskResult } from '@/apollo/server/models/adaptor';
-import * as Errors from '@/apollo/server/utils/error';
+import { AskResult } from '@/server/models/adaptor';
+import * as Errors from '@/server/utils/error';
 import { getLogger } from '@server/utils';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -15,7 +15,7 @@ import {
   deriveRuntimeExecutionContextFromRequest,
   getScopedThreadHistories,
   pollUntil,
-} from '@/apollo/server/utils/apiUtils';
+} from '@/server/utils/apiUtils';
 import {
   buildAskRuntimeContext,
   toAskRuntimeIdentity,

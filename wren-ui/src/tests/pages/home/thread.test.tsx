@@ -1,8 +1,13 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ThreadPage, {
+  buildPendingPromptThreadResponse,
   findLatestPollableThreadResponse,
   findLatestUnfinishedAskingResponse,
+  hasActivePromptAskingTask,
+  hydrateCreatedThreadResponse,
+  resolveCreatedThreadResponsePollingTaskId,
+  shouldSuspendThreadRecoveryDuringPromptFlow,
 } from '../../../pages/home/[id]';
 import { HISTORICAL_SNAPSHOT_READONLY_HINT } from '../../../utils/runtimeSnapshot';
 
@@ -29,6 +34,10 @@ const mockTriggerThreadResponseChart = jest.fn();
 const mockAdjustThreadResponseChart = jest.fn();
 
 let mockThread: any;
+let mockAskOnSubmit: jest.Mock;
+let mockAskOnStopPolling: jest.Mock;
+let mockAskOnFetching: jest.Mock;
+let mockAskOnStoreThreadQuestions: jest.Mock;
 
 jest.mock('next/router', () => ({
   useRouter: () => mockUseRouter(),
@@ -245,6 +254,10 @@ const renderPage = () => renderToStaticMarkup(React.createElement(ThreadPage));
 describe('home/[id] thread shell', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockAskOnSubmit = jest.fn();
+    mockAskOnStopPolling = jest.fn();
+    mockAskOnFetching = jest.fn().mockResolvedValue(undefined);
+    mockAskOnStoreThreadQuestions = jest.fn();
     mockCanFetchThreadResponse.mockReturnValue(false);
     mockGetIsFinished.mockImplementation((status?: string) =>
       ['FINISHED', 'FAILED', 'STOPPED'].includes(`${status ?? ''}`),
@@ -268,10 +281,18 @@ describe('home/[id] thread shell', () => {
     });
     mockUseAskPrompt.mockReturnValue({
       inputProps: {},
-      onSubmit: jest.fn(),
-      onStopPolling: jest.fn(),
-      onFetching: jest.fn(),
-      onStoreThreadQuestions: jest.fn(),
+      data: {
+        askingTask: {
+          queryId: 'query-123',
+          status: 'SEARCHING',
+          type: 'TEXT_TO_SQL',
+          candidates: [],
+        },
+      },
+      onSubmit: mockAskOnSubmit,
+      onStopPolling: mockAskOnStopPolling,
+      onFetching: mockAskOnFetching,
+      onStoreThreadQuestions: mockAskOnStoreThreadQuestions,
     });
     mockUseAdjustAnswer.mockReturnValue({
       loading: false,
@@ -343,7 +364,7 @@ describe('home/[id] thread shell', () => {
   it('renders the historical knowledge bases once inside the conversation shell', () => {
     const markup = renderPage();
 
-    expect(markup).toContain('电商订单数据（E-commerce）');
+    expect(markup).toContain('订单知识库');
     expect(markup).toContain('客户知识库');
     expect(markup).toContain('PromptThread');
     expect(markup).toContain('Prompt');
@@ -351,7 +372,7 @@ describe('home/[id] thread shell', () => {
     expect(markup).not.toContain('技能模式');
     expect(markup).not.toContain('当前线程已固定绑定');
     expect(markup).not.toContain('已绑定知识库');
-    expect(markup.split('电商订单数据（E-commerce）')).toHaveLength(2);
+    expect(markup.split('订单知识库')).toHaveLength(2);
     expect(markup.split('客户知识库')).toHaveLength(2);
   });
 
@@ -457,21 +478,22 @@ describe('home/[id] thread shell', () => {
     expect(next?.id).toBe(2);
   });
 
-  it('prefers the latest pollable response to avoid restarting stale ones', () => {
-    mockCanFetchThreadResponse.mockReturnValue(true);
-
+  it('prefers the latest unfinished response to avoid restarting stale ones', () => {
     const next = findLatestPollableThreadResponse([
-      { id: 11, askingTask: { status: 'FINISHED' } } as any,
-      { id: 12, askingTask: { status: 'FINISHED' } } as any,
+      {
+        id: 11,
+        answerDetail: { status: 'NOT_STARTED' },
+      } as any,
+      {
+        id: 12,
+        answerDetail: { status: 'PREPROCESSING' },
+      } as any,
     ]);
 
     expect(next?.id).toBe(12);
-    expect(mockCanFetchThreadResponse).toHaveBeenCalled();
   });
 
   it('does not keep polling a SQL-only response that is already renderable', () => {
-    mockCanFetchThreadResponse.mockReturnValue(true);
-
     const next = findLatestPollableThreadResponse([
       {
         id: 21,
@@ -483,5 +505,196 @@ describe('home/[id] thread shell', () => {
     ]);
 
     expect(next).toBeUndefined();
+  });
+
+  it('keeps polling unfinished answer/chart tasks even when askingTask is absent', () => {
+    const next = findLatestPollableThreadResponse([
+      {
+        id: 30,
+        askingTask: null,
+        answerDetail: { status: 'PREPROCESSING' },
+      } as any,
+      {
+        id: 31,
+        askingTask: null,
+        chartDetail: { status: 'FETCHING' },
+      } as any,
+    ]);
+
+    expect(next?.id).toBe(31);
+  });
+
+  it('hydrates follow-up responses with a pending asking task when api payload misses it', () => {
+    const nextResponse = hydrateCreatedThreadResponse({
+      response: {
+        id: 99,
+        threadId: 42,
+        question: '继续追问 GMV',
+        sql: null,
+        view: null,
+        askingTask: null,
+        breakdownDetail: null,
+        answerDetail: null,
+        chartDetail: null,
+        adjustment: null,
+        adjustmentTask: null,
+      } as any,
+      taskId: 'query-123',
+      fallbackAskingTask: {
+        queryId: 'query-123',
+        status: 'SEARCHING',
+        type: 'TEXT_TO_SQL',
+        candidates: [],
+      } as any,
+    });
+
+    expect(nextResponse.askingTask).toEqual({
+      queryId: 'query-123',
+      status: 'SEARCHING',
+      type: 'TEXT_TO_SQL',
+      candidates: [],
+    });
+  });
+
+  it('resolves the follow-up polling task id when the created response is still pending', () => {
+    const pendingResponse = hydrateCreatedThreadResponse({
+      response: {
+        id: 501,
+        threadId: 42,
+        question: '继续追问 GMV',
+        sql: null,
+        view: null,
+        askingTask: null,
+        breakdownDetail: null,
+        answerDetail: null,
+        chartDetail: null,
+        adjustment: null,
+        adjustmentTask: null,
+      } as any,
+      taskId: 'query-123',
+      fallbackAskingTask: {
+        queryId: 'query-123',
+        status: 'SEARCHING',
+        type: 'TEXT_TO_SQL',
+        candidates: [],
+      } as any,
+    });
+
+    expect(
+      resolveCreatedThreadResponsePollingTaskId({
+        response: pendingResponse,
+        taskId: 'query-123',
+      }),
+    ).toBe('query-123');
+  });
+
+  it('keeps active prompt polling alive before the follow-up response record is created', () => {
+    expect(
+      hasActivePromptAskingTask({
+        queryId: 'query-123',
+        status: 'UNDERSTANDING',
+        type: null,
+        candidates: [],
+      } as any),
+    ).toBe(true);
+    expect(
+      hasActivePromptAskingTask({
+        queryId: 'query-123',
+        status: 'FAILED',
+        type: null,
+        candidates: [],
+      } as any),
+    ).toBe(false);
+  });
+
+  it('suspends thread recovery while a new prompt submission is in flight', () => {
+    expect(
+      shouldSuspendThreadRecoveryDuringPromptFlow({
+        askingTask: null,
+        loading: true,
+      }),
+    ).toBe(true);
+    expect(
+      shouldSuspendThreadRecoveryDuringPromptFlow({
+        askingTask: {
+          queryId: 'query-123',
+          status: 'SEARCHING',
+          type: 'TEXT_TO_SQL',
+          candidates: [],
+        } as any,
+        loading: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldSuspendThreadRecoveryDuringPromptFlow({
+        askingTask: null,
+        loading: false,
+      }),
+    ).toBe(false);
+  });
+
+  it('builds a synthetic pending response so follow-up questions appear immediately', () => {
+    const pendingResponse = buildPendingPromptThreadResponse({
+      thread: {
+        id: 42,
+        knowledgeBaseIds: [],
+        selectedSkillIds: [],
+        responses: [
+          {
+            id: 7,
+            threadId: 42,
+            question: '旧问题',
+            askingTask: null,
+          },
+        ],
+      } as any,
+      originalQuestion: '继续追问 GMV',
+      askingTask: null,
+      loading: true,
+    });
+
+    expect(pendingResponse).toMatchObject({
+      id: -1,
+      threadId: 42,
+      question: '继续追问 GMV',
+      sql: null,
+      askingTask: {
+        status: 'UNDERSTANDING',
+        type: 'TEXT_TO_SQL',
+      },
+    });
+  });
+
+  it('hides the synthetic pending response once the real follow-up response exists', () => {
+    expect(
+      buildPendingPromptThreadResponse({
+        thread: {
+          id: 42,
+          knowledgeBaseIds: [],
+          selectedSkillIds: [],
+          responses: [
+            {
+              id: 8,
+              threadId: 42,
+              question: '继续追问 GMV',
+              askingTask: {
+                queryId: 'query-123',
+                status: 'SEARCHING',
+                type: 'TEXT_TO_SQL',
+                candidates: [],
+              },
+            },
+          ],
+        } as any,
+        originalQuestion: '继续追问 GMV',
+        askingTask: {
+          queryId: 'query-123',
+          status: 'SEARCHING',
+          type: 'TEXT_TO_SQL',
+          candidates: [],
+        } as any,
+        loading: false,
+      }),
+    ).toBeNull();
   });
 });

@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import useKnowledgeAssetSource from './useKnowledgeAssetSource';
+import { canImportSampleDatasetInWorkspace } from '@/utils/workspaceGovernance';
+import type { SourceOption } from '@/features/knowledgePage/types';
 
-type ConnectorSourceOption = {
-  key: string;
-  category: 'demo' | 'connector';
-};
+type ConnectorSourceOption = Pick<SourceOption, 'key' | 'category'>;
 
 export const resolveKnowledgeConnectorScopeKey = ({
   hasRuntimeScope,
@@ -43,6 +42,21 @@ export const shouldLoadKnowledgeConnectors = ({
   );
 };
 
+export const resolveKnowledgeSourceOptions = ({
+  workspaceKind,
+  sourceOptions,
+}: {
+  workspaceKind?: string | null;
+  sourceOptions: SourceOption[];
+}) =>
+  canImportSampleDatasetInWorkspace(workspaceKind)
+    ? sourceOptions
+    : sourceOptions.filter((option) => option.category === 'connector');
+
+export const resolveKnowledgeInitialSourceType = (
+  sourceOptions: ConnectorSourceOption[],
+) => sourceOptions[0]?.key || 'database';
+
 type ConnectorInput = {
   id: string;
   displayName: string;
@@ -73,7 +87,7 @@ export default function useKnowledgeConnectors<
     runtimeScopeId?: string;
   };
   assetModalOpen: boolean;
-  sourceOptions: ConnectorSourceOption[];
+  sourceOptions: SourceOption[];
   initialSourceType?: string;
   fetchConnectors: (selector?: {
     workspaceId?: string;

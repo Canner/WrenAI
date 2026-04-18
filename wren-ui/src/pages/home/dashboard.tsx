@@ -14,7 +14,9 @@ import DashboardHeader from '@/components/pages/home/dashboardGrid/DashboardHead
 import CacheSettingsDrawer, {
   Schedule,
 } from '@/components/pages/home/dashboardGrid/CacheSettingsDrawer';
-import { DataSourceName } from '@/types/api';
+import { DataSourceName } from '@/types/dataSource';
+import { hasExecutableRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
+
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
 import useRuntimeSelectorState from '@/hooks/useRuntimeSelectorState';
@@ -23,6 +25,7 @@ import {
   HISTORICAL_SNAPSHOT_READONLY_HINT,
   isHistoricalSnapshotReadonly,
 } from '@/utils/runtimeSnapshot';
+import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import {
   createDashboard,
   loadDashboardDetailPayload,
@@ -37,7 +40,12 @@ import {
   updateDashboardSchedule,
   deleteDashboardItem,
 } from '@/utils/dashboardRest';
-import { fetchSettings, type SettingsData } from '@/utils/settingsRest';
+import {
+  fetchSettings,
+  resolveSettingsConnection,
+  type KnowledgeConnectionSettings,
+  type SettingsData,
+} from '@/utils/settingsRest';
 
 const DashboardWorkbench = styled.div`
   width: min(100%, 1480px);
@@ -222,12 +230,16 @@ const DashboardPill = styled.span`
   font-weight: 600;
 `;
 
-const isSupportCachedSettings = (dataSource?: SettingsData['dataSource']) => {
-  if (!dataSource) {
+const isSupportCachedSettings = (
+  connection?: KnowledgeConnectionSettings | null,
+) => {
+  if (!connection) {
     return false;
   }
 
-  return !dataSource.sampleDataset && dataSource.type !== DataSourceName.DUCKDB;
+  return (
+    !connection.sampleDataset && connection.type !== DataSourceName.DUCKDB
+  );
 };
 
 const normalizeDashboardError = (error: unknown, fallbackMessage: string) =>
@@ -449,12 +461,13 @@ export default function Dashboard() {
   const [settings, setSettings] = useState<SettingsData | null>(null);
   const [createDashboardLoading, setCreateDashboardLoading] = useState(false);
   const resolvedCacheSupport = useMemo(() => {
-    if (!settings?.dataSource) {
+    const connection = resolveSettingsConnection(settings);
+    if (!connection) {
       return null;
     }
 
-    return isSupportCachedSettings(settings.dataSource);
-  }, [settings?.dataSource]);
+    return isSupportCachedSettings(connection);
+  }, [settings]);
 
   const {
     data: visibleDashboards,
@@ -583,6 +596,9 @@ export default function Dashboard() {
   const dashboardCacheEnabled = Boolean(
     visibleDashboardDetail?.cacheEnabled || activeDashboard?.cacheEnabled,
   );
+  const hasExecutableDashboardRuntime = hasExecutableRuntimeScopeSelector(
+    runtimeScopeNavigation.selector,
+  );
   const isSupportCached =
     dashboardCacheEnabled || resolvedCacheSupport === true;
   const canShowCacheSettings =
@@ -593,24 +609,31 @@ export default function Dashboard() {
       return true;
     }
 
-    if (resolvedCacheSupport === false || !runtimeScopePage.hasRuntimeScope) {
+    if (
+      resolvedCacheSupport === false ||
+      !runtimeScopePage.hasRuntimeScope ||
+      !hasExecutableDashboardRuntime
+    ) {
       return false;
     }
 
     try {
       const result = await fetchSettings(runtimeScopeNavigation.selector);
       setSettings(result);
-      return isSupportCachedSettings(result.dataSource);
+      return isSupportCachedSettings(resolveSettingsConnection(result));
     } catch (error) {
-      message.error(
-        error instanceof Error
-          ? error.message
-          : '加载系统设置失败，请稍后重试。',
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '加载系统设置失败，请稍后重试。',
       );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
       return false;
     }
   }, [
     dashboardCacheEnabled,
+    hasExecutableDashboardRuntime,
     resolvedCacheSupport,
     runtimeScopePage.hasRuntimeScope,
     runtimeScopeNavigation.selector,
@@ -623,7 +646,7 @@ export default function Dashboard() {
     }
     const supported = await ensureCacheSettingsSupported();
     if (!supported) {
-      message.info('当前数据源暂不支持缓存与调度');
+      message.info('当前连接暂不支持缓存与调度');
       return;
     }
 
@@ -682,9 +705,13 @@ export default function Dashboard() {
           items,
         }));
       } catch (error) {
-        message.error(
-          error instanceof Error ? error.message : '更新看板布局失败。',
+        const errorMessage = resolveAbortSafeErrorMessage(
+          error,
+          '更新看板布局失败。',
         );
+        if (errorMessage) {
+          message.error(errorMessage);
+        }
       }
     }
   };
@@ -706,9 +733,13 @@ export default function Dashboard() {
       }));
       await refetchDashboards();
     } catch (error) {
-      message.error(
-        error instanceof Error ? error.message : '删除看板项失败，请稍后重试',
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '删除看板项失败，请稍后重试',
       );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     }
   };
 
@@ -779,7 +810,13 @@ export default function Dashboard() {
         await replaceDashboardRoute(dashboard.id);
       }
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '创建看板失败。');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '创建看板失败。',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setCreateDashboardLoading(false);
     }
@@ -1072,11 +1109,13 @@ export default function Dashboard() {
                     await refetchDashboard();
                     await refetchDashboards();
                   } catch (error) {
-                    message.error(
-                      error instanceof Error
-                        ? error.message
-                        : '更新看板计划失败，请稍后重试',
+                    const errorMessage = resolveAbortSafeErrorMessage(
+                      error,
+                      '更新看板计划失败，请稍后重试',
                     );
+                    if (errorMessage) {
+                      message.error(errorMessage);
+                    }
                   }
                 }}
               />

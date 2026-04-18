@@ -16,8 +16,9 @@ import InfoCircleOutlined from '@ant-design/icons/InfoCircleOutlined';
 import RecommendedQuestions, {
   getRecommendedQuestionProps,
 } from '@/components/pages/home/RecommendedQuestions';
+import { AskingTaskType, RecommendedQuestionsTask } from '@/types/home';
 import MarkdownBlock from '@/components/editor/MarkdownBlock';
-import { AskingTaskType, RecommendedQuestionsTask } from '@/types/api';
+import { shouldCreateThreadResponseForPromptState } from './resultUtils';
 
 const StyledResult = styled.div`
   position: absolute;
@@ -164,7 +165,12 @@ const IntentionFinished = (props: Props) => {
 
   useEffect(() => {
     // create an empty response first if this is a text to sql task
-    if (type === AskingTaskType.TEXT_TO_SQL) {
+    if (
+      shouldCreateThreadResponseForPromptState({
+        type,
+        processState,
+      })
+    ) {
       onIntentSQLAnswer && onIntentSQLAnswer();
     }
   }, [onIntentSQLAnswer, processState, type]);

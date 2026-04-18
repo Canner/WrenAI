@@ -18,32 +18,26 @@ describe('novaShellNavigation', () => {
 
   it('uses the prefetched first dashboard id when navigating to dashboard', () => {
     mockPeekPrefetchedFirstDashboardId.mockReturnValue(7);
-    const onNavigate = jest.fn();
-
-    const dashboardItem = buildNovaShellNavItems({
-      onNavigate,
-    }).find((item) => item.key === 'dashboard');
-
-    dashboardItem?.onClick?.();
+    const dashboardItem = buildNovaShellNavItems({}).find(
+      (item) => item.key === 'dashboard',
+    );
 
     expect(resolveDashboardNavParams()).toEqual({ dashboardId: 7 });
-    expect(onNavigate).toHaveBeenCalledWith('/home/dashboard', {
+    expect(dashboardItem?.path).toBe('/home/dashboard');
+    expect(dashboardItem?.params).toEqual({
       dashboardId: 7,
     });
   });
 
   it('falls back to the bare dashboard path when no prefetched dashboard exists', () => {
     mockPeekPrefetchedFirstDashboardId.mockReturnValue(null);
-    const onNavigate = jest.fn();
-
-    const dashboardItem = buildNovaShellNavItems({
-      onNavigate,
-    }).find((item) => item.key === 'dashboard');
-
-    dashboardItem?.onClick?.();
+    const dashboardItem = buildNovaShellNavItems({}).find(
+      (item) => item.key === 'dashboard',
+    );
 
     expect(resolveDashboardNavParams()).toBeUndefined();
-    expect(onNavigate).toHaveBeenCalledWith('/home/dashboard', undefined);
+    expect(dashboardItem?.path).toBe('/home/dashboard');
+    expect(dashboardItem?.params).toBeUndefined();
   });
 
   it('builds grouped settings navigation with dedicated pages', () => {
@@ -60,60 +54,58 @@ describe('novaShellNavigation', () => {
         label: item.label,
         sectionLabel: item.sectionLabel,
       })),
-    ).toEqual(
-      expect.arrayContaining([
-        {
-          key: 'settingsWorkspace',
-          label: '工作空间管理',
-          sectionLabel: '工作空间',
-        },
-        {
-          key: 'settingsConnectors',
-          label: '数据连接器',
-          sectionLabel: '工作空间',
-        },
-        {
-          key: 'settingsSkills',
-          label: '技能管理',
-          sectionLabel: '工作空间',
-        },
-        {
-          key: 'settingsProfile',
-          label: '个人资料',
-          sectionLabel: '账户设置',
-        },
-        {
-          key: 'settingsUsers',
-          label: '用户管理',
-          sectionLabel: '组织与安全',
-        },
-        {
-          key: 'settingsPermissions',
-          label: '权限管理',
-          sectionLabel: '组织与安全',
-        },
-        {
-          key: 'settingsIdentity',
-          label: '身份与目录',
-          sectionLabel: '组织与安全',
-        },
-        {
-          key: 'settingsDiagnostics',
-          label: '调用诊断',
-          sectionLabel: '业务配置',
-        },
-        {
-          key: 'settingsSystemTasks',
-          label: '系统任务',
-          sectionLabel: '业务配置',
-        },
-        {
-          key: 'settingsPlatform',
-          label: '平台治理',
-          sectionLabel: '平台管理',
-        },
-      ]),
-    );
+    ).toEqual([
+      {
+        key: 'settingsProfile',
+        label: '个人资料',
+        sectionLabel: '账户设置',
+      },
+      {
+        key: 'settingsUsers',
+        label: '用户管理',
+        sectionLabel: '组织与安全',
+      },
+      {
+        key: 'settingsPermissions',
+        label: '权限管理',
+        sectionLabel: '组织与安全',
+      },
+      {
+        key: 'settingsIdentity',
+        label: '身份与目录',
+        sectionLabel: '组织与安全',
+      },
+      {
+        key: 'settingsAudit',
+        label: '审计日志',
+        sectionLabel: '组织与安全',
+      },
+      {
+        key: 'settingsWorkspace',
+        label: '工作空间管理',
+        sectionLabel: '工作空间',
+      },
+      {
+        key: 'settingsConnectors',
+        label: '数据连接器',
+        sectionLabel: '业务与配置',
+      },
+      {
+        key: 'settingsSkills',
+        label: '技能管理',
+        sectionLabel: '业务与配置',
+      },
+      {
+        key: 'settingsDiagnostics',
+        label: '调用诊断',
+        sectionLabel: '业务与配置',
+      },
+      {
+        key: 'settingsSystemTasks',
+        label: '系统任务',
+        sectionLabel: '业务与配置',
+      },
+    ]);
   });
 
   it('keeps workspace management out of the primary shell navigation', () => {
@@ -123,6 +115,13 @@ describe('novaShellNavigation', () => {
       buildNovaShellNavItems({
         onNavigate,
       }).map((item) => item.key),
-    ).toEqual(['home', 'knowledge', 'dashboard']);
+    ).toEqual(['home', 'dashboard', 'knowledge']);
+  });
+
+  it('keeps knowledge navigation in the primary shell stack below dashboard', () => {
+    const items = buildNovaShellNavItems({});
+    const knowledgeItem = items.find((item) => item.key === 'knowledge');
+
+    expect(knowledgeItem?.placement).toBeUndefined();
   });
 });

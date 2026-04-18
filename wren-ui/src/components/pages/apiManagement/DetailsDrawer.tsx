@@ -4,7 +4,8 @@ import { DrawerAction } from '@/hooks/useDrawerAction';
 import CheckCircleOutlined from '@ant-design/icons/CheckCircleOutlined';
 import CloseCircleOutlined from '@ant-design/icons/CloseCircleOutlined';
 import JsonCodeBlock from '@/components/code/JsonCodeBlock';
-import { ApiHistoryResponse } from '@/types/api';
+import type { ApiHistoryResponse } from '@/types/apiHistory';
+
 import { getAskDiagnostics } from './askDiagnostics';
 import { formatApiTypeLabel } from './apiTypeLabels';
 

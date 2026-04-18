@@ -8,10 +8,11 @@ import {
   WorkspaceGovernanceOverview,
   formatDateTime,
 } from '@/components/pages/settings/workspaceGovernanceShared';
-import { buildRuntimeScopeUrl } from '@/apollo/client/runtimeScope';
+import { buildRuntimeScopeUrl } from '@/runtime/client/runtimeScope';
 import useAuthSession from '@/hooks/useAuthSession';
 import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
+import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { Path } from '@/utils/enum';
 
 export default function SettingsAuditPage() {
@@ -62,7 +63,13 @@ export default function SettingsAuditPage() {
       }
       setWorkspaceOverview(payload as WorkspaceGovernanceOverview);
     } catch (error: any) {
-      message.error(error?.message || '加载审计中心失败');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '加载审计中心失败',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setLoading(false);
     }
@@ -104,7 +111,13 @@ export default function SettingsAuditPage() {
       }
       setAuditEvents(Array.isArray(payload.events) ? payload.events : []);
     } catch (error: any) {
-      message.error(error?.message || '加载审计事件失败');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '加载审计事件失败',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setAuditLoading(false);
     }

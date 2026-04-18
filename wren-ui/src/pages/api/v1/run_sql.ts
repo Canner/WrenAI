@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
 import { ApiType } from '@server/repositories/apiHistoryRepository';
-import * as Errors from '@/apollo/server/utils/error';
+import * as Errors from '@/server/utils/error';
 import { getLogger } from '@server/utils';
 import { v4 as uuidv4 } from 'uuid';
 import { PreviewDataResponse } from '@server/services/queryService';
@@ -10,7 +10,7 @@ import {
   respondWith,
   handleApiError,
   deriveRuntimeExecutionContextFromRequest,
-} from '@/apollo/server/utils/apiUtils';
+} from '@/server/utils/apiUtils';
 import { transformToObjects } from '@server/utils/dataUtils';
 import {
   assertAuthorizedWithAudit,

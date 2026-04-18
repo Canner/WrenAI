@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ClientRuntimeScopeSelector } from '@/apollo/client/runtimeScope';
+import { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
+import { abortWithReason, isAbortRequestError } from '@/utils/abort';
 import {
   listSkillDefinitions,
   listSkillMarketplaceCatalog,
@@ -58,7 +59,7 @@ export default function useSkillsControlPlaneData({
 
         return nextData;
       } catch (error) {
-        if (init?.signal?.aborted) {
+        if (init?.signal?.aborted || isAbortRequestError(error)) {
           return EMPTY_SKILLS_CONTROL_PLANE_DATA;
         }
 
@@ -88,7 +89,7 @@ export default function useSkillsControlPlaneData({
     void loadData({ signal: controller.signal });
 
     return () => {
-      controller.abort();
+      abortWithReason(controller, 'skills-control-plane-request-cancelled');
     };
   }, [enabled, loadData]);
 

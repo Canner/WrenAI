@@ -49,7 +49,7 @@ describe('resolveNetworkErrorMessage', () => {
     ).toBe('当前工作空间上下文不可用，请刷新或重新选择知识库后重试。');
   });
 
-  it('prefers graphql error codes for deployment-specific runtime failures', () => {
+  it('prefers structured backend error codes for deployment-specific runtime failures', () => {
     expect(
       resolveNetworkErrorMessage({
         name: 'ServerError',
@@ -81,5 +81,20 @@ describe('resolveNetworkErrorMessage', () => {
         }),
       } as any),
     ).toBe('服务暂时不可用，请稍后重试。');
+  });
+
+  it('ignores aborted network requests', () => {
+    expect(
+      resolveNetworkErrorMessage(
+        new DOMException('signal is aborted without reason', 'AbortError') as any,
+      ),
+    ).toBeNull();
+
+    expect(
+      resolveNetworkErrorMessage({
+        name: 'AbortError',
+        message: 'signal is aborted without reason',
+      } as any),
+    ).toBeNull();
   });
 });

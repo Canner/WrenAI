@@ -1,29 +1,35 @@
 import { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { Alert, Button, Form, Input, Modal, Typography, message } from 'antd';
-import { Logo } from '@/components/Logo';
 import InfoCircleOutlined from '@ant-design/icons/InfoCircleOutlined';
 import SelectOutlined from '@ant-design/icons/SelectOutlined';
+import { Logo } from '@/components/Logo';
+import ErrorCollapse from '@/components/ErrorCollapse';
+import ImportConnectionSQLModal, {
+  isSupportSubstitute,
+} from '@/components/modals/ImportConnectionSQLModal';
+import SQLEditor from '@/components/editor/SQLEditor';
+import PreviewData from '@/components/dataPreview/PreviewData';
+import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
+import useModalAction, { ModalAction } from '@/hooks/useModalAction';
+import { DataSource, DataSourceName } from '@/types/dataSource';
+import { hasExecutableRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
+import type { SqlPair } from '@/types/knowledge';
+import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { ERROR_TEXTS } from '@/utils/error';
 import { FORM_MODE } from '@/utils/enum';
-import { getDataSourceName } from '@/utils/dataSourceType';
-import useModalAction, { ModalAction } from '@/hooks/useModalAction';
-import SQLEditor from '@/components/editor/SQLEditor';
-import { createSQLPairQuestionValidator } from '@/utils/validator';
-import ErrorCollapse from '@/components/ErrorCollapse';
-import PreviewData from '@/components/dataPreview/PreviewData';
-import ImportDataSourceSQLModal, {
-  isSupportSubstitute,
-} from '@/components/modals/ImportDataSourceSQLModal';
-import { SqlPair, DataSource, DataSourceName } from '@/types/api';
-import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
+import { getConnectionTypeName } from '@/utils/connectionType';
+import { generateKnowledgeSqlPairQuestion } from '@/utils/knowledgeRuleSqlRest';
+import {
+  fetchSettings,
+  resolveSettingsConnection,
+} from '@/utils/settingsRest';
 import {
   previewSql,
   validateSql,
   type SqlPreviewDataResponse,
 } from '@/utils/sqlPreviewRest';
-import { fetchSettings } from '@/utils/settingsRest';
-import { generateKnowledgeSqlPairQuestion } from '@/utils/knowledgeRuleSqlRest';
+import { createSQLPairQuestionValidator } from '@/utils/validator';
 
 type Props = ModalAction<SqlPair> & {
   loading?: boolean;
@@ -104,11 +110,13 @@ const FooterHint = styled.div`
 `;
 
 const Toolbar = (props: {
-  dataSource?: DataSourceName;
+  connectionType?: DataSourceName;
   onClick: () => void;
 }) => {
-  const { dataSource, onClick } = props;
-  const name = dataSource ? getDataSourceName(dataSource) : '数据源';
+  const { connectionType, onClick } = props;
+  const name = connectionType
+    ? getConnectionTypeName(connectionType)
+    : '当前连接';
   return (
     <div className="d-flex justify-space-between align-center px-1">
       <span className="d-flex align-center gx-2">
@@ -135,28 +143,29 @@ export default function QuestionSQLPairModal(props: Props) {
 
   // pass payload?.isCreateMode to prevent formMode from being set to Update when passing defaultValue, for the 'Add a SQL pair from an existing answer' scenario use.
   const isCreateMode = formMode === FORM_MODE.CREATE || payload?.isCreateMode;
-  const importDataSourceSQLModal = useModalAction();
+  const importConnectionSQLModal = useModalAction();
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const [settings, setSettings] = useState<Awaited<
     ReturnType<typeof fetchSettings>
   > | null>(null);
-  const normalizedSettingsDataSource = useMemo<DataSource | undefined>(() => {
-    if (!settings?.dataSource?.type) {
+  const normalizedSettingsConnection = useMemo<DataSource | undefined>(() => {
+    const connection = resolveSettingsConnection(settings);
+    if (!connection?.type) {
       return undefined;
     }
 
     return {
-      type: settings.dataSource.type,
-      properties: settings.dataSource.properties || {},
-      sampleDataset: settings.dataSource.sampleDataset || undefined,
+      type: connection.type,
+      properties: connection.properties || {},
+      sampleDataset: connection.sampleDataset || undefined,
     };
-  }, [settings?.dataSource]);
-  const dataSource = useMemo(
+  }, [settings]);
+  const connectionContext = useMemo(
     () => ({
-      isSupportSubstitute: isSupportSubstitute(normalizedSettingsDataSource),
-      type: normalizedSettingsDataSource?.type || undefined,
+      isSupportSubstitute: isSupportSubstitute(normalizedSettingsConnection),
+      type: normalizedSettingsConnection?.type || undefined,
     }),
-    [normalizedSettingsDataSource],
+    [normalizedSettingsConnection],
   );
 
   const [form] = Form.useForm();
@@ -173,17 +182,23 @@ export default function QuestionSQLPairModal(props: Props) {
 
   useEffect(() => {
     if (visible) {
-      void fetchSettings(runtimeScopeNavigation.selector)
-        .then((payload) => {
-          setSettings(payload);
-        })
-        .catch((error) => {
-          message.error(
-            error instanceof Error
-              ? error.message
-              : '加载系统设置失败，请稍后重试。',
-          );
-        });
+      if (!hasExecutableRuntimeScopeSelector(runtimeScopeNavigation.selector)) {
+        setSettings(null);
+      } else {
+        void fetchSettings(runtimeScopeNavigation.selector)
+          .then((payload) => {
+            setSettings(payload);
+          })
+          .catch((error) => {
+            const errorMessage = resolveAbortSafeErrorMessage(
+              error,
+              '加载系统设置失败，请稍后重试。',
+            );
+            if (errorMessage) {
+              message.error(errorMessage);
+            }
+          });
+      }
       form.setFieldsValue({
         question: defaultValue?.question,
         sql: defaultValue?.sql,
@@ -203,8 +218,12 @@ export default function QuestionSQLPairModal(props: Props) {
   };
 
   const handleError = (error: unknown) => {
+    const errorMessage = resolveAbortSafeErrorMessage(error, 'SQL 语法无效');
+    if (!errorMessage) {
+      return;
+    }
     setError({
-      message: error instanceof Error ? error.message : 'SQL 语法无效',
+      message: errorMessage,
       shortMessage: 'SQL 语法无效',
       code: '',
       stacktrace: undefined,
@@ -249,7 +268,13 @@ export default function QuestionSQLPairModal(props: Props) {
       })
       .catch((err) => {
         setSubmitting(false);
-        message.error(err?.message || '保存失败，请稍后重试。');
+        const errorMessage = resolveAbortSafeErrorMessage(
+          err,
+          '保存失败，请稍后重试。',
+        );
+        if (errorMessage) {
+          message.error(errorMessage);
+        }
       });
   };
 
@@ -262,9 +287,13 @@ export default function QuestionSQLPairModal(props: Props) {
       );
       form.setFieldsValue({ question });
     } catch (error) {
-      message.error(
-        error instanceof Error ? error.message : '生成问题失败，请稍后重试。',
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '生成问题失败，请稍后重试。',
       );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setGeneratingQuestion(false);
     }
@@ -366,12 +395,13 @@ export default function QuestionSQLPairModal(props: Props) {
           >
             <SQLEditor
               toolbar={
-                dataSource.isSupportSubstitute && (
+                connectionContext.isSupportSubstitute && (
                   <Toolbar
-                    dataSource={dataSource.type}
+                    connectionType={connectionContext.type}
                     onClick={() =>
-                      importDataSourceSQLModal.openModal({
-                        dataSource: dataSource.type || DataSourceName.BIG_QUERY,
+                      importConnectionSQLModal.openModal({
+                        connectionType:
+                          connectionContext.type || DataSourceName.BIG_QUERY,
                       })
                     }
                   />
@@ -412,10 +442,10 @@ export default function QuestionSQLPairModal(props: Props) {
           />
         )}
       </StyledModal>
-      {dataSource.isSupportSubstitute && (
-        <ImportDataSourceSQLModal
-          {...importDataSourceSQLModal.state}
-          onClose={importDataSourceSQLModal.closeModal}
+      {connectionContext.isSupportSubstitute && (
+        <ImportConnectionSQLModal
+          {...importConnectionSQLModal.state}
+          onClose={importConnectionSQLModal.closeModal}
           onSubmit={async (convertedSql: string) => {
             form.setFieldsValue({ sql: convertedSql });
           }}

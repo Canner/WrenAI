@@ -2,10 +2,11 @@ import { useRef, useContext, useMemo } from 'react';
 import styled from 'styled-components';
 import { compact } from 'lodash';
 import FieldSelect, {
-  FieldValue,
   FieldOption,
+  FieldValue,
   getFieldValue,
 } from './FieldSelect';
+import { ExpressionName } from '@/types/calculatedField';
 import { nextTick } from '@/utils/time';
 import { makeIterable } from '@/utils/iteration';
 import { NODE_TYPE } from '@/utils/enum';
@@ -17,7 +18,7 @@ import {
 import { DiagramModel } from '@/utils/data';
 import { getNodeTypeIcon } from '@/utils/nodeType';
 import { aggregations } from '@/utils/expressionType';
-import { ExpressionName } from '@/types/api';
+
 import {
   checkStringFunctionAllowType,
   checkNumberFunctionAllowType,

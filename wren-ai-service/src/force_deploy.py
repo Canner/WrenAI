@@ -18,11 +18,9 @@ if Path(".env.dev").exists():
 async def force_deploy():
     async with aiohttp.ClientSession() as session:
         async with session.post(
-            f"{os.getenv("WREN_UI_ENDPOINT", "http://wren-ui:3000")}/api/graphql",
-            json={
-                "query": "mutation Deploy($force: Boolean) { deploy(force: $force) }",
-                "variables": {"force": True},
-            },
+            f"{os.getenv("WREN_UI_ENDPOINT", "http://wren-ui:3000")}/api/v1/internal/deploy",
+            headers={"x-wren-ai-service-internal": "1"},
+            json={"force": True},
             timeout=aiohttp.ClientTimeout(total=60),  # 60 seconds
         ) as response:
             res = await response.json()

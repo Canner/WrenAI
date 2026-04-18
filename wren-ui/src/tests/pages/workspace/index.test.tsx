@@ -13,7 +13,7 @@ jest.mock('next/router', () => ({
   useRouter: () => mockUseRouter(),
 }));
 
-jest.mock('@/apollo/client/runtimeScope', () => ({
+jest.mock('@/runtime/client/runtimeScope', () => ({
   buildRuntimeScopeUrl: (...args: any[]) => mockBuildRuntimeScopeUrl(...args),
 }));
 
@@ -34,12 +34,20 @@ jest.mock('@/hooks/useRuntimeScopeNavigation', () => ({
 
 jest.mock('@/components/reference/ConsoleShellLayout', () => ({
   __esModule: true,
-  default: ({ title, description, sections, navItems, children }: any) => {
+  default: ({
+    title,
+    description,
+    sections,
+    navItems,
+    sidebarBackAction,
+    children,
+  }: any) => {
     capturedConsoleShellLayoutProps = {
       title,
       description,
       sections,
       navItems,
+      sidebarBackAction,
     };
     const React = jest.requireActual('react');
     return React.createElement(
@@ -182,7 +190,7 @@ describe('workspace page', () => {
     });
   });
 
-  it('shrinks governance blocks into summary and jump actions', () => {
+  it('keeps workspace management focused on tabs and governance shortcuts', () => {
     const markup = renderPage();
 
     expect(markup).toContain('工作空间');
@@ -191,13 +199,13 @@ describe('workspace page', () => {
     expect(markup).toContain('申请记录');
     expect(markup).not.toContain('当前工作区');
     expect(markup).not.toContain('系统工作空间');
-    expect(markup).toContain('工作空间运营摘要');
+    expect(markup).not.toContain('工作空间运营摘要');
+    expect(markup).not.toContain('我可访问的工作空间');
     expect(markup).toContain('设置快捷入口');
     expect(markup).toContain('打开用户管理');
     expect(markup).toContain('打开权限管理');
     expect(markup).toContain('打开身份与目录');
     expect(markup).toContain('打开审计日志');
-    expect(markup).toContain('打开平台治理');
     expect(markup).toContain('身份与目录');
     expect(markup).toContain('审计与高风险动作');
     expect(markup).toContain('企业 SSO / OIDC / SAML / SCIM');
@@ -208,6 +216,11 @@ describe('workspace page', () => {
     expect(markup).not.toContain('刷新 metadata');
     expect(markup).not.toContain('创建紧急授权');
     expect(markup).not.toContain('开始代理登录');
+    expect(markup).not.toContain('平台治理');
+    expect(markup).not.toContain('打开平台治理');
+    expect(markup).not.toContain('查看我的知识库');
+    expect(markup).not.toContain('查看数据看板');
+    expect(markup).not.toContain('查看系统任务');
   });
 
   it('renders from the settings navigation tree instead of the primary workspace tab', () => {
@@ -218,5 +231,13 @@ describe('workspace page', () => {
         (item: any) => item.key === 'settingsWorkspace' && item.active,
       ),
     ).toBe(true);
+  });
+
+  it('keeps the back-to-main-menu action visible', () => {
+    renderPage();
+
+    expect(capturedConsoleShellLayoutProps?.sidebarBackAction?.label).toBe(
+      '返回主菜单',
+    );
   });
 });

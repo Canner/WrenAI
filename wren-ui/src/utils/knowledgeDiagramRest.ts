@@ -2,19 +2,19 @@ import {
   buildRuntimeScopeUrl,
   resolveClientRuntimeScopeSelector,
   type ClientRuntimeScopeSelector,
-} from '@/apollo/client/runtimeScope';
-import type { DiagramQuery } from '@/types/api';
+} from '@/runtime/client/runtimeScope';
+import type { DiagramResponse } from '@/types/modeling';
 import { parseRestJsonResponse } from './rest';
 
 type TimedDiagramCacheEntry = {
-  value: DiagramQuery;
+  value: DiagramResponse;
   updatedAt: number;
 };
 
 const KNOWLEDGE_DIAGRAM_CACHE_TTL_MS = 20_000;
 export const KNOWLEDGE_DIAGRAM_QUERY_FETCH_POLICY = 'no-cache' as const;
 const diagramCacheByRequestUrl = new Map<string, TimedDiagramCacheEntry>();
-const diagramRequestByRequestUrl = new Map<string, Promise<DiagramQuery>>();
+const diagramRequestByRequestUrl = new Map<string, Promise<DiagramResponse>>();
 
 const getFreshDiagramCache = (requestUrl: string) => {
   const cached = diagramCacheByRequestUrl.get(requestUrl);
@@ -57,7 +57,7 @@ export const primeKnowledgeDiagramPayload = ({
 }: {
   selector?: ClientRuntimeScopeSelector;
   requestUrl?: string;
-  payload: DiagramQuery;
+  payload: DiagramResponse;
 }) => {
   const resolvedRequestUrl = requestUrl || buildKnowledgeDiagramUrl(selector);
   diagramCacheByRequestUrl.set(resolvedRequestUrl, {
@@ -93,13 +93,13 @@ export const loadKnowledgeDiagramPayload = async ({
 
   const request = fetcher(resolvedRequestUrl)
     .then((response) =>
-      parseRestJsonResponse<DiagramQuery['diagram']>(
+      parseRestJsonResponse<DiagramResponse['diagram']>(
         response,
         '加载知识库图谱失败，请稍后重试。',
       ),
     )
     .then((diagram) => {
-      const payload = { diagram } as DiagramQuery;
+      const payload = { diagram } as DiagramResponse;
       primeKnowledgeDiagramPayload({ requestUrl: resolvedRequestUrl, payload });
       return payload;
     })

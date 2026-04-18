@@ -1,10 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { ModelResolver } from '@server/resolvers/modelResolver';
-import { ApiError } from '@/apollo/server/utils/apiUtils';
-import { buildResolverContextFromRequest } from '../../resolverContext';
+import { ModelController } from '@server/controllers/modelController';
+import { ApiError } from '@/server/utils/apiUtils';
+import { buildApiContextFromRequest } from '../../apiContext';
 import { sendRestApiError } from '../../restApi';
 
-const modelResolver = new ModelResolver();
+const modelController = new ModelController();
 
 const parseModelId = (value: string | string[] | undefined) => {
   const raw = Array.isArray(value) ? value[0] : value;
@@ -25,15 +25,12 @@ export default async function handler(
       throw new Error('Method not allowed');
     }
 
-    const ctx = await buildResolverContextFromRequest({ req });
-    await modelResolver.updateModelMetadata(
-      null,
-      {
-        where: { id: parseModelId(req.query.id) },
-        data: req.body || {},
-      },
+    const ctx = await buildApiContextFromRequest({ req });
+    await modelController.updateModelMetadata({
+      modelId: parseModelId(req.query.id),
+      data: req.body || {},
       ctx,
-    );
+    });
 
     return res.status(200).json({ success: true });
   } catch (error) {

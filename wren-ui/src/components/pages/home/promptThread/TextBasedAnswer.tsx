@@ -15,8 +15,11 @@ import { Props as AnswerResultProps } from '@/components/pages/home/promptThread
 import MarkdownBlock from '@/components/editor/MarkdownBlock';
 import PreviewData from '@/components/dataPreview/PreviewData';
 import { AdjustAnswerDropdown } from '@/components/diagram/CustomDropdown';
-import { ThreadResponseAnswerStatus } from '@/types/api';
+import { ThreadResponseAnswerStatus } from '@/types/home';
+
 import useResponsePreviewData from '@/hooks/useResponsePreviewData';
+import { resolveAbortSafeErrorMessage } from '@/utils/abort';
+import { getAnswerIsFinished } from './answerGeneration';
 
 const { Text } = Typography;
 
@@ -35,16 +38,6 @@ const ResultActionButton = styled(Button)`
     font-weight: 500;
   }
 `;
-
-export const getAnswerIsFinished = (
-  status?: ThreadResponseAnswerStatus | null,
-) =>
-  status != null &&
-  [
-    ThreadResponseAnswerStatus.FINISHED,
-    ThreadResponseAnswerStatus.FAILED,
-    ThreadResponseAnswerStatus.INTERRUPTED,
-  ].includes(status);
 
 const getIsLoadingFinished = (status?: ThreadResponseAnswerStatus | null) =>
   getAnswerIsFinished(status) ||
@@ -222,15 +215,23 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
     </AdjustAnswerDropdown>
   );
 
-  if (error) {
+  const answerErrorMessage = resolveAbortSafeErrorMessage(
+    error?.message,
+    '回答生成失败，请稍后重试。',
+  );
+  const answerShortMessage =
+    resolveAbortSafeErrorMessage(error?.shortMessage, answerErrorMessage || '') ||
+    '回答生成失败';
+
+  if (error && answerErrorMessage) {
     return (
       <>
         <div className="py-4 px-6">
           <div className="text-right">{adjustAnswerDropdown}</div>
           <Alert
             className="mt-4 mb-2"
-            message={error.shortMessage}
-            description={error.message}
+            message={answerShortMessage}
+            description={answerErrorMessage}
             type="error"
             showIcon
           />

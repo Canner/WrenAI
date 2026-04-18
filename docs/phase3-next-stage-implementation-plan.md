@@ -1,5 +1,7 @@
 # Phase 3 — 下一阶段功能实现计划
 
+> 历史说明（2026-04-16）：本文保留的是 Apollo/GraphQL 时代的设计、排障或执行记录。当前 `wren-ui` 运行时前端已经切到 REST，代码目录也已收口到 `src/server/*` 与 `src/pages/api/v1/*`；文中的旧 GraphQL 入口、resolver 与 Apollo 上下文描述仅作历史背景，不再代表当前主链路。
+
 更新时间：2026-04-12
 
 > 进度补注（2026-04-12）：
@@ -164,7 +166,7 @@ V2 / deepagents 阶段与 Phase 3 Wave 的对应关系：
    - `RuntimeScopeBootstrap`
    - `useProtectedRuntimeScopePage`
    - `useRuntimeScopeNavigation`
-   - GraphQL runtimeScope 查询/变更链路
+   - runtimeScope REST 查询/变更链路
 4. **拒绝跨 KB 污染**
    - 同 thread 禁止切换 KB
    - dashboard / ask / stream 都从 persisted runtime identity 恢复
@@ -172,9 +174,9 @@ V2 / deepagents 阶段与 Phase 3 Wave 的对应关系：
 ### 主要文件面
 
 - `wren-ui/src/pages/api/auth/*`
-- `wren-ui/src/apollo/server/services/authService.ts`
-- `wren-ui/src/apollo/server/services/workspaceService.ts`
-- `wren-ui/src/apollo/server/context/runtimeScope.ts`
+- `wren-ui/src/server/services/authService.ts`
+- `wren-ui/src/server/services/workspaceService.ts`
+- `wren-ui/src/server/context/runtimeScope.ts`
 - `wren-ui/src/components/runtimeScope/*`
 - `wren-ui/src/hooks/useProtectedRuntimeScopePage.ts`
 - `wren-ui/src/hooks/useRuntimeScopeNavigation.tsx`
@@ -223,11 +225,11 @@ V2 / deepagents 阶段与 Phase 3 Wave 的对应关系：
 
 ### 主要文件面
 
-- `wren-ui/src/apollo/server/services/connectorService.ts`
-- `wren-ui/src/apollo/server/services/secretService.ts`
-- `wren-ui/src/apollo/server/services/skillService.ts`
-- `wren-ui/src/apollo/server/utils/askContext.ts`
-- `wren-ui/src/apollo/server/adaptors/wrenAIAdaptor.ts`
+- `wren-ui/src/server/services/connectorService.ts`
+- `wren-ui/src/server/services/secretService.ts`
+- `wren-ui/src/server/services/skillService.ts`
+- `wren-ui/src/server/utils/askContext.ts`
+- `wren-ui/src/server/adaptors/wrenAIAdaptor.ts`
 - `wren-ui/src/pages/api/v1/connectors/*`
 - `wren-ui/src/pages/api/v1/skills/*`
 - `wren-ui/migrations/*skill*`
@@ -290,9 +292,9 @@ V2 / deepagents 阶段与 Phase 3 Wave 的对应关系：
 - `wren-ai-service/src/core/legacy_ask_tool.py`
 - `wren-ai-service/src/core/tool_router.py`
 - `wren-ai-service/src/web/v1/services/ask.py`
-- `wren-ui/src/apollo/server/services/askingService.ts`
-- `wren-ui/src/apollo/server/utils/askContext.ts`
-- `wren-ui/src/apollo/server/adaptors/wrenAIAdaptor.ts`
+- `wren-ui/src/server/services/askingService.ts`
+- `wren-ui/src/server/utils/askContext.ts`
+- `wren-ui/src/server/adaptors/wrenAIAdaptor.ts`
 - `wren-ui/src/pages/api/v1/skills/[id]/test.ts`
 - `wren-ui/src/pages/home/index.tsx`
 - `wren-ui/scripts/migrate_skill_bindings_to_runtime_skills.ts`
@@ -344,10 +346,10 @@ V2 / deepagents 阶段与 Phase 3 Wave 的对应关系：
 
 ### 主要文件面
 
-- `wren-ui/src/apollo/server/services/dashboardService.ts`
-- `wren-ui/src/apollo/server/services/scheduleService.ts`
-- `wren-ui/src/apollo/server/backgrounds/dashboardCacheBackgroundTracker.ts`
-- `wren-ui/src/apollo/server/backgrounds/scheduleWorker.ts`
+- `wren-ui/src/server/services/dashboardService.ts`
+- `wren-ui/src/server/services/scheduleService.ts`
+- `wren-ui/src/server/backgrounds/dashboardCacheBackgroundTracker.ts`
+- `wren-ui/src/server/backgrounds/scheduleWorker.ts`
 - `wren-ai-service/src/providers/document_store/pgvector.py`
 - `misc/scripts/scan-current-project.sh`
 - `misc/scripts/scan-runtime-identity.sh`

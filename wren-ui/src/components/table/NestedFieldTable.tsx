@@ -1,6 +1,6 @@
 import { COLUMN } from '@/components/table/BaseTable';
 import { Table, TableProps } from 'antd';
-import { DiagramModelNestedField } from '@/types/api';
+import { DiagramModelNestedField } from '@/types/modeling';
 
 type Props = TableProps<DiagramModelNestedField>;
 

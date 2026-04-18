@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   buildRuntimeScopeUrl,
   type ClientRuntimeScopeSelector,
-} from '@/apollo/client/runtimeScope';
-import type { ThreadResponse } from '@/types/api';
+} from '@/runtime/client/runtimeScope';
+import type { ThreadResponse } from '@/types/home';
 
 export const buildThreadResponseDetailUrl = ({
   responseId,

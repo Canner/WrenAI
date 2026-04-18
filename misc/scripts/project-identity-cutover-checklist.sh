@@ -23,7 +23,7 @@ wave_for_path() {
     wren-ai-service/src/core/runtime_identity.py|wren-ai-service/src/web/v1/services/__init__.py)
       echo "Wave 1 — AI service request alias cutover"
       ;;
-    wren-ui/src/apollo/client/runtimeScope.ts)
+    wren-ui/src/runtime/client/runtimeScope.ts)
       echo "Wave 2 — frontend query alias cutover"
       ;;
     wren-ui/src/apollo/server/repositories/kbSnapshotRepository.ts)
@@ -43,7 +43,7 @@ prerequisite_for_path() {
     wren-ai-service/src/web/v1/services/__init__.py)
       echo "External clients are cut over to runtime_scope_id / runtimeScopeId or canonical runtimeIdentity fields; request bodies no longer rely on projectBridgeId/project_bridge_id."
       ;;
-    wren-ui/src/apollo/client/runtimeScope.ts)
+    wren-ui/src/runtime/client/runtimeScope.ts)
       echo "Old bookmarked links, copied URLs, and internal route builders no longer rely on legacyProjectId/legacy_project_id query params."
       ;;
     wren-ui/src/apollo/server/repositories/kbSnapshotRepository.ts)
@@ -60,7 +60,7 @@ rollback_for_path() {
     wren-ai-service/src/core/runtime_identity.py|wren-ai-service/src/web/v1/services/__init__.py)
       echo "Restore legacy alias acceptance plus deprecation warnings, then rerun the AI service runtime identity tests."
       ;;
-    wren-ui/src/apollo/client/runtimeScope.ts)
+    wren-ui/src/runtime/client/runtimeScope.ts)
       echo "Restore legacy query alias parsing and warning behavior so old links continue to hydrate runtime scope."
       ;;
     wren-ui/src/apollo/server/repositories/kbSnapshotRepository.ts)
@@ -77,7 +77,7 @@ wave_description_for_path() {
     wren-ai-service/src/core/runtime_identity.py|wren-ai-service/src/web/v1/services/__init__.py)
       echo "Remove AI service legacy request alias acceptance once all callers are off projectBridgeId/project_bridge_id."
       ;;
-    wren-ui/src/apollo/client/runtimeScope.ts)
+    wren-ui/src/runtime/client/runtimeScope.ts)
       echo "Remove legacy query parsing after old bookmarked links and copied URLs are retired."
       ;;
     wren-ui/src/apollo/server/repositories/kbSnapshotRepository.ts)
@@ -127,10 +127,10 @@ MARKDOWN
 - `cd wren-ai-service && poetry run pytest tests/pytest/core/test_runtime_identity.py tests/pytest/services/test_runtime_identity_bridge.py -q`
 MARKDOWN
       ;;
-    wren-ui/src/apollo/client/runtimeScope.ts)
+    wren-ui/src/runtime/client/runtimeScope.ts)
       cat <<'MARKDOWN'
-- `cd wren-ui && npx eslint src/apollo/client/runtimeScope.ts src/apollo/client/tests/runtimeScope.test.ts`
-- `cd wren-ui && yarn jest src/apollo/client/tests/runtimeScope.test.ts --runInBand`
+- `cd wren-ui && npx eslint src/runtime/client/runtimeScope.ts src/runtime/client/tests/runtimeScope.test.ts`
+- `cd wren-ui && yarn jest src/runtime/client/tests/runtimeScope.test.ts --runInBand`
 MARKDOWN
       ;;
     wren-ui/src/apollo/server/repositories/kbSnapshotRepository.ts)

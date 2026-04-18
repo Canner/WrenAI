@@ -1,10 +1,9 @@
 import { EventEmitter } from 'events';
-import { ThreadResponseAnswerStatus } from '@/apollo/server/services/askingService';
+import { ThreadResponseAnswerStatus } from '@/server/services/askingService';
 
 const mockResolveRequestScope = jest.fn();
 const mockAssertResponseScope = jest.fn();
 const mockGetResponseScoped = jest.fn();
-const mockChangeThreadResponseAnswerDetailStatusScoped = jest.fn();
 const mockStreamTextBasedAnswer = jest.fn();
 const mockSendEvent = jest.fn();
 
@@ -14,15 +13,16 @@ jest.mock('@/common', () => ({
     askingService: {
       assertResponseScope: mockAssertResponseScope,
       getResponseScoped: mockGetResponseScoped,
-      changeThreadResponseAnswerDetailStatusScoped:
-        mockChangeThreadResponseAnswerDetailStatusScoped,
     },
     wrenAIAdaptor: { streamTextBasedAnswer: mockStreamTextBasedAnswer },
     telemetry: { sendEvent: mockSendEvent },
   },
 }));
 
-describe('pages/api/ask_task/streaming_answer', () => {
+describe.each([
+  ['legacy', '../ask_task/streaming_answer'],
+  ['v1', '../v1/thread-responses/[id]/stream-answer'],
+])('%s thread response stream API', (_label, modulePath) => {
   let consoleErrorSpy: jest.SpyInstance;
 
   const createReq = (query: Record<string, any> = {}) => {
@@ -45,6 +45,8 @@ describe('pages/api/ask_task/streaming_answer', () => {
       statusCode: 200,
       body: undefined,
       chunks: [] as Array<string | Buffer>,
+      writableEnded: false,
+      headersSent: false,
       status: jest.fn(function (code: number) {
         res.statusCode = code;
         return res;
@@ -54,15 +56,23 @@ describe('pages/api/ask_task/streaming_answer', () => {
         return res;
       }),
       write: jest.fn((chunk: string | Buffer) => {
+        res.headersSent = true;
         res.chunks.push(chunk);
       }),
-      end: jest.fn(),
+      end: jest.fn(() => {
+        res.writableEnded = true;
+      }),
     };
     return res;
   };
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockResolveRequestScope.mockReset();
+    mockAssertResponseScope.mockReset();
+    mockGetResponseScoped.mockReset();
+    mockStreamTextBasedAnswer.mockReset();
+    mockSendEvent.mockReset();
     consoleErrorSpy = jest
       .spyOn(console, 'error')
       .mockImplementation(() => undefined);
@@ -73,7 +83,7 @@ describe('pages/api/ask_task/streaming_answer', () => {
   });
 
   it('returns 400 when responseId is missing', async () => {
-    const handler = (await import('../ask_task/streaming_answer')).default;
+    const handler = (await import(modulePath)).default;
     const req = createReq();
     const res = createRes();
 
@@ -85,8 +95,10 @@ describe('pages/api/ask_task/streaming_answer', () => {
   });
 
   it('uses scoped response APIs before streaming answer output', async () => {
-    const handler = (await import('../ask_task/streaming_answer')).default;
-    const req = createReq({ responseId: '202' });
+    const handler = (await import(modulePath)).default;
+    const req = createReq(
+      modulePath.includes('[id]') ? { id: '202' } : { responseId: '202' },
+    );
     const res = createRes();
     const stream = new EventEmitter() as EventEmitter & { destroy: jest.Mock };
     stream.destroy = jest.fn();
@@ -116,17 +128,18 @@ describe('pages/api/ask_task/streaming_answer', () => {
         queryId: 'query-1',
       },
     });
-    mockChangeThreadResponseAnswerDetailStatusScoped.mockResolvedValue({});
     mockStreamTextBasedAnswer.mockResolvedValue(stream);
 
-    await handler(req, res);
+    const request = handler(req, res);
+    await Promise.resolve();
+    await new Promise((resolve) => setImmediate(resolve));
 
     expect(mockAssertResponseScope).toHaveBeenCalledWith(202, runtimeIdentity);
     expect(mockGetResponseScoped).toHaveBeenCalledWith(202, runtimeIdentity);
 
     stream.emit('data', Buffer.from('data: {"message":"hello"}\n\n'));
     stream.emit('end');
-    await new Promise((resolve) => setImmediate(resolve));
+    await request;
 
     expect(res.write).toHaveBeenCalledWith(
       Buffer.from('data: {"message":"hello"}\n\n'),
@@ -135,19 +148,17 @@ describe('pages/api/ask_task/streaming_answer', () => {
       `data: ${JSON.stringify({ done: true })}\n\n`,
     );
     expect(res.end).toHaveBeenCalled();
-    expect(
-      mockChangeThreadResponseAnswerDetailStatusScoped,
-    ).toHaveBeenCalledWith(
-      202,
-      runtimeIdentity,
-      ThreadResponseAnswerStatus.FINISHED,
-      'hello',
+    expect(mockSendEvent).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ question: 'What happened?' }),
     );
   });
 
   it('returns 500 when scoped response guard fails', async () => {
-    const handler = (await import('../ask_task/streaming_answer')).default;
-    const req = createReq({ responseId: '202' });
+    const handler = (await import(modulePath)).default;
+    const req = createReq(
+      modulePath.includes('[id]') ? { id: '202' } : { responseId: '202' },
+    );
     const res = createRes();
 
     mockResolveRequestScope.mockResolvedValue({
@@ -164,9 +175,46 @@ describe('pages/api/ask_task/streaming_answer', () => {
 
     await handler(req, res);
 
-    expect(res.status).toHaveBeenCalledWith(500);
     expect(res.end).toHaveBeenCalled();
     expect(mockGetResponseScoped).not.toHaveBeenCalled();
     expect(mockStreamTextBasedAnswer).not.toHaveBeenCalled();
+  });
+
+  it('replays finished content immediately when the answer has already been finalized', async () => {
+    const handler = (await import(modulePath)).default;
+    const req = createReq(
+      modulePath.includes('[id]') ? { id: '303' } : { responseId: '303' },
+    );
+    const res = createRes();
+
+    mockResolveRequestScope.mockResolvedValue({
+      project: { id: 42 },
+      workspace: { id: 'workspace-1' },
+      knowledgeBase: { id: 'kb-1' },
+      kbSnapshot: { id: 'snapshot-1' },
+      deployHash: 'deploy-1',
+      userId: 'user-1',
+    });
+    mockAssertResponseScope.mockResolvedValue(undefined);
+    mockGetResponseScoped.mockResolvedValue({
+      id: 303,
+      question: 'Already done?',
+      answerDetail: {
+        status: ThreadResponseAnswerStatus.FINISHED,
+        queryId: 'query-finished',
+        content: 'final answer',
+      },
+    });
+
+    await handler(req, res);
+
+    expect(mockStreamTextBasedAnswer).not.toHaveBeenCalled();
+    expect(res.write).toHaveBeenCalledWith(
+      `data: ${JSON.stringify({ message: 'final answer' })}\n\n`,
+    );
+    expect(res.write).toHaveBeenCalledWith(
+      `data: ${JSON.stringify({ done: true })}\n\n`,
+    );
+    expect(res.end).toHaveBeenCalled();
   });
 });

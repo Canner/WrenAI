@@ -1,6 +1,7 @@
 import {
   buildRuntimeSelectorRequestOptions,
   buildRuntimeSelectorStateUrl,
+  resolveRuntimeSelectorInitialLoading,
 } from './useRuntimeSelectorState';
 
 describe('useRuntimeSelectorState helpers', () => {
@@ -22,6 +23,36 @@ describe('useRuntimeSelectorState helpers', () => {
         runtimeScopeId: 'scope-1',
       }),
     ).toBe('/api/v1/runtime/scope/current?runtimeScopeId=scope-1');
+  });
+
+  it('treats only the empty-state fetch as initial loading', () => {
+    expect(
+      resolveRuntimeSelectorInitialLoading({
+        loading: true,
+        runtimeSelectorState: null,
+      }),
+    ).toBe(true);
+
+    expect(
+      resolveRuntimeSelectorInitialLoading({
+        loading: true,
+        runtimeSelectorState: {
+          currentWorkspace: null,
+          workspaces: [],
+          currentKnowledgeBase: null,
+          currentKbSnapshot: null,
+          knowledgeBases: [],
+          kbSnapshots: [],
+        },
+      }),
+    ).toBe(false);
+
+    expect(
+      resolveRuntimeSelectorInitialLoading({
+        loading: false,
+        runtimeSelectorState: null,
+      }),
+    ).toBe(false);
   });
 
   it('creates a plain GET request config and forwards the abort signal', () => {

@@ -1,9 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { ProjectResolver } from '@server/resolvers/projectResolver';
-import { buildResolverContextFromRequest } from '../resolverContext';
+import { ProjectController } from '@server/controllers/projectController';
+import { buildApiContextFromRequest } from '../apiContext';
 import { sendRestApiError } from '../restApi';
 
-const projectResolver = new ProjectResolver();
+const projectController = new ProjectController();
 
 export default async function handler(
   req: NextApiRequest,
@@ -15,8 +15,8 @@ export default async function handler(
       throw new Error('Method not allowed');
     }
 
-    const ctx = await buildResolverContextFromRequest({ req });
-    const hasSchemaChange = await projectResolver.triggerDataSourceDetection(
+    const ctx = await buildApiContextFromRequest({ req });
+    const hasSchemaChange = await projectController.triggerConnectionDetection(
       null,
       null,
       ctx,

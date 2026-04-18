@@ -4,7 +4,7 @@ describe('useKnowledgeBaseMeta helpers', () => {
   const kbA = { id: 'kb-a', name: 'A' };
   const kbB = { id: 'kb-b', name: 'B' };
 
-  it('prefers selected knowledge base over route/current fallback', () => {
+  it('prefers route/current knowledge base over pending selected fallback', () => {
     expect(
       resolveActiveKnowledgeBaseFromList({
         knowledgeBases: [kbA, kbB],
@@ -13,7 +13,7 @@ describe('useKnowledgeBaseMeta helpers', () => {
         currentKnowledgeBaseId: 'kb-a',
         selectorKnowledgeBaseFallback: null,
       }),
-    ).toEqual(kbB);
+    ).toEqual(kbA);
   });
 
   it('falls back to selector knowledge base when list is empty', () => {

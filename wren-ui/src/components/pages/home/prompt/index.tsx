@@ -1,10 +1,10 @@
 import {
+  forwardRef,
+  ReactNode,
   useEffect,
+  useImperativeHandle,
   useMemo,
   useState,
-  forwardRef,
-  useImperativeHandle,
-  ReactNode,
 } from 'react';
 import styled, { css } from 'styled-components';
 import { PROCESS_STATE } from '@/utils/enum';
@@ -13,8 +13,11 @@ import PromptResult from '@/components/pages/home/prompt/Result';
 import useAskProcessState, {
   getIsProcessing,
 } from '@/hooks/useAskProcessState';
+import type {
+  CreateThreadInput,
+  CreateThreadResponseInput,
+} from '@/types/home';
 import { AskPromptData } from '@/hooks/useAskPrompt';
-import { CreateThreadInput, CreateThreadResponseInput } from '@/types/api';
 
 interface Props {
   onCreateResponse: (
@@ -196,7 +199,7 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
       submit: submitAsk,
       close: closeResult,
     }),
-    [question, isProcessing, setQuestion],
+    [closeResult, submitAsk],
   );
 
   return (

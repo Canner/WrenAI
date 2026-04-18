@@ -11,6 +11,8 @@ type KnowledgeBaseLike = {
   id: string;
   name?: string | null;
   kind?: string | null;
+  sampleDataset?: string | null;
+  slug?: string | null;
   description?: string | null;
   createdBy?: string | null;
   defaultKbSnapshotId?: string | null;
@@ -40,9 +42,9 @@ export const resolveActiveKnowledgeBaseFromList = <
   currentKnowledgeBaseId?: string;
   selectorKnowledgeBaseFallback?: TKnowledgeBase | null;
 }) =>
-  knowledgeBases.find((kb) => kb.id === selectedKnowledgeBaseId) ||
   knowledgeBases.find((kb) => kb.id === routeKnowledgeBaseId) ||
   knowledgeBases.find((kb) => kb.id === currentKnowledgeBaseId) ||
+  knowledgeBases.find((kb) => kb.id === selectedKnowledgeBaseId) ||
   knowledgeBases[0] ||
   selectorKnowledgeBaseFallback ||
   null;
@@ -147,18 +149,18 @@ export default function useKnowledgeBaseMeta<
       ? snapshotReadonlyHint
       : null;
   const matchedDemoKnowledge = useMemo<ReferenceDemoKnowledge | null>(
-    () => getReferenceDemoKnowledgeByName(activeKnowledgeBase?.name) || null,
-    [activeKnowledgeBase?.name],
+    () => getReferenceDemoKnowledgeByName(activeKnowledgeBase) || null,
+    [activeKnowledgeBase],
   );
   const isReferenceDemoKnowledge = Boolean(matchedDemoKnowledge);
   const knowledgeDescription = useMemo(
     () =>
-      getReferenceDemoKnowledgeByName(activeKnowledgeBase?.name)?.description ||
+      getReferenceDemoKnowledgeByName(activeKnowledgeBase)?.description ||
       activeKnowledgeBase?.description ||
       (isReferenceDemoKnowledge ? matchedDemoKnowledge?.description : null),
     [
       activeKnowledgeBase?.description,
-      activeKnowledgeBase?.name,
+      activeKnowledgeBase,
       isReferenceDemoKnowledge,
       matchedDemoKnowledge?.description,
     ],
@@ -177,10 +179,10 @@ export default function useKnowledgeBaseMeta<
   );
   const displayKnowledgeName = useMemo(
     () =>
-      getReferenceDisplayKnowledgeName(activeKnowledgeBase?.name) ||
+      getReferenceDisplayKnowledgeName(activeKnowledgeBase) ||
       activeKnowledgeBase?.name ||
       '知识库',
-    [activeKnowledgeBase?.name],
+    [activeKnowledgeBase],
   );
 
   return {

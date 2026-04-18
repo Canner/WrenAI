@@ -18,7 +18,7 @@ import {
   shouldBlockRuntimeScopeBootstrapRender,
   shouldDeferRuntimeScopeUrlSync,
   writePersistedRuntimeScopeSelector,
-} from '@/apollo/client/runtimeScope';
+} from '@/runtime/client/runtimeScope';
 import useAuthSession from '@/hooks/useAuthSession';
 import { Path } from '@/utils/enum';
 

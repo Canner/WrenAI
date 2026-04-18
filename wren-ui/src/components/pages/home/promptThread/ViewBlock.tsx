@@ -3,8 +3,10 @@ import { Button } from 'antd';
 import FileDoneOutlined from '@ant-design/icons/FileDoneOutlined';
 import SaveOutlined from '@ant-design/icons/SaveOutlined';
 import { Path } from '@/utils/enum';
-import { ViewInfo } from '@/types/api';
+import type { ViewInfo } from '@/types/modeling';
+
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
+import { buildKnowledgeWorkbenchParams } from '@/utils/knowledgeWorkbench';
 
 interface Props {
   view?: ViewInfo;
@@ -22,10 +24,13 @@ export default function ViewBlock({ view, onClick }: Props) {
         基于已保存视图生成{' '}
         <Link
           className="gray-7"
-          href={runtimeScopeNavigation.hrefWorkspace(Path.Modeling, {
-            viewId: view.id,
-            openMetadata: true,
-          })}
+          href={runtimeScopeNavigation.hrefWorkspace(
+            Path.Knowledge,
+            buildKnowledgeWorkbenchParams('modeling', {
+              viewId: view.id,
+              openMetadata: true,
+            }),
+          )}
           target="_blank"
           rel="noreferrer noopener"
         >

@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 import { useParams } from 'next/navigation';
 import { message } from 'antd';
 import styled from 'styled-components';
+import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { Path } from '@/utils/enum';
 import FundViewOutlined from '@ant-design/icons/FundViewOutlined';
 import SidebarTree, {
@@ -60,9 +61,13 @@ export default function Home(props: Props) {
         runtimeScopeNavigation.pushWorkspace(Path.Home);
       }
     } catch (error) {
-      message.error(
-        error instanceof Error ? error.message : '删除对话失败，请稍后重试。',
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '删除对话失败，请稍后重试。',
       );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     }
   };
 

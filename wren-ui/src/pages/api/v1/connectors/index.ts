@@ -5,11 +5,11 @@ import {
   handleApiError,
   respondWithSimple,
   ApiError,
-} from '@/apollo/server/utils/apiUtils';
+} from '@/server/utils/apiUtils';
 import { getLogger } from '@server/utils';
 import {
   requirePersistedWorkspaceId,
-  resolvePersistedKnowledgeBaseId,
+  resolveOptionalPersistedKnowledgeBaseId,
   toCanonicalPersistedRuntimeIdentityFromScope,
 } from '@server/utils/persistedRuntimeIdentity';
 import {
@@ -117,15 +117,14 @@ const handleListConnectors = async (
       runtimeScope,
     }),
   });
-  const knowledgeBaseId = resolvePersistedKnowledgeBaseId(
-    runtimeIdentity,
-    undefined,
-    'Knowledge base scope is required',
-  );
-  const connectors = await connectorService.listConnectorsByKnowledgeBase(
-    workspaceId,
-    knowledgeBaseId,
-  );
+  const knowledgeBaseId =
+    resolveOptionalPersistedKnowledgeBaseId(runtimeIdentity);
+  const connectors = knowledgeBaseId
+    ? await connectorService.listConnectorsByKnowledgeBase(
+        workspaceId,
+        knowledgeBaseId,
+      )
+    : await connectorService.listConnectorsByWorkspace(workspaceId);
 
   await respondWithSimple({
     res,
@@ -156,7 +155,7 @@ const handleCreateConnector = async (
   });
   const payload = req.body as CreateConnectorRequest;
   validateConnectorPayload(payload, true);
-  const knowledgeBaseId = resolvePersistedKnowledgeBaseId(
+  const knowledgeBaseId = resolveOptionalPersistedKnowledgeBaseId(
     runtimeIdentity,
     payload,
   );

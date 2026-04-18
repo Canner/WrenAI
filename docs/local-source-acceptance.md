@@ -177,80 +177,24 @@ Show total orders by status as a table
 
 ---
 
-## 8. GraphQL 验证脚本
+## 8. REST 验证脚本
 
 ### 查看 thread 结果
 
 ```bash
-python - <<'PY'
-import requests
-url='http://127.0.0.1:3001/api/graphql?runtimeScopeId=4'
-q='''query Thread($threadId: Int!) {
-  thread(threadId: $threadId) {
-    id
-    responses {
-      id
-      question
-      sql
-      askingTask {
-        status
-        queryId
-        error { message shortMessage code }
-        candidates { sql type }
-      }
-      answerDetail {
-        status
-        queryId
-        error { message shortMessage code }
-        content
-      }
-    }
-  }
-}'''
-vars={'threadId': 22}
-r=requests.post(url, json={'query':q,'variables':vars})
-print(r.status_code)
-print(r.text)
-PY
+curl 'http://127.0.0.1:3001/api/v1/threads/22?runtimeScopeId=4'
 ```
 
 ### 查看 thread recommendation
 
 ```bash
-python - <<'PY'
-import requests
-url='http://127.0.0.1:3001/api/graphql?runtimeScopeId=4'
-q='''query GetThreadRecommendationQuestions($threadId: Int!) {
-  getThreadRecommendationQuestions(threadId: $threadId) {
-    status
-    questions { question category sql }
-    error { code message shortMessage }
-  }
-}'''
-vars={'threadId': 22}
-r=requests.post(url, json={'query':q,'variables':vars})
-print(r.status_code)
-print(r.text)
-PY
+curl 'http://127.0.0.1:3001/api/v1/thread-recommendation-questions/22?runtimeScopeId=4'
 ```
 
 ### 查看 project recommendation
 
 ```bash
-python - <<'PY'
-import requests
-url='http://127.0.0.1:3001/api/graphql?runtimeScopeId=4'
-q='''query GetProjectRecommendationQuestions {
-  getProjectRecommendationQuestions {
-    status
-    questions { question category sql }
-    error { code message shortMessage }
-  }
-}'''
-r=requests.post(url, json={'query':q,'variables':{}})
-print(r.status_code)
-print(r.text)
-PY
+curl 'http://127.0.0.1:3001/api/v1/project-recommendation-questions?runtimeScopeId=4'
 ```
 
 ---
@@ -258,7 +202,7 @@ PY
 ## 9. 关键通过标准
 
 ### Ask 主链路
-- `wren-ui -> GraphQL -> askingService -> wrenAIAdaptor -> ai-service`
+- `wren-ui -> /api/v1/* REST route -> controller/service -> ai-service`
 - ai-service 日志能看到：
 
 ```text
@@ -309,11 +253,13 @@ Cannot connect to host 127.0.0.1:8234
 ```bash
 cd /Users/liyi/Code/WrenAI/wren-ui
 yarn test --runInBand \
-  src/apollo/server/adaptors/tests/wrenAIAdaptor.test.ts \
-  src/apollo/server/services/tests/askingService.test.ts \
-  src/apollo/server/resolvers/tests/askingResolver.test.ts \
-  src/apollo/server/resolvers/tests/projectResolver.test.ts \
-  src/apollo/server/context/tests/runtimeScope.test.ts
+  src/server/adaptors/tests/wrenAIAdaptor.test.ts \
+  src/server/services/tests/askingService.test.ts \
+  src/server/controllers/tests/askingController.test.ts \
+  src/server/controllers/tests/projectController.test.ts \
+  src/server/context/tests/runtimeScope.test.ts \
+  src/pages/api/tests/thread_by_id_api.test.ts \
+  src/pages/api/tests/thread_recommendation_questions_api.test.ts
 
 yarn check-types
 ```

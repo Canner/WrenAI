@@ -29,10 +29,11 @@ import {
   metadataSourceColor,
   sourceDetailColor,
 } from '@/components/pages/settings/workspaceGovernanceShared';
-import { buildRuntimeScopeUrl } from '@/apollo/client/runtimeScope';
+import { buildRuntimeScopeUrl } from '@/runtime/client/runtimeScope';
 import useAuthSession from '@/hooks/useAuthSession';
 import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
+import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { Path } from '@/utils/enum';
 
 const { Paragraph, Text } = Typography;
@@ -107,7 +108,13 @@ export default function SettingsIdentityPage() {
       }
       setWorkspaceOverview(payload as WorkspaceGovernanceOverview);
     } catch (error: any) {
-      message.error(error?.message || '加载身份与目录失败');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '加载身份与目录失败',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setLoading(false);
     }
@@ -206,7 +213,10 @@ export default function SettingsIdentityPage() {
       setIdentityProviderConfig('{}');
       await loadWorkspaceOverview();
     } catch (error: any) {
-      message.error(error?.message || '创建身份源失败');
+      const errorMessage = resolveAbortSafeErrorMessage(error, '创建身份源失败');
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setIdentityLoading(false);
     }
@@ -255,10 +265,13 @@ export default function SettingsIdentityPage() {
       );
       await loadWorkspaceOverview();
     } catch (error: any) {
-      message.error(
-        error?.message ||
-          (action === 'delete' ? '删除身份源失败' : '更新身份源状态失败'),
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        action === 'delete' ? '删除身份源失败' : '更新身份源状态失败',
       );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setIdentityLoading(false);
     }
@@ -296,7 +309,10 @@ export default function SettingsIdentityPage() {
       setGroupMemberIds([]);
       await loadWorkspaceOverview();
     } catch (error: any) {
-      message.error(error?.message || '创建目录组失败');
+      const errorMessage = resolveAbortSafeErrorMessage(error, '创建目录组失败');
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setGroupLoading(false);
     }
@@ -320,7 +336,10 @@ export default function SettingsIdentityPage() {
       message.success('目录组已删除');
       await loadWorkspaceOverview();
     } catch (error: any) {
-      message.error(error?.message || '删除目录组失败');
+      const errorMessage = resolveAbortSafeErrorMessage(error, '删除目录组失败');
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setGroupLoading(false);
     }

@@ -19,8 +19,8 @@ export default function SetupRelationships() {
 
   return (
     <SetupConsoleLayout
-      title="定义关系"
-      description="确认模型间关联关系，确保后续问答、SQL 生成和图表聚合能基于统一语义执行。"
+      title="定义资产关系"
+      description="确认知识库资产间关联关系，确保后续问答、SQL 生成和图表聚合能基于统一语义执行。"
     >
       <ContainerCard step={current.step} maxWidth={current.maxWidth}>
         <current.component

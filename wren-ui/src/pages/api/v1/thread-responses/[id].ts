@@ -5,7 +5,7 @@ import {
   ApiError,
   handleApiError,
   respondWithSimple,
-} from '@/apollo/server/utils/apiUtils';
+} from '@/server/utils/apiUtils';
 import { getLogger } from '@server/utils';
 import { toCanonicalPersistedRuntimeIdentityFromScope } from '@server/utils/persistedRuntimeIdentity';
 import {

@@ -2,7 +2,7 @@ import {
   buildRuntimeScopeUrl,
   resolveClientRuntimeScopeSelector,
   type ClientRuntimeScopeSelector,
-} from '@/apollo/client/runtimeScope';
+} from '@/runtime/client/runtimeScope';
 import { parseRestJsonResponse } from './rest';
 
 export type LearningRecordData = {

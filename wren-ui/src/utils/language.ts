@@ -1,4 +1,4 @@
-import { ProjectLanguage } from '@/types/api';
+import { ProjectLanguage } from '@/types/project';
 
 export const getLanguageText = (language: ProjectLanguage) =>
   ({

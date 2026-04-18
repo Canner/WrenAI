@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { invalidateKnowledgeBaseList } from '@/utils/runtimePagePrefetch';
 
 type KnowledgeBaseSwitchable = {
   id: string;
@@ -47,25 +48,29 @@ export default function useKnowledgeBaseSelection<
     string | null
   >(null);
 
-  const loadKnowledgeBases = useCallback(async (): Promise<
-    TKnowledgeBase[]
-  > => {
-    if (!hasRuntimeScope || !knowledgeBasesUrl) {
-      setKnowledgeBases([]);
-      return [];
-    }
+  const loadKnowledgeBases = useCallback(
+    async (forceFresh = false): Promise<TKnowledgeBase[]> => {
+      if (!hasRuntimeScope || !knowledgeBasesUrl) {
+        setKnowledgeBases([]);
+        return [];
+      }
 
-    try {
-      const payload = await fetchKnowledgeBases(knowledgeBasesUrl);
-      const nextKnowledgeBases = Array.isArray(payload) ? payload : [];
-      setKnowledgeBases(nextKnowledgeBases);
-      return nextKnowledgeBases;
-    } catch (error) {
-      onLoadError?.(error);
-      setKnowledgeBases([]);
-      return [];
-    }
-  }, [fetchKnowledgeBases, hasRuntimeScope, knowledgeBasesUrl, onLoadError]);
+      try {
+        if (forceFresh) {
+          invalidateKnowledgeBaseList(knowledgeBasesUrl);
+        }
+        const payload = await fetchKnowledgeBases(knowledgeBasesUrl);
+        const nextKnowledgeBases = Array.isArray(payload) ? payload : [];
+        setKnowledgeBases(nextKnowledgeBases);
+        return nextKnowledgeBases;
+      } catch (error) {
+        onLoadError?.(error);
+        setKnowledgeBases([]);
+        return [];
+      }
+    },
+    [fetchKnowledgeBases, hasRuntimeScope, knowledgeBasesUrl, onLoadError],
+  );
 
   useEffect(() => {
     if (!cachedKnowledgeBases) {

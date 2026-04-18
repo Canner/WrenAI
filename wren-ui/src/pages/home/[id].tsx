@@ -1,3 +1,4 @@
+import { CreateSqlPairInput } from '@/types/knowledge';
 import { useRouter } from 'next/router';
 import {
   ComponentRef,
@@ -7,6 +8,14 @@ import {
   useRef,
   useState,
 } from 'react';
+import { AskingTaskStatus, AskingTaskType } from '@/types/home';
+import type {
+  AdjustThreadResponseChartInput,
+  AskingTask,
+  CreateThreadResponseInput,
+  DetailedThread,
+  ThreadResponse,
+} from '@/types/home';
 import { isEmpty } from 'lodash';
 import { Typography, message } from 'antd';
 import BookOutlined from '@ant-design/icons/BookOutlined';
@@ -15,7 +24,6 @@ import styled from 'styled-components';
 import Prompt from '@/components/pages/home/prompt';
 import useAskPrompt, {
   getIsFinished,
-  canFetchThreadResponse,
   isRecommendedFinished,
 } from '@/hooks/useAskPrompt';
 import useAdjustAnswer from '@/hooks/useAdjustAnswer';
@@ -25,7 +33,7 @@ import SaveAsViewModal from '@/components/modals/SaveAsViewModal';
 import QuestionSQLPairModal from '@/components/modals/QuestionSQLPairModal';
 import AdjustReasoningStepsModal from '@/components/modals/AdjustReasoningStepsModal';
 import AdjustSQLModal from '@/components/modals/AdjustSQLModal';
-import { getAnswerIsFinished } from '@/components/pages/home/promptThread/TextBasedAnswer';
+import { getAnswerIsFinished } from '@/components/pages/home/promptThread/answerGeneration';
 import { getIsChartFinished } from '@/components/pages/home/promptThread/ChartAnswer';
 import {
   IPromptThreadStore,
@@ -41,13 +49,7 @@ import {
   updateThreadResponseSql as updateThreadResponseSqlRequest,
 } from '@/utils/threadRest';
 import { createViewFromResponse } from '@/utils/viewRest';
-import {
-  AdjustThreadResponseChartInput,
-  CreateThreadResponseInput,
-  DetailedThread,
-  ThreadResponse,
-  CreateSqlPairInput,
-} from '@/types/api';
+
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
 import useRuntimeSelectorState from '@/hooks/useRuntimeSelectorState';
@@ -62,6 +64,7 @@ import { createKnowledgeSqlPair } from '@/utils/knowledgeRuleSqlRest';
 import useThreadDetail from '@/hooks/useThreadDetail';
 import useThreadResponsePolling from '@/hooks/useThreadResponsePolling';
 import useThreadRecommendedQuestionsPolling from '@/hooks/useThreadRecommendedQuestionsPolling';
+import { ANSWER_FINALIZATION_POLL_TIMEOUT_MS } from '@/utils/askingTimeouts';
 
 const getThreadResponseIsFinished = (
   threadResponse?: ThreadResponseData | null,
@@ -113,7 +116,7 @@ const REFERENCE_FOLLOW_UPS = [
 ];
 const REFERENCE_PRIMARY_QUESTION = '每个供应商单产品的成本趋势';
 const THREAD_RESPONSE_POLL_INTERVAL_MS = 1500;
-const THREAD_RESPONSE_POLL_TIMEOUT_MS = 45_000;
+const THREAD_RESPONSE_POLL_TIMEOUT_MS = ANSWER_FINALIZATION_POLL_TIMEOUT_MS;
 const THREAD_RECOMMEND_POLL_INTERVAL_MS = 1500;
 const THREAD_RECOMMEND_POLL_TIMEOUT_MS = 20_000;
 
@@ -144,11 +147,157 @@ export const findLatestPollableThreadResponse = (
 ) =>
   [...(responses || [])]
     .reverse()
-    .find(
-      (response) =>
-        !getThreadResponseIsFinished(response) &&
-        canFetchThreadResponse(response?.askingTask),
-    );
+    .find((response) => !getThreadResponseIsFinished(response));
+
+export const hasActivePromptAskingTask = (askingTask?: AskingTask | null) =>
+  Boolean(askingTask?.queryId && !getIsFinished(askingTask?.status));
+
+export const shouldSuspendThreadRecoveryDuringPromptFlow = ({
+  askingTask,
+  loading,
+}: {
+  askingTask?: AskingTask | null;
+  loading?: boolean;
+}) => Boolean(loading || hasActivePromptAskingTask(askingTask));
+
+export const buildPendingPromptThreadResponse = ({
+  thread,
+  originalQuestion,
+  askingTask,
+  loading,
+}: {
+  thread?: ThreadData | null;
+  originalQuestion?: string | null;
+  askingTask?: AskingTask | null;
+  loading?: boolean;
+}): ThreadResponseData | null => {
+  if (!thread) {
+    return null;
+  }
+
+  const question = originalQuestion?.trim();
+  if (!question) {
+    return null;
+  }
+
+  if (
+    !shouldSuspendThreadRecoveryDuringPromptFlow({
+      askingTask,
+      loading,
+    })
+  ) {
+    return null;
+  }
+
+  const hasPersistedResponse = thread.responses.some((response) => {
+    if (
+      askingTask?.queryId &&
+      response.askingTask?.queryId === askingTask.queryId
+    ) {
+      return true;
+    }
+
+    return false;
+  });
+
+  if (hasPersistedResponse) {
+    return null;
+  }
+
+  return {
+    id:
+      Math.min(
+        0,
+        ...thread.responses.map((response) =>
+          typeof response.id === 'number' ? response.id : 0,
+        ),
+      ) - 1,
+    threadId: thread.id,
+    question,
+    sql: null,
+    view: null,
+    askingTask: askingTask || {
+      candidates: [],
+      queryId: null,
+      status: AskingTaskStatus.UNDERSTANDING,
+      type: AskingTaskType.TEXT_TO_SQL,
+    },
+    breakdownDetail: null,
+    answerDetail: null,
+    chartDetail: null,
+    adjustment: null,
+    adjustmentTask: null,
+  };
+};
+
+const buildPendingFollowUpAskingTask = ({
+  taskId,
+  fallbackAskingTask,
+}: {
+  taskId?: string;
+  fallbackAskingTask?: AskingTask | null;
+}): AskingTask | null => {
+  if (!taskId) {
+    return null;
+  }
+
+  if (fallbackAskingTask?.queryId === taskId) {
+    return {
+      ...fallbackAskingTask,
+      candidates: [...(fallbackAskingTask.candidates || [])],
+    };
+  }
+
+  return {
+    candidates: [],
+    queryId: taskId,
+    status: AskingTaskStatus.SEARCHING,
+    type: AskingTaskType.TEXT_TO_SQL,
+  };
+};
+
+export const hydrateCreatedThreadResponse = ({
+  response,
+  taskId,
+  fallbackAskingTask,
+}: {
+  response: ThreadResponse;
+  taskId?: string;
+  fallbackAskingTask?: AskingTask | null;
+}): ThreadResponse => {
+  if (response.askingTask || !taskId) {
+    return response;
+  }
+
+  const askingTask = buildPendingFollowUpAskingTask({
+    taskId,
+    fallbackAskingTask,
+  });
+
+  if (!askingTask) {
+    return response;
+  }
+
+  return {
+    ...response,
+    askingTask,
+  };
+};
+
+export const resolveCreatedThreadResponsePollingTaskId = ({
+  response,
+  taskId,
+}: {
+  response: ThreadResponse;
+  taskId?: string | null;
+}) => {
+  const nextTaskId = response.askingTask?.queryId || taskId || null;
+  if (!nextTaskId) {
+    return null;
+  }
+
+  return getIsFinished(response.askingTask?.status) ? null : nextTaskId;
+};
 
 const reportThreadError = (_error: unknown, fallbackMessage: string) => {
   message.error(fallbackMessage);
@@ -533,6 +682,35 @@ export default function HomeThread() {
   );
 
   const thread = useMemo(() => data?.thread || null, [data]);
+  const pendingPromptResponse = useMemo(
+    () =>
+      buildPendingPromptThreadResponse({
+        thread,
+        originalQuestion: askPrompt.data?.originalQuestion,
+        askingTask: askPrompt.data?.askingTask,
+        loading: askPrompt.loading,
+      }),
+    [
+      askPrompt.data?.askingTask,
+      askPrompt.data?.originalQuestion,
+      askPrompt.loading,
+      thread,
+    ],
+  );
+  const displayThread = useMemo(() => {
+    if (!thread) {
+      return null;
+    }
+
+    if (!pendingPromptResponse) {
+      return thread;
+    }
+
+    return {
+      ...thread,
+      responses: [...thread.responses, pendingPromptResponse],
+    };
+  }, [pendingPromptResponse, thread]);
   const responses = useMemo(() => thread?.responses || [], [thread]);
   const runtimeKnowledgeBases = runtimeSelectorState?.knowledgeBases || [];
   const routeKnowledgeBaseIds = useMemo(() => {
@@ -772,6 +950,17 @@ export default function HomeThread() {
 
   const handleUnfinishedTasks = useCallback(
     (responses: ThreadResponse[]) => {
+      const activePromptTask = askPrompt.data?.askingTask;
+      if (
+        shouldSuspendThreadRecoveryDuringPromptFlow({
+          askingTask: activePromptTask,
+          loading: askPrompt.loading,
+        })
+      ) {
+        pollingAskingTaskIdRef.current = activePromptTask?.queryId || null;
+        return;
+      }
+
       // unfinished asking task
       const unfinishedAskingResponse =
         findLatestUnfinishedAskingResponse(responses);
@@ -880,6 +1069,7 @@ export default function HomeThread() {
     async (payload: CreateThreadResponseInput) => {
       try {
         askPrompt.onStopPolling();
+        stopThreadResponsePolling();
 
         const currentThreadId = thread?.id;
         if (!currentThreadId) {
@@ -891,8 +1081,29 @@ export default function HomeThread() {
           currentThreadId,
           payload,
         );
-        upsertThreadResponse(nextResponse);
+        const hydratedResponse = hydrateCreatedThreadResponse({
+          response: nextResponse,
+          taskId: payload.taskId || undefined,
+          fallbackAskingTask: askPrompt.data?.askingTask,
+        });
+        upsertThreadResponse(hydratedResponse);
         setShowRecommendedQuestions(false);
+
+        const nextTaskId = resolveCreatedThreadResponsePollingTaskId({
+          response: hydratedResponse,
+          taskId: payload.taskId,
+        });
+
+        if (nextTaskId) {
+          pollingAskingTaskIdRef.current = nextTaskId;
+          pollingResponseIdRef.current = null;
+          threadResponseRequestInFlightRef.current = null;
+
+          void askPrompt.onFetching(nextTaskId).catch((error) => {
+            pollingAskingTaskIdRef.current = null;
+            reportThreadError(error, '加载问答任务失败，请稍后重试');
+          });
+        }
       } catch (error) {
         reportThreadError(error, '创建回答失败，请稍后重试');
       }
@@ -900,24 +1111,25 @@ export default function HomeThread() {
     [
       askPrompt,
       runtimeScopeNavigation.selector,
+      stopThreadResponsePolling,
       thread?.id,
       upsertThreadResponse,
     ],
   );
 
   const providerDataValue = useMemo(() => {
-    if (!thread) {
+    if (!displayThread) {
       return null;
     }
 
     return {
-      data: thread as IPromptThreadStore['data'],
+      data: displayThread as IPromptThreadStore['data'],
       recommendedQuestions:
         (recommendedQuestions as IPromptThreadStore['recommendedQuestions']) ||
         null,
       showRecommendedQuestions,
     };
-  }, [recommendedQuestions, showRecommendedQuestions, thread]);
+  }, [displayThread, recommendedQuestions, showRecommendedQuestions]);
 
   const providerPreparationValue = useMemo(
     () => ({

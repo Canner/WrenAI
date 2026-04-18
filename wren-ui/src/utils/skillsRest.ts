@@ -1,7 +1,7 @@
 import {
   buildRuntimeScopeUrl,
   type ClientRuntimeScopeSelector,
-} from '@/apollo/client/runtimeScope';
+} from '@/runtime/client/runtimeScope';
 
 export type SkillDefinitionView = {
   id: string;

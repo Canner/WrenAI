@@ -1,9 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { AskingResolver } from '@server/resolvers/askingResolver';
-import { buildResolverContextFromRequest } from '../resolverContext';
+import { AskingController } from '@server/controllers/askingController';
+import { buildApiContextFromRequest } from '../apiContext';
 import { sendRestApiError } from '../restApi';
 
-const askingResolver = new AskingResolver();
+const askingController = new AskingController();
 
 export default async function handler(
   req: NextApiRequest,
@@ -15,8 +15,8 @@ export default async function handler(
       throw new Error('Method not allowed');
     }
 
-    const ctx = await buildResolverContextFromRequest({ req });
-    const task = await askingResolver.createInstantRecommendedQuestions(
+    const ctx = await buildApiContextFromRequest({ req });
+    const task = await askingController.createInstantRecommendedQuestions(
       null,
       {
         data: {

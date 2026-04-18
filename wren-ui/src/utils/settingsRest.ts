@@ -1,18 +1,21 @@
+import { SampleDatasetName, DataSourceName } from '@/types/dataSource';
 import {
   buildRuntimeScopeUrl,
   resolveClientRuntimeScopeSelector,
   type ClientRuntimeScopeSelector,
-} from '@/apollo/client/runtimeScope';
-import type { DataSourceName, SampleDatasetName } from '@/types/api';
+} from '@/runtime/client/runtimeScope';
+
 import { parseRestJsonResponse } from './rest';
+
+export type KnowledgeConnectionSettings = {
+  type?: DataSourceName | null;
+  properties?: Record<string, any> | null;
+  sampleDataset?: SampleDatasetName | null;
+};
 
 export type SettingsData = {
   productVersion?: string | null;
-  dataSource?: {
-    type?: DataSourceName | null;
-    properties?: Record<string, any> | null;
-    sampleDataset?: SampleDatasetName | null;
-  } | null;
+  connection?: KnowledgeConnectionSettings | null;
   language?: string | null;
 };
 
@@ -30,9 +33,9 @@ export const buildProjectSettingsUrl = (
   selector = resolveClientRuntimeScopeSelector(),
 ) => buildRuntimeScopeUrl('/api/v1/settings/project', {}, selector);
 
-export const buildDataSourceSettingsUrl = (
+export const buildKnowledgeConnectionSettingsUrl = (
   selector = resolveClientRuntimeScopeSelector(),
-) => buildRuntimeScopeUrl('/api/v1/settings/data-source', {}, selector);
+) => buildRuntimeScopeUrl('/api/v1/settings/connection', {}, selector);
 
 export const buildSampleDatasetUrl = (
   selector = resolveClientRuntimeScopeSelector(),
@@ -42,10 +45,25 @@ export const fetchSettings = async (
   selector: ClientRuntimeScopeSelector = resolveClientRuntimeScopeSelector(),
 ) => {
   const response = await fetch(buildSettingsUrl(selector));
-  return parseRestJsonResponse<SettingsData>(
+  const payload = await parseRestJsonResponse<SettingsData>(
     response,
     '加载系统设置失败，请稍后重试。',
   );
+  return normalizeSettingsData(payload);
+};
+
+export const resolveSettingsConnection = (
+  settings?: SettingsData | null,
+): KnowledgeConnectionSettings | null =>
+  settings?.connection ?? null;
+
+export const normalizeSettingsData = (
+  settings?: SettingsData | null,
+): SettingsData | null => {
+  if (!settings) {
+    return null;
+  }
+  return settings;
 };
 
 export const updateCurrentProjectLanguage = async (
@@ -77,7 +95,7 @@ export const resetCurrentProject = async (
   );
 };
 
-export const updateDataSourceSettings = async (
+export const updateKnowledgeConnectionSettings = async (
   selector: ClientRuntimeScopeSelector,
   {
     properties,
@@ -87,7 +105,7 @@ export const updateDataSourceSettings = async (
     type?: DataSourceName | null;
   },
 ) => {
-  const response = await fetch(buildDataSourceSettingsUrl(selector), {
+  const response = await fetch(buildKnowledgeConnectionSettingsUrl(selector), {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -96,9 +114,9 @@ export const updateDataSourceSettings = async (
     }),
   });
 
-  return parseRestJsonResponse<SettingsData['dataSource']>(
+  return parseRestJsonResponse<KnowledgeConnectionSettings>(
     response,
-    '更新数据源失败，请稍后重试。',
+    '更新知识库连接失败，请稍后重试。',
   );
 };
 

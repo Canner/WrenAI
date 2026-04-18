@@ -12,7 +12,7 @@ import {
   AskingTaskStatus,
   AskingTask,
   AdjustmentTask,
-} from '@/types/api';
+} from '@/types/home';
 
 export type Props = IPromptThreadStore['preparation'] & {
   className?: string;

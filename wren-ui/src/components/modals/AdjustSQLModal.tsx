@@ -4,7 +4,11 @@ import InfoCircleOutlined from '@ant-design/icons/InfoCircleOutlined';
 import { ERROR_TEXTS } from '@/utils/error';
 import { ModalAction } from '@/hooks/useModalAction';
 import SQLEditor from '@/components/editor/SQLEditor';
-import { isApolloLikeError, parseGraphQLError } from '@/utils/errorHandler';
+import {
+  isOperationClientError,
+  parseOperationError,
+} from '@/utils/errorHandler';
+import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import ErrorCollapse from '@/components/ErrorCollapse';
 import PreviewData from '@/components/dataPreview/PreviewData';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
@@ -29,7 +33,7 @@ export default function AdjustSQLModal(props: Props) {
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const [form] = Form.useForm();
   const [error, setError] =
-    useState<ReturnType<typeof parseGraphQLError>>(null);
+    useState<ReturnType<typeof parseOperationError>>(null);
   const [previewing, setPreviewing] = useState<boolean>(false);
   const [previewData, setPreviewData] = useState<
     SqlPreviewDataResponse | undefined
@@ -59,18 +63,22 @@ export default function AdjustSQLModal(props: Props) {
   };
 
   const handleError = (error: unknown) => {
-    if (isApolloLikeError(error)) {
-      const graphQLError = parseGraphQLError(error);
+    const errorMessage = resolveAbortSafeErrorMessage(error, 'SQL 语法无效');
+    if (!errorMessage) {
+      return;
+    }
+    if (isOperationClientError(error)) {
+      const operationError = parseOperationError(error);
       setError({
-        message: graphQLError?.message || error.message,
+        message: operationError?.message || errorMessage,
         shortMessage: 'SQL 语法无效',
-        code: graphQLError?.code || '',
-        stacktrace: graphQLError?.stacktrace,
+        code: operationError?.code || '',
+        stacktrace: operationError?.stacktrace,
       });
       return;
     }
     setError({
-      message: error instanceof Error ? error.message : 'SQL 语法无效',
+      message: errorMessage,
       shortMessage: 'SQL 语法无效',
       code: '',
       stacktrace: undefined,
@@ -119,7 +127,13 @@ export default function AdjustSQLModal(props: Props) {
       })
       .catch((err) => {
         setSubmitting(false);
-        message.error(err?.message || 'SQL 调整失败，请稍后重试。');
+        const errorMessage = resolveAbortSafeErrorMessage(
+          err,
+          'SQL 调整失败，请稍后重试。',
+        );
+        if (errorMessage) {
+          message.error(errorMessage);
+        }
       });
   };
 

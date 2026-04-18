@@ -1,11 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { SqlPairResolver } from '@server/resolvers/sqlPairResolver';
+import { SqlPairController } from '@server/controllers/sqlPairController';
 import { DialectSQL } from '@server/models/adaptor';
-import { ApiError } from '@/apollo/server/utils/apiUtils';
-import { buildResolverContextFromRequest } from '../resolverContext';
+import { ApiError } from '@/server/utils/apiUtils';
+import { buildApiContextFromRequest } from '../apiContext';
 import { sendRestApiError } from '../restApi';
 
-const sqlPairResolver = new SqlPairResolver();
+const sqlPairController = new SqlPairController();
 
 export default async function handler(
   req: NextApiRequest,
@@ -22,8 +22,8 @@ export default async function handler(
       throw new ApiError('SQL is required', 400);
     }
 
-    const ctx = await buildResolverContextFromRequest({ req });
-    const substitutedSql = await sqlPairResolver.modelSubstitute(
+    const ctx = await buildApiContextFromRequest({ req });
+    const substitutedSql = await sqlPairController.modelSubstitute(
       null,
       { data: { sql: sql as DialectSQL } },
       ctx,

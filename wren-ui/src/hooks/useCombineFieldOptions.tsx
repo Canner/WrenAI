@@ -4,6 +4,7 @@ import {
   convertObjectToIdentifier,
   convertIdentifierToObject,
 } from '@/utils/enum';
+import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { RelationsDataType } from '@/components/table/ModelRelationSelectionTable';
 import { RelationFormValues } from '@/components/modals/RelationModal';
 import useModelList from '@/hooks/useModelList';
@@ -115,7 +116,13 @@ export default function useCombineFieldOptions(props: Props) {
   const { data } = useModelList({
     enabled,
     onError: (error) => {
-      message.error(error.message || '加载模型列表失败，请稍后重试。');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '加载模型列表失败，请稍后重试。',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     },
   });
 

@@ -4,21 +4,22 @@ import { message } from 'antd';
 import {
   resolveClientRuntimeScopeSelector,
   type ClientRuntimeScopeSelector,
-} from '@/apollo/client/runtimeScope';
-import { AskingTaskStatus, ThreadResponse } from '@/types/api';
+} from '@/runtime/client/runtimeScope';
+import { AskingTaskStatus, ThreadResponse } from '@/types/home';
 import {
   adjustThreadResponseAnswer,
   cancelAdjustmentTask,
   rerunAdjustmentTask,
 } from '@/utils/homeRest';
 import type {
-  ThreadDetailQueryData,
-  UpdateThreadDetailQuery,
+  ThreadDetailStateData,
+  UpdateThreadDetailState,
 } from './useThreadDetail';
 import useThreadResponsePolling from './useThreadResponsePolling';
+import { ANSWER_FINALIZATION_POLL_TIMEOUT_MS } from '@/utils/askingTimeouts';
 
 const ADJUSTMENT_POLL_INTERVAL_MS = 1500;
-const ADJUSTMENT_POLL_TIMEOUT_MS = 45_000;
+const ADJUSTMENT_POLL_TIMEOUT_MS = ANSWER_FINALIZATION_POLL_TIMEOUT_MS;
 
 export const getIsFinished = (status?: AskingTaskStatus | null) =>
   status !== undefined &&
@@ -31,13 +32,13 @@ export const getIsFinished = (status?: AskingTaskStatus | null) =>
 
 const handleUpdateThreadCache = (
   threadResponse: ThreadResponse,
-  updateThreadQuery?: UpdateThreadDetailQuery,
+  updateThreadQuery?: UpdateThreadDetailState,
 ) => {
   if (!updateThreadQuery) {
     return;
   }
 
-  updateThreadQuery((existingData: ThreadDetailQueryData) => {
+  updateThreadQuery((existingData: ThreadDetailStateData) => {
     if (!existingData?.thread) {
       return existingData;
     }
@@ -66,7 +67,7 @@ const resolveRuntimeScopeSelector = (selector?: ClientRuntimeScopeSelector) =>
 
 export default function useAdjustAnswer(
   threadId?: number,
-  updateThreadQuery?: UpdateThreadDetailQuery,
+  updateThreadQuery?: UpdateThreadDetailState,
   runtimeScopeSelector?: ClientRuntimeScopeSelector,
 ) {
   const adjustmentPollingTimeoutRef = useRef<ReturnType<

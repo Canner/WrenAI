@@ -56,6 +56,17 @@ export const canCreateKnowledgeBaseInWorkspace = (
 export const canManageWorkspaceJoinFlow = (workspaceKind?: string | null) =>
   !isDefaultWorkspace(workspaceKind);
 
+export const canImportSampleDatasetInWorkspace = (
+  workspaceKind?: string | null,
+) => isDefaultWorkspace(workspaceKind);
+
+export const getSampleDatasetImportRestrictionReason = (
+  workspaceKind?: string | null,
+) =>
+  canImportSampleDatasetInWorkspace(workspaceKind)
+    ? null
+    : '系统样例已集中到系统样例空间，业务工作区不再支持导入样例数据，请直接配置真实数据库连接。';
+
 export const getConnectorScopeRestrictionReason = ({
   workspaceKind,
   knowledgeBaseKind,

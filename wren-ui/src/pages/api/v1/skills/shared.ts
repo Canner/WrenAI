@@ -1,4 +1,4 @@
-import { ApiError } from '@/apollo/server/utils/apiUtils';
+import { ApiError } from '@/server/utils/apiUtils';
 
 export const validateSkillId = (id: any): string => {
   if (!id || typeof id !== 'string') {

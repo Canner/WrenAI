@@ -1,16 +1,33 @@
 import { message } from 'antd';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { buildRuntimeScopeUrl } from '@/apollo/client/runtimeScope';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
+import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
+import { buildAskingTaskStreamUrl } from '@/utils/homeRest';
 
-type useAskingStreamTaskReturn = [
+type UseAskingStreamTaskReturn = [
   (queryId: string) => void,
   { data: string; loading: boolean; reset: () => void },
 ];
 
-export default function useAskingStreamTask() {
+export default function useAskingStreamTask(
+  selectorOverride?: ClientRuntimeScopeSelector,
+) {
   const eventSourceRef = useRef<EventSource | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [data, setData] = useState<string>('');
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
+
+  const selector = useMemo(
+    () => selectorOverride || runtimeScopeNavigation.selector,
+    [
+      runtimeScopeNavigation.selector.deployHash,
+      runtimeScopeNavigation.selector.kbSnapshotId,
+      runtimeScopeNavigation.selector.knowledgeBaseId,
+      runtimeScopeNavigation.selector.runtimeScopeId,
+      runtimeScopeNavigation.selector.workspaceId,
+      selectorOverride,
+    ],
+  );
 
   const closeEventSource = useCallback(() => {
     if (!eventSourceRef.current) {
@@ -33,7 +50,7 @@ export default function useAskingStreamTask() {
       setLoading(true);
 
       const eventSource = new EventSource(
-        buildRuntimeScopeUrl('/api/ask_task/streaming', { queryId }),
+        buildAskingTaskStreamUrl(queryId, selector),
       );
       eventSourceRef.current = eventSource;
 
@@ -59,7 +76,7 @@ export default function useAskingStreamTask() {
         reset();
       };
     },
-    [reset],
+    [reset, selector],
   );
 
   useEffect(() => {
@@ -71,5 +88,5 @@ export default function useAskingStreamTask() {
   return [
     fetchAskingStreamingTask,
     { data, loading, reset },
-  ] as useAskingStreamTaskReturn;
+  ] as UseAskingStreamTaskReturn;
 }

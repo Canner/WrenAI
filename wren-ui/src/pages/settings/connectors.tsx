@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import ApiOutlined from '@ant-design/icons/ApiOutlined';
 import {
   Alert,
   Button,
@@ -15,19 +14,17 @@ import {
   Typography,
   message,
 } from 'antd';
-import styled from 'styled-components';
 import ConsoleShellLayout from '@/components/reference/ConsoleShellLayout';
 import { buildNovaSettingsNavItems } from '@/components/reference/novaShellNavigation';
 import useAuthSession from '@/hooks/useAuthSession';
 import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
-import useRuntimeSelectorState from '@/hooks/useRuntimeSelectorState';
-import { buildRuntimeScopeUrl } from '@/apollo/client/runtimeScope';
-import { Path } from '@/utils/enum';
 import {
-  getReferenceDisplayKnowledgeName,
-  getReferenceDisplayWorkspaceName,
-} from '@/utils/referenceDemoKnowledge';
+  buildRuntimeScopeUrl,
+  type ClientRuntimeScopeSelector,
+} from '@/runtime/client/runtimeScope';
+import { resolveAbortSafeErrorMessage } from '@/utils/abort';
+import { Path } from '@/utils/enum';
 import { getConnectorScopeRestrictionReason } from '@/utils/workspaceGovernance';
 
 const { Paragraph, Text } = Typography;
@@ -127,58 +124,39 @@ type SecretReencryptPayload = {
   execute?: boolean;
 };
 
-const MetricGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 14px;
-  margin-bottom: 16px;
-`;
+export const buildConnectorsCollectionUrl = (
+  selector?: ClientRuntimeScopeSelector,
+) => buildRuntimeScopeUrl('/api/v1/connectors', {}, selector);
 
-const MetricCard = styled.div`
-  border-radius: 22px;
-  border: 1px solid rgba(15, 23, 42, 0.06);
-  background: linear-gradient(
-    180deg,
-    rgba(245, 240, 255, 0.96) 0%,
-    rgba(255, 255, 255, 0.98) 100%
-  );
-  padding: 18px 18px 16px;
-  min-height: 112px;
-`;
+export const buildConnectorItemUrl = (
+  id: string,
+  selector?: ClientRuntimeScopeSelector,
+) => buildRuntimeScopeUrl(`/api/v1/connectors/${id}`, {}, selector);
 
-const MetricLabel = styled.span`
-  display: block;
-  font-size: 12px;
-  color: #8c94a8;
-  margin-bottom: 8px;
-`;
+export const buildConnectorTestUrl = (selector?: ClientRuntimeScopeSelector) =>
+  buildRuntimeScopeUrl('/api/v1/connectors/test', {}, selector);
 
-const MetricValue = styled.span`
-  display: block;
-  font-size: 24px;
-  line-height: 1.15;
-  font-weight: 700;
-  color: #242a39;
-  margin-bottom: 6px;
-`;
+export const buildSecretReencryptApiUrl = (
+  selector?: ClientRuntimeScopeSelector,
+) => buildRuntimeScopeUrl('/api/v1/secrets/reencrypt', {}, selector);
 
-const MetricMeta = styled.span`
-  display: block;
-  font-size: 13px;
-  color: #667085;
-`;
+export const resolveConnectorWorkspaceSelector = ({
+  runtimeSelector,
+  sessionWorkspaceId,
+  actorWorkspaceId,
+}: {
+  runtimeSelector?: ClientRuntimeScopeSelector | null;
+  sessionWorkspaceId?: string | null;
+  actorWorkspaceId?: string | null;
+}): ClientRuntimeScopeSelector | null => {
+  const workspaceId =
+    runtimeSelector?.workspaceId ||
+    sessionWorkspaceId ||
+    actorWorkspaceId ||
+    null;
 
-export const buildConnectorsCollectionUrl = () =>
-  buildRuntimeScopeUrl('/api/v1/connectors');
-
-export const buildConnectorItemUrl = (id: string) =>
-  buildRuntimeScopeUrl(`/api/v1/connectors/${id}`);
-
-export const buildConnectorTestUrl = () =>
-  buildRuntimeScopeUrl('/api/v1/connectors/test');
-
-export const buildSecretReencryptApiUrl = () =>
-  buildRuntimeScopeUrl('/api/v1/secrets/reencrypt');
+  return workspaceId ? { workspaceId } : null;
+};
 
 export const CONNECTOR_TYPE_OPTIONS = [
   { label: 'REST JSON API', value: 'rest_json' },
@@ -420,6 +398,7 @@ const buildDatabaseConnectorSecret = (values: DatabaseConnectorFormShape) => {
 
 const isDatabaseSecretRequired = (values: DatabaseConnectorFormShape) => {
   switch (values.databaseProvider?.trim()) {
+    case 'mysql':
     case 'trino':
       return false;
     default:
@@ -696,6 +675,19 @@ export default function ManageConnectors() {
     useState<'dry-run' | 'execute' | null>(null);
   const [secretReencryptSummary, setSecretReencryptSummary] =
     useState<SecretReencryptSummary | null>(null);
+  const workspaceScopedSelector = useMemo(
+    () =>
+      resolveConnectorWorkspaceSelector({
+        runtimeSelector: runtimeScopeNavigation.selector,
+        sessionWorkspaceId: authSession.data?.workspace?.id,
+        actorWorkspaceId: authSession.data?.authorization?.actor?.workspaceId,
+      }),
+    [
+      authSession.data?.authorization?.actor?.workspaceId,
+      authSession.data?.workspace?.id,
+      runtimeScopeNavigation.selector?.workspaceId,
+    ],
+  );
   const watchedConnectorType = Form.useWatch('type', form);
   const watchedDatabaseProvider = Form.useWatch('databaseProvider', form);
   const watchedSnowflakeAuthMode = Form.useWatch('dbSnowflakeAuthMode', form);
@@ -741,8 +733,6 @@ export default function ManageConnectors() {
     watchedRedshiftAuthMode,
   ]);
 
-  const runtimeSelector = useRuntimeSelectorState();
-  const runtimeSelectorState = runtimeSelector.runtimeSelectorState;
   const connectorTypeOptions = useMemo(() => CONNECTOR_TYPE_OPTIONS, []);
   const configuredSecretCount = useMemo(
     () => connectors.filter((connector) => connector.hasSecret).length,
@@ -751,13 +741,10 @@ export default function ManageConnectors() {
   const connectorScopeRestrictionReason = useMemo(
     () =>
       getConnectorScopeRestrictionReason({
-        workspaceKind: runtimeSelectorState?.currentWorkspace?.kind,
-        knowledgeBaseKind: runtimeSelectorState?.currentKnowledgeBase?.kind,
+        workspaceKind: authSession.data?.workspace?.kind,
+        knowledgeBaseKind: null,
       }),
-    [
-      runtimeSelectorState?.currentKnowledgeBase?.kind,
-      runtimeSelectorState?.currentWorkspace?.kind,
-    ],
+    [authSession.data?.workspace?.kind],
   );
   const authorizationActions = authSession.data?.authorization?.actions || {};
   const hasAuthCapabilities = Object.keys(authorizationActions).length > 0;
@@ -803,15 +790,28 @@ export default function ManageConnectors() {
       ? null
       : '当前账号没有批量轮换密钥权限';
 
+  const requireWorkspaceSelector = () => {
+    if (!workspaceScopedSelector?.workspaceId) {
+      throw new Error('当前工作空间未就绪，请稍后重试。');
+    }
+
+    return workspaceScopedSelector;
+  };
+
   const loadConnectors = async () => {
-    if (!runtimeScopePage.hasRuntimeScope) {
+    if (
+      !runtimeScopePage.hasRuntimeScope ||
+      !workspaceScopedSelector?.workspaceId
+    ) {
       setConnectors([]);
       return;
     }
 
     setLoading(true);
     try {
-      const response = await fetch(buildConnectorsCollectionUrl());
+      const response = await fetch(
+        buildConnectorsCollectionUrl(requireWorkspaceSelector()),
+      );
       if (!response.ok) {
         throw new Error(`加载连接器失败：${response.status}`);
       }
@@ -819,7 +819,13 @@ export default function ManageConnectors() {
       const payload = await response.json();
       setConnectors(Array.isArray(payload) ? payload : []);
     } catch (error: any) {
-      message.error(error.message || '加载连接器失败。');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '加载连接器失败。',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
       setConnectors([]);
     } finally {
       setLoading(false);
@@ -827,11 +833,14 @@ export default function ManageConnectors() {
   };
 
   useEffect(() => {
+    if (
+      !runtimeScopePage.hasRuntimeScope ||
+      !workspaceScopedSelector?.workspaceId
+    ) {
+      return;
+    }
     void loadConnectors();
-  }, [
-    runtimeScopePage.hasRuntimeScope,
-    runtimeSelectorState?.currentKnowledgeBase?.id,
-  ]);
+  }, [runtimeScopePage.hasRuntimeScope, workspaceScopedSelector?.workspaceId]);
 
   const openCreateModal = () => {
     if (createConnectorBlockedReason) {
@@ -911,10 +920,11 @@ export default function ManageConnectors() {
       });
 
       setSubmitting(true);
+      const workspaceSelector = requireWorkspaceSelector();
       const response = await fetch(
         editingConnector
-          ? buildConnectorItemUrl(editingConnector.id)
-          : buildConnectorsCollectionUrl(),
+          ? buildConnectorItemUrl(editingConnector.id, workspaceSelector)
+          : buildConnectorsCollectionUrl(workspaceSelector),
         {
           method: editingConnector ? 'PUT' : 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -934,7 +944,13 @@ export default function ManageConnectors() {
       if (error?.errorFields) {
         return;
       }
-      message.error(error.message || '保存连接器失败。');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '保存连接器失败。',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -946,9 +962,12 @@ export default function ManageConnectors() {
       return;
     }
     try {
-      const response = await fetch(buildConnectorItemUrl(connectorId), {
-        method: 'DELETE',
-      });
+      const response = await fetch(
+        buildConnectorItemUrl(connectorId, requireWorkspaceSelector()),
+        {
+          method: 'DELETE',
+        },
+      );
       if (!response.ok) {
         const errorPayload = await response.json().catch(() => ({}));
         throw new Error(errorPayload.error || '删除连接器失败。');
@@ -957,18 +976,27 @@ export default function ManageConnectors() {
       message.success('连接器已删除。');
       await loadConnectors();
     } catch (error: any) {
-      message.error(error.message || '删除连接器失败。');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '删除连接器失败。',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     }
   };
 
   const executeConnectorTest = async (
     payload: ConnectorTestPayload,
   ): Promise<ConnectorTestResponse> => {
-    const response = await fetch(buildConnectorTestUrl(), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    const response = await fetch(
+      buildConnectorTestUrl(requireWorkspaceSelector()),
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      },
+    );
 
     if (!response.ok) {
       const errorPayload = await response.json().catch(() => ({}));
@@ -988,11 +1016,14 @@ export default function ManageConnectors() {
       execute,
     });
 
-    const response = await fetch(buildSecretReencryptApiUrl(), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    const response = await fetch(
+      buildSecretReencryptApiUrl(requireWorkspaceSelector()),
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      },
+    );
 
     if (!response.ok) {
       const errorPayload = await response.json().catch(() => ({}));
@@ -1028,7 +1059,13 @@ export default function ManageConnectors() {
       const result = await executeConnectorTest(payload);
       message.success(result.message || '连接测试成功。');
     } catch (error: any) {
-      message.error(error.message || '连接测试失败。');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '连接测试失败。',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setTestingConnection(false);
     }
@@ -1054,7 +1091,13 @@ export default function ManageConnectors() {
       });
       message.success(result.message || '连接测试成功。');
     } catch (error: any) {
-      message.error(error.message || '连接测试失败。');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '连接测试失败。',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setTestingConnectorId(null);
     }
@@ -1074,7 +1117,13 @@ export default function ManageConnectors() {
         execute ? '密钥重加密已执行。' : '密钥重加密 dry-run 已完成。',
       );
     } catch (error: any) {
-      message.error(error.message || '密钥轮换执行失败。');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '密钥轮换执行失败。',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setSecretReencryptSubmittingMode(null);
     }
@@ -1084,9 +1133,9 @@ export default function ManageConnectors() {
     return (
       <ConsoleShellLayout
         title="数据连接器"
-        description="统一管理工作区可复用的 API、数据库或工具端点，供技能与问答流程编排复用。"
-        eyebrow="Workspace Connectors"
         loading
+        hideHeader
+        contentBorderless
         navItems={buildNovaSettingsNavItems({
           activeKey: 'settingsConnectors',
           onNavigate: runtimeScopeNavigation.pushWorkspace,
@@ -1104,31 +1153,9 @@ export default function ManageConnectors() {
   return (
     <ConsoleShellLayout
       loading={loading || authSession.loading}
-      title={
-        <>
-          <ApiOutlined className="mr-2 gray-8" />
-          数据连接器
-        </>
-      }
-      description="统一管理工作区可复用的 API、数据库或工具端点，供技能与问答流程编排复用。"
-      eyebrow="Workspace Connectors"
-      titleExtra={
-        <Space wrap>
-          <Button
-            onClick={openSecretOpsModal}
-            disabled={Boolean(rotateConnectorSecretBlockedReason)}
-          >
-            批量轮换密钥
-          </Button>
-          <Button
-            type="primary"
-            onClick={openCreateModal}
-            disabled={Boolean(createConnectorBlockedReason)}
-          >
-            添加连接器
-          </Button>
-        </Space>
-      }
+      title="数据连接器"
+      hideHeader
+      contentBorderless
       navItems={buildNovaSettingsNavItems({
         activeKey: 'settingsConnectors',
         onNavigate: runtimeScopeNavigation.pushWorkspace,
@@ -1140,47 +1167,6 @@ export default function ManageConnectors() {
         onClick: () => runtimeScopeNavigation.pushWorkspace(Path.Home),
       }}
     >
-      <MetricGrid>
-        <MetricCard>
-          <MetricLabel>当前工作区</MetricLabel>
-          <MetricValue>
-            {getReferenceDisplayWorkspaceName(
-              runtimeSelectorState?.currentWorkspace?.name,
-            ) || '未知'}
-          </MetricValue>
-          <MetricMeta>连接器定义由工作区统一管理。</MetricMeta>
-        </MetricCard>
-        <MetricCard>
-          <MetricLabel>当前上下文</MetricLabel>
-          <MetricValue>
-            {getReferenceDisplayKnowledgeName(
-              runtimeSelectorState?.currentKnowledgeBase?.name,
-            ) || '未知'}
-          </MetricValue>
-          <MetricMeta>
-            如果从知识库进入，这里会显示当前上下文；连接器仍按工作区统一管理。
-          </MetricMeta>
-        </MetricCard>
-        <MetricCard>
-          <MetricLabel>已配置连接器</MetricLabel>
-          <MetricValue>{connectors.length}</MetricValue>
-          <MetricMeta>
-            {connectors.length > 0
-              ? '支持 API、数据库与 Python 工具接入。'
-              : '建议先配置至少一个连接器，供技能调用。'}
-          </MetricMeta>
-        </MetricCard>
-        <MetricCard>
-          <MetricLabel>已配置密钥</MetricLabel>
-          <MetricValue>{configuredSecretCount}</MetricValue>
-          <MetricMeta>
-            {configuredSecretCount > 0
-              ? '可按 key version 做 dry-run / execute 轮换。'
-              : '当前还没有任何连接器密钥。'}
-          </MetricMeta>
-        </MetricCard>
-      </MetricGrid>
-
       {connectorActionBlockedReason ? (
         <Alert
           showIcon
@@ -1200,18 +1186,25 @@ export default function ManageConnectors() {
           <div>
             <div className="console-panel-title">连接器目录</div>
             <div className="console-panel-subtitle">
-              用卡片化的后台工作台统一管理接入点、密钥状态与复用能力。
+              {connectors.length > 0
+                ? `当前共 ${connectors.length} 个连接器，${configuredSecretCount} 个已配置密钥。`
+                : '统一管理工作区可复用的 API、数据库与工具端点。'}
             </div>
           </div>
           <Space wrap>
-            {CONNECTOR_TYPE_OPTIONS.map((option) => (
-              <Tag
-                key={option.value}
-                style={{ borderRadius: 999, marginInlineEnd: 0 }}
-              >
-                {option.label}
-              </Tag>
-            ))}
+            <Button
+              onClick={openSecretOpsModal}
+              disabled={Boolean(rotateConnectorSecretBlockedReason)}
+            >
+              批量轮换密钥
+            </Button>
+            <Button
+              type="primary"
+              onClick={openCreateModal}
+              disabled={Boolean(createConnectorBlockedReason)}
+            >
+              添加连接器
+            </Button>
           </Space>
         </div>
 
@@ -1490,7 +1483,7 @@ export default function ManageConnectors() {
           {watchedConnectorType === 'database' ? (
             <Paragraph type="secondary">
               数据库连接器会根据 databaseProvider
-              做连接测试；进入多数据源联邦时， 仅支持自动映射到 Trino 的
+              做连接测试；进入联邦运行时时， 仅支持自动映射到 Trino 的
               provider / 鉴权方式会参与 runtime project 聚合。
             </Paragraph>
           ) : null}

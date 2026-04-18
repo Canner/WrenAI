@@ -1,11 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { ModelResolver } from '@server/resolvers/modelResolver';
+import { ModelController } from '@server/controllers/modelController';
 import { RelationType } from '@server/types/relationship';
-import { ApiError } from '@/apollo/server/utils/apiUtils';
-import { buildResolverContextFromRequest } from '../resolverContext';
+import { ApiError } from '@/server/utils/apiUtils';
+import { buildApiContextFromRequest } from '../apiContext';
 import { sendRestApiError } from '../restApi';
 
-const modelResolver = new ModelResolver();
+const modelController = new ModelController();
 
 const parseRelationId = (value: string | string[] | undefined) => {
   const raw = Array.isArray(value) ? value[0] : value;
@@ -22,7 +22,7 @@ export default async function handler(
 ) {
   try {
     const relationId = parseRelationId(req.query.id);
-    const ctx = await buildResolverContextFromRequest({ req });
+    const ctx = await buildApiContextFromRequest({ req });
 
     if (req.method === 'PATCH') {
       const type = req.body?.type;
@@ -33,20 +33,16 @@ export default async function handler(
         throw new ApiError('Relationship type is required', 400);
       }
 
-      const relation = await modelResolver.updateRelation(
-        null,
-        { where: { id: relationId }, data: { type: type as RelationType } },
+      const relation = await modelController.updateRelation({
+        relationId,
+        data: { type: type as RelationType },
         ctx,
-      );
+      });
       return res.status(200).json(relation);
     }
 
     if (req.method === 'DELETE') {
-      await modelResolver.deleteRelation(
-        null,
-        { where: { id: relationId } },
-        ctx,
-      );
+      await modelController.deleteRelation({ relationId, ctx });
       return res.status(200).json({ success: true });
     }
 

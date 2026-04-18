@@ -1,5 +1,5 @@
 // Refer to backend connector types:
-// src/apollo/server/connectors/types.ts
+// src/server/connectors/types.ts
 
 export enum COLUMN_TYPE {
   // Boolean Types

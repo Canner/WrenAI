@@ -21,6 +21,16 @@ export type ReferenceDemoKnowledge = {
   suggestedQuestions: string[];
 };
 
+export type ReferenceDemoKnowledgeTarget =
+  | string
+  | {
+      name?: string | null;
+      kind?: string | null;
+      sampleDataset?: string | null;
+      slug?: string | null;
+    }
+  | null;
+
 type ReferenceAssetAliasEntry = {
   name: string;
   description?: string;
@@ -52,7 +62,13 @@ export const REFERENCE_DEMO_KNOWLEDGE_BASES: ReferenceDemoKnowledge[] = [
   {
     id: 'demo-kb-ecommerce',
     name: '电商订单数据（E-commerce）',
-    aliases: ['ecommerce', 'e-commerce', '电商', '订单', 'github'],
+    aliases: [
+      'ecommerce',
+      'e-commerce',
+      '电商订单数据',
+      'github数据',
+      'github data',
+    ],
     snapshotCount: 8,
     score: 9.1,
     description:
@@ -92,11 +108,11 @@ export const REFERENCE_DEMO_KNOWLEDGE_BASES: ReferenceDemoKnowledge[] = [
       ],
       ['review_score', 'integer', '评价分', '5', '范围 1–5，用于满意度分析'],
       [
-        'product_category_name_english',
+        'product_category_name',
         'string',
-        '商品英文类目',
+        '商品类目',
         'bed_bath_table',
-        '可用于品类排行与转化分析',
+        '如需英文类目名称，请通过 product_category_name_translation 做类目翻译映射',
       ],
     ]),
     suggestedQuestions: [
@@ -108,7 +124,7 @@ export const REFERENCE_DEMO_KNOWLEDGE_BASES: ReferenceDemoKnowledge[] = [
   {
     id: 'demo-kb-hr',
     name: '人力资源数据（HR）',
-    aliases: ['hr', 'human resource', 'employee', '员工', '人力', '薪资'],
+    aliases: ['hr', 'human resource', 'human resources', '人力资源数据'],
     snapshotCount: 6,
     score: 8.9,
     description:
@@ -146,7 +162,7 @@ export const REFERENCE_DEMO_KNOWLEDGE_BASES: ReferenceDemoKnowledge[] = [
   {
     id: 'demo-kb-music',
     name: 'MUSIC',
-    aliases: ['music', '音乐', '歌曲'],
+    aliases: ['music'],
     snapshotCount: 7,
     score: 8.8,
     description:
@@ -171,7 +187,7 @@ export const REFERENCE_DEMO_KNOWLEDGE_BASES: ReferenceDemoKnowledge[] = [
   {
     id: 'demo-kb-nba',
     name: 'NBA',
-    aliases: ['nba', 'basketball', '篮球'],
+    aliases: ['nba'],
     snapshotCount: 5,
     score: 8.8,
     description:
@@ -411,6 +427,27 @@ const REFERENCE_THREAD_TITLE_ALIASES: Array<[RegExp, string]> = [
 const normalizeReferenceName = (value?: string | null) =>
   (value || '').trim().toLowerCase();
 
+const getReferenceKnowledgeRawName = (value?: ReferenceDemoKnowledgeTarget) =>
+  typeof value === 'string' ? value : value?.name;
+
+const getReferenceKnowledgeCandidates = (
+  value?: ReferenceDemoKnowledgeTarget,
+) => {
+  if (!value) {
+    return [];
+  }
+
+  if (typeof value === 'string') {
+    return [value];
+  }
+
+  if (value.kind && value.kind !== 'system_sample') {
+    return [];
+  }
+
+  return [value.sampleDataset, value.slug, value.name];
+};
+
 const findAlias = (aliases: Array<[RegExp, string]>, value?: string | null) => {
   const raw = (value || '').trim();
   if (!raw) {
@@ -427,7 +464,7 @@ const findAlias = (aliases: Array<[RegExp, string]>, value?: string | null) => {
 };
 
 const getReferenceAssetAliasEntry = (
-  knowledgeName?: string | null,
+  knowledgeName?: ReferenceDemoKnowledgeTarget,
   assetName?: string | null,
 ) => {
   const knowledgeId = getReferenceDemoKnowledgeByName(knowledgeName)?.id;
@@ -440,24 +477,40 @@ const getReferenceAssetAliasEntry = (
 };
 
 export const getReferenceDemoKnowledgeByName = (
-  value?: string | null,
+  value?: ReferenceDemoKnowledgeTarget,
 ): ReferenceDemoKnowledge | null => {
-  const normalized = normalizeReferenceName(value);
-  if (!normalized) {
+  const normalizedCandidates = [
+    ...new Set(
+      getReferenceKnowledgeCandidates(value)
+        .map((candidate) => normalizeReferenceName(candidate))
+        .filter(Boolean),
+    ),
+  ];
+
+  if (normalizedCandidates.length === 0) {
     return null;
   }
 
   return (
-    REFERENCE_DEMO_KNOWLEDGE_BASES.find(
-      (item) =>
-        item.aliases.some((alias) => normalized.includes(alias)) ||
-        normalized.includes(item.name.toLowerCase()),
+    REFERENCE_DEMO_KNOWLEDGE_BASES.find((item) =>
+      normalizedCandidates.some(
+        (candidate) =>
+          candidate === normalizeReferenceName(item.name) ||
+          candidate === normalizeReferenceName(item.id) ||
+          item.aliases.some(
+            (alias) => candidate === normalizeReferenceName(alias),
+          ),
+      ),
     ) || null
   );
 };
 
-export const getReferenceDisplayKnowledgeName = (value?: string | null) =>
-  getReferenceDemoKnowledgeByName(value)?.name || value || '当前知识库';
+export const getReferenceDisplayKnowledgeName = (
+  value?: ReferenceDemoKnowledgeTarget,
+) =>
+  getReferenceDemoKnowledgeByName(value)?.name ||
+  getReferenceKnowledgeRawName(value) ||
+  '当前知识库';
 
 export const getReferenceDisplayThreadTitle = (value?: string | null) => {
   const raw = (value || '').trim();
@@ -481,7 +534,7 @@ export const getReferenceDisplaySnapshotName = (value?: string | null) =>
   findAlias(REFERENCE_SNAPSHOT_ALIASES, value) || value || '快照';
 
 export const getReferenceDisplayAssetName = (
-  knowledgeName?: string | null,
+  knowledgeName?: ReferenceDemoKnowledgeTarget,
   assetName?: string | null,
 ) =>
   getReferenceAssetAliasEntry(knowledgeName, assetName)?.name ||
@@ -489,7 +542,7 @@ export const getReferenceDisplayAssetName = (
   '未命名资产';
 
 export const getReferenceDisplayAssetDescription = (
-  knowledgeName?: string | null,
+  knowledgeName?: ReferenceDemoKnowledgeTarget,
   assetName?: string | null,
   fallback?: string | null,
 ) =>
@@ -498,7 +551,7 @@ export const getReferenceDisplayAssetDescription = (
   null;
 
 export const getReferenceAssetCountByKnowledgeName = (
-  knowledgeName?: string | null,
+  knowledgeName?: ReferenceDemoKnowledgeTarget,
 ) => {
   const reference = getReferenceDemoKnowledgeByName(knowledgeName);
   if (!reference?.id) {

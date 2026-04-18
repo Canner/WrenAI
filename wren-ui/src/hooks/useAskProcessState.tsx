@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { PROCESS_STATE } from '@/utils/enum';
-import { AskingTask, AskingTaskStatus, AskingTaskType } from '@/types/api';
+import { AskingTask, AskingTaskStatus, AskingTaskType } from '@/types/home';
 
 export const getIsProcessing = (status: PROCESS_STATE) =>
   [

@@ -5,7 +5,7 @@ import {
   ApiError,
   respondWithSimple,
   handleApiError,
-} from '@/apollo/server/utils/apiUtils';
+} from '@/server/utils/apiUtils';
 import { getLogger } from '@server/utils';
 import { isNil } from 'lodash';
 import * as Errors from '@server/utils/error';
@@ -17,7 +17,7 @@ import {
 import {
   OUTDATED_RUNTIME_SNAPSHOT_MESSAGE,
   assertLatestExecutableRuntimeScope,
-} from '@/apollo/server/utils/runtimeExecutionContext';
+} from '@/server/utils/runtimeExecutionContext';
 import {
   assertAuthorizedWithAudit,
   buildAuthorizationActorFromRuntimeScope,

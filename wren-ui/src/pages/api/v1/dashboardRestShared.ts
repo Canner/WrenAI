@@ -1,4 +1,4 @@
-import { ApiError } from '@/apollo/server/utils/apiUtils';
+import { ApiError } from '@/server/utils/apiUtils';
 import type { IContext } from '@server/types';
 import type { Dashboard, DashboardItem } from '@server/repositories';
 import {
@@ -59,7 +59,9 @@ export const assertDashboardExecutableRuntimeScope = async (ctx: IContext) => {
     });
   } catch (error) {
     throw new ApiError(
-      error instanceof Error ? error.message : OUTDATED_RUNTIME_SNAPSHOT_MESSAGE,
+      error instanceof Error
+        ? error.message
+        : OUTDATED_RUNTIME_SNAPSHOT_MESSAGE,
       409,
     );
   }
@@ -185,7 +187,9 @@ export const buildDashboardPreviewResponse = async ({
 
   return {
     chartDataProfile:
-      shapedChartPreview.chartDataProfile || item.detail.chartDataProfile || null,
+      shapedChartPreview.chartDataProfile ||
+      item.detail.chartDataProfile ||
+      null,
     cacheHit: shapedChartPreview.previewData.cacheHit || false,
     cacheCreatedAt: shapedChartPreview.previewData.cacheCreatedAt || null,
     cacheOverrodeAt: shapedChartPreview.previewData.cacheOverrodeAt || null,

@@ -1,0 +1,4 @@
+﻿tenant_plat_id,channel_id,start_date,end_date,user_segment,user_count,deposit_user_count,deposit_amount,withdrawal_user_count,withdrawal_amount,charge_withdraw_diff,bet_user_count,valid_bet_amount,win_loss_amount,kill_rate,bet_deposit_ratio
+990001,990011,2026-04-01,2026-04-07,ALL,5,5,3248,3,160,3088,5,7300,580,0.079452,2.247537
+990001,990011,2026-04-01,2026-04-07,TOPN,3,3,1160,2,60,1100,3,7000,600,0.085714,6.034483
+990001,990011,2026-04-01,2026-04-07,NON_TOPN,2,2,2088,1,100,1988,2,300,-20,-0.066667,0.143678

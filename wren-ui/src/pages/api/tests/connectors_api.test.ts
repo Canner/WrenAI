@@ -2,6 +2,7 @@ const originalBindingMode = process.env.WREN_AUTHORIZATION_BINDING_MODE;
 
 const mockResolveRequestScope = jest.fn();
 const mockListConnectorsByKnowledgeBase = jest.fn();
+const mockListConnectorsByWorkspace = jest.fn();
 const mockCreateConnector = jest.fn();
 const mockGetConnectorById = jest.fn();
 const mockUpdateConnector = jest.fn();
@@ -36,6 +37,7 @@ jest.mock('@/common', () => ({
     runtimeScopeResolver: { resolveRequestScope: mockResolveRequestScope },
     connectorService: {
       listConnectorsByKnowledgeBase: mockListConnectorsByKnowledgeBase,
+      listConnectorsByWorkspace: mockListConnectorsByWorkspace,
       createConnector: mockCreateConnector,
       getConnectorById: mockGetConnectorById,
       updateConnector: mockUpdateConnector,
@@ -48,7 +50,7 @@ jest.mock('@/common', () => ({
   },
 }));
 
-jest.mock('@/apollo/server/utils/apiUtils', () => ({
+jest.mock('@/server/utils/apiUtils', () => ({
   ApiError: MockApiError,
   respondWithSimple: mockRespondWithSimple,
   handleApiError: mockHandleApiError,
@@ -144,6 +146,44 @@ describe('pages/api/v1/connectors routes', () => {
     );
   });
 
+  it('lists workspace connectors when no knowledge base scope is present', async () => {
+    const handler = (await import('../v1/connectors')).default;
+    const req = createReq({ method: 'GET' });
+    const res = createRes();
+
+    mockResolveRequestScope.mockResolvedValue(
+      buildRuntimeScope({ knowledgeBase: null, project: null }),
+    );
+    mockListConnectorsByWorkspace.mockResolvedValue([
+      {
+        id: 'connector-workspace-1',
+        workspaceId: 'ws-1',
+        knowledgeBaseId: null,
+        type: 'database',
+        databaseProvider: 'postgres',
+        displayName: 'Workspace Warehouse',
+        configJson: { host: 'db.internal', port: 5432 },
+        secretRecordId: 'secret-1',
+      },
+    ]);
+
+    await handler(req, res);
+
+    expect(mockListConnectorsByWorkspace).toHaveBeenCalledWith('ws-1');
+    expect(mockListConnectorsByKnowledgeBase).not.toHaveBeenCalled();
+    expect(mockRespondWithSimple).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: 200,
+        responsePayload: [
+          expect.objectContaining({
+            id: 'connector-workspace-1',
+            knowledgeBaseId: null,
+          }),
+        ],
+      }),
+    );
+  });
+
   it('creates a knowledge-base-scoped connector with secret payload', async () => {
     const handler = (await import('../v1/connectors')).default;
     const req = createReq({
@@ -195,6 +235,58 @@ describe('pages/api/v1/connectors routes', () => {
         responsePayload: expect.objectContaining({
           id: 'connector-2',
           hasSecret: true,
+        }),
+      }),
+    );
+  });
+
+  it('creates a workspace-scoped connector when no knowledge base scope is present', async () => {
+    const handler = (await import('../v1/connectors')).default;
+    const req = createReq({
+      method: 'POST',
+      body: {
+        type: 'database',
+        databaseProvider: 'postgres',
+        displayName: 'Workspace Warehouse',
+        config: { host: 'db.internal', port: 5432 },
+        secret: { password: 'secret-token' },
+      },
+    });
+    const res = createRes();
+
+    mockResolveRequestScope.mockResolvedValue(
+      buildRuntimeScope({ knowledgeBase: null, project: null }),
+    );
+    mockCreateConnector.mockResolvedValue({
+      id: 'connector-workspace-create-1',
+      workspaceId: 'ws-1',
+      knowledgeBaseId: null,
+      type: 'database',
+      databaseProvider: 'postgres',
+      displayName: 'Workspace Warehouse',
+      configJson: { host: 'db.internal', port: 5432 },
+      secretRecordId: 'secret-workspace-1',
+      createdBy: 'user-1',
+    });
+
+    await handler(req, res);
+
+    expect(mockCreateConnector).toHaveBeenCalledWith({
+      workspaceId: 'ws-1',
+      knowledgeBaseId: undefined,
+      type: 'database',
+      databaseProvider: 'postgres',
+      displayName: 'Workspace Warehouse',
+      config: { host: 'db.internal', port: 5432 },
+      secret: { password: 'secret-token' },
+      createdBy: 'user-1',
+    });
+    expect(mockRespondWithSimple).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: 201,
+        responsePayload: expect.objectContaining({
+          id: 'connector-workspace-create-1',
+          knowledgeBaseId: null,
         }),
       }),
     );
@@ -415,6 +507,86 @@ describe('pages/api/v1/connectors routes', () => {
         runtimeScope: expect.objectContaining({
           project: { id: 24 },
         }),
+      }),
+    );
+  });
+
+  it('allows workspace-level connector management routes without a knowledge base scope', async () => {
+    const detailHandler = (await import('../v1/connectors/[id]')).default;
+    const testHandler = (await import('../v1/connectors/test')).default;
+    const detailReq = createReq({
+      method: 'GET',
+      query: { id: 'connector-workspace-2' },
+    });
+    const updateReq = createReq({
+      method: 'PUT',
+      query: { id: 'connector-workspace-2' },
+      body: { displayName: 'Workspace Connector' },
+    });
+    const testReq = createReq({
+      method: 'POST',
+      body: { connectorId: 'connector-workspace-2' },
+    });
+    const detailRes = createRes();
+    const updateRes = createRes();
+    const testRes = createRes();
+
+    mockResolveRequestScope.mockResolvedValue(
+      buildRuntimeScope({ knowledgeBase: null, project: null }),
+    );
+    mockGetConnectorById.mockResolvedValue({
+      id: 'connector-workspace-2',
+      workspaceId: 'ws-1',
+      knowledgeBaseId: 'kb-9',
+      type: 'database',
+      databaseProvider: 'postgres',
+      displayName: 'Workspace Connector',
+      configJson: null,
+      secretRecordId: null,
+    });
+    mockUpdateConnector.mockResolvedValue({
+      id: 'connector-workspace-2',
+      workspaceId: 'ws-1',
+      knowledgeBaseId: 'kb-9',
+      type: 'database',
+      databaseProvider: 'postgres',
+      displayName: 'Workspace Connector',
+      configJson: null,
+      secretRecordId: null,
+    });
+    mockTestConnectorConnection.mockResolvedValue({
+      success: true,
+      connectorType: 'database',
+      message: '数据库连接测试成功',
+      tableCount: 1,
+      sampleTables: ['orders'],
+    });
+
+    await detailHandler(detailReq, detailRes);
+    await detailHandler(updateReq, updateRes);
+    await testHandler(testReq, testRes);
+
+    expect(mockRespondWithSimple).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: 200,
+        responsePayload: expect.objectContaining({
+          id: 'connector-workspace-2',
+          knowledgeBaseId: 'kb-9',
+        }),
+      }),
+    );
+    expect(mockUpdateConnector).toHaveBeenCalledWith('connector-workspace-2', {
+      knowledgeBaseId: undefined,
+      type: undefined,
+      databaseProvider: undefined,
+      displayName: 'Workspace Connector',
+      config: undefined,
+      secret: undefined,
+    });
+    expect(mockTestConnectorConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: 'ws-1',
+        connectorId: 'connector-workspace-2',
       }),
     );
   });

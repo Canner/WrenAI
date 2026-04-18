@@ -1,12 +1,12 @@
 import {
   buildRuntimeScopeUrl,
   type ClientRuntimeScopeSelector,
-} from '@/apollo/client/runtimeScope';
+} from '@/runtime/client/runtimeScope';
 import type {
   AdjustThreadResponseChartInput,
   CreateThreadResponseInput,
   ThreadResponse,
-} from '@/types/api';
+} from '@/types/home';
 
 type ErrorPayload = {
   error?: string;
@@ -42,6 +42,16 @@ export const buildGenerateThreadResponseAnswerUrl = (
 ) =>
   buildRuntimeScopeUrl(
     `/api/v1/thread-responses/${responseId}/generate-answer`,
+    {},
+    selector,
+  );
+
+export const buildThreadResponseAnswerStreamUrl = (
+  responseId: number,
+  selector: ClientRuntimeScopeSelector,
+) =>
+  buildRuntimeScopeUrl(
+    `/api/v1/thread-responses/${responseId}/stream-answer`,
     {},
     selector,
   );

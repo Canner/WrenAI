@@ -1,5 +1,7 @@
 # OpenCode 接续提示词
 
+> 历史说明（2026-04-16）：本文保留的是 Apollo/GraphQL 时代的设计、排障或执行记录。当前 `wren-ui` 运行时前端已经切到 REST，代码目录也已收口到 `src/server/*` 与 `src/pages/api/v1/*`；文中的旧 GraphQL 入口、resolver 与 Apollo 上下文描述仅作历史背景，不再代表当前主链路。
+
 下面这份提示词可以直接贴给 OpenCode，用来让它接续当前 WrenAI V1 改造方案与任务实现。
 
 ```text
@@ -51,10 +53,10 @@
 - `wren-ai-service/src/web/v1/services/runtime_models.py`
 
 #### wren-ui
-- `wren-ui/src/apollo/server/context/runtimeScope.ts`
-- `wren-ui/src/apollo/server/services/askingService.ts`
-- `wren-ui/src/apollo/server/services/deployService.ts`
-- `wren-ui/src/apollo/server/services/modelService.ts`
+- `wren-ui/src/server/context/runtimeScope.ts`
+- `wren-ui/src/server/services/askingService.ts`
+- `wren-ui/src/server/services/deployService.ts`
+- `wren-ui/src/server/services/modelService.ts`
 
 ---
 
@@ -62,10 +64,10 @@
 下面这些已经做完了，你要在此基础上继续，而不是重做：
 
 ### 1) wren-ui 侧已完成的大块
-- dashboard runtime / resolver / background tracker 收口
-- model resolver/service 第一轮 runtime-identity-first 收口
+- dashboard runtime / controller / 历史 resolver / background tracker 收口
+- model controller / 历史 resolver / service 第一轮 runtime-identity-first 收口
 - asking persistence / route / adaptor / API 主链路多轮收口
-- GraphQL / client / route 层大批 `projectId` 暴露已移除或压缩
+- runtime REST / client / route 层大批 `projectId` 暴露已移除或压缩
 - askingService / deployService 已统一 runtime identity helper
 - runtimeScope + modelService 联动收口已完成一轮
 
@@ -102,7 +104,7 @@
 - `bash misc/scripts/scan-runtime-identity.sh`
 
 ### wren-ui
-如果你动到 UI / Apollo / resolver / service：
+如果你动到 UI / runtime REST / controller / service：
 - `cd wren-ui && yarn check-types`
 
 ---

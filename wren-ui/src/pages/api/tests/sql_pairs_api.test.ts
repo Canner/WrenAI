@@ -51,7 +51,7 @@ jest.mock('@/common', () => ({
   },
 }));
 
-jest.mock('@/apollo/server/utils/apiUtils', () => ({
+jest.mock('@/server/utils/apiUtils', () => ({
   ApiError: MockApiError,
   respondWithSimple: mockRespondWithSimple,
   handleApiError: mockHandleApiError,
@@ -60,7 +60,7 @@ jest.mock('@/apollo/server/utils/apiUtils', () => ({
     mockDeriveRuntimeExecutionContextFromRequest,
 }));
 
-jest.mock('@/apollo/server/utils/runtimeExecutionContext', () => ({
+jest.mock('@/server/utils/runtimeExecutionContext', () => ({
   OUTDATED_RUNTIME_SNAPSHOT_MESSAGE:
     'This snapshot is outdated and cannot be executed',
   assertLatestExecutableRuntimeScope: (...args: any[]) =>

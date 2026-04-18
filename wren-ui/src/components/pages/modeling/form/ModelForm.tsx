@@ -1,24 +1,26 @@
+import { CompactColumn, CompactTable } from '@/types/dataSource';
 import { useEffect, useMemo, useState } from 'react';
 import { Form, FormInstance, Select, message } from 'antd';
 import { TransferItem } from 'antd/es/transfer';
 import { isEmpty } from 'lodash';
+import { hasExecutableRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import { FORM_MODE } from '@/utils/enum';
 import { DiagramModelField } from '@/utils/data';
 import { ERROR_TEXTS } from '@/utils/error';
+import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { DrawerAction } from '@/hooks/useDrawerAction';
 import { Loading } from '@/components/PageLoading';
 import TableTransfer, {
   defaultColumns,
 } from '@/components/table/TableTransfer';
-import { resolveClientRuntimeScopeSelector } from '@/apollo/client/runtimeScope';
-import type { CompactTable, CompactColumn } from '@/types/api';
 import {
   getCompactTableCatalogLabel,
   getCompactTableQualifiedName,
   getCompactTableScopedName,
 } from '@/utils/compactTable';
 import useModelList from '@/hooks/useModelList';
-import { listDataSourceTables } from '@/utils/modelingRest';
+import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
+import { listConnectionTables } from '@/utils/modelingRest';
 
 const { Option, OptGroup } = Select;
 
@@ -30,6 +32,7 @@ const FormFieldKey = {
 
 type Props = Pick<DrawerAction, 'defaultValue' | 'formMode'> & {
   form: FormInstance;
+  active?: boolean;
 };
 
 const primaryKeyValidator =
@@ -44,17 +47,15 @@ const primaryKeyValidator =
   };
 
 export default function ModelForm(props: Props) {
-  const { defaultValue, form, formMode } = props;
-  const runtimeScopeSelector = useMemo(
-    () => resolveClientRuntimeScopeSelector(),
-    [],
-  );
+  const { defaultValue, form, formMode, active = true } = props;
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
+  const runtimeScopeSelector = runtimeScopeNavigation.selector;
 
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
   const [sourceTableName, setSourceTableName] = useState<string | undefined>(
     undefined,
   );
-  const [dataSourceTables, setDataSourceTables] = useState<CompactTable[]>([]);
+  const [connectionTables, setConnectionTables] = useState<CompactTable[]>([]);
   const [fetching, setFetching] = useState(false);
   const sourceTableFieldValue = Form.useWatch(FormFieldKey.SOURCE_TABLE, form);
 
@@ -62,26 +63,44 @@ export default function ModelForm(props: Props) {
 
   const { data: modelListData, loading: listModelsQueryLoading } = useModelList(
     {
-      enabled: !isUpdateMode,
+      enabled: active && !isUpdateMode,
       onError: (error) => {
-        message.error(error.message || '加载模型列表失败，请稍后重试。');
+        const errorMessage = resolveAbortSafeErrorMessage(
+          error,
+          '加载模型列表失败，请稍后重试。',
+        );
+        if (errorMessage) {
+          message.error(errorMessage);
+        }
       },
     },
   );
   const existingModels = modelListData || [];
 
   useEffect(() => {
+    if (!active || !hasExecutableRuntimeScopeSelector(runtimeScopeSelector)) {
+      setConnectionTables([]);
+      setFetching(false);
+      return;
+    }
+
     let cancelled = false;
     setFetching(true);
-    void listDataSourceTables(runtimeScopeSelector)
+    void listConnectionTables(runtimeScopeSelector)
       .then((tables) => {
         if (!cancelled) {
-          setDataSourceTables(tables || []);
+          setConnectionTables(tables || []);
         }
       })
       .catch((error) => {
         if (!cancelled) {
-          message.error(error.message || '加载数据源表失败，请稍后重试。');
+          const errorMessage = resolveAbortSafeErrorMessage(
+            error,
+            '加载连接表失败，请稍后重试。',
+          );
+          if (errorMessage) {
+            message.error(errorMessage);
+          }
         }
       })
       .finally(() => {
@@ -93,7 +112,7 @@ export default function ModelForm(props: Props) {
     return () => {
       cancelled = true;
     };
-  }, [runtimeScopeSelector]);
+  }, [active, runtimeScopeSelector]);
   const inUsedModelList = useMemo(
     () => existingModels.map((model) => model.sourceTableName),
     [existingModels],
@@ -121,7 +140,7 @@ export default function ModelForm(props: Props) {
   }> = useMemo(() => {
     if (isEmpty(sourceTableName)) return [];
 
-    const table = dataSourceTables.find(
+    const table = connectionTables.find(
       (table) => table.name === sourceTableName,
     )!;
     if (!table) return [];
@@ -130,7 +149,7 @@ export default function ModelForm(props: Props) {
       ...column,
       key: column.name,
     }));
-  }, [dataSourceTables, sourceTableName]);
+  }, [connectionTables, sourceTableName]);
 
   useEffect(() => {
     if (defaultValue) {
@@ -155,7 +174,7 @@ export default function ModelForm(props: Props) {
   const tableOptions: JSX.Element[] = useMemo(() => {
     const groups = new Map<string, CompactTable[]>();
 
-    [...dataSourceTables]
+    [...connectionTables]
       .sort((left, right) =>
         getCompactTableQualifiedName(left).localeCompare(
           getCompactTableQualifiedName(right),
@@ -185,11 +204,11 @@ export default function ModelForm(props: Props) {
         })}
       </OptGroup>
     ));
-  }, [dataSourceTables, inUsedModelList]);
+  }, [connectionTables, inUsedModelList]);
 
   const onChangeColumns = (newKeys: string[]) => setSelectedColumns(newKeys);
 
-  const dataSourceTablesLoading = fetching || listModelsQueryLoading;
+  const connectionTablesLoading = fetching || listModelsQueryLoading;
 
   return (
     <>
@@ -212,7 +231,7 @@ export default function ModelForm(props: Props) {
                 placeholder="请选择数据表"
                 showSearch
                 optionFilterProp="title"
-                loading={dataSourceTablesLoading}
+                loading={connectionTablesLoading}
                 disabled={isUpdateMode}
               >
                 {tableOptions}
@@ -220,7 +239,7 @@ export default function ModelForm(props: Props) {
             </Form.Item>
           </div>
         )}
-        <Loading spinning={isUpdateMode ? dataSourceTablesLoading : false}>
+        <Loading spinning={isUpdateMode ? connectionTablesLoading : false}>
           <Form.Item
             label="选择字段"
             name={FormFieldKey.COLUMNS}

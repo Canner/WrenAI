@@ -1,5 +1,7 @@
 # kb_snapshot legacy project cutover audit (2026-04-09)
 
+> 历史说明（2026-04-16）：本文保留的是 Apollo/GraphQL 时代的设计、排障或执行记录。当前 `wren-ui` 运行时前端已经切到 REST，代码目录也已收口到 `src/server/*` 与 `src/pages/api/v1/*`；文中的旧 GraphQL 入口、resolver 与 Apollo 上下文描述仅作历史背景，不再代表当前主链路。
+
 ## Current repo status
 
 - Compatibility bridge exact hits in active implementation are down to **0**.
@@ -191,9 +193,9 @@ You can safely remove the old schema column only when all of the following are t
 7. Re-run repo checks:
    - `bash misc/scripts/scan-runtime-identity.sh`
    - `bash misc/scripts/inventory-project-identity.sh`
-   - `cd wren-ui && yarn jest src/apollo/server/repositories/kbSnapshotRepository.test.ts --runInBand`
-   - `cd wren-ui && yarn jest src/apollo/server/context/tests/runtimeScope.test.ts --runInBand`
-   - `cd wren-ui && yarn jest src/apollo/server/utils/tests/dashboardRuntime.test.ts --runInBand`
+   - `cd wren-ui && yarn jest src/server/repositories/kbSnapshotRepository.test.ts --runInBand`
+   - `cd wren-ui && yarn jest src/server/context/tests/runtimeScope.test.ts --runInBand`
+   - `cd wren-ui && yarn jest src/server/utils/tests/dashboardRuntime.test.ts --runInBand`
 
 ## Rollback note
 

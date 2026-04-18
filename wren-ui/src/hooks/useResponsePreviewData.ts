@@ -4,6 +4,7 @@ import {
   getThreadResponsePreviewData,
   type PreviewDataPayload,
 } from '@/utils/homeRest';
+import { isAbortRequestError } from '@/utils/abort';
 
 type PreviewDataEnvelope = {
   previewData?: PreviewDataPayload;
@@ -157,13 +158,19 @@ export default function useResponsePreviewData(responseId?: number | null) {
           return target.data;
         })
         .catch((error) => {
-          target.error =
+          const normalizedError =
             error instanceof Error
               ? error
               : new Error(String(error || '加载预览数据失败，请稍后重试。'));
           target.loading = false;
           target.promise = undefined;
           target.lastAccessedAt = Date.now();
+          if (isAbortRequestError(error) || isAbortRequestError(normalizedError)) {
+            target.error = undefined;
+            emit(cacheKey);
+            return undefined;
+          }
+          target.error = normalizedError;
           emit(cacheKey);
           throw target.error;
         });

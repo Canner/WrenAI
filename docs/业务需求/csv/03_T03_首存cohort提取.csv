@@ -1,0 +1,6 @@
+﻿first_deposit_date,tenant_plat_id,channel_id,player_id,player_username,first_deposit_amount,first_deposit_time_sample,register_date,is_new_customer_first_deposit,current_vip_id,regist_device,regist_domain
+2026-04-01,990001,990011,990101,kb_p01,10,2026-04-01 00:00:00,2026-04-01,1,1,2,kb-a.example.com
+2026-04-01,990001,990011,990102,kb_p02,20,2026-04-01 00:00:00,2026-03-31,0,1,1,kb-a.example.com
+2026-04-02,990001,990011,990103,kb_p03,50,2026-04-02 00:00:00,2026-04-02,1,2,2,kb-a.example.com
+2026-04-02,990001,990011,990104,kb_p04,2000,2026-04-02 00:00:00,2026-04-02,1,3,1,kb-a.example.com
+2026-04-03,990001,990011,990105,kb_p05,88,2026-04-03 00:00:00,2026-04-03,1,1,2,kb-a.example.com

@@ -1,0 +1,7 @@
+﻿biz_date,channel_id,login_user_count,register_user_count,deposit_user_count,deposit_amount,withdrawal_user_count,withdrawal_amount,charge_withdraw_diff,first_deposit_user_count,new_customer_first_deposit_user_count,develop_user_count,first_deposit_rate,first_deposit_amount,first_deposit_avg_amount,new_customer_deposit_amount,bet_user_count,valid_bet_amount,win_loss_amount,bet_deposit_ratio,rebate_amount,discount_adjust_amount,vip_award_amount,activity_amount,task_amount,promote_activity_amount,lottery_amount,promotion_total_amount
+2026-04-01,990011,3,2,2,30,0,0,30,2,1,1,1.0000,30,15.00,10,2,1300,110,43.3333,0,0,0,0,0,0,0,0
+2026-04-02,990011,3,2,3,2080,0,0,2080,2,2,0,1.0000,2050,1025.00,2080,3,1800,120,0.8654,5,0,30,20,0,0,10,60
+2026-04-03,990011,3,1,3,238,1,40,198,1,1,0,1.0000,88,88.00,138,3,1400,120,5.8824,10,12,0,0,8,0,0,20
+2026-04-04,990011,0,0,1,100,1,20,80,0,0,0,,0,,100,1,400,40,4.0000,0,0,0,0,0,15,0,15
+2026-04-05,990011,0,0,2,400,1,100,300,0,0,0,,0,,200,2,1300,100,3.2500,0,-6,0,0,0,0,0,-6
+2026-04-06,990011,0,0,2,400,0,0,400,0,0,0,,0,,400,2,1100,90,2.7500,0,0,0,0,0,0,0,0

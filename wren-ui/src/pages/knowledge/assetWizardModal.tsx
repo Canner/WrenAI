@@ -6,25 +6,16 @@ import {
   FolderOpenOutlined,
   PlusOutlined,
 } from '@ant-design/icons';
-import {
-  Button,
-  Input,
-  List,
-  Select,
-  Space,
-  Steps,
-  Typography,
-  message,
-} from 'antd';
+import { Button, Input, Select, Space, Steps, Typography, message } from 'antd';
+import List from 'antd/lib/list';
 import { memo } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { AssetWizardDraft } from '@/hooks/useKnowledgeAssetWizard';
 import type { ReferenceDemoKnowledge } from '@/utils/referenceDemoKnowledge';
 import {
-  CONNECTOR_SOURCE_OPTIONS,
   REFERENCE_MODAL_MASK_STYLE,
   WIZARD_STEP_LABELS,
-} from './constants';
+} from '@/features/knowledgePage/constants';
 import {
   FieldCluster,
   LightButton,
@@ -49,8 +40,12 @@ import {
   WizardFooter,
   WizardNote,
   WizardSteps,
-} from './index.styles';
-import type { AssetView, KnowledgeBaseRecord } from './types';
+} from '@/features/knowledgePage/index.styles';
+import type {
+  AssetView,
+  KnowledgeBaseRecord,
+  SourceOption,
+} from '@/features/knowledgePage/types';
 
 const { Text } = Typography;
 const { Step } = Steps;
@@ -66,6 +61,7 @@ type AssetWizardModalProps = {
   onChangeAssetWizardStep: (step: number) => void;
   activeKnowledgeBase?: KnowledgeBaseRecord | null;
   knowledgeBases: KnowledgeBaseRecord[];
+  sourceOptions: SourceOption[];
   selectedSourceType: string;
   setSelectedSourceType: Dispatch<SetStateAction<string>>;
   openConnectorConsole: () => Promise<unknown> | unknown;
@@ -96,6 +92,7 @@ function AssetWizardModal({
   onChangeAssetWizardStep,
   activeKnowledgeBase,
   knowledgeBases,
+  sourceOptions,
   selectedSourceType,
   setSelectedSourceType,
   openConnectorConsole,
@@ -119,6 +116,18 @@ function AssetWizardModal({
   closeAssetModal,
   onNavigateModeling,
 }: AssetWizardModalProps) {
+  const hasAvailableConnectorTargets = assetDatabaseOptions.length > 0;
+  const assetSourceSetupNote = isDemoSource
+    ? '已为系统样例预置字段与问题配置，选择主题表后即可继续进入知识配置。'
+    : hasAvailableConnectorTargets
+      ? '先前往工作区设置中的“数据连接器”完成 provider 选择、连接测试与保存，再回到这里继续引入资产。系统会保留当前知识库上下文，方便你继续建模与关系配置。'
+      : '当前工作区不提供样例资产，请先前往工作区设置中的“数据连接器”接入真实数据库连接，完成 provider 选择、连接测试与保存后，再回到这里继续引入资产。';
+  const assetSourceSummaryNote = isDemoSource
+    ? '样例资产会沿用当前知识库上下文，便于快速预览问答效果。'
+    : hasAvailableConnectorTargets
+      ? '接入完成后，当前知识库将自动继承对应的运行上下文。'
+      : '尚未检测到可用连接器；完成真实数据库连接后，这里会出现可选数据库与数据表。';
+
   return (
     <ReferenceModal
       visible={visible}
@@ -223,11 +232,11 @@ function AssetWizardModal({
                   icon={<PlusOutlined />}
                   onClick={() => void openConnectorConsole()}
                 >
-                  前往工作区连接器
+                  前往数据连接器
                 </Button>
               </div>
               <SourceGrid>
-                {CONNECTOR_SOURCE_OPTIONS.map((option) => (
+                {sourceOptions.map((option) => (
                   <SourceCard
                     key={option.key}
                     type="button"
@@ -290,19 +299,11 @@ function AssetWizardModal({
               </FieldCluster>
             </SelectGrid>
 
-            <WizardNote>
-              {isDemoSource
-                ? '已为系统样例预置字段与问题配置，选择主题表后即可继续进入知识配置。'
-                : '先前往工作区设置中的“数据连接器”完成 provider 选择、连接测试与保存，再回到这里继续引入资产。系统会保留当前知识库上下文，方便你继续建模与关系配置。'}
-            </WizardNote>
+            <WizardNote>{assetSourceSetupNote}</WizardNote>
 
             <WizardFooter>
               <div>
-                <Text type="secondary">
-                  {isDemoSource
-                    ? '样例资产会沿用当前知识库上下文，便于快速预览问答效果。'
-                    : '接入完成后，当前知识库将自动继承对应的运行上下文。'}
-                </Text>
+                <Text type="secondary">{assetSourceSummaryNote}</Text>
               </div>
               <Space size={12}>
                 <LightButton onClick={closeAssetModal}>取消</LightButton>

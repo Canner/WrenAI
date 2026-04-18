@@ -1,12 +1,12 @@
 import process from 'process';
-import { getConfig } from '../src/apollo/server/config';
-import { SecretRepository } from '../src/apollo/server/repositories/secretRepository';
+import { getConfig } from '../src/server/config';
+import { SecretRepository } from '../src/server/repositories/secretRepository';
 import {
   SecretReencryptOptions,
   reencryptSecrets,
-} from '../src/apollo/server/services/secretReencrypt';
-import { SecretService } from '../src/apollo/server/services/secretService';
-import { bootstrapKnex } from '../src/apollo/server/utils/knex';
+} from '../src/server/services/secretReencrypt';
+import { SecretService } from '../src/server/services/secretService';
+import { bootstrapKnex } from '../src/server/utils/knex';
 
 export interface CliOptions extends SecretReencryptOptions {
   help?: boolean;

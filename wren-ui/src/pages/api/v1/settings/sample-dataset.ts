@@ -1,10 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { ProjectResolver } from '@server/resolvers/projectResolver';
-import { ApiError } from '@/apollo/server/utils/apiUtils';
-import { buildResolverContextFromRequest } from '../resolverContext';
+import { ProjectController } from '@server/controllers/projectController';
+import { ApiError } from '@/server/utils/apiUtils';
+import { buildApiContextFromRequest } from '../apiContext';
 import { sendRestApiError } from '../restApi';
 
-const projectResolver = new ProjectResolver();
+const projectController = new ProjectController();
 
 export default async function handler(
   req: NextApiRequest,
@@ -21,8 +21,8 @@ export default async function handler(
       throw new ApiError('Sample dataset name is required', 400);
     }
 
-    const ctx = await buildResolverContextFromRequest({ req });
-    const result = await projectResolver.startSampleDataset(
+    const ctx = await buildApiContextFromRequest({ req });
+    const result = await projectController.startSampleDataset(
       null,
       { data: { name } },
       ctx,

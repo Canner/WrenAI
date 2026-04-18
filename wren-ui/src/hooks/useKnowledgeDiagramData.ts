@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { DiagramQuery } from '@/types/api';
+import type { DiagramResponse } from '@/types/modeling';
 import {
   KNOWLEDGE_DIAGRAM_QUERY_FETCH_POLICY,
   buildKnowledgeDiagramUrl,
@@ -117,7 +117,7 @@ export default function useKnowledgeDiagramData({
     effectiveRuntimeSelector.runtimeScopeId,
     effectiveRuntimeSelector.workspaceId,
   ]);
-  const [diagramData, setDiagramData] = useState<DiagramQuery | null>(
+  const [diagramData, setDiagramData] = useState<DiagramResponse | null>(
     requestUrl ? peekKnowledgeDiagramPayload({ requestUrl }) : null,
   );
   const [diagramLoading, setDiagramLoading] = useState(
@@ -139,16 +139,6 @@ export default function useKnowledgeDiagramData({
       setDiagramData(cachedDiagramData);
       setDiagramLoading(false);
       return cachedDiagramData;
-    }
-
-    if (
-      shouldClearScopedDiagramData({
-        previousScopeKey: previousDiagramScopeKeyRef.current,
-        nextScopeKey: diagramScopeKey,
-        hasCachedDiagramData: false,
-      })
-    ) {
-      setDiagramData(null);
     }
 
     previousDiagramScopeKeyRef.current = diagramScopeKey;

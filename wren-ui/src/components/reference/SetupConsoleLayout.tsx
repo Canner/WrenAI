@@ -20,6 +20,8 @@ export default function SetupConsoleLayout({
       activeNav="knowledge"
       title={title}
       description={description}
+      hideHeader
+      contentBorderless
       loading={onboarding.loading}
     >
       {children}

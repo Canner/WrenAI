@@ -22,5 +22,13 @@ describe('useKnowledgeActiveKnowledgeBaseSwitch helpers', () => {
         activeKnowledgeBaseId: 'kb-2',
       }),
     ).toBe(false);
+
+    expect(
+      shouldResetKnowledgeStateOnBaseSwitch({
+        previousKnowledgeBaseId: 'kb-1',
+        activeKnowledgeBaseId: 'kb-2',
+        switchReady: false,
+      }),
+    ).toBe(false);
   });
 });

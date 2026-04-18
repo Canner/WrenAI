@@ -8,12 +8,12 @@ import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import BasicProperties, {
   PropertiesProps,
 } from '@/components/chart/properties/BasicProperties';
+import { ChartTaskStatus, ChartType, DashboardItemType } from '@/types/home';
 import DonutProperties from '@/components/chart/properties/DonutProperties';
 import LineProperties from '@/components/chart/properties/LineProperties';
 import StackedBarProperties from '@/components/chart/properties/StackedBarProperties';
 import GroupedBarProperties from '@/components/chart/properties/GroupedBarProperties';
 import { Props as AnswerResultProps } from '@/components/pages/home/promptThread/AnswerResult';
-import { ChartTaskStatus, ChartType } from '@/types/api';
 import { isEmpty, isEqual } from 'lodash';
 import {
   getChartSpecFieldTitleMap,
@@ -23,7 +23,7 @@ import {
   loadDashboardListPayload,
   type DashboardListItem,
 } from '@/utils/dashboardRest';
-import { DashboardItemType } from '@/apollo/server/repositories';
+import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { usePromptThreadActionsStore } from './store';
 import useResponsePreviewData from '@/hooks/useResponsePreviewData';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
@@ -188,9 +188,13 @@ export default function ChartAnswer(props: AnswerResultProps) {
         if (cancelled) {
           return;
         }
-        message.error(
-          error instanceof Error ? error.message : '加载看板列表失败。',
+        const errorMessage = resolveAbortSafeErrorMessage(
+          error,
+          '加载看板列表失败。',
         );
+        if (errorMessage) {
+          message.error(errorMessage);
+        }
         setDashboardOptions([]);
       })
       .finally(() => {
@@ -227,7 +231,13 @@ export default function ChartAnswer(props: AnswerResultProps) {
 
     setHasRequestedPreview(true);
     ensurePreviewLoaded().catch((error) => {
-      message.error(error.message || '加载图表数据失败，请稍后重试。');
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '加载图表数据失败，请稍后重试。',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     });
   }, [ensurePreviewLoaded, hasRequestedPreview, shouldRequestPreview]);
 
@@ -406,12 +416,24 @@ export default function ChartAnswer(props: AnswerResultProps) {
     </div>
   );
 
-  if (error) {
+  const answerErrorMessage = resolveAbortSafeErrorMessage(
+    error?.message,
+    '图表生成失败，请稍后重试。',
+  );
+  const answerShortMessage =
+    resolveAbortSafeErrorMessage(error?.shortMessage, answerErrorMessage || '') ||
+    '图表生成失败';
+  const previewErrorMessage = resolveAbortSafeErrorMessage(
+    previewDataResult.error,
+    '加载图表数据失败，请稍后重试。',
+  );
+
+  if (error && answerErrorMessage) {
     return (
       <div className="p-6">
         <Alert
-          message={error.shortMessage}
-          description={error.message}
+          message={answerShortMessage}
+          description={answerErrorMessage}
           type="error"
           showIcon
         />
@@ -420,12 +442,12 @@ export default function ChartAnswer(props: AnswerResultProps) {
     );
   }
 
-  if (previewDataResult.error) {
+  if (previewDataResult.error && previewErrorMessage) {
     return (
       <div className="p-6">
         <Alert
           message="图表数据加载失败"
-          description={previewDataResult.error.message}
+          description={previewErrorMessage}
           type="error"
           showIcon
         />
@@ -562,9 +584,13 @@ export default function ChartAnswer(props: AnswerResultProps) {
             setIsPinModalOpen(false);
             setPinTargetDashboardId(null);
           } catch (error) {
-            message.error(
-              error instanceof Error ? error.message : '固定到看板失败。',
+            const errorMessage = resolveAbortSafeErrorMessage(
+              error,
+              '固定到看板失败。',
             );
+            if (errorMessage) {
+              message.error(errorMessage);
+            }
             return;
           } finally {
             setPinSubmitting(false);

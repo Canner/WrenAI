@@ -7,7 +7,7 @@ import { makeIterable } from '@/utils/iteration';
 import {
   RecommendedQuestionsTask,
   RecommendedQuestionsTaskStatus,
-} from '@/types/api';
+} from '@/types/home';
 
 export interface SelectQuestionProps {
   question: string;

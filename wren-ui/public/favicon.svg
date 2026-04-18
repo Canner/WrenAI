@@ -1,0 +1,21 @@
+<svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="nova-gradient" x1="3" y1="2.5" x2="21" y2="21.5">
+      <stop offset="0" stop-color="#6D4AFF" />
+      <stop offset="0.58" stop-color="#4E88FF" />
+      <stop offset="1" stop-color="#27C6B7" />
+    </linearGradient>
+    <radialGradient id="nova-glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(8 6) rotate(42.5) scale(16.2804 12.6028)">
+      <stop stop-color="white" stop-opacity="0.34" />
+      <stop offset="1" stop-color="white" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <rect x="1.5" y="1.5" width="21" height="21" rx="7" fill="url(#nova-gradient)" />
+  <rect x="1.5" y="1.5" width="21" height="21" rx="7" fill="url(#nova-glow)" />
+  <path d="M6.4 15.9L10.7 7.4L15.9 11.9" stroke="rgba(255,255,255,0.96)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M11 7.3L15.4 5.4" stroke="rgba(255,255,255,0.72)" stroke-width="1.35" stroke-linecap="round" />
+  <circle cx="6.2" cy="15.8" r="1.65" fill="white" />
+  <circle cx="10.7" cy="7.4" r="1.55" fill="#FFD666" />
+  <circle cx="15.9" cy="11.9" r="1.7" fill="#D9F7FF" />
+  <circle cx="16.7" cy="5.2" r="1.2" fill="white" fill-opacity="0.88" />
+</svg>

@@ -57,7 +57,7 @@ describe('useKnowledgeDiagramData helpers', () => {
     ).toBeNull();
   });
 
-  it('uses scope-local fetching instead of Apollo cache-first reuse', () => {
+  it('uses scope-local fetching instead of shared cache-first reuse', () => {
     expect(KNOWLEDGE_DIAGRAM_QUERY_FETCH_POLICY).toBe('no-cache');
   });
 

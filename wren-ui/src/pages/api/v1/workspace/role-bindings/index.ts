@@ -79,8 +79,7 @@ export default async function handler(
       roleId,
       createdBy: validatedSession.user.id,
       roleRepository: components.roleRepository,
-      principalRoleBindingRepository:
-        components.principalRoleBindingRepository,
+      principalRoleBindingRepository: components.principalRoleBindingRepository,
       workspaceMemberRepository: components.workspaceMemberRepository,
       directoryGroupRepository: components.directoryGroupRepository,
       serviceAccountRepository: components.serviceAccountRepository,

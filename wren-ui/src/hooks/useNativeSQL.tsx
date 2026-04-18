@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
-import { DataSourceName } from '@/types/api';
+import { DataSourceName } from '@/types/dataSource';
+import { hasExecutableRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
+
 import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
-import { fetchSettings } from '@/utils/settingsRest';
+import { fetchSettings, resolveSettingsConnection } from '@/utils/settingsRest';
 import { getThreadResponseNativeSql } from '@/utils/homeRest';
 
 export interface NativeSQLResult {
   data: string;
-  dataSourceType?: DataSourceName;
+  connectionType?: DataSourceName;
   hasNativeSQL: boolean;
   loading: boolean;
   nativeSQLMode: boolean;
@@ -16,7 +18,7 @@ export interface NativeSQLResult {
 // we assume that not having a sample dataset means supporting native SQL
 function useNativeSQLInfo() {
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
-  const [dataSourceType, setDataSourceType] = useState<DataSourceName>();
+  const [connectionType, setConnectionType] = useState<DataSourceName>();
   const [sampleDataset, setSampleDataset] = useState<string | null | undefined>(
     undefined,
   );
@@ -24,21 +26,30 @@ function useNativeSQLInfo() {
   useEffect(() => {
     let cancelled = false;
 
+    if (!hasExecutableRuntimeScopeSelector(runtimeScopeNavigation.selector)) {
+      setConnectionType(undefined);
+      setSampleDataset(undefined);
+      return () => {
+        cancelled = true;
+      };
+    }
+
     void fetchSettings(runtimeScopeNavigation.selector)
       .then((settings) => {
         if (cancelled) {
           return;
         }
 
-        setDataSourceType(settings?.dataSource?.type || undefined);
-        setSampleDataset(settings?.dataSource?.sampleDataset || null);
+        const connection = resolveSettingsConnection(settings);
+        setConnectionType(connection?.type || undefined);
+        setSampleDataset(connection?.sampleDataset || null);
       })
       .catch(() => {
         if (cancelled) {
           return;
         }
 
-        setDataSourceType(undefined);
+        setConnectionType(undefined);
         setSampleDataset(undefined);
       });
 
@@ -49,13 +60,16 @@ function useNativeSQLInfo() {
 
   return {
     hasNativeSQL: !Boolean(sampleDataset),
-    dataSourceType,
+    connectionType,
   };
 }
 
 export default function useNativeSQL() {
   const nativeSQLInfo = useNativeSQLInfo();
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
+  const hasExecutableRuntime = hasExecutableRuntimeScopeSelector(
+    runtimeScopeNavigation.selector,
+  );
 
   const [nativeSQLMode, setNativeSQLMode] = useState<boolean>(false);
   const [data, setData] = useState('');
@@ -76,6 +90,11 @@ export default function useNativeSQL() {
         return { data: { nativeSql: '' } };
       }
 
+      if (!hasExecutableRuntime) {
+        setData('');
+        return { data: { nativeSql: '' } };
+      }
+
       setLoading(true);
       try {
         const nativeSql = await getThreadResponseNativeSql(
@@ -92,7 +111,7 @@ export default function useNativeSQL() {
         setLoading(false);
       }
     },
-    [runtimeScopeNavigation.selector],
+    [hasExecutableRuntime, runtimeScopeNavigation.selector],
   );
 
   return {

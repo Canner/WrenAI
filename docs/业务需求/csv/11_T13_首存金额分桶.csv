@@ -1,0 +1,6 @@
+﻿first_deposit_date,channel_id,bucket_name,bucket_sort,bucket_user_count,total_first_deposit_user_count,bucket_ratio
+2026-04-01,990011,10元,1,1,2,0.500000
+2026-04-01,990011,20元,2,1,2,0.500000
+2026-04-02,990011,50元,4,1,2,0.500000
+2026-04-02,990011,2000元,11,1,2,0.500000
+2026-04-03,990011,其他,13,1,1,1.000000

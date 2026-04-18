@@ -5,11 +5,12 @@ import { FORM_MODE } from '@/utils/enum';
 import { ERROR_TEXTS } from '@/utils/error';
 import { DiagramModel } from '@/utils/data/type';
 import { ModalAction } from '@/hooks/useModalAction';
+import type { CreateCalculatedFieldInput } from '@/types/calculatedField';
 import {
   createLineageSelectorNameValidator,
   createLineageSelectorValidator,
 } from '@/utils/validator';
-import { ERROR_CODES, parseGraphQLError } from '@/utils/errorHandler';
+import { ERROR_CODES, parseOperationError } from '@/utils/errorHandler';
 import { FieldValue } from '@/components/selectors/lineageSelector/FieldSelect';
 import useExpressionFieldOptions from '@/hooks/useExpressionFieldOptions';
 import LineageSelector, {
@@ -17,7 +18,7 @@ import LineageSelector, {
 } from '@/components/selectors/lineageSelector';
 import DescriptiveSelector from '@/components/selectors/DescriptiveSelector';
 import ErrorCollapse from '@/components/ErrorCollapse';
-import { CreateCalculatedFieldInput } from '@/types/api';
+
 import { validateCalculatedField as validateCalculatedFieldRest } from '@/utils/modelingRest';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 
@@ -53,7 +54,7 @@ export default function AddCalculatedFieldModal(props: Props) {
 
   const isEditMode = formMode === FORM_MODE.EDIT;
   const [error, setError] =
-    useState<ReturnType<typeof parseGraphQLError>>(null);
+    useState<ReturnType<typeof parseOperationError>>(null);
 
   const [form] = Form.useForm();
   const expression = Form.useWatch('expression', form);
@@ -143,15 +144,17 @@ export default function AddCalculatedFieldModal(props: Props) {
         onClose();
       })
       .catch((err) => {
-        const graphQLError = parseGraphQLError(err);
-        if (!graphQLError) {
+        const operationError = parseOperationError(err);
+        if (!operationError) {
           return;
         }
-        if (graphQLError.code === ERROR_CODES.INVALID_CALCULATED_FIELD) {
-          setError(graphQLError);
+        if (operationError.code === ERROR_CODES.INVALID_CALCULATED_FIELD) {
+          setError(operationError);
           return;
         }
-        message.error(graphQLError.message || '保存计算字段失败，请稍后重试。');
+        message.error(
+          operationError.message || '保存计算字段失败，请稍后重试。',
+        );
       });
   };
 

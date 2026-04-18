@@ -1,3 +1,4 @@
+import { SampleDatasetName } from '@/types/dataSource';
 import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { NextRouter } from 'next/router';
@@ -6,6 +7,7 @@ import styled from 'styled-components';
 import { ModelIcon, TranslateIcon } from '@/utils/icons';
 import { RobotSVG } from '@/utils/svgs';
 import { renderToString } from 'react-dom/server';
+import { ProjectLanguage } from '@/types/project';
 import {
   Dispatcher,
   DriverConfig,
@@ -14,8 +16,8 @@ import {
   LEARNING,
 } from './utils';
 import { Path } from '@/utils/enum';
-import { ProjectLanguage, SampleDatasetName } from '@/types/api';
-import { buildRuntimeScopeUrl } from '@/apollo/client/runtimeScope';
+
+import { buildRuntimeScopeUrl } from '@/runtime/client/runtimeScope';
 import { TEMPLATE_OPTIONS as SAMPLE_DATASET_INFO } from '@/components/pages/setup/utils';
 import { getLanguageText } from '@/utils/language';
 import * as events from '@/utils/events';

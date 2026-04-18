@@ -43,6 +43,7 @@ import {
   prefetchThreadOverview,
   prefetchWorkspaceOverview,
 } from '@/utils/runtimePagePrefetch';
+import NovaBrandMark from '@/components/brand/NovaBrandMark';
 import { usePersistentShellEmbedded } from './PersistentShellContext';
 import RuntimeScopeSelector from '@/components/runtimeScope/RuntimeScopeSelector';
 
@@ -494,23 +495,19 @@ const CollapseToggleButton = styled(Button)<{ $collapsed?: boolean }>`
 
 const BrandIdentity = styled.div`
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
   min-width: 0;
 `;
 
-const DotMatrix = styled.div`
-  display: grid;
-  grid-template-columns: repeat(2, 6px);
-  grid-template-rows: repeat(2, 6px);
-  gap: 3px;
-  margin-top: 4px;
+const BrandMarkFrame = styled.div`
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 6px 12px rgba(79, 131, 255, 0.16));
 
-  span {
-    width: 6px;
-    height: 6px;
-    border-radius: 999px;
+  svg {
     display: block;
   }
 `;
@@ -1444,18 +1441,15 @@ const DolaAppShellSidebar = memo(function DolaAppShellSidebar({
       trigger={null}
     >
       <BrandBlock $collapsed={collapsed}>
-        {!collapsed ? (
-          <BrandIdentity>
-            <DotMatrix aria-hidden>
-              <span style={{ background: '#7757e8' }} />
-              <span style={{ background: '#4f83ff' }} />
-              <span style={{ background: '#f0b429' }} />
-              <span style={{ background: '#ef6b5b' }} />
-            </DotMatrix>
-            <div>
-              <BrandTitle>Nova</BrandTitle>
-            </div>
-          </BrandIdentity>
+          {!collapsed ? (
+            <BrandIdentity>
+              <BrandMarkFrame aria-hidden>
+                <NovaBrandMark size={22} />
+              </BrandMarkFrame>
+              <div>
+                <BrandTitle>Nova</BrandTitle>
+              </div>
+            </BrandIdentity>
         ) : null}
         <CollapseToggleButton
           type="text"

@@ -81,3 +81,112 @@ try {
 export const getTestConfig = () => {
   return merge(defaultTestConfig, userTestConfig);
 };
+
+const hasPlaceholder = (value: unknown) => {
+  if (typeof value !== 'string') {
+    return !value;
+  }
+
+  const normalized = value.trim();
+  if (!normalized) {
+    return true;
+  }
+
+  return (
+    normalized === 'bigquery-credential-path' ||
+    normalized.endsWith('-host') ||
+    normalized.endsWith('-username') ||
+    normalized.endsWith('-password') ||
+    normalized.endsWith('-database') ||
+    normalized.endsWith('-account') ||
+    normalized.endsWith('-schema') ||
+    normalized.endsWith('-catalog') ||
+    normalized.endsWith('-dataset') ||
+    normalized.endsWith('-projectId') ||
+    normalized.endsWith('-credential-path') ||
+    normalized.includes('placeholder')
+  );
+};
+
+const hasRequiredStrings = (values: unknown[]) =>
+  values.every((value) => !hasPlaceholder(value));
+
+export const hasBigQueryE2EConfig = () => {
+  const config = getTestConfig().bigQuery;
+  if (!hasRequiredStrings([config.projectId, config.datasetId])) {
+    return false;
+  }
+
+  const credentialPath = String(config.credentialPath || '').trim();
+  if (hasPlaceholder(credentialPath)) {
+    return false;
+  }
+
+  return fs.existsSync(path.resolve(process.cwd(), credentialPath));
+};
+
+export const hasConnectorE2EConfig = (
+  connector:
+    | 'clickhouse'
+    | 'mysql'
+    | 'postgresql'
+    | 'sqlserver'
+    | 'snowflake'
+    | 'trino',
+) => {
+  const config = getTestConfig();
+
+  switch (connector) {
+    case 'clickhouse':
+      return hasRequiredStrings([
+        config.clickhouse.host,
+        config.clickhouse.port,
+        config.clickhouse.username,
+        config.clickhouse.password,
+        config.clickhouse.database,
+      ]);
+    case 'mysql':
+      return hasRequiredStrings([
+        config.mysql.host,
+        config.mysql.port,
+        config.mysql.username,
+        config.mysql.password,
+        config.mysql.database,
+      ]);
+    case 'postgresql':
+      return hasRequiredStrings([
+        config.postgreSql.host,
+        config.postgreSql.port,
+        config.postgreSql.username,
+        config.postgreSql.password,
+        config.postgreSql.database,
+      ]);
+    case 'sqlserver':
+      return hasRequiredStrings([
+        config.sqlServer.host,
+        config.sqlServer.port,
+        config.sqlServer.username,
+        config.sqlServer.password,
+        config.sqlServer.database,
+      ]);
+    case 'snowflake':
+      return hasRequiredStrings([
+        config.snowflake.username,
+        config.snowflake.password,
+        config.snowflake.account,
+        config.snowflake.database,
+        config.snowflake.schema,
+      ]);
+    case 'trino':
+      return hasRequiredStrings([
+        config.trino.host,
+        config.trino.port,
+        config.trino.catalog,
+        config.trino.schema,
+        config.trino.username,
+        config.trino.password,
+      ]);
+    default:
+      return false;
+  }
+};

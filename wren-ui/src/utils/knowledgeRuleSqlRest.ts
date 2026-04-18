@@ -1,14 +1,13 @@
 import {
   buildRuntimeScopeUrl,
   type ClientRuntimeScopeSelector,
-} from '@/apollo/client/runtimeScope';
+} from '@/runtime/client/runtimeScope';
 import type {
   CreateInstructionInput,
   CreateSqlPairInput,
   Instruction,
   SqlPair,
-} from '@/types/api';
-
+} from '@/types/knowledge';
 type InstructionRestPayload = Partial<
   Pick<
     Instruction,

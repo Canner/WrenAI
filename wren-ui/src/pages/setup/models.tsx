@@ -12,8 +12,8 @@ export default function SetupModels() {
 
   return (
     <SetupConsoleLayout
-      title="选择模型表"
-      description="从当前数据源中挑选本次知识库需要纳入的核心表，后续再补关系和业务语义。"
+      title="选择知识库资产"
+      description="从当前知识库主连接中挑选本次需要纳入的核心资产，后续再补关系和业务语义。"
     >
       <ContainerCard step={current.step} maxWidth={current.maxWidth}>
         <current.component

@@ -9,7 +9,6 @@ import type {
   PreviewDataResponse,
 } from '@server/services/queryService';
 import {
-  buildHoverParams,
   ChartSpecRecord,
   DEFAULT_CANONICAL_AUTOSIZE,
   DEFAULT_CANONICAL_DIMENSION,
@@ -20,7 +19,6 @@ import {
   ensureColorFallback,
   ensureEncodingTitles,
   ensureHoverDefaults,
-  findFieldTitleInEncoding,
   getMarkType,
   normalizeMarkSpec,
   cloneChartSpec,
@@ -65,7 +63,7 @@ const normalizeChartType = (value?: string | null): RuntimeChartType | null => {
   ) || null) as RuntimeChartType | null;
 };
 
-const toGraphQLLikeChartType = (value?: string | null): string | undefined => {
+const toLegacyChartType = (value?: string | null): string | undefined => {
   if (!value) return undefined;
   return value.toUpperCase();
 };
@@ -99,7 +97,10 @@ const buildEncodingField = (
     field,
     title: meta?.title || fallback?.title || field,
     type:
-      meta?.type || fallback?.type || DEFAULT_CHANNEL_TYPE[channel] || 'nominal',
+      meta?.type ||
+      fallback?.type ||
+      DEFAULT_CHANNEL_TYPE[channel] ||
+      'nominal',
   };
 };
 
@@ -142,7 +143,9 @@ const convertMarkToChartType = (
   return normalizedMarkType;
 };
 
-const inferChartTypeFromSpec = (spec: ChartSpecRecord): RuntimeChartType | null => {
+const inferChartTypeFromSpec = (
+  spec: ChartSpecRecord,
+): RuntimeChartType | null => {
   const markType = getMarkType(spec.mark);
   if (!markType) return null;
   const inferred = convertMarkToChartType(markType, spec.encoding);
@@ -161,8 +164,8 @@ const getEncodingField = (
 ) =>
   channels
     .map((channel) => encoding?.[channel])
-    .find((spec) => spec?.field && (!type || spec.type === type))
-    ?.field || null;
+    .find((spec) => spec?.field && (!type || spec.type === type))?.field ||
+  null;
 
 const toRowObjects = (
   columns: ColumnMetadata[],
@@ -178,8 +181,7 @@ const toRowObjects = (
 const toMatrix = (
   columns: ColumnMetadata[],
   rows: Record<string, unknown>[],
-): unknown[][] =>
-  rows.map((row) => columns.map((column) => row[column.name]));
+): unknown[][] => rows.map((row) => columns.map((column) => row[column.name]));
 
 const aggregateQuantitativeByCategory = ({
   rows,
@@ -197,7 +199,8 @@ const aggregateQuantitativeByCategory = ({
     const numericValue = isNumber(value) ? value : Number(value);
     totals.set(
       category,
-      (totals.get(category) || 0) + (Number.isFinite(numericValue) ? numericValue : 0),
+      (totals.get(category) || 0) +
+        (Number.isFinite(numericValue) ? numericValue : 0),
     );
   });
   return totals;
@@ -246,7 +249,10 @@ const collectValidationErrors = (spec: ChartSpecRecord) => {
     },
   );
 
-  if ((markType === 'line' || markType === 'area') && (!encoding.x?.field || !encoding.y?.field)) {
+  if (
+    (markType === 'line' || markType === 'area') &&
+    (!encoding.x?.field || !encoding.y?.field)
+  ) {
     errors.push('Line/area chart requires x and y fields');
   }
 
@@ -255,14 +261,20 @@ const collectValidationErrors = (spec: ChartSpecRecord) => {
     encoding.x?.type === 'nominal' &&
     encoding.y?.type === 'nominal'
   ) {
-    errors.push('Line/area chart requires at least one quantitative or temporal axis');
+    errors.push(
+      'Line/area chart requires at least one quantitative or temporal axis',
+    );
   }
 
   if (markType === 'bar' && (!encoding.x?.field || !encoding.y?.field)) {
     errors.push('Bar chart requires x and y fields');
   }
 
-  if (markType === 'bar' && encoding.xOffset?.field && encoding.xOffset?.type !== 'nominal') {
+  if (
+    markType === 'bar' &&
+    encoding.xOffset?.field &&
+    encoding.xOffset?.type !== 'nominal'
+  ) {
     errors.push('Grouped bar chart requires xOffset to be nominal');
   }
 
@@ -271,7 +283,9 @@ const collectValidationErrors = (spec: ChartSpecRecord) => {
     encoding.xOffset?.field &&
     (encoding.x?.stack != null || encoding.y?.stack != null)
   ) {
-    errors.push('Grouped bar chart cannot enable stack and xOffset at the same time');
+    errors.push(
+      'Grouped bar chart cannot enable stack and xOffset at the same time',
+    );
   }
 
   if (
@@ -321,8 +335,7 @@ const getTemporalSortValue = (value: unknown) => {
 const sortRowsByTemporalField = (
   rows: Record<string, unknown>[],
   temporalField: string,
-) =>
-  sortBy(rows, (row) => getTemporalSortValue(row[temporalField]));
+) => sortBy(rows, (row) => getTemporalSortValue(row[temporalField]));
 
 export const canonicalizeChartSchema = (
   chartSchema?: Record<string, any> | null,
@@ -382,7 +395,9 @@ export const canonicalizeChartSchema = (
       renderHints: {
         preferredRenderer: inferPreferredRenderer(spec),
       },
-      validationErrors: [error instanceof Error ? error.message : String(error)],
+      validationErrors: [
+        error instanceof Error ? error.message : String(error),
+      ],
     };
   }
 };
@@ -401,7 +416,8 @@ export const applyDeterministicChartAdjustment = (
   const encoding = cloneDeep((baseSpec.encoding || {}) as EncodingSpec);
   const fieldMeta = collectFieldMeta(encoding);
   const currentChartType =
-    normalizeChartType(chartDetail.chartType) || inferChartTypeFromSpec(baseSpec);
+    normalizeChartType(chartDetail.chartType) ||
+    inferChartTypeFromSpec(baseSpec);
   const nextChartType = normalizeChartType(input.chartType) || currentChartType;
   if (!nextChartType) {
     throw new Error('Chart type is missing');
@@ -555,7 +571,7 @@ export const applyDeterministicChartAdjustment = (
   return {
     ...chartDetail,
     status: chartDetail.status,
-    chartType: toGraphQLLikeChartType(finalChartType),
+    chartType: toLegacyChartType(finalChartType),
     rawChartSchema: nextSpec,
     chartSchema: finalSpec,
     canonicalizationVersion,
@@ -579,12 +595,15 @@ export const shapeChartPreviewData = ({
   chartDataProfile?: ChartDataProfile;
 } => {
   const baseSpec =
-    cloneChartSpec(chartDetail?.chartSchema || chartDetail?.rawChartSchema) || null;
+    cloneChartSpec(chartDetail?.chartSchema || chartDetail?.rawChartSchema) ||
+    null;
   if (!baseSpec || !previewData.columns?.length || !previewData.data?.length) {
     return {
       previewData,
       renderHints: chartDetail?.renderHints,
-      chartDataProfile: chartDetail?.chartDataProfile as ChartDataProfile | undefined,
+      chartDataProfile: chartDetail?.chartDataProfile as
+        | ChartDataProfile
+        | undefined,
     };
   }
 
@@ -616,13 +635,20 @@ export const shapeChartPreviewData = ({
     ? uniq(shapedRows.map((row) => row[categoryField])).length
     : 0;
 
-  if (categoryField && quantitativeField && categoryCount > DEFAULT_CATEGORY_LIMIT) {
+  if (
+    categoryField &&
+    quantitativeField &&
+    categoryCount > DEFAULT_CATEGORY_LIMIT
+  ) {
     const totals = aggregateQuantitativeByCategory({
       rows: shapedRows,
       categoryField,
       quantitativeField,
     });
-    const topCategories = sortBy(Array.from(totals.entries()), ([, total]) => -total)
+    const topCategories = sortBy(
+      Array.from(totals.entries()),
+      ([, total]) => -total,
+    )
       .slice(0, DEFAULT_CATEGORY_LIMIT)
       .map(([category]) => category);
 
@@ -673,14 +699,18 @@ export const shapeChartPreviewData = ({
   const nextRenderHints = {
     ...(chartDetail?.renderHints || {}),
     preferredRenderer:
-      shapedRows.length > DEFAULT_SERIES_LIMIT || markType === 'line' || markType === 'area'
+      shapedRows.length > DEFAULT_SERIES_LIMIT ||
+      markType === 'line' ||
+      markType === 'area'
         ? 'canvas'
         : chartDetail?.renderHints?.preferredRenderer,
     categoryCount: categoryCount || undefined,
     isLargeCategory: categoryCount > DEFAULT_CATEGORY_LIMIT,
     isDenseSeries: sourceRowCount > DEFAULT_SERIES_LIMIT,
     suggestedTopN:
-      categoryCount > DEFAULT_CATEGORY_LIMIT ? DEFAULT_CATEGORY_LIMIT : undefined,
+      categoryCount > DEFAULT_CATEGORY_LIMIT
+        ? DEFAULT_CATEGORY_LIMIT
+        : undefined,
   } as Record<string, unknown>;
 
   const nextChartDataProfile: ChartDataProfile | undefined =
@@ -692,11 +722,17 @@ export const shapeChartPreviewData = ({
         }
       : undefined;
 
-  if (!nextChartDataProfile && !nextRenderHints.isLargeCategory && !nextRenderHints.isDenseSeries) {
+  if (
+    !nextChartDataProfile &&
+    !nextRenderHints.isLargeCategory &&
+    !nextRenderHints.isDenseSeries
+  ) {
     return {
       previewData,
       renderHints: nextRenderHints,
-      chartDataProfile: chartDetail?.chartDataProfile as ChartDataProfile | undefined,
+      chartDataProfile: chartDetail?.chartDataProfile as
+        | ChartDataProfile
+        | undefined,
     };
   }
 

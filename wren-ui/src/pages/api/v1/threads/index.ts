@@ -1,15 +1,15 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
-import { AskingResolver } from '@server/resolvers/askingResolver';
+import { AskingController } from '@server/controllers/askingController';
 import { ApiType } from '@server/repositories/apiHistoryRepository';
 import {
   ApiError,
   handleApiError,
   respondWithSimple,
-} from '@/apollo/server/utils/apiUtils';
+} from '@/server/utils/apiUtils';
 import { getLogger } from '@server/utils';
 import { toCanonicalPersistedRuntimeIdentityFromScope } from '@server/utils/persistedRuntimeIdentity';
-import { buildResolverContextFromRequest } from '../resolverContext';
+import { buildApiContextFromRequest } from '../apiContext';
 import {
   assertAuthorizedWithAudit,
   buildAuthorizationActorFromRuntimeScope,
@@ -19,7 +19,7 @@ import {
 
 const logger = getLogger('API_THREADS');
 logger.level = 'debug';
-const askingResolver = new AskingResolver();
+const askingController = new AskingController();
 
 const { runtimeScopeResolver, askingService, auditEventRepository } =
   components;
@@ -110,8 +110,8 @@ export default async function handler(
     runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
 
     if (req.method === 'POST') {
-      const ctx = await buildResolverContextFromRequest({ req, runtimeScope });
-      const thread = await askingResolver.createThread(
+      const ctx = await buildApiContextFromRequest({ req, runtimeScope });
+      const thread = await askingController.createThread(
         null,
         {
           data: {

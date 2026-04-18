@@ -1,23 +1,30 @@
 import { useEffect, useState } from 'react';
 import { message } from 'antd';
+import { hasExecutableRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
+import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { Path, SETUP } from '@/utils/enum';
-import type { ListDataSourceTablesQuery } from '@/types/api';
-import { listDataSourceTables, saveSetupTables } from '@/utils/modelingRest';
+import type { ConnectionTablesResult } from '@/types/dataSource';
+
+import { listConnectionTables, saveSetupTables } from '@/utils/modelingRest';
 import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
 
 export default function useSetupModels() {
   const [stepKey] = useState(SETUP.SELECT_MODELS);
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
-  const [tables, setTables] = useState<
-    ListDataSourceTablesQuery['listDataSourceTables']
-  >([]);
+  const [tables, setTables] = useState<ConnectionTablesResult>([]);
   const [fetching, setFetching] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    if (!hasExecutableRuntimeScopeSelector(runtimeScopeNavigation.selector)) {
+      setTables([]);
+      setFetching(false);
+      return;
+    }
+
     let cancelled = false;
     setFetching(true);
-    void listDataSourceTables(runtimeScopeNavigation.selector)
+    void listConnectionTables(runtimeScopeNavigation.selector)
       .then((nextTables) => {
         if (!cancelled) {
           setTables(nextTables || []);
@@ -25,7 +32,13 @@ export default function useSetupModels() {
       })
       .catch((error) => {
         if (!cancelled) {
-          message.error(error.message || '加载数据表失败，请稍后重试');
+          const errorMessage = resolveAbortSafeErrorMessage(
+            error,
+            '加载数据表失败，请稍后重试',
+          );
+          if (errorMessage) {
+            message.error(errorMessage);
+          }
         }
       })
       .finally(() => {
@@ -45,9 +58,13 @@ export default function useSetupModels() {
       await saveSetupTables(runtimeScopeNavigation.selector, tables);
       runtimeScopeNavigation.push(Path.OnboardingRelationships);
     } catch (error) {
-      message.error(
-        error instanceof Error ? error.message : '保存模型失败，请稍后重试',
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '保存模型失败，请稍后重试',
       );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setSubmitting(false);
     }

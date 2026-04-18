@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
-import { ApiError } from '@/apollo/server/utils/apiUtils';
+import { ApiError } from '@/server/utils/apiUtils';
 import { getLogger } from '@server/utils';
 import { toCanonicalPersistedRuntimeIdentityFromScope } from '@server/utils/persistedRuntimeIdentity';
 import {

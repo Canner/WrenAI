@@ -1,0 +1,3 @@
+﻿tenant_id,tenant_plat_id,tenant_plat_name,channel_id,channel_name,channel_partner_id,channel_partner_username,rate_agent_id,rate_agent_username,report_percent,report_percent_ratio,has_percent_config,percent_config_modify_time,channel_status,channel_create_time,channel_modify_time
+980001,990001,KB_TEST_P1,990011,KB主渠道A,980021,partner_a,980031,rate_a,90.0000,0.900000,1,2026-03-27 08:00:00,3,2026-03-26 09:00:00,2026-03-26 09:00:00
+980001,990001,KB_TEST_P1,990012,KB对照渠道B,980022,partner_b,980032,rate_b,100.0000,1.000000,0,,3,2026-03-26 09:30:00,2026-03-26 09:30:00

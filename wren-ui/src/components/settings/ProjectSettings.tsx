@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Button, Modal, Select, Row, Col, Form, message } from 'antd';
 import { Path } from '@/utils/enum';
 import { getLanguageText } from '@/utils/language';
-import { ProjectLanguage } from '@/types/api';
+import { ProjectLanguage } from '@/types/project';
+
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import {
   resetCurrentProject,

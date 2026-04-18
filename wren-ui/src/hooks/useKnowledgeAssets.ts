@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { DiagramQuery } from '@/types/api';
+import type { DiagramResponse } from '@/types/modeling';
 import {
   getReferenceDisplayAssetDescription,
   getReferenceDisplayAssetName,
@@ -118,7 +118,7 @@ export default function useKnowledgeAssets({
   activeKnowledgeBaseName?: string | null;
   hasActiveKnowledgeBase: boolean;
   activeKnowledgeBaseUsesRuntime: boolean;
-  diagramData: DiagramQuery | null;
+  diagramData: DiagramResponse | null;
   draftAssets: AssetView[];
   knowledgeOwner?: string | null;
   matchedDemoKnowledge?: DemoKnowledgeLike | null;

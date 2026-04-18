@@ -57,7 +57,7 @@ jest.mock('@/common', () => ({
   },
 }));
 
-jest.mock('@/apollo/server/utils/apiUtils', () => ({
+jest.mock('@/server/utils/apiUtils', () => ({
   ApiError: MockApiError,
   respondWith: mockRespondWith,
   handleApiError: mockHandleApiError,
@@ -72,6 +72,7 @@ jest.mock('@/apollo/server/utils/apiUtils', () => ({
 
 jest.mock('@server/utils/askContext', () => ({
   buildAskRuntimeContext: mockBuildAskRuntimeContext,
+  toAskRuntimeIdentity: (runtimeIdentity: any) => runtimeIdentity,
 }));
 
 jest.mock('@server/authz', () => ({

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
-import type { ClientRuntimeScopeSelector } from '@/apollo/client/runtimeScope';
-import { readRuntimeScopeSelectorFromObject } from '@/apollo/client/runtimeScope';
+import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
+import { readRuntimeScopeSelectorFromObject } from '@/runtime/client/runtimeScope';
 import type { RuntimeSelectorState } from '@/hooks/useRuntimeSelectorState';
 
 type RouterQueryLike = Record<string, string | string[] | undefined>;
@@ -17,17 +17,28 @@ export const resolveKnowledgeEffectiveRuntimeSelector = ({
   currentKnowledgeBaseId?: string;
   currentKbSnapshotId?: string;
   currentKbSnapshotDeployHash?: string;
-}): ClientRuntimeScopeSelector => ({
-  workspaceId:
-    routeRuntimeSelector.workspaceId || currentWorkspaceId || undefined,
-  knowledgeBaseId:
-    routeRuntimeSelector.knowledgeBaseId || currentKnowledgeBaseId || undefined,
-  kbSnapshotId:
-    routeRuntimeSelector.kbSnapshotId || currentKbSnapshotId || undefined,
-  deployHash:
-    routeRuntimeSelector.deployHash || currentKbSnapshotDeployHash || undefined,
-  runtimeScopeId: routeRuntimeSelector.runtimeScopeId || undefined,
-});
+}): ClientRuntimeScopeSelector => {
+  const routeKnowledgeBaseId = routeRuntimeSelector.knowledgeBaseId;
+  const shouldReuseCurrentSnapshot =
+    !routeKnowledgeBaseId || routeKnowledgeBaseId === currentKnowledgeBaseId;
+
+  return {
+    workspaceId:
+      routeRuntimeSelector.workspaceId || currentWorkspaceId || undefined,
+    knowledgeBaseId: routeKnowledgeBaseId || currentKnowledgeBaseId || undefined,
+    kbSnapshotId:
+      routeRuntimeSelector.kbSnapshotId ||
+      (shouldReuseCurrentSnapshot ? currentKbSnapshotId : undefined) ||
+      undefined,
+    deployHash:
+      routeRuntimeSelector.deployHash ||
+      (shouldReuseCurrentSnapshot
+        ? currentKbSnapshotDeployHash
+        : undefined) ||
+      undefined,
+    runtimeScopeId: routeRuntimeSelector.runtimeScopeId || undefined,
+  };
+};
 
 export const buildRuntimeScopeKeyFromRouteQuery = (
   routerQuery: RouterQueryLike,

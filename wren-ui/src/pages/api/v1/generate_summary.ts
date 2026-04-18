@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
 import { ApiType } from '@server/repositories/apiHistoryRepository';
-import * as Errors from '@/apollo/server/utils/error';
+import * as Errors from '@/server/utils/error';
 import { v4 as uuidv4 } from 'uuid';
 import {
   ApiError,
@@ -10,12 +10,12 @@ import {
   validateSummaryResult,
   deriveRuntimeExecutionContextFromRequest,
   pollUntil,
-} from '@/apollo/server/utils/apiUtils';
+} from '@/server/utils/apiUtils';
 import {
   TextBasedAnswerInput,
   TextBasedAnswerResult,
   TextBasedAnswerStatus,
-} from '@/apollo/server/models/adaptor';
+} from '@/server/models/adaptor';
 import { getLogger } from '@server/utils';
 import { toAskRuntimeIdentity } from '@server/utils/askContext';
 

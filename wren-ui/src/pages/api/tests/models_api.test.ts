@@ -56,8 +56,8 @@ jest.mock('@/common', () => ({
   },
 }));
 
-jest.mock('@/apollo/server/utils/apiUtils', () => {
-  const actual = jest.requireActual('@/apollo/server/utils/apiUtils');
+jest.mock('@/server/utils/apiUtils', () => {
+  const actual = jest.requireActual('@/server/utils/apiUtils');
   return {
     ...actual,
     ApiError: MockApiError,

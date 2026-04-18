@@ -95,11 +95,13 @@ export default async function handler(
       workspaceId: validatedSession.workspace.id,
       roleId,
       displayName:
-        req.body && Object.prototype.hasOwnProperty.call(req.body, 'displayName')
+        req.body &&
+        Object.prototype.hasOwnProperty.call(req.body, 'displayName')
           ? getString(req.body?.displayName)
           : undefined,
       description:
-        req.body && Object.prototype.hasOwnProperty.call(req.body, 'description')
+        req.body &&
+        Object.prototype.hasOwnProperty.call(req.body, 'description')
           ? getString(req.body?.description) || null
           : undefined,
       permissionNames: Array.isArray(req.body?.permissionNames)

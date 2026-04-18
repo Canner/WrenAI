@@ -37,7 +37,7 @@ jest.mock('next/router', () => ({
   useRouter: () => mockUseRouter(),
 }));
 
-jest.mock('@/apollo/client/runtimeScope', () => ({
+jest.mock('@/runtime/client/runtimeScope', () => ({
   buildRuntimeScopeUrl: (...args: any[]) => mockBuildRuntimeScopeUrl(...args),
   buildRuntimeScopeHeaders: (...args: any[]) =>
     mockBuildRuntimeScopeHeaders(...args),
@@ -83,6 +83,18 @@ jest.mock('@/hooks/useRuntimeScopeNavigation', () => ({
 jest.mock('@/hooks/useRuntimeScopeTransition', () => ({
   __esModule: true,
   default: () => mockUseRuntimeScopeTransition(),
+}));
+
+jest.mock('@/components/pages/modeling/ModelingWorkspace', () => ({
+  __esModule: true,
+  default: ({ embedded }: { embedded?: boolean }) => {
+    const React = jest.requireActual('react');
+    return React.createElement(
+      'div',
+      null,
+      embedded ? 'EmbeddedModelingWorkspace' : 'ModelingWorkspace',
+    );
+  },
 }));
 
 const renderPage = () =>
@@ -179,29 +191,97 @@ describe('knowledge index page', () => {
     });
   });
 
-  it('renders the empty-state primary action, top actions and wizard labels', () => {
+  it('renders the workbench primary action and section shortcuts', () => {
     const markup = renderPage();
 
-    expect(markup).toContain('添加资产');
     expect(markup).toContain('分析规则');
     expect(markup).toContain('SQL 模板');
     expect(markup).toContain('编辑知识库');
-    expect(markup).toContain('引入资产');
-    expect(markup).toContain('知识配置');
-    expect(markup).toContain('保存');
-    expect(markup).not.toContain('新建知识库');
+    expect(markup).toContain('资产数');
+    expect(markup).not.toContain('knowledge-workbench-tab-assets');
+    expect(markup).not.toContain('title="添加资产"');
+    expect(markup).not.toContain('引入资产');
+    expect(markup).not.toContain('知识配置');
+    expect(markup).not.toContain('添加知识库');
   });
 
-  it('reuses the provider-aware connector console instead of rendering the legacy database modal', () => {
+  it('renders the embedded modeling workspace when section=modeling', () => {
+    mockUseRouter.mockReturnValue({
+      query: { section: 'modeling' },
+      replace: jest.fn(),
+      push: jest.fn(),
+      isReady: true,
+    });
+
     const markup = renderPage();
 
-    expect(markup).toContain('前往工作区连接器');
+    expect(markup).toContain('模型');
+    expect(markup).not.toContain('查看资产');
+    expect(markup).toContain('EmbeddedModelingWorkspace');
+  });
+
+  it('renders sql templates as list cards without inline editor panel', () => {
+    mockUseRouter.mockReturnValue({
+      query: { section: 'sqlTemplates' },
+      replace: jest.fn(),
+      push: jest.fn(),
+      isReady: true,
+    });
+
+    const markup = renderPage();
+
+    expect(markup).toContain('新建 SQL 模板');
+    expect(markup).toContain('当前显示 0 / 0 条');
+    expect(markup).not.toContain('新建 SQL 模板草稿');
+  });
+
+  it('renders instructions as list cards without inline editor panel', () => {
+    mockUseRouter.mockReturnValue({
+      query: { section: 'instructions' },
+      replace: jest.fn(),
+      push: jest.fn(),
+      isReady: true,
+    });
+
+    const markup = renderPage();
+
+    expect(markup).toContain('新建分析规则');
+    expect(markup).toContain('当前显示 0 / 0 条');
+    expect(markup).not.toContain('新建分析规则草稿');
+  });
+
+  it('does not render the legacy database modal by default', () => {
+    const markup = renderPage();
+
+    expect(markup).toContain('资产');
     expect(markup).not.toContain('添加数据库');
     expect(markup).not.toContain('连接信息');
     expect(markup).not.toContain('开启跨源查询');
   });
 
-  it('switches knowledge base without routing by default', () => {
+  it('falls back to overview when loading the legacy assets section route', () => {
+    mockUseRouter.mockReturnValue({
+      query: { section: 'assets' },
+      replace: jest.fn(),
+      push: jest.fn(),
+      isReady: true,
+    });
+
+    const markup = renderPage();
+
+    expect(markup).toContain('资产数');
+    expect(markup).not.toContain('knowledge-workbench-tab-assets');
+    expect(markup).not.toContain('前往工作区连接器');
+    expect(markup).not.toContain('使用完整向导引入资产');
+    expect(markup).not.toContain('资产新增方式');
+    expect(markup).not.toContain('选择样例数据');
+    expect(markup).not.toContain('选择数据库');
+    expect(markup).not.toContain('人力资源数据');
+    expect(markup).not.toContain('请选择样例数据');
+    expect(markup).not.toContain('请选择主题表');
+  });
+
+  it('routes when switching to a different knowledge base', () => {
     expect(
       shouldRouteSwitchKnowledgeBase(
         {
@@ -215,12 +295,22 @@ describe('knowledge index page', () => {
         },
         'kb-1',
       ),
-    ).toBe(false);
+    ).toBe(true);
 
     expect(
       shouldRouteSwitchKnowledgeBase(
         {
           id: 'kb-2',
+          defaultKbSnapshot: null,
+        },
+        'kb-1',
+      ),
+    ).toBe(true);
+
+    expect(
+      shouldRouteSwitchKnowledgeBase(
+        {
+          id: 'kb-1',
           defaultKbSnapshot: null,
         },
         'kb-1',
@@ -282,7 +372,7 @@ describe('knowledge index page', () => {
     ).toBe(true);
   });
 
-  it('shows an asset loading stage only while runtime-backed knowledge content is still syncing', () => {
+  it('shows an asset loading overlay while runtime-backed knowledge content is still syncing', () => {
     expect(
       shouldShowKnowledgeAssetsLoading({
         activeKnowledgeBaseUsesRuntime: true,
@@ -296,12 +386,12 @@ describe('knowledge index page', () => {
     expect(
       shouldShowKnowledgeAssetsLoading({
         activeKnowledgeBaseUsesRuntime: true,
-        assetCount: 0,
+        assetCount: 4,
         diagramLoading: false,
         hasDiagramData: true,
-        routeRuntimeSyncing: false,
+        routeRuntimeSyncing: true,
       }),
-    ).toBe(false);
+    ).toBe(true);
 
     expect(
       shouldShowKnowledgeAssetsLoading({

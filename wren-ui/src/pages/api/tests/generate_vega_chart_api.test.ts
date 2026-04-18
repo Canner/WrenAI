@@ -47,7 +47,7 @@ jest.mock('@/common', () => ({
   },
 }));
 
-jest.mock('@/apollo/server/utils/apiUtils', () => ({
+jest.mock('@/server/utils/apiUtils', () => ({
   ApiError: MockApiError,
   respondWith: mockRespondWith,
   handleApiError: mockHandleApiError,
@@ -141,7 +141,10 @@ describe('pages/api/v1/generate_vega_chart', () => {
         { name: 'category', type: 'string' },
         { name: 'sales', type: 'number' },
       ],
-      data: Array.from({ length: 30 }, (_, index) => [`c-${index}`, 100 - index]),
+      data: Array.from({ length: 30 }, (_, index) => [
+        `c-${index}`,
+        100 - index,
+      ]),
     });
     mockGenerateChart.mockResolvedValue({ queryId: 'chart-query-1' });
     mockGetChartResult.mockResolvedValue({

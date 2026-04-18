@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { message } from 'antd';
+import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { Path } from '@/utils/enum';
 
 type RuntimeSelector = {
@@ -50,7 +51,7 @@ export default function useKnowledgeBaseLifecycle<
   activeKnowledgeBase?: TKnowledgeBase | null;
   kbForm: KnowledgeBaseForm;
   closeKnowledgeBaseModal: () => void;
-  loadKnowledgeBases: () => Promise<TKnowledgeBase[]>;
+  loadKnowledgeBases: (forceFresh?: boolean) => Promise<TKnowledgeBase[]>;
   refetchRuntimeSelector: () => Promise<unknown>;
   setSelectedKnowledgeBaseId: (id: string | null) => void;
   clearDetailAsset: () => void;
@@ -105,20 +106,30 @@ export default function useKnowledgeBaseLifecycle<
 
       const saved = (await response.json()) as TKnowledgeBase;
       closeKnowledgeBaseModal();
-      await loadKnowledgeBases();
+      const nextKnowledgeBases = await loadKnowledgeBases(true);
+      const refreshedKnowledgeBase =
+        nextKnowledgeBases.find((item) => item.id === saved.id) || saved;
+
+      clearDetailAsset();
+      setSelectedKnowledgeBaseId(refreshedKnowledgeBase.id);
       await refetchRuntimeSelector();
-      setSelectedKnowledgeBaseId(saved.id);
       message.success(isEditing ? '知识库已更新' : '知识库已创建');
       const nextSearchParams = new URLSearchParams({
-        workspaceId: saved.workspaceId,
-        knowledgeBaseId: saved.id,
+        workspaceId: refreshedKnowledgeBase.workspaceId,
+        knowledgeBaseId: refreshedKnowledgeBase.id,
       });
 
-      if (saved.defaultKbSnapshot?.id) {
-        nextSearchParams.set('kbSnapshotId', saved.defaultKbSnapshot.id);
+      if (refreshedKnowledgeBase.defaultKbSnapshot?.id) {
+        nextSearchParams.set(
+          'kbSnapshotId',
+          refreshedKnowledgeBase.defaultKbSnapshot.id,
+        );
       }
-      if (saved.defaultKbSnapshot?.deployHash) {
-        nextSearchParams.set('deployHash', saved.defaultKbSnapshot.deployHash);
+      if (refreshedKnowledgeBase.defaultKbSnapshot?.deployHash) {
+        nextSearchParams.set(
+          'deployHash',
+          refreshedKnowledgeBase.defaultKbSnapshot.deployHash,
+        );
       }
 
       await replaceRoute(`${Path.Knowledge}?${nextSearchParams.toString()}`);
@@ -126,16 +137,20 @@ export default function useKnowledgeBaseLifecycle<
       if (error?.errorFields) {
         return;
       }
-      message.error(
-        error.message ||
-          (editingKnowledgeBase ? '更新知识库失败' : '创建知识库失败'),
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        editingKnowledgeBase ? '更新知识库失败' : '创建知识库失败',
       );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setCreatingKnowledgeBase(false);
     }
   }, [
     buildRuntimeScopeUrl,
     closeKnowledgeBaseModal,
+    clearDetailAsset,
     editingKnowledgeBase,
     kbForm,
     loadKnowledgeBases,
@@ -184,7 +199,7 @@ export default function useKnowledgeBaseLifecycle<
         throw new Error(payload.error || `${actionLabel}失败`);
       }
 
-      const nextKnowledgeBases = await loadKnowledgeBases();
+      const nextKnowledgeBases = await loadKnowledgeBases(true);
       await refetchRuntimeSelector();
       message.success(`${actionLabel}成功`);
 
@@ -230,7 +245,13 @@ export default function useKnowledgeBaseLifecycle<
         activeKnowledgeBase;
       setSelectedKnowledgeBaseId(refreshedKnowledgeBase.id);
     } catch (error: any) {
-      message.error(error.message || `${actionLabel}失败`);
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        `${actionLabel}失败`,
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
     } finally {
       setKnowledgeLifecycleSubmitting(false);
     }

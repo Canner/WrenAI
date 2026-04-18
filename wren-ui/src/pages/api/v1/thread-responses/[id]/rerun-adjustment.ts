@@ -1,10 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { AskingResolver } from '@server/resolvers/askingResolver';
-import { ApiError } from '@/apollo/server/utils/apiUtils';
-import { buildResolverContextFromRequest } from '../../resolverContext';
+import { AskingController } from '@server/controllers/askingController';
+import { ApiError } from '@/server/utils/apiUtils';
+import { buildApiContextFromRequest } from '../../apiContext';
 import { sendRestApiError } from '../../restApi';
 
-const askingResolver = new AskingResolver();
+const askingController = new AskingController();
 
 const parseResponseId = (value: string | string[] | undefined) => {
   const raw = Array.isArray(value) ? value[0] : value;
@@ -25,8 +25,8 @@ export default async function handler(
       throw new Error('Method not allowed');
     }
 
-    const ctx = await buildResolverContextFromRequest({ req });
-    await askingResolver.rerunAdjustThreadResponseAnswer(
+    const ctx = await buildApiContextFromRequest({ req });
+    await askingController.rerunAdjustThreadResponseAnswer(
       null,
       { responseId: parseResponseId(req.query.id) },
       ctx,

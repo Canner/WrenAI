@@ -4,7 +4,7 @@ import {
   canGenerateAnswer,
   isReadyToThreadResponse,
 } from './useAskPrompt';
-import { AskingTask, AskingTaskStatus, AskingTaskType } from '@/types/api';
+import { AskingTask, AskingTaskStatus, AskingTaskType } from '@/types/home';
 
 describe('useAskPrompt helpers', () => {
   it('only triggers text answer generation for finished text-to-sql tasks', () => {

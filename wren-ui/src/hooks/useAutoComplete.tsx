@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { capitalize } from 'lodash';
-import type { DiagramQuery } from '@/types/api';
 import { getNodeTypeIcon } from '@/utils/nodeType';
 import {
+  type DiagramResponse,
   DiagramModel,
-  DiagramView,
   DiagramModelField,
+  DiagramView,
   DiagramViewField,
-} from '@/types/api';
+} from '@/types/modeling';
 import {
   buildKnowledgeDiagramUrl,
   loadKnowledgeDiagramPayload,
@@ -86,7 +86,7 @@ export default function useAutoComplete<T = Completer>(props: Props<T>) {
       skip ? null : buildKnowledgeDiagramUrl(runtimeScopeNavigation.selector),
     [runtimeScopeNavigation.selector, skip],
   );
-  const [data, setData] = useState<DiagramQuery | null>(
+  const [data, setData] = useState<DiagramResponse | null>(
     requestUrl ? peekKnowledgeDiagramPayload({ requestUrl }) : null,
   );
 
@@ -139,7 +139,12 @@ export default function useAutoComplete<T = Completer>(props: Props<T>) {
         item.fields
           .filter((field): field is Field => field != null)
           .forEach((field) => {
-            result.push(convertor({ ...field, parent: item }));
+            result.push(
+              convertor({
+                ...field,
+                parent: item,
+              } as Field & { parent: Model }),
+            );
           });
       }
       return result;
