@@ -69,6 +69,8 @@ wren-ui/db.sqlite3*.bak
 
 ## next.js
 wren-ui/.next
+wren-ui/.next-e2e
+wren-ui/.next-e2e-dev
 wren-ui/out
 
 wren-ui/.yarn/install-state.gz
@@ -112,6 +114,14 @@ playwright-home-snapshot.md
 .omc/state/
 .omc/sessions/
 docs/.omc/
+wren-ui/.omc/
+wren-ui/e2e/.auth/
+wren-ui/tmp/
+wren-ui/wren-ui/
+wren-ui/.tmp-*.cjs
+wren-ui/tmp-playwright-validation-failure.png
+output/
+setup-connection.png
 
 # OMX runtime artifacts (keep context/plans under version control)
 .omx/logs/
