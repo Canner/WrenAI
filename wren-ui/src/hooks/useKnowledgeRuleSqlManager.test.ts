@@ -1,4 +1,4 @@
-import type { Instruction } from '@/types/api';
+import type { Instruction } from '@/types/knowledge';
 import {
   parseInstructionDraft,
   shouldUseRuleSqlListCache,
@@ -61,8 +61,9 @@ describe('useKnowledgeRuleSqlManager helpers', () => {
     expect(
       shouldUseRuleSqlListCache({
         forceRefresh: false,
-        cachedCount: 3,
         lastLoadedAt: 1_000,
+        currentScopeKey: 'scope-a',
+        lastLoadedScopeKey: 'scope-a',
         now: 5_000,
         ttlMs: 10_000,
       }),
@@ -71,8 +72,9 @@ describe('useKnowledgeRuleSqlManager helpers', () => {
     expect(
       shouldUseRuleSqlListCache({
         forceRefresh: true,
-        cachedCount: 3,
         lastLoadedAt: 1_000,
+        currentScopeKey: 'scope-a',
+        lastLoadedScopeKey: 'scope-a',
         now: 5_000,
         ttlMs: 10_000,
       }),
@@ -81,19 +83,34 @@ describe('useKnowledgeRuleSqlManager helpers', () => {
     expect(
       shouldUseRuleSqlListCache({
         forceRefresh: false,
-        cachedCount: 0,
         lastLoadedAt: 1_000,
+        currentScopeKey: 'scope-a',
+        lastLoadedScopeKey: 'scope-a',
         now: 5_000,
         ttlMs: 10_000,
       }),
-    ).toBe(false);
+    ).toBe(true);
 
     expect(
       shouldUseRuleSqlListCache({
         forceRefresh: false,
-        cachedCount: 3,
         lastLoadedAt: 1_000,
+        currentScopeKey: 'scope-a',
+        lastLoadedScopeKey: 'scope-a',
         now: 20_000,
+        ttlMs: 10_000,
+      }),
+    ).toBe(false);
+  });
+
+  it('invalidates the cached rule/sql list when the runtime scope changes', () => {
+    expect(
+      shouldUseRuleSqlListCache({
+        forceRefresh: false,
+        lastLoadedAt: 1_000,
+        lastLoadedScopeKey: 'workspace-a|kb-a|snap-a',
+        currentScopeKey: 'workspace-b|kb-b|snap-b',
+        now: 5_000,
         ttlMs: 10_000,
       }),
     ).toBe(false);

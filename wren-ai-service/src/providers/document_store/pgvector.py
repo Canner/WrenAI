@@ -1,14 +1,18 @@
 import importlib
 import inspect
+import logging
 import os
 import re
 from collections.abc import Mapping
 from typing import Optional
 
 from haystack.utils import Secret
+from psycopg import Error as PsycopgError
 
 from src.core.provider import DocumentStoreProvider
 from src.providers.loader import provider
+
+logger = logging.getLogger("wren-ai-service")
 
 _PGVECTOR_DEPENDENCY_HINT = (
     "Provider `pgvector` requires optional pgvector dependencies. "
@@ -203,26 +207,97 @@ class PgvectorStoreAdapter:
     def __getattr__(self, item):
         return getattr(self._store, item)
 
+    def _reset_connection(self):
+        for attr in ("_cursor", "_dict_cursor"):
+            cursor = getattr(self._store, attr, None)
+            if cursor is not None:
+                try:
+                    cursor.close()
+                except Exception:
+                    pass
+                finally:
+                    setattr(self._store, attr, None)
+
+        connection = getattr(self._store, "_connection", None)
+        if connection is not None:
+            try:
+                connection.close()
+            except Exception:
+                pass
+            finally:
+                setattr(self._store, "_connection", None)
+
+    def _is_retryable_connection_error(self, exc: Exception) -> bool:
+        seen: set[int] = set()
+        current: Exception | None = exc
+
+        while current is not None and id(current) not in seen:
+            seen.add(id(current))
+            if isinstance(current, PsycopgError):
+                return True
+
+            message = str(current).lower()
+            if any(
+                marker in message
+                for marker in (
+                    "the connection is lost",
+                    "connection is closed",
+                    "server closed the connection unexpectedly",
+                    "terminating connection",
+                    "connection not open",
+                )
+            ):
+                return True
+
+            current = current.__cause__ or current.__context__
+
+        return False
+
+    def _call_with_reconnect(self, operation: str, fn):
+        try:
+            return fn()
+        except Exception as exc:
+            if not self._is_retryable_connection_error(exc):
+                raise
+
+            logger.warning(
+                "Retrying pgvector %s after resetting the native connection: %s",
+                operation,
+                exc,
+            )
+            self._reset_connection()
+            return fn()
+
     def _normalized_filters(self, filters):
         return _normalize_pgvector_filters(filters)
 
     async def write_documents(self, documents, policy):
         if not documents:
             return 0
-        return self._store.write_documents(documents=documents, policy=policy)
+        return self._call_with_reconnect(
+            "write",
+            lambda: self._store.write_documents(documents=documents, policy=policy),
+        )
 
     async def delete_documents(self, filters=None):
-        documents = self.filter_documents(filters=filters)
-        if documents:
-            self._store.delete_documents([document.id for document in documents])
+        def _delete():
+            documents = self.filter_documents(filters=filters)
+            if documents:
+                self._store.delete_documents([document.id for document in documents])
+
+        return self._call_with_reconnect("delete", _delete)
 
     async def count_documents(self, filters=None):
         if filters:
             return len(self.filter_documents(filters=filters))
-        return self._store.count_documents()
+        return self._call_with_reconnect("count", self._store.count_documents)
 
     def filter_documents(self, filters=None):
-        return self._store.filter_documents(filters=self._normalized_filters(filters))
+        normalized_filters = self._normalized_filters(filters)
+        return self._call_with_reconnect(
+            "filter",
+            lambda: self._store.filter_documents(filters=normalized_filters),
+        )
 
     def _embedding_retrieval(
         self,
@@ -232,11 +307,15 @@ class PgvectorStoreAdapter:
         top_k=10,
         vector_function=None,
     ):
-        return self._store._embedding_retrieval(
-            query_embedding,
-            filters=self._normalized_filters(filters),
-            top_k=top_k,
-            vector_function=vector_function,
+        normalized_filters = self._normalized_filters(filters)
+        return self._call_with_reconnect(
+            "embedding retrieval",
+            lambda: self._store._embedding_retrieval(
+                query_embedding,
+                filters=normalized_filters,
+                top_k=top_k,
+                vector_function=vector_function,
+            ),
         )
 
     def to_dict(self):
@@ -288,6 +367,18 @@ class PgvectorRetrieverAdapter:
             if top_k is not None:
                 documents = documents[:top_k]
             return {"documents": documents}
+
+        reconnect_wrapper = getattr(self._document_store, "_call_with_reconnect", None)
+        if callable(reconnect_wrapper):
+            return reconnect_wrapper(
+                "retrieval",
+                lambda: self._retriever.run(
+                    query_embedding=query_embedding,
+                    filters=normalized_filters,
+                    top_k=top_k,
+                    vector_function=vector_function,
+                ),
+            )
 
         return self._retriever.run(
             query_embedding=query_embedding,

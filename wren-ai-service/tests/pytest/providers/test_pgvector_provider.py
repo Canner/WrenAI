@@ -89,6 +89,55 @@ class FakeRuntimePgvectorStore:
         return [FakeDocument("doc-1")]
 
 
+class FakeReconnectableConnection:
+    def __init__(self):
+        self.closed = False
+
+    def close(self):
+        self.closed = True
+
+
+class FakeReconnectableCursor:
+    def __init__(self):
+        self.closed = False
+
+    def close(self):
+        self.closed = True
+
+
+class FakeRecoverableRuntimeStore(FakeRuntimePgvectorStore):
+    def __init__(self):
+        super().__init__()
+        self._connection = FakeReconnectableConnection()
+        self._cursor = FakeReconnectableCursor()
+        self._dict_cursor = FakeReconnectableCursor()
+        self.filter_failures = 1
+        self.embedding_failures = 1
+        self.filter_attempts = 0
+        self.embedding_attempts = 0
+
+    def filter_documents(self, filters=None):
+        self.filter_attempts += 1
+        if self.filter_failures > 0:
+            self.filter_failures -= 1
+            raise RuntimeError("the connection is lost")
+        return super().filter_documents(filters=filters)
+
+    def _embedding_retrieval(
+        self, query_embedding, *, filters=None, top_k=10, vector_function=None
+    ):
+        self.embedding_attempts += 1
+        if self.embedding_failures > 0:
+            self.embedding_failures -= 1
+            raise RuntimeError("the connection is lost")
+        return super()._embedding_retrieval(
+            query_embedding,
+            filters=filters,
+            top_k=top_k,
+            vector_function=vector_function,
+        )
+
+
 class FakeRuntimePgvectorRetriever:
     def __init__(self):
         self.last_query_embedding = None
@@ -102,6 +151,25 @@ class FakeRuntimePgvectorRetriever:
         self.last_top_k = top_k
         self.last_vector_function = vector_function
         return {"documents": [FakeDocument("doc-1")]}
+
+
+class FakeRecoverableRuntimeRetriever(FakeRuntimePgvectorRetriever):
+    def __init__(self):
+        super().__init__()
+        self.failures = 1
+        self.attempts = 0
+
+    def run(self, query_embedding, filters=None, top_k=None, vector_function=None):
+        self.attempts += 1
+        if self.failures > 0:
+            self.failures -= 1
+            raise RuntimeError("the connection is lost")
+        return super().run(
+            query_embedding,
+            filters=filters,
+            top_k=top_k,
+            vector_function=vector_function,
+        )
 
 
 class FakeUnserializablePgvectorStore:
@@ -339,6 +407,22 @@ async def test_pgvector_store_adapter_short_circuits_empty_writes():
 
 
 @pytest.mark.asyncio
+async def test_pgvector_store_adapter_reconnects_after_connection_loss():
+    store = FakeRecoverableRuntimeStore()
+    adapter = PgvectorStoreAdapter(store)
+
+    result = adapter.filter_documents(
+        filters={"field": "project_id", "operator": "==", "value": "scope-a"}
+    )
+
+    assert [doc.id for doc in result] == ["doc-1", "doc-2"]
+    assert store.filter_attempts == 2
+    assert store._connection is None
+    assert store._cursor is None
+    assert store._dict_cursor is None
+
+
+@pytest.mark.asyncio
 async def test_pgvector_retriever_adapter_is_async_compatible_and_normalizes_filters():
     retriever = FakeRuntimePgvectorRetriever()
     store = FakeRuntimePgvectorStore()
@@ -360,6 +444,30 @@ async def test_pgvector_retriever_adapter_is_async_compatible_and_normalizes_fil
     }
     assert retriever.last_top_k == 5
     assert retriever.last_vector_function == "cosine_similarity"
+
+
+@pytest.mark.asyncio
+async def test_pgvector_retriever_adapter_reconnects_after_connection_loss():
+    retriever = FakeRecoverableRuntimeRetriever()
+    store = FakeRecoverableRuntimeStore()
+    wrapped_store = PgvectorStoreAdapter(store)
+    adapter = PgvectorRetrieverAdapter(retriever, document_store=wrapped_store)
+
+    result = await adapter.run(
+        query_embedding=[0.1, 0.2],
+        filters={"field": "project_id", "operator": "==", "value": "scope-a"},
+        top_k=3,
+        vector_function="cosine_similarity",
+    )
+
+    assert [doc.id for doc in result["documents"]] == ["doc-1"]
+    assert retriever.attempts == 2
+    assert store._connection is None
+    assert retriever.last_filters == {
+        "field": "meta.project_id",
+        "operator": "==",
+        "value": "scope-a",
+    }
 
 
 @pytest.mark.asyncio

@@ -1,12 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { FormInstance } from 'antd';
 import type {
   CreateInstructionInput,
   CreateSqlPairInput,
   Instruction,
   SqlPair,
-} from '@/types/api';
-
+} from '@/types/knowledge';
 export type RuleDetailFormValues = {
   summary: string;
   scope: 'all' | 'matched';
@@ -22,22 +21,31 @@ export type SqlTemplateFormValues = {
 const INSTRUCTION_SUMMARY_PREFIX = '【规则描述】';
 const INSTRUCTION_CONTENT_PREFIX = '【规则内容】';
 const RULE_SQL_LIST_CACHE_TTL_MS = 15_000;
+const EMPTY_RULE_DETAIL_VALUES: RuleDetailFormValues = {
+  summary: '',
+  scope: 'all',
+  content: '',
+};
 
 export const shouldUseRuleSqlListCache = ({
   forceRefresh,
-  cachedCount,
   lastLoadedAt,
+  lastLoadedScopeKey,
+  currentScopeKey,
   now = Date.now(),
   ttlMs = RULE_SQL_LIST_CACHE_TTL_MS,
 }: {
   forceRefresh: boolean;
-  cachedCount: number;
   lastLoadedAt: number;
+  lastLoadedScopeKey?: string | null;
+  currentScopeKey?: string | null;
   now?: number;
   ttlMs?: number;
 }) =>
   !forceRefresh &&
-  cachedCount > 0 &&
+  (!currentScopeKey ||
+    !lastLoadedScopeKey ||
+    currentScopeKey === lastLoadedScopeKey) &&
   lastLoadedAt > 0 &&
   now - lastLoadedAt <= ttlMs;
 
@@ -95,10 +103,70 @@ const buildSqlTemplatePayload = (
   question: values.description,
 });
 
+const buildSqlTemplateFormValues = (
+  sqlPair?: SqlPair | null,
+): SqlTemplateFormValues => ({
+  sql: sqlPair?.sql || '',
+  scope: 'all',
+  description: sqlPair?.question || '',
+});
+
+const hasSameQuestions = (left: string[] = [], right: string[] = []) =>
+  left.length === right.length &&
+  left.every((question, index) => question === right[index]);
+
+const findMatchingInstruction = ({
+  ruleList,
+  editingId,
+  payload,
+}: {
+  ruleList: Instruction[];
+  editingId?: number;
+  payload: CreateInstructionInput;
+}) => {
+  if (editingId != null) {
+    return ruleList.find((instruction) => instruction.id === editingId) || null;
+  }
+
+  return (
+    ruleList.find(
+      (instruction) =>
+        instruction.instruction === payload.instruction &&
+        instruction.isDefault === payload.isDefault &&
+        hasSameQuestions(instruction.questions, payload.questions),
+    ) ||
+    ruleList[0] ||
+    null
+  );
+};
+
+const findMatchingSqlPair = ({
+  sqlList,
+  editingId,
+  payload,
+}: {
+  sqlList: SqlPair[];
+  editingId?: number;
+  payload: CreateSqlPairInput;
+}) => {
+  if (editingId != null) {
+    return sqlList.find((sqlPair) => sqlPair.id === editingId) || null;
+  }
+
+  return (
+    sqlList.find(
+      (sqlPair) =>
+        sqlPair.sql === payload.sql && sqlPair.question === payload.question,
+    ) ||
+    sqlList[0] ||
+    null
+  );
+};
+
 export default function useKnowledgeRuleSqlManager({
   ruleForm,
   sqlTemplateForm,
-  openModalSafely,
+  cacheScopeKey,
   refetchInstructions,
   refetchSqlPairs,
   createInstruction,
@@ -110,7 +178,7 @@ export default function useKnowledgeRuleSqlManager({
 }: {
   ruleForm: FormInstance<RuleDetailFormValues>;
   sqlTemplateForm: FormInstance<SqlTemplateFormValues>;
-  openModalSafely: (action: () => void) => void;
+  cacheScopeKey?: string | null;
   refetchInstructions: () => Promise<{
     data?: { instructions?: Instruction[] | null } | null;
   }>;
@@ -129,52 +197,52 @@ export default function useKnowledgeRuleSqlManager({
 }) {
   const [editingInstruction, setEditingInstruction] =
     useState<Instruction | null>(null);
-  const [ruleManageOpen, setRuleManageOpen] = useState(false);
   const [ruleManageLoading, setRuleManageLoading] = useState(false);
   const [ruleList, setRuleList] = useState<Instruction[]>([]);
-  const [ruleDetailOpen, setRuleDetailOpen] = useState(false);
   const [editingSqlPair, setEditingSqlPair] = useState<SqlPair | null>(null);
-  const [sqlManageOpen, setSqlManageOpen] = useState(false);
   const [sqlManageLoading, setSqlManageLoading] = useState(false);
   const [sqlList, setSqlList] = useState<SqlPair[]>([]);
-  const [sqlDetailOpen, setSqlDetailOpen] = useState(false);
   const ruleListLoadedAtRef = useRef(0);
   const sqlListLoadedAtRef = useRef(0);
+  const ruleListScopeKeyRef = useRef<string | null>(null);
+  const sqlListScopeKeyRef = useRef<string | null>(null);
   const pendingRuleListRequestRef = useRef<Promise<Instruction[]> | null>(null);
   const pendingSqlListRequestRef = useRef<Promise<SqlPair[]> | null>(null);
 
-  useEffect(() => {
-    if (!ruleDetailOpen) {
-      return;
-    }
+  const applyRuleFormValues = useCallback(
+    (instruction?: Instruction | null) => {
+      const draft = instruction
+        ? parseInstructionDraft(instruction)
+        : EMPTY_RULE_DETAIL_VALUES;
+      ruleForm.setFieldsValue({
+        summary: draft.summary,
+        scope: draft.scope,
+        content: draft.content,
+      });
+    },
+    [ruleForm],
+  );
 
-    const draft = parseInstructionDraft(editingInstruction);
-    ruleForm.setFieldsValue({
-      summary: draft.summary,
-      scope: draft.scope,
-      content: draft.content,
-    });
-  }, [editingInstruction, ruleDetailOpen, ruleForm]);
-
-  useEffect(() => {
-    if (!sqlDetailOpen) {
-      return;
-    }
-
-    sqlTemplateForm.setFieldsValue({
-      sql: editingSqlPair?.sql || '',
-      scope: 'all',
-      description: editingSqlPair?.question || '',
-    });
-  }, [editingSqlPair, sqlDetailOpen, sqlTemplateForm]);
+  const applySqlTemplateFormValues = useCallback(
+    (sqlPair?: SqlPair | null) => {
+      const draft = buildSqlTemplateFormValues(sqlPair);
+      sqlTemplateForm.setFieldsValue({
+        sql: draft.sql,
+        scope: draft.scope,
+        description: draft.description,
+      });
+    },
+    [sqlTemplateForm],
+  );
 
   const loadRuleList = useCallback(async () => {
     const forceRefresh = false;
     if (
       shouldUseRuleSqlListCache({
         forceRefresh,
-        cachedCount: ruleList.length,
         lastLoadedAt: ruleListLoadedAtRef.current,
+        lastLoadedScopeKey: ruleListScopeKeyRef.current,
+        currentScopeKey: cacheScopeKey,
       })
     ) {
       return ruleList;
@@ -190,6 +258,7 @@ export default function useKnowledgeRuleSqlManager({
         const nextRuleList = (result.data?.instructions || []) as Instruction[];
         setRuleList(nextRuleList);
         ruleListLoadedAtRef.current = Date.now();
+        ruleListScopeKeyRef.current = cacheScopeKey || null;
         return nextRuleList;
       })
       .finally(() => {
@@ -198,7 +267,7 @@ export default function useKnowledgeRuleSqlManager({
       });
     pendingRuleListRequestRef.current = request;
     return request;
-  }, [refetchInstructions, ruleList]);
+  }, [cacheScopeKey, refetchInstructions, ruleList]);
 
   const forceReloadRuleList = useCallback(async () => {
     if (pendingRuleListRequestRef.current) {
@@ -211,6 +280,7 @@ export default function useKnowledgeRuleSqlManager({
         const nextRuleList = (result.data?.instructions || []) as Instruction[];
         setRuleList(nextRuleList);
         ruleListLoadedAtRef.current = Date.now();
+        ruleListScopeKeyRef.current = cacheScopeKey || null;
         return nextRuleList;
       })
       .finally(() => {
@@ -219,15 +289,16 @@ export default function useKnowledgeRuleSqlManager({
       });
     pendingRuleListRequestRef.current = request;
     return request;
-  }, [refetchInstructions]);
+  }, [cacheScopeKey, refetchInstructions]);
 
   const loadSqlList = useCallback(async () => {
     const forceRefresh = false;
     if (
       shouldUseRuleSqlListCache({
         forceRefresh,
-        cachedCount: sqlList.length,
         lastLoadedAt: sqlListLoadedAtRef.current,
+        lastLoadedScopeKey: sqlListScopeKeyRef.current,
+        currentScopeKey: cacheScopeKey,
       })
     ) {
       return sqlList;
@@ -243,6 +314,7 @@ export default function useKnowledgeRuleSqlManager({
         const nextSqlList = (result.data?.sqlPairs || []) as SqlPair[];
         setSqlList(nextSqlList);
         sqlListLoadedAtRef.current = Date.now();
+        sqlListScopeKeyRef.current = cacheScopeKey || null;
         return nextSqlList;
       })
       .finally(() => {
@@ -251,7 +323,7 @@ export default function useKnowledgeRuleSqlManager({
       });
     pendingSqlListRequestRef.current = request;
     return request;
-  }, [refetchSqlPairs, sqlList]);
+  }, [cacheScopeKey, refetchSqlPairs, sqlList]);
 
   const forceReloadSqlList = useCallback(async () => {
     if (pendingSqlListRequestRef.current) {
@@ -264,6 +336,7 @@ export default function useKnowledgeRuleSqlManager({
         const nextSqlList = (result.data?.sqlPairs || []) as SqlPair[];
         setSqlList(nextSqlList);
         sqlListLoadedAtRef.current = Date.now();
+        sqlListScopeKeyRef.current = cacheScopeKey || null;
         return nextSqlList;
       })
       .finally(() => {
@@ -272,111 +345,130 @@ export default function useKnowledgeRuleSqlManager({
       });
     pendingSqlListRequestRef.current = request;
     return request;
-  }, [refetchSqlPairs]);
+  }, [cacheScopeKey, refetchSqlPairs]);
 
   const openRuleManageModal = useCallback(() => {
-    openModalSafely(() => {
-      setRuleManageOpen(true);
-    });
+    setEditingInstruction(null);
+    applyRuleFormValues(null);
     void loadRuleList();
-  }, [loadRuleList, openModalSafely]);
+  }, [applyRuleFormValues, loadRuleList]);
 
   const closeRuleManageModal = useCallback(() => {
-    setRuleManageOpen(false);
-  }, []);
+    setEditingInstruction(null);
+    applyRuleFormValues(null);
+  }, [applyRuleFormValues]);
 
   const openSqlManageModal = useCallback(() => {
-    openModalSafely(() => {
-      setSqlManageOpen(true);
-    });
+    setEditingSqlPair(null);
+    applySqlTemplateFormValues(null);
     void loadSqlList();
-  }, [loadSqlList, openModalSafely]);
+  }, [applySqlTemplateFormValues, loadSqlList]);
 
   const closeSqlManageModal = useCallback(() => {
-    setSqlManageOpen(false);
-  }, []);
+    setEditingSqlPair(null);
+    applySqlTemplateFormValues(null);
+  }, [applySqlTemplateFormValues]);
 
   const openRuleDetail = useCallback(
     (instruction?: Instruction) => {
-      setRuleManageOpen(false);
-      setEditingInstruction(instruction || null);
-      openModalSafely(() => {
-        setRuleDetailOpen(true);
-      });
+      const nextInstruction = instruction || null;
+      setEditingInstruction(nextInstruction);
+      applyRuleFormValues(nextInstruction);
     },
-    [openModalSafely],
+    [applyRuleFormValues],
   );
 
   const closeRuleDetail = useCallback(() => {
-    ruleForm.resetFields();
-    setRuleDetailOpen(false);
+    applyRuleFormValues(null);
     setEditingInstruction(null);
-  }, [ruleForm]);
+  }, [applyRuleFormValues]);
 
   const backToRuleManageModal = useCallback(() => {
     closeRuleDetail();
-    openModalSafely(() => {
-      setRuleManageOpen(true);
-    });
     void forceReloadRuleList();
-  }, [closeRuleDetail, forceReloadRuleList, openModalSafely]);
+  }, [closeRuleDetail, forceReloadRuleList]);
 
   const openSqlTemplateDetail = useCallback(
     (sqlPair?: SqlPair) => {
-      setSqlManageOpen(false);
-      setEditingSqlPair(sqlPair || null);
-      openModalSafely(() => {
-        setSqlDetailOpen(true);
-      });
+      const nextSqlPair = sqlPair || null;
+      setEditingSqlPair(nextSqlPair);
+      applySqlTemplateFormValues(nextSqlPair);
     },
-    [openModalSafely],
+    [applySqlTemplateFormValues],
   );
 
   const closeSqlDetail = useCallback(() => {
-    sqlTemplateForm.resetFields();
-    setSqlDetailOpen(false);
+    applySqlTemplateFormValues(null);
     setEditingSqlPair(null);
-  }, [sqlTemplateForm]);
+  }, [applySqlTemplateFormValues]);
 
   const backToSqlManageModal = useCallback(() => {
     closeSqlDetail();
-    openModalSafely(() => {
-      setSqlManageOpen(true);
-    });
     void forceReloadSqlList();
-  }, [closeSqlDetail, forceReloadSqlList, openModalSafely]);
+  }, [closeSqlDetail, forceReloadSqlList]);
 
   const handleDeleteRule = useCallback(
     async (instruction: Instruction) => {
       await deleteInstruction(instruction.id);
-      await forceReloadRuleList();
+      const nextRuleList = await forceReloadRuleList();
+
+      if (editingInstruction?.id === instruction.id) {
+        const nextInstruction = nextRuleList[0] || null;
+        setEditingInstruction(nextInstruction);
+        applyRuleFormValues(nextInstruction);
+      }
     },
-    [deleteInstruction, forceReloadRuleList],
+    [
+      applyRuleFormValues,
+      deleteInstruction,
+      editingInstruction?.id,
+      forceReloadRuleList,
+    ],
   );
 
   const handleDeleteSqlTemplate = useCallback(
     async (sqlPair: SqlPair) => {
       await deleteSqlPair(sqlPair.id);
-      await forceReloadSqlList();
+      const nextSqlList = await forceReloadSqlList();
+
+      if (editingSqlPair?.id === sqlPair.id) {
+        const nextSqlPair = nextSqlList[0] || null;
+        setEditingSqlPair(nextSqlPair);
+        applySqlTemplateFormValues(nextSqlPair);
+      }
     },
-    [deleteSqlPair, forceReloadSqlList],
+    [
+      applySqlTemplateFormValues,
+      deleteSqlPair,
+      editingSqlPair?.id,
+      forceReloadSqlList,
+    ],
   );
 
   const submitRuleDetail = useCallback(async () => {
     const values = await ruleForm.validateFields();
     const data = buildInstructionPayload(values);
+    const editingId = editingInstruction?.id;
 
-    if (editingInstruction?.id) {
-      await updateInstruction(editingInstruction.id, data);
+    if (editingId) {
+      await updateInstruction(editingId, data);
     } else {
       await createInstruction(data);
     }
 
-    backToRuleManageModal();
+    const nextRuleList = await forceReloadRuleList();
+    const nextInstruction = findMatchingInstruction({
+      ruleList: nextRuleList,
+      editingId,
+      payload: data,
+    });
+    setEditingInstruction(nextInstruction);
+    applyRuleFormValues(nextInstruction);
   }, [
-    backToRuleManageModal,
+    applyRuleFormValues,
     createInstruction,
     editingInstruction?.id,
+    forceReloadRuleList,
     ruleForm,
     updateInstruction,
   ]);
@@ -384,50 +476,69 @@ export default function useKnowledgeRuleSqlManager({
   const submitSqlTemplateDetail = useCallback(async () => {
     const values = await sqlTemplateForm.validateFields();
     const data = buildSqlTemplatePayload(values);
+    const editingId = editingSqlPair?.id;
 
-    if (editingSqlPair?.id) {
-      await updateSqlPair(editingSqlPair.id, data);
+    if (editingId) {
+      await updateSqlPair(editingId, data);
     } else {
       await createSqlPair(data);
     }
 
-    backToSqlManageModal();
+    const nextSqlList = await forceReloadSqlList();
+    const nextSqlPair = findMatchingSqlPair({
+      sqlList: nextSqlList,
+      editingId,
+      payload: data,
+    });
+    setEditingSqlPair(nextSqlPair);
+    applySqlTemplateFormValues(nextSqlPair);
   }, [
-    backToSqlManageModal,
+    applySqlTemplateFormValues,
     createSqlPair,
     editingSqlPair?.id,
+    forceReloadSqlList,
     sqlTemplateForm,
     updateSqlPair,
   ]);
 
   const resetRuleSqlManagerState = useCallback(() => {
-    setRuleManageOpen(false);
     setRuleManageLoading(false);
     setRuleList([]);
-    setRuleDetailOpen(false);
     setEditingInstruction(null);
-    setSqlManageOpen(false);
     setSqlManageLoading(false);
     setSqlList([]);
-    setSqlDetailOpen(false);
     setEditingSqlPair(null);
     ruleListLoadedAtRef.current = 0;
     sqlListLoadedAtRef.current = 0;
+    ruleListScopeKeyRef.current = null;
+    sqlListScopeKeyRef.current = null;
     pendingRuleListRequestRef.current = null;
     pendingSqlListRequestRef.current = null;
-  }, []);
+    applyRuleFormValues(null);
+    applySqlTemplateFormValues(null);
+  }, [applyRuleFormValues, applySqlTemplateFormValues]);
+
+  const resetRuleDetailEditor = useCallback(() => {
+    applyRuleFormValues(null);
+    setEditingInstruction(null);
+  }, [applyRuleFormValues]);
+
+  const resetSqlTemplateEditor = useCallback(() => {
+    applySqlTemplateFormValues(null);
+    setEditingSqlPair(null);
+  }, [applySqlTemplateFormValues]);
 
   return {
     editingInstruction,
-    ruleManageOpen,
     ruleManageLoading,
     ruleList,
-    ruleDetailOpen,
+    loadRuleList,
+    forceReloadRuleList,
     editingSqlPair,
-    sqlManageOpen,
     sqlManageLoading,
     sqlList,
-    sqlDetailOpen,
+    loadSqlList,
+    forceReloadSqlList,
     openRuleManageModal,
     closeRuleManageModal,
     openSqlManageModal,
@@ -442,6 +553,8 @@ export default function useKnowledgeRuleSqlManager({
     handleDeleteSqlTemplate,
     submitRuleDetail,
     submitSqlTemplateDetail,
+    resetRuleDetailEditor,
+    resetSqlTemplateEditor,
     resetRuleSqlManagerState,
   };
 }

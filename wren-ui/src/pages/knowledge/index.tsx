@@ -1,8 +1,8 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import { Form, Radio, Skeleton, Space } from 'antd';
 import PlusOutlined from '@ant-design/icons/PlusOutlined';
-import { buildRuntimeScopeUrl } from '@/apollo/client/runtimeScope';
+import { buildRuntimeScopeUrl } from '@/runtime/client/runtimeScope';
 import useRuntimeSelectorState from '@/hooks/useRuntimeSelectorState';
 import DolaAppShell from '@/components/reference/DolaAppShell';
 import { usePersistentShellEmbedded } from '@/components/reference/PersistentShellContext';
@@ -20,6 +20,10 @@ import useKnowledgeBaseLifecycle from '@/hooks/useKnowledgeBaseLifecycle';
 import useKnowledgeBaseMeta from '@/hooks/useKnowledgeBaseMeta';
 import useKnowledgeBaseModal from '@/hooks/useKnowledgeBaseModal';
 import useKnowledgeConnectors from '@/hooks/useKnowledgeConnectors';
+import {
+  resolveKnowledgeInitialSourceType,
+  resolveKnowledgeSourceOptions,
+} from '@/hooks/useKnowledgeConnectors';
 import useKnowledgeDataLoaders from '@/hooks/useKnowledgeDataLoaders';
 import useKnowledgeDerivedCollections from '@/hooks/useKnowledgeDerivedCollections';
 import useKnowledgeDetailViewState from '@/hooks/useKnowledgeDetailViewState';
@@ -44,10 +48,10 @@ import useKnowledgeRuleSqlManager, {
   type RuleDetailFormValues,
   type SqlTemplateFormValues,
 } from '@/hooks/useKnowledgeRuleSqlManager';
-import useKnowledgeRuleSqlMutations from '@/hooks/useKnowledgeRuleSqlMutations';
+import useKnowledgeRuleSqlActions from '@/hooks/useKnowledgeRuleSqlActions';
 import useKnowledgeRuntimeContext from '@/hooks/useKnowledgeRuntimeContext';
+import useKnowledgeRuntimeDataSync from '@/hooks/useKnowledgeRuntimeDataSync';
 import useKnowledgeSelectorFallback from '@/hooks/useKnowledgeSelectorFallback';
-import useKnowledgeSummaryActions from '@/hooks/useKnowledgeSummaryActions';
 import useKnowledgeSwitchReset from '@/hooks/useKnowledgeSwitchReset';
 import useKnowledgeSidebarData from '@/hooks/useKnowledgeSidebarData';
 import { shouldSyncKnowledgeRuntimeScopeData } from '@/hooks/useKnowledgeRuntimeSync';
@@ -57,6 +61,11 @@ import useRuntimeScopeTransition from '@/hooks/useRuntimeScopeTransition';
 import { Path } from '@/utils/enum';
 import { HISTORICAL_SNAPSHOT_READONLY_HINT } from '@/utils/runtimeSnapshot';
 import {
+  buildKnowledgeWorkbenchParams,
+  resolveKnowledgeWorkbenchSection,
+  type KnowledgeWorkbenchSection,
+} from '@/utils/knowledgeWorkbench';
+import {
   RailTabs,
   KbList,
   KbCreateButton,
@@ -64,21 +73,23 @@ import {
   LibraryStage,
   WorkbenchGrid,
   SidePanel,
-} from './index.styles';
+} from '@/features/knowledgePage/index.styles';
 import {
   blurActiveElement,
   CONNECTOR_SOURCE_OPTIONS,
   KNOWLEDGE_TABS,
   openModalSafely,
   resolveReferenceOwner,
-} from './constants';
-import AssetDetailModal from './assetDetailModal';
+} from '@/features/knowledgePage/constants';
 import AssetWizardModal from './assetWizardModal';
 import KnowledgeBaseModal from './knowledgeBaseModal';
-import { SidebarKnowledgeList } from './lists';
+import { SidebarKnowledgeList } from '@/features/knowledgePage/lists';
 import KnowledgeMainStage from './mainStage';
-import RuleSqlModals from './ruleSqlModals';
-import type { AssetView, ConnectorView, KnowledgeBaseRecord } from './types';
+import type {
+  AssetView,
+  ConnectorView,
+  KnowledgeBaseRecord,
+} from '@/features/knowledgePage/types';
 
 export {
   canShowKnowledgeLifecycleAction,
@@ -104,6 +115,10 @@ export default function KnowledgeHomePage() {
     disabled: persistentShellEmbedded,
   });
   const [knowledgeTab, setKnowledgeTab] = useState('workspace');
+  const [activeWorkbenchSection, setActiveWorkbenchSection] =
+    useState<KnowledgeWorkbenchSection>(() =>
+      resolveKnowledgeWorkbenchSection(router.query.section),
+    );
   const [assetModalOpen, setAssetModalOpen] = useState(false);
   const [assetWizardStep, setAssetWizardStep] = useState(0);
   const [detailAsset, setDetailAsset] = useState<AssetView | null>(null);
@@ -128,12 +143,21 @@ export default function KnowledgeHomePage() {
   const refetchRuntimeSelector = runtimeSelector.refetch;
   const runtimeSelectorState = runtimeSelector.runtimeSelectorState;
   const currentWorkspace = runtimeSelectorState?.currentWorkspace || null;
+  const knowledgeSourceOptions = useMemo(
+    () =>
+      resolveKnowledgeSourceOptions({
+        workspaceKind: currentWorkspace?.kind,
+        sourceOptions: CONNECTOR_SOURCE_OPTIONS,
+      }),
+    [currentWorkspace?.kind],
+  );
   const {
     effectiveRuntimeSelector,
     currentKnowledgeBaseId,
     currentKbSnapshotId,
     routeKnowledgeBaseId,
     routeKbSnapshotId,
+    runtimeSyncScopeKey,
   } = useKnowledgeRuntimeContext({
     routerQuery: router.query as Record<string, string | string[] | undefined>,
     routerReady: router.isReady,
@@ -143,7 +167,7 @@ export default function KnowledgeHomePage() {
   const { knowledgeBasesUrl, cachedKnowledgeBaseList } =
     useKnowledgeBaseListCache<KnowledgeBaseRecord>({
       hasRuntimeScope: runtimeScopePage.hasRuntimeScope,
-      workspaceId: currentWorkspace?.id,
+      workspaceId: effectiveRuntimeSelector.workspaceId,
     });
   const selectorKnowledgeBaseFallback = useKnowledgeSelectorFallback({
     runtimeSelectorState,
@@ -181,15 +205,6 @@ export default function KnowledgeHomePage() {
     shouldRouteSwitchKnowledgeBase: shouldRouteSwitchKnowledgeBase,
     onLoadError: handleKnowledgeBaseLoadError,
   });
-  useKnowledgePendingSwitchSync({
-    currentKnowledgeBaseId,
-    routeKnowledgeBaseId,
-    pendingKnowledgeBaseId,
-    routeRuntimeSyncing: false,
-    shouldCommitPendingSwitch: shouldCommitPendingKnowledgeBaseSwitch,
-    setSelectedKnowledgeBaseId,
-    setPendingKnowledgeBaseId,
-  });
   const {
     activeKnowledgeBase,
     activeKnowledgeBaseExecutable,
@@ -198,8 +213,6 @@ export default function KnowledgeHomePage() {
     isReadonlyKnowledgeBase,
     isSnapshotReadonlyKnowledgeBase,
     isKnowledgeMutationDisabled,
-    canManageKnowledgeBaseLifecycle,
-    knowledgeLifecycleActionLabel,
     knowledgeMutationHint,
     matchedDemoKnowledge,
     knowledgeDescription,
@@ -237,6 +250,21 @@ export default function KnowledgeHomePage() {
       runtimeScopeNavigation.selector.workspaceId,
     ],
   );
+  const ruleSqlCacheScopeKey = useMemo(
+    () =>
+      [
+        activeKnowledgeRuntimeSelector.workspaceId || '',
+        activeKnowledgeRuntimeSelector.knowledgeBaseId || '',
+        activeKnowledgeRuntimeSelector.kbSnapshotId || '',
+        activeKnowledgeRuntimeSelector.deployHash || '',
+      ].join('|'),
+    [
+      activeKnowledgeRuntimeSelector.workspaceId,
+      activeKnowledgeRuntimeSelector.knowledgeBaseId,
+      activeKnowledgeRuntimeSelector.kbSnapshotId,
+      activeKnowledgeRuntimeSelector.deployHash,
+    ],
+  );
   const {
     createInstructionLoading,
     updateInstructionLoading,
@@ -250,11 +278,16 @@ export default function KnowledgeHomePage() {
     deleteSqlPair,
     refetchInstructions,
     refetchSqlPairs,
-  } = useKnowledgeRuleSqlMutations(activeKnowledgeRuntimeSelector);
+  } = useKnowledgeRuleSqlActions(activeKnowledgeRuntimeSelector);
   const activeKnowledgeSnapshotId =
     activeKnowledgeBase?.defaultKbSnapshot?.id ||
     activeKnowledgeBase?.defaultKbSnapshotId ||
     null;
+  const queryWorkbenchSection = useMemo(
+    () => resolveKnowledgeWorkbenchSection(router.query.section),
+    [router.query.section],
+  );
+
   const {
     connectors,
     connectorsLoading,
@@ -275,17 +308,37 @@ export default function KnowledgeHomePage() {
     activeKbSnapshotId: activeKnowledgeSnapshotId,
     connectorRuntimeSelector: activeKnowledgeRuntimeSelector,
     assetModalOpen,
-    sourceOptions: CONNECTOR_SOURCE_OPTIONS,
+    sourceOptions: knowledgeSourceOptions,
+    initialSourceType: resolveKnowledgeInitialSourceType(
+      knowledgeSourceOptions,
+    ),
     fetchConnectors,
     onLoadError: handleConnectorLoadError,
   });
-  const { diagramData, diagramLoading } = useKnowledgeDiagramData({
+  const { diagramData, diagramLoading, refetchDiagram } =
+    useKnowledgeDiagramData({
     hasRuntimeScope: runtimeScopePage.hasRuntimeScope,
     routeKnowledgeBaseId: activeKnowledgeBase?.id || undefined,
     routeKbSnapshotId: activeKnowledgeSnapshotId || undefined,
     effectiveRuntimeSelector: activeKnowledgeRuntimeSelector,
   });
-  const routeRuntimeSyncing = false;
+  const { routeRuntimeSyncing: routeRuntimeDataSyncing } =
+    useKnowledgeRuntimeDataSync({
+      runtimeSyncScopeKey,
+      refetchRuntimeSelector,
+      refetchDiagram,
+    });
+  const routeRuntimeSyncing =
+    runtimeScopeTransition.transitioning || routeRuntimeDataSyncing;
+  useKnowledgePendingSwitchSync({
+    currentKnowledgeBaseId,
+    routeKnowledgeBaseId,
+    pendingKnowledgeBaseId,
+    routeRuntimeSyncing,
+    shouldCommitPendingSwitch: shouldCommitPendingKnowledgeBaseSwitch,
+    setSelectedKnowledgeBaseId,
+    setPendingKnowledgeBaseId,
+  });
 
   const canSaveKnowledgeBase = Boolean(kbNameValue?.trim());
   const { assets, overviewPreviewAsset, previewFieldCount } =
@@ -298,6 +351,46 @@ export default function KnowledgeHomePage() {
       knowledgeOwner,
       matchedDemoKnowledge,
     });
+  const modelingSummary = useMemo(() => {
+    const diagram = diagramData?.diagram;
+    const relationIds = new Set<number>();
+
+    (diagram?.models || []).forEach((model) => {
+      (model?.relationFields || []).forEach((field) => {
+        if (typeof field?.relationId === 'number') {
+          relationIds.add(field.relationId);
+        }
+      });
+    });
+
+    return {
+      modelCount: diagram?.models?.length || 0,
+      viewCount: diagram?.views?.length || 0,
+      relationCount: relationIds.size,
+    };
+  }, [diagramData]);
+  const currentModelingWorkspaceKey = useMemo(
+    () =>
+      `${activeKnowledgeBase?.id || 'none'}:${activeKnowledgeSnapshotId || 'default'}:${runtimeSelectorState?.currentKbSnapshot?.deployHash || 'deploy'}`,
+    [
+      activeKnowledgeBase?.id,
+      activeKnowledgeSnapshotId,
+      runtimeSelectorState?.currentKbSnapshot?.deployHash,
+    ],
+  );
+  const [committedModelingWorkspaceKey, setCommittedModelingWorkspaceKey] =
+    useState(currentModelingWorkspaceKey);
+  useEffect(() => {
+    if (routeRuntimeSyncing) {
+      return;
+    }
+
+    setCommittedModelingWorkspaceKey((previousKey) =>
+      previousKey === currentModelingWorkspaceKey
+        ? previousKey
+        : currentModelingWorkspaceKey,
+    );
+  }, [currentModelingWorkspaceKey, routeRuntimeSyncing]);
   const {
     kbModalOpen,
     editingKnowledgeBase,
@@ -319,7 +412,6 @@ export default function KnowledgeHomePage() {
     closeAssetModal,
     openConnectorConsole,
     openAssetWizard,
-    buildKnowledgeSwitchUrl,
     buildKnowledgeRuntimeSelector,
   } = useKnowledgePageActions({
     activeKnowledgeBase,
@@ -340,60 +432,50 @@ export default function KnowledgeHomePage() {
       router,
       setDetailAsset,
     });
-  const {
-    creatingKnowledgeBase,
-    knowledgeLifecycleSubmitting,
-    handleSaveKnowledgeBase,
-    handleToggleKnowledgeArchive,
-  } = useKnowledgeBaseLifecycle<KnowledgeBaseRecord>({
-    editingKnowledgeBase,
-    activeKnowledgeBase,
-    kbForm,
-    closeKnowledgeBaseModal,
-    loadKnowledgeBases,
-    refetchRuntimeSelector,
-    setSelectedKnowledgeBaseId,
-    clearDetailAsset,
-    currentKnowledgeBaseId,
-    canManageKnowledgeBaseLifecycle,
-    isSnapshotReadonlyKnowledgeBase,
-    snapshotReadonlyHint: HISTORICAL_SNAPSHOT_READONLY_HINT,
-    runtimeNavigationSelector: runtimeScopeNavigation.selector,
-    routerAsPath: router.asPath,
-    buildRuntimeScopeUrl,
-    buildKnowledgeRuntimeSelector,
-    replaceRoute: replaceKnowledgeRoute,
-    resolveLifecycleActionLabel: getKnowledgeLifecycleActionLabel,
-  });
+  const { creatingKnowledgeBase, handleSaveKnowledgeBase } =
+    useKnowledgeBaseLifecycle<KnowledgeBaseRecord>({
+      editingKnowledgeBase,
+      activeKnowledgeBase,
+      kbForm,
+      closeKnowledgeBaseModal,
+      loadKnowledgeBases,
+      refetchRuntimeSelector,
+      setSelectedKnowledgeBaseId,
+      clearDetailAsset,
+      currentKnowledgeBaseId,
+      canManageKnowledgeBaseLifecycle: false,
+      isSnapshotReadonlyKnowledgeBase,
+      snapshotReadonlyHint: HISTORICAL_SNAPSHOT_READONLY_HINT,
+      runtimeNavigationSelector: runtimeScopeNavigation.selector,
+      routerAsPath: router.asPath,
+      buildRuntimeScopeUrl,
+      buildKnowledgeRuntimeSelector,
+      replaceRoute: replaceKnowledgeRoute,
+      resolveLifecycleActionLabel: getKnowledgeLifecycleActionLabel,
+    });
 
   const {
-    ruleManageOpen,
     ruleManageLoading,
     ruleList,
-    ruleDetailOpen,
-    sqlManageOpen,
+    loadRuleList,
+    editingInstruction,
     sqlManageLoading,
     sqlList,
-    sqlDetailOpen,
-    openRuleManageModal,
-    closeRuleManageModal,
-    openSqlManageModal,
-    closeSqlManageModal,
+    loadSqlList,
+    editingSqlPair,
     openRuleDetail,
-    closeRuleDetail,
-    backToRuleManageModal,
     openSqlTemplateDetail,
-    closeSqlDetail,
-    backToSqlManageModal,
     handleDeleteRule,
     handleDeleteSqlTemplate,
     submitRuleDetail,
     submitSqlTemplateDetail,
+    resetRuleDetailEditor,
+    resetSqlTemplateEditor,
     resetRuleSqlManagerState,
   } = useKnowledgeRuleSqlManager({
     ruleForm,
     sqlTemplateForm,
-    openModalSafely,
+    cacheScopeKey: ruleSqlCacheScopeKey,
     refetchInstructions,
     refetchSqlPairs,
     createInstruction,
@@ -402,11 +484,6 @@ export default function KnowledgeHomePage() {
     createSqlPair,
     updateSqlPair,
     deleteSqlPair,
-  });
-  const handleSummaryMoreAction = useKnowledgeSummaryActions({
-    openRuleManageModal,
-    openSqlManageModal,
-    openEditKnowledgeBaseModal,
   });
   const { assetDatabaseOptions, assetTableOptions } =
     useKnowledgeAssetSelectOptions({
@@ -452,21 +529,16 @@ export default function KnowledgeHomePage() {
     setDraftAssets,
     wizardPreviewAssets,
   });
-  const {
-    commitAssetDraftToOverview,
-    openAssetDetail,
-    handleCopyAssetOverview,
-  } = useKnowledgeAssetInteractions<AssetView>({
-    saveAssetDraftToOverview,
-    blurActiveElement,
-    resetDetailViewState,
-    openModalSafely,
-    setDetailAsset,
-  });
+  const { commitAssetDraftToOverview, openAssetDetail } =
+    useKnowledgeAssetInteractions<AssetView>({
+      saveAssetDraftToOverview,
+      blurActiveElement,
+      resetDetailViewState,
+      openModalSafely,
+      setDetailAsset,
+    });
   const { historyItems, visibleKnowledgeItems } = useKnowledgeSidebarData({
     threads: homeSidebar.data?.threads || [],
-    onSelectThread: (threadId, selector) =>
-      homeSidebar.onSelect([threadId], selector),
     knowledgeBases,
     activeKnowledgeBase,
     knowledgeTab,
@@ -491,15 +563,86 @@ export default function KnowledgeHomePage() {
   });
   useKnowledgeActiveKnowledgeBaseSwitch({
     activeKnowledgeBaseId: activeKnowledgeBase?.id,
+    switchReady: !routeRuntimeSyncing,
     onKnowledgeBaseChanged: resetStateOnKnowledgeBaseSwitch,
   });
   const handleCloseAssetDetail = useCallback(() => {
     setDetailAsset(null);
   }, []);
-  const handleNavigateModeling = useCallback(
-    () => runtimeScopeNavigation.pushWorkspace(Path.Modeling),
-    [runtimeScopeNavigation.pushWorkspace],
+  const handleChangeWorkbenchSection = useCallback(
+    (nextSection: KnowledgeWorkbenchSection) => {
+      setActiveWorkbenchSection(nextSection);
+      blurActiveElement();
+      return runtimeScopeNavigation.replaceWorkspace(
+        Path.Knowledge,
+        buildKnowledgeWorkbenchParams(nextSection),
+      );
+    },
+    [runtimeScopeNavigation.replaceWorkspace],
   );
+  const buildKnowledgeSwitchUrl = useCallback(
+    (knowledgeBase: KnowledgeBaseRecord) =>
+      buildRuntimeScopeUrl(
+        Path.Knowledge,
+        buildKnowledgeWorkbenchParams(activeWorkbenchSection),
+        buildKnowledgeRuntimeSelector(knowledgeBase),
+      ),
+    [
+      activeWorkbenchSection,
+      buildKnowledgeRuntimeSelector,
+      buildRuntimeScopeUrl,
+    ],
+  );
+  const handleNavigateModeling = useCallback(
+    () => handleChangeWorkbenchSection('modeling'),
+    [handleChangeWorkbenchSection],
+  );
+  const handleOpenAssetWizard = useCallback(() => {
+    openAssetWizard();
+  }, [openAssetWizard]);
+  useEffect(() => {
+    const hasModelingIntent = Boolean(
+      router.query.openModelDrawer ||
+        router.query.openMetadata ||
+        router.query.openRelationModal,
+    );
+
+    if (hasModelingIntent) {
+      setActiveWorkbenchSection('modeling');
+      return;
+    }
+
+    setActiveWorkbenchSection((currentSection) =>
+      currentSection === queryWorkbenchSection
+        ? currentSection
+        : queryWorkbenchSection,
+    );
+  }, [
+    queryWorkbenchSection,
+    router.query.openMetadata,
+    router.query.openModelDrawer,
+    router.query.openRelationModal,
+  ]);
+
+  useEffect(() => {
+    if (
+      routeRuntimeSyncing ||
+      !runtimeScopePage.hasRuntimeScope ||
+      !activeKnowledgeBase?.id
+    ) {
+      return;
+    }
+
+    void loadRuleList().catch(() => null);
+    void loadSqlList().catch(() => null);
+  }, [
+    activeKnowledgeBase?.id,
+    activeKnowledgeSnapshotId,
+    routeRuntimeSyncing,
+    runtimeScopePage.hasRuntimeScope,
+    loadRuleList,
+    loadSqlList,
+  ]);
 
   const knowledgePageLoading = runtimeScopePage.guarding;
 
@@ -559,113 +702,99 @@ export default function KnowledgeHomePage() {
         </SidePanel>
 
         <KnowledgeMainStage
+          activeWorkbenchSection={activeWorkbenchSection}
+          onChangeWorkbenchSection={handleChangeWorkbenchSection}
           previewFieldCount={previewFieldCount}
           isSnapshotReadonlyKnowledgeBase={isSnapshotReadonlyKnowledgeBase}
           isReadonlyKnowledgeBase={isReadonlyKnowledgeBase}
           isKnowledgeMutationDisabled={isKnowledgeMutationDisabled}
-          activeKnowledgeBaseExecutable={activeKnowledgeBaseExecutable}
-          canManageKnowledgeBaseLifecycle={canManageKnowledgeBaseLifecycle}
-          knowledgeLifecycleActionLabel={knowledgeLifecycleActionLabel}
-          knowledgeLifecycleSubmitting={knowledgeLifecycleSubmitting}
-          activeKnowledgeBaseArchivedAt={activeKnowledgeBase?.archivedAt}
           knowledgeMutationHint={knowledgeMutationHint}
           knowledgeDescription={knowledgeDescription}
           showKnowledgeAssetsLoading={showKnowledgeAssetsLoading}
           detailAssets={detailAssets}
           activeDetailAsset={activeDetailAsset}
-          onOpenAssetWizard={openAssetWizard}
-          onSummaryMoreAction={handleSummaryMoreAction}
-          onToggleKnowledgeArchive={handleToggleKnowledgeArchive}
+          detailTab={detailTab}
+          detailFieldKeyword={detailFieldKeyword}
+          detailFieldFilter={detailFieldFilter}
+          detailAssetFields={detailAssetFields}
+          onOpenAssetWizard={handleOpenAssetWizard}
+          onOpenKnowledgeEditor={openEditKnowledgeBaseModal}
           onOpenAssetDetail={openAssetDetail}
+          onCloseAssetDetail={handleCloseAssetDetail}
+          onChangeDetailTab={setDetailTab}
+          onChangeFieldKeyword={setDetailFieldKeyword}
+          onChangeFieldFilter={setDetailFieldFilter}
           historicalSnapshotReadonlyHint={HISTORICAL_SNAPSHOT_READONLY_HINT}
+          ruleList={ruleList}
+          sqlList={sqlList}
+          ruleManageLoading={ruleManageLoading}
+          sqlManageLoading={sqlManageLoading}
+          onOpenRuleDetail={openRuleDetail}
+          onOpenSqlTemplateDetail={openSqlTemplateDetail}
+          onDeleteRule={handleDeleteRule}
+          onDeleteSqlTemplate={handleDeleteSqlTemplate}
+          editingInstruction={editingInstruction}
+          editingSqlPair={editingSqlPair}
+          ruleForm={ruleForm}
+          sqlTemplateForm={sqlTemplateForm}
+          createInstructionLoading={createInstructionLoading}
+          updateInstructionLoading={updateInstructionLoading}
+          createSqlPairLoading={createSqlPairLoading}
+          updateSqlPairLoading={updateSqlPairLoading}
+          onSubmitRuleDetail={submitRuleDetail}
+          onSubmitSqlTemplateDetail={submitSqlTemplateDetail}
+          onResetRuleDetailEditor={resetRuleDetailEditor}
+          onResetSqlTemplateEditor={resetSqlTemplateEditor}
+          modelingWorkspaceKey={committedModelingWorkspaceKey}
+          modelingSummary={modelingSummary}
+          onOpenModeling={handleNavigateModeling}
         />
       </WorkbenchGrid>
 
-      <KnowledgeBaseModal
-        visible={kbModalOpen}
-        editingKnowledgeBase={editingKnowledgeBase}
-        form={kbForm}
-        canSaveKnowledgeBase={canSaveKnowledgeBase}
-        creatingKnowledgeBase={creatingKnowledgeBase}
-        onCancel={closeKnowledgeBaseModal}
-        onSave={handleSaveKnowledgeBase}
-      />
+      {kbModalOpen ? (
+        <KnowledgeBaseModal
+          visible={kbModalOpen}
+          editingKnowledgeBase={editingKnowledgeBase}
+          form={kbForm}
+          canSaveKnowledgeBase={canSaveKnowledgeBase}
+          creatingKnowledgeBase={creatingKnowledgeBase}
+          onCancel={closeKnowledgeBaseModal}
+          onSave={handleSaveKnowledgeBase}
+        />
+      ) : null}
 
-      <AssetWizardModal
-        visible={assetModalOpen}
-        assetWizardStep={assetWizardStep}
-        onChangeAssetWizardStep={setAssetWizardStep}
-        activeKnowledgeBase={activeKnowledgeBase}
-        knowledgeBases={knowledgeBases}
-        selectedSourceType={selectedSourceType}
-        setSelectedSourceType={setSelectedSourceType}
-        openConnectorConsole={openConnectorConsole}
-        isDemoSource={isDemoSource}
-        connectorsLoading={connectorsLoading}
-        selectedDemoKnowledge={selectedDemoKnowledge}
-        selectedConnectorId={selectedConnectorId}
-        setSelectedConnectorId={setSelectedConnectorId}
-        selectedDemoTable={selectedDemoTable}
-        setSelectedDemoTable={setSelectedDemoTable}
-        assetDatabaseOptions={assetDatabaseOptions}
-        assetTableOptions={assetTableOptions}
-        canContinueAssetWizard={canContinueAssetWizard}
-        moveAssetWizardToConfig={moveAssetWizardToConfig}
-        assetDraft={assetDraft}
-        setAssetDraft={setAssetDraft}
-        assetDraftPreview={assetDraftPreview}
-        canContinueAssetConfiguration={canContinueAssetConfiguration}
-        commitAssetDraftToOverview={commitAssetDraftToOverview}
-        displayKnowledgeName={displayKnowledgeName}
-        closeAssetModal={closeAssetModal}
-        onNavigateModeling={handleNavigateModeling}
-      />
-
-      <AssetDetailModal
-        detailAsset={detailAsset}
-        activeDetailAsset={activeDetailAsset}
-        detailAssets={detailAssets}
-        detailTab={detailTab}
-        detailFieldKeyword={detailFieldKeyword}
-        detailFieldFilter={detailFieldFilter}
-        detailAssetFields={detailAssetFields}
-        onClose={handleCloseAssetDetail}
-        onOpenAssetDetail={openAssetDetail}
-        onNavigateModeling={handleNavigateModeling}
-        onCopyAssetOverview={handleCopyAssetOverview}
-        onChangeDetailTab={setDetailTab}
-        onChangeFieldKeyword={setDetailFieldKeyword}
-        onChangeFieldFilter={setDetailFieldFilter}
-      />
-
-      <RuleSqlModals
-        ruleManageOpen={ruleManageOpen}
-        ruleManageLoading={ruleManageLoading}
-        ruleList={ruleList}
-        ruleDetailOpen={ruleDetailOpen}
-        sqlManageOpen={sqlManageOpen}
-        sqlManageLoading={sqlManageLoading}
-        sqlList={sqlList}
-        sqlDetailOpen={sqlDetailOpen}
-        ruleForm={ruleForm}
-        sqlTemplateForm={sqlTemplateForm}
-        createInstructionLoading={createInstructionLoading}
-        updateInstructionLoading={updateInstructionLoading}
-        createSqlPairLoading={createSqlPairLoading}
-        updateSqlPairLoading={updateSqlPairLoading}
-        openRuleDetail={openRuleDetail}
-        closeRuleManageModal={closeRuleManageModal}
-        closeRuleDetail={closeRuleDetail}
-        backToRuleManageModal={backToRuleManageModal}
-        handleDeleteRule={handleDeleteRule}
-        submitRuleDetail={submitRuleDetail}
-        openSqlTemplateDetail={openSqlTemplateDetail}
-        closeSqlManageModal={closeSqlManageModal}
-        closeSqlDetail={closeSqlDetail}
-        backToSqlManageModal={backToSqlManageModal}
-        handleDeleteSqlTemplate={handleDeleteSqlTemplate}
-        submitSqlTemplateDetail={submitSqlTemplateDetail}
-      />
+      {assetModalOpen ? (
+        <AssetWizardModal
+          visible={assetModalOpen}
+          assetWizardStep={assetWizardStep}
+          onChangeAssetWizardStep={setAssetWizardStep}
+          activeKnowledgeBase={activeKnowledgeBase}
+          knowledgeBases={knowledgeBases}
+          sourceOptions={knowledgeSourceOptions}
+          selectedSourceType={selectedSourceType}
+          setSelectedSourceType={setSelectedSourceType}
+          openConnectorConsole={openConnectorConsole}
+          isDemoSource={isDemoSource}
+          connectorsLoading={connectorsLoading}
+          selectedDemoKnowledge={selectedDemoKnowledge}
+          selectedConnectorId={selectedConnectorId}
+          setSelectedConnectorId={setSelectedConnectorId}
+          selectedDemoTable={selectedDemoTable}
+          setSelectedDemoTable={setSelectedDemoTable}
+          assetDatabaseOptions={assetDatabaseOptions}
+          assetTableOptions={assetTableOptions}
+          canContinueAssetWizard={canContinueAssetWizard}
+          moveAssetWizardToConfig={moveAssetWizardToConfig}
+          assetDraft={assetDraft}
+          setAssetDraft={setAssetDraft}
+          assetDraftPreview={assetDraftPreview}
+          canContinueAssetConfiguration={canContinueAssetConfiguration}
+          commitAssetDraftToOverview={commitAssetDraftToOverview}
+          displayKnowledgeName={displayKnowledgeName}
+          closeAssetModal={closeAssetModal}
+          onNavigateModeling={handleNavigateModeling}
+        />
+      ) : null}
     </LibraryStage>
   );
 
