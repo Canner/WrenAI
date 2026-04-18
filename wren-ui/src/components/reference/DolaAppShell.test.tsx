@@ -5,6 +5,7 @@ import DolaAppShell, {
   getCachedShellUiState,
   resolveBackgroundNavPrefetchKeys,
   resolveHistoryThreadHref,
+  resolveHistoryThreadNavigationSelector,
   resolveShellPrefetchUrls,
   resolveShellUiScopeKey,
   shouldPrefetchShellIntent,
@@ -29,10 +30,31 @@ jest.mock('@/hooks/useRuntimeScopeNavigation', () => ({
   __esModule: true,
   default: () => ({
     push: jest.fn(),
-    href: (path: string) => `${path}?workspaceId=ws-1`,
+    href: (
+      path: string,
+      _params?: Record<string, string | number | boolean | null | undefined>,
+      selector?: {
+        workspaceId?: string;
+        knowledgeBaseId?: string;
+        kbSnapshotId?: string;
+        deployHash?: string;
+      },
+    ) => {
+      const query = new URLSearchParams();
+      if (selector?.workspaceId) query.set('workspaceId', selector.workspaceId);
+      if (selector?.knowledgeBaseId)
+        query.set('knowledgeBaseId', selector.knowledgeBaseId);
+      if (selector?.kbSnapshotId)
+        query.set('kbSnapshotId', selector.kbSnapshotId);
+      if (selector?.deployHash) query.set('deployHash', selector.deployHash);
+      return `${path}${query.toString() ? `?${query.toString()}` : ''}`;
+    },
     selector: {
       workspaceId: 'ws-1',
       runtimeScopeId: 'scope-1',
+    },
+    workspaceSelector: {
+      workspaceId: 'ws-1',
     },
   }),
 }));
@@ -227,10 +249,48 @@ describe('DolaAppShell', () => {
 
     expect(
       resolveHistoryThreadHref(
-        (path) => `${path}?workspaceId=ws-1`,
+        (
+          path,
+          _params,
+          selector = {
+            workspaceId: 'ws-1',
+          },
+        ) =>
+          `${path}?workspaceId=${selector.workspaceId}${
+            selector.knowledgeBaseId
+              ? `&knowledgeBaseId=${selector.knowledgeBaseId}`
+              : ''
+          }`,
         'thread-1',
+        {
+          workspaceId: 'ws-1',
+          knowledgeBaseId: 'kb-1',
+        },
       ),
-    ).toBe('/home/thread-1?workspaceId=ws-1');
+    ).toBe('/home/thread-1?workspaceId=ws-1&knowledgeBaseId=kb-1');
+
+    expect(
+      resolveHistoryThreadNavigationSelector({
+        item: {
+          id: 'thread-1',
+          title: '最近一次对话',
+          selector: {
+            workspaceId: 'ws-1',
+            knowledgeBaseId: 'kb-1',
+            kbSnapshotId: 'snap-1',
+            deployHash: 'deploy-1',
+          },
+        },
+        fallbackSelector: {
+          workspaceId: 'ws-1',
+        },
+      }),
+    ).toEqual({
+      workspaceId: 'ws-1',
+      knowledgeBaseId: 'kb-1',
+      kbSnapshotId: 'snap-1',
+      deployHash: 'deploy-1',
+    });
 
     expect(getCachedShellUiState('fresh-scope')).toEqual({
       collapsed: false,
@@ -257,6 +317,22 @@ describe('DolaAppShell', () => {
         hasAction: false,
       }),
     ).toBe(false);
+
+    expect(
+      resolveBackgroundNavPrefetchKeys(
+        [
+          {
+            key: 'dashboard',
+            label: '数据看板',
+            icon: <span>📈</span>,
+            iconKey: 'dashboard',
+            path: '/home/dashboard',
+            active: false,
+          },
+        ],
+        '/home',
+      ),
+    ).toEqual(['dashboard']);
   });
 
   it('only schedules background nav prefetch for inactive dashboard entries', () => {

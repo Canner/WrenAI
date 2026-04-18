@@ -30,7 +30,10 @@ import ArrowLeftOutlined from '@ant-design/icons/ArrowLeftOutlined';
 import styled from 'styled-components';
 import useAuthSession, { clearAuthSessionCache } from '@/hooks/useAuthSession';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
-import { buildRuntimeScopeUrl } from '@/apollo/client/runtimeScope';
+import {
+  ClientRuntimeScopeSelector,
+  buildRuntimeScopeUrl,
+} from '@/runtime/client/runtimeScope';
 import { Path } from '@/utils/enum';
 import { clearUserConfigCache } from '@/utils/env';
 import {
@@ -50,10 +53,15 @@ export interface DolaShellNavItem {
   key: string;
   label: string;
   icon: ReactNode;
+  iconKey?: string;
   sectionLabel?: string;
   active?: boolean;
   badge?: ReactNode;
   placement?: 'top' | 'bottom';
+  path?: string;
+  params?: Record<string, string | number | boolean | null | undefined>;
+  selector?: ClientRuntimeScopeSelector;
+  navigationScope?: 'workspace' | 'runtime';
   onClick?: () => void;
 }
 
@@ -62,6 +70,7 @@ export interface DolaShellHistoryItem {
   title: string;
   subtitle?: string;
   active?: boolean;
+  selector?: ClientRuntimeScopeSelector;
   onClick?: () => void;
 }
 
@@ -133,10 +142,62 @@ export const resolveShellUiScopeKey = ({
 export const getCachedShellUiState = (scopeKey: string): ShellUiState =>
   shellUiStateByScope.get(scopeKey) || DEFAULT_SHELL_UI_STATE;
 
+export const resolveHistoryThreadNavigationSelector = ({
+  item,
+  fallbackSelector,
+}: {
+  item: DolaShellHistoryItem;
+  fallbackSelector?: ClientRuntimeScopeSelector;
+}) => item.selector || fallbackSelector || {};
+
 export const resolveHistoryThreadHref = (
-  hrefBuilder: (path: string) => string,
+  hrefBuilder: (
+    path: string,
+    params?: Record<string, string | number | boolean | null | undefined>,
+    selectorOverride?: ClientRuntimeScopeSelector,
+  ) => string,
   threadId: string,
-) => hrefBuilder(`${Path.Home}/${threadId}`);
+  selectorOverride?: ClientRuntimeScopeSelector,
+) => hrefBuilder(`${Path.Home}/${threadId}`, {}, selectorOverride);
+
+const areRouteParamsEqual = (
+  previous?: Record<
+    string,
+    string | number | boolean | null | undefined
+  > | null,
+  next?: Record<string, string | number | boolean | null | undefined> | null,
+) => {
+  if (previous === next) {
+    return true;
+  }
+
+  const previousKeys = Object.keys(previous || {}).sort();
+  const nextKeys = Object.keys(next || {}).sort();
+  if (previousKeys.length !== nextKeys.length) {
+    return false;
+  }
+
+  return previousKeys.every(
+    (key, index) =>
+      key === nextKeys[index] && (previous || {})[key] === (next || {})[key],
+  );
+};
+
+const areSelectorsEqual = (
+  previous?: ClientRuntimeScopeSelector | null,
+  next?: ClientRuntimeScopeSelector | null,
+) =>
+  (previous?.workspaceId || null) === (next?.workspaceId || null) &&
+  (previous?.knowledgeBaseId || null) === (next?.knowledgeBaseId || null) &&
+  (previous?.kbSnapshotId || null) === (next?.kbSnapshotId || null) &&
+  (previous?.deployHash || null) === (next?.deployHash || null) &&
+  (previous?.runtimeScopeId || null) === (next?.runtimeScopeId || null);
+
+export const hasShellNavIntent = (item: DolaShellNavItem) =>
+  Boolean(item.path || item.onClick);
+
+export const hasShellHistoryIntent = (item: DolaShellHistoryItem) =>
+  Boolean(item.id || item.onClick);
 
 export const shouldPrefetchShellIntent = ({
   active,
@@ -157,7 +218,7 @@ export const resolveBackgroundNavPrefetchKeys = (
           (item) =>
             shouldPrefetchShellIntent({
               active: item.active,
-              hasAction: Boolean(item.onClick),
+              hasAction: hasShellNavIntent(item),
             }) && BACKGROUND_NAV_PREFETCH_KEYS.has(item.key),
         )
         .map((item) => item.key);
@@ -182,11 +243,16 @@ const areShellNavItemsEqual = (
     return (
       item.key === nextItem.key &&
       item.label === nextItem.label &&
-      item.icon === nextItem.icon &&
+      item.iconKey === nextItem.iconKey &&
+      (item.iconKey ? true : item.icon === nextItem.icon) &&
       item.sectionLabel === nextItem.sectionLabel &&
       item.active === nextItem.active &&
       item.badge === nextItem.badge &&
       item.placement === nextItem.placement &&
+      item.path === nextItem.path &&
+      areRouteParamsEqual(item.params, nextItem.params) &&
+      areSelectorsEqual(item.selector, nextItem.selector) &&
+      item.navigationScope === nextItem.navigationScope &&
       item.onClick === nextItem.onClick
     );
   });
@@ -203,12 +269,17 @@ const areShellHistoryItemsEqual = (
       item.title === nextItem.title &&
       item.subtitle === nextItem.subtitle &&
       item.active === nextItem.active &&
+      areSelectorsEqual(item.selector, nextItem.selector) &&
       item.onClick === nextItem.onClick
     );
   });
 
-const areDolaAppShellPropsEqual = (previous: Props, next: Props) =>
-  previous.children === next.children &&
+type SidebarProps = Omit<Props, 'children' | 'topbarExtra'>;
+
+const areDolaAppShellSidebarPropsEqual = (
+  previous: SidebarProps,
+  next: SidebarProps,
+) =>
   previous.historyLoading === next.historyLoading &&
   previous.onHistoryIntent === next.onHistoryIntent &&
   previous.onPrimaryAction === next.onPrimaryAction &&
@@ -219,7 +290,6 @@ const areDolaAppShellPropsEqual = (previous: Props, next: Props) =>
   previous.historySecondaryTitle === next.historySecondaryTitle &&
   previous.historyEmptyText === next.historyEmptyText &&
   previous.searchPlaceholder === next.searchPlaceholder &&
-  previous.topbarExtra === next.topbarExtra &&
   previous.onSettingsClick === next.onSettingsClick &&
   previous.hideHistorySection === next.hideHistorySection &&
   previous.sidebarBackAction?.label === next.sidebarBackAction?.label &&
@@ -308,17 +378,78 @@ const Sidebar = styled(Sider)`
     }
 
     .ant-menu-item-group {
-      margin-top: 6px;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #f1f3f7;
+    }
+
+    .ant-menu-item-group:first-of-type {
+      margin-top: 2px;
+      padding-top: 0;
+      border-top: 0;
     }
 
     .ant-menu-item-group-title {
-      padding: 10px 10px 6px !important;
+      padding: 3px 10px 5px !important;
       color: #8b93a7 !important;
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 700;
-      line-height: 1.4;
-      letter-spacing: 0.06em;
+      line-height: 1.25;
+      letter-spacing: 0.05em;
       text-transform: uppercase;
+    }
+
+    .ant-menu-item-group-list {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .ant-menu-item-group-list .ant-menu-item,
+    .ant-menu-item-group-list .ant-menu-submenu > .ant-menu-submenu-title {
+      width: 100%;
+      min-height: 30px;
+      height: 30px;
+      line-height: 30px;
+      margin: 0;
+      padding-inline: 8px !important;
+      border-radius: 9px;
+      color: #4b5563;
+      font-size: 13px;
+      font-weight: 400;
+      transition:
+        background 0.18s ease,
+        color 0.18s ease;
+    }
+
+    .ant-menu-item-group-list .ant-menu-item .ant-menu-title-content,
+    .ant-menu-item-group-list
+      .ant-menu-submenu
+      > .ant-menu-submenu-title
+      .ant-menu-title-content {
+      min-width: 0;
+    }
+
+    .ant-menu-item-group-list .ant-menu-item:hover,
+    .ant-menu-item-group-list
+      .ant-menu-submenu
+      > .ant-menu-submenu-title:hover {
+      background: #f7f8fb;
+      color: #111827;
+    }
+
+    .ant-menu-item-group-list .ant-menu-item-selected {
+      background: #f3f4f6;
+      color: #111827;
+      box-shadow: inset 2px 0 0 #d6dbe3;
+    }
+
+    .ant-menu-item-group-list .ant-menu-item .ant-menu-item-icon,
+    .ant-menu-item-group-list
+      .ant-menu-submenu
+      > .ant-menu-submenu-title
+      .ant-menu-item-icon {
+      font-size: 13px;
     }
 
     &.ant-layout-sider-collapsed {
@@ -442,8 +573,10 @@ const FooterControlCluster = styled.div<{ $collapsed?: boolean }>`
 const SidebarWorkspaceSwitcher = styled.div`
   flex-shrink: 0;
   min-height: 34px;
+  min-width: 0;
   padding-top: 6px;
   border-top: 1px solid #f3f5f8;
+  overflow: hidden;
 
   && {
     .runtime-scope-select.runtime-scope-workspace {
@@ -535,7 +668,9 @@ const HistorySection = styled.div`
 
 const HistoryScroller = styled.div`
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -571,13 +706,45 @@ const HistoryButton = styled(Button)<{ $active?: boolean }>`
       display: flex;
       justify-content: flex-start;
       text-align: left;
+      min-width: 0;
     }
 
     > span > div {
       width: 100%;
       text-align: left;
+      min-width: 0;
     }
   }
+`;
+
+const HistoryTextStack = styled.div`
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+`;
+
+const HistoryPrimaryText = styled.div`
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 400;
+  color: #111827;
+  line-height: 1.25;
+`;
+
+const HistorySecondaryText = styled.div`
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: #6b7280;
+  line-height: 1.25;
 `;
 
 const Footer = styled.div`
@@ -635,6 +802,7 @@ const Main = styled(Content)`
   min-width: 0;
   height: 100vh;
   overflow: auto;
+  scrollbar-gutter: stable both-edges;
   background: #ffffff;
   padding: 24px 24px 24px 4px;
 
@@ -660,7 +828,7 @@ const MainTopbar = styled.div`
   flex-wrap: wrap;
 `;
 
-const DolaAppShellFrame = memo(function DolaAppShellFrame({
+const DolaAppShellSidebar = memo(function DolaAppShellSidebar({
   navItems,
   historyItems = [],
   historyLoading = false,
@@ -671,12 +839,10 @@ const DolaAppShellFrame = memo(function DolaAppShellFrame({
   historyTitle = '历史对话',
   historyEmptyText = '暂无历史对话',
   searchPlaceholder = '搜索历史对话',
-  topbarExtra,
   onSettingsClick,
   hideHistorySection = false,
   sidebarBackAction,
-  children,
-}: Props) {
+}: SidebarProps) {
   const router = useRouter();
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const authSession = useAuthSession({ includeWorkspaceQuery: false });
@@ -703,8 +869,10 @@ const DolaAppShellFrame = memo(function DolaAppShellFrame({
   );
   const hrefWorkspace =
     runtimeScopeNavigation.hrefWorkspace || runtimeScopeNavigation.href;
+  const hrefRuntime = runtimeScopeNavigation.href;
   const pushWorkspace =
     runtimeScopeNavigation.pushWorkspace || runtimeScopeNavigation.push;
+  const pushRuntime = runtimeScopeNavigation.push;
   const workspaceScopedSelector = runtimeScopeNavigation.workspaceSelector;
   const prefetchUrls = useMemo(
     () => resolveShellPrefetchUrls((path) => hrefWorkspace(path)),
@@ -724,6 +892,10 @@ const DolaAppShellFrame = memo(function DolaAppShellFrame({
       return true;
     });
   }, [historyItems]);
+  const historyItemById = useMemo(
+    () => new Map(uniqueHistory.map((item) => [item.id, item])),
+    [uniqueHistory],
+  );
 
   const filteredHistory = useMemo(() => {
     const query = keyword.trim().toLowerCase();
@@ -797,13 +969,61 @@ const DolaAppShellFrame = memo(function DolaAppShellFrame({
     onHistoryIntent?.();
   }, [onHistoryIntent]);
 
+  const handleNavItemSelect = useCallback(
+    (item: DolaShellNavItem) => {
+      if (item.path) {
+        if (item.navigationScope === 'runtime') {
+          void pushRuntime(
+            item.path,
+            item.params || {},
+            item.selector || runtimeScopeNavigation.selector,
+          );
+          return;
+        }
+
+        void pushWorkspace(item.path, item.params || {});
+        return;
+      }
+
+      item.onClick?.();
+    },
+    [pushRuntime, pushWorkspace, runtimeScopeNavigation.selector],
+  );
+
+  const handleHistoryItemSelect = useCallback(
+    (item: DolaShellHistoryItem) => {
+      if (item.onClick) {
+        item.onClick();
+        return;
+      }
+
+      const historySelector = resolveHistoryThreadNavigationSelector({
+        item,
+        fallbackSelector: workspaceScopedSelector,
+      });
+
+      void pushRuntime(
+        `${Path.Home}/${item.id}`,
+        {},
+        historySelector,
+      );
+    },
+    [pushRuntime, workspaceScopedSelector],
+  );
+
   useEffect(() => {
     prefetchedNavKeysRef.current.clear();
     prefetchedThreadIdsRef.current.clear();
   }, [scopeKey]);
 
   const prefetchHistoryRoute = useCallback(
-    (threadId: string) => {
+    (item: DolaShellHistoryItem) => {
+      const historySelector = resolveHistoryThreadNavigationSelector({
+        item,
+        fallbackSelector: workspaceScopedSelector,
+      });
+      const threadId = item.id;
+
       if (typeof router.prefetch !== 'function') {
         const parsedThreadId = Number(threadId);
         if (
@@ -812,13 +1032,17 @@ const DolaAppShellFrame = memo(function DolaAppShellFrame({
         ) {
           prefetchedThreadIdsRef.current.add(parsedThreadId);
           void prefetchThreadOverview(parsedThreadId, {
-            selector: workspaceScopedSelector,
+            selector: historySelector,
           });
         }
         return;
       }
 
-      const href = resolveHistoryThreadHref(hrefWorkspace, threadId);
+      const href = resolveHistoryThreadHref(
+        hrefRuntime,
+        threadId,
+        historySelector,
+      );
       if (!href) {
         return;
       }
@@ -834,11 +1058,11 @@ const DolaAppShellFrame = memo(function DolaAppShellFrame({
       ) {
         prefetchedThreadIdsRef.current.add(parsedThreadId);
         void prefetchThreadOverview(parsedThreadId, {
-          selector: workspaceScopedSelector,
+          selector: historySelector,
         });
       }
     },
-    [hrefWorkspace, router, workspaceScopedSelector],
+    [hrefRuntime, router, workspaceScopedSelector],
   );
 
   const accountDisplayName = useMemo(() => {
@@ -989,6 +1213,11 @@ const DolaAppShellFrame = memo(function DolaAppShellFrame({
       }
 
       backgroundHistoryPrefetchIds.forEach((threadId) => {
+        const historyItem = historyItemById.get(threadId);
+        const historySelector = resolveHistoryThreadNavigationSelector({
+          item: historyItem || { id: threadId, title: threadId },
+          fallbackSelector: workspaceScopedSelector,
+        });
         const parsedThreadId = Number(threadId);
         if (
           Number.isFinite(parsedThreadId) &&
@@ -996,7 +1225,7 @@ const DolaAppShellFrame = memo(function DolaAppShellFrame({
         ) {
           prefetchedThreadIdsRef.current.add(parsedThreadId);
           void prefetchThreadOverview(parsedThreadId, {
-            selector: workspaceScopedSelector,
+            selector: historySelector,
           });
         }
       });
@@ -1019,7 +1248,7 @@ const DolaAppShellFrame = memo(function DolaAppShellFrame({
         clearTimeout(fallbackTimer);
       }
     };
-  }, [backgroundHistoryPrefetchIds, workspaceScopedSelector]);
+  }, [backgroundHistoryPrefetchIds, historyItemById, workspaceScopedSelector]);
 
   const buildMenuItems = (
     items: DolaShellNavItem[],
@@ -1041,12 +1270,12 @@ const DolaAppShellFrame = memo(function DolaAppShellFrame({
         if (
           shouldPrefetchShellIntent({
             active: item.active,
-            hasAction: Boolean(item.onClick),
+            hasAction: hasShellNavIntent(item),
           })
         ) {
           void prefetchNavData(item.key);
         }
-        item.onClick?.();
+        handleNavItemSelect(item);
       },
     }));
 
@@ -1083,21 +1312,14 @@ const DolaAppShellFrame = memo(function DolaAppShellFrame({
     ];
   };
 
-  const menuItems = buildMenuItems(topNavItems);
-  const footerMenuItems = buildMenuItems(bottomNavItems);
-  const resolvedTopbarExtra = useMemo(() => {
-    const extras: ReactNode[] = [];
-
-    if (topbarExtra) {
-      extras.push(<Fragment key="topbar-extra">{topbarExtra}</Fragment>);
-    }
-
-    if (extras.length === 0) {
-      return null;
-    }
-
-    return extras;
-  }, [runtimeScopeNavigation.hasRuntimeScope, router.asPath, topbarExtra]);
+  const menuItems = useMemo(
+    () => buildMenuItems(topNavItems),
+    [topNavItems, prefetchNavData, handleNavItemSelect],
+  );
+  const footerMenuItems = useMemo(
+    () => buildMenuItems(bottomNavItems),
+    [bottomNavItems, prefetchNavData, handleNavItemSelect],
+  );
 
   const onLogout = async () => {
     setLoggingOut(true);
@@ -1214,259 +1436,267 @@ const DolaAppShellFrame = memo(function DolaAppShellFrame({
   }, [collapsed, scopeKey]);
 
   return (
-    <Shell>
-      <Sidebar
-        width={196}
-        collapsed={collapsed}
-        collapsedWidth={60}
-        breakpoint="lg"
-        trigger={null}
-      >
-        <BrandBlock $collapsed={collapsed}>
-          {!collapsed ? (
-            <BrandIdentity>
-              <DotMatrix aria-hidden>
-                <span style={{ background: '#7757e8' }} />
-                <span style={{ background: '#4f83ff' }} />
-                <span style={{ background: '#f0b429' }} />
-                <span style={{ background: '#ef6b5b' }} />
-              </DotMatrix>
-              <div>
-                <BrandTitle>Nova</BrandTitle>
-              </div>
-            </BrandIdentity>
-          ) : null}
-          <CollapseToggleButton
+    <Sidebar
+      width={196}
+      collapsed={collapsed}
+      collapsedWidth={60}
+      breakpoint="lg"
+      trigger={null}
+    >
+      <BrandBlock $collapsed={collapsed}>
+        {!collapsed ? (
+          <BrandIdentity>
+            <DotMatrix aria-hidden>
+              <span style={{ background: '#7757e8' }} />
+              <span style={{ background: '#4f83ff' }} />
+              <span style={{ background: '#f0b429' }} />
+              <span style={{ background: '#ef6b5b' }} />
+            </DotMatrix>
+            <div>
+              <BrandTitle>Nova</BrandTitle>
+            </div>
+          </BrandIdentity>
+        ) : null}
+        <CollapseToggleButton
+          type="text"
+          size="small"
+          $collapsed={collapsed}
+          icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+          aria-label={collapsed ? '展开侧边栏' : '收起侧边栏'}
+          onClick={() => setCollapsed((value) => !value)}
+        />
+      </BrandBlock>
+
+      <NavSection>
+        {sidebarBackAction ? (
+          <SidebarBackButton
             type="text"
             size="small"
+            block={!collapsed}
             $collapsed={collapsed}
-            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-            aria-label={collapsed ? '展开侧边栏' : '收起侧边栏'}
-            onClick={() => setCollapsed((value) => !value)}
-          />
-        </BrandBlock>
+            icon={<ArrowLeftOutlined />}
+            aria-label={sidebarBackAction.label}
+            onClick={sidebarBackAction.onClick}
+          >
+            {collapsed ? null : sidebarBackAction.label}
+          </SidebarBackButton>
+        ) : null}
 
-        <NavSection>
-          {sidebarBackAction ? (
-            <SidebarBackButton
-              type="text"
-              size="small"
-              block={!collapsed}
-              $collapsed={collapsed}
-              icon={<ArrowLeftOutlined />}
-              aria-label={sidebarBackAction.label}
-              onClick={sidebarBackAction.onClick}
-            >
-              {collapsed ? null : sidebarBackAction.label}
-            </SidebarBackButton>
-          ) : null}
+        {onPrimaryAction ? (
+          <Button
+            type={router.pathname === Path.Home ? 'primary' : 'default'}
+            size="large"
+            block
+            icon={primaryActionIcon}
+            onClick={onPrimaryAction}
+          >
+            {collapsed ? null : primaryActionLabel}
+          </Button>
+        ) : null}
 
-          {onPrimaryAction ? (
-            <Button
-              type={router.pathname === Path.Home ? 'primary' : 'default'}
-              size="large"
-              block
-              icon={primaryActionIcon}
-              onClick={onPrimaryAction}
-            >
-              {collapsed ? null : primaryActionLabel}
-            </Button>
-          ) : null}
+        <Menu mode="inline" selectedKeys={selectedKeys} items={menuItems} />
+      </NavSection>
 
-          <Menu mode="inline" selectedKeys={selectedKeys} items={menuItems} />
-        </NavSection>
+      <Divider style={{ margin: 0 }} />
 
-        <Divider style={{ margin: 0 }} />
+      {hideHistorySection ? (
+        <div style={{ flex: 1 }} />
+      ) : (
+        <>
+          {!collapsed ? (
+            <HistorySection onPointerDown={handleHistoryIntent}>
+              <div>
+                <Text
+                  strong
+                  style={{ display: 'block', fontSize: 13, color: '#111827' }}
+                >
+                  {historyTitle}
+                </Text>
+              </div>
 
-        {hideHistorySection ? (
-          <div style={{ flex: 1 }} />
-        ) : (
-          <>
-            {!collapsed ? (
-              <HistorySection onPointerDown={handleHistoryIntent}>
-                <div>
-                  <Text
-                    strong
-                    style={{ display: 'block', fontSize: 13, color: '#111827' }}
-                  >
-                    {historyTitle}
-                  </Text>
-                </div>
+              <SearchInput
+                placeholder={searchPlaceholder}
+                value={keyword}
+                onFocus={handleHistoryIntent}
+                onChange={(event) => {
+                  handleHistoryIntent();
+                  setKeyword(event.target.value);
+                }}
+              />
 
-                <SearchInput
-                  placeholder={searchPlaceholder}
-                  value={keyword}
-                  onFocus={handleHistoryIntent}
-                  onChange={(event) => {
-                    handleHistoryIntent();
-                    setKeyword(event.target.value);
-                  }}
-                />
-
-                <HistoryScroller ref={historyScrollerRef}>
-                  {filteredHistory.length === 0 && historyLoading ? (
-                    <Text
-                      type="secondary"
-                      style={{ fontSize: 13, padding: '8px 4px' }}
-                    >
-                      加载历史对话中...
-                    </Text>
-                  ) : filteredHistory.length === 0 ? (
-                    <Text
-                      type="secondary"
-                      style={{ fontSize: 13, padding: '8px 4px' }}
-                    >
-                      {historyEmptyText}
-                    </Text>
-                  ) : (
-                    <>
-                      {shouldVirtualizeHistory &&
-                      historyVirtualWindow.topSpacerHeight > 0 ? (
-                        <div
-                          style={{
-                            height: historyVirtualWindow.topSpacerHeight,
-                          }}
-                          aria-hidden
-                        />
-                      ) : null}
-                      {visibleHistoryItems.map((item) => (
-                        <HistoryButton
-                          key={item.id}
-                          type="text"
-                          block
-                          $active={item.active}
-                          onMouseEnter={() => prefetchHistoryRoute(item.id)}
-                          onFocus={() => prefetchHistoryRoute(item.id)}
-                          onClick={() => {
-                            if (
-                              shouldPrefetchShellIntent({
-                                active: item.active,
-                                hasAction: Boolean(item.onClick),
-                              })
-                            ) {
-                              void prefetchHistoryRoute(item.id);
-                            }
-                            item.onClick?.();
-                          }}
-                        >
-                          <div>
-                            <div
-                              style={{
-                                fontSize: 12,
-                                fontWeight: 400,
-                                color: '#111827',
-                                lineHeight: 1.25,
-                              }}
-                            >
-                              {item.title}
-                            </div>
-                            {item.subtitle ? (
-                              <div
-                                style={{
-                                  fontSize: 11,
-                                  color: '#6b7280',
-                                  lineHeight: 1.25,
-                                }}
-                              >
-                                {item.subtitle}
-                              </div>
-                            ) : null}
-                          </div>
-                        </HistoryButton>
-                      ))}
-                      {shouldVirtualizeHistory &&
-                      historyVirtualWindow.bottomSpacerHeight > 0 ? (
-                        <div
-                          style={{
-                            height: historyVirtualWindow.bottomSpacerHeight,
-                          }}
-                          aria-hidden
-                        />
-                      ) : null}
-                    </>
-                  )}
-                </HistoryScroller>
-              </HistorySection>
-            ) : (
-              <div style={{ flex: 1 }} />
-            )}
-
-            <Divider style={{ margin: 0 }} />
-          </>
-        )}
-
-        <Footer>
-          <FooterControlCluster $collapsed={collapsed}>
-            {footerMenuItems.length > 0 ? (
-              <FooterNavSection>
-                <Menu
-                  mode="inline"
-                  selectedKeys={selectedKeys}
-                  items={footerMenuItems}
-                />
-                {!collapsed && runtimeScopeNavigation.hasRuntimeScope ? (
-                  <SidebarWorkspaceSwitcher>
-                    <RuntimeScopeSelector
-                      key={`workspace-selector-${router.asPath}`}
-                      layout="stacked"
-                      size="small"
-                      scope="workspace"
-                    />
-                  </SidebarWorkspaceSwitcher>
-                ) : null}
-              </FooterNavSection>
-            ) : null}
-
-            <Dropdown
-              overlay={
-                <Menu onClick={onAccountMenuClick}>
-                  <Menu.Item key="settings" icon={<SettingOutlined />}>
-                    系统设置
-                  </Menu.Item>
-                  <Menu.Item key="logout" icon={<LogoutOutlined />}>
-                    {loggingOut ? '退出中…' : '退出登录'}
-                  </Menu.Item>
-                </Menu>
-              }
-              trigger={['click']}
-              placement="topLeft"
-            >
-              <AccountButton
-                type="button"
-                $collapsed={collapsed}
-                aria-label="账户菜单"
+              <HistoryScroller
+                ref={historyScrollerRef}
+                data-testid="shell-history-scroller"
               >
-                <AccountRow>
-                  <AccountAvatar>
-                    {authSession.loading ? <UserOutlined /> : accountAvatar}
-                  </AccountAvatar>
-                  {!collapsed ? (
-                    <div style={{ minWidth: 0 }}>
-                      <Text
-                        strong
+                {filteredHistory.length === 0 && historyLoading ? (
+                  <Text
+                    type="secondary"
+                    style={{ fontSize: 13, padding: '8px 4px' }}
+                  >
+                    加载历史对话中...
+                  </Text>
+                ) : filteredHistory.length === 0 ? (
+                  <Text
+                    type="secondary"
+                    style={{ fontSize: 13, padding: '8px 4px' }}
+                  >
+                    {historyEmptyText}
+                  </Text>
+                ) : (
+                  <>
+                    {shouldVirtualizeHistory &&
+                    historyVirtualWindow.topSpacerHeight > 0 ? (
+                      <div
                         style={{
-                          display: 'block',
-                          fontSize: 13,
-                          color: '#111827',
+                          height: historyVirtualWindow.topSpacerHeight,
                         }}
-                        ellipsis
+                        aria-hidden
+                      />
+                    ) : null}
+                    {visibleHistoryItems.map((item) => (
+                      <HistoryButton
+                        key={item.id}
+                        type="text"
+                        block
+                        $active={item.active}
+                        onMouseEnter={() => prefetchHistoryRoute(item)}
+                        onFocus={() => prefetchHistoryRoute(item)}
+                        onClick={() => {
+                          if (
+                            shouldPrefetchShellIntent({
+                              active: item.active,
+                              hasAction: hasShellHistoryIntent(item),
+                            })
+                          ) {
+                            void prefetchHistoryRoute(item);
+                          }
+                          handleHistoryItemSelect(item);
+                        }}
                       >
-                        {authSession.loading
-                          ? '正在验证身份…'
-                          : accountDisplayName}
-                      </Text>
-                    </div>
-                  ) : null}
-                </AccountRow>
-                {!collapsed ? (
-                  <DownOutlined style={{ color: '#9ca3af', fontSize: 12 }} />
-                ) : null}
-              </AccountButton>
-            </Dropdown>
-          </FooterControlCluster>
-        </Footer>
-      </Sidebar>
+                        <HistoryTextStack>
+                          <HistoryPrimaryText title={item.title}>
+                            {item.title}
+                          </HistoryPrimaryText>
+                          {item.subtitle ? (
+                            <HistorySecondaryText title={item.subtitle}>
+                              {item.subtitle}
+                            </HistorySecondaryText>
+                          ) : null}
+                        </HistoryTextStack>
+                      </HistoryButton>
+                    ))}
+                    {shouldVirtualizeHistory &&
+                    historyVirtualWindow.bottomSpacerHeight > 0 ? (
+                      <div
+                        style={{
+                          height: historyVirtualWindow.bottomSpacerHeight,
+                        }}
+                        aria-hidden
+                      />
+                    ) : null}
+                  </>
+                )}
+              </HistoryScroller>
+            </HistorySection>
+          ) : (
+            <div style={{ flex: 1 }} />
+          )}
 
+          <Divider style={{ margin: 0 }} />
+        </>
+      )}
+
+      <Footer>
+        <FooterControlCluster $collapsed={collapsed}>
+          {footerMenuItems.length > 0 ? (
+            <FooterNavSection>
+              <Menu
+                mode="inline"
+                selectedKeys={selectedKeys}
+                items={footerMenuItems}
+              />
+            </FooterNavSection>
+          ) : null}
+          {!collapsed && runtimeScopeNavigation.hasRuntimeScope ? (
+            <SidebarWorkspaceSwitcher data-testid="shell-workspace-switcher">
+              <RuntimeScopeSelector
+                layout="stacked"
+                size="small"
+                scope="workspace"
+              />
+            </SidebarWorkspaceSwitcher>
+          ) : null}
+
+          <Dropdown
+            overlay={
+              <Menu onClick={onAccountMenuClick}>
+                <Menu.Item key="settings" icon={<SettingOutlined />}>
+                  系统设置
+                </Menu.Item>
+                <Menu.Item key="logout" icon={<LogoutOutlined />}>
+                  {loggingOut ? '退出中…' : '退出登录'}
+                </Menu.Item>
+              </Menu>
+            }
+            trigger={['click']}
+            placement="topLeft"
+          >
+            <AccountButton
+              type="button"
+              $collapsed={collapsed}
+              aria-label="账户菜单"
+            >
+              <AccountRow>
+                <AccountAvatar>
+                  {authSession.loading ? <UserOutlined /> : accountAvatar}
+                </AccountAvatar>
+                {!collapsed ? (
+                  <div style={{ minWidth: 0 }}>
+                    <Text
+                      strong
+                      style={{
+                        display: 'block',
+                        fontSize: 13,
+                        color: '#111827',
+                      }}
+                      ellipsis
+                    >
+                      {authSession.loading
+                        ? '正在验证身份…'
+                        : accountDisplayName}
+                    </Text>
+                  </div>
+                ) : null}
+              </AccountRow>
+              {!collapsed ? (
+                <DownOutlined style={{ color: '#9ca3af', fontSize: 12 }} />
+              ) : null}
+            </AccountButton>
+          </Dropdown>
+        </FooterControlCluster>
+      </Footer>
+    </Sidebar>
+  );
+}, areDolaAppShellSidebarPropsEqual);
+
+function DolaAppShellFrame({ children, topbarExtra, ...sidebarProps }: Props) {
+  const resolvedTopbarExtra = useMemo(() => {
+    const extras: ReactNode[] = [];
+
+    if (topbarExtra) {
+      extras.push(<Fragment key="topbar-extra">{topbarExtra}</Fragment>);
+    }
+
+    if (extras.length === 0) {
+      return null;
+    }
+
+    return extras;
+  }, [topbarExtra]);
+
+  return (
+    <Shell>
+      <DolaAppShellSidebar {...sidebarProps} />
       <Main>
         <MainInner>
           {resolvedTopbarExtra ? (
@@ -1477,7 +1707,7 @@ const DolaAppShellFrame = memo(function DolaAppShellFrame({
       </Main>
     </Shell>
   );
-}, areDolaAppShellPropsEqual);
+}
 
 export default function DolaAppShell(props: Props) {
   const embedded = usePersistentShellEmbedded();
