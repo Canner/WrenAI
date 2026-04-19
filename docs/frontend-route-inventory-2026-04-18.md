@@ -89,3 +89,5 @@
 - `src/pages/settings/access.tsx`、`src/pages/workspace/schedules.tsx`、
   `src/pages/api-management/history.tsx` 当前已直接复用各自 feature page 实现，
   不再经由 canonical route entry 中转，兼容层继续保持为薄 alias。
+- `src/pages/setup/{connection,models,relationships}.tsx` 当前也已收口为薄 route entry，
+  实际 setup flow 页面实现位于 `src/features/setup/*`。

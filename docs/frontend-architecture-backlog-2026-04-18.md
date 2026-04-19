@@ -106,6 +106,8 @@
   - `restApi.ts`
   - `dashboardRestShared.ts`
   - `threadPayloadSerializers.ts`
+- `src/pages/setup/{connection,models,relationships}.tsx` 已收口为 route-entry re-export；
+  实际页面实现已下沉到 `src/features/setup/*`
 
 ### W1-3. 建立 pages 目录约束
 
