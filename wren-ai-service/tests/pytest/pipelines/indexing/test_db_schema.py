@@ -8,8 +8,7 @@ from pytest_mock import MockFixture
 from src.pipelines.indexing.db_schema import DBSchema, DDLChunker
 
 
-@pytest.mark.asyncio
-async def test_empty_mdl():
+def test_empty_mdl():
     chunker = DDLChunker()
     mdl = {"models": [], "views": [], "relationships": [], "metrics": []}
 
@@ -17,8 +16,7 @@ async def test_empty_mdl():
     assert document == {"documents": []}
 
 
-@pytest.mark.asyncio
-async def test_single_model():
+def test_single_model():
     chunker = DDLChunker()
     mdl = {
         "models": [
@@ -49,8 +47,7 @@ async def test_single_model():
     )
 
 
-@pytest.mark.asyncio
-async def test_multiple_models():
+def test_multiple_models():
     chunker = DDLChunker()
     mdl = {
         "models": [
@@ -98,8 +95,7 @@ async def test_multiple_models():
     )
 
 
-@pytest.mark.asyncio
-async def test_column_is_primary_key():
+def test_column_is_primary_key():
     chunker = DDLChunker()
     mdl = {
         "models": [
@@ -140,8 +136,7 @@ async def test_column_is_primary_key():
     )
 
 
-@pytest.mark.asyncio
-async def test_column_with_properties():
+def test_column_with_properties():
     chunker = DDLChunker()
     mdl = {
         "models": [
@@ -195,8 +190,7 @@ async def test_column_with_properties():
     )
 
 
-@pytest.mark.asyncio
-async def test_column_with_nested_columns():
+def test_column_with_nested_columns():
     chunker = DDLChunker()
     mdl = {
         "models": [
@@ -242,8 +236,7 @@ async def test_column_with_nested_columns():
     )
 
 
-@pytest.mark.asyncio
-async def test_column_with_calculated_property():
+def test_column_with_calculated_property():
     chunker = DDLChunker()
     mdl = {
         "models": [
@@ -285,8 +278,7 @@ async def test_column_with_calculated_property():
     )
 
 
-@pytest.mark.asyncio
-async def test_column_with_relationship():
+def test_column_with_relationship():
     chunker = DDLChunker()
     mdl = {
         "models": [
@@ -381,8 +373,7 @@ async def test_column_with_relationship():
     )
 
 
-@pytest.mark.asyncio
-async def test_column_batch_size():
+def test_column_batch_size():
     chunker = DDLChunker()
     mdl = {
         "models": [
@@ -444,8 +435,7 @@ async def test_column_batch_size():
     )
 
 
-@pytest.mark.asyncio
-async def test_view():
+def test_view():
     chunker = DDLChunker()
     mdl = {
         "models": [],
@@ -468,8 +458,7 @@ async def test_view():
     )
 
 
-@pytest.mark.asyncio
-async def test_view_with_properties():
+def test_view_with_properties():
     chunker = DDLChunker()
     mdl = {
         "models": [],
@@ -498,8 +487,7 @@ async def test_view_with_properties():
     )
 
 
-@pytest.mark.asyncio
-async def test_metric():
+def test_metric():
     chunker = DDLChunker()
     mdl = {
         "models": [],
