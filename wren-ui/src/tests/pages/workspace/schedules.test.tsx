@@ -16,6 +16,10 @@ jest.mock('antd', () => {
       React.createElement('div', null, message, description),
     Button: ({ children }: any) =>
       React.createElement('button', null, children),
+    Card: ({ children, title, extra }: any) =>
+      React.createElement('section', null, title, extra, children),
+    Col: ({ children }: any) => React.createElement('div', null, children),
+    Row: ({ children }: any) => React.createElement('div', null, children),
     Select: ({ value, options }: any) =>
       React.createElement(
         'select',

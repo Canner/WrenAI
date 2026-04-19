@@ -33,6 +33,8 @@ jest.mock('antd', () => {
     Alert: ({ children }: any) => React.createElement('div', null, children),
     Button: ({ children }: any) =>
       React.createElement('button', null, children),
+    Card: ({ children, title, extra }: any) =>
+      React.createElement('section', null, title, extra, children),
     DatePicker: {
       RangePicker: (props: any) => {
         mockCapturedRangePickerProps = props;
