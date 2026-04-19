@@ -725,6 +725,14 @@
   - `src/features/settings/users/UsersMembersSection.tsx`
   将 users 页的角色来源摘要 / source detail 渲染 / 成员列表 section
   从 route entry 下沉到 settings/users feature 目录
+- 已继续把 `src/features/settings/users/UsersMembersSection.tsx` 从 ~602 行
+  收口到 ~280 行，并拆出：
+  - `UsersMembersToolbar.tsx`
+  - `UsersMemberInviteModal.tsx`
+  - `UsersMemberEditModal.tsx`
+  - `UsersMemberRoleModal.tsx`
+  - `usersMembersSectionTypes.ts`
+  当前 users 成员管理主 section 已聚焦筛选、表格与 modal 编排
 - 已新增 `src/features/settings/users/usersPageUtils.test.tsx`，为
   users feature 的角色来源 / 状态颜色 / source detail helper 补充回归测试
 - `settings/users.tsx` 已从 ~497 行继续收口到 route-entry re-export；

@@ -1,0 +1,131 @@
+import {
+  Alert,
+  Button,
+  Descriptions,
+  Modal,
+  Space,
+  Tag,
+  Typography,
+} from 'antd';
+import {
+  ROLE_LABELS,
+  STATUS_LABELS,
+  applicationStatusColor,
+  formatAccountLabel,
+  formatPhoneLabel,
+  renderSourceDetails,
+} from './usersPageUtils';
+import {
+  buildMemberLifecycleActions,
+  resolveMemberSourceFallbackLabel,
+  type MemberAction,
+  type WorkspaceMemberRecord,
+} from './usersMembersSectionTypes';
+
+const { Text } = Typography;
+
+const resolveRoleTagColor = (roleKey: string) =>
+  roleKey === 'owner' ? 'purple' : roleKey === 'admin' ? 'gold' : 'blue';
+
+export default function UsersMemberEditModal({
+  canManageMembers,
+  editingMember,
+  memberAction,
+  onClose,
+  onMemberAction,
+}: {
+  canManageMembers: boolean;
+  editingMember: WorkspaceMemberRecord | null;
+  memberAction: { memberId: string; action: MemberAction } | null;
+  onClose: () => void;
+  onMemberAction: (memberId: string, action: MemberAction) => void;
+}) {
+  const editingActions = editingMember
+    ? buildMemberLifecycleActions(editingMember)
+    : [];
+
+  return (
+    <Modal
+      title="编辑用户"
+      visible={Boolean(editingMember)}
+      destroyOnClose
+      footer={null}
+      onCancel={onClose}
+    >
+      {editingMember ? (
+        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+          <Descriptions
+            bordered
+            column={1}
+            labelStyle={{ width: 92, color: 'var(--nova-text-secondary)' }}
+          >
+            <Descriptions.Item label="姓名">
+              {editingMember.user?.displayName || '未命名用户'}
+            </Descriptions.Item>
+            <Descriptions.Item label="账号">
+              {formatAccountLabel(
+                editingMember.user?.email,
+                editingMember.userId || '—',
+              )}
+            </Descriptions.Item>
+            <Descriptions.Item label="邮箱">
+              {editingMember.user?.email || '—'}
+            </Descriptions.Item>
+            <Descriptions.Item label="手机号">
+              {formatPhoneLabel(
+                editingMember.user?.phone,
+                editingMember.user?.mobile,
+                editingMember.user?.phoneNumber,
+              )}
+            </Descriptions.Item>
+            <Descriptions.Item label="角色">
+              <Tag color={resolveRoleTagColor(editingMember.roleKey)}>
+                {ROLE_LABELS[editingMember.roleKey] || editingMember.roleKey}
+              </Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label="状态">
+              <Tag color={applicationStatusColor(editingMember.status)}>
+                {STATUS_LABELS[editingMember.status] || editingMember.status}
+              </Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label="来源">
+              {renderSourceDetails(
+                editingMember.sourceDetails,
+                resolveMemberSourceFallbackLabel(editingMember.status),
+              )}
+            </Descriptions.Item>
+          </Descriptions>
+
+          {canManageMembers ? (
+            <Space wrap>
+              {editingActions.map((action) => {
+                const busy =
+                  memberAction?.memberId === editingMember.id &&
+                  memberAction?.action === action.action;
+                return (
+                  <Button
+                    key={action.action}
+                    type={action.buttonType}
+                    danger={action.danger}
+                    loading={busy}
+                    onClick={() => {
+                      onMemberAction(editingMember.id, action.action);
+                      onClose();
+                    }}
+                  >
+                    {action.label}
+                  </Button>
+                );
+              })}
+              {!editingActions.length ? (
+                <Text type="secondary">当前账号不支持更多编辑操作。</Text>
+              ) : null}
+            </Space>
+          ) : (
+            <Alert type="info" showIcon message="当前账号仅可查看用户详情" />
+          )}
+        </Space>
+      ) : null}
+    </Modal>
+  );
+}

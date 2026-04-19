@@ -4,6 +4,9 @@ import {
   type WorkspaceGovernanceSourceDetail,
 } from '@/features/settings/workspaceGovernanceShared';
 import { renderSourceDetails } from '@/features/settings/workspaceGovernanceSharedUi';
+export { renderSourceDetails } from '@/features/settings/workspaceGovernanceSharedUi';
+
+export type SourceDetail = WorkspaceGovernanceSourceDetail;
 
 export const ROLE_LABELS: Record<string, string> = {
   owner: '所有者',
