@@ -819,6 +819,10 @@
 - `settings/skills.tsx` 已从 ~957 行继续收口到 route-entry re-export，仅保留
   页面入口；实际页面壳与 section/modal 组合已继续下沉到
   `src/features/settings/skills/ManageSkillsPage.tsx`
+- 已新增 `src/features/settings/profile/ManageProfilePage.tsx`，将
+  `settings.tsx` 的个人资料 / 代理登录提示 / 密码修改页面组合迁入
+  settings/profile feature 目录，并复用 `settingsShell` 共享导航壳；
+  `settings.tsx` 当前也已收口为 route-entry re-export
 - 随后继续删除仅做 page-level 组合的
   `src/features/settings/skills/useManageSkillsPage.ts`，让
   `ManageSkillsPage.tsx` 直接依赖 `useSkillsPageData.ts` /
