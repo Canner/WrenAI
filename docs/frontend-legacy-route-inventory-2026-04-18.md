@@ -20,14 +20,17 @@
 | `/api/ask_task/streaming` | `/api/v1/asking-tasks/[id]/stream` | 旧 SSE ask stream API | 确认客户端/外部集成都不再调用 | 保留兼容 wrapper，并发送 `Deprecation` + `Link` header |
 | `/api/ask_task/streaming_answer` | `/api/v1/thread-responses/[id]/stream-answer` | 旧 SSE answer stream API | 同上 | 保留兼容 wrapper，并发送 `Deprecation` + `Link` header |
 | `/api/v1/settings/data-source` | `/api/v1/settings/connection` | 历史 settings alias | 代码内无调用 | **已删除** |
+| `/api/v1/data-source/tables` | `/api/v1/connection/tables` | 历史连接表查询 alias | 确认无外部调用 / 本地脚本迁移完毕 | 保留 compatibility wrapper，直接调用 controller + 返回 deprecation header |
 
 ## 当前调用方说明
 
 ### `/modeling`
 当前已切走 stale E2E helper / runtime deep-link cleanup；兼容路径语义已集中到
 `src/utils/knowledgeWorkbench.ts` 的 shared helper，`src/pages/modeling.tsx`
-现已只保留基于 `src/utils/compatibilityRoutes.tsx` 的 runtime-aware redirect，
-不再手写 route entry 级跳转副作用。相关消费点仍包括：
+现已收口为指向 `src/features/modeling/ModelingCompatibilityRedirectPage.tsx`
+的薄 route entry；redirect 实现继续复用
+`src/utils/compatibilityRoutes.tsx` 的 runtime-aware helper，不再手写 route
+entry 级跳转副作用。相关消费点仍包括：
 
 - `src/utils/knowledgeWorkbench.ts`
 - `src/hooks/useRuntimeScopeNavigation.tsx`
@@ -48,6 +51,20 @@
 策略：兼容层继续保留，但显式返回 deprecation header，后续可统计流量后移除。
 当前 `Deprecation` / `Link` / `Warning` header 语义已统一收敛到
 `src/server/api/compatibilityApi.ts`。
+
+### `/api/v1/data-source/tables`
+
+当前 repo 运行时代码已统一改用 canonical route：
+
+- `src/utils/modelingRest.ts`
+
+仍保留 alias 的原因：
+
+- 兼容潜在外部调用方 / 旧脚本
+- `wren-ui/tmp/ui_init_workspaces.cjs` 仍引用旧路径（非运行时产物，不作为保留门槛）
+
+策略：兼容层不再 `export ... from '../connection/tables'`，而是直接调用
+controller 并附带 deprecation header；待确认无外部流量 / 本地脚本迁移完成后删除。
 
 ### `/settings/access` / `/settings/security`
 
