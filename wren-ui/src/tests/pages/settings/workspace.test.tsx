@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import SettingsWorkspacePage from '../../../pages/settings/workspace';
 
-jest.mock('../../../pages/workspace', () => ({
+jest.mock('@/features/workspace/ManageWorkspacePage', () => ({
   __esModule: true,
   default: () => <div>Workspace Canonical Page</div>,
 }));

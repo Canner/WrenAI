@@ -69,7 +69,9 @@
 
 兼容 route 当前直接复用 feature page：
 
+- `src/pages/register.tsx` -> `src/features/auth/AuthPage.tsx`
 - `src/pages/settings/access.tsx` -> `src/features/settings/users/ManageUsersPage.tsx`
+- `src/pages/settings/workspace.tsx` -> `src/features/workspace/ManageWorkspacePage.tsx`
 - `src/pages/workspace/schedules.tsx` -> `src/features/settings/systemTasks/ManageSystemTasksPage.tsx`
 - `src/pages/api-management/history.tsx` -> `src/features/settings/diagnostics/ManageDiagnosticsPage.tsx`
 

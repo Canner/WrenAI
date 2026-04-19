@@ -1,4 +1,4 @@
-import AuthPage from './auth';
+import AuthPage from '@/features/auth/AuthPage';
 import { Path } from '@/utils/enum';
 import { createCompatibilityAliasPage } from '@/utils/compatibilityRoutes';
 

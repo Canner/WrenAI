@@ -1,4 +1,4 @@
-import WorkspacePage from '../workspace';
+import WorkspacePage from '@/features/workspace/ManageWorkspacePage';
 import { Path } from '@/utils/enum';
 import { createCompatibilityAliasPage } from '@/utils/compatibilityRoutes';
 
