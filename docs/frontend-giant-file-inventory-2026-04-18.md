@@ -33,6 +33,7 @@
 - `DolaAppShell.tsx` 已进一步收敛到约 199 行，不再属于 giant-file 热点。
 - 已按“500 行以内即可”的当前标准继续收口：
   - `src/common.ts` 当前约 494 行
+  - `src/components/learning/guide/stories.tsx` 当前约 30 行
   - `src/utils/errorHandler.tsx` 当前约 320 行
   - `src/utils/referenceDemoKnowledge.ts` 当前约 165 行
   - `src/features/knowledgePage/lists.tsx` 当前约 459 行
@@ -139,6 +140,7 @@
 - `features/knowledgePage/lists.tsx` 也已从 giant-file 热点列表退出：SQL 模板 / 分析规则列表共用的虚拟滚动容器已下沉到 `virtualizedManageEntryList.tsx`，当前主文件约 459 行。
 - `errorHandler.tsx` 也已从 giant-file 热点列表退出：operationName 映射与 fallback copy 已下沉到 `errorHandlerOperationHandlers.tsx`，主文件当前约 320 行，并有独立 handler 单测覆盖。
 - `common.ts` 也已从 giant-file 热点列表退出：后台 tracker / schedule worker 初始化已下沉到 `commonBackgroundTrackers.ts`，版本化 singleton 逻辑已下沉到 `commonComponentSingleton.ts`；当前主文件约 494 行，聚焦组件装配主流程。
+- `components/learning/guide/stories.tsx` 也已从 giant-file 热点列表退出：四条引导 story 已拆到 `guideFlowStories.tsx` / `knowledgeGuideStories.tsx`，共享 preview panel、language switcher 与 driver config 已下沉到 `storyShared.tsx` / `storyTypes.ts`；当前入口文件约 30 行，仅保留 player dispatch。
 - `home/[id].tsx` 已进一步收敛到约 380 行，page shell、conversation shell、modal overlays 与 recovery orchestration 已下沉到 thread feature 组件 / hooks。
 - `home/dashboard.tsx` 已进一步收敛到 route-entry re-export；dashboard workbench 页面组合当前已下沉到 `features/home/dashboard/ManageDashboardPage.tsx`，为后续继续拆 dashboard rail / stage / 请求编排提供稳定 feature 边界。
 - `workspace.tsx` 已进一步收敛到约 452 行，不再属于 giant-file 热点。
