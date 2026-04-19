@@ -18,6 +18,7 @@ import {
 import LockOutlined from '@ant-design/icons/LockOutlined';
 import UserOutlined from '@ant-design/icons/UserOutlined';
 import ConsoleShellLayout from '@/components/reference/ConsoleShellLayout';
+import { buildNovaSettingsNavItems } from '@/components/reference/novaShellNavigation';
 import { buildRuntimeScopeUrl } from '@/runtime/client/runtimeScope';
 import useAuthSession from '@/hooks/useAuthSession';
 import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
@@ -27,9 +28,8 @@ import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { Path } from '@/utils/enum';
 import { getReferenceDisplayWorkspaceName } from '@/utils/referenceDemoKnowledge';
 import { resolvePlatformManagementFromAuthSession } from '@/features/settings/settingsPageCapabilities';
-import { buildSettingsConsoleShellProps } from '@/features/settings/settingsShell';
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 
 const SECURITY_TIPS = [
   '密码建议包含大小写字母、数字与特殊字符，避免与其它系统重复。',
@@ -93,11 +93,6 @@ export default function ManageProfilePage() {
   const showPlatformManagement = resolvePlatformManagementFromAuthSession(
     authSession.data,
   );
-  const shellProps = buildSettingsConsoleShellProps({
-    activeKey: 'settingsProfile',
-    onNavigate: runtimeScopeNavigation.pushWorkspace,
-    showPlatformAdmin: showPlatformManagement,
-  });
 
   const platformRoleKeys = authActor?.platformRoleKeys || [];
   const impersonation = authSession.data?.impersonation;
@@ -212,7 +207,18 @@ export default function ManageProfilePage() {
       description="查看当前账号、工作空间上下文与安全设置。"
       eyebrow="Account"
       loading={runtimeScopePage.guarding || authSession.loading}
-      {...shellProps}
+      navItems={buildNovaSettingsNavItems({
+        activeKey: 'settingsProfile',
+        onNavigate: runtimeScopeNavigation.pushWorkspace,
+        showPlatformAdmin: showPlatformManagement,
+      })}
+      hideHistorySection
+      hideHeader
+      contentBorderless
+      sidebarBackAction={{
+        label: '返回主菜单',
+        onClick: () => runtimeScopeNavigation.pushWorkspace(Path.Home),
+      }}
     >
       {!authSession.authenticated ? (
         <Alert

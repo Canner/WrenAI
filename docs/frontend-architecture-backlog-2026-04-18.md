@@ -776,6 +776,9 @@
   - `usePermissionsImpersonationExplain.ts` 负责 impersonation / explain
   - `usePermissionsRoleManagement.ts` 继续下沉到
     `usePermissionsRoleCatalog.ts` + `usePermissionsCustomRoles.ts`
+- 已新增 `src/features/settings/profile/ManageProfilePage.tsx`，将
+  `settings.tsx` 的个人资料 / 密码修改 / impersonation 提示页面实现下沉到
+  settings/profile feature 目录；`settings.tsx` 当前也已收口为 route-entry re-export
 - 已继续移除仅做治理组合的 `src/features/settings/permissions/usePermissionsGovernanceActions.ts`；随后又把当前 UI 未渲染的 governance / impersonation explain lane 从 permissions 页入口移出，避免页面继续实例化未使用的控制流，并顺手修正了这条旧组合链路里 `explainPrincipalType` 的错误引用
 - 已新增 `src/features/settings/identity/identityHealth.ts`，将 identity 页的证书健康、metadata 来源与 SCIM 状态 helper 从 `src/components/pages/settings/access/*` 迁入 settings/identity feature 目录，并补齐 `identityHealth.test.ts` 回归测试
 - 已补齐 settings shell 迁移后的渲染回归测试：
@@ -994,6 +997,10 @@
   不再在 route entry 内部手写 `useRouter + useRuntimeScopeNavigation.replace`
 - 已新增 `src/utils/compatibilityRoutes.test.tsx`，覆盖 alias / server redirect /
   runtime-aware redirect 三类共享兼容 helper 的行为
+- 已补 `src/tests/pages/settings/workspace.test.tsx` 与
+  `src/tests/pages/settings/security.test.ts`，锁定
+  `/settings/workspace -> /workspace` alias 与
+  `/settings/security -> /settings` redirect 的兼容行为
 - 已新增 `wren-ui/src/server/api/compatibilityApi.ts`，将 legacy API 的
   `Deprecation` / `Link` / `Warning` header 收敛为共享 helper
   - `/api/ask_task/streaming`
