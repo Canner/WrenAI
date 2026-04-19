@@ -826,6 +826,9 @@
   `settings.tsx` 的个人资料 / 代理登录提示 / 密码修改页面组合迁入
   settings/profile feature 目录，并复用 `settingsShell` 共享导航壳；
   `settings.tsx` 当前也已收口为 route-entry re-export
+- 已新增 `src/features/auth/AuthPage.tsx`，将 `auth.tsx` 的统一登录页
+  与 redirect helper 迁入 auth feature 目录；`auth.tsx` 当前收口为
+  route-entry re-export，继续对测试与 legacy `/register` alias 保持原导出契约
 - 随后继续删除仅做 page-level 组合的
   `src/features/settings/skills/useManageSkillsPage.ts`，让
   `ManageSkillsPage.tsx` 直接依赖 `useSkillsPageData.ts` /
