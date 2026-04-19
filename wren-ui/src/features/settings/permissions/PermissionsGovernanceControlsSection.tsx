@@ -32,43 +32,12 @@ import {
 const { Text, Title } = Typography;
 const { Panel } = Collapse;
 
-type ReviewActionDecision = 'keep' | 'remove';
-
-type AccessReview = {
-  id: string;
-  title: string;
-  status: string;
-  createdAt?: string | null;
-  items: Array<{
-    id: string;
-    userId?: string | null;
-    roleKey?: string | null;
-    status: string;
-    decision?: string | null;
-  }>;
-};
-
-type Member = {
-  userId: string;
-  user?: {
-    displayName?: string | null;
-    email?: string | null;
-  } | null;
-};
-
-type BreakGlassGrant = {
-  id: string;
-  userId: string;
-  roleKey: string;
-  status: string;
-  revokedAt?: string | null;
-  expiresAt?: string | null;
-  reason?: string | null;
-  user?: {
-    displayName?: string | null;
-    email?: string | null;
-  } | null;
-};
+import type {
+  AccessReview,
+  BreakGlassGrant,
+  Member,
+  ReviewActionDecision,
+} from './permissionsGovernanceControlTypes';
 
 export default function PermissionsGovernanceControlsSection({
   canManageControls,

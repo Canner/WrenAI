@@ -203,6 +203,7 @@
 
 - 已拆出 `src/features/home/homeSkillOptions.ts`
 - 已拆出 `src/features/home/homePageStyles.tsx`
+- `src/features/home/homePageStyles.tsx` 已继续从约 502 行收口到约 463 行；当前改为 styled leaf 直接 inline export，移除底部集中 export block 后不再超过 500 行阈值
 - 已拆出：
   - `src/features/home/components/HomeKnowledgePickerDropdown.tsx`
   - `src/features/home/components/HomeRecommendationSection.tsx`
@@ -789,6 +790,7 @@
 - 已继续新增：
   - `src/features/settings/permissions/PermissionsAuthorizationExplainSection.tsx`
   - `src/features/settings/permissions/PermissionsGovernanceControlsSection.tsx`
+  - `src/features/settings/permissions/permissionsGovernanceControlTypes.ts`
   - `src/features/settings/permissions/ManagePermissionsPage.tsx`
   - `src/features/settings/permissions/usePermissionsRoleManagement.ts`
   - `src/features/settings/permissions/usePermissionsRoleCatalog.ts`
@@ -798,6 +800,7 @@
   - `countActiveBreakGlassGrants`
   - `getAccessReviewStatusColor`
   - `getAccessReviewDecisionColor`
+- `src/features/settings/permissions/PermissionsGovernanceControlsSection.tsx` 已继续从约 504 行收口到约 473 行，并把 access review / break-glass / member / decision 类型下沉到 `permissionsGovernanceControlTypes.ts`；当前 section 已低于 500 行阈值
   将 permissions 页的授权解释 / access review / break-glass / impersonation
   主 section、治理态颜色 / 计数 helper，以及 page 级 mutation/request
   orchestration 继续下沉到 settings/permissions feature 目录；其中

@@ -4,7 +4,7 @@ import Prompt from '@/components/pages/home/prompt';
 
 const { Title } = Typography;
 
-const Stage = styled.div`
+export const Stage = styled.div`
   min-height: 100%;
   padding: clamp(116px, 17vh, 184px) 20px clamp(8px, 2vh, 16px);
   max-width: 920px;
@@ -17,7 +17,7 @@ const Stage = styled.div`
   background: transparent;
 `;
 
-const HeroPanel = styled.div`
+export const HeroPanel = styled.div`
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -25,7 +25,7 @@ const HeroPanel = styled.div`
   gap: 6px;
 `;
 
-const HeroGreeting = styled(Title)`
+export const HeroGreeting = styled(Title)`
   &.ant-typography {
     margin: 0 !important;
     font-size: 28px;
@@ -36,7 +36,7 @@ const HeroGreeting = styled(Title)`
   }
 `;
 
-const HeroTitle = styled(Title)`
+export const HeroTitle = styled(Title)`
   &.ant-typography {
     margin: 0 !important;
     font-size: 17px;
@@ -48,7 +48,7 @@ const HeroTitle = styled(Title)`
   }
 `;
 
-const ComposerCard = styled.div`
+export const ComposerCard = styled.div`
   border-radius: 20px;
   background: #ffffff;
   border: 1px solid #e7ecf3;
@@ -56,13 +56,13 @@ const ComposerCard = styled.div`
   padding: 12px 16px;
 `;
 
-const ComposerShell = styled.div<{ $dropdownOpen?: boolean }>`
+export const ComposerShell = styled.div<{ $dropdownOpen?: boolean }>`
   width: min(100%, 680px);
   position: relative;
   margin-top: 10px;
 `;
 
-const SourceChip = styled.div`
+export const SourceChip = styled.div`
   height: 28px;
   border-radius: 8px;
   background: #ffffff;
@@ -76,7 +76,7 @@ const SourceChip = styled.div`
   font-weight: 500;
 `;
 
-const SourceChipRemove = styled.button`
+export const SourceChipRemove = styled.button`
   width: 16px;
   height: 16px;
   border: 0;
@@ -95,7 +95,7 @@ const SourceChipRemove = styled.button`
   }
 `;
 
-const KnowledgePickerList = styled.div`
+export const KnowledgePickerList = styled.div`
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -104,7 +104,7 @@ const KnowledgePickerList = styled.div`
   overflow: auto;
 `;
 
-const KnowledgePickerCard = styled.button<{ $active?: boolean }>`
+export const KnowledgePickerCard = styled.button<{ $active?: boolean }>`
   width: 100%;
   border-radius: 8px;
   border: 1px solid
@@ -126,14 +126,14 @@ const KnowledgePickerCard = styled.button<{ $active?: boolean }>`
   }
 `;
 
-const RecommendationSection = styled.section`
+export const RecommendationSection = styled.section`
   width: 100%;
   display: flex;
   flex-direction: column;
   gap: 12px;
 `;
 
-const RecommendationRow = styled.div`
+export const RecommendationRow = styled.div`
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
@@ -147,7 +147,7 @@ const RecommendationRow = styled.div`
   }
 `;
 
-const RecommendationCard = styled.button<{ $accent: string }>`
+export const RecommendationCard = styled.button<{ $accent: string }>`
   border: 1px solid #e7ecf3;
   background: #ffffff;
   border-radius: 16px;
@@ -167,7 +167,7 @@ const RecommendationCard = styled.button<{ $accent: string }>`
   }
 `;
 
-const RecommendationIcon = styled.div<{ $accent: string }>`
+export const RecommendationIcon = styled.div<{ $accent: string }>`
   width: 32px;
   height: 32px;
   border-radius: 8px;
@@ -179,7 +179,7 @@ const RecommendationIcon = styled.div<{ $accent: string }>`
   font-size: 16px;
 `;
 
-const ComposerScopeRow = styled.div`
+export const ComposerScopeRow = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -187,7 +187,7 @@ const ComposerScopeRow = styled.div`
   margin-bottom: 10px;
 `;
 
-const KnowledgeDropdownPanel = styled.div`
+export const KnowledgeDropdownPanel = styled.div`
   position: absolute;
   top: calc(100% + 14px);
   left: 0;
@@ -203,7 +203,7 @@ const KnowledgeDropdownPanel = styled.div`
   gap: 10px;
 `;
 
-const KnowledgeDropdownSearchShell = styled.label`
+export const KnowledgeDropdownSearchShell = styled.label`
   height: 30px;
   width: 100%;
   background: transparent;
@@ -214,7 +214,7 @@ const KnowledgeDropdownSearchShell = styled.label`
   border-bottom: 1px solid #edf1f5;
 `;
 
-const KnowledgeDropdownSearch = styled.input`
+export const KnowledgeDropdownSearch = styled.input`
   flex: 1;
   min-width: 0;
   height: auto;
@@ -231,7 +231,7 @@ const KnowledgeDropdownSearch = styled.input`
   }
 `;
 
-const ComposerScopeChip = styled.button`
+export const ComposerScopeChip = styled.button`
   height: 28px;
   border-radius: 999px;
   border: 1px solid #e7ecf3;
@@ -256,7 +256,7 @@ const ComposerScopeChip = styled.button`
   }
 `;
 
-const ComposerPassiveChip = styled.div`
+export const ComposerPassiveChip = styled.div`
   height: 28px;
   border-radius: 999px;
   border: 1px solid #eef2f7;
@@ -270,7 +270,7 @@ const ComposerPassiveChip = styled.div`
   font-weight: 500;
 `;
 
-const ComposerAtMark = styled.span`
+export const ComposerAtMark = styled.span`
   width: 18px;
   height: 18px;
   border-radius: 999px;
@@ -283,7 +283,7 @@ const ComposerAtMark = styled.span`
   font-weight: 700;
 `;
 
-const ComposerPrompt = styled(Prompt)`
+export const ComposerPrompt = styled(Prompt)`
   width: 100%;
 
   .ant-input {
@@ -302,7 +302,7 @@ const ComposerPrompt = styled(Prompt)`
   }
 `;
 
-const ComposerToolButton = styled.button<{ $active?: boolean }>`
+export const ComposerToolButton = styled.button<{ $active?: boolean }>`
   height: 28px;
   border-radius: 999px;
   border: 1px solid
@@ -334,11 +334,11 @@ const ComposerToolButton = styled.button<{ $active?: boolean }>`
   }
 `;
 
-const ComposerKnowledgeAction = styled(ComposerScopeChip)`
+export const ComposerKnowledgeAction = styled(ComposerScopeChip)`
   background: #ffffff;
 `;
 
-const ExploreHeaderBar = styled.div`
+export const ExploreHeaderBar = styled.div`
   width: 100%;
   display: flex;
   align-items: center;
@@ -348,7 +348,7 @@ const ExploreHeaderBar = styled.div`
   padding-left: 4px;
 `;
 
-const ExploreTitle = styled.div`
+export const ExploreTitle = styled.div`
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -357,7 +357,7 @@ const ExploreTitle = styled.div`
   color: #111827;
 `;
 
-const ExploreSegmented = styled.div`
+export const ExploreSegmented = styled.div`
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -367,7 +367,7 @@ const ExploreSegmented = styled.div`
   border: 1px solid #edf1f6;
 `;
 
-const ExploreSegmentButton = styled.button<{
+export const ExploreSegmentButton = styled.button<{
   $active?: boolean;
   $disabled?: boolean;
 }>`
@@ -385,7 +385,7 @@ const ExploreSegmentButton = styled.button<{
   cursor: ${(props) => (props.$disabled ? 'not-allowed' : 'pointer')};
 `;
 
-const ExploreSourceHint = styled.div`
+export const ExploreSourceHint = styled.div`
   width: 100%;
   padding-left: 2px;
   color: #8b93a3;
@@ -393,26 +393,26 @@ const ExploreSourceHint = styled.div`
   line-height: 1.5;
 `;
 
-const ExploreEmpty = styled.div`
+export const ExploreEmpty = styled.div`
   padding: 18px 16px;
   color: #8b93a3;
   font-size: 13px;
 `;
 
-const KnowledgeOptionList = styled.div`
+export const KnowledgeOptionList = styled.div`
   display: block;
   max-height: min(380px, 44vh);
   min-height: 0;
   overflow-y: auto;
 `;
 
-const KnowledgeOptionItems = styled.div`
+export const KnowledgeOptionItems = styled.div`
   display: flex;
   flex-direction: column;
   gap: 6px;
 `;
 
-const KnowledgeOptionRow = styled.button<{ $active?: boolean }>`
+export const KnowledgeOptionRow = styled.button<{ $active?: boolean }>`
   width: 100%;
   border: 1px solid
     ${(props) =>
@@ -438,21 +438,21 @@ const KnowledgeOptionRow = styled.button<{ $active?: boolean }>`
   }
 `;
 
-const KnowledgeOptionMain = styled.div`
+export const KnowledgeOptionMain = styled.div`
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 10px;
 `;
 
-const KnowledgeOptionCopy = styled.div`
+export const KnowledgeOptionCopy = styled.div`
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 10px;
 `;
 
-const KnowledgeOptionMeta = styled.div<{ $active?: boolean }>`
+export const KnowledgeOptionMeta = styled.div<{ $active?: boolean }>`
   display: flex;
   align-items: center;
   gap: 8px;
@@ -461,42 +461,3 @@ const KnowledgeOptionMeta = styled.div<{ $active?: boolean }>`
   font-weight: 600;
   white-space: nowrap;
 `;
-
-export {
-  Stage,
-  HeroPanel,
-  HeroGreeting,
-  HeroTitle,
-  ComposerCard,
-  ComposerShell,
-  SourceChip,
-  SourceChipRemove,
-  KnowledgePickerList,
-  KnowledgePickerCard,
-  RecommendationSection,
-  RecommendationRow,
-  RecommendationCard,
-  RecommendationIcon,
-  ComposerScopeRow,
-  KnowledgeDropdownPanel,
-  KnowledgeDropdownSearchShell,
-  KnowledgeDropdownSearch,
-  ComposerScopeChip,
-  ComposerPassiveChip,
-  ComposerAtMark,
-  ComposerPrompt,
-  ComposerToolButton,
-  ComposerKnowledgeAction,
-  ExploreHeaderBar,
-  ExploreTitle,
-  ExploreSegmented,
-  ExploreSegmentButton,
-  ExploreSourceHint,
-  ExploreEmpty,
-  KnowledgeOptionList,
-  KnowledgeOptionItems,
-  KnowledgeOptionRow,
-  KnowledgeOptionMain,
-  KnowledgeOptionCopy,
-  KnowledgeOptionMeta,
-};
