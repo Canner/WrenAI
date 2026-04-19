@@ -545,6 +545,8 @@
 - 已继续把 `src/components/learning/guide/stories.tsx` 从约 653 行收口到约 30 行，并拆出 `guideFlowStories.tsx` / `knowledgeGuideStories.tsx` / `storyShared.tsx` / `storyTypes.ts` 分别承接引导 story 逻辑、共享 driver config、preview panel 与 payload 类型；主文件当前仅保留 story dispatch 入口
 - 已继续把 `src/components/pages/home/dashboardGrid/index.tsx` 从约 644 行收口到约 301 行，并拆出 `DashboardGridPinnedItem.tsx` / `DashboardGridPinnedItemTitle.tsx` / `dashboardGridTypes.ts` 承接看板 item preview、图表渲染、标题重命名与共享类型；主文件当前聚焦 grid 布局、resize 响应与 focus/refresh orchestration
 - 已继续把 `src/utils/chartSpecRuntime.ts` 从约 749 行收口到约 477 行，并拆出 `chartPreviewShaping.ts` 承接 top-N / other-bucket / dense-series downsample 的 preview data shaping；主文件当前聚焦图表 canonicalization 与 deterministic adjustment，且 `chartSpecRuntime.test.ts` 继续锁住既有行为
+- 已继续把 `src/runtime/client/runtimeScope.ts` 从约 804 行收口到约 42 行，并拆出 `runtimeScopeShared.ts` / `runtimeScopeParsing.ts` / `runtimeScopePersistence.ts` / `runtimeScopeRequest.ts` / `runtimeScopeTypes.ts` 承接共享规则、query/object/search 解析、client persistence 与 request/url helper；入口当前作为兼容 barrel，`runtimeScope.test.ts` 33 条用例继续通过
+- 已继续把 `src/features/home/dashboard/ManageDashboardPage.tsx` 从约 1145 行收口到约 372 行，并拆出 `useManageDashboardData.ts` / `useManageDashboardPageActions.ts` / `DashboardWorkbenchRail.tsx` / `DashboardWorkbenchStage.tsx` / `DashboardCreateModal.tsx` / `manageDashboardPageStyles.tsx` 承接数据加载、页面动作编排、左右工作台分区、创建弹窗与样式；主文件当前聚焦 runtime selector、工作台状态与顶层组合
 - 当前已完成纯状态 / 恢复判定 helper、页面样式、reference preview、conversation shell、page shell、overlay 组装与 polling/recovery orchestration 迁移
 
 ## 验收标准

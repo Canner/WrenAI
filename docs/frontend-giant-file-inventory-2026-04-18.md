@@ -33,8 +33,10 @@
 - `DolaAppShell.tsx` 已进一步收敛到约 199 行，不再属于 giant-file 热点。
 - 已按“500 行以内即可”的当前标准继续收口：
   - `src/common.ts` 当前约 494 行
+  - `src/features/home/dashboard/ManageDashboardPage.tsx` 当前约 372 行
   - `src/components/pages/home/dashboardGrid/index.tsx` 当前约 301 行
   - `src/components/learning/guide/stories.tsx` 当前约 30 行
+  - `src/runtime/client/runtimeScope.ts` 当前约 42 行
   - `src/utils/chartSpecRuntime.ts` 当前约 477 行
   - `src/utils/errorHandler.tsx` 当前约 320 行
   - `src/utils/referenceDemoKnowledge.ts` 当前约 165 行
@@ -144,6 +146,8 @@
 - `common.ts` 也已从 giant-file 热点列表退出：后台 tracker / schedule worker 初始化已下沉到 `commonBackgroundTrackers.ts`，版本化 singleton 逻辑已下沉到 `commonComponentSingleton.ts`；当前主文件约 494 行，聚焦组件装配主流程。
 - `components/learning/guide/stories.tsx` 也已从 giant-file 热点列表退出：四条引导 story 已拆到 `guideFlowStories.tsx` / `knowledgeGuideStories.tsx`，共享 preview panel、language switcher 与 driver config 已下沉到 `storyShared.tsx` / `storyTypes.ts`；当前入口文件约 30 行，仅保留 player dispatch。
 - `components/pages/home/dashboardGrid/index.tsx` 也已从 giant-file 热点列表退出：看板 item title / preview / chart render 逻辑已拆到 `DashboardGridPinnedItem.tsx`、`DashboardGridPinnedItemTitle.tsx` 与 `dashboardGridTypes.ts`；当前主文件约 301 行，聚焦 grid 布局与 resize/focus orchestration。
+- `features/home/dashboard/ManageDashboardPage.tsx` 也已从 giant-file 热点列表退出：看板列表/详情数据 hook 已下沉到 `useManageDashboardData.ts`，页面动作编排已下沉到 `useManageDashboardPageActions.ts`，左右工作台分区与创建弹窗已拆到 `DashboardWorkbenchRail.tsx` / `DashboardWorkbenchStage.tsx` / `DashboardCreateModal.tsx` / `manageDashboardPageStyles.tsx`；当前主文件约 372 行。
+- `runtime/client/runtimeScope.ts` 也已从 giant-file 热点列表退出：runtime selector 的共享规则、query/object/search 解析、client persistence 以及 request/url helper 已分别下沉到 `runtimeScopeShared.ts` / `runtimeScopeParsing.ts` / `runtimeScopePersistence.ts` / `runtimeScopeRequest.ts` / `runtimeScopeTypes.ts`；当前入口文件约 42 行，保留兼容导出面，并通过 `runtimeScope.test.ts` 锁定行为。
 - `utils/chartSpecRuntime.ts` 也已从 giant-file 热点列表退出：preview shaping lane 已拆到 `chartPreviewShaping.ts`，主文件当前约 477 行，聚焦 canonicalization 与 deterministic chart adjustment；现有 `chartSpecRuntime.test.ts` 继续覆盖 canonicalize/adjust/shaping 三组行为。
 - `home/[id].tsx` 已进一步收敛到约 380 行，page shell、conversation shell、modal overlays 与 recovery orchestration 已下沉到 thread feature 组件 / hooks。
 - `home/dashboard.tsx` 已进一步收敛到 route-entry re-export；dashboard workbench 页面组合当前已下沉到 `features/home/dashboard/ManageDashboardPage.tsx`，为后续继续拆 dashboard rail / stage / 请求编排提供稳定 feature 边界。
