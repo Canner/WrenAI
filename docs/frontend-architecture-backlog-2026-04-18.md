@@ -511,7 +511,8 @@
 - 已继续拆出 `src/features/home/thread/threadRecoveryOrchestrationTypes.ts` 与 recovery helper lanes（`threadRecoveryPlanHelpers.ts` / `threadRecoveryCleanupHelpers.ts` / `threadRecoveryQuestionStoreHelpers.ts` / `threadRecoveryPollingHelpers.ts`），将 recovery hook 的共享类型与 cleanup / recovery-plan / question-store / polling 逻辑继续按 types/helpers 分层
 - 已新增 `src/features/home/thread/useThreadPollingTimeouts.ts`，将 thread response/recommend 两类 timeout controller 与 stop/schedule 逻辑从 recovery hook 再次下沉
 - `threadPageState.ts` 已补充 `resolveThreadRecoveryPlan`，把“继续 prompt 流 / 恢复 asking task / 恢复 response 轮询 / 清空恢复态”的判定收敛到纯 helper，并由 `thread.test.tsx` 补齐回归
-- `home/[id].tsx` 已从 ~1405 行降到 ~380 行
+- `home/[id].tsx` 已从 ~1405 行降到 route-entry re-export；实际 thread 页组合已下沉到
+  `src/features/home/thread/routes/HomeThreadPage.tsx`
 - `useThreadRecoveryOrchestration.ts` 已继续收口到 ~195 行，并新增 `threadRecoveryOrchestrationTypes.ts` 与 recovery helper lanes 承接共享类型与 cleanup / recovery-plan / question-store helper
 - 已补 `src/features/home/thread/threadRecoveryOrchestrationHelpers.test.ts`，为 recovery cleanup / recovery-plan / question-store / polling helper 补齐纯函数回归覆盖
 - 已继续把 response/recommend 轮询的 dedupe / settle 逻辑下沉到 `threadRecoveryPollingHelpers.ts`（`startThreadResponsePollingIfNeeded` / `settleFinishedThreadResponsePolling` / `syncThreadRecommendationPollingState`），并补齐对应 helper 回归测试
