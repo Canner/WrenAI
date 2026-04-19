@@ -31,7 +31,12 @@
 
 - Wave 3 已有实质进展（knowledge feature 化、modeling workspace 抽离等）。
 - `DolaAppShell.tsx` 已进一步收敛到约 199 行，不再属于 giant-file 热点。
-- `home/index.tsx` 已进一步收敛到约 505 行，并把 landing controls / recommendations 下沉到 feature hooks，已暂时脱离 giant-file 热点。
+- 已按“500 行以内即可”的当前标准继续收口：
+  - `src/features/home/routes/HomeLandingPage.tsx` 当前约 284 行
+  - `src/features/settings/identity/ManageIdentityPage.tsx` 当前约 346 行
+  - `src/features/settings/automation/ManageAutomationPage.tsx` 当前约 316 行
+  - `src/features/settings/systemTasks/ManageSystemTasksPage.tsx` 当前约 310 行
+- `home/index.tsx` 已进一步收敛到 route-entry re-export，landing page 组合已迁入 `src/features/home/routes/HomeLandingPage.tsx`。
 - `KnowledgeMainStage.tsx` 已进一步收敛到约 191 行，overview 资产画廊、workbench header、modeling stage、SQL/规则 section 装配，以及主 stage props 类型都已继续下沉到专用组件 / hooks；新增 `KnowledgeOverviewStage.tsx`（约 115 行）/ `KnowledgeModelingSection.tsx`（约 50 行）/ `KnowledgeSqlTemplatesStage.tsx`（约 100 行）/ `KnowledgeInstructionsStage.tsx`（约 104 行）/ `knowledgeMainStageTypes.ts`（约 60 行）承接对应 stage/type lane；随后再新增 `buildKnowledgeMainStageSectionProps.ts` 与对应测试，统一承接 header / overview / modeling / SQL / 分析规则五条 stage props 映射；本轮又继续把这组 builder 拆成 `buildKnowledgeMainStageOverviewSectionProps.ts`（约 100 行）/ `buildKnowledgeMainStageEditorSectionProps.ts`（约 84 行）/ `knowledgeMainStageSectionPropTypes.ts`（约 15 行）/ `knowledgeMainStageOverviewSectionPropTypes.ts`（约 61 行）/ `knowledgeMainStageEditorSectionPropTypes.ts`（约 79 行），并继续新增 `buildKnowledgeMainStageEditorsInput.ts`（约 67 行）与对应测试，下沉 main-stage → editors hook 的纯输入映射；当前 `buildKnowledgeMainStageSectionProps.ts` 已收口为约 10 行 barrel。
 - `KnowledgeOverviewSection.tsx` 已进一步收敛到约 114 行，并新增 `KnowledgeOverviewStats.tsx`（约 59 行）/ `KnowledgeOverviewAssetsPanel.tsx`（约 82 行）/ `KnowledgeAssetDetailDrawer.tsx`（约 72 行）与对应测试；随后 `KnowledgeOverviewAssetsPanel.tsx` 又继续拆出 `KnowledgeAssetCreateCard.tsx`（约 34 行）/ `KnowledgeAssetGalleryCard.tsx`（约 89 行）/ `KnowledgeOverviewAssetsEmptyState.tsx`（约 49 行）/ `KnowledgeOverviewAssetsLoadingOverlay.tsx`（约 39 行），overview 的统计卡、资产画廊/空状态/加载态以及详情抽屉封装已进一步分层到独立 section 组件。
 - `AssetDetailContent.tsx` 已进一步收敛到约 165 行，并新增 `AssetDetailFieldOverview.tsx`（约 105 行）/ `AssetDetailUsagePanel.tsx`（约 83 行）/ `buildAssetDetailFieldColumns.tsx`（约 103 行）/ `assetDetailContentTypes.ts`（约 17 行）；资产详情的字段概览、推荐问法面板与字段列定义已拆到独立展示片段/纯 helper。

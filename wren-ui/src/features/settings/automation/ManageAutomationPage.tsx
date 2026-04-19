@@ -1,27 +1,6 @@
 import { useState } from 'react';
-import {
-  Alert,
-  Button,
-  Card,
-  Col,
-  Form,
-  Input,
-  Row,
-  Select,
-  Space,
-  Table,
-  Tag,
-  Typography,
-  message,
-} from 'antd';
-import RobotOutlined from '@ant-design/icons/RobotOutlined';
-import ApiOutlined from '@ant-design/icons/ApiOutlined';
+import { Alert, Space, message } from 'antd';
 import ConsoleShellLayout from '@/components/reference/ConsoleShellLayout';
-import {
-  ROLE_OPTIONS,
-  formatDateTime,
-  sourceDetailColor,
-} from '@/features/settings/workspaceGovernanceShared';
 import type { WorkspaceGovernanceOverview } from '@/features/settings/workspaceGovernanceShared';
 import { buildRuntimeScopeUrl } from '@/runtime/client/runtimeScope';
 import useAuthSession from '@/hooks/useAuthSession';
@@ -33,59 +12,9 @@ import { getReferenceDisplayWorkspaceName } from '@/utils/referenceDemoKnowledge
 import { resolvePlatformManagementFromAuthSession } from '@/features/settings/settingsPageCapabilities';
 import { buildSettingsConsoleShellProps } from '@/features/settings/settingsShell';
 import useWorkspaceGovernanceOverview from '@/features/settings/useWorkspaceGovernanceOverview';
-
-const { Paragraph, Text } = Typography;
-
-function AutomationSummaryMetric({
-  label,
-  value,
-  icon,
-}: {
-  label: string;
-  value: number;
-  icon?: any;
-}) {
-  return (
-    <Space direction="vertical" size={4}>
-      <Text type="secondary">{label}</Text>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          fontSize: 28,
-          fontWeight: 600,
-          lineHeight: 1.2,
-        }}
-      >
-        {icon ? <span style={{ fontSize: 20 }}>{icon}</span> : null}
-        <span>{value}</span>
-      </div>
-    </Space>
-  );
-}
-
-const renderSourceDetails = (
-  sourceDetails?: Array<{ kind?: string; label?: string }>,
-  fallbackLabel = '直接绑定',
-) => {
-  if (!sourceDetails || sourceDetails.length === 0) {
-    return <Tag color="blue">{fallbackLabel}</Tag>;
-  }
-
-  return (
-    <Space size={[4, 4]} wrap>
-      {sourceDetails.map((detail, index) => (
-        <Tag
-          key={`${detail.kind || 'detail'}-${index}`}
-          color={sourceDetailColor(detail.kind)}
-        >
-          {detail.label || detail.kind || fallbackLabel}
-        </Tag>
-      ))}
-    </Space>
-  );
-};
+import AutomationSummarySection from '@/features/settings/automation/AutomationSummarySection';
+import AutomationServiceAccountsSection from '@/features/settings/automation/AutomationServiceAccountsSection';
+import AutomationApiTokensSection from '@/features/settings/automation/AutomationApiTokensSection';
 
 export default function SettingsAutomationPage() {
   const runtimeScopePage = useProtectedRuntimeScopePage();
@@ -96,7 +25,6 @@ export default function SettingsAutomationPage() {
   const showPlatformManagement = resolvePlatformManagementFromAuthSession(
     authSession.data,
   );
-
   const currentWorkspaceName =
     getReferenceDisplayWorkspaceName(
       runtimeSelectorState?.currentWorkspace?.name,
@@ -125,7 +53,6 @@ export default function SettingsAutomationPage() {
     permissionActions['service_account.create'] ||
       permissionActions['api_token.create'],
   );
-
   const serviceAccounts = workspaceOverview?.serviceAccounts || [];
   const apiTokens = workspaceOverview?.apiTokens || [];
   const activeApiTokenCount = apiTokens.filter(
@@ -184,15 +111,16 @@ export default function SettingsAutomationPage() {
   };
 
   const handleServiceAccountAction = async (
-    serviceAccountId: string,
+    serviceAccount: NonNullable<
+      WorkspaceGovernanceOverview['serviceAccounts']
+    >[number],
     action: 'toggle' | 'delete',
-    status?: string,
   ) => {
     try {
       setServiceAccountLoading(true);
       const response = await fetch(
         buildRuntimeScopeUrl(
-          `/api/v1/workspace/service-accounts/${serviceAccountId}`,
+          `/api/v1/workspace/service-accounts/${serviceAccount.id}`,
         ),
         {
           method: action === 'delete' ? 'DELETE' : 'PATCH',
@@ -204,7 +132,8 @@ export default function SettingsAutomationPage() {
           body:
             action === 'toggle'
               ? JSON.stringify({
-                  status: status === 'active' ? 'inactive' : 'active',
+                  status:
+                    serviceAccount.status === 'active' ? 'inactive' : 'active',
                 })
               : undefined,
         },
@@ -220,7 +149,7 @@ export default function SettingsAutomationPage() {
       message.success(
         action === 'delete' ? '服务账号已删除' : '服务账号状态已更新',
       );
-      if (selectedServiceAccountId === serviceAccountId) {
+      if (selectedServiceAccountId === serviceAccount.id) {
         setSelectedServiceAccountId(null);
       }
       await refetchWorkspaceOverview();
@@ -257,9 +186,7 @@ export default function SettingsAutomationPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({
-            name: apiTokenName.trim(),
-          }),
+          body: JSON.stringify({ name: apiTokenName.trim() }),
         },
       );
       const payload = await response.json().catch(() => ({}));
@@ -284,11 +211,13 @@ export default function SettingsAutomationPage() {
     }
   };
 
-  const handleRevokeApiToken = async (tokenId: string) => {
+  const handleRevokeApiToken = async (
+    token: NonNullable<WorkspaceGovernanceOverview['apiTokens']>[number],
+  ) => {
     try {
       setApiTokenLoading(true);
       const response = await fetch(
-        buildRuntimeScopeUrl(`/api/v1/workspace/api-tokens/${tokenId}`),
+        buildRuntimeScopeUrl(`/api/v1/workspace/api-tokens/${token.id}`),
         {
           method: 'PATCH',
           credentials: 'include',
@@ -332,342 +261,54 @@ export default function SettingsAutomationPage() {
         />
       ) : (
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
-          <Card>
-            <Alert
-              type="info"
-              showIcon
-              message="当前运行范围"
-              description={
-                <Space direction="vertical" size={6}>
-                  <Text type="secondary">
-                    当前工作空间：<b>{currentWorkspaceName}</b>
-                  </Text>
-                  <Text type="secondary">
-                    Service Account、Token 生命周期与自动化入口统一在本页管理。
-                  </Text>
-                </Space>
-              }
-            />
-            <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-              <Col xs={24} md={8}>
-                <AutomationSummaryMetric
-                  label="服务账号"
-                  value={serviceAccounts.length}
-                  icon={<RobotOutlined />}
-                />
-              </Col>
-              <Col xs={24} md={8}>
-                <AutomationSummaryMetric
-                  label="活跃 Token"
-                  value={activeApiTokenCount}
-                  icon={<ApiOutlined />}
-                />
-              </Col>
-              <Col xs={24} md={8}>
-                <AutomationSummaryMetric
-                  label="最近使用记录"
-                  value={
-                    serviceAccounts.filter((account) => account.lastUsedAt)
-                      .length
-                  }
-                />
-              </Col>
-            </Row>
-          </Card>
-
-          <Row gutter={[16, 16]}>
-            <Col xs={24} xl={15}>
-              <Card title="服务账号">
-                <Text
-                  type="secondary"
-                  style={{ display: 'block', marginBottom: 12 }}
-                >
-                  最小权限、启停状态与最近使用记录。
-                </Text>
-                {!canManageMachineIdentity ? (
-                  <Alert
-                    type="info"
-                    showIcon
-                    style={{ marginBottom: 12 }}
-                    message="当前为只读视图"
-                    description="你可以查看 service account 与 API Token 状态，但创建、轮换、吊销仍需要具备 service_account / api_token 管理权限。"
-                  />
-                ) : null}
-                <Table
-                  rowKey="id"
-                  loading={loading || serviceAccountLoading}
-                  pagination={false}
-                  locale={{ emptyText: '当前没有自动化身份' }}
-                  dataSource={serviceAccounts}
-                  columns={[
-                    { title: '服务账号', dataIndex: 'name' },
-                    { title: '角色', dataIndex: 'roleKey', width: 120 },
-                    {
-                      title: '来源',
-                      key: 'source',
-                      width: 160,
-                      render: (_value, record) =>
-                        renderSourceDetails(record.sourceDetails),
-                    },
-                    {
-                      title: '活跃 Token',
-                      dataIndex: 'activeTokenCount',
-                      width: 110,
-                      render: (value: number | null | undefined) => value || 0,
-                    },
-                    {
-                      title: '最近使用',
-                      dataIndex: 'lastUsedAt',
-                      width: 160,
-                      render: (value: string | null | undefined) =>
-                        formatDateTime(value),
-                    },
-                    {
-                      title: '状态',
-                      dataIndex: 'status',
-                      width: 100,
-                      render: (value: string) => <Tag>{value}</Tag>,
-                    },
-                    ...(canManageMachineIdentity
-                      ? [
-                          {
-                            title: '操作',
-                            key: 'actions',
-                            width: 220,
-                            render: (
-                              _value: unknown,
-                              record: NonNullable<
-                                WorkspaceGovernanceOverview['serviceAccounts']
-                              >[number],
-                            ) => (
-                              <Space size={8} wrap>
-                                <Button
-                                  onClick={() => {
-                                    setSelectedServiceAccountId(record.id);
-                                    setLatestPlainTextToken(null);
-                                  }}
-                                >
-                                  选中发 Token
-                                </Button>
-                                <Button
-                                  onClick={() =>
-                                    void handleServiceAccountAction(
-                                      record.id,
-                                      'toggle',
-                                      record.status,
-                                    )
-                                  }
-                                >
-                                  {record.status === 'active' ? '停用' : '启用'}
-                                </Button>
-                                <Button
-                                  danger
-                                  onClick={() =>
-                                    void handleServiceAccountAction(
-                                      record.id,
-                                      'delete',
-                                      record.status,
-                                    )
-                                  }
-                                >
-                                  删除
-                                </Button>
-                              </Space>
-                            ),
-                          },
-                        ]
-                      : []),
-                  ]}
-                />
-              </Card>
-            </Col>
-            <Col xs={24} xl={9}>
-              <Card title="新建服务账号">
-                {canManageMachineIdentity ? (
-                  <Form layout="vertical">
-                    <Form.Item label="服务账号名称">
-                      <Input
-                        placeholder="服务账号名称"
-                        value={serviceAccountName}
-                        onChange={(event) =>
-                          setServiceAccountName(event.target.value)
-                        }
-                      />
-                    </Form.Item>
-                    <Form.Item label="描述">
-                      <Input
-                        placeholder="描述（可选）"
-                        value={serviceAccountDescription}
-                        onChange={(event) =>
-                          setServiceAccountDescription(event.target.value)
-                        }
-                      />
-                    </Form.Item>
-                    <Form.Item label="角色">
-                      <Select
-                        value={serviceAccountRoleKey}
-                        onChange={setServiceAccountRoleKey}
-                        options={ROLE_OPTIONS}
-                      />
-                    </Form.Item>
-                    <Button
-                      type="primary"
-                      loading={serviceAccountLoading}
-                      onClick={() => void handleCreateServiceAccount()}
-                    >
-                      新建服务账号
-                    </Button>
-                  </Form>
-                ) : (
-                  <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                    当前账号暂无自动化身份管理权限，本页仅提供运行状态与风险可见性。
-                  </Paragraph>
-                )}
-              </Card>
-            </Col>
-          </Row>
-
-          <Row gutter={[16, 16]}>
-            <Col xs={24} xl={15}>
-              <Card title="API Token">
-                <Text
-                  type="secondary"
-                  style={{ display: 'block', marginBottom: 12 }}
-                >
-                  到期、吊销与最近使用风险一并查看。
-                </Text>
-                <Table
-                  rowKey="id"
-                  loading={loading || apiTokenLoading}
-                  pagination={false}
-                  locale={{ emptyText: '当前没有 API Token' }}
-                  dataSource={apiTokens}
-                  columns={[
-                    { title: 'Token', dataIndex: 'name' },
-                    {
-                      title: '归属账号',
-                      dataIndex: 'serviceAccountId',
-                      render: (value: string | null | undefined) =>
-                        serviceAccounts.find((account) => account.id === value)
-                          ?.name || '—',
-                    },
-                    {
-                      title: '来源',
-                      key: 'source',
-                      width: 150,
-                      render: (_value, record) =>
-                        renderSourceDetails(
-                          record.sourceDetails,
-                          '服务账号 Token',
-                        ),
-                    },
-                    {
-                      title: '状态',
-                      dataIndex: 'status',
-                      width: 120,
-                      render: (value: string, record) => (
-                        <Tag color={record.revokedAt ? 'red' : 'green'}>
-                          {record.revokedAt ? '已吊销' : value}
-                        </Tag>
-                      ),
-                    },
-                    {
-                      title: '到期',
-                      dataIndex: 'expiresAt',
-                      width: 150,
-                      render: (value: string | null | undefined) =>
-                        formatDateTime(value),
-                    },
-                    {
-                      title: '最近使用',
-                      dataIndex: 'lastUsedAt',
-                      width: 150,
-                      render: (value: string | null | undefined) =>
-                        formatDateTime(value),
-                    },
-                    ...(canManageMachineIdentity
-                      ? [
-                          {
-                            title: '操作',
-                            key: 'actions',
-                            width: 100,
-                            render: (
-                              _value: unknown,
-                              record: NonNullable<
-                                WorkspaceGovernanceOverview['apiTokens']
-                              >[number],
-                            ) =>
-                              record.revokedAt ? null : (
-                                <Button
-                                  danger
-                                  onClick={() =>
-                                    void handleRevokeApiToken(record.id)
-                                  }
-                                >
-                                  吊销
-                                </Button>
-                              ),
-                          },
-                        ]
-                      : []),
-                  ]}
-                />
-              </Card>
-            </Col>
-            <Col xs={24} xl={9}>
-              <Card title="创建 Token">
-                {canManageMachineIdentity ? (
-                  <Form layout="vertical">
-                    <Form.Item label="服务账号">
-                      <Select
-                        placeholder="选择服务账号"
-                        value={selectedServiceAccountId || undefined}
-                        onChange={(value) => {
-                          setSelectedServiceAccountId(value);
-                          setLatestPlainTextToken(null);
-                        }}
-                        options={serviceAccounts.map((account) => ({
-                          label: `${account.name} · ${account.roleKey}`,
-                          value: account.id,
-                        }))}
-                      />
-                    </Form.Item>
-                    <Form.Item label="Token 名称">
-                      <Input
-                        placeholder="新 API Token 名称"
-                        value={apiTokenName}
-                        onChange={(event) =>
-                          setApiTokenName(event.target.value)
-                        }
-                      />
-                    </Form.Item>
-                    <Button
-                      loading={apiTokenLoading}
-                      onClick={() => void handleCreateApiToken()}
-                    >
-                      创建 Token
-                    </Button>
-                    {latestPlainTextToken ? (
-                      <Alert
-                        style={{ marginTop: 16 }}
-                        type="warning"
-                        showIcon
-                        message="请立即复制这个 Token"
-                        description={
-                          <Text copyable>{latestPlainTextToken}</Text>
-                        }
-                      />
-                    ) : null}
-                  </Form>
-                ) : (
-                  <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                    当前账号暂无 api_token.create 权限，本页仍可查看 Token
-                    风险状态与最近使用。
-                  </Paragraph>
-                )}
-              </Card>
-            </Col>
-          </Row>
+          <AutomationSummarySection
+            activeApiTokenCount={activeApiTokenCount}
+            currentWorkspaceName={currentWorkspaceName}
+            recentUsageCount={
+              serviceAccounts.filter((account) => account.lastUsedAt).length
+            }
+            serviceAccountCount={serviceAccounts.length}
+          />
+          <AutomationServiceAccountsSection
+            canManageMachineIdentity={canManageMachineIdentity}
+            loading={loading}
+            onCreate={() => void handleCreateServiceAccount()}
+            onDelete={(record) =>
+              void handleServiceAccountAction(record, 'delete')
+            }
+            onSelectForToken={(serviceAccountId) => {
+              setSelectedServiceAccountId(serviceAccountId);
+              setLatestPlainTextToken(null);
+            }}
+            onToggle={(record) =>
+              void handleServiceAccountAction(record, 'toggle')
+            }
+            selectedServiceAccountId={selectedServiceAccountId}
+            serviceAccountDescription={serviceAccountDescription}
+            serviceAccountLoading={serviceAccountLoading}
+            serviceAccountName={serviceAccountName}
+            serviceAccounts={serviceAccounts}
+            serviceAccountRoleKey={serviceAccountRoleKey}
+            setServiceAccountDescription={setServiceAccountDescription}
+            setServiceAccountName={setServiceAccountName}
+            setServiceAccountRoleKey={setServiceAccountRoleKey}
+          />
+          <AutomationApiTokensSection
+            apiTokenLoading={loading || apiTokenLoading}
+            apiTokenName={apiTokenName}
+            apiTokens={apiTokens}
+            canManageMachineIdentity={canManageMachineIdentity}
+            latestPlainTextToken={latestPlainTextToken}
+            onCreate={() => void handleCreateApiToken()}
+            onRevoke={(record) => void handleRevokeApiToken(record)}
+            onSelectServiceAccount={(value) => {
+              setSelectedServiceAccountId(value);
+              setLatestPlainTextToken(null);
+            }}
+            selectedServiceAccountId={selectedServiceAccountId}
+            serviceAccounts={serviceAccounts}
+            setApiTokenName={setApiTokenName}
+          />
         </Space>
       )}
     </ConsoleShellLayout>

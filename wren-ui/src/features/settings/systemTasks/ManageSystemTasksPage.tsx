@@ -1,162 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Alert,
-  Button,
-  Card,
-  Col,
-  Row,
-  Select,
-  Space,
-  Table,
-  Tag,
-  Typography,
-  message,
-} from 'antd';
+import { Alert, Space, message } from 'antd';
 import { buildRuntimeScopeUrl } from '@/runtime/client/runtimeScope';
 import ConsoleShellLayout from '@/components/reference/ConsoleShellLayout';
-import useAuthSession from '@/hooks/useAuthSession';
-import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
-import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import CacheSettingsDrawer from '@/components/pages/home/dashboardGrid/CacheSettingsDrawer';
 import type { Schedule as DashboardScheduleConfig } from '@/components/pages/home/dashboardGrid/CacheSettingsDrawer';
 import ScheduleRunDetailsDrawer from '@/components/pages/workspace/ScheduleRunDetailsDrawer';
 import { buildSettingsConsoleShellProps } from '@/features/settings/settingsShell';
 import { resolvePlatformManagementFromAuthSession } from '@/features/settings/settingsPageCapabilities';
-
-const { Text } = Typography;
-
-function SystemTaskSummaryMetric({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | number;
-}) {
-  return (
-    <Space direction="vertical" size={4}>
-      <Text type="secondary">{label}</Text>
-      <div style={{ fontSize: 28, fontWeight: 600, lineHeight: 1.2 }}>
-        {value}
-      </div>
-    </Space>
-  );
-}
-
-type ScheduleJobView = {
-  id: string;
-  targetType: string;
-  targetTypeLabel: string;
-  targetId: string;
-  targetName: string;
-  cronExpr: string;
-  timezone: string;
-  status: string;
-  nextRunAt?: string | null;
-  lastRunAt?: string | null;
-  lastError?: string | null;
-  dashboardId?: number | null;
-  cacheEnabled?: boolean;
-  scheduleConfig?: DashboardScheduleConfig | null;
-};
-
-type ScheduleRunView = {
-  id: string;
-  scheduleJobId: string;
-  targetType: string;
-  targetTypeLabel: string;
-  targetName: string;
-  status: string;
-  startedAt?: string | null;
-  finishedAt?: string | null;
-  traceId?: string | null;
-  errorMessage?: string | null;
-  detailJson?: {
-    runtimeIdentity?: {
-      workspaceId?: string | null;
-      knowledgeBaseId?: string | null;
-      kbSnapshotId?: string | null;
-      deployHash?: string | null;
-    } | null;
-    [key: string]: any;
-  } | null;
-};
-
-type ScheduleOverviewPayload = {
-  workspace: {
-    id: string;
-    name: string;
-    slug?: string | null;
-  };
-  currentKnowledgeBase?: {
-    id: string;
-    name: string;
-    slug?: string | null;
-  } | null;
-  currentKbSnapshot?: {
-    id: string;
-    deployHash?: string | null;
-  } | null;
-  stats: {
-    jobCount: number;
-    activeJobCount: number;
-    runCount: number;
-    latestRunStatus?: string | null;
-  };
-  jobs: ScheduleJobView[];
-  recentRuns: ScheduleRunView[];
-};
-
-const formatDateTime = (value?: string | null) => {
-  if (!value) {
-    return '—';
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return '—';
-  }
-
-  return date.toLocaleString('zh-CN', {
-    hour12: false,
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
-
-const getStatusColor = (status?: string | null) => {
-  switch (status) {
-    case 'active':
-    case 'succeeded':
-      return 'green';
-    case 'running':
-      return 'blue';
-    case 'failed':
-      return 'red';
-    case 'inactive':
-      return 'default';
-    default:
-      return 'default';
-  }
-};
-
-const getStatusLabel = (status?: string | null) => {
-  switch (status) {
-    case 'active':
-      return '启用';
-    case 'inactive':
-      return '停用';
-    case 'running':
-      return '运行中';
-    case 'succeeded':
-      return '成功';
-    case 'failed':
-      return '失败';
-    default:
-      return status || '未知';
-  }
-};
+import useAuthSession from '@/hooks/useAuthSession';
+import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
+import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
+import {
+  getStatusLabel,
+  type ScheduleJobView,
+  type ScheduleOverviewPayload,
+  type ScheduleRunView,
+} from '@/features/settings/systemTasks/systemTasksPageUtils';
+import SystemTasksSummarySection from '@/features/settings/systemTasks/SystemTasksSummarySection';
+import SystemTasksJobsSection from '@/features/settings/systemTasks/SystemTasksJobsSection';
+import SystemTasksRunsSection from '@/features/settings/systemTasks/SystemTasksRunsSection';
 
 export default function SettingsSystemTasksPage() {
   const runtimeScopePage = useProtectedRuntimeScopePage();
@@ -276,9 +138,7 @@ export default function SettingsSystemTasksPage() {
           buildRuntimeScopeUrl(`/api/v1/workspace/schedules/${jobId}`),
           {
             method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'disable' }),
           },
         );
@@ -314,13 +174,8 @@ export default function SettingsSystemTasksPage() {
           buildRuntimeScopeUrl(`/api/v1/workspace/schedules/${editingJob.id}`),
           {
             method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              action: 'update',
-              data: values,
-            }),
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'update', data: values }),
           },
         );
         const payload = (await response.json()) as { error?: string };
@@ -363,10 +218,7 @@ export default function SettingsSystemTasksPage() {
     () => [
       { label: '全部任务状态', value: 'all' },
       ...Array.from(new Set((data?.jobs || []).map((job) => job.status))).map(
-        (status) => ({
-          label: getStatusLabel(status),
-          value: status,
-        }),
+        (status) => ({ label: getStatusLabel(status), value: status }),
       ),
     ],
     [data?.jobs],
@@ -377,10 +229,7 @@ export default function SettingsSystemTasksPage() {
       { label: '全部运行状态', value: 'all' },
       ...Array.from(
         new Set((data?.recentRuns || []).map((run) => run.status)),
-      ).map((status) => ({
-        label: getStatusLabel(status),
-        value: status,
-      })),
+      ).map((status) => ({ label: getStatusLabel(status), value: status })),
     ],
     [data?.recentRuns],
   );
@@ -422,245 +271,26 @@ export default function SettingsSystemTasksPage() {
             description={error}
           />
         ) : null}
-
-        <Card>
-          <Space direction="vertical" size={12} style={{ width: '100%' }}>
-            <Text type="secondary">
-              当前工作空间 {data?.workspace?.name || '—'}
-              {data?.currentKnowledgeBase?.name
-                ? ` · 当前知识库 ${data.currentKnowledgeBase.name}`
-                : ''}
-            </Text>
-            <Row gutter={[16, 16]}>
-              <Col xs={24} md={6}>
-                <SystemTaskSummaryMetric
-                  label="任务总数"
-                  value={data?.stats.jobCount || 0}
-                />
-              </Col>
-              <Col xs={24} md={6}>
-                <SystemTaskSummaryMetric
-                  label="启用任务"
-                  value={data?.stats.activeJobCount || 0}
-                />
-              </Col>
-              <Col xs={24} md={6}>
-                <SystemTaskSummaryMetric
-                  label="最近运行数"
-                  value={data?.stats.runCount || 0}
-                />
-              </Col>
-              <Col xs={24} md={6}>
-                <SystemTaskSummaryMetric
-                  label="最新状态"
-                  value={getStatusLabel(data?.stats.latestRunStatus)}
-                />
-              </Col>
-            </Row>
-          </Space>
-        </Card>
-
-        <Card
-          title="任务列表"
-          extra={
-            <Space wrap>
-              <Text type="secondary">任务状态</Text>
-              <Select
-                value={jobStatusFilter}
-                onChange={(value) => setJobStatusFilter(value)}
-                options={jobStatusOptions}
-                style={{ minWidth: 180 }}
-              />
-            </Space>
-          }
-        >
-          <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-            当前支持对看板缓存刷新任务执行立即刷新、编辑计划与切换为仅手动刷新。
-          </Text>
-          <Table
-            rowKey="id"
-            loading={loading}
-            locale={{ emptyText: '暂无定时任务' }}
-            pagination={{ hideOnSinglePage: true, pageSize: 6 }}
-            dataSource={filteredJobs}
-            columns={[
-              {
-                title: '任务',
-                key: 'target',
-                render: (_value, record: ScheduleJobView) => (
-                  <Space direction="vertical" size={0}>
-                    <Text strong>{record.targetName}</Text>
-                    <Text type="secondary">{record.targetTypeLabel}</Text>
-                  </Space>
-                ),
-              },
-              {
-                title: '计划',
-                key: 'cron',
-                render: (_value, record: ScheduleJobView) => (
-                  <Space direction="vertical" size={0}>
-                    <Text>{record.cronExpr}</Text>
-                    <Text type="secondary">{record.timezone}</Text>
-                  </Space>
-                ),
-              },
-              {
-                title: '状态',
-                dataIndex: 'status',
-                width: 120,
-                render: (status: string) => (
-                  <Tag color={getStatusColor(status)}>
-                    {getStatusLabel(status)}
-                  </Tag>
-                ),
-              },
-              {
-                title: '下次执行',
-                dataIndex: 'nextRunAt',
-                width: 160,
-                render: (value: string | null) => formatDateTime(value),
-              },
-              {
-                title: '最近执行',
-                key: 'lastRun',
-                width: 200,
-                render: (_value, record: ScheduleJobView) => (
-                  <Space direction="vertical" size={0}>
-                    <Text>{formatDateTime(record.lastRunAt)}</Text>
-                    {record.lastError ? (
-                      <Text type="danger">{record.lastError}</Text>
-                    ) : (
-                      <Text type="secondary">无错误</Text>
-                    )}
-                  </Space>
-                ),
-              },
-              {
-                title: '操作',
-                key: 'actions',
-                width: 240,
-                render: (_value, record: ScheduleJobView) => {
-                  const isRunningAction =
-                    pendingAction?.jobId === record.id &&
-                    pendingAction.action === 'run';
-                  const isDisablingAction =
-                    pendingAction?.jobId === record.id &&
-                    pendingAction.action === 'disable';
-
-                  return (
-                    <Space size={8} wrap>
-                      <Button
-                        onClick={() => handleRunNow(record.id)}
-                        loading={isRunningAction}
-                      >
-                        立即刷新
-                      </Button>
-                      <Button
-                        onClick={() => setEditingJob(record)}
-                        loading={
-                          pendingAction?.jobId === record.id &&
-                          pendingAction.action === 'update'
-                        }
-                      >
-                        编辑计划
-                      </Button>
-                      {record.status === 'active' ? (
-                        <Button
-                          onClick={() => handleDisable(record.id)}
-                          loading={isDisablingAction}
-                        >
-                          切为仅手动刷新
-                        </Button>
-                      ) : null}
-                    </Space>
-                  );
-                },
-              },
-            ]}
-          />
-        </Card>
-
-        <Card
-          title="最近运行记录"
-          extra={
-            <Space wrap>
-              <Text type="secondary">运行状态</Text>
-              <Select
-                value={runStatusFilter}
-                onChange={(value) => setRunStatusFilter(value)}
-                options={runStatusOptions}
-                style={{ minWidth: 180 }}
-              />
-            </Space>
-          }
-        >
-          <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-            方便确认最近是否成功刷新、失败原因、trace 以及对应 runtime scope。
-          </Text>
-          <Table
-            rowKey="id"
-            loading={loading}
-            locale={{ emptyText: '暂无运行记录' }}
-            pagination={{ hideOnSinglePage: true, pageSize: 8 }}
-            dataSource={filteredRuns}
-            columns={[
-              {
-                title: '运行',
-                key: 'run',
-                render: (_value, record: ScheduleRunView) => (
-                  <Space direction="vertical" size={0}>
-                    <Text strong>{record.targetName}</Text>
-                    <Text type="secondary">
-                      {formatDateTime(record.startedAt)}
-                    </Text>
-                  </Space>
-                ),
-              },
-              {
-                title: '状态',
-                dataIndex: 'status',
-                width: 110,
-                render: (status: string) => (
-                  <Tag color={getStatusColor(status)}>
-                    {getStatusLabel(status)}
-                  </Tag>
-                ),
-              },
-              {
-                title: '详情',
-                key: 'detail',
-                render: (_value, record: ScheduleRunView) => (
-                  <Space direction="vertical" size={0}>
-                    {record.errorMessage ? (
-                      <Text type="danger">{record.errorMessage}</Text>
-                    ) : (
-                      <Text type="secondary">
-                        {record.traceId
-                          ? `traceId: ${record.traceId}`
-                          : '执行完成'}
-                      </Text>
-                    )}
-                    <Text type="secondary">
-                      {record.detailJson?.runtimeIdentity?.deployHash
-                        ? `deployHash: ${record.detailJson.runtimeIdentity.deployHash}`
-                        : '沿用当前 runtime scope'}
-                    </Text>
-                  </Space>
-                ),
-              },
-              {
-                title: '操作',
-                key: 'actions',
-                width: 120,
-                render: (_value, record: ScheduleRunView) => (
-                  <Button onClick={() => setSelectedRun(record)}>
-                    查看详情
-                  </Button>
-                ),
-              },
-            ]}
-          />
-        </Card>
+        <SystemTasksSummarySection data={data} />
+        <SystemTasksJobsSection
+          filteredJobs={filteredJobs}
+          jobStatusFilter={jobStatusFilter}
+          jobStatusOptions={jobStatusOptions}
+          loading={loading}
+          onChangeJobStatusFilter={setJobStatusFilter}
+          onDisable={(jobId) => void handleDisable(jobId)}
+          onEdit={setEditingJob}
+          onRunNow={(jobId) => void handleRunNow(jobId)}
+          pendingAction={pendingAction}
+        />
+        <SystemTasksRunsSection
+          filteredRuns={filteredRuns}
+          loading={loading}
+          onChangeRunStatusFilter={setRunStatusFilter}
+          onOpenRun={setSelectedRun}
+          runStatusFilter={runStatusFilter}
+          runStatusOptions={runStatusOptions}
+        />
       </Space>
 
       <CacheSettingsDrawer

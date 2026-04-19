@@ -1,10 +1,9 @@
-import { Space, Tag, Typography } from 'antd';
+import { Tag } from 'antd';
 import {
   formatRoleSourceLabel,
-  sourceDetailColor,
+  type WorkspaceGovernanceSourceDetail,
 } from '@/features/settings/workspaceGovernanceShared';
-
-const { Text } = Typography;
+import { renderSourceDetails } from '@/features/settings/workspaceGovernanceSharedUi';
 
 export const ROLE_LABELS: Record<string, string> = {
   owner: '所有者',
@@ -35,11 +34,6 @@ export const applicationStatusColor = (status: string) => {
     default:
       return 'default';
   }
-};
-
-export type SourceDetail = {
-  kind?: string;
-  label?: string;
 };
 
 export const formatAccountLabel = (
@@ -73,36 +67,14 @@ export const getRoleAdjustmentDisabledReason = (roleKey?: string | null) => {
   return null;
 };
 
-export const renderSourceDetails = (
-  sourceDetails?: SourceDetail[],
-  fallback?: string,
-) => {
-  if (!sourceDetails || sourceDetails.length === 0) {
-    return <Text type="secondary">{fallback || '—'}</Text>;
-  }
-
-  return (
-    <Space size={[4, 4]} wrap>
-      {sourceDetails.map((detail, index) => (
-        <Tag
-          key={`${detail.kind || 'source'}-${index}`}
-          color={sourceDetailColor(detail.kind)}
-        >
-          {detail.label || fallback || '—'}
-        </Tag>
-      ))}
-    </Space>
-  );
-};
-
 export const resolveRoleSourceSummary = ({
   workspaceActorSourceDetails,
   platformActorSourceDetails,
   workspaceRoleSource,
   platformRoleSource,
 }: {
-  workspaceActorSourceDetails?: SourceDetail[];
-  platformActorSourceDetails?: SourceDetail[];
+  workspaceActorSourceDetails?: WorkspaceGovernanceSourceDetail[];
+  platformActorSourceDetails?: WorkspaceGovernanceSourceDetail[];
   workspaceRoleSource?: 'legacy' | 'role_binding' | null;
   platformRoleSource?: 'legacy' | 'role_binding' | null;
 }) => ({

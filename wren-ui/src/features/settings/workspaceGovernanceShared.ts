@@ -1,3 +1,8 @@
+export type WorkspaceGovernanceSourceDetail = {
+  kind?: string;
+  label?: string;
+};
+
 export type WorkspaceGovernanceOverview = {
   authorization?: {
     actor?: {

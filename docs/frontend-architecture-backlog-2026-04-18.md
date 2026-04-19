@@ -25,6 +25,7 @@
 ## 执行原则
 
 - 优先做**低风险、高收益**重构
+- 大文件收口到 **500 行以内** 即视为达标，不再为拆分而拆分
 - 每一波都要求：
   - 小步提交
   - 有回归验证
@@ -735,6 +736,22 @@
   - `src/features/settings/automation/ManageAutomationPage.tsx`
   - `src/features/settings/systemTasks/ManageSystemTasksPage.tsx`
   - `src/features/settings/platform/ManagePlatformPage.tsx`
+- 已继续把以下 settings giant page 收口到 500 行内，并拆出 summary / section leaf：
+  - `src/features/settings/identity/ManageIdentityPage.tsx` → ~346 行
+    - `IdentitySummarySection.tsx`
+    - `IdentityProvidersSection.tsx`
+    - `DirectoryGroupsSection.tsx`
+  - `src/features/settings/automation/ManageAutomationPage.tsx` → ~316 行
+    - `AutomationSummarySection.tsx`
+    - `AutomationServiceAccountsSection.tsx`
+    - `AutomationApiTokensSection.tsx`
+  - `src/features/settings/systemTasks/ManageSystemTasksPage.tsx` → ~310 行
+    - `SystemTasksSummarySection.tsx`
+    - `SystemTasksJobsSection.tsx`
+    - `SystemTasksRunsSection.tsx`
+    - `systemTasksPageUtils.ts`
+- 已新增 `src/features/settings/workspaceGovernanceSharedUi.tsx`，把 users / identity /
+  automation 三处重复的 source-detail tag 渲染收口到共享 UI helper
 - settings 子域当前已基本形成“pages 仅 route entry，feature 承担页面实现”的结构，
   后续重点转向继续清理共享请求原语、legacy compatibility 与剩余 giant-file 热点
 - 已新增：
