@@ -12,7 +12,7 @@
 
 以下目录保留为页面入口：
 
-- `src/pages/index.tsx`
+- `src/pages/index.tsx`（route-entry re-export，实际实现位于 `src/features/home/ManageHomeIndexPage.tsx`）
 - `src/pages/auth.tsx`
 - `src/pages/register.tsx`（兼容 alias）
 - `src/pages/home/index.tsx`

@@ -834,6 +834,9 @@
 - 已新增 `src/features/home/dashboard/ManageDashboardPage.tsx`，将
   `home/dashboard.tsx` 的 dashboard workbench 页面组合迁入 home/dashboard
   feature 目录；`home/dashboard.tsx` 当前也已收口为 route-entry re-export
+- 已新增 `src/features/home/ManageHomeIndexPage.tsx`，将 `pages/index.tsx` 的
+  onboarding + loading route 入口迁入 home feature；`pages/index.tsx` 当前也已收口为
+  route-entry re-export
 - 已新增 `src/features/knowledgePage/routes/KnowledgeHomePage.tsx`，将
   `pages/knowledge/index.tsx` 的 workbench route 组合与测试需要的 helper re-export
   一并迁入 knowledgePage/routes；`pages/knowledge/index.tsx` 当前也已收口为
