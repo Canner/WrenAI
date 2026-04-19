@@ -1,18 +1,10 @@
 import clsx from 'clsx';
 import dynamic from 'next/dynamic';
-import styled from 'styled-components';
-import { useEffect, useMemo, useState, type ComponentType } from 'react';
-import { Alert, Form, Button, Skeleton, Modal, Select, message } from 'antd';
+import { useEffect, useMemo, useState } from 'react';
+import { Alert, Form, Modal, message } from 'antd';
 import { attachLoading } from '@/utils/helper';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
-import BasicProperties, {
-  PropertiesProps,
-} from '@/components/chart/properties/BasicProperties';
-import { ChartTaskStatus, ChartType, DashboardItemType } from '@/types/home';
-import DonutProperties from '@/components/chart/properties/DonutProperties';
-import LineProperties from '@/components/chart/properties/LineProperties';
-import StackedBarProperties from '@/components/chart/properties/StackedBarProperties';
-import GroupedBarProperties from '@/components/chart/properties/GroupedBarProperties';
+import { ChartType, DashboardItemType } from '@/types/home';
 import { Props as AnswerResultProps } from '@/components/pages/home/promptThread/AnswerResult';
 import { isEmpty, isEqual } from 'lodash';
 import {
@@ -28,117 +20,23 @@ import { usePromptThreadActionsStore } from './store';
 import useResponsePreviewData from '@/hooks/useResponsePreviewData';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import { createDashboardItem } from '@/utils/homeRest';
+import {
+  ChartWrapper,
+  ResultActionButton,
+  StyledSkeleton,
+  Toolbar,
+} from './chartAnswerStyles';
+import ChartAnswerPinModal from './ChartAnswerPinModal';
+import {
+  getDynamicProperties,
+  getIsChartFinished,
+  isCompatibleFieldName,
+  toPreferredRenderer,
+} from './chartAnswerUtils';
 
-const Chart = dynamic(() => import('@/components/chart'), {
-  ssr: false,
-});
-
-const StyledSkeleton = styled(Skeleton)`
-  padding: 16px;
-  .ant-skeleton-paragraph {
-    margin-bottom: 0;
-  }
-`;
-
-const ChartWrapper = styled.div`
-  position: relative;
-  padding-top: 0;
-  transition: padding-top 0.2s ease-out;
-  &.isEditMode {
-    padding-top: 72px;
-  }
-`;
-
-const Toolbar = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background-color: var(--gray-3);
-  padding: 8px 16px;
-  position: absolute;
-  top: -72px;
-  left: 0;
-  right: 0;
-  transition: top 0.2s ease-out;
-  &.isEditMode {
-    top: 0;
-  }
-`;
-
-const ResultActionButton = styled(Button)`
-  && {
-    height: 34px;
-    border-radius: 10px;
-    padding-inline: 12px;
-    font-weight: 500;
-  }
-`;
-
-const normalizeFieldToken = (value: string) =>
-  value.replace(/[`"]/g, '').replace(/\s+/g, '').trim().toLowerCase();
-
-const buildFieldAliases = (field: string): string[] => {
-  const normalized = normalizeFieldToken(field);
-  if (!normalized) return [];
-
-  const aliases = new Set<string>([normalized]);
-  if (normalized.includes('.')) {
-    aliases.add(normalized.split('.').pop() as string);
-  }
-
-  const aggregateMatch = normalized.match(/^([a-z_][a-z0-9_]*)\((.+)\)$/i);
-  if (aggregateMatch) {
-    const fn = aggregateMatch[1];
-    const arg = aggregateMatch[2];
-    aliases.add(`${fn}(${arg})`);
-    if (arg.includes('.')) {
-      aliases.add(`${fn}(${arg.split('.').pop()})`);
-    }
-  }
-
-  return Array.from(aliases);
-};
-
-const isCompatibleFieldName = (targetField: string, sourceField: string) => {
-  const targetAliases = buildFieldAliases(targetField);
-  if (targetAliases.length === 0) return false;
-  const sourceAliases = new Set(buildFieldAliases(sourceField));
-  return targetAliases.some((alias) => sourceAliases.has(alias));
-};
+const Chart = dynamic(() => import('@/components/chart'), { ssr: false });
 
 type DashboardOption = Pick<DashboardListItem, 'id' | 'name'>;
-
-const toPreferredRenderer = (value: unknown): 'svg' | 'canvas' | undefined =>
-  value === 'svg' || value === 'canvas' ? value : undefined;
-
-export const getIsChartFinished = (
-  status?: ChartTaskStatus | null,
-): boolean => {
-  if (!status) {
-    return false;
-  }
-  return [
-    ChartTaskStatus.FINISHED,
-    ChartTaskStatus.FAILED,
-    ChartTaskStatus.STOPPED,
-  ].includes(status);
-};
-
-const getDynamicProperties = (chartType?: ChartType | null) => {
-  const propertiesMap: Partial<
-    Record<ChartType, ComponentType<PropertiesProps>>
-  > = {
-    [ChartType.GROUPED_BAR]: GroupedBarProperties,
-    [ChartType.STACKED_BAR]: StackedBarProperties,
-    [ChartType.LINE]: LineProperties,
-    [ChartType.MULTI_LINE]: LineProperties,
-    [ChartType.PIE]: DonutProperties,
-  };
-  if (!chartType) {
-    return BasicProperties;
-  }
-  return propertiesMap[chartType] || BasicProperties;
-};
 
 export default function ChartAnswer(props: AnswerResultProps) {
   const { onGenerateChartAnswer, onAdjustChartAnswer } =
@@ -304,13 +202,12 @@ export default function ChartAnswer(props: AnswerResultProps) {
     chartDetail?.chartDataProfile || previewChartDataProfile,
   );
 
-  useEffect(() => {
-    form.setFieldsValue(chartOptionValues);
-  }, [chartOptionValues]);
+  useEffect(() => form.setFieldsValue(chartOptionValues), [chartOptionValues]);
 
-  const isAdjusted = useMemo(() => {
-    return newValues !== null && !isEqual(chartOptionValues, newValues);
-  }, [chartOptionValues, newValues]);
+  const isAdjusted = useMemo(
+    () => newValues !== null && !isEqual(chartOptionValues, newValues),
+    [chartOptionValues, newValues],
+  );
 
   const dataValues = useMemo(() => {
     const previewPayload = (previewDataResult.data?.previewData || {}) as {
@@ -387,13 +284,9 @@ export default function ChartAnswer(props: AnswerResultProps) {
     });
   };
 
-  const onEdit = () => {
-    setIsEditMode(!isEditMode);
-  };
+  const onEdit = () => setIsEditMode(!isEditMode);
 
-  const onPin = () => {
-    setIsPinModalOpen(true);
-  };
+  const onPin = () => setIsPinModalOpen(true);
 
   const onResetAdjustment = () => {
     setNewValues(null);
@@ -421,8 +314,10 @@ export default function ChartAnswer(props: AnswerResultProps) {
     '图表生成失败，请稍后重试。',
   );
   const answerShortMessage =
-    resolveAbortSafeErrorMessage(error?.shortMessage, answerErrorMessage || '') ||
-    '图表生成失败';
+    resolveAbortSafeErrorMessage(
+      error?.shortMessage,
+      answerErrorMessage || '',
+    ) || '图表生成失败';
   const previewErrorMessage = resolveAbortSafeErrorMessage(
     previewDataResult.error,
     '加载图表数据失败，请稍后重试。',
@@ -543,17 +438,18 @@ export default function ChartAnswer(props: AnswerResultProps) {
           chartRegenerateBtn
         )}
       </div>
-      <Modal
-        title="固定到看板"
-        visible={isPinModalOpen}
+      <ChartAnswerPinModal
+        dashboardsLoading={dashboardsLoading}
+        dashboardOptions={dashboardOptions}
+        open={isPinModalOpen}
+        pinSubmitting={pinSubmitting}
+        pinTargetDashboardId={pinTargetDashboardId}
+        setPinTargetDashboardId={setPinTargetDashboardId}
         onCancel={() => {
           setIsPinModalOpen(false);
           setPinTargetDashboardId(null);
         }}
-        confirmLoading={pinSubmitting}
-        okText="固定"
-        cancelText="取消"
-        onOk={async () => {
+        onConfirm={async () => {
           setPinSubmitting(true);
           try {
             const itemType = String(
@@ -596,23 +492,9 @@ export default function ChartAnswer(props: AnswerResultProps) {
             setPinSubmitting(false);
           }
         }}
-      >
-        <div className="gray-7" style={{ marginBottom: 12 }}>
-          可选目标看板；如果不选择，将加入当前作用域下的默认看板。固定后，你可以在看板页回到来源线程继续追问。
-        </div>
-        <Select
-          allowClear
-          style={{ width: '100%' }}
-          placeholder="不指定目标看板"
-          loading={dashboardsLoading}
-          value={pinTargetDashboardId ?? undefined}
-          onChange={(value?: number) => setPinTargetDashboardId(value ?? null)}
-          options={dashboardOptions.map((dashboard) => ({
-            label: dashboard.name,
-            value: dashboard.id,
-          }))}
-        />
-      </Modal>
+      />
     </StyledSkeleton>
   );
 }
+
+export { getIsChartFinished } from './chartAnswerUtils';

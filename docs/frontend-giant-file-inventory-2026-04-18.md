@@ -32,6 +32,7 @@
 - Wave 3 已有实质进展（knowledge feature 化、modeling workspace 抽离等）。
 - `DolaAppShell.tsx` 已进一步收敛到约 199 行，不再属于 giant-file 热点。
 - 已按“500 行以内即可”的当前标准继续收口：
+  - `src/components/pages/home/promptThread/ChartAnswer.tsx` 当前约 500 行
   - `src/features/home/routes/HomeLandingPage.tsx` 当前约 284 行
   - `src/hooks/useHomeSidebar.tsx` 当前约 404 行
   - `src/features/settings/identity/ManageIdentityPage.tsx` 当前约 346 行
@@ -122,6 +123,7 @@
 - 知识库页面相关的 route-builder 重复逻辑已下沉到 `src/utils/knowledgeWorkbench.ts`，后续 giant-file 热点更多集中在 orchestration 与 editor 状态，而非 URL 构建重复。
 - `index.styles.ts` 当前已直接 re-export 到 workbench leaf style files；原本仅做多层 barrel re-export 的 `knowledgePageWorkbenchStyles.ts` / `knowledgePageWorkbenchShellStyles.ts` / `knowledgePageWorkbenchSummaryStyles.ts` / `knowledgePageWorkbenchSummaryCardStyles.ts` / `knowledgePageWorkbenchEditorStyles.ts` / `knowledgePageWorkbenchEditorCardStyles.ts` / `knowledgePageWorkbenchEditorItemStyles.ts` 已删除。
 - `home/[id].tsx` 与 knowledge workbench styles 都已开始第二轮收口，不再是完全未动状态。
+- `ChartAnswer.tsx` 已从 giant-file 热点列表退出：图表 field 对齐 / renderer 选择 / 完成态 helper 已下沉到 `chartAnswerUtils.ts`，pin-to-dashboard modal 与局部 styled shell 也已拆到独立文件；当前主组件约 500 行，达到本轮“500 行以内即可”的收口标准。
 - `home/[id].tsx` 已进一步收敛到约 380 行，page shell、conversation shell、modal overlays 与 recovery orchestration 已下沉到 thread feature 组件 / hooks。
 - `home/dashboard.tsx` 已进一步收敛到 route-entry re-export；dashboard workbench 页面组合当前已下沉到 `features/home/dashboard/ManageDashboardPage.tsx`，为后续继续拆 dashboard rail / stage / 请求编排提供稳定 feature 边界。
 - `workspace.tsx` 已进一步收敛到约 452 行，不再属于 giant-file 热点。

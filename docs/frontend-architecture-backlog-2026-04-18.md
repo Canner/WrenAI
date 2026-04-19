@@ -530,6 +530,11 @@
 - 已继续新增 `src/features/home/thread/useThreadResponseArtifactActions.ts` 与 `useThreadResponseArtifactActions.test.tsx`，将 thread response actions 中的 view-create / sql-pair-create loading 与成功/失败反馈编排从 `useThreadResponseActions.ts` 继续下沉到独立 hook，并补齐 hook 级回归；`useThreadResponseActions.ts` 已继续从约 214 行收口到约 183 行
 - 已继续新增 `src/features/home/thread/useThreadResponseMutationActions.ts` 与 `useThreadResponseMutationActions.test.tsx`，将 thread response actions 中的 answer/chart generation、chart adjust、SQL fix + regenerate 编排从 `useThreadResponseActions.ts` 继续下沉到独立 hook，并补齐 hook 级回归；`useThreadResponseActions.ts` 已继续从约 183 行收口到约 105 行
 - 随后继续删除只剩 page-level hook composition 的 `src/features/home/thread/useThreadResponseActions.ts`，让 `src/pages/home/[id].tsx` 直接组合 `useThreadCreateResponseAction.ts` / `useThreadRecommendedQuestionsAction.ts` / `useThreadResponseArtifactActions.ts` / `useThreadResponseMutationActions.ts` 四条真实 lane；thread 页这一层又少掉一层无意义中转
+- 已继续把 `src/components/pages/home/promptThread/ChartAnswer.tsx` 从 ~618 行收口到约 500 行，并拆出：
+  - `src/components/pages/home/promptThread/chartAnswerUtils.ts`
+  - `src/components/pages/home/promptThread/ChartAnswerPinModal.tsx`
+  - `src/components/pages/home/promptThread/chartAnswerStyles.tsx`
+  当前 ChartAnswer 已聚焦 preview 数据对齐、图表编辑态与 pin-to-dashboard 编排，同时继续通过 re-export `getIsChartFinished` 保持 thread state / 测试的既有契约
 - 当前已完成纯状态 / 恢复判定 helper、页面样式、reference preview、conversation shell、page shell、overlay 组装与 polling/recovery orchestration 迁移
 
 ## 验收标准
