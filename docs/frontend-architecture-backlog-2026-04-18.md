@@ -832,6 +832,10 @@
 - 已新增 `src/features/home/dashboard/ManageDashboardPage.tsx`，将
   `home/dashboard.tsx` 的 dashboard workbench 页面组合迁入 home/dashboard
   feature 目录；`home/dashboard.tsx` 当前也已收口为 route-entry re-export
+- 已新增 `src/features/knowledgePage/routes/KnowledgeHomePage.tsx`，将
+  `pages/knowledge/index.tsx` 的 workbench route 组合与测试需要的 helper re-export
+  一并迁入 knowledgePage/routes；`pages/knowledge/index.tsx` 当前也已收口为
+  route-entry re-export
 - 随后继续删除仅做 page-level 组合的
   `src/features/settings/skills/useManageSkillsPage.ts`，让
   `ManageSkillsPage.tsx` 直接依赖 `useSkillsPageData.ts` /
@@ -1002,6 +1006,9 @@
 - `settings/security` 已改为统一 redirect helper
 - `/modeling` 已改为同一 compatibility helper 提供的 runtime-aware redirect page，
   不再在 route entry 内部手写 `useRouter + useRuntimeScopeNavigation.replace`
+- 已新增 `src/features/modeling/ModelingCompatibilityRedirectPage.tsx`，将
+  `/modeling` 的 styled fallback 与 runtime-aware redirect helper 组合下沉到
+  modeling feature 目录；`pages/modeling.tsx` 当前收口为薄 route-entry re-export
 - 已新增 `src/utils/compatibilityRoutes.test.tsx`，覆盖 alias / server redirect /
   runtime-aware redirect 三类共享兼容 helper 的行为
 - 已补 `src/tests/pages/settings/workspace.test.tsx` 与

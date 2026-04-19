@@ -35,11 +35,8 @@
 - `src/features/knowledgePage/modals/AssetWizardModal.tsx`
 - `src/features/knowledgePage/modals/KnowledgeBaseModal.tsx`
 
-页面 `src/pages/knowledge/index.tsx` 现在只负责：
-
-- route 参数解析
-- runtime scope / workbench state orchestration
-- 组合 feature section / modal
+页面 `src/pages/knowledge/index.tsx` 现在已收口为 route-entry re-export，
+真实 workbench 组合位于 `src/features/knowledgePage/routes/KnowledgeHomePage.tsx`。
 
 ### 2.5 settings 页面辅助组件已迁入 feature 目录
 
