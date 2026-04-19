@@ -65,6 +65,8 @@ entry 级跳转副作用。相关消费点仍包括：
 
 策略：兼容层不再 `export ... from '../connection/tables'`，而是直接调用
 controller 并附带 deprecation header；待确认无外部流量 / 本地脚本迁移完成后删除。
+最小验证：`src/pages/api/tests/data_source_tables_api.test.ts` 覆盖 alias
+成功返回与 deprecation header 语义，避免 route-to-route alias 回归。
 
 ### `/settings/access` / `/settings/security`
 
