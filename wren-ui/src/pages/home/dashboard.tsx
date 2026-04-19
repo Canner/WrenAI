@@ -5,15 +5,13 @@ import styled from 'styled-components';
 import { Path } from '@/utils/enum';
 import useDrawerAction from '@/hooks/useDrawerAction';
 import { LoadingWrapper } from '@/components/PageLoading';
-import DashboardGrid, {
-  DashboardGridHandle,
-} from '@/components/pages/home/dashboardGrid';
+import DashboardGrid from '@/components/pages/home/dashboardGrid';
+import type { DashboardGridHandle } from '@/components/pages/home/dashboardGrid';
 import type { DashboardGridItem } from '@/components/pages/home/dashboardGrid';
 import EmptyDashboard from '@/components/pages/home/dashboardGrid/EmptyDashboard';
 import DashboardHeader from '@/components/pages/home/dashboardGrid/DashboardHeader';
-import CacheSettingsDrawer, {
-  Schedule,
-} from '@/components/pages/home/dashboardGrid/CacheSettingsDrawer';
+import CacheSettingsDrawer from '@/components/pages/home/dashboardGrid/CacheSettingsDrawer';
+import type { Schedule } from '@/components/pages/home/dashboardGrid/CacheSettingsDrawer';
 import { DataSourceName } from '@/types/dataSource';
 import { hasExecutableRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 
@@ -237,9 +235,7 @@ const isSupportCachedSettings = (
     return false;
   }
 
-  return (
-    !connection.sampleDataset && connection.type !== DataSourceName.DUCKDB
-  );
+  return !connection.sampleDataset && connection.type !== DataSourceName.DUCKDB;
 };
 
 const normalizeDashboardError = (error: unknown, fallbackMessage: string) =>

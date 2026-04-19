@@ -1,4 +1,4 @@
-import { Page } from '@playwright/test';
+import { Page, expect } from '@playwright/test';
 import { expectPathname } from '../helper';
 
 type OnboardingPageContext = {
@@ -21,5 +21,6 @@ export const saveRecommendedRelationships = async ({
   await page.goto('/setup/relationships');
 
   await page.getByRole('button', { name: 'Finish' }).click();
-  await expectPathname({ page, pathname: '/modeling' });
+  await expectPathname({ page, pathname: '/knowledge' });
+  await expect(page).toHaveURL(/\/knowledge(?:\?.*section=modeling.*)?$/);
 };

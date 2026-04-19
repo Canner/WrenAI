@@ -92,6 +92,9 @@ const buildAuthSessionUrl = (workspaceId: string | undefined) => {
 };
 
 const AUTH_SESSION_CACHE_TTL_MS = 120_000;
+// Intentional exception to the generic request primitive:
+// auth session needs cross-component TTL caching + in-flight dedupe so every
+// shell/status consumer can share one request per scope without extra churn.
 const authSessionCache = new Map<
   string,
   { payload: AuthSessionPayload; updatedAt: number }
@@ -100,6 +103,20 @@ const authSessionRequestCache = new Map<
   string,
   Promise<AuthSessionPayload | null>
 >();
+
+const getFreshCachedAuthSession = (sessionCacheKey: string) => {
+  const cachedSession = authSessionCache.get(sessionCacheKey);
+  if (!cachedSession) {
+    return null;
+  }
+
+  if (Date.now() - cachedSession.updatedAt > AUTH_SESSION_CACHE_TTL_MS) {
+    authSessionCache.delete(sessionCacheKey);
+    return null;
+  }
+
+  return cachedSession.payload;
+};
 
 export const clearAuthSessionCache = () => {
   authSessionCache.clear();
@@ -113,15 +130,7 @@ export const loadAuthSessionPayload = async ({
   sessionCacheKey: string;
   workspaceId?: string;
 }) => {
-  const cachedSession = authSessionCache.get(sessionCacheKey);
-  const cachedPayload =
-    cachedSession &&
-    Date.now() - cachedSession.updatedAt <= AUTH_SESSION_CACHE_TTL_MS
-      ? cachedSession.payload
-      : null;
-  if (cachedSession && !cachedPayload) {
-    authSessionCache.delete(sessionCacheKey);
-  }
+  const cachedPayload = getFreshCachedAuthSession(sessionCacheKey);
   if (cachedPayload) {
     return cachedPayload;
   }
@@ -187,19 +196,10 @@ export default function useAuthSession(options: UseAuthSessionOptions = {}) {
     () => buildSessionCacheKey(workspaceId, includeWorkspaceQuery),
     [includeWorkspaceQuery, workspaceId],
   );
-  const cachedSession = useMemo(() => {
-    const cached = authSessionCache.get(sessionCacheKey);
-    if (!cached) {
-      return null;
-    }
-
-    if (Date.now() - cached.updatedAt > AUTH_SESSION_CACHE_TTL_MS) {
-      authSessionCache.delete(sessionCacheKey);
-      return null;
-    }
-
-    return cached.payload;
-  }, [sessionCacheKey]);
+  const cachedSession = useMemo(
+    () => getFreshCachedAuthSession(sessionCacheKey),
+    [sessionCacheKey],
+  );
   const [loading, setLoading] = useState(() => !cachedSession);
   const [data, setData] = useState<AuthSessionPayload | null>(cachedSession);
   const [error, setError] = useState<string | null>(null);
@@ -209,15 +209,7 @@ export default function useAuthSession(options: UseAuthSessionOptions = {}) {
       return null;
     }
 
-    const cachedSession = authSessionCache.get(sessionCacheKey);
-    const cachedPayload =
-      cachedSession &&
-      Date.now() - cachedSession.updatedAt <= AUTH_SESSION_CACHE_TTL_MS
-        ? cachedSession.payload
-        : null;
-    if (cachedSession && !cachedPayload) {
-      authSessionCache.delete(sessionCacheKey);
-    }
+    const cachedPayload = getFreshCachedAuthSession(sessionCacheKey);
     if (cachedPayload) {
       setData(cachedPayload);
       setLoading(false);
@@ -244,19 +236,7 @@ export default function useAuthSession(options: UseAuthSessionOptions = {}) {
   }, [router.isReady, sessionCacheKey, workspaceId]);
 
   useEffect(() => {
-    const nextCachedSession = (() => {
-      const cached = authSessionCache.get(sessionCacheKey);
-      if (!cached) {
-        return null;
-      }
-
-      if (Date.now() - cached.updatedAt > AUTH_SESSION_CACHE_TTL_MS) {
-        authSessionCache.delete(sessionCacheKey);
-        return null;
-      }
-
-      return cached.payload;
-    })();
+    const nextCachedSession = getFreshCachedAuthSession(sessionCacheKey);
     if (nextCachedSession) {
       setData(nextCachedSession);
       setLoading(false);

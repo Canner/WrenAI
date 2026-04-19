@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { ApiType } from '@/types/apiHistory';
 import {
   buildRuntimeScopeUrl,
   ClientRuntimeScopeSelector,
 } from '@/runtime/client/runtimeScope';
-import { abortWithReason, isAbortRequestError } from '@/utils/abort';
+import useRestRequest from './useRestRequest';
 
 export type ApiHistoryListItem = {
   id: string;
@@ -63,6 +63,28 @@ export const normalizeApiHistoryListPayload = (
   };
 };
 
+export const buildApiHistoryListRequestKey = ({
+  enabled,
+  pagination,
+  filter,
+  runtimeScopeSelector,
+}: {
+  enabled: boolean;
+  pagination: {
+    offset: number;
+    limit: number;
+  };
+  filter?: ApiHistoryListFilter;
+  runtimeScopeSelector?: ClientRuntimeScopeSelector;
+}) =>
+  enabled
+    ? buildApiHistoryListUrl({
+        pagination,
+        filter,
+        runtimeScopeSelector,
+      })
+    : null;
+
 export const buildApiHistoryListUrl = ({
   pagination,
   filter,
@@ -108,79 +130,47 @@ export default function useApiHistoryList({
   runtimeScopeSelector?: ClientRuntimeScopeSelector;
   onError?: (error: Error) => void;
 }) {
-  const [data, setData] = useState<ApiHistoryListResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  const requestUrl = useMemo(() => {
-    if (!enabled) {
-      return null;
-    }
-
-    return buildApiHistoryListUrl({
-      pagination,
-      filter,
-      runtimeScopeSelector,
-    });
-  }, [enabled, filter, pagination, runtimeScopeSelector]);
-
-  useEffect(() => {
-    if (!requestUrl) {
-      setData(null);
-      setLoading(false);
-      return;
-    }
-
-    const controller = new AbortController();
-    let cancelled = false;
-
-    setLoading(true);
-
-    void fetch(requestUrl, {
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        const payload = await response.json().catch(() => null);
-        if (!response.ok) {
-          throw new Error(payload?.error || '加载调用历史失败，请稍后重试。');
-        }
-
-        return normalizeApiHistoryListPayload(payload);
-      })
-      .then((payload) => {
-        if (cancelled) {
-          return;
-        }
-
-        setData(payload);
-      })
-      .catch((error) => {
-        if (
-          cancelled ||
-          controller.signal.aborted ||
-          isAbortRequestError(error)
-        ) {
-          return;
-        }
-
-        onError?.(
-          error instanceof Error
-            ? error
-            : new Error('加载调用历史失败，请稍后重试。'),
-        );
-      })
-      .finally(() => {
-        if (cancelled || controller.signal.aborted) {
-          return;
-        }
-
-        setLoading(false);
+  const requestUrl = useMemo(
+    () =>
+      buildApiHistoryListRequestKey({
+        enabled,
+        pagination,
+        filter,
+        runtimeScopeSelector,
+      }),
+    [
+      enabled,
+      filter?.apiType,
+      filter?.endDate,
+      filter?.startDate,
+      filter?.statusCode,
+      filter?.threadId,
+      pagination.limit,
+      pagination.offset,
+      runtimeScopeSelector?.deployHash,
+      runtimeScopeSelector?.kbSnapshotId,
+      runtimeScopeSelector?.knowledgeBaseId,
+      runtimeScopeSelector?.runtimeScopeId,
+      runtimeScopeSelector?.workspaceId,
+    ],
+  );
+  const { data, loading } = useRestRequest<ApiHistoryListResponse | null>({
+    enabled: Boolean(requestUrl),
+    initialData: null,
+    requestKey: requestUrl,
+    request: async ({ signal }) => {
+      const response = await fetch(requestUrl!, {
+        signal,
       });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error || '加载调用历史失败，请稍后重试。');
+      }
 
-    return () => {
-      cancelled = true;
-      abortWithReason(controller, 'api-history-request-cancelled');
-    };
-  }, [onError, requestUrl]);
+      return normalizeApiHistoryListPayload(payload);
+    },
+    onError,
+  });
 
   return {
     data,

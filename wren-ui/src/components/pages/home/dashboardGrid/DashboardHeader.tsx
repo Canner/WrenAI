@@ -4,10 +4,8 @@ import { MoreIcon } from '@/utils/icons';
 import { MORE_ACTION } from '@/utils/enum';
 import { getCompactTime } from '@/utils/time';
 import { DashboardDropdown } from '@/components/diagram/CustomDropdown';
-import {
-  Schedule,
-  getScheduleText,
-} from '@/components/pages/home/dashboardGrid/CacheSettingsDrawer';
+import { getScheduleText } from '@/components/pages/home/dashboardGrid/CacheSettingsDrawer';
+import type { Schedule } from '@/components/pages/home/dashboardGrid/CacheSettingsDrawer';
 
 interface Props {
   isSupportCached: boolean;

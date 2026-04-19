@@ -1,0 +1,20 @@
+export type RuleSqlStateInput = {
+  createInstructionLoading: boolean;
+  createSqlPairLoading: boolean;
+  editingInstruction: any;
+  editingSqlPair: any;
+  handleDeleteRule: any;
+  handleDeleteSqlTemplate: any;
+  openRuleDetail: any;
+  openSqlTemplateDetail: any;
+  resetRuleDetailEditor: () => void;
+  resetSqlTemplateEditor: () => void;
+  ruleList: any[];
+  ruleManageLoading: boolean;
+  sqlList: any[];
+  sqlManageLoading: boolean;
+  submitRuleDetail: any;
+  submitSqlTemplateDetail: any;
+  updateInstructionLoading: boolean;
+  updateSqlPairLoading: boolean;
+};

@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { RuntimeSelectorController } from '@server/controllers/runtimeSelectorController';
-import { buildApiContextFromRequest } from '../../apiContext';
-import { sendRestApiError } from '../../restApi';
+import { buildApiContextFromRequest } from '@/server/api/apiContext';
+import { sendRestApiError } from '@/server/api/restApi';
 
 const runtimeSelectorController = new RuntimeSelectorController();
 

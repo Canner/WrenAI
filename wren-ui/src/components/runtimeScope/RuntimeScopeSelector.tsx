@@ -81,9 +81,10 @@ export default function RuntimeScopeSelector({
     kbSnapshotId?: string;
     targetPath?: string;
   }) => {
+    const targetPath = nextSelector.targetPath || router.pathname;
     const nextUrl = buildRuntimeScopeUrl(
-      nextSelector.targetPath || router.pathname,
-      baseParams,
+      targetPath,
+      targetPath === router.pathname ? baseParams : {},
       nextSelector,
     );
     runtimeScopeTransition.transitionTo(nextUrl);

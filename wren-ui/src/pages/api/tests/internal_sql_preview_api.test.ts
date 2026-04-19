@@ -18,7 +18,7 @@ jest.mock('@server/controllers/modelController', () => ({
   })),
 }));
 
-jest.mock('../v1/apiContext', () => ({
+jest.mock('@/server/api/apiContext', () => ({
   buildApiContextFromRequest: mockBuildApiContextFromRequest,
 }));
 

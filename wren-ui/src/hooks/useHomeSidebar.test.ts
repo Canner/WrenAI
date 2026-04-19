@@ -1,5 +1,6 @@
 import {
   buildHomeSidebarThreadDetailUrl,
+  buildHomeSidebarThreadsRequestKey,
   buildHomeSidebarThreadsUrl,
   getCachedHomeSidebarThreads,
   getCachedHomeSidebarQueryEnabled,
@@ -51,6 +52,15 @@ describe('useHomeSidebar helpers', () => {
   it('builds the sidebar threads rest url with runtime scope query params', () => {
     expect(
       buildHomeSidebarThreadsUrl({
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+      }),
+    ).toBe('/api/v1/threads?workspaceId=workspace-1&knowledgeBaseId=kb-1');
+  });
+
+  it('uses the same scope-aware url as the sidebar threads request key', () => {
+    expect(
+      buildHomeSidebarThreadsRequestKey({
         workspaceId: 'workspace-1',
         knowledgeBaseId: 'kb-1',
       }),

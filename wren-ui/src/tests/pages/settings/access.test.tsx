@@ -104,16 +104,13 @@ describe('settings/access compatibility route', () => {
     const markup = renderPage();
 
     expect(markup).toContain('用户管理');
-    expect(markup).toContain(
-      '管理当前 Workspace 的成员邀请、审批、角色调整与状态变更。',
-    );
     expect(markup).toContain('个人资料');
     expect(markup).toContain('权限管理');
-    expect(markup).toContain('身份与目录');
     expect(markup).toContain('审计日志');
     expect(markup).toContain('调用诊断');
     expect(markup).toContain('系统任务');
-    expect(markup).toContain('用户列表');
-    expect(markup).toContain('Workspace 角色来源');
+    expect(markup).toContain('姓名');
+    expect(markup).toContain('账号');
+    expect(markup).toContain('角色');
   });
 });

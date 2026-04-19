@@ -71,11 +71,6 @@ describe('novaShellNavigation', () => {
         sectionLabel: '组织与安全',
       },
       {
-        key: 'settingsIdentity',
-        label: '身份与目录',
-        sectionLabel: '组织与安全',
-      },
-      {
         key: 'settingsAudit',
         label: '审计日志',
         sectionLabel: '组织与安全',

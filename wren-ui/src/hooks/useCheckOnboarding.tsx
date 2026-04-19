@@ -55,6 +55,17 @@ export const buildOnboardingStatusSelector = (
     : {}),
 });
 
+export const buildOnboardingStatusRequestKey = ({
+  skip,
+  selector,
+}: {
+  skip: boolean;
+  selector: ClientRuntimeScopeSelector;
+}) =>
+  skip || Object.keys(selector).length === 0
+    ? null
+    : buildRuntimeScopeStateKey(selector);
+
 const useOnboardingStatusState = ({ skip }: { skip: boolean }) => {
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const onboardingSelector = useMemo(
@@ -69,10 +80,18 @@ const useOnboardingStatusState = ({ skip }: { skip: boolean }) => {
   );
   const requestKey = useMemo(
     () =>
-      skip || Object.keys(onboardingSelector).length === 0
-        ? null
-        : buildRuntimeScopeStateKey(onboardingSelector),
-    [onboardingSelector, skip],
+      buildOnboardingStatusRequestKey({
+        skip,
+        selector: onboardingSelector,
+      }),
+    [
+      onboardingSelector.deployHash,
+      onboardingSelector.kbSnapshotId,
+      onboardingSelector.knowledgeBaseId,
+      onboardingSelector.runtimeScopeId,
+      onboardingSelector.workspaceId,
+      skip,
+    ],
   );
 
   const {

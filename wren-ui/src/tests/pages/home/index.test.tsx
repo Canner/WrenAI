@@ -1,13 +1,16 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import HomePage, {
-  clearHomeSkillOptionsCacheForTests,
-  normalizeHomeSkillOptions,
+  resolveActiveSelectedKnowledgeBaseIds,
   resolveAskRuntimeAvailability,
   resolveAskRuntimeSelector,
   resolveCreatedThreadRuntimeSelector,
-  shouldLoadHomeSkillOptions,
 } from '../../../pages/home';
+import {
+  clearHomeSkillOptionsCacheForTests,
+  normalizeHomeSkillOptions,
+  shouldLoadHomeSkillOptions,
+} from '../../../features/home/homeSkillOptions';
 import { HISTORICAL_SNAPSHOT_READONLY_HINT } from '../../../utils/runtimeSnapshot';
 
 const mockUseHomeSidebar = jest.fn();
@@ -20,6 +23,8 @@ const mockBuildRuntimeScopeHeaders = jest.fn();
 const mockBuildRuntimeScopeUrl = jest.fn();
 const mockResolveClientRuntimeScopeSelector = jest.fn();
 const mockUseAuthSession = jest.fn();
+const mockUseHomeSuggestedQuestions = jest.fn();
+const mockUseHomeRecommendationAssets = jest.fn();
 
 let capturedPromptProps: any = null;
 
@@ -84,12 +89,15 @@ jest.mock('@/components/pages/home/prompt', () => {
     capturedPromptProps = props;
     React.useImperativeHandle(ref, () => ({
       submit: jest.fn(),
+      setDraft: jest.fn(),
+      focus: jest.fn(),
+      close: jest.fn(),
     }));
     return React.createElement('div', null, 'Prompt');
   });
 });
 
-jest.mock('@/components/reference/DolaAppShell', () => ({
+jest.mock('@/components/reference/DirectShellPageFrame', () => ({
   __esModule: true,
   default: ({ children }: any) => {
     const React = jest.requireActual('react');
@@ -125,6 +133,16 @@ jest.mock('@/hooks/useRuntimeSelectorState', () => ({
 jest.mock('@/hooks/useAuthSession', () => ({
   __esModule: true,
   default: (...args: any[]) => mockUseAuthSession(...args),
+}));
+
+jest.mock('@/features/home/useHomeSuggestedQuestions', () => ({
+  __esModule: true,
+  default: (...args: any[]) => mockUseHomeSuggestedQuestions(...args),
+}));
+
+jest.mock('@/features/home/useHomeRecommendationAssets', () => ({
+  __esModule: true,
+  default: (...args: any[]) => mockUseHomeRecommendationAssets(...args),
 }));
 
 jest.mock('@/runtime/client/runtimeScope', () => ({
@@ -237,6 +255,22 @@ describe('home index page', () => {
         },
       },
     });
+    mockUseHomeSuggestedQuestions.mockReturnValue({
+      suggestedQuestionsData: null,
+    });
+    mockUseHomeRecommendationAssets.mockReturnValue({
+      recommendationAssets: [
+        {
+          id: 'asset-orders',
+          name: '订单明细',
+          suggestedQuestions: [
+            '请先概览 订单明细 的核心业务字段与可回答的问题',
+            '围绕 下单时间 分析 订单明细 的总体趋势',
+            '结合 客户城市 与 订单明细 给出异常或分层洞察',
+          ],
+        },
+      ],
+    });
     mockUseRuntimeSelectorState.mockReturnValue({
       provided: true,
       loading: false,
@@ -331,8 +365,11 @@ describe('home index page', () => {
     expect(markup).toContain('0 张表');
     expect(markup).toContain('案例广场');
     expect(markup).toContain('推荐模板');
-    expect(markup).toContain('问题来自');
-    expect(markup).toContain('订单量最高的 3 个城市分别是谁？');
+    expect(markup).toContain(
+      '问题来自「订单分析知识库」知识库中资产「订单明细」的推荐问法，点击后会填入输入框。',
+    );
+    expect(markup).toContain('请先概览 订单明细 的核心业务字段与可回答的问题');
+    expect(markup).toContain('来源资产 · 订单明细');
     expect(markup).not.toContain('当前知识库');
     expect(markup).not.toContain('系统工作空间');
     expect(markup).not.toContain('确认范围');
@@ -368,7 +405,12 @@ describe('home index page', () => {
   it('shows sample-runtime source hint when selected knowledge base has no demo mapping', () => {
     const useStateSpy = setHomeStateOverrides({
       3: ['kb-2'],
-      9: {
+    });
+    mockUseHomeRecommendationAssets.mockReturnValue({
+      recommendationAssets: [],
+    });
+    mockUseHomeSuggestedQuestions.mockReturnValue({
+      suggestedQuestionsData: {
         questions: [
           { question: '最近 30 天 GMV 趋势' },
           { question: '订单量波动最大的类目' },
@@ -379,12 +421,109 @@ describe('home index page', () => {
 
     const markup = renderPage();
 
-    expect(markup).toContain('问题来自当前运行时的样例题库');
+    expect(markup).toContain(
+      '问题来自当前运行时的样例题库，点击后会填入输入框。',
+    );
+
+    useStateSpy.mockRestore();
+  });
+
+  it('prefers asset suggested questions over runtime sample questions', () => {
+    const useStateSpy = setHomeStateOverrides({
+      3: ['kb-2'],
+    });
+
+    mockUseHomeRecommendationAssets.mockReturnValue({
+      recommendationAssets: [
+        {
+          id: 'asset-membership',
+          name: '会员画像',
+          suggestedQuestions: [
+            '请先概览 会员画像 的核心业务字段与可回答的问题',
+            '围绕 用户等级 分析 会员画像 的总体趋势',
+            '结合 城市 与 会员画像 给出异常或分层洞察',
+          ],
+        },
+      ],
+    });
+    mockUseHomeSuggestedQuestions.mockReturnValue({
+      suggestedQuestionsData: {
+        questions: [
+          { question: '最近 30 天 GMV 趋势' },
+          { question: '订单量波动最大的类目' },
+          { question: '复购率最高的用户群体' },
+        ],
+      },
+    });
+
+    const markup = renderPage();
+
+    expect(markup).toContain(
+      '问题来自「客户经营知识库」知识库中资产「会员画像」的推荐问法，点击后会填入输入框。',
+    );
+    expect(markup).toContain('请先概览 会员画像 的核心业务字段与可回答的问题');
+    expect(markup).toContain('围绕 用户等级 分析 会员画像 的总体趋势');
+    expect(markup).toContain('来源资产 · 会员画像');
+    expect(markup).not.toContain('最近 30 天 GMV 趋势');
+
+    useStateSpy.mockRestore();
+  });
+
+  it('spreads recommendation cards across multiple assets before reusing the next question round', () => {
+    mockUseHomeRecommendationAssets.mockReturnValue({
+      recommendationAssets: [
+        {
+          id: 'asset-orders',
+          name: '订单明细',
+          suggestedQuestions: ['订单明细问题 1', '订单明细问题 2'],
+        },
+        {
+          id: 'asset-customers',
+          name: '客户画像',
+          suggestedQuestions: ['客户画像问题 1', '客户画像问题 2'],
+        },
+      ],
+    });
+
+    const markup = renderPage();
+
+    expect(markup).toContain(
+      '问题来自「订单分析知识库」知识库内多个资产的推荐问法，点击后会填入输入框。',
+    );
+    expect(markup).toContain('订单明细问题 1');
+    expect(markup).toContain('客户画像问题 1');
+    expect(markup).toContain('订单明细问题 2');
+    expect(markup).toContain('来源资产 · 订单明细');
+    expect(markup).toContain('来源资产 · 客户画像');
+  });
+
+  it('falls back to selected knowledge-base scoped prompts when runtime samples are unavailable', () => {
+    const useStateSpy = setHomeStateOverrides({
+      3: ['kb-2'],
+    });
+
+    mockUseHomeRecommendationAssets.mockReturnValue({
+      recommendationAssets: [],
+    });
+    mockUseHomeSuggestedQuestions.mockReturnValue({
+      suggestedQuestionsData: null,
+    });
+
+    const markup = renderPage();
+
+    expect(markup).toContain(
+      '问题围绕「客户经营知识库」知识库整理，点击后会填入输入框。',
+    );
+    expect(markup).toContain('围绕「客户经营知识库」先看哪些关键指标？');
+    expect(markup).not.toContain('围绕「订单分析知识库」先看哪些关键指标？');
 
     useStateSpy.mockRestore();
   });
 
   it('shows selected knowledge-base demo source hint when pin matches demo mapping', () => {
+    mockUseHomeRecommendationAssets.mockReturnValue({
+      recommendationAssets: [],
+    });
     mockUseRuntimeSelectorState.mockReturnValue({
       provided: true,
       loading: false,
@@ -416,7 +555,9 @@ describe('home index page', () => {
 
     const markup = renderPage();
 
-    expect(markup).toContain('问题来自「人力资源数据（HR）」知识库的示例问题');
+    expect(markup).toContain(
+      '问题来自「人力资源数据（HR）」知识库的示例问题，点击后会填入输入框。',
+    );
 
     useStateSpy.mockRestore();
   });
@@ -808,7 +949,9 @@ describe('home index page', () => {
     renderPage();
     await capturedPromptProps.onSubmit('帮我看客户经营情况');
 
-    expect((globalThis as any).__homeIndexMessage.warning).not.toHaveBeenCalled();
+    expect(
+      (globalThis as any).__homeIndexMessage.warning,
+    ).not.toHaveBeenCalled();
     expect(global.fetch).toHaveBeenNthCalledWith(
       1,
       '/api/v1/asking-tasks?workspaceId=ws-1&knowledgeBaseId=kb-2',
@@ -868,6 +1011,18 @@ describe('home index page', () => {
       kbSnapshotId: 'snap-1',
       deployHash: 'deploy-1',
     });
+  });
+
+  it('drops stale pinned knowledge-base ids after workspace data changes', () => {
+    expect(
+      resolveActiveSelectedKnowledgeBaseIds({
+        selectedKnowledgeBaseIds: ['kb-stale', 'kb-2'],
+        knowledgeBases: [
+          { id: 'kb-2', name: '客户经营知识库' },
+          { id: 'kb-3', name: '订单分析知识库' },
+        ],
+      }),
+    ).toEqual(['kb-2']);
   });
 
   it('prefers the created thread runtime scope when the server returns a canonical selector', () => {

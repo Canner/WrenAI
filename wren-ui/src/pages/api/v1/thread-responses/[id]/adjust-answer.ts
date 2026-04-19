@@ -2,9 +2,9 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { AskingController } from '@server/controllers/askingController';
 import { ApiError } from '@/server/utils/apiUtils';
 import { toCanonicalPersistedRuntimeIdentityFromScope } from '@server/utils/persistedRuntimeIdentity';
-import { buildApiContextFromRequest } from '../../apiContext';
-import { sendRestApiError } from '../../restApi';
-import { serializeThreadResponsePayload } from '../../threadPayloadSerializers';
+import { buildApiContextFromRequest } from '@/server/api/apiContext';
+import { sendRestApiError } from '@/server/api/restApi';
+import { serializeThreadResponsePayload } from '@/server/api/threadPayloadSerializers';
 
 const askingController = new AskingController();
 

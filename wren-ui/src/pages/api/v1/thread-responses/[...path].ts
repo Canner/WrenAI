@@ -18,7 +18,7 @@ import {
   resolveProjectLanguage,
   resolveRuntimeProject,
 } from '@server/utils/runtimeExecutionContext';
-import { serializeThreadResponsePayload } from '../threadPayloadSerializers';
+import { serializeThreadResponsePayload } from '@/server/api/threadPayloadSerializers';
 
 const logger = getLogger('API_THREAD_RESPONSE_ACTION');
 logger.level = 'debug';

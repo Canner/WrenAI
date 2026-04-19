@@ -18,52 +18,69 @@ type DeployStatusPayload = {
   status?: SyncStatus | null;
 };
 
+const MODELING_PATH = '/knowledge';
+const MODELING_URL_PATTERN = /\/knowledge(?:\?.*section=modeling.*)?$/;
+
 const isModelingPage = ({ page, baseURL }: ModelingPageContext) =>
   baseURL
     ? new RegExp(
-        `^${baseURL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/modeling(?:\\?.*)?$`,
+        `^${baseURL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/knowledge(?:\\?.*section=modeling.*)?$`,
       ).test(page.url())
-    : /\/modeling(?:\?.*)?$/.test(page.url());
+    : MODELING_URL_PATTERN.test(page.url());
 
-const fetchRuntimeScopedJson = async <T,>(
+const gotoModelingWorkbench = async (page: Page) => {
+  await gotoRuntimeScopedPath({ page, pathname: MODELING_PATH });
+  const nextUrl = new URL(page.url());
+  nextUrl.searchParams.set('section', 'modeling');
+  await page.goto(nextUrl.toString());
+};
+
+const expectModelingWorkbench = async (page: Page) => {
+  await expectPathname({ page, pathname: MODELING_PATH });
+  await expect(page).toHaveURL(MODELING_URL_PATTERN);
+};
+
+const fetchRuntimeScopedJson = async <T>(
   page: Page,
   url: string,
   init?: RequestInit,
 ): Promise<T> => {
-  return page.evaluate(
-    async ({ nextUrl, nextInit }) => {
-      const raw = window.localStorage.getItem('wren.runtimeScope');
-      const selector = raw ? JSON.parse(raw) : {};
-      const searchParams = new URLSearchParams();
+  return page
+    .evaluate(
+      async ({ nextUrl, nextInit }) => {
+        const raw = window.localStorage.getItem('wren.runtimeScope');
+        const selector = raw ? JSON.parse(raw) : {};
+        const searchParams = new URLSearchParams();
 
-      Object.entries(selector as Record<string, string | undefined>).forEach(
-        ([key, value]) => {
-          if (value) {
-            searchParams.set(key, value);
-          }
-        },
-      );
+        Object.entries(selector as Record<string, string | undefined>).forEach(
+          ([key, value]) => {
+            if (value) {
+              searchParams.set(key, value);
+            }
+          },
+        );
 
-      const scopedUrl = searchParams.size
-        ? `${nextUrl}?${searchParams.toString()}`
-        : nextUrl;
-      const response = await fetch(scopedUrl, nextInit);
-      const text = await response.text();
+        const scopedUrl = searchParams.size
+          ? `${nextUrl}?${searchParams.toString()}`
+          : nextUrl;
+        const response = await fetch(scopedUrl, nextInit);
+        const text = await response.text();
 
-      return {
-        ok: response.ok,
-        status: response.status,
-        text,
-      };
-    },
-    { nextUrl: url, nextInit: init },
-  ).then((result) => {
-    expect(
-      result.ok,
-      `${init?.method || 'GET'} ${url} failed (${result.status}): ${result.text}`,
-    ).toBeTruthy();
-    return JSON.parse(result.text) as T;
-  });
+        return {
+          ok: response.ok,
+          status: response.status,
+          text,
+        };
+      },
+      { nextUrl: url, nextInit: init },
+    )
+    .then((result) => {
+      expect(
+        result.ok,
+        `${init?.method || 'GET'} ${url} failed (${result.status}): ${result.text}`,
+      ).toBeTruthy();
+      return JSON.parse(result.text) as T;
+    });
 };
 
 const fetchDeployStatus = async (page: Page) =>
@@ -97,8 +114,8 @@ export const waitForModelingDataLoaded = async (page: Page) => {
 };
 
 export const checkDeploySynced = async ({ page }: ModelingPageContext) => {
-  await gotoRuntimeScopedPath({ page, pathname: '/modeling' });
-  await expectPathname({ page, pathname: '/modeling' });
+  await gotoModelingWorkbench(page);
+  await expectModelingWorkbench(page);
   await waitForModelingDataLoaded(page);
   await waitForDeployStatus(page, SyncStatus.SYNCRONIZED);
 };
@@ -108,8 +125,8 @@ export const checkDeployUndeployedChanges = async ({
   baseURL,
 }: ModelingPageContext) => {
   if (!isModelingPage({ page, baseURL })) {
-    await gotoRuntimeScopedPath({ page, pathname: '/modeling' });
-    await expectPathname({ page, pathname: '/modeling' });
+    await gotoModelingWorkbench(page);
+    await expectModelingWorkbench(page);
   }
   await waitForModelingDataLoaded(page);
   await waitForDeployStatus(page, SyncStatus.UNSYNCRONIZED);
@@ -117,8 +134,8 @@ export const checkDeployUndeployedChanges = async ({
 
 export const executeDeploy = async ({ page, baseURL }: ModelingPageContext) => {
   if (!isModelingPage({ page, baseURL })) {
-    await gotoRuntimeScopedPath({ page, pathname: '/modeling' });
-    await expectPathname({ page, pathname: '/modeling' });
+    await gotoModelingWorkbench(page);
+    await expectModelingWorkbench(page);
   }
   await waitForModelingDataLoaded(page);
   await fetchRuntimeScopedJson(page, '/api/v1/deploy', { method: 'POST' });
@@ -137,8 +154,8 @@ export const executeModelCRUD = async (
     primaryKeyColumn: string;
   },
 ) => {
-  await gotoRuntimeScopedPath({ page, pathname: '/modeling' });
-  await expectPathname({ page, pathname: '/modeling' });
+  await gotoModelingWorkbench(page);
+  await expectModelingWorkbench(page);
   await waitForModelingDataLoaded(page);
 
   // click the model of sidebar
@@ -311,8 +328,8 @@ export const executeRelationshipCRUD = async (
     relationshipType,
   }: Relationship,
 ) => {
-  await gotoRuntimeScopedPath({ page, pathname: '/modeling' });
-  await expectPathname({ page, pathname: '/modeling' });
+  await gotoModelingWorkbench(page);
+  await expectModelingWorkbench(page);
   await waitForModelingDataLoaded(page);
 
   await page
@@ -412,8 +429,8 @@ export const updateModelMetadata = async (
     newModelDescription: string;
   },
 ) => {
-  await gotoRuntimeScopedPath({ page, pathname: '/modeling' });
-  await expectPathname({ page, pathname: '/modeling' });
+  await gotoModelingWorkbench(page);
+  await expectModelingWorkbench(page);
   await waitForModelingDataLoaded(page);
 
   await page
@@ -518,7 +535,7 @@ export const updateModelMetadata = async (
 };
 
 export const updateViewMetadata = async (
-  { page, baseURL }: ModelingPageContext,
+  { page, baseURL: _baseURL }: ModelingPageContext,
   {
     viewDisplayName,
     viewDescription,
@@ -531,8 +548,8 @@ export const updateViewMetadata = async (
     newViewDescription: string;
   },
 ) => {
-  await gotoRuntimeScopedPath({ page, pathname: '/modeling' });
-  await expectPathname({ page, pathname: '/modeling' });
+  await gotoModelingWorkbench(page);
+  await expectModelingWorkbench(page);
   await waitForModelingDataLoaded(page);
 
   // will show '-' if viewDescription is empty string
@@ -627,7 +644,6 @@ export const updateViewMetadata = async (
   await expect(
     page.getByTestId(`diagram__view-node__${newViewDisplayName}`),
   ).toBeVisible();
-
 };
 
 export const addCalculatedField = async (

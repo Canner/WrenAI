@@ -1,4 +1,12 @@
-import { Alert, Drawer, Row, Col, Tag, Typography } from 'antd';
+import {
+  Alert,
+  Descriptions,
+  Divider,
+  Drawer,
+  Space,
+  Tag,
+  Typography,
+} from 'antd';
 import JsonCodeBlock from '@/components/code/JsonCodeBlock';
 
 const { Text } = Typography;
@@ -175,127 +183,89 @@ export default function ScheduleRunDetailsDrawer(props: Props) {
             />
           ) : null}
 
-          <div style={sectionStyle}>
-            <Typography.Text className="d-block gray-7 mb-2">
-              任务概览
-            </Typography.Text>
-            <Row gutter={[16, 16]}>
-              <Col span={12}>
-                <Typography.Text className="d-block gray-7 mb-2">
-                  任务名称
-                </Typography.Text>
-                <div>{defaultValue.targetName}</div>
-              </Col>
-              <Col span={12}>
-                <Typography.Text className="d-block gray-7 mb-2">
-                  任务类型
-                </Typography.Text>
-                <div>{defaultValue.targetTypeLabel}</div>
-              </Col>
-              <Col span={12}>
-                <Typography.Text className="d-block gray-7 mb-2">
-                  运行状态
-                </Typography.Text>
-                <div>
-                  <Tag color={getStatusColor(defaultValue.status)}>
-                    {getStatusLabel(defaultValue.status)}
-                  </Tag>
-                </div>
-              </Col>
-              <Col span={12}>
-                <Typography.Text className="d-block gray-7 mb-2">
-                  Schedule Job ID
-                </Typography.Text>
-                <div>{renderCopyableValue(defaultValue.scheduleJobId)}</div>
-              </Col>
-              <Col span={12}>
-                <Typography.Text className="d-block gray-7 mb-2">
-                  运行记录 ID
-                </Typography.Text>
-                <div>{renderCopyableValue(defaultValue.id)}</div>
-              </Col>
-              <Col span={12}>
-                <Typography.Text className="d-block gray-7 mb-2">
-                  Trace ID
-                </Typography.Text>
-                <div>{renderCopyableValue(defaultValue.traceId)}</div>
-              </Col>
-            </Row>
-          </div>
+          <Divider orientation="left" plain>
+            任务概览
+          </Divider>
+          <Descriptions
+            bordered
+            column={2}
+            size="small"
+            style={sectionStyle}
+            labelStyle={{ width: 116, color: 'var(--nova-text-secondary)' }}
+          >
+            <Descriptions.Item label="任务名称">
+              {defaultValue.targetName}
+            </Descriptions.Item>
+            <Descriptions.Item label="任务类型">
+              {defaultValue.targetTypeLabel}
+            </Descriptions.Item>
+            <Descriptions.Item label="运行状态">
+              <Tag color={getStatusColor(defaultValue.status)}>
+                {getStatusLabel(defaultValue.status)}
+              </Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label="Schedule Job ID">
+              {renderCopyableValue(defaultValue.scheduleJobId)}
+            </Descriptions.Item>
+            <Descriptions.Item label="运行记录 ID">
+              {renderCopyableValue(defaultValue.id)}
+            </Descriptions.Item>
+            <Descriptions.Item label="Trace ID">
+              {renderCopyableValue(defaultValue.traceId)}
+            </Descriptions.Item>
+          </Descriptions>
 
-          <div style={sectionStyle}>
-            <Typography.Text className="d-block gray-7 mb-2">
-              执行时间
-            </Typography.Text>
-            <Row gutter={[16, 16]}>
-              <Col span={8}>
-                <Typography.Text className="d-block gray-7 mb-2">
-                  开始时间
-                </Typography.Text>
-                <div>{renderValue(formatDateTime(defaultValue.startedAt))}</div>
-              </Col>
-              <Col span={8}>
-                <Typography.Text className="d-block gray-7 mb-2">
-                  结束时间
-                </Typography.Text>
-                <div>
-                  {renderValue(formatDateTime(defaultValue.finishedAt))}
-                </div>
-              </Col>
-              <Col span={8}>
-                <Typography.Text className="d-block gray-7 mb-2">
-                  执行耗时
-                </Typography.Text>
-                <div>
-                  {renderValue(
-                    formatDuration(
-                      defaultValue.startedAt,
-                      defaultValue.finishedAt,
-                    ),
-                  )}
-                </div>
-              </Col>
-            </Row>
-          </div>
+          <Divider orientation="left" plain>
+            执行时间
+          </Divider>
+          <Descriptions
+            bordered
+            column={3}
+            size="small"
+            style={sectionStyle}
+            labelStyle={{ color: 'var(--nova-text-secondary)' }}
+          >
+            <Descriptions.Item label="开始时间">
+              {renderValue(formatDateTime(defaultValue.startedAt))}
+            </Descriptions.Item>
+            <Descriptions.Item label="结束时间">
+              {renderValue(formatDateTime(defaultValue.finishedAt))}
+            </Descriptions.Item>
+            <Descriptions.Item label="执行耗时">
+              {renderValue(
+                formatDuration(defaultValue.startedAt, defaultValue.finishedAt),
+              )}
+            </Descriptions.Item>
+          </Descriptions>
 
-          <div style={sectionStyle}>
-            <Typography.Text className="d-block gray-7 mb-2">
-              Runtime Identity
-            </Typography.Text>
-            <Row gutter={[16, 16]}>
-              <Col span={12}>
-                <Typography.Text className="d-block gray-7 mb-2">
-                  workspaceId
-                </Typography.Text>
-                <div>{renderCopyableValue(runtimeIdentity?.workspaceId)}</div>
-              </Col>
-              <Col span={12}>
-                <Typography.Text className="d-block gray-7 mb-2">
-                  knowledgeBaseId
-                </Typography.Text>
-                <div>
-                  {renderCopyableValue(runtimeIdentity?.knowledgeBaseId)}
-                </div>
-              </Col>
-              <Col span={12}>
-                <Typography.Text className="d-block gray-7 mb-2">
-                  kbSnapshotId
-                </Typography.Text>
-                <div>{renderCopyableValue(runtimeIdentity?.kbSnapshotId)}</div>
-              </Col>
-              <Col span={12}>
-                <Typography.Text className="d-block gray-7 mb-2">
-                  deployHash
-                </Typography.Text>
-                <div>{renderCopyableValue(runtimeIdentity?.deployHash)}</div>
-              </Col>
-            </Row>
-          </div>
+          <Divider orientation="left" plain>
+            Runtime Identity
+          </Divider>
+          <Descriptions
+            bordered
+            column={2}
+            size="small"
+            style={sectionStyle}
+            labelStyle={{ width: 132, color: 'var(--nova-text-secondary)' }}
+          >
+            <Descriptions.Item label="workspaceId">
+              {renderCopyableValue(runtimeIdentity?.workspaceId)}
+            </Descriptions.Item>
+            <Descriptions.Item label="knowledgeBaseId">
+              {renderCopyableValue(runtimeIdentity?.knowledgeBaseId)}
+            </Descriptions.Item>
+            <Descriptions.Item label="kbSnapshotId">
+              {renderCopyableValue(runtimeIdentity?.kbSnapshotId)}
+            </Descriptions.Item>
+            <Descriptions.Item label="deployHash">
+              {renderCopyableValue(runtimeIdentity?.deployHash)}
+            </Descriptions.Item>
+          </Descriptions>
 
-          <div style={sectionStyle}>
-            <Typography.Text className="d-block gray-7 mb-2">
-              detailJson
-            </Typography.Text>
+          <Divider orientation="left" plain>
+            detailJson
+          </Divider>
+          <Space direction="vertical" size={12} style={sectionStyle}>
             {defaultValue.detailJson ? (
               <JsonCodeBlock
                 code={toPrettyJson(defaultValue.detailJson)}
@@ -306,7 +276,7 @@ export default function ScheduleRunDetailsDrawer(props: Props) {
             ) : (
               <Text type="secondary">暂无结构化运行明细</Text>
             )}
-          </div>
+          </Space>
         </>
       )}
     </Drawer>

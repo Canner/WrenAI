@@ -45,6 +45,7 @@ const SYSTEM_ROLE_LABELS: Record<string, string> = {
 };
 
 const CUSTOM_ROLE_PREFIX = 'workspace_custom_role';
+const CUSTOM_ROLE_NAME_SEPARATOR = ':';
 
 export type WorkspaceRoleCatalogItem = {
   id: string;
@@ -54,6 +55,7 @@ export type WorkspaceRoleCatalogItem = {
   scopeType: string;
   scopeId?: string | null;
   isSystem: boolean;
+  isActive: boolean;
   permissionNames: string[];
   bindingCount: number;
 };
@@ -82,6 +84,15 @@ const normalizeRoleDisplayName = (role: Role) =>
       role.name,
   );
 
+const getWorkspaceRoleKey = (role: Role, workspaceId: string) => {
+  const normalizedName = String(role.name || '').trim();
+  const customPrefix = `${CUSTOM_ROLE_PREFIX}${CUSTOM_ROLE_NAME_SEPARATOR}${workspaceId}${CUSTOM_ROLE_NAME_SEPARATOR}`;
+  if (!role.isSystem && normalizedName.startsWith(customPrefix)) {
+    return normalizedName.slice(customPrefix.length) || normalizedName;
+  }
+  return normalizedName;
+};
+
 const isRoleVisibleInWorkspace = (role: Role, workspaceId: string) =>
   role.scopeType === 'workspace' &&
   (!role.scopeId || role.scopeId === '' || role.scopeId === workspaceId);
@@ -99,16 +110,25 @@ const slugify = (value: string) =>
     .replace(/^_+|_+$/g, '')
     .slice(0, 48);
 
+const normalizeCustomRoleKey = (value?: string | null) =>
+  slugify(String(value || '')) || 'custom_role';
+
+const buildCustomRoleInternalName = (workspaceId: string, roleKey: string) =>
+  `${CUSTOM_ROLE_PREFIX}${CUSTOM_ROLE_NAME_SEPARATOR}${workspaceId}${CUSTOM_ROLE_NAME_SEPARATOR}${roleKey}`;
+
 const buildCustomRoleName = (
   workspaceId: string,
-  displayName: string,
+  roleKey: string,
   existingNames: Set<string>,
 ) => {
-  const baseSlug = slugify(displayName) || 'custom_role';
-  let candidate = `${CUSTOM_ROLE_PREFIX}:${workspaceId}:${baseSlug}`;
+  const baseSlug = normalizeCustomRoleKey(roleKey);
+  let candidate = buildCustomRoleInternalName(workspaceId, baseSlug);
   let sequence = 2;
   while (existingNames.has(candidate)) {
-    candidate = `${CUSTOM_ROLE_PREFIX}:${workspaceId}:${baseSlug}_${sequence}`;
+    candidate = buildCustomRoleInternalName(
+      workspaceId,
+      `${baseSlug}_${sequence}`,
+    );
     sequence += 1;
   }
   return candidate;
@@ -180,12 +200,13 @@ export const listWorkspaceRoleCatalog = async ({
     .filter((role) => isRoleVisibleInWorkspace(role, workspaceId))
     .map((role) => ({
       id: role.id,
-      name: role.name,
+      name: getWorkspaceRoleKey(role, workspaceId),
       displayName: normalizeRoleDisplayName(role),
       description: role.description || null,
       scopeType: role.scopeType,
       scopeId: role.scopeId || '',
       isSystem: Boolean(role.isSystem),
+      isActive: role.isActive !== false,
       permissionNames: Array.from(
         new Set(permissionData.permissionNamesByRoleId[role.id] || []),
       ).sort(),
@@ -304,7 +325,7 @@ export const listWorkspaceRoleBindings = async ({
             workspaceId,
           }),
           roleId: role.id,
-          roleName: role.name,
+          roleName: getWorkspaceRoleKey(role, workspaceId),
           roleDisplayName: normalizeRoleDisplayName(role),
           isSystem: Boolean(role.isSystem),
           createdBy: binding.createdBy || null,
@@ -325,8 +346,10 @@ export const listWorkspaceRoleBindings = async ({
 
 export const createCustomWorkspaceRole = async ({
   workspaceId,
+  name,
   displayName,
   description,
+  isActive,
   permissionNames,
   createdBy,
   roleRepository,
@@ -337,8 +360,10 @@ export const createCustomWorkspaceRole = async ({
   'roleRepository' | 'permissionRepository' | 'rolePermissionRepository'
 > & {
   workspaceId: string;
+  name?: string | null;
   displayName: string;
   description?: string | null;
+  isActive?: boolean;
   permissionNames: string[];
   createdBy?: string | null;
 }) => {
@@ -346,6 +371,9 @@ export const createCustomWorkspaceRole = async ({
   if (!normalizedDisplayName) {
     throw new Error('displayName is required');
   }
+  const normalizedRoleKey = normalizeCustomRoleKey(
+    name || normalizedDisplayName,
+  );
 
   const assignableActions = new Set(getCustomRoleAssignableActions());
   const uniquePermissionNames = Array.from(
@@ -370,6 +398,14 @@ export const createCustomWorkspaceRole = async ({
   const workspaceRoles = roles.filter((role) =>
     isRoleVisibleInWorkspace(role, workspaceId),
   );
+  const duplicateKey = workspaceRoles.find(
+    (role) =>
+      getWorkspaceRoleKey(role, workspaceId).toLowerCase() ===
+      normalizedRoleKey.toLowerCase(),
+  );
+  if (duplicateKey) {
+    throw new Error('Role key already exists in this workspace');
+  }
   const duplicate = workspaceRoles.find(
     (role) =>
       normalizeRoleDisplayName(role).toLowerCase() ===
@@ -396,7 +432,7 @@ export const createCustomWorkspaceRole = async ({
         id: crypto.randomUUID(),
         name: buildCustomRoleName(
           workspaceId,
-          normalizedDisplayName,
+          normalizedRoleKey,
           new Set(roles.map((candidate) => candidate.name)),
         ),
         displayName: normalizedDisplayName,
@@ -404,6 +440,7 @@ export const createCustomWorkspaceRole = async ({
         scopeId: workspaceId,
         description: description || null,
         isSystem: false,
+        isActive: isActive !== false,
         createdBy: createdBy || null,
       },
       { tx },
@@ -431,8 +468,10 @@ export const createCustomWorkspaceRole = async ({
 export const updateCustomWorkspaceRole = async ({
   workspaceId,
   roleId,
+  name,
   displayName,
   description,
+  isActive,
   permissionNames,
   roleRepository,
   permissionRepository,
@@ -443,19 +482,51 @@ export const updateCustomWorkspaceRole = async ({
 > & {
   workspaceId: string;
   roleId: string;
+  name?: string;
   displayName?: string;
   description?: string | null;
+  isActive?: boolean;
   permissionNames?: string[];
 }) => {
   const role = await roleRepository.findOneBy({ id: roleId });
-  if (!role || !isCustomWorkspaceRole(role, workspaceId)) {
-    throw new Error('Custom role not found');
+  if (!role || !isRoleVisibleInWorkspace(role, workspaceId)) {
+    throw new Error('Workspace role not found');
   }
+  const metadataEditable = isCustomWorkspaceRole(role, workspaceId);
 
   const tx = await roleRepository.transaction();
   try {
     const patch: Partial<Role> = {};
+    if (name !== undefined) {
+      if (!metadataEditable) {
+        throw new Error('System role metadata is immutable');
+      }
+      const normalizedRoleKey = normalizeCustomRoleKey(name);
+      const roles = await roleRepository.findAll({ tx });
+      const duplicate = roles.find(
+        (candidate) =>
+          candidate.id !== role.id &&
+          isRoleVisibleInWorkspace(candidate, workspaceId) &&
+          getWorkspaceRoleKey(candidate, workspaceId).toLowerCase() ===
+            normalizedRoleKey.toLowerCase(),
+      );
+      if (duplicate) {
+        throw new Error('Role key already exists in this workspace');
+      }
+      patch.name = buildCustomRoleName(
+        workspaceId,
+        normalizedRoleKey,
+        new Set(
+          roles
+            .filter((candidate) => candidate.id !== role.id)
+            .map((candidate) => candidate.name),
+        ),
+      );
+    }
     if (displayName !== undefined) {
+      if (!metadataEditable) {
+        throw new Error('System role metadata is immutable');
+      }
       const normalizedDisplayName = String(displayName || '').trim();
       if (!normalizedDisplayName) {
         throw new Error('displayName is required');
@@ -474,7 +545,16 @@ export const updateCustomWorkspaceRole = async ({
       patch.displayName = normalizedDisplayName;
     }
     if (description !== undefined) {
+      if (!metadataEditable) {
+        throw new Error('System role metadata is immutable');
+      }
       patch.description = description || null;
+    }
+    if (isActive !== undefined) {
+      if (!metadataEditable) {
+        throw new Error('System role metadata is immutable');
+      }
+      patch.isActive = Boolean(isActive);
     }
 
     const updated =
@@ -484,6 +564,22 @@ export const updateCustomWorkspaceRole = async ({
 
     if (permissionNames) {
       const assignableActions = new Set(getCustomRoleAssignableActions());
+      const [permissions, existingRolePermissions] = await Promise.all([
+        permissionRepository.findAll({ tx }),
+        rolePermissionRepository.findAllBy({ roleId: role.id }, { tx }),
+      ]);
+      const permissionIdByName = new Map(
+        permissions.map((permission) => [permission.name, permission.id]),
+      );
+      const permissionNameById = new Map(
+        permissions.map((permission) => [permission.id, permission.name]),
+      );
+      const existingPermissionNames = existingRolePermissions
+        .map((record) => permissionNameById.get(record.permissionId))
+        .filter(Boolean) as string[];
+      const allowedPermissionNames = metadataEditable
+        ? assignableActions
+        : new Set([...assignableActions, ...existingPermissionNames]);
       const uniquePermissionNames = Array.from(
         new Set(
           permissionNames
@@ -495,19 +591,31 @@ export const updateCustomWorkspaceRole = async ({
         uniquePermissionNames.some(
           (permissionName) =>
             !isAuthorizationAction(permissionName) ||
-            !assignableActions.has(permissionName),
+            !allowedPermissionNames.has(permissionName),
         )
       ) {
         throw new Error('Custom role contains unsupported permissions');
       }
-      const permissions = await permissionRepository.findAll({ tx });
-      const permissionIdByName = new Map(
-        permissions.map((permission) => [permission.name, permission.id]),
+      const normalizedPermissionNames = metadataEditable
+        ? uniquePermissionNames
+        : Array.from(
+            new Set([
+              ...uniquePermissionNames,
+              ...existingPermissionNames.filter(
+                (permissionName) => !assignableActions.has(permissionName),
+              ),
+            ]),
+          );
+      const missingPermission = normalizedPermissionNames.find(
+        (permissionName) => !permissionIdByName.has(permissionName),
       );
+      if (missingPermission) {
+        throw new Error(`Permission ${missingPermission} is not registered`);
+      }
       await rolePermissionRepository.deleteAllBy({ roleId: role.id }, { tx });
-      if (uniquePermissionNames.length > 0) {
+      if (normalizedPermissionNames.length > 0) {
         await rolePermissionRepository.createMany(
-          uniquePermissionNames.map((permissionName) => ({
+          normalizedPermissionNames.map((permissionName) => ({
             id: crypto.randomUUID(),
             roleId: role.id,
             permissionId: permissionIdByName.get(permissionName)!,

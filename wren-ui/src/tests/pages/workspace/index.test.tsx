@@ -40,6 +40,7 @@ jest.mock('@/components/reference/ConsoleShellLayout', () => ({
     sections,
     navItems,
     sidebarBackAction,
+    hideHistorySection,
     children,
   }: any) => {
     capturedConsoleShellLayoutProps = {
@@ -48,6 +49,7 @@ jest.mock('@/components/reference/ConsoleShellLayout', () => ({
       sections,
       navItems,
       sidebarBackAction,
+      hideHistorySection,
     };
     const React = jest.requireActual('react');
     return React.createElement(
@@ -112,11 +114,36 @@ describe('workspace page', () => {
           'impersonation.start': true,
         },
       },
-      workspaces: [],
-      discoverableWorkspaces: [],
+      workspaces: [
+        {
+          id: 'workspace-2',
+          name: 'Finance Ops',
+          kind: 'regular',
+        },
+      ],
+      discoverableWorkspaces: [
+        {
+          id: 'workspace-3',
+          name: 'Analytics Lab',
+          kind: 'default',
+        },
+      ],
       applications: [],
       members: [],
-      reviewQueue: [],
+      reviewQueue: [
+        {
+          id: 'member-2',
+          userId: 'user-2',
+          roleKey: 'member',
+          status: 'pending',
+          user: {
+            id: 'user-2',
+            email: 'applicant@example.com',
+            displayName: '待审批用户',
+            status: 'pending',
+          },
+        },
+      ],
       serviceAccounts: [],
       apiTokens: [],
       identityProviders: [
@@ -171,6 +198,7 @@ describe('workspace page', () => {
         workspaceCount: 1,
         knowledgeBaseCount: 0,
         memberCount: 1,
+        reviewQueueCount: 1,
         directoryGroupCount: 0,
         breakGlassGrantCount: 0,
       },
@@ -190,25 +218,21 @@ describe('workspace page', () => {
     });
   });
 
-  it('keeps workspace management focused on tabs and governance shortcuts', () => {
+  it('keeps workspace management focused on tabs and tables', () => {
     const markup = renderPage();
 
     expect(markup).toContain('工作空间');
-    expect(markup).toContain('我的工作空间');
-    expect(markup).toContain('发现工作空间');
+    expect(markup).toContain('工作空间列表');
     expect(markup).toContain('申请记录');
+    expect(markup).toContain('是否默认');
+    expect(markup).toContain('设为默认');
+    expect(markup).toContain('申请加入');
     expect(markup).not.toContain('当前工作区');
     expect(markup).not.toContain('系统工作空间');
     expect(markup).not.toContain('工作空间运营摘要');
     expect(markup).not.toContain('我可访问的工作空间');
-    expect(markup).toContain('设置快捷入口');
-    expect(markup).toContain('打开用户管理');
-    expect(markup).toContain('打开权限管理');
+    expect(markup).not.toContain('审批预览');
     expect(markup).toContain('打开身份与目录');
-    expect(markup).toContain('打开审计日志');
-    expect(markup).toContain('身份与目录');
-    expect(markup).toContain('审计与高风险动作');
-    expect(markup).toContain('企业 SSO / OIDC / SAML / SCIM');
     expect(markup).toContain('SAML 证书健康告警');
 
     expect(markup).not.toContain('创建服务账号');
@@ -239,5 +263,11 @@ describe('workspace page', () => {
     expect(capturedConsoleShellLayoutProps?.sidebarBackAction?.label).toBe(
       '返回主菜单',
     );
+  });
+
+  it('hides the history section for workspace management', () => {
+    renderPage();
+
+    expect(capturedConsoleShellLayoutProps?.hideHistorySection).toBe(true);
   });
 });

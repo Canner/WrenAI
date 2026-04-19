@@ -1,5 +1,6 @@
 import {
   buildRuntimeSelectorRequestOptions,
+  buildRuntimeSelectorStateRequestKey,
   buildRuntimeSelectorStateUrl,
   resolveRuntimeSelectorInitialLoading,
 } from './useRuntimeSelectorState';
@@ -23,6 +24,31 @@ describe('useRuntimeSelectorState helpers', () => {
         runtimeScopeId: 'scope-1',
       }),
     ).toBe('/api/v1/runtime/scope/current?runtimeScopeId=scope-1');
+  });
+
+  it('returns a null request key when runtime selector state loading is skipped', () => {
+    expect(
+      buildRuntimeSelectorStateRequestKey({
+        skip: true,
+        selector: {
+          workspaceId: 'ws-1',
+          knowledgeBaseId: 'kb-1',
+        },
+      }),
+    ).toBeNull();
+
+    expect(
+      buildRuntimeSelectorStateRequestKey({
+        skip: false,
+        selector: {
+          workspaceId: 'ws-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snap-1',
+        },
+      }),
+    ).toBe(
+      '/api/v1/runtime/scope/current?workspaceId=ws-1&knowledgeBaseId=kb-1&kbSnapshotId=snap-1',
+    );
   });
 
   it('treats only the empty-state fetch as initial loading', () => {

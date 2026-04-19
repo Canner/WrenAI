@@ -141,6 +141,14 @@ describe.each([
     stream.emit('end');
     await request;
 
+    if (modulePath.includes('ask_task')) {
+      expect(res.setHeader).toHaveBeenCalledWith('Deprecation', 'true');
+      expect(res.setHeader).toHaveBeenCalledWith(
+        'Link',
+        '</api/v1/thread-responses/[id]/stream-answer>; rel="successor-version"',
+      );
+    }
+
     expect(res.write).toHaveBeenCalledWith(
       Buffer.from('data: {"message":"hello"}\n\n'),
     );

@@ -158,7 +158,7 @@ describe('workspace admin catalog api routes', () => {
     const res = createRes();
 
     mockListWorkspaceRoleCatalog.mockResolvedValue({
-      roles: [{ id: 'role-1', name: 'workspace_admin' }],
+      roles: [{ id: 'role-1', name: 'workspace_admin', isActive: true }],
       permissionCatalog: [],
       actionCatalog: [],
     });
@@ -169,7 +169,9 @@ describe('workspace admin catalog api routes', () => {
     await handler(req, res);
 
     expect(res.status).toHaveBeenCalledWith(200);
-    expect(res.body.roles).toEqual([{ id: 'role-1', name: 'workspace_admin' }]);
+    expect(res.body.roles).toEqual([
+      { id: 'role-1', name: 'workspace_admin', isActive: true },
+    ]);
     expect(res.body.bindings).toHaveLength(1);
   });
 
@@ -179,9 +181,11 @@ describe('workspace admin catalog api routes', () => {
       method: 'POST',
       query: { workspaceId: 'workspace-1' },
       body: {
+        name: 'data_steward',
         displayName: 'Data Steward',
         description: 'custom role',
         permissionNames: ['knowledge_base.read'],
+        isActive: true,
       },
     });
     const res = createRes();
@@ -194,7 +198,47 @@ describe('workspace admin catalog api routes', () => {
     await handler(req, res);
 
     expect(res.status).toHaveBeenCalledWith(201);
-    expect(mockCreateCustomWorkspaceRole).toHaveBeenCalled();
+    expect(mockCreateCustomWorkspaceRole).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: 'workspace-1',
+        name: 'data_steward',
+        displayName: 'Data Steward',
+        isActive: true,
+      }),
+    );
+  });
+
+  it('PATCH /workspace/roles/:id updates visible role metadata', async () => {
+    const handler = (await import('../v1/workspace/roles/[id]')).default;
+    const req = createReq({
+      method: 'PATCH',
+      query: { workspaceId: 'workspace-1', id: 'role-custom-1' },
+      body: {
+        name: 'finance_admin',
+        displayName: 'Finance Admin',
+        isActive: false,
+        permissionNames: ['knowledge_base.read'],
+      },
+    });
+    const res = createRes();
+
+    mockUpdateCustomWorkspaceRole.mockResolvedValue({
+      id: 'role-custom-1',
+      name: 'finance_admin',
+    });
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(mockUpdateCustomWorkspaceRole).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: 'workspace-1',
+        roleId: 'role-custom-1',
+        name: 'finance_admin',
+        displayName: 'Finance Admin',
+        isActive: false,
+      }),
+    );
   });
 
   it('POST /workspace/role-bindings creates role binding', async () => {

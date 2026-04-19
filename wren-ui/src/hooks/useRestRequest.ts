@@ -29,6 +29,8 @@ type UseRestRequestResult<TData> = {
   loading: boolean;
   error: Error | null;
   refetch: () => Promise<TData>;
+  cancel: (reason?: string) => void;
+  reset: () => void;
   setData: Dispatch<SetStateAction<TData>>;
 };
 
@@ -101,15 +103,22 @@ export default function useRestRequest<TData, TResult = TData>({
   const cancelInFlightRequest = useCallback(() => {
     requestCoordinatorRef.current.cancel();
   }, []);
+  const reset = useCallback(() => {
+    cancelInFlightRequest();
+    setData(initialDataRef.current);
+    setError(null);
+    setLoading(false);
+  }, [cancelInFlightRequest]);
 
   const refetch = useCallback(async () => {
     if (!enabled) {
       cancelInFlightRequest();
       if (resetDataOnDisable) {
-        setData(initialDataRef.current);
+        reset();
+      } else {
+        setError(null);
+        setLoading(false);
       }
-      setError(null);
-      setLoading(false);
       return initialDataRef.current;
     }
 
@@ -117,7 +126,9 @@ export default function useRestRequest<TData, TResult = TData>({
     setLoading(true);
 
     try {
-      const result = await requestRef.current({ signal: pendingRequest.signal });
+      const result = await requestRef.current({
+        signal: pendingRequest.signal,
+      });
       const nextData = mapResultRef.current
         ? mapResultRef.current(result)
         : (result as unknown as TData);
@@ -146,20 +157,17 @@ export default function useRestRequest<TData, TResult = TData>({
       }
       pendingRequest.finalize();
     }
-  }, [
-    cancelInFlightRequest,
-    enabled,
-    resetDataOnDisable,
-  ]);
+  }, [cancelInFlightRequest, enabled, resetDataOnDisable]);
 
   useEffect(() => {
     if (!enabled) {
       cancelInFlightRequest();
       if (resetDataOnDisable) {
-        setData(initialDataRef.current);
+        reset();
+      } else {
+        setError(null);
+        setLoading(false);
       }
-      setError(null);
-      setLoading(false);
       return;
     }
 
@@ -190,6 +198,8 @@ export default function useRestRequest<TData, TResult = TData>({
     loading,
     error,
     refetch,
+    cancel: cancelInFlightRequest,
+    reset,
     setData,
   };
 }

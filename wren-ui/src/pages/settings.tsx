@@ -1,8 +1,22 @@
-import { Fragment, useMemo, useState } from 'react';
-import { Alert, Button, Input, Space, Tag, Typography, message } from 'antd';
+import { useState } from 'react';
+import {
+  Alert,
+  Avatar,
+  Button,
+  Card,
+  Descriptions,
+  Form,
+  Input,
+  List,
+  Row,
+  Col,
+  Space,
+  Tag,
+  Typography,
+  message,
+} from 'antd';
 import LockOutlined from '@ant-design/icons/LockOutlined';
 import UserOutlined from '@ant-design/icons/UserOutlined';
-import styled from 'styled-components';
 import ConsoleShellLayout from '@/components/reference/ConsoleShellLayout';
 import { buildNovaSettingsNavItems } from '@/components/reference/novaShellNavigation';
 import { buildRuntimeScopeUrl } from '@/runtime/client/runtimeScope';
@@ -13,55 +27,15 @@ import useRuntimeSelectorState from '@/hooks/useRuntimeSelectorState';
 import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { Path } from '@/utils/enum';
 import { getReferenceDisplayWorkspaceName } from '@/utils/referenceDemoKnowledge';
+import { resolvePlatformManagementFromAuthSession } from '@/features/settings/settingsPageCapabilities';
 
-const { Text } = Typography;
+const { Text, Title } = Typography;
 
-const SectionStack = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-`;
-
-const DetailGrid = styled.div`
-  display: grid;
-  grid-template-columns: minmax(140px, 180px) minmax(0, 1fr);
-  gap: 14px 20px;
-
-  @media (max-width: 920px) {
-    grid-template-columns: 1fr;
-    gap: 8px;
-  }
-`;
-
-const DetailLabel = styled.div`
-  color: var(--nova-text-secondary);
-  font-size: 13px;
-`;
-
-const DetailValue = styled.div`
-  min-width: 0;
-  color: var(--nova-text-primary);
-  font-size: 14px;
-`;
-
-const PasswordStack = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  max-width: 560px;
-`;
-
-const PasswordField = styled.label`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-`;
-
-const InlineTagWrap = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-`;
+const SECURITY_TIPS = [
+  '密码建议包含大小写字母、数字与特殊字符，避免与其它系统重复。',
+  '如果当前账号通过企业 SSO 登录，请优先在统一身份系统内更新凭据。',
+  '完成修改后，如浏览器长期保持登录，建议重新打开敏感管理页以刷新安全上下文。',
+];
 
 const toDisplayRoleLabel = (roleKey: string) => {
   switch (roleKey) {
@@ -88,6 +62,14 @@ const getLoginAccountLabel = (email?: string | null) => {
   return localPart || email;
 };
 
+const getIdentityInitial = (
+  displayName?: string | null,
+  email?: string | null,
+) => {
+  const source = (displayName || email || 'N').trim();
+  return source.charAt(0).toUpperCase();
+};
+
 export default function SettingsPage() {
   const runtimeScopePage = useProtectedRuntimeScopePage();
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
@@ -108,17 +90,10 @@ export default function SettingsPage() {
     ) || '当前工作空间';
 
   const authActor = authSession.data?.authorization?.actor;
-  const showPlatformManagement = Boolean(
-    authActor?.platformRoleKeys?.includes('platform_admin') ||
-      authActor?.isPlatformAdmin ||
-      authSession.data?.isPlatformAdmin,
+  const showPlatformManagement = resolvePlatformManagementFromAuthSession(
+    authSession.data,
   );
 
-  const workspaceRoleKeys =
-    authActor?.workspaceRoleKeys?.length &&
-    Array.isArray(authActor.workspaceRoleKeys)
-      ? authActor.workspaceRoleKeys
-      : [authSession.data?.membership?.roleKey || 'member'];
   const platformRoleKeys = authActor?.platformRoleKeys || [];
   const impersonation = authSession.data?.impersonation;
   const defaultWorkspaceName =
@@ -129,74 +104,6 @@ export default function SettingsPage() {
         authSession.data?.workspace?.name ||
         currentWorkspaceName,
     ) || '当前工作空间';
-
-  const profileRows = useMemo(
-    () => [
-      {
-        label: '姓名',
-        value: authSession.data?.user?.displayName || '未设置',
-      },
-      {
-        label: '登录账号',
-        value: getLoginAccountLabel(authSession.data?.user?.email),
-      },
-      {
-        label: '邮箱',
-        value: authSession.data?.user?.email || '—',
-      },
-      {
-        label: '默认工作空间',
-        value: defaultWorkspaceName,
-      },
-      {
-        label: '当前工作空间',
-        value: currentWorkspaceName,
-      },
-      {
-        label: '工作空间角色',
-        value: (
-          <InlineTagWrap>
-            {workspaceRoleKeys.map((roleKey) => (
-              <Tag key={roleKey} color="blue">
-                {toDisplayRoleLabel(roleKey)}
-              </Tag>
-            ))}
-          </InlineTagWrap>
-        ),
-      },
-      {
-        label: '平台角色',
-        value:
-          platformRoleKeys.length > 0 ? (
-            <InlineTagWrap>
-              {platformRoleKeys.map((roleKey) => (
-                <Tag key={roleKey} color="purple">
-                  {toDisplayRoleLabel(roleKey)}
-                </Tag>
-              ))}
-            </InlineTagWrap>
-          ) : (
-            '普通账号'
-          ),
-      },
-      {
-        label: '会话状态',
-        value: <Tag color="green">已登录</Tag>,
-      },
-    ],
-    [
-      authSession.data?.membership?.roleKey,
-      authSession.data?.defaultWorkspaceId,
-      authSession.data?.user?.displayName,
-      authSession.data?.user?.email,
-      authSession.data?.workspaces,
-      authSession.data?.workspace?.name,
-      currentWorkspaceName,
-      defaultWorkspaceName,
-      platformRoleKeys,
-      workspaceRoleKeys,
-    ],
-  );
 
   const stopImpersonation = async () => {
     try {
@@ -297,7 +204,7 @@ export default function SettingsPage() {
   return (
     <ConsoleShellLayout
       title="个人资料"
-      description="查看当前账号与修改密码。"
+      description="查看当前账号、工作空间上下文与安全设置。"
       eyebrow="Account"
       loading={runtimeScopePage.guarding || authSession.loading}
       navItems={buildNovaSettingsNavItems({
@@ -322,7 +229,7 @@ export default function SettingsPage() {
           description="请先登录后再查看个人设置。"
         />
       ) : (
-        <SectionStack>
+        <Space direction="vertical" size={16} style={{ width: '100%' }}>
           {impersonation?.active ? (
             <Alert
               className="console-alert"
@@ -353,87 +260,199 @@ export default function SettingsPage() {
             />
           ) : null}
 
-          <section className="console-panel">
-            <div className="console-panel-header">
-              <div>
-                <div className="console-panel-title">
-                  <UserOutlined style={{ marginRight: 8 }} />
-                  基本资料
-                </div>
-              </div>
-            </div>
-            <DetailGrid>
-              {profileRows.map((row) => (
-                <Fragment key={row.label}>
-                  <DetailLabel>{row.label}</DetailLabel>
-                  <DetailValue>{row.value}</DetailValue>
-                </Fragment>
-              ))}
-            </DetailGrid>
-          </section>
-
-          <section className="console-panel">
-            <div className="console-panel-header">
-              <div>
-                <div className="console-panel-title">
-                  <LockOutlined style={{ marginRight: 8 }} />
-                  修改密码
-                </div>
-                <div className="console-panel-subtitle">
-                  仅本地登录账号支持直接修改密码。
-                </div>
-              </div>
-            </div>
-            <PasswordStack>
-              <PasswordField>
-                <Text>旧密码</Text>
-                <Input.Password
-                  size="large"
-                  value={passwordForm.currentPassword}
-                  onChange={(event) =>
-                    updatePasswordField('currentPassword', event.target.value)
-                  }
-                  placeholder="输入当前密码"
-                />
-              </PasswordField>
-              <PasswordField>
-                <Text>新密码</Text>
-                <Input.Password
-                  size="large"
-                  value={passwordForm.nextPassword}
-                  onChange={(event) =>
-                    updatePasswordField('nextPassword', event.target.value)
-                  }
-                  placeholder="至少 8 位"
-                />
-              </PasswordField>
-              <PasswordField>
-                <Text>确认新密码</Text>
-                <Input.Password
-                  size="large"
-                  value={passwordForm.confirmPassword}
-                  onChange={(event) =>
-                    updatePasswordField('confirmPassword', event.target.value)
-                  }
-                  placeholder="再次输入新密码"
-                  onPressEnter={() => void submitPasswordChange()}
-                />
-              </PasswordField>
-              <Space size={10}>
-                <Button
-                  type="primary"
-                  loading={savingPassword}
-                  onClick={() => void submitPasswordChange()}
-                >
-                  保存密码
-                </Button>
-                <Button onClick={resetPasswordForm} disabled={savingPassword}>
-                  重置
-                </Button>
+          <Card
+            title={
+              <Space size={8}>
+                <UserOutlined />
+                <span>基本资料</span>
               </Space>
-            </PasswordStack>
-          </section>
-        </SectionStack>
+            }
+          >
+            <Row gutter={[24, 24]} align="middle">
+              <Col xs={24} xl={10}>
+                <Space align="start" size={18} style={{ width: '100%' }}>
+                  <Avatar
+                    size={80}
+                    style={{
+                      background:
+                        'linear-gradient(135deg, rgba(141, 101, 225, 0.92), rgba(84, 168, 255, 0.9))',
+                      color: '#fff',
+                      fontSize: 30,
+                      fontWeight: 700,
+                      flexShrink: 0,
+                      boxShadow: '0 12px 28px rgba(84, 168, 255, 0.18)',
+                    }}
+                  >
+                    {getIdentityInitial(
+                      authSession.data?.user?.displayName,
+                      authSession.data?.user?.email,
+                    )}
+                  </Avatar>
+
+                  <Space
+                    direction="vertical"
+                    size={12}
+                    style={{ flex: 1, minWidth: 0 }}
+                  >
+                    <Space direction="vertical" size={4}>
+                      <Title
+                        level={2}
+                        style={{
+                          margin: 0,
+                          fontSize: 30,
+                          lineHeight: 1.1,
+                        }}
+                      >
+                        {authSession.data?.user?.displayName || '未设置姓名'}
+                      </Title>
+                      <Text type="secondary">
+                        {authSession.data?.user?.email || '未绑定邮箱'}
+                      </Text>
+                      <Text type="secondary">
+                        登录账号 ·{' '}
+                        {getLoginAccountLabel(authSession.data?.user?.email)}
+                      </Text>
+                    </Space>
+
+                    <Space size={[8, 8]} wrap>
+                      <Tag color={impersonation?.active ? 'gold' : 'default'}>
+                        {impersonation?.active ? '代理登录中' : '标准会话'}
+                      </Tag>
+                      <Tag color="blue">当前空间 · {currentWorkspaceName}</Tag>
+                    </Space>
+                  </Space>
+                </Space>
+              </Col>
+
+              <Col xs={24} xl={14}>
+                <div
+                  style={{
+                    border: '1px solid var(--ant-color-border-secondary)',
+                    borderRadius: 16,
+                    padding: 20,
+                    background: 'var(--ant-color-fill-quaternary)',
+                  }}
+                >
+                  <Descriptions
+                    column={2}
+                    colon={false}
+                    labelStyle={{ color: 'var(--nova-text-secondary)' }}
+                    contentStyle={{ color: 'var(--nova-text-primary)' }}
+                  >
+                    <Descriptions.Item label="默认工作空间">
+                      <Tag color="gold">{defaultWorkspaceName}</Tag>
+                    </Descriptions.Item>
+                    <Descriptions.Item label="平台角色">
+                      <Space size={[8, 8]} wrap>
+                        {platformRoleKeys.length > 0 ? (
+                          platformRoleKeys.map((roleKey) => (
+                            <Tag key={roleKey} color="purple">
+                              {toDisplayRoleLabel(roleKey)}
+                            </Tag>
+                          ))
+                        ) : (
+                          <Tag color="default">普通账号</Tag>
+                        )}
+                      </Space>
+                    </Descriptions.Item>
+                    <Descriptions.Item label="当前工作空间">
+                      {currentWorkspaceName}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="会话类型">
+                      <Tag color={impersonation?.active ? 'gold' : 'default'}>
+                        {impersonation?.active ? '代理登录' : '标准会话'}
+                      </Tag>
+                    </Descriptions.Item>
+                  </Descriptions>
+                </div>
+              </Col>
+            </Row>
+          </Card>
+
+          <Card
+            title={
+              <Space size={8}>
+                <LockOutlined />
+                <span>修改密码</span>
+              </Space>
+            }
+          >
+            <Row gutter={[16, 16]}>
+              <Col xs={24} lg={14}>
+                <Form layout="vertical">
+                  <Form.Item label="旧密码">
+                    <Input.Password
+                      size="large"
+                      value={passwordForm.currentPassword}
+                      onChange={(event) =>
+                        updatePasswordField(
+                          'currentPassword',
+                          event.target.value,
+                        )
+                      }
+                      placeholder="输入当前密码"
+                    />
+                  </Form.Item>
+                  <Form.Item label="新密码">
+                    <Input.Password
+                      size="large"
+                      value={passwordForm.nextPassword}
+                      onChange={(event) =>
+                        updatePasswordField('nextPassword', event.target.value)
+                      }
+                      placeholder="至少 8 位"
+                    />
+                  </Form.Item>
+                  <Form.Item label="确认新密码" style={{ marginBottom: 16 }}>
+                    <Input.Password
+                      size="large"
+                      value={passwordForm.confirmPassword}
+                      onChange={(event) =>
+                        updatePasswordField(
+                          'confirmPassword',
+                          event.target.value,
+                        )
+                      }
+                      placeholder="再次输入新密码"
+                      onPressEnter={() => void submitPasswordChange()}
+                    />
+                  </Form.Item>
+                  <Space size={10}>
+                    <Button
+                      type="primary"
+                      loading={savingPassword}
+                      onClick={() => void submitPasswordChange()}
+                    >
+                      保存密码
+                    </Button>
+                    <Button
+                      onClick={resetPasswordForm}
+                      disabled={savingPassword}
+                    >
+                      重置
+                    </Button>
+                  </Space>
+                </Form>
+              </Col>
+
+              <Col xs={24} lg={10}>
+                <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                  <Alert
+                    type="info"
+                    showIcon
+                    message="安全建议"
+                    description="保持凭据唯一、可恢复且能快速审计，是 Nova 管理后台的默认安全基线。"
+                  />
+                  <List
+                    bordered
+                    dataSource={SECURITY_TIPS}
+                    renderItem={(item) => <List.Item>{item}</List.Item>}
+                  />
+                </Space>
+              </Col>
+            </Row>
+          </Card>
+        </Space>
       )}
     </ConsoleShellLayout>
   );

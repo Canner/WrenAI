@@ -5,7 +5,6 @@ import SettingsUsersPage from '../../../pages/settings/users';
 const mockUseProtectedRuntimeScopePage = jest.fn();
 const mockUseRuntimeScopeNavigation = jest.fn();
 const mockUseAuthSession = jest.fn();
-const mockUseRuntimeSelectorState = jest.fn();
 
 jest.mock('@/hooks/useProtectedRuntimeScopePage', () => ({
   __esModule: true,
@@ -20,11 +19,6 @@ jest.mock('@/hooks/useRuntimeScopeNavigation', () => ({
 jest.mock('@/hooks/useAuthSession', () => ({
   __esModule: true,
   default: () => mockUseAuthSession(),
-}));
-
-jest.mock('@/hooks/useRuntimeSelectorState', () => ({
-  __esModule: true,
-  default: () => mockUseRuntimeSelectorState(),
 }));
 
 jest.mock('@/components/reference/ConsoleShellLayout', () => ({
@@ -80,26 +74,14 @@ describe('settings/users page', () => {
         },
       },
     });
-    mockUseRuntimeSelectorState.mockReturnValue({
-      runtimeSelectorState: {
-        currentWorkspace: {
-          id: 'workspace-1',
-          name: 'Demo Workspace',
-        },
-        currentKnowledgeBase: {
-          id: 'kb-1',
-          name: 'Sales KB',
-        },
-      },
-    });
   });
 
-  it('renders the member lifecycle surface', () => {
+  it('renders the user management surface', () => {
     const markup = renderPage();
 
     expect(markup).toContain('用户管理');
-    expect(markup).toContain('用户列表');
-    expect(markup).toContain('Workspace 角色来源');
-    expect(markup).toContain('Platform 角色来源');
+    expect(markup).toContain('搜索姓名 / 账号 / 手机号');
+    expect(markup).toContain('新增用户');
+    expect(markup).toContain('已显示 0 / 0 名用户');
   });
 });

@@ -10,7 +10,7 @@ import {
   deriveRuntimeExecutionContextFromRequest,
 } from '@/server/utils/apiUtils';
 import { getLogger } from '@server/utils';
-import { buildApiContextFromRequest } from './apiContext';
+import { buildApiContextFromRequest } from '@/server/api/apiContext';
 
 const logger = getLogger('API_MODELS');
 logger.level = 'debug';

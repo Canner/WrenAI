@@ -1,4 +1,5 @@
 import type { ParsedUrlQuery } from 'querystring';
+import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import { Path } from '@/utils/enum';
 
 export const KNOWLEDGE_WORKBENCH_SECTIONS = [
@@ -27,6 +28,12 @@ export const resolveKnowledgeWorkbenchSection = (
 
   return isKnowledgeWorkbenchSection(value) ? value : fallback;
 };
+
+export const isKnowledgeWorkbenchRoute = (pathname: string) =>
+  pathname.startsWith(Path.Knowledge);
+
+export const isLegacyModelingRoute = (pathname: string) =>
+  pathname.startsWith(Path.Modeling);
 
 const MODELING_DEEP_LINK_KEYS = [
   'modelId',
@@ -76,5 +83,84 @@ export const isKnowledgeModelingRoute = ({
   pathname: string;
   query?: ParsedUrlQuery | Record<string, unknown>;
 }) =>
-  pathname.startsWith(Path.Knowledge) &&
+  isKnowledgeWorkbenchRoute(pathname) &&
   resolveKnowledgeWorkbenchSection(query?.section) === 'modeling';
+
+export const isModelingSurfaceRoute = ({
+  pathname,
+  query,
+}: {
+  pathname: string;
+  query?: ParsedUrlQuery | Record<string, unknown>;
+}) =>
+  isLegacyModelingRoute(pathname) ||
+  isKnowledgeModelingRoute({
+    pathname,
+    query,
+  });
+
+export type KnowledgeWorkbenchRouteKnowledgeBase = {
+  id: string;
+  workspaceId: string;
+  defaultKbSnapshot?: {
+    id: string;
+    deployHash: string;
+  } | null;
+};
+
+export const resolveKnowledgeWorkbenchRuntimeSelector = ({
+  knowledgeBase,
+  fallbackSelector,
+}: {
+  knowledgeBase?: KnowledgeWorkbenchRouteKnowledgeBase | null;
+  fallbackSelector: ClientRuntimeScopeSelector;
+}): ClientRuntimeScopeSelector => {
+  if (!knowledgeBase) {
+    return fallbackSelector;
+  }
+
+  return {
+    workspaceId: knowledgeBase.workspaceId,
+    knowledgeBaseId: knowledgeBase.id,
+    ...(knowledgeBase.defaultKbSnapshot?.id
+      ? { kbSnapshotId: knowledgeBase.defaultKbSnapshot.id }
+      : {}),
+    ...(knowledgeBase.defaultKbSnapshot?.deployHash
+      ? { deployHash: knowledgeBase.defaultKbSnapshot.deployHash }
+      : {}),
+  };
+};
+
+export const buildKnowledgeWorkbenchUrl = ({
+  buildRuntimeScopeUrl,
+  knowledgeBase,
+  fallbackSelector,
+  section = 'overview',
+  extraParams = {},
+}: {
+  buildRuntimeScopeUrl: (
+    path: string,
+    query?: Record<string, string | number | boolean | null | undefined>,
+    selector?: ClientRuntimeScopeSelector,
+  ) => string;
+  knowledgeBase?: KnowledgeWorkbenchRouteKnowledgeBase | null;
+  fallbackSelector: ClientRuntimeScopeSelector;
+  section?: KnowledgeWorkbenchSection;
+  extraParams?: Record<string, string | number | boolean | null | undefined>;
+}) => {
+  const normalizedExtraParams = Object.fromEntries(
+    Object.entries(extraParams).filter(
+      (entry): entry is [string, string | number | boolean] =>
+        entry[1] !== undefined && entry[1] !== null,
+    ),
+  );
+
+  return buildRuntimeScopeUrl(
+    Path.Knowledge,
+    buildKnowledgeWorkbenchParams(section, normalizedExtraParams),
+    resolveKnowledgeWorkbenchRuntimeSelector({
+      knowledgeBase,
+      fallbackSelector,
+    }),
+  );
+};

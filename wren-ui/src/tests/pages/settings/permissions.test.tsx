@@ -2,10 +2,17 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import SettingsPermissionsPage from '../../../pages/settings/permissions';
 
+const mockUseAuthSession = jest.fn();
 const mockUseProtectedRuntimeScopePage = jest.fn();
 const mockUseRuntimeScopeNavigation = jest.fn();
-const mockUseAuthSession = jest.fn();
-const mockUseRuntimeSelectorState = jest.fn();
+const mockUseWorkspaceGovernanceOverview = jest.fn();
+const mockUsePermissionsRoleManagement = jest.fn();
+const mockResolvePlatformManagementFromAuthSession = jest.fn();
+
+jest.mock('@/hooks/useAuthSession', () => ({
+  __esModule: true,
+  default: () => mockUseAuthSession(),
+}));
 
 jest.mock('@/hooks/useProtectedRuntimeScopePage', () => ({
   __esModule: true,
@@ -17,14 +24,23 @@ jest.mock('@/hooks/useRuntimeScopeNavigation', () => ({
   default: () => mockUseRuntimeScopeNavigation(),
 }));
 
-jest.mock('@/hooks/useAuthSession', () => ({
+jest.mock('@/features/settings/useWorkspaceGovernanceOverview', () => ({
   __esModule: true,
-  default: () => mockUseAuthSession(),
+  default: (...args: any[]) => mockUseWorkspaceGovernanceOverview(...args),
 }));
 
-jest.mock('@/hooks/useRuntimeSelectorState', () => ({
+jest.mock(
+  '@/features/settings/permissions/usePermissionsRoleManagement',
+  () => ({
+    __esModule: true,
+    default: (...args: any[]) => mockUsePermissionsRoleManagement(...args),
+  }),
+);
+
+jest.mock('@/features/settings/settingsPageCapabilities', () => ({
   __esModule: true,
-  default: () => mockUseRuntimeSelectorState(),
+  resolvePlatformManagementFromAuthSession: (...args: any[]) =>
+    mockResolvePlatformManagementFromAuthSession(...args),
 }));
 
 jest.mock('@/components/reference/ConsoleShellLayout', () => ({
@@ -54,52 +70,80 @@ const renderPage = () =>
 describe('settings/permissions page', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUseAuthSession.mockReturnValue({
+      authenticated: true,
+      loading: false,
+      data: {},
+    });
     mockUseProtectedRuntimeScopePage.mockReturnValue({
       guarding: false,
       hasRuntimeScope: true,
     });
     mockUseRuntimeScopeNavigation.mockReturnValue({
-      push: jest.fn(),
-      replace: jest.fn(),
       pushWorkspace: jest.fn(),
-      hasRuntimeScope: true,
     });
-    mockUseAuthSession.mockReturnValue({
-      authenticated: true,
-      loading: false,
-      data: {
-        authorization: {
-          actor: {
-            platformRoleKeys: [],
-            isPlatformAdmin: false,
+    mockResolvePlatformManagementFromAuthSession.mockReturnValue(false);
+    mockUseWorkspaceGovernanceOverview.mockReturnValue({
+      workspaceOverview: {
+        permissions: {
+          actions: {
+            'role.read': true,
+            'role.manage': true,
           },
         },
       },
     });
-    mockUseRuntimeSelectorState.mockReturnValue({
-      runtimeSelectorState: {
-        currentWorkspace: {
-          id: 'workspace-1',
-          name: 'Demo Workspace',
+    mockUsePermissionsRoleManagement.mockReturnValue({
+      roleCatalog: [
+        {
+          id: 'role-1',
+          name: 'admin',
+          displayName: '系统管理员',
+          description: '管理系统设置',
+          scopeType: 'workspace',
+          scopeId: 'workspace-1',
+          isSystem: true,
+          isActive: true,
+          permissionNames: ['workspace.read'],
+          bindingCount: 2,
         },
-        currentKnowledgeBase: {
-          id: 'kb-1',
-          name: 'Sales KB',
+      ],
+      roleCatalogLoading: false,
+      permissionCatalog: [
+        {
+          name: 'workspace.read',
+          description: '查看工作空间信息',
+          assignable: false,
         },
-      },
+      ],
+      roleActionLoading: null,
+      handleCreateCustomRole: jest.fn(),
+      handleUpdateCustomRole: jest.fn(),
+      handleDeleteCustomRole: jest.fn(),
     });
   });
 
-  it('renders the role and authorization controls', () => {
+  it('renders the refreshed role management layout', () => {
     const markup = renderPage();
 
     expect(markup).toContain('权限管理');
-    expect(markup).toContain('角色总数');
-    expect(markup).toContain('绑定总数');
-    expect(markup).toContain('访问复核');
-    expect(markup).toContain('Break-glass 生效中');
-    expect(markup).toContain('角色目录');
-    expect(markup).toContain('角色绑定');
-    expect(markup).toContain('权限 Explain / Simulate');
+    expect(markup).toContain('角色列表');
+    expect(markup).toContain('请选择左侧角色查看详情');
+    expect(markup).toContain('搜索角色');
+    expect(markup).toContain('系统管理员');
+    expect(markup).not.toContain('访问复核与高风险流程');
+  });
+
+  it('shows the signed-out alert when the session is unavailable', () => {
+    mockUseAuthSession.mockReturnValue({
+      authenticated: false,
+      loading: false,
+      data: null,
+    });
+
+    const markup = renderPage();
+
+    expect(markup).toContain('当前未登录');
+    expect(markup).toContain('请先登录后再查看权限管理。');
   });
 });

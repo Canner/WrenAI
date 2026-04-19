@@ -2,48 +2,39 @@ import { useCallback } from 'react';
 import { message } from 'antd';
 import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import { Path } from '@/utils/enum';
+import {
+  buildKnowledgeWorkbenchUrl,
+  resolveKnowledgeWorkbenchRuntimeSelector,
+  type KnowledgeWorkbenchRouteKnowledgeBase,
+} from '@/utils/knowledgeWorkbench';
 
-type KnowledgeBaseForActions = {
-  id: string;
-  workspaceId: string;
-  defaultKbSnapshot?: {
-    id: string;
-    deployHash: string;
-  } | null;
-};
+type KnowledgeBaseForActions = KnowledgeWorkbenchRouteKnowledgeBase;
 
-export const resolveKnowledgeRuntimeSelector = ({
-  knowledgeBase,
-  fallbackSelector,
-}: {
-  knowledgeBase?: KnowledgeBaseForActions | null;
-  fallbackSelector: ClientRuntimeScopeSelector;
-}): ClientRuntimeScopeSelector => {
-  if (!knowledgeBase) {
-    return fallbackSelector;
-  }
-
-  return {
-    workspaceId: knowledgeBase.workspaceId,
-    knowledgeBaseId: knowledgeBase.id,
-    ...(knowledgeBase.defaultKbSnapshot?.id
-      ? { kbSnapshotId: knowledgeBase.defaultKbSnapshot.id }
-      : {}),
-    ...(knowledgeBase.defaultKbSnapshot?.deployHash
-      ? { deployHash: knowledgeBase.defaultKbSnapshot.deployHash }
-      : {}),
-  };
-};
+export const resolveKnowledgeRuntimeSelector =
+  resolveKnowledgeWorkbenchRuntimeSelector;
 
 export const buildKnowledgeSwitchPath = (
   knowledgeBase: KnowledgeBaseForActions,
 ) => {
-  const nextSearchParams = new URLSearchParams({
-    workspaceId: knowledgeBase.workspaceId,
-    knowledgeBaseId: knowledgeBase.id,
-    kbSnapshotId: knowledgeBase.defaultKbSnapshot?.id || '',
-    deployHash: knowledgeBase.defaultKbSnapshot?.deployHash || '',
+  const selector = resolveKnowledgeWorkbenchRuntimeSelector({
+    knowledgeBase,
+    fallbackSelector: { workspaceId: knowledgeBase.workspaceId },
   });
+  const nextSearchParams = new URLSearchParams();
+
+  if (selector.workspaceId) {
+    nextSearchParams.set('workspaceId', selector.workspaceId);
+  }
+  if (selector.knowledgeBaseId) {
+    nextSearchParams.set('knowledgeBaseId', selector.knowledgeBaseId);
+  }
+  if (selector.kbSnapshotId) {
+    nextSearchParams.set('kbSnapshotId', selector.kbSnapshotId);
+  }
+  if (selector.deployHash) {
+    nextSearchParams.set('deployHash', selector.deployHash);
+  }
+
   return `${Path.Knowledge}?${nextSearchParams.toString()}`;
 };
 
@@ -64,7 +55,7 @@ export default function useKnowledgePageActions({
   runtimeNavigationSelector: ClientRuntimeScopeSelector;
   buildRuntimeScopeUrl: (
     path: string,
-    query?: Record<string, string | number | undefined>,
+    query?: Record<string, string | number | boolean | null | undefined>,
     selector?: ClientRuntimeScopeSelector,
   ) => string;
   pushRoute: (url: string) => Promise<unknown>;
@@ -84,7 +75,7 @@ export default function useKnowledgePageActions({
 
   const buildKnowledgeRuntimeSelector = useCallback(
     (knowledgeBase?: KnowledgeBaseForActions | null) =>
-      resolveKnowledgeRuntimeSelector({
+      resolveKnowledgeWorkbenchRuntimeSelector({
         knowledgeBase,
         fallbackSelector: runtimeNavigationSelector,
       }),
@@ -141,12 +132,12 @@ export default function useKnowledgePageActions({
 
   const buildKnowledgeSwitchUrl = useCallback(
     (knowledgeBase: KnowledgeBaseForActions) =>
-      buildRuntimeScopeUrl(
-        Path.Knowledge,
-        {},
-        buildKnowledgeRuntimeSelector(knowledgeBase),
-      ),
-    [buildKnowledgeRuntimeSelector, buildRuntimeScopeUrl],
+      buildKnowledgeWorkbenchUrl({
+        buildRuntimeScopeUrl,
+        knowledgeBase,
+        fallbackSelector: runtimeNavigationSelector,
+      }),
+    [buildRuntimeScopeUrl, runtimeNavigationSelector],
   );
 
   return {

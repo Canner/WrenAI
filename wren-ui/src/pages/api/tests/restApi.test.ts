@@ -1,5 +1,5 @@
 import { ApiError } from '@/server/utils/apiUtils';
-import { inferRestApiStatusCode, sendRestApiError } from '../v1/restApi';
+import { inferRestApiStatusCode, sendRestApiError } from '@/server/api/restApi';
 
 describe('pages/api/v1/restApi', () => {
   it('keeps explicit ApiError status codes', () => {

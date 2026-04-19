@@ -14,6 +14,7 @@ import { ChartResult, ChartStatus } from '@/server/models/adaptor';
 import { PreviewDataResponse } from '@server/services/queryService';
 import { transformToObjects } from '@server/utils/dataUtils';
 import { toAskRuntimeIdentity } from '@server/utils/askContext';
+import { applyCompatibilityApiHeaders } from '@/server/api/compatibilityApi';
 import {
   canonicalizeChartSchema,
   shapeChartPreviewData,
@@ -43,12 +44,7 @@ const {
 } = components;
 
 const DEPRECATION_WARNING =
-  '299 - "Deprecated API: use the ask/chart workflow instead of /api/v1/generate_vega_chart."';
-
-const setDeprecatedHeaders = (res: NextApiResponse) => {
-  res.setHeader('Deprecation', 'true');
-  res.setHeader('Warning', DEPRECATION_WARNING);
-};
+  'Deprecated API: use the ask/chart workflow instead of /api/v1/generate_vega_chart.';
 
 const assertKnowledgeBaseReadAccess = async ({
   req,
@@ -128,7 +124,9 @@ export default async function handler(
   let runtimeScope;
 
   try {
-    setDeprecatedHeaders(res);
+    applyCompatibilityApiHeaders(res, {
+      warning: DEPRECATION_WARNING,
+    });
 
     // Only allow POST method
     if (req.method !== 'POST') {

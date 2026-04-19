@@ -2,8 +2,8 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { ModelController } from '@server/controllers/modelController';
 import { ExpressionName } from '@server/models/model';
 import { ApiError } from '@/server/utils/apiUtils';
-import { buildApiContextFromRequest } from '../apiContext';
-import { sendRestApiError } from '../restApi';
+import { buildApiContextFromRequest } from '@/server/api/apiContext';
+import { sendRestApiError } from '@/server/api/restApi';
 
 const modelController = new ModelController();
 

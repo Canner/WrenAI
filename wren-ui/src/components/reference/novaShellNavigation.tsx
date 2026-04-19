@@ -6,7 +6,6 @@ import TeamOutlined from '@ant-design/icons/TeamOutlined';
 import SettingOutlined from '@ant-design/icons/SettingOutlined';
 import ApiOutlined from '@ant-design/icons/ApiOutlined';
 import SafetyCertificateOutlined from '@ant-design/icons/SafetyCertificateOutlined';
-import LockOutlined from '@ant-design/icons/LockOutlined';
 import AuditOutlined from '@ant-design/icons/AuditOutlined';
 import CodeOutlined from '@ant-design/icons/CodeOutlined';
 import { Path } from '@/utils/enum';
@@ -56,6 +55,14 @@ export const buildNovaShellNavItems = ({
     path: activeKey === 'home' ? undefined : Path.Home,
   },
   {
+    key: 'knowledge',
+    label: '知识库',
+    icon: <BookOutlined />,
+    iconKey: 'knowledge',
+    active: activeKey === 'knowledge',
+    path: activeKey === 'knowledge' ? undefined : Path.Knowledge,
+  },
+  {
     key: 'dashboard',
     label: '数据看板',
     icon: <FundViewOutlined />,
@@ -63,14 +70,6 @@ export const buildNovaShellNavItems = ({
     active: activeKey === 'dashboard',
     path: activeKey === 'dashboard' ? undefined : Path.HomeDashboard,
     params: activeKey === 'dashboard' ? undefined : resolveDashboardNavParams(),
-  },
-  {
-    key: 'knowledge',
-    label: '我的知识库',
-    icon: <BookOutlined />,
-    iconKey: 'knowledge',
-    active: activeKey === 'knowledge',
-    path: activeKey === 'knowledge' ? undefined : Path.Knowledge,
   },
 ];
 
@@ -112,15 +111,6 @@ export const buildNovaSettingsNavItems = ({
         : Path.SettingsPermissions,
   },
   {
-    key: 'settingsIdentity',
-    label: '身份与目录',
-    icon: <LockOutlined />,
-    iconKey: 'settingsIdentity',
-    sectionLabel: '组织与安全',
-    active: activeKey === 'settingsIdentity',
-    path: activeKey === 'settingsIdentity' ? undefined : Path.SettingsIdentity,
-  },
-  {
     key: 'settingsAudit',
     label: '审计日志',
     icon: <AuditOutlined />,
@@ -136,8 +126,7 @@ export const buildNovaSettingsNavItems = ({
     iconKey: 'settingsWorkspace',
     sectionLabel: '工作空间',
     active: activeKey === 'settingsWorkspace',
-    path:
-      activeKey === 'settingsWorkspace' ? undefined : Path.SettingsWorkspace,
+    path: activeKey === 'settingsWorkspace' ? undefined : Path.Workspace,
   },
   {
     key: 'settingsConnectors',

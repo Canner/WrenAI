@@ -1,6 +1,6 @@
-import { Drawer, Typography, Row, Col, Tag } from 'antd';
+import { Descriptions, Divider, Drawer, Space, Tag, Typography } from 'antd';
 import { getAbsoluteTime } from '@/utils/time';
-import { DrawerAction } from '@/hooks/useDrawerAction';
+import type { DrawerAction } from '@/hooks/useDrawerAction';
 import CheckCircleOutlined from '@ant-design/icons/CheckCircleOutlined';
 import CloseCircleOutlined from '@ant-design/icons/CloseCircleOutlined';
 import JsonCodeBlock from '@/components/code/JsonCodeBlock';
@@ -15,15 +15,15 @@ type Props = DrawerAction<ApiHistoryResponse> & {
 
 const renderTextValue = (value?: string | number | null) => {
   if (value === null || value === undefined || value === '') {
-    return <div className="gray-7">-</div>;
+    return <Typography.Text type="secondary">-</Typography.Text>;
   }
 
-  return <div>{value}</div>;
+  return <span>{value}</span>;
 };
 
 const renderCopyableValue = (value?: string | null) => {
   if (!value) {
-    return <div className="gray-7">-</div>;
+    return <Typography.Text type="secondary">-</Typography.Text>;
   }
 
   return (
@@ -90,206 +90,145 @@ export default function DetailsDrawer(props: Props) {
       onClose={onClose}
       footer={null}
     >
-      <Row className="mb-6">
-        <Col span={12}>
-          <Typography.Text className="d-block gray-7 mb-2">
-            API 类型
-          </Typography.Text>
-          <div>
-            <Tag className="gray-8">{formatApiTypeLabel(apiType)}</Tag>
-          </div>
-        </Col>
-        <Col span={12}>
-          <Typography.Text className="d-block gray-7 mb-2">
-            线程 ID
-          </Typography.Text>
-          <div>{threadId || '-'}</div>
-        </Col>
-      </Row>
-      <Row className="mb-6">
-        <Col span={12}>
-          <Typography.Text className="d-block gray-7 mb-2">
-            创建时间
-          </Typography.Text>
-          <div>{createdAt ? getAbsoluteTime(createdAt) : '-'}</div>
-        </Col>
-        <Col span={12}>
-          <Typography.Text className="d-block gray-7 mb-2">
-            耗时
-          </Typography.Text>
-          <div>{durationMs} ms</div>
-        </Col>
-      </Row>
-      <Row className="mb-6">
-        <Col span={12}>
-          <Typography.Text className="d-block gray-7 mb-2">
-            状态码
-          </Typography.Text>
-          <div>{statusCode ? getStatusTag(statusCode) : '-'}</div>
-        </Col>
-      </Row>
+      <Descriptions
+        bordered
+        column={2}
+        size="small"
+        labelStyle={{ width: 108, color: 'var(--nova-text-secondary)' }}
+      >
+        <Descriptions.Item label="API 类型">
+          <Tag className="gray-8">{formatApiTypeLabel(apiType)}</Tag>
+        </Descriptions.Item>
+        <Descriptions.Item label="线程 ID">
+          {renderTextValue(threadId)}
+        </Descriptions.Item>
+        <Descriptions.Item label="创建时间">
+          {renderTextValue(createdAt ? getAbsoluteTime(createdAt) : null)}
+        </Descriptions.Item>
+        <Descriptions.Item label="耗时">
+          {renderTextValue(
+            durationMs === null || durationMs === undefined
+              ? null
+              : `${durationMs} ms`,
+          )}
+        </Descriptions.Item>
+        <Descriptions.Item label="状态码">
+          {statusCode ? getStatusTag(statusCode) : renderTextValue(null)}
+        </Descriptions.Item>
+      </Descriptions>
 
-      <div className="mb-6">
-        <Typography.Text className="d-block gray-7 mb-2">
-          请求头
-        </Typography.Text>
-        <JsonCodeBlock
-          code={headers}
-          backgroundColor="var(--gray-2)"
-          maxHeight="400"
-          copyable
-        />
-      </div>
+      <Divider orientation="left" plain>
+        请求头
+      </Divider>
+      <JsonCodeBlock
+        code={headers}
+        backgroundColor="var(--gray-2)"
+        maxHeight="400"
+        copyable
+      />
 
-      <div className="mb-6">
-        <Typography.Text className="d-block gray-7 mb-2">
-          请求载荷
-        </Typography.Text>
-        <JsonCodeBlock
-          code={requestPayload}
-          backgroundColor="var(--gray-2)"
-          maxHeight="400"
-          copyable
-        />
-      </div>
+      <Divider orientation="left" plain>
+        请求载荷
+      </Divider>
+      <JsonCodeBlock
+        code={requestPayload}
+        backgroundColor="var(--gray-2)"
+        maxHeight="400"
+        copyable
+      />
 
-      {askDiagnostics && (
-        <div className="mb-6">
-          <Typography.Text className="d-block gray-7 mb-2">
+      {askDiagnostics ? (
+        <>
+          <Divider orientation="left" plain>
             问答诊断
-          </Typography.Text>
-          <Row className="mb-4">
-            <Col span={12}>
-              <Typography.Text className="d-block gray-7 mb-2">
-                Trace ID
-              </Typography.Text>
+          </Divider>
+          <Descriptions
+            bordered
+            column={2}
+            size="small"
+            labelStyle={{ width: 108, color: 'var(--nova-text-secondary)' }}
+          >
+            <Descriptions.Item label="Trace ID">
               {renderCopyableValue(askDiagnostics.traceId)}
-            </Col>
-            <Col span={12}>
-              <Typography.Text className="d-block gray-7 mb-2">
-                问答路径
-              </Typography.Text>
+            </Descriptions.Item>
+            <Descriptions.Item label="问答路径">
               {askDiagnostics.askPath ? (
                 <Tag className="gray-8">{askDiagnostics.askPath}</Tag>
               ) : (
-                <div className="gray-7">-</div>
+                <Typography.Text type="secondary">-</Typography.Text>
               )}
-            </Col>
-          </Row>
+            </Descriptions.Item>
+          </Descriptions>
 
-          {shadowCompare && (
+          {shadowCompare ? (
             <>
-              <div className="mb-4">
-                <Typography.Text className="d-block gray-7 mb-2">
-                  影子对比
-                </Typography.Text>
-                <div>
-                  {renderStateTag('启用', shadowCompare.enabled)}
-                  {renderStateTag('执行', shadowCompare.executed)}
-                  {renderStateTag('可比对', shadowCompare.comparable, {
-                    inactiveLabel: '不可比对',
-                  })}
-                  {shadowCompare.comparable !== undefined &&
-                    renderStateTag('匹配', shadowCompare.matched, {
+              <Divider orientation="left" plain>
+                影子对比
+              </Divider>
+              <Space wrap size={[8, 8]} style={{ marginBottom: 16 }}>
+                {renderStateTag('启用', shadowCompare.enabled)}
+                {renderStateTag('执行', shadowCompare.executed)}
+                {renderStateTag('可比对', shadowCompare.comparable, {
+                  inactiveLabel: '不可比对',
+                })}
+                {shadowCompare.comparable !== undefined
+                  ? renderStateTag('匹配', shadowCompare.matched, {
                       activeLabel: '已匹配',
                       inactiveLabel: '不匹配',
-                    })}
-                </div>
-              </div>
-
-              <Row className="mb-4">
-                <Col span={12}>
-                  <Typography.Text className="d-block gray-7 mb-2">
-                    主链路路径
-                  </Typography.Text>
+                    })
+                  : null}
+              </Space>
+              <Descriptions
+                bordered
+                column={2}
+                size="small"
+                labelStyle={{ width: 132, color: 'var(--nova-text-secondary)' }}
+              >
+                <Descriptions.Item label="主链路路径">
                   {renderTextValue(shadowCompare.primaryAskPath)}
-                </Col>
-                <Col span={12}>
-                  <Typography.Text className="d-block gray-7 mb-2">
-                    影子链路路径
-                  </Typography.Text>
+                </Descriptions.Item>
+                <Descriptions.Item label="影子链路路径">
                   {renderTextValue(shadowCompare.shadowAskPath)}
-                </Col>
-              </Row>
-
-              <Row className="mb-4">
-                <Col span={12}>
-                  <Typography.Text className="d-block gray-7 mb-2">
-                    主链路类型
-                  </Typography.Text>
+                </Descriptions.Item>
+                <Descriptions.Item label="主链路类型">
                   {renderTextValue(shadowCompare.primaryType)}
-                </Col>
-                <Col span={12}>
-                  <Typography.Text className="d-block gray-7 mb-2">
-                    影子链路类型
-                  </Typography.Text>
+                </Descriptions.Item>
+                <Descriptions.Item label="影子链路类型">
                   {renderTextValue(shadowCompare.shadowType)}
-                </Col>
-              </Row>
-
-              <Row className="mb-4">
-                <Col span={12}>
-                  <Typography.Text className="d-block gray-7 mb-2">
-                    主链路结果数
-                  </Typography.Text>
+                </Descriptions.Item>
+                <Descriptions.Item label="主链路结果数">
                   {renderTextValue(shadowCompare.primaryResultCount)}
-                </Col>
-                <Col span={12}>
-                  <Typography.Text className="d-block gray-7 mb-2">
-                    影子链路结果数
-                  </Typography.Text>
+                </Descriptions.Item>
+                <Descriptions.Item label="影子链路结果数">
                   {renderTextValue(shadowCompare.shadowResultCount)}
-                </Col>
-              </Row>
-
-              <Row className="mb-4">
-                <Col span={12}>
-                  <Typography.Text className="d-block gray-7 mb-2">
-                    主链路错误类型
-                  </Typography.Text>
+                </Descriptions.Item>
+                <Descriptions.Item label="主链路错误类型">
                   {renderTextValue(shadowCompare.primaryErrorType)}
-                </Col>
-                <Col span={12}>
-                  <Typography.Text className="d-block gray-7 mb-2">
-                    影子链路错误类型
-                  </Typography.Text>
+                </Descriptions.Item>
+                <Descriptions.Item label="影子链路错误类型">
                   {renderTextValue(shadowCompare.shadowErrorType)}
-                </Col>
-              </Row>
-
-              <Row className="mb-4">
-                <Col span={24}>
-                  <Typography.Text className="d-block gray-7 mb-2">
-                    原因
-                  </Typography.Text>
+                </Descriptions.Item>
+                <Descriptions.Item label="原因" span={2}>
                   {renderTextValue(shadowCompare.reason)}
-                </Col>
-              </Row>
-
-              <Row className="mb-4">
-                <Col span={24}>
-                  <Typography.Text className="d-block gray-7 mb-2">
-                    影子链路错误详情
-                  </Typography.Text>
+                </Descriptions.Item>
+                <Descriptions.Item label="影子链路错误详情" span={2}>
                   {renderTextValue(shadowCompare.shadowError)}
-                </Col>
-              </Row>
+                </Descriptions.Item>
+              </Descriptions>
             </>
-          )}
-        </div>
-      )}
+          ) : null}
+        </>
+      ) : null}
 
-      <div className="mb-6">
-        <Typography.Text className="d-block gray-7 mb-2">
-          响应载荷
-        </Typography.Text>
-        <JsonCodeBlock
-          code={responsePayload}
-          backgroundColor="var(--gray-2)"
-          maxHeight="400"
-          copyable
-        />
-      </div>
+      <Divider orientation="left" plain>
+        响应载荷
+      </Divider>
+      <JsonCodeBlock
+        code={responsePayload}
+        backgroundColor="var(--gray-2)"
+        maxHeight="400"
+        copyable
+      />
     </Drawer>
   );
 }

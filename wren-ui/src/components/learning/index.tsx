@@ -18,7 +18,7 @@ import { LEARNING } from './guide/utils';
 import { useRouter } from 'next/router';
 import { Path } from '@/utils/enum';
 import { nextTick } from '@/utils/time';
-import { isKnowledgeModelingRoute } from '@/utils/knowledgeWorkbench';
+import { isModelingSurfaceRoute } from '@/utils/knowledgeWorkbench';
 import { ProjectLanguage } from '@/types/project';
 import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 
@@ -123,7 +123,7 @@ interface LearningConfig {
 const getData = (
   $guide: RefObject<ComponentRef<typeof LearningGuide>>,
   pathname: string,
-  isKnowledgeModeling: boolean,
+  isModelingSurface: boolean,
   saveRecord: (id: LEARNING) => Promise<void>,
   saveLanguage: NonNullable<Dispatcher['onSaveLanguage']>,
 ) => {
@@ -186,7 +186,7 @@ const getData = (
     },
   ];
 
-  if (pathname.startsWith(Path.Modeling) || isKnowledgeModeling) {
+  if (isModelingSurface) {
     return modeling;
   }
   if (pathname.startsWith(Path.Home)) {
@@ -197,20 +197,17 @@ const getData = (
 
 const isLearningAccessible = ({
   pathname,
-  isKnowledgeModeling,
+  isModelingSurface,
 }: {
   pathname: string;
-  isKnowledgeModeling: boolean;
-}) =>
-  pathname.startsWith(Path.Modeling) ||
-  pathname.startsWith(Path.Home) ||
-  isKnowledgeModeling;
+  isModelingSurface: boolean;
+}) => isModelingSurface || pathname.startsWith(Path.Home);
 
 interface Props {}
 
 export default function SidebarSection(_props: Props) {
   const router = useRouter();
-  const isKnowledgeModeling = isKnowledgeModelingRoute({
+  const isModelingSurface = isModelingSurfaceRoute({
     pathname: router.pathname,
     query: router.query,
   });
@@ -312,7 +309,7 @@ export default function SidebarSection(_props: Props) {
     const learningData = getData(
       $guide,
       router.pathname,
-      isKnowledgeModeling,
+      isModelingSurface,
       saveRecord,
       saveLanguageFromGuide,
     );
@@ -327,7 +324,7 @@ export default function SidebarSection(_props: Props) {
   }, [
     learningRecordPaths,
     router.pathname,
-    isKnowledgeModeling,
+    isModelingSurface,
     saveRecord,
     saveLanguageFromGuide,
   ]);
@@ -412,7 +409,7 @@ export default function SidebarSection(_props: Props) {
       }
     };
 
-    if (router.pathname.startsWith(Path.Modeling) || isKnowledgeModeling) {
+    if (isModelingSurface) {
       void playModelingGuide();
       return;
     }
@@ -431,7 +428,7 @@ export default function SidebarSection(_props: Props) {
       void playKnowledgeGuide();
     }
   }, [
-    isKnowledgeModeling,
+    isModelingSurface,
     learningRecordPaths,
     router.pathname,
     saveLanguageFromGuide,
@@ -452,7 +449,7 @@ export default function SidebarSection(_props: Props) {
       <LearningGuide ref={$guide} />
       {isLearningAccessible({
         pathname: router.pathname,
-        isKnowledgeModeling,
+        isModelingSurface,
       }) && (
         <div className="border-t border-gray-4">
           <div

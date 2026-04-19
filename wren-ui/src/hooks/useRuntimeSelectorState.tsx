@@ -75,6 +75,14 @@ export const buildRuntimeSelectorStateUrl = (
   selector = resolveClientRuntimeScopeSelector(),
 ) => buildRuntimeScopeUrl('/api/v1/runtime/scope/current', {}, selector);
 
+export const buildRuntimeSelectorStateRequestKey = ({
+  skip,
+  selector,
+}: {
+  skip: boolean;
+  selector: ClientRuntimeScopeSelector;
+}) => (skip ? null : buildRuntimeSelectorStateUrl(selector));
+
 export const buildRuntimeSelectorRequestOptions = ({
   signal,
 }: {
@@ -129,20 +137,21 @@ const useRuntimeSelectorStateRequest = ({
   skip: boolean;
   selector: ClientRuntimeScopeSelector;
 }) => {
-  const requestUrl = useMemo(() => {
-    if (skip) {
-      return null;
-    }
-
-    return buildRuntimeSelectorStateUrl(selector);
-  }, [
-    selector.deployHash,
-    selector.kbSnapshotId,
-    selector.knowledgeBaseId,
-    selector.runtimeScopeId,
-    selector.workspaceId,
-    skip,
-  ]);
+  const requestUrl = useMemo(
+    () =>
+      buildRuntimeSelectorStateRequestKey({
+        skip,
+        selector,
+      }),
+    [
+      selector.deployHash,
+      selector.kbSnapshotId,
+      selector.knowledgeBaseId,
+      selector.runtimeScopeId,
+      selector.workspaceId,
+      skip,
+    ],
+  );
 
   const {
     data: runtimeSelectorState,

@@ -42,8 +42,12 @@ function App({ Component, pageProps, router }: AppProps) {
     [router.pathname, runtimeScopePageKey],
   );
   const pageTitle = useMemo(
-    () => resolveNovaPageTitle(router.pathname),
-    [router.pathname],
+    () =>
+      resolveNovaPageTitle({
+        pathname: router.pathname,
+        query: router.query,
+      }),
+    [router.pathname, router.query],
   );
 
   return (

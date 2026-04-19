@@ -9,7 +9,7 @@ import {
 } from '@/server/utils/apiUtils';
 import { getLogger } from '@server/utils';
 import { toCanonicalPersistedRuntimeIdentityFromScope } from '@server/utils/persistedRuntimeIdentity';
-import { buildApiContextFromRequest } from '../apiContext';
+import { buildApiContextFromRequest } from '@/server/api/apiContext';
 import {
   assertAuthorizedWithAudit,
   buildAuthorizationActorFromRuntimeScope,

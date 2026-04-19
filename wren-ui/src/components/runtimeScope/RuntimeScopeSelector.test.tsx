@@ -112,4 +112,44 @@ describe('RuntimeScopeSelector', () => {
     expect(capturedSelectProps[2].loading).toBe(true);
     expect(capturedSelectProps[2].disabled).toBe(true);
   });
+
+  it('drops thread params when switching workspace from a thread route', () => {
+    const transitionTo = jest.fn();
+    mockUseRouter.mockReturnValue({
+      pathname: '/home/[id]',
+      query: {
+        id: 'thread-1',
+        workspaceId: 'ws-1',
+      },
+    });
+    mockUseRuntimeScopeTransition.mockReturnValue({
+      transitioning: false,
+      transitionTo,
+    });
+    mockUseRuntimeSelectorState.mockReturnValue({
+      runtimeSelectorState: {
+        currentWorkspace: {
+          id: 'ws-1',
+          slug: 'workspace-1',
+          name: 'Workspace 1',
+        },
+        workspaces: [
+          { id: 'ws-1', slug: 'workspace-1', name: 'Workspace 1' },
+          { id: 'ws-2', slug: 'workspace-2', name: 'Workspace 2' },
+        ],
+        currentKnowledgeBase: null,
+        currentKbSnapshot: null,
+        knowledgeBases: [],
+        kbSnapshots: [],
+      },
+      loading: false,
+      initialLoading: false,
+    });
+
+    renderToStaticMarkup(React.createElement(RuntimeScopeSelector));
+
+    capturedSelectProps[0].onChange('ws-2');
+
+    expect(transitionTo).toHaveBeenCalledWith('/home?workspaceId=ws-2');
+  });
 });

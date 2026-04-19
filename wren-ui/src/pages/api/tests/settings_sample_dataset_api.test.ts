@@ -16,11 +16,11 @@ jest.mock('@server/controllers/projectController', () => ({
   })),
 }));
 
-jest.mock('../v1/apiContext', () => ({
+jest.mock('@/server/api/apiContext', () => ({
   buildApiContextFromRequest: mockBuildApiContextFromRequest,
 }));
 
-jest.mock('../v1/restApi', () => ({
+jest.mock('@/server/api/restApi', () => ({
   sendRestApiError: (res: any, error: Error & { statusCode?: number }) =>
     mockSendRestApiError(res, error),
 }));

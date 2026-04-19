@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useMemo } from 'react';
 import { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
-import { abortWithReason, isAbortRequestError } from '@/utils/abort';
 import {
   listSkillDefinitions,
   listSkillMarketplaceCatalog,
   type SkillDefinitionView,
   type SkillMarketplaceCatalogView,
 } from '@/utils/skillsRest';
+import useRestRequest from './useRestRequest';
 
 export type SkillsControlPlaneData = {
   marketplaceCatalogSkills: SkillMarketplaceCatalogView[];
@@ -18,6 +18,23 @@ const EMPTY_SKILLS_CONTROL_PLANE_DATA: SkillsControlPlaneData = {
   skillDefinitions: [],
 };
 
+export const buildSkillsControlPlaneRequestKey = ({
+  enabled,
+  runtimeScopeSelector,
+}: {
+  enabled: boolean;
+  runtimeScopeSelector: ClientRuntimeScopeSelector;
+}) =>
+  enabled
+    ? JSON.stringify({
+        workspaceId: runtimeScopeSelector.workspaceId || null,
+        knowledgeBaseId: runtimeScopeSelector.knowledgeBaseId || null,
+        kbSnapshotId: runtimeScopeSelector.kbSnapshotId || null,
+        deployHash: runtimeScopeSelector.deployHash || null,
+        runtimeScopeId: runtimeScopeSelector.runtimeScopeId || null,
+      })
+    : null;
+
 export default function useSkillsControlPlaneData({
   enabled,
   runtimeScopeSelector,
@@ -27,73 +44,38 @@ export default function useSkillsControlPlaneData({
   runtimeScopeSelector: ClientRuntimeScopeSelector;
   onError?: (error: Error) => void;
 }) {
-  const [data, setData] = useState<SkillsControlPlaneData>(
-    EMPTY_SKILLS_CONTROL_PLANE_DATA,
+  const requestKey = useMemo(
+    () =>
+      buildSkillsControlPlaneRequestKey({
+        enabled,
+        runtimeScopeSelector,
+      }),
+    [
+      enabled,
+      runtimeScopeSelector.deployHash,
+      runtimeScopeSelector.kbSnapshotId,
+      runtimeScopeSelector.knowledgeBaseId,
+      runtimeScopeSelector.runtimeScopeId,
+      runtimeScopeSelector.workspaceId,
+    ],
   );
-  const [loading, setLoading] = useState(false);
+  const { data, loading, refetch } = useRestRequest<SkillsControlPlaneData>({
+    enabled,
+    initialData: EMPTY_SKILLS_CONTROL_PLANE_DATA,
+    requestKey,
+    request: async ({ signal }) => {
+      const [skillDefinitions, marketplaceCatalogSkills] = await Promise.all([
+        listSkillDefinitions(runtimeScopeSelector, { signal }),
+        listSkillMarketplaceCatalog(runtimeScopeSelector, { signal }),
+      ]);
 
-  const loadData = useCallback(
-    async (init?: RequestInit) => {
-      if (!enabled) {
-        setData(EMPTY_SKILLS_CONTROL_PLANE_DATA);
-        setLoading(false);
-        return EMPTY_SKILLS_CONTROL_PLANE_DATA;
-      }
-
-      setLoading(true);
-
-      try {
-        const [skillDefinitions, marketplaceCatalogSkills] = await Promise.all([
-          listSkillDefinitions(runtimeScopeSelector, init),
-          listSkillMarketplaceCatalog(runtimeScopeSelector, init),
-        ]);
-
-        const nextData = {
-          marketplaceCatalogSkills,
-          skillDefinitions,
-        };
-
-        if (!init?.signal || !init.signal.aborted) {
-          setData(nextData);
-        }
-
-        return nextData;
-      } catch (error) {
-        if (init?.signal?.aborted || isAbortRequestError(error)) {
-          return EMPTY_SKILLS_CONTROL_PLANE_DATA;
-        }
-
-        onError?.(
-          error instanceof Error
-            ? error
-            : new Error('加载技能控制面失败，请稍后重试。'),
-        );
-        return EMPTY_SKILLS_CONTROL_PLANE_DATA;
-      } finally {
-        if (!init?.signal || !init.signal.aborted) {
-          setLoading(false);
-        }
-      }
+      return {
+        marketplaceCatalogSkills,
+        skillDefinitions,
+      };
     },
-    [enabled, onError, runtimeScopeSelector],
-  );
-
-  useEffect(() => {
-    if (!enabled) {
-      setData(EMPTY_SKILLS_CONTROL_PLANE_DATA);
-      setLoading(false);
-      return;
-    }
-
-    const controller = new AbortController();
-    void loadData({ signal: controller.signal });
-
-    return () => {
-      abortWithReason(controller, 'skills-control-plane-request-cancelled');
-    };
-  }, [enabled, loadData]);
-
-  const refetch = useCallback(async () => await loadData(), [loadData]);
+    onError,
+  });
 
   return {
     data,

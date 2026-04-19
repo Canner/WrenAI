@@ -12,7 +12,8 @@ import DolaAppShell, {
 } from './DolaAppShell';
 
 const mockUseAuthSession = jest.fn();
-const mockUsePersistentShellEmbedded = jest.fn();
+const mockUseRuntimeSelectorState = jest.fn();
+const mockUseRuntimeScopeTransition = jest.fn();
 
 jest.mock('next/router', () => ({
   useRouter: () => ({
@@ -24,6 +25,16 @@ jest.mock('next/router', () => ({
 jest.mock('@/hooks/useAuthSession', () => ({
   __esModule: true,
   default: (...args: any[]) => mockUseAuthSession(...args),
+}));
+
+jest.mock('@/hooks/useRuntimeSelectorState', () => ({
+  __esModule: true,
+  default: () => mockUseRuntimeSelectorState(),
+}));
+
+jest.mock('@/hooks/useRuntimeScopeTransition', () => ({
+  __esModule: true,
+  default: () => mockUseRuntimeScopeTransition(),
 }));
 
 jest.mock('@/hooks/useRuntimeScopeNavigation', () => ({
@@ -56,12 +67,8 @@ jest.mock('@/hooks/useRuntimeScopeNavigation', () => ({
     workspaceSelector: {
       workspaceId: 'ws-1',
     },
+    hasRuntimeScope: true,
   }),
-}));
-
-jest.mock('./PersistentShellContext', () => ({
-  __esModule: true,
-  usePersistentShellEmbedded: () => mockUsePersistentShellEmbedded(),
 }));
 
 jest.mock('antd', () => {
@@ -78,6 +85,8 @@ jest.mock('antd', () => {
     React.createElement('div', { ...props, 'data-kind': 'input' }, prefix);
   const Dropdown = ({ children }: any) =>
     React.createElement('div', { 'data-kind': 'dropdown' }, children);
+  const Popover = ({ children }: any) =>
+    React.createElement('div', { 'data-kind': 'popover' }, children);
   const Avatar = ({ children, ...props }: any) =>
     React.createElement('div', { ...props, 'data-kind': 'avatar' }, children);
   const Menu = Object.assign(
@@ -119,6 +128,7 @@ jest.mock('antd', () => {
     Input,
     Layout,
     Menu,
+    Popover,
     Space,
     Typography,
   };
@@ -127,7 +137,6 @@ jest.mock('antd', () => {
 describe('DolaAppShell', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUsePersistentShellEmbedded.mockReturnValue(false);
     mockUseAuthSession.mockReturnValue({
       loading: false,
       authenticated: true,
@@ -137,6 +146,24 @@ describe('DolaAppShell', () => {
           email: 'admin',
         },
       },
+    });
+    mockUseRuntimeSelectorState.mockReturnValue({
+      initialLoading: false,
+      runtimeSelectorState: {
+        currentWorkspace: {
+          id: 'ws-1',
+          slug: 'workspace-1',
+          name: 'Workspace 1',
+        },
+        workspaces: [
+          { id: 'ws-1', slug: 'workspace-1', name: 'Workspace 1' },
+          { id: 'ws-2', slug: 'workspace-2', name: 'Workspace 2' },
+        ],
+      },
+    });
+    mockUseRuntimeScopeTransition.mockReturnValue({
+      transitioning: false,
+      transitionTo: jest.fn(),
     });
   });
 
@@ -166,6 +193,7 @@ describe('DolaAppShell', () => {
     expect(html).toContain('知识库');
     expect(html).toContain('最近一次对话');
     expect(html).toContain('admin');
+    expect(html).toContain('Workspace 1');
     expect(html).toContain('main-content');
     expect(html).not.toContain('scope-card');
     expect(html).not.toContain('当前账号');
@@ -194,35 +222,6 @@ describe('DolaAppShell', () => {
 
     expect(html).toContain('加载历史对话中');
     expect(html).not.toContain('暂无历史对话');
-  });
-
-  it('short-circuits when already embedded in the persistent shell', () => {
-    mockUsePersistentShellEmbedded.mockReturnValue(true);
-
-    const html = renderToStaticMarkup(
-      <DolaAppShell
-        navItems={[
-          {
-            key: 'knowledge',
-            label: '知识库',
-            icon: <span>📚</span>,
-          },
-        ]}
-        historyItems={[
-          {
-            id: 'thread-1',
-            title: '最近一次对话',
-          },
-        ]}
-      >
-        <div>main-content</div>
-      </DolaAppShell>,
-    );
-
-    expect(html).toContain('main-content');
-    expect(html).not.toContain('Nova');
-    expect(html).not.toContain('最近一次对话');
-    expect(mockUseAuthSession).not.toHaveBeenCalled();
   });
 
   it('builds scope-aware prefetch urls for primary shell routes', () => {
@@ -348,7 +347,7 @@ describe('DolaAppShell', () => {
           },
           {
             key: 'knowledge',
-            label: '我的知识库',
+            label: '知识库',
             icon: <span>📚</span>,
             onClick: jest.fn(),
           },

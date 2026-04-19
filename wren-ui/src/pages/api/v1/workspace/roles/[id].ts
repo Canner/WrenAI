@@ -16,6 +16,9 @@ const getQueryString = (value: string | string[] | undefined) =>
 const getString = (value: unknown) =>
   typeof value === 'string' ? value.trim() : '';
 
+const hasOwn = (value: unknown, key: string) =>
+  Boolean(value && Object.prototype.hasOwnProperty.call(value, key));
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
@@ -94,6 +97,10 @@ export default async function handler(
     const updated = await updateCustomWorkspaceRole({
       workspaceId: validatedSession.workspace.id,
       roleId,
+      name:
+        req.body && Object.prototype.hasOwnProperty.call(req.body, 'name')
+          ? getString(req.body?.name)
+          : undefined,
       displayName:
         req.body &&
         Object.prototype.hasOwnProperty.call(req.body, 'displayName')
@@ -103,6 +110,10 @@ export default async function handler(
         req.body &&
         Object.prototype.hasOwnProperty.call(req.body, 'description')
           ? getString(req.body?.description) || null
+          : undefined,
+      isActive:
+        hasOwn(req.body, 'isActive') || hasOwn(req.body, 'is_active')
+          ? Boolean(req.body?.isActive ?? req.body?.is_active)
           : undefined,
       permissionNames: Array.isArray(req.body?.permissionNames)
         ? req.body.permissionNames

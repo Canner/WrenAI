@@ -2,8 +2,8 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { DashboardController } from '@server/controllers/dashboardController';
 import { DashboardItemType } from '@server/repositories/dashboardItemRepository';
 import { ApiError } from '@/server/utils/apiUtils';
-import { buildApiContextFromRequest } from '../apiContext';
-import { sendRestApiError } from '../restApi';
+import { buildApiContextFromRequest } from '@/server/api/apiContext';
+import { sendRestApiError } from '@/server/api/restApi';
 
 const dashboardController = new DashboardController();
 

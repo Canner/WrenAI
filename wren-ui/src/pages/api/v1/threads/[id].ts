@@ -13,7 +13,7 @@ import {
   buildAuthorizationActorFromRuntimeScope,
   buildAuthorizationContextFromRequest,
 } from '@server/authz';
-import { serializeThreadDetailPayload } from '../threadPayloadSerializers';
+import { serializeThreadDetailPayload } from '@/server/api/threadPayloadSerializers';
 
 const logger = getLogger('API_THREAD_BY_ID');
 logger.level = 'debug';

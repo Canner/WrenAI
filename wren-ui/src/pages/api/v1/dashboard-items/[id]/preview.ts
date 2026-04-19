@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { ApiError } from '@/server/utils/apiUtils';
-import { buildApiContextFromRequest } from '../../apiContext';
-import { sendRestApiError } from '../../restApi';
+import { buildApiContextFromRequest } from '@/server/api/apiContext';
+import { sendRestApiError } from '@/server/api/restApi';
 import {
   assertDashboardExecutableRuntimeScope,
   assertDashboardKnowledgeBaseReadAccess,
@@ -9,7 +9,7 @@ import {
   ensureDashboardForScope,
   ensureDashboardItemForScope,
   recordDashboardKnowledgeBaseReadAudit,
-} from '../../dashboardRestShared';
+} from '@/server/api/dashboardRestShared';
 
 const parseItemId = (value: string | string[] | undefined) => {
   const raw = Array.isArray(value) ? value[0] : value;

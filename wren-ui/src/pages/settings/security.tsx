@@ -1,12 +1,9 @@
-import { GetServerSideProps } from 'next';
+import { Path } from '@/utils/enum';
+import {
+  CompatibilityRedirectPage,
+  createCompatibilityRedirect,
+} from '@/utils/compatibilityRoutes';
 
-export const getServerSideProps: GetServerSideProps = async () => ({
-  redirect: {
-    destination: '/settings',
-    permanent: false,
-  },
-});
+export const getServerSideProps = createCompatibilityRedirect(Path.Settings);
 
-export default function SettingsSecurityRedirectPage() {
-  return null;
-}
+export default CompatibilityRedirectPage;

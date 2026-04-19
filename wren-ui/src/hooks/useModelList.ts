@@ -37,8 +37,19 @@ export type ModelListItem = {
 
 const DEFAULT_RESPONSE: ModelListItem[] = [];
 
-const buildModelListUrl = (selector?: ClientRuntimeScopeSelector) =>
+export const buildModelListUrl = (selector?: ClientRuntimeScopeSelector) =>
   buildRuntimeScopeUrl('/api/v1/models/list', {}, selector);
+
+export const buildModelListRequestKey = ({
+  enabled,
+  selector,
+}: {
+  enabled: boolean;
+  selector: ClientRuntimeScopeSelector;
+}) =>
+  enabled && hasExecutableRuntimeScopeSelector(selector)
+    ? buildModelListUrl(selector)
+    : null;
 
 export const normalizeModelListPayload = (
   payload: unknown,
@@ -59,23 +70,21 @@ export default function useModelList({
 }) {
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
 
-  const requestUrl = useMemo(() => {
-    if (
-      !enabled ||
-      !hasExecutableRuntimeScopeSelector(runtimeScopeNavigation.selector)
-    ) {
-      return null;
-    }
-
-    return buildModelListUrl(runtimeScopeNavigation.selector);
-  }, [
-    enabled,
-    runtimeScopeNavigation.selector.deployHash,
-    runtimeScopeNavigation.selector.kbSnapshotId,
-    runtimeScopeNavigation.selector.knowledgeBaseId,
-    runtimeScopeNavigation.selector.runtimeScopeId,
-    runtimeScopeNavigation.selector.workspaceId,
-  ]);
+  const requestUrl = useMemo(
+    () =>
+      buildModelListRequestKey({
+        enabled,
+        selector: runtimeScopeNavigation.selector,
+      }),
+    [
+      enabled,
+      runtimeScopeNavigation.selector.deployHash,
+      runtimeScopeNavigation.selector.kbSnapshotId,
+      runtimeScopeNavigation.selector.knowledgeBaseId,
+      runtimeScopeNavigation.selector.runtimeScopeId,
+      runtimeScopeNavigation.selector.workspaceId,
+    ],
+  );
 
   const { data, loading } = useRestRequest<ModelListItem[] | null>({
     enabled: Boolean(requestUrl),

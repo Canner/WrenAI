@@ -1035,12 +1035,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@next/bundle-analyzer@npm:^15.3.0":
-  version: 15.3.0
-  resolution: "@next/bundle-analyzer@npm:15.3.0"
+"@next/bundle-analyzer@npm:14.2.35":
+  version: 14.2.35
+  resolution: "@next/bundle-analyzer@npm:14.2.35"
   dependencies:
     webpack-bundle-analyzer: "npm:4.10.1"
-  checksum: 10c0/4f207652a03988724fdc05297b14f8d9ca03ad69ab65edb01b3af09da30deb595aea009d59c573a70282dbff08930570ec96bf04d26cd5a7a560aecaad65c65b
+  checksum: 10c0/cef97a8df6ee5df261a3db9388993550f90f474aa7cad24acb63cdbe3cabd094fe1dc84d516cd36b978aebd4060e33d6bcedd4614ca2d78a58ac55d096c162ae
   languageName: node
   linkType: hard
 
@@ -1051,12 +1051,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@next/eslint-plugin-next@npm:14.2.21":
-  version: 14.2.21
-  resolution: "@next/eslint-plugin-next@npm:14.2.21"
+"@next/eslint-plugin-next@npm:14.2.35":
+  version: 14.2.35
+  resolution: "@next/eslint-plugin-next@npm:14.2.35"
   dependencies:
     glob: "npm:10.3.10"
-  checksum: 10c0/2270d990888236e83cc7adba8f5bba139381e0b4c62512d60d0ce8c382ec79bd5c030b0295c0b71737faa55261f4ac0e9f822969eb271a814ef8ba5feea9842c
+  checksum: 10c0/7dca56c70b43c38e8fd30dc00383400bd5be0c0edf11ef307f615b1f99cb169e51234f6f12d23bf8f54dbcc160868c9922caa2ae2786903cdf0dedef87ab6654
   languageName: node
   linkType: hard
 
@@ -4923,11 +4923,11 @@ __metadata:
   languageName: node
   linkType: hard
 
-"eslint-config-next@npm:14.2.21":
-  version: 14.2.21
-  resolution: "eslint-config-next@npm:14.2.21"
+"eslint-config-next@npm:14.2.35":
+  version: 14.2.35
+  resolution: "eslint-config-next@npm:14.2.35"
   dependencies:
-    "@next/eslint-plugin-next": "npm:14.2.21"
+    "@next/eslint-plugin-next": "npm:14.2.35"
     "@rushstack/eslint-patch": "npm:^1.3.3"
     "@typescript-eslint/eslint-plugin": "npm:^5.4.2 || ^6.0.0 || ^7.0.0 || ^8.0.0"
     "@typescript-eslint/parser": "npm:^5.4.2 || ^6.0.0 || ^7.0.0 || ^8.0.0"
@@ -4943,7 +4943,7 @@ __metadata:
   peerDependenciesMeta:
     typescript:
       optional: true
-  checksum: 10c0/9266186df8d7273b77ef8fcedd92e14390626d74e8ab0b4547c672ade6520aeda18c3d53ade65b37f6d88676f1561cee6016b1880457c495235538402fd5baaf
+  checksum: 10c0/8e489c74ded72a68cc26999a7504cf916a74e53df603ccd40cd3ac8ee7d5d1cf99569aa2a2509b464bceff1d604cdfab679b53004d894698e8689c499f956a8a
   languageName: node
   linkType: hard
 
@@ -12464,7 +12464,7 @@ __metadata:
   dependencies:
     "@google-cloud/bigquery": "npm:^6.0.3"
     "@google-cloud/storage": "npm:^6.10.1"
-    "@next/bundle-analyzer": "npm:^15.3.0"
+    "@next/bundle-analyzer": "npm:14.2.35"
     "@playwright/test": "npm:^1.55.2"
     "@testing-library/react": "npm:14.0.0"
     "@types/jest": "npm:29.4.4"
@@ -12490,7 +12490,7 @@ __metadata:
     duckdb: "npm:^0.10.1"
     duckdb-async: "npm:^0.10.0"
     eslint: "npm:^8"
-    eslint-config-next: "npm:14.2.21"
+    eslint-config-next: "npm:14.2.35"
     eslint-config-prettier: "npm:^9.1.0"
     eslint-plugin-prettier: "npm:^5.1.3"
     jest: "npm:29.4.3"

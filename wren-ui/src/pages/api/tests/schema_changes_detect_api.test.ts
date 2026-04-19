@@ -16,11 +16,11 @@ jest.mock('@server/controllers/projectController', () => ({
   })),
 }));
 
-jest.mock('../v1/apiContext', () => ({
+jest.mock('@/server/api/apiContext', () => ({
   buildApiContextFromRequest: mockBuildApiContextFromRequest,
 }));
 
-jest.mock('../v1/restApi', () => ({
+jest.mock('@/server/api/restApi', () => ({
   sendRestApiError: (res: any, error: Error & { statusCode?: number }) =>
     mockSendRestApiError(res, error),
 }));
@@ -54,11 +54,9 @@ describe('pages/api/v1/schema-changes/detect route', () => {
     await handler(req, res);
 
     expect(mockBuildApiContextFromRequest).toHaveBeenCalledWith({ req });
-    expect(mockTriggerConnectionDetection).toHaveBeenCalledWith(
-      null,
-      null,
-      { runtimeScope: true },
-    );
+    expect(mockTriggerConnectionDetection).toHaveBeenCalledWith(null, null, {
+      runtimeScope: true,
+    });
     expect(res.statusCode).toBe(200);
     expect(res.body).toBe(true);
   });

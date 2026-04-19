@@ -48,10 +48,7 @@ jest.mock('@/components/reference/ConsoleShellLayout', () => ({
   },
 }));
 
-const renderPage = () =>
-  renderToStaticMarkup(React.createElement(PlatformManagementPage));
-
-describe('platform management page', () => {
+describe('settings/platform page', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockUseProtectedRuntimeScopePage.mockReturnValue({
@@ -64,67 +61,10 @@ describe('platform management page', () => {
       pushWorkspace: jest.fn(),
       hasRuntimeScope: true,
     });
-    mockUseRuntimeSelectorState.mockReturnValue({
-      runtimeSelectorState: {
-        currentWorkspace: {
-          id: 'workspace-1',
-          name: 'Demo Workspace',
-        },
-        currentKnowledgeBase: {
-          id: 'kb-1',
-          name: 'Sales KB',
-        },
-      },
-    });
-  });
-
-  it('shows platform management navigation for platform admins', () => {
     mockUseAuthSession.mockReturnValue({
       authenticated: true,
       loading: false,
       data: {
-        user: {
-          id: 'user-1',
-          email: 'admin@example.com',
-          displayName: 'Admin',
-          isPlatformAdmin: true,
-        },
-        workspaces: [
-          { id: 'workspace-1', name: 'Demo Workspace' },
-          { id: 'workspace-2', name: 'Ops Workspace' },
-        ],
-        authorization: {
-          actor: {
-            platformRoleKeys: ['platform_admin'],
-            isPlatformAdmin: true,
-          },
-        },
-      },
-    });
-
-    const markup = renderPage();
-
-    expect(markup).toContain('平台治理');
-    expect(markup).toContain('个人资料');
-    expect(markup).toContain('用户管理');
-    expect(markup).toContain('权限管理');
-    expect(markup).toContain('审计日志');
-    expect(markup).toContain('平台治理');
-    expect(markup).toContain('平台管理员');
-    expect(markup).toContain('高风险动作请前往权限管理 / 审计日志');
-  });
-
-  it('shows a forbidden message for non-platform admins', () => {
-    mockUseAuthSession.mockReturnValue({
-      authenticated: true,
-      loading: false,
-      data: {
-        user: {
-          id: 'user-2',
-          email: 'member@example.com',
-          displayName: 'Member',
-          isPlatformAdmin: false,
-        },
         authorization: {
           actor: {
             platformRoleKeys: [],
@@ -133,10 +73,21 @@ describe('platform management page', () => {
         },
       },
     });
+    mockUseRuntimeSelectorState.mockReturnValue({
+      runtimeSelectorState: {
+        currentWorkspace: {
+          id: 'workspace-1',
+          name: 'Demo Workspace',
+        },
+      },
+    });
+  });
 
-    const markup = renderPage();
+  it('renders the platform permission guard state', () => {
+    const markup = renderToStaticMarkup(<PlatformManagementPage />);
 
-    expect(markup).toContain('当前账号没有平台治理权限');
     expect(markup).toContain('平台治理');
+    expect(markup).toContain('当前账号没有平台治理权限');
+    expect(markup).toContain('platform_admin');
   });
 });

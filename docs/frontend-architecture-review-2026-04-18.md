@@ -125,7 +125,6 @@
 - `wren-ui/src/pages/knowledge/assetDetailContent.tsx`
 - `wren-ui/src/pages/knowledge/assetWizardModal.tsx`
 - `wren-ui/src/pages/knowledge/knowledgeBaseModal.tsx`
-- `wren-ui/src/pages/knowledge/mainStage.tsx`
 
 ### 问题
 
@@ -289,13 +288,14 @@ knowledge page 已开始 feature 化，但其他核心域没有同步演进：
 
 当前若干关键文件体积已经明显过大：
 
-- `src/features/knowledgePage/index.styles.ts` — 2415 行
 - `src/server/services/askingService.ts` — 2360 行
-- `src/pages/home/index.tsx` — 1983 行
-- `src/pages/knowledge/mainStage.tsx` — 1865 行
-- `src/pages/settings/connectors.tsx` — 1754 行
-- `src/components/reference/DolaAppShell.tsx` — 1714 行
-- `src/pages/home/[id].tsx` — 1405 行
+- `src/pages/home/index.tsx` — 已收敛到约 505 行（landing stage、ask runtime helper、landing controls / recommendations hooks 已迁出）
+- `src/pages/settings/connectors.tsx` — 已收敛到约 634 行（payload/helper 与主要 UI blocks 已迁出）
+- `src/features/knowledgePage/styles/knowledgePageWorkbenchShellStyles.ts` — 约 551 行（由原 workbench 样式文件拆出，承接 layout / summary / compact panel primitives）
+- `src/features/knowledgePage/sections/useKnowledgeWorkbenchEditors.tsx` — 约 514 行（已继续拆出 draft state / save shortcut / value builders）
+- `src/components/reference/DolaAppShell.tsx` — 已收敛到约 199 行，sidebar 状态与样式已迁出
+- `src/pages/home/[id].tsx` — 已收敛到约 916 行（thread state helper / page styles / reference preview 已迁出）
+- `src/pages/workspace.tsx` — 已收敛到约 452 行（页面样式、类型/工具与主区/侧区 section 已迁出到 `features/workspace`）
 - `src/pages/settings/permissions.tsx` — 1413 行
 
 ### 问题
@@ -310,16 +310,16 @@ knowledge page 已开始 feature 化，但其他核心域没有同步演进：
 
 特别是：
 
-- `features/knowledgePage/index.styles.ts` 2415 行，说明“样式被挪走了，但复杂度没有被拆开”
+- knowledge workbench 样式已拆成 shell/editor 两个文件，但 shell primitives 仍有继续归类空间
 
 ### 建议
 
 优先拆分以下文件：
 
-1. `src/pages/home/index.tsx`
-2. `src/pages/knowledge/mainStage.tsx`
-3. `src/components/reference/DolaAppShell.tsx`
-4. `src/features/knowledgePage/index.styles.ts`
+1. `src/pages/home/[id].tsx`
+2. `src/pages/knowledge/index.tsx`
+3. `src/features/knowledgePage/sections/useKnowledgeWorkbenchEditors.tsx`
+4. `src/features/knowledgePage/styles/knowledgePageWorkbenchShellStyles.ts`
 
 拆分方式建议按职责切：
 
@@ -399,35 +399,32 @@ knowledge page 已开始 feature 化，但其他核心域没有同步演进：
 
 ---
 
-## P1-5. `DolaAppShell` 已接近 god component
+## P1-5. `DolaAppShell` 收口已取得明显进展，但 shell 边界仍需继续统一
 
 ### 现状
 
 文件：
 
-- `src/components/reference/DolaAppShell.tsx` — 1714 行
+- `src/components/reference/DolaAppShell.tsx` — 已收敛到约 199 行
 
 当前承载职责包括：
 
-- sidebar
-- top shell
-- history list
-- workspace switcher
-- account menu
-- prefetch
-- virtualization
-- shell UI state
+- sidebar assembly
+- frame / topbar composition
+- nav/history/footer 组合
 
 ### 问题
 
-这已经不是单一组件，而是一个 shell 子系统。
+虽然主文件已经明显变薄，但 shell 子系统仍分散在多个 reference 组件与 hooks 之间，route 级壳层决策也还没有完全统一。
 
 ### 建议
 
-继续拆分为更明确的子模块：
+后续重点不再是继续把 `DolaAppShell.tsx` 打碎，而是统一这些边界：
 
-- `ShellSidebar`
-- `ShellHistoryList`
+- `PersistentConsoleShell`
+- `ConsoleShellLayout`
+- `DolaAppShell`
+- `DirectShellPageFrame`
 - `ShellWorkspaceSwitcher`
 - `ShellAccountMenu`
 - `ShellPrefetchController`
@@ -457,6 +454,12 @@ knowledge page 已开始 feature 化，但其他核心域没有同步演进：
 - `src/pages/home/index.tsx`
 - `src/utils/runtimePagePrefetch.ts`
 - `src/hooks/useResponsePreviewData.ts`
+
+当前收口结论应区分三类：
+
+- 普通读取 hook：继续向 `useRestRequest` 收敛
+- 带 warm-cache / intent gating 的读取 hook：允许部分收口（例如 `useHomeSidebar`）
+- shared session cache / mutation orchestration：保留 intentional exception（例如 `useAuthSession`、`useKnowledgeBaseLifecycle`）
 
 ### 问题
 
@@ -637,10 +640,10 @@ knowledge workbench 已经很重，但目前未见明显按主分区进行更彻
 
 优先拆：
 
-- `src/pages/home/index.tsx`
-- `src/pages/knowledge/mainStage.tsx`
-- `src/components/reference/DolaAppShell.tsx`
-- `src/features/knowledgePage/index.styles.ts`
+- `src/pages/home/[id].tsx`
+- `src/pages/knowledge/index.tsx`
+- `src/features/knowledgePage/sections/useKnowledgeWorkbenchEditors.tsx`
+- `src/features/knowledgePage/styles/knowledgePageWorkbenchShellStyles.ts`
 
 ---
 
@@ -687,4 +690,3 @@ knowledge workbench 已经很重，但目前未见明显按主分区进行更彻
 因此建议：
 
 > 进入“功能继续做，但同步推进前端架构收口”的阶段。
-

@@ -23,6 +23,13 @@ export type DeployStatusResult = {
   stopPolling: () => void;
 };
 
+export const buildDeployStatusRequestKey = (
+  selector: Parameters<typeof hasExecutableRuntimeScopeSelector>[0],
+) =>
+  hasExecutableRuntimeScopeSelector(selector)
+    ? buildRuntimeScopeStateKey(selector)
+    : null;
+
 const UNSYNCHRONIZED_RESULT = {
   data: {
     modelSync: {
@@ -38,9 +45,9 @@ export default function useDeployStatusRest(): DeployStatusResult {
   const hasExecutableScope = hasExecutableRuntimeScopeSelector(
     runtimeScopeNavigation.selector,
   );
-  const requestKey = hasExecutableScope
-    ? buildRuntimeScopeStateKey(runtimeScopeNavigation.selector)
-    : null;
+  const requestKey = buildDeployStatusRequestKey(
+    runtimeScopeNavigation.selector,
+  );
 
   const {
     data,

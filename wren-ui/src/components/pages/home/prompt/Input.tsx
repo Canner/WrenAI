@@ -1,8 +1,10 @@
 import {
   ChangeEvent,
+  forwardRef,
   KeyboardEvent,
   ReactNode,
   useEffect,
+  useImperativeHandle,
   useRef,
   useState,
 } from 'react';
@@ -116,122 +118,138 @@ interface Props {
   onAtTrigger?: () => void;
 }
 
-export default function PromptInput(props: Props) {
-  const {
-    onAsk,
-    isProcessing,
-    question,
-    inputProps,
-    leadingIcon,
-    buttonMode = 'text',
-    layout = 'inline',
-    footerContent,
-    disabled = false,
-    onAtTrigger,
-  } = props;
-  const $promptInput = useRef<HTMLTextAreaElement>(null);
-  const [inputValue, setInputValue] = useState('');
-  const [innerLoading, setInnerLoading] = useState(false);
-
-  useEffect(() => {
-    if (question) setInputValue(question);
-  }, [question]);
-
-  useEffect(() => {
-    if (!isProcessing) {
-      $promptInput.current?.focus();
-      setInputValue('');
-    }
-  }, [isProcessing]);
-
-  const syncInputValue = (event: ChangeEvent<HTMLTextAreaElement>) => {
-    setInputValue(event.target.value);
-  };
-
-  const handleAsk = () => {
-    const trimmedValue = inputValue.trim();
-    if (!trimmedValue || disabled) return;
-    const startAsking = attachLoading(onAsk, setInnerLoading);
-    startAsking(trimmedValue);
-  };
-
-  const isDisabled = innerLoading || isProcessing || disabled;
-
-  const handleInputKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === '@' && onAtTrigger && !isDisabled) {
-      event.preventDefault();
-      onAtTrigger();
-      return;
-    }
-
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      handleAsk();
-    }
-  };
-
-  const iconOnly = buttonMode === 'icon';
-
-  const textArea = (
-    <Input.TextArea
-      ref={$promptInput}
-      data-gramm="false"
-      size="large"
-      autoSize={{ minRows: 1, maxRows: 6 }}
-      value={inputValue}
-      onChange={syncInputValue}
-      onKeyDown={handleInputKeyDown}
-      disabled={isDisabled}
-      {...inputProps}
-    />
-  );
-
-  if (layout === 'stacked') {
-    return (
-      <InputShell $layout={layout}>
-        {leadingIcon ? (
-          <span className="prompt-leading-icon">{leadingIcon}</span>
-        ) : null}
-        {textArea}
-        <PromptFooter>
-          <PromptFooterTools>{footerContent}</PromptFooterTools>
-          <PromptButton
-            className="prompt-send-button"
-            type="primary"
-            onClick={handleAsk}
-            disabled={isDisabled}
-            $iconOnly={iconOnly}
-            $stacked
-            icon={iconOnly ? <ArrowUpOutlined /> : undefined}
-            aria-label={iconOnly ? '发送问题' : undefined}
-          >
-            {iconOnly ? null : 'Ask'}
-          </PromptButton>
-        </PromptFooter>
-      </InputShell>
-    );
-  }
-
-  return (
-    <InlinePromptRow>
-      <InputShell $layout={layout}>
-        {leadingIcon ? (
-          <span className="prompt-leading-icon">{leadingIcon}</span>
-        ) : null}
-        {textArea}
-      </InputShell>
-      <PromptButton
-        className="prompt-send-button"
-        type="primary"
-        onClick={handleAsk}
-        disabled={isDisabled}
-        $iconOnly={iconOnly}
-        $stacked={false}
-        icon={iconOnly ? <ArrowUpOutlined /> : undefined}
-        aria-label={iconOnly ? '发送问题' : undefined}
-      >
-        {iconOnly ? null : 'Ask'}
-      </PromptButton>
-    </InlinePromptRow>
-  );
+export interface PromptInputHandle {
+  focus: () => void;
 }
+
+export default forwardRef<PromptInputHandle, Props>(
+  function PromptInput(props, ref) {
+    const {
+      onAsk,
+      isProcessing,
+      question,
+      inputProps,
+      leadingIcon,
+      buttonMode = 'text',
+      layout = 'inline',
+      footerContent,
+      disabled = false,
+      onAtTrigger,
+    } = props;
+    const $promptInput = useRef<HTMLTextAreaElement>(null);
+    const [inputValue, setInputValue] = useState('');
+    const [innerLoading, setInnerLoading] = useState(false);
+
+    useEffect(() => {
+      setInputValue(question || '');
+    }, [question]);
+
+    useEffect(() => {
+      if (!isProcessing) {
+        $promptInput.current?.focus();
+        setInputValue('');
+      }
+    }, [isProcessing]);
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        focus: () => {
+          $promptInput.current?.focus();
+        },
+      }),
+      [],
+    );
+
+    const syncInputValue = (event: ChangeEvent<HTMLTextAreaElement>) => {
+      setInputValue(event.target.value);
+    };
+
+    const handleAsk = () => {
+      const trimmedValue = inputValue.trim();
+      if (!trimmedValue || disabled) return;
+      const startAsking = attachLoading(onAsk, setInnerLoading);
+      startAsking(trimmedValue);
+    };
+
+    const isDisabled = innerLoading || isProcessing || disabled;
+
+    const handleInputKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (event.key === '@' && onAtTrigger && !isDisabled) {
+        event.preventDefault();
+        onAtTrigger();
+        return;
+      }
+
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        handleAsk();
+      }
+    };
+
+    const iconOnly = buttonMode === 'icon';
+
+    const textArea = (
+      <Input.TextArea
+        ref={$promptInput}
+        data-gramm="false"
+        size="large"
+        autoSize={{ minRows: 1, maxRows: 6 }}
+        value={inputValue}
+        onChange={syncInputValue}
+        onKeyDown={handleInputKeyDown}
+        disabled={isDisabled}
+        {...inputProps}
+      />
+    );
+
+    if (layout === 'stacked') {
+      return (
+        <InputShell $layout={layout}>
+          {leadingIcon ? (
+            <span className="prompt-leading-icon">{leadingIcon}</span>
+          ) : null}
+          {textArea}
+          <PromptFooter>
+            <PromptFooterTools>{footerContent}</PromptFooterTools>
+            <PromptButton
+              className="prompt-send-button"
+              type="primary"
+              onClick={handleAsk}
+              disabled={isDisabled}
+              $iconOnly={iconOnly}
+              $stacked
+              icon={iconOnly ? <ArrowUpOutlined /> : undefined}
+              aria-label={iconOnly ? '发送问题' : undefined}
+            >
+              {iconOnly ? null : 'Ask'}
+            </PromptButton>
+          </PromptFooter>
+        </InputShell>
+      );
+    }
+
+    return (
+      <InlinePromptRow>
+        <InputShell $layout={layout}>
+          {leadingIcon ? (
+            <span className="prompt-leading-icon">{leadingIcon}</span>
+          ) : null}
+          {textArea}
+        </InputShell>
+        <PromptButton
+          className="prompt-send-button"
+          type="primary"
+          onClick={handleAsk}
+          disabled={isDisabled}
+          $iconOnly={iconOnly}
+          $stacked={false}
+          icon={iconOnly ? <ArrowUpOutlined /> : undefined}
+          aria-label={iconOnly ? '发送问题' : undefined}
+        >
+          {iconOnly ? null : 'Ask'}
+        </PromptButton>
+      </InlinePromptRow>
+    );
+  },
+);

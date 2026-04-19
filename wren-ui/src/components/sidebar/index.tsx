@@ -10,6 +10,7 @@ import Modeling, { Props as ModelingSidebarProps } from './Modeling';
 import Knowledge from './Knowledge';
 import APIManagement from './APIManagement';
 import LearningSection from '@/components/learning';
+import { isModelingSurfaceRoute } from '@/utils/knowledgeWorkbench';
 
 const Layout = styled.div`
   position: relative;
@@ -47,16 +48,17 @@ type Props = (ModelingSidebarProps | HomeSidebarProps) & {
 const DynamicSidebar = (
   props: Props & {
     pathname: string;
+    query: Record<string, unknown>;
   },
 ) => {
-  const { pathname, ...restProps } = props;
+  const { pathname, query, ...restProps } = props;
 
   const getContent = () => {
     if (pathname.startsWith(Path.Home)) {
       return <Home {...(restProps as HomeSidebarProps)} />;
     }
 
-    if (pathname.startsWith(Path.Modeling)) {
+    if (isModelingSurfaceRoute({ pathname, query })) {
       return <Modeling {...(restProps as ModelingSidebarProps)} />;
     }
 
@@ -85,7 +87,11 @@ export default function Sidebar(props: Props) {
 
   return (
     <Layout className="d-flex flex-column">
-      <DynamicSidebar {...props} pathname={router.pathname} />
+      <DynamicSidebar
+        {...props}
+        pathname={router.pathname}
+        query={router.query as Record<string, unknown>}
+      />
       <LearningSection />
       <div className="border-t border-gray-4 pt-2">
         <StyledButton type="text" block onClick={onSettingsClick}>

@@ -7,6 +7,7 @@ import {
 import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { Path } from '@/utils/enum';
 import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
+import useRestRequest from './useRestRequest';
 
 type UseHomeSidebarOptions = {
   deferInitialLoad?: boolean;
@@ -145,6 +146,10 @@ export const buildHomeSidebarThreadsUrl = (
   selector: ClientRuntimeScopeSelector,
 ) => buildRuntimeScopeUrl('/api/v1/threads', {}, selector);
 
+export const buildHomeSidebarThreadsRequestKey = (
+  selector: ClientRuntimeScopeSelector,
+) => buildHomeSidebarThreadsUrl(selector);
+
 export const buildHomeSidebarThreadDetailUrl = (
   id: string,
   selector: ClientRuntimeScopeSelector,
@@ -257,6 +262,9 @@ export const shouldEagerLoadHomeSidebarOnIntent = ({
 }) => !disabled && hasRuntimeScope && cachedThreadCount === 0;
 
 export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
+  // Intentional partial exception:
+  // sessionStorage warm cache + intent/deferred enablement stay local here,
+  // while the primary threads GET path now reuses `useRestRequest`.
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const { hasRuntimeScope } = runtimeScopeNavigation;
   const deferInitialLoad = Boolean(options?.deferInitialLoad);
@@ -285,14 +293,10 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
   const [threads, setThreads] = useState(() =>
     getCachedHomeSidebarThreads(scopeKey),
   );
-  const [loading, setLoading] = useState(false);
   const [initialized, setInitialized] = useState(
     () => getCachedHomeSidebarThreads(scopeKey).length > 0,
   );
-  const pendingLoadThreadsRef = useRef<{
-    scopeKey: string;
-    request: Promise<SidebarThread[]>;
-  } | null>(null);
+  const requestCacheModeRef = useRef<RequestCache>('default');
 
   useEffect(() => {
     if (disabled) {
@@ -368,7 +372,6 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
   useEffect(() => {
     if (disabled) {
       setThreads(EMPTY_SIDEBAR_THREADS);
-      setLoading(false);
       setInitialized(true);
       return;
     }
@@ -376,6 +379,47 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
     setThreads(cachedThreads);
     setInitialized(cachedThreads.length > 0);
   }, [cachedThreads, disabled, scopeKey]);
+
+  const requestUrl = useMemo(
+    () => buildHomeSidebarThreadsRequestKey(sidebarHeaderSelector),
+    [sidebarHeaderSelector],
+  );
+  const { loading, refetch: refetchThreads } = useRestRequest<
+    SidebarThread[],
+    HomeSidebarThreadRecord[]
+  >({
+    enabled: !disabled && hasRuntimeScope && queryEnabled,
+    auto: false,
+    initialData: EMPTY_SIDEBAR_THREADS,
+    requestKey: requestUrl,
+    request: async ({ signal }) => {
+      const response = await fetch(requestUrl, {
+        cache: requestCacheModeRef.current,
+        signal,
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error || '加载历史对话失败，请稍后重试');
+      }
+
+      return normalizeHomeSidebarThreads(payload);
+    },
+    mapResult: syncThreads,
+    onSuccess: () => {
+      setInitialized(true);
+    },
+    onError: (error) => {
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '加载历史对话失败，请稍后重试',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
+      setInitialized(true);
+    },
+    resetDataOnDisable: false,
+  });
 
   const loadThreads = useCallback(
     async ({
@@ -385,53 +429,23 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
     } = {}) => {
       if (disabled || !hasRuntimeScope) {
         setThreads(EMPTY_SIDEBAR_THREADS);
-        setLoading(false);
         setInitialized(true);
         return EMPTY_SIDEBAR_THREADS;
       }
 
-      if (pendingLoadThreadsRef.current?.scopeKey === scopeKey) {
-        return pendingLoadThreadsRef.current.request;
+      requestCacheModeRef.current = networkOnly ? 'no-store' : 'default';
+
+      try {
+        return await refetchThreads();
+      } catch (_error) {
+        const cachedFallback = getCachedHomeSidebarThreads(scopeKey);
+        setThreads(cachedFallback);
+        return cachedFallback;
+      } finally {
+        requestCacheModeRef.current = 'default';
       }
-
-      setLoading(true);
-      const request = fetch(buildHomeSidebarThreadsUrl(sidebarHeaderSelector), {
-        cache: networkOnly ? 'no-store' : 'default',
-      })
-        .then(async (response) => {
-          const payload = await response.json().catch(() => null);
-          if (!response.ok) {
-            throw new Error(payload?.error || '加载历史对话失败，请稍后重试');
-          }
-
-          return normalizeHomeSidebarThreads(payload);
-        })
-        .then((payload) => syncThreads(payload))
-        .catch((error) => {
-          const errorMessage = resolveAbortSafeErrorMessage(
-            error,
-            '加载历史对话失败，请稍后重试',
-          );
-          if (errorMessage) {
-            message.error(errorMessage);
-          }
-          return getCachedHomeSidebarThreads(scopeKey);
-        })
-        .finally(() => {
-          setLoading(false);
-          setInitialized(true);
-          if (pendingLoadThreadsRef.current?.request === request) {
-            pendingLoadThreadsRef.current = null;
-          }
-        });
-      pendingLoadThreadsRef.current = {
-        scopeKey,
-        request,
-      };
-
-      return request;
     },
-    [disabled, hasRuntimeScope, scopeKey, sidebarHeaderSelector, syncThreads],
+    [disabled, hasRuntimeScope, refetchThreads, scopeKey],
   );
 
   useEffect(() => {
@@ -474,9 +488,13 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
     }
 
     cacheHomeSidebarQueryEnabled(scopeKey);
-    setQueryEnabled(true);
+    if (!queryEnabled) {
+      setQueryEnabled(true);
+      return getCachedHomeSidebarThreads(scopeKey);
+    }
+
     return loadThreads({ networkOnly: true });
-  }, [disabled, hasRuntimeScope, loadThreads, scopeKey]);
+  }, [disabled, hasRuntimeScope, loadThreads, queryEnabled, scopeKey]);
 
   const onSelect = useCallback(
     (selectKeys: string[], selectorOverride?: ClientRuntimeScopeSelector) => {
@@ -565,6 +583,7 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
     }
 
     if (
+      canEnableQuery ||
       !shouldEagerLoadHomeSidebarOnIntent({
         disabled,
         hasRuntimeScope,

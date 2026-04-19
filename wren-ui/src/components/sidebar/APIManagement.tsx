@@ -21,6 +21,7 @@ const Layout = styled.div`
 
 const MENU_KEY_MAP: Record<string, MENU_KEY> = {
   [Path.APIManagementHistory]: MENU_KEY.API_HISTORY,
+  [Path.SettingsDiagnostics]: MENU_KEY.API_HISTORY,
 };
 
 const linkStyle = { color: 'inherit', transition: 'none' };
@@ -35,7 +36,7 @@ export default function APIManagement() {
       label: (
         <Link
           style={linkStyle}
-          href={runtimeScopeNavigation.hrefWorkspace(Path.APIManagementHistory)}
+          href={runtimeScopeNavigation.hrefWorkspace(Path.SettingsDiagnostics)}
         >
           API history
         </Link>

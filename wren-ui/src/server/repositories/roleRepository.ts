@@ -13,6 +13,7 @@ export interface Role {
   displayName?: string | null;
   description?: string | null;
   isSystem?: boolean;
+  isActive?: boolean;
   createdBy?: string | null;
 }
 

@@ -17,7 +17,7 @@ import {
 } from 'antd';
 import { CacheScheduleDayEnum } from '@/types/home';
 import { browserTimeZone } from '@/utils/time';
-import { DrawerAction } from '@/hooks/useDrawerAction';
+import type { DrawerAction } from '@/hooks/useDrawerAction';
 import { ERROR_TEXTS } from '@/utils/error';
 import { handleFormSubmitError } from '@/utils/errorHandler';
 import { isValidCronLength, cronValidator } from '@/utils/validator';

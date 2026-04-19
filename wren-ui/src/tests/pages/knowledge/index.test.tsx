@@ -47,7 +47,7 @@ jest.mock('@/runtime/client/runtimeScope', () => ({
     mockResolveClientRuntimeScopeSelector(...args),
 }));
 
-jest.mock('@/components/reference/DolaAppShell', () => ({
+jest.mock('@/components/reference/DirectShellPageFrame', () => ({
   __esModule: true,
   default: ({ title, description, children }: any) => {
     const React = jest.requireActual('react');

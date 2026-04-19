@@ -6,6 +6,7 @@ import ThreadPage, {
   findLatestUnfinishedAskingResponse,
   hasActivePromptAskingTask,
   hydrateCreatedThreadResponse,
+  resolveThreadRecoveryPlan,
   resolveCreatedThreadResponsePollingTaskId,
   shouldSuspendThreadRecoveryDuringPromptFlow,
 } from '../../../pages/home/[id]';
@@ -631,6 +632,71 @@ describe('home/[id] thread shell', () => {
         loading: false,
       }),
     ).toBe(false);
+  });
+
+  it('builds a resume-asking recovery plan for the latest unfinished asking response', () => {
+    expect(
+      resolveThreadRecoveryPlan({
+        responses: [
+          {
+            id: 1,
+            askingTask: { queryId: 'task-1', status: 'PLANNING' },
+          } as any,
+          {
+            id: 2,
+            askingTask: { queryId: 'task-2', status: 'SEARCHING' },
+          } as any,
+        ],
+        currentPollingTaskId: 'task-1',
+        currentPollingResponseId: null,
+        askingTask: null,
+        loading: false,
+      }),
+    ).toEqual({
+      type: 'resumeAskingTask',
+      taskId: 'task-2',
+    });
+  });
+
+  it('builds a resume-response recovery plan when response polling should continue', () => {
+    expect(
+      resolveThreadRecoveryPlan({
+        responses: [
+          {
+            id: 31,
+            askingTask: null,
+            chartDetail: { status: 'FETCHING' },
+          } as any,
+        ],
+        currentPollingTaskId: null,
+        currentPollingResponseId: null,
+        askingTask: null,
+        loading: false,
+      }),
+    ).toEqual({
+      type: 'resumeThreadResponse',
+      responseId: 31,
+    });
+  });
+
+  it('builds a clear recovery plan when no unfinished work remains', () => {
+    expect(
+      resolveThreadRecoveryPlan({
+        responses: [
+          {
+            id: 41,
+            sql: 'select 1',
+            askingTask: { status: 'FINISHED' },
+            answerDetail: {},
+            chartDetail: null,
+          } as any,
+        ],
+        currentPollingTaskId: null,
+        currentPollingResponseId: null,
+        askingTask: null,
+        loading: false,
+      }),
+    ).toEqual({ type: 'clear' });
   });
 
   it('builds a synthetic pending response so follow-up questions appear immediately', () => {

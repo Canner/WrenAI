@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { SampleDatasetName } from '@server/data';
 import { components } from '@/common';
 import { ApiError } from '@/server/utils/apiUtils';
-import { sendRestApiError } from '../../restApi';
+import { sendRestApiError } from '@/server/api/restApi';
 
 const isE2EInternalRequest = (req: NextApiRequest) => {
   const header = req.headers['x-wren-e2e-internal'];

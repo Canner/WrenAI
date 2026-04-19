@@ -1,8 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { ApiError } from '@/server/utils/apiUtils';
 import { SqlPairController } from '@server/controllers/sqlPairController';
-import { buildApiContextFromRequest } from '../../apiContext';
-import { sendRestApiError } from '../../restApi';
+import { buildApiContextFromRequest } from '@/server/api/apiContext';
+import { sendRestApiError } from '@/server/api/restApi';
 
 const sqlPairController = new SqlPairController();
 

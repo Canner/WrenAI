@@ -6,11 +6,6 @@ import ShoppingCartOutlined from '@ant-design/icons/ShoppingCartOutlined';
 import TableOutlined from '@ant-design/icons/TableOutlined';
 import type { SourceOption } from './types';
 
-export const KNOWLEDGE_TABS = [
-  { key: 'workspace', label: '我创建的' },
-  { key: 'recent', label: '全部知识库' },
-];
-
 export const WIZARD_STEP_LABELS = ['引入资产', '知识配置', '保存'];
 
 export const resolveReferenceOwner = (

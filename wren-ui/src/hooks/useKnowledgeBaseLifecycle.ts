@@ -1,24 +1,15 @@
 import { useCallback, useState } from 'react';
 import { message } from 'antd';
+import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { Path } from '@/utils/enum';
+import {
+  buildKnowledgeWorkbenchUrl,
+  type KnowledgeWorkbenchRouteKnowledgeBase,
+} from '@/utils/knowledgeWorkbench';
 
-type RuntimeSelector = {
-  workspaceId?: string;
-  knowledgeBaseId?: string;
-  kbSnapshotId?: string;
-  deployHash?: string;
-  runtimeScopeId?: string;
-};
-
-type KnowledgeBaseEntity = {
-  id: string;
-  workspaceId: string;
+type KnowledgeBaseEntity = KnowledgeWorkbenchRouteKnowledgeBase & {
   archivedAt?: string | null;
-  defaultKbSnapshot?: {
-    id: string;
-    deployHash: string;
-  } | null;
 };
 
 type KnowledgeBaseForm = {
@@ -59,16 +50,16 @@ export default function useKnowledgeBaseLifecycle<
   canManageKnowledgeBaseLifecycle: boolean;
   isSnapshotReadonlyKnowledgeBase: boolean;
   snapshotReadonlyHint: string;
-  runtimeNavigationSelector: RuntimeSelector;
+  runtimeNavigationSelector: ClientRuntimeScopeSelector;
   routerAsPath: string;
   buildRuntimeScopeUrl: (
     path: string,
-    query?: Record<string, string | number | undefined>,
-    selector?: RuntimeSelector,
+    query?: Record<string, string | number | boolean | null | undefined>,
+    selector?: ClientRuntimeScopeSelector,
   ) => string;
   buildKnowledgeRuntimeSelector: (
     knowledgeBase?: TKnowledgeBase | null,
-  ) => RuntimeSelector;
+  ) => ClientRuntimeScopeSelector;
   replaceRoute: (url: string) => Promise<unknown>;
   resolveLifecycleActionLabel: (archivedAt?: string | null) => string;
 }) {
@@ -114,25 +105,13 @@ export default function useKnowledgeBaseLifecycle<
       setSelectedKnowledgeBaseId(refreshedKnowledgeBase.id);
       await refetchRuntimeSelector();
       message.success(isEditing ? '知识库已更新' : '知识库已创建');
-      const nextSearchParams = new URLSearchParams({
-        workspaceId: refreshedKnowledgeBase.workspaceId,
-        knowledgeBaseId: refreshedKnowledgeBase.id,
-      });
-
-      if (refreshedKnowledgeBase.defaultKbSnapshot?.id) {
-        nextSearchParams.set(
-          'kbSnapshotId',
-          refreshedKnowledgeBase.defaultKbSnapshot.id,
-        );
-      }
-      if (refreshedKnowledgeBase.defaultKbSnapshot?.deployHash) {
-        nextSearchParams.set(
-          'deployHash',
-          refreshedKnowledgeBase.defaultKbSnapshot.deployHash,
-        );
-      }
-
-      await replaceRoute(`${Path.Knowledge}?${nextSearchParams.toString()}`);
+      await replaceRoute(
+        buildKnowledgeWorkbenchUrl({
+          buildRuntimeScopeUrl,
+          knowledgeBase: refreshedKnowledgeBase,
+          fallbackSelector: runtimeNavigationSelector,
+        }),
+      );
     } catch (error: any) {
       if (error?.errorFields) {
         return;
@@ -154,6 +133,7 @@ export default function useKnowledgeBaseLifecycle<
     editingKnowledgeBase,
     kbForm,
     loadKnowledgeBases,
+    runtimeNavigationSelector,
     refetchRuntimeSelector,
     replaceRoute,
     setSelectedKnowledgeBaseId,

@@ -72,6 +72,7 @@ export class PrincipalRoleBindingRepository
         'binding.scope_type': scope.scopeType,
         'binding.scope_id': scope.scopeId,
       })
+      .whereNot('role.is_active', false)
       .select(
         'binding.id',
         'binding.role_id as roleId',
@@ -92,6 +93,7 @@ export class PrincipalRoleBindingRepository
   ) {
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
     const rows = await executer({ binding: this.tableName })
+      .join({ role: 'role' }, 'binding.role_id', 'role.id')
       .join(
         { rolePermission: 'role_permission' },
         'binding.role_id',
@@ -108,6 +110,7 @@ export class PrincipalRoleBindingRepository
         'binding.scope_type': scope.scopeType,
         'binding.scope_id': scope.scopeId,
       })
+      .whereNot('role.is_active', false)
       .select('permission.name');
 
     return Array.from(

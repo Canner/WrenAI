@@ -2,6 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
   CONNECTOR_CLEAR_SECRET_LABEL,
+  buildConnectorsCollectionRequestKey,
   buildConnectorsCollectionUrl,
   buildConnectorItemUrl,
   buildConnectorSubmitPayload,
@@ -9,12 +10,14 @@ import {
   buildConnectorTestUrl,
   buildSecretReencryptApiUrl,
   buildSecretReencryptPayload,
+  normalizeConnectorsCollectionPayload,
   CONNECTOR_TYPE_OPTIONS,
   CONNECTOR_SECRET_EDIT_HINT,
   CONNECTOR_SECRET_ROTATION_HINT,
   CONNECTOR_TEST_HINT,
-  default as ManageConnectors,
-} from '../../../pages/settings/connectors';
+} from '../../../features/settings/connectors/connectorsPageUtils';
+import { resolveConnectorManagementCapabilities } from '../../../features/settings/connectors/connectorManagementCapabilities';
+import ManageConnectors from '../../../pages/settings/connectors';
 
 const mockUseProtectedRuntimeScopePage = jest.fn();
 const mockBuildRuntimeScopeUrl = jest.fn();
@@ -160,6 +163,11 @@ describe('knowledge/connectors page', () => {
 
   it('builds runtime-scoped connector urls and exposes stable connector types', () => {
     expect(buildConnectorsCollectionUrl()).toBe('/api/v1/connectors');
+    expect(buildConnectorsCollectionRequestKey({ workspaceId: 'ws-1' })).toBe(
+      'ws-1',
+    );
+    expect(buildConnectorsCollectionRequestKey(null)).toBeNull();
+    expect(normalizeConnectorsCollectionPayload(null)).toEqual([]);
     expect(buildConnectorItemUrl('connector-1')).toBe(
       '/api/v1/connectors/connector-1',
     );
@@ -184,6 +192,47 @@ describe('knowledge/connectors page', () => {
     expect(markup).not.toContain('当前工作区');
     expect(markup).not.toContain('当前上下文');
     expect(markup).not.toContain('Workspace Connectors');
+  });
+
+  it('derives connector permissions from authorization actions', () => {
+    expect(
+      resolveConnectorManagementCapabilities({
+        workspaceKind: 'regular',
+        authorizationActions: {
+          'connector.read': true,
+        },
+      }),
+    ).toMatchObject({
+      showPlatformManagement: false,
+      connectorScopeRestrictionReason: null,
+      connectorActionBlockedReason: '当前账号没有连接器管理权限',
+      createConnectorBlockedReason: '当前账号没有创建连接器权限',
+      updateConnectorBlockedReason: '当前账号没有编辑或测试连接器权限',
+      deleteConnectorBlockedReason: '当前账号没有删除连接器权限',
+      rotateConnectorSecretBlockedReason: '当前账号没有批量轮换密钥权限',
+    });
+  });
+
+  it('lets managed sample workspaces block connector mutations even for admins', () => {
+    expect(
+      resolveConnectorManagementCapabilities({
+        workspaceKind: 'default',
+        authorizationActions: {
+          'connector.create': true,
+          'connector.update': true,
+          'connector.delete': true,
+          'connector.rotate_secret': true,
+        },
+        actorIsPlatformAdmin: true,
+      }),
+    ).toMatchObject({
+      showPlatformManagement: true,
+      connectorActionBlockedReason: '系统样例空间不支持接入或管理连接器',
+      createConnectorBlockedReason: '系统样例空间不支持接入或管理连接器',
+      updateConnectorBlockedReason: '系统样例空间不支持接入或管理连接器',
+      deleteConnectorBlockedReason: '系统样例空间不支持接入或管理连接器',
+      rotateConnectorSecretBlockedReason: '系统样例空间不支持接入或管理连接器',
+    });
   });
 
   it('preserves existing secret on edit when secret json is left blank', () => {
@@ -432,11 +481,46 @@ describe('knowledge/connectors page', () => {
     const markup = renderPage();
 
     expect(markup).toContain('数据连接器');
-    expect(markup).toContain('批量轮换密钥');
+    expect(markup).not.toContain('批量轮换密钥');
     expect(markup).toContain('当前仅 database 类型支持连接测试');
     expect(markup).not.toContain('当前工作区');
     expect(markup).not.toContain('当前上下文');
     expect(capturedTableProps).toBeDefined();
     expect(capturedTableProps.dataSource).toEqual([]);
+  });
+
+  it('adds 数据库类型列 and renders config as formatted json', () => {
+    renderPage();
+
+    const databaseTypeColumn = capturedTableProps.columns.find(
+      (column: any) => column.title === '数据库类型',
+    );
+    const configColumn = capturedTableProps.columns.find(
+      (column: any) => column.title === '配置',
+    );
+
+    expect(databaseTypeColumn).toBeDefined();
+    expect(configColumn).toBeDefined();
+
+    const databaseTypeMarkup = renderToStaticMarkup(
+      databaseTypeColumn.render('postgres', {
+        id: 'connector-1',
+        type: 'database',
+        databaseProvider: 'postgres',
+      }),
+    );
+    expect(databaseTypeMarkup).toContain('PostgreSQL');
+
+    const configMarkup = renderToStaticMarkup(
+      configColumn.render({
+        host: 'host.docker.internal',
+        port: 4000,
+        user: 'root',
+      }),
+    );
+    expect(configMarkup).toContain(
+      '&quot;host&quot;: &quot;host.docker.internal&quot;',
+    );
+    expect(configMarkup).toContain('&quot;port&quot;: 4000');
   });
 });

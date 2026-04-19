@@ -8,6 +8,10 @@ import {
   resolveClientRuntimeScopeSelector,
 } from '@/runtime/client/runtimeScope';
 import { Path } from '@/utils/enum';
+import {
+  isKnowledgeWorkbenchRoute,
+  isLegacyModelingRoute,
+} from '@/utils/knowledgeWorkbench';
 
 type RouteParams = Record<string, string | number | boolean | null | undefined>;
 
@@ -38,8 +42,8 @@ const normalizeNavigationPath = (path?: string | null) =>
 export const shouldPreserveKnowledgeRuntimeScope = (path?: string | null) => {
   const normalizedPath = normalizeNavigationPath(path);
   return (
-    normalizedPath === Path.Knowledge ||
-    normalizedPath === Path.Modeling ||
+    isKnowledgeWorkbenchRoute(normalizedPath) ||
+    isLegacyModelingRoute(normalizedPath) ||
     normalizedPath === Path.HomeDashboard
   );
 };

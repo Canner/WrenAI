@@ -17,6 +17,9 @@ const getQueryString = (value: string | string[] | undefined) =>
 const getString = (value: unknown) =>
   typeof value === 'string' ? value.trim() : '';
 
+const hasOwn = (value: unknown, key: string) =>
+  Boolean(value && Object.prototype.hasOwnProperty.call(value, key));
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
@@ -114,15 +117,21 @@ export default async function handler(
       context: auditContext,
     });
 
-    const displayName = getString(req.body?.displayName);
+    const displayName =
+      getString(req.body?.displayName) || getString(req.body?.name);
     if (!displayName) {
-      return res.status(400).json({ error: 'displayName is required' });
+      return res.status(400).json({ error: 'displayName or name is required' });
     }
 
     const role = await createCustomWorkspaceRole({
       workspaceId: validatedSession.workspace.id,
+      name: getString(req.body?.name) || undefined,
       displayName,
       description: getString(req.body?.description) || null,
+      isActive:
+        hasOwn(req.body, 'isActive') || hasOwn(req.body, 'is_active')
+          ? Boolean(req.body?.isActive ?? req.body?.is_active)
+          : undefined,
       permissionNames: Array.isArray(req.body?.permissionNames)
         ? req.body.permissionNames
             .map((value: unknown) => String(value || '').trim())

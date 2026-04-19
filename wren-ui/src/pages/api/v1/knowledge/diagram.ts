@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { DiagramController } from '@server/controllers/diagramController';
-import { buildApiContextFromRequest } from '../apiContext';
-import { sendRestApiError } from '../restApi';
+import { buildApiContextFromRequest } from '@/server/api/apiContext';
+import { sendRestApiError } from '@/server/api/restApi';
 
 const diagramController = new DiagramController();
 

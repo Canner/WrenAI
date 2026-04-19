@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { ProjectController } from '@server/controllers/projectController';
-import { buildApiContextFromRequest } from '../apiContext';
-import { sendRestApiError } from '../restApi';
+import { buildApiContextFromRequest } from '@/server/api/apiContext';
+import { sendRestApiError } from '@/server/api/restApi';
 
 const projectController = new ProjectController();
 

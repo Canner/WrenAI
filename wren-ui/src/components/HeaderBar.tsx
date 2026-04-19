@@ -7,7 +7,8 @@ import Deploy from '@/components/deploy/Deploy';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import {
   buildKnowledgeWorkbenchParams,
-  isKnowledgeModelingRoute,
+  isKnowledgeWorkbenchRoute,
+  isModelingSurfaceRoute,
 } from '@/utils/knowledgeWorkbench';
 import RuntimeScopeSelector from '@/components/runtimeScope/RuntimeScopeSelector';
 import AuthSessionStatus from '@/components/auth/AuthSessionStatus';
@@ -43,10 +44,8 @@ export default function HeaderBar() {
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const { asPath, pathname, query } = router;
   const showNav = !pathname.startsWith(Path.Onboarding);
-  const isKnowledgeModeling = isKnowledgeModelingRoute({ pathname, query });
-  const isModeling = pathname.startsWith(Path.Modeling) || isKnowledgeModeling;
-  const isKnowledge =
-    pathname.startsWith(Path.Knowledge) && !isKnowledgeModeling;
+  const isModeling = isModelingSurfaceRoute({ pathname, query });
+  const isKnowledge = isKnowledgeWorkbenchRoute(pathname) && !isModeling;
 
   return (
     <StyledHeader>
@@ -94,9 +93,7 @@ export default function HeaderBar() {
                 size="small"
                 $isHighlight={pathname.startsWith(Path.APIManagement)}
                 onClick={() =>
-                  runtimeScopeNavigation.pushWorkspace(
-                    Path.APIManagementHistory,
-                  )
+                  runtimeScopeNavigation.pushWorkspace(Path.SettingsDiagnostics)
                 }
               >
                 API

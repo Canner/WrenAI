@@ -1,9 +1,11 @@
 import {
+  useCallback,
   forwardRef,
   ReactNode,
   useEffect,
   useImperativeHandle,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import styled, { css } from 'styled-components';
@@ -18,6 +20,7 @@ import type {
   CreateThreadResponseInput,
 } from '@/types/home';
 import { AskPromptData } from '@/hooks/useAskPrompt';
+import type { PromptInputHandle } from '@/components/pages/home/prompt/Input';
 
 interface Props {
   onCreateResponse: (
@@ -46,6 +49,8 @@ interface Props {
 
 interface Attributes {
   submit: (value: string) => void;
+  setDraft: (value: string) => void;
+  focus: () => void;
   close: () => void;
 }
 
@@ -133,6 +138,7 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
   const error = useMemo(() => askingTask?.error || null, [askingTask?.error]);
   const [showResult, setShowResult] = useState(false);
   const [question, setQuestion] = useState('');
+  const promptInputRef = useRef<PromptInputHandle>(null);
   const currentProcessState = useMemo(
     () => askProcessState.currentState,
     [askProcessState.currentState],
@@ -193,18 +199,28 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
     onSubmit && (await onSubmit(value));
   };
 
+  const setDraftQuestion = useCallback((value: string) => {
+    setQuestion(value);
+    promptInputRef.current?.focus();
+  }, []);
+
   useImperativeHandle(
     ref,
     () => ({
       submit: submitAsk,
+      setDraft: setDraftQuestion,
+      focus: () => {
+        promptInputRef.current?.focus();
+      },
       close: closeResult,
     }),
-    [closeResult, submitAsk],
+    [closeResult, setDraftQuestion, submitAsk],
   );
 
   return (
     <PromptStyle $variant={variant} className={className}>
       <PromptInput
+        ref={promptInputRef}
         question={question}
         isProcessing={isProcessing}
         onAsk={submitAsk}

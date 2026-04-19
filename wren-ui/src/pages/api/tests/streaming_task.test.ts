@@ -111,6 +111,14 @@ describe.each([
     stream.emit('end');
     await request;
 
+    if (modulePath.includes('ask_task')) {
+      expect(res.setHeader).toHaveBeenCalledWith('Deprecation', 'true');
+      expect(res.setHeader).toHaveBeenCalledWith(
+        'Link',
+        '</api/v1/asking-tasks/[id]/stream>; rel="successor-version"',
+      );
+    }
+
     expect(mockAssertAskingTaskScope).toHaveBeenCalled();
     expect(mockGetAskStreamingResult).toHaveBeenCalledWith('ask-1');
     expect(res.write).toHaveBeenCalledWith(

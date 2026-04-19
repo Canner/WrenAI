@@ -1,10 +1,8 @@
-import { useEffect } from 'react';
-import { useRouter } from 'next/router';
 import { Skeleton } from 'antd';
 import styled from 'styled-components';
-import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import { Path } from '@/utils/enum';
 import { buildKnowledgeModelingRouteParams } from '@/utils/knowledgeWorkbench';
+import { createCompatibilityRuntimeRedirectPage } from '@/utils/compatibilityRoutes';
 
 const RedirectStage = styled.div`
   min-height: calc(100vh - 48px);
@@ -20,26 +18,15 @@ const RedirectCard = styled.div`
   padding: 24px;
 `;
 
-export default function ModelingPage() {
-  const router = useRouter();
-  const runtimeScopeNavigation = useRuntimeScopeNavigation();
-
-  useEffect(() => {
-    if (!router.isReady) {
-      return;
-    }
-
-    void runtimeScopeNavigation.replace(
-      Path.Knowledge,
-      buildKnowledgeModelingRouteParams(router.query),
-    );
-  }, [router.isReady, router.query, runtimeScopeNavigation]);
-
-  return (
+export default createCompatibilityRuntimeRedirectPage({
+  legacyRoute: Path.Modeling,
+  canonicalRoute: Path.Knowledge,
+  buildQuery: buildKnowledgeModelingRouteParams,
+  fallback: (
     <RedirectStage>
       <RedirectCard>
         <Skeleton active title={{ width: '38%' }} paragraph={{ rows: 4 }} />
       </RedirectCard>
     </RedirectStage>
-  );
-}
+  ),
+});
