@@ -543,6 +543,7 @@
 - 已继续把 `src/utils/errorHandler.tsx` 从约 768 行收口到约 320 行，并拆出 `src/utils/errorHandlerOperationHandlers.tsx` 承接 operationName → fallback message 的错误处理映射，同时补充 `errorHandlerOperationHandlers.test.ts` 锁定提取后的 handler copy；主文件当前聚焦 network/runtime-scope 错误解析与表单错误 helper
 - 已继续把 `src/common.ts` 从约 556 行收口到约 494 行，并拆出 `src/commonBackgroundTrackers.ts` / `src/commonComponentSingleton.ts` 分别承接后台 tracker + schedule worker 初始化与版本化 global singleton 逻辑；主文件当前聚焦 repositories/adaptors/services 装配主流程
 - 已继续把 `src/components/learning/guide/stories.tsx` 从约 653 行收口到约 30 行，并拆出 `guideFlowStories.tsx` / `knowledgeGuideStories.tsx` / `storyShared.tsx` / `storyTypes.ts` 分别承接引导 story 逻辑、共享 driver config、preview panel 与 payload 类型；主文件当前仅保留 story dispatch 入口
+- 已继续把 `src/components/pages/home/dashboardGrid/index.tsx` 从约 644 行收口到约 301 行，并拆出 `DashboardGridPinnedItem.tsx` / `DashboardGridPinnedItemTitle.tsx` / `dashboardGridTypes.ts` 承接看板 item preview、图表渲染、标题重命名与共享类型；主文件当前聚焦 grid 布局、resize 响应与 focus/refresh orchestration
 - 当前已完成纯状态 / 恢复判定 helper、页面样式、reference preview、conversation shell、page shell、overlay 组装与 polling/recovery orchestration 迁移
 
 ## 验收标准
