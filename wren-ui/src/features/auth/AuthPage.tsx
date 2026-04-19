@@ -45,8 +45,11 @@ const Page = styled.main`
   align-items: center;
   justify-content: center;
   padding: clamp(20px, 4vw, 32px);
-  background:
-    radial-gradient(circle at 22% 42%, rgba(123, 85, 232, 0.06), transparent 28%),
+  background: radial-gradient(
+      circle at 22% 42%,
+      rgba(123, 85, 232, 0.06),
+      transparent 28%
+    ),
     linear-gradient(180deg, #f5f6fb 0%, #f2f4fa 100%);
 `;
 

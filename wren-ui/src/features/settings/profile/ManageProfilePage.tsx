@@ -29,7 +29,7 @@ import { Path } from '@/utils/enum';
 import { getReferenceDisplayWorkspaceName } from '@/utils/referenceDemoKnowledge';
 import { resolvePlatformManagementFromAuthSession } from '@/features/settings/settingsPageCapabilities';
 
-const { Text } = Typography;
+const { Text, Title } = Typography;
 
 const SECURITY_TIPS = [
   '密码建议包含大小写字母、数字与特殊字符，避免与其它系统重复。',
