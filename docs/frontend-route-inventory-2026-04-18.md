@@ -15,7 +15,7 @@
 - `src/pages/index.tsx`（route-entry re-export，实际实现位于 `src/features/home/ManageHomeIndexPage.tsx`）
 - `src/pages/auth.tsx`
 - `src/pages/register.tsx`（兼容 alias）
-- `src/pages/home/index.tsx`
+- `src/pages/home/index.tsx`（route-entry re-export，实际实现位于 `src/features/home/routes/HomeLandingPage.tsx`）
 - `src/pages/home/[id].tsx`
 - `src/pages/home/dashboard.tsx`
 - `src/pages/knowledge/index.tsx`
