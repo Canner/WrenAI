@@ -707,6 +707,14 @@
   `src/features/settings/connectors/useManageConnectorsPage.ts`，并新增
   `src/features/settings/connectors/ManageConnectorsPage.tsx` 承担真实页面组合；
   `settings/connectors.tsx` 当前已收口为 route-entry re-export，连接器页这一层又少掉一层无意义中转
+- 已继续把 `src/features/settings/connectors/connectorsPageUtils.ts`
+  从 ~628 行收口到 ~219 行，并新增
+  `src/features/settings/connectors/connectorsPayloadUtils.ts`（~424 行）承接：
+  - 数据库 connector config / secret builder
+  - submit / test payload builder
+  - secret re-encrypt payload builder
+  - form value hydrate / JSON stringify helper
+  当前 connectorsPageUtils 已聚焦 URL、常量、selector 与类型导出
 - `useConnectorMutationOperations.ts` 已从 ~234 行进一步降到 ~58 行，并新增 `connectorMutationOperationTypes.ts` / `useConnectorSubmitOperation.ts` / `useConnectorDeleteOperation.ts`（约 18 / 95 / 47 行）；save/delete orchestration 已继续拆到独立 lane，连接测试链路仍由 `useConnectorTestingOperations.ts` 承接
 - 已补 `src/features/settings/connectors/buildManageConnectorsControlState.test.ts`、`buildConnectorManagementCapabilityInput.test.ts`、`useConnectorSubmitOperation.test.tsx` 与 `useConnectorDeleteOperation.test.tsx`，为连接器页 control-state / capability-input / submit / delete lane 补齐回归覆盖
 - 已新增 `src/features/settings/settingsPageCapabilities.ts`，将设置页与连接器页共享的
