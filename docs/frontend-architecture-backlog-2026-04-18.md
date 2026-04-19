@@ -595,6 +595,10 @@
 - 已为 `useSkillConnectors` 提取 `buildSkillConnectorsRequestKey`，将 skills
   连接器读取主链路的 request key 收敛到纯 helper，并补齐独立测试，和
   `useSkillsControlPlaneData` / `useSkillsPageData` 形成同一收口模式
+- 已继续将 `buildSkillConnectorsUrl` / `buildSkillConnectorsRequestKey` 收口到
+  `src/features/settings/skills/skillsPageUtils.ts`，让 skills connectors 的 URL
+  与 request-key 生成复用同一纯 helper 模式，避免 hook 内继续混杂请求标识与
+  URL 组装逻辑
 - 已为 `usePermissionsRoleCatalog` 提取 request-key / URL / payload normalize
   helper，并补齐独立测试，让 permissions 域的角色目录读取也遵循同一纯 helper
   + 定向回归测试模式
@@ -978,6 +982,9 @@
 
 - 已新增 `wren-ui/src/utils/compatibilityRoutes.tsx` 作为兼容 alias / redirect 的共享 helper
 - `register`、`settings/access`、`settings/workspace`、`workspace/schedules`、`api-management/history` 已改为统一 alias helper
+- `settings/access`、`workspace/schedules`、`api-management/history` 已继续改为
+  直接指向各自的 feature page 实现，不再通过 canonical route entry 二次中转，
+  让兼容 route 保持“薄 alias -> feature page”结构
 - `settings/security` 已改为统一 redirect helper
 - `/modeling` 已改为同一 compatibility helper 提供的 runtime-aware redirect page，
   不再在 route entry 内部手写 `useRouter + useRuntimeScopeNavigation.replace`

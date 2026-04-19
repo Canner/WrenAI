@@ -67,7 +67,14 @@
 - 工作空间页统一走 `/workspace`
 - API 历史入口统一走 `/settings/diagnostics`
 
-策略：继续保留 alias 以兼容旧书签，但新增入口必须直连 canonical route。
+兼容 route 当前直接复用 feature page：
+
+- `src/pages/settings/access.tsx` -> `src/features/settings/users/ManageUsersPage.tsx`
+- `src/pages/workspace/schedules.tsx` -> `src/features/settings/systemTasks/ManageSystemTasksPage.tsx`
+- `src/pages/api-management/history.tsx` -> `src/features/settings/diagnostics/ManageDiagnosticsPage.tsx`
+
+策略：继续保留 alias 以兼容旧书签，但新增入口必须直连 canonical route，且兼容
+层不再依赖其他 route entry。
 
 ## 标准化废弃流程
 

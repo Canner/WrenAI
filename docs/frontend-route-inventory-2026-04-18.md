@@ -88,3 +88,6 @@
 
 - `src/pages/api/tests/*` 仍在 `pages` 目录内，是测试遗留结构，不是运行时 route 污染。
 - `src/pages/modeling.tsx`、`src/pages/register.tsx`、`src/pages/settings/access.tsx`、`src/pages/settings/security.tsx`、`src/pages/workspace/schedules.tsx`、`src/pages/api-management/history.tsx` 仍是兼容入口，详见 legacy route inventory。
+- `src/pages/settings/access.tsx`、`src/pages/workspace/schedules.tsx`、
+  `src/pages/api-management/history.tsx` 当前已直接复用各自 feature page 实现，
+  不再经由 canonical route entry 中转，兼容层继续保持为薄 alias。

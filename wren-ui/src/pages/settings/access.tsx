@@ -1,4 +1,4 @@
-import UsersPage from './users';
+import UsersPage from '@/features/settings/users/ManageUsersPage';
 import { Path } from '@/utils/enum';
 import { createCompatibilityAliasPage } from '@/utils/compatibilityRoutes';
 
