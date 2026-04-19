@@ -538,6 +538,8 @@
   - `src/components/pages/home/promptThread/chartAnswerStyles.tsx`
   当前 ChartAnswer 已聚焦 preview 数据对齐、图表编辑态与 pin-to-dashboard 编排，同时继续通过 re-export `getIsChartFinished` 保持 thread state / 测试的既有契约
 - 已继续把 `src/hooks/useAskPrompt.tsx` 从约 586 行收口到约 459 行，并拆出 `src/hooks/askPromptUtils.ts` 承接 ask prompt 的状态判定、推荐问题历史、线程缓存回写与 runtime selector 解析 helper；主 hook 当前聚焦轮询控制、提交/重试编排与流式任务接线，同时继续 re-export 现有 helper/type 以保持首页与线程页调用契约
+- 已继续把 `src/utils/referenceDemoKnowledge.ts` 从约 567 行收口到约 165 行，并拆出 `src/utils/referenceDemoKnowledgeData.ts` / `src/utils/referenceDemoKnowledgeTypes.ts` 承接样例知识库元数据、资产别名与共享类型；主文件当前聚焦名称解析、展示文案与样例资产计数 helper，同时维持对既有常量与类型导出的兼容面
+- 已继续把 `src/features/knowledgePage/lists.tsx` 从约 605 行收口到约 459 行，并拆出 `src/features/knowledgePage/virtualizedManageEntryList.tsx` 承接 SQL 模板 / 分析规则管理列表的虚拟滚动容器；主文件当前聚焦知识库侧栏项与 rule/sql card 渲染
 - 当前已完成纯状态 / 恢复判定 helper、页面样式、reference preview、conversation shell、page shell、overlay 组装与 polling/recovery orchestration 迁移
 
 ## 验收标准

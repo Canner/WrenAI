@@ -32,6 +32,8 @@
 - Wave 3 已有实质进展（knowledge feature 化、modeling workspace 抽离等）。
 - `DolaAppShell.tsx` 已进一步收敛到约 199 行，不再属于 giant-file 热点。
 - 已按“500 行以内即可”的当前标准继续收口：
+  - `src/utils/referenceDemoKnowledge.ts` 当前约 165 行
+  - `src/features/knowledgePage/lists.tsx` 当前约 459 行
   - `src/features/home/homePageStyles.tsx` 当前约 463 行
   - `src/features/settings/permissions/PermissionsGovernanceControlsSection.tsx` 当前约 473 行
   - `src/hooks/useAskPrompt.tsx` 当前约 459 行
@@ -131,6 +133,8 @@
 - `useKnowledgeRuleSqlManager.ts` 也已从 giant-file 热点列表退出：规则/SQL 模板的 form value 类型、缓存判定、payload builder 与列表匹配 helper 已下沉到 `knowledgeRuleSqlManagerUtils.ts`，当前主 hook 约 423 行，保留知识库工作台现有 imports 的兼容 re-export。
 - `useAskPrompt.tsx` 同样已从 giant-file 热点列表退出：ask prompt 的完成态判定、推荐问题历史、thread cache update 与 selector 解析逻辑已下沉到 `askPromptUtils.ts`，当前主 hook 约 459 行，保留首页/线程页既有 helper exports。
 - `homePageStyles.tsx` 与 `PermissionsGovernanceControlsSection.tsx` 这两处临界热点也已收口到 500 行以下：前者通过把 styled leaf 改为 inline exports 删除集中 export block，后者把 access review / break-glass 相关类型下沉到 `permissionsGovernanceControlTypes.ts`；两者当前约 463 / 473 行。
+- `referenceDemoKnowledge.ts` 已从 giant-file 热点列表退出：样例知识库数据、资产别名与共享类型已下沉到 `referenceDemoKnowledgeData.ts` / `referenceDemoKnowledgeTypes.ts`，当前主文件约 165 行。
+- `features/knowledgePage/lists.tsx` 也已从 giant-file 热点列表退出：SQL 模板 / 分析规则列表共用的虚拟滚动容器已下沉到 `virtualizedManageEntryList.tsx`，当前主文件约 459 行。
 - `home/[id].tsx` 已进一步收敛到约 380 行，page shell、conversation shell、modal overlays 与 recovery orchestration 已下沉到 thread feature 组件 / hooks。
 - `home/dashboard.tsx` 已进一步收敛到 route-entry re-export；dashboard workbench 页面组合当前已下沉到 `features/home/dashboard/ManageDashboardPage.tsx`，为后续继续拆 dashboard rail / stage / 请求编排提供稳定 feature 边界。
 - `workspace.tsx` 已进一步收敛到约 452 行，不再属于 giant-file 热点。

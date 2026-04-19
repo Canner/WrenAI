@@ -77,10 +77,15 @@ describe('referenceDemoKnowledge', () => {
       (knowledge) => knowledge.id === 'demo-kb-ecommerce',
     );
 
-    expect(ecommerce?.fields.some((field) => field.fieldName === 'product_category_name_english')).toBe(false);
     expect(
-      ecommerce?.fields.find((field) => field.fieldName === 'product_category_name')
-        ?.note,
+      ecommerce?.fields.some(
+        (field) => field.fieldName === 'product_category_name_english',
+      ),
+    ).toBe(false);
+    expect(
+      ecommerce?.fields.find(
+        (field) => field.fieldName === 'product_category_name',
+      )?.note,
     ).toContain('product_category_name_translation');
   });
 });
