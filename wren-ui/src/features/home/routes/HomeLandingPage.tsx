@@ -1,12 +1,4 @@
-import {
-  ComponentRef,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
-import { Skeleton, Space } from 'antd';
+import { ComponentRef, useCallback, useMemo, useRef } from 'react';
 import { Path } from '@/utils/enum';
 import Prompt from '@/components/pages/home/prompt';
 import useAskPrompt from '@/hooks/useAskPrompt';
@@ -26,8 +18,8 @@ import { useHomeRecommendations } from '@/features/home/useHomeRecommendations';
 import useHomeSuggestedQuestions from '@/features/home/useHomeSuggestedQuestions';
 import useHomeSkillOptions from '@/features/home/useHomeSkillOptions';
 import HomeLandingStage from '@/features/home/components/HomeLandingStage';
-import { Stage } from '@/features/home/homePageStyles';
-import useRuntimeSelectorState from '@/hooks/useRuntimeSelectorState';
+import HomeLandingPageLoadingState from '@/features/home/routes/HomeLandingPageLoadingState';
+import useHomeLandingPageSelectionState from '@/features/home/routes/useHomeLandingPageSelectionState';
 import useHomeThreadCreation from '@/features/home/useHomeThreadCreation';
 import type { HomeRecommendationCard } from '@/features/home/components/HomeRecommendationSection';
 export {
@@ -36,31 +28,7 @@ export {
   resolveCreatedThreadRuntimeSelector,
 } from '@/features/home/homePageRuntime';
 
-type KnowledgeBaseSummary = {
-  id: string;
-  name?: string | null;
-};
-
-const areStringListsEqual = (left: string[], right: string[]) =>
-  left.length === right.length &&
-  left.every((value, index) => value === right[index]);
-
-export const resolveActiveSelectedKnowledgeBaseIds = ({
-  selectedKnowledgeBaseIds,
-  knowledgeBases,
-}: {
-  selectedKnowledgeBaseIds: string[];
-  knowledgeBases: KnowledgeBaseSummary[];
-}) => {
-  const availableKnowledgeBaseIds = new Set(
-    knowledgeBases.map((knowledgeBase) => knowledgeBase.id),
-  );
-
-  return selectedKnowledgeBaseIds.filter((knowledgeBaseId) =>
-    availableKnowledgeBaseIds.has(knowledgeBaseId),
-  );
-};
-
+export { resolveActiveSelectedKnowledgeBaseIds } from './useHomeLandingPageSelectionState';
 export default function Home() {
   const $prompt = useRef<ComponentRef<typeof Prompt>>(null);
   const composerShellRef = useRef<HTMLDivElement>(null);
@@ -68,69 +36,28 @@ export default function Home() {
   const runtimeScopePage = useProtectedRuntimeScopePage();
   const authSession = useAuthSession({ includeWorkspaceQuery: false });
   const refetchPersistentShellHistory = usePersistentShellHistoryRefetch();
-  const [knowledgePickerOpen, setKnowledgePickerOpen] = useState(false);
-  const [knowledgeKeyword, setKnowledgeKeyword] = useState('');
-  const [selectedKnowledgeBaseIds, setSelectedKnowledgeBaseIds] = useState<
-    string[]
-  >([]);
-  const [skillPickerOpen, setSkillPickerOpen] = useState(false);
-  const [skillKeyword, setSkillKeyword] = useState('');
-  const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([]);
-  const [draftSelectedSkillIds, setDraftSelectedSkillIds] = useState<string[]>(
-    [],
-  );
-  const [knowledgeListScrollTop, setKnowledgeListScrollTop] = useState(0);
-  const [knowledgeListViewportHeight, setKnowledgeListViewportHeight] =
-    useState(0);
-
-  const runtimeSelector = useRuntimeSelectorState();
-  const runtimeSelectorState = runtimeSelector.runtimeSelectorState;
-  const currentWorkspaceId = runtimeSelectorState?.currentWorkspace?.id || null;
-  const previousWorkspaceIdRef = useRef<string | null>(null);
-  const currentKnowledgeBases = runtimeSelectorState?.knowledgeBases || [];
-
-  useEffect(() => {
-    const previousWorkspaceId = previousWorkspaceIdRef.current;
-    previousWorkspaceIdRef.current = currentWorkspaceId;
-
-    if (
-      !previousWorkspaceId ||
-      !currentWorkspaceId ||
-      previousWorkspaceId === currentWorkspaceId
-    ) {
-      return;
-    }
-
-    setSelectedKnowledgeBaseIds([]);
-    setKnowledgeKeyword('');
-    setKnowledgePickerOpen(false);
-    setSelectedSkillIds([]);
-    setDraftSelectedSkillIds([]);
-    setSkillKeyword('');
-    setSkillPickerOpen(false);
-  }, [currentWorkspaceId]);
-
-  const activeSelectedKnowledgeBaseIds = useMemo(
-    () =>
-      resolveActiveSelectedKnowledgeBaseIds({
-        selectedKnowledgeBaseIds,
-        knowledgeBases: currentKnowledgeBases,
-      }),
-    [currentKnowledgeBases, selectedKnowledgeBaseIds],
-  );
-
-  useEffect(() => {
-    if (
-      areStringListsEqual(
-        selectedKnowledgeBaseIds,
-        activeSelectedKnowledgeBaseIds,
-      )
-    ) {
-      return;
-    }
-
-    setSelectedKnowledgeBaseIds(activeSelectedKnowledgeBaseIds);
-  }, [activeSelectedKnowledgeBaseIds, selectedKnowledgeBaseIds]);
+  const {
+    activeSelectedKnowledgeBaseIds,
+    currentKnowledgeBases,
+    draftSelectedSkillIds,
+    knowledgeKeyword,
+    knowledgeListScrollTop,
+    knowledgeListViewportHeight,
+    knowledgePickerOpen,
+    runtimeSelectorState,
+    selectedSkillIds,
+    setDraftSelectedSkillIds,
+    setKnowledgeKeyword,
+    setKnowledgeListScrollTop,
+    setKnowledgeListViewportHeight,
+    setKnowledgePickerOpen,
+    setSelectedKnowledgeBaseIds,
+    setSelectedSkillIds,
+    setSkillKeyword,
+    setSkillPickerOpen,
+    skillKeyword,
+    skillPickerOpen,
+  } = useHomeLandingPageSelectionState();
 
   const {
     hasExecutableRuntime: hasExecutableAskRuntime,
@@ -299,31 +226,8 @@ export default function Home() {
     return email.split('@')[0]?.trim() || email;
   }, [authSession.data?.user?.displayName, authSession.data?.user?.email]);
 
-  const homePageLoading = runtimeScopePage.guarding;
-
-  if (homePageLoading) {
-    const loadingContent = (
-      <Stage>
-        <Space
-          direction="vertical"
-          size={20}
-          style={{ width: '100%', maxWidth: 720 }}
-        >
-          <Skeleton active title={{ width: '38%' }} paragraph={{ rows: 5 }} />
-          <Skeleton.Button
-            active
-            block
-            style={{ height: 148, width: '100%' }}
-          />
-        </Space>
-      </Stage>
-    );
-
-    return (
-      <DirectShellPageFrame activeNav="home">
-        {loadingContent}
-      </DirectShellPageFrame>
-    );
+  if (runtimeScopePage.guarding) {
+    return <HomeLandingPageLoadingState />;
   }
 
   const pageContent = (
