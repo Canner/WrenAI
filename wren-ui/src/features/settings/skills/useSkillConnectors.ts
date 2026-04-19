@@ -4,7 +4,6 @@ import { parseRestJsonResponse } from '@/utils/rest';
 import useRestRequest from '@/hooks/useRestRequest';
 import {
   buildSkillConnectorsRequestKey,
-  buildSkillConnectorsUrl,
   normalizeSkillConnectorsPayload,
   type ConnectorView,
 } from './skillsPageUtils';
@@ -37,17 +36,7 @@ export default function useSkillConnectors({
       runtimeScopeSelector.workspaceId,
     ],
   );
-  const requestUrl = useMemo(
-    () => (requestKey ? buildSkillConnectorsUrl(runtimeScopeSelector) : null),
-    [
-      requestKey,
-      runtimeScopeSelector.deployHash,
-      runtimeScopeSelector.kbSnapshotId,
-      runtimeScopeSelector.knowledgeBaseId,
-      runtimeScopeSelector.runtimeScopeId,
-      runtimeScopeSelector.workspaceId,
-    ],
-  );
+  const requestUrl = requestKey;
 
   const { data, loading } = useRestRequest<ConnectorView[]>({
     enabled: Boolean(requestUrl),
