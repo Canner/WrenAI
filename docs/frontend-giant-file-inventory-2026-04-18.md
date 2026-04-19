@@ -33,6 +33,7 @@
 - `DolaAppShell.tsx` 已进一步收敛到约 199 行，不再属于 giant-file 热点。
 - 已按“500 行以内即可”的当前标准继续收口：
   - `src/features/home/routes/HomeLandingPage.tsx` 当前约 284 行
+  - `src/hooks/useHomeSidebar.tsx` 当前约 404 行
   - `src/features/settings/identity/ManageIdentityPage.tsx` 当前约 346 行
   - `src/features/settings/automation/ManageAutomationPage.tsx` 当前约 316 行
   - `src/features/settings/systemTasks/ManageSystemTasksPage.tsx` 当前约 310 行

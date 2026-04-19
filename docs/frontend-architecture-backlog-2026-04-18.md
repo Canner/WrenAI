@@ -621,6 +621,9 @@
   中补齐覆盖；同时将 connectors 页列表读取的 request-key / payload normalize
   helper 下沉到 connectors utils，并通过页面测试 + `useManageConnectorsPage`
   hook 测试锁定语义
+- 已继续新增 `src/hooks/homeSidebarHelpers.ts`，把 `useHomeSidebar` 内的 cache TTL、
+  storage 读写、selector / URL / query gate helper 统一迁出；`useHomeSidebar.tsx`
+  当前已收口到约 404 行，主 hook 仅保留 effect / request / mutation orchestration
 - 已新增：
   - `src/hooks/useSkillsControlPlaneData.test.ts`
   - `src/hooks/useApiHistoryList.test.ts`（补 request-key case）
