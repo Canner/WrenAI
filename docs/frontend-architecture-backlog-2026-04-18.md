@@ -860,6 +860,9 @@
 - 已新增 `src/features/auth/AuthPage.tsx`，将 `auth.tsx` 的统一登录页
   与 redirect helper 迁入 auth feature 目录；`auth.tsx` 当前收口为
   route-entry re-export，继续对测试与 legacy `/register` alias 保持原导出契约
+- 已继续把 `src/features/auth/AuthPage.tsx` 从 ~661 行收口到 ~345 行，并新增
+  `src/features/auth/authPageStyles.tsx` 承接登录页的视觉样式与版式定义；
+  当前 AuthPage 已聚焦 redirect 解析、session gating 与 submit orchestration
 - 已新增 `src/features/home/dashboard/ManageDashboardPage.tsx`，将
   `home/dashboard.tsx` 的 dashboard workbench 页面组合迁入 home/dashboard
   feature 目录；`home/dashboard.tsx` 当前也已收口为 route-entry re-export
