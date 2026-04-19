@@ -536,6 +536,7 @@
   - `src/components/pages/home/promptThread/ChartAnswerPinModal.tsx`
   - `src/components/pages/home/promptThread/chartAnswerStyles.tsx`
   当前 ChartAnswer 已聚焦 preview 数据对齐、图表编辑态与 pin-to-dashboard 编排，同时继续通过 re-export `getIsChartFinished` 保持 thread state / 测试的既有契约
+- 已继续把 `src/hooks/useAskPrompt.tsx` 从约 586 行收口到约 459 行，并拆出 `src/hooks/askPromptUtils.ts` 承接 ask prompt 的状态判定、推荐问题历史、线程缓存回写与 runtime selector 解析 helper；主 hook 当前聚焦轮询控制、提交/重试编排与流式任务接线，同时继续 re-export 现有 helper/type 以保持首页与线程页调用契约
 - 当前已完成纯状态 / 恢复判定 helper、页面样式、reference preview、conversation shell、page shell、overlay 组装与 polling/recovery orchestration 迁移
 
 ## 验收标准
