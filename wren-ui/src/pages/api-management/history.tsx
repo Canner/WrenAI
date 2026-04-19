@@ -1,4 +1,4 @@
-import DiagnosticsPage from '../settings/diagnostics';
+import DiagnosticsPage from '@/features/settings/diagnostics/ManageDiagnosticsPage';
 import { Path } from '@/utils/enum';
 import { createCompatibilityAliasPage } from '@/utils/compatibilityRoutes';
 

@@ -3,20 +3,15 @@ import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import { parseRestJsonResponse } from '@/utils/rest';
 import useRestRequest from '@/hooks/useRestRequest';
 import {
-  buildSkillConnectorsApiUrl,
+  buildSkillConnectorsRequestKey,
+  buildSkillConnectorsUrl,
   normalizeSkillConnectorsPayload,
   type ConnectorView,
 } from './skillsPageUtils';
 
 const EMPTY_CONNECTORS: ConnectorView[] = [];
 
-export const buildSkillConnectorsRequestKey = ({
-  enabled,
-  runtimeScopeSelector,
-}: {
-  enabled: boolean;
-  runtimeScopeSelector: ClientRuntimeScopeSelector;
-}) => (enabled ? buildSkillConnectorsApiUrl(runtimeScopeSelector) : null);
+export { buildSkillConnectorsRequestKey } from './skillsPageUtils';
 
 export default function useSkillConnectors({
   enabled,
@@ -27,7 +22,7 @@ export default function useSkillConnectors({
   runtimeScopeSelector: ClientRuntimeScopeSelector;
   onError?: (error: Error) => void;
 }) {
-  const requestUrl = useMemo(
+  const requestKey = useMemo(
     () =>
       buildSkillConnectorsRequestKey({
         enabled,
@@ -42,11 +37,22 @@ export default function useSkillConnectors({
       runtimeScopeSelector.workspaceId,
     ],
   );
+  const requestUrl = useMemo(
+    () => (requestKey ? buildSkillConnectorsUrl(runtimeScopeSelector) : null),
+    [
+      requestKey,
+      runtimeScopeSelector.deployHash,
+      runtimeScopeSelector.kbSnapshotId,
+      runtimeScopeSelector.knowledgeBaseId,
+      runtimeScopeSelector.runtimeScopeId,
+      runtimeScopeSelector.workspaceId,
+    ],
+  );
 
   const { data, loading } = useRestRequest<ConnectorView[]>({
     enabled: Boolean(requestUrl),
     initialData: EMPTY_CONNECTORS,
-    requestKey: requestUrl,
+    requestKey,
     request: async ({ signal }) => {
       const response = await fetch(requestUrl!, { signal });
       const payload = await parseRestJsonResponse<unknown>(

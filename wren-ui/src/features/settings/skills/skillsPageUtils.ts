@@ -43,9 +43,19 @@ export const buildSkillConnectorOptions = (connectors: ConnectorView[]) => [
   })),
 ];
 
-export const buildSkillConnectorsApiUrl = (
+export const buildSkillConnectorsUrl = (
   selector?: Parameters<typeof buildRuntimeScopeUrl>[2],
 ) => buildRuntimeScopeUrl('/api/v1/connectors', {}, selector);
+
+export const buildSkillConnectorsApiUrl = buildSkillConnectorsUrl;
+
+export const buildSkillConnectorsRequestKey = ({
+  enabled,
+  runtimeScopeSelector,
+}: {
+  enabled: boolean;
+  runtimeScopeSelector: Parameters<typeof buildSkillConnectorsUrl>[0];
+}) => (enabled ? buildSkillConnectorsUrl(runtimeScopeSelector) : null);
 
 export const SKILL_SECRET_EDIT_HINT =
   '技能密钥仅作为后端运行时上下文使用，不会在前端回显明文。留空表示保留现有密钥。';
