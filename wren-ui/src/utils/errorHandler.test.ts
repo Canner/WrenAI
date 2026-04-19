@@ -86,7 +86,10 @@ describe('resolveNetworkErrorMessage', () => {
   it('ignores aborted network requests', () => {
     expect(
       resolveNetworkErrorMessage(
-        new DOMException('signal is aborted without reason', 'AbortError') as any,
+        new DOMException(
+          'signal is aborted without reason',
+          'AbortError',
+        ) as any,
       ),
     ).toBeNull();
 
