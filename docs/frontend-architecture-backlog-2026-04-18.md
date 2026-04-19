@@ -926,8 +926,9 @@
 - 已拆出：
   - `src/features/workspace/components/WorkspacePrimaryPanel.tsx`
   - `src/features/workspace/components/WorkspaceGovernanceAside.tsx`
-- `pages/workspace.tsx` 已从 ~1177 行降到 ~132 行
-- 当前已完成页面样式、类型/工具、主区/侧区 section 与 page state /
+- `pages/workspace.tsx` 已从 ~1177 行降到 route-entry re-export；页面实现已继续下沉到
+  `src/features/workspace/ManageWorkspacePage.tsx`
+- 当前已完成页面样式、类型/工具、主区/侧区 section、feature page 与 page state /
   request orchestration 迁移
 - `useWorkspacePageState.ts` 已继续从 ~374 行收口到 ~183 行，当前主要保留
   runtime request / local UI state / action handler；基于 payload 的 view-model
