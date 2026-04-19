@@ -114,6 +114,7 @@
 - `index.styles.ts` 当前已直接 re-export 到 workbench leaf style files；原本仅做多层 barrel re-export 的 `knowledgePageWorkbenchStyles.ts` / `knowledgePageWorkbenchShellStyles.ts` / `knowledgePageWorkbenchSummaryStyles.ts` / `knowledgePageWorkbenchSummaryCardStyles.ts` / `knowledgePageWorkbenchEditorStyles.ts` / `knowledgePageWorkbenchEditorCardStyles.ts` / `knowledgePageWorkbenchEditorItemStyles.ts` 已删除。
 - `home/[id].tsx` 与 knowledge workbench styles 都已开始第二轮收口，不再是完全未动状态。
 - `home/[id].tsx` 已进一步收敛到约 380 行，page shell、conversation shell、modal overlays 与 recovery orchestration 已下沉到 thread feature 组件 / hooks。
+- `home/dashboard.tsx` 已进一步收敛到 route-entry re-export；dashboard workbench 页面组合当前已下沉到 `features/home/dashboard/ManageDashboardPage.tsx`，为后续继续拆 dashboard rail / stage / 请求编排提供稳定 feature 边界。
 - `workspace.tsx` 已进一步收敛到约 452 行，不再属于 giant-file 热点。
 - `settings/connectors.tsx` 已进一步收敛到 route-entry re-export；连接器页 shell、catalog 与 modal 组合当前已下沉到 `features/settings/connectors/ManageConnectorsPage.tsx`。
 - `settings/users.tsx` 也已进一步收敛到 route-entry re-export；用户管理页当前直接由 `features/settings/users/ManageUsersPage.tsx` 承担 shell 与成员管理组合。
