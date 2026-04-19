@@ -83,24 +83,16 @@ import type { IMDLService } from '@server/services/mdlService';
 import type { IProjectService } from '@server/services/projectService';
 import { PostHogTelemetry } from './server/telemetry/telemetry';
 import { RuntimeScopeResolver } from './server/context/runtimeScope';
-import {
-  ProjectRecommendQuestionBackgroundTracker,
-  ThreadRecommendQuestionBackgroundTracker,
-  DashboardCacheBackgroundTracker,
-  ScheduleWorker,
-} from './server/backgrounds';
 import { SqlPairService } from './server/services/sqlPairService';
-
+import { createBackgroundTrackers } from './commonBackgroundTrackers';
+import { getVersionedGlobalSingleton } from './commonComponentSingleton';
 export const serverConfig = getConfig();
-
 export const initComponents = () => {
   const telemetry = new PostHogTelemetry();
   const knex = bootstrapKnex({
     pgUrl: serverConfig.pgUrl,
     debug: serverConfig.debug,
   });
-
-  // repositories
   const projectRepository = new ProjectRepository(knex);
   const deployLogRepository = new DeployLogRepository(knex);
   const threadRepository = new ThreadRepository(knex);
@@ -154,8 +146,6 @@ export const initComponents = () => {
   const principalRoleBindingRepository = new PrincipalRoleBindingRepository(
     knex,
   );
-
-  // adaptors
   const wrenEngineAdaptor = new WrenEngineAdaptor({
     wrenEngineEndpoint: serverConfig.wrenEngineEndpoint,
   });
@@ -177,8 +167,6 @@ export const initComponents = () => {
     runtimeSsl:
       serverConfig.trinoCatalogManagementSsl ?? serverConfig.trinoRuntimeSsl,
   });
-
-  // services
   const metadataService = new ConnectionMetadataService({
     ibisAdaptor,
     wrenEngineAdaptor,
@@ -392,21 +380,16 @@ export const initComponents = () => {
     knowledgeBaseRepository,
     kbSnapshotRepository,
   });
-
-  // background trackers
-  const projectRecommendQuestionBackgroundTracker =
-    new ProjectRecommendQuestionBackgroundTracker({
-      telemetry,
-      wrenAIAdaptor,
-      projectRepository,
-    });
-  const threadRecommendQuestionBackgroundTracker =
-    new ThreadRecommendQuestionBackgroundTracker({
-      telemetry,
-      wrenAIAdaptor,
-      threadRepository,
-    });
-  const dashboardCacheBackgroundTracker = new DashboardCacheBackgroundTracker({
+  const {
+    projectRecommendQuestionBackgroundTracker,
+    threadRecommendQuestionBackgroundTracker,
+    dashboardCacheBackgroundTracker,
+    scheduleWorker,
+  } = createBackgroundTrackers({
+    telemetry,
+    wrenAIAdaptor,
+    projectRepository,
+    threadRepository,
     dashboardRepository,
     dashboardItemRepository,
     dashboardItemRefreshJobRepository,
@@ -414,40 +397,13 @@ export const initComponents = () => {
     projectService,
     deployService,
     queryService,
-    enablePolling: false,
-  });
-  const scheduleWorker = new ScheduleWorker({
     scheduleJobRepository,
     scheduleJobRunRepository,
     auditEventRepository,
-    executors: {
-      dashboard_refresh: async (job) => {
-        const dashboardId = Number.parseInt(job.targetId, 10);
-        if (Number.isNaN(dashboardId)) {
-          throw new Error(
-            `Invalid dashboard refresh target id: ${job.targetId}`,
-          );
-        }
-
-        const refreshedItems =
-          await dashboardCacheBackgroundTracker.refreshDashboardById(
-            dashboardId,
-          );
-
-        return {
-          detailJson: {
-            refreshedItems,
-          },
-        };
-      },
-    },
   });
-
   return {
     knex,
     telemetry,
-
-    // repositories
     projectRepository,
     deployLogRepository,
     threadRepository,
@@ -493,14 +449,10 @@ export const initComponents = () => {
     permissionRepository,
     rolePermissionRepository,
     principalRoleBindingRepository,
-
-    // adaptors
     wrenEngineAdaptor,
     wrenAIAdaptor,
     ibisAdaptor,
     trinoAdaptor,
-
-    // services
     metadataService,
     projectService,
     queryService,
@@ -527,30 +479,16 @@ export const initComponents = () => {
     runtimeScopeResolver,
     askingTaskTracker,
     scheduleWorker,
-
-    // background trackers
     projectRecommendQuestionBackgroundTracker,
     threadRecommendQuestionBackgroundTracker,
     dashboardCacheBackgroundTracker,
   };
 };
-
 type Components = ReturnType<typeof initComponents>;
 const COMPONENTS_RUNTIME_VERSION = 2;
-
-const globalForComponents = globalThis as typeof globalThis & {
-  __wrenComponents__?: Components;
-  __wrenComponentsVersion__?: number;
-};
-
-// singleton components
-export const components =
-  globalForComponents.__wrenComponents__ &&
-  globalForComponents.__wrenComponentsVersion__ === COMPONENTS_RUNTIME_VERSION
-    ? globalForComponents.__wrenComponents__
-    : initComponents();
-
-if (process.env.NODE_ENV !== 'production') {
-  globalForComponents.__wrenComponents__ = components;
-  globalForComponents.__wrenComponentsVersion__ = COMPONENTS_RUNTIME_VERSION;
-}
+export const components: Components = getVersionedGlobalSingleton({
+  factory: initComponents,
+  singletonKey: '__wrenComponents__',
+  version: COMPONENTS_RUNTIME_VERSION,
+  versionKey: '__wrenComponentsVersion__',
+});

@@ -541,6 +541,7 @@
 - 已继续把 `src/utils/referenceDemoKnowledge.ts` 从约 567 行收口到约 165 行，并拆出 `src/utils/referenceDemoKnowledgeData.ts` / `src/utils/referenceDemoKnowledgeTypes.ts` 承接样例知识库元数据、资产别名与共享类型；主文件当前聚焦名称解析、展示文案与样例资产计数 helper，同时维持对既有常量与类型导出的兼容面
 - 已继续把 `src/features/knowledgePage/lists.tsx` 从约 605 行收口到约 459 行，并拆出 `src/features/knowledgePage/virtualizedManageEntryList.tsx` 承接 SQL 模板 / 分析规则管理列表的虚拟滚动容器；主文件当前聚焦知识库侧栏项与 rule/sql card 渲染
 - 已继续把 `src/utils/errorHandler.tsx` 从约 768 行收口到约 320 行，并拆出 `src/utils/errorHandlerOperationHandlers.tsx` 承接 operationName → fallback message 的错误处理映射，同时补充 `errorHandlerOperationHandlers.test.ts` 锁定提取后的 handler copy；主文件当前聚焦 network/runtime-scope 错误解析与表单错误 helper
+- 已继续把 `src/common.ts` 从约 556 行收口到约 494 行，并拆出 `src/commonBackgroundTrackers.ts` / `src/commonComponentSingleton.ts` 分别承接后台 tracker + schedule worker 初始化与版本化 global singleton 逻辑；主文件当前聚焦 repositories/adaptors/services 装配主流程
 - 当前已完成纯状态 / 恢复判定 helper、页面样式、reference preview、conversation shell、page shell、overlay 组装与 polling/recovery orchestration 迁移
 
 ## 验收标准
