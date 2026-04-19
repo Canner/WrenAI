@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import sys
 import uuid
@@ -29,7 +28,7 @@ logger = logging.getLogger("wren-ai-service")
 @component
 class DDLChunker:
     @component.output_types(documents=List[Document])
-    async def run(
+    def run(
         self,
         mdl: Dict[str, Any],
         column_batch_size: int,
@@ -48,7 +47,7 @@ class DDLChunker:
                 },
                 "content": chunk["payload"],
             }
-            for chunk in await self._get_ddl_commands(
+            for chunk in self._get_ddl_commands(
                 **mdl, column_batch_size=column_batch_size
             )
         ]
@@ -63,7 +62,7 @@ class DDLChunker:
             ]
         }
 
-    async def _model_preprocessor(
+    def _model_preprocessor(
         self, models: List[Dict[str, Any]], **kwargs
     ) -> List[Dict[str, Any]]:
         def _column_preprocessor(
@@ -81,9 +80,9 @@ class DDLChunker:
                 **addition,
             }
 
-        async def _preprocessor(model: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        def _preprocessor(model: Dict[str, Any], **kwargs) -> Dict[str, Any]:
             addition = {
-                key: await helper(model, **kwargs)
+                key: helper(model, **kwargs)
                 for key, helper in helper.MODEL_PREPROCESSORS.items()
                 if helper.condition(model, **kwargs)
             }
@@ -100,11 +99,9 @@ class DDLChunker:
                 "primaryKey": model.get("primaryKey", ""),
             }
 
-        tasks = [_preprocessor(model, **kwargs) for model in models]
+        return [_preprocessor(model, **kwargs) for model in models]
 
-        return await asyncio.gather(*tasks)
-
-    async def _get_ddl_commands(
+    def _get_ddl_commands(
         self,
         models: List[Dict[str, Any]],
         relationships: List[Dict[str, Any]],
@@ -115,7 +112,7 @@ class DDLChunker:
     ) -> List[dict]:
         return (
             self._convert_models_and_relationships(
-                await self._model_preprocessor(models, **kwargs),
+                self._model_preprocessor(models, **kwargs),
                 relationships,
                 column_batch_size,
             )
@@ -300,13 +297,13 @@ def validate_mdl(mdl_str: str, validator: MDLValidator) -> Dict[str, Any]:
 
 
 @observe(capture_input=False)
-async def chunk(
+def chunk(
     mdl: Dict[str, Any],
     chunker: DDLChunker,
     column_batch_size: int,
     project_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    return await chunker.run(
+    return chunker.run(
         mdl=mdl,
         column_batch_size=column_batch_size,
         project_id=project_id,

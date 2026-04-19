@@ -13,7 +13,7 @@ async def test_empty_mdl():
     chunker = DDLChunker()
     mdl = {"models": [], "views": [], "relationships": [], "metrics": []}
 
-    document = await chunker.run(mdl, column_batch_size=1)
+    document = chunker.run(mdl, column_batch_size=1)
     assert document == {"documents": []}
 
 
@@ -35,7 +35,7 @@ async def test_single_model():
         "metrics": [],
     }
 
-    actual = await chunker.run(mdl, column_batch_size=1)
+    actual = chunker.run(mdl, column_batch_size=1)
     assert len(actual["documents"]) == 1
 
     document: Document = actual["documents"][0]
@@ -74,7 +74,7 @@ async def test_multiple_models():
         "metrics": [],
     }
 
-    actual = await chunker.run(mdl, column_batch_size=1)
+    actual = chunker.run(mdl, column_batch_size=1)
     assert len(actual["documents"]) == 2
 
     document_1: Document = actual["documents"][0]
@@ -119,7 +119,7 @@ async def test_column_is_primary_key():
         "metrics": [],
     }
 
-    actual = await chunker.run(mdl, column_batch_size=1)
+    actual = chunker.run(mdl, column_batch_size=1)
     assert len(actual["documents"]) == 2
 
     document_0: Document = actual["documents"][0]
@@ -164,7 +164,7 @@ async def test_column_with_properties():
         "metrics": [],
     }
 
-    actual = await chunker.run(mdl, column_batch_size=1)
+    actual = chunker.run(mdl, column_batch_size=1)
     assert len(actual["documents"]) == 2
 
     document_0: Document = actual["documents"][0]
@@ -221,7 +221,7 @@ async def test_column_with_nested_columns():
         "metrics": [],
     }
 
-    actual = await chunker.run(mdl, column_batch_size=1)
+    actual = chunker.run(mdl, column_batch_size=1)
     assert len(actual["documents"]) == 2
 
     document_0: Document = actual["documents"][0]
@@ -264,7 +264,7 @@ async def test_column_with_calculated_property():
         "metrics": [],
     }
 
-    actual = await chunker.run(mdl, column_batch_size=1)
+    actual = chunker.run(mdl, column_batch_size=1)
     assert len(actual["documents"]) == 2
 
     document_0: Document = actual["documents"][0]
@@ -328,7 +328,7 @@ async def test_column_with_relationship():
         "metrics": [],
     }
 
-    actual = await chunker.run(mdl, column_batch_size=1)
+    actual = chunker.run(mdl, column_batch_size=1)
     assert len(actual["documents"]) == 6
 
     document_0: Document = actual["documents"][0]
@@ -399,7 +399,7 @@ async def test_column_batch_size():
         "relationships": [],
         "metrics": [],
     }
-    actual = await chunker.run(mdl, column_batch_size=2)
+    actual = chunker.run(mdl, column_batch_size=2)
     assert len(actual["documents"]) == 3
 
     document_0: Document = actual["documents"][0]
@@ -453,7 +453,7 @@ async def test_view():
         "relationships": [],
         "metrics": [],
     }
-    actual = await chunker.run(mdl, column_batch_size=1)
+    actual = chunker.run(mdl, column_batch_size=1)
     assert len(actual["documents"]) == 1
 
     document_0: Document = actual["documents"][0]
@@ -483,7 +483,7 @@ async def test_view_with_properties():
         "relationships": [],
         "metrics": [],
     }
-    actual = await chunker.run(mdl, column_batch_size=1)
+    actual = chunker.run(mdl, column_batch_size=1)
     assert len(actual["documents"]) == 1
 
     document_0: Document = actual["documents"][0]
@@ -518,7 +518,7 @@ async def test_metric():
             }
         ],
     }
-    actual = await chunker.run(mdl, column_batch_size=1)
+    actual = chunker.run(mdl, column_batch_size=1)
     assert len(actual["documents"]) == 1
 
     document_0: Document = actual["documents"][0]
