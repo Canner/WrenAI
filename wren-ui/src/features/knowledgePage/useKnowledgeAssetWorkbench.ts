@@ -2,7 +2,6 @@ import { useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { message } from 'antd';
 import {
-  buildRuntimeScopeUrl,
   omitRuntimeScopeQuery,
   type ClientRuntimeScopeSelector,
 } from '@/runtime/client/runtimeScope';
@@ -119,7 +118,10 @@ export function useKnowledgeAssetWorkbench({
   const { connectorTables } = useKnowledgeConnectorTables({
     buildRuntimeScopeUrl,
     connectorId: selectedConnectorId,
-    workspaceId: selectedConnector?.workspaceId || null,
+    workspaceId:
+      selectedConnector?.workspaceId ||
+      activeKnowledgeRuntimeSelector?.workspaceId ||
+      null,
     enabled: !isDemoSource && Boolean(selectedConnectorId),
     onLoadError: handleConnectorTablesLoadError,
   });
@@ -133,7 +135,10 @@ export function useKnowledgeAssetWorkbench({
         ),
         selector,
       );
-      return router.replace(nextUrl, undefined, { scroll: false });
+      return router.replace(nextUrl, undefined, {
+        scroll: false,
+        shallow: true,
+      });
     },
     [router],
   );
@@ -169,7 +174,10 @@ export function useKnowledgeAssetWorkbench({
     assetDraftPreview,
     assetDraftPreviews,
     canContinueAssetConfiguration,
+    finalizePersistedRuntimeScope,
     moveAssetWizardToConfig,
+    persistedRuntimeSelector,
+    persistedAssetDraftPreviews,
     saveAssetDraftToOverview,
   } = useKnowledgeAssetWizard({
     assetDraft,
@@ -214,6 +222,22 @@ export function useKnowledgeAssetWorkbench({
     resetDetailViewState,
   });
 
+  const navigateModelingWithPersistedRuntimeScope = useCallback(() => {
+    const selectorOverride =
+      persistedRuntimeSelector || activeKnowledgeRuntimeSelector || undefined;
+    const nextUrl = buildRuntimeScopeUrl(
+      router.pathname,
+      { section: 'modeling' },
+      selectorOverride,
+    );
+    return router.push(nextUrl, undefined, { scroll: false });
+  }, [
+    activeKnowledgeRuntimeSelector,
+    buildRuntimeScopeUrl,
+    persistedRuntimeSelector,
+    router,
+  ]);
+
   return {
     activeDetailAsset,
     assetDatabaseOptions,
@@ -224,8 +248,15 @@ export function useKnowledgeAssetWorkbench({
     commitAssetDraftToOverview,
     detailAssetFields,
     detailAssets,
+    finalizePersistedRuntimeScope,
     moveAssetWizardToConfig,
+    navigateModelingWithPersistedRuntimeScope,
     openAssetDetail,
+    persistedRuntimeSelector,
+    persistedAssetDraftPreviews,
+    recommendationRuntimeSelector:
+      persistedRuntimeSelector || activeKnowledgeRuntimeSelector || null,
+    refreshAssets: refetchDiagram,
     savingAssetDraft,
     showKnowledgeAssetsLoading,
     visibleKnowledgeBaseId,

@@ -67,13 +67,11 @@ describe('knowledgeAssetWizardPersistence', () => {
     });
   });
 
-  it('creates models, updates metadata, and refetches diagram', async () => {
+  it('creates models, updates metadata, and returns persisted assets', async () => {
     mockCreateModel
       .mockResolvedValueOnce({ id: 11 })
       .mockResolvedValueOnce({ id: 12 });
     mockUpdateModelMetadata.mockResolvedValue({ success: true });
-    const refetchDiagram = jest.fn().mockResolvedValue({ diagram: {} });
-
     const result = await persistConnectorAssetDrafts({
       assetDraftPreviews: [
         {
@@ -93,7 +91,6 @@ describe('knowledgeAssetWizardPersistence', () => {
           sourceTableName: 'sales.customers',
         },
       ],
-      refetchDiagram,
       selector: {
         deployHash: 'deploy-1',
         kbSnapshotId: 'snapshot-1',
@@ -123,8 +120,23 @@ describe('knowledgeAssetWizardPersistence', () => {
         kbSnapshotId: 'snapshot-1',
       }),
     );
-    expect(refetchDiagram).toHaveBeenCalledTimes(1);
-    expect(result).toHaveLength(2);
+    expect(result.runtimeSelector).toEqual({
+      deployHash: 'deploy-1',
+      kbSnapshotId: 'snapshot-1',
+      knowledgeBaseId: 'kb-1',
+      workspaceId: 'ws-1',
+    });
+    expect(result.persistedAssets).toHaveLength(2);
+    expect(result.persistedAssets[0]).toEqual(
+      expect.objectContaining({
+        modelId: 11,
+        suggestedQuestions: [],
+        recommendation: expect.objectContaining({
+          status: 'NOT_STARTED',
+          questions: [],
+        }),
+      }),
+    );
   });
 
   it('activates connector runtime before persisting multi-table imports', async () => {
@@ -152,11 +164,7 @@ describe('knowledgeAssetWizardPersistence', () => {
     });
     mockCreateModel.mockResolvedValue({ id: 21 });
     mockUpdateModelMetadata.mockResolvedValue({ success: true });
-    const refetchDiagram = jest.fn().mockResolvedValue({ diagram: {} });
-    const refetchRuntimeSelector = jest.fn().mockResolvedValue({});
-    const replaceRuntimeScope = jest.fn().mockResolvedValue(true);
-
-    await persistConnectorAssetDrafts({
+    const result = await persistConnectorAssetDrafts({
       assetDraftPreviews: [
         {
           connectorTableName: 'report_demo.dwd_order_task',
@@ -168,9 +176,6 @@ describe('knowledgeAssetWizardPersistence', () => {
         },
       ],
       connectorId: 'workspace-connector-1',
-      refetchDiagram,
-      refetchRuntimeSelector,
-      replaceRuntimeScope,
       selector: {
         deployHash: 'deploy-1',
         kbSnapshotId: 'snapshot-1',
@@ -183,12 +188,6 @@ describe('knowledgeAssetWizardPersistence', () => {
     expect(mockFetch.mock.calls[0][0]).toContain(
       '/api/v1/connectors/workspace-connector-1/activate',
     );
-    expect(replaceRuntimeScope).toHaveBeenCalledWith({
-      deployHash: 'deploy-2',
-      kbSnapshotId: 'snapshot-2',
-      knowledgeBaseId: 'kb-1',
-      workspaceId: 'ws-1',
-    });
     expect(mockCreateModel).toHaveBeenCalledWith(
       expect.objectContaining({
         deployHash: 'deploy-2',
@@ -205,14 +204,12 @@ describe('knowledgeAssetWizardPersistence', () => {
         kbSnapshotId: 'snapshot-2',
       }),
     );
-    expect(replaceRuntimeScope).toHaveBeenLastCalledWith({
+    expect(result.runtimeSelector).toEqual({
       deployHash: 'deploy-3',
       kbSnapshotId: 'snapshot-3',
       knowledgeBaseId: 'kb-1',
       workspaceId: 'ws-1',
     });
-    expect(refetchDiagram).not.toHaveBeenCalled();
-    expect(refetchRuntimeSelector).toHaveBeenCalledTimes(1);
   });
 
   it('surfaces deploy failures after persisting assets', async () => {
@@ -235,7 +232,6 @@ describe('knowledgeAssetWizardPersistence', () => {
             sourceTableName: 'sales.orders',
           },
         ],
-        refetchDiagram: jest.fn().mockResolvedValue({}),
         selector: {
           deployHash: 'deploy-1',
           kbSnapshotId: 'snapshot-1',

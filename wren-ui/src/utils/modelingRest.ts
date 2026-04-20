@@ -6,6 +6,7 @@ import {
 } from '@/types/schemaChange';
 import type {
   CreateModelInput,
+  DiagramModelRecommendation,
   RelationInput,
   UpdateCalculatedFieldInput,
   UpdateModelInput,
@@ -90,10 +91,48 @@ export const buildModelMetadataUrl = (
   selector = resolveClientRuntimeScopeSelector(),
 ) => buildRuntimeScopeUrl(`/api/v1/models/${modelId}/metadata`, {}, selector);
 
+export const buildModelRecommendationQuestionsUrl = (
+  modelId: number,
+  selector = resolveClientRuntimeScopeSelector(),
+) =>
+  buildRuntimeScopeUrl(
+    `/api/v1/models/${modelId}/recommendation-questions`,
+    {},
+    selector,
+  );
+
 export const buildViewMetadataUrl = (
   viewId: number,
   selector = resolveClientRuntimeScopeSelector(),
 ) => buildRuntimeScopeUrl(`/api/v1/views/${viewId}/metadata`, {}, selector);
+
+export const generateModelRecommendationQuestions = async (
+  selector: ClientRuntimeScopeSelector,
+  modelId: number,
+) => {
+  const response = await fetch(buildModelRecommendationQuestionsUrl(modelId, selector), {
+    method: 'POST',
+  });
+  return parseRestJsonResponse<DiagramModelRecommendation>(
+    response,
+    '生成建议问题失败，请稍后重试。',
+  );
+};
+
+export const fetchModelRecommendationQuestions = async (
+  selector: ClientRuntimeScopeSelector,
+  modelId: number,
+  options: { signal?: AbortSignal } = {},
+) => {
+  const response = await fetch(buildModelRecommendationQuestionsUrl(modelId, selector), {
+    cache: 'no-store',
+    signal: options.signal,
+  });
+  return parseRestJsonResponse<DiagramModelRecommendation>(
+    response,
+    '加载建议问题失败，请稍后重试。',
+  );
+};
 
 export const buildRelationshipsCollectionUrl = (
   selector = resolveClientRuntimeScopeSelector(),

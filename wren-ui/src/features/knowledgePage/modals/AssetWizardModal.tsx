@@ -1,9 +1,25 @@
 import { ArrowRightOutlined, CloseOutlined } from '@ant-design/icons';
-import { Input, List, Space, Steps, Typography, message } from 'antd';
-import { memo } from 'react';
+import {
+  Input,
+  List,
+  Space,
+  Spin,
+  Steps,
+  Tag,
+  Typography,
+  message,
+} from 'antd';
+import { memo, useEffect, useMemo, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { KnowledgeAssetSelectOption } from '@/hooks/useKnowledgeAssetSelectOptions';
 import type { AssetWizardDraft } from '@/hooks/useKnowledgeAssetWizard';
+import { resolveClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
+import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
+import type { DiagramModelRecommendation } from '@/types/modeling';
+import {
+  fetchModelRecommendationQuestions,
+  generateModelRecommendationQuestions,
+} from '@/utils/modelingRest';
 import type { ReferenceDemoKnowledge } from '@/utils/referenceDemoKnowledge';
 import {
   REFERENCE_MODAL_MASK_STYLE,
@@ -33,6 +49,8 @@ import type {
   SelectedAssetTableValue,
   SourceOption,
 } from '@/features/knowledgePage/types';
+import AssetWizardAssetStep from './AssetWizardAssetStep';
+import AssetWizardConnectorDrawer from './AssetWizardConnectorDrawer';
 import AssetWizardSourceStep from './AssetWizardSourceStep';
 
 const { Text } = Typography;
@@ -47,7 +65,7 @@ type AssetWizardModalProps = {
   sourceOptions: SourceOption[];
   selectedSourceType: string;
   setSelectedSourceType: Dispatch<SetStateAction<string>>;
-  openConnectorConsole: () => Promise<unknown> | unknown;
+  openConnectorConsole?: () => Promise<unknown> | unknown;
   isDemoSource: boolean;
   connectorsLoading: boolean;
   selectedDemoKnowledge?: ReferenceDemoKnowledge | null;
@@ -65,12 +83,57 @@ type AssetWizardModalProps = {
   setAssetDraft: Dispatch<SetStateAction<AssetWizardDraft>>;
   assetDraftPreview?: AssetView | null;
   assetDraftPreviews?: AssetView[];
+  persistedAssetDraftPreviews?: AssetView[];
+  recommendationRuntimeSelector?: ClientRuntimeScopeSelector | null;
   canContinueAssetConfiguration: boolean;
   commitAssetDraftToOverview: () => Promise<void> | void;
   savingAssetDraft: boolean;
   displayKnowledgeName: string;
   closeAssetModal: () => void;
+  loadConnectors?: () => Promise<unknown> | unknown;
+  onFinalizePersistedRuntimeScope?: () => Promise<unknown> | unknown;
   onNavigateModeling: () => Promise<unknown> | unknown;
+  onRefreshAssets?: () => Promise<unknown> | unknown;
+};
+
+const createEmptyRecommendationState = (): DiagramModelRecommendation => ({
+  error: null,
+  queryId: null,
+  questions: [],
+  status: 'NOT_STARTED',
+  updatedAt: null,
+});
+
+const getAssetRecommendationState = (
+  asset: AssetView,
+): DiagramModelRecommendation =>
+  asset.recommendation || createEmptyRecommendationState();
+
+const getRecommendationStatusMeta = (
+  status: DiagramModelRecommendation['status'],
+) => {
+  switch (status) {
+    case 'GENERATING':
+      return {
+        color: 'processing',
+        label: '生成中',
+      } as const;
+    case 'FINISHED':
+      return {
+        color: 'success',
+        label: '已完成',
+      } as const;
+    case 'FAILED':
+      return {
+        color: 'error',
+        label: '失败',
+      } as const;
+    default:
+      return {
+        color: 'default',
+        label: '待生成',
+      } as const;
+  }
 };
 
 function AssetWizardModal({
@@ -82,7 +145,7 @@ function AssetWizardModal({
   sourceOptions,
   selectedSourceType,
   setSelectedSourceType,
-  openConnectorConsole,
+  openConnectorConsole: _openConnectorConsole,
   isDemoSource,
   connectorsLoading,
   selectedDemoKnowledge,
@@ -98,30 +161,171 @@ function AssetWizardModal({
   setAssetDraft,
   assetDraftPreview,
   assetDraftPreviews,
+  persistedAssetDraftPreviews,
+  recommendationRuntimeSelector,
   canContinueAssetConfiguration,
   commitAssetDraftToOverview,
   savingAssetDraft,
   displayKnowledgeName,
   closeAssetModal,
+  loadConnectors,
+  onFinalizePersistedRuntimeScope,
   onNavigateModeling,
+  onRefreshAssets,
 }: AssetWizardModalProps) {
-  const hasAvailableConnectorTargets = assetDatabaseOptions.length > 0;
-  const assetDraftPreviewList = assetDraftPreviews?.length
+  const assetConfigPreviewList = assetDraftPreviews?.length
     ? assetDraftPreviews
     : assetDraftPreview
       ? [assetDraftPreview]
       : [];
-  const isBatchSelection = !isDemoSource && assetDraftPreviewList.length > 1;
-  const assetSourceSetupNote = isDemoSource
-    ? '已为系统样例预置字段与问题配置，选择主题表后即可继续进入知识配置。'
-    : hasAvailableConnectorTargets
-      ? '先前往工作区设置中的“数据连接器”完成 provider 选择、连接测试与保存，再回到这里继续引入资产。系统会保留当前知识库上下文，方便你继续建模与关系配置。'
-      : '当前工作区不提供样例资产，请先前往工作区设置中的“数据连接器”接入真实数据库连接，完成 provider 选择、连接测试与保存后，再回到这里继续引入资产。';
-  const assetSourceSummaryNote = isDemoSource
-    ? '样例资产会沿用当前知识库上下文，便于快速预览问答效果。'
-    : hasAvailableConnectorTargets
-      ? '接入完成后，当前知识库将自动继承对应的运行上下文。'
-      : '尚未检测到可用连接器；完成真实数据库连接后，这里会出现可选数据库与数据表。';
+  const assetDraftPreviewList = persistedAssetDraftPreviews?.length
+    ? persistedAssetDraftPreviews
+    : assetConfigPreviewList;
+  const isBatchSelection = !isDemoSource && assetConfigPreviewList.length > 1;
+  const canContinueSourceSelection = isDemoSource
+    ? Boolean(selectedDemoKnowledge)
+    : Boolean(selectedConnectorId);
+  const recommendationTargets = useMemo(
+    () =>
+      assetDraftPreviewList.filter(
+        (asset) => asset.kind === 'model' && Boolean(asset.modelId),
+      ),
+    [assetDraftPreviewList],
+  );
+  const recommendationStateKey = useMemo(
+    () =>
+      recommendationTargets
+        .map(
+          (asset) =>
+            `${asset.id}:${asset.modelId}:${asset.recommendation?.status || 'NOT_STARTED'}:${asset.recommendation?.queryId || ''}:${asset.recommendation?.updatedAt || ''}`,
+        )
+        .join('|'),
+    [recommendationTargets],
+  );
+  const [recommendationStates, setRecommendationStates] = useState<
+    Record<string, DiagramModelRecommendation>
+  >({});
+  const [connectorDrawerOpen, setConnectorDrawerOpen] = useState(false);
+  const connectorWorkspaceId =
+    activeKnowledgeBase?.workspaceId ||
+    recommendationRuntimeSelector?.workspaceId ||
+    null;
+  const handleCloseAssetModal = () => {
+    closeAssetModal();
+    void onFinalizePersistedRuntimeScope?.();
+  };
+
+  useEffect(() => {
+    if (assetWizardStep !== 3) {
+      return;
+    }
+
+    setRecommendationStates(
+      Object.fromEntries(
+        assetDraftPreviewList.map((asset) => [
+          asset.id,
+          getAssetRecommendationState(asset),
+        ]),
+      ),
+    );
+  }, [assetDraftPreviewList, assetWizardStep]);
+
+  useEffect(() => {
+    if (
+      !visible ||
+      assetWizardStep !== 3 ||
+      isDemoSource ||
+      recommendationTargets.length === 0
+    ) {
+      return;
+    }
+
+    const selector =
+      recommendationRuntimeSelector || resolveClientRuntimeScopeSelector();
+    let cancelled = false;
+
+    const syncRecommendation = async (asset: AssetView) => {
+      if (!asset.modelId) {
+        return;
+      }
+
+      let recommendation = getAssetRecommendationState(asset);
+
+      try {
+        if (recommendation.status === 'NOT_STARTED') {
+          recommendation = await generateModelRecommendationQuestions(
+            selector,
+            asset.modelId,
+          );
+          if (cancelled) {
+            return;
+          }
+          setRecommendationStates((previous) => ({
+            ...previous,
+            [asset.id]: recommendation,
+          }));
+          await onRefreshAssets?.();
+        }
+
+        while (!cancelled && recommendation.status === 'GENERATING') {
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          if (cancelled) {
+            return;
+          }
+
+          recommendation = await fetchModelRecommendationQuestions(
+            selector,
+            asset.modelId,
+          );
+          if (cancelled) {
+            return;
+          }
+
+          setRecommendationStates((previous) => ({
+            ...previous,
+            [asset.id]: recommendation,
+          }));
+
+          if (recommendation.status !== 'GENERATING') {
+            await onRefreshAssets?.();
+          }
+        }
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        setRecommendationStates((previous) => ({
+          ...previous,
+          [asset.id]: {
+            ...recommendation,
+            error: {
+              message:
+                error instanceof Error
+                  ? error.message
+                  : '生成建议问题失败，请稍后重试。',
+            },
+            status: 'FAILED',
+            updatedAt: new Date().toISOString(),
+          },
+        }));
+      }
+    };
+
+    void Promise.allSettled(recommendationTargets.map(syncRecommendation));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    assetWizardStep,
+    isDemoSource,
+    onRefreshAssets,
+    recommendationRuntimeSelector,
+    recommendationStateKey,
+    recommendationTargets,
+    visible,
+  ]);
 
   return (
     <ReferenceModal
@@ -129,7 +333,7 @@ function AssetWizardModal({
       title={null}
       footer={null}
       closable={false}
-      onCancel={closeAssetModal}
+      onCancel={handleCloseAssetModal}
       width={1116}
       maskStyle={REFERENCE_MODAL_MASK_STYLE}
       destroyOnClose
@@ -137,7 +341,7 @@ function AssetWizardModal({
       <ModalPanel>
         <ModalHeader>
           <ModalTitle>引入资产</ModalTitle>
-          <ModalCloseButton type="button" onClick={closeAssetModal}>
+          <ModalCloseButton type="button" onClick={handleCloseAssetModal}>
             <CloseOutlined />
           </ModalCloseButton>
         </ModalHeader>
@@ -150,37 +354,47 @@ function AssetWizardModal({
 
         {assetWizardStep === 0 && (
           <AssetWizardSourceStep
-            visible={visible}
             activeKnowledgeBase={activeKnowledgeBase ?? null}
             assetDatabaseOptions={assetDatabaseOptions}
-            assetSourceSetupNote={assetSourceSetupNote}
-            assetSourceSummaryNote={assetSourceSummaryNote}
-            assetTableOptions={assetTableOptions}
-            canContinueAssetWizard={canContinueAssetWizard}
-            closeAssetModal={closeAssetModal}
+            canContinueSourceSelection={canContinueSourceSelection}
+            closeAssetModal={handleCloseAssetModal}
             connectorsLoading={connectorsLoading}
-            hasAvailableConnectorTargets={hasAvailableConnectorTargets}
             isDemoSource={isDemoSource}
             knowledgeBases={knowledgeBases}
-            moveAssetWizardToConfig={moveAssetWizardToConfig}
-            openConnectorConsole={openConnectorConsole}
+            onContinue={() => onChangeAssetWizardStep(1)}
+            onOpenConnectorDrawer={() => setConnectorDrawerOpen(true)}
             selectedConnectorId={selectedConnectorId}
             selectedDemoKnowledge={selectedDemoKnowledge ?? null}
-            selectedDemoTable={selectedDemoTable}
             selectedSourceType={selectedSourceType}
             setSelectedConnectorId={setSelectedConnectorId}
-            setSelectedDemoTable={setSelectedDemoTable}
             setSelectedSourceType={setSelectedSourceType}
             sourceOptions={sourceOptions}
           />
         )}
 
         {assetWizardStep === 1 && (
+          <AssetWizardAssetStep
+            assetDatabaseOptions={assetDatabaseOptions}
+            assetTableOptions={assetTableOptions}
+            canContinueAssetWizard={canContinueAssetWizard}
+            closeAssetModal={handleCloseAssetModal}
+            isDemoSource={isDemoSource}
+            moveAssetWizardToConfig={moveAssetWizardToConfig}
+            onBack={() => onChangeAssetWizardStep(0)}
+            selectedConnectorId={selectedConnectorId}
+            selectedDemoKnowledge={selectedDemoKnowledge ?? null}
+            selectedDemoTable={selectedDemoTable}
+            setSelectedDemoTable={setSelectedDemoTable}
+            visible={visible}
+          />
+        )}
+
+        {assetWizardStep === 2 && (
           <WizardBody>
             <WizardNote>
               <strong style={{ color: '#30354a' }}>知识配置</strong>
               <div style={{ marginTop: 6 }}>
-                为当前引入资产补充名称、业务描述与优先级，保存后会同步回知识库概览，再继续进入建模。
+                为当前引入资产补充名称、业务描述与优先级，保存后会同步回知识库概览，并开始生成可直接使用的建议问题。
               </div>
             </WizardNote>
 
@@ -270,11 +484,11 @@ function AssetWizardModal({
             />
 
             <WizardFooter>
-              <LightButton onClick={() => onChangeAssetWizardStep(0)}>
+              <LightButton onClick={() => onChangeAssetWizardStep(1)}>
                 上一步
               </LightButton>
               <Space size={12}>
-                <LightButton onClick={closeAssetModal}>取消</LightButton>
+                <LightButton onClick={handleCloseAssetModal}>取消</LightButton>
                 <PurpleButton
                   onClick={() => void commitAssetDraftToOverview()}
                   disabled={!canContinueAssetConfiguration}
@@ -287,12 +501,14 @@ function AssetWizardModal({
           </WizardBody>
         )}
 
-        {assetWizardStep === 2 && (
+        {assetWizardStep === 3 && (
           <WizardBody>
             <WizardNote>
-              <strong style={{ color: '#30354a' }}>保存完成</strong>
+              <strong style={{ color: '#30354a' }}>建议问题</strong>
               <div style={{ marginTop: 6 }}>
-                当前资产已经写入知识库概览，现在可以直接前往建模页补充字段、关系和语义配置。
+                {isDemoSource
+                  ? '样例资产已经写入当前知识库，下面展示的是可直接使用的预置问法。'
+                  : '资产已经保存，系统正在按模型语义生成建议问题。你可以留在这里查看结果，也可以先去建模，生成完成后会同步回资产详情。'}
               </div>
             </WizardNote>
 
@@ -301,28 +517,91 @@ function AssetWizardModal({
               style={{ borderRadius: 16, overflow: 'hidden' }}
               dataSource={assetDraftPreviewList}
               locale={{ emptyText: '暂无待保存资产' }}
-              renderItem={(asset) => (
-                <List.Item style={{ padding: '16px 18px' }}>
-                  <Space direction="vertical" size={6}>
-                    <Text strong>{asset.name}</Text>
-                    <Text type="secondary">
-                      {asset.kind === 'model' ? '数据表' : '视图'} ·{' '}
-                      {asset.fieldCount} 个字段 · {displayKnowledgeName}
-                    </Text>
-                    <Text type="secondary">{asset.description}</Text>
-                  </Space>
-                </List.Item>
-              )}
+              renderItem={(asset) => {
+                const recommendation =
+                  recommendationStates[asset.id] ||
+                  getAssetRecommendationState(asset);
+                const statusMeta = getRecommendationStatusMeta(
+                  asset.kind === 'view' && isDemoSource
+                    ? 'FINISHED'
+                    : recommendation.status,
+                );
+                const suggestedQuestions =
+                  recommendation.questions.length > 0
+                    ? recommendation.questions
+                    : (asset.suggestedQuestions || []).map((question) => ({
+                        question,
+                      }));
+
+                return (
+                  <List.Item style={{ padding: '16px 18px' }}>
+                    <Space
+                      direction="vertical"
+                      size={8}
+                      style={{ width: '100%' }}
+                    >
+                      <Space align="center" size={8} wrap>
+                        <Text strong>{asset.name}</Text>
+                        <Tag color={statusMeta.color}>{statusMeta.label}</Tag>
+                      </Space>
+                      <Text type="secondary">
+                        {asset.kind === 'model' ? '数据表' : '视图'} ·{' '}
+                        {asset.fieldCount} 个字段 · {displayKnowledgeName}
+                      </Text>
+                      {asset.description ? (
+                        <Text type="secondary">{asset.description}</Text>
+                      ) : null}
+                      {statusMeta.label === '生成中' ? (
+                        <Space size={8} align="center">
+                          <Spin size="small" />
+                          <Text type="secondary">
+                            正在分析字段语义与可回答问题，完成后会自动展示。
+                          </Text>
+                        </Space>
+                      ) : null}
+                      {statusMeta.label === '失败' ? (
+                        <Text type="danger">
+                          {recommendation.error?.message ||
+                            '建议问题生成失败，请稍后重试。'}
+                        </Text>
+                      ) : null}
+                      {suggestedQuestions.length > 0 ? (
+                        <ul
+                          style={{
+                            margin: 0,
+                            paddingLeft: 18,
+                            color: '#30354a',
+                          }}
+                        >
+                          {suggestedQuestions.slice(0, 3).map((item) => (
+                            <li key={`${asset.id}-${item.question}`}>
+                              {item.question}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                      {statusMeta.label === '已完成' &&
+                      suggestedQuestions.length === 0 ? (
+                        <Text type="secondary">
+                          当前模型暂未生成可直接使用的建议问题，后续可继续在问答过程中沉淀。
+                        </Text>
+                      ) : null}
+                    </Space>
+                  </List.Item>
+                );
+              }}
             />
 
             <WizardFooter>
-              <LightButton onClick={() => onChangeAssetWizardStep(1)}>
-                上一步
-              </LightButton>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {!isDemoSource && recommendationTargets.length > 0
+                  ? '建议问题会在生成完成后自动写回资产详情页。'
+                  : '可以直接带着这些预置问法进入后续建模或知识配置。'}
+              </Text>
               <Space size={12}>
                 <LightButton
                   onClick={() => {
-                    closeAssetModal();
+                    handleCloseAssetModal();
                     message.success(
                       '已返回知识库概览，可继续补充规则与 SQL 模板。',
                     );
@@ -344,6 +623,18 @@ function AssetWizardModal({
           </WizardBody>
         )}
       </ModalPanel>
+      <AssetWizardConnectorDrawer
+        open={connectorDrawerOpen}
+        workspaceId={connectorWorkspaceId}
+        onClose={() => setConnectorDrawerOpen(false)}
+        onRefreshConnectors={async () => {
+          await loadConnectors?.();
+        }}
+        onConnectorCreated={async (connectorId) => {
+          setSelectedSourceType('database');
+          setSelectedConnectorId(connectorId);
+        }}
+      />
     </ReferenceModal>
   );
 }

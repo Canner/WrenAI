@@ -2,6 +2,8 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import useKnowledgeAssetWorkbench from './useKnowledgeAssetWorkbench';
 
+const mockRouterReplace = jest.fn().mockResolvedValue(true);
+const mockRouterPush = jest.fn().mockResolvedValue(true);
 const mockUseKnowledgeAssetSelectOptions = jest.fn();
 const mockUseKnowledgeConnectorTables = jest.fn();
 const mockUseKnowledgeDerivedCollections = jest.fn();
@@ -52,13 +54,16 @@ jest.mock('next/router', () => ({
       workspaceId: 'ws-1',
       knowledgeBaseId: 'kb-1',
     },
-    replace: jest.fn().mockResolvedValue(true),
+    push: mockRouterPush,
+    replace: mockRouterReplace,
   }),
 }));
 
 describe('useKnowledgeAssetWorkbench', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockRouterPush.mockResolvedValue(true);
+    mockRouterReplace.mockResolvedValue(true);
     mockUseKnowledgeAssetSelectOptions.mockReturnValue({
       assetDatabaseOptions: [{ label: 'Warehouse', value: 'c1' }],
       assetTableOptions: [{ label: 'orders', value: 'orders' }],
@@ -171,5 +176,24 @@ describe('useKnowledgeAssetWorkbench', () => {
     expect(mockUseKnowledgeAssetWizard).toHaveBeenCalled();
     expect(mockUseKnowledgeAssetInteractions).toHaveBeenCalled();
     expect(mockUseKnowledgeAssetDetail).toHaveBeenCalled();
+  });
+
+  it('replaces runtime scope with shallow routing during connector imports', async () => {
+    renderHookHarness();
+
+    const wizardArgs = mockUseKnowledgeAssetWizard.mock.calls[0]?.[0];
+    expect(wizardArgs?.replaceRuntimeScope).toBeInstanceOf(Function);
+
+    await wizardArgs.replaceRuntimeScope({
+      workspaceId: 'ws-2',
+      knowledgeBaseId: 'kb-2',
+      kbSnapshotId: 'snapshot-2',
+      deployHash: 'deploy-2',
+    });
+
+    expect(mockRouterReplace).toHaveBeenCalledWith('/knowledge', undefined, {
+      scroll: false,
+      shallow: true,
+    });
   });
 });

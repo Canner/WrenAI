@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import type { DiagramResponse } from '@/types/modeling';
+import type { DiagramModelRecommendation } from '@/types/modeling';
 import {
   getReferenceDisplayAssetDescription,
   getReferenceDisplayAssetName,
@@ -38,8 +39,10 @@ type AssetView = {
   name: string;
   description?: string | null;
   kind: 'model' | 'view';
+  modelId?: number | null;
   fieldCount: number;
   owner?: string | null;
+  recommendation?: DiagramModelRecommendation | null;
   sourceTableName?: string | null;
   sourceSql?: string | null;
   primaryKey?: string | null;
@@ -81,29 +84,21 @@ export const resolveKnowledgePreviewFieldCount = ({
   return demoFieldCount || 0;
 };
 
-const buildAssetSuggestedQuestions = (
-  assetName: string,
-  fields: AssetField[],
+const resolveRecommendationSuggestedQuestions = (
+  recommendation?: DiagramModelRecommendation | null,
   fallback?: string[],
 ) => {
-  if (fallback?.length) {
-    return fallback.slice(0, 3);
+  const recommendationQuestions =
+    recommendation?.questions
+      ?.map((item) => item.question)
+      .filter(Boolean)
+      .slice(0, 3) || [];
+
+  if (recommendationQuestions.length > 0) {
+    return recommendationQuestions;
   }
 
-  const topFields = fields
-    .slice(0, 3)
-    .map((field) => field.aiName || field.fieldName)
-    .filter(Boolean);
-
-  return [
-    `请先概览 ${assetName} 的核心业务字段与可回答的问题`,
-    topFields[0]
-      ? `围绕 ${topFields[0]} 分析 ${assetName} 的总体趋势`
-      : `基于 ${assetName} 做一份指标概览`,
-    topFields[1]
-      ? `结合 ${topFields[1]} 与 ${assetName} 给出异常或分层洞察`
-      : `请给 ${assetName} 设计三条适合业务分析的问法`,
-  ];
+  return fallback?.slice(0, 3) || [];
 };
 
 export default function useKnowledgeAssets({
@@ -216,6 +211,7 @@ export default function useKnowledgeAssets({
 
       const assetName =
         model.displayName || model.referenceName || model.sourceTableName;
+      const recommendation = model.recommendation || null;
       return [
         {
           id: `model-${model.id}`,
@@ -229,8 +225,10 @@ export default function useKnowledgeAssets({
             model.description || model.sourceTableName,
           ),
           kind: 'model' as const,
+          modelId: model.modelId,
           fieldCount: mappedFields.length,
           owner: knowledgeOwner,
+          recommendation,
           sourceTableName: model.sourceTableName || null,
           sourceSql: model.refSql || null,
           primaryKey:
@@ -239,9 +237,8 @@ export default function useKnowledgeAssets({
           refreshTime: model.refreshTime || null,
           relationCount: relationFields.length,
           nestedFieldCount,
-          suggestedQuestions: buildAssetSuggestedQuestions(
-            assetName,
-            mappedFields,
+          suggestedQuestions: resolveRecommendationSuggestedQuestions(
+            recommendation,
             fallbackSuggestedQuestions,
           ),
           relationFields,
@@ -289,8 +286,10 @@ export default function useKnowledgeAssets({
             view.description || view.referenceName,
           ),
           kind: 'view' as const,
+          modelId: null,
           fieldCount: mappedFields.length,
           owner: knowledgeOwner,
+          recommendation: null,
           sourceTableName: null,
           sourceSql: view.statement || null,
           primaryKey: null,
@@ -298,11 +297,7 @@ export default function useKnowledgeAssets({
           refreshTime: null,
           relationCount: 0,
           nestedFieldCount: 0,
-          suggestedQuestions: buildAssetSuggestedQuestions(
-            assetName,
-            mappedFields,
-            fallbackSuggestedQuestions,
-          ),
+          suggestedQuestions: fallbackSuggestedQuestions?.slice(0, 3) || [],
           relationFields: [],
           fields: mappedFields,
         },

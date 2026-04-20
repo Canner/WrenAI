@@ -69,8 +69,8 @@ export const shouldRefetchConsoleHistory = ({
 };
 
 const PageRoot = styled.div<{ $flush?: boolean }>`
-  min-height: ${(props) => (props.$flush ? '100%' : 'calc(100vh - 48px)')};
-  height: ${(props) => (props.$flush ? '100%' : 'auto')};
+  min-height: ${(props) => (props.$flush ? '100dvh' : 'calc(100vh - 48px)')};
+  height: ${(props) => (props.$flush ? '100dvh' : 'auto')};
   padding: 0;
   background: transparent;
 `;
@@ -79,8 +79,8 @@ const ShellStack = styled.div<{ $flush?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 18px;
-  min-height: ${(props) => (props.$flush ? '100%' : '0')};
-  height: ${(props) => (props.$flush ? '100%' : 'auto')};
+  min-height: ${(props) => (props.$flush ? '100dvh' : '0')};
+  height: ${(props) => (props.$flush ? '100dvh' : 'auto')};
 `;
 
 const SegmentSurface = styled.div`

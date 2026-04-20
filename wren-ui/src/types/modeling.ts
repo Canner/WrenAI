@@ -62,6 +62,31 @@ export type DiagramModelRelationField = {
   type: RelationType;
 };
 
+export type RecommendationQuestionError = {
+  code?: string | null;
+  message: string;
+};
+
+export type RecommendationQuestionItem = {
+  category?: string | null;
+  question: string;
+  sql?: string | null;
+};
+
+export type DiagramModelRecommendationStatus =
+  | 'NOT_STARTED'
+  | 'GENERATING'
+  | 'FINISHED'
+  | 'FAILED';
+
+export type DiagramModelRecommendation = {
+  error?: RecommendationQuestionError | null;
+  queryId?: string | null;
+  questions: RecommendationQuestionItem[];
+  status: DiagramModelRecommendationStatus;
+  updatedAt?: string | null;
+};
+
 export type DiagramModel = {
   cached: boolean;
   calculatedFields: Array<DiagramModelField | null>;
@@ -71,6 +96,7 @@ export type DiagramModel = {
   id: string;
   modelId: number;
   nodeType: NodeType;
+  recommendation?: DiagramModelRecommendation | null;
   refSql?: string | null;
   referenceName: string;
   refreshTime?: string | null;

@@ -1,4 +1,9 @@
 import { RelationType } from '@server/types';
+import {
+  RecommendationQuestion,
+  RecommendationQuestionStatus,
+  WrenAIError,
+} from '@server/models/adaptor';
 
 export enum NodeType {
   MODEL = 'MODEL',
@@ -47,6 +52,15 @@ export interface DiagramModel {
   fields: DiagramModelField[];
   calculatedFields: DiagramModelField[];
   relationFields: DiagramModelRelationField[];
+  recommendation?: DiagramModelRecommendation | null;
+}
+
+export interface DiagramModelRecommendation {
+  error: WrenAIError | null;
+  queryId: string | null;
+  questions: RecommendationQuestion[];
+  status: RecommendationQuestionStatus | 'NOT_STARTED';
+  updatedAt: string | null;
 }
 
 export interface DiagramModelNestedField {

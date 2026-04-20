@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { DiagramModelRecommendation } from '@/types/modeling';
 
 export type KnowledgeBaseRecord = {
   id: string;
@@ -66,8 +67,10 @@ export type AssetView = {
   name: string;
   description?: string | null;
   kind: 'model' | 'view';
+  modelId?: number | null;
   fieldCount: number;
   owner?: string | null;
+  recommendation?: DiagramModelRecommendation | null;
   sourceTableName?: string | null;
   sourceSql?: string | null;
   primaryKey?: string | null;

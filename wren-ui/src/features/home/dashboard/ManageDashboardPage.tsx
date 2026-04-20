@@ -5,7 +5,7 @@ import { Modal, message } from 'antd';
 import { LoadingWrapper } from '@/components/PageLoading';
 import type { DashboardGridHandle } from '@/components/pages/home/dashboardGrid';
 import type { Schedule } from '@/components/pages/home/dashboardGrid/CacheSettingsDrawer';
-import ConsoleShellLayout from '@/components/reference/ConsoleShellLayout';
+import DirectShellPageFrame from '@/components/reference/DirectShellPageFrame';
 import useDrawerAction from '@/hooks/useDrawerAction';
 import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
@@ -285,23 +285,22 @@ export default function Dashboard() {
 
   if (runtimeScopePage.guarding) {
     return (
-      <ConsoleShellLayout
+      <DirectShellPageFrame
         activeNav="dashboard"
-        title="数据看板"
-        hideHeader
-        contentBorderless
-        loading
-      />
+        flushBottomPadding
+        stretchContent
+      >
+        <LoadingWrapper loading>
+          <div />
+        </LoadingWrapper>
+      </DirectShellPageFrame>
     );
   }
 
   return (
-    <ConsoleShellLayout
+    <DirectShellPageFrame
       activeNav="dashboard"
-      title="数据看板"
-      hideHeader
-      contentBorderless
-      flushMainPadding
+      flushBottomPadding
       stretchContent
     >
       <LoadingWrapper loading={loading}>
@@ -415,6 +414,6 @@ export default function Dashboard() {
           }
         }}
       />
-    </ConsoleShellLayout>
+    </DirectShellPageFrame>
   );
 }

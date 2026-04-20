@@ -102,16 +102,22 @@ const buildTableRowStyle = ({
   gap: 12,
   padding: '10px 12px',
   borderRadius: 12,
-  border: checked
-    ? '1px solid rgba(91, 75, 219, 0.24)'
-    : '1px solid rgba(15, 23, 42, 0.08)',
-  background: disabled
-    ? '#f8fafc'
-    : checked
-      ? 'rgba(123, 85, 232, 0.06)'
-      : '#fff',
+  border:
+    checked && disabled
+      ? '1px solid rgba(91, 75, 219, 0.16)'
+      : checked
+        ? '1px solid rgba(91, 75, 219, 0.24)'
+        : '1px solid rgba(15, 23, 42, 0.08)',
+  background:
+    checked && disabled
+      ? 'rgba(123, 85, 232, 0.05)'
+      : disabled
+        ? '#f8fafc'
+        : checked
+          ? 'rgba(123, 85, 232, 0.06)'
+          : '#fff',
   cursor: disabled ? 'not-allowed' : 'pointer',
-  opacity: disabled ? 0.72 : 1,
+  opacity: disabled ? 0.84 : 1,
   textAlign: 'left',
 });
 
@@ -123,6 +129,8 @@ type AssetWizardTableSelectorProps = {
   groupedAssetTableItems: AssetTableSelectorGroup[];
   hideImportedTables: boolean;
   importedCount: number;
+  lockedSelectedTableItems: AssetTableSelectorItem[];
+  lockedSelectedValues: string[];
   onClearSelected: () => void;
   onHideImportedTablesChange: (checked: boolean) => void;
   onPrefixSuggestionSelect: (keyword: string) => void;
@@ -155,6 +163,8 @@ export default function AssetWizardTableSelector({
   groupedAssetTableItems,
   hideImportedTables,
   importedCount,
+  lockedSelectedTableItems,
+  lockedSelectedValues,
   onClearSelected,
   onHideImportedTablesChange,
   onPrefixSuggestionSelect,
@@ -172,7 +182,11 @@ export default function AssetWizardTableSelector({
   tablePrefixKeyword,
   toggleSelectedTable,
 }: AssetWizardTableSelectorProps) {
+  const lockedValueSet = new Set(lockedSelectedValues);
   const selectedValueSet = new Set(selectedTableValues);
+  const pendingSelectedCount = selectedTableItems.length;
+  const lockedSelectedCount = lockedSelectedTableItems.length;
+  const displaySelectedCount = pendingSelectedCount + lockedSelectedCount;
 
   return (
     <>
@@ -229,19 +243,19 @@ export default function AssetWizardTableSelector({
           <Text type="secondary" style={{ fontSize: 12 }}>
             schema 过滤
           </Text>
-            {scopeOptions.map((scope) => (
-              <button
-                key={scope.value}
-                type="button"
-                disabled={!selectedConnectorId}
-                onClick={() => onScopeLabelChange(scope.value)}
-                style={FILTER_CHIP_STYLE(activeScopeLabel === scope.value)}
-                data-testid="asset-table-scope-chip"
-                data-scope-value={scope.value}
-              >
-                {renderScopeChipLabel(scope)}
-              </button>
-            ))}
+          {scopeOptions.map((scope) => (
+            <button
+              key={scope.value}
+              type="button"
+              disabled={!selectedConnectorId}
+              onClick={() => onScopeLabelChange(scope.value)}
+              style={FILTER_CHIP_STYLE(activeScopeLabel === scope.value)}
+              data-testid="asset-table-scope-chip"
+              data-scope-value={scope.value}
+            >
+              {renderScopeChipLabel(scope)}
+            </button>
+          ))}
         </div>
         {prefixOptions.length > 0 && (
           <div style={FILTER_GROUP_STYLE}>
@@ -274,8 +288,8 @@ export default function AssetWizardTableSelector({
               </Text>
               <div>
                 <Text type="secondary" style={{ fontSize: 12 }}>
-                  当前筛选 {filteredAssetTableItems.length} 张，匹配 {groupedAssetTableItems.length}{' '}
-                  个 schema 分组
+                  当前筛选 {filteredAssetTableItems.length} 张，匹配{' '}
+                  {groupedAssetTableItems.length} 个 schema 分组
                 </Text>
               </div>
             </div>
@@ -297,8 +311,8 @@ export default function AssetWizardTableSelector({
                 const selectableGroupValues = group.items
                   .filter((item) => !item.disabled)
                   .map((item) => item.value);
-                const selectedGroupCount = selectableGroupValues.filter((value) =>
-                  selectedValueSet.has(value),
+                const selectedGroupCount = selectableGroupValues.filter(
+                  (value) => selectedValueSet.has(value),
                 ).length;
                 const allGroupSelectableSelected =
                   selectableGroupValues.length > 0 &&
@@ -316,9 +330,7 @@ export default function AssetWizardTableSelector({
                         <Text strong style={{ fontSize: 13 }}>
                           {group.label}
                         </Text>
-                        <Tag color="default">
-                          {group.itemCount} 张表
-                        </Tag>
+                        <Tag color="default">{group.itemCount} 张表</Tag>
                         {group.selectableCount > 0 ? (
                           <Tag color="purple">
                             可引入 {group.selectableCount} 张
@@ -339,7 +351,9 @@ export default function AssetWizardTableSelector({
                       </Button>
                     </div>
                     {group.items.map((item) => {
-                      const checked = selectedValueSet.has(item.value);
+                      const checked =
+                        selectedValueSet.has(item.value) ||
+                        lockedValueSet.has(item.value);
                       return (
                         <button
                           key={item.value}
@@ -364,7 +378,10 @@ export default function AssetWizardTableSelector({
                               minWidth: 0,
                             }}
                           >
-                            <Checkbox checked={checked} disabled={item.disabled} />
+                            <Checkbox
+                              checked={checked}
+                              disabled={item.disabled}
+                            />
                             <div
                               style={{
                                 display: 'flex',
@@ -407,67 +424,125 @@ export default function AssetWizardTableSelector({
               </Text>
               <div>
                 <Text type="secondary" style={{ fontSize: 12 }}>
-                  共 {selectedTableItems.length} 张，将一起创建资产
+                  {pendingSelectedCount > 0
+                    ? `已纳入 ${lockedSelectedCount} 张，待引入 ${pendingSelectedCount} 张`
+                    : lockedSelectedCount > 0
+                      ? `已纳入 ${lockedSelectedCount} 张，继续前请再选择待引入数据表`
+                      : '请选择一张或多张数据表'}
                 </Text>
               </div>
             </div>
-            {selectedTableItems.length > 0 && <Tag color="purple">批量导入</Tag>}
+            {pendingSelectedCount > 0 && <Tag color="purple">批量导入</Tag>}
           </div>
           <div style={SELECTOR_LIST_STYLE}>
-            {selectedTableItems.length === 0 ? (
+            {displaySelectedCount === 0 ? (
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description="请选择一张或多张数据表"
               />
             ) : (
-              selectedTableItems.map((item) => (
-                <div
-                  key={item.value}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    justifyContent: 'space-between',
-                    gap: 12,
-                    padding: '10px 12px',
-                    borderRadius: 12,
-                    border: '1px solid rgba(91, 75, 219, 0.16)',
-                    background: 'rgba(123, 85, 232, 0.04)',
-                  }}
-                  data-testid="asset-table-selected-item"
-                  data-table-value={item.value}
-                >
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <Text
-                      strong
-                      style={{
-                        display: 'block',
-                        fontSize: 13,
-                        lineHeight: 1.4,
-                        color: '#1f2937',
-                      }}
-                    >
-                      {item.baseName}
-                    </Text>
-                    <span style={VALUE_TEXT_STYLE}>{item.value}</span>
+              <>
+                {lockedSelectedCount > 0 && (
+                  <div style={GROUP_BLOCK_STYLE}>
                     <Text type="secondary" style={{ fontSize: 12 }}>
-                      {item.scopeLabel}
+                      已纳入知识库
                     </Text>
+                    {lockedSelectedTableItems.map((item) => (
+                      <div
+                        key={item.value}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          justifyContent: 'space-between',
+                          gap: 12,
+                          padding: '10px 12px',
+                          borderRadius: 12,
+                          border: '1px solid rgba(15, 23, 42, 0.08)',
+                          background: '#f8fafc',
+                        }}
+                        data-testid="asset-table-locked-item"
+                        data-table-value={item.value}
+                      >
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <Text
+                            strong
+                            style={{
+                              display: 'block',
+                              fontSize: 13,
+                              lineHeight: 1.4,
+                              color: '#1f2937',
+                            }}
+                          >
+                            {item.baseName}
+                          </Text>
+                          <span style={VALUE_TEXT_STYLE}>{item.value}</span>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            {item.scopeLabel}
+                          </Text>
+                        </div>
+                        <Tag color="default">已导入</Tag>
+                      </div>
+                    ))}
                   </div>
-                  <Button
-                    size="small"
-                    type="text"
-                    icon={<CloseOutlined />}
-                    onClick={() => toggleSelectedTable(item.value)}
-                  />
-                </div>
-              ))
+                )}
+                {pendingSelectedCount > 0 && (
+                  <div style={GROUP_BLOCK_STYLE}>
+                    {lockedSelectedCount > 0 && (
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        待引入
+                      </Text>
+                    )}
+                    {selectedTableItems.map((item) => (
+                      <div
+                        key={item.value}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          justifyContent: 'space-between',
+                          gap: 12,
+                          padding: '10px 12px',
+                          borderRadius: 12,
+                          border: '1px solid rgba(91, 75, 219, 0.16)',
+                          background: 'rgba(123, 85, 232, 0.04)',
+                        }}
+                        data-testid="asset-table-selected-item"
+                        data-table-value={item.value}
+                      >
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <Text
+                            strong
+                            style={{
+                              display: 'block',
+                              fontSize: 13,
+                              lineHeight: 1.4,
+                              color: '#1f2937',
+                            }}
+                          >
+                            {item.baseName}
+                          </Text>
+                          <span style={VALUE_TEXT_STYLE}>{item.value}</span>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            {item.scopeLabel}
+                          </Text>
+                        </div>
+                        <Button
+                          size="small"
+                          type="text"
+                          icon={<CloseOutlined />}
+                          onClick={() => toggleSelectedTable(item.value)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
       </div>
       <Text type="secondary" style={{ fontSize: 12 }}>
-        共 {assetTableCount} 张表 · 已导入 {importedCount} 张 · 可引入 {availableCount}{' '}
-        张 · 当前已选 {selectedCount} 张
+        共 {assetTableCount} 张表 · 已导入 {importedCount} 张 · 可引入{' '}
+        {availableCount} 张 · 当前已选 {selectedCount} 张
       </Text>
     </>
   );

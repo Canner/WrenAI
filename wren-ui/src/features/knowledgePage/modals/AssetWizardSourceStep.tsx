@@ -4,11 +4,8 @@ import {
   FolderOpenOutlined,
   PlusOutlined,
 } from '@ant-design/icons';
-import { Button, Select, Space, Typography } from 'antd';
-import { useEffect, useMemo, useState } from 'react';
+import { Button, Empty, Select, Space, Spin, Typography } from 'antd';
 import type { Dispatch, SetStateAction } from 'react';
-import type { KnowledgeAssetSelectOption } from '@/hooks/useKnowledgeAssetSelectOptions';
-import { normalizeSelectedAssetTableValues } from '@/hooks/useKnowledgeAssetSource';
 import {
   FieldCluster,
   LightButton,
@@ -17,7 +14,6 @@ import {
   SectionTitle,
   SegmentedButton,
   SegmentedRow,
-  SelectGrid,
   SourceCard,
   SourceCardMeta,
   SourceCardTitle,
@@ -28,212 +24,53 @@ import {
 } from '@/features/knowledgePage/index.styles';
 import type {
   KnowledgeBaseRecord,
-  SelectedAssetTableValue,
   SourceOption,
 } from '@/features/knowledgePage/types';
+import type { KnowledgeAssetSelectOption } from '@/hooks/useKnowledgeAssetSelectOptions';
 import type { ReferenceDemoKnowledge } from '@/utils/referenceDemoKnowledge';
-import AssetWizardTableSelector from './AssetWizardTableSelector';
-import {
-  buildAssetTableSelectorGroups,
-  buildAssetTableSelectorItems,
-  resolveAssetTableQuickFilters,
-  resolveVisibleAssetTableSelectorItems,
-} from './assetWizardSourceStepSupport';
 
 const { Text } = Typography;
 
 type AssetWizardSourceStepProps = {
   activeKnowledgeBase?: KnowledgeBaseRecord | null;
   assetDatabaseOptions: KnowledgeAssetSelectOption[];
-  assetSourceSetupNote: string;
-  assetSourceSummaryNote: string;
-  assetTableOptions: KnowledgeAssetSelectOption[];
-  canContinueAssetWizard: boolean;
+  canContinueSourceSelection: boolean;
   closeAssetModal: () => void;
   connectorsLoading: boolean;
-  hasAvailableConnectorTargets: boolean;
   isDemoSource: boolean;
   knowledgeBases: KnowledgeBaseRecord[];
-  moveAssetWizardToConfig: () => void;
-  openConnectorConsole: () => Promise<unknown> | unknown;
+  onContinue: () => void;
+  onOpenConnectorDrawer: () => void;
   selectedConnectorId?: string;
   selectedDemoKnowledge?: ReferenceDemoKnowledge | null;
-  selectedDemoTable?: SelectedAssetTableValue;
   selectedSourceType: string;
   setSelectedConnectorId: Dispatch<SetStateAction<string | undefined>>;
-  setSelectedDemoTable: Dispatch<
-    SetStateAction<SelectedAssetTableValue | undefined>
-  >;
   setSelectedSourceType: Dispatch<SetStateAction<string>>;
   sourceOptions: SourceOption[];
-  visible: boolean;
 };
 
 export default function AssetWizardSourceStep({
   activeKnowledgeBase,
   assetDatabaseOptions,
-  assetSourceSetupNote,
-  assetSourceSummaryNote,
-  assetTableOptions,
-  canContinueAssetWizard,
+  canContinueSourceSelection,
   closeAssetModal,
   connectorsLoading,
-  hasAvailableConnectorTargets,
   isDemoSource,
   knowledgeBases,
-  moveAssetWizardToConfig,
-  openConnectorConsole,
+  onContinue,
+  onOpenConnectorDrawer,
   selectedConnectorId,
   selectedDemoKnowledge,
-  selectedDemoTable,
   selectedSourceType,
   setSelectedConnectorId,
-  setSelectedDemoTable,
   setSelectedSourceType,
   sourceOptions,
-  visible,
 }: AssetWizardSourceStepProps) {
-  const [hideImportedTables, setHideImportedTables] = useState(true);
-  const [tablePrefixKeyword, setTablePrefixKeyword] = useState('');
-  const [activeScopeLabel, setActiveScopeLabel] = useState('all');
-  const selectedTableValues = useMemo(
-    () => normalizeSelectedAssetTableValues(selectedDemoTable),
-    [selectedDemoTable],
-  );
-
-  useEffect(() => {
-    if (!visible) {
-      setHideImportedTables(true);
-      setTablePrefixKeyword('');
-      setActiveScopeLabel('all');
-    }
-  }, [visible]);
-
-  useEffect(() => {
-    if (!isDemoSource) {
-      setActiveScopeLabel('all');
-      setTablePrefixKeyword('');
-    }
-  }, [isDemoSource, selectedConnectorId]);
-
-  useEffect(() => {
-    if (isDemoSource || selectedTableValues.length === 0) {
-      return;
-    }
-
-    const nextSelectedValues = selectedTableValues.filter((value) => {
-      const matchedOption = assetTableOptions.find(
-        (option) => option.value === value,
-      );
-      return !matchedOption?.disabled;
-    });
-
-    if (nextSelectedValues.length === selectedTableValues.length) {
-      return;
-    }
-
-    setSelectedDemoTable(
-      nextSelectedValues.length > 0 ? nextSelectedValues : undefined,
-    );
-  }, [
-    assetTableOptions,
-    isDemoSource,
-    selectedTableValues,
-    setSelectedDemoTable,
-  ]);
-
-  const selectorItems = useMemo(
-    () => buildAssetTableSelectorItems(assetTableOptions),
-    [assetTableOptions],
-  );
-  const { prefixOptions, scopeOptions } = useMemo(
-    () => resolveAssetTableQuickFilters(assetTableOptions),
-    [assetTableOptions],
-  );
-  const importedCount = useMemo(
-    () => selectorItems.filter((option) => option.imported).length,
-    [selectorItems],
-  );
-  const availableCount = selectorItems.length - importedCount;
-  const filteredAssetTableItems = useMemo(() => {
-    if (isDemoSource) {
-      return selectorItems;
-    }
-
-    return resolveVisibleAssetTableSelectorItems({
-      activeScopeLabel,
-      assetTableOptions,
-      hideImportedTables,
-      selectedTableValues,
-      tablePrefixKeyword,
-    });
-  }, [
-    assetTableOptions,
-    activeScopeLabel,
-    hideImportedTables,
-    isDemoSource,
-    selectedTableValues,
-    selectorItems,
-    tablePrefixKeyword,
-  ]);
-  const selectableFilteredValues = useMemo(
-    () =>
-      filteredAssetTableItems
-        .filter((option) => !option.disabled)
-        .map((option) => option.value),
-    [filteredAssetTableItems],
-  );
-  const selectedTableItems = useMemo(() => {
-    const itemMap = new Map(selectorItems.map((item) => [item.value, item]));
-    return selectedTableValues
-      .map((value) => itemMap.get(value))
-      .filter((item): item is (typeof selectorItems)[number] => Boolean(item));
-  }, [selectedTableValues, selectorItems]);
-  const groupedAssetTableItems = useMemo(
-    () => buildAssetTableSelectorGroups(filteredAssetTableItems),
-    [filteredAssetTableItems],
-  );
-
-  const toggleSelectedTable = (value: string) => {
-    setSelectedDemoTable((previous) => {
-      const previousValues = normalizeSelectedAssetTableValues(previous);
-      const nextValues = previousValues.includes(value)
-        ? previousValues.filter((item) => item !== value)
-        : [...previousValues, value];
-
-      return nextValues.length > 0 ? nextValues : undefined;
-    });
-  };
-
-  const selectAllFilteredTables = () => {
-    setSelectedDemoTable((previous) =>
-      Array.from(
-        new Set([
-          ...normalizeSelectedAssetTableValues(previous),
-          ...selectableFilteredValues,
-        ]),
-      ),
-    );
-  };
-
-  const toggleGroupSelection = (values: string[]) => {
-    if (values.length === 0) {
-      return;
-    }
-
-    setSelectedDemoTable((previous) => {
-      const previousValues = normalizeSelectedAssetTableValues(previous);
-      const previousValueSet = new Set(previousValues);
-      const allSelected = values.every((value) => previousValueSet.has(value));
-
-      if (allSelected) {
-        const nextValues = previousValues.filter((value) => !values.includes(value));
-        return nextValues.length > 0 ? nextValues : undefined;
-      }
-
-      return Array.from(new Set([...previousValues, ...values]));
-    });
-  };
+  const connectorSummaryNote = connectorsLoading
+    ? '正在加载当前工作区的数据源。'
+    : assetDatabaseOptions.length > 0
+      ? '选择一个已配置数据源，下一步再筛选要引入的数据资产。'
+      : '当前工作区还没有可用数据源，直接在这里新建并完成连接测试即可继续。';
 
   return (
     <WizardBody>
@@ -286,32 +123,14 @@ export default function AssetWizardSourceStep({
         </SegmentedButton>
       </SegmentedRow>
       <Text type="secondary" style={{ fontSize: 12 }}>
-        真实数据源支持一次选择多张表，可按 schema /
-        表名前缀筛选，并自动跳过已导入资产。
+        先确认数据源，再选择具体资产并补充知识配置。建议问题会在最后一步统一展示。
       </Text>
 
       <FieldCluster>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
-            marginBottom: 12,
-          }}
-        >
-          <SectionTitle style={{ marginBottom: 0 }}>
-            <RequiredMark>*</RequiredMark>
-            来源
-          </SectionTitle>
-          <Button
-            type="link"
-            icon={<PlusOutlined />}
-            onClick={() => void openConnectorConsole()}
-          >
-            管理数据连接器
-          </Button>
-        </div>
+        <SectionTitle>
+          <RequiredMark>*</RequiredMark>
+          数据源类型
+        </SectionTitle>
         <SourceGrid>
           {sourceOptions.map((option) => (
             <SourceCard
@@ -331,104 +150,120 @@ export default function AssetWizardSourceStep({
       </FieldCluster>
 
       {isDemoSource ? (
-        <SelectGrid>
-          <FieldCluster>
-            <SectionTitle>
-              <RequiredMark>*</RequiredMark>
-              选择样例数据
-            </SectionTitle>
-            <Select
-              style={{ width: '100%' }}
-              placeholder="请选择样例数据"
-              loading={connectorsLoading}
-              value={selectedDemoKnowledge?.id}
-              options={assetDatabaseOptions}
-              disabled
-            />
-          </FieldCluster>
-          <FieldCluster>
-            <SectionTitle>
-              <RequiredMark>*</RequiredMark>
-              选择主题表
-            </SectionTitle>
-            <Select
-              style={{ width: '100%' }}
-              placeholder="请选择主题表"
-              disabled={!selectedDemoKnowledge}
-              value={selectedDemoTable}
-              onChange={(value) => setSelectedDemoTable(value || undefined)}
-              options={filteredAssetTableItems}
-            />
-          </FieldCluster>
-        </SelectGrid>
+        <WizardNote>
+          <strong style={{ color: '#30354a' }}>样例数据源</strong>
+          <div style={{ marginTop: 6 }}>
+            当前已选择
+            {selectedDemoKnowledge
+              ? ` “${selectedDemoKnowledge.name}”`
+              : '系统样例'}
+            ，下一步可选择主题表或核心字段视图。
+          </div>
+        </WizardNote>
       ) : (
-        <>
-          <FieldCluster>
-            <SectionTitle>
+        <FieldCluster>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+            }}
+          >
+            <SectionTitle style={{ marginBottom: 0 }}>
               <RequiredMark>*</RequiredMark>
-              选择数据库
+              已配置数据源
             </SectionTitle>
-            <Select
-              style={{ width: '100%' }}
-              placeholder="请选择数据库"
-              loading={connectorsLoading}
-              value={selectedConnectorId}
-              onChange={(value) => setSelectedConnectorId(value)}
-              options={assetDatabaseOptions}
-            />
-          </FieldCluster>
-          <FieldCluster>
-            <SectionTitle>
-              <RequiredMark>*</RequiredMark>
-              选择数据表
-            </SectionTitle>
-            <AssetWizardTableSelector
-              activeScopeLabel={activeScopeLabel}
-              assetTableCount={assetTableOptions.length}
-              availableCount={availableCount}
-              filteredAssetTableItems={filteredAssetTableItems}
-              groupedAssetTableItems={groupedAssetTableItems}
-              hideImportedTables={hideImportedTables}
-              importedCount={importedCount}
-              onClearSelected={() => setSelectedDemoTable(undefined)}
-              onHideImportedTablesChange={setHideImportedTables}
-              onPrefixSuggestionSelect={setTablePrefixKeyword}
-              onSelectAllFiltered={selectAllFilteredTables}
-              onScopeLabelChange={setActiveScopeLabel}
-              onTablePrefixKeywordChange={setTablePrefixKeyword}
-              onToggleGroupSelection={toggleGroupSelection}
-              prefixOptions={prefixOptions}
-              selectableFilteredValues={selectableFilteredValues}
-              selectedConnectorId={selectedConnectorId}
-              selectedCount={selectedTableValues.length}
-              selectedTableItems={selectedTableItems}
-              selectedTableValues={selectedTableValues}
-              scopeOptions={scopeOptions}
-              tablePrefixKeyword={tablePrefixKeyword}
-              toggleSelectedTable={toggleSelectedTable}
-            />
-          </FieldCluster>
-        </>
-      )}
+            <Button
+              type="link"
+              icon={<PlusOutlined />}
+              onClick={onOpenConnectorDrawer}
+            >
+              新建数据源
+            </Button>
+          </div>
 
-      <WizardNote>{assetSourceSetupNote}</WizardNote>
-
-      <WizardFooter>
-        <div>
-          <Text type="secondary">{assetSourceSummaryNote}</Text>
-          {!isDemoSource && !hasAvailableConnectorTargets && (
-            <div>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                当前工作区还没有可导入的数据连接器，请先完成真实数据库接入。
-              </Text>
+          {connectorsLoading ? (
+            <div
+              style={{
+                minHeight: 180,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: '1px solid rgba(15, 23, 42, 0.08)',
+                borderRadius: 14,
+                background: '#fff',
+              }}
+            >
+              <Spin />
+            </div>
+          ) : assetDatabaseOptions.length > 0 ? (
+            <SourceGrid
+              style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}
+            >
+              {assetDatabaseOptions.map((option) => (
+                <SourceCard
+                  key={option.value}
+                  type="button"
+                  $active={selectedConnectorId === option.value}
+                  onClick={() => setSelectedConnectorId(option.value)}
+                >
+                  <SourceCardTitle>
+                    <DatabaseOutlined />
+                    {option.label.split(' · ')[0]}
+                  </SourceCardTitle>
+                  <SourceCardMeta>
+                    {option.label.split(' · ').slice(1).join(' · ') ||
+                      '已配置连接器'}
+                  </SourceCardMeta>
+                </SourceCard>
+              ))}
+            </SourceGrid>
+          ) : (
+            <div
+              style={{
+                border: '1px dashed rgba(15, 23, 42, 0.12)',
+                borderRadius: 14,
+                background: '#fff',
+                padding: 18,
+              }}
+            >
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description="当前工作区还没有可用数据源"
+              >
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  onClick={onOpenConnectorDrawer}
+                >
+                  新建第一个数据源
+                </Button>
+              </Empty>
             </div>
           )}
-        </div>
+        </FieldCluster>
+      )}
+
+      <WizardNote>
+        {isDemoSource
+          ? '样例数据会沿用系统预置的字段说明和问答场景，适合快速验证向导链路。'
+          : connectorSummaryNote}
+      </WizardNote>
+
+      <WizardFooter>
+        <Text type="secondary">
+          {isDemoSource
+            ? '下一步选择要引入的样例资产。'
+            : selectedConnectorId
+              ? '下一步选择该数据源下要引入的表。'
+              : '先选择或新建一个数据源后继续。'}
+        </Text>
         <Space size={12}>
           <LightButton onClick={closeAssetModal}>取消</LightButton>
           <PurpleButton
-            onClick={moveAssetWizardToConfig}
-            disabled={!canContinueAssetWizard}
+            onClick={onContinue}
+            disabled={!canContinueSourceSelection}
           >
             下一步
           </PurpleButton>

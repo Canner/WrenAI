@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import useKnowledgeAssetSource from './useKnowledgeAssetSource';
 import { canImportSampleDatasetInWorkspace } from '@/utils/workspaceGovernance';
 import type { SourceOption } from '@/features/knowledgePage/types';
@@ -124,6 +124,33 @@ export default function useKnowledgeConnectors<
     [assetModalOpen, connectorScopeKey, selectedSourceType, sourceOptions],
   );
 
+  const loadConnectors = useCallback(async () => {
+    if (!connectorScopeKey) {
+      setConnectors([]);
+      setConnectorsLoading(false);
+      return [];
+    }
+
+    setConnectorsLoading(true);
+    try {
+      const payload = await fetchConnectors(connectorRuntimeSelector);
+      const nextConnectors = Array.isArray(payload) ? payload : [];
+      setConnectors(nextConnectors);
+      return nextConnectors;
+    } catch (error) {
+      onLoadError?.(error);
+      setConnectors([]);
+      return [];
+    } finally {
+      setConnectorsLoading(false);
+    }
+  }, [
+    connectorRuntimeSelector,
+    connectorScopeKey,
+    fetchConnectors,
+    onLoadError,
+  ]);
+
   useEffect(() => {
     if (!connectorScopeKey) {
       setConnectorsLoading(false);
@@ -136,32 +163,14 @@ export default function useKnowledgeConnectors<
       return;
     }
 
-    const loadConnectors = async () => {
-      setConnectorsLoading(true);
-      try {
-        const payload = await fetchConnectors(connectorRuntimeSelector);
-        setConnectors(Array.isArray(payload) ? payload : []);
-      } catch (error) {
-        onLoadError?.(error);
-        setConnectors([]);
-      } finally {
-        setConnectorsLoading(false);
-      }
-    };
-
     void loadConnectors();
-  }, [
-    connectorRuntimeSelector,
-    connectorScopeKey,
-    fetchConnectors,
-    onLoadError,
-    shouldLoadConnectors,
-  ]);
+  }, [connectorScopeKey, loadConnectors, shouldLoadConnectors]);
 
   return {
     connectors,
     connectorsLoading,
     connectorScopeKey,
+    loadConnectors,
     shouldLoadConnectors,
     ...assetSource,
   };

@@ -15,6 +15,7 @@ export const LibraryStage = styled.div`
 `;
 
 export const WorkbenchGrid = styled.div`
+  flex: 1;
   display: grid;
   grid-template-columns: 252px minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);

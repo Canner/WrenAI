@@ -105,7 +105,6 @@ describe('KnowledgeWorkbenchPageFrame', () => {
             sourceOptions: [],
             selectedSourceType: 'database',
             setSelectedSourceType: jest.fn(),
-            openConnectorConsole: jest.fn(),
             isDemoSource: false,
             connectorsLoading: false,
             selectedDemoKnowledge: null,

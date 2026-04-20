@@ -58,6 +58,7 @@ describe('useKnowledgeAssetWizard helpers', () => {
     expect(selected?.connectorTableName).toBe('orders');
     expect(selected?.fieldCount).toBe(2);
     expect(selected?.primaryKey).toBe('order_id');
+    expect(selected?.suggestedQuestions).toEqual([]);
   });
 
   it('builds multiple connector seeds when selecting multiple tables', () => {

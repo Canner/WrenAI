@@ -122,6 +122,13 @@ describe('DiagramController', () => {
     );
     expect(result.models).toHaveLength(1);
     expect(result.models[0].referenceName).toBe('orders');
+    expect(result.models[0].recommendation).toEqual({
+      error: null,
+      queryId: null,
+      questions: [],
+      status: 'NOT_STARTED',
+      updatedAt: null,
+    });
   });
 
   it('rejects diagram access without knowledge base read permission', async () => {
@@ -209,7 +216,22 @@ describe('DiagramController', () => {
             refSql: 'select * from orders',
             cached: false,
             refreshTime: null,
-            properties: JSON.stringify({ description: 'orders table' }),
+            properties: JSON.stringify({
+              description: 'orders table',
+              aiRecommendations: {
+                status: 'FINISHED',
+                queryId: 'rq-1',
+                questions: [
+                  {
+                    category: '分析',
+                    question: '按地区查看订单趋势',
+                    sql: 'select 1',
+                  },
+                ],
+                error: null,
+                updatedAt: '2026-04-20T12:00:00.000Z',
+              },
+            }),
           },
         ]),
       },
@@ -231,6 +253,15 @@ describe('DiagramController', () => {
       models: [
         expect.objectContaining({
           referenceName: 'orders',
+          recommendation: expect.objectContaining({
+            status: 'FINISHED',
+            queryId: 'rq-1',
+            questions: [
+              expect.objectContaining({
+                question: '按地区查看订单趋势',
+              }),
+            ],
+          }),
         }),
       ],
       views: [],

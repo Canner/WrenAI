@@ -30,7 +30,6 @@ export function buildKnowledgeWorkbenchControllerOverlaysInput({
       sourceOptions: knowledgeState.knowledgeSourceOptions,
       selectedSourceType: contentData.selectedSourceType,
       setSelectedSourceType: contentData.setSelectedSourceType,
-      openConnectorConsole: actions.openConnectorConsole,
       isDemoSource: contentData.isDemoSource,
       connectorsLoading: contentData.connectorsLoading,
       selectedDemoKnowledge: contentData.selectedDemoKnowledge ?? null,
@@ -46,12 +45,19 @@ export function buildKnowledgeWorkbenchControllerOverlaysInput({
       setAssetDraft: localState.setAssetDraft,
       assetDraftPreview: viewState.assetDraftPreview,
       assetDraftPreviews: viewState.assetDraftPreviews,
+      persistedAssetDraftPreviews: viewState.persistedAssetDraftPreviews,
+      recommendationRuntimeSelector: viewState.recommendationRuntimeSelector,
       canContinueAssetConfiguration: viewState.canContinueAssetConfiguration,
       commitAssetDraftToOverview: viewState.commitAssetDraftToOverview,
       savingAssetDraft: viewState.savingAssetDraft,
       displayKnowledgeName: knowledgeState.displayKnowledgeName,
       closeAssetModal: actions.closeAssetModal,
-      onNavigateModeling: viewState.handleNavigateModeling,
+      loadConnectors: contentData.loadConnectors,
+      onFinalizePersistedRuntimeScope: viewState.finalizePersistedRuntimeScope,
+      onNavigateModeling:
+        viewState.navigateModelingWithPersistedRuntimeScope ||
+        viewState.handleNavigateModeling,
+      onRefreshAssets: viewState.refreshAssets,
     },
   };
 }

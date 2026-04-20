@@ -16,6 +16,7 @@ export function useKnowledgeWorkbenchContentData<
   const {
     connectors,
     connectorsLoading,
+    loadConnectors,
     selectedSourceType,
     setSelectedSourceType,
     selectedConnectorId,
@@ -55,6 +56,7 @@ export function useKnowledgeWorkbenchContentData<
     canContinueAssetWizard: effectiveCanContinueAssetWizard,
     connectors,
     connectorsLoading,
+    loadConnectors,
     demoDatabaseOptions,
     demoTableOptions,
     diagramData,

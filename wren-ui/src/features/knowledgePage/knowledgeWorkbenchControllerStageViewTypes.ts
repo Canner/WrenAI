@@ -12,12 +12,18 @@ export type ViewStateInput = {
   commitAssetDraftToOverview: () => Promise<void> | void;
   detailAssetFields: any[];
   detailAssets: AssetView[];
+  finalizePersistedRuntimeScope?: () => Promise<unknown> | unknown;
   handleChangeWorkbenchSection: any;
   handleCloseAssetDetail: () => void;
   handleNavigateModeling: () => void;
   handleOpenAssetWizard: () => void;
+  loadConnectors?: () => Promise<unknown> | unknown;
   moveAssetWizardToConfig: () => void;
+  navigateModelingWithPersistedRuntimeScope?: () => Promise<unknown> | unknown;
   openAssetDetail: any;
+  persistedAssetDraftPreviews?: AssetView[];
+  recommendationRuntimeSelector?: any;
+  refreshAssets?: () => Promise<unknown> | unknown;
   savingAssetDraft: boolean;
   showKnowledgeAssetsLoading: boolean;
   visibleKnowledgeBaseId: string | null;

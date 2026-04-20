@@ -95,22 +95,13 @@ jest.mock('@/hooks/useRuntimeSelectorState', () => ({
   default: () => mockUseRuntimeSelectorState(),
 }));
 
-jest.mock('@/components/reference/ConsoleShellLayout', () => ({
+jest.mock('@/components/reference/DirectShellPageFrame', () => ({
   __esModule: true,
-  default: ({ title, description, sections, children }: any) => {
+  default: ({ activeNav, children }: any) => {
     const React = jest.requireActual('react');
     return React.createElement(
       'div',
-      null,
-      title,
-      description,
-      React.createElement(
-        'div',
-        null,
-        (sections || []).map((section: any) =>
-          React.createElement('span', { key: section.key }, section.label),
-        ),
-      ),
+      { 'data-shell-nav': activeNav },
       children,
     );
   },
@@ -228,7 +219,7 @@ describe('dashboard page shell', () => {
   it('renders the simplified dashboard shell', () => {
     const markup = renderPage();
 
-    expect(markup).toContain('数据看板');
+    expect(markup).toContain('data-shell-nav="dashboard"');
     expect(markup).toContain('看板');
     expect(markup).toContain('新建看板');
     expect(markup).not.toContain('去新对话生成图表');

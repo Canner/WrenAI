@@ -1,3 +1,5 @@
+export {};
+
 const originalBindingMode = process.env.WREN_AUTHORIZATION_BINDING_MODE;
 
 const mockResolveRequestScope = jest.fn();

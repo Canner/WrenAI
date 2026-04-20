@@ -22,14 +22,26 @@ export default function AssetDetailUsagePanel({
   onCreateRuleDraft,
   onCreateSqlTemplateDraft,
 }: AssetDetailUsagePanelProps) {
+  const recommendationStatus = activeDetailAsset.recommendation?.status;
+  const suggestedQuestions = activeDetailAsset.suggestedQuestions || [];
+
   return (
     <WorkbenchCompactPanel style={{ padding: '14px 16px' }}>
       <WorkbenchCompactPanelTitle style={{ marginBottom: 8 }}>
         推荐问法
       </WorkbenchCompactPanelTitle>
-      {(activeDetailAsset.suggestedQuestions || []).length ? (
+      {recommendationStatus === 'GENERATING' ? (
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          系统正在分析当前模型的字段与语义，建议问题生成后会自动展示在这里。
+        </Text>
+      ) : recommendationStatus === 'FAILED' ? (
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          {activeDetailAsset.recommendation?.error?.message ||
+            '当前资产的建议问题生成失败，可稍后重试。'}
+        </Text>
+      ) : suggestedQuestions.length ? (
         <AssetDetailQuestionList>
-          {(activeDetailAsset.suggestedQuestions || []).map((question) => (
+          {suggestedQuestions.map((question) => (
             <li key={question}>{question}</li>
           ))}
         </AssetDetailQuestionList>

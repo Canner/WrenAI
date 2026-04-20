@@ -90,7 +90,15 @@ export default function useKnowledgeAssetSource({
   }, [selectedConnectorId, selectedDemoKnowledge]);
 
   useEffect(() => {
-    if (!selectedConnectorId && connectors.length > 0) {
+    if (connectors.length === 0) {
+      setSelectedConnectorId(undefined);
+      return;
+    }
+
+    if (
+      !selectedConnectorId ||
+      !connectors.some((connector) => connector.id === selectedConnectorId)
+    ) {
       setSelectedConnectorId(connectors[0].id);
     }
   }, [connectors, selectedConnectorId]);

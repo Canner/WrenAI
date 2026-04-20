@@ -95,11 +95,15 @@ jest.mock('@/components/PageLoading', () => ({
   },
 }));
 
-jest.mock('@/components/reference/ConsoleShellLayout', () => ({
+jest.mock('@/components/reference/DirectShellPageFrame', () => ({
   __esModule: true,
-  default: ({ title, description, children }: any) => {
+  default: ({ activeNav, children }: any) => {
     const React = jest.requireActual('react');
-    return React.createElement('div', null, title, description, children);
+    return React.createElement(
+      'div',
+      { 'data-shell-nav': activeNav },
+      children,
+    );
   },
 }));
 
@@ -275,7 +279,7 @@ describe('home/dashboard page', () => {
   it('renders the simplified multi-dashboard workbench shell', () => {
     const markup = renderPage();
 
-    expect(markup).toContain('数据看板');
+    expect(markup).toContain('data-shell-nav="dashboard"');
     expect(markup).toContain('看板');
     expect(markup).toContain('新建看板');
     expect(markup).not.toContain('去新对话生成图表');

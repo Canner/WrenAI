@@ -58,6 +58,10 @@ import {
 } from './modelControllerModelActions';
 import { updateModelMetadataAction } from './modelControllerModelMetadataActions';
 import {
+  generateModelRecommendationQuestionsAction,
+  getModelRecommendationQuestionsAction,
+} from './modelControllerRecommendationActions';
+import {
   createViewAction,
   deleteViewAction,
   getViewAction,
@@ -298,6 +302,34 @@ export class ModelController {
     return updateModelMetadataAction({
       modelId,
       data,
+      ctx,
+      deps: MODEL_CONTROLLER_DEPS,
+    });
+  }
+
+  public generateModelRecommendationQuestions({
+    modelId,
+    ctx,
+  }: {
+    modelId: number;
+    ctx: IContext;
+  }) {
+    return generateModelRecommendationQuestionsAction({
+      modelId,
+      ctx,
+      deps: MODEL_CONTROLLER_DEPS,
+    });
+  }
+
+  public getModelRecommendationQuestions({
+    modelId,
+    ctx,
+  }: {
+    modelId: number;
+    ctx: IContext;
+  }) {
+    return getModelRecommendationQuestionsAction({
+      modelId,
       ctx,
       deps: MODEL_CONTROLLER_DEPS,
     });

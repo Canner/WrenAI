@@ -377,6 +377,7 @@ export const MetricPill = styled.div`
 `;
 
 export const MainStage = styled.div`
+  flex: 1;
   min-width: 0;
   min-height: 0;
   height: 100%;

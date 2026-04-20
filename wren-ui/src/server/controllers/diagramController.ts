@@ -24,6 +24,7 @@ import {
   buildAuthorizationActorFromRuntimeScope,
   recordAuditEvent,
 } from '@server/authz';
+import { readModelRecommendationState } from '@server/utils/modelRecommendation';
 
 const logger = getLogger('DiagramController');
 logger.level = 'debug';
@@ -219,6 +220,7 @@ export class DiagramController {
       refreshTime: model.refreshTime || '',
       cached: model.cached,
       description: properties?.description || '',
+      recommendation: readModelRecommendationState(model.properties),
       fields: [],
       calculatedFields: [],
       relationFields: [],

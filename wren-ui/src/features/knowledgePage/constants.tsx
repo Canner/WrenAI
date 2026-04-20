@@ -1,12 +1,14 @@
-import ApiOutlined from '@ant-design/icons/ApiOutlined';
-import CodeOutlined from '@ant-design/icons/CodeOutlined';
 import DatabaseOutlined from '@ant-design/icons/DatabaseOutlined';
 import IdcardOutlined from '@ant-design/icons/IdcardOutlined';
 import ShoppingCartOutlined from '@ant-design/icons/ShoppingCartOutlined';
-import TableOutlined from '@ant-design/icons/TableOutlined';
 import type { SourceOption } from './types';
 
-export const WIZARD_STEP_LABELS = ['引入资产', '知识配置', '保存'];
+export const WIZARD_STEP_LABELS = [
+  '数据源',
+  '数据资产',
+  '知识配置',
+  '建议问题',
+];
 
 export const resolveReferenceOwner = (
   owner: string | null | undefined,
@@ -40,30 +42,9 @@ export const CONNECTOR_SOURCE_OPTIONS: SourceOption[] = [
   },
   {
     key: 'database',
-    label: 'MySQL',
+    label: '工作区数据源',
     icon: <DatabaseOutlined />,
-    meta: '数据库',
-    category: 'connector',
-  },
-  {
-    key: 'clickhouse',
-    label: 'ClickHouse',
-    icon: <TableOutlined />,
-    meta: 'OLAP',
-    category: 'connector',
-  },
-  {
-    key: 'api',
-    label: 'REST API',
-    icon: <ApiOutlined />,
-    meta: '接口',
-    category: 'connector',
-  },
-  {
-    key: 'python_tool',
-    label: 'Python 工具',
-    icon: <CodeOutlined />,
-    meta: '工具',
+    meta: '已配置连接器',
     category: 'connector',
   },
 ];

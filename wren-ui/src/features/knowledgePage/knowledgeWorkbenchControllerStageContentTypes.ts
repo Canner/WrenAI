@@ -4,6 +4,7 @@ export type ContentDataInput = {
   canContinueAssetWizard: boolean;
   connectorsLoading: boolean;
   isDemoSource: boolean;
+  loadConnectors?: () => Promise<unknown> | unknown;
   previewFieldCount: number;
   selectedConnectorId?: string;
   selectedDemoKnowledge?: any;

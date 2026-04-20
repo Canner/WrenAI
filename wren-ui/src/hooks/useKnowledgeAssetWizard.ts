@@ -1,6 +1,7 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import type { Dispatch, SetStateAction } from 'react';
+import type { DiagramModelRecommendation } from '@/types/modeling';
 import type { SelectedAssetTableValue } from '@/features/knowledgePage/types';
 import type { CompactTable } from '@/types/dataSource';
 import {
@@ -35,8 +36,10 @@ type AssetLike = {
   name: string;
   description?: string | null;
   kind: 'model' | 'view';
+  modelId?: number | null;
   fieldCount: number;
   owner?: string | null;
+  recommendation?: DiagramModelRecommendation | null;
   sourceTableName?: string | null;
   sourceSql?: string | null;
   primaryKey?: string | null;
@@ -218,7 +221,7 @@ export const resolveSelectedAssetSeeds = ({
         return {
           id: `connector-draft-${connector.id}-${tableQualifiedName}`,
           name: tableDisplayName,
-          description: `来自 ${connector.displayName} 的真实数据表，可继续补充知识配置后进入建模。`,
+          description: `来自 ${connector.displayName} 的真实数据表，保存后会自动分析字段语义并生成建议问题。`,
           kind: 'model' as const,
           fieldCount: fields.length,
           owner: knowledgeOwner,
@@ -230,11 +233,7 @@ export const resolveSelectedAssetSeeds = ({
           refreshTime: null,
           relationCount: 0,
           nestedFieldCount: 0,
-          suggestedQuestions: [
-            `围绕 ${tableDisplayName} 设计适合业务分析的主题问法`,
-            `请总结 ${tableDisplayName} 的关键字段和建模建议`,
-            `基于 ${tableDisplayName} 规划下一步需要补齐的业务规则`,
-          ],
+          suggestedQuestions: [],
           relationFields: [],
           fields,
         };
@@ -336,6 +335,10 @@ export default function useKnowledgeAssetWizard({
   setDraftAssets: Dispatch<SetStateAction<AssetLike[]>>;
   wizardPreviewAssets: AssetLike[];
 }) {
+  const [persistedAssetDraftPreviews, setPersistedAssetDraftPreviews] =
+    useState<AssetLike[]>([]);
+  const [persistedRuntimeSelector, setPersistedRuntimeSelector] =
+    useState<ClientRuntimeScopeSelector | null>(null);
   const selectedAssetSeeds = useMemo(
     () =>
       resolveSelectedAssetSeeds({
@@ -377,7 +380,7 @@ export default function useKnowledgeAssetWizard({
   const requiresAssetName = selectedAssetSeeds.length <= 1;
   const canContinueAssetConfiguration = Boolean(
     assetDraft.description.trim() &&
-      (!requiresAssetName || assetDraft.name.trim()),
+    (!requiresAssetName || assetDraft.name.trim()),
   );
 
   const moveAssetWizardToConfig = useCallback(() => {
@@ -385,6 +388,8 @@ export default function useKnowledgeAssetWizard({
       return;
     }
 
+    setPersistedAssetDraftPreviews([]);
+    setPersistedRuntimeSelector(null);
     const primaryAssetSeed = selectedAssetSeeds[0];
     const selectedConnector = connectors.find(
       (connector) => connector.id === selectedConnectorId,
@@ -393,7 +398,7 @@ export default function useKnowledgeAssetWizard({
       selectedAssetSeeds.length > 1
         ? `来自 ${selectedConnector?.displayName || '当前连接器'} 的 ${
             selectedAssetSeeds.length
-          } 张真实数据表，可继续补充统一知识配置后进入建模。`
+          } 张真实数据表，保存后会统一生成建议问题。`
         : null;
 
     setAssetDraft({
@@ -404,7 +409,7 @@ export default function useKnowledgeAssetWizard({
         '请补充该资产在当前知识库中的业务定位与关键口径。',
       important: true,
     });
-    setAssetWizardStep(1);
+    setAssetWizardStep(2);
   }, [
     connectors,
     selectedAssetSeeds,
@@ -423,14 +428,14 @@ export default function useKnowledgeAssetWizard({
         throw new Error('当前知识库运行上下文未就绪，请稍后重试。');
       }
 
-      const persistedAssets = await persistConnectorAssetDrafts({
-        assetDraftPreviews,
-        connectorId: selectedConnectorId || null,
-        refetchDiagram,
-        refetchRuntimeSelector,
-        replaceRuntimeScope,
-        selector: activeKnowledgeRuntimeSelector,
-      });
+      const { persistedAssets, runtimeSelector } =
+        await persistConnectorAssetDrafts({
+          assetDraftPreviews,
+          connectorId: selectedConnectorId || null,
+          selector: activeKnowledgeRuntimeSelector,
+        });
+      setPersistedAssetDraftPreviews(persistedAssets);
+      setPersistedRuntimeSelector(runtimeSelector);
       const persistedKeys = new Set(
         persistedAssets.map(
           (asset) =>
@@ -444,7 +449,7 @@ export default function useKnowledgeAssetWizard({
         ),
       );
       setDetailAsset(null);
-      setAssetWizardStep(2);
+      setAssetWizardStep(3);
       return persistedAssets[0] || null;
     }
 
@@ -454,6 +459,8 @@ export default function useKnowledgeAssetWizard({
       id: `draft-asset-${createdAt}-${index}`,
     }));
     const persistedAsset = persistedAssets[0];
+    setPersistedAssetDraftPreviews(persistedAssets);
+    setPersistedRuntimeSelector(null);
     const persistedKeys = new Set(
       persistedAssets.map(
         (asset) =>
@@ -468,19 +475,32 @@ export default function useKnowledgeAssetWizard({
       ),
     ]);
     setDetailAsset(persistedAsset);
-    setAssetWizardStep(2);
+    setAssetWizardStep(3);
     return persistedAsset;
   }, [
     activeKnowledgeRuntimeSelector,
     assetDraftPreviews,
     isDemoSource,
-    refetchDiagram,
-    refetchRuntimeSelector,
-    replaceRuntimeScope,
     selectedConnectorId,
     setAssetWizardStep,
     setDetailAsset,
     setDraftAssets,
+  ]);
+
+  const finalizePersistedRuntimeScope = useCallback(async () => {
+    if (!persistedRuntimeSelector) {
+      return;
+    }
+
+    await replaceRuntimeScope?.(persistedRuntimeSelector);
+    await refetchRuntimeSelector?.().catch(() => null);
+    await refetchDiagram?.().catch(() => null);
+    setPersistedRuntimeSelector(null);
+  }, [
+    persistedRuntimeSelector,
+    refetchDiagram,
+    refetchRuntimeSelector,
+    replaceRuntimeScope,
   ]);
 
   return {
@@ -488,7 +508,10 @@ export default function useKnowledgeAssetWizard({
     selectedAssetSeeds,
     assetDraftPreview,
     assetDraftPreviews,
+    persistedRuntimeSelector,
+    persistedAssetDraftPreviews,
     canContinueAssetConfiguration,
+    finalizePersistedRuntimeScope,
     moveAssetWizardToConfig,
     saveAssetDraftToOverview,
   };

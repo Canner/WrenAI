@@ -17,6 +17,7 @@ export default function useConnectorSubmitOperation({
   requireWorkspaceSelector,
   loadConnectors,
   closeModal,
+  onSubmitted,
 }: Pick<
   ConnectorMutationOperationArgs,
   | 'form'
@@ -27,7 +28,9 @@ export default function useConnectorSubmitOperation({
   | 'requireWorkspaceSelector'
   | 'loadConnectors'
   | 'closeModal'
->) {
+> & {
+  onSubmitted?: (connector: Record<string, any> | null) => Promise<void> | void;
+}) {
   const [submitting, setSubmitting] = useState(false);
 
   const submitConnector = async () => {
@@ -63,15 +66,17 @@ export default function useConnectorSubmitOperation({
           body: JSON.stringify(payload),
         },
       );
+      const responsePayload = await response.json().catch(() => null);
 
       if (!response.ok) {
-        const errorPayload = await response.json().catch(() => ({}));
-        throw new Error(errorPayload.error || '保存连接器失败。');
+        throw new Error(responsePayload?.error || '保存连接器失败。');
       }
 
       message.success(editingConnector ? '连接器已更新。' : '连接器已创建。');
       closeModal();
       await loadConnectors();
+      await onSubmitted?.(responsePayload);
+      return responsePayload;
     } catch (error: any) {
       if (error?.errorFields) {
         return;
@@ -86,6 +91,8 @@ export default function useConnectorSubmitOperation({
     } finally {
       setSubmitting(false);
     }
+
+    return null;
   };
 
   return {

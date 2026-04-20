@@ -1,4 +1,5 @@
 import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
+import type { DiagramModelRecommendation } from '@/types/modeling';
 import type { UpdateModelMetadataInput } from '@/types/modeling';
 import { buildRuntimeScopeUrl } from '@/runtime/client/runtimeScope';
 import {
@@ -20,6 +21,17 @@ type PersistableAsset = {
   sourceTableName?: string | null;
   connectorTableName?: string | null;
   fields: PersistableAssetField[];
+};
+
+type PersistedConnectorAsset<TAsset extends PersistableAsset> = TAsset & {
+  modelId: number;
+  recommendation: DiagramModelRecommendation;
+  suggestedQuestions: string[];
+};
+
+type PersistConnectorAssetDraftsResult<TAsset extends PersistableAsset> = {
+  persistedAssets: PersistedConnectorAsset<TAsset>[];
+  runtimeSelector: ClientRuntimeScopeSelector;
 };
 
 export const resolvePersistableConnectorTableName = (
@@ -68,7 +80,11 @@ export const activateKnowledgeConnectorRuntime = async (
   connectorId: string,
 ) => {
   const response = await fetch(
-    buildRuntimeScopeUrl(`/api/v1/connectors/${connectorId}/activate`, {}, selector),
+    buildRuntimeScopeUrl(
+      `/api/v1/connectors/${connectorId}/activate`,
+      {},
+      selector,
+    ),
     {
       method: 'POST',
     },
@@ -85,23 +101,14 @@ export const persistConnectorAssetDrafts = async <
 >({
   assetDraftPreviews,
   connectorId,
-  refetchDiagram,
-  refetchRuntimeSelector,
-  replaceRuntimeScope,
   selector,
 }: {
   assetDraftPreviews: TAsset[];
   connectorId?: string | null;
-  refetchDiagram: () => Promise<unknown>;
-  refetchRuntimeSelector?: () => Promise<unknown>;
-  replaceRuntimeScope?: (
-    selector: ClientRuntimeScopeSelector,
-  ) => Promise<unknown>;
   selector: ClientRuntimeScopeSelector;
-}) => {
-  const persistedAssets: TAsset[] = [];
+}): Promise<PersistConnectorAssetDraftsResult<TAsset>> => {
+  const persistedAssets: PersistedConnectorAsset<TAsset>[] = [];
   let effectiveSelector = selector;
-  let selectorChanged = false;
 
   if (connectorId) {
     const activation = await activateKnowledgeConnectorRuntime(
@@ -110,16 +117,6 @@ export const persistConnectorAssetDrafts = async <
     );
     if (activation?.selector) {
       effectiveSelector = activation.selector;
-      selectorChanged =
-        activation.selector.workspaceId !== selector.workspaceId ||
-        activation.selector.knowledgeBaseId !== selector.knowledgeBaseId ||
-        activation.selector.kbSnapshotId !== selector.kbSnapshotId ||
-        activation.selector.deployHash !== selector.deployHash ||
-        activation.selector.runtimeScopeId !== selector.runtimeScopeId;
-
-      if (replaceRuntimeScope) {
-        await replaceRuntimeScope(activation.selector);
-      }
     }
   }
 
@@ -150,7 +147,18 @@ export const persistConnectorAssetDrafts = async <
       buildModelMetadataPayload(preview),
     );
 
-    persistedAssets.push(preview);
+    persistedAssets.push({
+      ...preview,
+      modelId,
+      recommendation: {
+        error: null,
+        queryId: null,
+        questions: [],
+        status: 'NOT_STARTED',
+        updatedAt: null,
+      },
+      suggestedQuestions: [],
+    });
   }
 
   const deployResult = await deployCurrentRuntime(effectiveSelector);
@@ -160,16 +168,8 @@ export const persistConnectorAssetDrafts = async <
     );
   }
 
-  if (deployResult?.selector && replaceRuntimeScope) {
-    await replaceRuntimeScope(deployResult.selector);
-    await refetchRuntimeSelector?.().catch(() => null);
-    return persistedAssets;
-  }
-
-  if (!selectorChanged) {
-    await refetchDiagram();
-  } else {
-    await refetchRuntimeSelector?.().catch(() => null);
-  }
-  return persistedAssets;
+  return {
+    persistedAssets,
+    runtimeSelector: deployResult?.selector || effectiveSelector,
+  };
 };

@@ -54,7 +54,7 @@ export default function useKnowledgeAssetInteractions<TAsset>({
         return;
       }
 
-      message.success('资产配置已保存到当前知识库概览，可继续前往建模。');
+      message.success('资产配置已保存，正在生成建议问题。');
     } catch (error) {
       message.error(
         error instanceof Error ? error.message : '保存资产失败，请稍后重试。',

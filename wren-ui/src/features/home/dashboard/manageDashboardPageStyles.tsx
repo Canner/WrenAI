@@ -7,9 +7,10 @@ export const DashboardWorkbench = styled.div`
   margin: 0;
   display: grid;
   grid-template-columns: 304px minmax(0, 1fr);
-  grid-auto-rows: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: 18px;
   align-items: stretch;
+  align-content: stretch;
   min-height: 100%;
   height: 100%;
 
@@ -32,7 +33,7 @@ export const DashboardRail = styled.aside`
 export const DashboardRailCard = styled(Card)`
   &.ant-card {
     height: 100%;
-    min-height: 100dvh;
+    min-height: 100%;
     display: flex;
     flex-direction: column;
     border-radius: 18px;
@@ -54,7 +55,7 @@ export const DashboardRailCard = styled(Card)`
     display: flex;
     flex-direction: column;
     gap: 8px;
-    min-height: 100%;
+    min-height: 0;
     height: 100%;
   }
 `;
@@ -267,7 +268,7 @@ export const DashboardStageCanvas = styled.div<{ $empty?: boolean }>`
   display: flex;
   flex-direction: column;
   min-width: 0;
-  min-height: ${(props) => (props.$empty ? 'max(620px, 100dvh)' : '100dvh')};
+  min-height: ${(props) => (props.$empty ? 'max(620px, 100%)' : '100%')};
   border-radius: 18px;
   border: 1px solid var(--nova-outline-soft);
   background: rgba(255, 255, 255, 0.98);
