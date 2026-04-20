@@ -1,7 +1,7 @@
 import clsx from 'clsx';
 import dynamic from 'next/dynamic';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Form, Modal, message } from 'antd';
+import { Alert, Form } from 'antd';
 import { attachLoading } from '@/utils/helper';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import { ChartType, DashboardItemType } from '@/types/home';
@@ -35,6 +35,7 @@ import {
   isCompatibleFieldName,
   toPreferredRenderer,
 } from './chartAnswerUtils';
+import { appMessage, appModal } from '@/utils/antdAppBridge';
 
 const Chart = dynamic(() => import('@/components/chart'), { ssr: false });
 
@@ -115,7 +116,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
           '加载看板列表失败。',
         );
         if (errorMessage) {
-          message.error(errorMessage);
+          appMessage.error(errorMessage);
         }
         setDashboardOptions([]);
       })
@@ -158,7 +159,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
         '加载图表数据失败，请稍后重试。',
       );
       if (errorMessage) {
-        message.error(errorMessage);
+        appMessage.error(errorMessage);
       }
     });
   }, [ensurePreviewLoaded, hasRequestedPreview, shouldRequestPreview]);
@@ -300,7 +301,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
   };
 
   const onReload = () => {
-    Modal.confirm({
+    appModal.confirm({
       title: '确认重新生成图表吗？',
       okText: '重新生成',
       cancelText: '取消',
@@ -345,7 +346,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
     const targetDashboard = dashboardOptions.find(
       (dashboard) => dashboard.id === payload.dashboardId,
     );
-    message.success(
+    appMessage.success(
       targetDashboardName
         ? `已固定到看板「${resolveDashboardDisplayName(targetDashboardName)}」`
         : targetDashboard
@@ -523,7 +524,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
         onCreateAndPin={async (dashboardName) => {
           const normalizedName = dashboardName.trim();
           if (!normalizedName) {
-            message.warning('请输入新看板名称。');
+            appMessage.warning('请输入新看板名称。');
             return;
           }
 
@@ -546,7 +547,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
               '新建看板并固定失败。',
             );
             if (errorMessage) {
-              message.error(errorMessage);
+              appMessage.error(errorMessage);
             }
           } finally {
             setCreateAndPinSubmitting(false);
@@ -562,7 +563,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
               '固定到看板失败。',
             );
             if (errorMessage) {
-              message.error(errorMessage);
+              appMessage.error(errorMessage);
             }
             return;
           } finally {

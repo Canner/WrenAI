@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import type { AppProps } from 'next/app';
 import Head from 'next/head';
-import { ConfigProvider, Spin } from 'antd';
+import { App as AntdApp, ConfigProvider, Spin } from 'antd';
 import 'antd/dist/reset.css';
 import posthog from 'posthog-js';
 import { PostHogProvider } from 'posthog-js/react';
@@ -13,6 +13,7 @@ import PersistentConsoleShell, {
   shouldKeyRuntimeScopePage,
 } from '@/components/reference/PersistentConsoleShell';
 import RuntimeScopeBootstrap from '@/components/runtimeScope/RuntimeScopeBootstrap';
+import AntdAppBridge from '@/components/app/AntdAppBridge';
 import { GlobalConfigProvider } from '@/hooks/useGlobalConfig';
 import { RuntimeSelectorStateProvider } from '@/hooks/useRuntimeSelectorState';
 import { defaultIndicator } from '@/components/PageLoading';
@@ -75,19 +76,23 @@ function App({ Component, pageProps, router }: AppProps) {
         <meta name="twitter:image" content={NOVA_SOCIAL_IMAGE_PATH} />
       </Head>
       <ConfigProvider theme={antdTheme}>
-        <GlobalConfigProvider>
-          <PostHogProvider client={posthog}>
-            <RuntimeScopeBootstrap>
-              <RuntimeSelectorStateProvider>
-                <main className="app">
-                  <PersistentConsoleShell>
-                    <Component key={componentKey} {...pageProps} />
-                  </PersistentConsoleShell>
-                </main>
-              </RuntimeSelectorStateProvider>
-            </RuntimeScopeBootstrap>
-          </PostHogProvider>
-        </GlobalConfigProvider>
+        <AntdApp>
+          <AntdAppBridge>
+            <GlobalConfigProvider>
+              <PostHogProvider client={posthog}>
+                <RuntimeScopeBootstrap>
+                  <RuntimeSelectorStateProvider>
+                    <main className="app">
+                      <PersistentConsoleShell>
+                        <Component key={componentKey} {...pageProps} />
+                      </PersistentConsoleShell>
+                    </main>
+                  </RuntimeSelectorStateProvider>
+                </RuntimeScopeBootstrap>
+              </PostHogProvider>
+            </GlobalConfigProvider>
+          </AntdAppBridge>
+        </AntdApp>
       </ConfigProvider>
     </>
   );

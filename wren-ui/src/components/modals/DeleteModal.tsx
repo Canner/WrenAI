@@ -1,7 +1,8 @@
 import { ReactNode } from 'react';
-import { ButtonProps, Modal, ModalProps } from 'antd';
+import { ButtonProps, ModalProps } from 'antd';
 import ExclamationCircleOutlined from '@ant-design/icons/ExclamationCircleOutlined';
 import DeleteOutlined from '@ant-design/icons/DeleteOutlined';
+import { appModal } from '@/utils/antdAppBridge';
 
 type DeleteModalProps = {
   disabled?: boolean;
@@ -31,7 +32,7 @@ export const makeDeleteModal =
       <Component
         icon={config?.icon}
         onClick={() =>
-          Modal.confirm({
+          appModal.confirm({
             autoFocusButton: null,
             cancelText: '取消',
             content: config?.content || '删除后将无法恢复，请确认是否继续。',

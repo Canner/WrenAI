@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, Modal, Select, Row, Col, Form, message } from 'antd';
+import { Button, Select, Row, Col, Form } from 'antd';
 import { Path } from '@/utils/enum';
 import { getLanguageText } from '@/utils/language';
 import { ProjectLanguage } from '@/types/project';
@@ -10,6 +10,7 @@ import {
   updateCurrentProjectLanguage,
 } from '@/utils/settingsRest';
 import { clearRuntimePagePrefetchCache } from '@/utils/runtimePagePrefetch';
+import { appMessage, appModal } from '@/utils/antdAppBridge';
 
 interface Props {
   data: { language: string };
@@ -27,7 +28,7 @@ export default function ProjectSettings(props: Props) {
   });
 
   const reset = () => {
-    Modal.confirm({
+    appModal.confirm({
       title: '确认要重置当前知识库吗？',
       okButtonProps: { danger: true, loading: resetting },
       okText: '确认重置',
@@ -39,7 +40,7 @@ export default function ProjectSettings(props: Props) {
           clearRuntimePagePrefetchCache();
           runtimeScopeNavigation.push(Path.OnboardingConnection);
         } catch (error) {
-          message.error(
+          appMessage.error(
             error instanceof Error
               ? error.message
               : '重置知识库失败，请稍后重试。',
@@ -63,9 +64,9 @@ export default function ProjectSettings(props: Props) {
             values.language,
           );
           await refetchSettings?.();
-          message.success('知识库语言已更新。');
+          appMessage.success('知识库语言已更新。');
         } catch (error) {
-          message.error(
+          appMessage.error(
             error instanceof Error
               ? error.message
               : '更新知识库语言失败，请稍后重试。',

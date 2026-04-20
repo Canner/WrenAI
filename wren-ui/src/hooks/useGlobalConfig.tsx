@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { message } from 'antd';
+import { appMessage } from '@/utils/antdAppBridge';
 import { getUserConfig, UserConfig } from '@/utils/env';
 import { trackUserTelemetry } from '@/utils/telemetry';
 
@@ -44,7 +44,7 @@ export const GlobalConfigProvider = ({ children }: { children: ReactNode }) => {
         setConfig(config);
       })
       .catch(() => {
-        message.error('加载全局配置失败，请刷新页面重试');
+        appMessage.error('加载全局配置失败，请刷新页面重试');
       });
 
     return () => {

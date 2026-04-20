@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { Modal } from 'antd';
 import type { TreeDataNode } from 'antd';
 import PlusOutlined from '@ant-design/icons/PlusOutlined';
 import { Path } from '@/utils/enum';
@@ -14,6 +13,7 @@ import {
 import LabelTitle from '@/components/sidebar/LabelTitle';
 import { StyledSidebarTree } from '@/components/sidebar/Modeling';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
+import { appModal } from '@/utils/antdAppBridge';
 
 interface Props {
   [key: string]: any;
@@ -26,7 +26,7 @@ export default function ViewTree(props: Props) {
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
 
   const onAddView = () => {
-    Modal.info({
+    appModal.info({
       title: '如何创建视图？',
       content: (
         <div>
