@@ -24,6 +24,13 @@ describe.each([
   ['v1', '../v1/thread-responses/[id]/stream-answer'],
 ])('%s thread response stream API', (_label, modulePath) => {
   let consoleErrorSpy: jest.SpyInstance;
+  const loadHandler = async () => {
+    if (modulePath === '../ask_task/streaming_answer') {
+      return (await import('../ask_task/streaming_answer')).default;
+    }
+
+    return (await import('../v1/thread-responses/[id]/stream-answer')).default;
+  };
 
   const createReq = (query: Record<string, any> = {}) => {
     const handlers = new Map<string, () => void>();
@@ -83,7 +90,7 @@ describe.each([
   });
 
   it('returns 400 when responseId is missing', async () => {
-    const handler = (await import(modulePath)).default;
+    const handler = await loadHandler();
     const req = createReq();
     const res = createRes();
 
@@ -95,7 +102,7 @@ describe.each([
   });
 
   it('uses scoped response APIs before streaming answer output', async () => {
-    const handler = (await import(modulePath)).default;
+    const handler = await loadHandler();
     const req = createReq(
       modulePath.includes('[id]') ? { id: '202' } : { responseId: '202' },
     );
@@ -163,7 +170,7 @@ describe.each([
   });
 
   it('returns 500 when scoped response guard fails', async () => {
-    const handler = (await import(modulePath)).default;
+    const handler = await loadHandler();
     const req = createReq(
       modulePath.includes('[id]') ? { id: '202' } : { responseId: '202' },
     );
@@ -189,7 +196,7 @@ describe.each([
   });
 
   it('replays finished content immediately when the answer has already been finalized', async () => {
-    const handler = (await import(modulePath)).default;
+    const handler = await loadHandler();
     const req = createReq(
       modulePath.includes('[id]') ? { id: '303' } : { responseId: '303' },
     );

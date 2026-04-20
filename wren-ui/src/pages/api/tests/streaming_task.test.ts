@@ -19,6 +19,13 @@ describe.each([
   ['v1', '../v1/asking-tasks/[id]/stream'],
 ])('%s asking task stream API', (_label, modulePath) => {
   let consoleErrorSpy: jest.SpyInstance;
+  const loadHandler = async () => {
+    if (modulePath === '../ask_task/streaming') {
+      return (await import('../ask_task/streaming')).default;
+    }
+
+    return (await import('../v1/asking-tasks/[id]/stream')).default;
+  };
 
   const createReq = (query: Record<string, any> = {}) => {
     const handlers = new Map<string, () => void>();
@@ -73,7 +80,7 @@ describe.each([
   });
 
   it('returns 400 when task id is missing', async () => {
-    const handler = (await import(modulePath)).default;
+    const handler = await loadHandler();
     const req = createReq();
     const res = createRes();
 
@@ -84,7 +91,7 @@ describe.each([
   });
 
   it('streams asking task output after scope validation', async () => {
-    const handler = (await import(modulePath)).default;
+    const handler = await loadHandler();
     const req = createReq(
       modulePath.includes('[id]') ? { id: 'ask-1' } : { queryId: 'ask-1' },
     );
