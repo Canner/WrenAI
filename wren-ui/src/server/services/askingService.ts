@@ -1,527 +1,45 @@
+import { PersistedRuntimeIdentity } from '@server/context/runtimeScope';
 import { IWrenAIAdaptor } from '@server/adaptors/wrenAIAdaptor';
 import {
-  AskRuntimeIdentity,
-  AskResultStatus,
-  RecommendationQuestionsResult,
-  RecommendationQuestionsInput,
-  RecommendationQuestion,
-  WrenAIError,
-  WrenAILanguage,
-  RecommendationQuestionStatus,
-  ChartStatus,
-  ChartAdjustmentOption,
-} from '@server/models/adaptor';
-import { buildAskRuntimeContext } from '@server/utils/askContext';
-import { IDeployService } from './deployService';
-import { IProjectService } from './projectService';
-import { IThreadRepository, Thread } from '../repositories/threadRepository';
-import {
-  IThreadResponseRepository,
-  ThreadResponse,
-  ThreadResponseAdjustmentType,
-} from '../repositories/threadResponseRepository';
-import { getLogger } from '@server/utils';
-import { isEmpty, isEqual, isNil } from 'lodash';
-import { safeFormatSQL } from '@server/utils/sqlFormat';
-import { DataSourceName } from '@server/types';
-import {
-  PostHogTelemetry,
-  TelemetryEvent,
-  WrenService,
-} from '../telemetry/telemetry';
+  AdjustmentBackgroundTaskTracker,
+  ChartAdjustmentBackgroundTracker,
+  ChartBackgroundTracker,
+  ThreadRecommendQuestionBackgroundTracker,
+} from '../backgrounds';
+import { TextBasedAnswerBackgroundTracker } from '../backgrounds/textBasedAnswerBackgroundTracker';
 import {
   IAskingTaskRepository,
   IKnowledgeBaseRepository,
   IViewRepository,
-  Project,
 } from '../repositories';
+import { IThreadRepository } from '../repositories/threadRepository';
+import { IThreadResponseRepository } from '../repositories/threadResponseRepository';
+import { PostHogTelemetry } from '../telemetry/telemetry';
+import { IAskingTaskTracker } from './askingTaskTracker';
+import { IDeployService } from './deployService';
+import { IProjectService } from './projectService';
 import { IQueryService, PreviewDataResponse } from './queryService';
-import {
-  ThreadRecommendQuestionBackgroundTracker,
-  ChartBackgroundTracker,
-  ChartAdjustmentBackgroundTracker,
-  AdjustmentBackgroundTaskTracker,
-  TrackedAdjustmentResult,
-} from '../backgrounds';
-import { getConfig } from '@server/config';
-import { TextBasedAnswerBackgroundTracker } from '../backgrounds/textBasedAnswerBackgroundTracker';
-import { IAskingTaskTracker, TrackedAskingResult } from './askingTaskTracker';
-import { PersistedRuntimeIdentity } from '@server/context/runtimeScope';
 import { ISkillService } from './skillService';
-import { Deploy } from '../repositories/deployLogRepository';
 import {
-  isPersistedRuntimeIdentityMatch,
-  normalizeCanonicalPersistedRuntimeIdentity,
-  resolveRuntimeScopeIdFromPersistedIdentityWithProjectBridgeFallback,
-  toPersistedRuntimeIdentityFromSource,
-} from '@server/utils/persistedRuntimeIdentity';
-import { resolveProjectLanguage } from '@server/utils/runtimeExecutionContext';
-import { Manifest, WrenEngineDataSourceType } from '../mdl/type';
-import { registerShutdownCallback } from '@server/utils/shutdown';
-import {
-  applyDeterministicChartAdjustment,
-  shapeChartPreviewData,
-} from '@/utils/chartSpecRuntime';
-
-const config = getConfig();
-
-const logger = getLogger('AskingService');
-logger.level = 'debug';
-const CHART_GENERATION_SAMPLE_LIMIT = 200;
-
-// const QUERY_ID_PLACEHOLDER = '0';
-
-export interface Task {
-  id: string;
-}
-
-export interface AskingPayload {
-  threadId?: number;
-  runtimeScopeId?: string | null;
-  runtimeIdentity?: PersistedRuntimeIdentity | null;
-  language: string;
-}
-
-export interface AskingTaskInput {
-  question: string;
-  knowledgeBaseIds?: string[];
-  selectedSkillIds?: string[];
-}
-
-export interface AskingDetailTaskInput {
-  question?: string;
-  sql?: string;
-  trackedAskingResult?: TrackedAskingResult;
-  knowledgeBaseIds?: string[];
-  selectedSkillIds?: string[];
-}
-
-export interface AskingDetailTaskUpdateInput {
-  summary?: string;
-}
-
-export enum RecommendQuestionResultStatus {
-  NOT_STARTED = 'NOT_STARTED',
-  GENERATING = 'GENERATING',
-  FINISHED = 'FINISHED',
-  FAILED = 'FAILED',
-}
-
-export interface ThreadRecommendQuestionResult {
-  status: RecommendQuestionResultStatus;
-  questions: RecommendationQuestion[];
-  error?: WrenAIError;
-}
-
-export interface InstantRecommendedQuestionsInput {
-  previousQuestions?: string[];
-}
-
-type InstantRecommendedQuestionTask = {
-  runtimeIdentity: PersistedRuntimeIdentity;
-  createdAt: number;
-};
-
-export enum ThreadResponseAnswerStatus {
-  NOT_STARTED = 'NOT_STARTED',
-  FETCHING_DATA = 'FETCHING_DATA',
-  PREPROCESSING = 'PREPROCESSING',
-  STREAMING = 'STREAMING',
-  FINISHED = 'FINISHED',
-  FAILED = 'FAILED',
-  INTERRUPTED = 'INTERRUPTED',
-}
-
-// adjustment input
-export interface AdjustmentReasoningInput {
-  tables: string[];
-  sqlGenerationReasoning: string;
-  runtimeIdentity?: PersistedRuntimeIdentity;
-}
-
-export interface AdjustmentSqlInput {
-  sql: string;
-}
-
-export interface IAskingService {
-  /**
-   * Asking task.
-   */
-  createAskingTask(
-    input: AskingTaskInput,
-    payload: AskingPayload,
-    // if the asking task is rerun from a cancelled thread response
-    rerunFromCancelled?: boolean,
-    // if the asking task is rerun from a cancelled thread response,
-    // the previous task id is the task id of the cancelled thread response
-    previousTaskId?: number,
-    // if the asking task is rerun from a thread response
-    // the thread response id is the id of the cancelled thread response
-    threadResponseId?: number,
-  ): Promise<Task>;
-  rerunAskingTask(
-    threadResponseId: number,
-    payload: AskingPayload,
-  ): Promise<Task>;
-  cancelAskingTask(taskId: string): Promise<void>;
-  getAskingTask(taskId: string): Promise<TrackedAskingResult | null>;
-  getAskingTaskById(id: number): Promise<TrackedAskingResult | null>;
-
-  /**
-   * Asking detail task.
-   */
-  createThread(
-    input: AskingDetailTaskInput,
-    runtimeIdentity: PersistedRuntimeIdentity,
-  ): Promise<Thread>;
-  updateThreadScoped(
-    threadId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-    input: Partial<AskingDetailTaskUpdateInput>,
-  ): Promise<Thread>;
-  deleteThreadScoped(
-    threadId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-  ): Promise<void>;
-  listThreads(runtimeIdentity: PersistedRuntimeIdentity): Promise<Thread[]>;
-  assertThreadScope(
-    threadId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-  ): Promise<Thread>;
-  assertAskingTaskScope(
-    queryId: string,
-    runtimeIdentity: PersistedRuntimeIdentity,
-  ): Promise<void>;
-  assertAskingTaskScopeById(
-    taskId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-  ): Promise<void>;
-  assertResponseScope(
-    responseId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-  ): Promise<ThreadResponse>;
-  createThreadResponseScoped(
-    input: AskingDetailTaskInput,
-    threadId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-  ): Promise<ThreadResponse>;
-  updateThreadResponseScoped(
-    responseId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-    data: { sql: string },
-  ): Promise<ThreadResponse>;
-  getResponsesWithThreadScoped(
-    threadId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-  ): Promise<ThreadResponse[]>;
-  getResponseScoped(
-    responseId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-  ): Promise<ThreadResponse>;
-  generateThreadResponseBreakdownScoped(
-    threadResponseId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-    configurations: { language: string },
-  ): Promise<ThreadResponse>;
-  generateThreadResponseAnswerScoped(
-    threadResponseId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-    configurations: { language: string },
-  ): Promise<ThreadResponse>;
-  generateThreadResponseChartScoped(
-    threadResponseId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-    configurations: { language: string },
-    runtimeScopeId?: string | null,
-  ): Promise<ThreadResponse>;
-  adjustThreadResponseChartScoped(
-    threadResponseId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-    input: ChartAdjustmentOption,
-    configurations: { language: string },
-    runtimeScopeId?: string | null,
-  ): Promise<ThreadResponse>;
-  adjustThreadResponseWithSQLScoped(
-    threadResponseId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-    input: AdjustmentSqlInput,
-  ): Promise<ThreadResponse>;
-  adjustThreadResponseAnswerScoped(
-    threadResponseId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-    input: AdjustmentReasoningInput,
-    configurations: { language: string },
-    runtimeScopeId?: string | null,
-  ): Promise<ThreadResponse>;
-  cancelAdjustThreadResponseAnswer(taskId: string): Promise<void>;
-  rerunAdjustThreadResponseAnswer(
-    threadResponseId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-    configurations: { language: string },
-    runtimeScopeId?: string | null,
-  ): Promise<{ queryId: string }>;
-  getAdjustmentTask(taskId: string): Promise<TrackedAdjustmentResult | null>;
-  getAdjustmentTaskById(id: number): Promise<TrackedAdjustmentResult | null>;
-  changeThreadResponseAnswerDetailStatusScoped(
-    responseId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-    status: ThreadResponseAnswerStatus,
-    content?: string,
-  ): Promise<ThreadResponse>;
-  previewDataScoped(
-    responseId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-    limit?: number,
-  ): Promise<PreviewDataResponse>;
-  previewBreakdownDataScoped(
-    responseId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-    stepIndex?: number,
-    limit?: number,
-  ): Promise<PreviewDataResponse>;
-
-  /**
-   * Recommendation questions
-   */
-  createInstantRecommendedQuestions(
-    input: InstantRecommendedQuestionsInput,
-    runtimeIdentity: PersistedRuntimeIdentity,
-    runtimeScopeId?: string | null,
-  ): Promise<Task>;
-  getInstantRecommendedQuestions(
-    queryId: string,
-    runtimeIdentity: PersistedRuntimeIdentity,
-  ): Promise<RecommendationQuestionsResult>;
-  generateThreadRecommendationQuestions(
-    threadId: number,
-    runtimeScopeId?: string | null,
-  ): Promise<void>;
-  getThreadRecommendationQuestions(
-    threadId: number,
-  ): Promise<ThreadRecommendQuestionResult>;
-
-  deleteAllByProjectId(projectId: number): Promise<void>;
-}
-
-/**
- * utility function to check if the status is finalized
- */
-const isFinalized = (status: AskResultStatus) => {
-  return (
-    status === AskResultStatus.FAILED ||
-    status === AskResultStatus.FINISHED ||
-    status === AskResultStatus.STOPPED
-  );
-};
-
-const isRecommendationQuestionsFinalized = (
-  status: RecommendationQuestionStatus,
-) => {
-  return (
-    status === RecommendationQuestionStatus.FAILED ||
-    status === RecommendationQuestionStatus.FINISHED
-  );
-};
-
-/**
- * Given a list of steps, construct the SQL statement with CTEs
- * If stepIndex is provided, only construct the SQL from top to that step
- * @param steps
- * @param stepIndex
- * @returns string
- */
-export const constructCteSql = (
-  steps: Array<{ cteName: string; summary: string; sql: string }>,
-  stepIndex?: number,
-): string => {
-  // validate stepIndex
-  if (!isNil(stepIndex) && (stepIndex < 0 || stepIndex >= steps.length)) {
-    throw new Error(`Invalid stepIndex: ${stepIndex}`);
-  }
-
-  const slicedSteps = isNil(stepIndex) ? steps : steps.slice(0, stepIndex + 1);
-
-  // if there's only one step, return the sql directly
-  if (slicedSteps.length === 1) {
-    return `-- ${slicedSteps[0].summary}\n${slicedSteps[0].sql}`;
-  }
-
-  let sql = 'WITH ';
-  slicedSteps.forEach((step, index) => {
-    if (index === slicedSteps.length - 1) {
-      // if it's the last step, remove the trailing comma.
-      // no need to wrap with WITH
-      sql += `\n-- ${step.summary}\n`;
-      sql += `${step.sql}`;
-    } else if (index === slicedSteps.length - 2) {
-      // if it's the last two steps, remove the trailing comma.
-      // wrap with CTE
-      sql += `${step.cteName} AS`;
-      sql += `\n-- ${step.summary}\n`;
-      sql += `(${step.sql})`;
-    } else {
-      // if it's not the last step, wrap with CTE
-      sql += `${step.cteName} AS`;
-      sql += `\n-- ${step.summary}\n`;
-      sql += `(${step.sql}),`;
-    }
-  });
-
-  return sql;
-};
-
-/**
- * Background tracker to track the status of the asking breakdown task
- */
-class BreakdownBackgroundTracker {
-  // tasks is a kv pair of task id and thread response
-  private tasks: Record<number, ThreadResponse> = {};
-  private intervalTime: number;
-  private wrenAIAdaptor: IWrenAIAdaptor;
-  private threadResponseRepository: IThreadResponseRepository;
-  private runningJobs = new Set();
-  private telemetry: PostHogTelemetry;
-  private pollingIntervalId: ReturnType<typeof setInterval> | null = null;
-  private unregisterShutdown?: () => void;
-
-  constructor({
-    telemetry,
-    wrenAIAdaptor,
-    threadResponseRepository,
-  }: {
-    telemetry: PostHogTelemetry;
-    wrenAIAdaptor: IWrenAIAdaptor;
-    threadResponseRepository: IThreadResponseRepository;
-  }) {
-    this.telemetry = telemetry;
-    this.wrenAIAdaptor = wrenAIAdaptor;
-    this.threadResponseRepository = threadResponseRepository;
-    this.intervalTime = 1000;
-    this.start();
-  }
-
-  public start() {
-    if (this.pollingIntervalId) {
-      return;
-    }
-    logger.info('Background tracker started');
-    this.pollingIntervalId = setInterval(() => {
-      const jobs = Object.values(this.tasks).map(
-        (threadResponse) => async () => {
-          // check if same job is running
-          if (this.runningJobs.has(threadResponse.id)) {
-            return;
-          }
-
-          // mark the job as running
-          this.runningJobs.add(threadResponse.id);
-
-          // get the answer detail
-          const breakdownDetail = threadResponse.breakdownDetail;
-          if (!breakdownDetail?.queryId) {
-            this.runningJobs.delete(threadResponse.id);
-            return;
-          }
-
-          // get the latest result from AI service
-          const result = await this.wrenAIAdaptor.getAskDetailResult(
-            breakdownDetail.queryId,
-          );
-
-          // check if status change
-          if (breakdownDetail.status === result.status) {
-            // mark the job as finished
-            logger.debug(
-              `Job ${threadResponse.id} status not changed, finished`,
-            );
-            this.runningJobs.delete(threadResponse.id);
-            return;
-          }
-
-          // update database
-          const updatedBreakdownDetail = {
-            queryId: breakdownDetail.queryId,
-            status: result?.status || breakdownDetail.status,
-            error: result?.error || undefined,
-            description: result?.response?.description,
-            steps: result?.response?.steps,
-          };
-          logger.debug(`Job ${threadResponse.id} status changed, updating`);
-          const updatedThreadResponse =
-            await this.threadResponseRepository.updateOneByIdWithRuntimeScope(
-              threadResponse.id,
-              toPersistedRuntimeIdentityFromSource(threadResponse),
-              {
-                breakdownDetail: updatedBreakdownDetail,
-              },
-            );
-          if (!updatedThreadResponse) {
-            delete this.tasks[threadResponse.id];
-            this.runningJobs.delete(threadResponse.id);
-            throw new Error(
-              `Thread response ${threadResponse.id} no longer matches the tracked runtime scope`,
-            );
-          }
-          this.tasks[threadResponse.id] = updatedThreadResponse;
-
-          // remove the task from tracker if it is finalized
-          if (isFinalized(result.status)) {
-            const eventProperties = {
-              question: threadResponse.question,
-              error: result.error,
-            };
-            if (result.status === AskResultStatus.FINISHED) {
-              this.telemetry.sendEvent(
-                TelemetryEvent.HOME_ANSWER_BREAKDOWN,
-                eventProperties,
-              );
-            } else {
-              this.telemetry.sendEvent(
-                TelemetryEvent.HOME_ANSWER_BREAKDOWN,
-                eventProperties,
-                WrenService.AI,
-                false,
-              );
-            }
-            logger.debug(`Job ${threadResponse.id} is finalized, removing`);
-            delete this.tasks[threadResponse.id];
-          }
-
-          // mark the job as finished
-          this.runningJobs.delete(threadResponse.id);
-        },
-      );
-
-      // run the jobs
-      Promise.allSettled(jobs.map((job) => job())).then((results) => {
-        // show reason of rejection
-        results.forEach((result, index) => {
-          if (result.status === 'rejected') {
-            logger.error(`Job ${index} failed: ${result.reason}`);
-          }
-        });
-      });
-    }, this.intervalTime);
-    this.unregisterShutdown = registerShutdownCallback(() => this.stop());
-  }
-
-  public stop() {
-    if (this.pollingIntervalId) {
-      clearInterval(this.pollingIntervalId);
-      this.pollingIntervalId = null;
-    }
-    this.unregisterShutdown?.();
-    this.unregisterShutdown = undefined;
-  }
-
-  public addTask(threadResponse: ThreadResponse) {
-    this.tasks[threadResponse.id] = threadResponse;
-  }
-
-  public getTasks() {
-    return this.tasks;
-  }
-}
+  AdjustmentReasoningInput,
+  AdjustmentSqlInput,
+  AskingDetailTaskInput,
+  AskingDetailTaskUpdateInput,
+  AskingPayload,
+  AskingServiceConstructorArgs,
+  AskingTaskInput,
+  BreakdownBackgroundTracker,
+  constructCteSql,
+  IAskingService,
+  InstantRecommendedQuestionTask,
+  InstantRecommendedQuestionsInput,
+  RecommendQuestionResultStatus,
+  Task,
+  ThreadRecommendQuestionResult,
+  ThreadResponseAnswerStatus,
+} from './askingServiceShared';
+import { applyAskingServiceActionPrototype } from './askingServicePrototypeActions';
+import { applyAskingServiceHelperPrototype } from './askingServicePrototypeHelpers';
 
 export class AskingService implements IAskingService {
   private instantRecommendedQuestionTasks = new Map<
@@ -551,6 +69,192 @@ export class AskingService implements IAskingService {
   private skillService?: Pick<ISkillService, 'getSkillDefinitionById'>;
   private backgroundTrackerWorkspaceId?: string | null;
 
+  public initialize!: () => Promise<void>;
+  public createAskingTask!: IAskingService['createAskingTask'];
+  public rerunAskingTask!: IAskingService['rerunAskingTask'];
+  public cancelAskingTask!: IAskingService['cancelAskingTask'];
+  public getAskingTask!: IAskingService['getAskingTask'];
+  public getAskingTaskById!: IAskingService['getAskingTaskById'];
+  public createThread!: IAskingService['createThread'];
+  public updateThreadScoped!: IAskingService['updateThreadScoped'];
+  public deleteThreadScoped!: IAskingService['deleteThreadScoped'];
+  public listThreads!: IAskingService['listThreads'];
+  public assertThreadScope!: IAskingService['assertThreadScope'];
+  public assertAskingTaskScope!: IAskingService['assertAskingTaskScope'];
+  public assertAskingTaskScopeById!: IAskingService['assertAskingTaskScopeById'];
+  public assertResponseScope!: IAskingService['assertResponseScope'];
+  public createThreadResponseScoped!: IAskingService['createThreadResponseScoped'];
+  public updateThreadResponseScoped!: IAskingService['updateThreadResponseScoped'];
+  public getResponsesWithThreadScoped!: IAskingService['getResponsesWithThreadScoped'];
+  public getResponseScoped!: IAskingService['getResponseScoped'];
+  public generateThreadResponseBreakdownScoped!: IAskingService['generateThreadResponseBreakdownScoped'];
+  public generateThreadResponseAnswerScoped!: IAskingService['generateThreadResponseAnswerScoped'];
+  public generateThreadResponseChartScoped!: IAskingService['generateThreadResponseChartScoped'];
+  public adjustThreadResponseChartScoped!: IAskingService['adjustThreadResponseChartScoped'];
+  public adjustThreadResponseWithSQLScoped!: IAskingService['adjustThreadResponseWithSQLScoped'];
+  public adjustThreadResponseAnswerScoped!: IAskingService['adjustThreadResponseAnswerScoped'];
+  public cancelAdjustThreadResponseAnswer!: IAskingService['cancelAdjustThreadResponseAnswer'];
+  public rerunAdjustThreadResponseAnswer!: IAskingService['rerunAdjustThreadResponseAnswer'];
+  public getAdjustmentTask!: IAskingService['getAdjustmentTask'];
+  public getAdjustmentTaskById!: IAskingService['getAdjustmentTaskById'];
+  public changeThreadResponseAnswerDetailStatusScoped!: IAskingService['changeThreadResponseAnswerDetailStatusScoped'];
+  public previewDataScoped!: IAskingService['previewDataScoped'];
+  public previewBreakdownDataScoped!: IAskingService['previewBreakdownDataScoped'];
+  public createInstantRecommendedQuestions!: IAskingService['createInstantRecommendedQuestions'];
+  public getInstantRecommendedQuestions!: IAskingService['getInstantRecommendedQuestions'];
+  public generateThreadRecommendationQuestions!: IAskingService['generateThreadRecommendationQuestions'];
+  public getThreadRecommendationQuestions!: IAskingService['getThreadRecommendationQuestions'];
+  public deleteAllByProjectId!: IAskingService['deleteAllByProjectId'];
+
+  public updateThread!: (
+    threadId: number,
+    input: Partial<AskingDetailTaskUpdateInput>,
+  ) => Promise<any>;
+  public deleteThread!: (threadId: number) => Promise<void>;
+  public createThreadResponse!: (
+    input: AskingDetailTaskInput,
+    threadId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ) => Promise<any>;
+  public updateThreadResponse!: (
+    responseId: number,
+    data: { sql: string },
+  ) => Promise<any>;
+  public generateThreadResponseBreakdown!: (
+    threadResponseId: number,
+    configurations: { language: string },
+  ) => Promise<any>;
+  public generateThreadResponseAnswer!: (
+    threadResponseId: number,
+    configurations?: { language: string },
+  ) => Promise<any>;
+  public generateThreadResponseChart!: (
+    threadResponseId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+    configurations: { language: string },
+    runtimeScopeId?: string | null,
+  ) => Promise<any>;
+  public adjustThreadResponseChart!: (
+    threadResponseId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+    input: any,
+    configurations?: { language: string },
+    runtimeScopeId?: string | null,
+  ) => Promise<any>;
+  public getResponsesWithThread!: (
+    threadId: number,
+    runtimeIdentity?: PersistedRuntimeIdentity,
+  ) => Promise<any[]>;
+  public getResponse!: (responseId: number) => Promise<any>;
+  public previewData!: (
+    responseId: number,
+    limit?: number,
+    fallbackRuntimeIdentity?: PersistedRuntimeIdentity | null,
+  ) => Promise<PreviewDataResponse>;
+  public previewBreakdownData!: (
+    responseId: number,
+    stepIndex?: number,
+    limit?: number,
+    fallbackRuntimeIdentity?: PersistedRuntimeIdentity | null,
+  ) => Promise<PreviewDataResponse>;
+  public changeThreadResponseAnswerDetailStatus!: (
+    responseId: number,
+    status: ThreadResponseAnswerStatus,
+    content?: string,
+  ) => Promise<any>;
+  public adjustThreadResponseWithSQL!: (
+    threadResponseId: number,
+    input: AdjustmentSqlInput,
+    fallbackRuntimeIdentity?: PersistedRuntimeIdentity | null,
+  ) => Promise<any>;
+  public adjustThreadResponseAnswer!: (
+    threadResponseId: number,
+    input: AdjustmentReasoningInput,
+    configurations: { language: string },
+    runtimeScopeId?: string | null,
+  ) => Promise<any>;
+
+  public getDeployId!: (
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ) => Promise<any>;
+  public getProjectAndDeployment!: (
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ) => Promise<any>;
+  public resolveScopedKnowledgeBaseIds!: (
+    inputKnowledgeBaseIds?: string[] | null,
+    thread?: any,
+    runtimeIdentity?: PersistedRuntimeIdentity | null,
+  ) => string[];
+  public resolveRuntimeIdentityFromKnowledgeSelection!: (
+    runtimeIdentity: PersistedRuntimeIdentity,
+    knowledgeBaseIds: string[],
+  ) => Promise<PersistedRuntimeIdentity>;
+  public resolveScopedSelectedSkillIds!: (
+    inputSelectedSkillIds?: string[] | null,
+    thread?: any,
+  ) => string[] | undefined;
+  public resolveRetrievalScopeIds!: (
+    knowledgeBaseIds: string[],
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ) => Promise<string[]>;
+  public resolveAskingRuntimeIdentity!: (
+    payload: AskingPayload,
+    threadRuntimeIdentity?: PersistedRuntimeIdentity | null,
+  ) => PersistedRuntimeIdentity;
+  public buildPersistedRuntimeIdentityPatch!: (
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ) => PersistedRuntimeIdentity;
+  public ensureTrackedAskingTaskPersisted!: (
+    queryId: string,
+    question: string,
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ) => Promise<void>;
+  public getThreadById!: (threadId: number) => Promise<any>;
+  public getThreadRuntimeIdentity!: (
+    threadId: number,
+    fallbackRuntimeIdentity?: PersistedRuntimeIdentity | null,
+  ) => Promise<PersistedRuntimeIdentity>;
+  public getThreadResponseRuntimeIdentity!: (
+    threadResponse: any,
+    fallbackRuntimeIdentity?: PersistedRuntimeIdentity | null,
+  ) => Promise<PersistedRuntimeIdentity>;
+  public getExecutionResources!: (
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ) => Promise<any>;
+  public getAskingHistory!: (
+    threadId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+    excludeThreadResponseId?: number,
+  ) => Promise<any[]>;
+  public getThreadRecommendationQuestionsConfig!: (project: any) => any;
+  public isLikelyNonChineseQuestions!: (
+    questions: any[] | undefined | null,
+  ) => boolean;
+  public shouldForceChineseThreadRecommendation!: (
+    thread: any,
+  ) => Promise<boolean>;
+  public trackInstantRecommendedQuestionTask!: (
+    queryId: string,
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ) => void;
+  public assertInstantRecommendedQuestionTaskScope!: (
+    queryId: string,
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ) => void;
+  public buildManifestBackedProject!: (deployment: any) => any;
+  public mapManifestDataSourceToProjectType!: (dataSource: any) => any;
+  public toAskRuntimeIdentity!: (
+    runtimeIdentity?: PersistedRuntimeIdentity | null,
+  ) => any;
+  public buildAskTaskRuntimeIdentity!: (
+    runtimeIdentity: PersistedRuntimeIdentity,
+    deployHash?: string | null,
+  ) => any;
+  public normalizeRuntimeScope!: (
+    runtimeIdentity?: PersistedRuntimeIdentity | null,
+  ) => PersistedRuntimeIdentity | null;
+  public resolveBreakdownBootstrapWorkspaceId!: () => Promise<string | null>;
+
   constructor({
     telemetry,
     wrenAIAdaptor,
@@ -565,24 +269,7 @@ export class AskingService implements IAskingService {
     skillService,
     knowledgeBaseRepository,
     backgroundTrackerWorkspaceId,
-  }: {
-    telemetry: PostHogTelemetry;
-    wrenAIAdaptor: IWrenAIAdaptor;
-    deployService: IDeployService;
-    projectService: IProjectService;
-    viewRepository: IViewRepository;
-    threadRepository: IThreadRepository;
-    threadResponseRepository: IThreadResponseRepository;
-    askingTaskRepository: IAskingTaskRepository;
-    queryService: IQueryService;
-    askingTaskTracker: IAskingTaskTracker;
-    knowledgeBaseRepository?: Pick<
-      IKnowledgeBaseRepository,
-      'findOneBy' | 'findAll'
-    >;
-    skillService?: Pick<ISkillService, 'getSkillDefinitionById'>;
-    backgroundTrackerWorkspaceId?: string | null;
-  }) {
+  }: AskingServiceConstructorArgs) {
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.deployService = deployService;
     this.projectService = projectService;
@@ -629,1732 +316,33 @@ export class AskingService implements IAskingService {
       askingTaskRepository,
       threadResponseRepository,
     });
-
     this.askingTaskRepository = askingTaskRepository;
     this.askingTaskTracker = askingTaskTracker;
     this.knowledgeBaseRepository = knowledgeBaseRepository;
     this.skillService = skillService;
     this.backgroundTrackerWorkspaceId = backgroundTrackerWorkspaceId ?? null;
   }
-
-  public async getThreadRecommendationQuestions(
-    threadId: number,
-  ): Promise<ThreadRecommendQuestionResult> {
-    const thread = await this.threadRepository.findOneBy({ id: threadId });
-    if (!thread) {
-      throw new Error(`Thread ${threadId} not found`);
-    }
-
-    // handle not started
-    const res: ThreadRecommendQuestionResult = {
-      status: RecommendQuestionResultStatus.NOT_STARTED,
-      questions: [],
-      error: undefined,
-    };
-    if (thread.queryId && thread.questionsStatus) {
-      const mappedStatus =
-        thread.questionsStatus as keyof typeof RecommendQuestionResultStatus;
-      res.status = RecommendQuestionResultStatus[mappedStatus] || res.status;
-      res.questions = thread.questions || [];
-      res.error = (thread.questionsError as WrenAIError) || undefined;
-
-      const shouldRegenerateInChinese =
-        res.status === RecommendQuestionResultStatus.FINISHED &&
-        this.isLikelyNonChineseQuestions(res.questions) &&
-        (await this.shouldForceChineseThreadRecommendation(thread));
-
-      if (shouldRegenerateInChinese) {
-        await this.generateThreadRecommendationQuestions(threadId);
-        return {
-          status: RecommendQuestionResultStatus.GENERATING,
-          questions: [],
-          error: undefined,
-        };
-      }
-    }
-    return res;
-  }
-
-  public async generateThreadRecommendationQuestions(
-    threadId: number,
-    runtimeScopeId?: string | null,
-  ): Promise<void> {
-    const thread = await this.threadRepository.findOneBy({ id: threadId });
-    if (!thread) {
-      throw new Error(`Thread ${threadId} not found`);
-    }
-
-    if (this.threadRecommendQuestionBackgroundTracker.isExist(thread)) {
-      logger.debug(
-        `thread "${threadId}" recommended questions are generating, skip the current request`,
-      );
-      return;
-    }
-
-    const runtimeIdentity = toPersistedRuntimeIdentityFromSource(thread);
-    const { project, manifest } =
-      await this.getExecutionResources(runtimeIdentity);
-
-    const threadResponses = await this.threadResponseRepository.findAllBy({
-      threadId,
-    });
-    // descending order and get the latest 5
-    const slicedThreadResponses = threadResponses
-      .sort((a, b) => b.id - a.id)
-      .slice(0, 5);
-    const questions = slicedThreadResponses.map(({ question }) => question);
-    const recommendQuestionRuntimeIdentity =
-      normalizeCanonicalPersistedRuntimeIdentity(runtimeIdentity);
-    const recommendQuestionData: RecommendationQuestionsInput = {
-      manifest,
-      runtimeScopeId:
-        runtimeScopeId ||
-        resolveRuntimeScopeIdFromPersistedIdentityWithProjectBridgeFallback(
-          recommendQuestionRuntimeIdentity,
-        ) ||
-        undefined,
-      runtimeIdentity: this.toAskRuntimeIdentity(
-        recommendQuestionRuntimeIdentity,
-      ),
-      previousQuestions: questions,
-      ...this.getThreadRecommendationQuestionsConfig(project),
-    };
-
-    const result = await this.wrenAIAdaptor.generateRecommendationQuestions(
-      recommendQuestionData,
-    );
-    // reset thread recommended questions
-    const updatedThread = await this.threadRepository.updateOne(threadId, {
-      queryId: result.queryId,
-      questionsStatus: RecommendationQuestionStatus.GENERATING,
-      questions: [],
-      questionsError: undefined,
-    });
-    this.threadRecommendQuestionBackgroundTracker.addTask(updatedThread);
-    return;
-  }
-
-  public async initialize() {
-    const bootstrapWorkspaceId =
-      await this.resolveBreakdownBootstrapWorkspaceId();
-    const scopeLabel = bootstrapWorkspaceId
-      ? `workspace ${bootstrapWorkspaceId}`
-      : 'all workspaces';
-
-    const unfininshedBreakdownThreadResponses = bootstrapWorkspaceId
-      ? await this.threadResponseRepository.findUnfinishedBreakdownResponsesByWorkspaceId(
-          bootstrapWorkspaceId,
-        )
-      : await this.threadResponseRepository.findUnfinishedBreakdownResponses();
-    logger.info(
-      `Initialization: adding unfininshed breakdown thread responses for ${scopeLabel} (total: ${unfininshedBreakdownThreadResponses.length}) to background tracker`,
-    );
-    for (const threadResponse of unfininshedBreakdownThreadResponses) {
-      this.breakdownBackgroundTracker.addTask(threadResponse);
-    }
-
-    const unfinishedAnswerResponses =
-      await this.threadResponseRepository.findUnfinishedAnswerResponses();
-    logger.info(
-      `Initialization: adding unfinished text-answer thread responses for all workspaces (total: ${unfinishedAnswerResponses.length}) to background tracker`,
-    );
-    for (const threadResponse of unfinishedAnswerResponses) {
-      this.textBasedAnswerBackgroundTracker.addTask(threadResponse);
-    }
-
-    const unfinishedChartResponses =
-      await this.threadResponseRepository.findUnfinishedChartResponses({
-        adjustment: false,
-      });
-    logger.info(
-      `Initialization: adding unfinished chart thread responses for all workspaces (total: ${unfinishedChartResponses.length}) to background tracker`,
-    );
-    for (const threadResponse of unfinishedChartResponses) {
-      this.chartBackgroundTracker.addTask(threadResponse);
-    }
-
-    const unfinishedChartAdjustmentResponses =
-      await this.threadResponseRepository.findUnfinishedChartResponses({
-        adjustment: true,
-      });
-    logger.info(
-      `Initialization: adding unfinished chart adjustment thread responses for all workspaces (total: ${unfinishedChartAdjustmentResponses.length}) to background tracker`,
-    );
-    for (const threadResponse of unfinishedChartAdjustmentResponses) {
-      this.chartAdjustmentBackgroundTracker.addTask(threadResponse);
-    }
-  }
-
-  private async resolveBreakdownBootstrapWorkspaceId(): Promise<string | null> {
-    if (this.backgroundTrackerWorkspaceId) {
-      return this.backgroundTrackerWorkspaceId;
-    }
-
-    const knowledgeBases = await this.knowledgeBaseRepository?.findAll?.();
-    const workspaceIds = Array.from(
-      new Set(
-        (knowledgeBases || [])
-          .map((knowledgeBase) => knowledgeBase.workspaceId)
-          .filter(Boolean),
-      ),
-    );
-
-    if (workspaceIds.length === 1) {
-      return workspaceIds[0];
-    }
-
-    return null;
-  }
-
-  /**
-   * Asking task.
-   */
-  public async createAskingTask(
-    input: AskingTaskInput,
-    payload: AskingPayload,
-    rerunFromCancelled?: boolean,
-    previousTaskId?: number,
-    threadResponseId?: number,
-  ): Promise<Task> {
-    const { threadId, language } = payload;
-    const thread = threadId ? await this.getThreadById(threadId) : null;
-    const threadRuntimeIdentity = thread
-      ? toPersistedRuntimeIdentityFromSource(
-          thread,
-          payload.runtimeIdentity
-            ? normalizeCanonicalPersistedRuntimeIdentity({
-                ...payload.runtimeIdentity,
-                deployHash: null,
-              })
-            : null,
-        )
-      : null;
-    const runtimeIdentity = this.resolveAskingRuntimeIdentity(
-      payload,
-      threadRuntimeIdentity,
-    );
-    const knowledgeBaseIds = this.resolveScopedKnowledgeBaseIds(
-      input.knowledgeBaseIds,
-      thread,
-      runtimeIdentity,
-    );
-    const scopedRuntimeIdentity =
-      await this.resolveRuntimeIdentityFromKnowledgeSelection(
-        runtimeIdentity,
-        knowledgeBaseIds,
-      );
-    const selectedSkillIds = this.resolveScopedSelectedSkillIds(
-      input.selectedSkillIds,
-      thread,
-    );
-    const deployId =
-      scopedRuntimeIdentity.deployHash ||
-      (await this.getDeployId(scopedRuntimeIdentity));
-    const retrievalScopeIds = await this.resolveRetrievalScopeIds(
-      knowledgeBaseIds,
-      {
-        ...scopedRuntimeIdentity,
-        deployHash: scopedRuntimeIdentity.deployHash || deployId,
-      },
-    );
-    const taskRuntimeIdentity = this.buildAskTaskRuntimeIdentity(
-      scopedRuntimeIdentity,
-      scopedRuntimeIdentity.deployHash || deployId,
-    );
-
-    // if it's a follow-up question, then the input will have a threadId
-    // then use the threadId to get the sql and get the steps of last thread response
-    // construct it into AskHistory and pass to ask
-    const histories = threadId
-      ? await this.getAskingHistory(
-          threadId,
-          scopedRuntimeIdentity,
-          threadResponseId,
-        )
-      : undefined;
-    const askRuntimeContext = await buildAskRuntimeContext({
-      runtimeIdentity: this.toAskRuntimeIdentity(taskRuntimeIdentity),
-      knowledgeBaseIds,
-      selectedSkillIds,
-      skillService: this.skillService,
-    });
-    const { runtimeIdentity: _runtimeIdentity, ...askContextWithoutIdentity } =
-      askRuntimeContext;
-    const response = await this.askingTaskTracker.createAskingTask({
-      query: input.question,
-      histories,
-      deployId,
-      runtimeScopeId:
-        payload.runtimeScopeId ||
-        taskRuntimeIdentity.deployHash ||
-        resolveRuntimeScopeIdFromPersistedIdentityWithProjectBridgeFallback(
-          taskRuntimeIdentity,
-        ) ||
-        undefined,
-      configurations: { language },
-      rerunFromCancelled,
-      previousTaskId,
-      threadResponseId,
-      runtimeIdentity: taskRuntimeIdentity,
-      retrievalScopeIds,
-      ...askContextWithoutIdentity,
-    });
-
-    if (!rerunFromCancelled) {
-      await this.ensureTrackedAskingTaskPersisted(
-        response.queryId,
-        input.question,
-        taskRuntimeIdentity,
-      );
-    }
-
-    return {
-      id: response.queryId,
-    };
-  }
-
-  public async rerunAskingTask(
-    threadResponseId: number,
-    payload: AskingPayload,
-  ): Promise<Task> {
-    const threadResponse = await this.threadResponseRepository.findOneBy({
-      id: threadResponseId,
-    });
-
-    if (!threadResponse) {
-      throw new Error(`Thread response ${threadResponseId} not found`);
-    }
-
-    // get the original question and ask again
-    const question = threadResponse.question;
-    const input = {
-      question,
-    };
-    const askingPayload = {
-      ...payload,
-      // it's possible that the threadId is not provided in the payload
-      // so we'll just use the threadId from the thread response
-      threadId: threadResponse.threadId,
-    };
-    const task = await this.createAskingTask(
-      input,
-      askingPayload,
-      true,
-      threadResponse.askingTaskId,
-      threadResponseId,
-    );
-    return task;
-  }
-
-  public async cancelAskingTask(taskId: string): Promise<void> {
-    const eventName = TelemetryEvent.HOME_CANCEL_ASK;
-    try {
-      await this.askingTaskTracker.cancelAskingTask(taskId);
-      this.telemetry.sendEvent(eventName, {});
-    } catch (err: any) {
-      this.telemetry.sendEvent(eventName, {}, err.extensions?.service, false);
-      throw err;
-    }
-  }
-
-  public async getAskingTask(
-    taskId: string,
-  ): Promise<TrackedAskingResult | null> {
-    return this.askingTaskTracker.getAskingResult(taskId);
-  }
-
-  public async getAskingTaskById(
-    id: number,
-  ): Promise<TrackedAskingResult | null> {
-    return this.askingTaskTracker.getAskingResultById(id);
-  }
-
-  /**
-   * Asking detail task.
-   * The process of creating a thread is as follows:
-   * 1. create a thread and the first thread response
-   * 2. create a task on AI service to generate the detail
-   * 3. update the thread response with the task id
-   */
-  public async createThread(
-    input: AskingDetailTaskInput,
-    runtimeIdentity: PersistedRuntimeIdentity,
-  ): Promise<Thread> {
-    const persistedRuntimeIdentity =
-      this.buildPersistedRuntimeIdentityPatch(runtimeIdentity);
-    const normalizedKnowledgeBaseIds = Array.from(
-      new Set(
-        [
-          ...(input.knowledgeBaseIds || []),
-          persistedRuntimeIdentity.knowledgeBaseId || null,
-        ].filter(Boolean),
-      ),
-    ) as string[];
-    const hasSelectedSkillIds = Array.isArray(input.selectedSkillIds);
-    const normalizedSelectedSkillIds = Array.from(
-      new Set((input.selectedSkillIds || []).filter(Boolean)),
-    );
-    // 1. create a thread and the first thread response
-    const thread = await this.threadRepository.createOne({
-      ...persistedRuntimeIdentity,
-      knowledgeBaseIds:
-        normalizedKnowledgeBaseIds.length > 0
-          ? normalizedKnowledgeBaseIds
-          : null,
-      selectedSkillIds: hasSelectedSkillIds ? normalizedSelectedSkillIds : null,
-      summary: input.question,
-    });
-
-    const threadResponse = await this.threadResponseRepository.createOne({
-      ...toPersistedRuntimeIdentityFromSource(thread, persistedRuntimeIdentity),
-      threadId: thread.id,
-      question: input.question,
-      sql: input.sql,
-      askingTaskId: input.trackedAskingResult?.taskId,
-    });
-
-    // if queryId is provided, update asking task
-    if (input.trackedAskingResult?.taskId) {
-      await this.askingTaskTracker.bindThreadResponse(
-        input.trackedAskingResult.taskId,
-        input.trackedAskingResult.queryId,
-        thread.id,
-        threadResponse.id,
-      );
-    }
-
-    // return the task id
-    return thread;
-  }
-
-  public async listThreads(
-    runtimeIdentity: PersistedRuntimeIdentity,
-  ): Promise<Thread[]> {
-    const scopedRuntimeIdentity =
-      this.buildPersistedRuntimeIdentityPatch(runtimeIdentity);
-    return this.threadRepository.listAllTimeDescOrderByScope({
-      projectId: scopedRuntimeIdentity.projectId ?? null,
-      workspaceId: scopedRuntimeIdentity.workspaceId,
-      knowledgeBaseId: scopedRuntimeIdentity.knowledgeBaseId,
-      kbSnapshotId: scopedRuntimeIdentity.kbSnapshotId,
-      deployHash: scopedRuntimeIdentity.deployHash,
-    });
-  }
-
-  public async assertThreadScope(
-    threadId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-  ): Promise<Thread> {
-    const scopedRuntimeIdentity =
-      this.normalizeRuntimeScope(runtimeIdentity) ?? runtimeIdentity;
-    const thread = await this.threadRepository.findOneByIdWithRuntimeScope(
-      threadId,
-      scopedRuntimeIdentity,
-    );
-    if (!thread) {
-      if (!(await this.threadRepository.findOneBy({ id: threadId }))) {
-        throw new Error(`Thread ${threadId} not found`);
-      }
-      throw new Error(
-        `Thread ${threadId} does not belong to the current runtime scope`,
-      );
-    }
-
-    return thread;
-  }
-
-  public async assertAskingTaskScope(
-    queryId: string,
-    runtimeIdentity: PersistedRuntimeIdentity,
-  ): Promise<void> {
-    const scopedRuntimeIdentity =
-      this.normalizeRuntimeScope(runtimeIdentity) ?? runtimeIdentity;
-    const task = await this.askingTaskRepository.findByQueryIdWithRuntimeScope(
-      queryId,
-      scopedRuntimeIdentity,
-    );
-    if (!task) {
-      const trackedRuntimeIdentity =
-        await this.askingTaskTracker?.getTrackedRuntimeIdentity?.(queryId);
-      if (
-        trackedRuntimeIdentity &&
-        isPersistedRuntimeIdentityMatch(
-          this.normalizeRuntimeScope(trackedRuntimeIdentity) ??
-            trackedRuntimeIdentity,
-          scopedRuntimeIdentity,
-        )
-      ) {
-        return;
-      }
-
-      if (!(await this.askingTaskRepository.findByQueryId(queryId))) {
-        throw new Error(`Asking task ${queryId} not found`);
-      }
-      throw new Error(
-        `Asking task ${queryId} does not belong to the current runtime scope`,
-      );
-    }
-  }
-
-  public async assertAskingTaskScopeById(
-    taskId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-  ): Promise<void> {
-    const scopedRuntimeIdentity =
-      this.normalizeRuntimeScope(runtimeIdentity) ?? runtimeIdentity;
-    const task = await this.askingTaskRepository.findOneByIdWithRuntimeScope(
-      taskId,
-      scopedRuntimeIdentity,
-    );
-    if (!task) {
-      if (!(await this.askingTaskRepository.findOneBy({ id: taskId }))) {
-        throw new Error(`Asking task ${taskId} not found`);
-      }
-      throw new Error(
-        `Asking task ${taskId} does not belong to the current runtime scope`,
-      );
-    }
-  }
-
-  public async assertResponseScope(
-    responseId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-  ): Promise<ThreadResponse> {
-    const scopedRuntimeIdentity =
-      this.normalizeRuntimeScope(runtimeIdentity) ?? runtimeIdentity;
-    const response =
-      await this.threadResponseRepository.findOneByIdWithRuntimeScope(
-        responseId,
-        scopedRuntimeIdentity,
-      );
-    if (!response) {
-      if (!(await this.getResponse(responseId))) {
-        throw new Error(`Thread response ${responseId} not found`);
-      }
-      throw new Error(
-        `Thread response ${responseId} does not belong to the current runtime scope`,
-      );
-    }
-
-    return response;
-  }
-
-  private async updateThread(
-    threadId: number,
-    input: Partial<AskingDetailTaskUpdateInput>,
-  ): Promise<Thread> {
-    // if input is empty, throw error
-    if (isEmpty(input)) {
-      throw new Error('Update thread input is empty');
-    }
-
-    return this.threadRepository.updateOne(threadId, {
-      summary: input.summary,
-    });
-  }
-
-  public async updateThreadScoped(
-    threadId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-    input: Partial<AskingDetailTaskUpdateInput>,
-  ): Promise<Thread> {
-    await this.assertThreadScope(threadId, runtimeIdentity);
-    return this.updateThread(threadId, input);
-  }
-
-  private async deleteThread(threadId: number): Promise<void> {
-    await this.threadRepository.deleteOne(threadId);
-  }
-
-  public async deleteThreadScoped(
-    threadId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-  ): Promise<void> {
-    await this.assertThreadScope(threadId, runtimeIdentity);
-    await this.deleteThread(threadId);
-  }
-
-  private async createThreadResponse(
-    input: AskingDetailTaskInput,
-    threadId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-  ): Promise<ThreadResponse> {
-    const thread = await this.threadRepository.findOneBy({
-      id: threadId,
-    });
-
-    if (!thread) {
-      throw new Error(`Thread ${threadId} not found`);
-    }
-
-    const threadResponse = await this.threadResponseRepository.createOne({
-      ...toPersistedRuntimeIdentityFromSource(thread, runtimeIdentity),
-      threadId: thread.id,
-      question: input.question,
-      sql: input.sql,
-      askingTaskId: input.trackedAskingResult?.taskId,
-    });
-
-    // if queryId is provided, update asking task
-    if (input.trackedAskingResult?.taskId) {
-      await this.askingTaskTracker.bindThreadResponse(
-        input.trackedAskingResult.taskId,
-        input.trackedAskingResult.queryId,
-        thread.id,
-        threadResponse.id,
-      );
-    }
-
-    return threadResponse;
-  }
-
-  public async createThreadResponseScoped(
-    input: AskingDetailTaskInput,
-    threadId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-  ): Promise<ThreadResponse> {
-    await this.assertThreadScope(threadId, runtimeIdentity);
-    return this.createThreadResponse(input, threadId, runtimeIdentity);
-  }
-
-  private async updateThreadResponse(
-    responseId: number,
-    data: { sql: string },
-  ): Promise<ThreadResponse> {
-    const threadResponse = await this.threadResponseRepository.findOneBy({
-      id: responseId,
-    });
-    if (!threadResponse) {
-      throw new Error(`Thread response ${responseId} not found`);
-    }
-
-    return await this.threadResponseRepository.updateOne(responseId, {
-      sql: data.sql,
-    });
-  }
-
-  public async updateThreadResponseScoped(
-    responseId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-    data: { sql: string },
-  ): Promise<ThreadResponse> {
-    await this.assertResponseScope(responseId, runtimeIdentity);
-    return this.updateThreadResponse(responseId, data);
-  }
-
-  private async generateThreadResponseBreakdown(
-    threadResponseId: number,
-    configurations: { language: string },
-  ): Promise<ThreadResponse> {
-    const { language } = configurations;
-    const threadResponse = await this.threadResponseRepository.findOneBy({
-      id: threadResponseId,
-    });
-
-    if (!threadResponse) {
-      throw new Error(`Thread response ${threadResponseId} not found`);
-    }
-    if (!threadResponse.sql) {
-      throw new Error(`Thread response ${threadResponseId} has no SQL`);
-    }
-
-    // 1. create a task on AI service to generate the detail
-    const response = await this.wrenAIAdaptor.generateAskDetail({
-      query: threadResponse.question,
-      sql: threadResponse.sql,
-      configurations: { language },
-    });
-
-    // 2. update the thread response with breakdown detail
-    const updatedThreadResponse = await this.threadResponseRepository.updateOne(
-      threadResponse.id,
-      {
-        breakdownDetail: {
-          queryId: response.queryId,
-          status: AskResultStatus.UNDERSTANDING,
-        },
-      },
-    );
-
-    // 3. put the task into background tracker
-    this.breakdownBackgroundTracker.addTask(updatedThreadResponse);
-
-    // return the task id
-    return updatedThreadResponse;
-  }
-
-  public async generateThreadResponseBreakdownScoped(
-    threadResponseId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-    configurations: { language: string },
-  ): Promise<ThreadResponse> {
-    await this.assertResponseScope(threadResponseId, runtimeIdentity);
-    return this.generateThreadResponseBreakdown(
-      threadResponseId,
-      configurations,
-    );
-  }
-
-  private async generateThreadResponseAnswer(
-    threadResponseId: number,
-    _configurations?: { language: string },
-  ): Promise<ThreadResponse> {
-    const threadResponse = await this.threadResponseRepository.findOneBy({
-      id: threadResponseId,
-    });
-
-    if (!threadResponse) {
-      throw new Error(`Thread response ${threadResponseId} not found`);
-    }
-
-    // update with initial status
-    const updatedThreadResponse = await this.threadResponseRepository.updateOne(
-      threadResponse.id,
-      {
-        answerDetail: {
-          status: ThreadResponseAnswerStatus.NOT_STARTED,
-        },
-      },
-    );
-
-    // put the task into background tracker
-    this.textBasedAnswerBackgroundTracker.addTask(updatedThreadResponse);
-
-    return updatedThreadResponse;
-  }
-
-  public async generateThreadResponseAnswerScoped(
-    threadResponseId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-    configurations: { language: string },
-  ): Promise<ThreadResponse> {
-    await this.assertResponseScope(threadResponseId, runtimeIdentity);
-    return this.generateThreadResponseAnswer(threadResponseId, configurations);
-  }
-
-  private async generateThreadResponseChart(
-    threadResponseId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-    configurations: { language: string },
-    runtimeScopeId?: string | null,
-  ): Promise<ThreadResponse> {
-    const threadResponse = await this.threadResponseRepository.findOneBy({
-      id: threadResponseId,
-    });
-
-    if (!threadResponse) {
-      throw new Error(`Thread response ${threadResponseId} not found`);
-    }
-    if (!threadResponse.sql) {
-      throw new Error(`Thread response ${threadResponseId} has no SQL`);
-    }
-
-    let previewDataSample: PreviewDataResponse | undefined;
-    try {
-      const { project, manifest } =
-        await this.getExecutionResources(runtimeIdentity);
-      previewDataSample = (await this.queryService.preview(threadResponse.sql, {
-        project,
-        manifest,
-        limit: CHART_GENERATION_SAMPLE_LIMIT,
-        modelingOnly: false,
-      })) as PreviewDataResponse;
-    } catch (error) {
-      logger.warn(
-        `Unable to fetch chart sample data for response ${threadResponseId}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-    }
-
-    // 1. create a task on AI service to generate the chart
-    const response = await this.wrenAIAdaptor.generateChart({
-      query: threadResponse.question,
-      sql: threadResponse.sql,
-      data: previewDataSample,
-      runtimeScopeId:
-        runtimeScopeId ||
-        resolveRuntimeScopeIdFromPersistedIdentityWithProjectBridgeFallback(
-          runtimeIdentity,
-        ) ||
-        undefined,
-      runtimeIdentity: this.toAskRuntimeIdentity(runtimeIdentity),
-      configurations,
-    });
-
-    // 2. update the thread response with chart detail
-    const updatedThreadResponse = await this.threadResponseRepository.updateOne(
-      threadResponse.id,
-      {
-        chartDetail: {
-          queryId: response.queryId,
-          status: ChartStatus.FETCHING,
-        },
-      },
-    );
-
-    // 3. put the task into background tracker
-    this.chartBackgroundTracker.addTask(updatedThreadResponse);
-
-    return updatedThreadResponse;
-  }
-
-  public async generateThreadResponseChartScoped(
-    threadResponseId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-    configurations: { language: string },
-    runtimeScopeId?: string | null,
-  ): Promise<ThreadResponse> {
-    await this.assertResponseScope(threadResponseId, runtimeIdentity);
-    return this.generateThreadResponseChart(
-      threadResponseId,
-      runtimeIdentity,
-      configurations,
-      runtimeScopeId,
-    );
-  }
-
-  private async adjustThreadResponseChart(
-    threadResponseId: number,
-    _runtimeIdentity: PersistedRuntimeIdentity,
-    input: ChartAdjustmentOption,
-    _configurations: { language: string },
-    _runtimeScopeId?: string | null,
-  ): Promise<ThreadResponse> {
-    const threadResponse = await this.threadResponseRepository.findOneBy({
-      id: threadResponseId,
-    });
-
-    if (!threadResponse) {
-      throw new Error(`Thread response ${threadResponseId} not found`);
-    }
-    if (!threadResponse.sql) {
-      throw new Error(`Thread response ${threadResponseId} has no SQL`);
-    }
-    if (!threadResponse.chartDetail?.chartSchema) {
-      throw new Error(`Thread response ${threadResponseId} has no chart`);
-    }
-
-    const updatedThreadResponse = await this.threadResponseRepository.updateOne(
-      threadResponse.id,
-      {
-        chartDetail: applyDeterministicChartAdjustment(
-          {
-            ...threadResponse.chartDetail,
-            status: ChartStatus.FINISHED,
-          },
-          input,
-        ),
-      },
-    );
-
-    return updatedThreadResponse;
-  }
-
-  public async adjustThreadResponseChartScoped(
-    threadResponseId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-    input: ChartAdjustmentOption,
-    configurations: { language: string },
-    runtimeScopeId?: string | null,
-  ): Promise<ThreadResponse> {
-    await this.assertResponseScope(threadResponseId, runtimeIdentity);
-    return this.adjustThreadResponseChart(
-      threadResponseId,
-      runtimeIdentity,
-      input,
-      configurations,
-      runtimeScopeId,
-    );
-  }
-
-  private async getResponsesWithThread(
-    threadId: number,
-    runtimeIdentity?: PersistedRuntimeIdentity,
-  ) {
-    if (!runtimeIdentity) {
-      return this.threadResponseRepository.getResponsesWithThread(threadId);
-    }
-
-    const scopedRuntimeIdentity =
-      this.normalizeRuntimeScope(runtimeIdentity) ?? runtimeIdentity;
-    return this.threadResponseRepository.getResponsesWithThreadByScope(
-      threadId,
-      scopedRuntimeIdentity,
-    );
-  }
-
-  public async getResponsesWithThreadScoped(
-    threadId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-  ) {
-    await this.assertThreadScope(threadId, runtimeIdentity);
-    return this.getResponsesWithThread(threadId, runtimeIdentity);
-  }
-
-  private async getResponse(responseId: number) {
-    return this.threadResponseRepository.findOneBy({ id: responseId });
-  }
-
-  public async getResponseScoped(
-    responseId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-  ) {
-    return this.assertResponseScope(responseId, runtimeIdentity);
-  }
-
-  private async previewData(
-    responseId: number,
-    limit?: number,
-    fallbackRuntimeIdentity?: PersistedRuntimeIdentity | null,
-  ) {
-    const response = await this.getResponse(responseId);
-    if (!response) {
-      throw new Error(`Thread response ${responseId} not found`);
-    }
-    if (!response.sql) {
-      throw new Error(`Thread response ${responseId} has no SQL`);
-    }
-    const runtimeIdentity = await this.getThreadResponseRuntimeIdentity(
-      response,
-      fallbackRuntimeIdentity,
-    );
-    const { project, manifest } =
-      await this.getExecutionResources(runtimeIdentity);
-    const eventName = TelemetryEvent.HOME_PREVIEW_ANSWER;
-    try {
-      const rawData = (await this.queryService.preview(response.sql, {
-        project,
-        manifest,
-        limit,
-      })) as PreviewDataResponse;
-      const shapedChartPreview = shapeChartPreviewData({
-        chartDetail: response.chartDetail,
-        previewData: rawData,
-      });
-
-      if (response.chartDetail) {
-        const nextChartDetail = {
-          ...response.chartDetail,
-          renderHints:
-            shapedChartPreview.renderHints || response.chartDetail.renderHints,
-          chartDataProfile:
-            shapedChartPreview.chartDataProfile ||
-            response.chartDetail.chartDataProfile,
-        };
-
-        if (
-          !isEqual(
-            response.chartDetail.renderHints,
-            nextChartDetail.renderHints,
-          ) ||
-          !isEqual(
-            response.chartDetail.chartDataProfile,
-            nextChartDetail.chartDataProfile,
-          )
-        ) {
-          await this.threadResponseRepository.updateOneByIdWithRuntimeScope(
-            response.id,
-            runtimeIdentity,
-            {
-              chartDetail: nextChartDetail,
-            },
-          );
-        }
-      }
-
-      const data = {
-        ...shapedChartPreview.previewData,
-        chartDataProfile:
-          shapedChartPreview.chartDataProfile ||
-          response.chartDetail?.chartDataProfile,
-      } as PreviewDataResponse & {
-        chartDataProfile?: Record<string, unknown>;
-      };
-      this.telemetry.sendEvent(eventName, { sql: response.sql });
-      return data;
-    } catch (err: any) {
-      this.telemetry.sendEvent(
-        eventName,
-        { sql: response.sql, error: err.message },
-        err.extensions?.service,
-        false,
-      );
-      throw err;
-    }
-  }
-
-  public async previewDataScoped(
-    responseId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-    limit?: number,
-  ): Promise<PreviewDataResponse> {
-    await this.assertResponseScope(responseId, runtimeIdentity);
-    return this.previewData(responseId, limit, runtimeIdentity);
-  }
-
-  /**
-   * this function is used to preview the data of a thread response
-   * get the target thread response and get the steps
-   * construct the CTEs and get the data
-   * @param responseId: the id of the thread response
-   * @param stepIndex: the step in the response detail
-   * @returns Promise<QueryResponse>
-   */
-  private async previewBreakdownData(
-    responseId: number,
-    stepIndex?: number,
-    limit?: number,
-    fallbackRuntimeIdentity?: PersistedRuntimeIdentity | null,
-  ): Promise<PreviewDataResponse> {
-    const response = await this.getResponse(responseId);
-    if (!response) {
-      throw new Error(`Thread response ${responseId} not found`);
-    }
-    const runtimeIdentity = await this.getThreadResponseRuntimeIdentity(
-      response,
-      fallbackRuntimeIdentity,
-    );
-    const { project, manifest } =
-      await this.getExecutionResources(runtimeIdentity);
-    const steps = response?.breakdownDetail?.steps || [];
-    const sql = safeFormatSQL(constructCteSql(steps, stepIndex));
-    const eventName = TelemetryEvent.HOME_PREVIEW_ANSWER;
-    try {
-      const data = (await this.queryService.preview(sql, {
-        project,
-        manifest,
-        limit,
-      })) as PreviewDataResponse;
-      this.telemetry.sendEvent(eventName, { sql });
-      return data;
-    } catch (err: any) {
-      this.telemetry.sendEvent(
-        eventName,
-        { sql, error: err.message },
-        err.extensions?.service,
-        false,
-      );
-      throw err;
-    }
-  }
-
-  public async previewBreakdownDataScoped(
-    responseId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-    stepIndex?: number,
-    limit?: number,
-  ): Promise<PreviewDataResponse> {
-    await this.assertResponseScope(responseId, runtimeIdentity);
-    return this.previewBreakdownData(
-      responseId,
-      stepIndex,
-      limit,
-      runtimeIdentity,
-    );
-  }
-
-  public async createInstantRecommendedQuestions(
-    input: InstantRecommendedQuestionsInput,
-    runtimeIdentity: PersistedRuntimeIdentity,
-    runtimeScopeId?: string | null,
-  ): Promise<Task> {
-    const { project, manifest } =
-      await this.getExecutionResources(runtimeIdentity);
-
-    const recommendQuestionRuntimeIdentity =
-      normalizeCanonicalPersistedRuntimeIdentity(runtimeIdentity);
-    const response = await this.wrenAIAdaptor.generateRecommendationQuestions({
-      manifest,
-      runtimeScopeId: runtimeScopeId || undefined,
-      runtimeIdentity: this.toAskRuntimeIdentity(
-        recommendQuestionRuntimeIdentity,
-      ),
-      previousQuestions: input.previousQuestions,
-      ...this.getThreadRecommendationQuestionsConfig(project),
-    });
-    this.trackInstantRecommendedQuestionTask(response.queryId, runtimeIdentity);
-    return { id: response.queryId };
-  }
-
-  public async getInstantRecommendedQuestions(
-    queryId: string,
-    runtimeIdentity: PersistedRuntimeIdentity,
-  ): Promise<RecommendationQuestionsResult> {
-    this.assertInstantRecommendedQuestionTaskScope(queryId, runtimeIdentity);
-    const response =
-      await this.wrenAIAdaptor.getRecommendationQuestionsResult(queryId);
-    if (isRecommendationQuestionsFinalized(response.status)) {
-      this.instantRecommendedQuestionTasks.delete(queryId);
-    }
-    return response;
-  }
-
-  public async deleteAllByProjectId(projectId: number): Promise<void> {
-    // delete all threads
-    await this.threadRepository.deleteAllBy({ projectId });
-  }
-
-  private async changeThreadResponseAnswerDetailStatus(
-    responseId: number,
-    status: ThreadResponseAnswerStatus,
-    content?: string,
-  ): Promise<ThreadResponse> {
-    const response = await this.threadResponseRepository.findOneBy({
-      id: responseId,
-    });
-    if (!response) {
-      throw new Error(`Thread response ${responseId} not found`);
-    }
-
-    if (response.answerDetail?.status === status) {
-      return response;
-    }
-
-    const updatedResponse = await this.threadResponseRepository.updateOne(
-      responseId,
-      {
-        answerDetail: {
-          ...response.answerDetail,
-          status,
-          content,
-        },
-      },
-    );
-
-    return updatedResponse;
-  }
-
-  public async changeThreadResponseAnswerDetailStatusScoped(
-    responseId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-    status: ThreadResponseAnswerStatus,
-    content?: string,
-  ): Promise<ThreadResponse> {
-    await this.assertResponseScope(responseId, runtimeIdentity);
-    return this.changeThreadResponseAnswerDetailStatus(
-      responseId,
-      status,
-      content,
-    );
-  }
-
-  private async getDeployId(runtimeIdentity: PersistedRuntimeIdentity) {
-    const deploymentLookupIdentity =
-      this.buildPersistedRuntimeIdentityPatch(runtimeIdentity);
-    const lastDeploy =
-      await this.deployService.getLastDeploymentByRuntimeIdentity(
-        deploymentLookupIdentity,
-      );
-    if (!lastDeploy) {
-      throw new Error('No deployment found, please deploy your project first');
-    }
-    return lastDeploy.hash;
-  }
-
-  private async getProjectAndDeployment(
-    runtimeIdentity: PersistedRuntimeIdentity,
-  ): Promise<{ project: Project; deployment: Deploy }> {
-    const deploymentLookupIdentity = runtimeIdentity.deployHash
-      ? this.buildPersistedRuntimeIdentityPatch(runtimeIdentity)
-      : runtimeIdentity;
-    const deployment = await this.deployService.getDeploymentByRuntimeIdentity(
-      deploymentLookupIdentity,
-    );
-
-    if (!deployment) {
-      throw new Error('No deployment found, please deploy your project first');
-    }
-
-    const project =
-      (await this.projectService.getProjectById(deployment.projectId)) ||
-      this.buildManifestBackedProject(deployment);
-    if (!project) {
-      throw new Error(`Project ${deployment.projectId} not found`);
-    }
-
-    return { project, deployment };
-  }
-
-  private resolveScopedKnowledgeBaseIds(
-    inputKnowledgeBaseIds?: string[] | null,
-    thread?: Thread | null,
-    runtimeIdentity?: PersistedRuntimeIdentity | null,
-  ) {
-    return Array.from(
-      new Set(
-        [
-          ...(thread?.knowledgeBaseIds || []),
-          ...(inputKnowledgeBaseIds || []),
-          runtimeIdentity?.knowledgeBaseId || null,
-        ].filter(Boolean),
-      ),
-    ) as string[];
-  }
-
-  private async resolveRuntimeIdentityFromKnowledgeSelection(
-    runtimeIdentity: PersistedRuntimeIdentity,
-    knowledgeBaseIds: string[],
-  ): Promise<PersistedRuntimeIdentity> {
-    if (
-      runtimeIdentity.knowledgeBaseId ||
-      !runtimeIdentity.workspaceId ||
-      knowledgeBaseIds.length === 0
-    ) {
-      return runtimeIdentity;
-    }
-
-    const primaryKnowledgeBaseId = knowledgeBaseIds[0];
-    const lastDeploy =
-      runtimeIdentity.deployHash ||
-      (
-        await this.deployService.getLastDeploymentByRuntimeIdentity({
-          ...this.buildPersistedRuntimeIdentityPatch(runtimeIdentity),
-          workspaceId: runtimeIdentity.workspaceId,
-          knowledgeBaseId: primaryKnowledgeBaseId,
-          kbSnapshotId: null,
-          deployHash: null,
-          projectId: null,
-        })
-      )?.hash;
-
-    return this.buildPersistedRuntimeIdentityPatch({
-      ...runtimeIdentity,
-      knowledgeBaseId: primaryKnowledgeBaseId,
-      deployHash: lastDeploy || null,
-    });
-  }
-
-  private resolveScopedSelectedSkillIds(
-    inputSelectedSkillIds?: string[] | null,
-    thread?: Thread | null,
-  ) {
-    if (Array.isArray(thread?.selectedSkillIds)) {
-      return Array.from(
-        new Set((thread?.selectedSkillIds || []).filter(Boolean)),
-      );
-    }
-
-    if (Array.isArray(inputSelectedSkillIds)) {
-      return Array.from(new Set((inputSelectedSkillIds || []).filter(Boolean)));
-    }
-
-    return undefined;
-  }
-
-  private async resolveRetrievalScopeIds(
-    knowledgeBaseIds: string[],
-    runtimeIdentity: PersistedRuntimeIdentity,
-  ) {
-    const scopedKnowledgeBaseIds = Array.from(
-      new Set(
-        [...knowledgeBaseIds, runtimeIdentity.knowledgeBaseId || null].filter(
-          Boolean,
-        ),
-      ),
-    ) as string[];
-
-    const workspaceId = runtimeIdentity.workspaceId || null;
-    const scopeIds = await Promise.all(
-      scopedKnowledgeBaseIds.map(async (knowledgeBaseId) => {
-        if (
-          knowledgeBaseId === runtimeIdentity.knowledgeBaseId &&
-          runtimeIdentity.deployHash
-        ) {
-          return runtimeIdentity.deployHash;
-        }
-
-        if (!workspaceId) {
-          return knowledgeBaseId;
-        }
-
-        const deployment =
-          await this.deployService.getLastDeploymentByRuntimeIdentity({
-            projectId: null,
-            workspaceId,
-            knowledgeBaseId,
-            kbSnapshotId: null,
-            deployHash: null,
-          });
-
-        return deployment?.hash || knowledgeBaseId;
-      }),
-    );
-
-    return Array.from(new Set(scopeIds.filter(Boolean)));
-  }
-
-  private resolveAskingRuntimeIdentity(
-    payload: AskingPayload,
-    threadRuntimeIdentity?: PersistedRuntimeIdentity | null,
-  ): PersistedRuntimeIdentity {
-    if (threadRuntimeIdentity) {
-      return threadRuntimeIdentity;
-    }
-
-    if (!payload.runtimeIdentity) {
-      throw new Error(
-        'createAskingTask requires runtime identity when threadId is absent',
-      );
-    }
-
-    return normalizeCanonicalPersistedRuntimeIdentity(
-      toPersistedRuntimeIdentityFromSource(payload.runtimeIdentity),
-    );
-  }
-
-  private buildPersistedRuntimeIdentityPatch(
-    runtimeIdentity: PersistedRuntimeIdentity,
-  ): PersistedRuntimeIdentity {
-    return normalizeCanonicalPersistedRuntimeIdentity(runtimeIdentity);
-  }
-
-  private async ensureTrackedAskingTaskPersisted(
-    queryId: string,
-    question: string,
-    runtimeIdentity: PersistedRuntimeIdentity,
-  ): Promise<void> {
-    if (!this.askingTaskRepository) {
-      return;
-    }
-
-    const existingTask = await this.askingTaskRepository.findByQueryId(queryId);
-    if (existingTask) {
-      return;
-    }
-
-    await this.askingTaskRepository.createOne({
-      queryId,
-      question,
-      detail: {
-        type: null,
-        status: AskResultStatus.UNDERSTANDING,
-        response: [],
-        error: null,
-      },
-      ...this.buildPersistedRuntimeIdentityPatch(runtimeIdentity),
-    });
-  }
-
-  private async getThreadById(threadId: number): Promise<Thread> {
-    const thread = await this.threadRepository.findOneBy({ id: threadId });
-    if (!thread) {
-      throw new Error(`Thread ${threadId} not found`);
-    }
-
-    return thread;
-  }
-
-  private async getThreadRuntimeIdentity(
-    threadId: number,
-    fallbackRuntimeIdentity?: PersistedRuntimeIdentity | null,
-  ): Promise<PersistedRuntimeIdentity> {
-    const runtimeIdentityFallback = fallbackRuntimeIdentity
-      ? normalizeCanonicalPersistedRuntimeIdentity({
-          ...fallbackRuntimeIdentity,
-          deployHash: null,
-        })
-      : null;
-
-    return toPersistedRuntimeIdentityFromSource(
-      await this.getThreadById(threadId),
-      runtimeIdentityFallback,
-    );
-  }
-
-  private async getThreadResponseRuntimeIdentity(
-    threadResponse: ThreadResponse,
-    fallbackRuntimeIdentity?: PersistedRuntimeIdentity | null,
-  ): Promise<PersistedRuntimeIdentity> {
-    const threadIdentity = await this.getThreadRuntimeIdentity(
-      threadResponse.threadId,
-      fallbackRuntimeIdentity,
-    );
-
-    return toPersistedRuntimeIdentityFromSource(threadResponse, threadIdentity);
-  }
-
-  private async getExecutionResources(
-    runtimeIdentity: PersistedRuntimeIdentity,
-  ): Promise<{
-    project: Project;
-    deployment: Deploy;
-    manifest: Deploy['manifest'];
-  }> {
-    const { project, deployment } =
-      await this.getProjectAndDeployment(runtimeIdentity);
-    return {
-      project,
-      deployment,
-      manifest: deployment.manifest,
-    };
-  }
-
-  private async adjustThreadResponseWithSQL(
-    threadResponseId: number,
-    input: AdjustmentSqlInput,
-    fallbackRuntimeIdentity?: PersistedRuntimeIdentity | null,
-  ): Promise<ThreadResponse> {
-    const response = await this.threadResponseRepository.findOneBy({
-      id: threadResponseId,
-    });
-    if (!response) {
-      throw new Error(`Thread response ${threadResponseId} not found`);
-    }
-    const runtimeIdentity = await this.getThreadResponseRuntimeIdentity(
-      response,
-      fallbackRuntimeIdentity,
-    );
-
-    return await this.threadResponseRepository.createOne({
-      ...runtimeIdentity,
-      sql: input.sql,
-      threadId: response.threadId,
-      question: response.question,
-      adjustment: {
-        type: ThreadResponseAdjustmentType.APPLY_SQL,
-        payload: {
-          originalThreadResponseId: response.id,
-          sql: input.sql,
-        },
-      },
-    });
-  }
-
-  public async adjustThreadResponseWithSQLScoped(
-    threadResponseId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-    input: AdjustmentSqlInput,
-  ): Promise<ThreadResponse> {
-    await this.assertResponseScope(threadResponseId, runtimeIdentity);
-    return this.adjustThreadResponseWithSQL(
-      threadResponseId,
-      input,
-      runtimeIdentity,
-    );
-  }
-
-  private async adjustThreadResponseAnswer(
-    threadResponseId: number,
-    input: AdjustmentReasoningInput,
-    configurations: { language: string },
-    runtimeScopeId?: string | null,
-  ): Promise<ThreadResponse> {
-    const originalThreadResponse =
-      await this.threadResponseRepository.findOneBy({
-        id: threadResponseId,
-      });
-    if (!originalThreadResponse) {
-      throw new Error(`Thread response ${threadResponseId} not found`);
-    }
-    if (!originalThreadResponse.sql) {
-      throw new Error(`Thread response ${threadResponseId} has no SQL`);
-    }
-    const adjustmentRuntimeIdentity = input.runtimeIdentity
-      ? this.buildAskTaskRuntimeIdentity(input.runtimeIdentity)
-      : undefined;
-
-    const { createdThreadResponse } =
-      await this.adjustmentBackgroundTracker.createAdjustmentTask({
-        threadId: originalThreadResponse.threadId,
-        tables: input.tables,
-        sqlGenerationReasoning: input.sqlGenerationReasoning,
-        sql: originalThreadResponse.sql,
-        runtimeScopeId:
-          runtimeScopeId ||
-          resolveRuntimeScopeIdFromPersistedIdentityWithProjectBridgeFallback(
-            adjustmentRuntimeIdentity,
-          ) ||
-          undefined,
-        runtimeIdentity: adjustmentRuntimeIdentity,
-        configurations,
-        question: originalThreadResponse.question,
-        originalThreadResponseId: originalThreadResponse.id,
-      });
-    return createdThreadResponse;
-  }
-
-  public async adjustThreadResponseAnswerScoped(
-    threadResponseId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-    input: AdjustmentReasoningInput,
-    configurations: { language: string },
-    runtimeScopeId?: string | null,
-  ): Promise<ThreadResponse> {
-    await this.assertResponseScope(threadResponseId, runtimeIdentity);
-    return this.adjustThreadResponseAnswer(
-      threadResponseId,
-      input,
-      configurations,
-      runtimeScopeId,
-    );
-  }
-
-  public async cancelAdjustThreadResponseAnswer(taskId: string): Promise<void> {
-    // call cancelAskFeedback on AI service
-    await this.adjustmentBackgroundTracker.cancelAdjustmentTask(taskId);
-  }
-
-  public async rerunAdjustThreadResponseAnswer(
-    threadResponseId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-    configurations: { language: string },
-    runtimeScopeId?: string | null,
-  ): Promise<{ queryId: string }> {
-    const threadResponse = await this.threadResponseRepository.findOneBy({
-      id: threadResponseId,
-    });
-    if (!threadResponse) {
-      throw new Error(`Thread response ${threadResponseId} not found`);
-    }
-
-    const { queryId } =
-      await this.adjustmentBackgroundTracker.rerunAdjustmentTask({
-        threadId: threadResponse.threadId,
-        threadResponseId,
-        runtimeScopeId:
-          runtimeScopeId ||
-          resolveRuntimeScopeIdFromPersistedIdentityWithProjectBridgeFallback(
-            runtimeIdentity,
-          ) ||
-          undefined,
-        runtimeIdentity,
-        configurations,
-      });
-    return { queryId };
-  }
-
-  public async getAdjustmentTask(
-    taskId: string,
-  ): Promise<TrackedAdjustmentResult | null> {
-    return this.adjustmentBackgroundTracker.getAdjustmentResult(taskId);
-  }
-
-  public async getAdjustmentTaskById(
-    id: number,
-  ): Promise<TrackedAdjustmentResult | null> {
-    return this.adjustmentBackgroundTracker.getAdjustmentResultById(id);
-  }
-
-  /**
-   * Get the thread response of a thread for asking
-   * @param threadId
-   * @returns Promise<ThreadResponse[]>
-   */
-  private async getAskingHistory(
-    threadId: number,
-    runtimeIdentity: PersistedRuntimeIdentity,
-    excludeThreadResponseId?: number,
-  ): Promise<ThreadResponse[]> {
-    if (!threadId) {
-      return [];
-    }
-    const scopedRuntimeIdentity =
-      this.normalizeRuntimeScope(runtimeIdentity) ?? runtimeIdentity;
-    let responses =
-      await this.threadResponseRepository.getResponsesWithThreadByScope(
-        threadId,
-        scopedRuntimeIdentity,
-        10,
-      );
-
-    // exclude the thread response if the excludeThreadResponseId is provided
-    // it's used when rerun the asking task, we don't want include the cancelled thread response
-    if (excludeThreadResponseId) {
-      responses = responses.filter(
-        (response) => response.id !== excludeThreadResponseId,
-      );
-    }
-
-    // filter out the thread response with empty sql
-    return responses.filter((response) => response.sql);
-  }
-
-  private getThreadRecommendationQuestionsConfig(project: Project) {
-    return {
-      maxCategories: config.threadRecommendationQuestionMaxCategories,
-      maxQuestions: config.threadRecommendationQuestionsMaxQuestions,
-      configuration: {
-        language: resolveProjectLanguage(project),
-      },
-    };
-  }
-
-  private isLikelyNonChineseQuestions(
-    questions: RecommendationQuestion[] | undefined | null,
-  ): boolean {
-    if (!questions?.length) {
-      return false;
-    }
-
-    const joined = questions
-      .map((item) => `${item?.category || ''} ${item?.question || ''}`)
-      .join(' ');
-
-    return !/[\u3400-\u9FFF]/.test(joined);
-  }
-
-  private async shouldForceChineseThreadRecommendation(
-    thread: Thread,
-  ): Promise<boolean> {
-    try {
-      const runtimeIdentity = toPersistedRuntimeIdentityFromSource(thread);
-      const { project } = await this.getExecutionResources(runtimeIdentity);
-      const knowledgeBase =
-        runtimeIdentity.knowledgeBaseId && this.knowledgeBaseRepository
-          ? await this.knowledgeBaseRepository.findOneBy({
-              id: runtimeIdentity.knowledgeBaseId,
-            })
-          : null;
-      const preferredLanguage = resolveProjectLanguage(project, knowledgeBase);
-      return (
-        preferredLanguage === WrenAILanguage.ZH_CN ||
-        preferredLanguage === WrenAILanguage.ZH_TW
-      );
-    } catch (error) {
-      logger.warn(
-        `failed to resolve thread recommendation language for thread ${thread.id}: ${error}`,
-      );
-      return false;
-    }
-  }
-
-  private trackInstantRecommendedQuestionTask(
-    queryId: string,
-    runtimeIdentity: PersistedRuntimeIdentity,
-  ) {
-    this.instantRecommendedQuestionTasks.set(queryId, {
-      runtimeIdentity:
-        this.normalizeRuntimeScope(runtimeIdentity) ?? runtimeIdentity,
-      createdAt: Date.now(),
-    });
-  }
-
-  private assertInstantRecommendedQuestionTaskScope(
-    queryId: string,
-    runtimeIdentity: PersistedRuntimeIdentity,
-  ) {
-    const task = this.instantRecommendedQuestionTasks.get(queryId);
-    const scopedRuntimeIdentity =
-      this.normalizeRuntimeScope(runtimeIdentity) ?? runtimeIdentity;
-    if (
-      !task ||
-      !isPersistedRuntimeIdentityMatch(
-        task.runtimeIdentity,
-        scopedRuntimeIdentity,
-      )
-    ) {
-      throw new Error('Instant recommended questions task not found');
-    }
-  }
-
-  private buildManifestBackedProject(deployment: Deploy): Project | null {
-    if (!deployment?.manifest) {
-      return null;
-    }
-
-    const manifest = deployment.manifest as Manifest;
-    if (!manifest.catalog || !manifest.schema || !manifest.dataSource) {
-      return null;
-    }
-
-    const type = this.mapManifestDataSourceToProjectType(manifest.dataSource);
-    if (!type) {
-      return null;
-    }
-
-    return {
-      id: deployment.projectId,
-      type,
-      version: '',
-      displayName: '',
-      catalog: manifest.catalog,
-      schema: manifest.schema,
-      sampleDataset: null as any,
-      connectionInfo: {} as any,
-      language: undefined,
-      queryId: undefined,
-      questions: [],
-      questionsStatus: undefined,
-      questionsError: undefined,
-    };
-  }
-
-  private mapManifestDataSourceToProjectType(
-    dataSource: WrenEngineDataSourceType,
-  ): DataSourceName | null {
-    switch (dataSource) {
-      case WrenEngineDataSourceType.ATHENA:
-        return DataSourceName.ATHENA;
-      case WrenEngineDataSourceType.BIGQUERY:
-        return DataSourceName.BIG_QUERY;
-      case WrenEngineDataSourceType.CLICKHOUSE:
-        return DataSourceName.CLICK_HOUSE;
-      case WrenEngineDataSourceType.MSSQL:
-        return DataSourceName.MSSQL;
-      case WrenEngineDataSourceType.ORACLE:
-        return DataSourceName.ORACLE;
-      case WrenEngineDataSourceType.MYSQL:
-        return DataSourceName.MYSQL;
-      case WrenEngineDataSourceType.POSTGRES:
-        return DataSourceName.POSTGRES;
-      case WrenEngineDataSourceType.SNOWFLAKE:
-        return DataSourceName.SNOWFLAKE;
-      case WrenEngineDataSourceType.TRINO:
-        return DataSourceName.TRINO;
-      case WrenEngineDataSourceType.DUCKDB:
-        return DataSourceName.DUCKDB;
-      case WrenEngineDataSourceType.DATABRICKS:
-        return DataSourceName.DATABRICKS;
-      case WrenEngineDataSourceType.REDSHIFT:
-        return DataSourceName.REDSHIFT;
-      default:
-        return null;
-    }
-  }
-
-  private toAskRuntimeIdentity(
-    runtimeIdentity?: PersistedRuntimeIdentity | null,
-  ): AskRuntimeIdentity | undefined {
-    if (!runtimeIdentity) {
-      return undefined;
-    }
-
-    return {
-      ...(typeof runtimeIdentity.projectId === 'number'
-        ? { projectId: runtimeIdentity.projectId }
-        : {}),
-      workspaceId: runtimeIdentity.workspaceId ?? null,
-      knowledgeBaseId: runtimeIdentity.knowledgeBaseId ?? null,
-      kbSnapshotId: runtimeIdentity.kbSnapshotId ?? null,
-      deployHash: runtimeIdentity.deployHash ?? null,
-      actorUserId: runtimeIdentity.actorUserId ?? null,
-    };
-  }
-
-  private buildAskTaskRuntimeIdentity(
-    runtimeIdentity: PersistedRuntimeIdentity,
-    deployHash?: string | null,
-  ): AskRuntimeIdentity & PersistedRuntimeIdentity {
-    return {
-      ...(typeof runtimeIdentity.projectId === 'number'
-        ? { projectId: runtimeIdentity.projectId }
-        : {}),
-      workspaceId: runtimeIdentity.workspaceId ?? null,
-      knowledgeBaseId: runtimeIdentity.knowledgeBaseId ?? null,
-      kbSnapshotId: runtimeIdentity.kbSnapshotId ?? null,
-      deployHash: deployHash ?? runtimeIdentity.deployHash ?? null,
-      actorUserId: runtimeIdentity.actorUserId ?? null,
-    };
-  }
-
-  private normalizeRuntimeScope(
-    runtimeIdentity?: PersistedRuntimeIdentity | null,
-  ): PersistedRuntimeIdentity | null {
-    if (!runtimeIdentity) {
-      return null;
-    }
-
-    return this.buildPersistedRuntimeIdentityPatch(runtimeIdentity);
-  }
 }
+
+applyAskingServiceActionPrototype(AskingService);
+applyAskingServiceHelperPrototype(AskingService);
+
+export {
+  constructCteSql,
+  RecommendQuestionResultStatus,
+  ThreadResponseAnswerStatus,
+};
+export type {
+  AdjustmentReasoningInput,
+  AdjustmentSqlInput,
+  AskingDetailTaskInput,
+  AskingDetailTaskUpdateInput,
+  AskingPayload,
+  AskingServiceConstructorArgs,
+  AskingTaskInput,
+  IAskingService,
+  InstantRecommendedQuestionTask,
+  InstantRecommendedQuestionsInput,
+  Task,
+  ThreadRecommendQuestionResult,
+};

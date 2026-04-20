@@ -9,6 +9,7 @@ export interface Dashboard {
   kbSnapshotId?: string | null;
   deployHash?: string | null;
   createdBy?: string | null;
+  isDefault?: boolean | null;
   name: string;
   cacheEnabled: boolean;
   scheduleFrequency: ScheduleFrequencyEnum | null;

@@ -17,6 +17,7 @@ import {
   buildAuthorizationContextFromRequest,
   recordAuditEvent,
 } from '@server/authz';
+import { resolveKnowledgeBaseAssetCount } from '@server/utils/knowledgeBaseAssetMetrics';
 
 const logger = getLogger('API_KNOWLEDGE_BASES');
 logger.level = 'debug';
@@ -42,6 +43,13 @@ const toKnowledgeBaseResponse = async (knowledgeBase: any) => {
     }),
     knowledgeBaseService.getPrimaryConnector(knowledgeBase),
   ]);
+  const assetCount = await resolveKnowledgeBaseAssetCount({
+    knowledgeBase,
+    defaultSnapshot: defaultKbSnapshot,
+    kbSnapshotRepository,
+    modelRepository: components.modelRepository,
+    viewRepository: components.viewRepository,
+  });
 
   return {
     id: knowledgeBase.id,
@@ -63,6 +71,7 @@ const toKnowledgeBaseResponse = async (knowledgeBase: any) => {
     createdAt: knowledgeBase.createdAt ?? null,
     updatedAt: knowledgeBase.updatedAt ?? null,
     snapshotCount: snapshots.length,
+    assetCount,
     defaultKbSnapshot: defaultKbSnapshot
       ? {
           id: defaultKbSnapshot.id,

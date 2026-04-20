@@ -32,6 +32,13 @@ logger.level = 'debug';
 export interface DeployResponse {
   status: DeployStatusEnum;
   error?: string;
+  hash?: string;
+  selector?: {
+    workspaceId?: string | null;
+    knowledgeBaseId?: string | null;
+    kbSnapshotId?: string | null;
+    deployHash?: string | null;
+  };
 }
 
 export interface MDLSyncResponse {
@@ -262,7 +269,7 @@ export class DeployService implements IDeployService {
           );
         if (lastDeploy && lastDeploy.hash === hash) {
           logger.log(`Model has been deployed, hash: ${hash}`);
-          return { status: DeployStatusEnum.SUCCESS };
+          return { status: DeployStatusEnum.SUCCESS, hash };
         }
       }
       const deployData = {
@@ -310,7 +317,7 @@ export class DeployService implements IDeployService {
           false,
         );
       }
-      return { status, error: aiError };
+      return { status, error: aiError, hash };
     } catch (err: any) {
       logger.error(`Error deploying model: ${err.message}`);
       this.telemetry.sendEvent(

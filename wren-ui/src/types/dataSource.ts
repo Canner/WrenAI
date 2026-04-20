@@ -10,6 +10,7 @@ export type CompactTable = {
   columns: CompactColumn[];
   name: string;
   properties?: unknown;
+  primaryKey?: string;
 };
 
 export type DataSource = {

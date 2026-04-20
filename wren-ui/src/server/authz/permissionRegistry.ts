@@ -1,6 +1,50 @@
 export const AUTHORIZATION_ACTIONS = {
+  'platform.user.read': {
+    description: 'Read the platform user directory',
+    scope: 'platform',
+  },
+  'platform.user.create': {
+    description: 'Create platform users',
+    scope: 'platform',
+  },
+  'platform.user.update': {
+    description: 'Update platform user profile fields',
+    scope: 'platform',
+  },
+  'platform.user.role.assign': {
+    description: 'Assign platform roles to users',
+    scope: 'platform',
+  },
+  'platform.user.workspace.assign': {
+    description: 'Assign users to workspaces from the platform console',
+    scope: 'platform',
+  },
+  'platform.role.read': {
+    description: 'Read platform role catalog and permission assignments',
+    scope: 'platform',
+  },
+  'platform.role.create': {
+    description: 'Create platform roles',
+    scope: 'platform',
+  },
+  'platform.role.update': {
+    description: 'Update platform roles',
+    scope: 'platform',
+  },
+  'platform.role.delete': {
+    description: 'Delete platform roles',
+    scope: 'platform',
+  },
+  'platform.workspace.read': {
+    description: 'Read workspace governance data from the platform console',
+    scope: 'platform',
+  },
   'workspace.create': {
     description: 'Create a new workspace',
+    scope: 'platform',
+  },
+  'platform.workspace.member.manage': {
+    description: 'Manage workspace members from the platform console',
     scope: 'platform',
   },
   'workspace.read': {
@@ -169,6 +213,22 @@ export const AUTHORIZATION_ACTIONS = {
   },
   'impersonation.start': {
     description: 'Start an audited impersonation session',
+    scope: 'platform',
+  },
+  'platform.audit.read': {
+    description: 'Read platform audit logs',
+    scope: 'platform',
+  },
+  'platform.diagnostics.read': {
+    description: 'Read platform diagnostics data',
+    scope: 'platform',
+  },
+  'platform.system_task.read': {
+    description: 'Read platform system task status',
+    scope: 'platform',
+  },
+  'platform.system_task.manage': {
+    description: 'Manage platform system tasks',
     scope: 'platform',
   },
 } as const;

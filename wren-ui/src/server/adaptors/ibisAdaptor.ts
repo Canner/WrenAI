@@ -19,254 +19,52 @@ import {
   toMultipleIbisConnectionInfos,
 } from '../dataSource';
 import { DialectSQL, WrenSQL } from '../models/adaptor';
+import {
+  DryRunResponse,
+  IbisDryPlanOptions,
+  IbisQueryOptions,
+  IbisQueryResponse,
+  IIbisAdaptor,
+  ValidationResponse,
+  ValidationRules,
+} from './ibisAdaptorTypes';
+import {
+  resolveDataSourceUrl,
+  resolveIbisErrorMessage,
+} from './ibisAdaptorSupport';
 
+export type {
+  DryRunResponse,
+  HostBasedConnectionInfo,
+  IbisAthenaConnectionInfo,
+  IbisBaseOptions,
+  IbisBigQueryConnectionInfo,
+  IbisDatabricksConnectionInfo,
+  IbisDryPlanOptions,
+  IbisPostgresConnectionInfo,
+  IbisQueryOptions,
+  IbisQueryResponse,
+  IbisRedshiftConnectionInfo,
+  IbisResponse,
+  IbisSnowflakeConnectionInfo,
+  IbisTrinoConnectionInfo,
+  IIbisAdaptor,
+  TableResponse,
+  UrlBasedConnectionInfo,
+  ValidationResponse,
+} from './ibisAdaptorTypes';
+export {
+  IbisDatabricksConnectionType,
+  IbisRedshiftConnectionType,
+  SupportedDataSource,
+  ValidationRules,
+} from './ibisAdaptorTypes';
 export type { WrenSQL };
 
 const logger = getLogger('IbisAdaptor');
 logger.level = 'debug';
 
 const config = getConfig();
-
-export interface HostBasedConnectionInfo {
-  host: string;
-  port: number;
-  database: string;
-  user: string;
-  password: string;
-}
-
-export interface UrlBasedConnectionInfo {
-  connectionUrl: string;
-}
-
-export type IbisPostgresConnectionInfo =
-  | UrlBasedConnectionInfo
-  | HostBasedConnectionInfo;
-
-export interface IbisBigQueryConnectionInfo {
-  project_id: string;
-  dataset_id: string;
-  credentials: string; // base64 encoded
-}
-
-export interface IbisTrinoConnectionInfo {
-  host: string;
-  port: string;
-  catalog: string;
-  schema: string;
-  user: string;
-  password: string;
-}
-
-export interface IbisSnowflakeConnectionInfo {
-  user: string;
-  account: string;
-  database: string;
-  schema: string;
-  password?: string;
-  privateKey?: string;
-  warehouse?: string;
-}
-
-export interface IbisAthenaConnectionInfo {
-  // AWS access key auth (optional if using OIDC)
-  aws_access_key_id?: string;
-  aws_secret_access_key?: string;
-
-  // OIDC auth (optional if using access keys)
-  web_identity_token?: string;
-  role_arn?: string;
-  role_session_name?: string;
-
-  region_name: string;
-  s3_staging_dir: string;
-  schema_name: string;
-}
-
-export enum IbisRedshiftConnectionType {
-  REDSHIFT = 'redshift',
-  REDSHIFT_IAM = 'redshift_iam',
-}
-
-interface IbisRedshiftPasswordAuth {
-  host: string;
-  port: number;
-  database: string;
-  user: string;
-  password: string;
-  redshift_type: IbisRedshiftConnectionType;
-}
-
-interface IbisRedshiftIAMAuth {
-  cluster_identifier: string;
-  user: string;
-  database: string;
-  region: string;
-  access_key_id: string;
-  access_key_secret: string;
-  redshift_type: IbisRedshiftConnectionType;
-}
-
-export enum IbisDatabricksConnectionType {
-  TOKEN = 'token',
-  SERVICE_PRINCIPAL = 'service_principal',
-}
-
-interface IbisDatabricksPersonalAccessTokenAuth {
-  databricks_type: IbisDatabricksConnectionType;
-  serverHostname: string;
-  httpPath: string;
-  accessToken: string;
-}
-
-interface IbisDatabricksServicePrincipalAuth {
-  databricks_type: IbisDatabricksConnectionType;
-  serverHostname: string;
-  httpPath: string;
-  clientId: string;
-  clientSecret: string;
-  azureTenantId?: string;
-}
-
-export type IbisRedshiftConnectionInfo =
-  | IbisRedshiftPasswordAuth
-  | IbisRedshiftIAMAuth;
-
-export type IbisDatabricksConnectionInfo =
-  | IbisDatabricksPersonalAccessTokenAuth
-  | IbisDatabricksServicePrincipalAuth;
-
-export enum SupportedDataSource {
-  POSTGRES = 'POSTGRES',
-  BIG_QUERY = 'BIG_QUERY',
-  SNOWFLAKE = 'SNOWFLAKE',
-  MYSQL = 'MYSQL',
-  ORACLE = 'ORACLE',
-  MSSQL = 'MSSQL',
-  CLICK_HOUSE = 'CLICK_HOUSE',
-  TRINO = 'TRINO',
-  ATHENA = 'ATHENA',
-  REDSHIFT = 'REDSHIFT',
-  DATABRICKS = 'DATABRICKS',
-}
-
-const dataSourceUrlMap: Record<SupportedDataSource, string> = {
-  [SupportedDataSource.POSTGRES]: 'postgres',
-  [SupportedDataSource.BIG_QUERY]: 'bigquery',
-  [SupportedDataSource.SNOWFLAKE]: 'snowflake',
-  [SupportedDataSource.MYSQL]: 'mysql',
-  [SupportedDataSource.ORACLE]: 'oracle',
-  [SupportedDataSource.MSSQL]: 'mssql',
-  [SupportedDataSource.CLICK_HOUSE]: 'clickhouse',
-  [SupportedDataSource.TRINO]: 'trino',
-  [SupportedDataSource.ATHENA]: 'athena',
-  [SupportedDataSource.REDSHIFT]: 'redshift',
-  [SupportedDataSource.DATABRICKS]: 'databricks',
-};
-const resolveDataSourceUrl = (dataSource: DataSourceName) => {
-  const dataSourceUrl =
-    dataSourceUrlMap[dataSource as unknown as SupportedDataSource];
-  if (!dataSourceUrl) {
-    throw new Error(`Unsupported data source: ${dataSource}`);
-  }
-  return dataSourceUrl;
-};
-const resolveErrorMessage = (error: unknown) => {
-  if (axios.isAxiosError(error)) {
-    return error.response?.data || error.message;
-  }
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return String(error);
-};
-
-export interface TableResponse {
-  tables: CompactTable[];
-}
-
-export enum ValidationRules {
-  COLUMN_IS_VALID = 'COLUMN_IS_VALID',
-}
-
-export interface ValidationResponse {
-  valid: boolean;
-  message: string | null;
-}
-
-export interface IbisBaseOptions {
-  dataSource: DataSourceName;
-  connectionInfo: WREN_AI_CONNECTION_INFO;
-  mdl: Manifest;
-}
-export interface IbisQueryOptions extends IbisBaseOptions {
-  limit?: number;
-  refresh?: boolean;
-  cacheEnabled?: boolean;
-}
-export interface IbisDryPlanOptions {
-  dataSource: DataSourceName;
-  mdl: Manifest;
-  // TODO: replace sql type with WrenSQL
-  sql: string;
-}
-
-export interface IIbisAdaptor {
-  query: (
-    // TODO: replace query type with WrenSQL
-    query: string,
-    options: IbisQueryOptions,
-  ) => Promise<IbisQueryResponse>;
-  dryRun: (query: string, options: IbisBaseOptions) => Promise<DryRunResponse>;
-  getTables: (
-    dataSource: DataSourceName,
-    connectionInfo: WREN_AI_CONNECTION_INFO,
-  ) => Promise<CompactTable[]>;
-  getConstraints: (
-    dataSource: DataSourceName,
-    connectionInfo: WREN_AI_CONNECTION_INFO,
-  ) => Promise<RecommendConstraint[]>;
-
-  getNativeSql: (options: IbisDryPlanOptions) => Promise<string>;
-  validate: (
-    dataSource: DataSourceName,
-    rule: ValidationRules,
-    connectionInfo: WREN_AI_CONNECTION_INFO,
-    mdl: Manifest,
-    parameters: Record<string, any>,
-  ) => Promise<ValidationResponse>;
-  modelSubstitute: (
-    sql: DialectSQL,
-    options: {
-      dataSource: DataSourceName;
-      connectionInfo: WREN_AI_CONNECTION_INFO;
-      mdl: Manifest;
-      catalog?: string;
-      schema?: string;
-    },
-  ) => Promise<WrenSQL>;
-  getVersion: (
-    dataSource: DataSourceName,
-    connectionInfo: WREN_AI_CONNECTION_INFO,
-  ) => Promise<string>;
-}
-
-export interface IbisResponse {
-  correlationId?: string;
-  processTime?: string;
-}
-
-export interface IbisQueryResponse extends IbisResponse {
-  columns: string[];
-  data: any[];
-  dtypes: Record<string, string>;
-  cacheHit?: boolean;
-  cacheCreatedAt?: string;
-  cacheOverrodeAt?: string;
-  override?: boolean;
-}
-
-export interface DryRunResponse extends IbisResponse {}
 
 enum IBIS_API_TYPE {
   QUERY = 'QUERY',
@@ -298,7 +96,7 @@ export class IbisAdaptor implements IIbisAdaptor {
       );
       return res.data;
     } catch (e) {
-      logger.debug(`Dry plan error: ${resolveErrorMessage(e)}`);
+      logger.debug(`Dry plan error: ${resolveIbisErrorMessage(e)}`);
       this.throwError(e, 'Error during dry plan execution');
     }
   }
@@ -341,7 +139,7 @@ export class IbisAdaptor implements IIbisAdaptor {
         override: res.headers['x-cache-override'] === 'true',
       };
     } catch (e) {
-      logger.debug(`Query error: ${resolveErrorMessage(e)}`);
+      logger.debug(`Query error: ${resolveIbisErrorMessage(e)}`);
       this.throwError(e, 'Error querying ibis server');
     }
   }
@@ -371,7 +169,7 @@ export class IbisAdaptor implements IIbisAdaptor {
         processTime: response.headers['x-process-time'],
       };
     } catch (err) {
-      logger.debug(`Dry run error: ${resolveErrorMessage(err)}`);
+      logger.debug(`Dry run error: ${resolveIbisErrorMessage(err)}`);
       this.throwError(err, 'Error during dry run execution');
     }
   }
@@ -418,7 +216,7 @@ export class IbisAdaptor implements IIbisAdaptor {
       );
       return await getTablesByConnectionInfo(ibisConnectionInfo);
     } catch (e) {
-      logger.debug(`Get tables error: ${resolveErrorMessage(e)}`);
+      logger.debug(`Get tables error: ${resolveIbisErrorMessage(e)}`);
       this.throwError(e, 'Error getting table from ibis server');
     }
   }
@@ -441,7 +239,7 @@ export class IbisAdaptor implements IIbisAdaptor {
       );
       return res.data;
     } catch (e) {
-      logger.debug(`Get constraints error: ${resolveErrorMessage(e)}`);
+      logger.debug(`Get constraints error: ${resolveIbisErrorMessage(e)}`);
       this.throwError(e, 'Error getting constraint from ibis server');
     }
   }
@@ -469,7 +267,7 @@ export class IbisAdaptor implements IIbisAdaptor {
       );
       return { valid: true, message: null };
     } catch (e) {
-      const errorMessage = resolveErrorMessage(e);
+      const errorMessage = resolveIbisErrorMessage(e);
       logger.debug(`Validation error: ${errorMessage}`);
       return { valid: false, message: errorMessage };
     }
@@ -510,7 +308,7 @@ export class IbisAdaptor implements IIbisAdaptor {
       );
       return res.data as WrenSQL;
     } catch (e) {
-      logger.debug(`Model substitution error: ${resolveErrorMessage(e)}`);
+      logger.debug(`Model substitution error: ${resolveIbisErrorMessage(e)}`);
       this.throwError(
         e,
         'Error running model substitution with ibis server',
@@ -537,7 +335,7 @@ export class IbisAdaptor implements IIbisAdaptor {
       );
       return res.data;
     } catch (e) {
-      logger.debug(`Get version error: ${resolveErrorMessage(e)}`);
+      logger.debug(`Get version error: ${resolveIbisErrorMessage(e)}`);
       this.throwError(e, 'Error getting version from ibis server');
     }
   }
@@ -582,7 +380,7 @@ export class IbisAdaptor implements IIbisAdaptor {
         return { ...table, properties };
       } catch (error) {
         logger.debug(
-          `Error transforming table properties: ${resolveErrorMessage(error)}`,
+          `Error transforming table properties: ${resolveIbisErrorMessage(error)}`,
         );
         return table;
       }
@@ -609,23 +407,36 @@ export class IbisAdaptor implements IIbisAdaptor {
     defaultMessage: string,
     errorMessageBuilder?: (message: string) => string,
   ): never {
-    const axiosError = axios.isAxiosError(e) ? e : null;
-    const resolvedErrorMessage = resolveErrorMessage(e);
+    const axiosError =
+      axios.isAxiosError(e) || (e && typeof e === 'object' && 'response' in e)
+        ? (e as {
+            response?: {
+              data?: Record<string, any> | string;
+              headers?: Record<string, any>;
+            };
+          })
+        : null;
+    const resolvedErrorMessage = resolveIbisErrorMessage(e);
     const customMessage =
-      axiosError?.response?.data?.message ||
+      (typeof axiosError?.response?.data === 'object'
+        ? axiosError?.response?.data?.message
+        : undefined) ||
       resolvedErrorMessage ||
       defaultMessage;
 
     const errorData = axiosError?.response?.data;
+    const errorHeaders = axiosError?.response?.headers || {};
+    const errorDataObject =
+      errorData && typeof errorData === 'object' ? errorData : undefined;
     throw Errors.create(Errors.GeneralErrorCodes.IBIS_SERVER_ERROR, {
       customMessage: errorMessageBuilder
         ? errorMessageBuilder(customMessage)
         : customMessage,
       originalError: e instanceof Error ? e : undefined,
       other: {
-        correlationId: axiosError?.response?.headers['x-correlation-id'],
-        processTime: axiosError?.response?.headers['x-process-time'],
-        ...errorData,
+        correlationId: errorHeaders['x-correlation-id'],
+        processTime: errorHeaders['x-process-time'],
+        ...(errorDataObject || {}),
       },
     });
   }

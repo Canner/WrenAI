@@ -1,4 +1,4 @@
-import { AuthorizationAction } from './permissionRegistry';
+import { AUTHORIZATION_ACTIONS, AuthorizationAction } from './permissionRegistry';
 import { toLegacyWorkspaceRoleKey } from './roleMapping';
 
 const OWNER_ACTIONS: AuthorizationAction[] = [
@@ -55,11 +55,9 @@ const MEMBER_ACTIONS: AuthorizationAction[] = [
   'access_review.read',
 ];
 
-const PLATFORM_ADMIN_ACTIONS: AuthorizationAction[] = [
-  'workspace.create',
-  'impersonation.start',
-  'break_glass.manage',
-];
+const PLATFORM_ADMIN_ACTIONS: AuthorizationAction[] = (
+  Object.keys(AUTHORIZATION_ACTIONS) as AuthorizationAction[]
+).filter((action) => AUTHORIZATION_ACTIONS[action].scope === 'platform');
 
 export const legacyRolePolicyMap: Record<string, AuthorizationAction[]> = {
   owner: OWNER_ACTIONS,

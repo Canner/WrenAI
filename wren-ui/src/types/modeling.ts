@@ -114,6 +114,7 @@ export type CreateViewInput = {
 };
 
 export type CreateModelInput = {
+  connectorId?: string | null;
   fields: string[];
   primaryKey?: string | null;
   sourceTableName: string;

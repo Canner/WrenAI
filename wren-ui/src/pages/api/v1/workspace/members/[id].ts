@@ -6,6 +6,7 @@ import {
   buildAuthorizationActorFromValidatedSession,
   buildAuthorizationContextFromRequest,
   recordAuditEvent,
+  toLegacyWorkspaceRoleKey,
 } from '@server/authz';
 
 const getQueryString = (value: string | string[] | undefined) =>
@@ -14,7 +15,7 @@ const getQueryString = (value: string | string[] | undefined) =>
 const getString = (value: unknown) =>
   typeof value === 'string' ? value.trim() : '';
 
-const VALID_MEMBER_ROLES = ['owner', 'admin', 'member'];
+const VALID_MEMBER_ROLES = ['owner', 'viewer', 'admin', 'member'];
 
 const ensureScopedMembership = async (id: string, workspaceId: string) => {
   const member = await components.workspaceMemberRepository.findOneBy({ id });
@@ -69,12 +70,6 @@ export default async function handler(
       return res.status(400).json({
         error: 'You cannot remove yourself from the current workspace',
       });
-    }
-
-    if (member.roleKey === 'owner') {
-      return res
-        .status(403)
-        .json({ error: 'Owner membership cannot be changed here' });
     }
 
     if (req.method === 'DELETE') {
@@ -148,11 +143,11 @@ export default async function handler(
       patch.status = 'inactive';
     }
     if (action === 'updateRole') {
-      const roleKey = getString(req.body?.roleKey).toLowerCase();
-      if (!VALID_MEMBER_ROLES.includes(roleKey)) {
+      const requestedRoleKey = getString(req.body?.roleKey).toLowerCase();
+      if (!VALID_MEMBER_ROLES.includes(requestedRoleKey)) {
         return res.status(400).json({ error: 'Unsupported roleKey' });
       }
-      patch.roleKey = roleKey;
+      patch.roleKey = toLegacyWorkspaceRoleKey(requestedRoleKey) || undefined;
     }
     const authorizationAction =
       action === 'updateRole'

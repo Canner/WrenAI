@@ -11,29 +11,17 @@ export const hasWorkspaceWriteRole = (roleKey?: string | null) =>
 
 export const canManageWorkspaceMemberRole = ({
   actorRoleKey,
-  targetRoleKey,
-  nextRoleKey,
+  targetRoleKey: _targetRoleKey,
+  nextRoleKey: _nextRoleKey,
 }: {
   actorRoleKey?: string | null;
   targetRoleKey?: string | null;
   nextRoleKey?: string | null;
 }) => {
   const actorRole = normalizeWorkspaceRoleKey(actorRoleKey);
-  const targetRole = normalizeWorkspaceRoleKey(targetRoleKey);
-  const nextRole = normalizeWorkspaceRoleKey(nextRoleKey);
 
   if (!isWorkspaceManagerRole(actorRole)) {
     return false;
-  }
-
-  if (actorRole === 'admin') {
-    if (targetRole === 'owner') {
-      return false;
-    }
-
-    if (nextRole === 'owner') {
-      return false;
-    }
   }
 
   return true;

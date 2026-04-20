@@ -310,6 +310,206 @@ describe('AuthService', () => {
     );
   });
 
+  it('reconciles stale platform role permissions before resolving structured claims', async () => {
+    const seededTx = { id: 'tx-seed' };
+    const permissions = [
+      {
+        id: 'perm-workspace-create',
+        name: 'workspace.create',
+        scopeType: 'platform',
+        description: 'Create a new workspace',
+      },
+    ];
+    const roles = [
+      {
+        id: 'role-platform-admin',
+        name: 'platform_admin',
+        scopeType: 'platform',
+        scopeId: '',
+        displayName: '平台管理员',
+        description: '管理平台级菜单、跨空间治理与高风险平台动作。',
+        isSystem: true,
+        isActive: true,
+        createdBy: null,
+      },
+      {
+        id: 'role-workspace-owner',
+        name: 'workspace_owner',
+        scopeType: 'workspace',
+        scopeId: '',
+        displayName: '所有者',
+        description: '管理工作空间成员、资源治理与关键配置。',
+        isSystem: true,
+        isActive: true,
+        createdBy: null,
+      },
+    ];
+    const rolePermissions = [
+      {
+        id: 'role-permission-platform-admin-workspace-create',
+        roleId: 'role-platform-admin',
+        permissionId: 'perm-workspace-create',
+      },
+    ];
+    const principalRoleBindings = [
+      {
+        id: 'binding-platform-admin',
+        principalType: 'user',
+        principalId: 'user-1',
+        roleId: 'role-platform-admin',
+        scopeType: 'platform',
+        scopeId: '',
+      },
+      {
+        id: 'binding-workspace-owner',
+        principalType: 'user',
+        principalId: 'user-1',
+        roleId: 'role-workspace-owner',
+        scopeType: 'workspace',
+        scopeId: 'workspace-1',
+      },
+    ];
+    const permissionRepository = {
+      findAll: jest.fn(async () => permissions.map((permission) => ({ ...permission }))),
+      createMany: jest.fn(async (payloads: any[]) => {
+        permissions.push(...payloads.map((payload) => ({ ...payload })));
+        return payloads;
+      }),
+    };
+    const rolePermissionRepository = {
+      findAll: jest.fn(async () =>
+        rolePermissions.map((rolePermission) => ({ ...rolePermission })),
+      ),
+      createMany: jest.fn(async (payloads: any[]) => {
+        rolePermissions.push(...payloads.map((payload) => ({ ...payload })));
+        return payloads;
+      }),
+    };
+    const roleRepository = {
+      findAll: jest.fn(async () => roles.map((role) => ({ ...role }))),
+      createOne: jest.fn(async (payload: any) => {
+        const created = { ...payload };
+        roles.push(created);
+        return created;
+      }),
+      transaction: jest.fn().mockResolvedValue(seededTx),
+      commit: jest.fn(),
+      rollback: jest.fn(),
+    };
+    const principalRoleBindingRepository = {
+      findResolvedRoleBindings: jest.fn(async (scope: any) =>
+        principalRoleBindings
+          .filter(
+            (binding) =>
+              binding.principalType === scope.principalType &&
+              binding.principalId === scope.principalId &&
+              binding.scopeType === scope.scopeType &&
+              binding.scopeId === scope.scopeId,
+          )
+          .map((binding) => {
+            const role = roles.find((item) => item.id === binding.roleId)!;
+            return {
+              id: binding.id,
+              roleId: binding.roleId,
+              roleName: role.name,
+              roleScopeType: role.scopeType,
+              principalType: binding.principalType,
+              principalId: binding.principalId,
+              scopeType: binding.scopeType,
+              scopeId: binding.scopeId,
+            };
+          }),
+      ),
+      findPermissionNamesByScope: jest.fn(async (scope: any) => {
+        const scopedRoleIds = principalRoleBindings
+          .filter(
+            (binding) =>
+              binding.principalType === scope.principalType &&
+              binding.principalId === scope.principalId &&
+              binding.scopeType === scope.scopeType &&
+              binding.scopeId === scope.scopeId,
+          )
+          .map((binding) => binding.roleId);
+
+        return Array.from(
+          new Set(
+            rolePermissions
+              .filter((rolePermission) =>
+                scopedRoleIds.includes(rolePermission.roleId),
+              )
+              .map((rolePermission) =>
+                permissions.find(
+                  (permission) => permission.id === rolePermission.permissionId,
+                )?.name,
+              )
+              .filter(Boolean),
+          ),
+        );
+      }),
+      deleteByScope: jest.fn(),
+      createOne: jest.fn(),
+    };
+
+    const structuredService = new AuthService({
+      userRepository,
+      authIdentityRepository,
+      authSessionRepository,
+      workspaceRepository,
+      workspaceMemberRepository,
+      workspaceBootstrapService,
+      roleRepository: roleRepository as any,
+      permissionRepository: permissionRepository as any,
+      rolePermissionRepository: rolePermissionRepository as any,
+      principalRoleBindingRepository: principalRoleBindingRepository as any,
+      sessionTtlMs: 60_000,
+    });
+
+    userRepository.findOneBy.mockResolvedValue({
+      id: 'user-1',
+      email: 'owner@example.com',
+      displayName: 'Owner',
+      status: 'active',
+      isPlatformAdmin: true,
+    });
+    workspaceMemberRepository.findOneBy.mockResolvedValue({
+      id: 'member-1',
+      workspaceId: 'workspace-1',
+      userId: 'user-1',
+      roleKey: 'owner',
+      status: 'active',
+    });
+    workspaceRepository.findOneBy.mockResolvedValue({
+      id: 'workspace-1',
+      name: 'Demo',
+      status: 'active',
+    });
+
+    const result = await structuredService.resolveActorClaims(
+      'user-1',
+      'workspace-1',
+    );
+
+    expect(result.actorClaims.platformRoleKeys).toEqual(['platform_admin']);
+    expect(result.actorClaims.isPlatformAdmin).toBe(true);
+    expect(result.actorClaims.grantedActions).toEqual(
+      expect.arrayContaining([
+        'workspace.create',
+        'platform.user.read',
+        'platform.role.read',
+        'platform.workspace.read',
+      ]),
+    );
+    expect(permissionRepository.createMany).toHaveBeenCalled();
+    expect(rolePermissionRepository.createMany).toHaveBeenCalled();
+    expect(roleRepository.createOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'platform_iam_admin',
+        scopeType: 'platform',
+      }),
+      expect.any(Object),
+    );
+  });
+
   it('bootstraps owner on a fresh instance', async () => {
     userRepository.findAll.mockResolvedValue([]);
     workspaceBootstrapService.ensureDefaultWorkspaceWithSamples.mockResolvedValue(
@@ -434,7 +634,7 @@ describe('AuthService', () => {
     );
     expect(
       workspaceBootstrapService.ensureDefaultWorkspaceWithSamples,
-    ).toHaveBeenCalledWith({ runtimeSeedMode: 'all' });
+    ).toHaveBeenCalledWith({ runtimeSeedMode: 'metadata_only' });
   });
 
   it('registers a local user into the default workspace', async () => {

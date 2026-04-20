@@ -15,118 +15,18 @@ import {
   IGovernanceService,
 } from './governanceService';
 import { IWorkspaceService } from './workspaceService';
-
-type ProviderConfigJson = {
-  scimBearerToken?: string;
-  groupRoleMappings?: Array<{ group: string; roleKey: string }>;
-};
-
-export interface ScimContext {
-  workspace: {
-    id: string;
-    slug?: string | null;
-    name: string;
-  };
-  provider: IdentityProviderConfig;
-}
-
-export interface IScimService {
-  authenticate(input: {
-    workspaceSlug: string;
-    bearerToken: string;
-  }): Promise<ScimContext>;
-  listUsers(context: ScimContext): Promise<any[]>;
-  getUser(context: ScimContext, id: string): Promise<any | null>;
-  createUser(context: ScimContext, payload: Record<string, any>): Promise<any>;
-  replaceUser(
-    context: ScimContext,
-    id: string,
-    payload: Record<string, any>,
-  ): Promise<any>;
-  patchUser(
-    context: ScimContext,
-    id: string,
-    operations: Array<Record<string, any>>,
-  ): Promise<any>;
-  deleteUser(context: ScimContext, id: string): Promise<void>;
-  listGroups(context: ScimContext): Promise<any[]>;
-  getGroup(context: ScimContext, id: string): Promise<any | null>;
-  createGroup(context: ScimContext, payload: Record<string, any>): Promise<any>;
-  replaceGroup(
-    context: ScimContext,
-    id: string,
-    payload: Record<string, any>,
-  ): Promise<any>;
-  patchGroup(
-    context: ScimContext,
-    id: string,
-    operations: Array<Record<string, any>>,
-  ): Promise<any>;
-  deleteGroup(context: ScimContext, id: string): Promise<void>;
-}
-
-const getPrimaryEmail = (payload: Record<string, any>) => {
-  const emails = Array.isArray(payload.emails) ? payload.emails : [];
-  const primary =
-    emails.find((item) => item?.primary && typeof item.value === 'string') ||
-    emails.find((item) => typeof item?.value === 'string');
-  if (primary?.value) {
-    return String(primary.value).trim().toLowerCase();
-  }
-  if (typeof payload.email === 'string') {
-    return payload.email.trim().toLowerCase();
-  }
-  return null;
-};
-
-const getDisplayName = (payload: Record<string, any>) => {
-  if (typeof payload.displayName === 'string' && payload.displayName.trim()) {
-    return payload.displayName.trim();
-  }
-  if (payload.name && typeof payload.name === 'object') {
-    const given =
-      typeof payload.name.givenName === 'string'
-        ? payload.name.givenName.trim()
-        : '';
-    const family =
-      typeof payload.name.familyName === 'string'
-        ? payload.name.familyName.trim()
-        : '';
-    const full = `${given} ${family}`.trim();
-    if (full) {
-      return full;
-    }
-  }
-  if (typeof payload.userName === 'string' && payload.userName.trim()) {
-    return payload.userName.trim();
-  }
-  return 'SCIM User';
-};
-
-const normalizeGroupMappings = (provider: IdentityProviderConfig) => {
-  const config = (provider.configJson || {}) as ProviderConfigJson;
-  const mappings = Array.isArray(config.groupRoleMappings)
-    ? config.groupRoleMappings
-    : [];
-  return mappings
-    .filter((item) => item?.group && item?.roleKey)
-    .map((item) => ({
-      group: String(item.group).trim(),
-      roleKey: String(item.roleKey).trim().toLowerCase(),
-    }));
-};
-
-const buildScimProviderSubject = (
-  providerId: string,
-  externalSubject: string,
-) => `scim:${providerId}:${externalSubject}`;
-
-const getStringArray = (value: unknown) =>
-  Array.isArray(value)
-    ? value
-        .map((item) => String(item?.value || item || '').trim())
-        .filter(Boolean)
-    : [];
+import {
+  IScimService,
+  ProviderConfigJson,
+  ScimContext,
+} from './scimServiceTypes';
+import {
+  buildScimProviderSubject,
+  getDisplayName,
+  getPrimaryEmail,
+  getStringArray,
+  normalizeGroupMappings,
+} from './scimServiceSupport';
 
 export class ScimService implements IScimService {
   constructor(
@@ -581,3 +481,9 @@ export class ScimService implements IScimService {
     };
   }
 }
+
+export type {
+  IScimService,
+  ProviderConfigJson,
+  ScimContext,
+} from './scimServiceTypes';

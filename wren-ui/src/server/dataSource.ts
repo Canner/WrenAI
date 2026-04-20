@@ -31,29 +31,23 @@ import {
   DATABRICKS_SERVICE_PRINCIPAL_AUTH,
 } from './repositories';
 import { DataSourceName } from './types';
-import { getConfig } from './config';
-import { Encryptor } from './utils';
-
-const config = getConfig();
-const encryptor = new Encryptor(config);
+import {
+  decryptScopedConnectionInfo,
+  encryptScopedConnectionInfo,
+} from './dataSourceCrypto';
+import type {
+  DataSourceConnectionRegistry,
+  IDataSourceConnectionInfo,
+} from './dataSourceTypes';
 
 export function encryptConnectionInfo(
   dataSourceType: DataSourceName,
   connectionInfo: WREN_AI_CONNECTION_INFO,
 ) {
-  const rawConnectionInfo = connectionInfo as Record<string, any>;
-  return dataSource[dataSourceType].sensitiveProps.reduce(
-    (acc, prop: string) => {
-      const value = rawConnectionInfo[prop];
-      if (value) {
-        const encryption = encryptor.encrypt(
-          JSON.parse(JSON.stringify({ [prop]: value })),
-        );
-        return { ...acc, [prop]: encryption };
-      }
-      return acc;
-    },
+  return encryptScopedConnectionInfo(
+    dataSourceType,
     connectionInfo,
+    dataSource,
   );
 }
 
@@ -74,17 +68,6 @@ export function toMultipleIbisConnectionInfos(
   }
   return handler(connectionInfo);
 }
-
-interface IDataSourceConnectionInfo<C, I extends Record<string, any>> {
-  sensitiveProps: string[];
-  toIbisConnectionInfo(connectionInfo: C): I;
-  toMultipleIbisConnectionInfos?(connectionInfo: C): I[];
-}
-
-type DataSourceConnectionRegistry = Record<
-  DataSourceName,
-  IDataSourceConnectionInfo<WREN_AI_CONNECTION_INFO, Record<string, any>>
->;
 
 const dataSource: DataSourceConnectionRegistry = {
   // Athena
@@ -507,17 +490,9 @@ function decryptConnectionInfo(
   dataSourceType: DataSourceName,
   connectionInfo: WREN_AI_CONNECTION_INFO,
 ): WREN_AI_CONNECTION_INFO {
-  const rawConnectionInfo = connectionInfo as Record<string, any>;
-  return dataSource[dataSourceType].sensitiveProps.reduce(
-    (acc, prop: string) => {
-      const value = rawConnectionInfo[prop];
-      if (value) {
-        const decryption = encryptor.decrypt(value);
-        const decryptedValue = JSON.parse(decryption)[prop];
-        return { ...acc, [prop]: decryptedValue };
-      }
-      return acc;
-    },
+  return decryptScopedConnectionInfo(
+    dataSourceType,
     connectionInfo,
+    dataSource,
   );
 }

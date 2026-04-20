@@ -22,6 +22,10 @@ const LEGACY_WORKSPACE_ROLE_BY_STRUCTURED = Object.entries(
   return acc;
 }, {});
 
+const LEGACY_WORKSPACE_ROLE_ALIASES: Record<string, LegacyWorkspaceRoleKey> = {
+  viewer: 'member',
+};
+
 export type AuthorizationRoleSource = 'legacy' | 'role_binding';
 
 export const normalizeRoleKey = (roleKey?: string | null) =>
@@ -39,6 +43,10 @@ export const toLegacyWorkspaceRoleKey = (
 
   if (normalizedRoleKey in LEGACY_WORKSPACE_ROLE_BY_STRUCTURED) {
     return LEGACY_WORKSPACE_ROLE_BY_STRUCTURED[normalizedRoleKey];
+  }
+
+  if (normalizedRoleKey in LEGACY_WORKSPACE_ROLE_ALIASES) {
+    return LEGACY_WORKSPACE_ROLE_ALIASES[normalizedRoleKey];
   }
 
   if (

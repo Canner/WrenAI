@@ -44,16 +44,31 @@ describe('knowledgeBaseRuntime', () => {
       updateOne: jest.fn(),
     };
     const modelRepository = {
-      findAllBy: jest.fn().mockResolvedValue([
-        {
-          id: 101,
-          projectId: 77,
-          workspaceId: null,
-          knowledgeBaseId: null,
-          kbSnapshotId: null,
-          deployHash: null,
-        },
-      ]),
+      findAllBy: jest
+        .fn()
+        .mockImplementation(async (filter) =>
+          'projectId' in filter
+            ? [
+                {
+                  id: 101,
+                  projectId: 77,
+                  workspaceId: null,
+                  knowledgeBaseId: null,
+                  kbSnapshotId: null,
+                  deployHash: null,
+                },
+              ]
+            : [
+                {
+                  id: 102,
+                  projectId: null,
+                  workspaceId: 'ws-1',
+                  knowledgeBaseId: 'kb-1',
+                  kbSnapshotId: 'snap-old',
+                  deployHash: 'deploy-old',
+                },
+              ],
+        ),
       updateOne: jest.fn(),
     };
     const relationRepository = {
@@ -111,6 +126,12 @@ describe('knowledgeBaseRuntime', () => {
       defaultKbSnapshotId: 'snap-1',
     });
     expect(modelRepository.updateOne).toHaveBeenCalledWith(101, {
+      workspaceId: 'ws-1',
+      knowledgeBaseId: 'kb-1',
+      kbSnapshotId: 'snap-1',
+      deployHash: 'deploy-77',
+    });
+    expect(modelRepository.updateOne).toHaveBeenCalledWith(102, {
       workspaceId: 'ws-1',
       knowledgeBaseId: 'kb-1',
       kbSnapshotId: 'snap-1',

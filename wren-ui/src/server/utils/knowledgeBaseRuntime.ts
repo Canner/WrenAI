@@ -81,9 +81,26 @@ const syncProjectRuntimeArtifacts = async <
     return;
   }
 
-  const records = await repository.findAllBy({
-    projectId: deployment.projectId,
-  } as Partial<T>);
+  const runtimeScopedRecords = await Promise.all([
+    deployment.projectId != null
+      ? repository.findAllBy({
+          projectId: deployment.projectId,
+        } as Partial<T>)
+      : Promise.resolve([] as T[]),
+    knowledgeBase.id
+      ? repository.findAllBy({
+          knowledgeBaseId: knowledgeBase.id,
+        } as Partial<T>)
+      : Promise.resolve([] as T[]),
+  ]);
+
+  const records = [
+    ...new Map(
+      runtimeScopedRecords
+        .flat()
+        .map((record) => [record.id, record] as const),
+    ).values(),
+  ];
 
   for (const record of records) {
     const shouldUpdate =

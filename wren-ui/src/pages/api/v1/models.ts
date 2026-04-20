@@ -34,6 +34,10 @@ export default async function handler(
       const fields = Array.isArray(req.body?.fields) ? req.body.fields : [];
       const sourceTableName = String(req.body?.sourceTableName || '').trim();
       const primaryKey = String(req.body?.primaryKey || '').trim();
+      const connectorId =
+        typeof req.body?.connectorId === 'string'
+          ? req.body.connectorId.trim() || null
+          : null;
       if (!sourceTableName || fields.length === 0 || !primaryKey) {
         throw new ApiError('Model payload is invalid', 400);
       }
@@ -41,6 +45,7 @@ export default async function handler(
       runtimeScope = await runtimeScopeResolver.resolveRequestScope(req);
       const ctx = await buildApiContextFromRequest({ req, runtimeScope });
       const data: CreateModelData = {
+        connectorId,
         sourceTableName,
         fields: fields as [string],
         primaryKey,

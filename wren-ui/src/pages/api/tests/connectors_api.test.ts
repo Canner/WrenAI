@@ -5,6 +5,7 @@ const mockListConnectorsByKnowledgeBase = jest.fn();
 const mockListConnectorsByWorkspace = jest.fn();
 const mockCreateConnector = jest.fn();
 const mockGetConnectorById = jest.fn();
+const mockListConnectorTables = jest.fn();
 const mockUpdateConnector = jest.fn();
 const mockDeleteConnector = jest.fn();
 const mockTestConnectorConnection = jest.fn();
@@ -40,6 +41,7 @@ jest.mock('@/common', () => ({
       listConnectorsByWorkspace: mockListConnectorsByWorkspace,
       createConnector: mockCreateConnector,
       getConnectorById: mockGetConnectorById,
+      listConnectorTables: mockListConnectorTables,
       updateConnector: mockUpdateConnector,
       deleteConnector: mockDeleteConnector,
       testConnectorConnection: mockTestConnectorConnection,
@@ -178,6 +180,45 @@ describe('pages/api/v1/connectors routes', () => {
           expect.objectContaining({
             id: 'connector-workspace-1',
             knowledgeBaseId: null,
+          }),
+        ],
+      }),
+    );
+  });
+
+  it('lists connector tables with workspace scope only', async () => {
+    const handler = (await import('../v1/connectors/[id]/tables')).default;
+    const req = createReq({
+      method: 'GET',
+      query: { id: 'connector-workspace-1' },
+    });
+    const res = createRes();
+
+    mockResolveRequestScope.mockResolvedValue(
+      buildRuntimeScope({ knowledgeBase: null, project: null }),
+    );
+    mockListConnectorTables.mockResolvedValue([
+      {
+        name: 'orders',
+        primaryKey: 'order_id',
+        columns: [{ name: 'order_id', type: 'INTEGER' }],
+        properties: { schema: 'sales', table: 'orders' },
+      },
+    ]);
+
+    await handler(req, res);
+
+    expect(mockListConnectorTables).toHaveBeenCalledWith(
+      'ws-1',
+      'connector-workspace-1',
+    );
+    expect(mockRespondWithSimple).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: 200,
+        responsePayload: [
+          expect.objectContaining({
+            name: 'orders',
+            primaryKey: 'order_id',
           }),
         ],
       }),

@@ -2,46 +2,20 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
 import { toPersistedRuntimeIdentity } from '@server/context/runtimeScope';
 import { getSessionTokenFromRequest } from '@server/context/actorClaims';
-import { resolveDashboardScheduleBinding } from '@server/utils/dashboardRuntime';
-import {
-  ScheduleFrequencyEnum,
-  SetDashboardCacheData,
-} from '@server/models/dashboard';
-import { DASHBOARD_REFRESH_TARGET_TYPE } from '@server/services/scheduleService';
 import {
   assertAuthorizedWithAudit,
   buildAuthorizationActorFromValidatedSession,
   buildAuthorizationContextFromRequest,
   recordAuditEvent,
 } from '@server/authz';
+import {
+  disableDashboardScheduleJob,
+  serializeScheduleJob,
+  updateDashboardScheduleJob,
+} from '../scheduleActionSupport';
 
 const readQueryValue = (value: string | string[] | undefined) =>
   Array.isArray(value) ? value[0] : value;
-
-const serializeScheduleJob = (job: any) => ({
-  id: job.id,
-  workspaceId: job.workspaceId,
-  knowledgeBaseId: job.knowledgeBaseId,
-  kbSnapshotId: job.kbSnapshotId,
-  deployHash: job.deployHash,
-  targetType: job.targetType,
-  targetId: job.targetId,
-  cronExpr: job.cronExpr,
-  timezone: job.timezone,
-  status: job.status,
-  nextRunAt: job.nextRunAt || null,
-  lastRunAt: job.lastRunAt || null,
-  lastError: job.lastError || null,
-});
-
-const serializeDashboard = (dashboard: any) => ({
-  id: dashboard.id,
-  cacheEnabled: dashboard.cacheEnabled,
-  scheduleFrequency: dashboard.scheduleFrequency,
-  scheduleTimezone: dashboard.scheduleTimezone,
-  scheduleCron: dashboard.scheduleCron,
-  nextScheduledAt: dashboard.nextScheduledAt || null,
-});
 
 const ensureScopedScheduleJob = async (req: NextApiRequest, id: string) => {
   const runtimeScope =
@@ -87,130 +61,6 @@ const ensureManagerPermission = async (
   }
 
   return validatedSession;
-};
-
-const syncDashboardScheduleJob = async ({
-  runtimeScope,
-  scheduleJob,
-  data,
-}: {
-  runtimeScope: Awaited<
-    ReturnType<typeof components.runtimeScopeResolver.resolveRequestScope>
-  >;
-  scheduleJob: Awaited<
-    ReturnType<typeof components.scheduleJobRepository.findOneBy>
-  >;
-  data: SetDashboardCacheData;
-}) => {
-  if (!scheduleJob) {
-    throw new Error('Schedule job not found');
-  }
-
-  if (scheduleJob.targetType !== DASHBOARD_REFRESH_TARGET_TYPE) {
-    throw new Error('Only dashboard refresh jobs can be updated here');
-  }
-
-  const dashboardId = Number.parseInt(scheduleJob.targetId, 10);
-  if (Number.isNaN(dashboardId)) {
-    throw new Error(
-      `Invalid dashboard refresh target id: ${scheduleJob.targetId}`,
-    );
-  }
-
-  const dashboard = await components.dashboardRepository.findOneBy({
-    id: dashboardId,
-  });
-  if (!dashboard) {
-    throw new Error('Dashboard not found');
-  }
-
-  const updatedDashboard =
-    await components.dashboardService.setDashboardSchedule(dashboardId, data);
-
-  const runtimeIdentity = toPersistedRuntimeIdentity(runtimeScope);
-  const scheduleBinding = await resolveDashboardScheduleBinding({
-    dashboard: updatedDashboard,
-    runtimeIdentity,
-    kbSnapshotRepository: components.kbSnapshotRepository,
-    knowledgeBaseRepository: components.knowledgeBaseRepository,
-  });
-
-  const syncedJob = await components.scheduleService.syncDashboardRefreshJob({
-    dashboardId: updatedDashboard.id,
-    enabled: Boolean(
-      updatedDashboard.cacheEnabled && updatedDashboard.scheduleCron,
-    ),
-    cronExpr: updatedDashboard.scheduleCron,
-    timezone:
-      updatedDashboard.scheduleTimezone || scheduleJob.timezone || 'UTC',
-    nextRunAt: updatedDashboard.nextScheduledAt || null,
-    workspaceId: scheduleBinding.workspaceId,
-    knowledgeBaseId: scheduleBinding.knowledgeBaseId,
-    kbSnapshotId: scheduleBinding.kbSnapshotId,
-    deployHash: scheduleBinding.deployHash,
-    createdBy: runtimeIdentity.actorUserId || null,
-  });
-
-  return {
-    dashboard: serializeDashboard(updatedDashboard),
-    job: serializeScheduleJob(syncedJob || scheduleJob),
-  };
-};
-
-const disableDashboardScheduleJob = async ({
-  runtimeScope,
-  scheduleJob,
-}: {
-  runtimeScope: Awaited<
-    ReturnType<typeof components.runtimeScopeResolver.resolveRequestScope>
-  >;
-  scheduleJob: Awaited<
-    ReturnType<typeof components.scheduleJobRepository.findOneBy>
-  >;
-}) =>
-  await syncDashboardScheduleJob({
-    runtimeScope,
-    scheduleJob,
-    data: {
-      cacheEnabled: true,
-      schedule: {
-        frequency: ScheduleFrequencyEnum.NEVER,
-        day: null as any,
-        hour: 0,
-        minute: 0,
-        cron: null as any,
-        timezone: scheduleJob?.timezone || 'UTC',
-      },
-    },
-  });
-
-const updateDashboardScheduleJob = async ({
-  runtimeScope,
-  scheduleJob,
-  body,
-}: {
-  runtimeScope: Awaited<
-    ReturnType<typeof components.runtimeScopeResolver.resolveRequestScope>
-  >;
-  scheduleJob: Awaited<
-    ReturnType<typeof components.scheduleJobRepository.findOneBy>
-  >;
-  body: Record<string, any>;
-}) => {
-  const data = body?.data as SetDashboardCacheData | undefined;
-  if (!data || typeof data.cacheEnabled !== 'boolean') {
-    throw new Error('Schedule update payload is required');
-  }
-
-  if (data.cacheEnabled && !data.schedule) {
-    throw new Error('Schedule config is required when cache is enabled');
-  }
-
-  return await syncDashboardScheduleJob({
-    runtimeScope,
-    scheduleJob,
-    data,
-  });
 };
 
 export default async function handler(
@@ -265,11 +115,16 @@ export default async function handler(
       context: auditContext,
     });
     const beforeJob = serializeScheduleJob(scopedJob.scheduleJob);
+    const runtimeIdentity = toPersistedRuntimeIdentity(scopedJob.runtimeScope);
     const payload =
       action === 'disable'
-        ? await disableDashboardScheduleJob(scopedJob)
+        ? await disableDashboardScheduleJob({
+            runtimeIdentity,
+            scheduleJob: scopedJob.scheduleJob,
+          })
         : await updateDashboardScheduleJob({
-            ...scopedJob,
+            runtimeIdentity,
+            scheduleJob: scopedJob.scheduleJob,
             body: req.body || {},
           });
     await recordAuditEvent({

@@ -7,45 +7,14 @@ import {
   buildAuthorizationContextFromRequest,
   recordAuditEvent,
 } from '@server/authz';
+import {
+  runScheduleJobNow,
+  serializeScheduleJob,
+  serializeScheduleRun,
+} from '../../scheduleActionSupport';
 
 const readQueryValue = (value: string | string[] | undefined) =>
   Array.isArray(value) ? value[0] : value;
-
-const toTimestamp = (value?: Date | string | null) => {
-  if (!value) {
-    return 0;
-  }
-
-  const time = new Date(value).getTime();
-  return Number.isFinite(time) ? time : 0;
-};
-
-const serializeScheduleJob = (job: any) => ({
-  id: job.id,
-  workspaceId: job.workspaceId,
-  knowledgeBaseId: job.knowledgeBaseId,
-  kbSnapshotId: job.kbSnapshotId,
-  deployHash: job.deployHash,
-  targetType: job.targetType,
-  targetId: job.targetId,
-  cronExpr: job.cronExpr,
-  timezone: job.timezone,
-  status: job.status,
-  nextRunAt: job.nextRunAt || null,
-  lastRunAt: job.lastRunAt || null,
-  lastError: job.lastError || null,
-});
-
-const serializeScheduleRun = (run: any) => ({
-  id: run.id,
-  scheduleJobId: run.scheduleJobId,
-  traceId: run.traceId || null,
-  status: run.status,
-  startedAt: run.startedAt || null,
-  finishedAt: run.finishedAt || null,
-  errorMessage: run.errorMessage || null,
-  detailJson: run.detailJson || null,
-});
 
 const ensureScopedScheduleJob = async (req: NextApiRequest, id: string) => {
   const runtimeScope =
@@ -128,18 +97,10 @@ export default async function handler(
       context: auditContext,
     });
     const beforeJob = serializeScheduleJob(scheduleJob);
-    await components.scheduleWorker.runJobNow(scheduleJob);
-
-    const [updatedJob, runs] = await Promise.all([
-      components.scheduleJobRepository.findOneBy({ id }),
-      components.scheduleJobRunRepository.findAllBy({ scheduleJobId: id }),
-    ]);
-
-    const latestRun = [...runs].sort(
-      (left, right) =>
-        toTimestamp(right.startedAt || right.finishedAt) -
-        toTimestamp(left.startedAt || left.finishedAt),
-    )[0];
+    const { updatedJob, latestRun } = await runScheduleJobNow({
+      id,
+      scheduleJob,
+    });
 
     if (latestRun?.status === 'failed') {
       await recordAuditEvent({

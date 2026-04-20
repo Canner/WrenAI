@@ -1,10 +1,5 @@
 import { getLogger } from '@server/utils';
-import { PersistedRuntimeIdentity } from '@server/context/runtimeScope';
-import {
-  AskFeedbackInput,
-  AskFeedbackResult,
-  AskFeedbackStatus,
-} from '@server/models/adaptor';
+import { AskFeedbackResult, AskFeedbackStatus } from '@server/models/adaptor';
 import {
   AskingTask,
   IAskingTaskRepository,
@@ -16,61 +11,22 @@ import { IWrenAIAdaptor } from '../adaptors';
 import { TelemetryEvent, WrenService } from '../telemetry/telemetry';
 import { PostHogTelemetry } from '../telemetry/telemetry';
 import { registerShutdownCallback } from '@server/utils/shutdown';
+import type {
+  CreateAdjustmentTaskInput,
+  IAdjustmentBackgroundTaskTracker,
+  RerunAdjustmentTaskInput,
+  TrackedAdjustmentResult,
+  TrackedTask,
+} from './adjustmentBackgroundTrackerTypes';
+export type {
+  CreateAdjustmentTaskInput,
+  IAdjustmentBackgroundTaskTracker,
+  RerunAdjustmentTaskInput,
+  TrackedAdjustmentResult,
+} from './adjustmentBackgroundTrackerTypes';
 
 const logger = getLogger('AdjustmentTaskTracker');
 logger.level = 'debug';
-
-interface TrackedTask {
-  queryId: string;
-  taskId?: number;
-  lastPolled: number;
-  result?: AskFeedbackResult;
-  isFinalized: boolean;
-  threadResponseId: number;
-  question: string;
-  originalThreadResponseId: number;
-  rerun?: boolean;
-  runtimeIdentity?: PersistedRuntimeIdentity;
-  adjustmentPayload?: {
-    originalThreadResponseId: number;
-    retrievedTables: string[];
-    sqlGenerationReasoning: string;
-  };
-}
-
-export type TrackedAdjustmentResult = AskFeedbackResult & {
-  taskId?: number;
-  queryId: string;
-};
-
-export type CreateAdjustmentTaskInput = AskFeedbackInput & {
-  threadId: number;
-  question: string;
-  originalThreadResponseId: number;
-  configurations: { language: string };
-  runtimeScopeId?: string | null;
-  runtimeIdentity?: PersistedRuntimeIdentity;
-};
-
-export type RerunAdjustmentTaskInput = {
-  threadResponseId: number;
-  threadId: number;
-  configurations: { language: string };
-  runtimeScopeId?: string | null;
-  runtimeIdentity?: PersistedRuntimeIdentity;
-};
-
-export interface IAdjustmentBackgroundTaskTracker {
-  createAdjustmentTask(
-    input: CreateAdjustmentTaskInput,
-  ): Promise<{ queryId: string }>;
-  getAdjustmentResult(queryId: string): Promise<TrackedAdjustmentResult | null>;
-  getAdjustmentResultById(id: number): Promise<TrackedAdjustmentResult | null>;
-  cancelAdjustmentTask(queryId: string): Promise<void>;
-  rerunAdjustmentTask(
-    input: RerunAdjustmentTaskInput,
-  ): Promise<{ queryId: string }>;
-}
 
 export class AdjustmentBackgroundTaskTracker
   implements IAdjustmentBackgroundTaskTracker

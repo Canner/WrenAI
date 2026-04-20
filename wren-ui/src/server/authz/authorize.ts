@@ -4,205 +4,34 @@ import {
   isSystemSampleKnowledgeBase,
 } from '@/utils/workspaceGovernance';
 import { AuthorizationActor } from './authorizationActor';
-import { isAuthorizationBindingOnlyEnabled } from './bindingMode';
-import { hasLegacyRolePermission } from './legacyRolePolicy';
+import {
+  allow,
+  AuthorizationError,
+  deny,
+  type AuthorizationContext,
+  type AuthorizationDecision,
+  type AuthorizationResource,
+} from './authorizationDecision';
 import {
   AuthorizationAction,
   getAuthorizationActionMeta,
 } from './permissionRegistry';
 import {
+  actorHasAction,
+  actorHasPlatformAction,
+  ensureWorkspaceBoundary,
+  ensureWorkspaceWriteAccess,
+} from './authorizationPermissionChecks';
+import {
   canManageWorkspaceMemberRole,
-  hasWorkspaceWriteRole,
   isProtectedWorkspaceMemberAction,
 } from './rules';
-
-export interface AuthorizationResource {
-  resourceType: string;
-  resourceId?: string | number | null;
-  workspaceId?: string | null;
-  ownerUserId?: string | null;
-  attributes?: {
-    workspaceKind?: string | null;
-    knowledgeBaseKind?: string | null;
-    targetRoleKey?: string | null;
-    nextRoleKey?: string | null;
-    targetUserId?: string | null;
-  } & Record<string, any>;
-}
-
-export interface AuthorizationContext {
-  requestId?: string | null;
-  sessionId?: string | null;
-  ipAddress?: string | null;
-  userAgent?: string | null;
-  runtimeScope?: Record<string, any> | null;
-}
-
-export interface AuthorizationDecision {
-  allowed: boolean;
-  action: AuthorizationAction;
-  actor: AuthorizationActor | null;
-  resource: AuthorizationResource | null;
-  reason?: string;
-  statusCode: number;
-}
-
-export class AuthorizationError extends Error {
-  statusCode: number;
-  action: AuthorizationAction;
-
-  constructor(action: AuthorizationAction, message: string, statusCode = 403) {
-    super(message);
-    this.name = 'AuthorizationError';
-    this.action = action;
-    this.statusCode = statusCode;
-  }
-}
-
-const deny = ({
-  action,
-  actor,
-  resource,
-  reason,
-  statusCode = 403,
-}: {
-  action: AuthorizationAction;
-  actor: AuthorizationActor | null;
-  resource: AuthorizationResource | null;
-  reason: string;
-  statusCode?: number;
-}): AuthorizationDecision => ({
-  allowed: false,
-  action,
-  actor,
-  resource,
-  reason,
-  statusCode,
-});
-
-const allow = ({
-  action,
-  actor,
-  resource,
-}: {
-  action: AuthorizationAction;
-  actor: AuthorizationActor;
-  resource: AuthorizationResource | null;
-}): AuthorizationDecision => ({
-  allowed: true,
-  action,
-  actor,
-  resource,
-  statusCode: 200,
-});
-
-const actorHasAction = (
-  actor: AuthorizationActor,
-  action: AuthorizationAction,
-) => {
-  const meta = getAuthorizationActionMeta(action);
-  if (meta.scope === 'workspace' && actor.isPlatformAdmin) {
-    return true;
-  }
-
-  if (Array.isArray(actor.grantedActions)) {
-    return actor.grantedActions.includes(action);
-  }
-
-  if (actor.workspaceRoleSource === 'role_binding') {
-    return false;
-  }
-
-  if (isAuthorizationBindingOnlyEnabled()) {
-    return false;
-  }
-
-  return actor.workspaceRoleKeys.some((roleKey) =>
-    hasLegacyRolePermission(roleKey, action),
-  );
-};
-
-const actorHasPlatformAction = (
-  actor: AuthorizationActor,
-  action: AuthorizationAction,
-) => {
-  if (Array.isArray(actor.grantedActions)) {
-    return actor.grantedActions.includes(action);
-  }
-
-  if (actor.platformRoleSource === 'role_binding') {
-    return false;
-  }
-
-  if (isAuthorizationBindingOnlyEnabled()) {
-    return false;
-  }
-
-  return actor.isPlatformAdmin;
-};
-
-const ensureWorkspaceBoundary = (
-  action: AuthorizationAction,
-  actor: AuthorizationActor,
-  resource: AuthorizationResource | null,
-) => {
-  if (!resource?.workspaceId || !actor.workspaceId) {
-    return null;
-  }
-
-  if (resource.workspaceId !== actor.workspaceId) {
-    return deny({
-      action,
-      actor,
-      resource,
-      reason: 'Resource does not belong to the current workspace',
-    });
-  }
-
-  return null;
-};
-
-const ensureWorkspaceWriteAccess = (
-  action: AuthorizationAction,
-  actor: AuthorizationActor,
-  resource: AuthorizationResource | null,
-  deniedReason: string,
-) => {
-  if (actor.isPlatformAdmin) {
-    return null;
-  }
-
-  if (Array.isArray(actor.grantedActions)) {
-    if (actor.grantedActions.includes(action)) {
-      return null;
-    }
-  } else if (actor.workspaceRoleSource === 'role_binding') {
-    return deny({
-      action,
-      actor,
-      resource,
-      reason: deniedReason,
-    });
-  } else if (isAuthorizationBindingOnlyEnabled()) {
-    return deny({
-      action,
-      actor,
-      resource,
-      reason: deniedReason,
-    });
-  } else if (
-    actor.workspaceRoleKeys.some((roleKey) => hasWorkspaceWriteRole(roleKey))
-  ) {
-    return null;
-  }
-
-  return deny({
-    action,
-    actor,
-    resource,
-    reason: deniedReason,
-  });
-};
+export type {
+  AuthorizationContext,
+  AuthorizationDecision,
+  AuthorizationResource,
+} from './authorizationDecision';
+export { AuthorizationError } from './authorizationDecision';
 
 export const authorize = ({
   actor,
@@ -241,7 +70,7 @@ export const authorize = ({
           action,
           actor,
           resource,
-          reason: 'Platform admin permission required',
+          reason: `Platform permission required: ${action}`,
         });
   }
 
@@ -304,18 +133,6 @@ export const authorize = ({
               ? 'You cannot change your own member status here'
               : 'You cannot change your own role here',
         statusCode: 400,
-      });
-    }
-
-    if (
-      !actor.isPlatformAdmin &&
-      resource?.attributes?.targetRoleKey === 'owner'
-    ) {
-      return deny({
-        action,
-        actor,
-        resource,
-        reason: 'Owner membership cannot be changed here',
       });
     }
 

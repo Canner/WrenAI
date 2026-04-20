@@ -6,6 +6,7 @@ import {
   buildAuthorizationActorFromValidatedSession,
   buildAuthorizationContextFromRequest,
   recordAuditEvent,
+  toLegacyWorkspaceRoleKey,
 } from '@server/authz';
 
 const getQueryString = (value: string | string[] | undefined) =>
@@ -44,7 +45,8 @@ export default async function handler(
     });
 
     const email = getString(req.body?.email).toLowerCase();
-    const roleKey = getString(req.body?.roleKey) || 'member';
+    const requestedRoleKey = getString(req.body?.roleKey) || 'viewer';
+    const roleKey = toLegacyWorkspaceRoleKey(requestedRoleKey) || 'member';
     if (!email) {
       return res.status(400).json({ error: 'email is required' });
     }

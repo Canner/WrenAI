@@ -15,20 +15,22 @@ export const buildApiContextFromRequest = async ({
     runtimeScope ??
     (await components.runtimeScopeResolver.resolveRequestScope(req));
 
-  let requestActor = null;
-  let authorizationActor = null;
+  let requestActor = resolvedRuntimeScope?.requestActor || null;
+  let authorizationActor = requestActor?.authorizationActor || null;
 
-  try {
-    requestActor = await resolveRequestActor({
-      req,
-      authService: components.authService,
-      automationService: components.automationService,
-      workspaceId: resolvedRuntimeScope?.workspace?.id,
-    });
-    authorizationActor = requestActor?.authorizationActor || null;
-  } catch (_error) {
-    requestActor = null;
-    authorizationActor = null;
+  if (!requestActor) {
+    try {
+      requestActor = await resolveRequestActor({
+        req,
+        authService: components.authService,
+        automationService: components.automationService,
+        workspaceId: resolvedRuntimeScope?.workspace?.id,
+      });
+      authorizationActor = requestActor?.authorizationActor || null;
+    } catch (_error) {
+      requestActor = null;
+      authorizationActor = null;
+    }
   }
 
   return {

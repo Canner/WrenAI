@@ -1,216 +1,35 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
 import { getSessionTokenFromRequest } from '@server/context/actorClaims';
-import { WORKSPACE_KINDS } from '@/utils/workspaceGovernance';
-import { PLATFORM_SCOPE_ID, toLegacyWorkspaceRoleKey } from '@server/authz';
 import {
-  AuthorizationAction,
+  WORKSPACE_KINDS,
+  normalizeWorkspaceRoleKeyForDisplay,
+} from '@/utils/workspaceGovernance';
+import { PLATFORM_SCOPE_ID } from '@server/authz';
+import {
   assertAuthorizedWithAudit,
-  authorize,
   buildAuthorizationActorFromValidatedSession,
   buildAuthorizationContextFromRequest,
   serializeAuthorizationActor,
 } from '@server/authz';
+import { buildWorkspacePermissionActions } from './workspaceCurrentPermissions';
+import {
+  type BindingSourceDetail,
+  sortApplications,
+  sortByName,
+  sortMembers,
+  sortUsers,
+  toApiTokenView,
+  toBindingSummaryLabel,
+  toBreakGlassGrantView,
+  toDirectoryGroupView,
+  toOwnerCandidateView,
+  toServiceAccountView,
+  toWorkspaceView,
+} from './workspaceCurrentViews';
 
 const getQueryString = (value: string | string[] | undefined) =>
   Array.isArray(value) ? value[0] : value;
-
-type BindingSourceDetail = {
-  kind:
-    | 'direct_binding'
-    | 'group_binding'
-    | 'platform_binding'
-    | 'service_account_binding'
-    | 'token_binding';
-  label: string;
-};
-
-const ROLE_LABELS: Record<string, string> = {
-  owner: '所有者',
-  admin: '管理员',
-  member: '成员',
-  workspace_owner: '所有者',
-  workspace_admin: '管理员',
-  workspace_viewer: '成员',
-  platform_admin: '平台管理员',
-};
-
-const sortByName = <T extends { name?: string | null }>(items: T[]) =>
-  [...items].sort((left, right) =>
-    String(left.name || '').localeCompare(String(right.name || '')),
-  );
-
-const sortUsers = <
-  T extends { displayName?: string | null; email?: string | null },
->(
-  items: T[],
-) =>
-  [...items].sort((left, right) => {
-    const leftName = left.displayName || left.email || '';
-    const rightName = right.displayName || right.email || '';
-    return leftName.localeCompare(rightName);
-  });
-
-const sortMembers = <
-  T extends {
-    roleKey?: string | null;
-    user?: { displayName?: string | null; email?: string | null } | null;
-  },
->(
-  items: T[],
-) =>
-  [...items].sort((left, right) => {
-    if (left.roleKey === 'owner' && right.roleKey !== 'owner') {
-      return -1;
-    }
-    if (left.roleKey !== 'owner' && right.roleKey === 'owner') {
-      return 1;
-    }
-
-    const leftName = left.user?.displayName || left.user?.email || '';
-    const rightName = right.user?.displayName || right.user?.email || '';
-    return leftName.localeCompare(rightName);
-  });
-
-const toWorkspaceView = (workspace: any) => ({
-  id: workspace.id,
-  name: workspace.name,
-  slug: workspace.slug || null,
-  status: workspace.status || 'active',
-  kind: workspace.kind || WORKSPACE_KINDS.REGULAR,
-});
-
-const formatRoleLabel = (roleName?: string | null) => {
-  const legacyRole = toLegacyWorkspaceRoleKey(roleName);
-  if (legacyRole && ROLE_LABELS[legacyRole]) {
-    return ROLE_LABELS[legacyRole];
-  }
-  return (
-    ROLE_LABELS[
-      String(roleName || '')
-        .trim()
-        .toLowerCase()
-    ] ||
-    roleName ||
-    '未知角色'
-  );
-};
-
-const compactBindingRoles = (roleNames: Array<string | null | undefined>) =>
-  Array.from(
-    new Set(
-      roleNames
-        .map((roleName) => String(formatRoleLabel(roleName)).trim())
-        .filter(Boolean),
-    ),
-  );
-
-const toBindingSummaryLabel = (
-  prefix: string,
-  roleNames: Array<string | null | undefined>,
-) => {
-  const labels = compactBindingRoles(roleNames);
-  return labels.length > 0 ? `${prefix} · ${labels.join(' / ')}` : prefix;
-};
-
-const toOwnerCandidateView = (user: any, isPlatformAdmin: boolean) => ({
-  id: user.id,
-  email: user.email,
-  displayName: user.displayName ?? null,
-  status: user.status || 'active',
-  isPlatformAdmin,
-});
-
-const toServiceAccountView = (
-  serviceAccount: any,
-  tokens: Array<any> = [],
-) => ({
-  id: serviceAccount.id,
-  workspaceId: serviceAccount.workspaceId,
-  name: serviceAccount.name,
-  description: serviceAccount.description || null,
-  roleKey: serviceAccount.roleKey,
-  status: serviceAccount.status,
-  createdBy: serviceAccount.createdBy || null,
-  lastUsedAt: serviceAccount.lastUsedAt || null,
-  createdAt: serviceAccount.createdAt || null,
-  updatedAt: serviceAccount.updatedAt || null,
-  tokenCount: tokens.length,
-  activeTokenCount: tokens.filter((token) => !token.revokedAt).length,
-});
-
-const toApiTokenView = (token: any) => ({
-  id: token.id,
-  workspaceId: token.workspaceId,
-  serviceAccountId: token.serviceAccountId || null,
-  name: token.name,
-  prefix: token.prefix,
-  scopeType: token.scopeType,
-  scopeId: token.scopeId,
-  status: token.status,
-  expiresAt: token.expiresAt || null,
-  revokedAt: token.revokedAt || null,
-  lastUsedAt: token.lastUsedAt || null,
-  createdBy: token.createdBy || null,
-  createdAt: token.createdAt || null,
-  updatedAt: token.updatedAt || null,
-});
-
-const toDirectoryGroupView = (group: any) => ({
-  id: group.id,
-  workspaceId: group.workspaceId,
-  displayName: group.displayName,
-  source: group.source,
-  status: group.status,
-  roleKeys: group.roleKeys || [],
-  memberIds: (group.members || []).map((member: any) => member.userId),
-  memberCount: Array.isArray(group.members) ? group.members.length : 0,
-  createdAt: group.createdAt || null,
-  updatedAt: group.updatedAt || null,
-});
-
-const toBreakGlassGrantView = (grant: any) => ({
-  id: grant.id,
-  workspaceId: grant.workspaceId,
-  userId: grant.userId,
-  roleKey: grant.roleKey,
-  status: grant.status,
-  reason: grant.reason,
-  expiresAt: grant.expiresAt,
-  revokedAt: grant.revokedAt || null,
-  createdBy: grant.createdBy || null,
-  user: grant.user || null,
-  createdAt: grant.createdAt || null,
-  updatedAt: grant.updatedAt || null,
-});
-
-const statusPriority: Record<string, number> = {
-  pending: 0,
-  invited: 1,
-  rejected: 2,
-  inactive: 3,
-  active: 4,
-};
-
-const sortApplications = <
-  T extends { status?: string | null; updatedAt?: string | Date | null },
->(
-  items: T[],
-) =>
-  [...items].sort((left, right) => {
-    const leftPriority =
-      statusPriority[String(left.status || '').toLowerCase()] ?? 99;
-    const rightPriority =
-      statusPriority[String(right.status || '').toLowerCase()] ?? 99;
-    if (leftPriority !== rightPriority) {
-      return leftPriority - rightPriority;
-    }
-
-    return (
-      new Date(right.updatedAt || 0).getTime() -
-      new Date(left.updatedAt || 0).getTime()
-    );
-  });
 
 export default async function handler(
   req: NextApiRequest,
@@ -257,226 +76,18 @@ export default async function handler(
       },
       context: auditContext,
     });
-    const evaluateAction = (
-      action: AuthorizationAction,
-      resource: Parameters<typeof authorize>[0]['resource'],
-    ) =>
-      authorize({
-        actor,
-        action,
-        resource,
-      }).allowed;
-    const workspaceResource = {
-      resourceType: 'workspace',
-      resourceId: validatedSession.workspace.id,
-      workspaceId: validatedSession.workspace.id,
-      attributes: {
-        workspaceKind: validatedSession.workspace.kind || null,
-      },
-    };
-    const canManageMembers = evaluateAction(
-      'workspace.member.status.update',
-      workspaceResource,
-    );
-    const canInviteMembers = evaluateAction(
-      'workspace.member.invite',
-      workspaceResource,
-    );
-    const canApproveMembers = evaluateAction(
-      'workspace.member.approve',
-      workspaceResource,
-    );
-    const canManageSchedules = evaluateAction(
-      'workspace.schedule.manage',
-      workspaceResource,
-    );
-    const canCreateWorkspace = evaluateAction('workspace.create', {
-      resourceType: 'workspace',
-      resourceId: 'new',
-      workspaceId: actor.workspaceId || validatedSession.workspace.id,
+    const {
+      canManageMembers,
+      canInviteMembers,
+      canApproveMembers,
+      canManageSchedules,
+      canCreateWorkspace,
+      actions: permissionActions,
+    } = buildWorkspacePermissionActions({
+      actor,
+      workspace: validatedSession.workspace,
+      user: validatedSession.user,
     });
-    const permissionActions = {
-      'workspace.create': canCreateWorkspace,
-      'workspace.default.set': evaluateAction('workspace.default.set', {
-        resourceType: 'workspace',
-        resourceId: validatedSession.user.defaultWorkspaceId || 'self',
-        ownerUserId: validatedSession.user.id,
-      }),
-      'workspace.member.invite': canInviteMembers,
-      'workspace.member.approve': canApproveMembers,
-      'workspace.member.status.update': canManageMembers,
-      'workspace.member.role.update': evaluateAction(
-        'workspace.member.role.update',
-        workspaceResource,
-      ),
-      'workspace.member.remove': evaluateAction(
-        'workspace.member.remove',
-        workspaceResource,
-      ),
-      'workspace.schedule.manage': canManageSchedules,
-      'knowledge_base.create': evaluateAction('knowledge_base.create', {
-        resourceType: 'workspace',
-        resourceId: validatedSession.workspace.id,
-        workspaceId: validatedSession.workspace.id,
-        attributes: {
-          workspaceKind: validatedSession.workspace.kind || null,
-        },
-      }),
-      'connector.create': evaluateAction('connector.create', {
-        resourceType: 'workspace',
-        resourceId: validatedSession.workspace.id,
-        workspaceId: validatedSession.workspace.id,
-        attributes: {
-          workspaceKind: validatedSession.workspace.kind || null,
-        },
-      }),
-      'skill.create': evaluateAction('skill.create', {
-        resourceType: 'workspace',
-        resourceId: validatedSession.workspace.id,
-        workspaceId: validatedSession.workspace.id,
-      }),
-      'secret.reencrypt': evaluateAction('secret.reencrypt', {
-        resourceType: 'workspace',
-        resourceId: validatedSession.workspace.id,
-        workspaceId: validatedSession.workspace.id,
-      }),
-      'service_account.read': evaluateAction('service_account.read', {
-        resourceType: 'workspace',
-        resourceId: validatedSession.workspace.id,
-        workspaceId: validatedSession.workspace.id,
-        attributes: {
-          workspaceKind: validatedSession.workspace.kind || null,
-        },
-      }),
-      'service_account.create': evaluateAction('service_account.create', {
-        resourceType: 'workspace',
-        resourceId: validatedSession.workspace.id,
-        workspaceId: validatedSession.workspace.id,
-        attributes: {
-          workspaceKind: validatedSession.workspace.kind || null,
-        },
-      }),
-      'service_account.update': evaluateAction('service_account.update', {
-        resourceType: 'workspace',
-        resourceId: validatedSession.workspace.id,
-        workspaceId: validatedSession.workspace.id,
-        attributes: {
-          workspaceKind: validatedSession.workspace.kind || null,
-        },
-      }),
-      'service_account.delete': evaluateAction('service_account.delete', {
-        resourceType: 'workspace',
-        resourceId: validatedSession.workspace.id,
-        workspaceId: validatedSession.workspace.id,
-        attributes: {
-          workspaceKind: validatedSession.workspace.kind || null,
-        },
-      }),
-      'api_token.read': evaluateAction('api_token.read', {
-        resourceType: 'workspace',
-        resourceId: validatedSession.workspace.id,
-        workspaceId: validatedSession.workspace.id,
-        attributes: {
-          workspaceKind: validatedSession.workspace.kind || null,
-        },
-      }),
-      'api_token.create': evaluateAction('api_token.create', {
-        resourceType: 'workspace',
-        resourceId: validatedSession.workspace.id,
-        workspaceId: validatedSession.workspace.id,
-        attributes: {
-          workspaceKind: validatedSession.workspace.kind || null,
-        },
-      }),
-      'api_token.revoke': evaluateAction('api_token.revoke', {
-        resourceType: 'workspace',
-        resourceId: validatedSession.workspace.id,
-        workspaceId: validatedSession.workspace.id,
-        attributes: {
-          workspaceKind: validatedSession.workspace.kind || null,
-        },
-      }),
-      'identity_provider.read': evaluateAction('identity_provider.read', {
-        resourceType: 'workspace',
-        resourceId: validatedSession.workspace.id,
-        workspaceId: validatedSession.workspace.id,
-        attributes: {
-          workspaceKind: validatedSession.workspace.kind || null,
-        },
-      }),
-      'identity_provider.manage': evaluateAction('identity_provider.manage', {
-        resourceType: 'workspace',
-        resourceId: validatedSession.workspace.id,
-        workspaceId: validatedSession.workspace.id,
-        attributes: {
-          workspaceKind: validatedSession.workspace.kind || null,
-        },
-      }),
-      'access_review.read': evaluateAction('access_review.read', {
-        resourceType: 'workspace',
-        resourceId: validatedSession.workspace.id,
-        workspaceId: validatedSession.workspace.id,
-        attributes: {
-          workspaceKind: validatedSession.workspace.kind || null,
-        },
-      }),
-      'access_review.manage': evaluateAction('access_review.manage', {
-        resourceType: 'workspace',
-        resourceId: validatedSession.workspace.id,
-        workspaceId: validatedSession.workspace.id,
-        attributes: {
-          workspaceKind: validatedSession.workspace.kind || null,
-        },
-      }),
-      'group.read': evaluateAction('group.read', {
-        resourceType: 'workspace',
-        resourceId: validatedSession.workspace.id,
-        workspaceId: validatedSession.workspace.id,
-        attributes: {
-          workspaceKind: validatedSession.workspace.kind || null,
-        },
-      }),
-      'group.manage': evaluateAction('group.manage', {
-        resourceType: 'workspace',
-        resourceId: validatedSession.workspace.id,
-        workspaceId: validatedSession.workspace.id,
-        attributes: {
-          workspaceKind: validatedSession.workspace.kind || null,
-        },
-      }),
-      'audit.read': evaluateAction('audit.read', {
-        resourceType: 'workspace',
-        resourceId: validatedSession.workspace.id,
-        workspaceId: validatedSession.workspace.id,
-        attributes: {
-          workspaceKind: validatedSession.workspace.kind || null,
-        },
-      }),
-      'role.read': evaluateAction('role.read', {
-        resourceType: 'workspace',
-        resourceId: validatedSession.workspace.id,
-        workspaceId: validatedSession.workspace.id,
-        attributes: {
-          workspaceKind: validatedSession.workspace.kind || null,
-        },
-      }),
-      'role.manage': evaluateAction('role.manage', {
-        resourceType: 'workspace',
-        resourceId: validatedSession.workspace.id,
-        workspaceId: validatedSession.workspace.id,
-        attributes: {
-          workspaceKind: validatedSession.workspace.kind || null,
-        },
-      }),
-      'break_glass.manage': evaluateAction('break_glass.manage', {
-        resourceType: 'workspace',
-        resourceId: validatedSession.workspace.id,
-      }),
-      'impersonation.start': evaluateAction('impersonation.start', {
-        resourceType: 'workspace',
-        resourceId: validatedSession.workspace.id,
-      }),
-    };
     const [
       workspaces,
       allWorkspaces,
@@ -565,6 +176,7 @@ export default async function handler(
         const memberUser = memberUsers[index];
         return {
           ...member,
+          roleKey: normalizeWorkspaceRoleKeyForDisplay(member.roleKey) || 'viewer',
           user: memberUser
             ? {
                 id: memberUser.id,
@@ -743,7 +355,9 @@ export default async function handler(
             workspaceById.get(membership.workspaceId)?.name ||
             membership.workspaceId,
           status: membership.status,
-          roleKey: membership.roleKey,
+          roleKey:
+            normalizeWorkspaceRoleKeyForDisplay(membership.roleKey) ||
+            'viewer',
           kind:
             workspaceById.get(membership.workspaceId)?.kind ||
             WORKSPACE_KINDS.REGULAR,
@@ -764,7 +378,13 @@ export default async function handler(
         ...validatedSession.workspace,
         kind: validatedSession.workspace.kind || WORKSPACE_KINDS.REGULAR,
       },
-      membership: validatedSession.membership,
+      membership: {
+        ...validatedSession.membership,
+        roleKey:
+          normalizeWorkspaceRoleKeyForDisplay(
+            validatedSession.membership.roleKey,
+          ) || 'viewer',
+      },
       permissions: {
         canManageMembers,
         canInviteMembers,

@@ -628,7 +628,7 @@ describe('RuntimeScopeResolver', () => {
     expect(result.selector.deployHash).toBeNull();
   });
 
-  it('rejects when deployHash does not match the requested kb snapshot', async () => {
+  it('canonicalizes stale deployHash to the requested kb snapshot deploy hash', async () => {
     kbSnapshotRepository.findOneBy.mockResolvedValueOnce({
       id: 'snap-1',
       knowledgeBaseId: 'kb-1',
@@ -651,7 +651,7 @@ describe('RuntimeScopeResolver', () => {
     deployService.getDeployment.mockResolvedValue({
       id: 1,
       projectId: 101,
-      hash: 'deploy-from-request',
+      hash: 'deploy-from-snapshot',
       manifest: {},
     });
 
@@ -664,7 +664,20 @@ describe('RuntimeScopeResolver', () => {
           },
         }),
       ),
-    ).rejects.toThrow('deploy_hash does not match the requested kb_snapshot');
+    ).resolves.toMatchObject({
+      selector: expect.objectContaining({
+        kbSnapshotId: 'snap-1',
+        deployHash: 'deploy-from-snapshot',
+      }),
+      deployHash: 'deploy-from-snapshot',
+    });
+    expect(deployService.getDeploymentByRuntimeIdentity).toHaveBeenCalledWith({
+      workspaceId: null,
+      knowledgeBaseId: 'kb-1',
+      kbSnapshotId: 'snap-1',
+      projectId: null,
+      deployHash: 'deploy-from-snapshot',
+    });
   });
 
   it('rejects workspace mismatch between session and requested scope', async () => {

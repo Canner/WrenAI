@@ -1,10 +1,9 @@
 import { getLogger } from '@server/utils';
-import { PersistedRuntimeIdentity } from '@server/context/runtimeScope';
+import type { PersistedRuntimeIdentity } from '@server/context/runtimeScope';
 import {
   AskResult,
   AskResultType,
   AskResultStatus,
-  AskInput,
 } from '@server/models/adaptor';
 import {
   AskingTask,
@@ -16,50 +15,20 @@ import { IWrenAIAdaptor } from '../adaptors';
 import * as Errors from '@server/utils/error';
 import { toPersistedRuntimeIdentityPatch } from '@server/utils/persistedRuntimeIdentity';
 import { registerShutdownCallback } from '@server/utils/shutdown';
+import type {
+  CreateAskingTaskInput,
+  IAskingTaskTracker,
+  TrackedAskingResult,
+  TrackedTask,
+} from './askingTaskTrackerTypes';
+export type {
+  CreateAskingTaskInput,
+  IAskingTaskTracker,
+  TrackedAskingResult,
+} from './askingTaskTrackerTypes';
 
 const logger = getLogger('AskingTaskTracker');
 logger.level = 'debug';
-
-interface TrackedTask {
-  queryId: string;
-  taskId?: number;
-  lastPolled: number;
-  question?: string;
-  result?: AskResult;
-  isFinalized: boolean;
-  threadResponseId?: number;
-  rerunFromCancelled?: boolean;
-  runtimeIdentity?: PersistedRuntimeIdentity;
-}
-
-export type TrackedAskingResult = AskResult & {
-  taskId?: number;
-  queryId: string;
-  question: string;
-};
-
-export type CreateAskingTaskInput = AskInput & {
-  rerunFromCancelled?: boolean;
-  previousTaskId?: number;
-  threadResponseId?: number;
-  runtimeIdentity?: PersistedRuntimeIdentity;
-};
-
-export interface IAskingTaskTracker {
-  createAskingTask(input: CreateAskingTaskInput): Promise<{ queryId: string }>;
-  getAskingResult(queryId: string): Promise<TrackedAskingResult | null>;
-  getAskingResultById(id: number): Promise<TrackedAskingResult | null>;
-  getTrackedRuntimeIdentity?(
-    queryId: string,
-  ): Promise<PersistedRuntimeIdentity | null>;
-  cancelAskingTask(queryId: string): Promise<void>;
-  bindThreadResponse(
-    id: number,
-    queryId: string,
-    threadId: number,
-    threadResponseId: number,
-  ): Promise<void>;
-}
 
 export class AskingTaskTracker implements IAskingTaskTracker {
   private wrenAIAdaptor: IWrenAIAdaptor;

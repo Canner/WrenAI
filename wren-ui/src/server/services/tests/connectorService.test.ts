@@ -29,6 +29,7 @@ describe('ConnectorService', () => {
     };
     knowledgeBaseRepository = {
       findOneBy: jest.fn(),
+      findAllBy: jest.fn(),
     };
     secretService = {
       createSecretRecord: jest.fn(),
@@ -218,6 +219,62 @@ describe('ConnectorService', () => {
     expect(connectorRepository.rollback).toHaveBeenCalledWith(tx);
   });
 
+  it('backfills workspace-scoped connectors from legacy knowledge base primaries', async () => {
+    const legacyConnector = {
+      id: 'connector-kb-1',
+      workspaceId: 'workspace-1',
+      knowledgeBaseId: 'kb-1',
+      type: 'database',
+      databaseProvider: 'mysql',
+      displayName: 'TiDB 业务数据源',
+      configJson: {
+        host: 'host.docker.internal',
+        port: 4000,
+        user: 'root',
+        database: 'tidb_business_demo',
+      },
+      secretRecordId: null,
+      createdBy: 'user-1',
+    };
+
+    connectorRepository.findAllBy.mockResolvedValue([legacyConnector]);
+    connectorRepository.findOneBy.mockResolvedValue(legacyConnector);
+    workspaceRepository.findOneBy.mockResolvedValue({
+      id: 'workspace-1',
+      kind: 'regular',
+    });
+    knowledgeBaseRepository.findAllBy.mockResolvedValue([
+      {
+        id: 'kb-1',
+        workspaceId: 'workspace-1',
+        primaryConnectorId: 'connector-kb-1',
+      },
+    ]);
+    connectorRepository.createOne.mockImplementation(async (payload: any) => ({
+      ...payload,
+    }));
+
+    const connectors = await service.listConnectorsByWorkspace('workspace-1');
+
+    expect(connectors).toHaveLength(1);
+    expect(connectors[0]).toEqual(
+      expect.objectContaining({
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: null,
+        type: 'database',
+        databaseProvider: 'mysql',
+        displayName: 'TiDB 业务数据源',
+      }),
+    );
+    expect(connectorRepository.createOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: null,
+      }),
+      { tx },
+    );
+  });
+
   it('rejects connector updates for system sample knowledge bases', async () => {
     connectorRepository.findOneBy.mockResolvedValue({
       id: 'connector-sample',
@@ -298,7 +355,7 @@ describe('ConnectorService', () => {
       expect.objectContaining({
         success: true,
         connectorType: 'database',
-        dataSource: DataSourceName.POSTGRES,
+        connectionType: DataSourceName.POSTGRES,
         tableCount: 2,
         sampleTables: ['orders', 'customers'],
         version: 'PostgreSQL 16.3',

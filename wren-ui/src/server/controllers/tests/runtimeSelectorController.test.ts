@@ -97,6 +97,22 @@ describe('RuntimeSelectorController', () => {
         status: 'draft',
       }),
     };
+    const modelRepository = {
+      findAllByRuntimeIdentity: jest.fn().mockImplementation(async (scope) => {
+        if (scope.knowledgeBaseId === 'kb-current') {
+          return [{ id: 1 }, { id: 2 }];
+        }
+        return [];
+      }),
+    };
+    const viewRepository = {
+      findAllByRuntimeIdentity: jest.fn().mockImplementation(async (scope) => {
+        if (scope.knowledgeBaseId === 'kb-current') {
+          return [{ id: 11 }];
+        }
+        return [];
+      }),
+    };
 
     const result = await resolver.getRuntimeSelectorState({
       ctx: {
@@ -129,6 +145,8 @@ describe('RuntimeSelectorController', () => {
         auditEventRepository,
         knowledgeBaseRepository,
         kbSnapshotRepository,
+        modelRepository,
+        viewRepository,
       } as any,
     });
 
@@ -159,6 +177,7 @@ describe('RuntimeSelectorController', () => {
         name: 'Current KB',
         kind: null,
         defaultKbSnapshotId: 'snap-current',
+        assetCount: 3,
       },
       currentKbSnapshot: {
         id: 'snap-current',
@@ -174,6 +193,7 @@ describe('RuntimeSelectorController', () => {
           name: 'Alpha KB',
           kind: null,
           defaultKbSnapshotId: null,
+          assetCount: 0,
         },
         {
           id: 'kb-current',
@@ -181,6 +201,7 @@ describe('RuntimeSelectorController', () => {
           name: 'Current KB',
           kind: null,
           defaultKbSnapshotId: 'snap-current',
+          assetCount: 3,
         },
         {
           id: 'kb-z',
@@ -188,6 +209,7 @@ describe('RuntimeSelectorController', () => {
           name: 'Zeta KB',
           kind: null,
           defaultKbSnapshotId: null,
+          assetCount: 0,
         },
       ],
       kbSnapshots: [
@@ -238,6 +260,12 @@ describe('RuntimeSelectorController', () => {
       findAllBy: jest.fn().mockResolvedValue([]),
       findOneBy: jest.fn().mockResolvedValue(null),
     };
+    const modelRepository = {
+      findAllByRuntimeIdentity: jest.fn().mockResolvedValue([]),
+    };
+    const viewRepository = {
+      findAllByRuntimeIdentity: jest.fn().mockResolvedValue([]),
+    };
     const workspaceService = {
       listWorkspacesForUser: jest.fn().mockResolvedValue([currentWorkspace]),
     };
@@ -258,6 +286,8 @@ describe('RuntimeSelectorController', () => {
         auditEventRepository,
         knowledgeBaseRepository,
         kbSnapshotRepository,
+        modelRepository,
+        viewRepository,
       } as any,
     });
 
@@ -318,6 +348,12 @@ describe('RuntimeSelectorController', () => {
       ),
       findOneBy: jest.fn().mockResolvedValue(null),
     };
+    const modelRepository = {
+      findAllByRuntimeIdentity: jest.fn().mockResolvedValue([]),
+    };
+    const viewRepository = {
+      findAllByRuntimeIdentity: jest.fn().mockResolvedValue([]),
+    };
 
     const result = await resolver.getRuntimeSelectorState({
       ctx: {
@@ -348,6 +384,8 @@ describe('RuntimeSelectorController', () => {
         },
         knowledgeBaseRepository,
         kbSnapshotRepository,
+        modelRepository,
+        viewRepository,
       } as any,
     });
 
@@ -363,6 +401,7 @@ describe('RuntimeSelectorController', () => {
       name: 'Ops KB',
       kind: null,
       defaultKbSnapshotId: 'snap-ops',
+      assetCount: 0,
     });
     expect(result?.currentKbSnapshot).toEqual({
       id: 'snap-ops',
@@ -378,6 +417,7 @@ describe('RuntimeSelectorController', () => {
         name: 'Ops KB',
         kind: null,
         defaultKbSnapshotId: 'snap-ops',
+        assetCount: 0,
       },
     ]);
   });
@@ -453,6 +493,12 @@ describe('RuntimeSelectorController', () => {
         status: 'active',
       }),
     };
+    const modelRepository = {
+      findAllByRuntimeIdentity: jest.fn().mockResolvedValue([]),
+    };
+    const viewRepository = {
+      findAllByRuntimeIdentity: jest.fn().mockResolvedValue([]),
+    };
 
     const result = await resolver.getRuntimeSelectorState({
       ctx: {
@@ -477,6 +523,8 @@ describe('RuntimeSelectorController', () => {
         workspaceService,
         knowledgeBaseRepository,
         kbSnapshotRepository,
+        modelRepository,
+        viewRepository,
       } as any,
     });
 
@@ -519,6 +567,7 @@ describe('RuntimeSelectorController', () => {
         name: 'Alpha KB',
         kind: null,
         defaultKbSnapshotId: 'snap-default',
+        assetCount: 0,
       },
       currentKbSnapshot: {
         id: 'snap-default',
@@ -534,6 +583,7 @@ describe('RuntimeSelectorController', () => {
           name: 'Alpha KB',
           kind: null,
           defaultKbSnapshotId: 'snap-default',
+          assetCount: 0,
         },
         {
           id: 'kb-beta',
@@ -541,6 +591,7 @@ describe('RuntimeSelectorController', () => {
           name: 'Beta KB',
           kind: null,
           defaultKbSnapshotId: null,
+          assetCount: 0,
         },
       ],
       kbSnapshots: [
@@ -608,6 +659,12 @@ describe('RuntimeSelectorController', () => {
         status: 'active',
       }),
     };
+    const modelRepository = {
+      findAllByRuntimeIdentity: jest.fn().mockResolvedValue([]),
+    };
+    const viewRepository = {
+      findAllByRuntimeIdentity: jest.fn().mockResolvedValue([]),
+    };
 
     const result = await resolver.getRuntimeSelectorState({
       ctx: {
@@ -635,6 +692,8 @@ describe('RuntimeSelectorController', () => {
         },
         knowledgeBaseRepository,
         kbSnapshotRepository,
+        modelRepository,
+        viewRepository,
       } as any,
     });
 
@@ -659,6 +718,7 @@ describe('RuntimeSelectorController', () => {
         name: '电商订单数据',
         kind: null,
         defaultKbSnapshotId: 'snap-ready',
+        assetCount: 0,
       },
       currentKbSnapshot: {
         id: 'snap-ready',
@@ -674,6 +734,7 @@ describe('RuntimeSelectorController', () => {
           name: '111',
           kind: null,
           defaultKbSnapshotId: null,
+          assetCount: 0,
         },
         {
           id: 'kb-ready',
@@ -681,6 +742,7 @@ describe('RuntimeSelectorController', () => {
           name: '电商订单数据',
           kind: null,
           defaultKbSnapshotId: 'snap-ready',
+          assetCount: 0,
         },
       ],
       kbSnapshots: [

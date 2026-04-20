@@ -8,3 +8,5 @@ export * from './legacyRolePolicy';
 export * from './permissionRegistry';
 export * from './roleMapping';
 export * from './rules';
+export * from './platformRoleCatalog';
+export * from './systemAuthorizationCatalog';

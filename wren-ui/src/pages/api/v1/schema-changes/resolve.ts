@@ -26,11 +26,7 @@ export default async function handler(
     }
 
     const ctx = await buildApiContextFromRequest({ req });
-    await projectController.resolveSchemaChange(
-      null,
-      { where: { type: type as SchemaChangeType } },
-      ctx,
-    );
+    await projectController.resolveSchemaChange(type as SchemaChangeType, ctx);
 
     return res.status(200).json({ success: true });
   } catch (error) {

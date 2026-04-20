@@ -16,11 +16,9 @@ export default async function handler(
     }
 
     const ctx = await buildApiContextFromRequest({ req });
-    const hasSchemaChange = await projectController.triggerConnectionDetection(
-      null,
-      null,
+    const hasSchemaChange = await projectController.triggerConnectionDetection({
       ctx,
-    );
+    });
 
     return res.status(200).json(hasSchemaChange);
   } catch (error) {

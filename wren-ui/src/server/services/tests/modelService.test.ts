@@ -293,10 +293,9 @@ describe('ModelService relation invariants', () => {
       service.createRelationByRuntimeIdentity(runtimeIdentity, relation),
     ).rejects.toThrow('This relationship already exists.');
 
-    expect(relationRepository.findExistedRelationBetweenModels).toHaveBeenCalledWith(
-      relation,
-      runtimeIdentity,
-    );
+    expect(
+      relationRepository.findExistedRelationBetweenModels,
+    ).toHaveBeenCalledWith(relation, runtimeIdentity);
     expect(relationRepository.createOne).not.toHaveBeenCalled();
   });
 

@@ -14,35 +14,34 @@ import { getLogger } from '@server/utils';
 import {
   getDashboardRuntimeBinding,
   resolveDashboardExecutionContext,
-  resolveDashboardScheduleBinding,
 } from '@server/utils/dashboardRuntime';
-import {
-  OUTDATED_RUNTIME_SNAPSHOT_MESSAGE,
-  assertLatestExecutableRuntimeScope,
-} from '@server/utils/runtimeExecutionContext';
-import { toPersistedRuntimeIdentity } from '@server/context/runtimeScope';
-import {
-  normalizeCanonicalPersistedRuntimeIdentity,
-  resolvePersistedProjectBridgeId,
-} from '@server/utils/persistedRuntimeIdentity';
 import {
   SetDashboardCacheData,
   DashboardSchedule,
   PreviewItemResponse,
 } from '@server/models/dashboard';
-import * as Errors from '@server/utils/error';
 import {
   assertAuthorizedWithAudit,
   buildAuthorizationActorFromRuntimeScope,
   recordAuditEvent,
 } from '@server/authz';
+import { resolvePersistedProjectBridgeId } from '@server/utils/persistedRuntimeIdentity';
 import { shapeChartPreviewData } from '@/utils/chartSpecRuntime';
+import {
+  assertDashboardExecutableRuntimeScope,
+  assertDashboardKnowledgeBaseReadAccess,
+  ensureCurrentDashboardForScope,
+  ensureDashboardItemInScope,
+  getCurrentPersistedRuntimeIdentity,
+  getDashboardControllerErrorMessage,
+  recordDashboardKnowledgeBaseReadAudit,
+  resolveDashboardScheduleRuntimeBinding,
+  toDashboardPreviewItemResponse,
+  toDashboardResponseRuntimeIdentitySource,
+} from './dashboardControllerSupport';
 
 const logger = getLogger('DashboardController');
 logger.level = 'debug';
-
-const getErrorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error);
 
 export class DashboardController {
   constructor() {
@@ -50,6 +49,8 @@ export class DashboardController {
     this.getDashboard = this.getDashboard.bind(this);
     this.getDashboardItems = this.getDashboardItems.bind(this);
     this.createDashboard = this.createDashboard.bind(this);
+    this.updateDashboard = this.updateDashboard.bind(this);
+    this.deleteDashboard = this.deleteDashboard.bind(this);
     this.createDashboardItem = this.createDashboardItem.bind(this);
     this.updateDashboardItem = this.updateDashboardItem.bind(this);
     this.deleteDashboardItem = this.deleteDashboardItem.bind(this);
@@ -64,13 +65,13 @@ export class DashboardController {
     _args: any,
     ctx: IContext,
   ): Promise<Dashboard[]> {
-    await this.assertKnowledgeBaseReadAccess(ctx);
-    const runtimeIdentity = this.getCurrentPersistedRuntimeIdentity(ctx);
+    await assertDashboardKnowledgeBaseReadAccess(ctx);
+    const runtimeIdentity = getCurrentPersistedRuntimeIdentity(ctx);
     const dashboards = await ctx.dashboardService.listDashboardsForScope(
       resolvePersistedProjectBridgeId(runtimeIdentity),
       getDashboardRuntimeBinding(runtimeIdentity),
     );
-    await this.recordKnowledgeBaseReadAudit(ctx, {
+    await recordDashboardKnowledgeBaseReadAudit(ctx, {
       payloadJson: {
         operation: 'get_dashboards',
       },
@@ -89,8 +90,11 @@ export class DashboardController {
       nextScheduledAt: string | null;
     }
   > {
-    await this.assertKnowledgeBaseReadAccess(ctx);
-    const dashboard = await this.ensureCurrentDashboard(ctx, args?.where?.id);
+    await assertDashboardKnowledgeBaseReadAccess(ctx);
+    const dashboard = await ensureCurrentDashboardForScope(
+      ctx,
+      args?.where?.id,
+    );
     const schedule = ctx.dashboardService.parseCronExpression(dashboard);
     const items = await ctx.dashboardService.getDashboardItems(dashboard.id);
     const result = {
@@ -101,7 +105,7 @@ export class DashboardController {
       schedule,
       items,
     };
-    await this.recordKnowledgeBaseReadAudit(ctx, {
+    await recordDashboardKnowledgeBaseReadAudit(ctx, {
       resourceType: 'dashboard',
       resourceId: dashboard.id,
       payloadJson: {
@@ -116,10 +120,13 @@ export class DashboardController {
     args: { where?: { id?: number | null } } | null | undefined,
     ctx: IContext,
   ): Promise<DashboardItem[]> {
-    await this.assertKnowledgeBaseReadAccess(ctx);
-    const dashboard = await this.ensureCurrentDashboard(ctx, args?.where?.id);
+    await assertDashboardKnowledgeBaseReadAccess(ctx);
+    const dashboard = await ensureCurrentDashboardForScope(
+      ctx,
+      args?.where?.id,
+    );
     const items = await ctx.dashboardService.getDashboardItems(dashboard.id);
-    await this.recordKnowledgeBaseReadAudit(ctx, {
+    await recordDashboardKnowledgeBaseReadAudit(ctx, {
       resourceType: 'dashboard',
       resourceId: dashboard.id,
       payloadJson: {
@@ -134,8 +141,8 @@ export class DashboardController {
     args: { data: { name: string } },
     ctx: IContext,
   ): Promise<Dashboard> {
-    await this.assertExecutableRuntimeScope(ctx);
-    const runtimeIdentity = this.getCurrentPersistedRuntimeIdentity(ctx);
+    await assertDashboardExecutableRuntimeScope(ctx);
+    const runtimeIdentity = getCurrentPersistedRuntimeIdentity(ctx);
     const name = args.data?.name?.trim();
     if (!name) {
       throw new Error('Dashboard name is required.');
@@ -143,6 +150,48 @@ export class DashboardController {
 
     return await ctx.dashboardService.createDashboardForScope(
       { name },
+      resolvePersistedProjectBridgeId(runtimeIdentity),
+      getDashboardRuntimeBinding(runtimeIdentity),
+    );
+  }
+
+  public async updateDashboard(
+    _root: any,
+    args: {
+      where: { id: number };
+      data: { isDefault?: boolean; name?: string };
+    },
+    ctx: IContext,
+  ): Promise<Dashboard> {
+    await assertDashboardExecutableRuntimeScope(ctx);
+    const runtimeIdentity = getCurrentPersistedRuntimeIdentity(ctx);
+    const normalizedName =
+      args.data?.name === undefined ? undefined : String(args.data.name).trim();
+    if (normalizedName !== undefined && !normalizedName) {
+      throw new Error('Dashboard name is required.');
+    }
+
+    return await ctx.dashboardService.updateDashboardForScope(
+      args.where.id,
+      {
+        ...(normalizedName !== undefined ? { name: normalizedName } : {}),
+        ...(args.data?.isDefault === true ? { isDefault: true } : {}),
+      },
+      resolvePersistedProjectBridgeId(runtimeIdentity),
+      getDashboardRuntimeBinding(runtimeIdentity),
+    );
+  }
+
+  public async deleteDashboard(
+    _root: any,
+    args: { where: { id: number } },
+    ctx: IContext,
+  ): Promise<Dashboard> {
+    await assertDashboardExecutableRuntimeScope(ctx);
+    const runtimeIdentity = getCurrentPersistedRuntimeIdentity(ctx);
+
+    return await ctx.dashboardService.deleteDashboardForScope(
+      args.where.id,
       resolvePersistedProjectBridgeId(runtimeIdentity),
       getDashboardRuntimeBinding(runtimeIdentity),
     );
@@ -160,9 +209,9 @@ export class DashboardController {
     ctx: IContext,
   ): Promise<DashboardItem> {
     const { responseId, itemType, dashboardId } = args.data;
-    await this.assertExecutableRuntimeScope(ctx);
-    const dashboard = await this.ensureCurrentDashboard(ctx, dashboardId);
-    const runtimeIdentity = this.getCurrentPersistedRuntimeIdentity(ctx);
+    await assertDashboardExecutableRuntimeScope(ctx);
+    const dashboard = await ensureCurrentDashboardForScope(ctx, dashboardId);
+    const runtimeIdentity = getCurrentPersistedRuntimeIdentity(ctx);
     await ctx.askingService.assertResponseScope(responseId, runtimeIdentity);
     const response = await ctx.askingService.getResponseScoped(
       responseId,
@@ -187,14 +236,14 @@ export class DashboardController {
       );
     }
 
-    // query with cache enabled
     const { project, manifest } = await resolveDashboardExecutionContext({
       dashboard,
       kbSnapshotRepository: ctx.kbSnapshotRepository,
       projectService: ctx.projectService,
       deployService: ctx.deployService,
       requestRuntimeIdentity: runtimeIdentity,
-      responseRuntimeIdentity: this.toResponseRuntimeIdentitySource(response),
+      responseRuntimeIdentity:
+        toDashboardResponseRuntimeIdentitySource(response),
     });
     await ctx.queryService.preview(responseSql, {
       project,
@@ -224,10 +273,10 @@ export class DashboardController {
     args: { where: { id: number }; data: { displayName: string } },
     ctx: IContext,
   ): Promise<DashboardItem> {
-    await this.assertExecutableRuntimeScope(ctx);
+    await assertDashboardExecutableRuntimeScope(ctx);
     const { id } = args.where;
     const { displayName } = args.data;
-    await this.ensureDashboardItemScope(ctx, id);
+    await ensureDashboardItemInScope(ctx, id);
     return await ctx.dashboardService.updateDashboardItem(id, { displayName });
   }
 
@@ -236,9 +285,9 @@ export class DashboardController {
     args: { where: { id: number } },
     ctx: IContext,
   ): Promise<boolean> {
-    await this.assertExecutableRuntimeScope(ctx);
+    await assertDashboardExecutableRuntimeScope(ctx);
     const { id } = args.where;
-    await this.ensureDashboardItemScope(ctx, id);
+    await ensureDashboardItemInScope(ctx, id);
     return await ctx.dashboardService.deleteDashboardItem(id);
   }
 
@@ -247,15 +296,13 @@ export class DashboardController {
     args: { data: { layouts: UpdateDashboardItemLayouts } },
     ctx: IContext,
   ): Promise<DashboardItem[]> {
-    await this.assertExecutableRuntimeScope(ctx);
+    await assertDashboardExecutableRuntimeScope(ctx);
     const { layouts } = args.data;
     if (layouts.length === 0) {
       throw new Error('Layouts are required.');
     }
     await Promise.all(
-      layouts.map((layout) =>
-        this.ensureDashboardItemScope(ctx, layout.itemId),
-      ),
+      layouts.map((layout) => ensureDashboardItemInScope(ctx, layout.itemId)),
     );
     return await ctx.dashboardService.updateDashboardItemLayouts(layouts);
   }
@@ -267,12 +314,12 @@ export class DashboardController {
   ): Promise<PreviewItemResponse> {
     const { itemId, limit, refresh } = args.data;
     try {
-      await this.assertKnowledgeBaseReadAccess(ctx);
-      await this.assertExecutableRuntimeScope(ctx);
-      const item = await this.ensureDashboardItemScope(ctx, itemId);
-      const dashboard = await this.ensureCurrentDashboard(ctx);
+      await assertDashboardKnowledgeBaseReadAccess(ctx);
+      await assertDashboardExecutableRuntimeScope(ctx);
+      const item = await ensureDashboardItemInScope(ctx, itemId);
+      const dashboard = await ensureCurrentDashboardForScope(ctx);
       const { cacheEnabled } = dashboard;
-      const runtimeIdentity = this.getCurrentPersistedRuntimeIdentity(ctx);
+      const runtimeIdentity = getCurrentPersistedRuntimeIdentity(ctx);
       const { project, manifest } = await resolveDashboardExecutionContext({
         dashboard,
         kbSnapshotRepository: ctx.kbSnapshotRepository,
@@ -296,27 +343,12 @@ export class DashboardController {
         previewData: rawData,
       });
 
-      // handle data to [{ column1: value1, column2: value2, ... }]
-      const values = shapedChartPreview.previewData.data.map((val) => {
-        return shapedChartPreview.previewData.columns.reduce<
-          Record<string, unknown>
-        >((acc, col, index) => {
-          acc[col.name] = val[index];
-          return acc;
-        }, {});
+      const result = toDashboardPreviewItemResponse({
+        item,
+        previewData: shapedChartPreview.previewData,
+        chartDataProfile: shapedChartPreview.chartDataProfile,
       });
-      const result = {
-        chartDataProfile:
-          shapedChartPreview.chartDataProfile ||
-          item.detail.chartDataProfile ||
-          null,
-        cacheHit: shapedChartPreview.previewData.cacheHit || false,
-        cacheCreatedAt: shapedChartPreview.previewData.cacheCreatedAt || null,
-        cacheOverrodeAt: shapedChartPreview.previewData.cacheOverrodeAt || null,
-        override: shapedChartPreview.previewData.override || false,
-        data: values,
-      } as PreviewItemResponse;
-      await this.recordKnowledgeBaseReadAudit(ctx, {
+      await recordDashboardKnowledgeBaseReadAudit(ctx, {
         resourceType: 'dashboard_item',
         resourceId: itemId,
         payloadJson: {
@@ -336,9 +368,9 @@ export class DashboardController {
     ctx: IContext,
   ): Promise<Dashboard> {
     try {
-      await this.assertExecutableRuntimeScope(ctx);
-      const runtimeIdentity = this.getCurrentPersistedRuntimeIdentity(ctx);
-      const dashboard = await this.ensureCurrentDashboard(ctx);
+      await assertDashboardExecutableRuntimeScope(ctx);
+      const runtimeIdentity = getCurrentPersistedRuntimeIdentity(ctx);
+      const dashboard = await ensureCurrentDashboardForScope(ctx);
       const actor =
         ctx.authorizationActor ||
         buildAuthorizationActorFromRuntimeScope(ctx.runtimeScope);
@@ -357,7 +389,7 @@ export class DashboardController {
         dashboard.id,
         args.data,
       );
-      const scheduleBinding = await this.resolveScheduleBinding(
+      const scheduleBinding = await resolveDashboardScheduleRuntimeBinding(
         ctx,
         updatedDashboard,
         runtimeIdentity,
@@ -395,158 +427,9 @@ export class DashboardController {
       return updatedDashboard;
     } catch (error) {
       logger.error(
-        `Failed to set dashboard schedule: ${getErrorMessage(error)}`,
+        `Failed to set dashboard schedule: ${getDashboardControllerErrorMessage(error)}`,
       );
       throw error;
     }
-  }
-
-  private async ensureCurrentDashboard(
-    ctx: IContext,
-    dashboardId?: number | null,
-  ): Promise<Dashboard> {
-    const runtimeIdentity = this.getCurrentPersistedRuntimeIdentity(ctx);
-    const resolvedProjectBridgeId =
-      resolvePersistedProjectBridgeId(runtimeIdentity);
-    const binding = getDashboardRuntimeBinding(runtimeIdentity);
-    const dashboard =
-      dashboardId != null
-        ? await ctx.dashboardService.getDashboardForScope(
-            dashboardId,
-            resolvedProjectBridgeId,
-            binding,
-          )
-        : await ctx.dashboardService.getCurrentDashboardForScope(
-            resolvedProjectBridgeId,
-            binding,
-          );
-    if (!dashboard) {
-      throw new Error('Dashboard not found.');
-    }
-
-    return dashboard;
-  }
-
-  private async ensureDashboardItemScope(
-    ctx: IContext,
-    itemId: number,
-  ): Promise<DashboardItem> {
-    const item = await ctx.dashboardService.getDashboardItem(itemId);
-    const dashboard = await this.ensureCurrentDashboard(ctx);
-    if (!item || item.dashboardId !== dashboard.id) {
-      throw new Error(`Dashboard item not found. id: ${itemId}`);
-    }
-
-    return item;
-  }
-
-  private getCurrentPersistedRuntimeIdentity(ctx: IContext) {
-    return normalizeCanonicalPersistedRuntimeIdentity(
-      toPersistedRuntimeIdentity(ctx.runtimeScope!),
-    );
-  }
-
-  private async assertExecutableRuntimeScope(ctx: IContext) {
-    try {
-      await assertLatestExecutableRuntimeScope({
-        runtimeScope: ctx.runtimeScope!,
-        knowledgeBaseRepository: ctx.knowledgeBaseRepository,
-        kbSnapshotRepository: ctx.kbSnapshotRepository,
-      });
-    } catch (error) {
-      throw Errors.create(Errors.GeneralErrorCodes.OUTDATED_RUNTIME_SNAPSHOT, {
-        customMessage:
-          error instanceof Error
-            ? error.message
-            : OUTDATED_RUNTIME_SNAPSHOT_MESSAGE,
-      });
-    }
-  }
-
-  private getKnowledgeBaseReadAuthorizationTarget(ctx: IContext) {
-    const workspaceId = ctx.runtimeScope?.workspace?.id || null;
-    const knowledgeBase = ctx.runtimeScope?.knowledgeBase;
-
-    return {
-      actor:
-        ctx.authorizationActor ||
-        buildAuthorizationActorFromRuntimeScope(ctx.runtimeScope),
-      resource: {
-        resourceType: knowledgeBase ? 'knowledge_base' : 'workspace',
-        resourceId: knowledgeBase?.id || workspaceId,
-        workspaceId,
-        attributes: {
-          workspaceKind: ctx.runtimeScope?.workspace?.kind || null,
-          knowledgeBaseKind: knowledgeBase?.kind || null,
-        },
-      },
-    };
-  }
-
-  private async assertKnowledgeBaseReadAccess(ctx: IContext) {
-    const { actor, resource } =
-      this.getKnowledgeBaseReadAuthorizationTarget(ctx);
-    await assertAuthorizedWithAudit({
-      auditEventRepository: ctx.auditEventRepository,
-      actor,
-      action: 'knowledge_base.read',
-      resource,
-    });
-  }
-
-  private async recordKnowledgeBaseReadAudit(
-    ctx: IContext,
-    {
-      resourceType,
-      resourceId,
-      payloadJson,
-    }: {
-      resourceType?: string;
-      resourceId?: string | number | null;
-      payloadJson?: Record<string, any> | null;
-    },
-  ) {
-    const { actor, resource } =
-      this.getKnowledgeBaseReadAuthorizationTarget(ctx);
-    await recordAuditEvent({
-      auditEventRepository: ctx.auditEventRepository,
-      actor,
-      action: 'knowledge_base.read',
-      resource: {
-        ...resource,
-        resourceType: resourceType || resource.resourceType,
-        resourceId: resourceId ?? resource.resourceId ?? null,
-      },
-      result: 'allowed',
-      payloadJson: payloadJson || undefined,
-    });
-  }
-
-  private toResponseRuntimeIdentitySource(response: {
-    projectId?: number | null;
-    deployHash?: string | null;
-  }) {
-    return {
-      projectId: response.projectId ?? null,
-      deployHash: response.deployHash ?? null,
-    };
-  }
-
-  private async resolveScheduleBinding(
-    ctx: IContext,
-    dashboard: Dashboard,
-    runtimeIdentity = this.getCurrentPersistedRuntimeIdentity(ctx),
-  ): Promise<{
-    workspaceId: string | null;
-    knowledgeBaseId: string | null;
-    kbSnapshotId: string | null;
-    deployHash: string | null;
-  }> {
-    return resolveDashboardScheduleBinding({
-      dashboard,
-      runtimeIdentity,
-      kbSnapshotRepository: ctx.kbSnapshotRepository,
-      knowledgeBaseRepository: ctx.knowledgeBaseRepository,
-    });
   }
 }

@@ -293,6 +293,8 @@ export const initComponents = () => {
     workspaceRepository,
     workspaceMemberRepository,
     roleRepository,
+    permissionRepository,
+    rolePermissionRepository,
     principalRoleBindingRepository,
     directoryGroupRepository,
     directoryGroupMemberRepository,
@@ -485,7 +487,7 @@ export const initComponents = () => {
   };
 };
 type Components = ReturnType<typeof initComponents>;
-const COMPONENTS_RUNTIME_VERSION = 2;
+const COMPONENTS_RUNTIME_VERSION = 3;
 export const components: Components = getVersionedGlobalSingleton({
   factory: initComponents,
   singletonKey: '__wrenComponents__',

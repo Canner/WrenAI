@@ -587,7 +587,7 @@ describe('apiUtils', () => {
       await validateSql(sql, executionContext, queryService);
 
       expect(queryService.preview).toHaveBeenCalledWith(
-        expect.stringContaining("tenant_plat_id = 0"),
+        expect.stringContaining('tenant_plat_id = 0'),
         expect.objectContaining({
           manifest: executionContext.manifest,
           project: executionContext.project,

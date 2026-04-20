@@ -253,7 +253,10 @@ describe('pages/api/v1/stream/ask', () => {
       }),
     );
     expect(mockBuildAskRuntimeContext).toHaveBeenCalledWith({
-      runtimeIdentity: executionContext.runtimeIdentity,
+      runtimeIdentity: {
+        ...executionContext.runtimeIdentity,
+        projectId: undefined,
+      },
     });
     expect(mockQueryPreview).toHaveBeenCalledWith(
       'select revenue from federated_sales',

@@ -16,13 +16,7 @@ import {
 } from '@/server/utils/apiUtils';
 import { buildAskRuntimeContext } from '@server/utils/askContext';
 import {
-  assertAuthorizedWithAudit,
-  buildAuthorizationActorFromRuntimeScope,
-  buildAuthorizationContextFromRequest,
-} from '@server/authz';
-import {
   AskResult,
-  AskRuntimeIdentity,
   AskResultStatus,
   TextBasedAnswerInput,
   TextBasedAnswerResult,
@@ -32,20 +26,25 @@ import {
 } from '@/server/models/adaptor';
 import { getLogger } from '@server/utils';
 import {
-  EventType,
   StateType,
   ContentBlockContentType,
   AsyncAskRequest,
-  ContentBlockStartEvent,
-  ContentBlockDeltaEvent,
-  ContentBlockStopEvent,
-  sendSSEEvent,
   sendMessageStart,
   sendStateUpdate,
   sendError,
   getSqlGenerationState,
   endStream,
 } from '@/server/utils';
+import {
+  assertKnowledgeBaseReadAccess,
+  getApiErrorAdditionalData,
+  getApiErrorCode,
+  getErrorMessage,
+  sendContentBlockDelta,
+  sendContentBlockStart,
+  sendContentBlockStop,
+  toAskRuntimeIdentity,
+} from './streamAskHelpers';
 const logger = getLogger('API_STREAM_ASK');
 logger.level = 'debug';
 
@@ -56,106 +55,6 @@ const {
   queryService,
   auditEventRepository,
 } = components;
-
-const toAskRuntimeIdentity = (runtimeIdentity: {
-  [K in keyof AskRuntimeIdentity]?: AskRuntimeIdentity[K] | null;
-}): AskRuntimeIdentity => ({
-  projectId: runtimeIdentity.projectId ?? undefined,
-  workspaceId: runtimeIdentity.workspaceId ?? null,
-  knowledgeBaseId: runtimeIdentity.knowledgeBaseId ?? null,
-  kbSnapshotId: runtimeIdentity.kbSnapshotId ?? null,
-  deployHash: runtimeIdentity.deployHash ?? null,
-  actorUserId: runtimeIdentity.actorUserId ?? null,
-});
-
-const getErrorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error);
-
-const getApiErrorAdditionalData = (
-  error: unknown,
-): Record<string, any> | undefined =>
-  error instanceof ApiError ? error.additionalData : undefined;
-
-const getApiErrorCode = (error: unknown): Errors.GeneralErrorCodes =>
-  error instanceof ApiError && error.code
-    ? error.code
-    : Errors.GeneralErrorCodes.INTERNAL_SERVER_ERROR;
-
-const assertKnowledgeBaseReadAccess = async ({
-  req,
-  runtimeScope,
-}: {
-  req: NextApiRequest;
-  runtimeScope: any;
-}) => {
-  const actor = buildAuthorizationActorFromRuntimeScope(runtimeScope);
-  await assertAuthorizedWithAudit({
-    auditEventRepository,
-    actor,
-    action: 'knowledge_base.read',
-    resource: {
-      resourceType: runtimeScope?.knowledgeBase
-        ? 'knowledge_base'
-        : 'workspace',
-      resourceId:
-        runtimeScope?.knowledgeBase?.id || runtimeScope?.workspace?.id,
-      workspaceId: runtimeScope?.workspace?.id || null,
-      attributes: {
-        workspaceKind: runtimeScope?.workspace?.kind || null,
-        knowledgeBaseKind: runtimeScope?.knowledgeBase?.kind || null,
-      },
-    },
-    context: buildAuthorizationContextFromRequest({
-      req,
-      sessionId: actor?.sessionId,
-      runtimeScope,
-    }),
-  });
-};
-
-/**
- * Send content block start event to client
- */
-const sendContentBlockStart = (
-  res: NextApiResponse,
-  name: ContentBlockContentType,
-) => {
-  const contentBlockStartEvent: ContentBlockStartEvent = {
-    type: EventType.CONTENT_BLOCK_START,
-    content_block: {
-      type: 'text',
-      name,
-    },
-    timestamp: Date.now(),
-  };
-  sendSSEEvent(res, contentBlockStartEvent);
-};
-
-/**
- * Send content block delta event to client
- */
-const sendContentBlockDelta = (res: NextApiResponse, text: string) => {
-  const contentBlockDeltaEvent: ContentBlockDeltaEvent = {
-    type: EventType.CONTENT_BLOCK_DELTA,
-    delta: {
-      type: 'text_delta',
-      text,
-    },
-    timestamp: Date.now(),
-  };
-  sendSSEEvent(res, contentBlockDeltaEvent);
-};
-
-/**
- * Send content block stop event to client
- */
-const sendContentBlockStop = (res: NextApiResponse) => {
-  const contentBlockStopEvent: ContentBlockStopEvent = {
-    type: EventType.CONTENT_BLOCK_STOP,
-    timestamp: Date.now(),
-  };
-  sendSSEEvent(res, contentBlockStopEvent);
-};
 
 export default async function handler(
   req: NextApiRequest,
@@ -192,7 +91,11 @@ export default async function handler(
       requireLatestExecutableSnapshot: true,
     });
     runtimeScope = derivedContext.runtimeScope;
-    await assertKnowledgeBaseReadAccess({ req, runtimeScope });
+    await assertKnowledgeBaseReadAccess({
+      req,
+      runtimeScope,
+      auditEventRepository,
+    });
     const {
       project,
       manifest,

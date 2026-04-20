@@ -3,83 +3,36 @@ import {
   Connector,
   IConnectorRepository,
   IKnowledgeBaseRepository,
-  IQueryOptions,
   IWorkspaceRepository,
 } from '../repositories';
 import { ISecretService, SecretPayload } from './secretService';
 import { IConnectionMetadataService } from './metadataService';
-import { DataSourceName } from '../types';
-import { encryptConnectionInfo } from '../dataSource';
-import { getConnectorScopeRestrictionReason } from '@/utils/workspaceGovernance';
-import {
-  buildDatabaseConnectorConnectionInfo,
-  getConnectionTypeForDatabaseProvider,
-  requireDatabaseProvider,
-} from '@server/utils/connectorDatabaseProvider';
 import { IFederatedRuntimeProjectService } from './federatedRuntimeProjectService';
-
-export interface CreateConnectorInput {
-  workspaceId: string;
-  knowledgeBaseId?: string | null;
-  type: string;
-  databaseProvider?: string | null;
-  displayName: string;
-  config?: Record<string, any> | null;
-  secret?: SecretPayload | null;
-  createdBy?: string | null;
-}
-
-export interface UpdateConnectorInput {
-  knowledgeBaseId?: string | null;
-  type?: string;
-  databaseProvider?: string | null;
-  displayName?: string;
-  config?: Record<string, any> | null;
-  secret?: SecretPayload | null;
-}
-
-export interface ResolvedConnector extends Connector {
-  secret: SecretPayload | null;
-}
-
-export interface TestConnectorConnectionInput {
-  workspaceId: string;
-  knowledgeBaseId?: string | null;
-  connectorId?: string;
-  type?: string;
-  databaseProvider?: string | null;
-  config?: Record<string, any> | null;
-  secret?: SecretPayload | null;
-}
-
-export interface ConnectorConnectionTestResult {
-  success: true;
-  message: string;
-  connectorType: string;
-  connectionType?: DataSourceName;
-  tableCount?: number;
-  sampleTables?: string[];
-  version?: string | null;
-}
-
-export interface IConnectorService {
-  createConnector(input: CreateConnectorInput): Promise<Connector>;
-  updateConnector(
-    connectorId: string,
-    input: UpdateConnectorInput,
-  ): Promise<Connector>;
-  getConnectorById(connectorId: string): Promise<Connector | null>;
-  listConnectorsByKnowledgeBase(
-    workspaceId: string,
-    knowledgeBaseId: string,
-  ): Promise<Connector[]>;
-  deleteConnector(connectorId: string): Promise<void>;
-  resolveConnectorSecret(connectorId: string): Promise<SecretPayload | null>;
-  getResolvedConnector(connectorId: string): Promise<ResolvedConnector | null>;
-  testConnectorConnection(
-    input: TestConnectorConnectionInput,
-  ): Promise<ConnectorConnectionTestResult>;
-}
+import {
+  ensureWritableConnectorScope,
+  listDatabaseConnectorTables,
+  normalizeConnectorInput,
+  resolveConnectorTestTarget,
+  syncKnowledgeBaseFederationIfNeeded,
+  testDatabaseConnector,
+} from './connectorServiceSupport';
+import type {
+  ConnectorConnectionTestResult,
+  CreateConnectorInput,
+  IConnectorService,
+  ResolvedConnector,
+  TestConnectorConnectionInput,
+  UpdateConnectorInput,
+} from './connectorServiceTypes';
+import { CompactTable } from './metadataService';
+export type {
+  ConnectorConnectionTestResult,
+  CreateConnectorInput,
+  IConnectorService,
+  ResolvedConnector,
+  TestConnectorConnectionInput,
+  UpdateConnectorInput,
+} from './connectorServiceTypes';
 
 export class ConnectorService implements IConnectorService {
   private connectorRepository: IConnectorRepository;
@@ -118,12 +71,14 @@ export class ConnectorService implements IConnectorService {
     const tx = await this.connectorRepository.transaction();
 
     try {
-      await this.ensureWritableConnectorScope(
-        input.workspaceId,
-        input.knowledgeBaseId,
-        { tx },
-      );
-      const normalizedInput = this.normalizeConnectorInput({
+      await ensureWritableConnectorScope({
+        workspaceId: input.workspaceId,
+        knowledgeBaseId: input.knowledgeBaseId,
+        workspaceRepository: this.workspaceRepository,
+        knowledgeBaseRepository: this.knowledgeBaseRepository,
+        queryOptions: { tx },
+      });
+      const normalizedInput = normalizeConnectorInput({
         type: input.type,
         databaseProvider: input.databaseProvider,
       });
@@ -161,9 +116,10 @@ export class ConnectorService implements IConnectorService {
       );
 
       await this.connectorRepository.commit(tx);
-      await this.syncKnowledgeBaseFederationIfNeeded([
-        connector.knowledgeBaseId,
-      ]);
+      await syncKnowledgeBaseFederationIfNeeded({
+        knowledgeBaseIds: [connector.knowledgeBaseId],
+        federatedRuntimeProjectService: this.federatedRuntimeProjectService,
+      });
       return connector;
     } catch (error) {
       await this.connectorRepository.rollback(tx);
@@ -186,13 +142,18 @@ export class ConnectorService implements IConnectorService {
         throw new Error(`Connector ${connectorId} not found`);
       }
 
-      await this.ensureWritableConnectorScope(
-        connector.workspaceId,
-        Object.prototype.hasOwnProperty.call(input, 'knowledgeBaseId')
+      await ensureWritableConnectorScope({
+        workspaceId: connector.workspaceId,
+        knowledgeBaseId: Object.prototype.hasOwnProperty.call(
+          input,
+          'knowledgeBaseId',
+        )
           ? input.knowledgeBaseId
           : connector.knowledgeBaseId,
-        { tx },
-      );
+        workspaceRepository: this.workspaceRepository,
+        knowledgeBaseRepository: this.knowledgeBaseRepository,
+        queryOptions: { tx },
+      });
 
       const patch: Partial<Connector> = {};
       const previousKnowledgeBaseId = connector.knowledgeBaseId ?? null;
@@ -202,7 +163,7 @@ export class ConnectorService implements IConnectorService {
       )
         ? input.knowledgeBaseId ?? null
         : previousKnowledgeBaseId;
-      const normalizedInput = this.normalizeConnectorInput({
+      const normalizedInput = normalizeConnectorInput({
         type: input.type ?? connector.type,
         databaseProvider: Object.prototype.hasOwnProperty.call(
           input,
@@ -273,10 +234,10 @@ export class ConnectorService implements IConnectorService {
             });
 
       await this.connectorRepository.commit(tx);
-      await this.syncKnowledgeBaseFederationIfNeeded([
-        previousKnowledgeBaseId,
-        nextKnowledgeBaseId,
-      ]);
+      await syncKnowledgeBaseFederationIfNeeded({
+        knowledgeBaseIds: [previousKnowledgeBaseId, nextKnowledgeBaseId],
+        federatedRuntimeProjectService: this.federatedRuntimeProjectService,
+      });
       return updatedConnector;
     } catch (error) {
       await this.connectorRepository.rollback(tx);
@@ -288,6 +249,39 @@ export class ConnectorService implements IConnectorService {
     connectorId: string,
   ): Promise<Connector | null> {
     return await this.connectorRepository.findOneBy({ id: connectorId });
+  }
+
+  public async listConnectorTables(
+    workspaceId: string,
+    connectorId: string,
+  ): Promise<CompactTable[]> {
+    const target = await resolveConnectorTestTarget({
+      input: {
+        workspaceId,
+        connectorId,
+      },
+      getConnectorById: this.getConnectorById.bind(this),
+      resolveConnectorSecret: this.resolveConnectorSecret.bind(this),
+    });
+
+    if (!target.persistedConnector) {
+      throw new Error(`Connector ${connectorId} not found`);
+    }
+
+    if (target.persistedConnector.workspaceId !== workspaceId) {
+      throw new Error(
+        `Connector ${connectorId} does not belong to workspace ${workspaceId}`,
+      );
+    }
+
+    if (target.type !== 'database') {
+      throw new Error(`暂不支持 ${target.type} 连接器的数据表探测`);
+    }
+
+    return await listDatabaseConnectorTables({
+      target,
+      metadataService: this.metadataService,
+    });
   }
 
   public async listConnectorsByKnowledgeBase(
@@ -303,9 +297,21 @@ export class ConnectorService implements IConnectorService {
   public async listConnectorsByWorkspace(
     workspaceId: string,
   ): Promise<Connector[]> {
-    return await this.connectorRepository.findAllBy({
+    const connectors = await this.connectorRepository.findAllBy({
       workspaceId,
     });
+    const workspaceScopedConnectors = connectors.filter(
+      (connector) => connector.knowledgeBaseId == null,
+    );
+
+    if (workspaceScopedConnectors.length > 0) {
+      return workspaceScopedConnectors;
+    }
+
+    return await this.backfillWorkspaceScopedConnectors(
+      workspaceId,
+      connectors,
+    );
   }
 
   public async deleteConnector(connectorId: string): Promise<void> {
@@ -321,11 +327,13 @@ export class ConnectorService implements IConnectorService {
         throw new Error(`Connector ${connectorId} not found`);
       }
 
-      await this.ensureWritableConnectorScope(
-        connector.workspaceId,
-        connector.knowledgeBaseId,
-        { tx },
-      );
+      await ensureWritableConnectorScope({
+        workspaceId: connector.workspaceId,
+        knowledgeBaseId: connector.knowledgeBaseId,
+        workspaceRepository: this.workspaceRepository,
+        knowledgeBaseRepository: this.knowledgeBaseRepository,
+        queryOptions: { tx },
+      });
 
       knowledgeBaseId = connector.knowledgeBaseId ?? null;
       await this.connectorRepository.deleteOne(connectorId, { tx });
@@ -336,7 +344,10 @@ export class ConnectorService implements IConnectorService {
       }
 
       await this.connectorRepository.commit(tx);
-      await this.syncKnowledgeBaseFederationIfNeeded([knowledgeBaseId]);
+      await syncKnowledgeBaseFederationIfNeeded({
+        knowledgeBaseIds: [knowledgeBaseId],
+        federatedRuntimeProjectService: this.federatedRuntimeProjectService,
+      });
     } catch (error) {
       await this.connectorRepository.rollback(tx);
       throw error;
@@ -380,16 +391,25 @@ export class ConnectorService implements IConnectorService {
     input: TestConnectorConnectionInput,
   ): Promise<ConnectorConnectionTestResult> {
     if (!input.connectorId) {
-      await this.ensureWritableConnectorScope(
-        input.workspaceId,
-        input.knowledgeBaseId,
-      );
+      await ensureWritableConnectorScope({
+        workspaceId: input.workspaceId,
+        knowledgeBaseId: input.knowledgeBaseId,
+        workspaceRepository: this.workspaceRepository,
+        knowledgeBaseRepository: this.knowledgeBaseRepository,
+      });
     }
-    const target = await this.resolveConnectorTestTarget(input);
-    await this.ensureWritableConnectorScope(
-      input.workspaceId,
-      input.knowledgeBaseId ?? target.persistedConnector?.knowledgeBaseId,
-    );
+    const target = await resolveConnectorTestTarget({
+      input,
+      getConnectorById: this.getConnectorById.bind(this),
+      resolveConnectorSecret: this.resolveConnectorSecret.bind(this),
+    });
+    await ensureWritableConnectorScope({
+      workspaceId: input.workspaceId,
+      knowledgeBaseId:
+        input.knowledgeBaseId ?? target.persistedConnector?.knowledgeBaseId,
+      workspaceRepository: this.workspaceRepository,
+      knowledgeBaseRepository: this.knowledgeBaseRepository,
+    });
 
     if (
       target.persistedConnector &&
@@ -404,235 +424,142 @@ export class ConnectorService implements IConnectorService {
       throw new Error(`暂不支持 ${target.type} 连接器的连接测试`);
     }
 
-    return await this.testDatabaseConnector(target);
-  }
-
-  private async resolveConnectorTestTarget(
-    input: TestConnectorConnectionInput,
-  ): Promise<{
-    persistedConnector: Connector | null;
-    type: string;
-    databaseProvider: string | null;
-    config: Record<string, any> | null;
-    secret: SecretPayload | null;
-  }> {
-    let persistedConnector: Connector | null = null;
-    let persistedSecret: SecretPayload | null = null;
-
-    if (input.connectorId) {
-      persistedConnector = await this.getConnectorById(input.connectorId);
-      if (!persistedConnector) {
-        throw new Error(`Connector ${input.connectorId} not found`);
-      }
-
-      if (
-        input.knowledgeBaseId !== undefined &&
-        persistedConnector.knowledgeBaseId !== (input.knowledgeBaseId ?? null)
-      ) {
-        throw new Error(
-          `Connector ${input.connectorId} does not belong to knowledge base ${input.knowledgeBaseId}`,
-        );
-      }
-
-      persistedSecret = await this.resolveConnectorSecret(input.connectorId);
-    }
-
-    const type = input.type ?? persistedConnector?.type;
-    if (!type) {
-      throw new Error('Connector type is required for connection test');
-    }
-    const normalizedInput = this.normalizeConnectorInput({
-      type,
-      databaseProvider: Object.prototype.hasOwnProperty.call(
-        input,
-        'databaseProvider',
-      )
-        ? input.databaseProvider
-        : persistedConnector?.databaseProvider,
+    return await testDatabaseConnector({
+      target,
+      metadataService: this.metadataService,
     });
-
-    const config = Object.prototype.hasOwnProperty.call(input, 'config')
-      ? input.config ?? null
-      : persistedConnector?.configJson ?? null;
-    const secret = Object.prototype.hasOwnProperty.call(input, 'secret')
-      ? input.secret ?? null
-      : persistedSecret;
-
-    return {
-      persistedConnector,
-      type: normalizedInput.type,
-      databaseProvider: normalizedInput.databaseProvider,
-      config,
-      secret,
-    };
   }
 
-  private async testDatabaseConnector(target: {
-    type: string;
-    databaseProvider: string | null;
-    config: Record<string, any> | null;
-    secret: SecretPayload | null;
-  }): Promise<ConnectorConnectionTestResult> {
-    const provider = requireDatabaseProvider(target.databaseProvider);
-    const connectionType = getConnectionTypeForDatabaseProvider(provider);
-    const connectionInfo = buildDatabaseConnectorConnectionInfo({
-      provider,
-      config: target.config,
-      secret: target.secret,
-    });
-    const encryptedConnectionInfo = encryptConnectionInfo(
-      connectionType,
-      connectionInfo,
-    );
-    const project = {
-      id: -1,
-      type: connectionType,
-      connectionInfo: encryptedConnectionInfo,
-    };
-
-    const tables = await this.metadataService.listTables(project as any);
-    let version: string | null = null;
-    try {
-      version = await this.metadataService.getVersion(project as any);
-    } catch (_error) {
-      version = null;
-    }
-
-    const tableCount = tables.length;
-    return {
-      success: true,
-      message:
-        tableCount > 0
-          ? `数据库连接测试成功，已发现 ${tableCount} 张表`
-          : '数据库连接测试成功，但当前库中没有可见表',
-      connectorType: target.type,
-      connectionType,
-      tableCount,
-      sampleTables: tables.slice(0, 5).map((table) => table.name),
-      version,
-    };
-  }
-
-  private requireString(value: unknown, label: string): string {
-    if (typeof value !== 'string' || value.trim().length === 0) {
-      throw new Error(`${label}不能为空`);
-    }
-
-    return value.trim();
-  }
-
-  private governanceError(message: string) {
-    return Object.assign(new Error(message), { statusCode: 403 });
-  }
-
-  private assertWritableConnectorScope({
-    workspaceKind,
-    knowledgeBaseKind,
-  }: {
-    workspaceKind?: string | null;
-    knowledgeBaseKind?: string | null;
-  }) {
-    const restrictionReason = getConnectorScopeRestrictionReason({
-      workspaceKind,
-      knowledgeBaseKind,
-    });
-
-    if (restrictionReason) {
-      throw this.governanceError(restrictionReason);
-    }
-  }
-
-  private async ensureWorkspaceExists(
-    workspaceId: string,
-    queryOptions?: IQueryOptions,
-  ) {
-    const workspace = await this.workspaceRepository.findOneBy(
-      { id: workspaceId },
-      queryOptions,
-    );
-    if (!workspace) {
-      throw new Error(`Workspace ${workspaceId} not found`);
-    }
-
-    return workspace;
-  }
-
-  private async ensureKnowledgeBaseExists(
-    workspaceId: string,
-    knowledgeBaseId?: string | null,
-    queryOptions?: IQueryOptions,
-  ) {
-    if (!knowledgeBaseId) {
-      return null;
-    }
-
-    const knowledgeBase = await this.knowledgeBaseRepository.findOneBy(
-      { id: knowledgeBaseId },
-      queryOptions,
-    );
-    if (!knowledgeBase || knowledgeBase.workspaceId !== workspaceId) {
-      throw new Error(
-        `Knowledge base ${knowledgeBaseId} not found in workspace ${workspaceId}`,
-      );
-    }
-
-    return knowledgeBase;
-  }
-
-  private async ensureWritableConnectorScope(
-    workspaceId: string,
-    knowledgeBaseId?: string | null,
-    queryOptions?: IQueryOptions,
-  ) {
-    const workspace = await this.ensureWorkspaceExists(
-      workspaceId,
-      queryOptions,
-    );
-    const knowledgeBase = await this.ensureKnowledgeBaseExists(
-      workspaceId,
-      knowledgeBaseId,
-      queryOptions,
-    );
-
-    this.assertWritableConnectorScope({
-      workspaceKind: workspace.kind,
-      knowledgeBaseKind: knowledgeBase?.kind,
-    });
-
-    return { workspace, knowledgeBase };
-  }
-
-  private normalizeConnectorInput({
+  private buildConnectorFingerprint = ({
     type,
     databaseProvider,
+    displayName,
+    configJson,
+    secret,
   }: {
     type: string;
     databaseProvider?: string | null;
-  }) {
-    const normalizedType = this.requireString(type, 'Connector type');
-    if (normalizedType !== 'database') {
-      return {
-        type: normalizedType,
-        databaseProvider: null,
-      };
+    displayName: string;
+    configJson?: Record<string, any> | null;
+    secret?: SecretPayload | null;
+  }) =>
+    JSON.stringify({
+      type,
+      databaseProvider: databaseProvider ?? null,
+      displayName,
+      configJson: this.normalizeFingerprintValue(configJson ?? null),
+      secret: this.normalizeFingerprintValue(secret ?? null),
+    });
+
+  private normalizeFingerprintValue = (value: unknown): unknown => {
+    if (Array.isArray(value)) {
+      return value.map((item) => this.normalizeFingerprintValue(item));
     }
 
-    return {
-      type: normalizedType,
-      databaseProvider: requireDatabaseProvider(databaseProvider),
-    };
-  }
-
-  private async syncKnowledgeBaseFederationIfNeeded(
-    knowledgeBaseIds: Array<string | null | undefined>,
-  ) {
-    const scopedKnowledgeBaseIds = [
-      ...new Set(knowledgeBaseIds.filter(Boolean)),
-    ];
-    for (const knowledgeBaseId of scopedKnowledgeBaseIds) {
-      await this.federatedRuntimeProjectService.syncKnowledgeBaseFederation(
-        knowledgeBaseId!,
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value as Record<string, unknown>)
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([key, item]) => [key, this.normalizeFingerprintValue(item)]),
       );
     }
+
+    return value;
+  };
+
+  private async backfillWorkspaceScopedConnectors(
+    workspaceId: string,
+    allWorkspaceConnectors: Connector[],
+  ): Promise<Connector[]> {
+    const workspace = await this.workspaceRepository.findOneBy({ id: workspaceId });
+    if (!workspace || workspace.kind === 'default') {
+      return [];
+    }
+
+    const knowledgeBases = await this.knowledgeBaseRepository.findAllBy({
+      workspaceId,
+    });
+    const legacyPrimaryConnectorIds = Array.from(
+      new Set(
+        knowledgeBases
+          .map((knowledgeBase) => knowledgeBase.primaryConnectorId)
+          .filter((connectorId): connectorId is string => Boolean(connectorId)),
+      ),
+    );
+
+    if (legacyPrimaryConnectorIds.length === 0) {
+      return [];
+    }
+
+    const fingerprintSet = new Set<string>();
+    const createdConnectors: Connector[] = [];
+
+    for (const connector of allWorkspaceConnectors) {
+      if (connector.knowledgeBaseId != null) {
+        continue;
+      }
+
+      const resolved = await this.getResolvedConnector(connector.id);
+      if (!resolved) {
+        continue;
+      }
+      fingerprintSet.add(
+        this.buildConnectorFingerprint({
+          type: resolved.type,
+          databaseProvider: resolved.databaseProvider,
+          displayName: resolved.displayName,
+          configJson: resolved.configJson,
+          secret: resolved.secret,
+        }),
+      );
+    }
+
+    for (const connectorId of legacyPrimaryConnectorIds) {
+      const legacyConnector =
+        allWorkspaceConnectors.find((connector) => connector.id === connectorId) ||
+        (await this.getConnectorById(connectorId));
+      if (
+        !legacyConnector ||
+        legacyConnector.workspaceId !== workspaceId ||
+        legacyConnector.knowledgeBaseId == null
+      ) {
+        continue;
+      }
+
+      const resolvedLegacyConnector = await this.getResolvedConnector(
+        legacyConnector.id,
+      );
+      if (!resolvedLegacyConnector) {
+        continue;
+      }
+
+      const fingerprint = this.buildConnectorFingerprint({
+        type: resolvedLegacyConnector.type,
+        databaseProvider: resolvedLegacyConnector.databaseProvider,
+        displayName: resolvedLegacyConnector.displayName,
+        configJson: resolvedLegacyConnector.configJson,
+        secret: resolvedLegacyConnector.secret,
+      });
+
+      if (fingerprintSet.has(fingerprint)) {
+        continue;
+      }
+
+      fingerprintSet.add(fingerprint);
+      createdConnectors.push(
+        await this.createConnector({
+          workspaceId,
+          knowledgeBaseId: null,
+          type: resolvedLegacyConnector.type,
+          databaseProvider: resolvedLegacyConnector.databaseProvider,
+          displayName: resolvedLegacyConnector.displayName,
+          config: resolvedLegacyConnector.configJson ?? null,
+          secret: resolvedLegacyConnector.secret ?? null,
+          createdBy: resolvedLegacyConnector.createdBy ?? undefined,
+        }),
+      );
+    }
+
+    return createdConnectors;
   }
 }

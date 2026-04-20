@@ -291,24 +291,26 @@ describe('WorkspaceBootstrapService', () => {
     ];
 
     workspaceRepository.findOneBy.mockResolvedValue(workspace);
-    knowledgeBaseRepository.findOneBy.mockImplementation(async (filter: any) => {
-      const matchedKnowledgeBase = knowledgeBases.find(
-        (knowledgeBase) =>
-          knowledgeBase.slug === filter.slug ||
-          knowledgeBase.sampleDataset === filter.sampleDataset,
-      );
+    knowledgeBaseRepository.findOneBy.mockImplementation(
+      async (filter: any) => {
+        const matchedKnowledgeBase = knowledgeBases.find(
+          (knowledgeBase) =>
+            knowledgeBase.slug === filter.slug ||
+            knowledgeBase.sampleDataset === filter.sampleDataset,
+        );
 
-      return (
-        matchedKnowledgeBase ||
-        createKnowledgeBase({
-          id: `kb-${filter.slug || String(filter.sampleDataset).toLowerCase()}`,
-          slug: filter.slug || String(filter.sampleDataset).toLowerCase(),
-          name: filter.sampleDataset || String(filter.slug).toUpperCase(),
-          sampleDataset:
-            filter.sampleDataset || String(filter.slug).toUpperCase(),
-        })
-      );
-    });
+        return (
+          matchedKnowledgeBase ||
+          createKnowledgeBase({
+            id: `kb-${filter.slug || String(filter.sampleDataset).toLowerCase()}`,
+            slug: filter.slug || String(filter.sampleDataset).toLowerCase(),
+            name: filter.sampleDataset || String(filter.slug).toUpperCase(),
+            sampleDataset:
+              filter.sampleDataset || String(filter.slug).toUpperCase(),
+          })
+        );
+      },
+    );
 
     const ensureSystemSampleRuntimeSpy = jest
       .spyOn(service as any, 'ensureSystemSampleRuntime')

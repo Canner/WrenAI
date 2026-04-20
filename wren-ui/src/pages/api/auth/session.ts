@@ -1,11 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
 import { getSessionTokenFromRequest } from '@server/context/actorClaims';
-import { resolveBootstrapKnowledgeBaseSelection } from '@server/utils/runtimeSelectorState';
 import { buildAuthResponseUser } from './responseUser';
 import { clearSessionCookie } from './sessionCookie';
-import { KBSnapshot, KnowledgeBase } from '@server/repositories';
-import { getLogger } from '@server/utils';
 import {
   AuthorizationAction,
   assertAuthorizedWithAudit,
@@ -15,22 +12,14 @@ import {
   serializeAuthorizationActor,
 } from '@server/authz';
 
-const logger = getLogger('API_AUTH_SESSION');
-const SESSION_REFRESH_RUNTIME_SEED_MODE =
-  process.env.NODE_ENV === 'test' ? 'metadata_only' : 'background_all';
-
 const getQueryString = (value: string | string[] | undefined) =>
   Array.isArray(value) ? value[0] : value;
 
-const toRuntimeSelector = (
-  workspaceId: string,
-  knowledgeBase: KnowledgeBase | null,
-  snapshot: KBSnapshot | null,
-) => ({
+const toRuntimeSelector = (workspaceId: string) => ({
   workspaceId,
-  knowledgeBaseId: knowledgeBase?.id || null,
-  kbSnapshotId: snapshot?.id || null,
-  deployHash: snapshot?.deployHash || null,
+  knowledgeBaseId: null,
+  kbSnapshotId: null,
+  deployHash: null,
 });
 
 export default async function handler(
@@ -57,20 +46,6 @@ export default async function handler(
     if (!validatedSession) {
       res.setHeader('Set-Cookie', clearSessionCookie(req));
       return res.status(200).json({ authenticated: false });
-    }
-
-    try {
-      await components.workspaceBootstrapService?.ensureDefaultWorkspaceWithSamples?.(
-        {
-          runtimeSeedMode: SESSION_REFRESH_RUNTIME_SEED_MODE,
-        },
-      );
-    } catch (error: any) {
-      logger.warn(
-        `Default workspace sample bootstrap skipped during session refresh: ${
-          error?.message || error
-        }`,
-      );
     }
 
     const authorizationActor =
@@ -105,15 +80,8 @@ export default async function handler(
         action,
         resource,
       }).allowed;
-    const knowledgeBases = await components.knowledgeBaseRepository.findAllBy({
-      workspaceId: validatedSession.workspace.id,
-    });
-    const { knowledgeBase: currentKnowledgeBase, snapshot: currentKbSnapshot } =
-      await resolveBootstrapKnowledgeBaseSelection(
-        knowledgeBases,
-        components.kbSnapshotRepository,
-        components.deployLogRepository,
-      );
+    const currentKnowledgeBaseId = 'current';
+    const currentConnectorResourceId = 'current';
 
     return res.status(200).json({
       authenticated: true,
@@ -164,29 +132,29 @@ export default async function handler(
           }),
           'knowledge_base.read': evaluateAction('knowledge_base.read', {
             resourceType: 'knowledge_base',
-            resourceId: currentKnowledgeBase?.id || 'current',
+            resourceId: currentKnowledgeBaseId,
             workspaceId: validatedSession.workspace.id,
             attributes: {
               workspaceKind: validatedSession.workspace.kind || null,
-              knowledgeBaseKind: currentKnowledgeBase?.kind || null,
+              knowledgeBaseKind: null,
             },
           }),
           'knowledge_base.update': evaluateAction('knowledge_base.update', {
             resourceType: 'knowledge_base',
-            resourceId: currentKnowledgeBase?.id || 'current',
+            resourceId: currentKnowledgeBaseId,
             workspaceId: validatedSession.workspace.id,
             attributes: {
               workspaceKind: validatedSession.workspace.kind || null,
-              knowledgeBaseKind: currentKnowledgeBase?.kind || null,
+              knowledgeBaseKind: null,
             },
           }),
           'knowledge_base.archive': evaluateAction('knowledge_base.archive', {
             resourceType: 'knowledge_base',
-            resourceId: currentKnowledgeBase?.id || 'current',
+            resourceId: currentKnowledgeBaseId,
             workspaceId: validatedSession.workspace.id,
             attributes: {
               workspaceKind: validatedSession.workspace.kind || null,
-              knowledgeBaseKind: currentKnowledgeBase?.kind || null,
+              knowledgeBaseKind: null,
             },
           }),
           'connector.create': evaluateAction('connector.create', {
@@ -195,43 +163,43 @@ export default async function handler(
             workspaceId: validatedSession.workspace.id,
             attributes: {
               workspaceKind: validatedSession.workspace.kind || null,
-              knowledgeBaseKind: currentKnowledgeBase?.kind || null,
+              knowledgeBaseKind: null,
             },
           }),
           'connector.read': evaluateAction('connector.read', {
             resourceType: 'connector',
-            resourceId: 'current',
+            resourceId: currentConnectorResourceId,
             workspaceId: validatedSession.workspace.id,
             attributes: {
               workspaceKind: validatedSession.workspace.kind || null,
-              knowledgeBaseKind: currentKnowledgeBase?.kind || null,
+              knowledgeBaseKind: null,
             },
           }),
           'connector.update': evaluateAction('connector.update', {
             resourceType: 'connector',
-            resourceId: 'current',
+            resourceId: currentConnectorResourceId,
             workspaceId: validatedSession.workspace.id,
             attributes: {
               workspaceKind: validatedSession.workspace.kind || null,
-              knowledgeBaseKind: currentKnowledgeBase?.kind || null,
+              knowledgeBaseKind: null,
             },
           }),
           'connector.delete': evaluateAction('connector.delete', {
             resourceType: 'connector',
-            resourceId: 'current',
+            resourceId: currentConnectorResourceId,
             workspaceId: validatedSession.workspace.id,
             attributes: {
               workspaceKind: validatedSession.workspace.kind || null,
-              knowledgeBaseKind: currentKnowledgeBase?.kind || null,
+              knowledgeBaseKind: null,
             },
           }),
           'connector.rotate_secret': evaluateAction('connector.rotate_secret', {
             resourceType: 'connector',
-            resourceId: 'current',
+            resourceId: currentConnectorResourceId,
             workspaceId: validatedSession.workspace.id,
             attributes: {
               workspaceKind: validatedSession.workspace.kind || null,
-              knowledgeBaseKind: currentKnowledgeBase?.kind || null,
+              knowledgeBaseKind: null,
             },
           }),
           'skill.create': evaluateAction('skill.create', {
@@ -360,11 +328,7 @@ export default async function handler(
       workspaces,
       isPlatformAdmin: authorizationActor.isPlatformAdmin,
       defaultWorkspaceId: validatedSession.user.defaultWorkspaceId ?? null,
-      runtimeSelector: toRuntimeSelector(
-        validatedSession.workspace.id,
-        currentKnowledgeBase,
-        currentKbSnapshot,
-      ),
+      runtimeSelector: toRuntimeSelector(validatedSession.workspace.id),
       session: {
         id: validatedSession.session.id,
         expiresAt: validatedSession.session.expiresAt,

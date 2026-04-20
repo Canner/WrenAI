@@ -9,6 +9,7 @@ import {
   buildAuthorizationActorFromRuntimeScope,
   recordAuditEvent,
 } from '@server/authz';
+import { resolveKnowledgeBaseAssetCountMap } from '@server/utils/knowledgeBaseAssetMetrics';
 
 const sortByStringField = <T extends Record<string, any>>(
   items: T[],
@@ -30,6 +31,7 @@ const toWorkspaceView = (workspace: Workspace | null | undefined) =>
 
 const toKnowledgeBaseView = (
   knowledgeBase: KnowledgeBase | null | undefined,
+  assetCount?: number,
 ) =>
   knowledgeBase
     ? {
@@ -38,6 +40,7 @@ const toKnowledgeBaseView = (
         name: knowledgeBase.name,
         kind: knowledgeBase.kind || null,
         defaultKbSnapshotId: knowledgeBase.defaultKbSnapshotId || null,
+        assetCount,
       }
     : null;
 
@@ -156,6 +159,12 @@ export class RuntimeSelectorController {
       mergedKnowledgeBases,
       'name',
     );
+    const knowledgeBaseAssetCountMap = await resolveKnowledgeBaseAssetCountMap({
+      knowledgeBases: sortedKnowledgeBases,
+      kbSnapshotRepository: ctx.kbSnapshotRepository,
+      modelRepository: ctx.modelRepository,
+      viewRepository: ctx.viewRepository,
+    });
 
     const hasExecutableCurrentSelection = Boolean(
       currentKbSnapshot?.id ||
@@ -251,9 +260,19 @@ export class RuntimeSelectorController {
     const result = {
       currentWorkspace: toWorkspaceView(currentWorkspace),
       workspaces: sortedWorkspaces.map(toWorkspaceView),
-      currentKnowledgeBase: toKnowledgeBaseView(currentKnowledgeBase),
+      currentKnowledgeBase: toKnowledgeBaseView(
+        currentKnowledgeBase,
+        currentKnowledgeBase?.id
+          ? knowledgeBaseAssetCountMap.get(currentKnowledgeBase.id)
+          : undefined,
+      ),
       currentKbSnapshot: toKBSnapshotView(currentKbSnapshot),
-      knowledgeBases: sortedKnowledgeBases.map(toKnowledgeBaseView),
+      knowledgeBases: sortedKnowledgeBases.map((knowledgeBase) =>
+        toKnowledgeBaseView(
+          knowledgeBase,
+          knowledgeBaseAssetCountMap.get(knowledgeBase.id),
+        ),
+      ),
       kbSnapshots: mergedSortedKbSnapshots.map(toKBSnapshotView),
     };
     await recordAuditEvent({

@@ -115,6 +115,9 @@ describe('authorize', () => {
       },
     });
     expect(deniedDecision.allowed).toBe(false);
+    expect(deniedDecision.reason).toBe(
+      'Platform permission required: workspace.create',
+    );
 
     const allowedDecision = authorize({
       actor: {
@@ -166,6 +169,9 @@ describe('authorize', () => {
     });
 
     expect(decision.allowed).toBe(false);
+    expect(decision.reason).toBe(
+      'Platform permission required: workspace.create',
+    );
   });
 
   it('allows platform admin to read the selected workspace without explicit workspace grants', () => {

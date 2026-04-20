@@ -8,6 +8,8 @@ const mockUpdateKnowledgeBase = jest.fn();
 const mockGetPrimaryConnector = jest.fn();
 const mockFindKbSnapshot = jest.fn();
 const mockFindAllKbSnapshots = jest.fn();
+const mockFindModelsByRuntimeIdentity = jest.fn();
+const mockFindViewsByRuntimeIdentity = jest.fn();
 const mockRespondWithSimple = jest.fn();
 const mockCreateAuditEvent = jest.fn();
 const mockHandleApiError = jest.fn(
@@ -45,6 +47,12 @@ jest.mock('@/common', () => ({
     kbSnapshotRepository: {
       findOneBy: mockFindKbSnapshot,
       findAllBy: mockFindAllKbSnapshots,
+    },
+    modelRepository: {
+      findAllByRuntimeIdentity: mockFindModelsByRuntimeIdentity,
+    },
+    viewRepository: {
+      findAllByRuntimeIdentity: mockFindViewsByRuntimeIdentity,
     },
     auditEventRepository: {
       createOne: mockCreateAuditEvent,
@@ -101,6 +109,8 @@ describe('pages/api/v1/knowledge/bases routes', () => {
     mockResolveRequestScope.mockResolvedValue(runtimeScope);
     mockFindKbSnapshot.mockResolvedValue(null);
     mockFindAllKbSnapshots.mockResolvedValue([]);
+    mockFindModelsByRuntimeIdentity.mockResolvedValue([]);
+    mockFindViewsByRuntimeIdentity.mockResolvedValue([]);
     mockGetPrimaryConnector.mockResolvedValue(null);
   });
 
@@ -196,6 +206,14 @@ describe('pages/api/v1/knowledge/bases routes', () => {
         return [];
       },
     );
+    mockFindModelsByRuntimeIdentity.mockImplementation(async (runtimeIdentity) =>
+      runtimeIdentity.knowledgeBaseId === 'kb-newer'
+        ? [{ id: 1 }, { id: 2 }]
+        : [{ id: 3 }],
+    );
+    mockFindViewsByRuntimeIdentity.mockImplementation(async (runtimeIdentity) =>
+      runtimeIdentity.knowledgeBaseId === 'kb-newer' ? [{ id: 10 }] : [],
+    );
     mockGetPrimaryConnector.mockImplementation(async (knowledgeBase: any) => {
       if (knowledgeBase.id === 'kb-older') {
         return {
@@ -244,6 +262,7 @@ describe('pages/api/v1/knowledge/bases routes', () => {
         recommendationStatus: 'running',
         recommendationError: { message: 'retrying' },
         snapshotCount: 2,
+        assetCount: 3,
         runtimeProjectId: null,
         defaultKbSnapshot: expect.objectContaining({
           id: 'snap-newer',
@@ -259,6 +278,7 @@ describe('pages/api/v1/knowledge/bases routes', () => {
         recommendationQuestions: [
           { question: 'Q1', category: 'demo', sql: 'select 1' },
         ],
+        assetCount: 1,
         primaryConnectorId: 'connector-older',
         runtimeProjectId: 701,
         primaryConnector: expect.objectContaining({

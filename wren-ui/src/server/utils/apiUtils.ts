@@ -1,5 +1,4 @@
-import { NextApiRequest, NextApiResponse } from 'next';
-import { v4 as uuidv4 } from 'uuid';
+import { NextApiRequest } from 'next';
 import {
   ApiType,
   ApiHistory,
@@ -10,7 +9,6 @@ import {
   RuntimeScope,
   toPersistedRuntimeIdentity,
 } from '@server/context/runtimeScope';
-import { toPersistedRuntimeIdentityPatch } from '@server/utils/persistedRuntimeIdentity';
 import {
   OUTDATED_RUNTIME_SNAPSHOT_MESSAGE,
   assertLatestExecutableRuntimeScope,
@@ -18,6 +16,8 @@ import {
 } from '@server/utils/runtimeExecutionContext';
 import { isPersistedRuntimeIdentityMatch } from '@server/utils/persistedRuntimeIdentity';
 import * as Errors from '@server/utils/error';
+import { ApiError } from '@server/utils/apiResponseHelpers';
+import { prepareSqlForDryRunValidation } from '@server/utils/sqlDryRunValidation';
 import { components } from '@/common';
 import {
   AskResult,
@@ -47,130 +47,14 @@ export const MAX_WAIT_TIME = 1000 * 60 * 3; // 3 minutes
 export const DEFAULT_POLL_INTERVAL_MS = 1200;
 export const MAX_POLL_INTERVAL_MS = 3000;
 
-const NAMED_SQL_PARAM_PATTERN = /[A-Za-z_][A-Za-z0-9_]*/;
-
-const inferDryRunLiteralForNamedSqlParam = (paramName: string) => {
-  if (/(^|_)(date|day)(_|$)/i.test(paramName)) {
-    return "DATE '2026-04-01'";
-  }
-
-  if (/(^|_)(time|timestamp)(_|$)|(_at)$/i.test(paramName)) {
-    return "TIMESTAMP '2026-04-01 00:00:00'";
-  }
-
-  if (/(^|_)(is|has|flag|enabled|active|deleted)(_|$)/i.test(paramName)) {
-    return 'TRUE';
-  }
-
-  if (
-    /(^|_)(id|no|count|num|amount|total|size|days|month|year|percent|ratio|score|price|salary|age|limit|offset)(_|$)/i.test(
-      paramName,
-    )
-  ) {
-    return '0';
-  }
-
-  return "'sample'";
-};
-
-export const prepareSqlForDryRunValidation = (sql: string) => {
-  let result = '';
-  let index = 0;
-  let inSingleQuote = false;
-  let inDoubleQuote = false;
-  let inBacktick = false;
-  let inLineComment = false;
-  let inBlockComment = false;
-
-  while (index < sql.length) {
-    const current = sql[index];
-    const next = sql[index + 1];
-
-    if (inLineComment) {
-      result += current;
-      if (current === '\n') inLineComment = false;
-      index += 1;
-      continue;
-    }
-
-    if (inBlockComment) {
-      result += current;
-      if (current === '*' && next === '/') {
-        result += next;
-        inBlockComment = false;
-        index += 2;
-        continue;
-      }
-      index += 1;
-      continue;
-    }
-
-    if (!inSingleQuote && !inDoubleQuote && !inBacktick) {
-      if (current === '-' && next === '-') {
-        result += current + next;
-        inLineComment = true;
-        index += 2;
-        continue;
-      }
-
-      if (current === '/' && next === '*') {
-        result += current + next;
-        inBlockComment = true;
-        index += 2;
-        continue;
-      }
-    }
-
-    if (!inDoubleQuote && !inBacktick && current === "'") {
-      result += current;
-      if (inSingleQuote && next === "'") {
-        result += next;
-        index += 2;
-        continue;
-      }
-      inSingleQuote = !inSingleQuote;
-      index += 1;
-      continue;
-    }
-
-    if (!inSingleQuote && !inBacktick && current === '"') {
-      result += current;
-      inDoubleQuote = !inDoubleQuote;
-      index += 1;
-      continue;
-    }
-
-    if (!inSingleQuote && !inDoubleQuote && current === '`') {
-      result += current;
-      inBacktick = !inBacktick;
-      index += 1;
-      continue;
-    }
-
-    const canReplaceNamedParam =
-      !inSingleQuote &&
-      !inDoubleQuote &&
-      !inBacktick &&
-      current === ':' &&
-      next !== ':' &&
-      sql[index - 1] !== ':';
-
-    if (canReplaceNamedParam) {
-      const remaining = sql.slice(index + 1);
-      const match = remaining.match(NAMED_SQL_PARAM_PATTERN);
-      if (match) {
-        result += inferDryRunLiteralForNamedSqlParam(match[0]);
-        index += 1 + match[0].length;
-        continue;
-      }
-    }
-
-    result += current;
-    index += 1;
-  }
-
-  return result;
-};
+export {
+  ApiError,
+  createApiHistoryRecord,
+  handleApiError,
+  respondWith,
+  respondWithSimple,
+} from '@server/utils/apiResponseHelpers';
+export { prepareSqlForDryRunValidation } from '@server/utils/sqlDryRunValidation';
 
 export const isAskResultFinished = (result: AskResult) => {
   return (
@@ -323,27 +207,6 @@ export const getScopedThreadHistories = async ({
   );
 };
 
-export const createApiHistoryRecord = async ({
-  apiHistoryRepository = getComponents().apiHistoryRepository,
-  runtimeScope,
-  ...record
-}: {
-  apiHistoryRepository?: Pick<IApiHistoryRepository, 'createOne'>;
-  runtimeScope?: RuntimeScope | null;
-} & Omit<ApiHistory, 'projectId'>) => {
-  if (!runtimeScope) {
-    return null;
-  }
-
-  const runtimeIdentity = toPersistedRuntimeIdentityPatch(
-    toPersistedRuntimeIdentity(runtimeScope),
-  );
-  return await apiHistoryRepository.createOne({
-    ...record,
-    ...runtimeIdentity,
-  });
-};
-
 export const deriveRuntimeExecutionContextFromRequest = async ({
   req,
   runtimeScopeResolver = getComponents().runtimeScopeResolver,
@@ -435,27 +298,6 @@ export const validateSql = async (
   }
 };
 
-/**
- * Common error class for API endpoints
- */
-export class ApiError extends Error {
-  statusCode: number;
-  code?: Errors.GeneralErrorCodes;
-  additionalData?: Record<string, any>;
-
-  constructor(
-    message: string,
-    statusCode: number,
-    code?: Errors.GeneralErrorCodes,
-    additionalData?: Record<string, any>,
-  ) {
-    super(message);
-    this.statusCode = statusCode;
-    this.code = code;
-    this.additionalData = additionalData;
-  }
-}
-
 export const sleep = (ms: number) =>
   new Promise<void>((resolve) => {
     setTimeout(resolve, ms);
@@ -508,150 +350,4 @@ export const pollUntil = async <T>({
       Math.max(intervalMs, Math.floor(interval * 1.2)),
     );
   }
-};
-
-/**
- * Common response handler for API endpoints that also logs to API history
- */
-export const respondWith = async ({
-  res,
-  statusCode,
-  responsePayload,
-  runtimeScope,
-  apiType,
-  threadId,
-  headers,
-  requestPayload,
-  startTime,
-}: {
-  res: NextApiResponse;
-  statusCode: number;
-  responsePayload: any;
-  runtimeScope?: RuntimeScope | null;
-  apiType: ApiType;
-  startTime: number;
-  requestPayload?: Record<string, any>;
-  threadId?: string;
-  headers?: Record<string, string>;
-}) => {
-  const durationMs = startTime ? Date.now() - startTime : undefined;
-  const responseId = uuidv4();
-  await createApiHistoryRecord({
-    id: responseId,
-    runtimeScope,
-    apiType,
-    threadId,
-    headers,
-    requestPayload,
-    responsePayload,
-    statusCode,
-    durationMs,
-  });
-
-  return res.status(statusCode).json({
-    id: responseId,
-    ...responsePayload,
-  });
-};
-
-/**
- * Simple response handler for API endpoints that don't need responseId or threadId
- * Used for simple CRUD operations like instructions
- */
-export const respondWithSimple = async ({
-  res,
-  statusCode,
-  responsePayload,
-  runtimeScope,
-  apiType,
-  headers,
-  requestPayload,
-  startTime,
-}: {
-  res: NextApiResponse;
-  statusCode: number;
-  responsePayload: any;
-  runtimeScope?: RuntimeScope | null;
-  apiType: ApiType;
-  startTime: number;
-  requestPayload?: Record<string, any>;
-  headers?: Record<string, string>;
-}) => {
-  const durationMs = startTime ? Date.now() - startTime : undefined;
-  const responseId = uuidv4();
-  await createApiHistoryRecord({
-    id: responseId,
-    runtimeScope,
-    apiType,
-    headers,
-    requestPayload,
-    responsePayload,
-    statusCode,
-    durationMs,
-  });
-
-  return res.status(statusCode).json(responsePayload);
-};
-
-/**
- * Common error handler for API endpoints
- */
-export const handleApiError = async ({
-  error,
-  res,
-  runtimeScope,
-  apiType,
-  requestPayload,
-  threadId,
-  headers,
-  startTime,
-  logger,
-}: {
-  error: any;
-  res: NextApiResponse;
-  runtimeScope?: RuntimeScope | null;
-  apiType: ApiType;
-  requestPayload?: Record<string, any>;
-  threadId?: string;
-  headers?: Record<string, string>;
-  startTime: number;
-  logger?: any;
-}) => {
-  if (logger) {
-    logger.error(`Error in ${apiType} API:`, error);
-  }
-
-  const statusCode =
-    error instanceof ApiError
-      ? error.statusCode
-      : typeof error?.statusCode === 'number'
-        ? error.statusCode
-        : 500;
-  let responsePayload: Record<string, any>;
-
-  if (error instanceof ApiError && error.code) {
-    responsePayload = {
-      code: error.code,
-      error: error.message,
-    };
-
-    // Include any additional data associated with the error
-    if (error.additionalData) {
-      Object.assign(responsePayload, error.additionalData);
-    }
-  } else {
-    responsePayload = { error: error.message };
-  }
-
-  await respondWith({
-    res,
-    statusCode,
-    responsePayload,
-    runtimeScope,
-    apiType,
-    startTime,
-    requestPayload,
-    threadId,
-    headers,
-  });
 };

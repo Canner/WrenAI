@@ -2,6 +2,7 @@ export interface CreateModelData {
   sourceTableName: string;
   fields: [string];
   primaryKey: string;
+  connectorId?: string | null;
 }
 
 export interface UpdateModelData {
