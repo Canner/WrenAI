@@ -4,7 +4,6 @@ import {
   Checkbox,
   Dropdown,
   Empty,
-  Menu,
   Skeleton,
   Space,
   Tag,
@@ -88,55 +87,46 @@ export default function PermissionsRoleCatalogPermissionGroups({
             extra={
               <Dropdown
                 trigger={['click']}
-                overlay={
-                  <Menu>
-                    <Menu.Item
-                      key={`${group.key}-select`}
-                      disabled={
+                menu={{
+                  items: [
+                    {
+                      key: `${group.key}-select`,
+                      label: '全选',
+                      disabled:
                         permissionReadOnly ||
-                        assignablePermissionNames.length === 0
-                      }
-                      onClick={() =>
+                        assignablePermissionNames.length === 0,
+                      onClick: () =>
                         onMutateGroupSelection(
                           assignablePermissionNames,
                           'select',
-                        )
-                      }
-                    >
-                      全选
-                    </Menu.Item>
-                    <Menu.Item
-                      key={`${group.key}-clear`}
-                      disabled={
+                        ),
+                    },
+                    {
+                      key: `${group.key}-clear`,
+                      label: '清空',
+                      disabled:
                         permissionReadOnly ||
-                        assignablePermissionNames.length === 0
-                      }
-                      onClick={() =>
+                        assignablePermissionNames.length === 0,
+                      onClick: () =>
                         onMutateGroupSelection(
                           assignablePermissionNames,
                           'clear',
-                        )
-                      }
-                    >
-                      清空
-                    </Menu.Item>
-                    <Menu.Item
-                      key={`${group.key}-invert`}
-                      disabled={
+                        ),
+                    },
+                    {
+                      key: `${group.key}-invert`,
+                      label: '反选',
+                      disabled:
                         permissionReadOnly ||
-                        assignablePermissionNames.length === 0
-                      }
-                      onClick={() =>
+                        assignablePermissionNames.length === 0,
+                      onClick: () =>
                         onMutateGroupSelection(
                           assignablePermissionNames,
                           'invert',
-                        )
-                      }
-                    >
-                      反选
-                    </Menu.Item>
-                  </Menu>
-                }
+                        ),
+                    },
+                  ],
+                }}
               >
                 <Button type="text" icon={<MoreOutlined />}>
                   更多

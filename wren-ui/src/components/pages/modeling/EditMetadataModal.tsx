@@ -48,7 +48,7 @@ export default function EditMetadataModal(props: Props) {
     <Modal
       title="编辑元数据"
       width={800}
-      visible={visible}
+      open={visible}
       okText="保存"
       cancelText="取消"
       onOk={submit}

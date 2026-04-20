@@ -292,7 +292,7 @@ export default function SchemaChangeModal(props: Props) {
         </>
       }
       width={750}
-      visible={visible}
+      open={visible}
       onCancel={onClose}
       destroyOnClose
       footer={null}

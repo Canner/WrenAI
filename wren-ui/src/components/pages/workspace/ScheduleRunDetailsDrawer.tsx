@@ -36,7 +36,8 @@ export type ScheduleRunDetailView = {
 };
 
 type Props = {
-  visible: boolean;
+  visible?: boolean;
+  open?: boolean;
   onClose: () => void;
   defaultValue?: ScheduleRunDetailView | null;
 };
@@ -151,12 +152,13 @@ const renderCopyableValue = (value?: string | null) => {
 };
 
 export default function ScheduleRunDetailsDrawer(props: Props) {
-  const { visible, onClose, defaultValue } = props;
+  const { visible, open, onClose, defaultValue } = props;
+  const drawerOpen = open ?? visible ?? false;
   const runtimeIdentity = defaultValue?.detailJson?.runtimeIdentity || null;
 
   return (
     <Drawer
-      visible={visible}
+      open={drawerOpen}
       title="运行详情"
       width={760}
       destroyOnClose

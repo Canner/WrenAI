@@ -118,7 +118,7 @@ export default function FieldSelect(props: IterableComponent<Props>) {
     if (selectedValue) getOptions();
   }, []);
 
-  const onDropdownVisibleChange = async (open: boolean) => {
+  const handleOpenChange = async (open: boolean) => {
     if (!open) return;
     getOptions();
   };
@@ -150,7 +150,7 @@ export default function FieldSelect(props: IterableComponent<Props>) {
         suffixIcon={null}
         value={selectedValue}
         dropdownClassName="adm-model-field-select-dropdown"
-        onDropdownVisibleChange={onDropdownVisibleChange}
+        onOpenChange={handleOpenChange}
         onSelect={(value) => {
           onChange && onChange(String(value), index);
         }}

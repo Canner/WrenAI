@@ -1,6 +1,5 @@
 import React from 'react';
-import styled from 'styled-components';
-import { Dropdown, Menu } from 'antd';
+import { Dropdown } from 'antd';
 import type { MenuProps } from 'antd';
 import { MORE_ACTION, NODE_TYPE } from '@/utils/enum';
 import EditOutlined from '@ant-design/icons/EditOutlined';
@@ -22,23 +21,17 @@ import {
 
 type DropdownItem = NonNullable<MenuProps['items']>[number];
 
-const StyledMenu = styled(Menu)`
-  .ant-dropdown-menu-item:not(.ant-dropdown-menu-item-disabled) {
-    color: var(--gray-8);
-  }
-`;
-
 interface Props {
   [key: string]: any;
   onMoreClick: (type: MORE_ACTION | { type: MORE_ACTION; data: any }) => void;
   onMenuEnter?: (event: React.MouseEvent) => void;
   children: React.ReactNode;
-  onDropdownVisibleChange?: (visible: boolean) => void;
+  onOpenChange?: (open: boolean) => void;
 }
 
 const makeDropdown =
   (getItems: (props: Props) => DropdownItem[]) => (props: Props) => {
-    const { children, onMenuEnter, onDropdownVisibleChange } = props;
+    const { children, onMenuEnter, onOpenChange } = props;
 
     const items = getItems(props);
 
@@ -46,14 +39,12 @@ const makeDropdown =
       <Dropdown
         trigger={['click']}
         overlayStyle={{ minWidth: 100, userSelect: 'none' }}
-        overlay={
-          <StyledMenu
-            onClick={(e) => e.domEvent.stopPropagation()}
-            items={items}
-            onMouseEnter={onMenuEnter}
-          />
-        }
-        onVisibleChange={onDropdownVisibleChange}
+        menu={{
+          items,
+          onClick: (event) => event.domEvent.stopPropagation(),
+          onMouseEnter: onMenuEnter,
+        }}
+        onOpenChange={onOpenChange}
       >
         {children}
       </Dropdown>

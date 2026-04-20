@@ -12,10 +12,10 @@ import {
   Divider,
   Dropdown,
   Empty,
-  Menu,
   Tag,
   Tooltip,
   Typography,
+  type MenuProps,
 } from 'antd';
 
 import type { DashboardGridItem } from '@/components/pages/home/dashboardGrid';
@@ -117,57 +117,56 @@ export const DashboardWorkbenchRail = (props: {
               dashboards.map((dashboard) => {
                 const isMutating = dashboardMutationTargetId === dashboard.id;
                 const isActiveDashboard = activeDashboardId === dashboard.id;
-                const menu = (
-                  <Menu onClick={({ domEvent }) => domEvent.stopPropagation()}>
-                    {isActiveDashboard ? (
-                      <Menu.Item
-                        key="refresh"
-                        icon={<ReloadOutlined />}
-                        disabled={isDashboardReadonly || isMutating}
-                        onClick={() => onRefreshDashboard()}
-                      >
-                        刷新看板
-                      </Menu.Item>
-                    ) : null}
-                    {isActiveDashboard && canShowCacheSettings ? (
-                      <Menu.Item
-                        key="cache-settings"
-                        icon={<ClockCircleOutlined />}
-                        disabled={isDashboardReadonly || isMutating}
-                        onClick={() => onCacheSettings()}
-                      >
-                        缓存与调度
-                      </Menu.Item>
-                    ) : null}
-                    <Menu.Item
-                      key="rename"
-                      icon={<EditOutlined />}
-                      disabled={isDashboardReadonly || isMutating}
-                      onClick={() => onRenameDashboard(dashboard.id)}
-                    >
-                      重命名
-                    </Menu.Item>
-                    {!dashboard.isDefault ? (
-                      <Menu.Item
-                        key="default"
-                        icon={<StarOutlined />}
-                        disabled={isDashboardReadonly || isMutating}
-                        onClick={() => onSetDefaultDashboard(dashboard.id)}
-                      >
-                        设为默认
-                      </Menu.Item>
-                    ) : null}
-                    <Menu.Item
-                      key="delete"
-                      icon={<DeleteOutlined />}
-                      danger
-                      disabled={isDashboardReadonly || isMutating}
-                      onClick={() => onDeleteDashboard(dashboard.id)}
-                    >
-                      删除看板
-                    </Menu.Item>
-                  </Menu>
-                );
+                const menuItems: NonNullable<MenuProps['items']> = [
+                  ...(isActiveDashboard
+                    ? [
+                        {
+                          key: 'refresh',
+                          icon: <ReloadOutlined />,
+                          label: '刷新看板',
+                          disabled: isDashboardReadonly || isMutating,
+                          onClick: () => onRefreshDashboard(),
+                        },
+                      ]
+                    : []),
+                  ...(isActiveDashboard && canShowCacheSettings
+                    ? [
+                        {
+                          key: 'cache-settings',
+                          icon: <ClockCircleOutlined />,
+                          label: '缓存与调度',
+                          disabled: isDashboardReadonly || isMutating,
+                          onClick: () => onCacheSettings(),
+                        },
+                      ]
+                    : []),
+                  {
+                    key: 'rename',
+                    icon: <EditOutlined />,
+                    label: '重命名',
+                    disabled: isDashboardReadonly || isMutating,
+                    onClick: () => onRenameDashboard(dashboard.id),
+                  },
+                  ...(!dashboard.isDefault
+                    ? [
+                        {
+                          key: 'default',
+                          icon: <StarOutlined />,
+                          label: '设为默认',
+                          disabled: isDashboardReadonly || isMutating,
+                          onClick: () => onSetDefaultDashboard(dashboard.id),
+                        },
+                      ]
+                    : []),
+                  {
+                    key: 'delete',
+                    icon: <DeleteOutlined />,
+                    label: '删除看板',
+                    danger: true,
+                    disabled: isDashboardReadonly || isMutating,
+                    onClick: () => onDeleteDashboard(dashboard.id),
+                  },
+                ];
 
                 return (
                   <DashboardRailItem
@@ -186,7 +185,13 @@ export const DashboardWorkbenchRail = (props: {
                         ) : null}
                       </DashboardRailTitle>
                     </DashboardRailItemBody>
-                    <Dropdown overlay={menu} trigger={['click']}>
+                    <Dropdown
+                      menu={{
+                        items: menuItems,
+                        onClick: ({ domEvent }) => domEvent.stopPropagation(),
+                      }}
+                      trigger={['click']}
+                    >
                       <DashboardRailItemMenuButton
                         type="text"
                         loading={isMutating}

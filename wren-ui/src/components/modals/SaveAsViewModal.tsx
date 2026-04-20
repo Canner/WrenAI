@@ -57,7 +57,7 @@ export default function SaveAsViewModal(props: Props) {
       destroyOnClose
       onCancel={onClose}
       maskClosable={false}
-      visible={visible}
+      open={visible}
       width={600}
       afterClose={() => form.resetFields()}
       footer={

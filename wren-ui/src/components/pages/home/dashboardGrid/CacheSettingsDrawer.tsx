@@ -22,7 +22,9 @@ import { ERROR_TEXTS } from '@/utils/error';
 import { handleFormSubmitError } from '@/utils/errorHandler';
 import { isValidCronLength, cronValidator } from '@/utils/validator';
 
-type Props = DrawerAction & {
+type Props = Omit<DrawerAction, 'visible'> & {
+  visible?: boolean;
+  open?: boolean;
   loading?: boolean;
 };
 export interface Schedule {
@@ -196,13 +198,14 @@ const getNextScheduleByCron = (cron: string) => {
 };
 
 export default function CacheSettingsDrawer(props: Props) {
-  const { visible, defaultValue, loading, onClose, onSubmit } = props;
+  const { visible, open, defaultValue, loading, onClose, onSubmit } = props;
+  const drawerOpen = open ?? visible;
   const [form] = Form.useForm();
 
   const cacheEnabled = Form.useWatch('cacheEnabled', form);
 
   useEffect(() => {
-    if (visible) {
+    if (drawerOpen) {
       const { schedule, ...restValues } = defaultValue || {};
       form.setFieldsValue({
         ...restValues,
@@ -217,10 +220,10 @@ export default function CacheSettingsDrawer(props: Props) {
         },
       });
     }
-  }, [visible, defaultValue]);
+  }, [drawerOpen, defaultValue]);
 
-  const afterVisibleChange = (visible: boolean) => {
-    if (!visible) {
+  const afterOpenChange = (open: boolean) => {
+    if (!open) {
       form.resetFields();
     }
   };
@@ -255,13 +258,13 @@ export default function CacheSettingsDrawer(props: Props) {
 
   return (
     <Drawer
-      visible={visible}
+      open={drawerOpen}
       title="缓存设置"
       width={410}
       closable
       destroyOnClose
       maskClosable={false}
-      afterVisibleChange={afterVisibleChange}
+      afterOpenChange={afterOpenChange}
       onClose={onClose}
       footer={
         <Space className="d-flex justify-end">

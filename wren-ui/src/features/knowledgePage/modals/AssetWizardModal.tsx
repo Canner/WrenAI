@@ -329,7 +329,7 @@ function AssetWizardModal({
 
   return (
     <ReferenceModal
-      visible={visible}
+      open={visible}
       title={null}
       footer={null}
       closable={false}
@@ -385,7 +385,7 @@ function AssetWizardModal({
             selectedDemoKnowledge={selectedDemoKnowledge ?? null}
             selectedDemoTable={selectedDemoTable}
             setSelectedDemoTable={setSelectedDemoTable}
-            visible={visible}
+            open={visible}
           />
         )}
 

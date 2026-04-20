@@ -28,8 +28,8 @@ export default function ModelDrawer(props: Props) {
   const [form] = Form.useForm();
   const currentFormMode = formMode || FORM_MODE.CREATE;
 
-  const afterVisibleChange = (visible: boolean) => {
-    if (!visible) {
+  const afterOpenChange = (open: boolean) => {
+    if (!open) {
       form.resetFields();
     }
   };
@@ -51,12 +51,12 @@ export default function ModelDrawer(props: Props) {
 
   return (
     <Drawer
-      visible={visible}
+      open={visible}
       title={getDrawerTitle(currentFormMode, defaultValue?.displayName)}
       width={750}
       closable
       destroyOnClose
-      afterVisibleChange={afterVisibleChange}
+      afterOpenChange={afterOpenChange}
       onClose={onClose}
       footer={
         <Space className="d-flex justify-end">

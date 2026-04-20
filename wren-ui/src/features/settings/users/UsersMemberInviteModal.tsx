@@ -27,7 +27,7 @@ export default function UsersMemberInviteModal({
   return (
     <Modal
       title="邀请成员"
-      visible={inviteModalOpen}
+      open={inviteModalOpen}
       destroyOnClose
       onCancel={onClose}
       onOk={onSubmit}

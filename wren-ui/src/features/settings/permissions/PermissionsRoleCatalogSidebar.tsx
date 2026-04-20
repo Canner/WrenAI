@@ -5,7 +5,6 @@ import {
   Dropdown,
   Empty,
   Input,
-  Menu,
   Skeleton,
   Space,
   Tag,
@@ -190,21 +189,7 @@ export default function PermissionsRoleCatalogSidebar({
                     </div>
                     <Dropdown
                       trigger={['click']}
-                      overlay={
-                        <Menu>
-                          {getRoleMenuItems(role).map((item) => (
-                            <Menu.Item
-                              key={item.key}
-                              icon={item.icon}
-                              danger={item.danger}
-                              disabled={item.disabled}
-                              onClick={item.onClick}
-                            >
-                              {item.label}
-                            </Menu.Item>
-                          ))}
-                        </Menu>
-                      }
+                      menu={{ items: getRoleMenuItems(role) }}
                     >
                       <Button
                         type="text"

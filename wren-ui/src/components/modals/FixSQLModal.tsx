@@ -117,7 +117,7 @@ export function FixSQLModal(props: Props) {
     <Modal
       title="修复 SQL"
       width={640}
-      visible={visible}
+      open={visible}
       okText="提交"
       cancelText="取消"
       onOk={submit}

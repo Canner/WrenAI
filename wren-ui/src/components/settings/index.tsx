@@ -166,7 +166,7 @@ export default function Settings(props: Props) {
     <StyledModal
       width={950}
       bodyStyle={{ padding: 0, height: 700 }}
-      visible={visible}
+      open={visible}
       footer={null}
       onCancel={onClose}
       destroyOnClose

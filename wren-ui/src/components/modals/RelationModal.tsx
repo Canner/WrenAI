@@ -104,7 +104,7 @@ export default function RelationModal(props: Props) {
     <Modal
       title={`${isEmpty(defaultValue) ? '新增' : '编辑'}关系`}
       width={750}
-      visible={visible}
+      open={visible}
       okText="保存"
       cancelText="取消"
       onOk={submit}

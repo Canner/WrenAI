@@ -20,10 +20,7 @@ import { ERROR_TEXTS } from '@/utils/error';
 import { FORM_MODE } from '@/utils/enum';
 import { getConnectionTypeName } from '@/utils/connectionType';
 import { generateKnowledgeSqlPairQuestion } from '@/utils/knowledgeRuleSqlRest';
-import {
-  fetchSettings,
-  resolveSettingsConnection,
-} from '@/utils/settingsRest';
+import { fetchSettings, resolveSettingsConnection } from '@/utils/settingsRest';
 import {
   previewSql,
   validateSql,
@@ -312,7 +309,7 @@ export default function QuestionSQLPairModal(props: Props) {
         destroyOnClose
         maskClosable={false}
         onCancel={onClose}
-        visible={visible}
+        open={visible}
         width={640}
         cancelButtonProps={{ disabled: confirmLoading }}
         okButtonProps={{ disabled: previewing }}

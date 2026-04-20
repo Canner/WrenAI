@@ -825,7 +825,7 @@ export default function ManagePlatformUsersPage() {
       )}
 
       <Drawer
-        visible={Boolean(detail && selectedUserId)}
+        open={Boolean(detail && selectedUserId)}
         width={920}
         title={`${detail?.user.displayName || detail?.user.email || '用户'} · 管理所属空间`}
         onClose={() => {
@@ -915,7 +915,7 @@ export default function ManagePlatformUsersPage() {
       </Drawer>
 
       <Modal
-        visible={workspaceModalOpen}
+        open={workspaceModalOpen}
         title="分配工作空间"
         destroyOnClose
         onCancel={() => setWorkspaceModalOpen(false)}
@@ -946,7 +946,7 @@ export default function ManagePlatformUsersPage() {
       </Modal>
 
       <Modal
-        visible={createModalOpen}
+        open={createModalOpen}
         title="新增用户"
         destroyOnClose
         confirmLoading={createSubmitting}
@@ -1007,7 +1007,7 @@ export default function ManagePlatformUsersPage() {
       </Modal>
 
       <Modal
-        visible={editModalOpen}
+        open={editModalOpen}
         title="编辑用户"
         destroyOnClose
         confirmLoading={editSubmitting}
@@ -1034,7 +1034,7 @@ export default function ManagePlatformUsersPage() {
       </Modal>
 
       <Modal
-        visible={roleModalOpen}
+        open={roleModalOpen}
         title="调整平台角色"
         destroyOnClose
         confirmLoading={roleSubmitting}

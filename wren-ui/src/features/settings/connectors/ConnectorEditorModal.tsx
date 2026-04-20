@@ -46,7 +46,7 @@ export default function ConnectorEditorModal({
   return (
     <Modal
       title={editingConnector ? '编辑连接器' : '添加连接器'}
-      visible={open}
+      open={open}
       onCancel={onCancel}
       destroyOnClose
       footer={[

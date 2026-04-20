@@ -47,7 +47,7 @@ export default function UsersMemberEditModal({
   return (
     <Modal
       title="编辑用户"
-      visible={Boolean(editingMember)}
+      open={Boolean(editingMember)}
       destroyOnClose
       footer={null}
       onCancel={onClose}

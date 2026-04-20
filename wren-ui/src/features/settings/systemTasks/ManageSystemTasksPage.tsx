@@ -72,9 +72,9 @@ const canManageWorkspaceScheduleFromAuthSession = (
 ) =>
   Boolean(
     authSession?.authorization?.actions?.['workspace.schedule.manage'] ||
-      authSession?.authorization?.actor?.grantedActions?.includes(
-        'workspace.schedule.manage',
-      ),
+    authSession?.authorization?.actor?.grantedActions?.includes(
+      'workspace.schedule.manage',
+    ),
   );
 
 export const loadSystemTasksOverviewPayload = async ({
@@ -114,7 +114,7 @@ export default function SettingsSystemTasksPage() {
   const usePlatformManageRoute = platformCapabilities.canManageSystemTasks;
   const canManageTaskActions = Boolean(
     usePlatformManageRoute ||
-      canManageWorkspaceScheduleFromAuthSession(authSession.data),
+    canManageWorkspaceScheduleFromAuthSession(authSession.data),
   );
   const [pendingAction, setPendingAction] = useState<{
     jobId: string;
@@ -130,10 +130,7 @@ export default function SettingsSystemTasksPage() {
         hasRuntimeScope: runtimeScopePage.hasRuntimeScope,
         usePlatformRoute: platformCapabilities.canReadSystemTasks,
       }),
-    [
-      platformCapabilities.canReadSystemTasks,
-      runtimeScopePage.hasRuntimeScope,
-    ],
+    [platformCapabilities.canReadSystemTasks, runtimeScopePage.hasRuntimeScope],
   );
   const [error, setError] = useState<string | null>(null);
   const {
@@ -405,14 +402,14 @@ export default function SettingsSystemTasksPage() {
       </Space>
 
       <CacheSettingsDrawer
-        visible={Boolean(editingJob)}
+        open={Boolean(editingJob)}
         defaultValue={getDrawerDefaultValue(editingJob)}
         loading={pendingAction?.action === 'update'}
         onClose={() => setEditingJob(null)}
         onSubmit={handleUpdateSchedule}
       />
       <ScheduleRunDetailsDrawer
-        visible={Boolean(selectedRun)}
+        open={Boolean(selectedRun)}
         defaultValue={selectedRun}
         onClose={() => setSelectedRun(null)}
       />

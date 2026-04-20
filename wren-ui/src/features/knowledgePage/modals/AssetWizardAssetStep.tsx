@@ -39,7 +39,7 @@ type AssetWizardAssetStepProps = {
   setSelectedDemoTable: Dispatch<
     SetStateAction<SelectedAssetTableValue | undefined>
   >;
-  visible: boolean;
+  open: boolean;
 };
 
 export default function AssetWizardAssetStep({
@@ -54,7 +54,7 @@ export default function AssetWizardAssetStep({
   selectedDemoKnowledge,
   selectedDemoTable,
   setSelectedDemoTable,
-  visible,
+  open,
 }: AssetWizardAssetStepProps) {
   const [hideImportedTables, setHideImportedTables] = useState(true);
   const [tablePrefixKeyword, setTablePrefixKeyword] = useState('');
@@ -65,12 +65,12 @@ export default function AssetWizardAssetStep({
   );
 
   useEffect(() => {
-    if (!visible) {
+    if (!open) {
       setHideImportedTables(true);
       setTablePrefixKeyword('');
       setActiveScopeLabel('all');
     }
-  }, [visible]);
+  }, [open]);
 
   useEffect(() => {
     if (!isDemoSource) {

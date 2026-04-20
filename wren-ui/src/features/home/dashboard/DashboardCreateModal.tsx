@@ -30,7 +30,7 @@ export const DashboardCreateModal = (props: {
   return (
     <Modal
       title={title}
-      visible={open}
+      open={open}
       onCancel={onCancel}
       onOk={() => void onSubmit()}
       confirmLoading={confirmLoading}

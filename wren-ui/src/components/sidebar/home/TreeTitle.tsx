@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import styled from 'styled-components';
-import { Dropdown, Menu } from 'antd';
+import type { MenuProps } from 'antd';
+import { Dropdown } from 'antd';
 import EditOutlined from '@ant-design/icons/EditOutlined';
 import MoreOutlined from '@ant-design/icons/MoreOutlined';
 import LabelTitle from '@/components/sidebar/LabelTitle';
@@ -11,12 +11,6 @@ const MENU_ITEM_KEYS = {
   RENAME: 'rename',
   DELETE: 'delete',
 };
-
-const StyledMenu = styled(Menu)`
-  a:hover {
-    color: white;
-  }
-`;
 
 interface TreeTitleProps {
   id: string;
@@ -59,34 +53,30 @@ export default function TreeTitle(props: TreeTitleProps) {
         <Dropdown
           trigger={['click']}
           overlayStyle={{ userSelect: 'none', minWidth: 150 }}
-          overlay={
-            <StyledMenu
-              items={[
-                {
-                  label: (
-                    <>
-                      <EditOutlined className="mr-2" />
-                      Rename
-                    </>
-                  ),
-                  key: MENU_ITEM_KEYS.RENAME,
-                  onClick: ({ domEvent }) => {
-                    domEvent.stopPropagation();
-                    setIsEditing(true);
-                  },
+          menu={{
+            items: [
+              {
+                label: (
+                  <>
+                    <EditOutlined className="mr-2" />
+                    Rename
+                  </>
+                ),
+                key: MENU_ITEM_KEYS.RENAME,
+                onClick: ({ domEvent }) => {
+                  domEvent.stopPropagation();
+                  setIsEditing(true);
                 },
-                {
-                  label: (
-                    <DeleteThreadModal onConfirm={() => onDeleteData(id)} />
-                  ),
-                  key: MENU_ITEM_KEYS.DELETE,
-                  onClick: ({ domEvent }) => {
-                    domEvent.stopPropagation();
-                  },
+              },
+              {
+                label: <DeleteThreadModal onConfirm={() => onDeleteData(id)} />,
+                key: MENU_ITEM_KEYS.DELETE,
+                onClick: ({ domEvent }) => {
+                  domEvent.stopPropagation();
                 },
-              ]}
-            />
-          }
+              },
+            ] satisfies MenuProps['items'],
+          }}
         >
           <MoreOutlined onClick={(event) => event.stopPropagation()} />
         </Dropdown>

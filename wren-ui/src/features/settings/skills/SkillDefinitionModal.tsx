@@ -42,7 +42,7 @@ export default function SkillDefinitionModal({
   return (
     <Modal
       title={editingDefinition ? '编辑技能' : '添加技能'}
-      visible={open}
+      open={open}
       onCancel={onCancel}
       onOk={onSubmit}
       confirmLoading={confirmLoading}

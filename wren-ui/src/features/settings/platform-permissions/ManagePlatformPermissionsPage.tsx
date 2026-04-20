@@ -8,7 +8,6 @@ import {
   Dropdown,
   Empty,
   Input,
-  Menu,
   Skeleton,
   Space,
   Switch,
@@ -835,9 +834,7 @@ export default function ManagePlatformPermissionsPage() {
                           </div>
                           <Dropdown
                             trigger={['click']}
-                            overlay={
-                              <Menu items={buildSidebarRoleMenuItems(role)} />
-                            }
+                            menu={{ items: buildSidebarRoleMenuItems(role) }}
                           >
                             <Button
                               type="text"
@@ -1019,7 +1016,7 @@ export default function ManagePlatformPermissionsPage() {
                   <Space size={[8, 8]} wrap>
                     <Dropdown
                       trigger={['click']}
-                      overlay={<Menu items={moduleOperationItems} />}
+                      menu={{ items: moduleOperationItems }}
                     >
                       <Button
                         icon={<MoreOutlined />}
@@ -1101,42 +1098,40 @@ export default function ManagePlatformPermissionsPage() {
                             extra={
                               <Dropdown
                                 trigger={['click']}
-                                overlay={
-                                  <Menu
-                                    items={[
-                                      {
-                                        key: 'select',
-                                        label: '全选',
-                                        disabled: !canSubmitRole,
-                                        onClick: () =>
-                                          mutatePermissionSelection(
-                                            groupPermissionNames,
-                                            'select',
-                                          ),
-                                      },
-                                      {
-                                        key: 'clear',
-                                        label: '清空',
-                                        disabled: !canSubmitRole,
-                                        onClick: () =>
-                                          mutatePermissionSelection(
-                                            groupPermissionNames,
-                                            'clear',
-                                          ),
-                                      },
-                                      {
-                                        key: 'invert',
-                                        label: '反选',
-                                        disabled: !canSubmitRole,
-                                        onClick: () =>
-                                          mutatePermissionSelection(
-                                            groupPermissionNames,
-                                            'invert',
-                                          ),
-                                      },
-                                    ]}
-                                  />
-                                }
+                                menu={{
+                                  items: [
+                                    {
+                                      key: 'select',
+                                      label: '全选',
+                                      disabled: !canSubmitRole,
+                                      onClick: () =>
+                                        mutatePermissionSelection(
+                                          groupPermissionNames,
+                                          'select',
+                                        ),
+                                    },
+                                    {
+                                      key: 'clear',
+                                      label: '清空',
+                                      disabled: !canSubmitRole,
+                                      onClick: () =>
+                                        mutatePermissionSelection(
+                                          groupPermissionNames,
+                                          'clear',
+                                        ),
+                                    },
+                                    {
+                                      key: 'invert',
+                                      label: '反选',
+                                      disabled: !canSubmitRole,
+                                      onClick: () =>
+                                        mutatePermissionSelection(
+                                          groupPermissionNames,
+                                          'invert',
+                                        ),
+                                    },
+                                  ],
+                                }}
                               >
                                 <Button
                                   type="text"

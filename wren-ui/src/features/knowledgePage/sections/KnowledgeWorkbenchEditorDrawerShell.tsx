@@ -33,7 +33,7 @@ export default function KnowledgeWorkbenchEditorDrawerShell({
     <Drawer
       destroyOnClose={false}
       onClose={() => void onClose()}
-      visible={open}
+      open={open}
       width={WORKBENCH_EDITOR_DRAWER_WIDTH}
       closable={false}
       title={null}

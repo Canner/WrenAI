@@ -40,7 +40,7 @@ export default function ConnectorSecretRotationModal({
   return (
     <Modal
       title="批量轮换密钥"
-      visible={open}
+      open={open}
       onCancel={onClose}
       destroyOnClose
       footer={[

@@ -1,15 +1,15 @@
 import { useState } from 'react';
 
 export default function useDropdown() {
-  const [visible, setVisible] = useState<boolean>(false);
+  const [open, setOpen] = useState<boolean>(false);
 
-  const onVisibleChange = (visible: boolean) => setVisible(visible);
+  const onOpenChange = (nextOpen: boolean) => setOpen(nextOpen);
 
-  const onCloseDropdownMenu = () => setVisible(false);
+  const onCloseDropdownMenu = () => setOpen(false);
 
   return {
-    visible,
-    onVisibleChange,
+    open,
+    onOpenChange,
     onCloseDropdownMenu,
   };
 }

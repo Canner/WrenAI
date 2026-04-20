@@ -102,7 +102,7 @@ export default function ChartAnswerPinModal({
   return (
     <Modal
       title="固定到看板"
-      visible={open}
+      open={open}
       width={640}
       onCancel={onCancel}
       confirmLoading={pinSubmitting}

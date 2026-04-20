@@ -108,7 +108,7 @@ export default function ImportConnectionSQLModal(props: Props) {
       onOk={submit}
       okText="转换"
       cancelText="取消"
-      visible={visible}
+      open={visible}
       width={600}
       cancelButtonProps={{ disabled: loading }}
       afterClose={() => reset()}
@@ -125,9 +125,7 @@ export default function ImportConnectionSQLModal(props: Props) {
           ]}
         >
           <SQLEditor
-            toolbar={
-              <Toolbar connectionType={defaultValue?.connectionType} />
-            }
+            toolbar={<Toolbar connectionType={defaultValue?.connectionType} />}
             autoFocus
           />
         </Form.Item>

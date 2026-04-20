@@ -823,7 +823,7 @@ export default function ManagePlatformWorkspacesPage() {
       )}
 
       <Drawer
-        visible={Boolean(detail && selectedWorkspaceId)}
+        open={Boolean(detail && selectedWorkspaceId)}
         width={980}
         title={`${detail?.workspace.name || '工作空间'} · 成员管理`}
         onClose={() => {
@@ -898,7 +898,7 @@ export default function ManagePlatformWorkspacesPage() {
       </Drawer>
 
       <Modal
-        visible={createModalOpen}
+        open={createModalOpen}
         title="新建工作空间"
         destroyOnClose
         onCancel={() => setCreateModalOpen(false)}

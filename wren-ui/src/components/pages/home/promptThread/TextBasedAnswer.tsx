@@ -197,7 +197,7 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
     <AdjustAnswerDropdown
       onMoreClick={onMoreClick}
       data={adjustAnswerDropdownData}
-      onDropdownVisibleChange={adjustResultsDropdown.onVisibleChange}
+      onOpenChange={adjustResultsDropdown.onOpenChange}
     >
       <Button
         className="px-0"
@@ -209,7 +209,7 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
         调整回答
         <CaretDownOutlined
           className="ml-1"
-          rotate={adjustResultsDropdown.visible ? 180 : 0}
+          rotate={adjustResultsDropdown.open ? 180 : 0}
         />
       </Button>
     </AdjustAnswerDropdown>
@@ -220,8 +220,10 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
     '回答生成失败，请稍后重试。',
   );
   const answerShortMessage =
-    resolveAbortSafeErrorMessage(error?.shortMessage, answerErrorMessage || '') ||
-    '回答生成失败';
+    resolveAbortSafeErrorMessage(
+      error?.shortMessage,
+      answerErrorMessage || '',
+    ) || '回答生成失败';
 
   if (error && answerErrorMessage) {
     return (

@@ -65,7 +65,7 @@ export default function InstructionDrawer(props: Props) {
       destroyOnClose
       onClose={onClose}
       title="分析规则详情"
-      visible={visible}
+      open={visible}
       width={760}
     >
       <Section>

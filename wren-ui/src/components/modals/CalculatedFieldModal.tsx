@@ -162,7 +162,7 @@ export default function AddCalculatedFieldModal(props: Props) {
     <Modal
       title={`${isEditMode ? '编辑' : '新增'}计算字段`}
       width={750}
-      visible={visible}
+      open={visible}
       onCancel={onClose}
       confirmLoading={loading}
       maskClosable={false}

@@ -44,7 +44,7 @@ function KnowledgeBaseModal({
 }: KnowledgeBaseModalProps) {
   return (
     <ReferenceModal
-      visible={visible}
+      open={visible}
       title={null}
       footer={null}
       closable={false}

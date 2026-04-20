@@ -126,7 +126,7 @@ export default function AdjustReasoningStepsModal(props: Props) {
     <Modal
       title="调整步骤"
       width={640}
-      visible={visible}
+      open={visible}
       okText="重新生成回答"
       cancelText="取消"
       onOk={submit}

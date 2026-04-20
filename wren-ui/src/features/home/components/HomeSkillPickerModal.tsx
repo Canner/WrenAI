@@ -42,7 +42,7 @@ export default function HomeSkillPickerModal({
 }: HomeSkillPickerModalProps) {
   return (
     <Modal
-      visible={open}
+      open={open}
       title="选择本次对话要启用的技能"
       okText="确认技能范围"
       cancelText="取消"

@@ -251,8 +251,8 @@ function SidebarWorkspaceSwitchCard() {
       <Popover
         trigger="click"
         placement="topLeft"
-        visible={disabled ? false : open}
-        onVisibleChange={(nextOpen) => {
+        open={disabled ? false : open}
+        onOpenChange={(nextOpen) => {
           if (!disabled) {
             setOpen(nextOpen);
           }
@@ -325,6 +325,19 @@ export default function DolaShellFooterPanel({
   accountAvatar,
   accountDisplayName,
 }: Props) {
+  const accountMenuItems: MenuProps['items'] = [
+    {
+      key: 'settings',
+      icon: <SettingOutlined />,
+      label: '系统设置',
+    },
+    {
+      key: 'logout',
+      icon: <LogoutOutlined />,
+      label: loggingOut ? '退出中…' : '退出登录',
+    },
+  ];
+
   return (
     <Footer>
       <FooterControlCluster $collapsed={collapsed}>
@@ -340,16 +353,10 @@ export default function DolaShellFooterPanel({
         {!collapsed && hasRuntimeScope ? <SidebarWorkspaceSwitchCard /> : null}
 
         <Dropdown
-          overlay={
-            <Menu onClick={onAccountMenuClick}>
-              <Menu.Item key="settings" icon={<SettingOutlined />}>
-                系统设置
-              </Menu.Item>
-              <Menu.Item key="logout" icon={<LogoutOutlined />}>
-                {loggingOut ? '退出中…' : '退出登录'}
-              </Menu.Item>
-            </Menu>
-          }
+          menu={{
+            items: accountMenuItems,
+            onClick: onAccountMenuClick,
+          }}
           trigger={['click']}
           placement="topLeft"
         >

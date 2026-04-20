@@ -4,7 +4,6 @@ import {
   Dropdown,
   Empty,
   Input,
-  Menu,
   Space,
   Switch,
   Tabs,
@@ -335,30 +334,26 @@ export default function PermissionsRoleCatalogEditor({
               <Space size={8} wrap>
                 <Dropdown
                   trigger={['click']}
-                  overlay={
-                    <Menu>
-                      <Menu.Item
-                        key="select-module"
-                        disabled={
+                  menu={{
+                    items: [
+                      {
+                        key: 'select-module',
+                        label: '全选本模块',
+                        disabled:
                           permissionReadOnly ||
-                          activeModulePermissionNames.length === 0
-                        }
-                        onClick={() => onMutateModuleSelection(true)}
-                      >
-                        全选本模块
-                      </Menu.Item>
-                      <Menu.Item
-                        key="clear-module"
-                        disabled={
+                          activeModulePermissionNames.length === 0,
+                        onClick: () => onMutateModuleSelection(true),
+                      },
+                      {
+                        key: 'clear-module',
+                        label: '清空本模块',
+                        disabled:
                           permissionReadOnly ||
-                          activeModulePermissionNames.length === 0
-                        }
-                        onClick={() => onMutateModuleSelection(false)}
-                      >
-                        清空本模块
-                      </Menu.Item>
-                    </Menu>
-                  }
+                          activeModulePermissionNames.length === 0,
+                        onClick: () => onMutateModuleSelection(false),
+                      },
+                    ],
+                  }}
                 >
                   <Button
                     icon={<MoreOutlined />}

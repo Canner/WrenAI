@@ -19,7 +19,7 @@ export default function PermissionsRoleCatalogUnsavedModal({
 }: Props) {
   return (
     <Modal
-      visible={open}
+      open={open}
       title="有未保存改动"
       onCancel={onCancel}
       footer={[
