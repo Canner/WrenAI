@@ -1,13 +1,9 @@
 /* eslint-disable @typescript-eslint/no-var-requires */
-const path = require('path');
 const withLess = require('next-with-less');
 const withBundleAnalyzer = require('@next/bundle-analyzer')({
   enabled: process.env.ANALYZE === 'true',
 });
 
-const resolveAlias = {
-  antd$: path.resolve(__dirname, 'src/import/antd'),
-};
 const distDir = process.env.NEXT_DIST_DIR || './.next';
 
 /** @type {import('next').NextConfig} */
@@ -25,13 +21,6 @@ const nextConfig = withLess({
   },
   lessLoaderOptions: {
     additionalData: `@import "@/styles/antd-variables.less";`,
-  },
-  webpack: (config) => {
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      ...resolveAlias,
-    };
-    return config;
   },
   // routes redirect
   async redirects() {
