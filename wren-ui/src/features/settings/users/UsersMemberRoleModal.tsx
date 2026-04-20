@@ -1,5 +1,5 @@
 import { Alert, Form, Modal, Select, Typography } from 'antd';
-import { ROLE_OPTIONS } from '@/features/settings/workspaceGovernanceShared';
+import { WORKSPACE_MEMBER_ROLE_OPTIONS } from '@/utils/workspaceGovernance';
 import {
   getRoleAdjustmentDisabledReason,
   isRoleProtectedFromAdjustment,
@@ -54,7 +54,7 @@ export default function UsersMemberRoleModal({
         });
         onClose();
       }}
-      okText="保存角色"
+      okText="保存权限"
       okButtonProps={{
         disabled:
           !roleTargetMember ||
@@ -85,10 +85,10 @@ export default function UsersMemberRoleModal({
               style={{ marginBottom: 12 }}
             />
           ) : null}
-          <Form.Item label="工作空间角色" style={{ marginBottom: 0 }}>
+          <Form.Item label="工作空间权限" style={{ marginBottom: 0 }}>
             <Select
               value={nextRoleKey}
-              options={ROLE_OPTIONS}
+              options={[...WORKSPACE_MEMBER_ROLE_OPTIONS]}
               disabled={!canManageMembers || Boolean(roleChangeDisabledReason)}
               onChange={setNextRoleKey}
             />

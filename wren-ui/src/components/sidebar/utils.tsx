@@ -1,6 +1,6 @@
 import styled from 'styled-components';
 import { Button } from 'antd';
-import { DataNode } from 'antd/lib/tree';
+import type { TreeDataNode } from 'antd';
 import { getColumnTypeIcon } from '@/utils/columnType';
 import { PrimaryKeyIcon, RelationshipIcon } from '@/utils/icons';
 import { ComposeDiagramField } from '@/utils/data';
@@ -10,7 +10,7 @@ import { getJoinTypeText } from '@/utils/data';
 import { NODE_TYPE } from '@/utils/enum';
 import { getNodeTypeIcon } from '@/utils/nodeType';
 
-type TreeNode = DataNode;
+type TreeNode = TreeDataNode;
 
 const ColumnNode = (props: {
   title: string;
@@ -94,7 +94,7 @@ interface GroupSet {
   emptyLabel?: string;
   quotaUsage?: number;
   appendSlot?: React.ReactNode;
-  children?: DataNode[];
+  children?: TreeDataNode[];
   actions: ActionType[];
 }
 

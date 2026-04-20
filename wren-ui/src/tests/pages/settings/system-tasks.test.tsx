@@ -1,6 +1,11 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import SettingsSystemTasksPage from '../../../pages/settings/system-tasks';
+import {
+  buildSystemTaskActionUrl,
+  buildSystemTasksOverviewRequestKey,
+  buildSystemTasksOverviewUrl,
+} from '@/features/settings/systemTasks/ManageSystemTasksPage';
 
 const mockUseProtectedRuntimeScopePage = jest.fn();
 const mockUseRuntimeScopeNavigation = jest.fn();
@@ -86,5 +91,46 @@ describe('settings/system-tasks page', () => {
     expect(markup).toContain('查看当前 Workspace 的调度任务');
     expect(markup).toContain('任务列表');
     expect(markup).toContain('最近运行');
+  });
+
+  it('builds the scope-aware request key only when runtime scope exists', () => {
+    expect(buildSystemTasksOverviewUrl()).toBe('/api/v1/workspace/schedules');
+    expect(
+      buildSystemTasksOverviewUrl({
+        usePlatformRoute: true,
+      }),
+    ).toBe('/api/v1/platform/system-tasks');
+    expect(
+      buildSystemTasksOverviewRequestKey({
+        hasRuntimeScope: true,
+      }),
+    ).toBe('/api/v1/workspace/schedules');
+    expect(
+      buildSystemTasksOverviewRequestKey({
+        hasRuntimeScope: true,
+        usePlatformRoute: true,
+      }),
+    ).toBe('/api/v1/platform/system-tasks');
+    expect(
+      buildSystemTasksOverviewRequestKey({
+        hasRuntimeScope: false,
+      }),
+    ).toBeNull();
+  });
+
+  it('builds platform-aware mutation urls for system task actions', () => {
+    expect(
+      buildSystemTaskActionUrl({
+        jobId: 'job-1',
+        action: 'update',
+      }),
+    ).toBe('/api/v1/workspace/schedules/job-1');
+    expect(
+      buildSystemTaskActionUrl({
+        jobId: 'job-1',
+        action: 'run',
+        usePlatformRoute: true,
+      }),
+    ).toBe('/api/v1/platform/system-tasks/job-1/run');
   });
 });

@@ -7,7 +7,7 @@ import {
   Descriptions,
   Form,
   Input,
-  List,
+  Popover,
   Row,
   Col,
   Space,
@@ -15,8 +15,12 @@ import {
   Typography,
   message,
 } from 'antd';
+import CheckCircleFilled from '@ant-design/icons/CheckCircleFilled';
+import InfoCircleOutlined from '@ant-design/icons/InfoCircleOutlined';
+import KeyOutlined from '@ant-design/icons/KeyOutlined';
 import LockOutlined from '@ant-design/icons/LockOutlined';
-import UserOutlined from '@ant-design/icons/UserOutlined';
+import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
+import SafetyCertificateOutlined from '@ant-design/icons/SafetyCertificateOutlined';
 import ConsoleShellLayout from '@/components/reference/ConsoleShellLayout';
 import { buildNovaSettingsNavItems } from '@/components/reference/novaShellNavigation';
 import { buildRuntimeScopeUrl } from '@/runtime/client/runtimeScope';
@@ -32,9 +36,26 @@ import { resolvePlatformManagementFromAuthSession } from '@/features/settings/se
 const { Text, Title } = Typography;
 
 const SECURITY_TIPS = [
-  '密码建议包含大小写字母、数字与特殊字符，避免与其它系统重复。',
-  '如果当前账号通过企业 SSO 登录，请优先在统一身份系统内更新凭据。',
-  '完成修改后，如浏览器长期保持登录，建议重新打开敏感管理页以刷新安全上下文。',
+  {
+    key: 'password',
+    title: '设置独立密码',
+    description: '密码建议包含大小写字母、数字与特殊字符，避免与其它系统重复。',
+    Icon: KeyOutlined,
+  },
+  {
+    key: 'sso',
+    title: 'SSO 场景优先走统一身份系统',
+    description:
+      '如果当前账号通过企业 SSO 登录，请优先在统一身份系统内更新凭据。',
+    Icon: SafetyCertificateOutlined,
+  },
+  {
+    key: 'context',
+    title: '修改后刷新敏感上下文',
+    description:
+      '完成修改后，如浏览器长期保持登录，建议重新打开敏感管理页以刷新安全上下文。',
+    Icon: ReloadOutlined,
+  },
 ];
 
 const toDisplayRoleLabel = (roleKey: string) => {
@@ -48,6 +69,16 @@ const toDisplayRoleLabel = (roleKey: string) => {
       return '工作空间成员';
     case 'platform_admin':
       return '平台管理员';
+    case 'platform_iam_admin':
+      return '平台权限管理员';
+    case 'platform_workspace_admin':
+      return '平台空间管理员';
+    case 'platform_auditor':
+      return '平台审计员';
+    case 'support_readonly':
+      return '支持只读';
+    case 'support_impersonator':
+      return '支持代理员';
     default:
       return roleKey;
   }
@@ -96,6 +127,113 @@ export default function ManageProfilePage() {
 
   const platformRoleKeys = authActor?.platformRoleKeys || [];
   const impersonation = authSession.data?.impersonation;
+  const passwordRuleChecks = [
+    {
+      key: 'length',
+      label: '至少 8 位',
+      satisfied: passwordForm.nextPassword.length >= 8,
+    },
+    {
+      key: 'composition',
+      label: '包含字母、数字与特殊字符',
+      satisfied:
+        /[A-Za-z]/.test(passwordForm.nextPassword) &&
+        /\d/.test(passwordForm.nextPassword) &&
+        /[^A-Za-z0-9]/.test(passwordForm.nextPassword),
+    },
+    {
+      key: 'distinct',
+      label: '与当前密码保持不同',
+      satisfied:
+        Boolean(passwordForm.nextPassword) &&
+        passwordForm.nextPassword !== passwordForm.currentPassword,
+    },
+  ];
+  const satisfiedPasswordRuleCount = passwordRuleChecks.filter(
+    (rule) => rule.satisfied,
+  ).length;
+  const remainingPasswordRuleCount =
+    passwordRuleChecks.length - satisfiedPasswordRuleCount;
+  const passwordStrengthMeta = !passwordForm.nextPassword
+    ? {
+        label: '未检查',
+        color: 'var(--nova-text-secondary)',
+      }
+    : satisfiedPasswordRuleCount === passwordRuleChecks.length
+      ? { label: '强', color: 'var(--ant-color-success)' }
+      : satisfiedPasswordRuleCount >= 2
+        ? { label: '中', color: 'var(--ant-color-warning)' }
+        : { label: '弱', color: 'var(--ant-color-error)' };
+  const passwordInputFeedback = !passwordForm.nextPassword
+    ? null
+    : remainingPasswordRuleCount === 0
+      ? {
+          Icon: CheckCircleFilled,
+          label: `基础强度：${passwordStrengthMeta.label}，可以继续确认密码。`,
+          color: 'var(--ant-color-success)',
+        }
+      : {
+          Icon: InfoCircleOutlined,
+          label: `基础强度：${passwordStrengthMeta.label}，还需满足 ${remainingPasswordRuleCount} 项规则。`,
+          color: passwordStrengthMeta.color,
+        };
+  const confirmPasswordFeedback = !passwordForm.confirmPassword
+    ? null
+    : !passwordForm.nextPassword
+      ? {
+          Icon: InfoCircleOutlined,
+          label: '请先输入新密码，再完成确认。',
+          color: 'var(--nova-text-secondary)',
+        }
+      : passwordForm.confirmPassword !== passwordForm.nextPassword
+        ? {
+            Icon: InfoCircleOutlined,
+            label: '与新密码不一致，请重新确认。',
+            color: 'var(--ant-color-error)',
+          }
+        : {
+            Icon: CheckCircleFilled,
+            label: '两次输入一致，可直接保存。',
+            color: 'var(--ant-color-success)',
+          };
+  const passwordRulesPopoverContent = (
+    <Space direction="vertical" size={8} style={{ maxWidth: 260 }}>
+      <Text strong style={{ fontSize: 13 }}>
+        密码规则
+      </Text>
+      <Space direction="vertical" size={6} style={{ width: '100%' }}>
+        {passwordRuleChecks.map((rule) => (
+          <Space key={rule.key} size={6} align="start">
+            {rule.satisfied ? (
+              <CheckCircleFilled
+                style={{
+                  color: 'var(--ant-color-success)',
+                  marginTop: 3,
+                }}
+              />
+            ) : (
+              <InfoCircleOutlined
+                style={{
+                  color: 'var(--nova-text-secondary)',
+                  marginTop: 3,
+                }}
+              />
+            )}
+            <Text
+              style={{
+                fontSize: 12,
+                color: rule.satisfied
+                  ? 'var(--nova-text-primary)'
+                  : 'var(--nova-text-secondary)',
+              }}
+            >
+              {rule.label}
+            </Text>
+          </Space>
+        ))}
+      </Space>
+    </Space>
+  );
   const defaultWorkspaceName =
     getReferenceDisplayWorkspaceName(
       authSession.data?.workspaces?.find(
@@ -215,6 +353,9 @@ export default function ManageProfilePage() {
       hideHistorySection
       hideHeader
       contentBorderless
+      hideSidebarBranding
+      hideSidebarFooterPanel
+      hideSidebarCollapseToggle
       sidebarBackAction={{
         label: '返回主菜单',
         onClick: () => runtimeScopeNavigation.pushWorkspace(Path.Home),
@@ -260,14 +401,7 @@ export default function ManageProfilePage() {
             />
           ) : null}
 
-          <Card
-            title={
-              <Space size={8}>
-                <UserOutlined />
-                <span>基本资料</span>
-              </Space>
-            }
-          >
+          <Card>
             <Row gutter={[24, 24]} align="middle">
               <Col xs={24} xl={10}>
                 <Space align="start" size={18} style={{ width: '100%' }}>
@@ -312,13 +446,6 @@ export default function ManageProfilePage() {
                         登录账号 ·{' '}
                         {getLoginAccountLabel(authSession.data?.user?.email)}
                       </Text>
-                    </Space>
-
-                    <Space size={[8, 8]} wrap>
-                      <Tag color={impersonation?.active ? 'gold' : 'default'}>
-                        {impersonation?.active ? '代理登录中' : '标准会话'}
-                      </Tag>
-                      <Tag color="blue">当前空间 · {currentWorkspaceName}</Tag>
                     </Space>
                   </Space>
                 </Space>
@@ -374,81 +501,250 @@ export default function ManageProfilePage() {
               <Space size={8}>
                 <LockOutlined />
                 <span>修改密码</span>
+                <Popover
+                  trigger={['hover', 'click']}
+                  placement="rightTop"
+                  content={passwordRulesPopoverContent}
+                >
+                  <Button
+                    aria-label="查看密码规则"
+                    icon={<InfoCircleOutlined />}
+                    size="small"
+                    type="text"
+                    style={{
+                      width: 28,
+                      height: 28,
+                      padding: 0,
+                      borderRadius: 999,
+                      color: 'var(--nova-text-secondary)',
+                      background: 'var(--ant-color-fill-quaternary)',
+                      border: '1px solid var(--ant-color-border-secondary)',
+                    }}
+                  />
+                </Popover>
               </Space>
             }
           >
-            <Row gutter={[16, 16]}>
-              <Col xs={24} lg={14}>
-                <Form layout="vertical">
-                  <Form.Item label="旧密码">
-                    <Input.Password
-                      size="large"
-                      value={passwordForm.currentPassword}
-                      onChange={(event) =>
-                        updatePasswordField(
-                          'currentPassword',
-                          event.target.value,
-                        )
+            <Row gutter={[32, 24]} style={{ alignItems: 'stretch' }}>
+              <Col xs={24} xl={15} style={{ display: 'flex' }}>
+                <div style={{ maxWidth: 760, width: '100%' }}>
+                  <Form layout="vertical">
+                    <Form.Item label="旧密码">
+                      <Input.Password
+                        size="large"
+                        value={passwordForm.currentPassword}
+                        onChange={(event) =>
+                          updatePasswordField(
+                            'currentPassword',
+                            event.target.value,
+                          )
+                        }
+                        placeholder="输入当前密码"
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      label="新密码"
+                      extra={
+                        passwordInputFeedback ? (
+                          <Space size={6} style={{ marginTop: 6 }}>
+                            <passwordInputFeedback.Icon
+                              style={{ color: passwordInputFeedback.color }}
+                            />
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                color: passwordInputFeedback.color,
+                              }}
+                            >
+                              {passwordInputFeedback.label}
+                            </Text>
+                          </Space>
+                        ) : null
                       }
-                      placeholder="输入当前密码"
-                    />
-                  </Form.Item>
-                  <Form.Item label="新密码">
-                    <Input.Password
-                      size="large"
-                      value={passwordForm.nextPassword}
-                      onChange={(event) =>
-                        updatePasswordField('nextPassword', event.target.value)
-                      }
-                      placeholder="至少 8 位"
-                    />
-                  </Form.Item>
-                  <Form.Item label="确认新密码" style={{ marginBottom: 16 }}>
-                    <Input.Password
-                      size="large"
-                      value={passwordForm.confirmPassword}
-                      onChange={(event) =>
-                        updatePasswordField(
-                          'confirmPassword',
-                          event.target.value,
-                        )
-                      }
-                      placeholder="再次输入新密码"
-                      onPressEnter={() => void submitPasswordChange()}
-                    />
-                  </Form.Item>
-                  <Space size={10}>
-                    <Button
-                      type="primary"
-                      loading={savingPassword}
-                      onClick={() => void submitPasswordChange()}
                     >
-                      保存密码
-                    </Button>
-                    <Button
-                      onClick={resetPasswordForm}
-                      disabled={savingPassword}
-                    >
-                      重置
-                    </Button>
-                  </Space>
-                </Form>
+                      <Input.Password
+                        size="large"
+                        value={passwordForm.nextPassword}
+                        onChange={(event) =>
+                          updatePasswordField(
+                            'nextPassword',
+                            event.target.value,
+                          )
+                        }
+                        placeholder="至少 8 位"
+                      />
+                    </Form.Item>
+                    <Form.Item label="确认新密码" style={{ marginBottom: 16 }}>
+                      <Space
+                        direction="vertical"
+                        size={8}
+                        style={{ width: '100%' }}
+                      >
+                        <Input.Password
+                          size="large"
+                          status={
+                            passwordForm.confirmPassword &&
+                            passwordForm.nextPassword &&
+                            passwordForm.confirmPassword !==
+                              passwordForm.nextPassword
+                              ? 'error'
+                              : undefined
+                          }
+                          value={passwordForm.confirmPassword}
+                          onChange={(event) =>
+                            updatePasswordField(
+                              'confirmPassword',
+                              event.target.value,
+                            )
+                          }
+                          placeholder="再次输入新密码"
+                          onPressEnter={() => void submitPasswordChange()}
+                        />
+                        {confirmPasswordFeedback ? (
+                          <Space size={6}>
+                            <confirmPasswordFeedback.Icon
+                              style={{ color: confirmPasswordFeedback.color }}
+                            />
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                color: confirmPasswordFeedback.color,
+                              }}
+                            >
+                              {confirmPasswordFeedback.label}
+                            </Text>
+                          </Space>
+                        ) : null}
+                      </Space>
+                    </Form.Item>
+                    <Space size={12}>
+                      <Button
+                        type="primary"
+                        size="large"
+                        loading={savingPassword}
+                        onClick={() => void submitPasswordChange()}
+                        style={{ minWidth: 120 }}
+                      >
+                        保存密码
+                      </Button>
+                      <Button
+                        size="large"
+                        onClick={resetPasswordForm}
+                        disabled={savingPassword}
+                        style={{ minWidth: 88 }}
+                      >
+                        重置
+                      </Button>
+                    </Space>
+                  </Form>
+                </div>
               </Col>
 
-              <Col xs={24} lg={10}>
-                <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                  <Alert
-                    type="info"
-                    showIcon
-                    message="安全建议"
-                    description="保持凭据唯一、可恢复且能快速审计，是 Nova 管理后台的默认安全基线。"
-                  />
-                  <List
-                    bordered
-                    dataSource={SECURITY_TIPS}
-                    renderItem={(item) => <List.Item>{item}</List.Item>}
-                  />
-                </Space>
+              <Col xs={24} xl={9} style={{ display: 'flex' }}>
+                <div
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    border: '1px solid var(--ant-color-border-secondary)',
+                    borderRadius: 18,
+                    padding: 18,
+                    background:
+                      'linear-gradient(180deg, rgba(117, 89, 255, 0.03), rgba(255, 255, 255, 0.98))',
+                    display: 'flex',
+                    flexDirection: 'column',
+                  }}
+                >
+                  <Space
+                    direction="vertical"
+                    size={16}
+                    style={{ width: '100%' }}
+                  >
+                    <Space align="start" size={10}>
+                      <div
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: 12,
+                          background: 'rgba(87, 97, 255, 0.10)',
+                          color: '#5669FF',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <SafetyCertificateOutlined style={{ fontSize: 18 }} />
+                      </div>
+                      <Space direction="vertical" size={2}>
+                        <Text strong style={{ fontSize: 18 }}>
+                          安全建议
+                        </Text>
+                        <Text
+                          type="secondary"
+                          style={{ fontSize: 13, lineHeight: 1.6 }}
+                        >
+                          保持凭据唯一、可恢复且能快速审计，是 Nova
+                          管理后台的默认安全基线。
+                        </Text>
+                      </Space>
+                    </Space>
+
+                    <div style={{ width: '100%' }}>
+                      <div
+                        style={{
+                          borderTop:
+                            '1px solid var(--ant-color-border-secondary)',
+                        }}
+                      />
+                      {SECURITY_TIPS.map(
+                        ({ key, title, description, Icon }, index) => (
+                          <div
+                            key={key}
+                            style={{
+                              display: 'flex',
+                              gap: 10,
+                              padding: '12px 0',
+                              borderTop:
+                                index > 0
+                                  ? '1px solid var(--ant-color-border-secondary)'
+                                  : undefined,
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: 24,
+                                height: 24,
+                                borderRadius: 8,
+                                background: 'var(--ant-color-bg-container)',
+                                border:
+                                  '1px solid var(--ant-color-border-secondary)',
+                                color: '#5669FF',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                                marginTop: 2,
+                              }}
+                            >
+                              <Icon style={{ fontSize: 14 }} />
+                            </div>
+                            <Space direction="vertical" size={2}>
+                              <Text strong style={{ fontSize: 13 }}>
+                                {title}
+                              </Text>
+                              <Text
+                                type="secondary"
+                                style={{ fontSize: 12, lineHeight: 1.6 }}
+                              >
+                                {description}
+                              </Text>
+                            </Space>
+                          </div>
+                        ),
+                      )}
+                    </div>
+                  </Space>
+                </div>
               </Col>
             </Row>
           </Card>

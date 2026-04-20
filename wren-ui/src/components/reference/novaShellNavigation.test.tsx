@@ -71,11 +71,6 @@ describe('novaShellNavigation', () => {
         sectionLabel: '组织与安全',
       },
       {
-        key: 'settingsAudit',
-        label: '审计日志',
-        sectionLabel: '组织与安全',
-      },
-      {
         key: 'settingsWorkspace',
         label: '工作空间管理',
         sectionLabel: '工作空间',
@@ -91,14 +86,19 @@ describe('novaShellNavigation', () => {
         sectionLabel: '业务与配置',
       },
       {
-        key: 'settingsDiagnostics',
-        label: '调用诊断',
-        sectionLabel: '业务与配置',
-      },
-      {
         key: 'settingsSystemTasks',
         label: '系统任务',
         sectionLabel: '业务与配置',
+      },
+      {
+        key: 'settingsAudit',
+        label: '审计日志',
+        sectionLabel: '观测与运维',
+      },
+      {
+        key: 'settingsDiagnostics',
+        label: '调用诊断',
+        sectionLabel: '观测与运维',
       },
     ]);
   });
@@ -110,7 +110,7 @@ describe('novaShellNavigation', () => {
       buildNovaShellNavItems({
         onNavigate,
       }).map((item) => item.key),
-    ).toEqual(['home', 'dashboard', 'knowledge']);
+    ).toEqual(['home', 'knowledge', 'dashboard']);
   });
 
   it('keeps knowledge navigation in the primary shell stack below dashboard', () => {

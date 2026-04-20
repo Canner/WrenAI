@@ -100,17 +100,15 @@ describe('settings/access compatibility route', () => {
     });
   });
 
-  it('keeps /settings/access pointing to the dedicated users page', () => {
+  it('keeps /settings/access pointing to the dedicated users page shell', () => {
     const markup = renderPage();
 
     expect(markup).toContain('用户管理');
     expect(markup).toContain('个人资料');
-    expect(markup).toContain('权限管理');
     expect(markup).toContain('审计日志');
     expect(markup).toContain('调用诊断');
     expect(markup).toContain('系统任务');
-    expect(markup).toContain('姓名');
-    expect(markup).toContain('账号');
-    expect(markup).toContain('角色');
+    expect(markup).toContain('当前账号没有平台治理权限');
+    expect(markup).toContain('平台用户管理仅对具备平台用户目录权限的角色开放。');
   });
 });

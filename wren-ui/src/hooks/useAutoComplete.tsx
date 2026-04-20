@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { capitalize } from 'lodash';
 import { getNodeTypeIcon } from '@/utils/nodeType';
 import {
@@ -14,6 +14,7 @@ import {
   peekKnowledgeDiagramPayload,
 } from '@/utils/knowledgeDiagramRest';
 import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
+import useRestRequest from './useRestRequest';
 
 type Model = DiagramModel | DiagramView;
 type Field = DiagramModelField | DiagramViewField;
@@ -78,49 +79,45 @@ export const convertCompleter = (
 export type Mention = ReturnType<typeof convertMention>;
 export type Completer = ReturnType<typeof convertCompleter>;
 
+export const buildAutoCompleteRequestKey = ({
+  selector,
+  skip,
+}: {
+  selector: Parameters<typeof buildKnowledgeDiagramUrl>[0];
+  skip?: boolean;
+}) => (skip ? null : buildKnowledgeDiagramUrl(selector));
+
 export default function useAutoComplete<T = Completer>(props: Props<T>) {
   const { includeColumns, skip } = props;
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const requestUrl = useMemo(
     () =>
-      skip ? null : buildKnowledgeDiagramUrl(runtimeScopeNavigation.selector),
+      buildAutoCompleteRequestKey({
+        selector: runtimeScopeNavigation.selector,
+        skip,
+      }),
     [runtimeScopeNavigation.selector, skip],
   );
-  const [data, setData] = useState<DiagramResponse | null>(
-    requestUrl ? peekKnowledgeDiagramPayload({ requestUrl }) : null,
+  const initialData = useMemo(
+    () => (requestUrl ? peekKnowledgeDiagramPayload({ requestUrl }) : null),
+    [requestUrl],
   );
+  const shouldAutoFetch = Boolean(requestUrl && !initialData);
+  const { data, setData } = useRestRequest<DiagramResponse | null>({
+    enabled: Boolean(requestUrl),
+    auto: shouldAutoFetch,
+    initialData,
+    requestKey: requestUrl,
+    request: async () =>
+      loadKnowledgeDiagramPayload({
+        requestUrl: requestUrl as string,
+        useCache: true,
+      }),
+  });
 
   useEffect(() => {
-    if (!requestUrl) {
-      setData(null);
-      return;
-    }
-
-    let cancelled = false;
-    const cached = peekKnowledgeDiagramPayload({ requestUrl });
-    if (cached) {
-      setData(cached);
-    }
-
-    void loadKnowledgeDiagramPayload({
-      requestUrl,
-      useCache: true,
-    })
-      .then((payload) => {
-        if (!cancelled) {
-          setData(payload);
-        }
-      })
-      .catch(() => {
-        if (!cancelled && !cached) {
-          setData(null);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [requestUrl]);
+    setData(initialData);
+  }, [initialData, setData]);
 
   // Defined convertor
   const convertor = (props.convertor || convertCompleter) as Convertor<T>;

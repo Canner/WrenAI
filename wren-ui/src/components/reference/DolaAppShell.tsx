@@ -1,5 +1,6 @@
 import { ReactNode, memo } from 'react';
 import { Divider } from 'antd';
+import styled from 'styled-components';
 import DolaShellFooterPanel from './DolaShellFooterPanel';
 import DolaShellHistoryPane from './DolaShellHistoryPane';
 import DolaShellNavPane, { DolaShellBackAction } from './DolaShellNavPane';
@@ -42,6 +43,12 @@ interface Props {
   onSettingsClick?: () => void;
   hideHistorySection?: boolean;
   sidebarBackAction?: DolaShellBackAction;
+  hideSidebarBranding?: boolean;
+  hideSidebarFooterPanel?: boolean;
+  hideSidebarCollapseToggle?: boolean;
+  flushMainPadding?: boolean;
+  flushBottomPadding?: boolean;
+  stretchContent?: boolean;
   children: ReactNode;
 }
 
@@ -63,6 +70,9 @@ const areDolaAppShellSidebarPropsEqual = (
   previous.searchPlaceholder === next.searchPlaceholder &&
   previous.onSettingsClick === next.onSettingsClick &&
   previous.hideHistorySection === next.hideHistorySection &&
+  previous.hideSidebarBranding === next.hideSidebarBranding &&
+  previous.hideSidebarFooterPanel === next.hideSidebarFooterPanel &&
+  previous.hideSidebarCollapseToggle === next.hideSidebarCollapseToggle &&
   previous.sidebarBackAction?.label === next.sidebarBackAction?.label &&
   previous.sidebarBackAction?.onClick === next.sidebarBackAction?.onClick &&
   areShellNavItemsEqual(previous.navItems, next.navItems) &&
@@ -85,6 +95,9 @@ const DolaAppShellSidebar = memo(function DolaAppShellSidebar({
   onSettingsClick,
   hideHistorySection = false,
   sidebarBackAction,
+  hideSidebarBranding = false,
+  hideSidebarFooterPanel = false,
+  hideSidebarCollapseToggle = false,
 }: SidebarProps) {
   const {
     router,
@@ -129,6 +142,8 @@ const DolaAppShellSidebar = memo(function DolaAppShellSidebar({
         collapsed={collapsed}
         isHomeActive={router.pathname === '/home'}
         sidebarBackAction={sidebarBackAction}
+        hideBranding={hideSidebarBranding}
+        hideCollapseToggle={hideSidebarCollapseToggle}
         onPrimaryAction={onPrimaryAction}
         primaryActionLabel={primaryActionLabel}
         primaryActionIcon={primaryActionIcon}
@@ -165,29 +180,46 @@ const DolaAppShellSidebar = memo(function DolaAppShellSidebar({
         </>
       )}
 
-      <DolaShellFooterPanel
-        collapsed={collapsed}
-        selectedKeys={selectedKeys}
-        footerMenuItems={footerMenuItems}
-        hasRuntimeScope={runtimeScopeNavigation.hasRuntimeScope}
-        onAccountMenuClick={onAccountMenuClick}
-        loggingOut={loggingOut}
-        authLoading={authSession.loading}
-        accountAvatar={accountAvatar}
-        accountDisplayName={accountDisplayName}
-      />
+      {hideSidebarFooterPanel ? null : (
+        <DolaShellFooterPanel
+          collapsed={collapsed}
+          selectedKeys={selectedKeys}
+          footerMenuItems={footerMenuItems}
+          hasRuntimeScope={runtimeScopeNavigation.hasRuntimeScope}
+          onAccountMenuClick={onAccountMenuClick}
+          loggingOut={loggingOut}
+          authLoading={authSession.loading}
+          accountAvatar={accountAvatar}
+          accountDisplayName={accountDisplayName}
+        />
+      )}
     </Sidebar>
   );
 }, areDolaAppShellSidebarPropsEqual);
 
-function DolaAppShellFrame({ children, topbarExtra, ...sidebarProps }: Props) {
+const ContentSlot = styled.div<{ $stretch?: boolean }>`
+  display: ${(props) => (props.$stretch ? 'flex' : 'block')};
+  flex-direction: column;
+  flex: ${(props) => (props.$stretch ? '1 1 auto' : '0 0 auto')};
+  height: ${(props) => (props.$stretch ? '100%' : 'auto')};
+  min-height: ${(props) => (props.$stretch ? '0' : 'auto')};
+`;
+
+function DolaAppShellFrame({
+  children,
+  topbarExtra,
+  flushMainPadding = false,
+  flushBottomPadding = false,
+  stretchContent = false,
+  ...sidebarProps
+}: Props) {
   return (
     <Shell>
       <DolaAppShellSidebar {...sidebarProps} />
-      <Main>
+      <Main $flush={flushMainPadding} $flushBottom={flushBottomPadding}>
         <MainInner>
           {topbarExtra ? <MainTopbar>{topbarExtra}</MainTopbar> : null}
-          {children}
+          <ContentSlot $stretch={stretchContent}>{children}</ContentSlot>
         </MainInner>
       </Main>
     </Shell>

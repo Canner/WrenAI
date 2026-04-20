@@ -83,6 +83,7 @@ describe('useManageConnectorsEditorState', () => {
     expect(mockUseConnectorEditorFields).toHaveBeenCalledWith(
       expect.objectContaining({
         form: hookValue.form,
+        editingConnector: null,
       }),
     );
     expect(mockUseConnectorEditorModalState).toHaveBeenCalledWith(

@@ -88,6 +88,48 @@ describe('settings/platform page', () => {
 
     expect(markup).toContain('平台治理');
     expect(markup).toContain('当前账号没有平台治理权限');
-    expect(markup).toContain('platform_admin');
+    expect(markup).not.toContain('platform_admin');
+  });
+
+  it('shows a platform admin fallback label only when the session still carries the legacy admin flag', () => {
+    mockUseAuthSession.mockReturnValue({
+      authenticated: true,
+      loading: false,
+      data: {
+        isPlatformAdmin: true,
+        authorization: {
+          actor: {
+            platformRoleKeys: [],
+            isPlatformAdmin: true,
+          },
+        },
+      },
+    });
+
+    const markup = renderToStaticMarkup(<PlatformManagementPage />);
+
+    expect(markup).toContain('平台治理总览');
+    expect(markup).toContain('平台管理员');
+  });
+
+  it('renders support role labels when the actor carries the new default support roles', () => {
+    mockUseAuthSession.mockReturnValue({
+      authenticated: true,
+      loading: false,
+      data: {
+        authorization: {
+          actor: {
+            platformRoleKeys: ['support_readonly', 'support_impersonator'],
+            isPlatformAdmin: false,
+          },
+        },
+      },
+    });
+
+    const markup = renderToStaticMarkup(<PlatformManagementPage />);
+
+    expect(markup).toContain('平台治理总览');
+    expect(markup).toContain('支持只读');
+    expect(markup).toContain('支持代理员');
   });
 });

@@ -68,6 +68,7 @@ export const buildApiHistoryListRequestKey = ({
   pagination,
   filter,
   runtimeScopeSelector,
+  apiPath,
 }: {
   enabled: boolean;
   pagination: {
@@ -76,12 +77,14 @@ export const buildApiHistoryListRequestKey = ({
   };
   filter?: ApiHistoryListFilter;
   runtimeScopeSelector?: ClientRuntimeScopeSelector;
+  apiPath?: string;
 }) =>
   enabled
     ? buildApiHistoryListUrl({
         pagination,
         filter,
         runtimeScopeSelector,
+        apiPath,
       })
     : null;
 
@@ -89,6 +92,7 @@ export const buildApiHistoryListUrl = ({
   pagination,
   filter,
   runtimeScopeSelector,
+  apiPath = '/api/v1/api-history',
 }: {
   pagination: {
     offset: number;
@@ -96,6 +100,7 @@ export const buildApiHistoryListUrl = ({
   };
   filter?: ApiHistoryListFilter;
   runtimeScopeSelector?: ClientRuntimeScopeSelector;
+  apiPath?: string;
 }) => {
   const query: Record<string, string | number | undefined> = {
     offset: pagination.offset,
@@ -107,11 +112,7 @@ export const buildApiHistoryListUrl = ({
     endDate: filter?.endDate,
   };
 
-  return buildRuntimeScopeUrl(
-    '/api/v1/api-history',
-    query,
-    runtimeScopeSelector,
-  );
+  return buildRuntimeScopeUrl(apiPath, query, runtimeScopeSelector);
 };
 
 export default function useApiHistoryList({
@@ -120,6 +121,7 @@ export default function useApiHistoryList({
   filter,
   runtimeScopeSelector,
   onError,
+  apiPath,
 }: {
   enabled: boolean;
   pagination: {
@@ -129,6 +131,7 @@ export default function useApiHistoryList({
   filter?: ApiHistoryListFilter;
   runtimeScopeSelector?: ClientRuntimeScopeSelector;
   onError?: (error: Error) => void;
+  apiPath?: string;
 }) {
   const requestUrl = useMemo(
     () =>
@@ -137,8 +140,10 @@ export default function useApiHistoryList({
         pagination,
         filter,
         runtimeScopeSelector,
+        apiPath,
       }),
     [
+      apiPath,
       enabled,
       filter?.apiType,
       filter?.endDate,

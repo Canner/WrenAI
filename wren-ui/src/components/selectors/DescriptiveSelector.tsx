@@ -1,13 +1,18 @@
 import React, { useState } from 'react';
 import { Select, SelectProps, Space, Typography } from 'antd';
-import { DefaultOptionType } from 'antd/es/select';
 import styled from 'styled-components';
 import { omit } from 'lodash';
 
-type DescriptiveOption = DefaultOptionType & {
+type DescriptiveOption = {
+  disabled?: boolean;
+  label?: React.ReactNode;
+  value?: string | number | null;
+  key?: React.Key;
+  title?: string;
   content?: Record<string, any>;
   options?: DescriptiveOption[];
   onMouseEnter?: (event: React.MouseEvent<HTMLElement>) => void;
+  [key: string]: any;
 };
 
 interface Props extends SelectProps<any, DescriptiveOption> {

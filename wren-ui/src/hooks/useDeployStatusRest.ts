@@ -6,8 +6,14 @@ import {
 import type { ModelSyncResponse } from '@/types/project';
 
 import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
+import { PollingRequestCoordinator } from './usePollingRequestLoop';
 import useRestRequest from './useRestRequest';
 import { fetchDeployStatus } from '@/utils/modelingRest';
+import {
+  normalizeDeployStatusRefetchResult,
+  shouldContinueDeployStatusPolling,
+  UNSYNCHRONIZED_RESULT,
+} from './deployStatusRestHelpers';
 
 export type DeployStatusResult = {
   data?: {
@@ -30,17 +36,9 @@ export const buildDeployStatusRequestKey = (
     ? buildRuntimeScopeStateKey(selector)
     : null;
 
-const UNSYNCHRONIZED_RESULT = {
-  data: {
-    modelSync: {
-      status: 'UNSYNCRONIZED',
-    } as ModelSyncResponse,
-  },
-};
-
 export default function useDeployStatusRest(): DeployStatusResult {
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollingCoordinatorRef = useRef(new PollingRequestCoordinator());
   const pollIntervalRef = useRef<number | null>(null);
   const hasExecutableScope = hasExecutableRuntimeScopeSelector(
     runtimeScopeNavigation.selector,
@@ -69,10 +67,7 @@ export default function useDeployStatusRest(): DeployStatusResult {
 
   const stopPolling = useCallback(() => {
     pollIntervalRef.current = null;
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
+    pollingCoordinatorRef.current.stop();
   }, []);
 
   const refetch = useCallback(async () => {
@@ -82,29 +77,27 @@ export default function useDeployStatusRest(): DeployStatusResult {
       return UNSYNCHRONIZED_RESULT;
     }
 
-    const nextData = await refetchState();
-    return {
-      data:
-        nextData ||
-        ({
-          modelSync: UNSYNCHRONIZED_RESULT.data.modelSync,
-        } as { modelSync: ModelSyncResponse }),
-    };
+    return normalizeDeployStatusRefetchResult(await refetchState());
   }, [hasExecutableScope, refetchState, setData, stopPolling]);
 
   const schedulePoll = useCallback(() => {
-    if (!pollIntervalRef.current) {
+    const intervalMs = pollIntervalRef.current;
+    if (!shouldContinueDeployStatusPolling(intervalMs)) {
       return;
     }
-    timerRef.current = setTimeout(() => {
+    const pollingSession = pollingCoordinatorRef.current.begin();
+    pollingSession.scheduleNext(() => {
       void refetch()
         .catch(() => null)
         .finally(() => {
-          if (pollIntervalRef.current) {
+          if (
+            pollingSession.isCurrent() &&
+            shouldContinueDeployStatusPolling(pollIntervalRef.current)
+          ) {
             schedulePoll();
           }
         });
-    }, pollIntervalRef.current);
+    }, intervalMs as number);
   }, [refetch]);
 
   const startPolling = useCallback(

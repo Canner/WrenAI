@@ -56,8 +56,10 @@ export const resolveNovaPageTitle = ({
     case Path.SettingsSkills:
       return '技能管理 · Nova';
     case Path.SettingsUsers:
+    case Path.SettingsPlatformUsers:
       return '用户管理 · Nova';
     case Path.SettingsPermissions:
+    case Path.SettingsPlatformPermissions:
       return '权限管理 · Nova';
     case Path.SettingsAccess:
       return '用户管理 · Nova';
@@ -73,6 +75,8 @@ export const resolveNovaPageTitle = ({
       return '系统任务 · Nova';
     case Path.SettingsPlatform:
       return '平台设置 · Nova';
+    case Path.SettingsPlatformWorkspaces:
+      return '工作空间 · Nova';
     case Path.APIManagement:
     case Path.APIManagementHistory:
       return '调用诊断 · Nova';

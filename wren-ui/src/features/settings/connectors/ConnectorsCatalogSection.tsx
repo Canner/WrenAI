@@ -1,10 +1,15 @@
-import { Button, Card, Popconfirm, Space, Table, Tag, Typography } from 'antd';
+import { Button, Popconfirm, Space, Table, Tag, Typography } from 'antd';
 import {
+  CONNECTOR_TYPE_OPTIONS,
   DATABASE_PROVIDER_OPTIONS,
   type ConnectorView,
 } from './connectorsPageUtils';
 
 const { Paragraph, Text } = Typography;
+
+const CONNECTOR_TYPE_LABELS = Object.fromEntries(
+  CONNECTOR_TYPE_OPTIONS.map((option) => [option.value, option.label]),
+);
 
 const DATABASE_PROVIDER_LABELS = Object.fromEntries(
   DATABASE_PROVIDER_OPTIONS.map((option) => [option.value, option.label]),
@@ -40,7 +45,7 @@ export default function ConnectorsCatalogSection({
   onDeleteConnector,
 }: ConnectorsCatalogSectionProps) {
   return (
-    <Card>
+    <>
       <Space
         align="start"
         size={16}
@@ -85,37 +90,34 @@ export default function ConnectorsCatalogSection({
         pagination={{ hideOnSinglePage: true, pageSize: 10 }}
         columns={[
           {
-            title: '连接器',
+            title: '名称',
             dataIndex: 'displayName',
             render: (value: string, record: ConnectorView) => (
               <Space direction="vertical" size={0}>
                 <Text strong>{value}</Text>
-                <Space size={6}>
-                  <Text type="secondary">{record.type}</Text>
-                  {record.trinoCatalogName ? (
-                    <Tag color="purple" style={{ marginInlineEnd: 0 }}>
-                      {record.trinoCatalogName}
-                    </Tag>
-                  ) : null}
-                </Space>
+                {record.trinoCatalogName ? (
+                  <Tag color="purple" style={{ marginInlineEnd: 0 }}>
+                    {record.trinoCatalogName}
+                  </Tag>
+                ) : null}
               </Space>
             ),
           },
           {
-            title: '数据库类型',
-            dataIndex: 'databaseProvider',
-            width: 160,
-            render: (
-              value: ConnectorView['databaseProvider'],
-              record: ConnectorView,
-            ) =>
-              record.type === 'database' && value ? (
-                <Tag style={{ marginInlineEnd: 0 }}>
-                  {DATABASE_PROVIDER_LABELS[value] || value}
-                </Tag>
-              ) : (
-                <Text type="secondary">—</Text>
-              ),
+            title: '类型',
+            dataIndex: 'type',
+            width: 180,
+            render: (_value: ConnectorView['type'], record: ConnectorView) => (
+              <Space direction="vertical" size={4}>
+                <Text>{CONNECTOR_TYPE_LABELS[record.type] || record.type}</Text>
+                {record.type === 'database' && record.databaseProvider ? (
+                  <Tag style={{ marginInlineEnd: 0 }}>
+                    {DATABASE_PROVIDER_LABELS[record.databaseProvider] ||
+                      record.databaseProvider}
+                  </Tag>
+                ) : null}
+              </Space>
+            ),
           },
           {
             title: '配置',
@@ -126,6 +128,8 @@ export default function ConnectorsCatalogSection({
                   style={{
                     marginBottom: 0,
                     whiteSpace: 'pre-wrap',
+                    fontSize: 12,
+                    lineHeight: 1.5,
                     fontFamily:
                       'ui-monospace, SFMono-Regular, SFMono-Regular, Consolas, monospace',
                   }}
@@ -183,6 +187,6 @@ export default function ConnectorsCatalogSection({
           },
         ]}
       />
-    </Card>
+    </>
   );
 }

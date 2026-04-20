@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback } from 'react';
 import {
   buildRuntimeScopeUrl,
   type ClientRuntimeScopeSelector,
 } from '@/runtime/client/runtimeScope';
 import type { ThreadResponse } from '@/types/home';
+import usePollingRequestLoop from './usePollingRequestLoop';
 
 export const buildThreadResponseDetailUrl = ({
   responseId,
@@ -79,72 +80,23 @@ export default function useThreadResponsePolling({
   onCompleted?: (response: ThreadResponse) => void;
   onError?: (error: Error) => void;
 }) {
-  const [data, setData] = useState<ThreadResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pollingSessionRef = useRef(0);
-
-  const stopPolling = useCallback(() => {
-    pollingSessionRef.current += 1;
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-  }, []);
+  const { data, loading, startPolling, stopPolling } =
+    usePollingRequestLoop<ThreadResponse>({
+      pollInterval,
+      onCompleted,
+      onError,
+    });
 
   const fetchById = useCallback(
-    async (responseId: number) => {
-      const sessionId = pollingSessionRef.current + 1;
-      pollingSessionRef.current = sessionId;
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
-      setLoading(true);
-
-      const run = async (): Promise<ThreadResponse | null> => {
-        try {
-          const nextResponse = await loadThreadResponsePayload({
-            responseId,
-            runtimeScopeSelector,
-          });
-
-          if (pollingSessionRef.current !== sessionId) {
-            return nextResponse;
-          }
-
-          setData(nextResponse);
-          onCompleted?.(nextResponse);
-          timerRef.current = setTimeout(() => {
-            void run();
-          }, pollInterval);
-          return nextResponse;
-        } catch (error) {
-          if (pollingSessionRef.current === sessionId) {
-            onError?.(
-              error instanceof Error
-                ? error
-                : new Error('加载对话结果失败，请稍后重试'),
-            );
-          }
-          return null;
-        } finally {
-          if (pollingSessionRef.current === sessionId) {
-            setLoading(false);
-          }
-        }
-      };
-
-      return run();
-    },
-    [onCompleted, onError, pollInterval, runtimeScopeSelector],
+    (responseId: number) =>
+      startPolling(() =>
+        loadThreadResponsePayload({
+          responseId,
+          runtimeScopeSelector,
+        }),
+      ),
+    [runtimeScopeSelector, startPolling],
   );
-
-  useEffect(() => {
-    return () => {
-      stopPolling();
-    };
-  }, [stopPolling]);
 
   return {
     data,

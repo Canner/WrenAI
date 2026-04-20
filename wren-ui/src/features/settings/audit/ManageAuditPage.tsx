@@ -22,7 +22,10 @@ import useAuthSession from '@/hooks/useAuthSession';
 import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import { resolveAbortSafeErrorMessage } from '@/utils/abort';
-import { resolvePlatformManagementFromAuthSession } from '@/features/settings/settingsPageCapabilities';
+import {
+  resolvePlatformConsoleCapabilities,
+  resolvePlatformManagementFromAuthSession,
+} from '@/features/settings/settingsPageCapabilities';
 import { buildSettingsConsoleShellProps } from '@/features/settings/settingsShell';
 import useWorkspaceGovernanceOverview from '@/features/settings/useWorkspaceGovernanceOverview';
 
@@ -52,6 +55,9 @@ export default function SettingsAuditPage() {
   const showPlatformManagement = resolvePlatformManagementFromAuthSession(
     authSession.data,
   );
+  const platformCapabilities = resolvePlatformConsoleCapabilities(
+    authSession.data,
+  );
   const workspaceOverviewRequestEnabled =
     runtimeScopePage.hasRuntimeScope && authSession.authenticated;
   const { workspaceOverview, loading } = useWorkspaceGovernanceOverview({
@@ -66,6 +72,9 @@ export default function SettingsAuditPage() {
     result: '',
     query: '',
   });
+  const auditEventsPath = platformCapabilities.canReadAudit
+    ? '/api/v1/platform/audit-events'
+    : '/api/v1/workspace/audit-events';
 
   const loadAuditEvents = useCallback(async () => {
     if (!workspaceOverviewRequestEnabled) {
@@ -90,9 +99,7 @@ export default function SettingsAuditPage() {
       }
 
       const response = await fetch(
-        buildRuntimeScopeUrl(
-          `/api/v1/workspace/audit-events?${query.toString()}`,
-        ),
+        buildRuntimeScopeUrl(`${auditEventsPath}?${query.toString()}`),
         {
           credentials: 'include',
         },
@@ -117,14 +124,16 @@ export default function SettingsAuditPage() {
     } finally {
       setAuditLoading(false);
     }
-  }, [auditFilters, workspaceOverviewRequestEnabled]);
+  }, [auditEventsPath, auditFilters, workspaceOverviewRequestEnabled]);
 
   useEffect(() => {
     void loadAuditEvents();
   }, [loadAuditEvents]);
 
   const permissionActions = workspaceOverview?.permissions?.actions || {};
-  const canReadAudit = Boolean(permissionActions['audit.read']);
+  const canReadAudit = Boolean(
+    platformCapabilities.canReadAudit || permissionActions['audit.read'],
+  );
 
   const resultSummary = useMemo(
     () => ({

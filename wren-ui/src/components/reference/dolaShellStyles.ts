@@ -162,22 +162,35 @@ export const Sidebar = styled(Sider)`
   }
 `;
 
-export const Main = styled(Content)`
+export const Main = styled(Content)<{
+  $flush?: boolean;
+  $flushBottom?: boolean;
+}>`
   min-width: 0;
   height: 100vh;
+  display: flex;
+  flex-direction: column;
   overflow: auto;
   scrollbar-gutter: stable both-edges;
   background: #ffffff;
-  padding: 24px 24px 24px 4px;
+  padding: ${(props) =>
+    props.$flush
+      ? '0'
+      : props.$flushBottom
+        ? '24px 24px 0 4px'
+        : '24px 24px 24px 4px'};
 
   @media (max-width: 1120px) {
     height: auto;
-    padding: 16px;
+    padding: ${(props) =>
+      props.$flush ? '0' : props.$flushBottom ? '16px 16px 0' : '16px'};
   }
 `;
 
 export const MainInner = styled.div`
   min-height: 100%;
+  height: 100%;
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 20px;

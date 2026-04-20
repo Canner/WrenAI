@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
+import useRestRequest from './useRestRequest';
 
 interface AuthSessionUser {
   id: string;
@@ -80,7 +81,7 @@ const buildSessionCacheKey = (
 ) =>
   includeWorkspaceQuery ? `workspace:${workspaceId || 'default'}` : 'global';
 
-const buildAuthSessionUrl = (workspaceId: string | undefined) => {
+export const buildAuthSessionUrl = (workspaceId: string | undefined) => {
   const searchParams = new URLSearchParams();
   if (workspaceId) {
     searchParams.set('workspaceId', workspaceId);
@@ -91,7 +92,19 @@ const buildAuthSessionUrl = (workspaceId: string | undefined) => {
   }`;
 };
 
+export const buildAuthSessionRequestKey = ({
+  includeWorkspaceQuery,
+  routerReady,
+  workspaceId,
+}: {
+  includeWorkspaceQuery: boolean;
+  routerReady: boolean;
+  workspaceId?: string;
+}) =>
+  routerReady ? buildSessionCacheKey(workspaceId, includeWorkspaceQuery) : null;
+
 const AUTH_SESSION_CACHE_TTL_MS = 120_000;
+const AUTH_SESSION_STORAGE_PREFIX = 'wren.authSession:';
 // Intentional exception to the generic request primitive:
 // auth session needs cross-component TTL caching + in-flight dedupe so every
 // shell/status consumer can share one request per scope without extra churn.
@@ -104,15 +117,93 @@ const authSessionRequestCache = new Map<
   Promise<AuthSessionPayload | null>
 >();
 
+const getAuthSessionStorage = () => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  return window.sessionStorage;
+};
+
+const getAuthSessionStorageKey = (sessionCacheKey: string) =>
+  `${AUTH_SESSION_STORAGE_PREFIX}${sessionCacheKey}`;
+
+const getAuthSessionStorageKeys = (storage: Storage, prefix: string) => {
+  const keys: string[] = [];
+
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index);
+    if (key?.startsWith(prefix)) {
+      keys.push(key);
+    }
+  }
+
+  return keys;
+};
+
+const readStoredAuthSession = (sessionCacheKey: string) => {
+  const storage = getAuthSessionStorage();
+  if (!storage) {
+    return null;
+  }
+
+  try {
+    const rawValue = storage.getItem(getAuthSessionStorageKey(sessionCacheKey));
+    if (!rawValue) {
+      return null;
+    }
+
+    const parsed = JSON.parse(rawValue) as
+      | { payload: AuthSessionPayload; updatedAt: number }
+      | null;
+    if (!parsed || typeof parsed.updatedAt !== 'number' || !parsed.payload) {
+      storage.removeItem(getAuthSessionStorageKey(sessionCacheKey));
+      return null;
+    }
+
+    return parsed;
+  } catch (_error) {
+    return null;
+  }
+};
+
+const writeStoredAuthSession = (
+  sessionCacheKey: string,
+  entry: { payload: AuthSessionPayload; updatedAt: number },
+) => {
+  const storage = getAuthSessionStorage();
+  if (!storage) {
+    return;
+  }
+
+  try {
+    storage.setItem(
+      getAuthSessionStorageKey(sessionCacheKey),
+      JSON.stringify(entry),
+    );
+  } catch (_error) {
+    // ignore sessionStorage write failures
+  }
+};
+
 const getFreshCachedAuthSession = (sessionCacheKey: string) => {
-  const cachedSession = authSessionCache.get(sessionCacheKey);
+  const inMemorySession = authSessionCache.get(sessionCacheKey) || null;
+  const cachedSession =
+    inMemorySession || readStoredAuthSession(sessionCacheKey);
   if (!cachedSession) {
     return null;
   }
 
   if (Date.now() - cachedSession.updatedAt > AUTH_SESSION_CACHE_TTL_MS) {
     authSessionCache.delete(sessionCacheKey);
+    getAuthSessionStorage()?.removeItem(
+      getAuthSessionStorageKey(sessionCacheKey),
+    );
     return null;
+  }
+
+  if (!inMemorySession) {
+    authSessionCache.set(sessionCacheKey, cachedSession);
   }
 
   return cachedSession.payload;
@@ -121,6 +212,21 @@ const getFreshCachedAuthSession = (sessionCacheKey: string) => {
 export const clearAuthSessionCache = () => {
   authSessionCache.clear();
   authSessionRequestCache.clear();
+
+  const storage = getAuthSessionStorage();
+  if (!storage) {
+    return;
+  }
+
+  try {
+    const keysToRemove = getAuthSessionStorageKeys(
+      storage,
+      AUTH_SESSION_STORAGE_PREFIX,
+    );
+    keysToRemove.forEach((key) => storage.removeItem(key));
+  } catch (_error) {
+    // ignore sessionStorage cleanup failures
+  }
 };
 
 export const loadAuthSessionPayload = async ({
@@ -150,10 +256,12 @@ export const loadAuthSessionPayload = async ({
         throw new Error(payload.error || 'Failed to load auth session');
       }
 
-      authSessionCache.set(sessionCacheKey, {
+      const entry = {
         payload,
         updatedAt: Date.now(),
-      });
+      };
+      authSessionCache.set(sessionCacheKey, entry);
+      writeStoredAuthSession(sessionCacheKey, entry);
       return payload;
     })
     .finally(() => {
@@ -193,74 +301,65 @@ export default function useAuthSession(options: UseAuthSessionOptions = {}) {
     [includeWorkspaceQuery, router.query.workspaceId],
   );
   const sessionCacheKey = useMemo(
-    () => buildSessionCacheKey(workspaceId, includeWorkspaceQuery),
-    [includeWorkspaceQuery, workspaceId],
+    () =>
+      buildAuthSessionRequestKey({
+        includeWorkspaceQuery,
+        routerReady: router.isReady,
+        workspaceId,
+      }),
+    [includeWorkspaceQuery, router.isReady, workspaceId],
   );
   const cachedSession = useMemo(
-    () => getFreshCachedAuthSession(sessionCacheKey),
+    () => (sessionCacheKey ? getFreshCachedAuthSession(sessionCacheKey) : null),
     [sessionCacheKey],
   );
-  const [loading, setLoading] = useState(() => !cachedSession);
-  const [data, setData] = useState<AuthSessionPayload | null>(cachedSession);
-  const [error, setError] = useState<string | null>(null);
+  const requestState = useRestRequest<AuthSessionPayload | null>({
+    enabled: Boolean(sessionCacheKey),
+    auto: Boolean(sessionCacheKey),
+    initialData: cachedSession,
+    requestKey: sessionCacheKey,
+    request: async () =>
+      loadAuthSessionPayload({
+        sessionCacheKey: sessionCacheKey as string,
+        workspaceId,
+      }),
+    resetDataOnDisable: false,
+  });
+  const { data, loading, error, refetch, setData } = requestState;
 
-  const fetchSession = useCallback(async () => {
-    if (!router.isReady) {
+  useEffect(() => {
+    setData(cachedSession);
+  }, [cachedSession, setData]);
+
+  const refresh = useCallback(async () => {
+    if (!sessionCacheKey) {
       return null;
     }
-
-    const cachedPayload = getFreshCachedAuthSession(sessionCacheKey);
-    if (cachedPayload) {
-      setData(cachedPayload);
-      setLoading(false);
-    } else {
-      setLoading(true);
-    }
-    setError(null);
 
     try {
-      const payload = await loadAuthSessionPayload({
-        sessionCacheKey,
-        workspaceId,
-      });
-      setData(payload);
-      return payload;
-    } catch (fetchError: any) {
-      const fallbackPayload = { authenticated: false };
-      setData(fallbackPayload);
-      setError(fetchError?.message || 'Failed to load auth session');
+      return await refetch();
+    } catch (_error) {
       return null;
-    } finally {
-      setLoading(false);
     }
-  }, [router.isReady, sessionCacheKey, workspaceId]);
+  }, [refetch, sessionCacheKey]);
 
-  useEffect(() => {
-    const nextCachedSession = getFreshCachedAuthSession(sessionCacheKey);
-    if (nextCachedSession) {
-      setData(nextCachedSession);
-      setLoading(false);
-      return;
+  const resolvedData = useMemo<AuthSessionPayload | null>(() => {
+    if (data) {
+      return data;
     }
 
-    if (router.isReady) {
-      setLoading(true);
-    }
-  }, [router.isReady, sessionCacheKey]);
-
-  useEffect(() => {
-    if (!router.isReady) {
-      return;
+    if (error) {
+      return { authenticated: false };
     }
 
-    void fetchSession();
-  }, [fetchSession, router.isReady]);
+    return null;
+  }, [data, error]);
 
   return {
     loading,
-    authenticated: Boolean(data?.authenticated),
-    data,
-    error,
-    refresh: fetchSession,
+    authenticated: Boolean(resolvedData?.authenticated),
+    data: resolvedData,
+    error: error?.message || null,
+    refresh,
   };
 }

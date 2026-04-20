@@ -17,6 +17,65 @@ export type KnowledgeBaseKind =
 export const DEFAULT_WORKSPACE_NAME = '系统样例空间';
 export const DEFAULT_WORKSPACE_SLUG = 'system-samples';
 
+export const WORKSPACE_MEMBER_ROLE_LABELS: Record<string, string> = {
+  owner: '所有者',
+  viewer: '查看者',
+};
+
+export const WORKSPACE_MEMBER_ROLE_OPTIONS = [
+  { label: WORKSPACE_MEMBER_ROLE_LABELS.owner, value: 'owner' },
+  { label: WORKSPACE_MEMBER_ROLE_LABELS.viewer, value: 'viewer' },
+] as const;
+
+export type WorkspaceMemberUiRoleKey =
+  (typeof WORKSPACE_MEMBER_ROLE_OPTIONS)[number]['value'];
+
+const WORKSPACE_ROLE_DISPLAY_ALIASES: Record<string, WorkspaceMemberUiRoleKey> =
+  {
+    owner: 'owner',
+    admin: 'owner',
+    workspace_owner: 'owner',
+    workspace_admin: 'owner',
+    viewer: 'viewer',
+    member: 'viewer',
+    workspace_viewer: 'viewer',
+  };
+
+const normalizeWorkspaceRoleInput = (roleKey?: string | null) =>
+  String(roleKey || '')
+    .trim()
+    .toLowerCase();
+
+export const normalizeWorkspaceRoleKeyForDisplay = (
+  roleKey?: string | null,
+): WorkspaceMemberUiRoleKey | null =>
+  WORKSPACE_ROLE_DISPLAY_ALIASES[normalizeWorkspaceRoleInput(roleKey)] || null;
+
+export const getWorkspaceRoleLabel = (roleKey?: string | null) => {
+  const normalizedRoleKey = normalizeWorkspaceRoleKeyForDisplay(roleKey);
+  if (normalizedRoleKey) {
+    return WORKSPACE_MEMBER_ROLE_LABELS[normalizedRoleKey];
+  }
+
+  const rawRoleKey = normalizeWorkspaceRoleInput(roleKey);
+  return rawRoleKey || '未知角色';
+};
+
+export const isWorkspaceOwnerEquivalentRole = (roleKey?: string | null) =>
+  normalizeWorkspaceRoleKeyForDisplay(roleKey) === 'owner';
+
+export const toStoredWorkspaceRoleKey = (roleKey?: string | null) => {
+  const normalizedRoleKey = normalizeWorkspaceRoleKeyForDisplay(roleKey);
+  if (normalizedRoleKey === 'owner') {
+    return 'owner';
+  }
+  if (normalizedRoleKey === 'viewer') {
+    return 'member';
+  }
+
+  return normalizeWorkspaceRoleInput(roleKey) || null;
+};
+
 export const SYSTEM_SAMPLE_KNOWLEDGE_BASES = [
   {
     slug: 'hr',

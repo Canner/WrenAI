@@ -9,14 +9,20 @@ import {
   peekPrefetchedFirstDashboardId,
   peekThreadOverview,
   peekWorkspaceOverview,
+  primeKnowledgeBaseList,
   prefetchDashboardOverview,
   prefetchKnowledgeOverview,
   prefetchThreadOverview,
 } from './runtimePagePrefetch';
+import {
+  clearDashboardRestCache,
+  peekDashboardDetailPayload,
+} from './dashboardRest';
 
 describe('runtimePagePrefetch', () => {
   beforeEach(() => {
     clearRuntimePagePrefetchCache();
+    clearDashboardRestCache();
     jest.clearAllMocks();
   });
 
@@ -49,16 +55,24 @@ describe('runtimePagePrefetch', () => {
   });
 
   it('prefetches dashboard list and stores the first dashboard id for navigation', async () => {
-    const fetcher = jest.fn().mockResolvedValue({
+    const fetcher = jest.fn().mockImplementation(async (url: string) => ({
       ok: true,
-      json: async () => [
-        {
-          id: 7,
-          name: '经营总览',
-          cacheEnabled: true,
-        },
-      ],
-    } as Response);
+      json: async () =>
+        url.includes('/api/v1/dashboards?')
+          ? [
+              {
+                id: 7,
+                name: '经营总览',
+                cacheEnabled: true,
+              },
+            ]
+          : {
+              id: 7,
+              name: '经营总览',
+              cacheEnabled: true,
+              items: [],
+            },
+    }));
 
     await prefetchDashboardOverview({
       selector: { workspaceId: 'ws-1' },
@@ -66,8 +80,22 @@ describe('runtimePagePrefetch', () => {
     });
 
     expect(fetcher).toHaveBeenCalledWith('/api/v1/dashboards?workspaceId=ws-1');
-    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledWith(
+      '/api/v1/dashboards/7?workspaceId=ws-1',
+    );
+    expect(fetcher).toHaveBeenCalledTimes(2);
     expect(peekPrefetchedFirstDashboardId()).toBe(7);
+    expect(
+      peekDashboardDetailPayload({
+        selector: { workspaceId: 'ws-1' },
+        dashboardId: 7,
+      }),
+    ).toEqual({
+      id: 7,
+      name: '经营总览',
+      cacheEnabled: true,
+      items: [],
+    });
   });
 
   it('prefetches thread detail into the runtime cache through REST', async () => {
@@ -189,6 +217,18 @@ describe('runtimePagePrefetch', () => {
     });
     expect(refreshed).toEqual([{ id: 'kb-2', name: '新知识库' }]);
     expect(secondFetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('can prime the knowledge-base cache from runtime selector state', () => {
+    const url = '/api/v1/knowledge/bases?workspaceId=ws-1';
+    const payload = [{ id: 'kb-1', name: '订单分析知识库' }];
+
+    primeKnowledgeBaseList({
+      url,
+      payload,
+    });
+
+    expect(peekKnowledgeBaseList(url)).toEqual(payload);
   });
 
   it('prefetches knowledge list, connectors and diagram into caches', async () => {

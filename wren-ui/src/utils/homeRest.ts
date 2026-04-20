@@ -32,6 +32,117 @@ type ProjectRecommendationQuestionsPayload =
   ProjectRecommendationQuestionsResponse['getProjectRecommendationQuestions'];
 type InstantRecommendedQuestionsPayload =
   InstantRecommendedQuestionsResponse['instantRecommendedQuestions'];
+type TimedSuggestedQuestionsEntry = {
+  payload: SuggestedQuestionsPayload;
+  updatedAt: number;
+};
+
+const SUGGESTED_QUESTIONS_CACHE_TTL_MS = 30_000;
+const SUGGESTED_QUESTIONS_STORAGE_PREFIX = 'wren.suggestedQuestions:';
+const suggestedQuestionsCache = new Map<string, TimedSuggestedQuestionsEntry>();
+
+const getSuggestedQuestionsStorage = () => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  return window.sessionStorage;
+};
+
+const getSuggestedQuestionsStorageKey = (requestUrl: string) =>
+  `${SUGGESTED_QUESTIONS_STORAGE_PREFIX}${requestUrl}`;
+
+const readStoredSuggestedQuestions = (
+  requestUrl: string,
+): TimedSuggestedQuestionsEntry | null => {
+  const storage = getSuggestedQuestionsStorage();
+  if (!storage) {
+    return null;
+  }
+
+  try {
+    const rawValue = storage.getItem(
+      getSuggestedQuestionsStorageKey(requestUrl),
+    );
+    if (!rawValue) {
+      return null;
+    }
+
+    const parsed = JSON.parse(rawValue) as TimedSuggestedQuestionsEntry | null;
+    if (!parsed || typeof parsed.updatedAt !== 'number' || !parsed.payload) {
+      storage.removeItem(getSuggestedQuestionsStorageKey(requestUrl));
+      return null;
+    }
+
+    return parsed;
+  } catch (_error) {
+    return null;
+  }
+};
+
+const writeStoredSuggestedQuestions = (
+  requestUrl: string,
+  entry: TimedSuggestedQuestionsEntry,
+) => {
+  const storage = getSuggestedQuestionsStorage();
+  if (!storage) {
+    return;
+  }
+
+  try {
+    storage.setItem(
+      getSuggestedQuestionsStorageKey(requestUrl),
+      JSON.stringify(entry),
+    );
+  } catch (_error) {
+    // ignore sessionStorage write failures
+  }
+};
+
+const getFreshSuggestedQuestionsPayload = (requestUrl: string) => {
+  const inMemoryEntry = suggestedQuestionsCache.get(requestUrl) || null;
+  const cachedEntry =
+    inMemoryEntry || readStoredSuggestedQuestions(requestUrl);
+  if (!cachedEntry) {
+    return null;
+  }
+
+  if (Date.now() - cachedEntry.updatedAt > SUGGESTED_QUESTIONS_CACHE_TTL_MS) {
+    suggestedQuestionsCache.delete(requestUrl);
+    getSuggestedQuestionsStorage()?.removeItem(
+      getSuggestedQuestionsStorageKey(requestUrl),
+    );
+    return null;
+  }
+
+  if (!inMemoryEntry) {
+    suggestedQuestionsCache.set(requestUrl, cachedEntry);
+  }
+
+  return cachedEntry.payload;
+};
+
+export const clearSuggestedQuestionsCache = () => {
+  suggestedQuestionsCache.clear();
+
+  const storage = getSuggestedQuestionsStorage();
+  if (!storage) {
+    return;
+  }
+
+  try {
+    const keysToRemove: string[] = [];
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = storage.key(index);
+      if (key?.startsWith(SUGGESTED_QUESTIONS_STORAGE_PREFIX)) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach((key) => storage.removeItem(key));
+  } catch (_error) {
+    // ignore sessionStorage cleanup failures
+  }
+};
 
 export const buildSuggestedQuestionsUrl = (
   selector = resolveClientRuntimeScopeSelector(),
@@ -153,11 +264,24 @@ export const buildDashboardItemsUrl = (
 export const fetchSuggestedQuestions = async (
   selector: ClientRuntimeScopeSelector = resolveClientRuntimeScopeSelector(),
 ) => {
-  const response = await fetch(buildSuggestedQuestionsUrl(selector));
-  return parseRestJsonResponse<SuggestedQuestionsPayload>(
+  const requestUrl = buildSuggestedQuestionsUrl(selector);
+  const cachedPayload = getFreshSuggestedQuestionsPayload(requestUrl);
+  if (cachedPayload) {
+    return cachedPayload;
+  }
+
+  const response = await fetch(requestUrl);
+  const payload = await parseRestJsonResponse<SuggestedQuestionsPayload>(
     response,
     '加载推荐问题失败，请稍后重试。',
   );
+  const entry = {
+    payload,
+    updatedAt: Date.now(),
+  };
+  suggestedQuestionsCache.set(requestUrl, entry);
+  writeStoredSuggestedQuestions(requestUrl, entry);
+  return payload;
 };
 
 export const getProjectRecommendationQuestions = async (

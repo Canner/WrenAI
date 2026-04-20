@@ -6,14 +6,17 @@ import { Path } from '@/utils/enum';
 import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
 import useRestRequest from './useRestRequest';
 import {
+  deleteHomeSidebarThread,
+  loadHomeSidebarThreadsPayload,
+  renameHomeSidebarThread,
+} from './homeSidebarRequests';
+import {
   EMPTY_SIDEBAR_THREADS,
-  buildHomeSidebarThreadDetailUrl,
   buildHomeSidebarThreadsRequestKey,
   cacheHomeSidebarQueryEnabled,
   cacheHomeSidebarThreads,
   getCachedHomeSidebarQueryEnabled,
   getCachedHomeSidebarThreads,
-  normalizeHomeSidebarThreads,
   resolveHomeSidebarHeaderSelector,
   resolveHomeSidebarScopeKey,
   resolveHomeSidebarThreadSelector,
@@ -170,26 +173,21 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
     () => buildHomeSidebarThreadsRequestKey(sidebarHeaderSelector),
     [sidebarHeaderSelector],
   );
-  const { loading, refetch: refetchThreads } = useRestRequest<
-    SidebarThread[],
-    HomeSidebarThreadRecord[]
-  >({
+  const {
+    loading,
+    refetch: refetchThreads,
+    cancel: cancelThreadsRequest,
+  } = useRestRequest<SidebarThread[], HomeSidebarThreadRecord[]>({
     enabled: !disabled && hasRuntimeScope && queryEnabled,
     auto: false,
     initialData: EMPTY_SIDEBAR_THREADS,
     requestKey: requestUrl,
-    request: async ({ signal }) => {
-      const response = await fetch(requestUrl, {
-        cache: requestCacheModeRef.current,
+    request: ({ signal }) =>
+      loadHomeSidebarThreadsPayload({
+        requestUrl,
+        cacheMode: requestCacheModeRef.current,
         signal,
-      });
-      const payload = await response.json().catch(() => null);
-      if (!response.ok) {
-        throw new Error(payload?.error || '加载历史对话失败，请稍后重试');
-      }
-
-      return normalizeHomeSidebarThreads(payload);
-    },
+      }),
     mapResult: syncThreads,
     onSuccess: () => {
       setInitialized(true);
@@ -206,6 +204,8 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
     },
     resetDataOnDisable: false,
   });
+
+  useEffect(() => cancelThreadsRequest, [cancelThreadsRequest]);
 
   const loadThreads = useCallback(
     async ({
@@ -246,19 +246,7 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
       return;
     }
 
-    let cancelled = false;
-
-    void loadThreads().then((nextThreads) => {
-      if (cancelled) {
-        return;
-      }
-
-      setThreads(nextThreads);
-    });
-
-    return () => {
-      cancelled = true;
-    };
+    void loadThreads();
   }, [
     cachedThreads.length,
     disabled,
@@ -295,21 +283,11 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
   const onRename = useCallback(
     async (id: string, newName: string) => {
       try {
-        const response = await fetch(
-          buildHomeSidebarThreadDetailUrl(id, sidebarHeaderSelector),
-          {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ summary: newName }),
-          },
-        );
-        const payload = await response.json().catch(() => null);
-        if (!response.ok) {
-          throw new Error(payload?.error || '更新对话失败，请稍后重试');
-        }
-
+        await renameHomeSidebarThread({
+          id,
+          summary: newName,
+          selector: sidebarHeaderSelector,
+        });
         await safeRefetch();
       } catch (error: any) {
         const errorMessage = resolveAbortSafeErrorMessage(
@@ -327,17 +305,10 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
   const onDelete = useCallback(
     async (id: string) => {
       try {
-        const response = await fetch(
-          buildHomeSidebarThreadDetailUrl(id, sidebarHeaderSelector),
-          {
-            method: 'DELETE',
-          },
-        );
-        const payload = await response.json().catch(() => null);
-        if (!response.ok) {
-          throw new Error(payload?.error || '删除对话失败，请稍后重试');
-        }
-
+        await deleteHomeSidebarThread({
+          id,
+          selector: sidebarHeaderSelector,
+        });
         await safeRefetch();
       } catch (error: any) {
         const errorMessage = resolveAbortSafeErrorMessage(
@@ -378,9 +349,7 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
       return;
     }
 
-    void loadThreads().then((nextThreads) => {
-      setThreads(nextThreads);
-    });
+    void loadThreads();
   }, [disabled, hasRuntimeScope, loadThreads, queryEnabled, scopeKey]);
 
   return useMemo(

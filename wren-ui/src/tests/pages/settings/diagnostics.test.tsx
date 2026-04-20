@@ -128,5 +128,35 @@ describe('settings/diagnostics page', () => {
     expect(markup).toContain('查看 API History 与 Ask 诊断。');
     expect(markup).toContain('时间范围');
     expect(markup).toContain('调用明细');
+    expect(mockUseApiHistoryList).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiPath: '/api/v1/api-history',
+      }),
+    );
+  });
+
+  it('switches to the platform diagnostics route for platform readers', () => {
+    mockUseAuthSession.mockReturnValue({
+      authenticated: true,
+      loading: false,
+      data: {
+        authenticated: true,
+        authorization: {
+          actor: {
+            platformRoleKeys: ['platform_auditor'],
+            grantedActions: ['platform.diagnostics.read'],
+            isPlatformAdmin: false,
+          },
+        },
+      },
+    });
+
+    renderToStaticMarkup(<SettingsDiagnosticsPage />);
+
+    expect(mockUseApiHistoryList).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiPath: '/api/v1/platform/api-history',
+      }),
+    );
   });
 });

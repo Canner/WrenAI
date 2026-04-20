@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Alert, Button, Card, Col, Row, Space, Tag, Typography } from 'antd';
 import ConsoleShellLayout from '@/components/reference/ConsoleShellLayout';
 import useAuthSession from '@/hooks/useAuthSession';
@@ -10,6 +11,15 @@ import { resolvePlatformManagementFromAuthSession } from '@/features/settings/se
 import { buildSettingsConsoleShellProps } from '@/features/settings/settingsShell';
 
 const { Text } = Typography;
+
+const PLATFORM_ROLE_LABELS: Record<string, string> = {
+  platform_admin: '平台管理员',
+  platform_iam_admin: '平台权限管理员',
+  platform_workspace_admin: '平台空间管理员',
+  platform_auditor: '平台审计员',
+  support_readonly: '支持只读',
+  support_impersonator: '支持代理员',
+};
 
 function PlatformSummaryMetric({
   label,
@@ -36,6 +46,20 @@ export default function PlatformManagementPage() {
   const runtimeSelectorState = runtimeSelector.runtimeSelectorState;
 
   const authActor = authSession.data?.authorization?.actor;
+  const displayedPlatformRoleKeys = useMemo(() => {
+    const actorRoleKeys = (authActor?.platformRoleKeys || []).filter(Boolean);
+    if (actorRoleKeys.length > 0) {
+      return actorRoleKeys;
+    }
+    if (authActor?.isPlatformAdmin || authSession.data?.isPlatformAdmin) {
+      return ['platform_admin'];
+    }
+    return [];
+  }, [
+    authActor?.isPlatformAdmin,
+    authActor?.platformRoleKeys,
+    authSession.data?.isPlatformAdmin,
+  ]);
   const showPlatformManagement = resolvePlatformManagementFromAuthSession(
     authSession.data,
   );
@@ -64,7 +88,7 @@ export default function PlatformManagementPage() {
   return (
     <ConsoleShellLayout
       title="平台治理"
-      description="平台管理员视角的跨工作空间治理入口。"
+      description="平台治理角色视角的跨工作空间治理入口。"
       eyebrow="Platform Governance"
       {...shellProps}
     >
@@ -82,7 +106,7 @@ export default function PlatformManagementPage() {
           type="error"
           showIcon
           message="当前账号没有平台治理权限"
-          description="平台治理仅对 platform_admin 开放。"
+          description="平台治理入口仅对具备平台治理角色的账号开放。"
         />
       ) : (
         <Card
@@ -91,14 +115,18 @@ export default function PlatformManagementPage() {
             <Space wrap>
               <Button
                 onClick={() =>
-                  runtimeScopeNavigation.pushWorkspace(Path.SettingsUsers)
+                  runtimeScopeNavigation.pushWorkspace(
+                    Path.SettingsPlatformUsers,
+                  )
                 }
               >
                 用户管理
               </Button>
               <Button
                 onClick={() =>
-                  runtimeScopeNavigation.pushWorkspace(Path.SettingsPermissions)
+                  runtimeScopeNavigation.pushWorkspace(
+                    Path.SettingsPlatformPermissions,
+                  )
                 }
               >
                 权限管理
@@ -112,7 +140,9 @@ export default function PlatformManagementPage() {
               </Button>
               <Button
                 onClick={() =>
-                  runtimeScopeNavigation.pushWorkspace(Path.Workspace)
+                  runtimeScopeNavigation.pushWorkspace(
+                    Path.SettingsPlatformWorkspaces,
+                  )
                 }
               >
                 工作空间页
@@ -129,9 +159,7 @@ export default function PlatformManagementPage() {
               <Col xs={24} md={8}>
                 <PlatformSummaryMetric
                   label="平台角色数"
-                  value={
-                    (authActor?.platformRoleKeys || ['platform_admin']).length
-                  }
+                  value={displayedPlatformRoleKeys.length}
                 />
               </Col>
               <Col xs={24} md={8}>
@@ -148,13 +176,11 @@ export default function PlatformManagementPage() {
               </Col>
             </Row>
             <Space wrap>
-              {(authActor?.platformRoleKeys || ['platform_admin']).map(
-                (roleKey) => (
-                  <Tag key={roleKey} color="purple">
-                    {roleKey === 'platform_admin' ? '平台管理员' : roleKey}
-                  </Tag>
-                ),
-              )}
+              {displayedPlatformRoleKeys.map((roleKey) => (
+                <Tag key={roleKey} color="purple">
+                  {PLATFORM_ROLE_LABELS[roleKey] || roleKey}
+                </Tag>
+              ))}
               <Tag color="blue">当前工作空间 {currentWorkspaceName}</Tag>
               <Tag color="gold">高风险动作请前往权限管理 / 审计日志</Tag>
             </Space>

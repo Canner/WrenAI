@@ -13,6 +13,9 @@ describe('settingsShell', () => {
     expect(shellProps.hideHeader).toBe(true);
     expect(shellProps.contentBorderless).toBe(true);
     expect(shellProps.hideHistorySection).toBe(true);
+    expect(shellProps.hideSidebarBranding).toBe(true);
+    expect(shellProps.hideSidebarFooterPanel).toBe(true);
+    expect(shellProps.hideSidebarCollapseToggle).toBe(true);
     expect(shellProps.navItems).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ key: 'settingsUsers' }),

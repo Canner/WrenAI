@@ -8,12 +8,12 @@ import {
   Typography,
 } from 'antd';
 import {
-  ROLE_LABELS,
   STATUS_LABELS,
   applicationStatusColor,
   formatAccountLabel,
   formatPhoneLabel,
   renderSourceDetails,
+  resolveWorkspaceMemberRoleLabel,
 } from './usersPageUtils';
 import {
   buildMemberLifecycleActions,
@@ -25,7 +25,7 @@ import {
 const { Text } = Typography;
 
 const resolveRoleTagColor = (roleKey: string) =>
-  roleKey === 'owner' ? 'purple' : roleKey === 'admin' ? 'gold' : 'blue';
+  roleKey === 'owner' ? 'purple' : 'blue';
 
 export default function UsersMemberEditModal({
   canManageMembers,
@@ -80,7 +80,7 @@ export default function UsersMemberEditModal({
             </Descriptions.Item>
             <Descriptions.Item label="角色">
               <Tag color={resolveRoleTagColor(editingMember.roleKey)}>
-                {ROLE_LABELS[editingMember.roleKey] || editingMember.roleKey}
+                {resolveWorkspaceMemberRoleLabel(editingMember.roleKey)}
               </Tag>
             </Descriptions.Item>
             <Descriptions.Item label="状态">

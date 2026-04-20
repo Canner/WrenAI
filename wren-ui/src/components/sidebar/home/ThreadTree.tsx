@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import styled from 'styled-components';
-import { DataNode } from 'antd/lib/tree';
+import type { TreeDataNode } from 'antd';
 import { Path } from '@/utils/enum';
 import { useParams } from 'next/navigation';
 import PlusOutlined from '@ant-design/icons/PlusOutlined';
@@ -78,7 +78,7 @@ export default function ThreadTree(props: Props) {
     ],
   });
 
-  const [tree, setTree] = useState<DataNode[]>(getThreadGroupNode());
+  const [tree, setTree] = useState<TreeDataNode[]>(getThreadGroupNode());
 
   useEffect(() => {
     setTree((_tree) =>

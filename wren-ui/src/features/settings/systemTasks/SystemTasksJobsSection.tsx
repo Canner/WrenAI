@@ -9,6 +9,7 @@ import {
 const { Text } = Typography;
 
 export default function SystemTasksJobsSection({
+  canManageActions,
   filteredJobs,
   jobStatusFilter,
   jobStatusOptions,
@@ -19,6 +20,7 @@ export default function SystemTasksJobsSection({
   onRunNow,
   pendingAction,
 }: {
+  canManageActions: boolean;
   filteredJobs: ScheduleJobView[];
   jobStatusFilter: string;
   jobStatusOptions: Array<{ label: string; value: string }>;
@@ -45,7 +47,9 @@ export default function SystemTasksJobsSection({
       }
     >
       <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-        当前支持对看板缓存刷新任务执行立即刷新、编辑计划与切换为仅手动刷新。
+        {canManageActions
+          ? '当前支持对看板缓存刷新任务执行立即刷新、编辑计划与切换为仅手动刷新。'
+          : '当前账号仅可查看任务状态与最近运行记录。'}
       </Text>
       <Table
         rowKey="id"
@@ -117,29 +121,35 @@ export default function SystemTasksJobsSection({
 
               return (
                 <Space size={8} wrap>
-                  <Button
-                    onClick={() => onRunNow(record.id)}
-                    loading={isRunningAction}
-                  >
-                    立即刷新
-                  </Button>
-                  <Button
-                    onClick={() => onEdit(record)}
-                    loading={
-                      pendingAction?.jobId === record.id &&
-                      pendingAction.action === 'update'
-                    }
-                  >
-                    编辑计划
-                  </Button>
-                  {record.status === 'active' ? (
-                    <Button
-                      onClick={() => onDisable(record.id)}
-                      loading={isDisablingAction}
-                    >
-                      切为仅手动刷新
-                    </Button>
-                  ) : null}
+                  {canManageActions ? (
+                    <>
+                      <Button
+                        onClick={() => onRunNow(record.id)}
+                        loading={isRunningAction}
+                      >
+                        立即刷新
+                      </Button>
+                      <Button
+                        onClick={() => onEdit(record)}
+                        loading={
+                          pendingAction?.jobId === record.id &&
+                          pendingAction.action === 'update'
+                        }
+                      >
+                        编辑计划
+                      </Button>
+                      {record.status === 'active' ? (
+                        <Button
+                          onClick={() => onDisable(record.id)}
+                          loading={isDisablingAction}
+                        >
+                          切为仅手动刷新
+                        </Button>
+                      ) : null}
+                    </>
+                  ) : (
+                    <Text type="secondary">只读</Text>
+                  )}
                 </Space>
               );
             },

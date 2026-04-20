@@ -14,12 +14,17 @@ import {
   readRuntimeScopeSelectorFromSearch,
   RUNTIME_SCOPE_RECOVERY_EVENT,
   resolveRuntimeScopeBootstrapSelector,
-  RuntimeSelectorStateBootstrapData,
   shouldBlockRuntimeScopeBootstrapRender,
   shouldDeferRuntimeScopeUrlSync,
   writePersistedRuntimeScopeSelector,
 } from '@/runtime/client/runtimeScope';
 import useAuthSession from '@/hooks/useAuthSession';
+import {
+  buildRuntimeSelectorStateUrl,
+  peekRuntimeSelectorStatePayload,
+  primeRuntimeSelectorStatePayload,
+  type RuntimeSelectorState,
+} from '@/hooks/runtimeSelectorStateRequest';
 import { Path } from '@/utils/enum';
 
 interface Props {
@@ -196,6 +201,8 @@ export default function RuntimeScopeBootstrap({ children }: Props) {
 
     const bootstrapRuntimeScope = async () => {
       for (const candidate of bootstrapCandidates) {
+        const requestUrl = buildRuntimeSelectorStateUrl(candidate.selector);
+
         if (hasExplicitRuntimeScopeSelector(candidate.selector)) {
           const candidateKey = buildRuntimeScopeStateKey(candidate.selector);
           if (validatedSelectorKeysRef.current.has(candidateKey)) {
@@ -208,27 +215,34 @@ export default function RuntimeScopeBootstrap({ children }: Props) {
         }
 
         try {
-          const response = await fetch(
-            buildRuntimeScopeUrl(
-              '/api/v1/runtime/scope/current',
-              {},
-              candidate.selector,
-            ),
-            {
+          const cachedRuntimeSelectorState = peekRuntimeSelectorStatePayload({
+            requestUrl,
+          });
+          const runtimeSelectorState =
+            cachedRuntimeSelectorState ||
+            ((await fetch(requestUrl, {
               headers: {
                 ...buildRuntimeScopeHeaders(candidate.selector),
                 [RUNTIME_SCOPE_BOOTSTRAP_HEADER]: '1',
               },
               cache: 'no-store',
-            },
-          );
-          if (!response.ok) {
-            throw new Error(`Runtime bootstrap failed (${response.status})`);
+            }).then(async (response) => {
+              if (!response.ok) {
+                throw new Error(`Runtime bootstrap failed (${response.status})`);
+              }
+
+              return (await response
+                .json()
+                .catch(() => null)) as RuntimeSelectorState | null;
+            })) as RuntimeSelectorState | null);
+
+          if (!cachedRuntimeSelectorState) {
+            primeRuntimeSelectorStatePayload({
+              requestUrl,
+              payload: runtimeSelectorState,
+            });
           }
 
-          const runtimeSelectorState = (await response
-            .json()
-            .catch(() => null)) as RuntimeSelectorStateBootstrapData | null;
           if (cancelled) {
             return;
           }

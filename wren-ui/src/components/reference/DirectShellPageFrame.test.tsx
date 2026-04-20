@@ -23,13 +23,21 @@ jest.mock('@/hooks/useRuntimeScopeNavigation', () => ({
 
 jest.mock('./DolaAppShell', () => ({
   __esModule: true,
-  default: ({ children, historyItems, navItems }: any) => {
+  default: ({
+    children,
+    historyItems,
+    navItems,
+    flushBottomPadding,
+    stretchContent,
+  }: any) => {
     const React = jest.requireActual('react');
     return React.createElement(
       'div',
       {
         'data-nav-count': navItems?.length || 0,
         'data-history-count': historyItems?.length || 0,
+        'data-flush-bottom': String(Boolean(flushBottomPadding)),
+        'data-stretch-content': String(Boolean(stretchContent)),
       },
       children,
     );
@@ -75,5 +83,20 @@ describe('DirectShellPageFrame', () => {
 
     expect(html).toContain('embedded-content');
     expect(html).not.toContain('data-nav-count');
+  });
+
+  it('forwards bottom-flush and stretch props to the shell', () => {
+    const html = renderToStaticMarkup(
+      <DirectShellPageFrame
+        activeNav="knowledge"
+        flushBottomPadding
+        stretchContent
+      >
+        <div>workbench</div>
+      </DirectShellPageFrame>,
+    );
+
+    expect(html).toContain('data-flush-bottom="true"');
+    expect(html).toContain('data-stretch-content="true"');
   });
 });

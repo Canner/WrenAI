@@ -3,6 +3,10 @@ import {
   formatRoleSourceLabel,
   type WorkspaceGovernanceSourceDetail,
 } from '@/features/settings/workspaceGovernanceShared';
+import {
+  getWorkspaceRoleLabel,
+  normalizeWorkspaceRoleKeyForDisplay,
+} from '@/utils/workspaceGovernance';
 import { renderSourceDetails } from '@/features/settings/workspaceGovernanceSharedUi';
 export { renderSourceDetails } from '@/features/settings/workspaceGovernanceSharedUi';
 
@@ -10,8 +14,7 @@ export type SourceDetail = WorkspaceGovernanceSourceDetail;
 
 export const ROLE_LABELS: Record<string, string> = {
   owner: '所有者',
-  admin: '管理员',
-  member: '成员',
+  viewer: '查看者',
 };
 
 export const STATUS_LABELS: Record<string, string> = {
@@ -57,18 +60,15 @@ export const formatPhoneLabel = (
   phoneNumber?: string | null,
 ) => phone || mobile || phoneNumber || '—';
 
-export const isRoleProtectedFromAdjustment = (roleKey?: string | null) =>
-  roleKey === 'owner' || roleKey === 'admin';
+export const isRoleProtectedFromAdjustment = (_roleKey?: string | null) =>
+  false;
 
-export const getRoleAdjustmentDisabledReason = (roleKey?: string | null) => {
-  if (roleKey === 'owner') {
-    return '工作空间所有者不支持在此调整角色';
-  }
-  if (roleKey === 'admin') {
-    return '管理员账号不支持在此调整角色';
-  }
-  return null;
-};
+export const getRoleAdjustmentDisabledReason = (_roleKey?: string | null) =>
+  null;
+
+export const resolveWorkspaceMemberRoleLabel = (roleKey?: string | null) =>
+  ROLE_LABELS[normalizeWorkspaceRoleKeyForDisplay(roleKey) || ''] ||
+  getWorkspaceRoleLabel(roleKey);
 
 export const resolveRoleSourceSummary = ({
   workspaceActorSourceDetails,

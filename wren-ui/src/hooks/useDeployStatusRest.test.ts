@@ -3,6 +3,11 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import useDeployStatusRest, {
   buildDeployStatusRequestKey,
 } from './useDeployStatusRest';
+import {
+  normalizeDeployStatusRefetchResult,
+  shouldContinueDeployStatusPolling,
+  UNSYNCHRONIZED_RESULT,
+} from './deployStatusRestHelpers';
 
 const mockUseRuntimeScopeNavigation = jest.fn();
 const mockUseRestRequest = jest.fn();
@@ -53,6 +58,25 @@ describe('useDeployStatusRest', () => {
         workspaceId: 'workspace-1',
       }),
     ).toBeNull();
+  });
+
+  it('normalizes empty deploy-status refetch payloads to the unsynchronized fallback', () => {
+    expect(normalizeDeployStatusRefetchResult()).toEqual(UNSYNCHRONIZED_RESULT);
+    expect(
+      normalizeDeployStatusRefetchResult({
+        modelSync: { status: 'SUCCESS' } as any,
+      }),
+    ).toEqual({
+      data: {
+        modelSync: { status: 'SUCCESS' },
+      },
+    });
+  });
+
+  it('only continues deploy-status polling when a positive interval is configured', () => {
+    expect(shouldContinueDeployStatusPolling(null)).toBe(false);
+    expect(shouldContinueDeployStatusPolling(0)).toBe(false);
+    expect(shouldContinueDeployStatusPolling(1000)).toBe(true);
   });
 
   it('passes the derived request key into useRestRequest', () => {

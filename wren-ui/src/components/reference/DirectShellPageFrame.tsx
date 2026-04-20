@@ -12,10 +12,17 @@ import { usePersistentShellEmbedded } from './PersistentShellContext';
 
 type Props = {
   activeNav: NovaShellNavKey;
+  flushBottomPadding?: boolean;
+  stretchContent?: boolean;
   children: ReactNode;
 };
 
-export default function DirectShellPageFrame({ activeNav, children }: Props) {
+export default function DirectShellPageFrame({
+  activeNav,
+  flushBottomPadding = false,
+  stretchContent = false,
+  children,
+}: Props) {
   const embedded = usePersistentShellEmbedded();
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const homeSidebar = useHomeSidebar({
@@ -53,6 +60,8 @@ export default function DirectShellPageFrame({ activeNav, children }: Props) {
       historyItems={historyItems}
       historyLoading={homeSidebar.loading && historyItems.length === 0}
       onHistoryIntent={homeSidebar.ensureLoaded}
+      flushBottomPadding={flushBottomPadding}
+      stretchContent={stretchContent}
     >
       {children}
     </DolaAppShell>

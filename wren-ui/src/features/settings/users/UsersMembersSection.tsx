@@ -7,12 +7,12 @@ import { formatUserLabel } from '@/features/settings/workspaceGovernanceShared';
 
 const { Text } = Typography;
 import {
-  ROLE_LABELS,
   STATUS_LABELS,
   applicationStatusColor,
   formatAccountLabel,
   formatPhoneLabel,
   getRoleAdjustmentDisabledReason,
+  resolveWorkspaceMemberRoleLabel,
 } from './usersPageUtils';
 import UsersMembersToolbar from './UsersMembersToolbar';
 import UsersMemberInviteModal from './UsersMemberInviteModal';
@@ -24,7 +24,7 @@ import {
 } from './usersMembersSectionTypes';
 
 const resolveRoleTagColor = (roleKey: string) =>
-  roleKey === 'owner' ? 'purple' : roleKey === 'admin' ? 'gold' : 'blue';
+  roleKey === 'owner' ? 'purple' : 'blue';
 
 export default function UsersMembersSection({
   loading,
@@ -67,7 +67,7 @@ export default function UsersMembersSection({
     useState<WorkspaceMemberRecord | null>(null);
   const [roleTargetMember, setRoleTargetMember] =
     useState<WorkspaceMemberRecord | null>(null);
-  const [nextRoleKey, setNextRoleKey] = useState('member');
+  const [nextRoleKey, setNextRoleKey] = useState('viewer');
 
   const filteredMembers = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase();
@@ -114,11 +114,11 @@ export default function UsersMembersSection({
 
   const openRoleModal = (member: WorkspaceMemberRecord) => {
     setRoleTargetMember(member);
-    setNextRoleKey(member.roleKey || 'member');
+    setNextRoleKey(member.roleKey || 'viewer');
   };
 
   return (
-    <Card title="用户列表">
+    <Card title="成员列表">
       <UsersMembersToolbar
         canManageMembers={canManageMembers}
         filteredCount={filteredMembers.length}
@@ -189,7 +189,7 @@ export default function UsersMembersSection({
             width: 120,
             render: (roleKey: string) => (
               <Tag color={resolveRoleTagColor(roleKey)}>
-                {ROLE_LABELS[roleKey] || roleKey}
+                {resolveWorkspaceMemberRoleLabel(roleKey)}
               </Tag>
             ),
           },
@@ -233,7 +233,7 @@ export default function UsersMembersSection({
                         loading={updateBusy}
                         onClick={() => openRoleModal(record)}
                       >
-                        调整角色
+                        调整权限
                       </Button>
                     </span>
                   </Tooltip>

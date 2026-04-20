@@ -1,7 +1,7 @@
 import { SchemaChangeType, SchemaChange } from '@/types/schemaChange';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { message } from 'antd';
-import { DataNode } from 'antd/es/tree';
+import type { TreeDataNode } from 'antd';
 import { hasExecutableRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import { DiagramModel } from '@/utils/data';
 import { getNodeTypeIcon } from '@/utils/nodeType';
@@ -195,7 +195,7 @@ export default function ModelTree(props: Props) {
     ],
   });
 
-  const [tree, setTree] = useState<DataNode[]>(getModelGroupNode());
+  const [tree, setTree] = useState<TreeDataNode[]>(getModelGroupNode());
 
   useEffect(() => {
     setTree((_tree) =>

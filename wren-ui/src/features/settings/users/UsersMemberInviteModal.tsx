@@ -1,5 +1,5 @@
 import { Form, Input, Modal, Select, Typography } from 'antd';
-import { ROLE_OPTIONS } from '@/features/settings/workspaceGovernanceShared';
+import { WORKSPACE_MEMBER_ROLE_OPTIONS } from '@/utils/workspaceGovernance';
 
 const { Text } = Typography;
 
@@ -26,7 +26,7 @@ export default function UsersMemberInviteModal({
 }) {
   return (
     <Modal
-      title="新增用户"
+      title="邀请成员"
       visible={inviteModalOpen}
       destroyOnClose
       onCancel={onClose}
@@ -38,10 +38,10 @@ export default function UsersMemberInviteModal({
       <Form layout="vertical">
         <Form.Item>
           <Text type="secondary">
-            当前版本通过成员邀请完成新增，用户接受邀请后会自动进入当前工作空间。
+            当前版本通过成员邀请完成加入，成员接受邀请后会自动进入当前工作空间。
           </Text>
         </Form.Item>
-        <Form.Item label="用户邮箱" style={{ marginBottom: 12 }}>
+        <Form.Item label="成员邮箱" style={{ marginBottom: 12 }}>
           <Input
             autoFocus
             value={inviteEmail}
@@ -49,10 +49,10 @@ export default function UsersMemberInviteModal({
             onChange={(event) => onInviteEmailChange(event.target.value)}
           />
         </Form.Item>
-        <Form.Item label="工作空间角色" style={{ marginBottom: 0 }}>
+        <Form.Item label="工作空间权限" style={{ marginBottom: 0 }}>
           <Select
             value={inviteRole}
-            options={ROLE_OPTIONS}
+            options={[...WORKSPACE_MEMBER_ROLE_OPTIONS]}
             onChange={onInviteRoleChange}
           />
         </Form.Item>

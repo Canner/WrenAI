@@ -11,9 +11,9 @@ import {
 } from 'antd';
 import UserAddOutlined from '@ant-design/icons/UserAddOutlined';
 import {
-  ROLE_LABELS,
   STATUS_LABELS,
   applicationStatusColor,
+  resolveWorkspaceMemberRoleLabel,
 } from './usersPageUtils';
 import {
   ROLE_FILTER_OPTIONS,
@@ -95,7 +95,7 @@ export default function UsersMembersToolbar({
               icon={<UserAddOutlined />}
               onClick={() => setInviteModalOpen(true)}
             >
-              新增用户
+              邀请成员
             </Button>
           </Col>
         ) : null}
@@ -107,18 +107,20 @@ export default function UsersMembersToolbar({
           showIcon
           style={{ marginBottom: 14 }}
           message="当前为只读视图"
-          description="你可以查看用户信息与角色分布；编辑用户、调整角色与新增用户仍需要 workspace.member 管理权限。"
+          description="你可以查看成员信息与角色分布；编辑成员、调整角色与邀请成员仍需要 workspace.member 管理权限。"
         />
       ) : null}
 
       <Space style={{ marginBottom: 12 }} wrap>
         <Text type="secondary">
-          已显示 {filteredCount} / {totalCount} 名用户
+          已显示 {filteredCount} / {totalCount} 名成员
         </Text>
-        <Tag color="default">总用户 {memberCount}</Tag>
+        <Tag color="default">总成员 {memberCount}</Tag>
         <Tag color="default">待处理 {reviewQueueCount}</Tag>
         {roleFilter !== 'all' ? (
-          <Tag color="blue">角色：{ROLE_LABELS[roleFilter] || roleFilter}</Tag>
+          <Tag color="blue">
+            角色：{resolveWorkspaceMemberRoleLabel(roleFilter)}
+          </Tag>
         ) : null}
         {statusFilter !== 'all' ? (
           <Tag color={applicationStatusColor(statusFilter)}>

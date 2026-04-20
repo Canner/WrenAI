@@ -17,7 +17,9 @@ export enum Path {
   SettingsConnectors = '/settings/connectors',
   SettingsSkills = '/settings/skills',
   SettingsUsers = '/settings/users',
+  SettingsPlatformUsers = '/settings/platform/users',
   SettingsPermissions = '/settings/permissions',
+  SettingsPlatformPermissions = '/settings/platform/permissions',
   SettingsAccess = '/settings/access',
   SettingsIdentity = '/settings/identity',
   SettingsAutomation = '/settings/automation',
@@ -25,6 +27,7 @@ export enum Path {
   SettingsDiagnostics = '/settings/diagnostics',
   SettingsSystemTasks = '/settings/system-tasks',
   SettingsPlatform = '/settings/platform',
+  SettingsPlatformWorkspaces = '/settings/platform/workspaces',
   Workspace = '/workspace',
   WorkspaceSchedules = '/workspace/schedules',
 }

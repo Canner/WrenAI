@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import {
   buildRuntimeScopeUrl,
   type ClientRuntimeScopeSelector,
@@ -8,6 +8,7 @@ import {
   peekThreadOverview,
   primeThreadOverview,
 } from '@/utils/runtimePagePrefetch';
+import useRestRequest from './useRestRequest';
 
 const EMPTY_THREAD_DETAIL_RETRY_INTERVAL_MS = 500;
 const EMPTY_THREAD_DETAIL_MAX_RETRIES = 8;
@@ -39,6 +40,22 @@ export const buildThreadDetailUrl = ({
   runtimeScopeSelector?: ClientRuntimeScopeSelector;
 }) =>
   buildRuntimeScopeUrl(`/api/v1/threads/${threadId}`, {}, runtimeScopeSelector);
+
+export const buildThreadDetailRequestKey = ({
+  enabled,
+  threadId,
+  runtimeScopeSelector,
+}: {
+  enabled: boolean;
+  threadId?: number | null;
+  runtimeScopeSelector?: ClientRuntimeScopeSelector;
+}) =>
+  enabled && threadId != null
+    ? buildThreadDetailUrl({
+        threadId,
+        runtimeScopeSelector,
+      })
+    : null;
 
 export const normalizeThreadDetailPayload = (
   payload: unknown,
@@ -181,11 +198,8 @@ export default function useThreadDetail({
   onError?: (error: Error) => void;
 }) {
   const requestUrl = useMemo(() => {
-    if (!enabled || threadId == null) {
-      return null;
-    }
-
-    return buildThreadDetailUrl({
+    return buildThreadDetailRequestKey({
+      enabled,
       threadId,
       runtimeScopeSelector,
     });
@@ -195,20 +209,41 @@ export default function useThreadDetail({
     () => getCachedThreadDetail(threadId),
     [threadId],
   );
-  const onErrorRef = useRef(onError);
-  useEffect(() => {
-    onErrorRef.current = onError;
-  }, [onError]);
   const shouldRevalidatePrefetchedData = useMemo(
     () => shouldRefetchEmptyThreadDetail(prefetchedData?.thread),
     [prefetchedData],
   );
-  const [data, setData] = useState<ThreadDetailStateData | null>(
-    prefetchedData,
+  const shouldAutoFetch = Boolean(
+    requestUrl && (!prefetchedData || shouldRevalidatePrefetchedData),
   );
-  const [loading, setLoading] = useState(
-    Boolean(requestUrl && (!prefetchedData || shouldRevalidatePrefetchedData)),
-  );
+  const { data, loading, setData } = useRestRequest<
+    ThreadDetailStateData | null,
+    ThreadDetailData
+  >({
+    enabled: Boolean(requestUrl),
+    auto: shouldAutoFetch,
+    initialData: prefetchedData,
+    requestKey: requestUrl,
+    request: async () =>
+      loadThreadDetailPayloadWithRetry({
+        threadId: threadId as number,
+        requestUrl: requestUrl as string,
+        preferPrefetchedData: false,
+      }),
+    mapResult: (thread) => ({
+      thread,
+    }),
+    onError: (error) => {
+      onError?.(
+        error instanceof Error ? error : new Error('加载对话失败，已返回首页'),
+      );
+    },
+  });
+
+  useEffect(() => {
+    setData(prefetchedData);
+  }, [prefetchedData, setData]);
+
   const activeData = useMemo(() => {
     if (threadId == null) {
       return null;
@@ -220,55 +255,6 @@ export default function useThreadDetail({
 
     return prefetchedData;
   }, [data, prefetchedData, threadId]);
-
-  useEffect(() => {
-    setData(prefetchedData);
-
-    if (!requestUrl || threadId == null) {
-      setLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    setLoading(!prefetchedData || shouldRevalidatePrefetchedData);
-
-    void loadThreadDetailPayloadWithRetry({
-      threadId,
-      requestUrl,
-      preferPrefetchedData: false,
-    })
-      .then((thread) => {
-        if (cancelled) {
-          return;
-        }
-
-        setData({
-          thread,
-        });
-      })
-      .catch((error) => {
-        if (cancelled) {
-          return;
-        }
-
-        onErrorRef.current?.(
-          error instanceof Error
-            ? error
-            : new Error('加载对话失败，已返回首页'),
-        );
-      })
-      .finally(() => {
-        if (cancelled) {
-          return;
-        }
-
-        setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [prefetchedData, requestUrl, shouldRevalidatePrefetchedData, threadId]);
 
   const updateQuery = useCallback<UpdateThreadDetailState>(
     (updater) => {

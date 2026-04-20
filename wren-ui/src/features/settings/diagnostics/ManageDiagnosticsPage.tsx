@@ -53,7 +53,10 @@ import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import useApiHistoryList, {
   type ApiHistoryListItem,
 } from '@/hooks/useApiHistoryList';
-import { resolvePlatformManagementFromAuthSession } from '@/features/settings/settingsPageCapabilities';
+import {
+  resolvePlatformConsoleCapabilities,
+  resolvePlatformManagementFromAuthSession,
+} from '@/features/settings/settingsPageCapabilities';
 import { buildSettingsConsoleShellProps } from '@/features/settings/settingsShell';
 
 const PAGE_SIZE = 10;
@@ -64,6 +67,9 @@ export default function SettingsDiagnosticsPage() {
   const runtimeScopePage = useProtectedRuntimeScopePage();
   const authSession = useAuthSession();
   const showPlatformManagement = resolvePlatformManagementFromAuthSession(
+    authSession.data,
+  );
+  const platformCapabilities = resolvePlatformConsoleCapabilities(
     authSession.data,
   );
   const guardShellProps = buildSettingsConsoleShellProps({
@@ -151,6 +157,9 @@ export default function SettingsDiagnosticsPage() {
       ...dateFilter,
     },
     runtimeScopeSelector,
+    apiPath: platformCapabilities.canReadDiagnostics
+      ? '/api/v1/platform/api-history'
+      : '/api/v1/api-history',
     onError: (error) => {
       const errorMessage = resolveAbortSafeErrorMessage(
         error,

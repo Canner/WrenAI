@@ -2,13 +2,16 @@ import { useEffect } from 'react';
 import { Form } from 'antd';
 import {
   DATABASE_PROVIDER_EXAMPLES,
+  type ConnectorView,
   type ConnectorFormValues,
 } from './connectorsPageUtils';
 
 export default function useConnectorEditorFields({
   form,
+  editingConnector,
 }: {
   form: ReturnType<typeof Form.useForm<ConnectorFormValues>>[0];
+  editingConnector?: ConnectorView | null;
 }) {
   const watchedConnectorType = Form.useWatch('type', form);
   const watchedDatabaseProvider = Form.useWatch('databaseProvider', form);
@@ -20,10 +23,14 @@ export default function useConnectorEditorFields({
       : null;
 
   useEffect(() => {
-    if (watchedConnectorType === 'database' && !watchedDatabaseProvider) {
+    if (
+      watchedConnectorType === 'database' &&
+      !watchedDatabaseProvider &&
+      !editingConnector
+    ) {
       form.setFieldsValue({ databaseProvider: 'postgres' });
     }
-  }, [form, watchedConnectorType, watchedDatabaseProvider]);
+  }, [editingConnector, form, watchedConnectorType, watchedDatabaseProvider]);
 
   useEffect(() => {
     if (

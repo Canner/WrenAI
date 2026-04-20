@@ -16,6 +16,8 @@ type Props = {
   collapsed: boolean;
   isHomeActive: boolean;
   sidebarBackAction?: DolaShellBackAction;
+  hideBranding?: boolean;
+  hideCollapseToggle?: boolean;
   onPrimaryAction?: () => void;
   primaryActionLabel: string;
   primaryActionIcon?: ReactNode;
@@ -24,13 +26,17 @@ type Props = {
   onToggleCollapsed: () => void;
 };
 
-const BrandBlock = styled.div<{ $collapsed?: boolean }>`
+const BrandBlock = styled.div<{
+  $collapsed?: boolean;
+  $hideBranding?: boolean;
+}>`
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: ${(props) =>
+    props.$hideBranding ? 'flex-end' : 'space-between'};
   gap: 8px;
-  padding: 4px 2px 0;
-  min-height: 32px;
+  padding: ${(props) => (props.$hideBranding ? '0 2px' : '4px 2px 0')};
+  min-height: ${(props) => (props.$hideBranding ? '0' : '32px')};
   flex-shrink: 0;
 `;
 
@@ -89,13 +95,18 @@ const NavSection = styled.div`
 
 const SidebarBackButton = styled(Button)<{ $collapsed?: boolean }>`
   && {
+    width: 100%;
     height: 34px;
     border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
     justify-content: ${(props) => (props.$collapsed ? 'center' : 'flex-start')};
-    padding-inline: ${(props) => (props.$collapsed ? '0' : '10px')} !important;
+    gap: 6px;
+    padding-inline: ${(props) => (props.$collapsed ? '0' : '6px')} !important;
     color: #4b5563;
     border: 0;
     background: transparent;
+    font-weight: 500;
 
     &:hover,
     &:focus {
@@ -109,6 +120,8 @@ export default function DolaShellNavPane({
   collapsed,
   isHomeActive,
   sidebarBackAction,
+  hideBranding = false,
+  hideCollapseToggle = false,
   onPrimaryAction,
   primaryActionLabel,
   primaryActionIcon,
@@ -118,8 +131,8 @@ export default function DolaShellNavPane({
 }: Props) {
   return (
     <>
-      <BrandBlock $collapsed={collapsed}>
-        {!collapsed ? (
+      <BrandBlock $collapsed={collapsed} $hideBranding={hideBranding}>
+        {!collapsed && !hideBranding ? (
           <BrandIdentity>
             <BrandMarkFrame aria-hidden>
               <NovaBrandMark size={22} />
@@ -129,14 +142,16 @@ export default function DolaShellNavPane({
             </div>
           </BrandIdentity>
         ) : null}
-        <CollapseToggleButton
-          type="text"
-          size="small"
-          $collapsed={collapsed}
-          icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-          aria-label={collapsed ? '展开侧边栏' : '收起侧边栏'}
-          onClick={onToggleCollapsed}
-        />
+        {hideCollapseToggle ? null : (
+          <CollapseToggleButton
+            type="text"
+            size="small"
+            $collapsed={collapsed}
+            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            aria-label={collapsed ? '展开侧边栏' : '收起侧边栏'}
+            onClick={onToggleCollapsed}
+          />
+        )}
       </BrandBlock>
 
       <NavSection>

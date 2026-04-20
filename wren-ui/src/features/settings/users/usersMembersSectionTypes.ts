@@ -1,7 +1,7 @@
-import { ROLE_OPTIONS } from '@/features/settings/workspaceGovernanceShared';
+import { WORKSPACE_MEMBER_ROLE_OPTIONS } from '@/utils/workspaceGovernance';
 import {
-  ROLE_LABELS,
   STATUS_LABELS,
+  resolveWorkspaceMemberRoleLabel,
   type SourceDetail,
 } from './usersPageUtils';
 
@@ -39,10 +39,6 @@ export type WorkspaceMemberRecord = {
 export const buildMemberLifecycleActions = (
   record: WorkspaceMemberRecord,
 ): MemberLifecycleActionConfig[] => {
-  if (record.roleKey === 'owner') {
-    return [];
-  }
-
   switch (record.status) {
     case 'pending':
       return [
@@ -67,7 +63,7 @@ export const buildMemberLifecycleActions = (
 
 export const ROLE_FILTER_OPTIONS = [
   { label: '全部角色', value: 'all' },
-  ...ROLE_OPTIONS,
+  ...WORKSPACE_MEMBER_ROLE_OPTIONS,
 ].map((option) => ({ ...option, key: option.value }));
 
 export const STATUS_FILTER_OPTIONS = [
@@ -80,7 +76,7 @@ export const STATUS_FILTER_OPTIONS = [
 ];
 
 export const resolveMemberRoleLabel = (roleKey: string) =>
-  ROLE_LABELS[roleKey] || roleKey;
+  resolveWorkspaceMemberRoleLabel(roleKey);
 
 export const resolveMemberSourceFallbackLabel = (status: string) => {
   if (status === 'pending') {

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Modal } from 'antd';
-import { DataNode } from 'antd/es/tree';
+import type { TreeDataNode } from 'antd';
 import PlusOutlined from '@ant-design/icons/PlusOutlined';
 import { Path } from '@/utils/enum';
 import { DiagramView } from '@/utils/data';
@@ -71,7 +71,7 @@ export default function ViewTree(props: Props) {
     ],
   });
 
-  const [tree, setTree] = useState<DataNode[]>(getViewGroupNode());
+  const [tree, setTree] = useState<TreeDataNode[]>(getViewGroupNode());
 
   useEffect(() => {
     setTree((_tree) =>

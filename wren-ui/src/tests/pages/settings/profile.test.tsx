@@ -106,10 +106,51 @@ describe('settings/profile page', () => {
     const markup = renderPage();
 
     expect(markup).toContain('个人资料');
-    expect(markup).toContain('基本资料');
+    expect(markup).not.toContain('基本资料');
     expect(markup).toContain('默认工作空间');
     expect(markup).toContain('平台角色');
     expect(markup).toContain('修改密码');
     expect(markup).toContain('安全建议');
+    expect(markup).not.toContain('当前空间 · Nova 工作空间');
+    expect(markup).not.toContain(
+      '更新当前账号的登录凭据，建议使用独立且可恢复的密码。',
+    );
+  });
+
+  it('renders the new support role labels in the profile summary', () => {
+    mockUseAuthSession.mockReturnValue({
+      authenticated: true,
+      loading: false,
+      data: {
+        user: {
+          email: 'support@example.com',
+          displayName: 'Support Agent',
+        },
+        membership: {
+          roleKey: 'viewer',
+        },
+        workspace: {
+          name: 'Nova 工作空间',
+        },
+        workspaces: [
+          {
+            id: 'ws-1',
+            name: 'Nova 工作空间',
+          },
+        ],
+        defaultWorkspaceId: 'ws-1',
+        authorization: {
+          actor: {
+            workspaceRoleKeys: ['viewer'],
+            platformRoleKeys: ['support_readonly', 'support_impersonator'],
+          },
+        },
+      },
+    });
+
+    const markup = renderPage();
+
+    expect(markup).toContain('支持只读');
+    expect(markup).toContain('支持代理员');
   });
 });

@@ -75,100 +75,121 @@ export const buildNovaShellNavItems = ({
 
 export const buildNovaSettingsNavItems = ({
   activeKey,
+  showPlatformAdmin = false,
 }: {
   activeKey?: NovaShellNavKey;
   onNavigate?: (path: string, params?: NovaNavParams) => void;
   showPlatformAdmin?: boolean;
-}): DolaShellNavItem[] => [
-  {
-    key: 'settingsProfile',
-    label: '个人资料',
-    icon: <SettingOutlined />,
-    iconKey: 'settingsProfile',
-    sectionLabel: '账户设置',
-    active: activeKey === 'settingsProfile',
-    path: activeKey === 'settingsProfile' ? undefined : Path.Settings,
-  },
-  {
-    key: 'settingsUsers',
-    label: '用户管理',
-    icon: <SafetyCertificateOutlined />,
-    iconKey: 'settingsUsers',
-    sectionLabel: '组织与安全',
-    active: activeKey === 'settingsUsers',
-    path: activeKey === 'settingsUsers' ? undefined : Path.SettingsUsers,
-  },
-  {
-    key: 'settingsPermissions',
-    label: '权限管理',
-    icon: <SafetyCertificateOutlined />,
-    iconKey: 'settingsPermissions',
-    sectionLabel: '组织与安全',
-    active: activeKey === 'settingsPermissions',
-    path:
-      activeKey === 'settingsPermissions'
-        ? undefined
-        : Path.SettingsPermissions,
-  },
-  {
-    key: 'settingsAudit',
-    label: '审计日志',
-    icon: <AuditOutlined />,
-    iconKey: 'settingsAudit',
-    sectionLabel: '组织与安全',
-    active: activeKey === 'settingsAudit',
-    path: activeKey === 'settingsAudit' ? undefined : Path.SettingsAudit,
-  },
-  {
-    key: 'settingsWorkspace',
-    label: '工作空间管理',
-    icon: <TeamOutlined />,
-    iconKey: 'settingsWorkspace',
-    sectionLabel: '工作空间',
-    active: activeKey === 'settingsWorkspace',
-    path: activeKey === 'settingsWorkspace' ? undefined : Path.Workspace,
-  },
-  {
-    key: 'settingsConnectors',
-    label: '数据连接器',
-    icon: <ApiOutlined />,
-    iconKey: 'settingsConnectors',
-    sectionLabel: '业务与配置',
-    active: activeKey === 'settingsConnectors',
-    path:
-      activeKey === 'settingsConnectors' ? undefined : Path.SettingsConnectors,
-  },
-  {
-    key: 'settingsSkills',
-    label: '技能管理',
-    icon: <CodeOutlined />,
-    iconKey: 'settingsSkills',
-    sectionLabel: '业务与配置',
-    active: activeKey === 'settingsSkills',
-    path: activeKey === 'settingsSkills' ? undefined : Path.SettingsSkills,
-  },
-  {
-    key: 'settingsDiagnostics',
-    label: '调用诊断',
-    icon: <ApiOutlined />,
-    iconKey: 'settingsDiagnostics',
-    sectionLabel: '业务与配置',
-    active: activeKey === 'settingsDiagnostics',
-    path:
-      activeKey === 'settingsDiagnostics'
-        ? undefined
-        : Path.SettingsDiagnostics,
-  },
-  {
-    key: 'settingsSystemTasks',
-    label: '系统任务',
-    icon: <ScheduleOutlined />,
-    iconKey: 'settingsSystemTasks',
-    sectionLabel: '业务与配置',
-    active: activeKey === 'settingsSystemTasks',
-    path:
-      activeKey === 'settingsSystemTasks'
-        ? undefined
-        : Path.SettingsSystemTasks,
-  },
-];
+}): DolaShellNavItem[] => {
+  const navItems: DolaShellNavItem[] = [
+    {
+      key: 'settingsProfile',
+      label: '个人资料',
+      icon: <SettingOutlined />,
+      iconKey: 'settingsProfile',
+      sectionLabel: '账户设置',
+      active: activeKey === 'settingsProfile',
+      path: activeKey === 'settingsProfile' ? undefined : Path.Settings,
+    },
+  ];
+
+  if (showPlatformAdmin) {
+    navItems.push(
+      {
+        key: 'settingsUsers',
+        label: '用户管理',
+        icon: <SafetyCertificateOutlined />,
+        iconKey: 'settingsUsers',
+        sectionLabel: '组织与安全',
+        active: activeKey === 'settingsUsers',
+        path:
+          activeKey === 'settingsUsers'
+            ? undefined
+            : Path.SettingsPlatformUsers,
+      },
+      {
+        key: 'settingsPermissions',
+        label: '权限管理',
+        icon: <SafetyCertificateOutlined />,
+        iconKey: 'settingsPermissions',
+        sectionLabel: '组织与安全',
+        active: activeKey === 'settingsPermissions',
+        path:
+          activeKey === 'settingsPermissions'
+            ? undefined
+            : Path.SettingsPlatformPermissions,
+      },
+    );
+  }
+
+  navItems.push(
+    {
+      key: 'settingsWorkspace',
+      label: '工作空间管理',
+      icon: <TeamOutlined />,
+      iconKey: 'settingsWorkspace',
+      sectionLabel: '工作空间',
+      active: activeKey === 'settingsWorkspace',
+      path:
+        activeKey === 'settingsWorkspace'
+          ? undefined
+          : Path.SettingsPlatformWorkspaces,
+    },
+    {
+      key: 'settingsConnectors',
+      label: '数据连接器',
+      icon: <ApiOutlined />,
+      iconKey: 'settingsConnectors',
+      sectionLabel: '业务与配置',
+      active: activeKey === 'settingsConnectors',
+      path:
+        activeKey === 'settingsConnectors'
+          ? undefined
+          : Path.SettingsConnectors,
+    },
+    {
+      key: 'settingsSkills',
+      label: '技能管理',
+      icon: <CodeOutlined />,
+      iconKey: 'settingsSkills',
+      sectionLabel: '业务与配置',
+      active: activeKey === 'settingsSkills',
+      path: activeKey === 'settingsSkills' ? undefined : Path.SettingsSkills,
+    },
+    {
+      key: 'settingsSystemTasks',
+      label: '系统任务',
+      icon: <ScheduleOutlined />,
+      iconKey: 'settingsSystemTasks',
+      sectionLabel: '业务与配置',
+      active: activeKey === 'settingsSystemTasks',
+      path:
+        activeKey === 'settingsSystemTasks'
+          ? undefined
+          : Path.SettingsSystemTasks,
+    },
+    {
+      key: 'settingsAudit',
+      label: '审计日志',
+      icon: <AuditOutlined />,
+      iconKey: 'settingsAudit',
+      sectionLabel: '观测与运维',
+      active: activeKey === 'settingsAudit',
+      path: activeKey === 'settingsAudit' ? undefined : Path.SettingsAudit,
+    },
+    {
+      key: 'settingsDiagnostics',
+      label: '调用诊断',
+      icon: <ApiOutlined />,
+      iconKey: 'settingsDiagnostics',
+      sectionLabel: '观测与运维',
+      active: activeKey === 'settingsDiagnostics',
+      path:
+        activeKey === 'settingsDiagnostics'
+          ? undefined
+          : Path.SettingsDiagnostics,
+    },
+  );
+
+  return navItems;
+};

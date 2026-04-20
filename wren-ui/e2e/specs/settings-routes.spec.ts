@@ -30,7 +30,6 @@ const ROUTE_CASES: Array<{
   { pathname: '/workspace/schedules', title: '系统任务' },
   { pathname: '/settings/workspace', title: '工作空间' },
   { pathname: '/workspace', title: '工作空间' },
-  { pathname: '/settings/security', title: '个人资料', url: /\/settings(?:\?.*)?$/ },
 ];
 
 const seedDiagnosticsAndSchedulesFixture = async (

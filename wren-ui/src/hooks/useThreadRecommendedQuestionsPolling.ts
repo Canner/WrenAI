@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback } from 'react';
 import {
   buildRuntimeScopeUrl,
   type ClientRuntimeScopeSelector,
 } from '@/runtime/client/runtimeScope';
 import type { RecommendedQuestionsTask } from '@/types/home';
+import usePollingRequestLoop from './usePollingRequestLoop';
 
 export const buildThreadRecommendationQuestionsUrl = ({
   threadId,
@@ -76,72 +77,23 @@ export default function useThreadRecommendedQuestionsPolling({
   onCompleted?: (task: RecommendedQuestionsTask) => void;
   onError?: (error: Error) => void;
 }) {
-  const [data, setData] = useState<RecommendedQuestionsTask | null>(null);
-  const [loading, setLoading] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pollingSessionRef = useRef(0);
-
-  const stopPolling = useCallback(() => {
-    pollingSessionRef.current += 1;
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-  }, []);
+  const { data, loading, startPolling, stopPolling } =
+    usePollingRequestLoop<RecommendedQuestionsTask>({
+      pollInterval,
+      onCompleted,
+      onError,
+    });
 
   const fetchByThreadId = useCallback(
-    async (threadId: number) => {
-      const sessionId = pollingSessionRef.current + 1;
-      pollingSessionRef.current = sessionId;
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
-      setLoading(true);
-
-      const run = async (): Promise<RecommendedQuestionsTask | null> => {
-        try {
-          const nextTask = await loadThreadRecommendationQuestionsPayload({
-            threadId,
-            runtimeScopeSelector,
-          });
-
-          if (pollingSessionRef.current !== sessionId) {
-            return nextTask;
-          }
-
-          setData(nextTask);
-          onCompleted?.(nextTask);
-          timerRef.current = setTimeout(() => {
-            void run();
-          }, pollInterval);
-          return nextTask;
-        } catch (error) {
-          if (pollingSessionRef.current === sessionId) {
-            onError?.(
-              error instanceof Error
-                ? error
-                : new Error('加载推荐追问失败，请稍后重试'),
-            );
-          }
-          return null;
-        } finally {
-          if (pollingSessionRef.current === sessionId) {
-            setLoading(false);
-          }
-        }
-      };
-
-      return run();
-    },
-    [onCompleted, onError, pollInterval, runtimeScopeSelector],
+    (threadId: number) =>
+      startPolling(() =>
+        loadThreadRecommendationQuestionsPayload({
+          threadId,
+          runtimeScopeSelector,
+        }),
+      ),
+    [runtimeScopeSelector, startPolling],
   );
-
-  useEffect(() => {
-    return () => {
-      stopPolling();
-    };
-  }, [stopPolling]);
 
   return {
     data,

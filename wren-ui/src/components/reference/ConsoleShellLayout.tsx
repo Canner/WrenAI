@@ -27,6 +27,8 @@ interface Props {
   eyebrow?: ReactNode;
   hideHeader?: boolean;
   contentBorderless?: boolean;
+  flushMainPadding?: boolean;
+  stretchContent?: boolean;
   loading?: boolean;
   children?: ReactNode;
   sections?: ConsoleSectionItem[];
@@ -35,6 +37,9 @@ interface Props {
   activeHistoryId?: string | null;
   hideHistorySection?: boolean;
   sidebarBackAction?: DolaShellBackAction;
+  hideSidebarBranding?: boolean;
+  hideSidebarFooterPanel?: boolean;
+  hideSidebarCollapseToggle?: boolean;
 }
 
 export const shouldRefetchConsoleHistory = ({
@@ -63,16 +68,19 @@ export const shouldRefetchConsoleHistory = ({
   return true;
 };
 
-const PageRoot = styled.div`
-  min-height: calc(100vh - 48px);
+const PageRoot = styled.div<{ $flush?: boolean }>`
+  min-height: ${(props) => (props.$flush ? '100%' : 'calc(100vh - 48px)')};
+  height: ${(props) => (props.$flush ? '100%' : 'auto')};
   padding: 0;
   background: transparent;
 `;
 
-const ShellStack = styled.div`
+const ShellStack = styled.div<{ $flush?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 18px;
+  min-height: ${(props) => (props.$flush ? '100%' : '0')};
+  height: ${(props) => (props.$flush ? '100%' : 'auto')};
 `;
 
 const SegmentSurface = styled.div`
@@ -140,13 +148,18 @@ const Eyebrow = styled.div`
   letter-spacing: 0.04em;
 `;
 
-const ContentStage = styled.div<{ $borderless?: boolean }>`
+const ContentStage = styled.div<{ $borderless?: boolean; $stretch?: boolean }>`
   border-radius: ${(props) => (props.$borderless ? '0' : '16px')};
   border: ${(props) =>
     props.$borderless ? '0' : '1px solid var(--nova-outline-soft)'};
   background: ${(props) => (props.$borderless ? 'transparent' : '#fff')};
   padding: ${(props) => (props.$borderless ? '0' : '24px')};
   width: 100%;
+  flex: ${(props) => (props.$stretch ? '1 1 auto' : '0 0 auto')};
+  height: ${(props) => (props.$stretch ? '100%' : 'auto')};
+  min-height: ${(props) => (props.$stretch ? '0' : 'auto')};
+  display: ${(props) => (props.$stretch ? 'flex' : 'block')};
+  flex-direction: column;
 
   .console-grid {
     display: grid;
@@ -278,6 +291,8 @@ export default function ConsoleShellLayout({
   eyebrow = '工作台',
   hideHeader,
   contentBorderless,
+  flushMainPadding,
+  stretchContent,
   loading,
   children,
   sections,
@@ -286,6 +301,9 @@ export default function ConsoleShellLayout({
   activeHistoryId,
   hideHistorySection,
   sidebarBackAction,
+  hideSidebarBranding,
+  hideSidebarFooterPanel,
+  hideSidebarCollapseToggle,
 }: Props) {
   const embedded = usePersistentShellEmbedded();
   const homeSidebar = useHomeSidebar({
@@ -343,8 +361,8 @@ export default function ConsoleShellLayout({
   );
 
   const content = (
-    <PageRoot>
-      <ShellStack>
+    <PageRoot $flush={flushMainPadding}>
+      <ShellStack $flush={flushMainPadding}>
         {sections?.length ? (
           <SegmentSurface>
             {sections.map((section) => (
@@ -395,7 +413,7 @@ export default function ConsoleShellLayout({
           </HeaderCard>
         ) : null}
 
-        <ContentStage $borderless={contentBorderless}>
+        <ContentStage $borderless={contentBorderless} $stretch={stretchContent}>
           {loading ? <Skeleton active paragraph={{ rows: 8 }} /> : children}
         </ContentStage>
       </ShellStack>
@@ -414,6 +432,11 @@ export default function ConsoleShellLayout({
       onHistoryIntent={homeSidebar.ensureLoaded}
       hideHistorySection={hideHistorySection}
       sidebarBackAction={sidebarBackAction}
+      hideSidebarBranding={hideSidebarBranding}
+      hideSidebarFooterPanel={hideSidebarFooterPanel}
+      hideSidebarCollapseToggle={hideSidebarCollapseToggle}
+      flushMainPadding={flushMainPadding}
+      stretchContent={stretchContent}
     >
       {content}
     </DolaAppShell>

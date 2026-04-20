@@ -32,6 +32,21 @@ describe('useApiHistoryList helpers', () => {
     );
   });
 
+  it('builds the platform api history url when a custom base path is provided', () => {
+    expect(
+      buildApiHistoryListUrl({
+        apiPath: '/api/v1/platform/api-history',
+        pagination: {
+          offset: 0,
+          limit: 10,
+        },
+        runtimeScopeSelector: {
+          workspaceId: 'ws-1',
+        },
+      }),
+    ).toBe('/api/v1/platform/api-history?offset=0&limit=10&workspaceId=ws-1');
+  });
+
   it('returns a null request key when api history loading is disabled', () => {
     expect(
       buildApiHistoryListRequestKey({

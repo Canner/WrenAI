@@ -1,8 +1,8 @@
-import WorkspacePage from '@/features/workspace/ManageWorkspacePage';
+import PlatformWorkspacesPage from '@/features/settings/platform-workspaces/ManagePlatformWorkspacesPage';
 import { Path } from '@/utils/enum';
 import { createCompatibilityAliasPage } from '@/utils/compatibilityRoutes';
 
-export default createCompatibilityAliasPage(WorkspacePage, {
+export default createCompatibilityAliasPage(PlatformWorkspacesPage, {
   legacyRoute: Path.SettingsWorkspace,
-  canonicalRoute: Path.Workspace,
+  canonicalRoute: Path.SettingsPlatformWorkspaces,
 });

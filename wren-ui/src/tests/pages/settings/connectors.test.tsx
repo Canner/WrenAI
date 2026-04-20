@@ -489,35 +489,52 @@ describe('knowledge/connectors page', () => {
     expect(capturedTableProps.dataSource).toEqual([]);
   });
 
-  it('adds 数据库类型列 and renders config as formatted json', () => {
+  it('renders 名称/类型列 and keeps config json compact', () => {
     renderPage();
 
-    const databaseTypeColumn = capturedTableProps.columns.find(
-      (column: any) => column.title === '数据库类型',
+    const nameColumn = capturedTableProps.columns.find(
+      (column: any) => column.title === '名称',
+    );
+    const typeColumn = capturedTableProps.columns.find(
+      (column: any) => column.title === '类型',
     );
     const configColumn = capturedTableProps.columns.find(
       (column: any) => column.title === '配置',
     );
 
-    expect(databaseTypeColumn).toBeDefined();
+    expect(nameColumn).toBeDefined();
+    expect(typeColumn).toBeDefined();
     expect(configColumn).toBeDefined();
 
-    const databaseTypeMarkup = renderToStaticMarkup(
-      databaseTypeColumn.render('postgres', {
+    const nameMarkup = renderToStaticMarkup(
+      nameColumn.render('Warehouse', {
+        id: 'connector-1',
+        type: 'database',
+        databaseProvider: 'postgres',
+        displayName: 'Warehouse',
+      }),
+    );
+    expect(nameMarkup).toContain('Warehouse');
+    expect(nameMarkup).not.toContain('database');
+
+    const typeMarkup = renderToStaticMarkup(
+      typeColumn.render('database', {
         id: 'connector-1',
         type: 'database',
         databaseProvider: 'postgres',
       }),
     );
-    expect(databaseTypeMarkup).toContain('PostgreSQL');
+    expect(typeMarkup).toContain('数据库');
+    expect(typeMarkup).toContain('PostgreSQL');
 
-    const configMarkup = renderToStaticMarkup(
-      configColumn.render({
-        host: 'host.docker.internal',
-        port: 4000,
-        user: 'root',
-      }),
-    );
+    const configElement = configColumn.render({
+      host: 'host.docker.internal',
+      port: 4000,
+      user: 'root',
+    });
+    const configMarkup = renderToStaticMarkup(configElement);
+    expect(configElement.props.style.fontSize).toBe(12);
+    expect(configElement.props.style.lineHeight).toBe(1.5);
     expect(configMarkup).toContain(
       '&quot;host&quot;: &quot;host.docker.internal&quot;',
     );

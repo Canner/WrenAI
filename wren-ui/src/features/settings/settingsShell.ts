@@ -36,4 +36,7 @@ export const buildSettingsConsoleShellProps = ({
     label: '返回主菜单',
     onClick: () => onNavigate(Path.Home),
   },
+  hideSidebarBranding: true,
+  hideSidebarFooterPanel: true,
+  hideSidebarCollapseToggle: true,
 });

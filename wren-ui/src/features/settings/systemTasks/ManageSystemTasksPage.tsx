@@ -6,9 +6,13 @@ import CacheSettingsDrawer from '@/components/pages/home/dashboardGrid/CacheSett
 import type { Schedule as DashboardScheduleConfig } from '@/components/pages/home/dashboardGrid/CacheSettingsDrawer';
 import ScheduleRunDetailsDrawer from '@/components/pages/workspace/ScheduleRunDetailsDrawer';
 import { buildSettingsConsoleShellProps } from '@/features/settings/settingsShell';
-import { resolvePlatformManagementFromAuthSession } from '@/features/settings/settingsPageCapabilities';
+import {
+  resolvePlatformConsoleCapabilities,
+  resolvePlatformManagementFromAuthSession,
+} from '@/features/settings/settingsPageCapabilities';
 import useAuthSession from '@/hooks/useAuthSession';
 import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
+import useRestRequest from '@/hooks/useRestRequest';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import {
   getStatusLabel,
@@ -20,6 +24,78 @@ import SystemTasksSummarySection from '@/features/settings/systemTasks/SystemTas
 import SystemTasksJobsSection from '@/features/settings/systemTasks/SystemTasksJobsSection';
 import SystemTasksRunsSection from '@/features/settings/systemTasks/SystemTasksRunsSection';
 
+export const buildSystemTasksOverviewUrl = ({
+  usePlatformRoute = false,
+}: {
+  usePlatformRoute?: boolean;
+} = {}) =>
+  buildRuntimeScopeUrl(
+    usePlatformRoute
+      ? '/api/v1/platform/system-tasks'
+      : '/api/v1/workspace/schedules',
+  );
+
+export const buildSystemTasksOverviewRequestKey = ({
+  hasRuntimeScope,
+  usePlatformRoute = false,
+}: {
+  hasRuntimeScope: boolean;
+  usePlatformRoute?: boolean;
+}) =>
+  hasRuntimeScope
+    ? buildSystemTasksOverviewUrl({
+        usePlatformRoute,
+      })
+    : null;
+
+export const buildSystemTaskActionUrl = ({
+  jobId,
+  action,
+  usePlatformRoute = false,
+}: {
+  jobId: string;
+  action: 'run' | 'update' | 'disable';
+  usePlatformRoute?: boolean;
+}) =>
+  buildRuntimeScopeUrl(
+    usePlatformRoute
+      ? action === 'run'
+        ? `/api/v1/platform/system-tasks/${jobId}/run`
+        : `/api/v1/platform/system-tasks/${jobId}`
+      : action === 'run'
+        ? `/api/v1/workspace/schedules/${jobId}/run`
+        : `/api/v1/workspace/schedules/${jobId}`,
+  );
+
+const canManageWorkspaceScheduleFromAuthSession = (
+  authSession: ReturnType<typeof useAuthSession>['data'],
+) =>
+  Boolean(
+    authSession?.authorization?.actions?.['workspace.schedule.manage'] ||
+      authSession?.authorization?.actor?.grantedActions?.includes(
+        'workspace.schedule.manage',
+      ),
+  );
+
+export const loadSystemTasksOverviewPayload = async ({
+  requestUrl = buildSystemTasksOverviewUrl(),
+  fetcher = fetch,
+}: {
+  requestUrl?: string;
+  fetcher?: typeof fetch;
+}) => {
+  const response = await fetcher(requestUrl);
+  const payload = (await response.json()) as ScheduleOverviewPayload & {
+    error?: string;
+  };
+
+  if (!response.ok) {
+    throw new Error(payload.error || '加载定时任务失败');
+  }
+
+  return payload;
+};
+
 export default function SettingsSystemTasksPage() {
   const runtimeScopePage = useProtectedRuntimeScopePage();
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
@@ -27,14 +103,19 @@ export default function SettingsSystemTasksPage() {
   const showPlatformManagement = resolvePlatformManagementFromAuthSession(
     authSession.data,
   );
+  const platformCapabilities = resolvePlatformConsoleCapabilities(
+    authSession.data,
+  );
   const shellProps = buildSettingsConsoleShellProps({
     activeKey: 'settingsSystemTasks',
     onNavigate: runtimeScopeNavigation.pushWorkspace,
     showPlatformAdmin: showPlatformManagement,
   });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<ScheduleOverviewPayload | null>(null);
+  const usePlatformManageRoute = platformCapabilities.canManageSystemTasks;
+  const canManageTaskActions = Boolean(
+    usePlatformManageRoute ||
+      canManageWorkspaceScheduleFromAuthSession(authSession.data),
+  );
   const [pendingAction, setPendingAction] = useState<{
     jobId: string;
     action: 'run' | 'disable' | 'update';
@@ -43,50 +124,67 @@ export default function SettingsSystemTasksPage() {
   const [selectedRun, setSelectedRun] = useState<ScheduleRunView | null>(null);
   const [jobStatusFilter, setJobStatusFilter] = useState<string>('all');
   const [runStatusFilter, setRunStatusFilter] = useState<string>('all');
+  const requestUrl = useMemo(
+    () =>
+      buildSystemTasksOverviewRequestKey({
+        hasRuntimeScope: runtimeScopePage.hasRuntimeScope,
+        usePlatformRoute: platformCapabilities.canReadSystemTasks,
+      }),
+    [
+      platformCapabilities.canReadSystemTasks,
+      runtimeScopePage.hasRuntimeScope,
+    ],
+  );
+  const [error, setError] = useState<string | null>(null);
+  const {
+    data,
+    loading,
+    refetch: refetchOverview,
+    setData,
+  } = useRestRequest<ScheduleOverviewPayload | null>({
+    enabled: Boolean(requestUrl),
+    auto: Boolean(requestUrl),
+    initialData: null,
+    requestKey: requestUrl,
+    request: async () =>
+      loadSystemTasksOverviewPayload({
+        requestUrl: requestUrl as string,
+      }),
+    onSuccess: () => {
+      setError(null);
+    },
+    onError: (nextError) => {
+      setError(nextError.message || '加载定时任务失败');
+    },
+  });
 
   const load = useCallback(
     async (keepLoadingState = true) => {
-      if (!runtimeScopePage.hasRuntimeScope) {
+      if (!requestUrl) {
         return;
       }
 
       if (keepLoadingState) {
-        setLoading(true);
+        try {
+          await refetchOverview();
+        } catch (_error) {
+          return;
+        }
+        return;
       }
-      setError(null);
 
       try {
-        const response = await fetch(
-          buildRuntimeScopeUrl('/api/v1/workspace/schedules'),
-        );
-        const payload = (await response.json()) as ScheduleOverviewPayload & {
-          error?: string;
-        };
-
-        if (!response.ok) {
-          throw new Error(payload.error || '加载定时任务失败');
-        }
-
+        const payload = await loadSystemTasksOverviewPayload({
+          requestUrl,
+        });
         setData(payload);
+        setError(null);
       } catch (fetchError: any) {
         setError(fetchError?.message || '加载定时任务失败');
-        setData(null);
-      } finally {
-        if (keepLoadingState) {
-          setLoading(false);
-        }
       }
     },
-    [runtimeScopePage.hasRuntimeScope],
+    [refetchOverview, requestUrl, setData],
   );
-
-  useEffect(() => {
-    if (!runtimeScopePage.hasRuntimeScope) {
-      return;
-    }
-
-    void load();
-  }, [load, runtimeScopePage.hasRuntimeScope]);
 
   useEffect(() => {
     if (!selectedRun?.id) {
@@ -110,7 +208,11 @@ export default function SettingsSystemTasksPage() {
       setPendingAction({ jobId, action: 'run' });
       try {
         const response = await fetch(
-          buildRuntimeScopeUrl(`/api/v1/workspace/schedules/${jobId}/run`),
+          buildSystemTaskActionUrl({
+            jobId,
+            action: 'run',
+            usePlatformRoute: usePlatformManageRoute,
+          }),
           { method: 'POST' },
         );
         const payload = (await response.json()) as { error?: string };
@@ -127,7 +229,7 @@ export default function SettingsSystemTasksPage() {
         setPendingAction(null);
       }
     },
-    [load],
+    [load, usePlatformManageRoute],
   );
 
   const handleDisable = useCallback(
@@ -135,7 +237,11 @@ export default function SettingsSystemTasksPage() {
       setPendingAction({ jobId, action: 'disable' });
       try {
         const response = await fetch(
-          buildRuntimeScopeUrl(`/api/v1/workspace/schedules/${jobId}`),
+          buildSystemTaskActionUrl({
+            jobId,
+            action: 'disable',
+            usePlatformRoute: usePlatformManageRoute,
+          }),
           {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
@@ -156,7 +262,7 @@ export default function SettingsSystemTasksPage() {
         setPendingAction(null);
       }
     },
-    [load],
+    [load, usePlatformManageRoute],
   );
 
   const handleUpdateSchedule = useCallback(
@@ -171,7 +277,11 @@ export default function SettingsSystemTasksPage() {
       setPendingAction({ jobId: editingJob.id, action: 'update' });
       try {
         const response = await fetch(
-          buildRuntimeScopeUrl(`/api/v1/workspace/schedules/${editingJob.id}`),
+          buildSystemTaskActionUrl({
+            jobId: editingJob.id,
+            action: 'update',
+            usePlatformRoute: usePlatformManageRoute,
+          }),
           {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
@@ -193,7 +303,7 @@ export default function SettingsSystemTasksPage() {
         setPendingAction(null);
       }
     },
-    [editingJob, load],
+    [editingJob, load, usePlatformManageRoute],
   );
 
   const getDrawerDefaultValue = useCallback((job: ScheduleJobView | null) => {
@@ -273,6 +383,7 @@ export default function SettingsSystemTasksPage() {
         ) : null}
         <SystemTasksSummarySection data={data} />
         <SystemTasksJobsSection
+          canManageActions={canManageTaskActions}
           filteredJobs={filteredJobs}
           jobStatusFilter={jobStatusFilter}
           jobStatusOptions={jobStatusOptions}

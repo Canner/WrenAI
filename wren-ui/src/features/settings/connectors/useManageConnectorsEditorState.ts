@@ -11,15 +11,14 @@ export default function useManageConnectorsEditorState({
   updateConnectorBlockedReason: string | null;
 }) {
   const [form] = Form.useForm<ConnectorFormValues>();
-
-  const editorFields = useConnectorEditorFields({
-    form,
-  });
-
   const editorModalState = useConnectorEditorModalState({
     form,
     createConnectorBlockedReason,
     updateConnectorBlockedReason,
+  });
+  const editorFields = useConnectorEditorFields({
+    form,
+    editingConnector: editorModalState.editingConnector,
   });
 
   return {

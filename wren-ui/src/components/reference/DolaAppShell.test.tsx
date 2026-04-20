@@ -224,6 +224,38 @@ describe('DolaAppShell', () => {
     expect(html).not.toContain('暂无历史对话');
   });
 
+  it('can hide sidebar branding and footer controls for focused settings pages', () => {
+    const html = renderToStaticMarkup(
+      <DolaAppShell
+        navItems={[
+          {
+            key: 'settingsProfile',
+            label: '个人资料',
+            icon: <span>👤</span>,
+          },
+        ]}
+        hideHistorySection
+        hideSidebarBranding
+        hideSidebarFooterPanel
+        hideSidebarCollapseToggle
+        sidebarBackAction={{
+          label: '返回主菜单',
+          onClick: jest.fn(),
+        }}
+      >
+        <div>settings-content</div>
+      </DolaAppShell>,
+    );
+
+    expect(html).toContain('返回主菜单');
+    expect(html).toContain('个人资料');
+    expect(html).toContain('settings-content');
+    expect(html).not.toContain('Nova');
+    expect(html).not.toContain('Workspace 1');
+    expect(html).not.toContain('admin');
+    expect(html).not.toContain('收起侧边栏');
+  });
+
   it('builds scope-aware prefetch urls for primary shell routes', () => {
     expect(
       resolveShellPrefetchUrls((path) => `${path}?workspaceId=ws-1`),

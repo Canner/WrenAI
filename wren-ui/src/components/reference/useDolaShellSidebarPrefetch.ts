@@ -49,6 +49,7 @@ export default function useDolaShellSidebarPrefetch({
 }: Props) {
   const prefetchedNavKeysRef = useRef<Set<string>>(new Set());
   const prefetchedThreadIdsRef = useRef<Set<number>>(new Set());
+  const prefetchedRouteUrlsRef = useRef<Set<string>>(new Set());
   const prefetchUrls = useMemo(
     () => resolveShellPrefetchUrls((path) => hrefWorkspace(path)),
     [hrefWorkspace],
@@ -57,6 +58,7 @@ export default function useDolaShellSidebarPrefetch({
   useEffect(() => {
     prefetchedNavKeysRef.current.clear();
     prefetchedThreadIdsRef.current.clear();
+    prefetchedRouteUrlsRef.current.clear();
   }, [scopeKey]);
 
   const prefetchNavData = useCallback(
@@ -262,12 +264,28 @@ export default function useDolaShellSidebarPrefetch({
   }, [backgroundHistoryPrefetchIds, historyItemById, workspaceScopedSelector]);
 
   useEffect(() => {
-    if (typeof router.prefetch !== 'function') {
+    if (
+      typeof window === 'undefined' ||
+      (typeof router.prefetch !== 'function' &&
+        process.env.NODE_ENV !== 'development')
+    ) {
       return;
     }
 
     prefetchUrls.forEach((url) => {
-      router.prefetch(url).catch(() => null);
+      if (typeof router.prefetch === 'function') {
+        router.prefetch(url).catch(() => null);
+      }
+
+      if (
+        process.env.NODE_ENV === 'development' &&
+        !prefetchedRouteUrlsRef.current.has(url)
+      ) {
+        prefetchedRouteUrlsRef.current.add(url);
+        void fetch(url, {
+          credentials: 'include',
+        }).catch(() => null);
+      }
     });
   }, [prefetchUrls, router]);
 
