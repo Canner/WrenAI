@@ -95,9 +95,7 @@ const MentionOption = (props: Mention) => {
 export default function MarkdownEditor(props: Props) {
   const { value, onChange, maxLength, autoFocus, mentions } = props;
   const $wrapper = useRef<HTMLDivElement>(null);
-  const $textarea = useRef<HTMLElement & { textarea: HTMLTextAreaElement }>(
-    null,
-  );
+  const $textarea = useRef<any>(null);
   const [focused, setFocused] = useState<boolean>(false);
   const [isPreviewMode, setIsPreviewMode] = useState<boolean>(false);
 

@@ -252,7 +252,7 @@ export default function ModelForm(props: Props) {
             <TableTransfer
               dataSource={columns}
               targetKeys={selectedColumns}
-              onChange={onChangeColumns}
+              onChange={(targetKeys) => onChangeColumns(targetKeys.map(String))}
               filterOption={(inputValue: string, item) =>
                 item.name.toLowerCase().indexOf(inputValue.toLowerCase()) !==
                   -1 ||

@@ -70,7 +70,7 @@ function KnowledgeBaseModal({
           </ModalCloseButton>
         </ModalHeader>
 
-        <ModalForm form={form} layout="vertical">
+        <ModalForm form={form as any} layout="vertical">
           <Form.Item
             label="知识库名称"
             name="name"

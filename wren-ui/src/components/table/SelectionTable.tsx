@@ -1,4 +1,4 @@
-import { forwardRef, useState } from 'react';
+import { useState } from 'react';
 import styled from 'styled-components';
 import { Collapse, Form, Row, RowProps, Table, TableProps } from 'antd';
 
@@ -67,10 +67,7 @@ type Props<T> = TableProps<T> & {
   tableHeader: React.ReactNode;
 };
 
-function SelectionTable<T extends Record<string, any>>(
-  props: Props<T>,
-  ref: React.Ref<HTMLDivElement>,
-) {
+function SelectionTable<T extends Record<string, any>>(props: Props<T>) {
   const {
     columns,
     dataSource,
@@ -119,7 +116,6 @@ function SelectionTable<T extends Record<string, any>>(
         showArrow={false}
       >
         <Table
-          ref={ref}
           columns={columns}
           dataSource={dataSource}
           rowKey={rowKey}
@@ -132,7 +128,7 @@ function SelectionTable<T extends Record<string, any>>(
   );
 }
 
-export default forwardRef(SelectionTable);
+export default SelectionTable;
 
 function useCollapseState(tableTitleName: string) {
   const [collapseDefaultActiveKey, setCollapseDefaultActiveKey] = useState<

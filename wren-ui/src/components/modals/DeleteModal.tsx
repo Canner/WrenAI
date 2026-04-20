@@ -25,6 +25,7 @@ export const makeDeleteModal =
   (Component: React.ComponentType<DeleteTriggerProps>, config?: Config) =>
   (props: DeleteModalProps) => {
     const { title, content, modalProps = {}, onConfirm, ...restProps } = props;
+    const { width, ...restModalProps } = modalProps;
 
     return (
       <Component
@@ -38,10 +39,10 @@ export const makeDeleteModal =
             okText: '删除',
             onOk: onConfirm,
             title: `确认删除${config?.itemName || '当前内容'}吗？`,
-            width: 464,
-            ...modalProps,
+            ...restModalProps,
+            width: typeof width === 'object' ? 464 : (width ?? 464),
             okButtonProps: {
-              ...modalProps.okButtonProps,
+              ...restModalProps.okButtonProps,
               danger: true,
             },
           })

@@ -336,9 +336,9 @@ export default function SchemaChangeModal(props: Props) {
                 size: 'small',
                 pageSize: 10,
               }}
-              rowClassName={checkIsExpandable}
+              rowClassName={(record: any) => checkIsExpandable(record)}
               expandable={{
-                expandedRowRender: (record: object): ReactNode => (
+                expandedRowRender: (record: any): ReactNode => (
                   <ExpandedRows
                     record={record as ExpandedRowsProps['record']}
                     tipMessage="下方列出了受该模型影响的资源；执行修复后，这些资源会被一并删除。"
@@ -372,9 +372,9 @@ export default function SchemaChangeModal(props: Props) {
                 size: 'small',
                 pageSize: 10,
               }}
-              rowClassName={checkIsExpandable}
+              rowClassName={(record: any) => checkIsExpandable(record)}
               expandable={{
-                expandedRowRender: (record: object): ReactNode => (
+                expandedRowRender: (record: any): ReactNode => (
                   <ExpandedRows
                     record={record as ExpandedRowsProps['record']}
                     tipMessage="下方列出了受该字段影响的资源；执行修复后，这些资源会被一并删除。"
@@ -404,9 +404,9 @@ export default function SchemaChangeModal(props: Props) {
                 size: 'small',
                 pageSize: 10,
               }}
-              rowClassName={checkIsExpandable}
+              rowClassName={(record: any) => checkIsExpandable(record)}
               expandable={{
-                expandedRowRender: (record: object): ReactNode => (
+                expandedRowRender: (record: any): ReactNode => (
                   <ExpandedRows
                     record={record as ExpandedRowsProps['record']}
                     tipMessage="下方列出了使用该字段的资源。请逐项检查，并在需要时手动更新对应配置。"

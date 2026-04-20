@@ -1,4 +1,5 @@
 /* eslint-disable react/display-name */
+import React from 'react';
 import Document, {
   Html,
   Head,
@@ -7,6 +8,7 @@ import Document, {
   DocumentContext,
   DocumentInitialProps,
 } from 'next/document';
+import { createCache, extractStyle, StyleProvider } from '@ant-design/cssinjs';
 import { ServerStyleSheet } from 'styled-components';
 
 export default class AppDocument extends Document {
@@ -14,19 +16,39 @@ export default class AppDocument extends Document {
     ctx: DocumentContext,
   ): Promise<DocumentInitialProps> {
     const originalRenderPage = ctx.renderPage;
-
     const sheet = new ServerStyleSheet();
+    const cache = createCache();
 
-    ctx.renderPage = () =>
-      originalRenderPage({
-        enhanceApp: (App) => (props) => sheet.collectStyles(<App {...props} />),
-        enhanceComponent: (Component) => Component,
-      });
+    try {
+      ctx.renderPage = () =>
+        originalRenderPage({
+          enhanceApp: (App) => (props) =>
+            sheet.collectStyles(
+              <StyleProvider cache={cache}>
+                <App {...props} />
+              </StyleProvider>,
+            ),
+        });
 
-    const intialProps = await Document.getInitialProps(ctx);
-    const styles = sheet.getStyleElement();
+      const initialProps = await Document.getInitialProps(ctx);
+      const antdStyle = extractStyle(cache, true);
 
-    return { ...intialProps, styles };
+      return {
+        ...initialProps,
+        styles: (
+          <>
+            {initialProps.styles}
+            {sheet.getStyleElement()}
+            <style
+              id="antd-cssinjs"
+              dangerouslySetInnerHTML={{ __html: antdStyle }}
+            />
+          </>
+        ),
+      };
+    } finally {
+      sheet.seal();
+    }
   }
 
   render() {

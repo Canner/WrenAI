@@ -1,8 +1,10 @@
 import { useMemo } from 'react';
-import { AppProps } from 'next/app';
+import type { AppProps } from 'next/app';
 import Head from 'next/head';
-import { Spin } from 'antd';
+import { ConfigProvider, Spin } from 'antd';
+import 'antd/dist/reset.css';
 import posthog from 'posthog-js';
+import { PostHogProvider } from 'posthog-js/react';
 import {
   buildRuntimeScopeStateKey,
   readRuntimeScopeSelectorFromUrl,
@@ -13,7 +15,6 @@ import PersistentConsoleShell, {
 import RuntimeScopeBootstrap from '@/components/runtimeScope/RuntimeScopeBootstrap';
 import { GlobalConfigProvider } from '@/hooks/useGlobalConfig';
 import { RuntimeSelectorStateProvider } from '@/hooks/useRuntimeSelectorState';
-import { PostHogProvider } from 'posthog-js/react';
 import { defaultIndicator } from '@/components/PageLoading';
 import {
   NOVA_APP_NAME,
@@ -21,8 +22,8 @@ import {
   NOVA_SOCIAL_IMAGE_PATH,
   resolveNovaPageTitle,
 } from '@/utils/brandMeta';
-
-require('../styles/index.less');
+import { antdTheme } from '@/styles/antdTheme';
+import '../styles/index.less';
 
 Spin.setDefaultIndicator(defaultIndicator);
 
@@ -73,19 +74,21 @@ function App({ Component, pageProps, router }: AppProps) {
         <meta name="twitter:description" content={NOVA_DEFAULT_DESCRIPTION} />
         <meta name="twitter:image" content={NOVA_SOCIAL_IMAGE_PATH} />
       </Head>
-      <GlobalConfigProvider>
-        <PostHogProvider client={posthog}>
-          <RuntimeScopeBootstrap>
-            <RuntimeSelectorStateProvider>
-              <main className="app">
-                <PersistentConsoleShell>
-                  <Component key={componentKey} {...pageProps} />
-                </PersistentConsoleShell>
-              </main>
-            </RuntimeSelectorStateProvider>
-          </RuntimeScopeBootstrap>
-        </PostHogProvider>
-      </GlobalConfigProvider>
+      <ConfigProvider theme={antdTheme}>
+        <GlobalConfigProvider>
+          <PostHogProvider client={posthog}>
+            <RuntimeScopeBootstrap>
+              <RuntimeSelectorStateProvider>
+                <main className="app">
+                  <PersistentConsoleShell>
+                    <Component key={componentKey} {...pageProps} />
+                  </PersistentConsoleShell>
+                </main>
+              </RuntimeSelectorStateProvider>
+            </RuntimeScopeBootstrap>
+          </PostHogProvider>
+        </GlobalConfigProvider>
+      </ConfigProvider>
     </>
   );
 }
