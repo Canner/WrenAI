@@ -6,7 +6,11 @@ export default function CustomPopover(props: Props) {
   const { children } = props;
 
   return (
-    <Popover {...props} mouseLeaveDelay={0} overlayStyle={{ maxWidth: 520 }}>
+    <Popover
+      {...props}
+      mouseLeaveDelay={0}
+      styles={{ root: { maxWidth: 520 } }}
+    >
       {children}
     </Popover>
   );

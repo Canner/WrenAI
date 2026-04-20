@@ -149,7 +149,7 @@ export default function FieldSelect(props: IterableComponent<Props>) {
         placeholder="选择字段"
         suffixIcon={null}
         value={selectedValue}
-        dropdownClassName="adm-model-field-select-dropdown"
+        classNames={{ popup: { root: 'adm-model-field-select-dropdown' } }}
         onOpenChange={handleOpenChange}
         onSelect={(value) => {
           onChange && onChange(String(value), index);

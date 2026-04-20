@@ -38,7 +38,7 @@ const makeDropdown =
     return (
       <Dropdown
         trigger={['click']}
-        overlayStyle={{ minWidth: 100, userSelect: 'none' }}
+        styles={{ root: { minWidth: 100, userSelect: 'none' } }}
         menu={{
           items,
           onClick: (event) => event.domEvent.stopPropagation(),

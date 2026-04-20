@@ -51,12 +51,14 @@ export default function PermissionsRoleCatalogSidebar({
     <Card
       size="small"
       style={{ width: 286, flexShrink: 0 }}
-      bodyStyle={{
-        padding: 8,
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        minHeight: 0,
+      styles={{
+        body: {
+          padding: 8,
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          minHeight: 0,
+        },
       }}
     >
       <div

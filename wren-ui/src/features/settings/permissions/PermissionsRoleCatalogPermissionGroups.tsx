@@ -133,7 +133,7 @@ export default function PermissionsRoleCatalogPermissionGroups({
                 </Button>
               </Dropdown>
             }
-            bodyStyle={{ padding: 8 }}
+            styles={{ body: { padding: 8 } }}
           >
             <div
               style={{

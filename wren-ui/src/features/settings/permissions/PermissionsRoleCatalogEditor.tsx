@@ -23,7 +23,6 @@ import type {
 import { normalizeWorkspaceRoleNameInput } from './permissionsPageUtils';
 
 const { Text } = Typography;
-const { TabPane } = Tabs;
 
 const ReadonlyField = ({
   fallback = '--',
@@ -135,12 +134,14 @@ export default function PermissionsRoleCatalogEditor({
     <Card
       size="small"
       style={{ flex: 1, minWidth: 0 }}
-      bodyStyle={{
-        padding: '8px 8px 4px',
-        display: 'flex',
-        flexDirection: 'column',
-        minHeight: 0,
-        height: '100%',
+      styles={{
+        body: {
+          padding: '8px 8px 4px',
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0,
+          height: '100%',
+        },
       }}
     >
       {!selectedRole && !isCreateMode ? (
@@ -293,11 +294,8 @@ export default function PermissionsRoleCatalogEditor({
                 onActiveModuleChange(key as PermissionModuleKey)
               }
               style={{ marginBottom: 0, paddingTop: 2 }}
-            >
-              {tabsItems.map((item) => (
-                <TabPane tab={item.label} key={item.key} />
-              ))}
-            </Tabs>
+              items={tabsItems}
+            />
 
             <div
               style={{

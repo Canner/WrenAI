@@ -52,7 +52,7 @@ export default function TreeTitle(props: TreeTitleProps) {
       appendIcon={
         <Dropdown
           trigger={['click']}
-          overlayStyle={{ userSelect: 'none', minWidth: 150 }}
+          styles={{ root: { userSelect: 'none', minWidth: 150 } }}
           menu={{
             items: [
               {
