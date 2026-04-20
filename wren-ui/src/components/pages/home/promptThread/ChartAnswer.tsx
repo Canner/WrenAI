@@ -1,6 +1,6 @@
 import clsx from 'clsx';
 import dynamic from 'next/dynamic';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Form, Modal, message } from 'antd';
 import { attachLoading } from '@/utils/helper';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
@@ -12,7 +12,9 @@ import {
   getChartSpecOptionValues,
 } from '@/components/chart/meta';
 import {
+  createDashboard,
   loadDashboardListPayload,
+  resolveDashboardDisplayName,
   type DashboardListItem,
 } from '@/utils/dashboardRest';
 import { resolveAbortSafeErrorMessage } from '@/utils/abort';
@@ -36,7 +38,20 @@ import {
 
 const Chart = dynamic(() => import('@/components/chart'), { ssr: false });
 
-type DashboardOption = Pick<DashboardListItem, 'id' | 'name'>;
+type DashboardOption = Pick<
+  DashboardListItem,
+  'id' | 'isDefault' | 'name' | 'cacheEnabled' | 'scheduleFrequency'
+>;
+
+const sortDashboardOptions = (dashboards: DashboardOption[]) =>
+  [...dashboards].sort((left, right) => {
+    const leftIsDefault = Boolean(left.isDefault);
+    const rightIsDefault = Boolean(right.isDefault);
+    if (leftIsDefault !== rightIsDefault) {
+      return leftIsDefault ? -1 : 1;
+    }
+    return left.id - right.id;
+  });
 
 export default function ChartAnswer(props: AnswerResultProps) {
   const { onGenerateChartAnswer, onAdjustChartAnswer } =
@@ -67,6 +82,15 @@ export default function ChartAnswer(props: AnswerResultProps) {
     [],
   );
   const [pinSubmitting, setPinSubmitting] = useState(false);
+  const [createAndPinSubmitting, setCreateAndPinSubmitting] = useState(false);
+  const pinSelectionInitializedRef = useRef(false);
+  const defaultDashboardOption = useMemo(
+    () =>
+      dashboardOptions.find((dashboard) => dashboard.isDefault) ||
+      dashboardOptions[0] ||
+      null,
+    [dashboardOptions],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -80,7 +104,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
         if (cancelled) {
           return;
         }
-        setDashboardOptions(payload);
+        setDashboardOptions(sortDashboardOptions(payload));
       })
       .catch((error) => {
         if (cancelled) {
@@ -286,7 +310,52 @@ export default function ChartAnswer(props: AnswerResultProps) {
 
   const onEdit = () => setIsEditMode(!isEditMode);
 
-  const onPin = () => setIsPinModalOpen(true);
+  useEffect(() => {
+    if (!isPinModalOpen || pinSelectionInitializedRef.current) {
+      return;
+    }
+    if (defaultDashboardOption?.id != null) {
+      pinSelectionInitializedRef.current = true;
+      setPinTargetDashboardId(defaultDashboardOption.id);
+    }
+  }, [defaultDashboardOption?.id, isPinModalOpen]);
+
+  const onPin = () => {
+    pinSelectionInitializedRef.current = defaultDashboardOption?.id != null;
+    setPinTargetDashboardId(defaultDashboardOption?.id ?? null);
+    setIsPinModalOpen(true);
+  };
+
+  const submitPinToDashboard = async (
+    targetDashboardId: number | null,
+    targetDashboardName?: string | null,
+  ) => {
+    const itemType = String(
+      chartType || chartOptionValues.chartType || '',
+    ).toUpperCase() as DashboardItemType;
+    if (!Object.values(DashboardItemType).includes(itemType)) {
+      throw new Error('当前图表类型暂不支持固定到看板。');
+    }
+
+    const payload = await createDashboardItem(runtimeScopeNavigation.selector, {
+      itemType,
+      responseId: threadResponse.id,
+      ...(targetDashboardId != null ? { dashboardId: targetDashboardId } : {}),
+    });
+    const targetDashboard = dashboardOptions.find(
+      (dashboard) => dashboard.id === payload.dashboardId,
+    );
+    message.success(
+      targetDashboardName
+        ? `已固定到看板「${resolveDashboardDisplayName(targetDashboardName)}」`
+        : targetDashboard
+          ? `已固定到看板「${resolveDashboardDisplayName(targetDashboard.name)}」`
+          : '已固定到当前工作空间的默认看板。',
+    );
+    pinSelectionInitializedRef.current = false;
+    setIsPinModalOpen(false);
+    setPinTargetDashboardId(null);
+  };
 
   const onResetAdjustment = () => {
     setNewValues(null);
@@ -439,6 +508,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
         )}
       </div>
       <ChartAnswerPinModal
+        createAndPinSubmitting={createAndPinSubmitting}
         dashboardsLoading={dashboardsLoading}
         dashboardOptions={dashboardOptions}
         open={isPinModalOpen}
@@ -446,39 +516,46 @@ export default function ChartAnswer(props: AnswerResultProps) {
         pinTargetDashboardId={pinTargetDashboardId}
         setPinTargetDashboardId={setPinTargetDashboardId}
         onCancel={() => {
+          pinSelectionInitializedRef.current = false;
           setIsPinModalOpen(false);
           setPinTargetDashboardId(null);
+        }}
+        onCreateAndPin={async (dashboardName) => {
+          const normalizedName = dashboardName.trim();
+          if (!normalizedName) {
+            message.warning('请输入新看板名称。');
+            return;
+          }
+
+          setCreateAndPinSubmitting(true);
+          try {
+            const dashboard = await createDashboard(
+              runtimeScopeNavigation.selector,
+              {
+                name: normalizedName,
+              },
+            );
+            setDashboardOptions((previous) =>
+              sortDashboardOptions([...previous, dashboard]),
+            );
+            setPinTargetDashboardId(dashboard.id);
+            await submitPinToDashboard(dashboard.id, dashboard.name);
+          } catch (error) {
+            const errorMessage = resolveAbortSafeErrorMessage(
+              error,
+              '新建看板并固定失败。',
+            );
+            if (errorMessage) {
+              message.error(errorMessage);
+            }
+          } finally {
+            setCreateAndPinSubmitting(false);
+          }
         }}
         onConfirm={async () => {
           setPinSubmitting(true);
           try {
-            const itemType = String(
-              chartType || chartOptionValues.chartType || '',
-            ).toUpperCase() as DashboardItemType;
-            if (!Object.values(DashboardItemType).includes(itemType)) {
-              throw new Error('当前图表类型暂不支持固定到看板。');
-            }
-
-            const payload = await createDashboardItem(
-              runtimeScopeNavigation.selector,
-              {
-                itemType,
-                responseId: threadResponse.id,
-                ...(pinTargetDashboardId != null
-                  ? { dashboardId: pinTargetDashboardId }
-                  : {}),
-              },
-            );
-            const targetDashboard = dashboardOptions.find(
-              (dashboard) => dashboard.id === payload.dashboardId,
-            );
-            message.success(
-              targetDashboard
-                ? `已固定到看板「${targetDashboard.name}」`
-                : '已固定到默认看板。',
-            );
-            setIsPinModalOpen(false);
-            setPinTargetDashboardId(null);
+            await submitPinToDashboard(pinTargetDashboardId);
           } catch (error) {
             const errorMessage = resolveAbortSafeErrorMessage(
               error,

@@ -13,6 +13,7 @@ export type KnowledgeBaseRecord = {
   updatedAt?: string | null;
   archivedAt?: string | null;
   snapshotCount?: number;
+  assetCount?: number;
   defaultKbSnapshot?: {
     id: string;
     displayName: string;
@@ -85,6 +86,8 @@ export type AssetView = {
   }>;
   fields: AssetFieldView[];
 };
+
+export type SelectedAssetTableValue = string | string[];
 
 export type SourceOption = {
   key: string;

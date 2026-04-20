@@ -1,5 +1,6 @@
 import {
   KNOWLEDGE_DIAGRAM_QUERY_FETCH_POLICY,
+  buildKnowledgeDiagramRequestKey,
   resolveKnowledgeDiagramScopeKey,
   shouldFetchKnowledgeDiagram,
   shouldClearScopedDiagramData,
@@ -55,6 +56,33 @@ describe('useKnowledgeDiagramData helpers', () => {
         },
       }),
     ).toBeNull();
+  });
+
+  it('builds a request key only when diagram scope is ready', () => {
+    expect(
+      buildKnowledgeDiagramRequestKey({
+        diagramScopeKey: null,
+        effectiveRuntimeSelector: {
+          workspaceId: 'ws-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snap-1',
+        },
+      }),
+    ).toBeNull();
+
+    expect(
+      buildKnowledgeDiagramRequestKey({
+        diagramScopeKey: 'ws-1|kb-1|snap-1|deploy-1|',
+        effectiveRuntimeSelector: {
+          workspaceId: 'ws-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snap-1',
+          deployHash: 'deploy-1',
+        },
+      }),
+    ).toBe(
+      '/api/v1/knowledge/diagram?workspaceId=ws-1&knowledgeBaseId=kb-1&kbSnapshotId=snap-1&deployHash=deploy-1',
+    );
   });
 
   it('uses scope-local fetching instead of shared cache-first reuse', () => {

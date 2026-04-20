@@ -19,6 +19,7 @@ type KnowledgeBaseLike = {
   sampleDataset?: string | null;
   slug?: string | null;
   snapshotCount?: number;
+  assetCount?: number;
 };
 
 export type KnowledgeSidebarItem<TKnowledgeBase extends KnowledgeBaseLike> = {
@@ -47,6 +48,30 @@ export const prioritizeKnowledgeSidebarItems = <
     })
     .slice(0, 4);
 
+export const buildKnowledgeSidebarItems = <
+  TKnowledgeBase extends KnowledgeBaseLike,
+>(
+  knowledgeBases: TKnowledgeBase[],
+  activeKnowledgeBase?: TKnowledgeBase | null,
+): KnowledgeSidebarItem<TKnowledgeBase>[] => {
+  const baseList =
+    knowledgeBases.length > 0
+      ? knowledgeBases
+      : activeKnowledgeBase
+        ? [activeKnowledgeBase]
+        : [];
+
+  return baseList.map((kb) => {
+    const displayName = getReferenceDisplayKnowledgeName(kb);
+    return {
+      id: kb.id,
+      name: displayName,
+      assetCount: getReferenceAssetCountByKnowledgeName(kb) ?? kb.assetCount,
+      record: kb,
+    };
+  });
+};
+
 export default function useKnowledgeSidebarData<
   TKnowledgeBase extends KnowledgeBaseLike,
 >({
@@ -72,23 +97,7 @@ export default function useKnowledgeSidebarData<
   );
 
   const kbList = useMemo<KnowledgeSidebarItem<TKnowledgeBase>[]>(() => {
-    const baseList =
-      knowledgeBases.length > 0
-        ? knowledgeBases
-        : activeKnowledgeBase
-          ? [activeKnowledgeBase]
-          : [];
-
-    return baseList.map((kb) => {
-      const displayName = getReferenceDisplayKnowledgeName(kb);
-      return {
-        id: kb.id,
-        name: displayName,
-        assetCount:
-          getReferenceAssetCountByKnowledgeName(kb) ?? kb.snapshotCount,
-        record: kb,
-      };
-    });
+    return buildKnowledgeSidebarItems(knowledgeBases, activeKnowledgeBase);
   }, [activeKnowledgeBase, knowledgeBases]);
 
   const visibleKnowledgeItems = useMemo(() => {

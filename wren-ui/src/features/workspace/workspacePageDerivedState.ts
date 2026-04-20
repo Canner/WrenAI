@@ -63,7 +63,11 @@ export default function buildWorkspacePageDerivedState({
   );
   const defaultWorkspaceId =
     data?.defaultWorkspaceId || data?.user?.defaultWorkspaceId || null;
-  const isPlatformAdmin = canCreateWorkspace || Boolean(data?.isPlatformAdmin);
+  const isPlatformAdmin =
+    canCreateWorkspace ||
+    Boolean(data?.isPlatformAdmin) ||
+    Boolean(data?.authorization?.actor?.isPlatformAdmin) ||
+    Boolean(data?.authorization?.actor?.platformRoleKeys?.length);
   const identityProviders = data?.identityProviders || [];
   const enabledIdentityProviderCount = identityProviders.filter(
     (provider) => provider.enabled,

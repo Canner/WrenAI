@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
+import type { SelectedAssetTableValue } from '@/features/knowledgePage/types';
 
 type AssetLike = {
   id: string;
@@ -23,7 +24,7 @@ export const resetKnowledgeStateForSwitch = <TAsset extends AssetLike>({
   setAssetWizardStep: (step: number) => void;
   resetRuleSqlManagerState: () => void;
   setSelectedConnectorId: (value?: string) => void;
-  setSelectedDemoTable: (value?: string) => void;
+  setSelectedDemoTable: (value?: SelectedAssetTableValue) => void;
   resetAssetDraft: () => void;
 }) => {
   setDetailAsset(null);
@@ -55,7 +56,7 @@ export default function useKnowledgeSwitchReset<TAsset extends AssetLike>({
   setAssetWizardStep: (step: number) => void;
   resetRuleSqlManagerState: () => void;
   setSelectedConnectorId: (value?: string) => void;
-  setSelectedDemoTable: (value?: string) => void;
+  setSelectedDemoTable: (value?: SelectedAssetTableValue) => void;
   resetAssetDraft: () => void;
 }) {
   return useCallback(

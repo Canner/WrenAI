@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import type { DiagramResponse } from '@/types/modeling';
+import useRestRequest from './useRestRequest';
 import {
   KNOWLEDGE_DIAGRAM_QUERY_FETCH_POLICY,
   buildKnowledgeDiagramUrl,
@@ -71,6 +72,15 @@ export const shouldClearScopedDiagramData = ({
       !hasCachedDiagramData,
   );
 
+export const buildKnowledgeDiagramRequestKey = ({
+  diagramScopeKey,
+  effectiveRuntimeSelector,
+}: {
+  diagramScopeKey?: string | null;
+  effectiveRuntimeSelector: RuntimeScopeSelector;
+}) =>
+  diagramScopeKey ? buildKnowledgeDiagramUrl(effectiveRuntimeSelector) : null;
+
 export default function useKnowledgeDiagramData({
   hasRuntimeScope,
   routeKnowledgeBaseId,
@@ -82,8 +92,6 @@ export default function useKnowledgeDiagramData({
   routeKbSnapshotId?: string;
   effectiveRuntimeSelector: RuntimeScopeSelector;
 }) {
-  const diagramRequestIdRef = useRef(0);
-  const previousDiagramScopeKeyRef = useRef<string | null>(null);
   const diagramScopeKey = useMemo(
     () =>
       resolveKnowledgeDiagramScopeKey({
@@ -103,71 +111,59 @@ export default function useKnowledgeDiagramData({
       routeKnowledgeBaseId,
     ],
   );
-  const requestUrl = useMemo(() => {
-    if (!diagramScopeKey) {
-      return null;
-    }
-
-    return buildKnowledgeDiagramUrl(effectiveRuntimeSelector);
-  }, [
-    diagramScopeKey,
-    effectiveRuntimeSelector.deployHash,
-    effectiveRuntimeSelector.kbSnapshotId,
-    effectiveRuntimeSelector.knowledgeBaseId,
-    effectiveRuntimeSelector.runtimeScopeId,
-    effectiveRuntimeSelector.workspaceId,
-  ]);
-  const [diagramData, setDiagramData] = useState<DiagramResponse | null>(
-    requestUrl ? peekKnowledgeDiagramPayload({ requestUrl }) : null,
+  const requestUrl = useMemo(
+    () =>
+      buildKnowledgeDiagramRequestKey({
+        diagramScopeKey,
+        effectiveRuntimeSelector,
+      }),
+    [
+      diagramScopeKey,
+      effectiveRuntimeSelector.deployHash,
+      effectiveRuntimeSelector.kbSnapshotId,
+      effectiveRuntimeSelector.knowledgeBaseId,
+      effectiveRuntimeSelector.runtimeScopeId,
+      effectiveRuntimeSelector.workspaceId,
+    ],
   );
-  const [diagramLoading, setDiagramLoading] = useState(
-    Boolean(requestUrl && !peekKnowledgeDiagramPayload({ requestUrl })),
+  const initialData = useMemo(
+    () => (requestUrl ? peekKnowledgeDiagramPayload({ requestUrl }) : null),
+    [requestUrl],
   );
-
-  const refetchDiagram = useCallback(async () => {
-    if (!diagramScopeKey || !requestUrl) {
-      diagramRequestIdRef.current += 1;
-      previousDiagramScopeKeyRef.current = null;
-      setDiagramData(null);
-      setDiagramLoading(false);
-      return null;
-    }
-
-    const cachedDiagramData = peekKnowledgeDiagramPayload({ requestUrl });
-    if (cachedDiagramData) {
-      previousDiagramScopeKeyRef.current = diagramScopeKey;
-      setDiagramData(cachedDiagramData);
-      setDiagramLoading(false);
-      return cachedDiagramData;
-    }
-
-    previousDiagramScopeKeyRef.current = diagramScopeKey;
-
-    const requestId = diagramRequestIdRef.current + 1;
-    diagramRequestIdRef.current = requestId;
-    setDiagramLoading(true);
-
-    try {
-      const responseData = await loadKnowledgeDiagramPayload({
-        requestUrl,
+  const shouldAutoFetch = Boolean(requestUrl && !initialData);
+  const {
+    data: diagramData,
+    loading: diagramLoading,
+    setData,
+  } = useRestRequest<DiagramResponse | null>({
+    enabled: Boolean(requestUrl),
+    auto: shouldAutoFetch,
+    initialData,
+    requestKey: requestUrl,
+    request: async () =>
+      loadKnowledgeDiagramPayload({
+        requestUrl: requestUrl as string,
         useCache: true,
-      });
-
-      if (diagramRequestIdRef.current === requestId) {
-        setDiagramData(responseData);
-      }
-
-      return responseData;
-    } finally {
-      if (diagramRequestIdRef.current === requestId) {
-        setDiagramLoading(false);
-      }
-    }
-  }, [diagramScopeKey, requestUrl]);
+      }),
+  });
 
   useEffect(() => {
-    void refetchDiagram();
-  }, [refetchDiagram]);
+    setData(initialData);
+  }, [initialData, setData]);
+
+  const refetchDiagram = useCallback(async () => {
+    if (!requestUrl) {
+      setData(null);
+      return null;
+    }
+
+    const payload = await loadKnowledgeDiagramPayload({
+      requestUrl,
+      useCache: false,
+    });
+    setData(payload);
+    return payload;
+  }, [requestUrl, setData]);
 
   return {
     diagramData,

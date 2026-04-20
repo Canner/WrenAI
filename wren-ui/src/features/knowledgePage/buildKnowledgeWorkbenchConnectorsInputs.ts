@@ -8,7 +8,6 @@ export function buildKnowledgeWorkbenchConnectorsInputs<
 >({
   activeKnowledgeBase,
   activeKnowledgeRuntimeSelector,
-  activeKnowledgeSnapshotId,
   assetModalOpen,
   fetchConnectors,
   handleConnectorLoadError,
@@ -18,11 +17,14 @@ export function buildKnowledgeWorkbenchConnectorsInputs<
 }: KnowledgeWorkbenchContentDataArgs<TKnowledgeBase, TConnector>): Parameters<
   typeof useKnowledgeConnectors<TConnector>
 >[0] {
+  const workspaceId =
+    activeKnowledgeRuntimeSelector?.workspaceId ||
+    activeKnowledgeBase?.workspaceId;
+
   return {
     hasRuntimeScope,
-    activeKnowledgeBaseId: activeKnowledgeBase?.id,
-    activeKbSnapshotId: activeKnowledgeSnapshotId,
-    connectorRuntimeSelector: activeKnowledgeRuntimeSelector,
+    activeWorkspaceId: workspaceId,
+    connectorRuntimeSelector: workspaceId ? { workspaceId } : undefined,
     assetModalOpen,
     sourceOptions: knowledgeSourceOptions,
     initialSourceType: initialKnowledgeSourceType,

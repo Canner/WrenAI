@@ -99,6 +99,7 @@ const baseArgs = {
     activeWorkbenchSection: 'overview',
     assetDatabaseOptions: [],
     assetDraftPreview: null,
+    assetDraftPreviews: [],
     assetTableOptions: [],
     buildKnowledgeSwitchUrl: jest.fn(() => '/knowledge?knowledgeBaseId=kb-1'),
     canContinueAssetConfiguration: true,

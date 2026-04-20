@@ -1,44 +1,34 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
-import { groupBy, orderBy, flatMap } from 'lodash';
 import { message } from 'antd';
 import { hasExecutableRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import Icon from '@/import/icon';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import { CopilotSVG } from '@/utils/svgs';
-import { isRecommendedFinished } from '@/hooks/useAskPrompt';
-import { ResultQuestion, RecommendedQuestionsTaskStatus } from '@/types/home';
 
 import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
+import usePollingRequestLoop from './usePollingRequestLoop';
 import {
   generateProjectRecommendationQuestions,
   getProjectRecommendationQuestions,
 } from '@/utils/homeRest';
+import {
+  buildEmptyRecommendedQuestionsTask,
+  createRecommendationPollingLoader,
+  resolveRecommendedQuestionsSettlement,
+  shouldContinueRecommendationPolling,
+  type GroupedQuestion,
+} from './recommendedQuestionsInstructionHelpers';
 
-export interface GroupedQuestion {
-  category: string;
-  question: string;
-  sql: string;
-}
+export type { GroupedQuestion } from './recommendedQuestionsInstructionHelpers';
 
 const RECOMMENDED_QUESTION_POLL_INTERVAL_MS = 2000;
 const RECOMMENDED_QUESTION_POLL_TIMEOUT_MS = 20_000;
 
-const getGroupedQuestions = (
-  questions: ResultQuestion[],
-): GroupedQuestion[] => {
-  const groupedData = groupBy(questions, 'category');
-  return orderBy(
-    flatMap(groupedData),
-    (item) => groupedData[item.category].length,
-    'desc',
-  );
-};
-
 export default function useRecommendedQuestionsInstruction(enabled = true) {
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollingTriggeredByActionRef = useRef(false);
   const [showRetry, setShowRetry] = useState<boolean>(false);
   const [generating, setGenerating] = useState<boolean>(false);
   const [isRegenerate, setIsRegenerate] = useState<boolean>(false);
@@ -50,116 +40,136 @@ export default function useRecommendedQuestionsInstruction(enabled = true) {
     GroupedQuestion[]
   >([]);
 
-  const clearTimers = useCallback(() => {
+  const clearPollingTimeout = useCallback(() => {
     if (pollTimeoutRef.current) {
       clearTimeout(pollTimeoutRef.current);
       pollTimeoutRef.current = null;
     }
-    if (pollTimerRef.current) {
-      clearTimeout(pollTimerRef.current);
-      pollTimerRef.current = null;
-    }
   }, []);
-
-  const stopPolling = useCallback(() => {
-    clearTimers();
-  }, [clearTimers]);
   const hasExecutableRuntime = hasExecutableRuntimeScopeSelector(
     runtimeScopeNavigation.selector,
   );
 
   const readRecommendationQuestions = useCallback(async () => {
     if (!hasExecutableRuntime) {
-      return {
-        status: RecommendedQuestionsTaskStatus.FINISHED,
-        questions: [],
-      };
+      return buildEmptyRecommendedQuestionsTask();
     }
     return getProjectRecommendationQuestions(runtimeScopeNavigation.selector);
   }, [hasExecutableRuntime, runtimeScopeNavigation.selector]);
 
-  const pollRecommendationQuestions = useCallback(async () => {
-    const task = await readRecommendationQuestions();
+  const handleRecommendationTaskSettled = useCallback(
+    (task: Awaited<ReturnType<typeof readRecommendationQuestions>>) => {
+      const settlement = resolveRecommendedQuestionsSettlement({
+        task,
+        isRegenerate,
+        showRecommendedQuestionsPromptMode,
+      });
 
-    if (isRecommendedFinished(task.status)) {
-      stopPolling();
-
-      if (task.questions.length === 0) {
-        isRegenerate && setShowRetry(true);
-
-        if (
-          showRecommendedQuestionsPromptMode &&
-          task.status === RecommendedQuestionsTaskStatus.FAILED
-        ) {
-          message.error(
-            `We couldn't regenerate questions right now. Let's try again later.`,
-          );
-        }
-      } else {
-        setIsRegenerate(true);
-        setRecommendedQuestions(getGroupedQuestions(task.questions));
-        setShowRecommendedQuestionsPromptMode(true);
+      clearPollingTimeout();
+      if (settlement.nextRecommendedQuestions) {
+        setRecommendedQuestions(settlement.nextRecommendedQuestions);
       }
-
+      setShowRetry(settlement.nextShowRetry);
+      setIsRegenerate(settlement.nextIsRegenerate);
+      setShowRecommendedQuestionsPromptMode(
+        settlement.nextShowRecommendedQuestionsPromptMode,
+      );
       setGenerating(false);
-      return task;
-    }
+      pollingTriggeredByActionRef.current = false;
 
-    pollTimerRef.current = setTimeout(() => {
-      void pollRecommendationQuestions().catch(() => null);
-    }, RECOMMENDED_QUESTION_POLL_INTERVAL_MS);
+      if (settlement.shouldReportRegenerateFailure) {
+        message.error(
+          `We couldn't regenerate questions right now. Let's try again later.`,
+        );
+      }
+    },
+    [clearPollingTimeout, isRegenerate, showRecommendedQuestionsPromptMode],
+  );
 
-    return task;
-  }, [
-    isRegenerate,
-    readRecommendationQuestions,
-    showRecommendedQuestionsPromptMode,
-    stopPolling,
-  ]);
+  const {
+    startPolling: startRecommendationPolling,
+    stopPolling: stopRecommendationRequestLoop,
+  } = usePollingRequestLoop<
+    Awaited<ReturnType<typeof readRecommendationQuestions>>
+  >({
+    pollInterval: RECOMMENDED_QUESTION_POLL_INTERVAL_MS,
+    shouldContinue: shouldContinueRecommendationPolling,
+    onCompleted: (task) => {
+      if (!shouldContinueRecommendationPolling(task)) {
+        handleRecommendationTaskSettled(task);
+      }
+    },
+    onError: (error) => {
+      clearPollingTimeout();
+      setGenerating(false);
+      if (pollingTriggeredByActionRef.current) {
+        const errorMessage = resolveAbortSafeErrorMessage(
+          error,
+          '生成推荐问题失败，请稍后重试',
+        );
+        if (errorMessage) {
+          message.error(errorMessage);
+        }
+      }
+      pollingTriggeredByActionRef.current = false;
+    },
+  });
+
+  const stopPolling = useCallback(() => {
+    pollingTriggeredByActionRef.current = false;
+    clearPollingTimeout();
+    stopRecommendationRequestLoop();
+  }, [clearPollingTimeout, stopRecommendationRequestLoop]);
 
   const schedulePollingTimeout = useCallback(() => {
-    clearTimers();
+    clearPollingTimeout();
     pollTimeoutRef.current = setTimeout(() => {
       stopPolling();
       setGenerating(false);
       setShowRetry(true);
       message.warning('推荐问题生成超时，请稍后重试');
     }, RECOMMENDED_QUESTION_POLL_TIMEOUT_MS);
-  }, [clearTimers, stopPolling]);
+  }, [clearPollingTimeout, stopPolling]);
 
   useEffect(() => {
     if (!enabled || !hasExecutableRuntime) {
-      clearTimers();
+      stopPolling();
       setGenerating(false);
       setShowRecommendedQuestionsPromptMode(false);
       setRecommendedQuestions([]);
       return;
     }
 
+    let cancelled = false;
     void readRecommendationQuestions()
       .then((task) => {
-        schedulePollingTimeout();
-        if (isRecommendedFinished(task.status)) {
-          stopPolling();
-          if (task.questions.length > 0) {
-            setRecommendedQuestions(getGroupedQuestions(task.questions));
-            setShowRecommendedQuestionsPromptMode(true);
-          }
+        if (cancelled) {
           return;
         }
 
-        pollTimerRef.current = setTimeout(() => {
-          void pollRecommendationQuestions().catch(() => null);
-        }, RECOMMENDED_QUESTION_POLL_INTERVAL_MS);
+        if (!shouldContinueRecommendationPolling(task)) {
+          handleRecommendationTaskSettled(task);
+          return;
+        }
+
+        schedulePollingTimeout();
+        pollingTriggeredByActionRef.current = false;
+        void startRecommendationPolling(
+          createRecommendationPollingLoader(task, readRecommendationQuestions),
+        );
       })
       .catch(() => null);
+
+    return () => {
+      cancelled = true;
+    };
   }, [
     enabled,
+    handleRecommendationTaskSettled,
     hasExecutableRuntime,
-    pollRecommendationQuestions,
     readRecommendationQuestions,
     schedulePollingTimeout,
-    stopPolling,
+    startRecommendationPolling,
   ]);
 
   const onGetRecommendationQuestions = useCallback(async () => {
@@ -169,13 +179,14 @@ export default function useRecommendedQuestionsInstruction(enabled = true) {
 
     setGenerating(true);
     setIsRegenerate(true);
+    pollingTriggeredByActionRef.current = true;
 
     try {
       await generateProjectRecommendationQuestions(
         runtimeScopeNavigation.selector,
       );
       schedulePollingTimeout();
-      await pollRecommendationQuestions();
+      await startRecommendationPolling(readRecommendationQuestions);
     } catch (error) {
       stopPolling();
       setGenerating(false);
@@ -190,9 +201,10 @@ export default function useRecommendedQuestionsInstruction(enabled = true) {
   }, [
     enabled,
     hasExecutableRuntime,
-    pollRecommendationQuestions,
+    readRecommendationQuestions,
     runtimeScopeNavigation.selector,
     schedulePollingTimeout,
+    startRecommendationPolling,
     stopPolling,
   ]);
 

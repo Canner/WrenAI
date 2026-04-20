@@ -18,7 +18,11 @@ export default function KnowledgeWorkbenchPageFrame({
   overlaysProps: KnowledgeWorkbenchOverlaysProps;
 }) {
   return (
-    <DirectShellPageFrame activeNav="knowledge">
+    <DirectShellPageFrame
+      activeNav="knowledge"
+      flushBottomPadding
+      stretchContent
+    >
       <KnowledgeWorkbenchStage
         loading={loading}
         sidebarProps={sidebarProps}

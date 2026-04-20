@@ -25,6 +25,11 @@ type RuntimeScopeSelector = {
   runtimeScopeId?: string;
 };
 
+export const resolveWorkspaceConnectorSelector = (
+  selector?: RuntimeScopeSelector,
+): RuntimeScopeSelector | undefined =>
+  selector?.workspaceId ? { workspaceId: selector.workspaceId } : undefined;
+
 export const normalizeKnowledgeListPayload = <T>(payload: unknown): T[] =>
   Array.isArray(payload) ? (payload as T[]) : [];
 
@@ -51,7 +56,11 @@ export default function useKnowledgeDataLoaders<TKnowledgeBase, TConnector>({
   const fetchConnectors = useCallback(
     async (selector?: RuntimeScopeSelector) => {
       const payload = await loadKnowledgeConnectors<TConnector[]>(
-        buildRuntimeScopeUrl('/api/v1/connectors', {}, selector),
+        buildRuntimeScopeUrl(
+          '/api/v1/connectors',
+          {},
+          resolveWorkspaceConnectorSelector(selector),
+        ),
       );
       return normalizeKnowledgeListPayload<TConnector>(payload);
     },

@@ -6,6 +6,8 @@ import useKnowledgeDataLoaders from '@/hooks/useKnowledgeDataLoaders';
 import useKnowledgeRuntimeContext from '@/hooks/useKnowledgeRuntimeContext';
 import useKnowledgeSelectorFallback from '@/hooks/useKnowledgeSelectorFallback';
 import useRuntimeSelectorState from '@/hooks/useRuntimeSelectorState';
+import { useEffect, useMemo } from 'react';
+import { primeKnowledgeBaseList } from '@/utils/runtimePagePrefetch';
 import buildKnowledgeWorkbenchBaseMetaInputs from './buildKnowledgeWorkbenchBaseMetaInputs';
 import buildKnowledgeWorkbenchBaseSelectionInputs from './buildKnowledgeWorkbenchBaseSelectionInputs';
 import buildKnowledgeWorkbenchDataLoadersInputs from './buildKnowledgeWorkbenchDataLoadersInputs';
@@ -43,6 +45,45 @@ export function useKnowledgeWorkbenchKnowledgeState<
     useKnowledgeBaseListCache<TKnowledgeBase>(
       buildKnowledgeWorkbenchListCacheInputs(args, runtimeContext),
     );
+  const selectorKnowledgeBaseList = useMemo(() => {
+    if (
+      !currentWorkspace?.id ||
+      effectiveRuntimeSelector.workspaceId !== currentWorkspace.id
+    ) {
+      return [] as TKnowledgeBase[];
+    }
+
+    return (runtimeSelectorState?.knowledgeBases || []).map((knowledgeBase) => ({
+      id: knowledgeBase.id,
+      workspaceId: currentWorkspace.id,
+      slug: knowledgeBase.slug,
+      name: knowledgeBase.name,
+      defaultKbSnapshotId: knowledgeBase.defaultKbSnapshotId || null,
+      assetCount: knowledgeBase.assetCount ?? 0,
+    })) as TKnowledgeBase[];
+  }, [
+    currentWorkspace?.id,
+    effectiveRuntimeSelector.workspaceId,
+    runtimeSelectorState?.knowledgeBases,
+  ]);
+  const initialKnowledgeBaseList = useMemo(
+    () =>
+      cachedKnowledgeBaseList && cachedKnowledgeBaseList.length > 0
+        ? cachedKnowledgeBaseList
+        : selectorKnowledgeBaseList,
+    [cachedKnowledgeBaseList, selectorKnowledgeBaseList],
+  );
+
+  useEffect(() => {
+    if (!knowledgeBasesUrl || initialKnowledgeBaseList.length === 0) {
+      return;
+    }
+
+    primeKnowledgeBaseList({
+      url: knowledgeBasesUrl,
+      payload: initialKnowledgeBaseList,
+    });
+  }, [initialKnowledgeBaseList, knowledgeBasesUrl]);
 
   const selectorKnowledgeBaseFallback = useKnowledgeSelectorFallback(
     buildKnowledgeWorkbenchSelectorFallbackInputs(runtimeContext, {
@@ -73,7 +114,7 @@ export function useKnowledgeWorkbenchKnowledgeState<
       currentKnowledgeBaseId,
       handleKnowledgeBaseLoadError,
       knowledgeBasesUrl,
-      cachedKnowledgeBaseList,
+      cachedKnowledgeBaseList: initialKnowledgeBaseList,
       routeKnowledgeBaseId,
       fetchKnowledgeBaseList,
     }),

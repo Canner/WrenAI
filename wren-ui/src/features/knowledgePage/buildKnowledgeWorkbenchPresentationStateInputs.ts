@@ -8,6 +8,7 @@ export function buildKnowledgeWorkbenchPresentationStateInputs<
 >({
   activeKnowledgeBase,
   activeKnowledgeBaseExecutable,
+  activeKnowledgeRuntimeSelector,
   assetDraft,
   assets,
   buildKnowledgeRuntimeSelector,
@@ -26,6 +27,7 @@ export function buildKnowledgeWorkbenchPresentationStateInputs<
   knowledgeTab,
   openAssetWizard,
   overviewPreviewAsset,
+  refetchDiagram,
   pendingKnowledgeBaseId,
   replaceWorkspace,
   resetDetailViewState,
@@ -44,6 +46,7 @@ export function buildKnowledgeWorkbenchPresentationStateInputs<
   return {
     activeKnowledgeBase,
     activeKnowledgeBaseExecutable,
+    activeKnowledgeRuntimeSelector,
     assetDraft,
     assets,
     buildKnowledgeRuntimeSelector,
@@ -62,6 +65,7 @@ export function buildKnowledgeWorkbenchPresentationStateInputs<
     knowledgeTab,
     openAssetWizard,
     overviewPreviewAsset,
+    refetchDiagram,
     pendingKnowledgeBaseId,
     replaceWorkspace,
     resetDetailViewState,

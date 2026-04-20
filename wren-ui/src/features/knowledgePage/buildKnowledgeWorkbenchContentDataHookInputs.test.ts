@@ -52,9 +52,8 @@ describe('buildKnowledgeWorkbenchContentDataHookInputs', () => {
     expect(inputs).toEqual(
       expect.objectContaining({
         hasRuntimeScope: true,
-        activeKnowledgeBaseId: 'kb-1',
-        activeKbSnapshotId: 'snapshot-1',
-        connectorRuntimeSelector: baseArgs.activeKnowledgeRuntimeSelector,
+        activeWorkspaceId: 'ws-1',
+        connectorRuntimeSelector: { workspaceId: 'ws-1' },
         assetModalOpen: true,
         fetchConnectors: baseArgs.fetchConnectors,
         onLoadError: baseArgs.handleConnectorLoadError,

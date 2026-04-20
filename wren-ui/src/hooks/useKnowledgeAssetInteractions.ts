@@ -1,17 +1,19 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { message } from 'antd';
 
-export const commitKnowledgeAssetDraft = <TAsset>({
+type MaybePromise<T> = T | Promise<T>;
+
+export const commitKnowledgeAssetDraft = async <TAsset>({
   saveAssetDraftToOverview,
   blurActiveElement,
   resetDetailViewState,
 }: {
-  saveAssetDraftToOverview: () => TAsset | null;
+  saveAssetDraftToOverview: () => MaybePromise<TAsset | null>;
   blurActiveElement: () => void;
   resetDetailViewState: () => void;
 }) => {
-  const persistedAsset = saveAssetDraftToOverview();
+  const persistedAsset = await saveAssetDraftToOverview();
   if (!persistedAsset) {
     return null;
   }
@@ -28,24 +30,44 @@ export default function useKnowledgeAssetInteractions<TAsset>({
   openModalSafely,
   setDetailAsset,
 }: {
-  saveAssetDraftToOverview: () => TAsset | null;
+  saveAssetDraftToOverview: () => MaybePromise<TAsset | null>;
   blurActiveElement: () => void;
   resetDetailViewState: () => void;
   openModalSafely: (action: () => void) => void;
   setDetailAsset: Dispatch<SetStateAction<TAsset | null>>;
 }) {
-  const commitAssetDraftToOverview = useCallback(() => {
-    const persistedAsset = commitKnowledgeAssetDraft({
-      saveAssetDraftToOverview,
-      blurActiveElement,
-      resetDetailViewState,
-    });
-    if (!persistedAsset) {
+  const [savingAssetDraft, setSavingAssetDraft] = useState(false);
+
+  const commitAssetDraftToOverview = useCallback(async () => {
+    if (savingAssetDraft) {
       return;
     }
 
-    message.success('资产配置已保存到当前知识库概览，可继续前往建模。');
-  }, [blurActiveElement, resetDetailViewState, saveAssetDraftToOverview]);
+    setSavingAssetDraft(true);
+    try {
+      const persistedAsset = await commitKnowledgeAssetDraft({
+        saveAssetDraftToOverview,
+        blurActiveElement,
+        resetDetailViewState,
+      });
+      if (!persistedAsset) {
+        return;
+      }
+
+      message.success('资产配置已保存到当前知识库概览，可继续前往建模。');
+    } catch (error) {
+      message.error(
+        error instanceof Error ? error.message : '保存资产失败，请稍后重试。',
+      );
+    } finally {
+      setSavingAssetDraft(false);
+    }
+  }, [
+    blurActiveElement,
+    resetDetailViewState,
+    saveAssetDraftToOverview,
+    savingAssetDraft,
+  ]);
 
   const openAssetDetail = useCallback(
     (asset: TAsset) => {
@@ -60,5 +82,6 @@ export default function useKnowledgeAssetInteractions<TAsset>({
   return {
     commitAssetDraftToOverview,
     openAssetDetail,
+    savingAssetDraft,
   };
 }

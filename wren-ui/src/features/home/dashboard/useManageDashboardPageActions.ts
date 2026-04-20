@@ -10,7 +10,9 @@ import type {
 } from '@/utils/dashboardRest';
 import {
   createDashboard,
+  deleteDashboard,
   deleteDashboardItem,
+  updateDashboard,
   updateDashboardItemLayouts,
   updateDashboardSchedule,
 } from '@/utils/dashboardRest';
@@ -24,6 +26,8 @@ import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { Path } from '@/utils/enum';
 
 import { isSupportCachedSettings } from './useManageDashboardData';
+
+export type DashboardMutationType = 'rename' | 'delete' | 'default' | null;
 
 export const useManageDashboardPageActions = ({
   activeDashboardId,
@@ -53,7 +57,9 @@ export const useManageDashboardPageActions = ({
   dashboardCacheEnabled: boolean;
   hasExecutableDashboardRuntime: boolean;
   isDashboardReadonly: boolean;
-  refetchDashboard: () => Promise<DashboardDetailData | null>;
+  refetchDashboard: (options?: {
+    useCache?: boolean;
+  }) => Promise<DashboardDetailData | null>;
   refetchDashboards: (options?: { useCache?: boolean }) => Promise<any[]>;
   replaceDashboardRoute: (dashboardId: number) => Promise<void>;
   resolvedCacheSupport: boolean | null;
@@ -71,6 +77,11 @@ export const useManageDashboardPageActions = ({
   visibleDashboardDetailSchedule?: DashboardDetailData['schedule'];
 }) => {
   const [createDashboardLoading, setCreateDashboardLoading] = useState(false);
+  const [dashboardMutationTargetId, setDashboardMutationTargetId] = useState<
+    number | null
+  >(null);
+  const [dashboardMutationType, setDashboardMutationType] =
+    useState<DashboardMutationType>(null);
 
   const ensureCacheSettingsSupported = useCallback(async () => {
     if (dashboardCacheEnabled || resolvedCacheSupport === true) {
@@ -265,7 +276,7 @@ export const useManageDashboardPageActions = ({
       message.success('已创建看板。');
       setCreateDashboardOpen(false);
       setCreateDashboardName('');
-      await refetchDashboards();
+      await refetchDashboards({ useCache: false });
       if (dashboard?.id != null) {
         await replaceDashboardRoute(dashboard.id);
       }
@@ -290,6 +301,100 @@ export const useManageDashboardPageActions = ({
     setCreateDashboardOpen,
   ]);
 
+  const submitRenameDashboard = useCallback(
+    async (dashboardId: number, name: string) => {
+      if (isDashboardReadonly) {
+        message.info(HISTORICAL_SNAPSHOT_READONLY_HINT);
+        return false;
+      }
+
+      const normalizedName = name.trim();
+      if (!normalizedName) {
+        message.warning('请输入看板名称。');
+        return false;
+      }
+
+      try {
+        setDashboardMutationTargetId(dashboardId);
+        setDashboardMutationType('rename');
+        await updateDashboard(runtimeScopeNavigation.selector, dashboardId, {
+          name: normalizedName,
+        });
+        message.success('看板已重命名。');
+        await refetchDashboards({ useCache: false });
+        if (activeDashboardId === dashboardId) {
+          await refetchDashboard({ useCache: false });
+        }
+        return true;
+      } catch (error) {
+        const errorMessage = resolveAbortSafeErrorMessage(
+          error,
+          '重命名看板失败。',
+        );
+        if (errorMessage) {
+          message.error(errorMessage);
+        }
+        return false;
+      } finally {
+        setDashboardMutationTargetId(null);
+        setDashboardMutationType(null);
+      }
+    },
+    [
+      activeDashboardId,
+      isDashboardReadonly,
+      refetchDashboard,
+      refetchDashboards,
+      runtimeScopeNavigation.selector,
+    ],
+  );
+
+  const submitDeleteDashboard = useCallback(
+    async (dashboardId: number) => {
+      if (isDashboardReadonly) {
+        message.info(HISTORICAL_SNAPSHOT_READONLY_HINT);
+        return null;
+      }
+
+      try {
+        setDashboardMutationTargetId(dashboardId);
+        setDashboardMutationType('delete');
+        const fallbackDashboard = await deleteDashboard(
+          runtimeScopeNavigation.selector,
+          dashboardId,
+        );
+        message.success('看板已删除。');
+        await refetchDashboards({ useCache: false });
+        if (
+          activeDashboardId === dashboardId &&
+          fallbackDashboard?.id != null
+        ) {
+          await replaceDashboardRoute(fallbackDashboard.id);
+        }
+        return fallbackDashboard;
+      } catch (error) {
+        const errorMessage = resolveAbortSafeErrorMessage(
+          error,
+          '删除看板失败。',
+        );
+        if (errorMessage) {
+          message.error(errorMessage);
+        }
+        return null;
+      } finally {
+        setDashboardMutationTargetId(null);
+        setDashboardMutationType(null);
+      }
+    },
+    [
+      activeDashboardId,
+      isDashboardReadonly,
+      refetchDashboards,
+      replaceDashboardRoute,
+      runtimeScopeNavigation.selector,
+    ],
+  );
+
   const submitCacheSettings = useCallback(
     async (values: any) => {
       if (activeDashboardId == null) {
@@ -302,8 +407,8 @@ export const useManageDashboardPageActions = ({
           values,
         );
         message.success('看板计划已更新。');
-        await refetchDashboard();
-        await refetchDashboards();
+        await refetchDashboard({ useCache: false });
+        await refetchDashboards({ useCache: false });
       } catch (error) {
         const errorMessage = resolveAbortSafeErrorMessage(
           error,
@@ -322,8 +427,52 @@ export const useManageDashboardPageActions = ({
     ],
   );
 
+  const submitSetDefaultDashboard = useCallback(
+    async (dashboardId: number) => {
+      if (isDashboardReadonly) {
+        message.info(HISTORICAL_SNAPSHOT_READONLY_HINT);
+        return false;
+      }
+
+      try {
+        setDashboardMutationTargetId(dashboardId);
+        setDashboardMutationType('default');
+        await updateDashboard(runtimeScopeNavigation.selector, dashboardId, {
+          isDefault: true,
+        });
+        message.success('已设为默认看板。');
+        await refetchDashboards({ useCache: false });
+        if (activeDashboardId === dashboardId) {
+          await refetchDashboard({ useCache: false });
+        }
+        return true;
+      } catch (error) {
+        const errorMessage = resolveAbortSafeErrorMessage(
+          error,
+          '设置默认看板失败，请稍后重试。',
+        );
+        if (errorMessage) {
+          message.error(errorMessage);
+        }
+        return false;
+      } finally {
+        setDashboardMutationTargetId(null);
+        setDashboardMutationType(null);
+      }
+    },
+    [
+      activeDashboardId,
+      isDashboardReadonly,
+      refetchDashboard,
+      refetchDashboards,
+      runtimeScopeNavigation.selector,
+    ],
+  );
+
   return {
     createDashboardLoading,
+    dashboardMutationTargetId,
+    dashboardMutationType,
     goToSourceThread,
     onDashboardItemUpdated,
     onDelete,
@@ -332,5 +481,8 @@ export const useManageDashboardPageActions = ({
     refreshActiveDashboard,
     submitCacheSettings,
     submitCreateDashboard,
+    submitDeleteDashboard,
+    submitRenameDashboard,
+    submitSetDefaultDashboard,
   };
 };

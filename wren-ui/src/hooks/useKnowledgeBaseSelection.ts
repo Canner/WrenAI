@@ -80,8 +80,55 @@ export default function useKnowledgeBaseSelection<
   }, [cachedKnowledgeBases]);
 
   useEffect(() => {
-    void loadKnowledgeBases();
-  }, [loadKnowledgeBases]);
+    if (!hasRuntimeScope || !knowledgeBasesUrl) {
+      return;
+    }
+
+    let cancelled = false;
+    let timeoutId: number | null = null;
+    let idleCallbackId: number | null = null;
+    const hasHydratedKnowledgeBases =
+      Array.isArray(cachedKnowledgeBases) && cachedKnowledgeBases.length > 0;
+
+    const runLoad = () => {
+      if (cancelled) {
+        return;
+      }
+
+      void loadKnowledgeBases(hasHydratedKnowledgeBases).catch(() => null);
+    };
+
+    if (hasHydratedKnowledgeBases) {
+      if (
+        typeof window !== 'undefined' &&
+        typeof window.requestIdleCallback === 'function'
+      ) {
+        idleCallbackId = window.requestIdleCallback(runLoad, {
+          timeout: 1500,
+        });
+      } else if (typeof window !== 'undefined') {
+        timeoutId = window.setTimeout(runLoad, 900);
+      } else {
+        runLoad();
+      }
+    } else {
+      runLoad();
+    }
+
+    return () => {
+      cancelled = true;
+      if (timeoutId != null && typeof window !== 'undefined') {
+        window.clearTimeout(timeoutId);
+      }
+      if (
+        idleCallbackId != null &&
+        typeof window !== 'undefined' &&
+        typeof window.cancelIdleCallback === 'function'
+      ) {
+        window.cancelIdleCallback(idleCallbackId);
+      }
+    };
+  }, [cachedKnowledgeBases, hasRuntimeScope, knowledgeBasesUrl, loadKnowledgeBases]);
 
   useEffect(() => {
     if (selectedKnowledgeBaseId) {

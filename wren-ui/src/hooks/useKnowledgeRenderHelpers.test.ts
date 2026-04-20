@@ -45,6 +45,15 @@ describe('useKnowledgeRenderHelpers', () => {
     ).toBeGreaterThanOrEqual(0);
   });
 
+  it('preserves zero assetCount instead of falling back to reference counts', () => {
+    expect(
+      resolveKnowledgeSidebarFallbackAssetCount({
+        name: '电商销售分析',
+        assetCount: 0,
+      }),
+    ).toBe(0);
+  });
+
   it('resolves rule draft summary/content through parser', () => {
     const instruction = {
       id: 1,

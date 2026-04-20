@@ -4,7 +4,15 @@ import KnowledgeWorkbenchPageFrame from './KnowledgeWorkbenchPageFrame';
 
 jest.mock('@/components/reference/DirectShellPageFrame', () => ({
   __esModule: true,
-  default: ({ children }: any) => <div data-shell>{children}</div>,
+  default: ({ children, flushBottomPadding, stretchContent }: any) => (
+    <div
+      data-shell
+      data-flush-bottom={String(Boolean(flushBottomPadding))}
+      data-stretch-content={String(Boolean(stretchContent))}
+    >
+      {children}
+    </div>
+  ),
 }));
 
 jest.mock('./sections/KnowledgeWorkbenchStage', () => ({
@@ -112,8 +120,10 @@ describe('KnowledgeWorkbenchPageFrame', () => {
             assetDraft: { name: '', description: '', important: true },
             setAssetDraft: jest.fn(),
             assetDraftPreview: null,
+            assetDraftPreviews: [],
             canContinueAssetConfiguration: false,
             commitAssetDraftToOverview: jest.fn(),
+            savingAssetDraft: false,
             displayKnowledgeName: 'KB',
             closeAssetModal: jest.fn(),
             onNavigateModeling: jest.fn(),
@@ -123,6 +133,8 @@ describe('KnowledgeWorkbenchPageFrame', () => {
     );
 
     expect(html).toContain('data-shell');
+    expect(html).toContain('data-flush-bottom="true"');
+    expect(html).toContain('data-stretch-content="true"');
     expect(html).toContain('data-stage');
   });
 });

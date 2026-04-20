@@ -24,12 +24,46 @@ jest.mock('antd', () => {
   const Input = (props: any) => React.createElement('input', props);
   Input.Search = ({ allowClear: _allowClear, ...props }: any) =>
     React.createElement('input', props);
+  const Typography = {
+    Text: ({ children }: any) => React.createElement('span', null, children),
+  };
+  const Descriptions = ({ children }: any) =>
+    React.createElement('dl', null, children);
+  (Descriptions as any).Item = ({ label, children }: any) =>
+    React.createElement(
+      'div',
+      null,
+      label ? React.createElement('dt', null, label) : null,
+      React.createElement('dd', null, children),
+    );
+  const Menu = ({ children }: any) =>
+    React.createElement('div', null, children);
+  (Menu as any).Item = ({ children }: any) =>
+    React.createElement('button', null, children);
   return {
-    Button: ({ children, danger: _danger, ...props }: any) =>
-      React.createElement('button', props, children),
+    Button: ({
+      children,
+      danger: _danger,
+      block: _block,
+      icon: _icon,
+      loading: _loading,
+      type: _type,
+      ...props
+    }: any) => React.createElement('button', props, children),
+    Card: ({ children, title }: any) =>
+      React.createElement('section', null, title, children),
+    Descriptions,
+    Divider: () => React.createElement('hr'),
+    Dropdown: ({ children }: any) => React.createElement('div', null, children),
+    Empty: ({ description }: any) =>
+      React.createElement('div', null, description),
     Input,
+    Menu,
     Modal: ({ title, children }: any) =>
       React.createElement('div', null, title, children),
+    Tag: ({ children }: any) => React.createElement('span', null, children),
+    Tooltip: ({ children }: any) => React.createElement('span', null, children),
+    Typography,
     message: {
       success: jest.fn(),
       error: jest.fn(),
@@ -184,6 +218,7 @@ describe('home/dashboard page', () => {
       payload: [
         {
           id: 11,
+          isDefault: true,
           name: '经营总览',
           cacheEnabled: true,
           nextScheduledAt: null,
@@ -191,6 +226,7 @@ describe('home/dashboard page', () => {
         },
         {
           id: 12,
+          isDefault: false,
           name: '销售看板',
           cacheEnabled: false,
           nextScheduledAt: null,
@@ -203,6 +239,7 @@ describe('home/dashboard page', () => {
       dashboardId: 11,
       payload: {
         id: 11,
+        isDefault: true,
         name: '经营总览',
         description: null,
         cacheEnabled: true,
@@ -241,12 +278,13 @@ describe('home/dashboard page', () => {
     expect(markup).toContain('数据看板');
     expect(markup).toContain('看板');
     expect(markup).toContain('新建看板');
-    expect(markup).toContain('去新对话生成图表');
+    expect(markup).not.toContain('去新对话生成图表');
+    expect(markup).toContain('默认');
     expect(markup).toContain('经营总览');
     expect(markup).toContain('销售看板');
     expect(markup).toContain('销售趋势');
-    expect(markup).toContain('图表');
-    expect(markup).toContain('选中图表');
+    expect(markup).toContain('已固定图表');
+    expect(markup).toContain('当前图表');
     expect(markup).toContain('回到来源线程');
     expect(markup).toContain('近 30 天销售趋势');
     expect(markup).toContain('#21');
@@ -254,6 +292,7 @@ describe('home/dashboard page', () => {
     expect(markup).not.toContain('看板列表');
     expect(markup).not.toContain('图表列表');
     expect(markup).not.toContain('当前选中卡片');
+    expect(markup).not.toContain('设为默认');
     expect(capturedDashboardGridProps?.readOnly).toBe(false);
     expect(capturedDashboardHeaderProps?.readOnly).toBe(false);
   });
@@ -277,7 +316,6 @@ describe('home/dashboard page', () => {
 
     const markup = renderPage();
 
-    expect(markup).toContain('历史快照只读');
     expect(capturedDashboardGridProps?.readOnly).toBe(true);
     expect(capturedDashboardHeaderProps?.readOnly).toBe(true);
     expect(markup).toContain('DashboardHeaderReadonly');

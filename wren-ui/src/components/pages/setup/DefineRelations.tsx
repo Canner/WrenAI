@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { omit } from 'lodash';
 import { Alert, Button, Popconfirm, Space, Spin, Typography } from 'antd';
+import type { TableColumnsType } from 'antd';
 import styled from 'styled-components';
-import type { ColumnsType } from 'antd/es/table';
 import DeleteOutlined from '@ant-design/icons/DeleteOutlined';
 import EditOutlined from '@ant-design/icons/EditOutlined';
 import PlusOutlined from '@ant-design/icons/PlusOutlined';
@@ -142,7 +142,7 @@ function EditableRelationTable(props: EditableRelationTableProps) {
     recommendNameMapping,
   } = props;
 
-  const columns: ColumnsType<RelationsDataType> = [
+  const columns: TableColumnsType<RelationsDataType> = [
     {
       title: '起始字段',
       dataIndex: 'fromField',

@@ -1,11 +1,19 @@
 import React from 'react';
 import styled from 'styled-components';
 import { Table, Transfer, Tag } from 'antd';
+import type { TableColumnsType, TableProps, TransferProps } from 'antd';
+import type { TransferItem } from 'antd/es/transfer';
 import difference from 'lodash/difference';
-import { TransferItem, TransferProps } from 'antd/es/transfer';
-import { ColumnsType, TableRowSelection } from 'antd/es/table/interface';
 
-const StyledTable = styled(Table)`
+export type TableTransferRecord = TransferItem & {
+  disabled?: boolean;
+  title?: React.ReactNode;
+  [key: string]: any;
+};
+
+const TypedTable = Table<TableTransferRecord>;
+
+const StyledTable = styled(TypedTable)`
   .ant-table-row {
     cursor: pointer;
   }
@@ -18,8 +26,7 @@ const StyledTable = styled(Table)`
   }
 `;
 
-// default left and right columns
-export const defaultColumns = [
+export const defaultColumns: TableColumnsType<TableTransferRecord> = [
   {
     dataIndex: 'name',
     title: '字段名称',
@@ -31,10 +38,10 @@ export const defaultColumns = [
   },
 ];
 
-interface TableTransferProps extends TransferProps<TransferItem> {
-  dataSource: any[];
-  leftColumns?: ColumnsType<any>;
-  rightColumns?: ColumnsType<any>;
+interface TableTransferProps extends TransferProps<TableTransferRecord> {
+  dataSource: TableTransferRecord[];
+  leftColumns?: TableColumnsType<TableTransferRecord>;
+  rightColumns?: TableColumnsType<TableTransferRecord>;
 }
 
 const TableTransfer = (
@@ -43,10 +50,10 @@ const TableTransfer = (
     rightColumns = defaultColumns,
     ...restProps
   }: TableTransferProps,
-  ref: any,
+  ref: React.ForwardedRef<HTMLDivElement>,
 ) => {
   return (
-    <Transfer
+    <Transfer<TableTransferRecord>
       {...restProps}
       locale={{
         searchPlaceholder: '搜索字段',
@@ -67,23 +74,29 @@ const TableTransfer = (
         disabled: listDisabled,
       }) => {
         const columns = direction === 'left' ? leftColumns : rightColumns;
-        const shouldPaginate = filteredItems.length > 120;
+        const tableItems = filteredItems as TableTransferRecord[];
+        const shouldPaginate = tableItems.length > 120;
 
-        const rowSelection: TableRowSelection<TransferItem> = {
+        const rowSelection: NonNullable<
+          TableProps<TableTransferRecord>['rowSelection']
+        > = {
           getCheckboxProps: (item) => ({
             disabled: listDisabled || item.disabled,
           }),
           onSelectAll(selected, selectedRows) {
             const treeSelectedKeys = selectedRows
               .filter((item) => !item.disabled)
-              .map(({ key }) => key);
+              .map(({ key }) => key)
+              .filter((key): key is string => typeof key === 'string');
             const diffKeys = selected
               ? difference(treeSelectedKeys, listSelectedKeys)
               : difference(listSelectedKeys, treeSelectedKeys);
-            onItemSelectAll(diffKeys as string[], selected);
+            onItemSelectAll(diffKeys, selected);
           },
           onSelect({ key }, selected) {
-            onItemSelect(key as string, selected);
+            if (typeof key === 'string') {
+              onItemSelect(key, selected);
+            }
           },
           selectedRowKeys: listSelectedKeys,
         };
@@ -93,25 +106,24 @@ const TableTransfer = (
             <StyledTable
               rowSelection={rowSelection}
               columns={columns}
-              dataSource={filteredItems}
+              dataSource={tableItems}
               locale={{ emptyText: '暂无数据' }}
               size="small"
-              style={
-                {
-                  pointerEvents: listDisabled ? 'none' : null,
-                } as React.CSSProperties
-              }
-              onRow={({ key, disabled: itemDisabled, title }: any) => ({
+              style={{
+                pointerEvents: listDisabled ? 'none' : undefined,
+              }}
+              onRow={({ key, disabled: itemDisabled, title }) => ({
                 title,
                 onClick: () => {
-                  if (itemDisabled || listDisabled) return;
-                  onItemSelect(
-                    key as string,
-                    !listSelectedKeys.includes(key as string),
-                  );
+                  if (itemDisabled || listDisabled) {
+                    return;
+                  }
+                  if (typeof key === 'string') {
+                    onItemSelect(key, !listSelectedKeys.includes(key));
+                  }
                 },
               })}
-              rowClassName={({ disabled: itemDisabled }: any) =>
+              rowClassName={({ disabled: itemDisabled }) =>
                 itemDisabled ? 'ant-table-row-disabled' : ''
               }
               scroll={{ y: 200 }}

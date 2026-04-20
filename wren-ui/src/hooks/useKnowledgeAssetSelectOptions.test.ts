@@ -23,19 +23,39 @@ describe('useKnowledgeAssetSelectOptions helpers', () => {
     ).toEqual([{ label: '样例库', value: 'demo' }]);
   });
 
-  it('maps runtime assets to table options when connector source is selected', () => {
+  it('maps runtime assets to table options and disables imported tables', () => {
     expect(
       resolveKnowledgeAssetTableOptions({
+        assets: [{ sourceTableName: 'sales.orders' }],
         isDemoSource: false,
         demoTableOptions: [{ label: '样例表', value: 'demo-table' }],
-        assets: [
-          { id: 'a1', name: 'orders' },
-          { id: 'a2', name: 'customers' },
+        connectorTables: [
+          {
+            name: 'orders',
+            primaryKey: 'order_id',
+            columns: [],
+            properties: { schema: 'sales', table: 'orders' },
+          },
+          {
+            name: 'customers',
+            columns: [],
+            properties: { schema: 'sales', table: 'customers' },
+          },
         ],
       }),
     ).toEqual([
-      { label: 'orders', value: 'a1' },
-      { label: 'customers', value: 'a2' },
+      {
+        disabled: true,
+        imported: true,
+        label: 'sales.orders · 已导入',
+        value: 'sales.orders',
+      },
+      {
+        disabled: false,
+        imported: false,
+        label: 'sales.customers',
+        value: 'sales.customers',
+      },
     ]);
   });
 });

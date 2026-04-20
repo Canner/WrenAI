@@ -1,13 +1,13 @@
 import { commitKnowledgeAssetDraft } from './useKnowledgeAssetInteractions';
 
 describe('useKnowledgeAssetInteractions helpers', () => {
-  it('commits draft and runs side effects when persisted asset exists', () => {
+  it('commits draft and runs side effects when persisted asset exists', async () => {
     const persistedAsset = { id: 'asset-1' };
     const blurActiveElement = jest.fn();
     const resetDetailViewState = jest.fn();
 
-    const result = commitKnowledgeAssetDraft({
-      saveAssetDraftToOverview: () => persistedAsset,
+    const result = await commitKnowledgeAssetDraft({
+      saveAssetDraftToOverview: async () => persistedAsset,
       blurActiveElement,
       resetDetailViewState,
     });
@@ -17,12 +17,12 @@ describe('useKnowledgeAssetInteractions helpers', () => {
     expect(resetDetailViewState).toHaveBeenCalledTimes(1);
   });
 
-  it('does nothing when no persisted asset is returned', () => {
+  it('does nothing when no persisted asset is returned', async () => {
     const blurActiveElement = jest.fn();
     const resetDetailViewState = jest.fn();
 
-    const result = commitKnowledgeAssetDraft({
-      saveAssetDraftToOverview: () => null,
+    const result = await commitKnowledgeAssetDraft({
+      saveAssetDraftToOverview: async () => null,
       blurActiveElement,
       resetDetailViewState,
     });

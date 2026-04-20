@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { SelectedAssetTableValue } from '@/features/knowledgePage/types';
 import {
   REFERENCE_DEMO_KNOWLEDGE_BASES,
   type ReferenceDemoKnowledge,
@@ -34,6 +35,18 @@ export const resolveSelectedDemoKnowledge = (sourceType: string) => {
   return null;
 };
 
+export const normalizeSelectedAssetTableValues = (
+  value?: SelectedAssetTableValue | null,
+) =>
+  (Array.isArray(value) ? value : value ? [value] : []).filter(
+    (item): item is string =>
+      typeof item === 'string' && item.trim().length > 0,
+  );
+
+export const hasSelectedAssetTableValues = (
+  value?: SelectedAssetTableValue | null,
+) => normalizeSelectedAssetTableValues(value).length > 0;
+
 export default function useKnowledgeAssetSource({
   sourceOptions,
   connectors,
@@ -46,7 +59,8 @@ export default function useKnowledgeAssetSource({
   const [selectedSourceType, setSelectedSourceType] =
     useState(initialSourceType);
   const [selectedConnectorId, setSelectedConnectorId] = useState<string>();
-  const [selectedDemoTable, setSelectedDemoTable] = useState<string>();
+  const [selectedDemoTable, setSelectedDemoTable] =
+    useState<SelectedAssetTableValue>();
 
   const selectedSourceOption = useMemo(
     () =>
@@ -68,6 +82,12 @@ export default function useKnowledgeAssetSource({
 
     setSelectedDemoTable(`${selectedDemoKnowledge.id}::theme-view`);
   }, [selectedDemoKnowledge]);
+
+  useEffect(() => {
+    if (!selectedDemoKnowledge && selectedConnectorId) {
+      setSelectedDemoTable(undefined);
+    }
+  }, [selectedConnectorId, selectedDemoKnowledge]);
 
   useEffect(() => {
     if (!selectedConnectorId && connectors.length > 0) {
@@ -105,8 +125,9 @@ export default function useKnowledgeAssetSource({
   );
 
   const canContinueAssetWizard = isDemoSource
-    ? Boolean(selectedDemoTable)
-    : Boolean(selectedConnectorId);
+    ? hasSelectedAssetTableValues(selectedDemoTable)
+    : Boolean(selectedConnectorId) &&
+      hasSelectedAssetTableValues(selectedDemoTable);
 
   return {
     selectedSourceType,

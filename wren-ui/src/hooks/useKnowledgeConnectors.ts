@@ -7,18 +7,16 @@ type ConnectorSourceOption = Pick<SourceOption, 'key' | 'category'>;
 
 export const resolveKnowledgeConnectorScopeKey = ({
   hasRuntimeScope,
-  activeKnowledgeBaseId,
-  activeKbSnapshotId,
+  activeWorkspaceId,
 }: {
   hasRuntimeScope: boolean;
-  activeKnowledgeBaseId?: string | null;
-  activeKbSnapshotId?: string | null;
+  activeWorkspaceId?: string | null;
 }) => {
-  if (!hasRuntimeScope || !activeKnowledgeBaseId || !activeKbSnapshotId) {
+  if (!hasRuntimeScope || !activeWorkspaceId) {
     return null;
   }
 
-  return `${activeKnowledgeBaseId}:${activeKbSnapshotId}`;
+  return activeWorkspaceId;
 };
 
 export const shouldLoadKnowledgeConnectors = ({
@@ -67,8 +65,7 @@ export default function useKnowledgeConnectors<
   TConnector extends ConnectorInput,
 >({
   hasRuntimeScope,
-  activeKnowledgeBaseId,
-  activeKbSnapshotId,
+  activeWorkspaceId,
   connectorRuntimeSelector,
   assetModalOpen,
   sourceOptions,
@@ -77,8 +74,7 @@ export default function useKnowledgeConnectors<
   onLoadError,
 }: {
   hasRuntimeScope: boolean;
-  activeKnowledgeBaseId?: string | null;
-  activeKbSnapshotId?: string | null;
+  activeWorkspaceId?: string | null;
   connectorRuntimeSelector?: {
     workspaceId?: string;
     knowledgeBaseId?: string;
@@ -112,10 +108,9 @@ export default function useKnowledgeConnectors<
     () =>
       resolveKnowledgeConnectorScopeKey({
         hasRuntimeScope,
-        activeKnowledgeBaseId,
-        activeKbSnapshotId,
+        activeWorkspaceId,
       }),
-    [activeKbSnapshotId, activeKnowledgeBaseId, hasRuntimeScope],
+    [activeWorkspaceId, hasRuntimeScope],
   );
 
   const shouldLoadConnectors = useMemo(

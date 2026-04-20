@@ -1,5 +1,6 @@
 import {
   normalizeKnowledgeListPayload,
+  resolveWorkspaceConnectorSelector,
   resolveKnowledgeLoadErrorMessage,
 } from './useKnowledgeDataLoaders';
 
@@ -25,5 +26,22 @@ describe('useKnowledgeDataLoaders helpers', () => {
     expect(resolveKnowledgeLoadErrorMessage('boom', 'fallback')).toBe(
       'fallback',
     );
+  });
+
+  it('shrinks connector selector to workspace scope only', () => {
+    expect(
+      resolveWorkspaceConnectorSelector({
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snap-1',
+        deployHash: 'deploy-1',
+      }),
+    ).toEqual({ workspaceId: 'workspace-1' });
+
+    expect(
+      resolveWorkspaceConnectorSelector({
+        knowledgeBaseId: 'kb-1',
+      }),
+    ).toBeUndefined();
   });
 });

@@ -1,11 +1,13 @@
 import styled from 'styled-components';
 
 export const LibraryStage = styled.div`
+  flex: 1;
   width: 100%;
   max-width: none;
   margin: 0;
   padding: 0;
   min-height: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -21,11 +23,13 @@ export const WorkbenchGrid = styled.div`
   align-items: stretch;
   align-content: stretch;
   min-height: 100%;
+  height: 100%;
 
   @media (max-width: 1080px) {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto;
     min-height: 0;
+    height: auto;
   }
 `;
 

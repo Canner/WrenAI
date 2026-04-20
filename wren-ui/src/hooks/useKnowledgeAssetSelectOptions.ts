@@ -1,4 +1,9 @@
 import { useMemo } from 'react';
+import type { CompactTable } from '@/types/dataSource';
+import {
+  getCompactTableQualifiedName,
+  getCompactTableScopedName,
+} from '@/utils/compactTable';
 
 type ConnectorLike = {
   id: string;
@@ -6,19 +11,20 @@ type ConnectorLike = {
   type: string;
 };
 
-type Option = {
+type AssetLike = {
+  sourceTableName?: string | null;
+};
+
+export type KnowledgeAssetSelectOption = {
+  disabled?: boolean;
+  imported?: boolean;
   label: string;
   value: string;
 };
 
-type AssetLike = {
-  id: string;
-  name: string;
-};
-
 export const resolveKnowledgeConnectorOptions = (
   connectors: ConnectorLike[],
-): Option[] =>
+): KnowledgeAssetSelectOption[] =>
   connectors.map((connector) => ({
     label: `${connector.displayName} · ${connector.type}`,
     value: connector.id,
@@ -30,38 +36,65 @@ export const resolveKnowledgeAssetDatabaseOptions = ({
   connectorOptions,
 }: {
   isDemoSource: boolean;
-  demoDatabaseOptions: Option[];
-  connectorOptions: Option[];
+  demoDatabaseOptions: KnowledgeAssetSelectOption[];
+  connectorOptions: KnowledgeAssetSelectOption[];
 }) => (isDemoSource ? demoDatabaseOptions : connectorOptions);
 
+export const resolveImportedConnectorTableNames = (assets: AssetLike[] = []) =>
+  new Set(
+    assets
+      .map((asset) => asset.sourceTableName?.trim())
+      .filter((value): value is string => Boolean(value)),
+  );
+
 export const resolveKnowledgeAssetTableOptions = ({
+  assets,
   isDemoSource,
   demoTableOptions,
-  assets,
+  connectorTables,
 }: {
+  assets?: AssetLike[];
   isDemoSource: boolean;
-  demoTableOptions: Option[];
-  assets: AssetLike[];
-}): Option[] =>
-  isDemoSource
-    ? demoTableOptions
-    : assets.slice(0, 8).map((asset) => ({
-        label: asset.name,
-        value: asset.id,
-      }));
+  demoTableOptions: KnowledgeAssetSelectOption[];
+  connectorTables: CompactTable[];
+}): KnowledgeAssetSelectOption[] => {
+  if (isDemoSource) {
+    return demoTableOptions;
+  }
+
+  const importedSourceTableNames = resolveImportedConnectorTableNames(assets);
+
+  return connectorTables.map((table) => {
+    const qualifiedName = getCompactTableQualifiedName(table);
+    const scopedName = getCompactTableScopedName(table);
+    const imported =
+      importedSourceTableNames.has(table.name) ||
+      importedSourceTableNames.has(scopedName) ||
+      importedSourceTableNames.has(qualifiedName);
+
+    return {
+      disabled: imported,
+      imported,
+      label: imported ? `${qualifiedName} · 已导入` : qualifiedName,
+      value: qualifiedName,
+    };
+  });
+};
 
 export default function useKnowledgeAssetSelectOptions({
+  assets,
   connectors,
   isDemoSource,
   demoDatabaseOptions,
   demoTableOptions,
-  assets,
+  connectorTables,
 }: {
+  assets: AssetLike[];
   connectors: ConnectorLike[];
   isDemoSource: boolean;
-  demoDatabaseOptions: Option[];
-  demoTableOptions: Option[];
-  assets: AssetLike[];
+  demoDatabaseOptions: KnowledgeAssetSelectOption[];
+  demoTableOptions: KnowledgeAssetSelectOption[];
+  connectorTables: CompactTable[];
 }) {
   const connectorOptions = useMemo(
     () => resolveKnowledgeConnectorOptions(connectors),
@@ -79,11 +112,12 @@ export default function useKnowledgeAssetSelectOptions({
   const assetTableOptions = useMemo(
     () =>
       resolveKnowledgeAssetTableOptions({
+        assets,
         isDemoSource,
         demoTableOptions,
-        assets,
+        connectorTables,
       }),
-    [assets, demoTableOptions, isDemoSource],
+    [assets, connectorTables, demoTableOptions, isDemoSource],
   );
 
   return {

@@ -48,9 +48,11 @@ export function useKnowledgeWorkbenchContentData<
       }),
     );
 
+  const effectiveCanContinueAssetWizard = canContinueAssetWizard;
+
   return {
     assets,
-    canContinueAssetWizard,
+    canContinueAssetWizard: effectiveCanContinueAssetWizard,
     connectors,
     connectorsLoading,
     demoDatabaseOptions,
@@ -60,6 +62,7 @@ export function useKnowledgeWorkbenchContentData<
     isDemoSource,
     overviewPreviewAsset,
     previewFieldCount,
+    refetchDiagram,
     routeRuntimeSyncing: args.runtimeTransitioning || routeRuntimeDataSyncing,
     selectedConnectorId,
     selectedDemoKnowledge,

@@ -3,7 +3,7 @@ import { shouldCommitPendingKnowledgeBaseSwitch } from '@/hooks/useKnowledgePage
 import useKnowledgePendingSwitchSync from '@/hooks/useKnowledgePendingSwitchSync';
 import useKnowledgeSwitchReset from '@/hooks/useKnowledgeSwitchReset';
 import useKnowledgeWorkbenchBootstrap from './useKnowledgeWorkbenchBootstrap';
-import type { AssetView } from './types';
+import type { AssetView, SelectedAssetTableValue } from './types';
 
 export function useKnowledgeWorkbenchSyncEffects({
   activeKnowledgeBaseId,
@@ -47,7 +47,7 @@ export function useKnowledgeWorkbenchSyncEffects({
   setDraftAssets: React.Dispatch<React.SetStateAction<AssetView[]>>;
   setPendingKnowledgeBaseId: (id: string | null) => void;
   setSelectedConnectorId: (id?: string) => void;
-  setSelectedDemoTable: (table?: string) => void;
+  setSelectedDemoTable: (table?: SelectedAssetTableValue) => void;
   setSelectedKnowledgeBaseId: (id: string | null) => void;
 }) {
   useKnowledgePendingSwitchSync({

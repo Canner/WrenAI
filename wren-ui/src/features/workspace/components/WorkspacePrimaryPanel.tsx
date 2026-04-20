@@ -1,5 +1,5 @@
 import { Button, Input, Space, Table, Tag, Typography } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
+import type { TableColumnsType } from 'antd';
 import { useMemo } from 'react';
 import { formatUserLabel } from '@/features/settings/workspaceGovernanceShared';
 import { getReferenceDisplayWorkspaceName } from '@/utils/referenceDemoKnowledge';
@@ -123,7 +123,7 @@ export default function WorkspacePrimaryPanel({
       });
   }, [reviewQueue, searchKeyword, workspace?.name]);
 
-  const workspaceColumns: ColumnsType<(typeof workspaceRows)[number]> = [
+  const workspaceColumns: TableColumnsType<(typeof workspaceRows)[number]> = [
     {
       title: '名称',
       dataIndex: 'name',
@@ -181,7 +181,7 @@ export default function WorkspacePrimaryPanel({
     },
   ];
 
-  const reviewColumns: ColumnsType<WorkspaceMemberView> = [
+  const reviewColumns: TableColumnsType<WorkspaceMemberView> = [
     {
       title: '名称',
       key: 'workspaceName',

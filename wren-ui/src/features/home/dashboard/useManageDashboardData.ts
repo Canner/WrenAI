@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { DataSourceName } from '@/types/dataSource';
 import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
+import useRestRequest from '@/hooks/useRestRequest';
 import {
+  buildDashboardDetailUrl,
+  buildDashboardListUrl,
   loadDashboardDetailPayload,
   loadDashboardListPayload,
   peekDashboardDetailPayload,
@@ -26,6 +29,27 @@ export const isSupportCachedSettings = (
   return !connection.sampleDataset && connection.type !== DataSourceName.DUCKDB;
 };
 
+export const buildDashboardListRequestKey = ({
+  enabled,
+  selector,
+}: {
+  enabled: boolean;
+  selector: ClientRuntimeScopeSelector;
+}) => (enabled ? buildDashboardListUrl(selector) : null);
+
+export const buildDashboardDetailRequestKey = ({
+  dashboardId,
+  enabled,
+  selector,
+}: {
+  dashboardId?: number | null;
+  enabled: boolean;
+  selector: ClientRuntimeScopeSelector;
+}) =>
+  enabled && dashboardId != null
+    ? buildDashboardDetailUrl(dashboardId, selector)
+    : null;
+
 export const useDashboardListData = ({
   enabled,
   selector,
@@ -35,65 +59,71 @@ export const useDashboardListData = ({
   selector: ClientRuntimeScopeSelector;
   onError?: (error: Error) => void;
 }) => {
+  const requestKey = useMemo(
+    () =>
+      buildDashboardListRequestKey({
+        enabled,
+        selector,
+      }),
+    [
+      enabled,
+      selector.deployHash,
+      selector.kbSnapshotId,
+      selector.knowledgeBaseId,
+      selector.runtimeScopeId,
+      selector.workspaceId,
+    ],
+  );
   const initialData = useMemo(() => {
-    if (!enabled) {
+    if (!requestKey) {
       return [] as DashboardListItem[];
     }
 
-    return peekDashboardListPayload({ selector }) || [];
-  }, [
-    enabled,
-    selector.deployHash,
-    selector.kbSnapshotId,
-    selector.knowledgeBaseId,
-    selector.runtimeScopeId,
-    selector.workspaceId,
-  ]);
-  const [data, setData] = useState<DashboardListItem[]>(initialData);
-  const [loading, setLoading] = useState(
-    Boolean(enabled && initialData.length === 0),
-  );
+    return peekDashboardListPayload({ requestUrl: requestKey }) || [];
+  }, [requestKey]);
+  const useCacheRef = useRef(true);
+  const {
+    data,
+    loading,
+    refetch: refetchList,
+    setData,
+  } = useRestRequest<DashboardListItem[]>({
+    enabled: Boolean(requestKey),
+    auto: Boolean(requestKey),
+    initialData,
+    requestKey,
+    request: async () =>
+      loadDashboardListPayload({
+        selector,
+        requestUrl: requestKey as string,
+        useCache: useCacheRef.current,
+      }),
+    onError: (error) => {
+      onError?.(normalizeDashboardError(error, '加载看板列表失败。'));
+    },
+  });
 
   useEffect(() => {
     setData(initialData);
-    setLoading(Boolean(enabled && initialData.length === 0));
-  }, [enabled, initialData]);
+  }, [initialData, setData]);
 
   const refetch = useCallback(
     async ({ useCache = false }: { useCache?: boolean } = {}) => {
-      if (!enabled) {
+      if (!requestKey) {
         setData([]);
-        setLoading(false);
         return [] as DashboardListItem[];
       }
 
-      setLoading(true);
+      useCacheRef.current = useCache;
 
       try {
-        const payload = await loadDashboardListPayload({ selector, useCache });
-        setData(payload);
-        return payload;
-      } catch (error) {
-        const normalizedError = normalizeDashboardError(
-          error,
-          '加载看板列表失败。',
-        );
-        onError?.(normalizedError);
-        throw normalizedError;
+        return await refetchList();
       } finally {
-        setLoading(false);
+        useCacheRef.current = true;
       }
     },
-    [enabled, onError, selector],
+    [refetchList, requestKey, setData],
   );
-
-  useEffect(() => {
-    if (!enabled) {
-      return;
-    }
-
-    void refetch({ useCache: true }).catch(() => null);
-  }, [enabled, refetch]);
 
   return { data, loading, refetch };
 };
@@ -109,70 +139,77 @@ export const useDashboardDetailData = ({
   selector: ClientRuntimeScopeSelector;
   onError?: (error: Error) => void;
 }) => {
+  const requestKey = useMemo(
+    () =>
+      buildDashboardDetailRequestKey({
+        dashboardId,
+        enabled,
+        selector,
+      }),
+    [
+      dashboardId,
+      enabled,
+      selector.deployHash,
+      selector.kbSnapshotId,
+      selector.knowledgeBaseId,
+      selector.runtimeScopeId,
+      selector.workspaceId,
+    ],
+  );
   const initialData = useMemo(() => {
-    if (!enabled || dashboardId == null) {
+    if (!requestKey) {
       return null;
     }
 
-    return peekDashboardDetailPayload({ selector, dashboardId });
-  }, [
-    dashboardId,
-    enabled,
-    selector.deployHash,
-    selector.kbSnapshotId,
-    selector.knowledgeBaseId,
-    selector.runtimeScopeId,
-    selector.workspaceId,
-  ]);
-  const [data, setData] = useState<DashboardDetailData | null>(initialData);
-  const [loading, setLoading] = useState(
-    Boolean(enabled && dashboardId != null && !initialData),
-  );
+    return peekDashboardDetailPayload({
+      requestUrl: requestKey,
+      dashboardId: dashboardId ?? undefined,
+    });
+  }, [dashboardId, requestKey]);
+  const useCacheRef = useRef(true);
+  const {
+    data,
+    loading,
+    refetch: refetchDetail,
+    setData,
+  } = useRestRequest<DashboardDetailData | null>({
+    enabled: Boolean(requestKey),
+    auto: Boolean(requestKey),
+    initialData,
+    requestKey,
+    request: async () =>
+      loadDashboardDetailPayload({
+        dashboardId: dashboardId as number,
+        selector,
+        requestUrl: requestKey as string,
+        useCache: useCacheRef.current,
+      }),
+    onError: (error) => {
+      onError?.(normalizeDashboardError(error, '加载看板项失败。'));
+    },
+  });
 
   useEffect(() => {
     setData(initialData);
-    setLoading(Boolean(enabled && dashboardId != null && !initialData));
-  }, [dashboardId, enabled, initialData]);
+  }, [initialData, setData]);
 
   const refetch = useCallback(
     async ({ useCache = false }: { useCache?: boolean } = {}) => {
-      if (!enabled || dashboardId == null) {
+      if (!requestKey) {
         setData(null);
-        setLoading(false);
         return null;
       }
 
-      setLoading(true);
+      useCacheRef.current = useCache;
 
       try {
-        const payload = await loadDashboardDetailPayload({
-          dashboardId,
-          selector,
-          useCache,
-        });
-        setData(payload);
-        return payload;
-      } catch (error) {
-        const normalizedError = normalizeDashboardError(
-          error,
-          '加载看板项失败。',
-        );
-        onError?.(normalizedError);
-        throw normalizedError;
+        return await refetchDetail();
       } finally {
-        setLoading(false);
+        useCacheRef.current = true;
       }
     },
-    [dashboardId, enabled, onError, selector],
+    [refetchDetail, requestKey, setData],
   );
-
-  useEffect(() => {
-    if (!enabled || dashboardId == null) {
-      return;
-    }
-
-    void refetch({ useCache: true }).catch(() => null);
-  }, [dashboardId, enabled, refetch]);
 
   const updateData = useCallback(
     (updater: (previousData: DashboardDetailData) => DashboardDetailData) => {

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Button, Form, Space, Typography } from 'antd';
+import type { TableColumnsType } from 'antd';
 import styled from 'styled-components';
-import type { ColumnsType } from 'antd/es/table';
 import { ERROR_TEXTS } from '@/utils/error';
 import MultiSelectBox from '@/components/table/MultiSelectBox';
 import type { CompactTable } from '@/types/dataSource';
@@ -98,7 +98,7 @@ type SelectModelItem = CompactTable & {
   qualifiedName: string;
 };
 
-const columns: ColumnsType<SelectModelItem> = [
+const columns: TableColumnsType<SelectModelItem> = [
   {
     title: 'Catalog',
     dataIndex: 'catalogLabel',

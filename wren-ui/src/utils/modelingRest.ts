@@ -33,6 +33,7 @@ export type DeployResponsePayload = {
   error?: string | null;
   version?: string | null;
   hash?: string | null;
+  selector?: ClientRuntimeScopeSelector | null;
 };
 
 export const buildDeployUrl = (

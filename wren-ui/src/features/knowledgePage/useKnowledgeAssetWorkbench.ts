@@ -1,15 +1,28 @@
+import { useCallback } from 'react';
+import { useRouter } from 'next/router';
+import { message } from 'antd';
+import {
+  buildRuntimeScopeUrl,
+  omitRuntimeScopeQuery,
+  type ClientRuntimeScopeSelector,
+} from '@/runtime/client/runtimeScope';
+import type { SelectedAssetTableValue } from '@/features/knowledgePage/types';
 import useKnowledgeAssetDetail from '@/hooks/useKnowledgeAssetDetail';
 import useKnowledgeAssetInteractions from '@/hooks/useKnowledgeAssetInteractions';
 import useKnowledgeAssetSelectOptions from '@/hooks/useKnowledgeAssetSelectOptions';
+import useKnowledgeConnectorTables from '@/hooks/useKnowledgeConnectorTables';
 import useKnowledgeAssetWizard from '@/hooks/useKnowledgeAssetWizard';
 import useKnowledgeDerivedCollections from '@/hooks/useKnowledgeDerivedCollections';
+import useRuntimeSelectorState from '@/hooks/useRuntimeSelectorState';
 import type { AssetView, ConnectorView } from './types';
 
 export function useKnowledgeAssetWorkbench({
   activeKnowledgeBaseExecutable,
   activeKnowledgeBaseId,
+  activeKnowledgeRuntimeSelector,
   assetDraft,
   assets,
+  buildRuntimeScopeUrl,
   connectors,
   demoDatabaseOptions,
   demoTableOptions,
@@ -25,6 +38,7 @@ export function useKnowledgeAssetWorkbench({
   pendingKnowledgeBaseId,
   resetDetailViewState,
   routeRuntimeSyncing,
+  refetchDiagram,
   saveAssetDraftToOverviewExternal,
   selectedConnectorId,
   selectedDemoKnowledge,
@@ -36,8 +50,14 @@ export function useKnowledgeAssetWorkbench({
 }: {
   activeKnowledgeBaseExecutable: boolean;
   activeKnowledgeBaseId?: string | null;
+  activeKnowledgeRuntimeSelector?: Parameters<
+    typeof useKnowledgeAssetWizard
+  >[0]['activeKnowledgeRuntimeSelector'];
   assetDraft: Parameters<typeof useKnowledgeAssetWizard>[0]['assetDraft'];
   assets: AssetView[];
+  buildRuntimeScopeUrl: Parameters<
+    typeof useKnowledgeConnectorTables
+  >[0]['buildRuntimeScopeUrl'];
   connectors: ConnectorView[];
   demoDatabaseOptions: Parameters<
     typeof useKnowledgeAssetSelectOptions
@@ -61,12 +81,18 @@ export function useKnowledgeAssetWorkbench({
   pendingKnowledgeBaseId?: string | null;
   resetDetailViewState: () => void;
   routeRuntimeSyncing: boolean;
-  saveAssetDraftToOverviewExternal?: () => AssetView | null;
+  refetchDiagram?: Parameters<
+    typeof useKnowledgeAssetWizard
+  >[0]['refetchDiagram'];
+  saveAssetDraftToOverviewExternal?: () =>
+    | Promise<AssetView | null>
+    | AssetView
+    | null;
   selectedConnectorId?: string;
   selectedDemoKnowledge?: Parameters<
     typeof useKnowledgeDerivedCollections
   >[0]['selectedDemoKnowledge'];
-  selectedDemoTable?: string;
+  selectedDemoTable?: SelectedAssetTableValue;
   setAssetDraft: Parameters<typeof useKnowledgeAssetWizard>[0]['setAssetDraft'];
   setAssetWizardStep: Parameters<
     typeof useKnowledgeAssetWizard
@@ -78,13 +104,48 @@ export function useKnowledgeAssetWorkbench({
     typeof useKnowledgeAssetWizard
   >[0]['setDraftAssets'];
 }) {
+  const router = useRouter();
+  const runtimeSelectorState = useRuntimeSelectorState();
+  const selectedConnector = connectors.find(
+    (connector) => connector.id === selectedConnectorId,
+  );
+  const handleConnectorTablesLoadError = useCallback((error: unknown) => {
+    message.error(
+      error instanceof Error
+        ? error.message
+        : '加载连接器数据表失败，请稍后重试。',
+    );
+  }, []);
+  const { connectorTables } = useKnowledgeConnectorTables({
+    buildRuntimeScopeUrl,
+    connectorId: selectedConnectorId,
+    workspaceId: selectedConnector?.workspaceId || null,
+    enabled: !isDemoSource && Boolean(selectedConnectorId),
+    onLoadError: handleConnectorTablesLoadError,
+  });
+
+  const replaceRuntimeScope = useCallback(
+    async (selector: ClientRuntimeScopeSelector) => {
+      const nextUrl = buildRuntimeScopeUrl(
+        router.pathname,
+        omitRuntimeScopeQuery(
+          router.query as Record<string, string | string[] | undefined>,
+        ),
+        selector,
+      );
+      return router.replace(nextUrl, undefined, { scroll: false });
+    },
+    [router],
+  );
+
   const { assetDatabaseOptions, assetTableOptions } =
     useKnowledgeAssetSelectOptions({
+      assets,
       connectors,
       isDemoSource,
       demoDatabaseOptions,
       demoTableOptions,
-      assets,
+      connectorTables,
     });
 
   const {
@@ -106,11 +167,13 @@ export function useKnowledgeAssetWorkbench({
 
   const {
     assetDraftPreview,
+    assetDraftPreviews,
     canContinueAssetConfiguration,
     moveAssetWizardToConfig,
     saveAssetDraftToOverview,
   } = useKnowledgeAssetWizard({
     assetDraft,
+    connectorTables,
     connectors,
     demoTableOptions,
     isDemoSource,
@@ -118,6 +181,10 @@ export function useKnowledgeAssetWorkbench({
     selectedConnectorId,
     selectedDemoKnowledge,
     selectedDemoTable,
+    activeKnowledgeRuntimeSelector,
+    refetchDiagram,
+    refetchRuntimeSelector: runtimeSelectorState.refetch,
+    replaceRuntimeScope,
     setAssetDraft,
     setAssetWizardStep,
     setDetailAsset,
@@ -125,7 +192,7 @@ export function useKnowledgeAssetWorkbench({
     wizardPreviewAssets,
   });
 
-  const { commitAssetDraftToOverview, openAssetDetail } =
+  const { commitAssetDraftToOverview, openAssetDetail, savingAssetDraft } =
     useKnowledgeAssetInteractions<AssetView>({
       saveAssetDraftToOverview:
         saveAssetDraftToOverviewExternal || saveAssetDraftToOverview,
@@ -151,6 +218,7 @@ export function useKnowledgeAssetWorkbench({
     activeDetailAsset,
     assetDatabaseOptions,
     assetDraftPreview,
+    assetDraftPreviews,
     assetTableOptions,
     canContinueAssetConfiguration,
     commitAssetDraftToOverview,
@@ -158,6 +226,7 @@ export function useKnowledgeAssetWorkbench({
     detailAssets,
     moveAssetWizardToConfig,
     openAssetDetail,
+    savingAssetDraft,
     showKnowledgeAssetsLoading,
     visibleKnowledgeBaseId,
   };

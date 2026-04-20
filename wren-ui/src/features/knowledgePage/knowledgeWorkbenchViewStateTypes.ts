@@ -1,4 +1,8 @@
-import type { ConnectorView, KnowledgeBaseRecord } from './types';
+import type {
+  ConnectorView,
+  KnowledgeBaseRecord,
+  SelectedAssetTableValue,
+} from './types';
 import type { KnowledgeWorkbenchPresentationStateArgs } from './knowledgeWorkbenchPresentationStateTypes';
 
 export type KnowledgeWorkbenchViewStateArgs<
@@ -17,6 +21,6 @@ export type KnowledgeWorkbenchViewStateArgs<
   setAssetModalOpen: (open: boolean) => void;
   setPendingKnowledgeBaseId: (id: string | null) => void;
   setSelectedConnectorId: (id?: string) => void;
-  setSelectedDemoTable: (table?: string) => void;
+  setSelectedDemoTable: (table?: SelectedAssetTableValue) => void;
   setSelectedKnowledgeBaseId: (id: string | null) => void;
 };

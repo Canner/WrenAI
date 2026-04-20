@@ -11,6 +11,14 @@ export const shouldSyncKnowledgeRuntimeScopeData = ({
     runtimeScopeKey && runtimeScopeKey !== (lastSyncedRuntimeScopeKey || null),
   );
 
+export const shouldPrimeKnowledgeRuntimeScopeData = ({
+  runtimeScopeKey,
+  lastSyncedRuntimeScopeKey,
+}: {
+  runtimeScopeKey?: string | null;
+  lastSyncedRuntimeScopeKey?: string | null;
+}) => Boolean(runtimeScopeKey && !lastSyncedRuntimeScopeKey);
+
 export default function useKnowledgeRuntimeSync({
   runtimeSyncScopeKey,
   sync,
@@ -24,6 +32,17 @@ export default function useKnowledgeRuntimeSync({
   useEffect(() => {
     if (!runtimeSyncScopeKey) {
       lastRuntimeSyncScopeKeyRef.current = null;
+      setRuntimeSyncing(false);
+      return;
+    }
+
+    if (
+      shouldPrimeKnowledgeRuntimeScopeData({
+        runtimeScopeKey: runtimeSyncScopeKey,
+        lastSyncedRuntimeScopeKey: lastRuntimeSyncScopeKeyRef.current,
+      })
+    ) {
+      lastRuntimeSyncScopeKeyRef.current = runtimeSyncScopeKey;
       setRuntimeSyncing(false);
       return;
     }

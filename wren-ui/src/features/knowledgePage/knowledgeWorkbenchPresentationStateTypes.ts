@@ -1,6 +1,10 @@
 import useKnowledgeAssetWorkbench from './useKnowledgeAssetWorkbench';
 import useKnowledgeWorkbenchNavigationState from './useKnowledgeWorkbenchNavigationState';
-import type { ConnectorView, KnowledgeBaseRecord } from './types';
+import type {
+  ConnectorView,
+  KnowledgeBaseRecord,
+  SelectedAssetTableValue,
+} from './types';
 
 export type KnowledgeWorkbenchPresentationStateArgs<
   TKnowledgeBase extends KnowledgeBaseRecord,
@@ -8,14 +12,17 @@ export type KnowledgeWorkbenchPresentationStateArgs<
 > = {
   activeKnowledgeBase?: TKnowledgeBase | null;
   activeKnowledgeBaseExecutable: boolean;
+  activeKnowledgeRuntimeSelector?: Parameters<
+    typeof useKnowledgeAssetWorkbench
+  >[0]['activeKnowledgeRuntimeSelector'];
   assetDraft: Parameters<typeof useKnowledgeAssetWorkbench>[0]['assetDraft'];
   assets: Parameters<typeof useKnowledgeAssetWorkbench>[0]['assets'];
+  buildRuntimeScopeUrl: Parameters<
+    typeof useKnowledgeAssetWorkbench
+  >[0]['buildRuntimeScopeUrl'];
   buildKnowledgeRuntimeSelector: Parameters<
     typeof useKnowledgeWorkbenchNavigationState<TKnowledgeBase>
   >[0]['buildKnowledgeRuntimeSelector'];
-  buildRuntimeScopeUrl: Parameters<
-    typeof useKnowledgeWorkbenchNavigationState<TKnowledgeBase>
-  >[0]['buildRuntimeScopeUrl'];
   connectors: TConnector[];
   demoDatabaseOptions: Parameters<
     typeof useKnowledgeAssetWorkbench
@@ -38,6 +45,9 @@ export type KnowledgeWorkbenchPresentationStateArgs<
   overviewPreviewAsset?: Parameters<
     typeof useKnowledgeAssetWorkbench
   >[0]['overviewPreviewAsset'];
+  refetchDiagram?: Parameters<
+    typeof useKnowledgeAssetWorkbench
+  >[0]['refetchDiagram'];
   pendingKnowledgeBaseId?: string | null;
   replaceWorkspace: Parameters<
     typeof useKnowledgeWorkbenchNavigationState<TKnowledgeBase>
@@ -51,7 +61,7 @@ export type KnowledgeWorkbenchPresentationStateArgs<
   selectedDemoKnowledge?: Parameters<
     typeof useKnowledgeAssetWorkbench
   >[0]['selectedDemoKnowledge'];
-  selectedDemoTable?: string;
+  selectedDemoTable?: SelectedAssetTableValue;
   setAssetDraft: Parameters<
     typeof useKnowledgeAssetWorkbench
   >[0]['setAssetDraft'];

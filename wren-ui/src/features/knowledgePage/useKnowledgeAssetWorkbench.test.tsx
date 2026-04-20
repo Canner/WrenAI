@@ -3,14 +3,21 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import useKnowledgeAssetWorkbench from './useKnowledgeAssetWorkbench';
 
 const mockUseKnowledgeAssetSelectOptions = jest.fn();
+const mockUseKnowledgeConnectorTables = jest.fn();
 const mockUseKnowledgeDerivedCollections = jest.fn();
 const mockUseKnowledgeAssetWizard = jest.fn();
 const mockUseKnowledgeAssetInteractions = jest.fn();
 const mockUseKnowledgeAssetDetail = jest.fn();
+const mockUseRuntimeSelectorState = jest.fn();
 
 jest.mock('@/hooks/useKnowledgeAssetSelectOptions', () => ({
   __esModule: true,
   default: (...args: any[]) => mockUseKnowledgeAssetSelectOptions(...args),
+}));
+
+jest.mock('@/hooks/useKnowledgeConnectorTables', () => ({
+  __esModule: true,
+  default: (...args: any[]) => mockUseKnowledgeConnectorTables(...args),
 }));
 
 jest.mock('@/hooks/useKnowledgeDerivedCollections', () => ({
@@ -33,12 +40,32 @@ jest.mock('@/hooks/useKnowledgeAssetDetail', () => ({
   default: (...args: any[]) => mockUseKnowledgeAssetDetail(...args),
 }));
 
+jest.mock('@/hooks/useRuntimeSelectorState', () => ({
+  __esModule: true,
+  default: (...args: any[]) => mockUseRuntimeSelectorState(...args),
+}));
+
+jest.mock('next/router', () => ({
+  useRouter: () => ({
+    pathname: '/knowledge',
+    query: {
+      workspaceId: 'ws-1',
+      knowledgeBaseId: 'kb-1',
+    },
+    replace: jest.fn().mockResolvedValue(true),
+  }),
+}));
+
 describe('useKnowledgeAssetWorkbench', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockUseKnowledgeAssetSelectOptions.mockReturnValue({
       assetDatabaseOptions: [{ label: 'Warehouse', value: 'c1' }],
       assetTableOptions: [{ label: 'orders', value: 'orders' }],
+    });
+    mockUseKnowledgeConnectorTables.mockReturnValue({
+      connectorTables: [{ name: 'orders', columns: [] }],
+      connectorTablesLoading: false,
     });
     mockUseKnowledgeDerivedCollections.mockReturnValue({
       wizardPreviewAssets: [{ id: 'asset-1', name: 'orders' }],
@@ -48,6 +75,7 @@ describe('useKnowledgeAssetWorkbench', () => {
     });
     mockUseKnowledgeAssetWizard.mockReturnValue({
       assetDraftPreview: { id: 'draft-1', name: 'draft orders' },
+      assetDraftPreviews: [{ id: 'draft-1', name: 'draft orders' }],
       canContinueAssetConfiguration: true,
       moveAssetWizardToConfig: jest.fn(),
       saveAssetDraftToOverview: jest.fn(() => ({ id: 'asset-2' })),
@@ -55,10 +83,14 @@ describe('useKnowledgeAssetWorkbench', () => {
     mockUseKnowledgeAssetInteractions.mockReturnValue({
       commitAssetDraftToOverview: jest.fn(),
       openAssetDetail: jest.fn(),
+      savingAssetDraft: false,
     });
     mockUseKnowledgeAssetDetail.mockReturnValue({
       activeDetailAsset: { id: 'asset-1', name: 'orders' },
       detailAssetFields: [{ fieldName: 'order_id' }],
+    });
+    mockUseRuntimeSelectorState.mockReturnValue({
+      refetch: jest.fn().mockResolvedValue({}),
     });
   });
 
@@ -69,12 +101,17 @@ describe('useKnowledgeAssetWorkbench', () => {
       current = useKnowledgeAssetWorkbench({
         activeKnowledgeBaseExecutable: true,
         activeKnowledgeBaseId: 'kb-1',
+        activeKnowledgeRuntimeSelector: {
+          workspaceId: 'ws-1',
+          knowledgeBaseId: 'kb-1',
+        },
         assetDraft: {
           name: '',
           description: '',
           important: true,
         },
         assets: [],
+        buildRuntimeScopeUrl: (path: string) => path,
         connectors: [],
         demoDatabaseOptions: [],
         demoTableOptions: [],
@@ -90,6 +127,7 @@ describe('useKnowledgeAssetWorkbench', () => {
         pendingKnowledgeBaseId: null,
         resetDetailViewState: jest.fn(),
         routeRuntimeSyncing: false,
+        refetchDiagram: jest.fn(async () => null),
         selectedConnectorId: undefined,
         selectedDemoKnowledge: null,
         selectedDemoTable: undefined,
@@ -117,11 +155,18 @@ describe('useKnowledgeAssetWorkbench', () => {
       id: 'draft-1',
       name: 'draft orders',
     });
+    expect(hookValue.assetDraftPreviews).toEqual([
+      {
+        id: 'draft-1',
+        name: 'draft orders',
+      },
+    ]);
     expect(hookValue.activeDetailAsset).toEqual({
       id: 'asset-1',
       name: 'orders',
     });
     expect(mockUseKnowledgeAssetSelectOptions).toHaveBeenCalled();
+    expect(mockUseKnowledgeConnectorTables).toHaveBeenCalled();
     expect(mockUseKnowledgeDerivedCollections).toHaveBeenCalled();
     expect(mockUseKnowledgeAssetWizard).toHaveBeenCalled();
     expect(mockUseKnowledgeAssetInteractions).toHaveBeenCalled();

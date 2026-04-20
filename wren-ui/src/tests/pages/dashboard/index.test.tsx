@@ -27,12 +27,45 @@ jest.mock('antd', () => {
       Search,
     },
   );
+  const Typography = {
+    Text: ({ children }: any) => React.createElement('span', null, children),
+  };
+  const Descriptions = ({ children }: any) =>
+    React.createElement('dl', null, children);
+  (Descriptions as any).Item = ({ label, children }: any) =>
+    React.createElement(
+      'div',
+      null,
+      label ? React.createElement('dt', null, label) : null,
+      React.createElement('dd', null, children),
+    );
+  const Menu = ({ children }: any) =>
+    React.createElement('div', null, children);
+  (Menu as any).Item = ({ children }: any) =>
+    React.createElement('button', null, children);
 
   return {
-    Button: ({ children }: any) =>
-      React.createElement('button', null, children),
+    Button: ({
+      children,
+      block: _block,
+      icon: _icon,
+      loading: _loading,
+      type: _type,
+      ...props
+    }: any) => React.createElement('button', props, children),
+    Card: ({ children, title }: any) =>
+      React.createElement('section', null, title, children),
+    Descriptions,
+    Divider: () => React.createElement('hr'),
+    Dropdown: ({ children }: any) => React.createElement('div', null, children),
+    Empty: ({ description }: any) =>
+      React.createElement('div', null, description),
     Input,
+    Menu,
     Modal: ({ children }: any) => React.createElement('div', null, children),
+    Tag: ({ children }: any) => React.createElement('span', null, children),
+    Tooltip: ({ children }: any) => React.createElement('span', null, children),
+    Typography,
     message: {
       success: jest.fn(),
       error: jest.fn(),
@@ -169,6 +202,7 @@ describe('dashboard page shell', () => {
       payload: [
         {
           id: 1,
+          isDefault: true,
           name: '默认看板',
           cacheEnabled: true,
           nextScheduledAt: null,
@@ -181,6 +215,7 @@ describe('dashboard page shell', () => {
       dashboardId: 1,
       payload: {
         id: 1,
+        isDefault: true,
         name: '默认看板',
         cacheEnabled: true,
         nextScheduledAt: null,
@@ -196,11 +231,13 @@ describe('dashboard page shell', () => {
     expect(markup).toContain('数据看板');
     expect(markup).toContain('看板');
     expect(markup).toContain('新建看板');
-    expect(markup).toContain('图表');
-    expect(markup).toContain('选中图表');
-    expect(markup).toContain('去新对话生成图表');
+    expect(markup).not.toContain('去新对话生成图表');
+    expect(markup).toContain('默认看板');
     expect(markup).not.toContain('看板列表');
     expect(markup).not.toContain('图表列表');
     expect(markup).not.toContain('当前选中卡片');
+    expect(markup).not.toContain('当前图表');
+    expect(markup).not.toContain('已固定图表');
+    expect(markup).not.toContain('设为默认');
   });
 });

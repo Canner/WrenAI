@@ -14,28 +14,25 @@ describe('useKnowledgeConnectors helpers', () => {
     icon: null,
   });
 
-  it('resolves connector scope key by active knowledge base + snapshot', () => {
+  it('resolves connector scope key by workspace', () => {
     expect(
       resolveKnowledgeConnectorScopeKey({
         hasRuntimeScope: true,
-        activeKnowledgeBaseId: 'kb-1',
-        activeKbSnapshotId: 'snap-1',
+        activeWorkspaceId: 'ws-1',
       }),
-    ).toBe('kb-1:snap-1');
+    ).toBe('ws-1');
 
     expect(
       resolveKnowledgeConnectorScopeKey({
         hasRuntimeScope: true,
-        activeKnowledgeBaseId: 'kb-1',
-        activeKbSnapshotId: null,
+        activeWorkspaceId: null,
       }),
     ).toBeNull();
 
     expect(
       resolveKnowledgeConnectorScopeKey({
         hasRuntimeScope: false,
-        activeKnowledgeBaseId: 'kb-1',
-        activeKbSnapshotId: 'snap-1',
+        activeWorkspaceId: 'ws-1',
       }),
     ).toBeNull();
   });
@@ -49,7 +46,7 @@ describe('useKnowledgeConnectors helpers', () => {
     expect(
       shouldLoadKnowledgeConnectors({
         assetModalOpen: true,
-        connectorScopeKey: 'kb-1:snap-1',
+        connectorScopeKey: 'ws-1',
         selectedSourceType: 'database',
         sourceOptions,
       }),
@@ -58,7 +55,7 @@ describe('useKnowledgeConnectors helpers', () => {
     expect(
       shouldLoadKnowledgeConnectors({
         assetModalOpen: false,
-        connectorScopeKey: 'kb-1:snap-1',
+        connectorScopeKey: 'ws-1',
         selectedSourceType: 'database',
         sourceOptions,
       }),
@@ -67,7 +64,7 @@ describe('useKnowledgeConnectors helpers', () => {
     expect(
       shouldLoadKnowledgeConnectors({
         assetModalOpen: true,
-        connectorScopeKey: 'kb-1:snap-1',
+        connectorScopeKey: 'ws-1',
         selectedSourceType: 'demo_ecommerce',
         sourceOptions,
       }),

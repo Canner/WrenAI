@@ -19,6 +19,8 @@ export default function useHomeSuggestedQuestions({
 
   useEffect(() => {
     let cancelled = false;
+    let timeoutId: number | null = null;
+    let idleCallbackId: number | null = null;
 
     if (!hasRuntimeScope || !hasExecutableAskRuntime) {
       setSuggestedQuestionsData(null);
@@ -27,20 +29,47 @@ export default function useHomeSuggestedQuestions({
       };
     }
 
-    void fetchSuggestedQuestions(askRuntimeSelector)
-      .then((payload) => {
-        if (!cancelled) {
-          setSuggestedQuestionsData(payload);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setSuggestedQuestionsData(null);
-        }
+    setSuggestedQuestionsData(null);
+
+    const runFetch = () => {
+      void fetchSuggestedQuestions(askRuntimeSelector)
+        .then((payload) => {
+          if (!cancelled) {
+            setSuggestedQuestionsData(payload);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setSuggestedQuestionsData(null);
+          }
+        });
+    };
+
+    if (
+      typeof window !== 'undefined' &&
+      typeof window.requestIdleCallback === 'function'
+    ) {
+      idleCallbackId = window.requestIdleCallback(runFetch, {
+        timeout: 1200,
       });
+    } else if (typeof window !== 'undefined') {
+      timeoutId = window.setTimeout(runFetch, 480);
+    } else {
+      runFetch();
+    }
 
     return () => {
       cancelled = true;
+      if (timeoutId != null && typeof window !== 'undefined') {
+        window.clearTimeout(timeoutId);
+      }
+      if (
+        idleCallbackId != null &&
+        typeof window !== 'undefined' &&
+        typeof window.cancelIdleCallback === 'function'
+      ) {
+        window.cancelIdleCallback(idleCallbackId);
+      }
     };
   }, [askRuntimeSelector, hasExecutableAskRuntime, hasRuntimeScope]);
 

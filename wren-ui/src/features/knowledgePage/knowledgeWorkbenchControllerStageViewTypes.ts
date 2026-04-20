@@ -5,10 +5,11 @@ export type ViewStateInput = {
   activeWorkbenchSection: any;
   assetDatabaseOptions: Array<any>;
   assetDraftPreview: AssetView | null;
+  assetDraftPreviews: AssetView[];
   assetTableOptions: Array<any>;
   buildKnowledgeSwitchUrl: (...args: any[]) => string;
   canContinueAssetConfiguration: boolean;
-  commitAssetDraftToOverview: () => void;
+  commitAssetDraftToOverview: () => Promise<void> | void;
   detailAssetFields: any[];
   detailAssets: AssetView[];
   handleChangeWorkbenchSection: any;
@@ -17,6 +18,7 @@ export type ViewStateInput = {
   handleOpenAssetWizard: () => void;
   moveAssetWizardToConfig: () => void;
   openAssetDetail: any;
+  savingAssetDraft: boolean;
   showKnowledgeAssetsLoading: boolean;
   visibleKnowledgeBaseId: string | null;
   visibleKnowledgeItems: any[];

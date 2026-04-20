@@ -1,15 +1,8 @@
-import {
-  AppstoreOutlined,
-  ArrowRightOutlined,
-  CloseOutlined,
-  DatabaseOutlined,
-  FolderOpenOutlined,
-  PlusOutlined,
-} from '@ant-design/icons';
-import { Button, Input, Select, Space, Steps, Typography, message } from 'antd';
-import List from 'antd/lib/list';
+import { ArrowRightOutlined, CloseOutlined } from '@ant-design/icons';
+import { Input, List, Space, Steps, Typography, message } from 'antd';
 import { memo } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
+import type { KnowledgeAssetSelectOption } from '@/hooks/useKnowledgeAssetSelectOptions';
 import type { AssetWizardDraft } from '@/hooks/useKnowledgeAssetWizard';
 import type { ReferenceDemoKnowledge } from '@/utils/referenceDemoKnowledge';
 import {
@@ -27,13 +20,6 @@ import {
   ReferenceModal,
   RequiredMark,
   SectionTitle,
-  SegmentedButton,
-  SegmentedRow,
-  SelectGrid,
-  SourceCard,
-  SourceCardMeta,
-  SourceCardTitle,
-  SourceGrid,
   ToggleInput,
   ToggleLabel,
   WizardBody,
@@ -44,16 +30,13 @@ import {
 import type {
   AssetView,
   KnowledgeBaseRecord,
+  SelectedAssetTableValue,
   SourceOption,
 } from '@/features/knowledgePage/types';
+import AssetWizardSourceStep from './AssetWizardSourceStep';
 
 const { Text } = Typography;
 const { Step } = Steps;
-
-type SelectOption = {
-  label: string;
-  value: string;
-};
 
 type AssetWizardModalProps = {
   visible: boolean;
@@ -70,17 +53,21 @@ type AssetWizardModalProps = {
   selectedDemoKnowledge?: ReferenceDemoKnowledge | null;
   selectedConnectorId?: string;
   setSelectedConnectorId: Dispatch<SetStateAction<string | undefined>>;
-  selectedDemoTable?: string;
-  setSelectedDemoTable: Dispatch<SetStateAction<string | undefined>>;
-  assetDatabaseOptions: SelectOption[];
-  assetTableOptions: SelectOption[];
+  selectedDemoTable?: SelectedAssetTableValue;
+  setSelectedDemoTable: Dispatch<
+    SetStateAction<SelectedAssetTableValue | undefined>
+  >;
+  assetDatabaseOptions: KnowledgeAssetSelectOption[];
+  assetTableOptions: KnowledgeAssetSelectOption[];
   canContinueAssetWizard: boolean;
   moveAssetWizardToConfig: () => void;
   assetDraft: AssetWizardDraft;
   setAssetDraft: Dispatch<SetStateAction<AssetWizardDraft>>;
   assetDraftPreview?: AssetView | null;
+  assetDraftPreviews?: AssetView[];
   canContinueAssetConfiguration: boolean;
-  commitAssetDraftToOverview: () => void;
+  commitAssetDraftToOverview: () => Promise<void> | void;
+  savingAssetDraft: boolean;
   displayKnowledgeName: string;
   closeAssetModal: () => void;
   onNavigateModeling: () => Promise<unknown> | unknown;
@@ -110,13 +97,21 @@ function AssetWizardModal({
   assetDraft,
   setAssetDraft,
   assetDraftPreview,
+  assetDraftPreviews,
   canContinueAssetConfiguration,
   commitAssetDraftToOverview,
+  savingAssetDraft,
   displayKnowledgeName,
   closeAssetModal,
   onNavigateModeling,
 }: AssetWizardModalProps) {
   const hasAvailableConnectorTargets = assetDatabaseOptions.length > 0;
+  const assetDraftPreviewList = assetDraftPreviews?.length
+    ? assetDraftPreviews
+    : assetDraftPreview
+      ? [assetDraftPreview]
+      : [];
+  const isBatchSelection = !isDemoSource && assetDraftPreviewList.length > 1;
   const assetSourceSetupNote = isDemoSource
     ? '已为系统样例预置字段与问题配置，选择主题表后即可继续进入知识配置。'
     : hasAvailableConnectorTargets
@@ -154,168 +149,30 @@ function AssetWizardModal({
         </WizardSteps>
 
         {assetWizardStep === 0 && (
-          <WizardBody>
-            <FieldCluster>
-              <SectionTitle>
-                <RequiredMark>*</RequiredMark>
-                知识类型
-              </SectionTitle>
-              <SegmentedRow>
-                <SegmentedButton type="button" $active>
-                  <DatabaseOutlined />
-                  表/数据集
-                </SegmentedButton>
-                <SegmentedButton
-                  type="button"
-                  $disabled
-                  disabled
-                  aria-disabled
-                  title="矩阵模型引入将在后续版本开放"
-                >
-                  <AppstoreOutlined />
-                  矩阵模型
-                </SegmentedButton>
-              </SegmentedRow>
-            </FieldCluster>
-
-            <FieldCluster>
-              <SectionTitle>
-                <RequiredMark>*</RequiredMark>
-                目标知识库
-              </SectionTitle>
-              <Select
-                style={{ width: '100%' }}
-                value={activeKnowledgeBase?.id}
-                options={knowledgeBases.map((kb) => ({
-                  label: kb.name,
-                  value: kb.id,
-                }))}
-              />
-            </FieldCluster>
-
-            <SegmentedRow>
-              <SegmentedButton type="button" $active>
-                <PlusOutlined />
-                单个引入
-              </SegmentedButton>
-              <SegmentedButton
-                type="button"
-                $disabled
-                disabled
-                aria-disabled
-                title="当前仅支持单个引入"
-              >
-                <FolderOpenOutlined />
-                批量引入
-              </SegmentedButton>
-            </SegmentedRow>
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              当前版本先支持单个资产引入，保存后可继续追加更多资产。
-            </Text>
-
-            <FieldCluster>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 12,
-                  marginBottom: 12,
-                }}
-              >
-                <SectionTitle style={{ marginBottom: 0 }}>
-                  <RequiredMark>*</RequiredMark>
-                  来源
-                </SectionTitle>
-                <Button
-                  type="link"
-                  icon={<PlusOutlined />}
-                  onClick={() => void openConnectorConsole()}
-                >
-                  前往数据连接器
-                </Button>
-              </div>
-              <SourceGrid>
-                {sourceOptions.map((option) => (
-                  <SourceCard
-                    key={option.key}
-                    type="button"
-                    $active={selectedSourceType === option.key}
-                    onClick={() => setSelectedSourceType(option.key)}
-                  >
-                    <SourceCardTitle>
-                      {option.icon}
-                      {option.label}
-                    </SourceCardTitle>
-                    <SourceCardMeta>{option.meta}</SourceCardMeta>
-                  </SourceCard>
-                ))}
-              </SourceGrid>
-            </FieldCluster>
-
-            <SelectGrid>
-              <FieldCluster>
-                <SectionTitle>
-                  <RequiredMark>*</RequiredMark>
-                  {isDemoSource ? '选择样例数据' : '选择数据库'}
-                </SectionTitle>
-                <Select
-                  style={{ width: '100%' }}
-                  placeholder={isDemoSource ? '请选择样例数据' : '请选择数据库'}
-                  loading={connectorsLoading}
-                  value={
-                    isDemoSource
-                      ? selectedDemoKnowledge?.id
-                      : selectedConnectorId
-                  }
-                  onChange={(value) => {
-                    if (!isDemoSource) {
-                      setSelectedConnectorId(value);
-                    }
-                  }}
-                  options={assetDatabaseOptions}
-                  disabled={isDemoSource}
-                />
-              </FieldCluster>
-              <FieldCluster>
-                <SectionTitle>
-                  <RequiredMark>*</RequiredMark>
-                  {isDemoSource ? '选择主题表' : '选择数据表'}
-                </SectionTitle>
-                <Select
-                  style={{ width: '100%' }}
-                  placeholder={isDemoSource ? '请选择主题表' : '请选择数据表'}
-                  disabled={
-                    isDemoSource ? !selectedDemoKnowledge : !selectedConnectorId
-                  }
-                  value={isDemoSource ? selectedDemoTable : undefined}
-                  onChange={(value) => {
-                    if (isDemoSource) {
-                      setSelectedDemoTable(value);
-                    }
-                  }}
-                  options={assetTableOptions}
-                />
-              </FieldCluster>
-            </SelectGrid>
-
-            <WizardNote>{assetSourceSetupNote}</WizardNote>
-
-            <WizardFooter>
-              <div>
-                <Text type="secondary">{assetSourceSummaryNote}</Text>
-              </div>
-              <Space size={12}>
-                <LightButton onClick={closeAssetModal}>取消</LightButton>
-                <PurpleButton
-                  onClick={moveAssetWizardToConfig}
-                  disabled={!canContinueAssetWizard}
-                >
-                  下一步
-                </PurpleButton>
-              </Space>
-            </WizardFooter>
-          </WizardBody>
+          <AssetWizardSourceStep
+            visible={visible}
+            activeKnowledgeBase={activeKnowledgeBase ?? null}
+            assetDatabaseOptions={assetDatabaseOptions}
+            assetSourceSetupNote={assetSourceSetupNote}
+            assetSourceSummaryNote={assetSourceSummaryNote}
+            assetTableOptions={assetTableOptions}
+            canContinueAssetWizard={canContinueAssetWizard}
+            closeAssetModal={closeAssetModal}
+            connectorsLoading={connectorsLoading}
+            hasAvailableConnectorTargets={hasAvailableConnectorTargets}
+            isDemoSource={isDemoSource}
+            knowledgeBases={knowledgeBases}
+            moveAssetWizardToConfig={moveAssetWizardToConfig}
+            openConnectorConsole={openConnectorConsole}
+            selectedConnectorId={selectedConnectorId}
+            selectedDemoKnowledge={selectedDemoKnowledge ?? null}
+            selectedDemoTable={selectedDemoTable}
+            selectedSourceType={selectedSourceType}
+            setSelectedConnectorId={setSelectedConnectorId}
+            setSelectedDemoTable={setSelectedDemoTable}
+            setSelectedSourceType={setSelectedSourceType}
+            sourceOptions={sourceOptions}
+          />
         )}
 
         {assetWizardStep === 1 && (
@@ -327,15 +184,25 @@ function AssetWizardModal({
               </div>
             </WizardNote>
 
-            <SelectGrid>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'minmax(0, 1fr) 220px',
+                gap: 20,
+              }}
+            >
               <FieldCluster>
                 <SectionTitle>
-                  <RequiredMark>*</RequiredMark>
-                  资产名称
+                  {!isBatchSelection && <RequiredMark>*</RequiredMark>}
+                  {isBatchSelection ? '资产名称前缀（可选）' : '资产名称'}
                 </SectionTitle>
                 <Input
                   value={assetDraft.name}
-                  placeholder="请输入资产名称"
+                  placeholder={
+                    isBatchSelection
+                      ? '可选：例如 ods_ / 业务_'
+                      : '请输入资产名称'
+                  }
                   onChange={(event) =>
                     setAssetDraft((previous) => ({
                       ...previous,
@@ -360,7 +227,7 @@ function AssetWizardModal({
                   标记为重点资产
                 </ToggleLabel>
               </FieldCluster>
-            </SelectGrid>
+            </div>
 
             <FieldCluster>
               <SectionTitle>
@@ -383,7 +250,7 @@ function AssetWizardModal({
             <List
               bordered
               style={{ borderRadius: 16, overflow: 'hidden' }}
-              dataSource={assetDraftPreview ? [assetDraftPreview] : []}
+              dataSource={assetDraftPreviewList}
               locale={{
                 emptyText: isDemoSource
                   ? '当前样例还没有可展示的主题资产'
@@ -409,8 +276,9 @@ function AssetWizardModal({
               <Space size={12}>
                 <LightButton onClick={closeAssetModal}>取消</LightButton>
                 <PurpleButton
-                  onClick={commitAssetDraftToOverview}
+                  onClick={() => void commitAssetDraftToOverview()}
                   disabled={!canContinueAssetConfiguration}
+                  loading={savingAssetDraft}
                 >
                   保存配置
                 </PurpleButton>
@@ -431,7 +299,7 @@ function AssetWizardModal({
             <List
               bordered
               style={{ borderRadius: 16, overflow: 'hidden' }}
-              dataSource={assetDraftPreview ? [assetDraftPreview] : []}
+              dataSource={assetDraftPreviewList}
               locale={{ emptyText: '暂无待保存资产' }}
               renderItem={(asset) => (
                 <List.Item style={{ padding: '16px 18px' }}>

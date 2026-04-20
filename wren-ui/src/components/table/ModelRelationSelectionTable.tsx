@@ -1,4 +1,4 @@
-import type { ColumnsType } from 'antd/es/table';
+import type { TableColumnsType } from 'antd';
 import { JOIN_TYPE } from '@/utils/enum';
 import { ModelIcon } from '@/utils/icons';
 import SelectionTable from '@/components/table/SelectionTable';
@@ -20,7 +20,7 @@ export interface RelationsDataType {
 }
 
 interface Props {
-  columns: ColumnsType<RelationsDataType>;
+  columns: TableColumnsType<RelationsDataType>;
   dataSource: RelationsDataType[];
   enableRowSelection?: boolean;
   extra?: (

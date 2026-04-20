@@ -48,10 +48,18 @@ export type DashboardGridItemData = {
 
 export type DashboardListItem = {
   id: number;
+  isDefault?: boolean | null;
   name: string;
   cacheEnabled: boolean;
   nextScheduledAt?: string | null;
   scheduleFrequency?: string | null;
+};
+
+export const resolveDashboardDisplayName = (name?: string | null) => {
+  const normalizedName = String(name || '').trim();
+  return !normalizedName || normalizedName === 'Dashboard'
+    ? '默认看板'
+    : normalizedName;
 };
 
 export type DashboardDetailData = DashboardListItem & {
@@ -75,6 +83,7 @@ type TimedCacheEntry<TPayload> = {
 };
 
 const DASHBOARD_CACHE_TTL_MS = 30_000;
+const DASHBOARD_STORAGE_PREFIX = 'wren.dashboardRest:';
 const dashboardListCache = new Map<
   string,
   TimedCacheEntry<DashboardListItem[]>
@@ -86,18 +95,104 @@ const dashboardDetailCache = new Map<
 >();
 const dashboardDetailRequests = new Map<string, Promise<DashboardDetailData>>();
 
+const getDashboardStorage = () => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  return window.sessionStorage;
+};
+
+const getDashboardStorageKey = (requestUrl: string) =>
+  `${DASHBOARD_STORAGE_PREFIX}${requestUrl}`;
+
+const getDashboardStorageKeys = (storage: Storage, prefix: string) => {
+  const keys: string[] = [];
+
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index);
+    if (key?.startsWith(prefix)) {
+      keys.push(key);
+    }
+  }
+
+  return keys;
+};
+
+const readStoredDashboardEntry = <TPayload>(
+  requestUrl: string,
+): TimedCacheEntry<TPayload> | null => {
+  const storage = getDashboardStorage();
+  if (!storage) {
+    return null;
+  }
+
+  try {
+    const rawValue = storage.getItem(getDashboardStorageKey(requestUrl));
+    if (!rawValue) {
+      return null;
+    }
+
+    const parsed = JSON.parse(rawValue) as TimedCacheEntry<TPayload> | null;
+    if (!parsed || typeof parsed.updatedAt !== 'number') {
+      storage.removeItem(getDashboardStorageKey(requestUrl));
+      return null;
+    }
+
+    return parsed;
+  } catch (_error) {
+    return null;
+  }
+};
+
+const writeStoredDashboardEntry = <TPayload>(
+  requestUrl: string,
+  entry: TimedCacheEntry<TPayload>,
+) => {
+  const storage = getDashboardStorage();
+  if (!storage) {
+    return;
+  }
+
+  try {
+    storage.setItem(getDashboardStorageKey(requestUrl), JSON.stringify(entry));
+  } catch (_error) {
+    // ignore sessionStorage write failures
+  }
+};
+
+const clearStoredDashboardEntry = (requestUrl: string) => {
+  const storage = getDashboardStorage();
+  if (!storage) {
+    return;
+  }
+
+  try {
+    storage.removeItem(getDashboardStorageKey(requestUrl));
+  } catch (_error) {
+    // ignore sessionStorage cleanup failures
+  }
+};
+
 const getFreshCachedValue = <TPayload>(
   cache: Map<string, TimedCacheEntry<TPayload>>,
   requestUrl: string,
 ) => {
-  const cached = cache.get(requestUrl);
+  const inMemoryEntry = cache.get(requestUrl) || null;
+  const cached =
+    inMemoryEntry || readStoredDashboardEntry<TPayload>(requestUrl);
   if (!cached) {
     return null;
   }
 
   if (Date.now() - cached.updatedAt > DASHBOARD_CACHE_TTL_MS) {
     cache.delete(requestUrl);
+    clearStoredDashboardEntry(requestUrl);
     return null;
+  }
+
+  if (!inMemoryEntry) {
+    cache.set(requestUrl, cached);
   }
 
   return cached.value;
@@ -108,6 +203,21 @@ export const clearDashboardRestCache = () => {
   dashboardListRequests.clear();
   dashboardDetailCache.clear();
   dashboardDetailRequests.clear();
+
+  const storage = getDashboardStorage();
+  if (!storage) {
+    return;
+  }
+
+  try {
+    const keysToRemove = getDashboardStorageKeys(
+      storage,
+      DASHBOARD_STORAGE_PREFIX,
+    );
+    keysToRemove.forEach((key) => storage.removeItem(key));
+  } catch (_error) {
+    // ignore sessionStorage cleanup failures
+  }
 };
 
 export const buildDashboardListUrl = (
@@ -169,10 +279,12 @@ export const primeDashboardListPayload = ({
   payload: DashboardListItem[];
 }) => {
   const resolvedRequestUrl = requestUrl || buildDashboardListUrl(selector);
-  dashboardListCache.set(resolvedRequestUrl, {
+  const entry = {
     value: payload,
     updatedAt: Date.now(),
-  });
+  };
+  dashboardListCache.set(resolvedRequestUrl, entry);
+  writeStoredDashboardEntry(resolvedRequestUrl, entry);
 };
 
 export const peekDashboardDetailPayload = ({
@@ -216,10 +328,12 @@ export const primeDashboardDetailPayload = ({
     return;
   }
 
-  dashboardDetailCache.set(resolvedRequestUrl, {
+  const entry = {
     value: payload,
     updatedAt: Date.now(),
-  });
+  };
+  dashboardDetailCache.set(resolvedRequestUrl, entry);
+  writeStoredDashboardEntry(resolvedRequestUrl, entry);
 };
 
 export const loadDashboardListPayload = async ({
@@ -336,6 +450,37 @@ export const createDashboard = async (
   return parseRestJsonResponse<DashboardListItem>(
     response,
     '创建看板失败，请稍后重试。',
+  );
+};
+
+export const updateDashboard = async (
+  selector: ClientRuntimeScopeSelector,
+  dashboardId: number,
+  data: { isDefault?: boolean; name?: string },
+) => {
+  const response = await fetch(buildDashboardDetailUrl(dashboardId, selector), {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+
+  return parseRestJsonResponse<DashboardListItem & Record<string, any>>(
+    response,
+    '更新看板失败，请稍后重试。',
+  );
+};
+
+export const deleteDashboard = async (
+  selector: ClientRuntimeScopeSelector,
+  dashboardId: number,
+) => {
+  const response = await fetch(buildDashboardDetailUrl(dashboardId, selector), {
+    method: 'DELETE',
+  });
+
+  return parseRestJsonResponse<DashboardListItem & Record<string, any>>(
+    response,
+    '删除看板失败，请稍后重试。',
   );
 };
 

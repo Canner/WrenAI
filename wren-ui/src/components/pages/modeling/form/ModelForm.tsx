@@ -1,7 +1,6 @@
 import { CompactColumn, CompactTable } from '@/types/dataSource';
 import { useEffect, useMemo, useState } from 'react';
 import { Form, FormInstance, Select, message } from 'antd';
-import { TransferItem } from 'antd/es/transfer';
 import { isEmpty } from 'lodash';
 import { hasExecutableRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import { FORM_MODE } from '@/utils/enum';
@@ -254,7 +253,7 @@ export default function ModelForm(props: Props) {
               dataSource={columns}
               targetKeys={selectedColumns}
               onChange={onChangeColumns}
-              filterOption={(inputValue: string, item: TransferItem) =>
+              filterOption={(inputValue: string, item) =>
                 item.name.toLowerCase().indexOf(inputValue.toLowerCase()) !==
                   -1 ||
                 item.type.toLowerCase().indexOf(inputValue.toLowerCase()) !== -1

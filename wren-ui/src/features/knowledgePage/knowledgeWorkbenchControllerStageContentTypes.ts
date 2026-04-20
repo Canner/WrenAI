@@ -1,3 +1,5 @@
+import type { SelectedAssetTableValue } from './types';
+
 export type ContentDataInput = {
   canContinueAssetWizard: boolean;
   connectorsLoading: boolean;
@@ -5,7 +7,7 @@ export type ContentDataInput = {
   previewFieldCount: number;
   selectedConnectorId?: string;
   selectedDemoKnowledge?: any;
-  selectedDemoTable?: string;
+  selectedDemoTable?: SelectedAssetTableValue;
   selectedSourceType: any;
   setSelectedConnectorId: any;
   setSelectedDemoTable: any;

@@ -19,6 +19,7 @@ export function buildKnowledgeWorkbenchPageInteractionContentInputs<
   | 'diagramLoading'
   | 'isDemoSource'
   | 'overviewPreviewAsset'
+  | 'refetchDiagram'
   | 'routeRuntimeSyncing'
   | 'selectedConnectorId'
   | 'selectedDemoKnowledge'
@@ -35,6 +36,7 @@ export function buildKnowledgeWorkbenchPageInteractionContentInputs<
     diagramLoading,
     isDemoSource,
     overviewPreviewAsset,
+    refetchDiagram,
     routeRuntimeSyncing,
     selectedConnectorId,
     selectedDemoKnowledge,
@@ -52,6 +54,7 @@ export function buildKnowledgeWorkbenchPageInteractionContentInputs<
     diagramLoading,
     isDemoSource,
     overviewPreviewAsset,
+    refetchDiagram,
     routeRuntimeSyncing,
     selectedConnectorId,
     selectedDemoKnowledge,

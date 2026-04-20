@@ -36,6 +36,6 @@ export type KnowledgeWorkbenchDataLoadersState<
   TConnector extends ConnectorView,
 > = ReturnType<typeof useKnowledgeDataLoaders<TKnowledgeBase, TConnector>>;
 
-export type KnowledgeWorkbenchRuntimeBindingsState<
-  TKnowledgeBase extends KnowledgeBaseRecord,
-> = ReturnType<typeof useKnowledgeRuntimeBindings<TKnowledgeBase>>;
+export type KnowledgeWorkbenchRuntimeBindingsState = ReturnType<
+  typeof useKnowledgeRuntimeBindings
+>;

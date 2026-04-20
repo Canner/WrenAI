@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
-import { message } from 'antd';
+import { Modal, message } from 'antd';
 
 import { LoadingWrapper } from '@/components/PageLoading';
 import type { DashboardGridHandle } from '@/components/pages/home/dashboardGrid';
@@ -13,6 +13,7 @@ import useRuntimeSelectorState from '@/hooks/useRuntimeSelectorState';
 import { hasExecutableRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import { Path } from '@/utils/enum';
 import { isHistoricalSnapshotReadonly } from '@/utils/runtimeSnapshot';
+import { resolveDashboardDisplayName } from '@/utils/dashboardRest';
 import {
   resolveSettingsConnection,
   type SettingsData,
@@ -35,21 +36,24 @@ export default function Dashboard() {
   const runtimeScopePage = useProtectedRuntimeScopePage();
   const dashboardGridRef = useRef<DashboardGridHandle>(null);
   const cacheSettingsDrawer = useDrawerAction();
-  const [cardKeyword, setCardKeyword] = useState('');
-  const [dashboardKeyword, setDashboardKeyword] = useState('');
   const [selectedDashboardItemId, setSelectedDashboardItemId] = useState<
     number | null
   >(null);
   const [createDashboardOpen, setCreateDashboardOpen] = useState(false);
   const [createDashboardName, setCreateDashboardName] = useState('');
+  const [renameDashboardOpen, setRenameDashboardOpen] = useState(false);
+  const [renameDashboardId, setRenameDashboardId] = useState<number | null>(
+    null,
+  );
+  const [renameDashboardName, setRenameDashboardName] = useState('');
   const [settings, setSettings] = useState<SettingsData | null>(null);
   const runtimeSelectorState = useRuntimeSelectorState().runtimeSelectorState;
 
   const isDashboardReadonly = isHistoricalSnapshotReadonly({
     selectorHasRuntime: Boolean(
       runtimeScopeNavigation.selector.deployHash ||
-        runtimeScopeNavigation.selector.kbSnapshotId ||
-        runtimeScopeNavigation.selector.runtimeScopeId,
+      runtimeScopeNavigation.selector.kbSnapshotId ||
+      runtimeScopeNavigation.selector.runtimeScopeId,
     ),
     currentKbSnapshotId: runtimeSelectorState?.currentKbSnapshot?.id,
     defaultKbSnapshotId:
@@ -127,19 +131,6 @@ export default function Dashboard() {
     [router, runtimeScopeNavigation.hrefWorkspace],
   );
 
-  const filteredDashboards = useMemo(() => {
-    const normalizedKeyword = dashboardKeyword.trim().toLowerCase();
-    if (!normalizedKeyword) {
-      return visibleDashboards;
-    }
-
-    return visibleDashboards.filter((dashboard) =>
-      `${dashboard.name} ${dashboard.scheduleFrequency || ''}`
-        .toLowerCase()
-        .includes(normalizedKeyword),
-    );
-  }, [dashboardKeyword, visibleDashboards]);
-
   useEffect(() => {
     if (
       !router.isReady ||
@@ -206,17 +197,6 @@ export default function Dashboard() {
     [dashboardItems],
   );
 
-  const filteredDashboardSummaryItems = useMemo(() => {
-    const normalizedKeyword = cardKeyword.trim().toLowerCase();
-    if (!normalizedKeyword) {
-      return dashboardSummaryItems;
-    }
-
-    return dashboardSummaryItems.filter((item) =>
-      `${item.title} ${item.meta}`.toLowerCase().includes(normalizedKeyword),
-    );
-  }, [cardKeyword, dashboardSummaryItems]);
-
   const selectedDashboardItem = useMemo(() => {
     const selectedFromState = dashboardItems.find(
       (item) => item.id === selectedDashboardItemId,
@@ -226,6 +206,8 @@ export default function Dashboard() {
 
   const {
     createDashboardLoading,
+    dashboardMutationTargetId,
+    dashboardMutationType,
     goToSourceThread,
     onDashboardItemUpdated,
     onDelete,
@@ -234,6 +216,9 @@ export default function Dashboard() {
     refreshActiveDashboard,
     submitCacheSettings,
     submitCreateDashboard,
+    submitDeleteDashboard,
+    submitRenameDashboard,
+    submitSetDefaultDashboard,
   } = useManageDashboardPageActions({
     activeDashboardId,
     cacheSettingsDrawer,
@@ -262,6 +247,42 @@ export default function Dashboard() {
     dashboardGridRef.current?.focusItem(itemId);
   };
 
+  const onOpenRenameDashboard = useCallback(
+    (dashboardId: number) => {
+      const targetDashboard = visibleDashboards.find(
+        (dashboard) => dashboard.id === dashboardId,
+      );
+      if (!targetDashboard) {
+        return;
+      }
+      setRenameDashboardId(dashboardId);
+      setRenameDashboardName(targetDashboard.name);
+      setRenameDashboardOpen(true);
+    },
+    [visibleDashboards],
+  );
+
+  const onDeleteDashboard = useCallback(
+    (dashboardId: number) => {
+      const targetDashboard = visibleDashboards.find(
+        (dashboard) => dashboard.id === dashboardId,
+      );
+      Modal.confirm({
+        title: '确认删除这个看板吗？',
+        content: `删除后将移除「${resolveDashboardDisplayName(
+          targetDashboard?.name,
+        )}」以及其中的图表。若它是默认看板，系统会自动补一个默认看板。`,
+        okText: '删除看板',
+        okButtonProps: { danger: true },
+        cancelText: '取消',
+        onOk: async () => {
+          await submitDeleteDashboard(dashboardId);
+        },
+      });
+    },
+    [submitDeleteDashboard, visibleDashboards],
+  );
+
   if (runtimeScopePage.guarding) {
     return (
       <ConsoleShellLayout
@@ -280,19 +301,22 @@ export default function Dashboard() {
       title="数据看板"
       hideHeader
       contentBorderless
+      flushMainPadding
+      stretchContent
     >
       <LoadingWrapper loading={loading}>
         <DashboardWorkbench>
           <DashboardWorkbenchRail
             activeDashboardId={activeDashboardId}
-            cardKeyword={cardKeyword}
-            dashboardKeyword={dashboardKeyword}
-            dashboards={filteredDashboards}
-            filteredDashboardSummaryItems={filteredDashboardSummaryItems}
+            canShowCacheSettings={canShowCacheSettings}
+            dashboards={visibleDashboards}
+            dashboardMutationTargetId={dashboardMutationTargetId}
+            filteredDashboardSummaryItems={dashboardSummaryItems}
+            hasDashboardSummaryItems={dashboardSummaryItems.length > 0}
             isDashboardReadonly={isDashboardReadonly}
-            onCardKeywordChange={setCardKeyword}
+            onCacheSettings={openCacheSettings}
             onCreateDashboard={() => setCreateDashboardOpen(true)}
-            onDashboardKeywordChange={setDashboardKeyword}
+            onDeleteDashboard={onDeleteDashboard}
             onDeleteSelectedItem={() =>
               selectedDashboardItem
                 ? void onDelete(selectedDashboardItem.id)
@@ -309,41 +333,35 @@ export default function Dashboard() {
                 selectedDashboardItem?.detail?.sourceResponseId,
               )
             }
+            onRefreshDashboard={() => void refreshActiveDashboard()}
+            onRenameDashboard={onOpenRenameDashboard}
             onSelectDashboard={(dashboardId) => {
               void replaceDashboardRoute(dashboardId);
             }}
             onSelectItem={onSelectItem}
+            onSetDefaultDashboard={(dashboardId) => {
+              void submitSetDefaultDashboard(dashboardId);
+            }}
             selectedDashboardItem={selectedDashboardItem}
           />
 
           <DashboardWorkbenchStage
-            activeDashboardName={
-              visibleDashboardDetail?.name ||
-              activeDashboard?.name ||
-              '默认看板'
-            }
             cacheSettingsDrawerProps={{
               ...cacheSettingsDrawer.state,
               onClose: cacheSettingsDrawer.closeDrawer,
             }}
-            canShowCacheSettings={canShowCacheSettings}
-            dashboardCacheEnabled={dashboardCacheEnabled}
             dashboardGridRef={dashboardGridRef}
             dashboardItems={dashboardItems}
             isDashboardReadonly={isDashboardReadonly}
             isSupportCached={isSupportCached}
             nextScheduleTime={visibleDashboardDetail?.nextScheduledAt}
             onCacheSettings={openCacheSettings}
-            onCreateChart={() =>
-              runtimeScopeNavigation.pushWorkspace(Path.Home)
-            }
             onDeleteItem={onDelete}
             onGoToThread={goToSourceThread}
             onItemUpdated={onDashboardItemUpdated}
             onRefreshAll={() => {
               dashboardGridRef.current?.onRefreshAll();
             }}
-            onRefreshDashboard={refreshActiveDashboard}
             onSubmitCacheSettings={submitCacheSettings}
             onUpdateChange={onUpdateChange as (layouts: any[]) => Promise<void>}
             readOnlySchedule={visibleDashboardDetail?.schedule as Schedule}
@@ -352,13 +370,50 @@ export default function Dashboard() {
         </DashboardWorkbench>
       </LoadingWrapper>
       <DashboardCreateModal
-        createDashboardLoading={createDashboardLoading}
-        createDashboardName={createDashboardName}
+        confirmLoading={createDashboardLoading}
+        description="为当前工作空间新增一个可承接图表结果的数据看板。"
+        inputPlaceholder="例如：经营总览 / 销售日报"
         isDashboardReadonly={isDashboardReadonly}
+        okText="创建看板"
         open={createDashboardOpen}
+        title="新建看板"
+        value={createDashboardName}
         onCancel={() => setCreateDashboardOpen(false)}
-        onChangeName={setCreateDashboardName}
+        onChangeValue={setCreateDashboardName}
         onSubmit={submitCreateDashboard}
+      />
+      <DashboardCreateModal
+        confirmLoading={
+          dashboardMutationTargetId === renameDashboardId &&
+          dashboardMutationType === 'rename'
+        }
+        description="更新当前看板名称，不会影响已固定的图表内容。"
+        inputPlaceholder="请输入新的看板名称"
+        isDashboardReadonly={isDashboardReadonly}
+        okText="保存名称"
+        open={renameDashboardOpen}
+        title="重命名看板"
+        value={renameDashboardName}
+        onCancel={() => {
+          setRenameDashboardOpen(false);
+          setRenameDashboardId(null);
+          setRenameDashboardName('');
+        }}
+        onChangeValue={setRenameDashboardName}
+        onSubmit={async () => {
+          if (renameDashboardId == null) {
+            return;
+          }
+          const success = await submitRenameDashboard(
+            renameDashboardId,
+            renameDashboardName,
+          );
+          if (success) {
+            setRenameDashboardOpen(false);
+            setRenameDashboardId(null);
+            setRenameDashboardName('');
+          }
+        }}
       />
     </ConsoleShellLayout>
   );

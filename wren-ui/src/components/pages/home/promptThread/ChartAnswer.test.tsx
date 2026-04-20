@@ -6,10 +6,14 @@ const mockCreateDashboardItem = jest.fn();
 const mockUsePromptThreadActionsStore = jest.fn();
 const mockEnsureLoaded = jest.fn();
 const mockLoadDashboardListPayload = jest.fn();
+const mockCreateDashboard = jest.fn();
 const mockPushWorkspace = jest.fn();
+const mockMessageSuccess = jest.fn();
+const mockMessageError = jest.fn();
+const mockMessageWarning = jest.fn();
 let capturedChartProps: any = null;
 
-let capturedModalProps: any = null;
+let capturedPinModalProps: any = null;
 
 jest.mock('next/dynamic', () => () => {
   const React = jest.requireActual('react');
@@ -39,29 +43,35 @@ jest.mock('antd', () => {
     Button: ({ children, onClick }: any) =>
       React.createElement('button', { onClick }, children),
     Skeleton: ({ children }: any) => React.createElement('div', null, children),
-    Modal: (props: any) => {
-      capturedModalProps = props;
-      return React.createElement('section', null, props.title, props.children);
-    },
-    Select: ({ options }: any) =>
-      React.createElement(
-        'select',
-        null,
-        (options || []).map((option: any) =>
-          React.createElement(
-            'option',
-            { key: option.value, value: option.value },
-            option.label,
-          ),
-        ),
-      ),
+    Input: Object.assign(
+      ({ allowClear: _allowClear, ...props }: any) =>
+        React.createElement('input', props),
+      {
+        Search: ({ allowClear: _allowClear, ...props }: any) =>
+          React.createElement('input', props),
+      },
+    ),
+    Modal: () => React.createElement('section'),
     message: {
-      success: jest.fn(),
-      error: jest.fn(),
-      warning: jest.fn(),
+      success: (...args: any[]) => mockMessageSuccess(...args),
+      error: (...args: any[]) => mockMessageError(...args),
+      warning: (...args: any[]) => mockMessageWarning(...args),
     },
   };
 });
+
+jest.mock('./ChartAnswerPinModal', () => ({
+  __esModule: true,
+  default: (props: any) => {
+    capturedPinModalProps = props;
+    const React = jest.requireActual('react');
+    return React.createElement(
+      'section',
+      null,
+      props.open ? 'PinModalOpen' : 'PinModalClosed',
+    );
+  },
+}));
 
 jest.mock('@/components/chart/properties/BasicProperties', () => () => null);
 jest.mock('@/components/chart/properties/DonutProperties', () => () => null);
@@ -98,8 +108,11 @@ jest.mock('@/components/pages/home/promptThread/store', () => ({
 }));
 
 jest.mock('@/utils/dashboardRest', () => ({
+  createDashboard: (...args: any[]) => mockCreateDashboard(...args),
   loadDashboardListPayload: (...args: any[]) =>
     mockLoadDashboardListPayload(...args),
+  resolveDashboardDisplayName: (name?: string | null) =>
+    !name || name === 'Dashboard' ? '默认看板' : name,
 }));
 
 jest.mock('@/utils/homeRest', () => ({
@@ -129,7 +142,7 @@ const setStateOverrides = (overrides: Partial<Record<number, any>>) => {
 describe('ChartAnswer', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    capturedModalProps = null;
+    capturedPinModalProps = null;
     capturedChartProps = null;
     mockEnsureLoaded.mockResolvedValue({
       previewData: { data: [], columns: [] },
@@ -142,6 +155,13 @@ describe('ChartAnswer', () => {
       { id: 11, name: '经营总览' },
       { id: 12, name: '销售看板' },
     ]);
+    mockCreateDashboard.mockResolvedValue({
+      id: 13,
+      name: '本周经营复盘',
+      isDefault: false,
+      cacheEnabled: false,
+      scheduleFrequency: null,
+    });
     mockCreateDashboardItem.mockResolvedValue({
       id: 901,
       dashboardId: 11,
@@ -175,7 +195,7 @@ describe('ChartAnswer', () => {
       } as any),
     );
 
-    await capturedModalProps.onOk();
+    await capturedPinModalProps.onConfirm();
 
     expect(mockCreateDashboardItem).toHaveBeenCalledWith(
       { workspaceId: 'ws-1' },
@@ -213,5 +233,89 @@ describe('ChartAnswer', () => {
     );
 
     expect(capturedChartProps?.preferredRenderer).toBe('canvas');
+  });
+
+  it('shows normalized default dashboard name in pin success message', async () => {
+    const useStateSpy = setStateOverrides({
+      // 5th state: isPinModalOpen
+      5: true,
+      // 6th state: pinTargetDashboardId
+      6: 11,
+      // 8th state: dashboardOptions
+      8: [{ id: 11, name: 'Dashboard' }],
+    });
+
+    renderToStaticMarkup(
+      React.createElement(ChartAnswer, {
+        threadResponse: {
+          id: 93,
+          chartDetail: {
+            status: 'FINISHED',
+            description: '销售趋势',
+            chartSchema: {
+              mark: 'line',
+              encoding: {
+                x: { field: 'date', type: 'temporal' },
+                y: { field: 'value', type: 'quantitative' },
+              },
+            },
+          },
+        },
+      } as any),
+    );
+
+    await capturedPinModalProps.onConfirm();
+
+    expect(mockMessageSuccess).toHaveBeenCalledWith('已固定到看板「默认看板」');
+
+    useStateSpy.mockRestore();
+  });
+
+  it('creates a dashboard before pinning when using create-and-pin action', async () => {
+    const useStateSpy = setStateOverrides({
+      5: true,
+      6: null,
+      8: [{ id: 11, name: '经营总览' }],
+    });
+    mockCreateDashboardItem.mockResolvedValueOnce({
+      id: 902,
+      dashboardId: 13,
+    });
+
+    renderToStaticMarkup(
+      React.createElement(ChartAnswer, {
+        threadResponse: {
+          id: 94,
+          chartDetail: {
+            status: 'FINISHED',
+            description: '销售趋势',
+            chartSchema: {
+              mark: 'line',
+              encoding: {
+                x: { field: 'date', type: 'temporal' },
+                y: { field: 'value', type: 'quantitative' },
+              },
+            },
+          },
+        },
+      } as any),
+    );
+
+    await capturedPinModalProps.onCreateAndPin('本周经营复盘');
+
+    expect(mockCreateDashboard).toHaveBeenCalledWith(
+      { workspaceId: 'ws-1' },
+      { name: '本周经营复盘' },
+    );
+    expect(mockCreateDashboardItem).toHaveBeenCalledWith(
+      { workspaceId: 'ws-1' },
+      {
+        itemType: 'LINE',
+        responseId: 94,
+        dashboardId: 13,
+      },
+    );
+
+    useStateSpy.mockRestore();
   });
 });

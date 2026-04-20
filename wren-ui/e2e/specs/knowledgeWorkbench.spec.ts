@@ -910,10 +910,12 @@ const createPostgresConnector = async ({
   page,
   selector,
   displayName = CONNECTOR_DISPLAY_NAME,
+  schemaName = 'public',
 }: {
   page: Page;
   selector: KnowledgeWorkbenchSelector;
   displayName?: string;
+  schemaName?: string;
 }) => {
   await helper.gotoRuntimeScopedPath({
     page,
@@ -921,9 +923,10 @@ const createPostgresConnector = async ({
     selector: toKnowledgeRouteSelector(selector),
   });
   await helper.expectPathname({ page, pathname: '/settings/connectors' });
-  await expect(page.getByRole('heading', { name: /数据连接器/ })).toBeVisible({
-    timeout: 60_000,
-  });
+  await expect(page.getByText('连接器目录')).toBeVisible({ timeout: 60_000 });
+  await expect(
+    page.getByRole('button', { name: '添加连接器' }),
+  ).toBeVisible({ timeout: 60_000 });
 
   await page.getByRole('button', { name: '添加连接器' }).click();
   const connectorModal = page.locator('.ant-modal').last();
@@ -952,7 +955,7 @@ const createPostgresConnector = async ({
   await connectorModal.getByLabel('Port').fill('9432');
   await connectorModal.getByLabel('数据库名').fill('wrenai_e2e');
   await connectorModal.getByLabel('用户名').fill('postgres');
-  await connectorModal.getByLabel('Schema').fill('public');
+  await connectorModal.getByLabel('Schema').fill(schemaName);
   await connectorModal.getByLabel('密码').fill('postgres');
 
   const testConnectorRequest = page.waitForResponse((response) => {
@@ -1010,13 +1013,17 @@ const importConnectorAsset = async ({
   page,
   selector,
   connectorDisplayName,
+  tableQualifiedNames,
+  expectedAssetNames,
+  description,
 }: {
   page: Page;
   selector: KnowledgeWorkbenchSelector;
   connectorDisplayName: string;
+  tableQualifiedNames?: string[];
+  expectedAssetNames?: string[];
+  description?: string;
 }) => {
-  const importedAssetName = `${connectorDisplayName} / 待引入资产`;
-
   await helper.gotoRuntimeScopedPath({
     page,
     pathname: '/knowledge',
@@ -1042,30 +1049,89 @@ const importConnectorAsset = async ({
     .click();
   await page.getByRole('option', { name: new RegExp(connectorDisplayName) }).click();
   await expect(
+    assetModal.locator('[data-testid="asset-table-option"]').first(),
+  ).toBeVisible({ timeout: 60_000 });
+
+  const selectedTableQualifiedNames =
+    tableQualifiedNames && tableQualifiedNames.length > 0
+      ? tableQualifiedNames
+      : [
+          (
+            await assetModal
+              .locator('[data-testid="asset-table-option"]:not([disabled])')
+              .first()
+              .getAttribute('data-table-value')
+          ) || '',
+        ].filter(Boolean);
+
+  for (const tableQualifiedName of selectedTableQualifiedNames) {
+    const tableRow = assetModal.locator(
+      `[data-testid="asset-table-option"][data-table-value="${tableQualifiedName}"]`,
+    );
+    await expect(tableRow).toBeVisible({ timeout: 60_000 });
+    await tableRow.click();
+  }
+
+  await expect(
     assetModal.getByRole('button', { name: '下一步' }),
   ).toBeEnabled({ timeout: 60_000 });
   await assetModal.getByRole('button', { name: '下一步' }).click();
 
-  await assetModal.getByPlaceholder('请输入资产名称').fill(importedAssetName);
+  const resolvedDescription =
+    description || `围绕 ${connectorDisplayName} 补充真实数据资产验证。`;
+  const isBatchImport = selectedTableQualifiedNames.length > 1;
+  if (!isBatchImport) {
+    const importedAssetName =
+      expectedAssetNames?.[0] ||
+      `${connectorDisplayName} / 待引入资产`;
+    await assetModal.getByPlaceholder('请输入资产名称').fill(importedAssetName);
+  }
   await assetModal
     .getByPlaceholder('补充该资产在当前知识库中的用途、口径与注意事项')
-    .fill(`围绕 ${connectorDisplayName} 补充真实数据资产验证。`);
+    .fill(resolvedDescription);
+
+  const previewAssetNames =
+    expectedAssetNames && expectedAssetNames.length > 0
+      ? expectedAssetNames
+      : await assetModal
+          .locator('.ant-list-item strong')
+          .allTextContents();
+
+  expect(previewAssetNames.length).toBeGreaterThan(0);
+
   await assetModal.getByRole('button', { name: '保存配置' }).click();
 
-  await expect(page.getByText(importedAssetName).first()).toBeVisible({
-    timeout: 60_000,
-  });
+  for (const importedAssetName of previewAssetNames) {
+    await expect(page.getByText(importedAssetName).first()).toBeVisible({
+      timeout: 60_000,
+    });
+  }
   await assetModal.getByRole('button', { name: '返回知识库' }).click();
   await expect(
     page.getByText('已返回知识库概览，可继续补充规则与 SQL 模板。'),
   ).toBeVisible({
     timeout: 60_000,
   });
-  await expect(
-    getKnowledgeAssetCardByName(page, importedAssetName),
-  ).toBeVisible({
-    timeout: 60_000,
+  for (const importedAssetName of previewAssetNames) {
+    await expect(
+      getKnowledgeAssetCardByName(page, importedAssetName),
+    ).toBeVisible({
+      timeout: 60_000,
+    });
+  }
+
+  await page.reload();
+  await expectKnowledgeWorkbenchLoaded({
+    page,
+    selector,
   });
+  for (const importedAssetName of previewAssetNames) {
+    await expect(
+      getKnowledgeAssetCardByName(page, importedAssetName),
+    ).toBeVisible({
+      timeout: 60_000,
+    });
+  }
 };
 
 const dismissNextRuntimeErrorOverlay = async (page: Page) => {
@@ -1809,6 +1875,47 @@ test.describe('Knowledge workbench', () => {
       page,
       selector,
       connectorDisplayName: CONNECTOR_DISPLAY_NAME,
+    });
+
+    errorCollector.assertClean();
+  });
+
+  test('imports multiple connector tables and keeps the assets after refresh', async ({
+    page,
+  }) => {
+    const errorCollector = attachPageErrorCollectors(page);
+    const multiTableConnectorName = `${CONNECTOR_DISPLAY_NAME} 多表导入`;
+    const tableQualifiedNames = [
+      `${postgresSelector.schemaName}.orders`,
+      `${postgresSelector.schemaName}.customers`,
+    ];
+
+    await helper.gotoRuntimeScopedPath({
+      page,
+      pathname: '/knowledge',
+      selector: toKnowledgeRouteSelector(selector),
+    });
+    await helper.expectPathname({ page, pathname: '/knowledge' });
+    await expectKnowledgeWorkbenchLoaded({
+      page,
+      selector,
+      knowledgeBaseName,
+    });
+
+    await createPostgresConnector({
+      page,
+      selector,
+      displayName: multiTableConnectorName,
+      schemaName: postgresSelector.schemaName || 'public',
+    });
+
+    await importConnectorAsset({
+      page,
+      selector,
+      connectorDisplayName: multiTableConnectorName,
+      tableQualifiedNames,
+      expectedAssetNames: tableQualifiedNames,
+      description: '验证多表批量引入后，资产卡片在刷新后仍然可见。',
     });
 
     errorCollector.assertClean();

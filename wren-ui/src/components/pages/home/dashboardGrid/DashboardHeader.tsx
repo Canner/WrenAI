@@ -20,10 +20,29 @@ const StyledHeader = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 49px;
-  padding: 8px 16px;
-  background-color: white;
-  border-bottom: 1px solid var(--gray-4);
+  min-height: 46px;
+  padding: 8px 14px;
+  background: linear-gradient(180deg, #fcfcff 0%, #f7f8fe 100%);
+  border-bottom: 1px solid var(--nova-outline-soft);
+`;
+
+const HeaderMeta = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--nova-text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+
+  .cursor-pointer {
+    color: var(--nova-text-secondary);
+  }
+`;
+
+const HeaderHint = styled.span`
+  color: var(--nova-text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
 `;
 
 export default function DashboardHeader(props: Props) {
@@ -50,10 +69,10 @@ export default function DashboardHeader(props: Props) {
 
   return (
     <StyledHeader>
-      <div />
+      <HeaderHint>拖拽卡片可直接调整布局</HeaderHint>
       <div>
         {schedule && (
-          <div className="d-flex align-center gray-6 gx-2">
+          <HeaderMeta>
             {isSupportCached && (
               <>
                 {nextScheduleTime ? (
@@ -89,7 +108,7 @@ export default function DashboardHeader(props: Props) {
             >
               <Button type="text" icon={<MoreIcon className="gray-8" />} />
             </DashboardDropdown>
-          </div>
+          </HeaderMeta>
         )}
       </div>
     </StyledHeader>

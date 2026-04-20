@@ -1,5 +1,9 @@
 import useKnowledgeWorkbenchViewState from './useKnowledgeWorkbenchViewState';
-import type { ConnectorView, KnowledgeBaseRecord } from './types';
+import type {
+  ConnectorView,
+  KnowledgeBaseRecord,
+  SelectedAssetTableValue,
+} from './types';
 
 export type KnowledgeWorkbenchControllerViewStateInputs<
   TKnowledgeBase extends KnowledgeBaseRecord,
@@ -7,6 +11,9 @@ export type KnowledgeWorkbenchControllerViewStateInputs<
 > = {
   activeKnowledgeBase?: TKnowledgeBase | null;
   activeKnowledgeBaseExecutable: boolean;
+  activeKnowledgeRuntimeSelector?: Parameters<
+    typeof useKnowledgeWorkbenchViewState<TKnowledgeBase, TConnector>
+  >[0]['activeKnowledgeRuntimeSelector'];
   activeKnowledgeSnapshotId?: string | null;
   assetDraft: Parameters<
     typeof useKnowledgeWorkbenchViewState<TKnowledgeBase, TConnector>
@@ -44,6 +51,9 @@ export type KnowledgeWorkbenchControllerViewStateInputs<
   overviewPreviewAsset: Parameters<
     typeof useKnowledgeWorkbenchViewState<TKnowledgeBase, TConnector>
   >[0]['overviewPreviewAsset'];
+  refetchDiagram?: Parameters<
+    typeof useKnowledgeWorkbenchViewState<TKnowledgeBase, TConnector>
+  >[0]['refetchDiagram'];
   pendingKnowledgeBaseId?: string | null;
   replaceWorkspace: Parameters<
     typeof useKnowledgeWorkbenchViewState<TKnowledgeBase, TConnector>
@@ -61,7 +71,7 @@ export type KnowledgeWorkbenchControllerViewStateInputs<
   selectedDemoKnowledge: Parameters<
     typeof useKnowledgeWorkbenchViewState<TKnowledgeBase, TConnector>
   >[0]['selectedDemoKnowledge'];
-  selectedDemoTable?: string;
+  selectedDemoTable?: SelectedAssetTableValue;
   setAssetDraft: Parameters<
     typeof useKnowledgeWorkbenchViewState<TKnowledgeBase, TConnector>
   >[0]['setAssetDraft'];
@@ -79,6 +89,6 @@ export type KnowledgeWorkbenchControllerViewStateInputs<
   >[0]['setDraftAssets'];
   setPendingKnowledgeBaseId: (id: string | null) => void;
   setSelectedConnectorId: (id?: string) => void;
-  setSelectedDemoTable: (table?: string) => void;
+  setSelectedDemoTable: (table?: SelectedAssetTableValue) => void;
   setSelectedKnowledgeBaseId: (id: string | null) => void;
 };

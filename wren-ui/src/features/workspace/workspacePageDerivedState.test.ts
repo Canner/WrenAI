@@ -141,4 +141,31 @@ describe('buildWorkspacePageDerivedState', () => {
         '有 1 个已启用 SAML 提供方证书已过期，请前往“设置 > 身份与目录”处理。',
     });
   });
+
+  it('treats any structured platform role as platform governance visibility for shared navigation', () => {
+    const result = buildWorkspacePageDerivedState({
+      data: {
+        ...baseData,
+        isPlatformAdmin: false,
+        permissions: {
+          ...baseData.permissions,
+          canCreateWorkspace: false,
+          actions: {
+            ...baseData.permissions?.actions,
+            'workspace.create': false,
+          },
+        },
+        authorization: {
+          actor: {
+            principalType: 'user',
+            isPlatformAdmin: false,
+            platformRoleKeys: ['platform_workspace_admin'],
+          },
+        },
+      },
+      searchKeyword: '',
+    });
+
+    expect(result.isPlatformAdmin).toBe(true);
+  });
 });
