@@ -47,6 +47,8 @@ jobs:
         run: yarn list
       - name: Install Node.js dependencies
         run: yarn install
+      - name: Run dependency audit
+        run: yarn deps:audit:check
       - name: Run lint
         run: yarn lint
           
