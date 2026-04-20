@@ -18,8 +18,7 @@ export interface IdentityProviderConfig {
   createdBy?: string | null;
 }
 
-export interface IIdentityProviderConfigRepository
-  extends IBasicRepository<IdentityProviderConfig> {}
+export interface IIdentityProviderConfigRepository extends IBasicRepository<IdentityProviderConfig> {}
 
 export class IdentityProviderConfigRepository
   extends BaseRepository<IdentityProviderConfig>

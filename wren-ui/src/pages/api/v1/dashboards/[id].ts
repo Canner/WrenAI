@@ -72,8 +72,8 @@ export default async function handler(
       req.method === 'DELETE'
         ? '删除看板失败，请稍后重试。'
         : req.method === 'PATCH'
-        ? '更新看板失败，请稍后重试。'
-        : '加载看板详情失败，请稍后重试。',
+          ? '更新看板失败，请稍后重试。'
+          : '加载看板详情失败，请稍后重试。',
     );
   }
 }

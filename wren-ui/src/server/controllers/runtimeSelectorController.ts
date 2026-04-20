@@ -168,8 +168,8 @@ export class RuntimeSelectorController {
 
     const hasExecutableCurrentSelection = Boolean(
       currentKbSnapshot?.id ||
-        runtimeScope?.deployment?.hash ||
-        runtimeScope?.deployHash,
+      runtimeScope?.deployment?.hash ||
+      runtimeScope?.deployHash,
     );
 
     if (currentKnowledgeBase && !hasExecutableCurrentSelection) {

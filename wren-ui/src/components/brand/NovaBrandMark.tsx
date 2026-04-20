@@ -32,7 +32,14 @@ export default function NovaBrandMark({
           <stop offset="0.58" stopColor="#4E88FF" />
           <stop offset="1" stopColor="#27C6B7" />
         </linearGradient>
-        <radialGradient id={glowId} cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(8 6) rotate(42.5) scale(16.2804 12.6028)">
+        <radialGradient
+          id={glowId}
+          cx="0"
+          cy="0"
+          r="1"
+          gradientUnits="userSpaceOnUse"
+          gradientTransform="translate(8 6) rotate(42.5) scale(16.2804 12.6028)"
+        >
           <stop stopColor="white" stopOpacity="0.34" />
           <stop offset="1" stopColor="white" stopOpacity="0" />
         </radialGradient>

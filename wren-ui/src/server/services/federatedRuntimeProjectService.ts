@@ -57,9 +57,7 @@ type FederatedConnectorBinding = ResolvedConnector & {
   schemas: { catalog: string; schema: string }[];
 };
 
-export class FederatedRuntimeProjectService
-  implements IFederatedRuntimeProjectService
-{
+export class FederatedRuntimeProjectService implements IFederatedRuntimeProjectService {
   private readonly knowledgeBaseRepository: IKnowledgeBaseRepository;
   private readonly connectorRepository: IConnectorRepository;
   private readonly projectRepository: IProjectRepository;

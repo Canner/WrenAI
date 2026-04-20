@@ -109,7 +109,8 @@ export class QueryService implements IQueryService {
     } = options;
     const { type: connectionType, connectionInfo } = project;
     if (this.useEngineForConnection(connectionType)) {
-      const duckDbConnectionInfo = (connectionInfo || {}) as DUCKDB_CONNECTION_INFO;
+      const duckDbConnectionInfo = (connectionInfo ||
+        {}) as DUCKDB_CONNECTION_INFO;
       await this.ensureDuckDbRuntime(duckDbConnectionInfo);
       try {
         if (dryRun) {
@@ -215,10 +216,7 @@ export class QueryService implements IQueryService {
 
   private checkConnectionTypeIsSupported(connectionType: DataSourceName) {
     if (
-      !Object.prototype.hasOwnProperty.call(
-        SupportedDataSource,
-        connectionType,
-      )
+      !Object.prototype.hasOwnProperty.call(SupportedDataSource, connectionType)
     ) {
       throw new Error(
         `Unsupported connection type for ibis: "${connectionType}"`,

@@ -40,9 +40,7 @@ const parseLineage = (lineage?: string): number[] => {
   }
 };
 
-export default class ConnectionSchemaDetector
-  implements IConnectionSchemaDetector
-{
+export default class ConnectionSchemaDetector implements IConnectionSchemaDetector {
   public ctx: IContext;
   public projectId: number;
 

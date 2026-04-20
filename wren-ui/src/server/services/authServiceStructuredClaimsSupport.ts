@@ -226,10 +226,10 @@ export const resolveStructuredActorClaims = async ({
 export const canSyncStructuredBindings = (deps: AuthServiceDependencies) =>
   Boolean(
     deps.roleRepository &&
-      deps.principalRoleBindingRepository &&
-      typeof (deps.roleRepository as any).findByNames === 'function' &&
-      typeof (deps.principalRoleBindingRepository as any)
-        .findResolvedRoleBindings === 'function',
+    deps.principalRoleBindingRepository &&
+    typeof (deps.roleRepository as any).findByNames === 'function' &&
+    typeof (deps.principalRoleBindingRepository as any)
+      .findResolvedRoleBindings === 'function',
   );
 
 export const isSyntheticWorkspaceMembership = (membership: WorkspaceMember) =>
@@ -300,8 +300,8 @@ export const loadStructuredActorClaims = async ({
         (group): group is NonNullable<typeof group> =>
           Boolean(
             group &&
-              group.workspaceId === workspace.id &&
-              group.status === 'active',
+            group.workspaceId === workspace.id &&
+            group.status === 'active',
           ),
       );
       const groupResults = await Promise.all(

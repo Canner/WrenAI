@@ -214,8 +214,8 @@ export const explainWorkspaceAuthorization = async ({
       (group): group is NonNullable<typeof group> =>
         Boolean(
           group &&
-            group.workspaceId === workspaceId &&
-            group.status === 'active',
+          group.workspaceId === workspaceId &&
+          group.status === 'active',
         ),
     );
     const groupResults = await Promise.all(

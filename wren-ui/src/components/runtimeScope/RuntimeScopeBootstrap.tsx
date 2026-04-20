@@ -228,7 +228,9 @@ export default function RuntimeScopeBootstrap({ children }: Props) {
               cache: 'no-store',
             }).then(async (response) => {
               if (!response.ok) {
-                throw new Error(`Runtime bootstrap failed (${response.status})`);
+                throw new Error(
+                  `Runtime bootstrap failed (${response.status})`,
+                );
               }
 
               return (await response

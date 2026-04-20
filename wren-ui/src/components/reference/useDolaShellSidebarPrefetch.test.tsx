@@ -15,13 +15,15 @@ jest.mock('@/utils/runtimePagePrefetch', () => ({
     mockPrefetchDashboardOverview(...args),
   prefetchKnowledgeOverview: (...args: any[]) =>
     mockPrefetchKnowledgeOverview(...args),
-  prefetchThreadOverview: (...args: any[]) => mockPrefetchThreadOverview(...args),
+  prefetchThreadOverview: (...args: any[]) =>
+    mockPrefetchThreadOverview(...args),
   prefetchWorkspaceOverview: (...args: any[]) =>
     mockPrefetchWorkspaceOverview(...args),
 }));
 
 jest.mock('./dolaShellUtils', () => ({
-  resolveShellPrefetchUrls: (...args: any[]) => mockResolveShellPrefetchUrls(...args),
+  resolveShellPrefetchUrls: (...args: any[]) =>
+    mockResolveShellPrefetchUrls(...args),
   resolveBackgroundNavPrefetchKeys: (...args: any[]) =>
     mockResolveBackgroundNavPrefetchKeys(...args),
   resolveBackgroundHistoryPrefetchIds: (...args: any[]) =>

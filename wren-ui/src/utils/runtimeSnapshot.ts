@@ -30,7 +30,7 @@ export const isHistoricalSnapshotReadonly = ({
 }: RuntimeSnapshotSelection) =>
   Boolean(
     selectorHasRuntime &&
-      defaultKbSnapshotId &&
-      currentKbSnapshotId &&
-      currentKbSnapshotId !== defaultKbSnapshotId,
+    defaultKbSnapshotId &&
+    currentKbSnapshotId &&
+    currentKbSnapshotId !== defaultKbSnapshotId,
   );

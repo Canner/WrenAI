@@ -67,9 +67,9 @@ export const shouldClearScopedDiagramData = ({
 }) =>
   Boolean(
     previousScopeKey &&
-      nextScopeKey &&
-      previousScopeKey !== nextScopeKey &&
-      !hasCachedDiagramData,
+    nextScopeKey &&
+    previousScopeKey !== nextScopeKey &&
+    !hasCachedDiagramData,
   );
 
 export const buildKnowledgeDiagramRequestKey = ({

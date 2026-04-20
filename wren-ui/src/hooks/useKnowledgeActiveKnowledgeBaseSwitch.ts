@@ -12,8 +12,8 @@ export const shouldResetKnowledgeStateOnBaseSwitch = ({
   Boolean(
     switchReady &&
     previousKnowledgeBaseId &&
-      activeKnowledgeBaseId &&
-      previousKnowledgeBaseId !== activeKnowledgeBaseId,
+    activeKnowledgeBaseId &&
+    previousKnowledgeBaseId !== activeKnowledgeBaseId,
   );
 
 export default function useKnowledgeActiveKnowledgeBaseSwitch({

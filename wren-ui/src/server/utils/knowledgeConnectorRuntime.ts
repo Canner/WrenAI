@@ -125,9 +125,8 @@ export const activateConnectorForKnowledgeBaseRuntime = async ({
     throw new Error(`Knowledge base ${knowledgeBaseId} not found`);
   }
 
-  const resolvedConnector = await ctx.connectorService.getResolvedConnector(
-    connectorId,
-  );
+  const resolvedConnector =
+    await ctx.connectorService.getResolvedConnector(connectorId);
   if (!resolvedConnector) {
     throw new Error(`Connector ${connectorId} not found`);
   }
@@ -184,7 +183,8 @@ export const activateConnectorForKnowledgeBaseRuntime = async ({
       })
     : null;
   const shouldCreateRuntimeProject =
-    !existingRuntimeProject || existingRuntimeProject.type === DataSourceName.TRINO;
+    !existingRuntimeProject ||
+    existingRuntimeProject.type === DataSourceName.TRINO;
   const runtimeProject = shouldCreateRuntimeProject
     ? await createProjectFromConnector({
         ctx,

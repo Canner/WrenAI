@@ -16,8 +16,7 @@ export interface AccessReview {
   updatedAt?: Date | string | null;
 }
 
-export interface IAccessReviewRepository
-  extends IBasicRepository<AccessReview> {}
+export interface IAccessReviewRepository extends IBasicRepository<AccessReview> {}
 
 export class AccessReviewRepository
   extends BaseRepository<AccessReview>

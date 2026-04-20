@@ -144,7 +144,8 @@ const PERMISSION_HEADLINE_OVERRIDES: Record<string, string> = {
 };
 
 const PERMISSION_DESCRIPTION_OVERRIDES: Record<string, string> = {
-  'platform.user.read': '允许查看平台用户目录、平台角色标签与默认工作空间信息。',
+  'platform.user.read':
+    '允许查看平台用户目录、平台角色标签与默认工作空间信息。',
   'platform.user.create': '允许在平台控制台中新增本地用户账号。',
   'platform.user.update': '允许编辑用户基本资料与默认工作空间。',
   'platform.user.role.assign': '允许为用户分配或移除平台角色。',
@@ -192,7 +193,9 @@ export const isDraftEqual = (left: RoleDraft, right: RoleDraft) =>
   JSON.stringify(normalizePermissionNames(left.permissionNames)) ===
     JSON.stringify(normalizePermissionNames(right.permissionNames));
 
-export const buildRoleDraftFromRole = (role: PlatformRoleCatalogItem): RoleDraft => ({
+export const buildRoleDraftFromRole = (
+  role: PlatformRoleCatalogItem,
+): RoleDraft => ({
   name: role.name || '',
   displayName: role.displayName || '',
   description: role.description || '',
@@ -248,7 +251,9 @@ export const getPermissionHeadline = (permissionName: string) => {
   if (PERMISSION_HEADLINE_OVERRIDES[permissionName]) {
     return PERMISSION_HEADLINE_OVERRIDES[permissionName];
   }
-  const resourceLabel = getResourceLabel(getPermissionResourceKey(permissionName));
+  const resourceLabel = getResourceLabel(
+    getPermissionResourceKey(permissionName),
+  );
   const action = getActionDescriptor(permissionName);
   return `${action.label}${resourceLabel}`;
 };

@@ -20,8 +20,7 @@ export interface BreakGlassGrant {
   updatedAt?: Date | string | null;
 }
 
-export interface IBreakGlassGrantRepository
-  extends IBasicRepository<BreakGlassGrant> {
+export interface IBreakGlassGrantRepository extends IBasicRepository<BreakGlassGrant> {
   findActiveGrantForUser(
     workspaceId: string,
     userId: string,

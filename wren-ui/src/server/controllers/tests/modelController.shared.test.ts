@@ -34,10 +34,7 @@ describe('modelControllerShared table identity helpers', () => {
 
   it('accepts qualified names during table existence validation', () => {
     expect(() =>
-      validateTableExistSupport(
-        'report_demo.dwd_order_task',
-        connectionTables,
-      ),
+      validateTableExistSupport('report_demo.dwd_order_task', connectionTables),
     ).not.toThrow();
   });
 });

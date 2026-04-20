@@ -285,9 +285,14 @@ describe('QueryService', () => {
   it('re-prepares duckdb runtime once when preview hits a closed pool error', async () => {
     mockWrenEngineAdaptor.previewData
       .mockRejectedValueOnce(
-        new Error('HikariDataSource HikariDataSource (DUCKDB_POOL) has been closed.'),
+        new Error(
+          'HikariDataSource HikariDataSource (DUCKDB_POOL) has been closed.',
+        ),
       )
-      .mockResolvedValueOnce({ data: [[1]], columns: [{ name: 'id', type: 'INTEGER' }] });
+      .mockResolvedValueOnce({
+        data: [[1]],
+        columns: [{ name: 'id', type: 'INTEGER' }],
+      });
 
     await expect(
       queryService.preview('SELECT * FROM test', {

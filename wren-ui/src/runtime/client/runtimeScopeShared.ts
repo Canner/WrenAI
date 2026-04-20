@@ -54,9 +54,9 @@ const hasModernRuntimeScopeSelector = (
 
   return Boolean(
     normalizedSelector.workspaceId ||
-      normalizedSelector.knowledgeBaseId ||
-      normalizedSelector.kbSnapshotId ||
-      normalizedSelector.deployHash,
+    normalizedSelector.knowledgeBaseId ||
+    normalizedSelector.kbSnapshotId ||
+    normalizedSelector.deployHash,
   );
 };
 
@@ -66,7 +66,7 @@ export const shouldUseProjectBridgeFallback = (
   const normalizedSelector = normalizeSelector(selector);
   return Boolean(
     normalizedSelector.runtimeScopeId &&
-      !hasModernRuntimeScopeSelector(normalizedSelector),
+    !hasModernRuntimeScopeSelector(normalizedSelector),
   );
 };
 

@@ -98,15 +98,18 @@ export const resolveKnowledgeBaseAssetCountMap = async ({
   knowledgeBases: KnowledgeBaseAssetScope[];
 } & AssetCountResolverDeps): Promise<Map<string, number>> => {
   const entries: Array<[string, number]> = await Promise.all(
-    knowledgeBases.map(async (knowledgeBase) => [
-      knowledgeBase.id,
-      await resolveKnowledgeBaseAssetCount({
-        knowledgeBase,
-        kbSnapshotRepository,
-        modelRepository,
-        viewRepository,
-      }),
-    ] as [string, number]),
+    knowledgeBases.map(
+      async (knowledgeBase) =>
+        [
+          knowledgeBase.id,
+          await resolveKnowledgeBaseAssetCount({
+            knowledgeBase,
+            kbSnapshotRepository,
+            modelRepository,
+            viewRepository,
+          }),
+        ] as [string, number],
+    ),
   );
 
   return new Map(entries);

@@ -103,7 +103,10 @@ export const resolveAssetTableQuickFilters = (
   const prefixCounts = new Map<string, number>();
 
   selectorItems.forEach((item) => {
-    scopeCounts.set(item.scopeLabel, (scopeCounts.get(item.scopeLabel) || 0) + 1);
+    scopeCounts.set(
+      item.scopeLabel,
+      (scopeCounts.get(item.scopeLabel) || 0) + 1,
+    );
 
     if (item.imported) {
       return;

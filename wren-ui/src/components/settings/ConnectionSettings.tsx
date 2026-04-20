@@ -65,7 +65,9 @@ const ConnectionPanel = (props: Props) => {
 
   useEffect(() => {
     if (properties) {
-      form.setFieldsValue(transformConnectionPropertiesToForm(properties, type));
+      form.setFieldsValue(
+        transformConnectionPropertiesToForm(properties, type),
+      );
     }
   }, [form, properties, type]);
 

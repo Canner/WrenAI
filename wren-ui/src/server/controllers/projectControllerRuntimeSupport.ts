@@ -221,9 +221,9 @@ export const isManagedFederatedRuntimeProject = (
 ) =>
   Boolean(
     project &&
-      knowledgeBase?.runtimeProjectId &&
-      project.id === knowledgeBase.runtimeProjectId &&
-      project.type === DataSourceName.TRINO,
+    knowledgeBase?.runtimeProjectId &&
+    project.id === knowledgeBase.runtimeProjectId &&
+    project.type === DataSourceName.TRINO,
   );
 
 export const buildConnectionSettingsProperties = ({

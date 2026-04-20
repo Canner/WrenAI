@@ -87,7 +87,9 @@ export class SecretService implements ISecretService {
     queryOptions?: IQueryOptions,
   ): Promise<SecretRecord> {
     const aad =
-      input.aad === undefined ? this.buildDefaultAAD(input) : input.aad ?? null;
+      input.aad === undefined
+        ? this.buildDefaultAAD(input)
+        : (input.aad ?? null);
     const encrypted = this.encryptPayload(
       input.payload,
       aad,
@@ -124,7 +126,8 @@ export class SecretService implements ISecretService {
       throw new Error(`Secret ${secretId} not found`);
     }
 
-    const aad = input.aad === undefined ? secretRecord.aad ?? null : input.aad;
+    const aad =
+      input.aad === undefined ? (secretRecord.aad ?? null) : input.aad;
     const encrypted = this.encryptPayload(
       input.payload,
       aad,

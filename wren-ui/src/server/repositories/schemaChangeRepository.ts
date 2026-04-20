@@ -21,8 +21,7 @@ export interface SchemaChange {
   updateAt: string; // Updated at
 }
 
-export interface ISchemaChangeRepository
-  extends IBasicRepository<SchemaChange> {
+export interface ISchemaChangeRepository extends IBasicRepository<SchemaChange> {
   findLastSchemaChange(projectId: number): Promise<SchemaChange | null>;
 }
 

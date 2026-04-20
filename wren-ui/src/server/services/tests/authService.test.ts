@@ -370,7 +370,9 @@ describe('AuthService', () => {
       },
     ];
     const permissionRepository = {
-      findAll: jest.fn(async () => permissions.map((permission) => ({ ...permission }))),
+      findAll: jest.fn(async () =>
+        permissions.map((permission) => ({ ...permission })),
+      ),
       createMany: jest.fn(async (payloads: any[]) => {
         permissions.push(...payloads.map((payload) => ({ ...payload })));
         return payloads;
@@ -437,10 +439,12 @@ describe('AuthService', () => {
               .filter((rolePermission) =>
                 scopedRoleIds.includes(rolePermission.roleId),
               )
-              .map((rolePermission) =>
-                permissions.find(
-                  (permission) => permission.id === rolePermission.permissionId,
-                )?.name,
+              .map(
+                (rolePermission) =>
+                  permissions.find(
+                    (permission) =>
+                      permission.id === rolePermission.permissionId,
+                  )?.name,
               )
               .filter(Boolean),
           ),

@@ -49,8 +49,7 @@ export interface DashboardItem {
   displayName?: string;
 }
 
-export interface IDashboardItemRepository
-  extends IBasicRepository<DashboardItem> {}
+export interface IDashboardItemRepository extends IBasicRepository<DashboardItem> {}
 
 export class DashboardItemRepository
   extends BaseRepository<DashboardItem>

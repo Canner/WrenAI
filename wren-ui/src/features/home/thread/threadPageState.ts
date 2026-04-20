@@ -42,8 +42,8 @@ export const hasReferenceRenderableResponse = (
 ) =>
   Boolean(
     threadResponse?.answerDetail?.content ||
-      threadResponse?.chartDetail?.chartSchema ||
-      threadResponse?.sql,
+    threadResponse?.chartDetail?.chartSchema ||
+    threadResponse?.sql,
   );
 
 export const buildThreadQuestionSignature = (

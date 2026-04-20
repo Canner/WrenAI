@@ -33,22 +33,17 @@ export default async function handler(
     }
 
     if (req.method === 'GET') {
-      const recommendation = await modelController.getModelRecommendationQuestions(
-        {
+      const recommendation =
+        await modelController.getModelRecommendationQuestions({
           modelId,
           ctx,
-        },
-      );
+        });
       return res.status(200).json(recommendation);
     }
 
     res.setHeader('Allow', 'GET, POST');
     throw new Error('Method not allowed');
   } catch (error) {
-    return sendRestApiError(
-      res,
-      error,
-      '加载模型建议问题失败，请稍后重试。',
-    );
+    return sendRestApiError(res, error, '加载模型建议问题失败，请稍后重试。');
   }
 }

@@ -206,13 +206,15 @@ describe('pages/api/v1/knowledge/bases routes', () => {
         return [];
       },
     );
-    mockFindModelsByRuntimeIdentity.mockImplementation(async (runtimeIdentity) =>
-      runtimeIdentity.knowledgeBaseId === 'kb-newer'
-        ? [{ id: 1 }, { id: 2 }]
-        : [{ id: 3 }],
+    mockFindModelsByRuntimeIdentity.mockImplementation(
+      async (runtimeIdentity) =>
+        runtimeIdentity.knowledgeBaseId === 'kb-newer'
+          ? [{ id: 1 }, { id: 2 }]
+          : [{ id: 3 }],
     );
-    mockFindViewsByRuntimeIdentity.mockImplementation(async (runtimeIdentity) =>
-      runtimeIdentity.knowledgeBaseId === 'kb-newer' ? [{ id: 10 }] : [],
+    mockFindViewsByRuntimeIdentity.mockImplementation(
+      async (runtimeIdentity) =>
+        runtimeIdentity.knowledgeBaseId === 'kb-newer' ? [{ id: 10 }] : [],
     );
     mockGetPrimaryConnector.mockImplementation(async (knowledgeBase: any) => {
       if (knowledgeBase.id === 'kb-older') {

@@ -7,8 +7,7 @@ export interface RolePermission {
   permissionId: string;
 }
 
-export interface IRolePermissionRepository
-  extends IBasicRepository<RolePermission> {}
+export interface IRolePermissionRepository extends IBasicRepository<RolePermission> {}
 
 export class RolePermissionRepository
   extends BaseRepository<RolePermission>

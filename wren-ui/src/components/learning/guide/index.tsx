@@ -33,7 +33,8 @@ export default forwardRef<Attributes, Props>(function Guide(_props, ref) {
   > | null>(null);
 
   const storyPayload = useMemo(() => {
-    const sampleDataset = resolveSettingsConnection(settingsResult)?.sampleDataset;
+    const sampleDataset =
+      resolveSettingsConnection(settingsResult)?.sampleDataset;
     const language = settingsResult?.language;
 
     return {

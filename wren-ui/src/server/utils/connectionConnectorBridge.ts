@@ -38,15 +38,16 @@ const PROVIDER_TO_DATA_SOURCE = Object.entries(DATA_SOURCE_TO_PROVIDER).reduce<
   return accumulator;
 }, {});
 
-const SENSITIVE_FIELDS_BY_DATA_SOURCE: Partial<Record<DataSourceName, string[]>> =
-  {
-    [DataSourceName.POSTGRES]: ['password'],
-    [DataSourceName.MYSQL]: ['password'],
-    [DataSourceName.BIG_QUERY]: ['credentials'],
-    [DataSourceName.SNOWFLAKE]: ['password', 'privateKey'],
-    [DataSourceName.REDSHIFT]: ['password', 'awsAccessKey', 'awsSecretKey'],
-    [DataSourceName.TRINO]: ['password'],
-  };
+const SENSITIVE_FIELDS_BY_DATA_SOURCE: Partial<
+  Record<DataSourceName, string[]>
+> = {
+  [DataSourceName.POSTGRES]: ['password'],
+  [DataSourceName.MYSQL]: ['password'],
+  [DataSourceName.BIG_QUERY]: ['credentials'],
+  [DataSourceName.SNOWFLAKE]: ['password', 'privateKey'],
+  [DataSourceName.REDSHIFT]: ['password', 'awsAccessKey', 'awsSecretKey'],
+  [DataSourceName.TRINO]: ['password'],
+};
 
 const pickDefined = <T extends Record<string, any>>(value: T) =>
   Object.fromEntries(
@@ -110,8 +111,7 @@ export const getConnectionTypeForConnectorProvider = (
 
 export const canBridgeConnectionTypeToConnector = (
   type?: DataSourceName | null,
-) =>
-  Boolean(type && getConnectorDatabaseProviderForDataSource(type));
+) => Boolean(type && getConnectorDatabaseProviderForDataSource(type));
 
 type ConnectorBridgePayload = {
   type: 'database';
@@ -144,7 +144,8 @@ const buildConnectorBridgeFromProperties = (
           port: readOptionalPositiveInteger(properties.port),
           database: readOptionalString(properties.database),
           user: readOptionalString(properties.user ?? properties.username),
-          ssl: properties.ssl === undefined ? undefined : Boolean(properties.ssl),
+          ssl:
+            properties.ssl === undefined ? undefined : Boolean(properties.ssl),
         }),
         ...(password ? { secret: { password } } : {}),
       };
@@ -160,7 +161,8 @@ const buildConnectorBridgeFromProperties = (
           port: readOptionalPositiveInteger(properties.port),
           database: readOptionalString(properties.database),
           user: readOptionalString(properties.user ?? properties.username),
-          ssl: properties.ssl === undefined ? undefined : Boolean(properties.ssl),
+          ssl:
+            properties.ssl === undefined ? undefined : Boolean(properties.ssl),
         }),
         ...(password ? { secret: { password } } : {}),
       };
@@ -254,7 +256,8 @@ const buildConnectorBridgeFromProperties = (
           port: readOptionalPositiveInteger(properties.port),
           schemas: readOptionalString(properties.schemas ?? properties.schema),
           username: readOptionalString(properties.username ?? properties.user),
-          ssl: properties.ssl === undefined ? undefined : Boolean(properties.ssl),
+          ssl:
+            properties.ssl === undefined ? undefined : Boolean(properties.ssl),
         }),
         ...(password ? { secret: { password } } : {}),
       };
@@ -274,16 +277,19 @@ const decryptLegacyProjectSecret = (
   connectionInfo: WREN_AI_CONNECTION_INFO,
 ): SecretPayload | undefined => {
   const sensitiveFields = SENSITIVE_FIELDS_BY_DATA_SOURCE[type] || [];
-  const payload = sensitiveFields.reduce<Record<string, any>>((accumulator, field) => {
-    const decryptedValue = decryptSecretField(
-      (connectionInfo as Record<string, any>)[field],
-      field,
-    );
-    if (decryptedValue !== undefined) {
-      accumulator[field] = decryptedValue;
-    }
-    return accumulator;
-  }, {});
+  const payload = sensitiveFields.reduce<Record<string, any>>(
+    (accumulator, field) => {
+      const decryptedValue = decryptSecretField(
+        (connectionInfo as Record<string, any>)[field],
+        field,
+      );
+      if (decryptedValue !== undefined) {
+        accumulator[field] = decryptedValue;
+      }
+      return accumulator;
+    },
+    {},
+  );
 
   return Object.keys(payload).length > 0 ? payload : undefined;
 };
@@ -295,7 +301,10 @@ export const buildConnectorBridgeFromLegacyProject = (
     return null;
   }
 
-  const secret = decryptLegacyProjectSecret(project.type, project.connectionInfo);
+  const secret = decryptLegacyProjectSecret(
+    project.type,
+    project.connectionInfo,
+  );
   const properties = {
     displayName: project.displayName,
     ...(project.connectionInfo as Record<string, any>),
@@ -314,7 +323,8 @@ export const buildConnectionSettingsFromConnector = ({
   databaseProvider?: string | null;
   config?: Record<string, any> | null;
 }): DataSource | null => {
-  const connectionType = getConnectionTypeForConnectorProvider(databaseProvider);
+  const connectionType =
+    getConnectionTypeForConnectorProvider(databaseProvider);
   if (!connectionType) {
     return null;
   }

@@ -319,7 +319,7 @@ export default async function handler(
           ? ApiType.GET_KNOWLEDGE_BASES
           : ApiType.UPDATE_KNOWLEDGE_BASE,
       requestPayload:
-        req.method === 'GET' ? { id: req.query.id } : req.body ?? {},
+        req.method === 'GET' ? { id: req.query.id } : (req.body ?? {}),
       headers: req.headers as Record<string, string>,
       startTime,
       logger,

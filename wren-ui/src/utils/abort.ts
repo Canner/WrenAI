@@ -14,7 +14,8 @@ const readErrorName = (error: unknown) => {
     return '';
   }
 
-  return 'name' in error && typeof (error as { name?: unknown }).name === 'string'
+  return 'name' in error &&
+    typeof (error as { name?: unknown }).name === 'string'
     ? (error as { name: string }).name.trim()
     : '';
 };

@@ -54,8 +54,7 @@ export const fetchSettings = async (
 
 export const resolveSettingsConnection = (
   settings?: SettingsData | null,
-): KnowledgeConnectionSettings | null =>
-  settings?.connection ?? null;
+): KnowledgeConnectionSettings | null => settings?.connection ?? null;
 
 export const normalizeSettingsData = (
   settings?: SettingsData | null,

@@ -27,9 +27,10 @@ const resolveExecutableSnapshotIds = async ({
   deployLogRepository,
 }: {
   snapshots: KBSnapshot[];
-  deployLogRepository?:
-    | Pick<IDeployLogRepository, 'findLastRuntimeDeployLog'>
-    | null;
+  deployLogRepository?: Pick<
+    IDeployLogRepository,
+    'findLastRuntimeDeployLog'
+  > | null;
 }) => {
   if (!deployLogRepository || snapshots.length === 0) {
     return null;
@@ -50,8 +51,8 @@ const resolveExecutableSnapshotIds = async ({
   );
 
   return new Set(
-    executableSnapshotIds.filter(
-      (snapshotId): snapshotId is string => Boolean(snapshotId),
+    executableSnapshotIds.filter((snapshotId): snapshotId is string =>
+      Boolean(snapshotId),
     ),
   );
 };
@@ -108,9 +109,10 @@ export const resolveKnowledgeBaseSnapshotSelection = async ({
 }: {
   knowledgeBase: KnowledgeBase | null;
   kbSnapshotRepository: IKBSnapshotRepository;
-  deployLogRepository?:
-    | Pick<IDeployLogRepository, 'findLastRuntimeDeployLog'>
-    | null;
+  deployLogRepository?: Pick<
+    IDeployLogRepository,
+    'findLastRuntimeDeployLog'
+  > | null;
 }) => {
   if (!knowledgeBase) {
     return {
@@ -149,9 +151,10 @@ export const resolveKnowledgeBaseSnapshotSelection = async ({
 export const resolveBootstrapKnowledgeBaseSelection = async (
   knowledgeBases: KnowledgeBase[],
   kbSnapshotRepository: IKBSnapshotRepository,
-  deployLogRepository?:
-    | Pick<IDeployLogRepository, 'findLastRuntimeDeployLog'>
-    | null,
+  deployLogRepository?: Pick<
+    IDeployLogRepository,
+    'findLastRuntimeDeployLog'
+  > | null,
 ) => {
   const sortedKnowledgeBases = sortByName(
     knowledgeBases.filter((knowledgeBase) => !knowledgeBase.archivedAt),

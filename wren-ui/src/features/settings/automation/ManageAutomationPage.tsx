@@ -51,7 +51,7 @@ export default function SettingsAutomationPage() {
   const permissionActions = workspaceOverview?.permissions?.actions || {};
   const canManageMachineIdentity = Boolean(
     permissionActions['service_account.create'] ||
-      permissionActions['api_token.create'],
+    permissionActions['api_token.create'],
   );
   const serviceAccounts = workspaceOverview?.serviceAccounts || [];
   const apiTokens = workspaceOverview?.apiTokens || [];

@@ -28,9 +28,7 @@ export type {
 const logger = getLogger('AdjustmentTaskTracker');
 logger.level = 'debug';
 
-export class AdjustmentBackgroundTaskTracker
-  implements IAdjustmentBackgroundTaskTracker
-{
+export class AdjustmentBackgroundTaskTracker implements IAdjustmentBackgroundTaskTracker {
   private wrenAIAdaptor: IWrenAIAdaptor;
   private askingTaskRepository: IAskingTaskRepository;
   private trackedTasks: Map<string, TrackedTask> = new Map();

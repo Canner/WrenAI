@@ -38,24 +38,32 @@ const normalizeRoleKey = (value?: string | null) =>
     .slice(0, 48);
 
 const getPlatformAuthorizationActions = () =>
-  (Object.keys(AUTHORIZATION_ACTIONS) as Array<keyof typeof AUTHORIZATION_ACTIONS>)
-    .filter((action) => getAuthorizationActionMeta(action).scope === 'platform');
+  (
+    Object.keys(AUTHORIZATION_ACTIONS) as Array<
+      keyof typeof AUTHORIZATION_ACTIONS
+    >
+  ).filter((action) => getAuthorizationActionMeta(action).scope === 'platform');
 
-const getPlatformAssignableActions = () => new Set(getPlatformAuthorizationActions());
+const getPlatformAssignableActions = () =>
+  new Set(getPlatformAuthorizationActions());
 
 const isPlatformRole = (role: Role) =>
-  role.scopeType === 'platform' && String(role.scopeId || '') === PLATFORM_SCOPE_ID;
+  role.scopeType === 'platform' &&
+  String(role.scopeId || '') === PLATFORM_SCOPE_ID;
 
 const ensureValidPlatformPermissionNames = (permissionNames: string[]) => {
   const assignableActions = getPlatformAssignableActions();
   const normalizedPermissionNames = Array.from(
-    new Set(permissionNames.map((name) => String(name || '').trim()).filter(Boolean)),
+    new Set(
+      permissionNames.map((name) => String(name || '').trim()).filter(Boolean),
+    ),
   );
 
   if (
     normalizedPermissionNames.some(
       (permissionName) =>
-        !isAuthorizationAction(permissionName) || !assignableActions.has(permissionName),
+        !isAuthorizationAction(permissionName) ||
+        !assignableActions.has(permissionName),
     )
   ) {
     throw new Error('Platform role contains unsupported permissions');
@@ -89,18 +97,17 @@ export const listPlatformRoleCatalog = async ({
   const permissionNameById = new Map(
     permissions.map((permission) => [permission.id, permission.name]),
   );
-  const permissionNamesByRoleId = rolePermissions.reduce<Record<string, string[]>>(
-    (acc, rolePermission) => {
-      const permissionName = permissionNameById.get(rolePermission.permissionId);
-      if (!permissionName) {
-        return acc;
-      }
-      acc[rolePermission.roleId] = acc[rolePermission.roleId] || [];
-      acc[rolePermission.roleId].push(permissionName);
+  const permissionNamesByRoleId = rolePermissions.reduce<
+    Record<string, string[]>
+  >((acc, rolePermission) => {
+    const permissionName = permissionNameById.get(rolePermission.permissionId);
+    if (!permissionName) {
       return acc;
-    },
-    {},
-  );
+    }
+    acc[rolePermission.roleId] = acc[rolePermission.roleId] || [];
+    acc[rolePermission.roleId].push(permissionName);
+    return acc;
+  }, {});
   const bindingCountByRoleId = bindings.reduce<Record<string, number>>(
     (acc, binding) => {
       acc[binding.roleId] = (acc[binding.roleId] || 0) + 1;

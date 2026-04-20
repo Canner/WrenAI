@@ -96,12 +96,12 @@ const hasStaleProjectScopeAliasInObject = (
 ) =>
   Boolean(
     source &&
-      Object.keys(source).some(
-        (key) =>
-          STALE_PROJECT_SCOPE_QUERY_KEYS.includes(
-            key as (typeof STALE_PROJECT_SCOPE_QUERY_KEYS)[number],
-          ) || isRemovedLegacyProjectScopeQueryKey(key),
-      ),
+    Object.keys(source).some(
+      (key) =>
+        STALE_PROJECT_SCOPE_QUERY_KEYS.includes(
+          key as (typeof STALE_PROJECT_SCOPE_QUERY_KEYS)[number],
+        ) || isRemovedLegacyProjectScopeQueryKey(key),
+    ),
   );
 
 const readQueryValue = (

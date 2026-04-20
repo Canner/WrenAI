@@ -17,8 +17,7 @@ export interface AccessReviewItem {
   updatedAt?: Date | string | null;
 }
 
-export interface IAccessReviewItemRepository
-  extends IBasicRepository<AccessReviewItem> {}
+export interface IAccessReviewItemRepository extends IBasicRepository<AccessReviewItem> {}
 
 export class AccessReviewItemRepository
   extends BaseRepository<AccessReviewItem>

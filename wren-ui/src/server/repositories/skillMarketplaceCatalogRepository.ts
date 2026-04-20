@@ -33,8 +33,7 @@ export interface SkillMarketplaceCatalog {
   installCount?: number;
 }
 
-export interface ISkillMarketplaceCatalogRepository
-  extends IBasicRepository<SkillMarketplaceCatalog> {
+export interface ISkillMarketplaceCatalogRepository extends IBasicRepository<SkillMarketplaceCatalog> {
   findFeatured(
     queryOptions?: IQueryOptions,
   ): Promise<SkillMarketplaceCatalog[]>;

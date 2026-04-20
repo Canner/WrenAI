@@ -22,8 +22,7 @@ export interface ServiceAccount {
   updatedAt?: Date | string | null;
 }
 
-export interface IServiceAccountRepository
-  extends IBasicRepository<ServiceAccount> {}
+export interface IServiceAccountRepository extends IBasicRepository<ServiceAccount> {}
 
 export class ServiceAccountRepository
   extends BaseRepository<ServiceAccount>

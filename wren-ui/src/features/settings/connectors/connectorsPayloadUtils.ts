@@ -51,26 +51,26 @@ const parsePositiveInteger = (value: string, field: string) => {
 const hasStructuredDatabaseConfigInput = (values: DatabaseConnectorFormShape) =>
   Boolean(
     readText(values.dbHost) ||
-      readText(values.dbPort) ||
-      readText(values.dbDatabase) ||
-      readText(values.dbUser) ||
-      readText(values.dbSchema) ||
-      readText(values.dbProjectId) ||
-      readText(values.dbDatasetId) ||
-      readText(values.dbSnowflakeAccount) ||
-      readText(values.dbSnowflakeWarehouse) ||
-      readText(values.dbClusterIdentifier) ||
-      readText(values.dbAwsRegion) ||
-      readText(values.dbTrinoSchemas),
+    readText(values.dbPort) ||
+    readText(values.dbDatabase) ||
+    readText(values.dbUser) ||
+    readText(values.dbSchema) ||
+    readText(values.dbProjectId) ||
+    readText(values.dbDatasetId) ||
+    readText(values.dbSnowflakeAccount) ||
+    readText(values.dbSnowflakeWarehouse) ||
+    readText(values.dbClusterIdentifier) ||
+    readText(values.dbAwsRegion) ||
+    readText(values.dbTrinoSchemas),
   );
 
 const hasStructuredDatabaseSecretInput = (values: DatabaseConnectorFormShape) =>
   Boolean(
     readText(values.dbPassword) ||
-      readText(values.dbPrivateKey) ||
-      readText(values.dbCredentialsText) ||
-      readText(values.dbAwsAccessKey) ||
-      readText(values.dbAwsSecretKey),
+    readText(values.dbPrivateKey) ||
+    readText(values.dbCredentialsText) ||
+    readText(values.dbAwsAccessKey) ||
+    readText(values.dbAwsSecretKey),
   );
 
 const buildDatabaseConnectorConfig = (values: DatabaseConnectorFormShape) => {

@@ -98,8 +98,8 @@ export const normalizeModelRecommendationState = (
     questions: Array.isArray(candidate.questions)
       ? candidate.questions
           .map(normalizeRecommendationQuestion)
-          .filter(
-            (question): question is RecommendationQuestion => Boolean(question),
+          .filter((question): question is RecommendationQuestion =>
+            Boolean(question),
           )
       : [],
     status,
@@ -111,7 +111,9 @@ export const normalizeModelRecommendationState = (
 export const readModelRecommendationState = (
   properties?: string | null,
 ): ModelRecommendationState =>
-  normalizeModelRecommendationState(parseJsonObject(properties).aiRecommendations);
+  normalizeModelRecommendationState(
+    parseJsonObject(properties).aiRecommendations,
+  );
 
 export const mergeModelRecommendationState = ({
   properties,

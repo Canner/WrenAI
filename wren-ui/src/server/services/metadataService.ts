@@ -82,7 +82,10 @@ export class ConnectionMetadataService implements IConnectionMetadataService {
     if (connectionType === DataSourceName.DUCKDB) {
       return [];
     }
-    return await this.ibisAdaptor.getConstraints(connectionType, connectionInfo);
+    return await this.ibisAdaptor.getConstraints(
+      connectionType,
+      connectionInfo,
+    );
   }
 
   public async getVersion(project: Project): Promise<string> {

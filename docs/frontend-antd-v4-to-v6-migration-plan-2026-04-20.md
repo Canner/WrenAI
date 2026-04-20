@@ -19,7 +19,7 @@
 
 ## 执行状态（2026-04-21）
 
-当前这 9 个逻辑 commit 已全部落地，其中前 7 个已经提交，后 2 个在本轮收尾：
+当前这 9 个逻辑 commit 已全部落地，另外补了 1 个 repo-wide lint/build 收尾提交，把默认验证链路也恢复到可通过状态：
 
 1. `e93ec9a4` — 对齐到最新 `antd@4.24.x` 基线
 2. `54441e97` — 移除内部 Antd 类型导入
@@ -29,17 +29,20 @@
 6. `c9acc38d` — 完成 popup `open/menu` API 迁移
 7. `25378f6d` — 接入 `AntdAppBridge` 并迁移首批 feedback surface
 8. `521bc2e4` — 升级到 `antd@6.3.6` / `@ant-design/icons@6.1.1` / `@ant-design/cssinjs@2.1.2`，清零 `Tabs.TabPane` / `destroyOnClose` / `moment`，补齐 Antd 6 类型兼容与构建兼容脚本
-9. `本次收尾提交` — 清零 legacy popup/style props，统一迁移到 `styles` / `classNames` 语义化 API，并回填迁移文档
+9. `3a170704` — 清零 legacy popup/style props，统一迁移到 `styles` / `classNames` 语义化 API，并回填迁移文档
+10. `本次补充收尾提交` — 批量清理 repo-wide prettier / lint debt，并修复剩余 2 个真实 ESLint 错误，让默认 `yarn lint` / `yarn build` 重新通过
 
 ### 本轮最终验证结果
 
 - `yarn check-types` ✅
 - `yarn lint:changed` ✅
+- `yarn test --runTestsByPath src/server/utils/tests/docker.test.ts --runInBand` ✅
 - `rg "Tabs\.TabPane|<TabPane\b" src` ✅ 0 命中
 - `rg "\bdestroyOnClose\b" src` ✅ 0 命中
 - `rg "\bmoment\b" src` ✅ 0 命中
 - `rg "bodyStyle|headerStyle|maskStyle|overlayStyle|dropdownClassName|popupClassName|overlayClassName" src` ✅ 0 命中
-- `yarn lint` ⚠️ 仍被仓库既有的 repo-wide prettier / lint debt 阻塞（与本轮 Antd 迁移改动无直接关系）
+- `yarn lint` ✅ 通过
+- `yarn build` ✅ 通过
 - `./node_modules/.bin/next build --no-lint` ✅ 通过
 
 ### 额外兼容修复
@@ -51,7 +54,7 @@ Antd 6 在当前 Next.js Pages Router / Node 22 组合下，会在 `Collecting p
 - `wren-ui/scripts/patch_rc_component_util_esm.mjs`
 - `package.json` 中的 `patch:rc-component-util-esm` / `postinstall` / `dev` / `build` / `start` 前置修复链路
 
-该补丁只会给真实存在的 `*.js` 目标补齐扩展名，用来保证 `next build --no-lint` 能稳定完成 SSR / page-data 阶段。
+该补丁只会给真实存在的 `*.js` 目标补齐扩展名，用来保证 `next build --no-lint` 与默认 `yarn build` 都能稳定完成 SSR / page-data 阶段。
 
 ---
 

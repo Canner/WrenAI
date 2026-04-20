@@ -19,8 +19,7 @@ export interface ScheduleJobRun {
   detailJson?: Record<string, any> | null;
 }
 
-export interface IScheduleJobRunRepository
-  extends IBasicRepository<ScheduleJobRun> {
+export interface IScheduleJobRunRepository extends IBasicRepository<ScheduleJobRun> {
   findAllByScheduleJobIds(scheduleJobIds: string[]): Promise<ScheduleJobRun[]>;
 }
 

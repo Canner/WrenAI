@@ -96,9 +96,7 @@ const syncProjectRuntimeArtifacts = async <
 
   const records = [
     ...new Map(
-      runtimeScopedRecords
-        .flat()
-        .map((record) => [record.id, record] as const),
+      runtimeScopedRecords.flat().map((record) => [record.id, record] as const),
     ).values(),
   ];
 

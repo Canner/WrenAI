@@ -22,8 +22,7 @@ export interface DirectoryGroup {
   updatedAt?: Date | string | null;
 }
 
-export interface IDirectoryGroupRepository
-  extends IBasicRepository<DirectoryGroup> {}
+export interface IDirectoryGroupRepository extends IBasicRepository<DirectoryGroup> {}
 
 export class DirectoryGroupRepository
   extends BaseRepository<DirectoryGroup>

@@ -153,9 +153,10 @@ const readStoredAuthSession = (sessionCacheKey: string) => {
       return null;
     }
 
-    const parsed = JSON.parse(rawValue) as
-      | { payload: AuthSessionPayload; updatedAt: number }
-      | null;
+    const parsed = JSON.parse(rawValue) as {
+      payload: AuthSessionPayload;
+      updatedAt: number;
+    } | null;
     if (!parsed || typeof parsed.updatedAt !== 'number' || !parsed.payload) {
       storage.removeItem(getAuthSessionStorageKey(sessionCacheKey));
       return null;

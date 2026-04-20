@@ -176,7 +176,8 @@ export default async function handler(
         const memberUser = memberUsers[index];
         return {
           ...member,
-          roleKey: normalizeWorkspaceRoleKeyForDisplay(member.roleKey) || 'viewer',
+          roleKey:
+            normalizeWorkspaceRoleKeyForDisplay(member.roleKey) || 'viewer',
           user: memberUser
             ? {
                 id: memberUser.id,
@@ -356,8 +357,7 @@ export default async function handler(
             membership.workspaceId,
           status: membership.status,
           roleKey:
-            normalizeWorkspaceRoleKeyForDisplay(membership.roleKey) ||
-            'viewer',
+            normalizeWorkspaceRoleKeyForDisplay(membership.roleKey) || 'viewer',
           kind:
             workspaceById.get(membership.workspaceId)?.kind ||
             WORKSPACE_KINDS.REGULAR,

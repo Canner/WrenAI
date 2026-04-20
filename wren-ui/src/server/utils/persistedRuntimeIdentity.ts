@@ -27,9 +27,9 @@ export const hasCanonicalRuntimeIdentity = (
 ) =>
   Boolean(
     source?.workspaceId ||
-      source?.knowledgeBaseId ||
-      source?.kbSnapshotId ||
-      source?.deployHash,
+    source?.knowledgeBaseId ||
+    source?.kbSnapshotId ||
+    source?.deployHash,
   );
 
 export const normalizeCanonicalPersistedRuntimeIdentity = <

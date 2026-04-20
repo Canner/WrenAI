@@ -1,10 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
 import { toPersistedRuntimeIdentityFromSource } from '@server/utils/persistedRuntimeIdentity';
-import {
-  assertAuthorizedWithAudit,
-  recordAuditEvent,
-} from '@server/authz';
+import { assertAuthorizedWithAudit, recordAuditEvent } from '@server/authz';
 import {
   disableDashboardScheduleJob,
   serializeScheduleJob,

@@ -33,8 +33,8 @@ export default function useModelingWorkspaceState() {
     isHistoricalSnapshotReadonly({
       selectorHasRuntime: Boolean(
         runtimeScopeNavigation.selector.deployHash ||
-          runtimeScopeNavigation.selector.kbSnapshotId ||
-          runtimeScopeNavigation.selector.runtimeScopeId,
+        runtimeScopeNavigation.selector.kbSnapshotId ||
+        runtimeScopeNavigation.selector.runtimeScopeId,
       ),
       currentKbSnapshotId: runtimeSelectorState?.currentKbSnapshot?.id,
       defaultKbSnapshotId:

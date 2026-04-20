@@ -1,5 +1,10 @@
 import { NextApiRequest } from 'next';
-import { Deploy, KBSnapshot, KnowledgeBase, Workspace } from '@server/repositories';
+import {
+  Deploy,
+  KBSnapshot,
+  KnowledgeBase,
+  Workspace,
+} from '@server/repositories';
 import { resolveRequestActor, type ResolvedRequestActor } from './actorClaims';
 import {
   coerceRuntimeScopeInteger,
@@ -224,12 +229,13 @@ export class RuntimeScopeResolver implements IRuntimeScopeResolver {
       throw new Error('Session workspace does not match requested workspace');
     }
 
-    const resolvedDeployHash = kbSnapshot?.deployHash || selector.deployHash || null;
+    const resolvedDeployHash =
+      kbSnapshot?.deployHash || selector.deployHash || null;
     const shouldResolveDeployment = Boolean(
       resolvedDeployHash ||
-        selector.kbSnapshotId ||
-        selector.knowledgeBaseId ||
-        selector.bridgeProjectId,
+      selector.kbSnapshotId ||
+      selector.knowledgeBaseId ||
+      selector.bridgeProjectId,
     );
     const deployment = shouldResolveDeployment
       ? await this.resolveDeploymentForScope(

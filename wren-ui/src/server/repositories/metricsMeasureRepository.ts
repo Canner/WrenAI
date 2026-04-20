@@ -9,8 +9,7 @@ export interface MetricMeasure {
   granularity?: string; // Granularity for the measure, eg: "day", "hour", "minute", "year"
 }
 
-export interface IMetricMeasureRepository
-  extends IBasicRepository<MetricMeasure> {}
+export interface IMetricMeasureRepository extends IBasicRepository<MetricMeasure> {}
 
 export class MetricMeasureRepository
   extends BaseRepository<MetricMeasure>

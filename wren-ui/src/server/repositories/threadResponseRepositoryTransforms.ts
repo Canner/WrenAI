@@ -22,9 +22,9 @@ export const hasCanonicalThreadResponseScope = (
 ) =>
   Boolean(
     scope.workspaceId ||
-      scope.knowledgeBaseId ||
-      scope.kbSnapshotId ||
-      scope.deployHash,
+    scope.knowledgeBaseId ||
+    scope.kbSnapshotId ||
+    scope.deployHash,
   );
 
 export const transformJoinedThreadResponses = (

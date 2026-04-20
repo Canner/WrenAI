@@ -41,8 +41,7 @@ export interface SkillDefinition {
   createdBy?: string | null;
 }
 
-export interface ISkillDefinitionRepository
-  extends IBasicRepository<SkillDefinition> {
+export interface ISkillDefinitionRepository extends IBasicRepository<SkillDefinition> {
   listAvailableSkillsByWorkspace(
     workspaceId: string,
     queryOptions?: IQueryOptions,

@@ -53,14 +53,16 @@ export function useKnowledgeWorkbenchKnowledgeState<
       return [] as TKnowledgeBase[];
     }
 
-    return (runtimeSelectorState?.knowledgeBases || []).map((knowledgeBase) => ({
-      id: knowledgeBase.id,
-      workspaceId: currentWorkspace.id,
-      slug: knowledgeBase.slug,
-      name: knowledgeBase.name,
-      defaultKbSnapshotId: knowledgeBase.defaultKbSnapshotId || null,
-      assetCount: knowledgeBase.assetCount ?? 0,
-    })) as TKnowledgeBase[];
+    return (runtimeSelectorState?.knowledgeBases || []).map(
+      (knowledgeBase) => ({
+        id: knowledgeBase.id,
+        workspaceId: currentWorkspace.id,
+        slug: knowledgeBase.slug,
+        name: knowledgeBase.name,
+        defaultKbSnapshotId: knowledgeBase.defaultKbSnapshotId || null,
+        assetCount: knowledgeBase.assetCount ?? 0,
+      }),
+    ) as TKnowledgeBase[];
   }, [
     currentWorkspace?.id,
     effectiveRuntimeSelector.workspaceId,

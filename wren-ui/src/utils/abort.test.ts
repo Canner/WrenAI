@@ -1,7 +1,4 @@
-import {
-  isAbortRequestError,
-  resolveAbortSafeErrorMessage,
-} from './abort';
+import { isAbortRequestError, resolveAbortSafeErrorMessage } from './abort';
 
 describe('abort utils', () => {
   it('detects serialized abort errors', () => {

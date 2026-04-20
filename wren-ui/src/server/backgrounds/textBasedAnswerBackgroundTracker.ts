@@ -288,7 +288,7 @@ export class TextBasedAnswerBackgroundTracker {
 
   private async persistStreamingAnswer({
     threadResponse,
-    runtimeIdentity,
+    runtimeIdentity: _runtimeIdentity,
     queryId,
   }: {
     threadResponse: ThreadResponse;

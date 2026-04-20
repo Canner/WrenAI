@@ -25,16 +25,15 @@ export const resolveKnowledgeEffectiveRuntimeSelector = ({
   return {
     workspaceId:
       routeRuntimeSelector.workspaceId || currentWorkspaceId || undefined,
-    knowledgeBaseId: routeKnowledgeBaseId || currentKnowledgeBaseId || undefined,
+    knowledgeBaseId:
+      routeKnowledgeBaseId || currentKnowledgeBaseId || undefined,
     kbSnapshotId:
       routeRuntimeSelector.kbSnapshotId ||
       (shouldReuseCurrentSnapshot ? currentKbSnapshotId : undefined) ||
       undefined,
     deployHash:
       routeRuntimeSelector.deployHash ||
-      (shouldReuseCurrentSnapshot
-        ? currentKbSnapshotDeployHash
-        : undefined) ||
+      (shouldReuseCurrentSnapshot ? currentKbSnapshotDeployHash : undefined) ||
       undefined,
     runtimeScopeId: routeRuntimeSelector.runtimeScopeId || undefined,
   };

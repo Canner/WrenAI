@@ -36,8 +36,7 @@ jest.mock('@/hooks/useRuntimeScopeNavigation', () => ({
 }));
 
 jest.mock('@/utils/modelingRest', () => ({
-  listConnectionTables: (...args: any[]) =>
-    mockListConnectionTables(...args),
+  listConnectionTables: (...args: any[]) => mockListConnectionTables(...args),
 }));
 
 jest.mock('@/components/PageLoading', () => ({

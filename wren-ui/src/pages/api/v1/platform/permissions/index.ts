@@ -85,7 +85,8 @@ export default async function handler(
       });
 
       const catalog = await listPlatformRoleCatalog(deps);
-      const role = catalog.roles.find((item) => item.id === createdRole.id) || null;
+      const role =
+        catalog.roles.find((item) => item.id === createdRole.id) || null;
 
       return res.status(201).json({
         role,

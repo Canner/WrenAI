@@ -192,8 +192,7 @@ const handleUpdateModel = async (
 
   const sourceTableColumns =
     findConnectionTableByNameSupport(sourceTableName, connectionTables)
-      ?.columns ??
-    [];
+      ?.columns ?? [];
   const { toDeleteColumnIds, toCreateColumns, toUpdateColumns } =
     findColumnsToUpdate(fields, existingColumns, sourceTableColumns);
   await updateModelPrimaryKey(ctx.modelColumnRepository, model.id, primaryKey);

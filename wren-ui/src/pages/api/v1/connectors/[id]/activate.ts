@@ -105,7 +105,10 @@ export default async function handler(
       runtimeScope,
       apiType: ApiType.UPDATE_CONNECTOR,
       startTime,
-      requestPayload: { id: connectorId, operation: 'activate_connector_runtime' },
+      requestPayload: {
+        id: connectorId,
+        operation: 'activate_connector_runtime',
+      },
       headers: req.headers as Record<string, string>,
     });
   } catch (error) {

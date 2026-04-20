@@ -135,9 +135,9 @@ export class AskingTaskRepository
   private hasCanonicalRuntimeScope(scope: AskingTaskRuntimeScope) {
     return Boolean(
       scope.workspaceId ||
-        scope.knowledgeBaseId ||
-        scope.kbSnapshotId ||
-        scope.deployHash,
+      scope.knowledgeBaseId ||
+      scope.kbSnapshotId ||
+      scope.deployHash,
     );
   }
 

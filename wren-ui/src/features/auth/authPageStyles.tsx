@@ -9,7 +9,8 @@ export const Page = styled.main`
   align-items: center;
   justify-content: center;
   padding: clamp(20px, 4vw, 32px);
-  background: radial-gradient(
+  background:
+    radial-gradient(
       circle at 22% 42%,
       rgba(123, 85, 232, 0.06),
       transparent 28%

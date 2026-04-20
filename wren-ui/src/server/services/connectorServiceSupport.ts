@@ -200,10 +200,10 @@ export const resolveConnectorTestTarget = async ({
   });
 
   const config = Object.prototype.hasOwnProperty.call(input, 'config')
-    ? input.config ?? null
-    : persistedConnector?.configJson ?? null;
+    ? (input.config ?? null)
+    : (persistedConnector?.configJson ?? null);
   const secret = Object.prototype.hasOwnProperty.call(input, 'secret')
-    ? input.secret ?? null
+    ? (input.secret ?? null)
     : persistedSecret;
 
   return {

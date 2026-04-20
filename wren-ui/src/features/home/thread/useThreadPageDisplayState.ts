@@ -103,7 +103,8 @@ export function useThreadPageDisplayState({
 
   const latestResponse = responses[responses.length - 1] || null;
   const shouldUseReferencePreview =
-    shouldForceReferencePreview && !hasReferenceRenderableResponse(latestResponse);
+    shouldForceReferencePreview &&
+    !hasReferenceRenderableResponse(latestResponse);
 
   const primaryQuestion = shouldUseReferencePreview
     ? responses[0]?.question ||

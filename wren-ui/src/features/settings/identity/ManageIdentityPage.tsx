@@ -45,7 +45,7 @@ export default function SettingsIdentityPage() {
   const permissionActions = workspaceOverview?.permissions?.actions || {};
   const canManageIdentity = Boolean(
     permissionActions['identity_provider.manage'] ||
-      permissionActions['group.manage'],
+    permissionActions['group.manage'],
   );
   const shellProps = buildSettingsConsoleShellProps({
     activeKey: 'settingsIdentity',

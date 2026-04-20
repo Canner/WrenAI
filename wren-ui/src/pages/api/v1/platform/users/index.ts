@@ -62,19 +62,20 @@ export default async function handler(
       action: 'platform.user.read',
     });
 
-    const [users, workspaces, memberships, platformRoleData] = await Promise.all([
-      components.userRepository.findAll({
-        order: 'display_name asc, email asc',
-      }),
-      components.workspaceRepository.findAllBy(
-        { status: 'active' },
-        { order: 'name asc' },
-      ),
-      components.workspaceMemberRepository.findAll({
-        order: 'workspace_id asc, created_at asc',
-      }),
-      listPlatformRoleAssignments(),
-    ]);
+    const [users, workspaces, memberships, platformRoleData] =
+      await Promise.all([
+        components.userRepository.findAll({
+          order: 'display_name asc, email asc',
+        }),
+        components.workspaceRepository.findAllBy(
+          { status: 'active' },
+          { order: 'name asc' },
+        ),
+        components.workspaceMemberRepository.findAll({
+          order: 'workspace_id asc, created_at asc',
+        }),
+        listPlatformRoleAssignments(),
+      ]);
 
     const workspaceById = new Map(
       workspaces.map((workspace) => [workspace.id, workspace]),
@@ -95,7 +96,8 @@ export default async function handler(
           user,
           memberships: membershipsByUserId.get(user.id) || [],
           workspaceById,
-          platformRoles: platformRoleData.platformRolesByUserId.get(user.id) || [],
+          platformRoles:
+            platformRoleData.platformRolesByUserId.get(user.id) || [],
           platformAdminFallbackRole: platformRoleData.platformAdminRole,
         }),
       ),

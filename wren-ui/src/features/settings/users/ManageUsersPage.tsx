@@ -40,7 +40,7 @@ export default function ManageUsersPage() {
   const permissionActions = workspaceOverview?.permissions?.actions || {};
   const canManageMembers = Boolean(
     permissionActions['workspace.member.invite'] ||
-      permissionActions['workspace.member.status.update'],
+    permissionActions['workspace.member.status.update'],
   );
 
   const handleInviteMember = async () => {

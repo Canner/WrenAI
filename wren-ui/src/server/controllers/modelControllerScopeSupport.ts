@@ -257,23 +257,23 @@ export const buildExecutionRuntimeIdentity = (
 
   return normalizeCanonicalPersistedRuntimeIdentity({
     projectId: hasField('projectId')
-      ? source?.projectId ?? null
-      : runtimeIdentity.projectId ?? null,
+      ? (source?.projectId ?? null)
+      : (runtimeIdentity.projectId ?? null),
     workspaceId: hasField('workspaceId')
-      ? source?.workspaceId ?? null
-      : runtimeIdentity.workspaceId ?? null,
+      ? (source?.workspaceId ?? null)
+      : (runtimeIdentity.workspaceId ?? null),
     knowledgeBaseId: hasField('knowledgeBaseId')
-      ? source?.knowledgeBaseId ?? null
-      : runtimeIdentity.knowledgeBaseId ?? null,
+      ? (source?.knowledgeBaseId ?? null)
+      : (runtimeIdentity.knowledgeBaseId ?? null),
     kbSnapshotId: hasField('kbSnapshotId')
-      ? source?.kbSnapshotId ?? null
-      : runtimeIdentity.kbSnapshotId ?? null,
+      ? (source?.kbSnapshotId ?? null)
+      : (runtimeIdentity.kbSnapshotId ?? null),
     deployHash: hasField('deployHash')
-      ? source?.deployHash ?? null
-      : runtimeIdentity.deployHash ?? null,
+      ? (source?.deployHash ?? null)
+      : (runtimeIdentity.deployHash ?? null),
     actorUserId: hasField('actorUserId')
-      ? source?.actorUserId ?? null
-      : runtimeIdentity.actorUserId ?? null,
+      ? (source?.actorUserId ?? null)
+      : (runtimeIdentity.actorUserId ?? null),
   });
 };
 

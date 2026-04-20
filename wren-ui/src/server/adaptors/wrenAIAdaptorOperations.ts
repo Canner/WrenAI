@@ -260,10 +260,10 @@ const transformRuntimeIdentityForOptional = (runtimeIdentity: any) => {
 
   const hasCanonicalRuntimeFields = Boolean(
     runtimeIdentity.workspaceId ||
-      runtimeIdentity.knowledgeBaseId ||
-      runtimeIdentity.kbSnapshotId ||
-      runtimeIdentity.deployHash ||
-      runtimeIdentity.actorUserId,
+    runtimeIdentity.knowledgeBaseId ||
+    runtimeIdentity.kbSnapshotId ||
+    runtimeIdentity.deployHash ||
+    runtimeIdentity.actorUserId,
   );
   const hasAnyRuntimeFields = Boolean(
     runtimeIdentity.projectId || hasCanonicalRuntimeFields,

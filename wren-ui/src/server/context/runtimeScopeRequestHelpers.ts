@@ -77,9 +77,9 @@ export const hasModernRuntimeScopeSelector = (
 ): boolean =>
   Boolean(
     selector.workspaceId ||
-      selector.knowledgeBaseId ||
-      selector.kbSnapshotId ||
-      selector.deployHash,
+    selector.knowledgeBaseId ||
+    selector.kbSnapshotId ||
+    selector.deployHash,
   );
 
 export const hasExplicitRuntimeScopeSelector = (

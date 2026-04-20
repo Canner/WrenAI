@@ -55,10 +55,7 @@ describe('modelRecommendation utils', () => {
         manifest: {
           catalog: 'demo',
           dataSource: 'MYSQL' as any,
-          models: [
-            { name: 'orders' },
-            { name: 'customers' },
-          ],
+          models: [{ name: 'orders' }, { name: 'customers' }],
           relationships: [
             {
               name: 'orders_customers',

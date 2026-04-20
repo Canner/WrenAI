@@ -39,7 +39,11 @@ export interface ExtraRelationInfo {
 export type RelationInfo = Relation & ExtraRelationInfo;
 export type RelationRuntimeScope = Pick<
   Relation,
-  'projectId' | 'workspaceId' | 'knowledgeBaseId' | 'kbSnapshotId' | 'deployHash'
+  | 'projectId'
+  | 'workspaceId'
+  | 'knowledgeBaseId'
+  | 'kbSnapshotId'
+  | 'deployHash'
 >;
 
 export interface IRelationRepository extends IBasicRepository<Relation> {
@@ -266,19 +270,16 @@ export class RelationRepository
         '=',
         'tmc.id',
       )
-      .whereRaw(
-        duplicateCondition,
-        [
-          fromModelId,
-          fromColumnId,
-          toModelId,
-          toColumnId,
-          toModelId,
-          toColumnId,
-          fromModelId,
-          fromColumnId,
-        ],
-      )
+      .whereRaw(duplicateCondition, [
+        fromModelId,
+        fromColumnId,
+        toModelId,
+        toColumnId,
+        toModelId,
+        toColumnId,
+        fromModelId,
+        fromColumnId,
+      ])
       .select(`${this.tableName}.*`);
     const result = await scopedQuery;
     return result.map((r) => this.transformFromDBData(r)) as RelationInfo[];

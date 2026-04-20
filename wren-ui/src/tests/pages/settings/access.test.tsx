@@ -109,6 +109,8 @@ describe('settings/access compatibility route', () => {
     expect(markup).toContain('调用诊断');
     expect(markup).toContain('系统任务');
     expect(markup).toContain('当前账号没有平台治理权限');
-    expect(markup).toContain('平台用户管理仅对具备平台用户目录权限的角色开放。');
+    expect(markup).toContain(
+      '平台用户管理仅对具备平台用户目录权限的角色开放。',
+    );
   });
 });

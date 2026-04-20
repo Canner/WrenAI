@@ -197,7 +197,7 @@ export const saveConnectionAction = async ({
   });
 
   return connectorResource
-    ? buildConnectionSettingsFromConnector({
+    ? (buildConnectionSettingsFromConnector({
         displayName: connectorResource.displayName,
         databaseProvider: connectorResource.databaseProvider,
         config: connectorResource.configJson,
@@ -207,7 +207,7 @@ export const saveConnectionAction = async ({
           displayName: project.displayName,
           ...ctx.projectService.getGeneralConnectionInfo(project),
         },
-      }
+      })
     : {
         type: project.type,
         properties: {
@@ -346,7 +346,7 @@ export const updateConnectionAction = async ({
   });
 
   return connectorResource
-    ? buildConnectionSettingsFromConnector({
+    ? (buildConnectionSettingsFromConnector({
         displayName: connectorResource.displayName,
         databaseProvider: connectorResource.databaseProvider,
         config: connectorResource.configJson,
@@ -356,7 +356,7 @@ export const updateConnectionAction = async ({
           displayName: updatedProject.displayName,
           ...ctx.projectService.getGeneralConnectionInfo(updatedProject),
         },
-      }
+      })
     : {
         type: updatedProject.type,
         properties: {

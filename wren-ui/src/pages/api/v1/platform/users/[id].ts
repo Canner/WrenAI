@@ -57,7 +57,9 @@ export default async function handler(
         patch.displayName = displayName;
       }
 
-      const explicitPlatformRoleIds = getPlatformRoleIds(req.body?.platformRoleIds);
+      const explicitPlatformRoleIds = getPlatformRoleIds(
+        req.body?.platformRoleIds,
+      );
       const shouldTogglePlatformAdmin =
         typeof req.body?.isPlatformAdmin === 'boolean';
       const shouldSyncPlatformRoles =
@@ -74,10 +76,11 @@ export default async function handler(
           { status: 'active' },
           { order: 'name asc' },
         );
-        const memberships = await components.workspaceMemberRepository.findAllBy(
-          { userId: id },
-          { order: 'created_at asc' },
-        );
+        const memberships =
+          await components.workspaceMemberRepository.findAllBy(
+            { userId: id },
+            { order: 'created_at asc' },
+          );
         const defaultWorkspaceId = getString(req.body?.defaultWorkspaceId);
         if (!defaultWorkspaceId) {
           patch.defaultWorkspaceId = null;
@@ -213,7 +216,9 @@ export default async function handler(
       user: buildPlatformUserRecord({
         user: refreshedUser,
         memberships,
-        workspaceById: new Map(workspaces.map((workspace) => [workspace.id, workspace])),
+        workspaceById: new Map(
+          workspaces.map((workspace) => [workspace.id, workspace]),
+        ),
         platformRoles: platformRoleData.platformRolesByUserId.get(id) || [],
         platformAdminFallbackRole: platformRoleData.platformAdminRole,
       }),

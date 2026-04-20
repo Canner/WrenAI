@@ -1,4 +1,7 @@
-import { AUTHORIZATION_ACTIONS, AuthorizationAction } from './permissionRegistry';
+import {
+  AUTHORIZATION_ACTIONS,
+  AuthorizationAction,
+} from './permissionRegistry';
 import { toLegacyWorkspaceRoleKey } from './roleMapping';
 
 const OWNER_ACTIONS: AuthorizationAction[] = [

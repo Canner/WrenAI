@@ -128,7 +128,12 @@ export default function useKnowledgeBaseSelection<
         window.cancelIdleCallback(idleCallbackId);
       }
     };
-  }, [cachedKnowledgeBases, hasRuntimeScope, knowledgeBasesUrl, loadKnowledgeBases]);
+  }, [
+    cachedKnowledgeBases,
+    hasRuntimeScope,
+    knowledgeBasesUrl,
+    loadKnowledgeBases,
+  ]);
 
   useEffect(() => {
     if (selectedKnowledgeBaseId) {

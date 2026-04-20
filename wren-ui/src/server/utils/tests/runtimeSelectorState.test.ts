@@ -93,29 +93,27 @@ describe('runtimeSelectorState', () => {
               ],
         ),
       ),
-      findOneBy: jest
-        .fn()
-        .mockImplementation(({ id }) =>
-          Promise.resolve(
-            id === 'snap-ready'
-              ? {
-                  id: 'snap-ready',
-                  knowledgeBaseId: 'kb-ready',
-                  snapshotKey: 'prod',
-                  displayName: 'Prod Snapshot',
-                  deployHash: 'deploy-ready',
-                  status: 'active',
-                }
-              : {
-                  id: 'snap-stale',
-                  knowledgeBaseId: 'kb-stale',
-                  snapshotKey: 'draft',
-                  displayName: 'Draft Snapshot',
-                  deployHash: 'deploy-stale',
-                  status: 'active',
-                },
-          ),
+      findOneBy: jest.fn().mockImplementation(({ id }) =>
+        Promise.resolve(
+          id === 'snap-ready'
+            ? {
+                id: 'snap-ready',
+                knowledgeBaseId: 'kb-ready',
+                snapshotKey: 'prod',
+                displayName: 'Prod Snapshot',
+                deployHash: 'deploy-ready',
+                status: 'active',
+              }
+            : {
+                id: 'snap-stale',
+                knowledgeBaseId: 'kb-stale',
+                snapshotKey: 'draft',
+                displayName: 'Draft Snapshot',
+                deployHash: 'deploy-stale',
+                status: 'active',
+              },
         ),
+      ),
     };
     const deployLogRepository = {
       findLastRuntimeDeployLog: jest

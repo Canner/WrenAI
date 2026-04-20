@@ -34,8 +34,7 @@ export interface KnowledgeBase {
   updatedAt?: Date | string | null;
 }
 
-export interface IKnowledgeBaseRepository
-  extends IBasicRepository<KnowledgeBase> {}
+export interface IKnowledgeBaseRepository extends IBasicRepository<KnowledgeBase> {}
 
 export class KnowledgeBaseRepository
   extends BaseRepository<KnowledgeBase>

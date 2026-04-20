@@ -78,10 +78,10 @@ export default function HomeThread() {
   const runtimeSelectorState = runtimeSelector.runtimeSelectorState;
   const selectorHasRuntime = Boolean(
     runtimeScopeNavigation.selector.deployHash ||
-      runtimeScopeNavigation.selector.kbSnapshotId ||
-      runtimeScopeNavigation.selector.runtimeScopeId ||
-      runtimeSelectorState?.currentKbSnapshot?.deployHash ||
-      runtimeSelectorState?.currentKbSnapshot?.id,
+    runtimeScopeNavigation.selector.kbSnapshotId ||
+    runtimeScopeNavigation.selector.runtimeScopeId ||
+    runtimeSelectorState?.currentKbSnapshot?.deployHash ||
+    runtimeSelectorState?.currentKbSnapshot?.id,
   );
   const hasExecutableRuntime = useMemo(() => {
     return hasLatestExecutableSnapshot({

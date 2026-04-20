@@ -74,8 +74,8 @@ export const isPlatformAdminActor = ({
 }) =>
   Boolean(
     actor.isPlatformAdmin ||
-      actor.platformRoleKeys.includes('platform_admin') ||
-      validatedSession?.user?.isPlatformAdmin,
+    actor.platformRoleKeys.includes('platform_admin') ||
+    validatedSession?.user?.isPlatformAdmin,
   );
 
 export const requirePlatformAdminContext = async (req: NextApiRequest) => {
@@ -357,7 +357,9 @@ export const listPlatformRoleAssignments = async () => {
   });
 
   const [roles, bindings] = await Promise.all([
-    components.roleRepository.findAll({ order: 'is_system desc, created_at asc' }),
+    components.roleRepository.findAll({
+      order: 'is_system desc, created_at asc',
+    }),
     components.principalRoleBindingRepository.findAllBy({
       scopeType: 'platform',
       scopeId: PLATFORM_SCOPE_ID,
@@ -386,29 +388,29 @@ export const listPlatformRoleAssignments = async () => {
     });
 
   const roleById = new Map(platformRoleCatalog.map((role) => [role.id, role]));
-  const platformRolesByUserId = bindings.reduce<Map<string, PlatformRoleOption[]>>(
-    (acc, binding) => {
-      if (binding.principalType !== 'user') {
-        return acc;
-      }
-      const role = roleById.get(binding.roleId);
-      if (!role) {
-        return acc;
-      }
-      const nextRoles = acc.get(binding.principalId) || [];
-      nextRoles.push(role);
-      acc.set(binding.principalId, nextRoles);
+  const platformRolesByUserId = bindings.reduce<
+    Map<string, PlatformRoleOption[]>
+  >((acc, binding) => {
+    if (binding.principalType !== 'user') {
       return acc;
-    },
-    new Map(),
-  );
+    }
+    const role = roleById.get(binding.roleId);
+    if (!role) {
+      return acc;
+    }
+    const nextRoles = acc.get(binding.principalId) || [];
+    nextRoles.push(role);
+    acc.set(binding.principalId, nextRoles);
+    return acc;
+  }, new Map());
 
   return {
     platformRoleCatalog,
     platformRolesByUserId,
     platformAdminRole:
-      platformRoleCatalog.find((role) => role.name === PLATFORM_ADMIN_ROLE_NAME) ||
-      null,
+      platformRoleCatalog.find(
+        (role) => role.name === PLATFORM_ADMIN_ROLE_NAME,
+      ) || null,
   };
 };
 
@@ -466,8 +468,9 @@ export const buildPlatformUserRecord = ({
         ? [platformAdminFallbackRole]
         : [];
   const isPlatformAdmin =
-    assignedPlatformRoles.some((role) => role.name === PLATFORM_ADMIN_ROLE_NAME) ||
-    Boolean(user.isPlatformAdmin);
+    assignedPlatformRoles.some(
+      (role) => role.name === PLATFORM_ADMIN_ROLE_NAME,
+    ) || Boolean(user.isPlatformAdmin);
 
   return {
     id: user.id,

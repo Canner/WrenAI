@@ -104,8 +104,8 @@ export default function useKnowledgeBaseMeta<
   );
   const activeKnowledgeBaseUsesRuntime = Boolean(
     activeKnowledgeBase?.id &&
-      activeKnowledgeBase.id === routeKnowledgeBaseId &&
-      routeKbSnapshotId,
+    activeKnowledgeBase.id === routeKnowledgeBaseId &&
+    routeKbSnapshotId,
   );
   const activeKnowledgeBaseExecutable = Boolean(
     activeKnowledgeBase?.defaultKbSnapshotId,

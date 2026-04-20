@@ -76,8 +76,8 @@ export default function useKnowledgeWorkbenchSectionRouting<
   useEffect(() => {
     const hasModelingIntent = Boolean(
       routerQuery.openModelDrawer ||
-        routerQuery.openMetadata ||
-        routerQuery.openRelationModal,
+      routerQuery.openMetadata ||
+      routerQuery.openRelationModal,
     );
 
     if (hasModelingIntent) {

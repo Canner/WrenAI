@@ -95,7 +95,10 @@ describe('settingsPageCapabilities', () => {
     };
 
     expect(
-      resolvePlatformActionFromAuthSession(authSession, 'platform.workspace.read'),
+      resolvePlatformActionFromAuthSession(
+        authSession,
+        'platform.workspace.read',
+      ),
     ).toBe(true);
     expect(
       resolvePlatformActionFromAuthSession(authSession, 'platform.user.read'),

@@ -108,7 +108,7 @@ export default function buildWorkspacePageDerivedState({
   const scimEnabledProviderCount = identityProviders.filter((provider) =>
     Boolean(
       provider.configJson?.hasScimBearerToken ||
-        provider.configJson?.scimBearerToken,
+      provider.configJson?.scimBearerToken,
     ),
   ).length;
   const accessReviews = data?.accessReviews || [];

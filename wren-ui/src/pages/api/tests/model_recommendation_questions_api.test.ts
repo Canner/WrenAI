@@ -22,7 +22,8 @@ class MockApiError extends Error {
 
 jest.mock('@server/controllers/modelController', () => ({
   ModelController: jest.fn().mockImplementation(() => ({
-    generateModelRecommendationQuestions: mockGenerateModelRecommendationQuestions,
+    generateModelRecommendationQuestions:
+      mockGenerateModelRecommendationQuestions,
     getModelRecommendationQuestions: mockGetModelRecommendationQuestions,
   })),
 }));

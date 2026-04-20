@@ -1,9 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
-import {
-  assertAuthorizedWithAudit,
-  recordAuditEvent,
-} from '@server/authz';
+import { assertAuthorizedWithAudit, recordAuditEvent } from '@server/authz';
 import {
   runScheduleJobNow,
   serializeScheduleJob,

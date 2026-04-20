@@ -62,8 +62,7 @@ export interface WorkspaceBootstrapServiceDependencies {
   wrenEngineAdaptor: IWrenEngineAdaptor;
 }
 
-export interface WorkspaceBootstrapRuntimeDeps
-  extends WorkspaceBootstrapServiceDependencies {
+export interface WorkspaceBootstrapRuntimeDeps extends WorkspaceBootstrapServiceDependencies {
   runtimeSeedJobs: Map<string, Promise<void>>;
   workspaceWarmupJobs: Map<string, Promise<void>>;
 }

@@ -94,8 +94,7 @@ export type ThreadResponseRuntimeScope = Pick<
   | 'deployHash'
 >;
 
-export interface IThreadResponseRepository
-  extends IBasicRepository<ThreadResponse> {
+export interface IThreadResponseRepository extends IBasicRepository<ThreadResponse> {
   getResponsesWithThread(
     threadId: number,
     limit?: number,

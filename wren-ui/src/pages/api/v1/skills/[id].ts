@@ -307,7 +307,7 @@ export default async function handler(
             ? ApiType.UPDATE_SKILL
             : ApiType.DELETE_SKILL,
       requestPayload:
-        req.method === 'DELETE' ? { id: req.query.id } : req.body ?? {},
+        req.method === 'DELETE' ? { id: req.query.id } : (req.body ?? {}),
       headers: req.headers as Record<string, string>,
       startTime,
       logger,

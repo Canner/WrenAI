@@ -110,9 +110,12 @@ export const generateModelRecommendationQuestions = async (
   selector: ClientRuntimeScopeSelector,
   modelId: number,
 ) => {
-  const response = await fetch(buildModelRecommendationQuestionsUrl(modelId, selector), {
-    method: 'POST',
-  });
+  const response = await fetch(
+    buildModelRecommendationQuestionsUrl(modelId, selector),
+    {
+      method: 'POST',
+    },
+  );
   return parseRestJsonResponse<DiagramModelRecommendation>(
     response,
     '生成建议问题失败，请稍后重试。',
@@ -124,10 +127,13 @@ export const fetchModelRecommendationQuestions = async (
   modelId: number,
   options: { signal?: AbortSignal } = {},
 ) => {
-  const response = await fetch(buildModelRecommendationQuestionsUrl(modelId, selector), {
-    cache: 'no-store',
-    signal: options.signal,
-  });
+  const response = await fetch(
+    buildModelRecommendationQuestionsUrl(modelId, selector),
+    {
+      cache: 'no-store',
+      signal: options.signal,
+    },
+  );
   return parseRestJsonResponse<DiagramModelRecommendation>(
     response,
     '加载建议问题失败，请稍后重试。',

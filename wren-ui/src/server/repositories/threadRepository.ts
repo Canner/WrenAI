@@ -134,18 +134,18 @@ export class ThreadRepository
   private hasCanonicalScope(scope: ThreadRuntimeScope) {
     return Boolean(
       scope.workspaceId ||
-        scope.knowledgeBaseId ||
-        scope.kbSnapshotId ||
-        scope.deployHash,
+      scope.knowledgeBaseId ||
+      scope.kbSnapshotId ||
+      scope.deployHash,
     );
   }
 
   private isWorkspaceWideScope(scope: ThreadRuntimeScope) {
     return Boolean(
       scope.workspaceId &&
-        !scope.knowledgeBaseId &&
-        !scope.kbSnapshotId &&
-        !scope.deployHash,
+      !scope.knowledgeBaseId &&
+      !scope.kbSnapshotId &&
+      !scope.deployHash,
     );
   }
 

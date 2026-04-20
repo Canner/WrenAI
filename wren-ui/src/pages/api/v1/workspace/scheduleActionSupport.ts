@@ -58,7 +58,9 @@ const syncDashboardScheduleJob = async ({
   data,
 }: {
   runtimeIdentity: PersistedRuntimeIdentity;
-  scheduleJob: Awaited<ReturnType<typeof components.scheduleJobRepository.findOneBy>>;
+  scheduleJob: Awaited<
+    ReturnType<typeof components.scheduleJobRepository.findOneBy>
+  >;
   data: SetDashboardCacheData;
 }) => {
   if (!scheduleJob) {
@@ -120,7 +122,9 @@ export const disableDashboardScheduleJob = async ({
   scheduleJob,
 }: {
   runtimeIdentity: PersistedRuntimeIdentity;
-  scheduleJob: Awaited<ReturnType<typeof components.scheduleJobRepository.findOneBy>>;
+  scheduleJob: Awaited<
+    ReturnType<typeof components.scheduleJobRepository.findOneBy>
+  >;
 }) =>
   await syncDashboardScheduleJob({
     runtimeIdentity,
@@ -144,7 +148,9 @@ export const updateDashboardScheduleJob = async ({
   body,
 }: {
   runtimeIdentity: PersistedRuntimeIdentity;
-  scheduleJob: Awaited<ReturnType<typeof components.scheduleJobRepository.findOneBy>>;
+  scheduleJob: Awaited<
+    ReturnType<typeof components.scheduleJobRepository.findOneBy>
+  >;
   body: Record<string, any>;
 }) => {
   const data = body?.data as SetDashboardCacheData | undefined;
@@ -175,7 +181,9 @@ export const runScheduleJobNow = async ({
   scheduleJob,
 }: {
   id: string;
-  scheduleJob: Awaited<ReturnType<typeof components.scheduleJobRepository.findOneBy>>;
+  scheduleJob: Awaited<
+    ReturnType<typeof components.scheduleJobRepository.findOneBy>
+  >;
 }) => {
   if (!scheduleJob) {
     throw new Error('Schedule job not found');

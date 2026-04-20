@@ -20,8 +20,7 @@ export interface DashboardItemRefreshJob {
   updatedAt: Date;
 }
 
-export interface IDashboardItemRefreshJobRepository
-  extends IBasicRepository<DashboardItemRefreshJob> {}
+export interface IDashboardItemRefreshJobRepository extends IBasicRepository<DashboardItemRefreshJob> {}
 
 export class DashboardItemRefreshJobRepository
   extends BaseRepository<DashboardItemRefreshJob>

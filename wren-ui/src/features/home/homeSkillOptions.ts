@@ -159,6 +159,6 @@ export const shouldLoadHomeSkillOptions = ({
 }) =>
   Boolean(
     workspaceId &&
-      hasExecutableRuntime &&
-      (skillPickerOpen || selectedSkillCount > 0),
+    hasExecutableRuntime &&
+    (skillPickerOpen || selectedSkillCount > 0),
   );

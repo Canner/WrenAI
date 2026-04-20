@@ -35,8 +35,7 @@ export interface PrincipalRoleBindingScope {
   scopeId: string;
 }
 
-export interface IPrincipalRoleBindingRepository
-  extends IBasicRepository<PrincipalRoleBinding> {
+export interface IPrincipalRoleBindingRepository extends IBasicRepository<PrincipalRoleBinding> {
   findResolvedRoleBindings(
     scope: PrincipalRoleBindingScope,
     queryOptions?: IQueryOptions,

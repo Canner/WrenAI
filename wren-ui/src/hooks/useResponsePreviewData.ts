@@ -165,7 +165,10 @@ export default function useResponsePreviewData(responseId?: number | null) {
           target.loading = false;
           target.promise = undefined;
           target.lastAccessedAt = Date.now();
-          if (isAbortRequestError(error) || isAbortRequestError(normalizedError)) {
+          if (
+            isAbortRequestError(error) ||
+            isAbortRequestError(normalizedError)
+          ) {
             target.error = undefined;
             emit(cacheKey);
             return undefined;

@@ -241,7 +241,8 @@ export const ensureTrackedAskingTaskPersisted = async (
   if (!service.askingTaskRepository) {
     return;
   }
-  const existingTask = await service.askingTaskRepository.findByQueryId(queryId);
+  const existingTask =
+    await service.askingTaskRepository.findByQueryId(queryId);
   if (existingTask) {
     return;
   }

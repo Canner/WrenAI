@@ -158,13 +158,17 @@ const getFreshRuntimeSelectorStateEntry = (
   requestUrl: string,
 ): TimedCacheEntry | null => {
   const inMemoryEntry = runtimeSelectorStateCache.get(requestUrl) || null;
-  const cachedEntry = inMemoryEntry || readStoredRuntimeSelectorState(requestUrl);
+  const cachedEntry =
+    inMemoryEntry || readStoredRuntimeSelectorState(requestUrl);
 
   if (!cachedEntry) {
     return null;
   }
 
-  if (Date.now() - cachedEntry.updatedAt > RUNTIME_SELECTOR_STATE_CACHE_TTL_MS) {
+  if (
+    Date.now() - cachedEntry.updatedAt >
+    RUNTIME_SELECTOR_STATE_CACHE_TTL_MS
+  ) {
     runtimeSelectorStateCache.delete(requestUrl);
     clearStoredRuntimeSelectorState(requestUrl);
     return null;
@@ -263,7 +267,10 @@ export const fetchRuntimeSelectorState = async ({
     return pendingRequest;
   }
 
-  const request = fetch(requestUrl, buildRuntimeSelectorRequestOptions({ signal }))
+  const request = fetch(
+    requestUrl,
+    buildRuntimeSelectorRequestOptions({ signal }),
+  )
     .then((response) =>
       parseRestJsonResponse<RuntimeSelectorState | null>(
         response,

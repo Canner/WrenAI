@@ -161,7 +161,7 @@ export class ConnectorService implements IConnectorService {
         input,
         'knowledgeBaseId',
       )
-        ? input.knowledgeBaseId ?? null
+        ? (input.knowledgeBaseId ?? null)
         : previousKnowledgeBaseId;
       const normalizedInput = normalizeConnectorInput({
         type: input.type ?? connector.type,
@@ -471,7 +471,9 @@ export class ConnectorService implements IConnectorService {
     workspaceId: string,
     allWorkspaceConnectors: Connector[],
   ): Promise<Connector[]> {
-    const workspace = await this.workspaceRepository.findOneBy({ id: workspaceId });
+    const workspace = await this.workspaceRepository.findOneBy({
+      id: workspaceId,
+    });
     if (!workspace || workspace.kind === 'default') {
       return [];
     }
@@ -516,8 +518,9 @@ export class ConnectorService implements IConnectorService {
 
     for (const connectorId of legacyPrimaryConnectorIds) {
       const legacyConnector =
-        allWorkspaceConnectors.find((connector) => connector.id === connectorId) ||
-        (await this.getConnectorById(connectorId));
+        allWorkspaceConnectors.find(
+          (connector) => connector.id === connectorId,
+        ) || (await this.getConnectorById(connectorId));
       if (
         !legacyConnector ||
         legacyConnector.workspaceId !== workspaceId ||

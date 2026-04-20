@@ -401,10 +401,10 @@ export const hasCanonicalRuntimeIdentity = (
 ) =>
   Boolean(
     runtimeIdentity.workspaceId ||
-      runtimeIdentity.knowledgeBaseId ||
-      runtimeIdentity.kbSnapshotId ||
-      runtimeIdentity.deployHash ||
-      runtimeIdentity.actorUserId,
+    runtimeIdentity.knowledgeBaseId ||
+    runtimeIdentity.kbSnapshotId ||
+    runtimeIdentity.deployHash ||
+    runtimeIdentity.actorUserId,
   );
 
 export const describeRuntimeIdentity = (runtimeIdentity: Record<string, any>) =>

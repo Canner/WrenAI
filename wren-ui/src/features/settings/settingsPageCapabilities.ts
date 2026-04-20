@@ -31,8 +31,8 @@ export const canShowPlatformManagement = ({
 }: PlatformManagementCapabilityInput) =>
   Boolean(
     (platformRoleKeys?.length || 0) > 0 ||
-      actorIsPlatformAdmin ||
-      sessionIsPlatformAdmin,
+    actorIsPlatformAdmin ||
+    sessionIsPlatformAdmin,
   );
 
 export const resolvePlatformManagementFromAuthSession = (
@@ -61,7 +61,7 @@ export const resolvePlatformActionFromAuthSession = (
 
   return Boolean(
     authSession?.authorization?.actor?.grantedActions?.includes(action) ||
-      authSession?.authorization?.actions?.[action],
+    authSession?.authorization?.actions?.[action],
   );
 };
 

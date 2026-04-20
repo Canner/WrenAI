@@ -270,9 +270,8 @@ export const loadScheduleOverviewPayload = async ({
 
   const jobIds = jobViews.map((job) => job.id);
   const jobIdSet = new Set(jobIds);
-  const runRows = await components.scheduleJobRunRepository.findAllByScheduleJobIds(
-    jobIds,
-  );
+  const runRows =
+    await components.scheduleJobRunRepository.findAllByScheduleJobIds(jobIds);
   const recentRuns = sortRuns(
     runRows
       .filter((run) => jobIdSet.has(run.scheduleJobId))
@@ -283,8 +282,7 @@ export const loadScheduleOverviewPayload = async ({
           scheduleJobId: run.scheduleJobId,
           targetType: job?.targetType || 'unknown',
           targetTypeLabel:
-            job?.targetTypeLabel ||
-            getScheduleTargetTypeLabel(job?.targetType),
+            job?.targetTypeLabel || getScheduleTargetTypeLabel(job?.targetType),
           targetName: job?.targetName || `任务 #${run.scheduleJobId}`,
           status: run.status,
           startedAt: run.startedAt || null,

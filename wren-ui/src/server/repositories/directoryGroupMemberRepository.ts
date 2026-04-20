@@ -15,8 +15,7 @@ export interface DirectoryGroupMember {
   updatedAt?: Date | string | null;
 }
 
-export interface IDirectoryGroupMemberRepository
-  extends IBasicRepository<DirectoryGroupMember> {
+export interface IDirectoryGroupMemberRepository extends IBasicRepository<DirectoryGroupMember> {
   findAllByUser(
     workspaceId: string,
     userId: string,

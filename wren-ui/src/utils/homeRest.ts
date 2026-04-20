@@ -101,8 +101,7 @@ const writeStoredSuggestedQuestions = (
 
 const getFreshSuggestedQuestionsPayload = (requestUrl: string) => {
   const inMemoryEntry = suggestedQuestionsCache.get(requestUrl) || null;
-  const cachedEntry =
-    inMemoryEntry || readStoredSuggestedQuestions(requestUrl);
+  const cachedEntry = inMemoryEntry || readStoredSuggestedQuestions(requestUrl);
   if (!cachedEntry) {
     return null;
   }

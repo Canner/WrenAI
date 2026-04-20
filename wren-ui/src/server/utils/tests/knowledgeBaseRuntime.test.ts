@@ -44,31 +44,29 @@ describe('knowledgeBaseRuntime', () => {
       updateOne: jest.fn(),
     };
     const modelRepository = {
-      findAllBy: jest
-        .fn()
-        .mockImplementation(async (filter) =>
-          'projectId' in filter
-            ? [
-                {
-                  id: 101,
-                  projectId: 77,
-                  workspaceId: null,
-                  knowledgeBaseId: null,
-                  kbSnapshotId: null,
-                  deployHash: null,
-                },
-              ]
-            : [
-                {
-                  id: 102,
-                  projectId: null,
-                  workspaceId: 'ws-1',
-                  knowledgeBaseId: 'kb-1',
-                  kbSnapshotId: 'snap-old',
-                  deployHash: 'deploy-old',
-                },
-              ],
-        ),
+      findAllBy: jest.fn().mockImplementation(async (filter) =>
+        'projectId' in filter
+          ? [
+              {
+                id: 101,
+                projectId: 77,
+                workspaceId: null,
+                knowledgeBaseId: null,
+                kbSnapshotId: null,
+                deployHash: null,
+              },
+            ]
+          : [
+              {
+                id: 102,
+                projectId: null,
+                workspaceId: 'ws-1',
+                knowledgeBaseId: 'kb-1',
+                kbSnapshotId: 'snap-old',
+                deployHash: 'deploy-old',
+              },
+            ],
+      ),
       updateOne: jest.fn(),
     };
     const relationRepository = {

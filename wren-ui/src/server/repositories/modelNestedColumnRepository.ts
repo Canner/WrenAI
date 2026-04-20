@@ -20,8 +20,7 @@ export interface ModelNestedColumn {
   properties?: Record<string, any>; // Nested column properties, a json string, the description should be stored here
 }
 
-export interface IModelNestedColumnRepository
-  extends IBasicRepository<ModelNestedColumn> {
+export interface IModelNestedColumnRepository extends IBasicRepository<ModelNestedColumn> {
   findNestedColumnsByModelIds(modelIds: number[]): Promise<ModelNestedColumn[]>;
   findNestedColumnsByIds(ids: number[]): Promise<ModelNestedColumn[]>;
 }

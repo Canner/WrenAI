@@ -96,7 +96,10 @@ const buildRecommendationConfig = ({
   project: { language?: string | null };
 }) => ({
   configuration: {
-    language: resolveProjectLanguage(project as any, ctx.runtimeScope?.knowledgeBase),
+    language: resolveProjectLanguage(
+      project as any,
+      ctx.runtimeScope?.knowledgeBase,
+    ),
   },
   maxCategories: config.projectRecommendationQuestionMaxCategories,
   maxQuestions: config.projectRecommendationQuestionsMaxQuestions,
@@ -137,7 +140,9 @@ export const generateModelRecommendationQuestionsAction = async ({
   const response = await ctx.wrenAIAdaptor.generateRecommendationQuestions({
     manifest,
     runtimeScopeId: ctx.runtimeScope?.selector?.runtimeScopeId || undefined,
-    runtimeIdentity: toAskRuntimeIdentity(executionContext.runtimeIdentity as any),
+    runtimeIdentity: toAskRuntimeIdentity(
+      executionContext.runtimeIdentity as any,
+    ),
     previousQuestions: [],
     ...buildRecommendationConfig({
       ctx,
@@ -185,10 +190,7 @@ export const getModelRecommendationQuestionsAction = async ({
   let model = await deps.ensureModelScope(ctx, modelId);
   let recommendation = readModelRecommendationState(model.properties);
 
-  if (
-    recommendation.status === 'GENERATING' &&
-    recommendation.queryId
-  ) {
+  if (recommendation.status === 'GENERATING' && recommendation.queryId) {
     const result = await ctx.wrenAIAdaptor.getRecommendationQuestionsResult(
       recommendation.queryId,
     );

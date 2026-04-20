@@ -87,7 +87,7 @@ export const resolveAskRuntimeAvailability = ({
     null;
   const switchingKnowledgeBase = Boolean(
     primaryKnowledgeBaseId &&
-      primaryKnowledgeBaseId !== currentSelector.knowledgeBaseId,
+    primaryKnowledgeBaseId !== currentSelector.knowledgeBaseId,
   );
 
   if (switchingKnowledgeBase) {
@@ -99,9 +99,9 @@ export const resolveAskRuntimeAvailability = ({
 
   const selectorHasRuntime = Boolean(
     currentSelector.deployHash ||
-      currentSelector.kbSnapshotId ||
-      currentKbSnapshot?.deployHash ||
-      currentKbSnapshot?.id,
+    currentSelector.kbSnapshotId ||
+    currentKbSnapshot?.deployHash ||
+    currentKbSnapshot?.id,
   );
 
   return {

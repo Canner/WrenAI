@@ -24,8 +24,7 @@ export interface AuthIdentity {
   updatedAt?: Date | string | null;
 }
 
-export interface IAuthIdentityRepository
-  extends IBasicRepository<AuthIdentity> {}
+export interface IAuthIdentityRepository extends IBasicRepository<AuthIdentity> {}
 
 export class AuthIdentityRepository
   extends BaseRepository<AuthIdentity>
