@@ -1,12 +1,11 @@
 import clsx from 'clsx';
-import { Button, Mentions, Typography } from 'antd';
+import { Button, Form, Mentions, Typography } from 'antd';
 import styled from 'styled-components';
-import { useState, useContext, useRef, type ComponentProps } from 'react';
+import { useState, useRef, type ComponentProps } from 'react';
 import ReadOutlined from '@ant-design/icons/ReadOutlined';
 import EditOutlined from '@ant-design/icons/EditOutlined';
 import { nextTick } from '@/utils/time';
 import { Mention } from '@/hooks/useAutoComplete';
-import { FormItemInputContext } from 'antd/lib/form/context';
 import MarkdownBlock from './MarkdownBlock';
 
 const Wrapper = styled.div`
@@ -102,8 +101,7 @@ export default function MarkdownEditor(props: Props) {
   const [focused, setFocused] = useState<boolean>(false);
   const [isPreviewMode, setIsPreviewMode] = useState<boolean>(false);
 
-  const formItemContext = useContext(FormItemInputContext);
-  const { status } = formItemContext;
+  const { status } = Form.Item.useStatus();
 
   const change = (targetValue: string) => {
     onChange?.(targetValue);

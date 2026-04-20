@@ -1,10 +1,6 @@
-import { forwardRef, useContext, useState } from 'react';
+import { forwardRef, useState } from 'react';
 import styled from 'styled-components';
-import { Collapse, Row, RowProps, Table, TableProps } from 'antd';
-import {
-  FormItemInputContext,
-  FormItemStatusContextProps,
-} from 'antd/lib/form/context';
+import { Collapse, Form, Row, RowProps, Table, TableProps } from 'antd';
 
 const { Panel } = Collapse;
 
@@ -86,9 +82,7 @@ function SelectionTable<T extends Record<string, any>>(
     tableTitle,
   } = props;
 
-  const formItemContext =
-    useContext<FormItemStatusContextProps>(FormItemInputContext);
-  const { status } = formItemContext;
+  const { status } = Form.Item.useStatus();
 
   const collapseState = useCollapseState(tableTitle);
 
