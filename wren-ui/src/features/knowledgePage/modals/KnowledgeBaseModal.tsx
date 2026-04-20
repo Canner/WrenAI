@@ -50,8 +50,8 @@ function KnowledgeBaseModal({
       closable={false}
       onCancel={onCancel}
       width={728}
-      maskStyle={REFERENCE_MODAL_MASK_STYLE}
-      destroyOnClose
+      styles={{ mask: REFERENCE_MODAL_MASK_STYLE }}
+      destroyOnHidden
     >
       <ModalPanel>
         <ModalHeader>

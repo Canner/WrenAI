@@ -48,7 +48,7 @@ export default function ConnectorEditorModal({
       title={editingConnector ? '编辑连接器' : '添加连接器'}
       open={open}
       onCancel={onCancel}
-      destroyOnClose
+      destroyOnHidden
       footer={[
         <Button
           key="cancel"

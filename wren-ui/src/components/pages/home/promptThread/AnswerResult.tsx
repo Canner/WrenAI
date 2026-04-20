@@ -230,10 +230,7 @@ export default function AnswerResult(props: Props) {
       }),
     [isBreakdownOnly, askingTask, adjustmentTask, answerDetail, sql],
   );
-  const autoGenerateRequestKey = useMemo(
-    () => `${id}:${sql || ''}`,
-    [id, sql],
-  );
+  const autoGenerateRequestKey = useMemo(() => `${id}:${sql || ''}`, [id, sql]);
   const autoGenerateRequestRef = useRef<string | null>(null);
 
   // initialize generate answer
@@ -281,6 +278,45 @@ export default function AnswerResult(props: Props) {
     return rephrasedQuestion;
   }, [rephrasedQuestion, question, isOpeningQuestion]);
 
+  const answerTabItems = [
+    ...(!isBreakdownOnly
+      ? [
+          {
+            key: ANSWER_TAB_KEYS.ANSWER,
+            label: (
+              <div className="select-none">
+                <CheckCircleFilled className="mr-2" />
+                <Text>回答</Text>
+              </div>
+            ),
+            children: <TextBasedAnswer {...props} />,
+          },
+        ]
+      : []),
+    {
+      key: ANSWER_TAB_KEYS.VIEW_SQL,
+      label: (
+        <div className="select-none">
+          <CodeFilled className="mr-2" />
+          <Text>SQL 查询</Text>
+        </div>
+      ),
+      children: <ViewSQLTabContent {...props} />,
+    },
+    {
+      key: 'chart',
+      label: (
+        <div className="select-none">
+          <PieChartFilled className="mr-2" />
+          <Text>
+            图表<Tag className="adm-beta-tag">测试版</Tag>
+          </Text>
+        </div>
+      ),
+      children: <ChartAnswer {...props} />,
+    },
+  ];
+
   return (
     <div style={resultStyle} data-jsid="answerResult">
       {isAdjustment && <AdjustmentInformation adjustment={adjustment} />}
@@ -293,45 +329,12 @@ export default function AnswerResult(props: Props) {
       />
       {showAnswerTabs && (
         <>
-          <StyledTabs type="card" size="small" onTabClick={onTabClick}>
-            {!isBreakdownOnly && (
-              <Tabs.TabPane
-                key={ANSWER_TAB_KEYS.ANSWER}
-                tab={
-                  <div className="select-none">
-                    <CheckCircleFilled className="mr-2" />
-                    <Text>回答</Text>
-                  </div>
-                }
-              >
-                <TextBasedAnswer {...props} />
-              </Tabs.TabPane>
-            )}
-            <Tabs.TabPane
-              key={ANSWER_TAB_KEYS.VIEW_SQL}
-              tab={
-                <div className="select-none">
-                  <CodeFilled className="mr-2" />
-                  <Text>SQL 查询</Text>
-                </div>
-              }
-            >
-              <ViewSQLTabContent {...props} />
-            </Tabs.TabPane>
-            <Tabs.TabPane
-              key="chart"
-              tab={
-                <div className="select-none">
-                  <PieChartFilled className="mr-2" />
-                  <Text>
-                    图表<Tag className="adm-beta-tag">测试版</Tag>
-                  </Text>
-                </div>
-              }
-            >
-              <ChartAnswer {...props} />
-            </Tabs.TabPane>
-          </StyledTabs>
+          <StyledTabs
+            type="card"
+            size="small"
+            onTabClick={onTabClick}
+            items={answerTabItems}
+          />
           {(sqlText || normalizedView) && (
             <div className="mt-2 d-flex align-center">
               {sql && (

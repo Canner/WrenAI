@@ -1,4 +1,5 @@
-import moment from 'moment';
+import dayjs from 'dayjs';
+import customParseFormat from 'dayjs/plugin/customParseFormat';
 import { ApiType } from '@/types/apiHistory';
 import {
   buildApiHistoryQueryParams,
@@ -6,6 +7,8 @@ import {
   omitApiHistoryManagedQuery,
   readApiHistoryQueryState,
 } from './historyQuery';
+
+dayjs.extend(customParseFormat);
 
 describe('apiManagement historyQuery helpers', () => {
   it('reads page, filters, and date range from URL query state', () => {
@@ -59,8 +62,8 @@ describe('apiManagement historyQuery helpers', () => {
           threadId: ['thread-456'],
         },
         dateRange: [
-          moment('2026-04-10', 'YYYY-MM-DD', true),
-          moment('2026-04-12', 'YYYY-MM-DD', true),
+          dayjs('2026-04-10', 'YYYY-MM-DD', true),
+          dayjs('2026-04-12', 'YYYY-MM-DD', true),
         ],
       }),
     ).toEqual({

@@ -65,7 +65,7 @@ const nextConfig = withLess({
     },
   },
   experimental: {
-    esmExternals: 'loose',
+    esmExternals: false,
   },
   // routes redirect
   async redirects() {

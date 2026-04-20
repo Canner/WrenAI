@@ -1,7 +1,9 @@
 import { useEffect } from 'react';
 import { capitalize } from 'lodash';
 import { CronExpressionParser } from 'cron-parser';
-import moment from 'moment';
+import dayjs, { Dayjs } from 'dayjs';
+import customParseFormat from 'dayjs/plugin/customParseFormat';
+import utc from 'dayjs/plugin/utc';
 import {
   Button,
   Col,
@@ -21,6 +23,9 @@ import type { DrawerAction } from '@/hooks/useDrawerAction';
 import { ERROR_TEXTS } from '@/utils/error';
 import { handleFormSubmitError } from '@/utils/errorHandler';
 import { isValidCronLength, cronValidator } from '@/utils/validator';
+
+dayjs.extend(customParseFormat);
+dayjs.extend(utc);
 
 type Props = Omit<DrawerAction, 'visible'> & {
   visible?: boolean;
@@ -87,14 +92,14 @@ const getInitialSchedule = (frequency: string) => {
     case FREQUENCY.DAILY:
       schedule = {
         day: null,
-        time: moment('00:00', timeFormat),
+        time: dayjs('00:00', timeFormat),
         cron: null,
       };
       break;
     case FREQUENCY.WEEKLY:
       schedule = {
         day: DAY_OF_WEEK[0],
-        time: moment('00:00', timeFormat),
+        time: dayjs('00:00', timeFormat),
         cron: null,
       };
       break;
@@ -123,7 +128,7 @@ export const getScheduleText = (schedule: Schedule): string => {
   const { frequency } = schedule;
 
   const convertTime = (schedule: Schedule) => {
-    const time = moment(
+    const time = dayjs(
       `${schedule.hour}:${schedule.minute}`,
       timeFormat,
     ).format(timeFormat);
@@ -154,7 +159,7 @@ export const getScheduleText = (schedule: Schedule): string => {
 const getNextSchedule = (data: {
   frequency: string;
   day: string;
-  time: moment.Moment;
+  time: Dayjs | null;
   cron: string;
 }) => {
   const { frequency, day, time, cron } = data;
@@ -162,23 +167,25 @@ const getNextSchedule = (data: {
   if (frequency === FREQUENCY.NEVER || !time) return null;
 
   // frequency daily or weekly calculation
-  const now = moment();
-  const targetTime = moment(
+  const now = dayjs();
+  let targetTime = dayjs(
     `${now.format('YYYY-MM-DD')} ${time.format(timeFormat)}`,
+    'YYYY-MM-DD HH:mm',
   );
 
   // set the day of the week if it's a weekly schedule
   if (day) {
     const dayIndex = DAY_OF_WEEK.findIndex((d) => d === day);
-    targetTime.set({ day: dayIndex });
+    const dayOffset = (dayIndex - targetTime.day() + 7) % 7;
+    targetTime = targetTime.add(dayOffset, 'day');
   }
 
-  // postpond the time if it's already passed
+  // postpone the time if it's already passed
   if (now.isAfter(targetTime)) {
     if (frequency === FREQUENCY.DAILY) {
-      targetTime.add(1, 'd');
+      targetTime = targetTime.add(1, 'day');
     } else if (frequency === FREQUENCY.WEEKLY) {
-      targetTime.add(7, 'd');
+      targetTime = targetTime.add(7, 'day');
     }
   }
 
@@ -189,7 +196,7 @@ const getNextScheduleByCron = (cron: string) => {
   if (!cron || !isValidCronLength(cron)) return null;
   try {
     const interval = CronExpressionParser.parse(cron, { tz: 'UTC' });
-    const targetTime = moment.utc(interval.next().toDate()).local();
+    const targetTime = dayjs.utc(interval.next().toDate()).local();
     return targetTime.isValid() ? targetTime.format('YYYY-MM-DD HH:mm') : null;
   } catch (error) {
     console.warn(error);
@@ -213,8 +220,8 @@ export default function CacheSettingsDrawer(props: Props) {
           day: schedule?.day,
           frequency: schedule?.frequency,
           time:
-            schedule?.hour.toString() && schedule?.minute.toString()
-              ? moment(`${schedule?.hour}:${schedule?.minute}`, timeFormat)
+            schedule?.hour != null && schedule?.minute != null
+              ? dayjs(`${schedule?.hour}:${schedule?.minute}`, timeFormat)
               : null,
           cron: schedule?.cron,
         },
@@ -262,7 +269,7 @@ export default function CacheSettingsDrawer(props: Props) {
       title="缓存设置"
       width={410}
       closable
-      destroyOnClose
+      destroyOnHidden
       maskClosable={false}
       afterOpenChange={afterOpenChange}
       onClose={onClose}

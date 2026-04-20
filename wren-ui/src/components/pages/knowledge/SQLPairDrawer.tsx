@@ -59,7 +59,7 @@ export default function SQLPairDrawer(props: Props) {
   return (
     <StyledDrawer
       closable
-      destroyOnClose
+      destroyOnHidden
       onClose={onClose}
       title="SQL 模板详情"
       open={visible}

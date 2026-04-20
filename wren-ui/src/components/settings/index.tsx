@@ -165,11 +165,11 @@ export default function Settings(props: Props) {
   return (
     <StyledModal
       width={950}
-      bodyStyle={{ padding: 0, height: 700 }}
+      styles={{ body: { padding: 0, height: 700 } }}
       open={visible}
       footer={null}
       onCancel={onClose}
-      destroyOnClose
+      destroyOnHidden
       centered
     >
       <Layout style={{ height: '100%' }}>

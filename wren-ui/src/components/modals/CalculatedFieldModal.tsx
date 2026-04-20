@@ -166,7 +166,7 @@ export default function AddCalculatedFieldModal(props: Props) {
       onCancel={onClose}
       confirmLoading={loading}
       maskClosable={false}
-      destroyOnClose
+      destroyOnHidden
       afterClose={() => reset()}
       footer={
         <div className="d-flex justify-space-between align-center">

@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Input, Button } from 'antd';
+import { Input, Button, type GetRef } from 'antd';
 import ArrowUpOutlined from '@ant-design/icons/ArrowUpOutlined';
 import styled from 'styled-components';
 import { attachLoading } from '@/utils/helper';
@@ -136,7 +136,7 @@ export default forwardRef<PromptInputHandle, Props>(
       disabled = false,
       onAtTrigger,
     } = props;
-    const $promptInput = useRef<HTMLTextAreaElement>(null);
+    const $promptInput = useRef<GetRef<typeof Input.TextArea>>(null);
     const [inputValue, setInputValue] = useState('');
     const [innerLoading, setInnerLoading] = useState(false);
 

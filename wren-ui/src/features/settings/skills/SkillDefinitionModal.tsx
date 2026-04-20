@@ -46,7 +46,7 @@ export default function SkillDefinitionModal({
       onCancel={onCancel}
       onOk={onSubmit}
       confirmLoading={confirmLoading}
-      destroyOnClose
+      destroyOnHidden
       width={760}
     >
       <Form layout="vertical" form={form}>

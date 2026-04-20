@@ -57,7 +57,6 @@ import {
 } from './platformPermissionsMeta';
 
 const { Paragraph, Text } = Typography;
-const { TabPane } = Tabs;
 
 type PermissionsPayload = {
   roles: PlatformRoleCatalogItem[];
@@ -682,7 +681,7 @@ export default function ManagePlatformPermissionsPage() {
               display: 'flex',
               flexDirection: 'column',
             }}
-            bodyStyle={PANEL_BODY_STYLE}
+            styles={{ body: PANEL_BODY_STYLE }}
           >
             <div
               style={{
@@ -859,7 +858,7 @@ export default function ManagePlatformPermissionsPage() {
               display: 'flex',
               flexDirection: 'column',
             }}
-            bodyStyle={PANEL_BODY_STYLE}
+            styles={{ body: PANEL_BODY_STYLE }}
           >
             {!selectedRole && !isCreateMode ? (
               <Empty
@@ -984,11 +983,11 @@ export default function ManagePlatformPermissionsPage() {
                       setActiveModuleKey(key as PlatformPermissionModuleKey)
                     }
                     style={{ marginBottom: 0, paddingTop: 2 }}
-                  >
-                    {moduleTabItems.map((module) => (
-                      <TabPane key={module.key} tab={module.label} />
-                    ))}
-                  </Tabs>
+                    items={moduleTabItems.map((module) => ({
+                      key: module.key,
+                      label: module.label,
+                    }))}
+                  />
                 </div>
 
                 <div style={FILTER_BAR_STYLE}>
@@ -1142,7 +1141,7 @@ export default function ManagePlatformPermissionsPage() {
                                 </Button>
                               </Dropdown>
                             }
-                            bodyStyle={{ padding: 8 }}
+                            styles={{ body: { padding: 8 } }}
                             style={{
                               borderRadius: 8,
                             }}

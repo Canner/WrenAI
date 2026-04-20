@@ -40,15 +40,17 @@ export default function KnowledgeAssetDetailDrawer({
 }: KnowledgeAssetDetailDrawerProps) {
   return (
     <Drawer
-      destroyOnClose={false}
+      destroyOnHidden={false}
       placement="right"
       closable={false}
       title={null}
       open={Boolean(activeDetailAsset)}
       onClose={onCloseAssetDetail}
       width="60vw"
-      bodyStyle={{ padding: 20, background: '#ffffff' }}
-      headerStyle={{ display: 'none' }}
+      styles={{
+        body: { padding: 20, background: '#ffffff' },
+        header: { display: 'none' },
+      }}
     >
       {activeDetailAsset ? (
         <AssetDetailContent

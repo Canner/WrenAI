@@ -54,7 +54,7 @@ export default function SaveAsViewModal(props: Props) {
       title="保存为视图"
       centered
       closable
-      destroyOnClose
+      destroyOnHidden
       onCancel={onClose}
       maskClosable={false}
       open={visible}

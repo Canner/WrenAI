@@ -1,14 +1,5 @@
 import { ArrowRightOutlined, CloseOutlined } from '@ant-design/icons';
-import {
-  Input,
-  List,
-  Space,
-  Spin,
-  Steps,
-  Tag,
-  Typography,
-  message,
-} from 'antd';
+import { Input, List, Space, Spin, Tag, Typography, message } from 'antd';
 import { memo, useEffect, useMemo, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { KnowledgeAssetSelectOption } from '@/hooks/useKnowledgeAssetSelectOptions';
@@ -54,8 +45,6 @@ import AssetWizardConnectorDrawer from './AssetWizardConnectorDrawer';
 import AssetWizardSourceStep from './AssetWizardSourceStep';
 
 const { Text } = Typography;
-const { Step } = Steps;
-
 type AssetWizardModalProps = {
   visible: boolean;
   assetWizardStep: number;
@@ -335,8 +324,8 @@ function AssetWizardModal({
       closable={false}
       onCancel={handleCloseAssetModal}
       width={1116}
-      maskStyle={REFERENCE_MODAL_MASK_STYLE}
-      destroyOnClose
+      styles={{ mask: REFERENCE_MODAL_MASK_STYLE }}
+      destroyOnHidden
     >
       <ModalPanel>
         <ModalHeader>
@@ -346,11 +335,14 @@ function AssetWizardModal({
           </ModalCloseButton>
         </ModalHeader>
 
-        <WizardSteps current={assetWizardStep} responsive={false}>
-          {WIZARD_STEP_LABELS.map((label) => (
-            <Step key={label} title={label} />
-          ))}
-        </WizardSteps>
+        <WizardSteps
+          current={assetWizardStep}
+          responsive={false}
+          items={WIZARD_STEP_LABELS.map((label) => ({
+            key: label,
+            title: label,
+          }))}
+        />
 
         {assetWizardStep === 0 && (
           <AssetWizardSourceStep

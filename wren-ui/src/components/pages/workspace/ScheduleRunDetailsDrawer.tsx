@@ -161,7 +161,7 @@ export default function ScheduleRunDetailsDrawer(props: Props) {
       open={drawerOpen}
       title="运行详情"
       width={760}
-      destroyOnClose
+      destroyOnHidden
       closable
       onClose={onClose}
       footer={null}
@@ -185,7 +185,7 @@ export default function ScheduleRunDetailsDrawer(props: Props) {
             />
           ) : null}
 
-          <Divider orientation="left" plain>
+          <Divider titlePlacement="start" plain>
             任务概览
           </Divider>
           <Descriptions
@@ -217,7 +217,7 @@ export default function ScheduleRunDetailsDrawer(props: Props) {
             </Descriptions.Item>
           </Descriptions>
 
-          <Divider orientation="left" plain>
+          <Divider titlePlacement="start" plain>
             执行时间
           </Divider>
           <Descriptions
@@ -240,7 +240,7 @@ export default function ScheduleRunDetailsDrawer(props: Props) {
             </Descriptions.Item>
           </Descriptions>
 
-          <Divider orientation="left" plain>
+          <Divider titlePlacement="start" plain>
             Runtime Identity
           </Divider>
           <Descriptions
@@ -264,7 +264,7 @@ export default function ScheduleRunDetailsDrawer(props: Props) {
             </Descriptions.Item>
           </Descriptions>
 
-          <Divider orientation="left" plain>
+          <Divider titlePlacement="start" plain>
             detailJson
           </Divider>
           <Space direction="vertical" size={12} style={sectionStyle}>

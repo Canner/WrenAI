@@ -1,15 +1,18 @@
-import moment from 'moment';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
 import {
   buildApiHistoryDateFilter,
   getApiHistoryDateRangePresets,
   hasApiHistoryDateRange,
 } from './timeRange';
 
+dayjs.extend(utc);
+
 describe('apiManagement timeRange helpers', () => {
   it('builds inclusive start/end ISO filters from a selected date range', () => {
     const range = [
-      moment.utc('2026-04-01T12:00:00Z'),
-      moment.utc('2026-04-03T12:00:00Z'),
+      dayjs.utc('2026-04-01T12:00:00Z'),
+      dayjs.utc('2026-04-03T12:00:00Z'),
     ] as const;
 
     expect(buildApiHistoryDateFilter(range as any)).toEqual({
@@ -24,7 +27,7 @@ describe('apiManagement timeRange helpers', () => {
   });
 
   it('builds quick range presets from the provided clock', () => {
-    const now = moment.utc('2026-04-03T10:00:00Z');
+    const now = dayjs.utc('2026-04-03T10:00:00Z');
     const ranges = getApiHistoryDateRangePresets(now);
 
     expect(Object.keys(ranges)).toEqual([

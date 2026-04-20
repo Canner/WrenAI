@@ -40,7 +40,7 @@ export default function UsersMemberRoleModal({
     <Modal
       title="调整角色"
       open={Boolean(roleTargetMember)}
-      destroyOnClose
+      destroyOnHidden
       onCancel={onClose}
       onOk={() => {
         if (

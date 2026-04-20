@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { useRouter } from 'next/router';
-import moment, { Moment } from 'moment';
+import dayjs, { Dayjs } from 'dayjs';
 import {
   Button,
   Card,
@@ -310,7 +310,7 @@ export default function SettingsDiagnosticsPage() {
   ];
 
   const handleDateRangeChange = (
-    nextDateRange: [Moment | null, Moment | null] | null,
+    nextDateRange: [Dayjs | null, Dayjs | null] | null,
   ) => {
     if (!nextDateRange?.[0] || !nextDateRange?.[1]) {
       syncHistoryQuery({
@@ -348,7 +348,7 @@ export default function SettingsDiagnosticsPage() {
             <DatePicker.RangePicker
               allowClear
               value={dateRange as any}
-              ranges={getApiHistoryDateRangePresets(moment()) as any}
+              ranges={getApiHistoryDateRangePresets(dayjs()) as any}
               onChange={handleDateRangeChange as any}
             />
             <Button

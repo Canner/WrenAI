@@ -1,6 +1,9 @@
-import moment from 'moment';
+import dayjs from 'dayjs';
+import customParseFormat from 'dayjs/plugin/customParseFormat';
 import { ApiType } from '@/types/apiHistory';
 import type { ApiHistoryDateRange } from './timeRange';
+
+dayjs.extend(customParseFormat);
 
 const PAGE_QUERY_KEY = 'page';
 const API_TYPE_QUERY_KEY = 'apiType';
@@ -92,7 +95,7 @@ const readDateBoundary = (
     return null;
   }
 
-  const parsed = moment(normalizedValue, 'YYYY-MM-DD', true);
+  const parsed = dayjs(normalizedValue, 'YYYY-MM-DD', true);
   return parsed.isValid() ? parsed : null;
 };
 

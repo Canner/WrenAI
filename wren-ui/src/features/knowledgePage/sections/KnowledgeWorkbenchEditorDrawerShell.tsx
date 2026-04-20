@@ -31,14 +31,16 @@ export default function KnowledgeWorkbenchEditorDrawerShell({
 }: KnowledgeWorkbenchEditorDrawerShellProps) {
   return (
     <Drawer
-      destroyOnClose={false}
+      destroyOnHidden={false}
       onClose={() => void onClose()}
       open={open}
       width={WORKBENCH_EDITOR_DRAWER_WIDTH}
       closable={false}
       title={null}
-      bodyStyle={WORKBENCH_EDITOR_DRAWER_BODY_STYLE}
-      headerStyle={{ display: 'none' }}
+      styles={{
+        body: WORKBENCH_EDITOR_DRAWER_BODY_STYLE,
+        header: { display: 'none' },
+      }}
     >
       <div style={WORKBENCH_EDITOR_DRAWER_CONTENT_STYLE}>{children}</div>
       <KnowledgeWorkbenchEditorDrawerFooter

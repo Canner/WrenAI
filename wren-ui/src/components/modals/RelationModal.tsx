@@ -111,7 +111,7 @@ export default function RelationModal(props: Props) {
       onCancel={onClose}
       confirmLoading={loading}
       maskClosable={false}
-      destroyOnClose
+      destroyOnHidden
       afterClose={() => form.resetFields()}
       centered
     >

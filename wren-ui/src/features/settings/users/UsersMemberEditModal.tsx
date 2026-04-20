@@ -48,7 +48,7 @@ export default function UsersMemberEditModal({
     <Modal
       title="编辑用户"
       open={Boolean(editingMember)}
-      destroyOnClose
+      destroyOnHidden
       footer={null}
       onCancel={onClose}
     >

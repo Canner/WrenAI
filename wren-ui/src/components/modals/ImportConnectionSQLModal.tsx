@@ -102,7 +102,7 @@ export default function ImportConnectionSQLModal(props: Props) {
       centered
       closable
       confirmLoading={loading}
-      destroyOnClose
+      destroyOnHidden
       maskClosable={false}
       onCancel={onClose}
       onOk={submit}

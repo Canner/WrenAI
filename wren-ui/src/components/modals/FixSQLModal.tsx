@@ -124,7 +124,7 @@ export function FixSQLModal(props: Props) {
       onCancel={onClose}
       confirmLoading={loading}
       maskClosable={false}
-      destroyOnClose
+      destroyOnHidden
       centered
       afterClose={reset}
     >

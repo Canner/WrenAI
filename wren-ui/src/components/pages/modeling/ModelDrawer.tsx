@@ -55,7 +55,7 @@ export default function ModelDrawer(props: Props) {
       title={getDrawerTitle(currentFormMode, defaultValue?.displayName)}
       width={750}
       closable
-      destroyOnClose
+      destroyOnHidden
       afterOpenChange={afterOpenChange}
       onClose={onClose}
       footer={

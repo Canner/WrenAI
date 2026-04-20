@@ -306,7 +306,7 @@ export default function QuestionSQLPairModal(props: Props) {
         centered
         closable
         confirmLoading={confirmLoading}
-        destroyOnClose
+        destroyOnHidden
         maskClosable={false}
         onCancel={onClose}
         open={visible}

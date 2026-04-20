@@ -86,7 +86,7 @@ export default function DetailsDrawer(props: Props) {
       title="API 调用详情"
       width={760}
       closable
-      destroyOnClose
+      destroyOnHidden
       onClose={onClose}
       footer={null}
     >
@@ -117,7 +117,7 @@ export default function DetailsDrawer(props: Props) {
         </Descriptions.Item>
       </Descriptions>
 
-      <Divider orientation="left" plain>
+      <Divider titlePlacement="start" plain>
         请求头
       </Divider>
       <JsonCodeBlock
@@ -127,7 +127,7 @@ export default function DetailsDrawer(props: Props) {
         copyable
       />
 
-      <Divider orientation="left" plain>
+      <Divider titlePlacement="start" plain>
         请求载荷
       </Divider>
       <JsonCodeBlock
@@ -139,7 +139,7 @@ export default function DetailsDrawer(props: Props) {
 
       {askDiagnostics ? (
         <>
-          <Divider orientation="left" plain>
+          <Divider titlePlacement="start" plain>
             问答诊断
           </Divider>
           <Descriptions
@@ -162,7 +162,7 @@ export default function DetailsDrawer(props: Props) {
 
           {shadowCompare ? (
             <>
-              <Divider orientation="left" plain>
+              <Divider titlePlacement="start" plain>
                 影子对比
               </Divider>
               <Space wrap size={[8, 8]} style={{ marginBottom: 16 }}>
@@ -220,7 +220,7 @@ export default function DetailsDrawer(props: Props) {
         </>
       ) : null}
 
-      <Divider orientation="left" plain>
+      <Divider titlePlacement="start" plain>
         响应载荷
       </Divider>
       <JsonCodeBlock

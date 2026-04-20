@@ -38,7 +38,7 @@ export default function MetadataDrawer(props: Props) {
       title={displayName}
       width={760}
       closable
-      destroyOnClose
+      destroyOnHidden
       onClose={onClose}
       extra={
         <Button

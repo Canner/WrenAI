@@ -793,32 +793,46 @@ export default function ManagePlatformWorkspacesPage() {
             ) : null}
           </Space>
 
-          <Tabs activeKey={activeTab} onChange={setActiveTab}>
-            <Tabs.TabPane tab="工作空间列表" key="workspaces">
-              <Table
-                className="console-table"
-                rowKey="id"
-                loading={loading}
-                columns={workspaceColumns}
-                dataSource={filteredWorkspaces}
-                pagination={{ pageSize: 10, hideOnSinglePage: true }}
-                locale={{ emptyText: loading ? '加载中…' : '暂无工作空间' }}
-                scroll={{ x: 1110 }}
-              />
-            </Tabs.TabPane>
-            <Tabs.TabPane tab="申请记录" key="applications">
-              <Table
-                className="console-table"
-                rowKey="id"
-                loading={loading}
-                columns={applicationColumns}
-                dataSource={filteredApplications}
-                pagination={{ pageSize: 10, hideOnSinglePage: true }}
-                locale={{ emptyText: loading ? '加载中…' : '暂无待审批申请' }}
-                scroll={{ x: 980 }}
-              />
-            </Tabs.TabPane>
-          </Tabs>
+          <Tabs
+            activeKey={activeTab}
+            onChange={setActiveTab}
+            items={[
+              {
+                key: 'workspaces',
+                label: '工作空间列表',
+                children: (
+                  <Table
+                    className="console-table"
+                    rowKey="id"
+                    loading={loading}
+                    columns={workspaceColumns}
+                    dataSource={filteredWorkspaces}
+                    pagination={{ pageSize: 10, hideOnSinglePage: true }}
+                    locale={{ emptyText: loading ? '加载中…' : '暂无工作空间' }}
+                    scroll={{ x: 1110 }}
+                  />
+                ),
+              },
+              {
+                key: 'applications',
+                label: '申请记录',
+                children: (
+                  <Table
+                    className="console-table"
+                    rowKey="id"
+                    loading={loading}
+                    columns={applicationColumns}
+                    dataSource={filteredApplications}
+                    pagination={{ pageSize: 10, hideOnSinglePage: true }}
+                    locale={{
+                      emptyText: loading ? '加载中…' : '暂无待审批申请',
+                    }}
+                    scroll={{ x: 980 }}
+                  />
+                ),
+              },
+            ]}
+          />
         </Space>
       )}
 
@@ -900,7 +914,7 @@ export default function ManagePlatformWorkspacesPage() {
       <Modal
         open={createModalOpen}
         title="新建工作空间"
-        destroyOnClose
+        destroyOnHidden
         onCancel={() => setCreateModalOpen(false)}
         onOk={() => void handleCreateWorkspace()}
         okText="创建"

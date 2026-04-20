@@ -294,7 +294,7 @@ export default function SchemaChangeModal(props: Props) {
       width={750}
       open={visible}
       onCancel={onClose}
-      destroyOnClose
+      destroyOnHidden
       footer={null}
     >
       <Typography.Paragraph className="gray-6 mb-4">

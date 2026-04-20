@@ -1,6 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import moment from 'moment';
+import dayjs from 'dayjs';
+import customParseFormat from 'dayjs/plugin/customParseFormat';
 import APIHistory from '../../../pages/api-management/history';
 import { ApiType } from '@/types/apiHistory';
 
@@ -153,6 +154,8 @@ const buildRouter = (query: Record<string, any>) => {
 const readQueryFromUrl = (url: string) =>
   Object.fromEntries(new URL(url, 'http://wren.local').searchParams.entries());
 
+dayjs.extend(customParseFormat);
+
 const renderPage = () => renderToStaticMarkup(React.createElement(APIHistory));
 
 describe('APIHistory page URL sync', () => {
@@ -193,10 +196,10 @@ describe('APIHistory page URL sync', () => {
 
     renderPage();
 
-    const expectedStartDate = moment('2026-04-01', 'YYYY-MM-DD', true)
+    const expectedStartDate = dayjs('2026-04-01', 'YYYY-MM-DD', true)
       .startOf('day')
       .toISOString();
-    const expectedEndDate = moment('2026-04-03', 'YYYY-MM-DD', true)
+    const expectedEndDate = dayjs('2026-04-03', 'YYYY-MM-DD', true)
       .endOf('day')
       .toISOString();
 
@@ -296,8 +299,8 @@ describe('APIHistory page URL sync', () => {
 
     renderPage();
     mockCapturedRangePickerProps.onChange([
-      moment('2026-04-10', 'YYYY-MM-DD', true),
-      moment('2026-04-12', 'YYYY-MM-DD', true),
+      dayjs('2026-04-10', 'YYYY-MM-DD', true),
+      dayjs('2026-04-12', 'YYYY-MM-DD', true),
     ]);
 
     expect(router.replace).toHaveBeenCalledTimes(1);

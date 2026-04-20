@@ -62,7 +62,7 @@ export default function InstructionDrawer(props: Props) {
   return (
     <StyledDrawer
       closable
-      destroyOnClose
+      destroyOnHidden
       onClose={onClose}
       title="分析规则详情"
       open={visible}

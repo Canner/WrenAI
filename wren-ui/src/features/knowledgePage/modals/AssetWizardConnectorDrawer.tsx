@@ -86,7 +86,7 @@ export default function AssetWizardConnectorDrawer({
       open={open}
       title="新建数据源"
       width={560}
-      destroyOnClose
+      destroyOnHidden
       onClose={handleClose}
       footer={
         <Space className="d-flex justify-end">

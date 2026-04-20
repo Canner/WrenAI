@@ -88,10 +88,11 @@ export default function ManageWorkspacePage() {
           workspacePage.setActiveTab(key as typeof workspacePage.activeTab)
         }
         style={{ marginBottom: 16 }}
-      >
-        <Tabs.TabPane tab="工作空间列表" key="mine" />
-        <Tabs.TabPane tab="申请记录" key="applications" />
-      </Tabs>
+        items={[
+          { key: 'mine', label: '工作空间列表' },
+          { key: 'applications', label: '申请记录' },
+        ]}
+      />
 
       <WorkspacePrimaryPanel
         activeTab={workspacePage.activeTab}

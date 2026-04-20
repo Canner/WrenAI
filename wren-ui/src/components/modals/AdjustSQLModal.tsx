@@ -146,7 +146,7 @@ export default function AdjustSQLModal(props: Props) {
       centered
       closable
       confirmLoading={confirmLoading}
-      destroyOnClose
+      destroyOnHidden
       maskClosable={false}
       onCancel={onClose}
       open={visible}

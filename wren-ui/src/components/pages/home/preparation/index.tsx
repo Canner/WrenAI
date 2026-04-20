@@ -71,7 +71,7 @@ export default function Preparation(props: Props) {
       <Collapse
         className="bg-gray-1"
         bordered={false}
-        expandIconPosition="right"
+        expandIconPosition="end"
         expandIcon={({ isActive }) =>
           !isStopped && (
             <DownOutlined

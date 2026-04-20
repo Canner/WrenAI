@@ -917,7 +917,7 @@ export default function ManagePlatformUsersPage() {
       <Modal
         open={workspaceModalOpen}
         title="分配工作空间"
-        destroyOnClose
+        destroyOnHidden
         onCancel={() => setWorkspaceModalOpen(false)}
         onOk={() => void handleSubmitWorkspace()}
         okText="确认分配"
@@ -948,7 +948,7 @@ export default function ManagePlatformUsersPage() {
       <Modal
         open={createModalOpen}
         title="新增用户"
-        destroyOnClose
+        destroyOnHidden
         confirmLoading={createSubmitting}
         onCancel={() => {
           setCreateModalOpen(false);
@@ -1009,7 +1009,7 @@ export default function ManagePlatformUsersPage() {
       <Modal
         open={editModalOpen}
         title="编辑用户"
-        destroyOnClose
+        destroyOnHidden
         confirmLoading={editSubmitting}
         onCancel={() => {
           setEditModalOpen(false);
@@ -1036,7 +1036,7 @@ export default function ManagePlatformUsersPage() {
       <Modal
         open={roleModalOpen}
         title="调整平台角色"
-        destroyOnClose
+        destroyOnHidden
         confirmLoading={roleSubmitting}
         onCancel={() => {
           setRoleModalOpen(false);

@@ -148,7 +148,7 @@ export default function InstructionModal(props: Props) {
       centered
       closable
       confirmLoading={loading}
-      destroyOnClose
+      destroyOnHidden
       maskClosable={false}
       onCancel={onClose}
       open={visible}
