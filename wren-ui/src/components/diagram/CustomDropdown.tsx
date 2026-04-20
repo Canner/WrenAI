@@ -1,7 +1,7 @@
 import React from 'react';
 import styled from 'styled-components';
 import { Dropdown, Menu } from 'antd';
-import { ItemType } from 'antd/lib/menu/hooks/useItems';
+import type { MenuProps } from 'antd';
 import { MORE_ACTION, NODE_TYPE } from '@/utils/enum';
 import EditOutlined from '@ant-design/icons/EditOutlined';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
@@ -20,6 +20,8 @@ import {
   DeleteInstructionModal,
 } from '@/components/modals/DeleteModal';
 
+type DropdownItem = NonNullable<MenuProps['items']>[number];
+
 const StyledMenu = styled(Menu)`
   .ant-dropdown-menu-item:not(.ant-dropdown-menu-item-disabled) {
     color: var(--gray-8);
@@ -35,7 +37,7 @@ interface Props {
 }
 
 const makeDropdown =
-  (getItems: (props: Props) => ItemType[]) => (props: Props) => {
+  (getItems: (props: Props) => DropdownItem[]) => (props: Props) => {
     const { children, onMenuEnter, onDropdownVisibleChange } = props;
 
     const items = getItems(props);
@@ -61,7 +63,7 @@ const makeDropdown =
 export const ModelDropdown = makeDropdown((props: Props) => {
   const { onMoreClick, disableMutationActions } = props;
 
-  const items: ItemType[] = [
+  const items: DropdownItem[] = [
     {
       label: (
         <>
@@ -89,7 +91,7 @@ export const ModelDropdown = makeDropdown((props: Props) => {
 
 export const ViewDropdown = makeDropdown((props: Props) => {
   const { onMoreClick, disableMutationActions } = props;
-  const items: ItemType[] = [
+  const items: DropdownItem[] = [
     {
       label: (
         <DeleteViewModal onConfirm={() => onMoreClick(MORE_ACTION.DELETE)} />
@@ -112,7 +114,7 @@ export const ColumnDropdown = makeDropdown((props: Props) => {
       ? DeleteRelationshipModal
       : DeleteCalculatedFieldModal;
 
-  const items: ItemType[] = [
+  const items: DropdownItem[] = [
     {
       label: (
         <>
@@ -141,7 +143,7 @@ export const ColumnDropdown = makeDropdown((props: Props) => {
 export const DashboardDropdown = makeDropdown((props: Props) => {
   const { onMoreClick, isSupportCached, disableCacheSettings, disableRefresh } =
     props;
-  const items: ItemType[] = [
+  const items: DropdownItem[] = [
     isSupportCached && {
       label: (
         <>
@@ -176,7 +178,7 @@ export const DashboardItemDropdown = makeDropdown((props: Props) => {
     disableRefresh,
     disableDelete,
   } = props;
-  const items: ItemType[] = [
+  const items: DropdownItem[] = [
     {
       label: isHideLegend ? (
         <>
@@ -225,7 +227,7 @@ export const SQLPairDropdown = makeDropdown(
     },
   ) => {
     const { onMoreClick, data, disableEdit, disableDelete } = props;
-    const items: ItemType[] = [
+    const items: DropdownItem[] = [
       {
         label: (
           <>
@@ -286,7 +288,7 @@ export const InstructionDropdown = makeDropdown(
     },
   ) => {
     const { onMoreClick, data, disableEdit, disableDelete } = props;
-    const items: ItemType[] = [
+    const items: DropdownItem[] = [
       {
         label: (
           <>
@@ -347,7 +349,7 @@ export const AdjustAnswerDropdown = makeDropdown(
     },
   ) => {
     const { onMoreClick, data } = props;
-    const items: ItemType[] = [
+    const items: DropdownItem[] = [
       {
         label: '调整步骤',
         icon: <EditSVG />,

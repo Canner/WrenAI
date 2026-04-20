@@ -2,12 +2,15 @@ import React from 'react';
 import styled from 'styled-components';
 import { Table, Transfer, Tag } from 'antd';
 import type { TableColumnsType, TableProps, TransferProps } from 'antd';
-import type { TransferItem } from 'antd/es/transfer';
 import difference from 'lodash/difference';
 
-export type TableTransferRecord = TransferItem & {
+export type TableTransferRecord = {
+  key?: string;
+  title?: string;
+  description?: string;
   disabled?: boolean;
-  title?: React.ReactNode;
+  name: string;
+  type: string;
   [key: string]: any;
 };
 
