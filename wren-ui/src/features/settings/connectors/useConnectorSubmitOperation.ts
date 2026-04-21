@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { message } from 'antd';
+
+import { appMessage as message } from '@/utils/antdAppBridge';
 import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import {
   buildConnectorsCollectionUrl,

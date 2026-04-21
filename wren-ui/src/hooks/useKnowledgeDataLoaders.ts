@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
-import { message } from 'antd';
+
+import { appMessage as message } from '@/utils/antdAppBridge';
 import {
   loadKnowledgeBaseList,
   loadKnowledgeConnectors,

@@ -4,6 +4,7 @@ import useRuntimeSelectorState from '@/hooks/useRuntimeSelectorState';
 type KnowledgeBaseSummary = {
   id: string;
   name?: string | null;
+  assetCount?: number | null;
 };
 
 const areStringListsEqual = (left: string[], right: string[]) =>

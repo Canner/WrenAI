@@ -253,7 +253,7 @@ export default function PermissionsRoleCatalogEditor({
             </div>
 
             <Space
-              direction="vertical"
+              orientation="vertical"
               size={6}
               style={{ width: '100%', marginTop: 10 }}
             >

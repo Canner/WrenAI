@@ -235,7 +235,7 @@ export default function AssetWizardTableSelector({
       </Space>
 
       <Space
-        direction="vertical"
+        orientation="vertical"
         size={10}
         style={{ width: '100%', marginBottom: 10 }}
       >

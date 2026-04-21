@@ -56,6 +56,26 @@ export default function PermissionsAuthorizationExplainSection({
   onExplainResourceAttributesChange: (value: string) => void;
   onRunAuthorizationExplain: () => void;
 }) {
+  const bindingSummaryItems = explainResult
+    ? [
+        {
+          key: 'directBindings',
+          label: 'Direct bindings',
+          children: explainResult.directBindings.length,
+        },
+        {
+          key: 'groupBindings',
+          label: 'Group bindings',
+          children: explainResult.groupBindings.length,
+        },
+        {
+          key: 'platformBindings',
+          label: 'Platform bindings',
+          children: explainResult.platformBindings.length,
+        },
+      ]
+    : [];
+
   return (
     <Card title="权限 Explain / Simulate">
       {!canReadRoles ? (
@@ -66,7 +86,7 @@ export default function PermissionsAuthorizationExplainSection({
           description="你没有 role.read 权限，暂时无法执行权限解释。"
         />
       ) : (
-        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           <Form layout="vertical">
             <Row gutter={[12, 0]}>
               <Col xs={24} md={8}>
@@ -160,23 +180,21 @@ export default function PermissionsAuthorizationExplainSection({
                   : '仅返回主体授权画像（未带 action）'
               }
               description={
-                <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                <Space
+                  orientation="vertical"
+                  size={8}
+                  style={{ width: '100%' }}
+                >
                   {explainResult.decision?.reason ? (
                     <Text type="secondary">
                       原因：{explainResult.decision.reason}
                     </Text>
                   ) : null}
-                  <Descriptions column={1} colon={false}>
-                    <Descriptions.Item label="Direct bindings">
-                      {explainResult.directBindings.length}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="Group bindings">
-                      {explainResult.groupBindings.length}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="Platform bindings">
-                      {explainResult.platformBindings.length}
-                    </Descriptions.Item>
-                  </Descriptions>
+                  <Descriptions
+                    column={1}
+                    colon={false}
+                    items={bindingSummaryItems}
+                  />
                   <Space size={[8, 8]} wrap>
                     {explainResult.grantedActions.length > 0 ? (
                       explainResult.grantedActions.map((action) => (

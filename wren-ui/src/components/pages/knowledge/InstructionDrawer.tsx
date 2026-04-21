@@ -66,7 +66,7 @@ export default function InstructionDrawer(props: Props) {
       onClose={onClose}
       title="分析规则详情"
       open={visible}
-      width={760}
+      size={760}
     >
       <Section>
         <Label>规则内容</Label>

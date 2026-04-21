@@ -129,7 +129,7 @@ export default function RecommendedQuestionsPrompt(props: Props) {
       <Space
         style={{ width: 680 }}
         className="gray-8"
-        direction="vertical"
+        orientation="vertical"
         size={[0, 16]}
       >
         <CategorySectionBlock>

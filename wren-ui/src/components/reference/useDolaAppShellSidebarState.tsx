@@ -321,7 +321,7 @@ export default function useDolaAppShellSidebarState({
       clearRuntimePagePrefetchCache();
       router.push(Path.Auth).catch(() => null);
     }
-  }, [router]);
+  }, [router.push]);
 
   const onAccountMenuClick = useCallback<NonNullable<MenuProps['onClick']>>(
     ({ key }) => {

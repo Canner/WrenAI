@@ -103,7 +103,7 @@ export default function ImportConnectionSQLModal(props: Props) {
       closable
       confirmLoading={loading}
       destroyOnHidden
-      maskClosable={false}
+      mask={{ closable: false }}
       onCancel={onClose}
       onOk={submit}
       okText="转换"

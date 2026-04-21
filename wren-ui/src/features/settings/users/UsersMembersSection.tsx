@@ -164,7 +164,7 @@ export default function UsersMembersSection({
             key: 'account',
             width: 220,
             render: (_value: unknown, record: WorkspaceMemberRecord) => (
-              <Space direction="vertical" size={0}>
+              <Space orientation="vertical" size={0}>
                 <Text>
                   {formatAccountLabel(record.user?.email, record.userId || '—')}
                 </Text>

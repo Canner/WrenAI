@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { Alert, Button, Form, Input, Modal, Typography, message } from 'antd';
+import { Alert, Button, Form, Input, Modal, Typography } from 'antd';
 import InfoCircleOutlined from '@ant-design/icons/InfoCircleOutlined';
 import SelectOutlined from '@ant-design/icons/SelectOutlined';
+import { appMessage as message } from '@/utils/antdAppBridge';
 import { Logo } from '@/components/Logo';
 import ErrorCollapse from '@/components/ErrorCollapse';
 import ImportConnectionSQLModal, {
@@ -307,7 +308,7 @@ export default function QuestionSQLPairModal(props: Props) {
         closable
         confirmLoading={confirmLoading}
         destroyOnHidden
-        maskClosable={false}
+        mask={{ closable: false }}
         onCancel={onClose}
         open={visible}
         width={640}

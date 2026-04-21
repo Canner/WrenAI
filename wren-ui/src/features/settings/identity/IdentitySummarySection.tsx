@@ -14,7 +14,7 @@ function IdentitySummaryMetric({
   icon?: React.ReactNode;
 }) {
   return (
-    <Space direction="vertical" size={4}>
+    <Space orientation="vertical" size={4}>
       <Text type="secondary">{label}</Text>
       <div
         style={{

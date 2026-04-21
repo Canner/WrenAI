@@ -54,7 +54,7 @@ export default function EditMetadataModal(props: Props) {
       onOk={submit}
       onCancel={onClose}
       confirmLoading={loading}
-      maskClosable={false}
+      mask={{ closable: false }}
       destroyOnHidden
       centered
       afterClose={() => form.resetFields()}

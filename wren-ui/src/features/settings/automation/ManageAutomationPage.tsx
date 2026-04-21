@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Alert, Space, message } from 'antd';
+import { Alert, Space } from 'antd';
+import { appMessage as message } from '@/utils/antdAppBridge';
 import ConsoleShellLayout from '@/components/reference/ConsoleShellLayout';
 import type { WorkspaceGovernanceOverview } from '@/features/settings/workspaceGovernanceShared';
 import { buildRuntimeScopeUrl } from '@/runtime/client/runtimeScope';
@@ -260,7 +261,7 @@ export default function SettingsAutomationPage() {
           description="请先登录后再查看自动化身份。"
         />
       ) : (
-        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           <AutomationSummarySection
             activeApiTokenCount={activeApiTokenCount}
             currentWorkspaceName={currentWorkspaceName}

@@ -69,7 +69,7 @@ export default function PermissionsRoleBindingsSection({
           description="你没有 role.read 权限，暂时无法查看角色绑定。"
         />
       ) : (
-        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           {canManageRoles ? (
             <Form layout="vertical">
               <Row gutter={[12, 0]} align="bottom">

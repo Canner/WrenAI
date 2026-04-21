@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Select, Input } from 'antd';
+import { Select, Space } from 'antd';
 
 interface Value {
   model?: string;
@@ -60,7 +60,7 @@ export default function CombineFieldSelector(props: Props) {
   };
 
   return (
-    <Input.Group className="d-flex" compact>
+    <Space.Compact block className="d-flex">
       <Select
         style={{ width: '35%' }}
         options={modelOptions}
@@ -83,6 +83,6 @@ export default function CombineFieldSelector(props: Props) {
         optionFilterProp="label"
         data-testid="common__fields-select"
       />
-    </Input.Group>
+    </Space.Compact>
   );
 }

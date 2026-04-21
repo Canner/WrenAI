@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { message } from 'antd';
+
+import { appMessage as message } from '@/utils/antdAppBridge';
 import type { CreateSqlPairInput } from '@/types/knowledge';
 import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import { createKnowledgeSqlPair } from '@/utils/knowledgeRuleSqlRest';

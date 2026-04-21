@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
-import { message } from 'antd';
+
+import { appMessage as message } from '@/utils/antdAppBridge';
 import { hasExecutableRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import Icon from '@/import/icon';
@@ -94,6 +95,7 @@ export default function useRecommendedQuestionsInstruction(enabled = true) {
   >({
     pollInterval: RECOMMENDED_QUESTION_POLL_INTERVAL_MS,
     shouldContinue: shouldContinueRecommendationPolling,
+    shouldContinueOnError: () => true,
     onCompleted: (task) => {
       if (!shouldContinueRecommendationPolling(task)) {
         handleRecommendationTaskSettled(task);

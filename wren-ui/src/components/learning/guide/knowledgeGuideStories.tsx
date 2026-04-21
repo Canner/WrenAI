@@ -1,7 +1,7 @@
-import { message } from 'antd';
 import type { NextRouter } from 'next/router';
 import { renderToString } from 'react-dom/server';
 
+import { appMessage as message } from '@/utils/antdAppBridge';
 import { nextTick } from '@/utils/time';
 
 import {

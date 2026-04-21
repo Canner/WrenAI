@@ -38,7 +38,7 @@ export default function SkillsMarketplaceSection({
             title: '技能',
             dataIndex: 'name',
             render: (value: string, record: SkillMarketplaceCatalogView) => (
-              <Space direction="vertical" size={0}>
+              <Space orientation="vertical" size={0}>
                 <Text strong>{value}</Text>
                 <Text type="secondary">
                   {record.category || '未分类'} / {record.runtimeKind}
@@ -49,7 +49,7 @@ export default function SkillsMarketplaceSection({
           {
             title: '默认行为',
             render: (_: unknown, record: SkillMarketplaceCatalogView) => (
-              <Space direction="vertical" size={0}>
+              <Space orientation="vertical" size={0}>
                 <Text>
                   执行模式：{record.defaultExecutionMode || 'inject_only'}
                 </Text>

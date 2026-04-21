@@ -5,7 +5,7 @@ export default function KnowledgeLoadingStage() {
   return (
     <LibraryStage>
       <Space
-        direction="vertical"
+        orientation="vertical"
         size={18}
         style={{ width: '100%', maxWidth: 960 }}
       >

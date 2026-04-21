@@ -17,7 +17,7 @@ function SkillsMetricCard({
 }) {
   return (
     <Card>
-      <Space direction="vertical" size={6}>
+      <Space orientation="vertical" size={6}>
         <Text type="secondary">{label}</Text>
         <div style={{ fontSize: 28, fontWeight: 600, lineHeight: 1.2 }}>
           {value}

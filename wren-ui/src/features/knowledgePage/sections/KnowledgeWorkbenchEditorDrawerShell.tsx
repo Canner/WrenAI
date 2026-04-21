@@ -34,7 +34,7 @@ export default function KnowledgeWorkbenchEditorDrawerShell({
       destroyOnHidden={false}
       onClose={() => void onClose()}
       open={open}
-      width={WORKBENCH_EDITOR_DRAWER_WIDTH}
+      size={WORKBENCH_EDITOR_DRAWER_WIDTH}
       closable={false}
       title={null}
       styles={{

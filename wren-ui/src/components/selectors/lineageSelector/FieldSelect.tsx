@@ -143,7 +143,7 @@ export default function FieldSelect(props: IterableComponent<Props>) {
       )}
 
       <StyledSelector
-        bordered={false}
+        variant="borderless"
         options={options}
         optionLabelProp="label"
         placeholder="选择字段"

@@ -56,7 +56,7 @@ export default function ConnectorsCatalogSection({
         }}
         wrap
       >
-        <Space direction="vertical" size={4} style={{ maxWidth: 640 }}>
+        <Space orientation="vertical" size={4} style={{ maxWidth: 640 }}>
           <Text strong>连接器目录</Text>
           <Text type="secondary">
             {connectors.length > 0
@@ -93,7 +93,7 @@ export default function ConnectorsCatalogSection({
             title: '名称',
             dataIndex: 'displayName',
             render: (value: string, record: ConnectorView) => (
-              <Space direction="vertical" size={0}>
+              <Space orientation="vertical" size={0}>
                 <Text strong>{value}</Text>
                 {record.trinoCatalogName ? (
                   <Tag color="purple" style={{ marginInlineEnd: 0 }}>
@@ -108,7 +108,7 @@ export default function ConnectorsCatalogSection({
             dataIndex: 'type',
             width: 180,
             render: (_value: ConnectorView['type'], record: ConnectorView) => (
-              <Space direction="vertical" size={4}>
+              <Space orientation="vertical" size={4}>
                 <Text>{CONNECTOR_TYPE_LABELS[record.type] || record.type}</Text>
                 {record.type === 'database' && record.databaseProvider ? (
                   <Tag style={{ marginInlineEnd: 0 }}>

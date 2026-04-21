@@ -36,7 +36,7 @@ export default function MetadataDrawer(props: Props) {
     <Drawer
       open={visible}
       title={displayName}
-      width={760}
+      size={760}
       closable
       destroyOnHidden
       onClose={onClose}

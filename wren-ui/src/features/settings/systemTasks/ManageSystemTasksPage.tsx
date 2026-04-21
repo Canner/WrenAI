@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Space, message } from 'antd';
+import { Alert, Space } from 'antd';
+import { appMessage as message } from '@/utils/antdAppBridge';
 import { buildRuntimeScopeUrl } from '@/runtime/client/runtimeScope';
 import ConsoleShellLayout from '@/components/reference/ConsoleShellLayout';
 import CacheSettingsDrawer from '@/components/pages/home/dashboardGrid/CacheSettingsDrawer';
@@ -368,7 +369,7 @@ export default function SettingsSystemTasksPage() {
       eyebrow="Automation & Operations"
       {...shellProps}
     >
-      <Space direction="vertical" size={16} style={{ width: '100%' }}>
+      <Space orientation="vertical" size={16} style={{ width: '100%' }}>
         {error ? (
           <Alert
             className="console-alert"

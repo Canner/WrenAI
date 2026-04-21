@@ -1,5 +1,6 @@
 import { useCallback, useRef } from 'react';
-import { message } from 'antd';
+
+import { appMessage as message } from '@/utils/antdAppBridge';
 import { ANSWER_FINALIZATION_POLL_TIMEOUT_MS } from '@/utils/askingTimeouts';
 
 const THREAD_RESPONSE_POLL_TIMEOUT_MS = ANSWER_FINALIZATION_POLL_TIMEOUT_MS;

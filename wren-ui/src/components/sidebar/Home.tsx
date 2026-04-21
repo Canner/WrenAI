@@ -2,8 +2,9 @@ import clsx from 'clsx';
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useParams } from 'next/navigation';
-import { message } from 'antd';
+
 import styled from 'styled-components';
+import { appMessage as message } from '@/utils/antdAppBridge';
 import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { Path } from '@/utils/enum';
 import FundViewOutlined from '@ant-design/icons/FundViewOutlined';

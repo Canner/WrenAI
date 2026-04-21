@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
-import { message } from 'antd';
+
+import { appMessage as message } from '@/utils/antdAppBridge';
 import { buildRuntimeScopeUrl } from '@/runtime/client/runtimeScope';
 import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import useRestRequest from '@/hooks/useRestRequest';

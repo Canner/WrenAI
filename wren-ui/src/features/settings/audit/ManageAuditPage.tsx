@@ -39,7 +39,7 @@ function AuditSummaryMetric({
   value: number;
 }) {
   return (
-    <Space direction="vertical" size={4}>
+    <Space orientation="vertical" size={4}>
       <Text type="secondary">{label}</Text>
       <div style={{ fontSize: 28, fontWeight: 600, lineHeight: 1.2 }}>
         {value}
@@ -174,7 +174,7 @@ export default function SettingsAuditPage() {
           description="请先登录后再查看审计日志。"
         />
       ) : (
-        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           <Card>
             <Row gutter={[16, 16]}>
               <Col xs={24} md={8}>

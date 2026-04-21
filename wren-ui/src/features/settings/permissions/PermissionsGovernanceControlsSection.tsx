@@ -16,6 +16,7 @@ import {
   Tag,
   Typography,
 } from 'antd';
+import type { CollapseProps } from 'antd';
 import SafetyCertificateOutlined from '@ant-design/icons/SafetyCertificateOutlined';
 import {
   formatDateTime,
@@ -30,7 +31,6 @@ import {
 } from './permissionsPageUtils';
 
 const { Text, Title } = Typography;
-const { Panel } = Collapse;
 
 import type {
   AccessReview,
@@ -120,6 +120,91 @@ export default function PermissionsGovernanceControlsSection({
     () => new Map(members.map((member) => [member.userId, member])),
     [members],
   );
+  const accessReviewItems: CollapseProps['items'] = accessReviews
+    .slice(0, 2)
+    .map((review) => ({
+      key: review.id,
+      label: (
+        <Space size={[8, 8]} wrap>
+          <Text strong>{review.title}</Text>
+          <Tag color={getAccessReviewStatusColor(review.status)}>
+            {review.status === 'completed' ? '已完成' : '进行中'}
+          </Tag>
+          <Text type="secondary">{formatDateTime(review.createdAt)}</Text>
+        </Space>
+      ),
+      children: (
+        <List
+          dataSource={(review.items || []).slice(0, 3)}
+          locale={{ emptyText: '该复核暂无成员项' }}
+          renderItem={(item) => {
+            const member = item.userId ? memberMap.get(item.userId) : undefined;
+            const busy =
+              reviewActionLoading?.reviewId === review.id &&
+              reviewActionLoading?.itemId === item.id;
+
+            return (
+              <List.Item
+                actions={
+                  canManageControls && item.status !== 'reviewed'
+                    ? [
+                        <Button
+                          key="keep"
+                          type="primary"
+                          loading={
+                            busy && reviewActionLoading?.decision === 'keep'
+                          }
+                          onClick={() =>
+                            onReviewAccessItem(review.id, item.id, 'keep')
+                          }
+                        >
+                          保留
+                        </Button>,
+                        <Button
+                          key="remove"
+                          danger
+                          loading={
+                            busy && reviewActionLoading?.decision === 'remove'
+                          }
+                          onClick={() =>
+                            onReviewAccessItem(review.id, item.id, 'remove')
+                          }
+                        >
+                          移除
+                        </Button>,
+                      ]
+                    : undefined
+                }
+              >
+                <Space orientation="vertical" size={4}>
+                  <Text strong>
+                    {formatUserLabel(
+                      member?.user?.displayName,
+                      member?.user?.email,
+                      item.userId || item.id,
+                    )}
+                  </Text>
+                  <Space size={[8, 8]} wrap>
+                    <Tag color="blue">
+                      {PERMISSION_ROLE_LABELS[item.roleKey || 'member'] ||
+                        item.roleKey ||
+                        'member'}
+                    </Tag>
+                    <Tag color={getAccessReviewDecisionColor(item.decision)}>
+                      {item.decision === 'remove'
+                        ? '移除'
+                        : item.decision === 'keep'
+                          ? '保留'
+                          : '待处理'}
+                    </Tag>
+                  </Space>
+                </Space>
+              </List.Item>
+            );
+          }}
+        />
+      ),
+    }));
 
   return (
     <Card
@@ -136,7 +221,7 @@ export default function PermissionsGovernanceControlsSection({
         </Tag>
       }
     >
-      <Space direction="vertical" size={16} style={{ width: '100%' }}>
+      <Space orientation="vertical" size={16} style={{ width: '100%' }}>
         {!canManageControls ? (
           <Alert
             type="info"
@@ -183,112 +268,7 @@ export default function PermissionsGovernanceControlsSection({
               description="当前还没有访问复核记录。"
             />
           ) : (
-            <Collapse bordered={false}>
-              {accessReviews.slice(0, 2).map((review) => (
-                <Panel
-                  key={review.id}
-                  header={
-                    <Space size={[8, 8]} wrap>
-                      <Text strong>{review.title}</Text>
-                      <Tag color={getAccessReviewStatusColor(review.status)}>
-                        {review.status === 'completed' ? '已完成' : '进行中'}
-                      </Tag>
-                      <Text type="secondary">
-                        {formatDateTime(review.createdAt)}
-                      </Text>
-                    </Space>
-                  }
-                >
-                  <List
-                    dataSource={(review.items || []).slice(0, 3)}
-                    locale={{ emptyText: '该复核暂无成员项' }}
-                    renderItem={(item) => {
-                      const member = item.userId
-                        ? memberMap.get(item.userId)
-                        : undefined;
-                      const busy =
-                        reviewActionLoading?.reviewId === review.id &&
-                        reviewActionLoading?.itemId === item.id;
-
-                      return (
-                        <List.Item
-                          actions={
-                            canManageControls && item.status !== 'reviewed'
-                              ? [
-                                  <Button
-                                    key="keep"
-                                    type="primary"
-                                    loading={
-                                      busy &&
-                                      reviewActionLoading?.decision === 'keep'
-                                    }
-                                    onClick={() =>
-                                      onReviewAccessItem(
-                                        review.id,
-                                        item.id,
-                                        'keep',
-                                      )
-                                    }
-                                  >
-                                    保留
-                                  </Button>,
-                                  <Button
-                                    key="remove"
-                                    danger
-                                    loading={
-                                      busy &&
-                                      reviewActionLoading?.decision === 'remove'
-                                    }
-                                    onClick={() =>
-                                      onReviewAccessItem(
-                                        review.id,
-                                        item.id,
-                                        'remove',
-                                      )
-                                    }
-                                  >
-                                    移除
-                                  </Button>,
-                                ]
-                              : undefined
-                          }
-                        >
-                          <Space direction="vertical" size={4}>
-                            <Text strong>
-                              {formatUserLabel(
-                                member?.user?.displayName,
-                                member?.user?.email,
-                                item.userId || item.id,
-                              )}
-                            </Text>
-                            <Space size={[8, 8]} wrap>
-                              <Tag color="blue">
-                                {PERMISSION_ROLE_LABELS[
-                                  item.roleKey || 'member'
-                                ] ||
-                                  item.roleKey ||
-                                  'member'}
-                              </Tag>
-                              <Tag
-                                color={getAccessReviewDecisionColor(
-                                  item.decision,
-                                )}
-                              >
-                                {item.decision === 'remove'
-                                  ? '移除'
-                                  : item.decision === 'keep'
-                                    ? '保留'
-                                    : '待处理'}
-                              </Tag>
-                            </Space>
-                          </Space>
-                        </List.Item>
-                      );
-                    }}
-                  />
-                </Panel>
-              ))}
-            </Collapse>
+            <Collapse bordered={false} items={accessReviewItems} />
           )}
         </div>
 
@@ -389,7 +369,7 @@ export default function PermissionsGovernanceControlsSection({
                     : [<Tag key="status">{grant.status}</Tag>]
                 }
               >
-                <Space direction="vertical" size={2}>
+                <Space orientation="vertical" size={2}>
                   <Text strong>
                     {formatUserLabel(
                       grant.user?.displayName,

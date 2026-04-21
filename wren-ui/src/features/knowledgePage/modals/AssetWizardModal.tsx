@@ -1,7 +1,8 @@
 import { ArrowRightOutlined, CloseOutlined } from '@ant-design/icons';
-import { Input, List, Space, Spin, Tag, Typography, message } from 'antd';
+import { Input, List, Space, Spin, Tag, Typography } from 'antd';
 import { memo, useEffect, useMemo, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
+import { appMessage as message } from '@/utils/antdAppBridge';
 import type { KnowledgeAssetSelectOption } from '@/hooks/useKnowledgeAssetSelectOptions';
 import type { AssetWizardDraft } from '@/hooks/useKnowledgeAssetWizard';
 import { resolveClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
@@ -464,7 +465,7 @@ function AssetWizardModal({
               }}
               renderItem={(asset) => (
                 <List.Item style={{ padding: '14px 18px' }}>
-                  <Space direction="vertical" size={4}>
+                  <Space orientation="vertical" size={4}>
                     <Text strong>{asset.name}</Text>
                     <Text type="secondary">
                       {asset.kind === 'model' ? '数据表' : '视图'} ·{' '}
@@ -528,7 +529,7 @@ function AssetWizardModal({
                 return (
                   <List.Item style={{ padding: '16px 18px' }}>
                     <Space
-                      direction="vertical"
+                      orientation="vertical"
                       size={8}
                       style={{ width: '100%' }}
                     >

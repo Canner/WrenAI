@@ -1,5 +1,5 @@
-import { message } from 'antd';
 import { useEffect, useRef, useState } from 'react';
+import { appMessage as message } from '@/utils/antdAppBridge';
 import {
   fetchHomeSkillOptions,
   getCachedHomeSkillOptions,

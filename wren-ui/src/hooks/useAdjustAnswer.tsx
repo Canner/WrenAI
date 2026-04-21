@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cloneDeep } from 'lodash';
-import { message } from 'antd';
+
+import { appMessage as message } from '@/utils/antdAppBridge';
 import {
   resolveClientRuntimeScopeSelector,
   type ClientRuntimeScopeSelector,

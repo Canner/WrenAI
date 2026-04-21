@@ -1,4 +1,4 @@
-import { message } from 'antd';
+import { appMessage as message } from '@/utils/antdAppBridge';
 import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { buildConnectorItemUrl } from './connectorsPageUtils';
 import type { ConnectorMutationOperationArgs } from './connectorMutationOperationTypes';

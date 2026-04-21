@@ -9,7 +9,7 @@ import {
   Tag,
   Typography,
 } from 'antd';
-import type { PopconfirmProps } from 'antd';
+import type { CollapseProps, PopconfirmProps } from 'antd';
 import styled from 'styled-components';
 import FileDoneOutlined from '@ant-design/icons/FileDoneOutlined';
 import LineOutlined from '@ant-design/icons/LineOutlined';
@@ -308,115 +308,115 @@ export default function SchemaChangeModal(props: Props) {
         message="请注意：点击“执行修复”后，系统可能会自动删除受影响的模型、关系和计算字段。"
       />
       <StyledCollapse
+        items={
+          [
+            deletedTables && {
+              key: 'deleteTables',
+              label: (
+                <PanelHeader
+                  title="源表已删除"
+                  count={deletedTables.length}
+                  onResolve={() =>
+                    onResolveSchemaChange(SchemaChangeType.DELETED_TABLES)
+                  }
+                  isResolving={isResolving}
+                />
+              ),
+              children: (
+                <StyledTable
+                  rowKey="rowKey"
+                  columns={columnsOfDeleteTables}
+                  dataSource={deletedTables}
+                  size="small"
+                  pagination={{
+                    hideOnSinglePage: true,
+                    size: 'small',
+                    pageSize: 10,
+                  }}
+                  rowClassName={(record: any) => checkIsExpandable(record)}
+                  expandable={{
+                    expandedRowRender: (record: any): ReactNode => (
+                      <ExpandedRows
+                        record={record as ExpandedRowsProps['record']}
+                        tipMessage="下方列出了受该模型影响的资源；执行修复后，这些资源会被一并删除。"
+                      />
+                    ),
+                  }}
+                />
+              ),
+            },
+            deletedColumns && {
+              key: 'deleteColumns',
+              label: (
+                <PanelHeader
+                  title="源字段已删除"
+                  count={deletedColumns.length}
+                  onResolve={() =>
+                    onResolveSchemaChange(SchemaChangeType.DELETED_COLUMNS)
+                  }
+                  isResolving={isResolving}
+                />
+              ),
+              children: (
+                <StyledTable
+                  rowKey="rowKey"
+                  columns={columnsOfDeletedColumns}
+                  dataSource={deletedColumns}
+                  size="small"
+                  pagination={{
+                    hideOnSinglePage: true,
+                    size: 'small',
+                    pageSize: 10,
+                  }}
+                  rowClassName={(record: any) => checkIsExpandable(record)}
+                  expandable={{
+                    expandedRowRender: (record: any): ReactNode => (
+                      <ExpandedRows
+                        record={record as ExpandedRowsProps['record']}
+                        tipMessage="下方列出了受该字段影响的资源；执行修复后，这些资源会被一并删除。"
+                      />
+                    ),
+                  }}
+                />
+              ),
+            },
+            modifiedColumns && {
+              key: 'modifiedColumns',
+              label: (
+                <PanelHeader
+                  title="源字段类型已变更"
+                  count={modifiedColumns.length}
+                />
+              ),
+              children: (
+                <StyledTable
+                  rowKey="rowKey"
+                  columns={columnsOfModifiedColumns}
+                  dataSource={modifiedColumns}
+                  size="small"
+                  pagination={{
+                    hideOnSinglePage: true,
+                    size: 'small',
+                    pageSize: 10,
+                  }}
+                  rowClassName={(record: any) => checkIsExpandable(record)}
+                  expandable={{
+                    expandedRowRender: (record: any): ReactNode => (
+                      <ExpandedRows
+                        record={record as ExpandedRowsProps['record']}
+                        tipMessage="下方列出了使用该字段的资源。请逐项检查，并在需要时手动更新对应配置。"
+                      />
+                    ),
+                  }}
+                />
+              ),
+            },
+          ].filter(Boolean) as CollapseProps['items']
+        }
         expandIcon={(panelProps) =>
           panelProps.isActive ? <LineOutlined /> : <PlusSquareOutlined />
         }
-      >
-        {deletedTables && (
-          <Collapse.Panel
-            header={
-              <PanelHeader
-                title="源表已删除"
-                count={deletedTables.length}
-                onResolve={() =>
-                  onResolveSchemaChange(SchemaChangeType.DELETED_TABLES)
-                }
-                isResolving={isResolving}
-              ></PanelHeader>
-            }
-            key="deleteTables"
-          >
-            <StyledTable
-              rowKey="rowKey"
-              columns={columnsOfDeleteTables}
-              dataSource={deletedTables}
-              size="small"
-              pagination={{
-                hideOnSinglePage: true,
-                size: 'small',
-                pageSize: 10,
-              }}
-              rowClassName={(record: any) => checkIsExpandable(record)}
-              expandable={{
-                expandedRowRender: (record: any): ReactNode => (
-                  <ExpandedRows
-                    record={record as ExpandedRowsProps['record']}
-                    tipMessage="下方列出了受该模型影响的资源；执行修复后，这些资源会被一并删除。"
-                  />
-                ),
-              }}
-            />
-          </Collapse.Panel>
-        )}
-        {deletedColumns && (
-          <Collapse.Panel
-            header={
-              <PanelHeader
-                title="源字段已删除"
-                count={deletedColumns.length}
-                onResolve={() =>
-                  onResolveSchemaChange(SchemaChangeType.DELETED_COLUMNS)
-                }
-                isResolving={isResolving}
-              ></PanelHeader>
-            }
-            key="deleteColumns"
-          >
-            <StyledTable
-              rowKey="rowKey"
-              columns={columnsOfDeletedColumns}
-              dataSource={deletedColumns}
-              size="small"
-              pagination={{
-                hideOnSinglePage: true,
-                size: 'small',
-                pageSize: 10,
-              }}
-              rowClassName={(record: any) => checkIsExpandable(record)}
-              expandable={{
-                expandedRowRender: (record: any): ReactNode => (
-                  <ExpandedRows
-                    record={record as ExpandedRowsProps['record']}
-                    tipMessage="下方列出了受该字段影响的资源；执行修复后，这些资源会被一并删除。"
-                  />
-                ),
-              }}
-            />
-          </Collapse.Panel>
-        )}
-        {modifiedColumns && (
-          <Collapse.Panel
-            header={
-              <PanelHeader
-                title="源字段类型已变更"
-                count={modifiedColumns.length}
-              ></PanelHeader>
-            }
-            key="modifiedColumns"
-          >
-            <StyledTable
-              rowKey="rowKey"
-              columns={columnsOfModifiedColumns}
-              dataSource={modifiedColumns}
-              size="small"
-              pagination={{
-                hideOnSinglePage: true,
-                size: 'small',
-                pageSize: 10,
-              }}
-              rowClassName={(record: any) => checkIsExpandable(record)}
-              expandable={{
-                expandedRowRender: (record: any): ReactNode => (
-                  <ExpandedRows
-                    record={record as ExpandedRowsProps['record']}
-                    tipMessage="下方列出了使用该字段的资源。请逐项检查，并在需要时手动更新对应配置。"
-                  />
-                ),
-              }}
-            />
-          </Collapse.Panel>
-        )}
-      </StyledCollapse>
+      />
     </Modal>
   );
 }

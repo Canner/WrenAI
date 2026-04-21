@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { keyBy } from 'lodash';
-import { Alert, Col, Row, Typography, Button, message } from 'antd';
+import { Alert, Col, Row, Typography, Button } from 'antd';
+import { appMessage as message } from '@/utils/antdAppBridge';
 import FieldTable from '@/components/table/FieldTable';
 import CalculatedFieldTable from '@/components/table/CalculatedFieldTable';
 import RelationTable from '@/components/table/RelationTable';

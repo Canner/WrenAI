@@ -375,7 +375,7 @@ export default function DefineRelations(props: Props) {
           ),
         )}
         <div style={{ padding: '18px 0 4px', textAlign: 'center' }}>
-          <Spin spinning={fetching} tip="加载中…" />
+          <Spin spinning={fetching} description="加载中…" />
         </div>
       </Panel>
 

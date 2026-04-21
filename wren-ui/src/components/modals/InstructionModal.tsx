@@ -1,9 +1,10 @@
 import { useEffect } from 'react';
-import { Button, Form, Input, Modal, Row, Col, Radio, message } from 'antd';
+import { Button, Form, Input, Modal, Row, Col, Radio } from 'antd';
 import DeleteOutlined from '@ant-design/icons/DeleteOutlined';
 import PlusOutlined from '@ant-design/icons/PlusOutlined';
 import { isEmpty } from 'lodash';
 import styled from 'styled-components';
+import { appMessage as message } from '@/utils/antdAppBridge';
 import { FORM_MODE } from '@/utils/enum';
 import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { ERROR_TEXTS } from '@/utils/error';
@@ -149,7 +150,7 @@ export default function InstructionModal(props: Props) {
       closable
       confirmLoading={loading}
       destroyOnHidden
-      maskClosable={false}
+      mask={{ closable: false }}
       onCancel={onClose}
       open={visible}
       width={720}

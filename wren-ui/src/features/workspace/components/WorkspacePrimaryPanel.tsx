@@ -207,7 +207,7 @@ export default function WorkspacePrimaryPanel({
       title: '申请人',
       key: 'applicant',
       render: (_, record) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Text>
             {formatUserLabel(
               record.user?.displayName,
@@ -256,7 +256,7 @@ export default function WorkspacePrimaryPanel({
   ];
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
+    <Space orientation="vertical" size={16} style={{ width: '100%' }}>
       <Input.Search
         allowClear
         value={searchKeyword}

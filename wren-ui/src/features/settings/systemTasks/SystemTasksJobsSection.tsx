@@ -62,7 +62,7 @@ export default function SystemTasksJobsSection({
             title: '任务',
             key: 'target',
             render: (_value, record: ScheduleJobView) => (
-              <Space direction="vertical" size={0}>
+              <Space orientation="vertical" size={0}>
                 <Text strong>{record.targetName}</Text>
                 <Text type="secondary">{record.targetTypeLabel}</Text>
               </Space>
@@ -72,7 +72,7 @@ export default function SystemTasksJobsSection({
             title: '计划',
             key: 'cron',
             render: (_value, record: ScheduleJobView) => (
-              <Space direction="vertical" size={0}>
+              <Space orientation="vertical" size={0}>
                 <Text>{record.cronExpr}</Text>
                 <Text type="secondary">{record.timezone}</Text>
               </Space>
@@ -97,7 +97,7 @@ export default function SystemTasksJobsSection({
             key: 'lastRun',
             width: 200,
             render: (_value, record: ScheduleJobView) => (
-              <Space direction="vertical" size={0}>
+              <Space orientation="vertical" size={0}>
                 <Text>{formatDateTime(record.lastRunAt)}</Text>
                 {record.lastError ? (
                   <Text type="danger">{record.lastError}</Text>

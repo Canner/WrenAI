@@ -369,7 +369,7 @@ export default function ManagePlatformWorkspacesPage() {
       key: 'name',
       width: 260,
       render: (_value, record) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Text strong>{getReferenceDisplayWorkspaceName(record.name)}</Text>
           <Text type="secondary">{record.slug || '未配置 slug'}</Text>
         </Space>
@@ -387,7 +387,7 @@ export default function ManagePlatformWorkspacesPage() {
       key: 'members',
       width: 150,
       render: (_value, record) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Text>{record.memberCount} 人</Text>
           <Text type="secondary">
             Owner {record.ownerCount} / Viewer {record.viewerCount}
@@ -448,7 +448,7 @@ export default function ManagePlatformWorkspacesPage() {
       title: '工作空间',
       key: 'workspace',
       render: (_value, record) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Text strong>
             {getReferenceDisplayWorkspaceName(record.workspace?.name || '—')}
           </Text>
@@ -460,7 +460,7 @@ export default function ManagePlatformWorkspacesPage() {
       title: '申请人',
       key: 'user',
       render: (_value, record) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Text>{record.user?.displayName || '未命名用户'}</Text>
           <Text type="secondary">
             {formatAccountLabel(record.user?.email, record.id)}
@@ -552,7 +552,7 @@ export default function ManagePlatformWorkspacesPage() {
       key: 'account',
       width: 220,
       render: (_value, record) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Text>{formatAccountLabel(record.user?.email, record.userId)}</Text>
           <Text type="secondary">{record.user?.email || '—'}</Text>
         </Space>
@@ -771,7 +771,7 @@ export default function ManagePlatformWorkspacesPage() {
           description="平台工作空间管理仅对具备工作空间治理查看权限的角色开放。"
         />
       ) : (
-        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           {error ? <Alert type="warning" showIcon message={error} /> : null}
 
           <Space style={{ width: '100%', justifyContent: 'space-between' }}>
@@ -838,7 +838,7 @@ export default function ManagePlatformWorkspacesPage() {
 
       <Drawer
         open={Boolean(detail && selectedWorkspaceId)}
-        width={980}
+        size={980}
         title={`${detail?.workspace.name || '工作空间'} · 成员管理`}
         onClose={() => {
           setSelectedWorkspaceId(null);
@@ -848,7 +848,7 @@ export default function ManagePlatformWorkspacesPage() {
           setMemberAction(null);
         }}
       >
-        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           <Space wrap>
             <Tag>{detail?.workspace.kind || 'regular'}</Tag>
             <Tag>成员 {detail?.workspace.memberCount || 0}</Tag>

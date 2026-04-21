@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
-import { message } from 'antd';
+
+import { appMessage as message } from '@/utils/antdAppBridge';
 import type { ClickPayload } from '@/components/diagram/Context';
 import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import { resolveAbortSafeErrorMessage } from '@/utils/abort';

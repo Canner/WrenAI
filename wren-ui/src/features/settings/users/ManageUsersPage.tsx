@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Alert, message } from 'antd';
+import { Alert } from 'antd';
+import { appMessage as message } from '@/utils/antdAppBridge';
 import ConsoleShellLayout from '@/components/reference/ConsoleShellLayout';
 import { buildRuntimeScopeUrl } from '@/runtime/client/runtimeScope';
 import useAuthSession from '@/hooks/useAuthSession';

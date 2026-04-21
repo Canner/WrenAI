@@ -726,7 +726,11 @@ export default function ManagePlatformPermissionsPage() {
 
             <div style={{ flex: 1, overflow: 'auto', paddingRight: 4 }}>
               {sidebarLoading ? (
-                <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                <Space
+                  orientation="vertical"
+                  size={8}
+                  style={{ width: '100%' }}
+                >
                   {Array.from({ length: 3 }).map((_, index) => (
                     <Card key={index} size="small">
                       <Skeleton active title={false} paragraph={{ rows: 2 }} />
@@ -739,7 +743,11 @@ export default function ManagePlatformPermissionsPage() {
                   description="暂无匹配角色"
                 />
               ) : (
-                <Space direction="vertical" size={6} style={{ width: '100%' }}>
+                <Space
+                  orientation="vertical"
+                  size={6}
+                  style={{ width: '100%' }}
+                >
                   {visibleRoles.map((role) => {
                     const selected =
                       selectedRoleId === role.id && !isCreateMode;
@@ -877,7 +885,7 @@ export default function ManagePlatformPermissionsPage() {
                   }}
                 >
                   <Space
-                    direction="vertical"
+                    orientation="vertical"
                     size={10}
                     style={{ width: '100%' }}
                   >
@@ -1046,7 +1054,7 @@ export default function ManagePlatformPermissionsPage() {
                 >
                   {loading && permissionCatalog.length === 0 ? (
                     <Space
-                      direction="vertical"
+                      orientation="vertical"
                       size={10}
                       style={{ width: '100%' }}
                     >
@@ -1067,7 +1075,7 @@ export default function ManagePlatformPermissionsPage() {
                     />
                   ) : (
                     <Space
-                      direction="vertical"
+                      orientation="vertical"
                       size={10}
                       style={{ width: '100%' }}
                     >

@@ -74,7 +74,7 @@ export default function HomeSkillPickerModal({
           <Text type="secondary">正在加载技能列表…</Text>
         ) : options.length === 0 ? (
           <Space
-            direction="vertical"
+            orientation="vertical"
             size={12}
             style={{ width: '100%', paddingTop: 8 }}
           >
@@ -107,7 +107,11 @@ export default function HomeSkillPickerModal({
                 $active={active}
                 onClick={() => onToggleSkill(skillOption.id)}
               >
-                <Space direction="vertical" size={6} style={{ width: '100%' }}>
+                <Space
+                  orientation="vertical"
+                  size={6}
+                  style={{ width: '100%' }}
+                >
                   <Space align="center" size={10} wrap>
                     <Text strong style={{ fontSize: 15 }}>
                       {skillOption.name}

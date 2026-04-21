@@ -1,6 +1,7 @@
+import { appMessage as message } from '@/utils/antdAppBridge';
 import { SchemaChangeType, SchemaChange } from '@/types/schemaChange';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { message } from 'antd';
+
 import type { TreeDataNode } from 'antd';
 import { hasExecutableRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import { DiagramModel } from '@/utils/data';

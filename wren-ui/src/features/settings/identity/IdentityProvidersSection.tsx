@@ -116,7 +116,7 @@ export default function IdentityProvidersSection({
                     record.configJson,
                   );
                   return (
-                    <Space direction="vertical" size={0}>
+                    <Space orientation="vertical" size={0}>
                       <Tag color={metadataSourceColor(metadata.source)}>
                         {metadata.label}
                       </Tag>

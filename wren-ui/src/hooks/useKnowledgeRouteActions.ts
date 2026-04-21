@@ -26,7 +26,7 @@ export default function useKnowledgeRouteActions<TAsset>({
 }) {
   const replaceKnowledgeRoute = useCallback(
     (nextUrl: string) => replaceKnowledgeRouteWithShallow(router, nextUrl),
-    [router],
+    [router.replace],
   );
   const clearDetailAsset = useCallback(
     () => clearKnowledgeDetailAsset(setDetailAsset),

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { message } from 'antd';
+
+import { appMessage as message } from '@/utils/antdAppBridge';
 import { hasExecutableRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { Path, SETUP } from '@/utils/enum';

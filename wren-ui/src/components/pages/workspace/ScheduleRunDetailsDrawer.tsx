@@ -160,7 +160,7 @@ export default function ScheduleRunDetailsDrawer(props: Props) {
     <Drawer
       open={drawerOpen}
       title="运行详情"
-      width={760}
+      size={760}
       destroyOnHidden
       closable
       onClose={onClose}
@@ -267,7 +267,7 @@ export default function ScheduleRunDetailsDrawer(props: Props) {
           <Divider titlePlacement="start" plain>
             detailJson
           </Divider>
-          <Space direction="vertical" size={12} style={sectionStyle}>
+          <Space orientation="vertical" size={12} style={sectionStyle}>
             {defaultValue.detailJson ? (
               <JsonCodeBlock
                 code={toPrettyJson(defaultValue.detailJson)}

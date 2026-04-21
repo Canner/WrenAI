@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Alert, Button, Typography, message } from 'antd';
+import { Alert, Button, Typography } from 'antd';
+import { appMessage as message } from '@/utils/antdAppBridge';
 import SQLCodeBlock from '@/components/code/SQLCodeBlock';
 import PreviewData from '@/components/dataPreview/PreviewData';
 import { COLUMN } from '@/components/table/BaseTable';

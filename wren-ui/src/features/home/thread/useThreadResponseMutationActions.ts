@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { message } from 'antd';
+
+import { appMessage as message } from '@/utils/antdAppBridge';
 import type {
   AdjustThreadResponseChartInput,
   ThreadResponse,

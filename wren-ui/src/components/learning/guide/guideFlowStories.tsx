@@ -1,8 +1,8 @@
-import { message } from 'antd';
 import type { NextRouter } from 'next/router';
 import { createRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 
+import { appMessage as message } from '@/utils/antdAppBridge';
 import { TEMPLATE_OPTIONS as SAMPLE_DATASET_INFO } from '@/components/pages/setup/utils';
 import { buildRuntimeScopeUrl } from '@/runtime/client/runtimeScope';
 import { ProjectLanguage } from '@/types/project';

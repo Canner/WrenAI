@@ -293,11 +293,13 @@ describe('home index page', () => {
             id: 'kb-1',
             name: '订单分析知识库',
             defaultKbSnapshotId: 'snap-1',
+            assetCount: 6,
           },
           {
             id: 'kb-2',
             name: '客户经营知识库',
             defaultKbSnapshotId: 'snap-2',
+            assetCount: 3,
           },
         ],
       },
@@ -362,7 +364,8 @@ describe('home index page', () => {
     expect(markup).toContain('输入关键词搜索知识库');
     expect(markup).toContain('订单分析知识库');
     expect(markup).toContain('客户经营知识库');
-    expect(markup).toContain('0 张表');
+    expect(markup).toContain('6 张表');
+    expect(markup).toContain('3 张表');
     expect(markup).toContain('案例广场');
     expect(markup).toContain('推荐模板');
     expect(markup).toContain(

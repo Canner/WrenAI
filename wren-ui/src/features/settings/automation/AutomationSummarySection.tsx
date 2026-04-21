@@ -14,7 +14,7 @@ function AutomationSummaryMetric({
   icon?: React.ReactNode;
 }) {
   return (
-    <Space direction="vertical" size={4}>
+    <Space orientation="vertical" size={4}>
       <Text type="secondary">{label}</Text>
       <div
         style={{
@@ -51,7 +51,7 @@ export default function AutomationSummarySection({
         showIcon
         message="当前运行范围"
         description={
-          <Space direction="vertical" size={6}>
+          <Space orientation="vertical" size={6}>
             <Text type="secondary">
               当前工作空间：<b>{currentWorkspaceName}</b>
             </Text>

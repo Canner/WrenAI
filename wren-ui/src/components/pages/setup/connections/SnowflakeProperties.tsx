@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { Button, Form, Input, Radio, Upload, UploadProps, message } from 'antd';
+import { Button, Form, Input, Radio, Upload, UploadProps } from 'antd';
 import type { RadioChangeEvent } from 'antd';
 import UploadOutlined from '@ant-design/icons/UploadOutlined';
+import { appMessage as message } from '@/utils/antdAppBridge';
 import { ERROR_TEXTS } from '@/utils/error';
 import { FORM_MODE } from '@/utils/enum';
 import { readFileContent, extractPrivateKeyString } from '@/utils/file';

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { message } from 'antd';
+
+import { appMessage as message } from '@/utils/antdAppBridge';
 import {
   convertObjectToIdentifier,
   convertIdentifierToObject,

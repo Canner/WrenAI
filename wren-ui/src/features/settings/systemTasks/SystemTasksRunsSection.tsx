@@ -52,7 +52,7 @@ export default function SystemTasksRunsSection({
             title: '运行',
             key: 'run',
             render: (_value, record: ScheduleRunView) => (
-              <Space direction="vertical" size={0}>
+              <Space orientation="vertical" size={0}>
                 <Text strong>{record.targetName}</Text>
                 <Text type="secondary">{formatDateTime(record.startedAt)}</Text>
               </Space>
@@ -70,7 +70,7 @@ export default function SystemTasksRunsSection({
             title: '详情',
             key: 'detail',
             render: (_value, record: ScheduleRunView) => (
-              <Space direction="vertical" size={0}>
+              <Space orientation="vertical" size={0}>
                 {record.errorMessage ? (
                   <Text type="danger">{record.errorMessage}</Text>
                 ) : (

@@ -1,9 +1,10 @@
 import { useCallback } from 'react';
+import { appMessage as message } from '@/utils/antdAppBridge';
 import type { ClickPayload } from '@/components/diagram/Context';
 import useModalAction from '@/hooks/useModalAction';
 import useRelationshipModal from '@/hooks/useRelationshipModal';
 import { type ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
-import { message } from 'antd';
+
 import { NODE_TYPE } from '@/utils/enum';
 import { HISTORICAL_SNAPSHOT_READONLY_HINT } from '@/utils/runtimeSnapshot';
 import buildModelingRelationshipMutationInput from './buildModelingRelationshipMutationInput';

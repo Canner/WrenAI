@@ -11,7 +11,7 @@ export function buildAssetDetailFieldColumns() {
       key: 'field',
       width: 260,
       render: (_value: unknown, field: AssetDetailFieldRow) => (
-        <Space direction="vertical" size={1} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={1} style={{ width: '100%' }}>
           <Text strong style={{ lineHeight: 1.3, fontSize: 12 }}>
             {field.aiName || field.fieldName}
           </Text>
@@ -89,7 +89,7 @@ export function buildAssetDetailFieldColumns() {
         value: string | null | undefined,
         field: AssetDetailFieldRow,
       ) => (
-        <Space direction="vertical" size={1}>
+        <Space orientation="vertical" size={1}>
           <span style={{ lineHeight: 1.35 }}>{value || '暂无'}</span>
           {field.lineage?.length ? (
             <Text type="secondary" style={{ fontSize: 11, lineHeight: 1.3 }}>

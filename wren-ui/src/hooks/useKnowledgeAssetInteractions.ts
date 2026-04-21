@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import { message } from 'antd';
+import { appMessage as message } from '@/utils/antdAppBridge';
 
 type MaybePromise<T> = T | Promise<T>;
 

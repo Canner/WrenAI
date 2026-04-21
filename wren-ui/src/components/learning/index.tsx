@@ -8,10 +8,11 @@ import {
   useState,
 } from 'react';
 import { sortBy } from 'lodash';
-import { message } from 'antd';
+
 import styled from 'styled-components';
 import ReadOutlined from '@ant-design/icons/ReadOutlined';
 import RightOutlined from '@ant-design/icons/RightOutlined';
+import { appMessage as message } from '@/utils/antdAppBridge';
 import { IterableComponent, makeIterable } from '@/utils/iteration';
 import LearningGuide from '@/components/learning/guide';
 import { LEARNING } from './guide/utils';

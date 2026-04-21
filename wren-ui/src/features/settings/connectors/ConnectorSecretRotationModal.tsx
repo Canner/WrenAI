@@ -75,7 +75,7 @@ export default function ConnectorSecretRotationModal({
         </Button>,
       ]}
     >
-      <Space direction="vertical" size={12} style={{ width: '100%' }}>
+      <Space orientation="vertical" size={12} style={{ width: '100%' }}>
         <Paragraph type="secondary" className="mb-0">
           {CONNECTOR_SECRET_ROTATION_HINT}
         </Paragraph>

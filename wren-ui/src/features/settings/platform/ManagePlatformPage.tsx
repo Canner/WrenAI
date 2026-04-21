@@ -29,7 +29,7 @@ function PlatformSummaryMetric({
   value: string | number;
 }) {
   return (
-    <Space direction="vertical" size={4}>
+    <Space orientation="vertical" size={4}>
       <Text type="secondary">{label}</Text>
       <div style={{ fontSize: 28, fontWeight: 600, lineHeight: 1.2 }}>
         {value}
@@ -150,7 +150,7 @@ export default function PlatformManagementPage() {
             </Space>
           }
         >
-          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+          <Space orientation="vertical" size={16} style={{ width: '100%' }}>
             <Text type="secondary">
               当前工作空间 <b>{currentWorkspaceName}</b>
               ，可从这里快速进入用户、权限、审计与工作空间治理入口。

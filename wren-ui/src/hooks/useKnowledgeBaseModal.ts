@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { message } from 'antd';
+import { appMessage as message } from '@/utils/antdAppBridge';
 
 type KnowledgeBaseEditable = {
   id?: string;

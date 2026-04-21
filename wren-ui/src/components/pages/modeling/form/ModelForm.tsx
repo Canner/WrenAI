@@ -1,6 +1,7 @@
+import { appMessage as message } from '@/utils/antdAppBridge';
 import { CompactColumn, CompactTable } from '@/types/dataSource';
 import { useEffect, useMemo, useState } from 'react';
-import { Form, FormInstance, Select, message } from 'antd';
+import { Form, FormInstance, Select } from 'antd';
 import { isEmpty } from 'lodash';
 import { hasExecutableRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import { FORM_MODE } from '@/utils/enum';

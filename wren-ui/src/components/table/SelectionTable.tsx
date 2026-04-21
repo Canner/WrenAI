@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import styled from 'styled-components';
 import { Collapse, Form, Row, RowProps, Table, TableProps } from 'antd';
-
-const { Panel } = Collapse;
+import type { CollapseProps } from 'antd';
 
 const StyledCollapse = styled(Collapse)`
   &.ant-collapse.adm-error {
@@ -93,28 +92,22 @@ function SelectionTable<T extends Record<string, any>>(props: Props<T>) {
         },
       }
     : undefined;
-
-  return (
-    <StyledCollapse
-      className={status ? `adm-${status}` : ''}
-      defaultActiveKey={collapseState.collapseDefaultActiveKey}
-      onChange={collapseState.onChangeCollapsePanelState}
-    >
-      <Panel
-        extra={extra && extra(collapseState.onCollapseOpen)}
-        header={
-          <StyledRow
-            wrap={false}
-            gutter={8}
-            align="middle"
-            $isRowSelection={isRowSelection}
-          >
-            {tableHeader}
-          </StyledRow>
-        }
-        key={tableTitle}
-        showArrow={false}
-      >
+  const items: CollapseProps['items'] = [
+    {
+      key: tableTitle,
+      extra: extra && extra(collapseState.onCollapseOpen),
+      label: (
+        <StyledRow
+          wrap={false}
+          gutter={8}
+          align="middle"
+          $isRowSelection={isRowSelection}
+        >
+          {tableHeader}
+        </StyledRow>
+      ),
+      showArrow: false,
+      children: (
         <Table
           columns={columns}
           dataSource={dataSource}
@@ -123,20 +116,27 @@ function SelectionTable<T extends Record<string, any>>(props: Props<T>) {
           locale={{ emptyText: '暂无数据' }}
           pagination={{ hideOnSinglePage: true, pageSize: 50, size: 'small' }}
         />
-      </Panel>
-    </StyledCollapse>
+      ),
+    },
+  ];
+
+  return (
+    <StyledCollapse
+      className={status ? `adm-${status}` : ''}
+      activeKey={collapseState.activeKeys}
+      items={items}
+      onChange={collapseState.onChangeCollapsePanelState}
+    />
   );
 }
 
 export default SelectionTable;
 
 function useCollapseState(tableTitleName: string) {
-  const [collapseDefaultActiveKey, setCollapseDefaultActiveKey] = useState<
-    string[]
-  >([tableTitleName]);
+  const [activeKeys, setActiveKeys] = useState<string[]>([tableTitleName]);
 
   const onChangeCollapsePanelState = (key: string | string[]) =>
-    setCollapseDefaultActiveKey(key as string[]);
+    setActiveKeys(Array.isArray(key) ? key : key ? [key] : []);
 
   const onCollapseOpen = (
     event: React.MouseEvent<HTMLElement, MouseEvent>,
@@ -144,13 +144,13 @@ function useCollapseState(tableTitleName: string) {
   ) => {
     // Make sure the panel is open
     onChangeCollapsePanelState([collapseKey]);
-    if (collapseDefaultActiveKey.includes(collapseKey)) {
+    if (activeKeys.includes(collapseKey)) {
       event.stopPropagation();
     }
   };
 
   return {
-    collapseDefaultActiveKey,
+    activeKeys,
     onChangeCollapsePanelState,
     onCollapseOpen,
   };

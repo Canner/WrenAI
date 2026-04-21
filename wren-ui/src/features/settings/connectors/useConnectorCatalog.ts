@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
-import { message } from 'antd';
+
+import { appMessage as message } from '@/utils/antdAppBridge';
 import useRestRequest from '@/hooks/useRestRequest';
 import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import {

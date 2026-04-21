@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { message } from 'antd';
+
+import { appMessage as message } from '@/utils/antdAppBridge';
 import { Path } from '@/utils/enum';
 import { SampleDatasetName } from '@/types/dataSource';
 
@@ -37,7 +38,7 @@ export default function useSetupConnectionSampleDataset() {
         setLoading(false);
       }
     },
-    [runtimeScopeNavigation],
+    [runtimeScopeNavigation.push, runtimeScopeNavigation.selector],
   );
 
   return {

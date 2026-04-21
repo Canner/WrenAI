@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useRouter } from 'next/router';
-import { message } from 'antd';
+
+import { appMessage as message } from '@/utils/antdAppBridge';
 import {
   omitRuntimeScopeQuery,
   type ClientRuntimeScopeSelector,
@@ -140,7 +141,7 @@ export function useKnowledgeAssetWorkbench({
         shallow: true,
       });
     },
-    [router],
+    [router.pathname, router.query, router.replace],
   );
 
   const { assetDatabaseOptions, assetTableOptions } =

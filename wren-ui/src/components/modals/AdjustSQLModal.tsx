@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Form, Modal, Typography, message } from 'antd';
+import { Alert, Button, Form, Modal, Typography } from 'antd';
 import InfoCircleOutlined from '@ant-design/icons/InfoCircleOutlined';
+import { appMessage as message } from '@/utils/antdAppBridge';
 import { ERROR_TEXTS } from '@/utils/error';
 import { ModalAction } from '@/hooks/useModalAction';
 import SQLEditor from '@/components/editor/SQLEditor';
@@ -147,7 +148,7 @@ export default function AdjustSQLModal(props: Props) {
       closable
       confirmLoading={confirmLoading}
       destroyOnHidden
-      maskClosable={false}
+      mask={{ closable: false }}
       onCancel={onClose}
       open={visible}
       width={640}

@@ -53,7 +53,7 @@ export default function ModelDrawer(props: Props) {
     <Drawer
       open={visible}
       title={getDrawerTitle(currentFormMode, defaultValue?.displayName)}
-      width={750}
+      size={750}
       closable
       destroyOnHidden
       afterOpenChange={afterOpenChange}

@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
-import { message } from 'antd';
+
+import { appMessage as message } from '@/utils/antdAppBridge';
 import { DataSourceName } from '@/types/dataSource';
 import {
   DATABRICKS_AUTH_METHOD,
@@ -19,7 +20,7 @@ export default function useSetupConnectionType() {
   const [error, setError] = useState<Error | null>(null);
   const completedConnectionSave = useCallback(async () => {
     runtimeScopeNavigation.push(Path.OnboardingModels);
-  }, [runtimeScopeNavigation]);
+  }, [runtimeScopeNavigation.push]);
 
   const selectConnectionType = useCallback(
     (payload: { connectionType: DataSourceName; dispatch?: () => void }) => {

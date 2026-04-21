@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
-import { message } from 'antd';
+
+import { appMessage as message } from '@/utils/antdAppBridge';
 import type { CreateThreadResponseInput, ThreadResponse } from '@/types/home';
 import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import { createThreadResponse as createThreadResponseRequest } from '@/utils/threadRest';

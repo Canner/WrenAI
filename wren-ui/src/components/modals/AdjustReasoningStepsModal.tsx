@@ -132,7 +132,7 @@ export default function AdjustReasoningStepsModal(props: Props) {
       onOk={submit}
       onCancel={onClose}
       confirmLoading={loading}
-      maskClosable={false}
+      mask={{ closable: false }}
       destroyOnHidden
       centered
       afterClose={reset}

@@ -237,7 +237,7 @@ export default function AuthPage() {
   if (authSession.loading && !authSession.data) {
     return (
       <Page>
-        <Spin tip="正在验证当前登录状态…" />
+        <Spin description="正在验证当前登录状态…" />
       </Page>
     );
   }
@@ -245,7 +245,7 @@ export default function AuthPage() {
   if (authSession.authenticated) {
     return (
       <Page>
-        <Spin tip="已检测到登录态，正在跳转…" />
+        <Spin description="已检测到登录态，正在跳转…" />
       </Page>
     );
   }

@@ -43,6 +43,63 @@ export default function UsersMemberEditModal({
   const editingActions = editingMember
     ? buildMemberLifecycleActions(editingMember)
     : [];
+  const memberDetailItems = editingMember
+    ? [
+        {
+          key: 'displayName',
+          label: '姓名',
+          children: editingMember.user?.displayName || '未命名用户',
+        },
+        {
+          key: 'account',
+          label: '账号',
+          children: formatAccountLabel(
+            editingMember.user?.email,
+            editingMember.userId || '—',
+          ),
+        },
+        {
+          key: 'email',
+          label: '邮箱',
+          children: editingMember.user?.email || '—',
+        },
+        {
+          key: 'phone',
+          label: '手机号',
+          children: formatPhoneLabel(
+            editingMember.user?.phone,
+            editingMember.user?.mobile,
+            editingMember.user?.phoneNumber,
+          ),
+        },
+        {
+          key: 'role',
+          label: '角色',
+          children: (
+            <Tag color={resolveRoleTagColor(editingMember.roleKey)}>
+              {resolveWorkspaceMemberRoleLabel(editingMember.roleKey)}
+            </Tag>
+          ),
+        },
+        {
+          key: 'status',
+          label: '状态',
+          children: (
+            <Tag color={applicationStatusColor(editingMember.status)}>
+              {STATUS_LABELS[editingMember.status] || editingMember.status}
+            </Tag>
+          ),
+        },
+        {
+          key: 'source',
+          label: '来源',
+          children: renderSourceDetails(
+            editingMember.sourceDetails,
+            resolveMemberSourceFallbackLabel(editingMember.status),
+          ),
+        },
+      ]
+    : [];
 
   return (
     <Modal
@@ -53,48 +110,15 @@ export default function UsersMemberEditModal({
       onCancel={onClose}
     >
       {editingMember ? (
-        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           <Descriptions
             bordered
             column={1}
-            labelStyle={{ width: 92, color: 'var(--nova-text-secondary)' }}
-          >
-            <Descriptions.Item label="姓名">
-              {editingMember.user?.displayName || '未命名用户'}
-            </Descriptions.Item>
-            <Descriptions.Item label="账号">
-              {formatAccountLabel(
-                editingMember.user?.email,
-                editingMember.userId || '—',
-              )}
-            </Descriptions.Item>
-            <Descriptions.Item label="邮箱">
-              {editingMember.user?.email || '—'}
-            </Descriptions.Item>
-            <Descriptions.Item label="手机号">
-              {formatPhoneLabel(
-                editingMember.user?.phone,
-                editingMember.user?.mobile,
-                editingMember.user?.phoneNumber,
-              )}
-            </Descriptions.Item>
-            <Descriptions.Item label="角色">
-              <Tag color={resolveRoleTagColor(editingMember.roleKey)}>
-                {resolveWorkspaceMemberRoleLabel(editingMember.roleKey)}
-              </Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label="状态">
-              <Tag color={applicationStatusColor(editingMember.status)}>
-                {STATUS_LABELS[editingMember.status] || editingMember.status}
-              </Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label="来源">
-              {renderSourceDetails(
-                editingMember.sourceDetails,
-                resolveMemberSourceFallbackLabel(editingMember.status),
-              )}
-            </Descriptions.Item>
-          </Descriptions>
+            items={memberDetailItems}
+            styles={{
+              label: { width: 92, color: 'var(--nova-text-secondary)' },
+            }}
+          />
 
           {canManageMembers ? (
             <Space wrap>

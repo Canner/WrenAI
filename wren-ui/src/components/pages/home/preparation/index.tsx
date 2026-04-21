@@ -2,6 +2,7 @@ import clsx from 'clsx';
 import Image from 'next/image';
 import { useEffect, useMemo, useState, type ComponentProps } from 'react';
 import { Typography, Collapse } from 'antd';
+import type { CollapseProps } from 'antd';
 import DownOutlined from '@ant-design/icons/DownOutlined';
 import ErrorBoundary from './ErrorBoundary';
 import PreparationStatus from './PreparationStatus';
@@ -65,13 +66,43 @@ export default function Preparation(props: Props) {
   if (preparedTask === null) return null;
 
   const isStopped = preparedTask.status === AskingTaskStatus.STOPPED;
+  const items: CollapseProps['items'] = [
+    {
+      key: 'preparation',
+      label: (
+        <div className="flex-grow-1 d-flex align-center justify-space-between gx-2 select-none">
+          <Typography.Title level={5} className="gray-8 text-medium mb-0">
+            <Image
+              src="/images/icon/message-ai.svg"
+              alt="回答准备步骤"
+              width={24}
+              height={24}
+              className="mr-1"
+            />
+            回答准备步骤
+          </Typography.Title>
+          <PreparationStatus {...props} preparedTask={preparedTask} />
+        </div>
+      ),
+      children: (
+        <ErrorBoundary error={error}>
+          <PreparationSteps
+            {...props}
+            preparedTask={preparedTask}
+            className="px-1 -mb-4"
+          />
+        </ErrorBoundary>
+      ),
+    },
+  ];
 
   return (
     <div className={clsx('border border-gray-4 rounded', className)}>
       <Collapse
         className="bg-gray-1"
         bordered={false}
-        expandIconPosition="end"
+        items={items}
+        expandIconPlacement="end"
         expandIcon={({ isActive }) =>
           !isStopped && (
             <DownOutlined
@@ -80,36 +111,12 @@ export default function Preparation(props: Props) {
             />
           )
         }
-        activeKey={isActive && !isStopped ? 'preparation' : undefined}
-        onChange={([key]) => setIsActive(key === 'preparation')}
-      >
-        <Collapse.Panel
-          key="preparation"
-          header={
-            <div className="flex-grow-1 d-flex align-center justify-space-between gx-2 select-none">
-              <Typography.Title level={5} className="gray-8 text-medium mb-0">
-                <Image
-                  src="/images/icon/message-ai.svg"
-                  alt="回答准备步骤"
-                  width={24}
-                  height={24}
-                  className="mr-1"
-                />
-                回答准备步骤
-              </Typography.Title>
-              <PreparationStatus {...props} preparedTask={preparedTask} />
-            </div>
-          }
-        >
-          <ErrorBoundary error={error}>
-            <PreparationSteps
-              {...props}
-              preparedTask={preparedTask}
-              className="px-1 -mb-4"
-            />
-          </ErrorBoundary>
-        </Collapse.Panel>
-      </Collapse>
+        activeKey={isActive && !isStopped ? ['preparation'] : []}
+        onChange={(key) => {
+          const keys = Array.isArray(key) ? key : key ? [key] : [];
+          setIsActive(keys.includes('preparation'));
+        }}
+      />
     </div>
   );
 }

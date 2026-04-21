@@ -14,7 +14,7 @@ function SystemTaskSummaryMetric({
   value: string | number;
 }) {
   return (
-    <Space direction="vertical" size={4}>
+    <Space orientation="vertical" size={4}>
       <Text type="secondary">{label}</Text>
       <div style={{ fontSize: 28, fontWeight: 600, lineHeight: 1.2 }}>
         {value}
@@ -30,7 +30,7 @@ export default function SystemTasksSummarySection({
 }) {
   return (
     <Card>
-      <Space direction="vertical" size={12} style={{ width: '100%' }}>
+      <Space orientation="vertical" size={12} style={{ width: '100%' }}>
         <Text type="secondary">
           当前工作空间 {data?.workspace?.name || '—'}
           {data?.currentKnowledgeBase?.name

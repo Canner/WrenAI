@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react';
-import { message } from 'antd';
+
+import { appMessage as message } from '@/utils/antdAppBridge';
 import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import useRuntimeSelectorState, {
@@ -53,7 +54,7 @@ export default function useSkillsPageData() {
   );
   const connectorsHref = useMemo(
     () => runtimeScopeNavigation.hrefWorkspace(Path.SettingsConnectors),
-    [runtimeScopeNavigation],
+    [runtimeScopeNavigation.hrefWorkspace],
   );
   const marketplaceCatalogSkills = data.marketplaceCatalogSkills;
   const skillDefinitions = data.skillDefinitions;

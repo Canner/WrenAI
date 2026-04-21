@@ -1,5 +1,5 @@
-import { message } from 'antd';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { appMessage as message } from '@/utils/antdAppBridge';
 import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
 import { buildThreadResponseAnswerStreamUrl } from '@/utils/threadRest';

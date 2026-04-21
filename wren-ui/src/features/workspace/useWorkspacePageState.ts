@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
-import { message } from 'antd';
+
+import { appMessage as message } from '@/utils/antdAppBridge';
 import { buildRuntimeScopeUrl } from '@/runtime/client/runtimeScope';
 import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
@@ -104,7 +105,7 @@ export default function useWorkspacePageState() {
       );
       await router.replace(nextUrl);
     },
-    [router],
+    [router.replace],
   );
 
   const handleWorkspaceAction = useCallback(

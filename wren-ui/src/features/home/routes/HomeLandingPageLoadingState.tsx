@@ -7,7 +7,7 @@ export default function HomeLandingPageLoadingState() {
     <DirectShellPageFrame activeNav="home">
       <Stage>
         <Space
-          direction="vertical"
+          orientation="vertical"
           size={20}
           style={{ width: '100%', maxWidth: 720 }}
         >

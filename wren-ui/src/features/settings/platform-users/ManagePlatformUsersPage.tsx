@@ -547,7 +547,7 @@ export default function ManagePlatformUsersPage() {
       key: 'account',
       width: 220,
       render: (_value, record) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Text>{formatAccountLabel(record.email, record.id)}</Text>
           <Text type="secondary">{record.email}</Text>
         </Space>
@@ -656,7 +656,7 @@ export default function ManagePlatformUsersPage() {
       title: '工作空间',
       key: 'workspace',
       render: (_value, record) => (
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Text strong>
             {getReferenceDisplayWorkspaceName(record.workspace?.name || '—')}
           </Text>
@@ -790,7 +790,7 @@ export default function ManagePlatformUsersPage() {
           description="平台用户管理仅对具备平台用户目录权限的角色开放。"
         />
       ) : (
-        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           {error ? <Alert type="warning" showIcon message={error} /> : null}
 
           <Space
@@ -826,7 +826,7 @@ export default function ManagePlatformUsersPage() {
 
       <Drawer
         open={Boolean(detail && selectedUserId)}
-        width={920}
+        size={920}
         title={`${detail?.user.displayName || detail?.user.email || '用户'} · 管理所属空间`}
         onClose={() => {
           setSelectedUserId(null);
@@ -834,12 +834,12 @@ export default function ManagePlatformUsersPage() {
           setWorkspaceModalOpen(false);
         }}
       >
-        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           <Space
             align="start"
             style={{ width: '100%', justifyContent: 'space-between' }}
           >
-            <Space direction="vertical" size={6}>
+            <Space orientation="vertical" size={6}>
               <Text strong>{detail?.user.displayName || '未命名用户'}</Text>
               <Text type="secondary">{detail?.user.email || '—'}</Text>
               <Space wrap>
@@ -852,7 +852,7 @@ export default function ManagePlatformUsersPage() {
                 <Tag>已关联 {detail?.user.workspaceCount || 0} 个工作空间</Tag>
               </Space>
             </Space>
-            <Space direction="vertical" size={6} style={{ minWidth: 280 }}>
+            <Space orientation="vertical" size={6} style={{ minWidth: 280 }}>
               <Text type="secondary">默认工作空间</Text>
               <Select
                 value={detail?.user.defaultWorkspaceId || undefined}

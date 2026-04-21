@@ -197,11 +197,11 @@ export default function ManageProfilePage() {
             color: 'var(--ant-color-success)',
           };
   const passwordRulesPopoverContent = (
-    <Space direction="vertical" size={8} style={{ maxWidth: 260 }}>
+    <Space orientation="vertical" size={8} style={{ maxWidth: 260 }}>
       <Text strong style={{ fontSize: 13 }}>
         密码规则
       </Text>
-      <Space direction="vertical" size={6} style={{ width: '100%' }}>
+      <Space orientation="vertical" size={6} style={{ width: '100%' }}>
         {passwordRuleChecks.map((rule) => (
           <Space key={rule.key} size={6} align="start">
             {rule.satisfied ? (
@@ -370,7 +370,7 @@ export default function ManageProfilePage() {
           description="请先登录后再查看个人设置。"
         />
       ) : (
-        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           {impersonation?.active ? (
             <Alert
               className="console-alert"
@@ -378,7 +378,7 @@ export default function ManageProfilePage() {
               showIcon
               message="当前处于代理登录（Impersonation）会话"
               description={
-                <Space direction="vertical" size={8}>
+                <Space orientation="vertical" size={8}>
                   <Text type="secondary">
                     该会话正在代表其他成员执行操作，所有关键行为都会写入审计。
                   </Text>
@@ -424,11 +424,11 @@ export default function ManageProfilePage() {
                   </Avatar>
 
                   <Space
-                    direction="vertical"
+                    orientation="vertical"
                     size={12}
                     style={{ flex: 1, minWidth: 0 }}
                   >
-                    <Space direction="vertical" size={4}>
+                    <Space orientation="vertical" size={4}>
                       <Title
                         level={2}
                         style={{
@@ -576,7 +576,7 @@ export default function ManageProfilePage() {
                     </Form.Item>
                     <Form.Item label="确认新密码" style={{ marginBottom: 16 }}>
                       <Space
-                        direction="vertical"
+                        orientation="vertical"
                         size={8}
                         style={{ width: '100%' }}
                       >
@@ -655,7 +655,7 @@ export default function ManageProfilePage() {
                   }}
                 >
                   <Space
-                    direction="vertical"
+                    orientation="vertical"
                     size={16}
                     style={{ width: '100%' }}
                   >
@@ -675,7 +675,7 @@ export default function ManageProfilePage() {
                       >
                         <SafetyCertificateOutlined style={{ fontSize: 18 }} />
                       </div>
-                      <Space direction="vertical" size={2}>
+                      <Space orientation="vertical" size={2}>
                         <Text strong style={{ fontSize: 18 }}>
                           安全建议
                         </Text>
@@ -728,7 +728,7 @@ export default function ManageProfilePage() {
                             >
                               <Icon style={{ fontSize: 14 }} />
                             </div>
-                            <Space direction="vertical" size={2}>
+                            <Space orientation="vertical" size={2}>
                               <Text strong style={{ fontSize: 13 }}>
                                 {title}
                               </Text>

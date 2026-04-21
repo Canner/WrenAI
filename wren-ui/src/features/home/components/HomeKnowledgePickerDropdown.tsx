@@ -23,6 +23,7 @@ const { Text } = Typography;
 type KnowledgeBaseOption = {
   id: string;
   name?: string | null;
+  assetCount?: number | null;
 };
 
 type HomeKnowledgePickerDropdownProps = {
@@ -78,9 +79,10 @@ export default function HomeKnowledgePickerDropdown({
               const active = selectedKnowledgeBaseIds.includes(
                 knowledgeBase.id,
               );
-              const tableCount = getReferenceAssetCountByKnowledgeName(
-                knowledgeBase.name,
-              );
+              const tableCount =
+                getReferenceAssetCountByKnowledgeName(knowledgeBase.name) ??
+                knowledgeBase.assetCount ??
+                0;
 
               return (
                 <KnowledgeOptionRow
@@ -97,7 +99,7 @@ export default function HomeKnowledgePickerDropdown({
                     </KnowledgeOptionCopy>
                   </KnowledgeOptionMain>
                   <KnowledgeOptionMeta $active={active}>
-                    {(tableCount || 0).toString()} 张表
+                    {tableCount.toString()} 张表
                   </KnowledgeOptionMeta>
                 </KnowledgeOptionRow>
               );

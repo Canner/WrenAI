@@ -46,7 +46,7 @@ export default function KnowledgeAssetDetailDrawer({
       title={null}
       open={Boolean(activeDetailAsset)}
       onClose={onCloseAssetDetail}
-      width="60vw"
+      size="60vw"
       styles={{
         body: { padding: 20, background: '#ffffff' },
         header: { display: 'none' },

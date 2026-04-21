@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Modal, Form, Input, Typography, Button, Alert, message } from 'antd';
+import { Modal, Form, Input, Typography, Button, Alert } from 'antd';
 import LinkOutlined from '@ant-design/icons/LinkOutlined';
+import { appMessage as message } from '@/utils/antdAppBridge';
 import { FORM_MODE } from '@/utils/enum';
 import { ERROR_TEXTS } from '@/utils/error';
 import { DiagramModel } from '@/utils/data/type';
@@ -165,7 +166,7 @@ export default function AddCalculatedFieldModal(props: Props) {
       open={visible}
       onCancel={onClose}
       confirmLoading={loading}
-      maskClosable={false}
+      mask={{ closable: false }}
       destroyOnHidden
       afterClose={() => reset()}
       footer={

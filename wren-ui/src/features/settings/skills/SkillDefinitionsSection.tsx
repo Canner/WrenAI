@@ -78,7 +78,7 @@ export default function SkillDefinitionsSection({
             title: '技能',
             dataIndex: 'name',
             render: (value: string, record: SkillDefinitionView) => (
-              <Space direction="vertical" size={0}>
+              <Space orientation="vertical" size={0}>
                 <Space wrap size={8}>
                   <Text strong>{value}</Text>
                   <Tag>{getInstalledFromLabel(record.installedFrom)}</Tag>
@@ -93,7 +93,7 @@ export default function SkillDefinitionsSection({
           {
             title: '运行时配置',
             render: (_: unknown, record: SkillDefinitionView) => (
-              <Space direction="vertical" size={0}>
+              <Space orientation="vertical" size={0}>
                 <Text>执行模式：{record.executionMode || 'inject_only'}</Text>
                 <Text type="secondary">
                   连接器：{record.connectorId || '无'}
@@ -105,7 +105,7 @@ export default function SkillDefinitionsSection({
           {
             title: '指令 / 推荐范围',
             render: (_: unknown, record: SkillDefinitionView) => (
-              <Space direction="vertical" size={0}>
+              <Space orientation="vertical" size={0}>
                 <Paragraph ellipsis={{ rows: 2 }} className="mb-0">
                   {record.instruction || '未设置 instruction'}
                 </Paragraph>
@@ -130,7 +130,7 @@ export default function SkillDefinitionsSection({
             title: '状态',
             width: 140,
             render: (_: unknown, record: SkillDefinitionView) => (
-              <Space direction="vertical" size={4}>
+              <Space orientation="vertical" size={4}>
                 {record.isEnabled !== false ? (
                   <Tag color="green">启用</Tag>
                 ) : (

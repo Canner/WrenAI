@@ -1,10 +1,13 @@
 /* eslint-disable @typescript-eslint/no-var-requires */
+const path = require('path');
 const withLess = require('next-with-less');
 const withBundleAnalyzer = require('@next/bundle-analyzer')({
   enabled: process.env.ANALYZE === 'true',
 });
 
 const distDir = process.env.NEXT_DIST_DIR || './.next';
+const NEXT_EMPTY_MODULE_ALIAS = 'private-next-empty-module';
+const NEXT_INSTRUMENTATION_CLIENT_ALIAS = 'private-next-instrumentation-client';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = withLess({
@@ -64,8 +67,28 @@ const nextConfig = withLess({
       ssr: true,
     },
   },
-  experimental: {
-    esmExternals: false,
+  devIndicators: false,
+  webpack(config, { dir, isServer }) {
+    if (!isServer) {
+      config.resolve = config.resolve || {};
+      config.resolve.alias = config.resolve.alias || {};
+
+      if (config.resolve.alias[NEXT_EMPTY_MODULE_ALIAS] === undefined) {
+        config.resolve.alias[NEXT_EMPTY_MODULE_ALIAS] = false;
+      }
+
+      if (
+        config.resolve.alias[NEXT_INSTRUMENTATION_CLIENT_ALIAS] === undefined
+      ) {
+        config.resolve.alias[NEXT_INSTRUMENTATION_CLIENT_ALIAS] = [
+          path.join(dir, 'src', 'instrumentation-client'),
+          path.join(dir, 'instrumentation-client'),
+          NEXT_EMPTY_MODULE_ALIAS,
+        ];
+      }
+    }
+
+    return config;
   },
   // routes redirect
   async redirects() {

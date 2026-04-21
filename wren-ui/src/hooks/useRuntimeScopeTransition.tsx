@@ -39,7 +39,7 @@ export default function useRuntimeScopeTransition() {
         setTransitioning(false);
       }
     },
-    [router],
+    [router.asPath, router.push, router.replace],
   );
 
   return {

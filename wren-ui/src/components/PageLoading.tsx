@@ -83,7 +83,11 @@ export const Loading = ({
   loading = false,
   tip,
 }: LoadingProps) => (
-  <Spin indicator={defaultIndicator} spinning={spinning || loading} tip={tip}>
+  <Spin
+    indicator={defaultIndicator}
+    spinning={spinning || loading}
+    description={tip}
+  >
     {children}
   </Spin>
 );

@@ -1,7 +1,8 @@
 import Image from 'next/image';
+import { appMessage as message } from '@/utils/antdAppBridge';
 import { SampleDatasetName, DataSourceName } from '@/types/dataSource';
 import { useEffect, useState } from 'react';
-import { Button, Form, message, Alert } from 'antd';
+import { Button, Form, Alert } from 'antd';
 import { DATA_SOURCES, FORM_MODE, Path } from '@/utils/enum';
 import { getConnectionType } from '@/components/pages/setup/utils';
 import { FlexLoading } from '@/components/PageLoading';

@@ -85,7 +85,7 @@ export default function AssetWizardConnectorDrawer({
     <Drawer
       open={open}
       title="新建数据源"
-      width={560}
+      size={560}
       destroyOnHidden
       onClose={handleClose}
       footer={

@@ -84,7 +84,7 @@ export default function DetailsDrawer(props: Props) {
       open={visible}
       className="gray-8"
       title="API 调用详情"
-      width={760}
+      size={760}
       closable
       destroyOnHidden
       onClose={onClose}

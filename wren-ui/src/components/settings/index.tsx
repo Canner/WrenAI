@@ -1,6 +1,7 @@
+import { appMessage as message } from '@/utils/antdAppBridge';
 import { SampleDatasetName, DataSourceName } from '@/types/dataSource';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Modal, Layout, Button, message } from 'antd';
+import { Modal, Layout, Button } from 'antd';
 import styled from 'styled-components';
 import { hasExecutableRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import { SETTINGS } from '@/utils/enum';

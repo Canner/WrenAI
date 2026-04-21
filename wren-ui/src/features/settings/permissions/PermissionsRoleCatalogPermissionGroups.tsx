@@ -43,7 +43,7 @@ export default function PermissionsRoleCatalogPermissionGroups({
 }: Props) {
   if (roleCatalogLoading) {
     return (
-      <Space direction="vertical" size={10} style={{ width: '100%' }}>
+      <Space orientation="vertical" size={10} style={{ width: '100%' }}>
         <Card size="small">
           <Skeleton active paragraph={{ rows: 2 }} title={false} />
         </Card>
@@ -64,7 +64,7 @@ export default function PermissionsRoleCatalogPermissionGroups({
   }
 
   return (
-    <Space direction="vertical" size={8} style={{ width: '100%' }}>
+    <Space orientation="vertical" size={8} style={{ width: '100%' }}>
       {permissionGroups.map((group) => {
         const selectedCount = group.items.filter((permission) =>
           selectedPermissionSet.has(permission.name),

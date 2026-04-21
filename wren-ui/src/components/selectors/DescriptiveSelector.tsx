@@ -40,7 +40,7 @@ const DescribeBox = styled.div`
 
 const defaultDescriptiveContentRender = (content: Record<string, any>) => {
   return (
-    <Space style={{ width: '100%' }} size={[0, 16]} direction="vertical">
+    <Space style={{ width: '100%' }} size={[0, 16]} orientation="vertical">
       <div>
         <div style={{ marginBottom: 4 }}>
           <b>描述</b>
@@ -143,10 +143,10 @@ export default function DescriptiveSelector(props: Props) {
       options={mainOptions}
       value={value}
       onChange={onChange}
-      dropdownRender={renderDescriptiveMenu}
+      popupRender={renderDescriptiveMenu}
       listHeight={maxHeight}
       placeholder={placeholder}
-      dropdownMatchSelectWidth={dropdownMatchSelectWidth}
+      popupMatchSelectWidth={dropdownMatchSelectWidth}
       data-testid="common__descriptive-select"
     />
   );

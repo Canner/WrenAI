@@ -93,7 +93,7 @@ export default function PermissionsRoleCatalogSidebar({
 
       <div style={{ flex: 1, overflow: 'auto', paddingRight: 4 }}>
         {roleCatalogLoading ? (
-          <Space direction="vertical" size={8} style={{ width: '100%' }}>
+          <Space orientation="vertical" size={8} style={{ width: '100%' }}>
             <Card size="small">
               <Skeleton active title={false} paragraph={{ rows: 2 }} />
             </Card>
@@ -110,7 +110,7 @@ export default function PermissionsRoleCatalogSidebar({
             description="暂无匹配角色"
           />
         ) : (
-          <Space direction="vertical" size={6} style={{ width: '100%' }}>
+          <Space orientation="vertical" size={6} style={{ width: '100%' }}>
             {visibleRoles.map((role) => {
               const selected = selectedRoleId === role.id && !isCreateMode;
               const deleting =

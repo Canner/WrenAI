@@ -94,7 +94,7 @@ export default function RuntimeScopeSelector({
     <SelectorGroup
       className={className}
       size={layout === 'stacked' ? [0, 8] : [8, 0]}
-      direction={layout === 'stacked' ? 'vertical' : 'horizontal'}
+      orientation={layout === 'stacked' ? 'vertical' : 'horizontal'}
       $layout={layout}
     >
       {showWorkspace ? (
@@ -113,7 +113,7 @@ export default function RuntimeScopeSelector({
             value: workspace.id,
           }))}
           placeholder="工作区"
-          dropdownMatchSelectWidth={false}
+          popupMatchSelectWidth={false}
           optionLabelProp="label"
           onChange={(workspaceId: string) => {
             if (!workspaceId || workspaceId === currentWorkspace?.id) {
@@ -144,7 +144,7 @@ export default function RuntimeScopeSelector({
             value: knowledgeBase.id,
           }))}
           placeholder="知识库"
-          dropdownMatchSelectWidth={false}
+          popupMatchSelectWidth={false}
           onChange={(knowledgeBaseId: string) => {
             if (
               !currentWorkspace?.id ||
@@ -180,7 +180,7 @@ export default function RuntimeScopeSelector({
             value: kbSnapshot.id,
           }))}
           placeholder="快照"
-          dropdownMatchSelectWidth={false}
+          popupMatchSelectWidth={false}
           onChange={(kbSnapshotId: string) => {
             if (
               !currentWorkspace?.id ||

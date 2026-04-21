@@ -56,7 +56,7 @@ export default function SaveAsViewModal(props: Props) {
       closable
       destroyOnHidden
       onCancel={onClose}
-      maskClosable={false}
+      mask={{ closable: false }}
       open={visible}
       width={600}
       afterClose={() => form.resetFields()}

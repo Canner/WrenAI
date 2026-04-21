@@ -63,7 +63,7 @@ export default function SQLPairDrawer(props: Props) {
       onClose={onClose}
       title="SQL 模板详情"
       open={visible}
-      width={760}
+      size={760}
     >
       <Section>
         <Label>问题</Label>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Collapse } from 'antd';
+import type { CollapseProps } from 'antd';
 import styled from 'styled-components';
 import CaretRightOutlined from '@ant-design/icons/CaretRightOutlined';
 
@@ -35,22 +36,30 @@ export default function ErrorCollapse(props: Props) {
   const [activeKey, setActiveKey] = useState<string[]>(
     defaultActive ? ['1'] : [],
   );
+  const items: CollapseProps['items'] = [
+    {
+      key: '1',
+      label: 'Show error messages',
+      children: (
+        <pre className="text-sm mb-0 pl-5" style={{ whiteSpace: 'pre-wrap' }}>
+          {message}
+        </pre>
+      ),
+    },
+  ];
 
   return (
     <StyledCollapse
       className={className}
       ghost
       activeKey={activeKey}
-      onChange={(key) => setActiveKey(key as string[])}
+      items={items}
+      onChange={(key) =>
+        setActiveKey(Array.isArray(key) ? key : key ? [key] : [])
+      }
       expandIcon={({ isActive }) => (
         <CaretRightOutlined rotate={isActive ? 90 : 0} />
       )}
-    >
-      <Collapse.Panel key="1" header="Show error messages">
-        <pre className="text-sm mb-0 pl-5" style={{ whiteSpace: 'pre-wrap' }}>
-          {message}
-        </pre>
-      </Collapse.Panel>
-    </StyledCollapse>
+    />
   );
 }

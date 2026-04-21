@@ -1,8 +1,9 @@
+import { appMessage as message } from '@/utils/antdAppBridge';
 import { CreateSqlPairInput } from '@/types/knowledge';
 import { useRouter } from 'next/router';
 import { ComponentRef, useCallback, useMemo, useRef, useState } from 'react';
 import type { ThreadResponse } from '@/types/home';
-import { message } from 'antd';
+
 import { Path } from '@/utils/enum';
 import Prompt from '@/components/pages/home/prompt';
 import useAskPrompt from '@/hooks/useAskPrompt';
