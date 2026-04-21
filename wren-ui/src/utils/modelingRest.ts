@@ -27,7 +27,7 @@ import type {
   CalculatedFieldValidationResponsePayload,
   CreateCalculatedFieldInput,
 } from '@/types/calculatedField';
-import { parseRestJsonResponse } from './rest';
+import { parseRestJsonResponse, withTransientRuntimeScopeRetry } from './rest';
 
 export type DeployResponsePayload = {
   status?: string | null;
@@ -171,14 +171,19 @@ export const fetchDeployStatus = async (
   selector: ClientRuntimeScopeSelector,
   options: { signal?: AbortSignal } = {},
 ) => {
-  const response = await fetch(buildDeployStatusUrl(selector), {
-    cache: 'no-store',
+  return withTransientRuntimeScopeRetry({
     signal: options.signal,
+    loader: async () => {
+      const response = await fetch(buildDeployStatusUrl(selector), {
+        cache: 'no-store',
+        signal: options.signal,
+      });
+      return parseRestJsonResponse<ModelSyncResponse>(
+        response,
+        '加载部署状态失败，请稍后重试。',
+      );
+    },
   });
-  return parseRestJsonResponse<ModelSyncResponse>(
-    response,
-    '加载部署状态失败，请稍后重试。',
-  );
 };
 
 export const deployCurrentRuntime = async (

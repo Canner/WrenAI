@@ -42,6 +42,43 @@ describe('homeSidebarRequests', () => {
     });
   });
 
+  it('retries transient runtime scope failures when loading sidebar threads', async () => {
+    const fetcher = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({
+          error: 'Workspace scope could not be resolved',
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [
+          {
+            id: 1,
+            summary: '收入分析',
+            workspaceId: 'ws-1',
+            knowledgeBaseId: 'kb-1',
+          },
+        ],
+      });
+
+    await expect(
+      loadHomeSidebarThreadsPayload({
+        requestUrl: '/api/v1/threads?workspaceId=ws-1',
+        fetcher,
+      }),
+    ).resolves.toEqual([
+      {
+        id: 1,
+        summary: '收入分析',
+        workspaceId: 'ws-1',
+        knowledgeBaseId: 'kb-1',
+      },
+    ]);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
   it('renames a sidebar thread through the shared mutation helper', async () => {
     const fetcher = jest.fn().mockResolvedValue({
       ok: true,

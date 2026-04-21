@@ -14,6 +14,7 @@ import {
   readRuntimeScopeSelectorFromSearch,
   RUNTIME_SCOPE_RECOVERY_EVENT,
   resolveRuntimeScopeBootstrapSelector,
+  shouldAcceptRuntimeScopeBootstrapCandidate,
   shouldBlockRuntimeScopeBootstrapRender,
   shouldDeferRuntimeScopeUrlSync,
   writePersistedRuntimeScopeSelector,
@@ -253,6 +254,18 @@ export default function RuntimeScopeBootstrap({ children }: Props) {
             buildRuntimeScopeSelectorFromRuntimeSelectorState(
               runtimeSelectorState,
             );
+
+          if (
+            !shouldAcceptRuntimeScopeBootstrapCandidate({
+              candidate,
+              selectorFromServer,
+            })
+          ) {
+            if (candidate.source === 'stored') {
+              writePersistedRuntimeScopeSelector({});
+            }
+            continue;
+          }
 
           const resolvedSelector = resolveRuntimeScopeBootstrapSelector({
             candidate,

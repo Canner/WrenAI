@@ -68,6 +68,42 @@ describe('runtimeSelectorStateRequest cache helpers', () => {
     expect(peekRuntimeSelectorStatePayload({ requestUrl })).toEqual(payload);
   });
 
+  it('retries transient runtime scope failures before rejecting', async () => {
+    const payload = {
+      currentWorkspace: {
+        id: 'workspace-1',
+        slug: 'workspace-1',
+        name: 'Workspace 1',
+      },
+      workspaces: [],
+      currentKnowledgeBase: null,
+      currentKbSnapshot: null,
+      knowledgeBases: [],
+      kbSnapshots: [],
+    };
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            error: 'Session workspace does not match requested workspace',
+          }),
+          { status: 500 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(payload), { status: 200 }),
+      );
+
+    const requestUrl = '/api/v1/runtime/scope/current?workspaceId=workspace-1';
+    await expect(
+      fetchRuntimeSelectorState({
+        requestUrl,
+        signal: new AbortController().signal,
+      }),
+    ).resolves.toEqual(payload);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
   it('can prime runtime selector payloads before the hook requests them', () => {
     const requestUrl = '/api/v1/runtime/scope/current?workspaceId=workspace-1';
     const payload = {

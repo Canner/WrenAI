@@ -15,6 +15,7 @@ export {
   normalizeSelector,
   RUNTIME_SCOPE_RECOVERY_EVENT,
   resolveRuntimeScopeBootstrapSelector,
+  shouldAcceptRuntimeScopeBootstrapCandidate,
   shouldBlockRuntimeScopeBootstrapRender,
   shouldDeferRuntimeScopeUrlSync,
   shouldHydrateRuntimeScopeSelector,

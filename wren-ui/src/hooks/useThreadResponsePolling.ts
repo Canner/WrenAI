@@ -85,6 +85,7 @@ export default function useThreadResponsePolling({
       pollInterval,
       onCompleted,
       onError,
+      shouldContinueOnError: () => true,
     });
 
   const fetchById = useCallback(

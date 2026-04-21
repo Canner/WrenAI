@@ -7,6 +7,7 @@ type UsePollingRequestLoopOptions<TData> = {
   onCompleted?: (data: TData) => void;
   onError?: (error: Error) => void;
   shouldContinue?: (data: TData) => boolean;
+  shouldContinueOnError?: (error: Error) => boolean;
 };
 
 type UsePollingRequestLoopResult<TData> = {
@@ -18,6 +19,14 @@ type UsePollingRequestLoopResult<TData> = {
 
 export const normalizePollingRequestError = (error: unknown) =>
   error instanceof Error ? error : new Error('请求失败，请稍后重试');
+
+export const shouldRetryPollingRequestError = ({
+  error,
+  shouldContinueOnError,
+}: {
+  error: Error;
+  shouldContinueOnError?: (error: Error) => boolean;
+}) => Boolean(shouldContinueOnError?.(error));
 
 export class PollingRequestCoordinator {
   private sessionId = 0;
@@ -57,6 +66,7 @@ export default function usePollingRequestLoop<TData>({
   onCompleted,
   onError,
   shouldContinue,
+  shouldContinueOnError,
 }: UsePollingRequestLoopOptions<TData>): UsePollingRequestLoopResult<TData> {
   const [data, setData] = useState<TData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -88,8 +98,20 @@ export default function usePollingRequestLoop<TData>({
           }
           return nextData;
         } catch (error) {
+          const normalizedError = normalizePollingRequestError(error);
           if (pollingSession.isCurrent()) {
-            onError?.(normalizePollingRequestError(error));
+            if (
+              shouldRetryPollingRequestError({
+                error: normalizedError,
+                shouldContinueOnError,
+              })
+            ) {
+              pollingSession.scheduleNext(() => {
+                void run();
+              }, pollInterval);
+            } else {
+              onError?.(normalizedError);
+            }
           }
           return null;
         } finally {
@@ -101,7 +123,7 @@ export default function usePollingRequestLoop<TData>({
 
       return run();
     },
-    [onCompleted, onError, pollInterval, shouldContinue],
+    [onCompleted, onError, pollInterval, shouldContinue, shouldContinueOnError],
   );
 
   useEffect(() => {

@@ -1,4 +1,7 @@
-import { parseRestJsonResponse } from '@/utils/rest';
+import {
+  parseRestJsonResponse,
+  withTransientRuntimeScopeRetry,
+} from '@/utils/rest';
 import {
   buildHomeSidebarThreadDetailUrl,
   normalizeHomeSidebarThreads,
@@ -17,14 +20,19 @@ export const loadHomeSidebarThreadsPayload = async ({
   signal?: AbortSignal;
   fetcher?: typeof fetch;
 }) => {
-  const response = await fetcher(requestUrl, {
-    cache: cacheMode,
+  const payload = await withTransientRuntimeScopeRetry({
     signal,
+    loader: async () => {
+      const response = await fetcher(requestUrl, {
+        cache: cacheMode,
+        signal,
+      });
+      return parseRestJsonResponse<unknown>(
+        response,
+        '加载历史对话失败，请稍后重试',
+      );
+    },
   });
-  const payload = await parseRestJsonResponse<unknown>(
-    response,
-    '加载历史对话失败，请稍后重试',
-  );
 
   return normalizeHomeSidebarThreads(payload) as HomeSidebarThreadRecord[];
 };

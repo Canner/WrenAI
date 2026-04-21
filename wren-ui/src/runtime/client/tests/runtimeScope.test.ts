@@ -17,6 +17,7 @@ import {
   RUNTIME_SCOPE_RECOVERY_EVENT,
   resolveClientRuntimeScopeSelector,
   resolveRuntimeScopeBootstrapSelector,
+  shouldAcceptRuntimeScopeBootstrapCandidate,
   shouldRecoverRuntimeScopeFromErrorCode,
   shouldHydrateRuntimeScopeSelector,
   shouldBlockRuntimeScopeBootstrapRender,
@@ -643,6 +644,45 @@ describe('client runtime scope helpers', () => {
       kbSnapshotId: 'fresh-snap',
       deployHash: 'fresh-deploy',
     });
+  });
+
+  it('rejects explicit bootstrap candidates when the server returns no runtime scope', () => {
+    expect(
+      shouldAcceptRuntimeScopeBootstrapCandidate({
+        candidate: {
+          source: 'url',
+          selector: {
+            workspaceId: 'ws-stale',
+            knowledgeBaseId: 'kb-stale',
+          },
+        },
+        selectorFromServer: {},
+      }),
+    ).toBe(false);
+
+    expect(
+      shouldAcceptRuntimeScopeBootstrapCandidate({
+        candidate: {
+          source: 'default',
+          selector: {},
+        },
+        selectorFromServer: {},
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldAcceptRuntimeScopeBootstrapCandidate({
+        candidate: {
+          source: 'stored',
+          selector: {
+            workspaceId: 'ws-1',
+          },
+        },
+        selectorFromServer: {
+          workspaceId: 'ws-1',
+        },
+      }),
+    ).toBe(true);
   });
 
   it('keeps bootstrap loading blocked until router is ready', () => {

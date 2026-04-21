@@ -1,6 +1,7 @@
 import {
   PollingRequestCoordinator,
   normalizePollingRequestError,
+  shouldRetryPollingRequestError,
 } from './usePollingRequestLoop';
 
 describe('usePollingRequestLoop helpers', () => {
@@ -75,5 +76,22 @@ describe('usePollingRequestLoop helpers', () => {
 
     expect(shouldContinue).toHaveBeenCalledWith({ status: 'FINISHED' });
     expect(callback).not.toHaveBeenCalled();
+  });
+
+  it('retries transient polling errors only when explicitly allowed', () => {
+    const transientError = new Error('transient');
+
+    expect(
+      shouldRetryPollingRequestError({
+        error: transientError,
+      }),
+    ).toBe(false);
+
+    expect(
+      shouldRetryPollingRequestError({
+        error: transientError,
+        shouldContinueOnError: () => true,
+      }),
+    ).toBe(true);
   });
 });

@@ -82,6 +82,7 @@ export default function useThreadRecommendedQuestionsPolling({
       pollInterval,
       onCompleted,
       onError,
+      shouldContinueOnError: () => true,
     });
 
   const fetchByThreadId = useCallback(

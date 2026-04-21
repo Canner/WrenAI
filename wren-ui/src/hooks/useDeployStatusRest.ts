@@ -6,6 +6,7 @@ import {
 import type { ModelSyncResponse } from '@/types/project';
 
 import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
+import useRuntimeSelectorState from './useRuntimeSelectorState';
 import { PollingRequestCoordinator } from './usePollingRequestLoop';
 import useRestRequest from './useRestRequest';
 import { fetchDeployStatus } from '@/utils/modelingRest';
@@ -38,13 +39,16 @@ export const buildDeployStatusRequestKey = (
 
 export default function useDeployStatusRest(): DeployStatusResult {
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
+  const runtimeSelectorState = useRuntimeSelectorState();
   const pollingCoordinatorRef = useRef(new PollingRequestCoordinator());
   const pollIntervalRef = useRef<number | null>(null);
   const hasExecutableScope = hasExecutableRuntimeScopeSelector(
     runtimeScopeNavigation.selector,
   );
+  const readyForRequest =
+    hasExecutableScope && !runtimeSelectorState.initialLoading;
   const requestKey = buildDeployStatusRequestKey(
-    runtimeScopeNavigation.selector,
+    readyForRequest ? runtimeScopeNavigation.selector : {},
   );
 
   const {
@@ -56,8 +60,8 @@ export default function useDeployStatusRest(): DeployStatusResult {
     { modelSync: ModelSyncResponse } | undefined,
     ModelSyncResponse
   >({
-    enabled: hasExecutableScope,
-    auto: true,
+    enabled: readyForRequest,
+    auto: readyForRequest,
     initialData: undefined,
     requestKey,
     request: ({ signal }) =>
@@ -77,8 +81,18 @@ export default function useDeployStatusRest(): DeployStatusResult {
       return UNSYNCHRONIZED_RESULT;
     }
 
+    if (runtimeSelectorState.initialLoading) {
+      return UNSYNCHRONIZED_RESULT;
+    }
+
     return normalizeDeployStatusRefetchResult(await refetchState());
-  }, [hasExecutableScope, refetchState, setData, stopPolling]);
+  }, [
+    hasExecutableScope,
+    refetchState,
+    runtimeSelectorState.initialLoading,
+    setData,
+    stopPolling,
+  ]);
 
   const schedulePoll = useCallback(() => {
     const intervalMs = pollIntervalRef.current;

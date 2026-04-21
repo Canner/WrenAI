@@ -3,7 +3,10 @@ import {
   resolveClientRuntimeScopeSelector,
   type ClientRuntimeScopeSelector,
 } from '@/runtime/client/runtimeScope';
-import { parseRestJsonResponse } from '@/utils/rest';
+import {
+  parseRestJsonResponse,
+  withTransientRuntimeScopeRetry,
+} from '@/utils/rest';
 
 export type RuntimeSelectorState = {
   currentWorkspace?: {
@@ -267,16 +270,20 @@ export const fetchRuntimeSelectorState = async ({
     return pendingRequest;
   }
 
-  const request = fetch(
-    requestUrl,
-    buildRuntimeSelectorRequestOptions({ signal }),
-  )
-    .then((response) =>
-      parseRestJsonResponse<RuntimeSelectorState | null>(
+  const request = withTransientRuntimeScopeRetry({
+    signal,
+    loader: async () => {
+      const response = await fetch(
+        requestUrl,
+        buildRuntimeSelectorRequestOptions({ signal }),
+      );
+
+      return parseRestJsonResponse<RuntimeSelectorState | null>(
         response,
         '加载运行时范围失败，请稍后重试。',
-      ),
-    )
+      );
+    },
+  })
     .then((payload) => {
       primeRuntimeSelectorStatePayload({ requestUrl, payload });
       return payload;

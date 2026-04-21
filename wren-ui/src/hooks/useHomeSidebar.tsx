@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { message } from 'antd';
+
+import { appMessage as message } from '@/utils/antdAppBridge';
 import { type ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { Path } from '@/utils/enum';
 import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
+import useRuntimeSelectorState from './useRuntimeSelectorState';
 import useRestRequest from './useRestRequest';
 import {
   deleteHomeSidebarThread,
@@ -55,7 +57,10 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
   // sessionStorage warm cache + intent/deferred enablement stay local here,
   // while the primary threads GET path now reuses `useRestRequest`.
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
+  const runtimeSelectorState = useRuntimeSelectorState();
   const { hasRuntimeScope } = runtimeScopeNavigation;
+  const runtimeScopeReady =
+    !hasRuntimeScope || !runtimeSelectorState.initialLoading;
   const deferInitialLoad = Boolean(options?.deferInitialLoad);
   const loadOnIntent = Boolean(options?.loadOnIntent);
   const disabled = Boolean(options?.disabled);
@@ -111,7 +116,7 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
     if (
       !shouldScheduleDeferredSidebarLoad({
         deferInitialLoad,
-        hasRuntimeScope,
+        hasRuntimeScope: hasRuntimeScope && runtimeScopeReady,
         loadOnIntent,
         queryEnabled,
       })
@@ -126,7 +131,14 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
     return () => {
       window.clearTimeout(timer);
     };
-  }, [deferInitialLoad, disabled, hasRuntimeScope, loadOnIntent, queryEnabled]);
+  }, [
+    deferInitialLoad,
+    disabled,
+    hasRuntimeScope,
+    loadOnIntent,
+    queryEnabled,
+    runtimeScopeReady,
+  ]);
 
   useEffect(() => {
     if (disabled || !hasRuntimeScope || !queryEnabled) {
@@ -178,7 +190,7 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
     refetch: refetchThreads,
     cancel: cancelThreadsRequest,
   } = useRestRequest<SidebarThread[], HomeSidebarThreadRecord[]>({
-    enabled: !disabled && hasRuntimeScope && queryEnabled,
+    enabled: !disabled && hasRuntimeScope && runtimeScopeReady && queryEnabled,
     auto: false,
     initialData: EMPTY_SIDEBAR_THREADS,
     requestKey: requestUrl,
@@ -219,6 +231,10 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
         return EMPTY_SIDEBAR_THREADS;
       }
 
+      if (!runtimeScopeReady) {
+        return getCachedHomeSidebarThreads(scopeKey);
+      }
+
       requestCacheModeRef.current = networkOnly ? 'no-store' : 'default';
 
       try {
@@ -231,14 +247,14 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
         requestCacheModeRef.current = 'default';
       }
     },
-    [disabled, hasRuntimeScope, refetchThreads, scopeKey],
+    [disabled, hasRuntimeScope, refetchThreads, runtimeScopeReady, scopeKey],
   );
 
   useEffect(() => {
     if (
       !shouldFetchHomeSidebarThreads({
         disabled,
-        hasRuntimeScope,
+        hasRuntimeScope: hasRuntimeScope && runtimeScopeReady,
         queryEnabled,
         cachedThreadCount: cachedThreads.length,
       })
@@ -253,11 +269,16 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
     hasRuntimeScope,
     loadThreads,
     queryEnabled,
+    runtimeScopeReady,
   ]);
 
   const safeRefetch = useCallback(async () => {
     if (disabled || !hasRuntimeScope) {
       return EMPTY_SIDEBAR_THREADS;
+    }
+
+    if (!runtimeScopeReady) {
+      return getCachedHomeSidebarThreads(scopeKey);
     }
 
     cacheHomeSidebarQueryEnabled(scopeKey);
@@ -267,7 +288,14 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
     }
 
     return loadThreads({ networkOnly: true });
-  }, [disabled, hasRuntimeScope, loadThreads, queryEnabled, scopeKey]);
+  }, [
+    disabled,
+    hasRuntimeScope,
+    loadThreads,
+    queryEnabled,
+    runtimeScopeReady,
+    scopeKey,
+  ]);
 
   const onSelect = useCallback(
     (selectKeys: string[], selectorOverride?: ClientRuntimeScopeSelector) => {

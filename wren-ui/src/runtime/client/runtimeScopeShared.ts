@@ -203,6 +203,16 @@ export const resolveRuntimeScopeBootstrapSelector = ({
   return normalizeSelector(candidate.selector);
 };
 
+export const shouldAcceptRuntimeScopeBootstrapCandidate = ({
+  candidate,
+  selectorFromServer,
+}: {
+  candidate: RuntimeScopeBootstrapCandidate;
+  selectorFromServer: ClientRuntimeScopeSelector;
+}) =>
+  hasExplicitRuntimeScopeSelector(selectorFromServer) ||
+  candidate.source === 'default';
+
 export const shouldBlockRuntimeScopeBootstrapRender = ({
   isBrowser,
   currentUrl,
