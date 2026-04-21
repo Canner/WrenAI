@@ -11,7 +11,7 @@ import {
   requirePersistedWorkspaceId,
   toCanonicalPersistedRuntimeIdentityFromScope,
 } from '@server/utils/persistedRuntimeIdentity';
-import { toSkillResponse } from './shared';
+import { toSkillResponse } from '@server/api/skills/shared';
 import {
   assertAuthorizedWithAudit,
   buildAuthorizationActorFromRuntimeScope,

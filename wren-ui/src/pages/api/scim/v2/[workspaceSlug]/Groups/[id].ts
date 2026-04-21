@@ -9,7 +9,7 @@ import {
   authorizeScimRequest,
   recordScimReadAudit,
   recordScimWriteAudit,
-} from '../../../audit';
+} from '@server/api/scim/audit';
 
 const getId = (req: NextApiRequest) => {
   const value = req.query.id;

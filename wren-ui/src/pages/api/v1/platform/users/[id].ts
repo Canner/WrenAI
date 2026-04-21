@@ -8,7 +8,7 @@ import {
   getString,
   listPlatformRoleAssignments,
   requirePlatformActionContext,
-} from '../platformApiUtils';
+} from '@server/api/platform/platformApiUtils';
 
 const getPlatformRoleIds = (value: unknown) =>
   Array.isArray(value)

@@ -1,8 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
 import { getSessionTokenFromRequest } from '@server/context/actorClaims';
-import { buildAuthResponseUser } from './responseUser';
-import { clearSessionCookie } from './sessionCookie';
+import { buildAuthResponseUser } from '@server/api/auth/responseUser';
+import { clearSessionCookie } from '@server/api/auth/sessionCookie';
 import {
   AuthorizationAction,
   assertAuthorizedWithAudit,

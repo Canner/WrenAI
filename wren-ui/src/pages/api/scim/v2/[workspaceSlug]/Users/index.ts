@@ -10,7 +10,7 @@ import {
   authorizeScimRequest,
   recordScimReadAudit,
   recordScimWriteAudit,
-} from '../../../audit';
+} from '@server/api/scim/audit';
 
 export default async function handler(
   req: NextApiRequest,

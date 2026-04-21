@@ -11,7 +11,10 @@ import {
   requirePersistedWorkspaceId,
   toCanonicalPersistedRuntimeIdentityFromScope,
 } from '@server/utils/persistedRuntimeIdentity';
-import { toSkillMarketplaceCatalogResponse, toSkillResponse } from './shared';
+import {
+  toSkillMarketplaceCatalogResponse,
+  toSkillResponse,
+} from '@server/api/skills/shared';
 import {
   assertAuthorizedWithAudit,
   buildAuthorizationActorFromRuntimeScope,

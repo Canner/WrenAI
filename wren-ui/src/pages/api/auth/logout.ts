@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
 import { getSessionTokenFromRequest } from '@server/context/actorClaims';
-import { clearSessionCookie } from './sessionCookie';
+import { clearSessionCookie } from '@server/api/auth/sessionCookie';
 
 export default async function handler(
   req: NextApiRequest,

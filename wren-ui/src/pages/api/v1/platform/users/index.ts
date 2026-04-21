@@ -5,7 +5,7 @@ import {
   listPlatformRoleAssignments,
   requirePlatformActionContext,
   sortWorkspacesByName,
-} from '../platformApiUtils';
+} from '@server/api/platform/platformApiUtils';
 
 export default async function handler(
   req: NextApiRequest,

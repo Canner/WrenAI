@@ -5,7 +5,7 @@ import {
   createHttpError,
   getQueryString,
   requirePlatformActionContext,
-} from '../platformApiUtils';
+} from '@server/api/platform/platformApiUtils';
 
 export default async function handler(
   req: NextApiRequest,

@@ -1,12 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
 import { recordAuditEvent } from '@server/authz';
-import { loadScheduleOverviewPayload } from '../../workspace/schedulesOverviewSupport';
+import { loadScheduleOverviewPayload } from '@server/api/workspace/schedulesOverviewSupport';
 import {
   createHttpError,
   getQueryString,
   requirePlatformActionContext,
-} from '../platformApiUtils';
+} from '@server/api/platform/platformApiUtils';
 
 export default async function handler(
   req: NextApiRequest,

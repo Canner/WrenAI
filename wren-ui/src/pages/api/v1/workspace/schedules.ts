@@ -5,7 +5,7 @@ import {
   buildAuthorizationActorFromRuntimeScope,
   buildAuthorizationContextFromRequest,
 } from '@server/authz';
-import { loadScheduleOverviewPayload } from './schedulesOverviewSupport';
+import { loadScheduleOverviewPayload } from '@server/api/workspace/schedulesOverviewSupport';
 
 export default async function handler(
   req: NextApiRequest,

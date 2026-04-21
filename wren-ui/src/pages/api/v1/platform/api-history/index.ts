@@ -9,7 +9,7 @@ import {
   createHttpError,
   getQueryString,
   requirePlatformActionContext,
-} from '../platformApiUtils';
+} from '@server/api/platform/platformApiUtils';
 
 const parseRequiredPositiveInt = (
   value: string | undefined,

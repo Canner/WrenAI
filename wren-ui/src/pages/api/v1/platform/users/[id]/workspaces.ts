@@ -9,7 +9,7 @@ import {
   requirePlatformActionContext,
   serializeMembership,
   sortWorkspacesByName,
-} from '../../platformApiUtils';
+} from '@server/api/platform/platformApiUtils';
 
 export default async function handler(
   req: NextApiRequest,

@@ -12,7 +12,7 @@ import {
   buildAuthorizationContextFromRequest,
   serializeAuthorizationActor,
 } from '@server/authz';
-import { buildWorkspacePermissionActions } from './workspaceCurrentPermissions';
+import { buildWorkspacePermissionActions } from '@server/api/workspace/workspaceCurrentPermissions';
 import {
   type BindingSourceDetail,
   sortApplications,
@@ -26,7 +26,7 @@ import {
   toOwnerCandidateView,
   toServiceAccountView,
   toWorkspaceView,
-} from './workspaceCurrentViews';
+} from '@server/api/workspace/workspaceCurrentViews';
 
 const getQueryString = (value: string | string[] | undefined) =>
   Array.isArray(value) ? value[0] : value;

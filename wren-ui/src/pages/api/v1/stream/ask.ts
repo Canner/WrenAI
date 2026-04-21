@@ -44,7 +44,7 @@ import {
   sendContentBlockStart,
   sendContentBlockStop,
   toAskRuntimeIdentity,
-} from './streamAskHelpers';
+} from '@server/api/stream/streamAskHelpers';
 const logger = getLogger('API_STREAM_ASK');
 logger.level = 'debug';
 

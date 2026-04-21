@@ -11,7 +11,7 @@ import {
   runScheduleJobNow,
   serializeScheduleJob,
   serializeScheduleRun,
-} from '../../scheduleActionSupport';
+} from '@server/api/workspace/scheduleActionSupport';
 
 const readQueryValue = (value: string | string[] | undefined) =>
   Array.isArray(value) ? value[0] : value;

@@ -16,7 +16,7 @@ import {
   toSkillRuntimeInput,
   validateSkillRuntimePayload,
   type SkillRuntimeMutationRequest,
-} from './shared';
+} from '@server/api/skills/shared';
 import {
   assertAuthorizedWithAudit,
   buildAuthorizationActorFromRuntimeScope,

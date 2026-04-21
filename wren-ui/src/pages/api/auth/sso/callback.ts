@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
-import { buildSessionCookie } from '../sessionCookie';
+import { buildSessionCookie } from '@server/api/auth/sessionCookie';
 import { resolveBootstrapKnowledgeBaseSelection } from '@server/utils/runtimeSelectorState';
 import { KBSnapshot, KnowledgeBase } from '@server/repositories';
 import {

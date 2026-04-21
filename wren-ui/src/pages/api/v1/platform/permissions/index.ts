@@ -8,7 +8,7 @@ import {
   createHttpError,
   getString,
   requirePlatformActionContext,
-} from '../platformApiUtils';
+} from '@server/api/platform/platformApiUtils';
 
 const getPlatformRoleCatalogDeps = () => ({
   roleRepository: components.roleRepository,

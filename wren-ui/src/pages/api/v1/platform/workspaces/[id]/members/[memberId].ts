@@ -10,7 +10,7 @@ import {
   createHttpError,
   getString,
   requireWorkspaceScopedContext,
-} from '../../../platformApiUtils';
+} from '@server/api/platform/platformApiUtils';
 
 const SUPPORTED_ACTIONS = [
   'approve',

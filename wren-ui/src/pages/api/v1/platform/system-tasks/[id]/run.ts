@@ -5,13 +5,13 @@ import {
   runScheduleJobNow,
   serializeScheduleJob,
   serializeScheduleRun,
-} from '../../../workspace/scheduleActionSupport';
+} from '@server/api/workspace/scheduleActionSupport';
 import {
   assertPlatformActionForContext,
   createHttpError,
   getString,
   requireWorkspaceScopedContext,
-} from '../../platformApiUtils';
+} from '@server/api/platform/platformApiUtils';
 
 const resolveScheduleJob = async ({
   id,
