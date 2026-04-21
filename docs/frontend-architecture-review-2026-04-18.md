@@ -515,7 +515,7 @@ knowledge page 已开始 feature 化，但其他核心域没有同步演进：
 
 ---
 
-## P2-1. 依赖栈整体稳定，但偏老且有版本漂移
+## P2-1. 依赖栈整体稳定，但偏老且仍需治理闭环
 
 ### 当前关键版本
 
@@ -524,11 +524,11 @@ knowledge page 已开始 feature 化，但其他核心域没有同步演进：
 - `antd`: `4.20.4`
 - `styled-components`: `5.3.6`
 - `next-with-less`: `3.0.1`
-- `@next/bundle-analyzer`: `15.3.0`
-- `eslint-config-next`: `14.2.21`
+- `@next/bundle-analyzer`: `14.2.35`
+- `eslint-config-next`: `14.2.35`
 - `@types/node`: `18.16.9`
 
-### 问题
+### 当前判断
 
 #### 1. Antd 4 + Less 栈偏老
 
@@ -538,17 +538,17 @@ knowledge page 已开始 feature 化，但其他核心域没有同步演进：
 - 依赖链较老
 - 后续升级成本会越来越高
 
-#### 2. Next 生态存在版本漂移
+#### 2. Next 生态关键版本已对齐，但需要持续锁步
 
-例如：
+- `next` / `eslint-config-next` / `@next/bundle-analyzer` 当前都为 `14.2.35`
+- Wave 7 最初发现的主版本漂移已经收口
+- 后续升级或引入 bundle 分析工具时，仍需要把这三项作为一组维护
 
-- `next` 14.x
-- `@next/bundle-analyzer` 15.x
-- `eslint-config-next` 14.x
+#### 3. 重复依赖样本已清理，并开始逐包关闭可疑依赖
 
-#### 3. 重复依赖
-
-- `cron-parser` 同时出现在 `dependencies` 和 `devDependencies`
+- `cron-parser` 现在只保留在 `dependencies`
+- `docs/frontend-dependency-audit-2026-04-18.md` 已补出首版重复依赖 / 可疑依赖清单
+- `ts-essentials`、`@testing-library/react`、`duckdb-async`、`duckdb`、`micro`、`micro-cors`、`pg-cursor`、`@google-cloud/bigquery` 与 `@google-cloud/storage` 已作为首批可疑依赖样本移除，且移除后 `yarn deps:audit:check` / `yarn check-types` 通过
 
 #### 4. Node 类型版本偏旧
 
@@ -558,13 +558,36 @@ knowledge page 已开始 feature 化，但其他核心域没有同步演进：
 
 短期先做：
 
-- 对齐 Next 相关版本
-- 清理重复依赖
-- 做一次 package audit
+- 固化 Next 生态版本锁步规则
+- 先冻结新增 `antd/lib/*` / `antd/es/*` / 全局 Less / 新 feature 中的 `styled-components`
+- 把剩余 Antd internal import 收回统一边界
+- 跑 `yarn deps:audit:check`，并把结论收口到固定文档
 
 中期再评估：
 
+- Next / React / TypeScript 升级窗口
 - Antd 4 / less / styled-components 的演进路线
+
+补充证据（2026-04-20）：
+
+- `npm view antd dist-tags --json` 显示 `latest = 6.3.6`、`latest-5 = 5.29.3`、`latest-4 = 4.24.16`
+- `npm view @ant-design/icons dist-tags --json` 显示 `latest = 6.1.1`
+- `npm view antd@6 peerDependencies --json` 显示 `react` / `react-dom` 要求 `>=18.0.0`
+- 非测试代码中约 **278 个文件** 直接 import `antd`
+- `src/import/antd.ts` 当前维护 **47** 个 Antd 4 alias export
+- Antd prep Batch 0A 落地前约 **21 个非测试文件** 直接 import `antd/lib/*` / `antd/es/*`
+- 当前已先清掉其中 **14** 个纯 low-risk internal import 文件，剩余 **7** 个 internal-import 文件（其中 5 个 `form/context`、1 个 `menu/hooks/useItems`、以及 `src/import/antd.ts`）
+- 约 **45** 处 `visible=`、**4** 处 `onVisibleChange` / `onDropdownVisibleChange`
+- 约 **12** 处 `Tabs.TabPane`、**19** 处 `bodyStyle` / `maskStyle` / `overlayStyle` / `dropdownClassName` 等旧 prop
+- 约 **18** 处 `moment`
+- `styled-components` 非测试使用面约 **93 个文件**
+- `next-with-less` + `_app.tsx` 全局 Less + `antd-variables.less` 仍共同构成 Antd 4 主题桥接链
+- `src/pages/_document.tsx` 当前只注入 `styled-components` 的 `ServerStyleSheet`，尚未接 Antd CSS-in-JS 的 Next Pages Router SSR 链路
+
+因此，Wren UI 若要从 `antd@4.20.4` 升到最新稳定版，路线不应理解为“一次改版本号”，而应理解为：
+
+1. **先做 v4 → v5**：internal import / facade 收口、`visible/open` 等 API 改名、Less 主题链迁到 token + `@ant-design/cssinjs`、补 `_document.tsx` 的 Antd SSR
+2. **再做 v5 → v6**：清 `Tabs.TabPane`、`destroyOnClose`、旧 style/class props，并回归 `.ant-*` 覆盖样式
 
 ---
 
@@ -667,8 +690,8 @@ knowledge workbench 已经很重，但目前未见明显按主分区进行更彻
 
 包括：
 
-- 对齐 Next 生态版本
-- package audit
+- 维持 Next 生态版本锁步
+- package audit / dedupe 流程（`yarn deps:audit[:check]`）
 - 评估 Antd4 / less / styled-components 后续路线
 
 ---

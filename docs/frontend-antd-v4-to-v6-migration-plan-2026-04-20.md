@@ -47,14 +47,14 @@
 
 ### 额外兼容修复
 
-Antd 6 在当前 Next.js Pages Router / Node 22 组合下，会在 `Collecting page data` 阶段触发部分 `@rc-component/*/es` 裸扩展名导入问题。
+Antd 6 在当前 Next.js Pages Router / Node 22 组合下，曾经为排查 page-data 阶段兼容性临时引入过 `rc-component` ESM 扩展名补丁链路。
 
-因此本轮额外补了：
+截至 2026-04-21，该补丁链路已经过回归验证并移除：
 
-- `wren-ui/scripts/patch_rc_component_util_esm.mjs`
-- `package.json` 中的 `patch:rc-component-util-esm` / `postinstall` / `dev` / `build` / `start` 前置修复链路
+- `wren-ui/scripts/patch_rc_component_util_esm.mjs` 已删除
+- `package.json` 中的 `patch:rc-component-util-esm` / `postinstall` / `dev` / `build` / `start` 前置修复链路已移除
 
-该补丁只会给真实存在的 `*.js` 目标补齐扩展名，用来保证 `next build --no-lint` 与默认 `yarn build` 都能稳定完成 SSR / page-data 阶段。
+当前构建仍能稳定完成，说明这条 patch 链在现有 lockfile / node_modules 安装态下已不是硬依赖。
 
 ---
 

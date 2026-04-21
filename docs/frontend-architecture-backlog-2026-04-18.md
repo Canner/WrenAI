@@ -223,7 +223,7 @@
 - 已补：
   - `src/features/home/homeSkillOptions.test.ts`
   - `src/utils/homeRest.test.ts`
-  为首页技能缓存/归一化与 suggested questions REST helper 补充回归测试
+    为首页技能缓存/归一化与 suggested questions REST helper 补充回归测试
 - 页面内 skill option storage/cache/fetch helper 与主要渲染块已迁出
 - 页面内 ask runtime selector / availability helper 与常量已迁出并由 page re-export
 - 已拆出 `src/features/knowledgePage/useKnowledgeAssetWorkbench.ts`，将资产选择项 / 资产草稿预览 / detail drawer 视图聚合从 page entry 下沉到独立 workbench hook
@@ -375,7 +375,7 @@
   - `src/features/knowledgePage/sections/useKnowledgeWorkbenchRuleActions.ts`
   - `src/features/knowledgePage/sections/useKnowledgeWorkbenchSqlActions.test.tsx`
   - `src/features/knowledgePage/sections/useKnowledgeWorkbenchRuleActions.test.tsx`
-  将 SQL 模板 / 分析规则的 editor 打开、复制、删除、基于资产起草、关闭抽屉等动作按 lane 从 `useKnowledgeWorkbenchEditors.tsx` 下沉
+    将 SQL 模板 / 分析规则的 editor 打开、复制、删除、基于资产起草、关闭抽屉等动作按 lane 从 `useKnowledgeWorkbenchEditors.tsx` 下沉
 - `useKnowledgeWorkbenchEditors.tsx` 已进一步收口到 ~171 行，当前主要保留 draft-state wiring、published view-state 与轻量组合层
 - 已继续新增 `src/features/knowledgePage/sections/resolveKnowledgeWorkbenchDraftDirty.ts` 与 `resolveKnowledgeWorkbenchDraftDirty.test.ts`，将 section switch / SQL 模板打开 / 分析规则打开三处重复的 draft-dirty 判定收敛到共享 helper，并补齐纯函数回归测试
 - 已新增 `src/features/knowledgePage/sections/KnowledgeWorkbenchEditorRailControls.tsx` / `KnowledgeWorkbenchEditorEmptyState.tsx` / `KnowledgeWorkbenchAssetContextPanel.tsx` / `KnowledgeWorkbenchEditorDrawerFooter.tsx`，将 SQL 模板 / 分析规则 section 里的列表 rail、空状态、参考资产面板与抽屉 footer 继续下沉到共享 editor fragments；`KnowledgeSqlTemplatesSection.tsx` / `KnowledgeInstructionsSection.tsx` 已进一步从约 368 / 395 行收口到约 294 / 313 行
@@ -536,7 +536,7 @@
   - `src/components/pages/home/promptThread/chartAnswerUtils.ts`
   - `src/components/pages/home/promptThread/ChartAnswerPinModal.tsx`
   - `src/components/pages/home/promptThread/chartAnswerStyles.tsx`
-  当前 ChartAnswer 已聚焦 preview 数据对齐、图表编辑态与 pin-to-dashboard 编排，同时继续通过 re-export `getIsChartFinished` 保持 thread state / 测试的既有契约
+    当前 ChartAnswer 已聚焦 preview 数据对齐、图表编辑态与 pin-to-dashboard 编排，同时继续通过 re-export `getIsChartFinished` 保持 thread state / 测试的既有契约
 - 已继续把 `src/hooks/useAskPrompt.tsx` 从约 586 行收口到约 459 行，并拆出 `src/hooks/askPromptUtils.ts` 承接 ask prompt 的状态判定、推荐问题历史、线程缓存回写与 runtime selector 解析 helper；主 hook 当前聚焦轮询控制、提交/重试编排与流式任务接线，同时继续 re-export 现有 helper/type 以保持首页与线程页调用契约
 - 已继续把 `src/utils/referenceDemoKnowledge.ts` 从约 567 行收口到约 165 行，并拆出 `src/utils/referenceDemoKnowledgeData.ts` / `src/utils/referenceDemoKnowledgeTypes.ts` 承接样例知识库元数据、资产别名与共享类型；主文件当前聚焦名称解析、展示文案与样例资产计数 helper，同时维持对既有常量与类型导出的兼容面
 - 已继续把 `src/features/knowledgePage/lists.tsx` 从约 605 行收口到约 459 行，并拆出 `src/features/knowledgePage/virtualizedManageEntryList.tsx` 承接 SQL 模板 / 分析规则管理列表的虚拟滚动容器；主文件当前聚焦知识库侧栏项与 rule/sql card 渲染
@@ -622,7 +622,7 @@
   URL 组装逻辑
 - 已为 `usePermissionsRoleCatalog` 提取 request-key / URL / payload normalize
   helper，并补齐独立测试，让 permissions 域的角色目录读取也遵循同一纯 helper
-  + 定向回归测试模式
+  - 定向回归测试模式
 - 已为 `useModelList` 提取 `buildModelListRequestKey`，并补齐 hook 级独立测试，
   让 modeling 域的模型列表读取也纳入同一 request-key/helper 收口模式
 - 已为 `useDeployStatusRest` 提取 `buildDeployStatusRequestKey`，并补齐 hook 级
@@ -641,10 +641,16 @@
 - 已继续新增 `src/hooks/homeSidebarHelpers.ts`，把 `useHomeSidebar` 内的 cache TTL、
   storage 读写、selector / URL / query gate helper 统一迁出；`useHomeSidebar.tsx`
   当前已收口到约 404 行，主 hook 仅保留 effect / request / mutation orchestration
+- 已新增 `src/hooks/runtimeSelectorStateRequest.ts`，将 runtime selector 的
+  URL / request-key / GET request / initial-loading 判断统一下沉到纯 request helper；
+  `useRuntimeSelectorState.tsx` 当前主文件仅保留 provider / hook 编排
+- 已新增 `src/hooks/usePollingRequestLoop.ts`，把 thread response /
+  recommended questions 两条 polling 链路共用的 session/timer/loading 状态机收成
+  同一套 coordinator，避免两份 hook 继续各自维护重复轮询逻辑
 - 已新增：
   - `src/hooks/useSkillsControlPlaneData.test.ts`
   - `src/hooks/useApiHistoryList.test.ts`（补 request-key case）
-  继续为请求 key / URL 构造补充回归覆盖
+    继续为请求 key / URL 构造补充回归覆盖
 
 ## 验收标准
 
@@ -731,7 +737,7 @@
   - submit / test payload builder
   - secret re-encrypt payload builder
   - form value hydrate / JSON stringify helper
-  当前 connectorsPageUtils 已聚焦 URL、常量、selector 与类型导出
+    当前 connectorsPageUtils 已聚焦 URL、常量、selector 与类型导出
 - `useConnectorMutationOperations.ts` 已从 ~234 行进一步降到 ~58 行，并新增 `connectorMutationOperationTypes.ts` / `useConnectorSubmitOperation.ts` / `useConnectorDeleteOperation.ts`（约 18 / 95 / 47 行）；save/delete orchestration 已继续拆到独立 lane，连接测试链路仍由 `useConnectorTestingOperations.ts` 承接
 - 已补 `src/features/settings/connectors/buildManageConnectorsControlState.test.ts`、`buildConnectorManagementCapabilityInput.test.ts`、`useConnectorSubmitOperation.test.tsx` 与 `useConnectorDeleteOperation.test.tsx`，为连接器页 control-state / capability-input / submit / delete lane 补齐回归覆盖
 - 已新增 `src/features/settings/settingsPageCapabilities.ts`，将设置页与连接器页共享的
@@ -748,8 +754,8 @@
 - 已新增：
   - `src/features/settings/users/usersPageUtils.tsx`
   - `src/features/settings/users/UsersMembersSection.tsx`
-  将 users 页的角色来源摘要 / source detail 渲染 / 成员列表 section
-  从 route entry 下沉到 settings/users feature 目录
+    将 users 页的角色来源摘要 / source detail 渲染 / 成员列表 section
+    从 route entry 下沉到 settings/users feature 目录
 - 已继续把 `src/features/settings/users/UsersMembersSection.tsx` 从 ~602 行
   收口到 ~280 行，并拆出：
   - `UsersMembersToolbar.tsx`
@@ -757,7 +763,7 @@
   - `UsersMemberEditModal.tsx`
   - `UsersMemberRoleModal.tsx`
   - `usersMembersSectionTypes.ts`
-  当前 users 成员管理主 section 已聚焦筛选、表格与 modal 编排
+    当前 users 成员管理主 section 已聚焦筛选、表格与 modal 编排
 - 已新增 `src/features/settings/users/usersPageUtils.test.tsx`，为
   users feature 的角色来源 / 状态颜色 / source detail helper 补充回归测试
 - `settings/users.tsx` 已从 ~497 行继续收口到 route-entry re-export；
@@ -794,8 +800,8 @@
   - `src/features/settings/permissions/permissionsPageUtils.ts`
   - `src/features/settings/permissions/PermissionsRoleCatalogSection.tsx`
   - `src/features/settings/permissions/PermissionsRoleBindingsSection.tsx`
-  将 permissions 页的角色目录 / 角色绑定两个主 section 与角色标签 helper
-  从 route entry 下沉到 settings/permissions feature 目录
+    将 permissions 页的角色目录 / 角色绑定两个主 section 与角色标签 helper
+    从 route entry 下沉到 settings/permissions feature 目录
 - 已继续新增：
   - `src/features/settings/permissions/PermissionsAuthorizationExplainSection.tsx`
   - `src/features/settings/permissions/PermissionsGovernanceControlsSection.tsx`
@@ -821,6 +827,14 @@
 - 已新增 `src/features/settings/permissions/permissionsPageUtils.test.ts`，
   为 permissions feature 的角色标签、治理计数与状态颜色 helper
   补充回归测试
+- `src/features/settings/permissions/PermissionsRoleCatalogSection.tsx` 已继续从约 1643 行收口到约 469 行，并拆出：
+  - `permissionsRoleCatalogMeta.ts`
+  - `PermissionsRoleCatalogSidebar.tsx`
+  - `PermissionsRoleCatalogEditor.tsx`
+  - `PermissionsRoleCatalogPermissionGroups.tsx`
+  - `PermissionsRoleCatalogUnsavedModal.tsx`
+  - `usePermissionsRoleCatalogActions.ts`
+    当前主文件聚焦筛选状态、权限分组衍生与顶层组合，角色目录的元数据映射、左右分区 UI 与未保存改动编排已下沉到独立 leaf / hook，同时保留原有自定义角色保存、复制、停启用与未保存拦截行为不变
 - `settings/permissions.tsx` 已从 ~1371 行继续收口到 route-entry re-export；
   实际 settings shell 与 feature section 组合当前已下沉到
   `src/features/settings/permissions/ManagePermissionsPage.tsx`
@@ -844,8 +858,8 @@
   - `src/tests/pages/settings/skills.test.tsx`
   - `src/tests/pages/settings/diagnostics.test.tsx`
   - `src/tests/pages/settings/system-tasks.test.tsx`
-  结合已有的 `users / permissions / audit / identity / automation / connectors`
-  页面测试，settings 子域的共享 shell/layout 收口已有回归保护
+    结合已有的 `users / permissions / audit / identity / automation / connectors`
+    页面测试，settings 子域的共享 shell/layout 收口已有回归保护
 - 已新增 `src/features/settings/skills/skillsPageUtils.ts`，将
   skills 页的 connector option / submit payload / capability 解析等纯工具
   从 route entry 中抽离
@@ -872,8 +886,8 @@
   - `src/features/settings/skills/SkillsMarketplaceSection.tsx`
   - `src/features/settings/skills/SkillDefinitionsSection.tsx`
   - `src/features/settings/skills/SkillDefinitionModal.tsx`
-  将 skills 页的指标区、市场列表、我的技能列表与编辑 modal
-  从 route entry 中拆到 settings/skills feature 目录
+    将 skills 页的指标区、市场列表、我的技能列表与编辑 modal
+    从 route entry 中拆到 settings/skills feature 目录
 - 已新增 `src/features/settings/skills/skillsPageUtils.test.ts`，为
   skills feature 的 submit payload / capability / connector normalize helper
   补充回归覆盖
@@ -934,9 +948,9 @@
   - `src/features/modeling/useModelingWorkspaceNavigationEffects.ts`
   - `src/features/modeling/useModelingWorkspaceDiagramActions.ts`
   - `src/features/modeling/useModelingWorkspaceMoreActions.ts`
-  分别承接 deep-link / metadata sync / GO_TO_FIRST_MODEL 事件、
-  diagram node interaction / add / relationship mutation input 组合，以及
-  more-menu 的 delete/edit/update-columns action orchestration
+    分别承接 deep-link / metadata sync / GO_TO_FIRST_MODEL 事件、
+    diagram node interaction / add / relationship mutation input 组合，以及
+    more-menu 的 delete/edit/update-columns action orchestration
 - 已新增 `src/features/modeling/useModelingWorkspaceMutationHandlers.ts`，将
   metadata / model / calculated-field / relationship submit handler 与 loading
   state orchestration 从 `ModelingWorkspace.tsx` 继续拆到 modeling feature
@@ -946,13 +960,13 @@
   - `src/features/modeling/useModelingMetadataMutationHandler.ts`
   - `src/features/modeling/useModelingEntityMutationHandlers.ts`
   - `src/features/modeling/useModelingRelationshipMutationHandler.ts`
-  将 metadata、实体 create/update、relationship submit 三组 mutation
-  从 `useModelingWorkspaceMutationHandlers.ts` 继续拆到独立 feature hooks
+    将 metadata、实体 create/update、relationship submit 三组 mutation
+    从 `useModelingWorkspaceMutationHandlers.ts` 继续拆到独立 feature hooks
 - 已新增：
   - `src/features/modeling/buildModelingRelationshipMutationInput.ts`
   - `src/features/modeling/buildModelingRelationshipMutationInput.test.ts`
-  将 relationship form -> mutation payload 的纯转换逻辑从
-  `useModelingWorkspaceDiagramActions.ts` 继续拆成纯函数，并补充回归测试
+    将 relationship form -> mutation payload 的纯转换逻辑从
+    `useModelingWorkspaceDiagramActions.ts` 继续拆成纯函数，并补充回归测试
 - 已新增 `src/features/modeling/useModelingWorkspaceDeleteActions.ts`，将
   model / calculated field / relation / view 四类 delete orchestration 从
   `useModelingWorkspaceMoreActions.ts` 继续拆到独立 feature hook
@@ -1036,6 +1050,106 @@
   - `/settings/access -> /settings/users`
   - `/settings/security -> /settings`
 - 已同步 `docs/frontend-route-inventory-2026-04-18.md` 的兼容入口清单
+- 已新增 `wren-ui/scripts/check_pages_routes.mjs` 与
+  `wren-ui/scripts/pages-route-allowlist.json`
+  - 用 allowlist 锁定 `src/pages` 当前 168 条 route entry / compatibility route
+  - 测试文件自动排除
+  - 后续若有 route 变更，必须显式更新 inventory，避免页面组件回流到 `pages/`
+- 已继续把 `src/server/authz/authorize.ts` 从约 608 行收口到约 437 行，并拆出
+  `src/server/authz/authorizationDecision.ts` /
+  `src/server/authz/authorizationPermissionChecks.ts`
+  - decision/error/types 与 allow/deny helper 下沉到独立文件
+  - actor/platform action 判定、workspace boundary / write-access 守卫下沉到
+    独立 helper 文件
+  - 主文件当前聚焦 action-specific authorization flow
+- 已继续把 `src/server/services/skillService.ts` 从约 606 行收口到约 465 行，并拆出
+  `src/server/services/skillServiceTypes.ts` /
+  `src/server/services/skillServiceSupport.ts`
+  - 创建/更新/runtime 更新输入与 service 接口类型下沉到独立 types 文件
+  - workspace/connector/name 校验、require skill、预留 marketplace 安装名、
+    inject-only executionMode 归一化等支撑逻辑下沉到 support helper
+  - 主文件当前聚焦 skill create/update/install/delete 主流程
+- 已继续把 `src/server/utils/apiUtils.ts` 从约 657 行收口到约 352 行，并拆出
+  `src/server/utils/apiResponseHelpers.ts` /
+  `src/server/utils/sqlDryRunValidation.ts`
+  - `ApiError`、API history 落库、标准 JSON response / error response helper
+    下沉到 `apiResponseHelpers.ts`
+  - dry-run SQL 命名参数替换逻辑下沉到 `sqlDryRunValidation.ts`
+  - `apiUtils.ts` 保持原有导出面，仅保留 ask/runtime/sql validation/polling
+    主流程 helper，避免影响现有 API route 调用方
+- 已继续把 `src/server/repositories/threadResponseRepository.ts` 从约 641 行
+  收口到约 426 行，并拆出
+  `src/server/repositories/threadResponseRepositoryTypes.ts` /
+  `src/server/repositories/threadResponseRepositoryTransforms.ts`
+  - repository 的公开类型/接口下沉到独立 types 文件
+  - joined-row 反序列化、runtime scope rehydrate、DB payload transform 与
+    canonical-scope 判断下沉到 transforms 文件
+  - 主 repository 文件当前聚焦 query / lease / scoped update 行为
+- 已继续把 `src/server/repositories/apiHistoryRepository.ts` 从约 506 行收口到
+  约 390 行，并拆出
+  `src/server/repositories/apiHistoryRepositoryTypes.ts`
+  - API history / pagination / shadow compare 相关类型与 repository 接口
+    下沉到独立 types 文件
+  - 主 repository 文件继续保留查询与统计 SQL 逻辑，同时维持原有导出面不变
+- 已继续把 `src/server/backgrounds/adjustmentBackgroundTracker.ts` 从约 538 行
+  收口到约 497 行，并拆出
+  `src/server/backgrounds/adjustmentBackgroundTrackerTypes.ts`
+  - adjustment tracker 的 tracked task / create / rerun / result 类型与接口
+    下沉到独立 types 文件
+  - 主文件继续聚焦 polling / telemetry / DB update 主流程
+- 已继续把 `src/pages/api/v1/stream/ask.ts` 从约 551 行收口到约 454 行，并拆出
+  `src/pages/api/v1/stream/streamAskHelpers.ts`
+  - stream ask 的 runtimeIdentity normalize、authz guard、SSE content-block
+    event helper 与 API error 解析 helper 下沉到独立文件
+  - 主 route 文件继续聚焦 ask / SQL / summary 的流式编排主流程
+- 已继续把 `src/server/services/askingTaskTracker.ts` 从约 525 行收口到约
+  493 行，并拆出
+  `src/server/services/askingTaskTrackerTypes.ts`
+  - asking task tracker 的 tracked task / create input / result / service
+    contract 下沉到独立 types 文件
+  - 主文件继续聚焦 task lifecycle、polling 与 DB bind/update 行为
+- 已继续把 `src/server/managers/connectionSchemaDetector.ts` 从约 543 行收口到
+  约 494 行，并拆出
+  `src/server/managers/connectionSchemaDetectorTypes.ts`
+  - connection schema / resolve / change type / affected resource /
+    detector contract 下沉到独立 types 文件
+  - 主 detector 文件继续聚焦 diff / resolve / affected-resources 主流程
+- 已继续把 `src/server/services/connectorService.ts` 从约 638 行收口到约
+  388 行，并拆出
+  `src/server/services/connectorServiceTypes.ts` /
+  `src/server/services/connectorServiceSupport.ts`
+  - connector service 的公开输入/输出/service contract 下沉到独立 types 文件
+  - writable-scope 校验、test target 解析、database 连接测试与 KB federation
+    sync helper 下沉到 support 文件
+  - 主 service 文件继续聚焦 create/update/delete/resolve 主流程
+- 已继续把 `src/server/dataSource.ts` 从约 523 行收口到约 490 行，并拆出
+  `src/server/dataSourceTypes.ts` /
+  `src/server/dataSourceCrypto.ts`
+  - datasource registry 类型下沉到独立 types 文件
+  - connection info 的 encrypt/decrypt helper 下沉到独立 crypto 文件
+  - 主 datasource 文件继续保留各 provider 到 ibis connection info 的映射表
+- 已继续把 `src/server/authz/adminCatalog.ts` 从约 1001 行收口到约
+  388 行，并拆出
+  `src/server/authz/adminCatalogTypes.ts` /
+  `src/server/authz/adminCatalogHelpers.ts` /
+  `src/server/authz/adminCatalogMutations.ts`
+  - role catalog / binding catalog 类型下沉到独立 types 文件
+  - role-name/permission/principal label/shared scope helper 下沉到 helper 文件
+  - custom role / binding 的 create/update/delete mutation 主流程下沉到
+    mutations 文件
+  - 主 admin catalog 文件当前聚焦 list/explain/search 主流程，并 re-export
+    mutation surface 维持调用契约
+- 已继续把 `src/pages/api/v1/workspace/current.ts` 从约 892 行收口到约
+  500 行，并拆出
+  `src/pages/api/v1/workspace/workspaceCurrentViews.ts` /
+  `src/pages/api/v1/workspace/workspaceCurrentPermissions.ts`
+  - workspace overview 的排序/序列化/view-mapper helper 下沉到 views 文件
+  - permission action matrix 组装逻辑下沉到 permissions 文件
+  - 主 route 文件继续聚焦 session 校验、数据聚合与 response 组装主流程
+- 已顺手修正两处阻塞 `wren-ui` 全量 `check-types` 的类型问题：
+  - `src/server/authz/adminCatalog.ts` 的 `Set.has` 字面量类型约束
+  - `src/features/knowledgePage/knowledgeWorkbenchKnowledgeStateTypes.ts`
+    对非泛型 hook 的错误 `ReturnType<typeof fn<T>>` 写法
 - 内部导航已优先切到 canonical route：
   - 工作空间入口统一走 `/workspace`
   - API 历史入口统一走 `/settings/diagnostics`
@@ -1198,3 +1312,338 @@
 - 依赖版本整齐
 
 届时前端将从“能持续迭代”提升到“能低摩擦持续演进”。
+
+---
+
+## 状态摘要（2026-04-19）
+
+- 另见：`docs/frontend-architecture-progress-summary-2026-04-19.md`
+- 下一批执行清单：`docs/frontend-architecture-next-batch-2026-04-19.md`
+- 该摘要基于 backlog + 当前代码/脚本 fresh verification 生成，用于快速查看各 Wave 完成度与下一批优先项。
+- 最新复核结论：`wren-ui/src` 非测试代码 `>500` 行文件数仍为 **0**；当前最接近阈值的两个文件是 `src/pages/api/v1/workspace/current.ts`（500）与 `src/components/pages/home/promptThread/ChartAnswer.tsx`（500）；`pages-route-allowlist.json` 当前锁定 **168** 条 route，非测试代码内 `useRestRequest` 实际调用数为 **18**。
+
+## 最新执行进展（2026-04-19）
+
+- 已继续把 `src/server/context/runtimeScope.ts` 从约 584 行收口到约 395 行，并拆出
+  `src/server/context/runtimeScopeTypes.ts` /
+  `src/server/context/runtimeScopeRequestHelpers.ts`
+  - runtime scope 的 selector/runtime/persisted identity 类型与 resolution error 下沉到独立 types 文件
+  - request body/query/header 读取、selector 解析以及 modern/explicit selector 判定下沉到 request helper 文件
+  - 主 resolver 文件继续聚焦 request/runtimeScopeId 解析与 explicit scope 主流程
+- 已继续把 `src/server/controllers/dashboardController.ts` 从约 552 行收口到约 391 行，并拆出
+  `src/server/controllers/dashboardControllerSupport.ts`
+  - runtime identity 归一化、dashboard/item scope 校验、knowledge-base read authz + audit、schedule binding 与 preview-item response 组装下沉到 support 文件
+  - 主 controller 文件继续聚焦 GraphQL mutation/query orchestration 主流程
+- 上述两处改动已通过以下验证：
+  - `yarn --cwd wren-ui next lint --file src/server/context/runtimeScope.ts --file src/server/context/runtimeScopeTypes.ts --file src/server/context/runtimeScopeRequestHelpers.ts --file src/server/context/tests/runtimeScope.test.ts --file src/server/controllers/dashboardController.ts --file src/server/controllers/dashboardControllerSupport.ts --file src/server/controllers/tests/dashboardController.test.ts`
+  - `yarn --cwd wren-ui jest src/server/context/tests/runtimeScope.test.ts src/server/controllers/tests/dashboardController.test.ts --runInBand`
+  - `yarn --cwd wren-ui check-types`
+- 已继续推进 Wave 4 第一批请求原语收口：
+  - `src/hooks/useThreadDetail.ts` 已移除本地 `fetch + setLoading + cancelled` 状态机，改为基于 `useRestRequest` 承接主读取链路，同时保留 prefetched thread detail / empty-response retry / `updateQuery` 缓存更新语义
+  - `src/features/home/dashboard/useManageDashboardData.ts` 已把 dashboard list/detail 两条主读取链路迁入 `useRestRequest`，并通过 ref-based request mode 保留“自动读取走 cache、手动 refetch 默认 network-only”的既有行为
+  - 新增 `src/hooks/useThreadDetail.hook.test.tsx` 与 `src/features/home/dashboard/useManageDashboardData.test.tsx`，锁定新的 request key / auto-fetch / manual refetch 契约
+- 这批 Wave 4 改动已通过以下验证：
+  - `yarn --cwd wren-ui next lint --file src/hooks/useThreadDetail.ts --file src/hooks/useThreadDetail.test.ts --file src/hooks/useThreadDetail.hook.test.tsx --file src/features/home/dashboard/useManageDashboardData.ts --file src/features/home/dashboard/useManageDashboardData.test.tsx`
+  - `yarn --cwd wren-ui jest src/hooks/useThreadDetail.test.ts src/hooks/useThreadDetail.hook.test.tsx src/features/home/dashboard/useManageDashboardData.test.tsx --runInBand`
+  - `yarn --cwd wren-ui check-types`
+- 已继续推进 Wave 4 第二批请求原语收口：
+  - `src/hooks/useKnowledgeDiagramData.ts` 已移除本地 `requestId + setLoading` 状态机，改为基于 `useRestRequest` 承接 diagram 主读取链路，并保留“命中 scope-local cache 则直接复用、无 scope 时回退为 null”的原有语义
+  - `src/hooks/useHomeSidebar.tsx` 已继续收敛：为 sidebar threads 的 manual request lane 增加 unmount cancel，并移除两处依赖 `loadThreads().then(setThreads)` 的重复状态同步
+  - 新增 `src/hooks/useKnowledgeDiagramData.hook.test.tsx`，并扩展 `src/hooks/useKnowledgeDiagramData.test.ts` 覆盖 request key helper 契约
+- 这批 Wave 4 补充改动已通过以下验证：
+  - `yarn --cwd wren-ui next lint --file src/hooks/useKnowledgeDiagramData.ts --file src/hooks/useKnowledgeDiagramData.test.ts --file src/hooks/useKnowledgeDiagramData.hook.test.tsx --file src/hooks/useHomeSidebar.tsx --file src/hooks/useHomeSidebar.test.ts --file src/hooks/useRuntimeSelectorState.tsx --file src/hooks/useRuntimeSelectorState.test.ts`
+  - `yarn --cwd wren-ui jest src/hooks/useKnowledgeDiagramData.test.ts src/hooks/useKnowledgeDiagramData.hook.test.tsx src/hooks/useHomeSidebar.test.ts src/hooks/useRuntimeSelectorState.test.ts --runInBand`
+  - `yarn --cwd wren-ui check-types`
+- 已继续推进 Wave 4 第三批请求原语收口：
+  - `src/hooks/useAuthSession.ts` 已移除本地 `setLoading + setError + useEffect(fetchSession)` 状态机，改为基于 `useRestRequest` 承接 session 读取链路，同时保留 auth session 自己的 TTL cache + in-flight dedupe
+  - 新增 `src/hooks/useAuthSession.hook.test.tsx`，锁定 auth session 的 request key / router-ready gating 契约
+- 这批 Wave 4 补充改动已通过以下验证：
+  - `yarn --cwd wren-ui next lint --file src/hooks/useAuthSession.ts --file src/hooks/useAuthSession.test.tsx --file src/hooks/useAuthSession.hook.test.tsx`
+  - `yarn --cwd wren-ui jest src/hooks/useAuthSession.test.tsx src/hooks/useAuthSession.hook.test.tsx --runInBand`
+  - `yarn --cwd wren-ui check-types`
+- 已继续推进 Wave 4 第四批请求原语收口：
+  - `src/hooks/useAutoComplete.tsx` 已移除本地 `peek -> load -> cancelled` 状态机，改为基于 `useRestRequest` 承接 diagram 自动补全数据读取链路，并保留“命中 diagram cache 时直接复用”的原有语义
+  - 新增 `src/hooks/useAutoComplete.test.tsx`，锁定 autocomplete 的 request key / cached auto-fetch 契约
+- 这批 Wave 4 补充改动已通过以下验证：
+  - `yarn --cwd wren-ui next lint --file src/hooks/useAutoComplete.tsx --file src/hooks/useAutoComplete.test.tsx`
+  - `yarn --cwd wren-ui jest src/hooks/useAutoComplete.test.tsx --runInBand`
+  - `yarn --cwd wren-ui check-types`
+- 已继续推进 Wave 4 第五批请求原语收口：
+  - `src/features/settings/systemTasks/ManageSystemTasksPage.tsx` 已把 workspace schedules overview 的主读取链路迁入 `useRestRequest`，同时保留 action 后的 silent refresh 语义
+  - 扩展 `src/tests/pages/settings/system-tasks.test.tsx`，覆盖 system tasks overview request key helper 契约
+- 这批 Wave 4 补充改动已通过以下验证：
+  - `yarn --cwd wren-ui next lint --file src/features/settings/systemTasks/ManageSystemTasksPage.tsx --file src/tests/pages/settings/system-tasks.test.tsx`
+  - `yarn --cwd wren-ui jest src/tests/pages/settings/system-tasks.test.tsx --runInBand`
+  - `yarn --cwd wren-ui check-types`
+- 已继续推进 Wave 4 第六批请求原语收口：
+  - `src/hooks/usePollingRequestLoop.ts` 已新增共享 polling coordinator，并接管
+    `src/hooks/useThreadResponsePolling.ts` /
+    `src/hooks/useThreadRecommendedQuestionsPolling.ts`
+    原先各自维护的 timer/session/loading 状态机
+  - `src/hooks/runtimeSelectorStateRequest.ts` 已承接 runtime selector 的
+    request-key / request options / GET request / initial-loading helper，
+    `src/hooks/useRuntimeSelectorState.tsx` 主体仅保留 provider + `useRestRequest`
+    编排
+  - 新增 `src/hooks/usePollingRequestLoop.test.ts`，锁定 polling coordinator 的
+    current-session / clear-timer / error-normalize 契约
+- 这批 Wave 4 补充改动已通过以下验证：
+  - `yarn --cwd wren-ui next lint --file src/hooks/usePollingRequestLoop.ts --file src/hooks/usePollingRequestLoop.test.ts --file src/hooks/useThreadResponsePolling.ts --file src/hooks/useThreadRecommendedQuestionsPolling.ts --file src/hooks/useRuntimeSelectorState.tsx --file src/hooks/runtimeSelectorStateRequest.ts --file src/hooks/useRuntimeSelectorState.test.ts`
+  - `yarn --cwd wren-ui jest src/hooks/usePollingRequestLoop.test.ts src/hooks/useThreadResponsePolling.test.ts src/hooks/useThreadRecommendedQuestionsPolling.test.ts src/hooks/useRuntimeSelectorState.test.ts --runInBand`
+  - `yarn --cwd wren-ui check-types`
+- 已继续推进 Wave 4 第七批请求原语收口：
+  - `src/hooks/homeSidebarRequests.ts` 已新增 sidebar threads 的共享 request helper，
+    将主 GET / rename / delete request 从 `useHomeSidebar.tsx` 下沉出去
+  - `src/hooks/useHomeSidebar.tsx` 主体已不再直接包含
+    `fetch + response.json().catch(() => null)` 细节，保留的复杂度主要是
+    warm-cache / intent gate / refetch orchestration
+  - 新增 `src/hooks/homeSidebarRequests.test.ts`，锁定 GET / PATCH / DELETE
+    三条 sidebar request lane 的 URL、payload 与 fallback error 契约
+- 这批 Wave 4 补充改动已通过以下验证：
+  - `yarn --cwd wren-ui next lint --file src/hooks/useHomeSidebar.tsx --file src/hooks/useHomeSidebar.test.ts --file src/hooks/homeSidebarRequests.ts --file src/hooks/homeSidebarRequests.test.ts`
+  - `yarn --cwd wren-ui jest src/hooks/useHomeSidebar.test.ts src/hooks/homeSidebarRequests.test.ts --runInBand`
+  - `yarn --cwd wren-ui check-types`
+- 已继续推进 Wave 4 第八批请求原语收口：
+  - `src/hooks/useRecommendedQuestionsInstruction.tsx` 已改为复用
+    `src/hooks/usePollingRequestLoop.ts`，不再自管重复的 poll-timer 递归状态机
+  - 新增 `src/hooks/recommendedQuestionsInstructionHelpers.ts`，将
+    empty-task / question grouping / prefetched initial-task loader /
+    finished settlement 逻辑下沉到纯 helper
+  - 新增 `src/hooks/recommendedQuestionsInstructionHelpers.test.ts`，
+    锁定 grouping、polling continuation、prefetched-loader 与 settlement 契约
+- 这批 Wave 4 补充改动已通过以下验证：
+  - `yarn --cwd wren-ui next lint --file src/hooks/useRecommendedQuestionsInstruction.tsx --file src/hooks/recommendedQuestionsInstructionHelpers.ts --file src/hooks/recommendedQuestionsInstructionHelpers.test.ts --file src/hooks/usePollingRequestLoop.ts --file src/hooks/usePollingRequestLoop.test.ts --file src/components/pages/home/prompt/RecommendedQuestionsPrompt.tsx`
+  - `yarn --cwd wren-ui jest src/hooks/recommendedQuestionsInstructionHelpers.test.ts src/hooks/usePollingRequestLoop.test.ts --runInBand`
+  - `yarn --cwd wren-ui check-types`
+- 已继续推进 Wave 4 第九批请求原语收口：
+  - 新增 `src/hooks/deployStatusRestHelpers.ts`，将 deploy status 的
+    unsynchronized fallback 与 polling-interval 守卫下沉到纯 helper
+  - `src/hooks/useDeployStatusRest.ts` 已改为复用 `PollingRequestCoordinator`，
+    不再自管 `timerRef + setTimeout` 轮询控制
+  - `src/hooks/useDeployStatusRest.test.ts` 已补 helper contract 覆盖：
+    fallback normalize 与 interval guard
+- 这批 Wave 4 补充改动已通过以下验证：
+  - `yarn --cwd wren-ui next lint --file src/hooks/useDeployStatusRest.ts --file src/hooks/useDeployStatusRest.test.ts --file src/hooks/deployStatusRestHelpers.ts`
+  - `yarn --cwd wren-ui jest src/hooks/useDeployStatusRest.test.ts --runInBand`
+  - `yarn --cwd wren-ui check-types`
+- 已继续把 `src/server/mdl/mdlBuilder.ts` 从约 558 行收口到约 438 行，并拆出
+  `src/server/mdl/mdlBuilderTypes.ts` /
+  `src/server/mdl/mdlBuilderSupport.ts`
+  - builder 的公开接口类型下沉到独立 types 文件
+  - tableReference / dataSource / rust post-process helper 下沉到 support 文件
+  - 主 builder 文件继续聚焦 manifest 组装主流程
+- 已继续把 `src/server/services/scimService.ts` 从约 583 行收口到约 481 行，并拆出
+  `src/server/services/scimServiceTypes.ts` /
+  `src/server/services/scimServiceSupport.ts`
+  - SCIM service contract、context 与 provider config 类型下沉到独立 types 文件
+  - email/displayName 解析、group mapping 归一化与 provider-subject helper 下沉到 support 文件
+  - 主 service 文件继续聚焦 authenticate / user-group upsert 主流程
+- 这两处补充改动已通过以下验证：
+  - `yarn --cwd wren-ui next lint --file src/server/mdl/mdlBuilder.ts --file src/server/mdl/mdlBuilderTypes.ts --file src/server/mdl/mdlBuilderSupport.ts --file src/server/mdl/test/mdlBuilder.test.ts --file src/server/services/scimService.ts --file src/server/services/scimServiceTypes.ts --file src/server/services/scimServiceSupport.ts --file src/pages/api/tests/scim_api.test.ts`
+  - `yarn --cwd wren-ui jest src/server/mdl/test/mdlBuilder.test.ts src/pages/api/tests/scim_api.test.ts --runInBand`
+  - `yarn --cwd wren-ui check-types`
+- 已继续把 `src/server/services/workspaceService.ts` 从约 721 行收口到约 497 行，并拆出
+  `src/server/services/workspaceServiceTypes.ts` /
+  `src/server/services/workspaceServiceSupport.ts`
+  - workspace service 的公开输入/输出与 constructor 依赖类型下沉到独立 types 文件
+  - actor authz、platform-admin 判定、default-workspace actor 构造、slug/regular-workspace 校验、member binding sync 与 member-record update helper 下沉到 support 文件
+  - 主 service 文件继续聚焦 create/invite/update/remove/default-workspace 主流程
+- 已继续把 `src/server/adaptors/ibisAdaptor.ts` 从约 687 行收口到约 480 行，并拆出
+  `src/server/adaptors/ibisAdaptorTypes.ts` /
+  `src/server/adaptors/ibisAdaptorSupport.ts`
+  - ibis adaptor 的 connection/query/validation/dry-run contract 与 datasource enums 下沉到独立 types 文件
+  - datasource-url 解析与 axios-like error message helper 下沉到 support 文件
+  - 主 adaptor 文件继续聚焦 ibis 调用链与错误封装主流程
+- 已继续把 `src/server/services/dashboardService.ts` 从约 796 行收口到约 409 行，并拆出
+  `src/server/services/dashboardServiceTypes.ts` /
+  `src/server/services/dashboardServiceSupport.ts`
+  - dashboard service contract/runtime-binding 类型下沉到独立 types 文件
+  - runtime-binding patch、scoped dashboard lookup/create、layout 计算与 schedule/cron helper 下沉到 support 文件
+  - 主 service 文件继续聚焦 dashboard scope orchestration 与 item CRUD 主流程；原有 protected schedule helper surface 通过 wrapper 保持测试/调用兼容
+- 这批补充改动已通过以下验证：
+  - `yarn --cwd wren-ui next lint --file src/server/services/workspaceService.ts --file src/server/services/workspaceServiceTypes.ts --file src/server/services/workspaceServiceSupport.ts --file src/server/services/tests/workspaceService.test.ts --file src/server/adaptors/ibisAdaptor.ts --file src/server/adaptors/ibisAdaptorTypes.ts --file src/server/adaptors/ibisAdaptorSupport.ts --file src/server/adaptors/tests/ibisAdaptor.test.ts --file src/server/services/dashboardService.ts --file src/server/services/dashboardServiceTypes.ts --file src/server/services/dashboardServiceSupport.ts --file src/server/services/tests/dashboardService.test.ts`
+  - `yarn --cwd wren-ui jest src/server/services/tests/workspaceService.test.ts src/server/adaptors/tests/ibisAdaptor.test.ts --runInBand`
+  - `yarn --cwd wren-ui jest src/server/services/tests/dashboardService.test.ts --runInBand`
+  - `yarn --cwd wren-ui check-types`
+- 已继续把 `src/server/services/workspaceBootstrapService.ts` 从约 948 行收口到约 368 行，并拆出
+  `src/server/services/workspaceBootstrapServiceTypes.ts` /
+  `src/server/services/workspaceBootstrapServiceSupport.ts` /
+  `src/server/services/workspaceBootstrapServiceRuntimeSupport.ts`
+  - default workspace/sample bootstrap 的 service contract 下沉到独立 types 文件
+  - sample metadata/project/model bootstrap helper 下沉到 support 文件
+  - runtime snapshot/sync/warmup helper 下沉到 runtime support 文件
+  - 主 service 文件继续聚焦 default workspace + sample runtime orchestration；原有 runtime bootstrap/duckdb/model/relation wrapper surface 通过方法保留测试兼容
+- 已继续把 `src/server/services/governanceService.ts` 从约 942 行收口到约 189 行，并拆出
+  `src/server/services/governanceServiceTypes.ts` /
+  `src/server/services/governanceServiceSupport.ts` /
+  `src/server/services/governanceServiceDirectorySupport.ts`
+  - governance service contract 与 constructor 依赖下沉到独立 types 文件
+  - access-review/impersonation/break-glass/共享 workspace helper 下沉到 support 文件
+  - directory-group orchestration 与绑定/member sync helper 下沉到 directory support 文件
+  - 主 service 文件继续聚焦对外方法委派，不再承载大段治理细节逻辑
+- 这批补充改动已通过以下验证：
+  - `yarn --cwd wren-ui next lint --file src/server/services/workspaceBootstrapService.ts --file src/server/services/workspaceBootstrapServiceTypes.ts --file src/server/services/workspaceBootstrapServiceSupport.ts --file src/server/services/workspaceBootstrapServiceRuntimeSupport.ts --file src/server/services/tests/workspaceBootstrapService.test.ts`
+  - `yarn --cwd wren-ui jest src/server/services/tests/workspaceBootstrapService.test.ts --runInBand`
+  - `yarn --cwd wren-ui next lint --file src/server/services/governanceService.ts --file src/server/services/governanceServiceTypes.ts --file src/server/services/governanceServiceSupport.ts --file src/server/services/governanceServiceDirectorySupport.ts --file src/server/services/tests/governanceService.test.ts`
+  - `yarn --cwd wren-ui jest src/server/services/tests/governanceService.test.ts --runInBand`
+  - `yarn --cwd wren-ui check-types`
+- 已继续把 `src/server/adaptors/wrenAIAdaptor.ts` 从约 1132 行收口到约 474 行，并拆出
+  `src/server/adaptors/wrenAIAdaptorTypes.ts` /
+  `src/server/adaptors/wrenAIAdaptorSupport.ts` /
+  `src/server/adaptors/wrenAIAdaptorOperations.ts`
+  - adaptor contract 下沉到独立 types 文件
+  - runtime-identity、deploy polling、AI status/error/result transform helper 下沉到 support 文件
+  - SQL pair / instruction / question / ask-feedback 这一批 maintenance APIs 下沉到 operations 文件
+  - 主 adaptor 文件继续聚焦 ask/deploy/recommendation/chart/text-answer 主链路与对外委派
+- 这批补充改动已通过以下验证：
+  - `yarn --cwd wren-ui next lint --file src/server/adaptors/wrenAIAdaptor.ts --file src/server/adaptors/wrenAIAdaptorTypes.ts --file src/server/adaptors/wrenAIAdaptorSupport.ts --file src/server/adaptors/wrenAIAdaptorOperations.ts --file src/server/adaptors/tests/wrenAIAdaptor.test.ts`
+  - `yarn --cwd wren-ui jest src/server/adaptors/tests/wrenAIAdaptor.test.ts --runInBand`
+  - `yarn --cwd wren-ui check-types`
+- 已继续把 `src/server/services/authService.ts` 从约 1120 行收口到约 96 行，并拆出
+  `src/server/services/authServiceTypes.ts` /
+  `src/server/services/authServiceSessionSupport.ts` /
+  `src/server/services/authServiceActorClaimsSupport.ts` /
+  `src/server/services/authServiceStructuredClaimsSupport.ts`
+  - auth service contract、session ttl / login bootstrap 常量与依赖类型下沉到 types 文件
+  - bootstrap/register/login/password/session 生命周期下沉到 session support 文件
+  - actor claim 解析、platform-admin synthetic membership 与 workspace 选择逻辑下沉到 actor-claims support 文件
+  - structured bindings / permission scopes / backfill 同步与 group claim 聚合下沉到 structured-claims support 文件
+  - 主 service 文件继续聚焦公开方法委派；同时修正 `authService.test.ts` 中 login 样例空间预热模式的过期断言，使之匹配现有 `metadata_only` 语义
+- 这批补充改动已通过以下验证：
+  - `yarn --cwd wren-ui next lint --file src/server/services/authService.ts --file src/server/services/authServiceTypes.ts --file src/server/services/authServiceSessionSupport.ts --file src/server/services/authServiceActorClaimsSupport.ts --file src/server/services/authServiceStructuredClaimsSupport.ts --file src/server/services/tests/authService.test.ts`
+  - `yarn --cwd wren-ui jest src/server/services/tests/authService.test.ts --runInBand`
+  - `yarn --cwd wren-ui check-types`
+- 已继续把 `src/server/controllers/askingController.ts` 从约 1203 行收口到约 271 行，并拆出
+  `src/server/controllers/askingControllerTypes.ts` /
+  `src/server/controllers/askingControllerScopeSupport.ts` /
+  `src/server/controllers/askingControllerAskActions.ts` /
+  `src/server/controllers/askingControllerThreadActions.ts` /
+  `src/server/controllers/askingControllerNestedResolvers.ts`
+  - controller 的公开返回类型与 GraphQL payload contract 下沉到独立 types 文件
+  - runtime scope / audit / askingTask transform / scoped lookup helper 下沉到 scope support 文件
+  - ask/recommendation/task 查询链路与 thread/response/chart 主链路分别下沉到 ask-actions / thread-actions 文件
+  - nested resolver 工厂单独下沉，主 controller 文件当前只保留 route-facing 委派与导出面
+- 这批补充改动已通过以下验证：
+  - `yarn --cwd wren-ui next lint --file src/server/controllers/askingController.ts --file src/server/controllers/askingControllerTypes.ts --file src/server/controllers/askingControllerScopeSupport.ts --file src/server/controllers/askingControllerAskActions.ts --file src/server/controllers/askingControllerThreadActions.ts --file src/server/controllers/askingControllerNestedResolvers.ts --file src/server/controllers/tests/askingController.test.ts`
+  - `yarn --cwd wren-ui jest src/server/controllers/tests/askingController.test.ts --runInBand`
+  - `yarn --cwd wren-ui check-types`
+- 已继续把 `src/server/services/modelService.ts` 从约 1455 行收口到约 400 行，并拆出
+  `src/server/services/modelServiceTypes.ts` /
+  `src/server/services/modelServiceRuntimeScopeSupport.ts` /
+  `src/server/services/modelServiceCalculatedFieldSupport.ts` /
+  `src/server/services/modelServiceRelationSupport.ts` /
+  `src/server/services/modelServiceViewSupport.ts` /
+  `src/server/services/modelServiceDatasetSupport.ts`
+  - service contract、constructor 依赖与 runtime-scoped record 类型下沉到 types 文件
+  - runtime identity scope 过滤与 runtime-aware get/list helper 下沉到 runtime-scope support 文件
+  - calculated field 创建/更新/命名校验/可查询性检查下沉到 calculated-field support 文件
+  - relation CRUD、project bridge 校验、runtime persistence patch 与 calculated-field lineage 清理下沉到 relation support 文件
+  - view name 校验以及 sample metadata 批量更新 helper 分别下沉到 view / dataset support 文件；主 service 当前聚焦公开委派与轻量 scoped wrapper
+- 这批补充改动已通过以下验证：
+  - `yarn --cwd wren-ui next lint --file src/server/services/modelService.ts --file src/server/services/modelServiceTypes.ts --file src/server/services/modelServiceRuntimeScopeSupport.ts --file src/server/services/modelServiceCalculatedFieldSupport.ts --file src/server/services/modelServiceRelationSupport.ts --file src/server/services/modelServiceViewSupport.ts --file src/server/services/modelServiceDatasetSupport.ts --file src/server/services/tests/modelService.test.ts`
+  - `yarn --cwd wren-ui jest src/server/services/tests/modelService.test.ts --runInBand`
+  - `yarn --cwd wren-ui check-types`
+- 已继续把 `src/server/data/sample.ts` 从约 1909 行收口到约 63 行，并拆出
+  `src/server/data/sampleTypes.ts` /
+  `src/server/data/sampleHrDataset.ts` /
+  `src/server/data/sampleMusicDataset.ts` /
+  `src/server/data/sampleEcommerceTablesPart1.ts` /
+  `src/server/data/sampleEcommerceTablesPart2.ts` /
+  `src/server/data/sampleEcommerceDataset.ts` /
+  `src/server/data/sampleNbaTablesPart1.ts` /
+  `src/server/data/sampleNbaTablesPart2.ts` /
+  `src/server/data/sampleNbaDataset.ts`
+  - sample dataset 的共享类型下沉到独立 types 文件
+  - HR / Music 数据集拆到独立 dataset 文件
+  - Ecommerce / NBA 继续按 tables-part1 / tables-part2 / dataset wrapper 拆开，保证每个静态数据文件都不超过 500 行
+  - 主 `sample.ts` 当前只保留数据集装配与 `buildInitSql` / `getRelations` / `getSampleAskQuestions` helper 导出面
+- 这批补充改动已通过以下验证：
+  - `yarn --cwd wren-ui next lint --file src/server/data/sample.ts --file src/server/data/sampleTypes.ts --file src/server/data/sampleHrDataset.ts --file src/server/data/sampleMusicDataset.ts --file src/server/data/sampleEcommerceTablesPart1.ts --file src/server/data/sampleEcommerceTablesPart2.ts --file src/server/data/sampleEcommerceDataset.ts --file src/server/data/sampleNbaTablesPart1.ts --file src/server/data/sampleNbaTablesPart2.ts --file src/server/data/sampleNbaDataset.ts`
+  - `yarn --cwd wren-ui jest src/server/services/tests/workspaceBootstrapService.test.ts src/server/controllers/tests/askingController.test.ts --runInBand`
+  - `yarn --cwd wren-ui check-types`
+- 已继续把 `src/server/controllers/projectController.ts` 从约 1770 行收口到约 472 行，并拆出
+  `src/server/controllers/projectControllerRuntimeSupport.ts` /
+  `src/server/controllers/projectControllerProjectSupport.ts` /
+  `src/server/controllers/projectControllerReadActions.ts` /
+  `src/server/controllers/projectControllerMutationTypes.ts` /
+  `src/server/controllers/projectControllerConnectionActions.ts` /
+  `src/server/controllers/projectControllerModelingActions.ts`，同时把 `projectControllerMutationActions.ts` 收成轻量 barrel
+  - runtime scope / knowledge-base authz + audit / connector bridge / managed federated runtime helper 下沉到 runtime support 文件
+  - project create+deploy、DuckDB 环境准备、relation input 与 model overwrite helper 下沉到 project support 文件
+  - settings / onboarding / tables / suggested relation / schema change 读取链路下沉到 read actions 文件
+  - connection/update/reset 与 sample/modeling 变更链路分别落到 connection/modeling actions 文件；主 controller 当前只保留 public route-facing wrapper 与少量私有委派 helper
+- 这批补充改动已通过以下验证：
+  - `yarn --cwd wren-ui next lint --file src/server/controllers/projectController.ts --file src/server/controllers/projectControllerRuntimeSupport.ts --file src/server/controllers/projectControllerProjectSupport.ts --file src/server/controllers/projectControllerReadActions.ts --file src/server/controllers/projectControllerMutationActions.ts --file src/server/controllers/projectControllerMutationTypes.ts --file src/server/controllers/projectControllerConnectionActions.ts --file src/server/controllers/projectControllerModelingActions.ts --file src/pages/api/v1/schema-changes/detect.ts --file src/pages/api/v1/schema-changes/resolve.ts --file src/server/controllers/tests/projectController.test.ts`
+  - `yarn --cwd wren-ui jest src/server/controllers/tests/projectController.test.ts --runInBand`
+  - `yarn --cwd wren-ui check-types`
+- 已继续把 `src/server/controllers/modelController.ts` 从约 2018 行收口到约 433 行，并拆出
+  `src/server/controllers/modelControllerShared.ts` /
+  `src/server/controllers/modelControllerScopeSupport.ts` /
+  `src/server/controllers/modelControllerRelationActions.ts` /
+  `src/server/controllers/modelControllerRuntimeActions.ts` /
+  `src/server/controllers/modelControllerModelActions.ts` /
+  `src/server/controllers/modelControllerModelMetadataActions.ts` /
+  `src/server/controllers/modelControllerViewActions.ts` /
+  `src/server/controllers/modelControllerPreviewActions.ts`
+  - runtime identity / authz + audit / executable-scope / response execution context / scope guard helper 下沉到 scope support 文件
+  - relation / calculated field / sync+deploy / model CRUD / model metadata / view management / preview-native-sql 分别下沉到独立 actions 文件，主 controller 当前只保留 route-facing wrapper 与测试所需的 `getResponseExecutionContext` 薄委派
+  - `modelControllerShared.ts` 统一承接 `SyncStatusEnum`、JSON properties 解析与 metadata/table-column 校验小 helper，避免 support/action 文件重复实现
+- 这批补充改动已通过以下验证：
+  - `yarn --cwd wren-ui next lint --file src/server/controllers/modelController.ts --file src/server/controllers/modelControllerShared.ts --file src/server/controllers/modelControllerScopeSupport.ts --file src/server/controllers/modelControllerRelationActions.ts --file src/server/controllers/modelControllerRuntimeActions.ts --file src/server/controllers/modelControllerModelActions.ts --file src/server/controllers/modelControllerModelMetadataActions.ts --file src/server/controllers/modelControllerViewActions.ts --file src/server/controllers/modelControllerPreviewActions.ts --file src/server/controllers/tests/modelController.test.ts`
+  - `yarn --cwd wren-ui jest src/server/controllers/tests/modelController.test.ts --runInBand`
+  - `yarn --cwd wren-ui check-types`
+- 随后已继续把 `src/server/services/identityProviderService.ts` 从约 2110 行收口到约 437 行，并拆出：
+  - `src/server/services/identityProviderServiceShared.ts`：identity provider contract/types/shared helper + XML/shared config readers
+  - `src/server/services/identityProviderServiceOidcSupport.ts`：OIDC metadata/code-exchange/claims 链路
+  - `src/server/services/identityProviderServiceSamlXmlSupport.ts`：SAML XML tree / canonicalization helper
+  - `src/server/services/identityProviderServiceSamlMetadataSupport.ts`：SAML metadata refresh/normalize/certificate summary/authn-request helper
+  - `src/server/services/identityProviderServiceSamlAuthSupport.ts`：SAML response validation + signature verification 主链路
+  - `src/server/services/identityProviderServiceProvisioningSupport.ts`：SSO user provisioning / membership bind / session issuance 主链路
+- 当前主 service 只保留 public orchestration，以及测试直接访问的 `maybeRefreshSamlMetadataProvider` / `parseXmlTree` / `findElementById` / `canonicalizeXmlNode` / `completeSamlSSO` 薄委派。
+- 这批补充改动已通过以下验证：
+  - `yarn --cwd wren-ui next lint --file src/server/services/identityProviderService.ts --file src/server/services/identityProviderServiceShared.ts --file src/server/services/identityProviderServiceOidcSupport.ts --file src/server/services/identityProviderServiceSamlXmlSupport.ts --file src/server/services/identityProviderServiceSamlMetadataSupport.ts --file src/server/services/identityProviderServiceSamlAuthSupport.ts --file src/server/services/identityProviderServiceProvisioningSupport.ts --file src/server/services/tests/identityProviderService.test.ts`
+  - `yarn --cwd wren-ui jest src/server/services/tests/identityProviderService.test.ts --runInBand`
+  - `yarn --cwd wren-ui check-types`
+- 随后已继续把 `src/server/services/askingService.ts` 从约 2360 行收口到约 341 行，并拆出：
+  - `src/server/services/askingServiceShared.ts`：asking service contract / enums / `constructCteSql` / background tracker bootstrap shared helper
+  - `src/server/services/askingServiceRuntimeSupport.ts`：runtime identity / deploy+project lookup / scope-normalize / recommendation scope helper
+  - `src/server/services/askingServiceTaskActions.ts`：asking task create/rerun/cancel/query 链路
+  - `src/server/services/askingServiceThreadActions.ts`：thread / response CRUD 与 scoped guard 链路
+  - `src/server/services/askingServiceRecommendationActions.ts`：thread / instant recommendation questions 链路
+  - `src/server/services/askingServiceResponseActions.ts`：preview / breakdown / answer / chart / adjustment 链路
+  - `src/server/services/askingServiceInitializationSupport.ts`：background tracker rehydrate/bootstrap 逻辑
+  - `src/server/services/askingServicePrototypeActions.ts`：public action prototype 绑定
+  - `src/server/services/askingServicePrototypeHelpers.ts`：runtime/helper prototype 绑定
+- 当前主 service 只保留 constructor、public method surface 声明，以及测试所需 prototype-compatible export 面；`askingServiceRuntimeSupport.ts` 也已压到约 499 行，满足“500 行以内即可”的当前标准。
+- 这批补充改动已通过以下验证：
+  - `yarn --cwd wren-ui next lint --file src/server/services/askingService.ts --file src/server/services/askingServiceShared.ts --file src/server/services/askingServiceRuntimeSupport.ts --file src/server/services/askingServiceTaskActions.ts --file src/server/services/askingServiceThreadActions.ts --file src/server/services/askingServiceRecommendationActions.ts --file src/server/services/askingServiceResponseActions.ts --file src/server/services/askingServiceInitializationSupport.ts --file src/server/services/askingServicePrototypeActions.ts --file src/server/services/askingServicePrototypeHelpers.ts --file src/server/services/tests/askingService.test.ts --file src/server/backgrounds/tests/textBasedAnswerBackgroundTracker.test.ts --file src/server/controllers/askingControllerNestedResolvers.ts --file 'src/pages/api/v1/threads/[...path].ts'`
+  - `yarn --cwd wren-ui jest src/server/services/tests/askingService.test.ts --runInBand`
+  - `yarn --cwd wren-ui jest src/server/backgrounds/tests/textBasedAnswerBackgroundTracker.test.ts --runInBand`
+  - `yarn --cwd wren-ui check-types`
+- 按“500 行以内即可”的当前标准，server 侧这轮 giant-file 主热点已清零。
+- 随后已开始收口测试热点：`src/server/services/tests/askingService.test.ts` 已从约 2179 行拆为 7 个主题测试文件（`constructThread` / `createAskingTask.primary` / `createAskingTask.followUp` / `runtimeIdentity` / `scopeGuard` / `recommendations` / `chartLifecycle`），所有拆后文件均低于 500 行。
+- 注：以上测试拆分记录保留为已完成历史；但按最新标准，测试文件后续不再作为 giant-file cleanup 的强制目标。
+- 这批测试拆分已通过以下验证：
+  - `yarn --cwd wren-ui next lint --file src/server/services/tests/askingService.constructThread.test.ts --file src/server/services/tests/askingService.createAskingTask.primary.test.ts --file src/server/services/tests/askingService.createAskingTask.followUp.test.ts --file src/server/services/tests/askingService.runtimeIdentity.test.ts --file src/server/services/tests/askingService.scopeGuard.test.ts --file src/server/services/tests/askingService.recommendations.test.ts --file src/server/services/tests/askingService.chartLifecycle.test.ts`
+  - `yarn --cwd wren-ui jest src/server/services/tests/askingService.constructThread.test.ts src/server/services/tests/askingService.createAskingTask.primary.test.ts src/server/services/tests/askingService.createAskingTask.followUp.test.ts src/server/services/tests/askingService.runtimeIdentity.test.ts src/server/services/tests/askingService.scopeGuard.test.ts src/server/services/tests/askingService.recommendations.test.ts src/server/services/tests/askingService.chartLifecycle.test.ts src/server/backgrounds/tests/textBasedAnswerBackgroundTracker.test.ts --runInBand`
+  - `yarn --cwd wren-ui check-types`
+- 随后已继续把 `src/server/controllers/tests/projectController.test.ts` 从约 1814 行拆为 7 个主题测试文件（`recommendations` / `scopedReads` / `mutationScope.reads` / `mutationScope.connections` / `mutationScope.reset` / `draftRuntimeProjectLinkage` / `startSampleDataset`），所有拆后文件均低于 500 行。
+- 这批测试拆分已通过以下验证：
+  - `yarn --cwd wren-ui next lint --file src/server/controllers/tests/projectController.recommendations.test.ts --file src/server/controllers/tests/projectController.scopedReads.test.ts --file src/server/controllers/tests/projectController.mutationScope.reads.test.ts --file src/server/controllers/tests/projectController.mutationScope.connections.test.ts --file src/server/controllers/tests/projectController.mutationScope.reset.test.ts --file src/server/controllers/tests/projectController.draftRuntimeProjectLinkage.test.ts --file src/server/controllers/tests/projectController.startSampleDataset.test.ts`
+  - `yarn --cwd wren-ui jest src/server/controllers/tests/projectController.recommendations.test.ts src/server/controllers/tests/projectController.scopedReads.test.ts src/server/controllers/tests/projectController.mutationScope.reads.test.ts src/server/controllers/tests/projectController.mutationScope.connections.test.ts src/server/controllers/tests/projectController.mutationScope.reset.test.ts src/server/controllers/tests/projectController.draftRuntimeProjectLinkage.test.ts src/server/controllers/tests/projectController.startSampleDataset.test.ts --runInBand`
+  - `yarn --cwd wren-ui check-types`
+- 随后已继续把 `src/pages/api/tests/auth_api.test.ts` 从约 1229 行拆为 4 个主题测试文件（`localAuth` / `session` / `sso` / `impersonation`），并新增 `auth_api.testSupport.ts` 收拢共享 mock、req/res builder 与 reset 流程；所有拆后文件均低于 500 行。
+- 这批 auth API 测试拆分已通过以下验证：
+  - `yarn --cwd wren-ui next lint --file src/pages/api/tests/auth_api.localAuth.test.ts --file src/pages/api/tests/auth_api.session.test.ts --file src/pages/api/tests/auth_api.sso.test.ts --file src/pages/api/tests/auth_api.impersonation.test.ts --file src/pages/api/tests/auth_api.testSupport.ts`
+  - `yarn --cwd wren-ui jest src/pages/api/tests/auth_api.localAuth.test.ts src/pages/api/tests/auth_api.session.test.ts src/pages/api/tests/auth_api.sso.test.ts src/pages/api/tests/auth_api.impersonation.test.ts --runInBand`
+  - `yarn --cwd wren-ui check-types`
+- 随后已继续把 `src/server/services/tests/dashboardService.test.ts` 从约 1212 行拆为 7 个主题测试文件（`projectScope` / `generateCronExpression` / `calculateNextRunTime` / `toUTC` / `toTimezone` / `validateScheduleInput` / `setDashboardSchedule`），并新增 `dashboardService.testSupport.ts` 收拢 test subclass、schedule factory 与 repository harness；所有拆后文件均低于 500 行。
+- 这批 dashboard service 测试拆分已通过以下验证：
+  - `yarn --cwd wren-ui next lint --file src/server/services/tests/dashboardService.projectScope.test.ts --file src/server/services/tests/dashboardService.generateCronExpression.test.ts --file src/server/services/tests/dashboardService.calculateNextRunTime.test.ts --file src/server/services/tests/dashboardService.toUTC.test.ts --file src/server/services/tests/dashboardService.toTimezone.test.ts --file src/server/services/tests/dashboardService.validateScheduleInput.test.ts --file src/server/services/tests/dashboardService.setDashboardSchedule.test.ts --file src/server/services/tests/dashboardService.testSupport.ts`
+  - `yarn --cwd wren-ui jest src/server/services/tests/dashboardService.projectScope.test.ts src/server/services/tests/dashboardService.generateCronExpression.test.ts src/server/services/tests/dashboardService.calculateNextRunTime.test.ts src/server/services/tests/dashboardService.toUTC.test.ts src/server/services/tests/dashboardService.toTimezone.test.ts src/server/services/tests/dashboardService.validateScheduleInput.test.ts src/server/services/tests/dashboardService.setDashboardSchedule.test.ts --runInBand`
+  - `yarn --cwd wren-ui check-types`
+- 随后已继续把 `src/pages/api/tests/workspace_api.test.ts` 从约 1044 行拆为 3 个主题测试文件（`current` / `bindings` / `membership`），并新增 `workspace_api.testSupport.ts` 收拢共享 authorization/session mock、req/res builder 与 reset 流程；所有拆后文件均低于 500 行。
+- 这批 workspace API 测试拆分已通过以下验证：
+  - `yarn --cwd wren-ui next lint --file src/pages/api/tests/workspace_api.current.test.ts --file src/pages/api/tests/workspace_api.bindings.test.ts --file src/pages/api/tests/workspace_api.membership.test.ts --file src/pages/api/tests/workspace_api.testSupport.ts`
+  - `yarn --cwd wren-ui jest src/pages/api/tests/workspace_api.current.test.ts src/pages/api/tests/workspace_api.bindings.test.ts src/pages/api/tests/workspace_api.membership.test.ts --runInBand`
+  - `yarn --cwd wren-ui check-types`
+- 当前 `wren-ui/src` 中非测试代码 >500 行文件仍为 0。按最新标准，测试代码不再纳入 giant-file cleanup 目标，因此后续不再继续为“测试文件降到 500 行以内”而拆分；已完成的测试拆分保持现状，不主动回滚。

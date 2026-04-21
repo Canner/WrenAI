@@ -71,6 +71,12 @@
 3. API route 的共享 helper：
    - 放到 `src/server/api/...`
    - 不再放在 `src/pages/api/v1` 下
+4. 当前已新增 `wren-ui/scripts/check_pages_routes.mjs` +
+   `wren-ui/scripts/pages-route-allowlist.json`
+   - 用显式 allowlist 锁定当前 `src/pages` route inventory
+   - 测试文件（`src/pages/api/tests/*`）自动排除
+   - 未来若新增/删除 route，必须显式更新 allowlist，避免业务组件悄悄回流到
+     `pages/`
 
 ## Owner / 目标位置
 
