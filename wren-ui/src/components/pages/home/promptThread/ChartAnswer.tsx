@@ -339,7 +339,8 @@ export default function ChartAnswer(props: AnswerResultProps) {
     setIsCreatePinModalOpen(false);
   };
 
-  const shouldUsePinPopover = dashboardsLoading || dashboardOptions.length !== 1;
+  const shouldUsePinPopover =
+    dashboardsLoading || dashboardOptions.length !== 1;
 
   const runPinToDashboard = async (
     targetDashboardId: number | null,
@@ -534,7 +535,9 @@ export default function ChartAnswer(props: AnswerResultProps) {
                   />
                 ) : undefined
               }
-              pinPopoverOpen={shouldUsePinPopover ? isPinPopoverOpen : undefined}
+              pinPopoverOpen={
+                shouldUsePinPopover ? isPinPopoverOpen : undefined
+              }
               onPinPopoverOpenChange={
                 shouldUsePinPopover
                   ? (open) => {

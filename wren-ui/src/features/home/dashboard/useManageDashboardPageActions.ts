@@ -123,63 +123,66 @@ export const useManageDashboardPageActions = ({
     setSettings,
   ]);
 
-  const openCacheSettings = useCallback(async (dashboardId?: number | null) => {
-    if (isDashboardReadonly) {
-      message.info(HISTORICAL_SNAPSHOT_READONLY_HINT);
-      return;
-    }
+  const openCacheSettings = useCallback(
+    async (dashboardId?: number | null) => {
+      if (isDashboardReadonly) {
+        message.info(HISTORICAL_SNAPSHOT_READONLY_HINT);
+        return;
+      }
 
-    const supported = await ensureCacheSettingsSupported();
-    if (!supported) {
-      message.info('当前连接暂不支持缓存与调度');
-      return;
-    }
+      const supported = await ensureCacheSettingsSupported();
+      if (!supported) {
+        message.info('当前连接暂不支持缓存与调度');
+        return;
+      }
 
-    const targetDashboardId = dashboardId ?? activeDashboardId;
-    if (targetDashboardId == null) {
-      return;
-    }
+      const targetDashboardId = dashboardId ?? activeDashboardId;
+      if (targetDashboardId == null) {
+        return;
+      }
 
-    const detailData =
-      targetDashboardId === activeDashboardId
-        ? {
-            cacheEnabled: visibleDashboardDetailCacheEnabled,
-            schedule: visibleDashboardDetailSchedule,
-          }
-        : await loadDashboardDetailPayload({
-            dashboardId: targetDashboardId,
-            selector: runtimeScopeNavigation.selector,
-            useCache: false,
-          }).catch((error) => {
-            const errorMessage = resolveAbortSafeErrorMessage(
-              error,
-              '加载看板计划失败，请稍后重试。',
-            );
-            if (errorMessage) {
-              message.error(errorMessage);
+      const detailData =
+        targetDashboardId === activeDashboardId
+          ? {
+              cacheEnabled: visibleDashboardDetailCacheEnabled,
+              schedule: visibleDashboardDetailSchedule,
             }
-            return null;
-          });
+          : await loadDashboardDetailPayload({
+              dashboardId: targetDashboardId,
+              selector: runtimeScopeNavigation.selector,
+              useCache: false,
+            }).catch((error) => {
+              const errorMessage = resolveAbortSafeErrorMessage(
+                error,
+                '加载看板计划失败，请稍后重试。',
+              );
+              if (errorMessage) {
+                message.error(errorMessage);
+              }
+              return null;
+            });
 
-    if (!detailData) {
-      return;
-    }
+      if (!detailData) {
+        return;
+      }
 
-    setCacheSettingsTargetId(targetDashboardId);
-    cacheSettingsDrawer.openDrawer({
-      cacheEnabled: detailData.cacheEnabled,
-      schedule: detailData.schedule,
-    });
-  }, [
-    activeDashboardId,
-    cacheSettingsDrawer,
-    ensureCacheSettingsSupported,
-    isDashboardReadonly,
-    runtimeScopeNavigation.selector,
-    setCacheSettingsTargetId,
-    visibleDashboardDetailCacheEnabled,
-    visibleDashboardDetailSchedule,
-  ]);
+      setCacheSettingsTargetId(targetDashboardId);
+      cacheSettingsDrawer.openDrawer({
+        cacheEnabled: detailData.cacheEnabled,
+        schedule: detailData.schedule,
+      });
+    },
+    [
+      activeDashboardId,
+      cacheSettingsDrawer,
+      ensureCacheSettingsSupported,
+      isDashboardReadonly,
+      runtimeScopeNavigation.selector,
+      setCacheSettingsTargetId,
+      visibleDashboardDetailCacheEnabled,
+      visibleDashboardDetailSchedule,
+    ],
+  );
 
   const onUpdateChange = useCallback(
     async (layouts: DashboardItemLayoutInput[]) => {
@@ -263,44 +266,47 @@ export const useManageDashboardPageActions = ({
     [updateDashboardDetailData],
   );
 
-  const refreshDashboard = useCallback(async (dashboardId?: number | null) => {
-    if (isDashboardReadonly) {
-      message.info(HISTORICAL_SNAPSHOT_READONLY_HINT);
-      return;
-    }
-    const targetDashboardId = dashboardId ?? activeDashboardId;
-    if (targetDashboardId == null) {
-      return;
-    }
+  const refreshDashboard = useCallback(
+    async (dashboardId?: number | null) => {
+      if (isDashboardReadonly) {
+        message.info(HISTORICAL_SNAPSHOT_READONLY_HINT);
+        return;
+      }
+      const targetDashboardId = dashboardId ?? activeDashboardId;
+      if (targetDashboardId == null) {
+        return;
+      }
 
-    try {
-      if (targetDashboardId === activeDashboardId) {
-        await refetchDashboard({ useCache: false });
-      } else {
-        await loadDashboardDetailPayload({
-          dashboardId: targetDashboardId,
-          selector: runtimeScopeNavigation.selector,
-          useCache: false,
-        });
-        message.success('看板已刷新。');
+      try {
+        if (targetDashboardId === activeDashboardId) {
+          await refetchDashboard({ useCache: false });
+        } else {
+          await loadDashboardDetailPayload({
+            dashboardId: targetDashboardId,
+            selector: runtimeScopeNavigation.selector,
+            useCache: false,
+          });
+          message.success('看板已刷新。');
+        }
+        await refetchDashboards({ useCache: false });
+      } catch (error) {
+        const errorMessage = resolveAbortSafeErrorMessage(
+          error,
+          '刷新看板失败，请稍后重试。',
+        );
+        if (errorMessage) {
+          message.error(errorMessage);
+        }
       }
-      await refetchDashboards({ useCache: false });
-    } catch (error) {
-      const errorMessage = resolveAbortSafeErrorMessage(
-        error,
-        '刷新看板失败，请稍后重试。',
-      );
-      if (errorMessage) {
-        message.error(errorMessage);
-      }
-    }
-  }, [
-    activeDashboardId,
-    isDashboardReadonly,
-    refetchDashboard,
-    refetchDashboards,
-    runtimeScopeNavigation.selector,
-  ]);
+    },
+    [
+      activeDashboardId,
+      isDashboardReadonly,
+      refetchDashboard,
+      refetchDashboards,
+      runtimeScopeNavigation.selector,
+    ],
+  );
 
   const goToSourceThread = useCallback(
     async (threadId?: number | null, responseId?: number | null) => {

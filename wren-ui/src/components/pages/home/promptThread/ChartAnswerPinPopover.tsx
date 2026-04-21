@@ -7,10 +7,7 @@ import {
   type DashboardListItem,
 } from '@/utils/dashboardRest';
 
-type DashboardOption = Pick<
-  DashboardListItem,
-  'id' | 'isDefault' | 'name'
->;
+type DashboardOption = Pick<DashboardListItem, 'id' | 'isDefault' | 'name'>;
 
 const PopoverShell = styled.div`
   width: 272px;
@@ -36,8 +33,7 @@ const PopoverRow = styled.button<{ $active?: boolean; $disabled?: boolean }>`
   padding: 4px 8px;
   border-radius: 7px;
   border: 1px solid
-    ${(props) =>
-      props.$active ? 'rgba(141, 101, 225, 0.18)' : 'transparent'};
+    ${(props) => (props.$active ? 'rgba(141, 101, 225, 0.18)' : 'transparent')};
   background: ${(props) =>
     props.$active ? 'rgba(141, 101, 225, 0.08)' : 'transparent'};
   text-align: left;

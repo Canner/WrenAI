@@ -313,7 +313,9 @@ export default function Dashboard() {
             filteredDashboardSummaryItems={dashboardSummaryItems}
             hasDashboardSummaryItems={dashboardSummaryItems.length > 0}
             isDashboardReadonly={isDashboardReadonly}
-            onCacheSettings={(dashboardId) => void openCacheSettings(dashboardId)}
+            onCacheSettings={(dashboardId) =>
+              void openCacheSettings(dashboardId)
+            }
             onCreateDashboard={() => setCreateDashboardOpen(true)}
             onDeleteDashboard={onDeleteDashboard}
             onRefreshDashboard={(dashboardId) =>
