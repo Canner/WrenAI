@@ -15,12 +15,13 @@
 
 - `analysis-rules/`：分析规则，后续建议导入为 **instructions**
 - `sql-templates/`：SQL 模板定义，后续建议导入为 **sql_pairs**
-- `_templates/`：新建文档时复用的模板
 - `import-format.md`：统一 front matter 字段约定
+- `ui-import-checklist.md`：当前这批规则 / 模板的 UI 导入顺序与检查清单
 - `import-manifest.sample.yaml`：未来导入脚本可参考的批量导入样例
+- `../_archive/knowledge-base/`：已归档的汇总页、模板草稿与生成稿，不作为当前 UI 导入主数据源
 
 > 建议把 `analysis-rules/` 与 `sql-templates/` 下的**单文件文档**作为后续导入的权威来源；
-> 根目录下的 `analysis-rules.md` / `sql-templates.md` 更适合作为汇总浏览页。
+> 已归档的汇总页、模板草稿与 suggestedQuestions 生成稿仅保留备查，不参与当前导入链路。
 
 ## 推荐导入映射
 
@@ -63,6 +64,16 @@
 - SQL 模板单文件：15 个
 - 其中已补 SQL 草案：11 个
 - 仍受阻模板：4 个（`T05/T07/T14/T15`）
+
+## 当前导入主链路
+
+如果目标是通过 UI 方式导入并验证业务需求，当前应只使用下面这些目录 / 文件：
+
+- `analysis-rules/`
+- `sql-templates/`
+- `import-format.md`
+- `ui-import-checklist.md`
+- `import-manifest.sample.yaml`（如需批量导入）
 
 ## 录入建议
 

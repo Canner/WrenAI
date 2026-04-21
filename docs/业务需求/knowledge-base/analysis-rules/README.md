@@ -1,6 +1,6 @@
 # 分析规则清单
 
-单文件规则是后续导入 instruction 的**权威来源**；字段格式约定见 [`../import-format.md`](../import-format.md)，汇总说明见 [`../analysis-rules.md`](../analysis-rules.md)。
+单文件规则是后续导入 instruction 的**权威来源**；字段格式约定见 [`../import-format.md`](../import-format.md)，UI 导入顺序见 [`../ui-import-checklist.md`](../ui-import-checklist.md)，历史汇总页已归档到 [`../../_archive/knowledge-base/analysis-rules.md`](../../_archive/knowledge-base/analysis-rules.md)。
 
 ## 单文件列表
 

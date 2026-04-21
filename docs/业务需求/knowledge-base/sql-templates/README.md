@@ -1,6 +1,6 @@
 # SQL 模板清单
 
-单文件模板是后续导入的**权威来源**；字段格式约定见 [`../import-format.md`](../import-format.md)，汇总说明见 [`../sql-templates.md`](../sql-templates.md)。
+单文件模板是后续导入的**权威来源**；字段格式约定见 [`../import-format.md`](../import-format.md)，UI 导入顺序见 [`../ui-import-checklist.md`](../ui-import-checklist.md)，历史汇总页已归档到 [`../../_archive/knowledge-base/sql-templates.md`](../../_archive/knowledge-base/sql-templates.md)。
 
 ## 当前状态概览
 
