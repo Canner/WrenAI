@@ -155,6 +155,87 @@ export default function ScheduleRunDetailsDrawer(props: Props) {
   const { visible, open, onClose, defaultValue } = props;
   const drawerOpen = open ?? visible ?? false;
   const runtimeIdentity = defaultValue?.detailJson?.runtimeIdentity || null;
+  const overviewItems = defaultValue
+    ? [
+        {
+          key: 'targetName',
+          label: '任务名称',
+          children: defaultValue.targetName,
+        },
+        {
+          key: 'targetType',
+          label: '任务类型',
+          children: defaultValue.targetTypeLabel,
+        },
+        {
+          key: 'status',
+          label: '运行状态',
+          children: (
+            <Tag color={getStatusColor(defaultValue.status)}>
+              {getStatusLabel(defaultValue.status)}
+            </Tag>
+          ),
+        },
+        {
+          key: 'scheduleJobId',
+          label: 'Schedule Job ID',
+          children: renderCopyableValue(defaultValue.scheduleJobId),
+        },
+        {
+          key: 'runId',
+          label: '运行记录 ID',
+          children: renderCopyableValue(defaultValue.id),
+        },
+        {
+          key: 'traceId',
+          label: 'Trace ID',
+          children: renderCopyableValue(defaultValue.traceId),
+        },
+      ]
+    : [];
+  const executionTimeItems = defaultValue
+    ? [
+        {
+          key: 'startedAt',
+          label: '开始时间',
+          children: renderValue(formatDateTime(defaultValue.startedAt)),
+        },
+        {
+          key: 'finishedAt',
+          label: '结束时间',
+          children: renderValue(formatDateTime(defaultValue.finishedAt)),
+        },
+        {
+          key: 'duration',
+          label: '执行耗时',
+          children: renderValue(
+            formatDuration(defaultValue.startedAt, defaultValue.finishedAt),
+          ),
+        },
+      ]
+    : [];
+  const runtimeIdentityItems = [
+    {
+      key: 'workspaceId',
+      label: 'workspaceId',
+      children: renderCopyableValue(runtimeIdentity?.workspaceId),
+    },
+    {
+      key: 'knowledgeBaseId',
+      label: 'knowledgeBaseId',
+      children: renderCopyableValue(runtimeIdentity?.knowledgeBaseId),
+    },
+    {
+      key: 'kbSnapshotId',
+      label: 'kbSnapshotId',
+      children: renderCopyableValue(runtimeIdentity?.kbSnapshotId),
+    },
+    {
+      key: 'deployHash',
+      label: 'deployHash',
+      children: renderCopyableValue(runtimeIdentity?.deployHash),
+    },
+  ];
 
   return (
     <Drawer
@@ -193,29 +274,11 @@ export default function ScheduleRunDetailsDrawer(props: Props) {
             column={2}
             size="small"
             style={sectionStyle}
-            labelStyle={{ width: 116, color: 'var(--nova-text-secondary)' }}
-          >
-            <Descriptions.Item label="任务名称">
-              {defaultValue.targetName}
-            </Descriptions.Item>
-            <Descriptions.Item label="任务类型">
-              {defaultValue.targetTypeLabel}
-            </Descriptions.Item>
-            <Descriptions.Item label="运行状态">
-              <Tag color={getStatusColor(defaultValue.status)}>
-                {getStatusLabel(defaultValue.status)}
-              </Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label="Schedule Job ID">
-              {renderCopyableValue(defaultValue.scheduleJobId)}
-            </Descriptions.Item>
-            <Descriptions.Item label="运行记录 ID">
-              {renderCopyableValue(defaultValue.id)}
-            </Descriptions.Item>
-            <Descriptions.Item label="Trace ID">
-              {renderCopyableValue(defaultValue.traceId)}
-            </Descriptions.Item>
-          </Descriptions>
+            items={overviewItems}
+            styles={{
+              label: { width: 116, color: 'var(--nova-text-secondary)' },
+            }}
+          />
 
           <Divider titlePlacement="start" plain>
             执行时间
@@ -225,20 +288,9 @@ export default function ScheduleRunDetailsDrawer(props: Props) {
             column={3}
             size="small"
             style={sectionStyle}
-            labelStyle={{ color: 'var(--nova-text-secondary)' }}
-          >
-            <Descriptions.Item label="开始时间">
-              {renderValue(formatDateTime(defaultValue.startedAt))}
-            </Descriptions.Item>
-            <Descriptions.Item label="结束时间">
-              {renderValue(formatDateTime(defaultValue.finishedAt))}
-            </Descriptions.Item>
-            <Descriptions.Item label="执行耗时">
-              {renderValue(
-                formatDuration(defaultValue.startedAt, defaultValue.finishedAt),
-              )}
-            </Descriptions.Item>
-          </Descriptions>
+            items={executionTimeItems}
+            styles={{ label: { color: 'var(--nova-text-secondary)' } }}
+          />
 
           <Divider titlePlacement="start" plain>
             Runtime Identity
@@ -248,21 +300,11 @@ export default function ScheduleRunDetailsDrawer(props: Props) {
             column={2}
             size="small"
             style={sectionStyle}
-            labelStyle={{ width: 132, color: 'var(--nova-text-secondary)' }}
-          >
-            <Descriptions.Item label="workspaceId">
-              {renderCopyableValue(runtimeIdentity?.workspaceId)}
-            </Descriptions.Item>
-            <Descriptions.Item label="knowledgeBaseId">
-              {renderCopyableValue(runtimeIdentity?.knowledgeBaseId)}
-            </Descriptions.Item>
-            <Descriptions.Item label="kbSnapshotId">
-              {renderCopyableValue(runtimeIdentity?.kbSnapshotId)}
-            </Descriptions.Item>
-            <Descriptions.Item label="deployHash">
-              {renderCopyableValue(runtimeIdentity?.deployHash)}
-            </Descriptions.Item>
-          </Descriptions>
+            items={runtimeIdentityItems}
+            styles={{
+              label: { width: 132, color: 'var(--nova-text-secondary)' },
+            }}
+          />
 
           <Divider titlePlacement="start" plain>
             detailJson

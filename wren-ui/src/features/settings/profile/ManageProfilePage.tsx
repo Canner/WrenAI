@@ -242,6 +242,44 @@ export default function ManageProfilePage() {
         authSession.data?.workspace?.name ||
         currentWorkspaceName,
     ) || '当前工作空间';
+  const profileSummaryItems = [
+    {
+      key: 'defaultWorkspace',
+      label: '默认工作空间',
+      children: <Tag color="gold">{defaultWorkspaceName}</Tag>,
+    },
+    {
+      key: 'platformRoles',
+      label: '平台角色',
+      children: (
+        <Space size={[8, 8]} wrap>
+          {platformRoleKeys.length > 0 ? (
+            platformRoleKeys.map((roleKey) => (
+              <Tag key={roleKey} color="purple">
+                {toDisplayRoleLabel(roleKey)}
+              </Tag>
+            ))
+          ) : (
+            <Tag color="default">普通账号</Tag>
+          )}
+        </Space>
+      ),
+    },
+    {
+      key: 'currentWorkspace',
+      label: '当前工作空间',
+      children: currentWorkspaceName,
+    },
+    {
+      key: 'sessionType',
+      label: '会话类型',
+      children: (
+        <Tag color={impersonation?.active ? 'gold' : 'default'}>
+          {impersonation?.active ? '代理登录' : '标准会话'}
+        </Tag>
+      ),
+    },
+  ];
 
   const stopImpersonation = async () => {
     try {
@@ -463,34 +501,12 @@ export default function ManageProfilePage() {
                   <Descriptions
                     column={2}
                     colon={false}
-                    labelStyle={{ color: 'var(--nova-text-secondary)' }}
-                    contentStyle={{ color: 'var(--nova-text-primary)' }}
-                  >
-                    <Descriptions.Item label="默认工作空间">
-                      <Tag color="gold">{defaultWorkspaceName}</Tag>
-                    </Descriptions.Item>
-                    <Descriptions.Item label="平台角色">
-                      <Space size={[8, 8]} wrap>
-                        {platformRoleKeys.length > 0 ? (
-                          platformRoleKeys.map((roleKey) => (
-                            <Tag key={roleKey} color="purple">
-                              {toDisplayRoleLabel(roleKey)}
-                            </Tag>
-                          ))
-                        ) : (
-                          <Tag color="default">普通账号</Tag>
-                        )}
-                      </Space>
-                    </Descriptions.Item>
-                    <Descriptions.Item label="当前工作空间">
-                      {currentWorkspaceName}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="会话类型">
-                      <Tag color={impersonation?.active ? 'gold' : 'default'}>
-                        {impersonation?.active ? '代理登录' : '标准会话'}
-                      </Tag>
-                    </Descriptions.Item>
-                  </Descriptions>
+                    items={profileSummaryItems}
+                    styles={{
+                      label: { color: 'var(--nova-text-secondary)' },
+                      content: { color: 'var(--nova-text-primary)' },
+                    }}
+                  />
                 </div>
               </Col>
             </Row>

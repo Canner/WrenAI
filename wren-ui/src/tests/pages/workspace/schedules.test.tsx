@@ -129,9 +129,13 @@ describe('workspace/schedules page', () => {
       loading: false,
       data: {
         authorization: {
+          actions: {
+            'workspace.schedule.manage': true,
+          },
           actor: {
             platformRoleKeys: [],
             isPlatformAdmin: false,
+            grantedActions: ['workspace.schedule.manage'],
           },
         },
         isPlatformAdmin: false,
