@@ -41,7 +41,6 @@ def test_prepare_spider_benchmark_target_restores_source_path_and_loads_postgres
     monkeypatch, mocker
 ):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    load_to_postgres = mocker.patch("eval.evaluation.load_eval_data_db_to_postgres")
 
     settings = EvalSettings()
     prepare_spider_benchmark_target(
@@ -55,18 +54,12 @@ def test_prepare_spider_benchmark_target_restores_source_path_and_loads_postgres
 
     assert settings.eval_data_db_path == "etc/spider1.0/database"
     assert settings.spider_benchmark_db_target == POSTGRES_TARGET
-    load_to_postgres.assert_called_once_with(
-        "concert_singer",
-        "etc/spider1.0/database",
-        POSTGRES_TARGET,
-    )
 
 
 def test_prepare_spider_benchmark_target_infers_source_path_for_legacy_prediction_files(
     monkeypatch, mocker
 ):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    load_to_postgres = mocker.patch("eval.evaluation.load_eval_data_db_to_postgres")
 
     settings = EvalSettings()
     prepare_spider_benchmark_target(
@@ -78,28 +71,19 @@ def test_prepare_spider_benchmark_target_infers_source_path_for_legacy_predictio
     )
 
     assert settings.eval_data_db_path == "etc/spider1.0/database"
-    load_to_postgres.assert_called_once_with(
-        "concert_singer",
-        "etc/spider1.0/database",
-        POSTGRES_TARGET,
-    )
 
 
-def test_prepare_spider_benchmark_target_skips_reload_for_file_targets(
-    monkeypatch, mocker
+def test_prepare_spider_benchmark_target_keeps_non_benchmark_evaluations_untouched(
+    monkeypatch
 ):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    load_to_postgres = mocker.patch("eval.evaluation.load_eval_data_db_to_postgres")
 
     settings = EvalSettings()
     prepare_spider_benchmark_target(
         meta={
-            "evaluation_dataset": "eval/dataset/spider_concert_singer_eval_dataset.toml",
-            "eval_data_db_path": "etc/spider1.0/database",
-            "spider_benchmark_db_target": "./tools/dev/etc/spider1.0/database",
+            "evaluation_dataset": "eval/dataset/custom_eval_dataset.toml",
         },
         settings=settings,
     )
 
-    assert settings.eval_data_db_path == "etc/spider1.0/database"
-    load_to_postgres.assert_not_called()
+    assert settings.eval_data_db_path == ""

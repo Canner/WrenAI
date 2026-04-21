@@ -1,11 +1,8 @@
-import os
 import re
-import sqlite3
 from collections import defaultdict
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
-SQLITE_SUFFIX = ".sqlite"
 POSTGRES_SCHEMES = {"postgres", "postgresql"}
 DOUBLE_QUOTED_IDENTIFIER_RE = re.compile(r'"((?:[^"]|"")*)"')
 
@@ -14,29 +11,22 @@ def is_postgres_target(target: str) -> bool:
     return urlparse(target).scheme in POSTGRES_SCHEMES
 
 
-def build_benchmark_db_target(db_dir: str, db_name: str) -> str:
-    if is_postgres_target(db_dir):
-        if "{" in db_dir:
-            return db_dir.format(db_name=db_name, catalog=db_name)
-        return db_dir
+def _require_postgres_target(target: str, context: str) -> str:
+    if not is_postgres_target(target):
+        raise ValueError(f"{context} must be a PostgreSQL DSN, got: {target}")
+    return target
 
-    return os.path.join(db_dir, db_name, f"{db_name}{SQLITE_SUFFIX}")
+
+def build_benchmark_db_target(db_target: str, db_name: str) -> str:
+    _require_postgres_target(db_target, "Spider benchmark target")
+    if "{" in db_target:
+        return db_target.format(db_name=db_name, catalog=db_name)
+    return db_target
 
 
 def resolve_execution_targets(target: str) -> list[str]:
-    if is_postgres_target(target):
-        return [target]
-
-    db_dir = os.path.dirname(target)
-    if not os.path.isdir(db_dir):
-        return [target]
-
-    sqlite_targets = sorted(
-        os.path.join(db_dir, basename)
-        for basename in os.listdir(db_dir)
-        if basename.endswith(SQLITE_SUFFIX)
-    )
-    return sqlite_targets or [target]
+    _require_postgres_target(target, "Spider execution target")
+    return [target]
 
 
 def _split_postgres_target(target: str) -> tuple[str, str]:
@@ -104,57 +94,35 @@ def _connect_postgres(target: str):
 
 
 def get_cursor_from_target(target: str):
-    if is_postgres_target(target):
-        normalized_target, _ = _split_postgres_target(target)
-        connection = _connect_postgres(normalized_target)
-        return connection, connection.cursor()
-
-    if not os.path.exists(target):
-        print("Openning a new connection %s" % target)
-
-    connection = sqlite3.connect(target)
-    connection.text_factory = lambda b: b.decode(errors="ignore")
+    normalized_target, _ = _split_postgres_target(
+        _require_postgres_target(target, "Spider cursor target")
+    )
+    connection = _connect_postgres(normalized_target)
     return connection, connection.cursor()
 
 
 def get_schema(target: str) -> dict[str, list[str]]:
-    if is_postgres_target(target):
-        normalized_target, schema_name = _split_postgres_target(target)
-        connection = _connect_postgres(normalized_target)
-        cursor = connection.cursor()
-        try:
-            cursor.execute(
-                """
-                SELECT table_name, column_name
-                FROM information_schema.columns
-                WHERE table_schema = %s
-                ORDER BY table_name, ordinal_position
-                """,
-                (schema_name,),
-            )
-
-            schema = defaultdict(list)
-            for table_name, column_name in cursor.fetchall():
-                schema[str(table_name).lower()].append(str(column_name).lower())
-
-            return dict(schema)
-        finally:
-            cursor.close()
-            connection.close()
-
-    schema = {}
-    connection = sqlite3.connect(target)
+    normalized_target, schema_name = _split_postgres_target(
+        _require_postgres_target(target, "Spider schema target")
+    )
+    connection = _connect_postgres(normalized_target)
     cursor = connection.cursor()
-
     try:
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-        tables = [str(table[0].lower()) for table in cursor.fetchall()]
+        cursor.execute(
+            """
+            SELECT table_name, column_name
+            FROM information_schema.columns
+            WHERE table_schema = %s
+            ORDER BY table_name, ordinal_position
+            """,
+            (schema_name,),
+        )
 
-        for table in tables:
-            cursor.execute("PRAGMA table_info({})".format(table))
-            schema[table] = [str(col[1].lower()) for col in cursor.fetchall()]
+        schema = defaultdict(list)
+        for table_name, column_name in cursor.fetchall():
+            schema[str(table_name).lower()].append(str(column_name).lower())
 
-        return schema
+        return dict(schema)
     finally:
         cursor.close()
         connection.close()

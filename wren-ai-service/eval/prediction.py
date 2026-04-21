@@ -18,8 +18,6 @@ import src.utils as utils
 from eval import EvalSettings, default_eval_data_db_path
 from eval.metrics.spider.database import is_postgres_target
 from eval.utils import (
-    load_eval_data_db_to_postgres,
-    parse_db_name,
     parse_toml,
     replace_wren_engine_env_variables,
 )
@@ -51,11 +49,7 @@ def generate_meta(
         "datasource": settings.datasource,
         "eval_data_db_path": settings.eval_data_db_path,
         "spider_benchmark_db_target": settings.effective_spider_benchmark_db_target,
-        "spider_benchmark_backend": (
-            "postgres"
-            if is_postgres_target(settings.effective_spider_benchmark_db_target)
-            else "sqlite"
-        ),
+        "spider_benchmark_backend": "postgres",
     }
 
 
@@ -116,11 +110,10 @@ if __name__ == "__main__":
     benchmark_source_path = default_eval_data_db_path(path)
     if benchmark_source_path:
         settings.eval_data_db_path = settings.eval_data_db_path or benchmark_source_path
-        load_eval_data_db_to_postgres(
-            parse_db_name(path),
-            settings.eval_data_db_path,
-            settings.effective_spider_benchmark_db_target,
-        )
+        if not is_postgres_target(settings.effective_spider_benchmark_db_target):
+            raise ValueError(
+                "Spider/BIRD prediction now requires a PostgreSQL benchmark target"
+            )
 
         settings.datasource = "postgres"
         _connection_info = base64.b64encode(

@@ -28,6 +28,8 @@ from eval.utils import (
     get_next_few_items_circular,
 )
 
+BIRD_NORMALIZED_GROUND_TRUTH_FILE = "mini_dev_ground_truth.json"
+
 
 def download_spider_data(destination_path: Path):
     def _download_and_extract(
@@ -81,6 +83,30 @@ def download_bird_data(destination_path: Path):
         destination_path,
         "minidev",
         "minidev.zip",
+    )
+    ensure_bird_ground_truth_file(destination_path)
+
+
+def ensure_bird_ground_truth_file(destination_path: Path) -> Path:
+    normalized_path = (
+        destination_path / f"minidev/MINIDEV/{BIRD_NORMALIZED_GROUND_TRUTH_FILE}"
+    )
+    if normalized_path.exists():
+        return normalized_path
+
+    source_dir = destination_path / "minidev/MINIDEV"
+    legacy_candidates = sorted(
+        path
+        for path in source_dir.glob("mini_dev*.json")
+        if path.name != BIRD_NORMALIZED_GROUND_TRUTH_FILE
+    )
+    if legacy_candidates:
+        normalized_path.write_bytes(legacy_candidates[0].read_bytes())
+        return normalized_path
+
+    raise FileNotFoundError(
+        "BIRD ground truth file not found. Expected either "
+        f"{normalized_path} or another mini_dev*.json ground truth file."
     )
 
 
@@ -327,9 +353,8 @@ def build_question_sql_pairs_by_db_using_bird(destination_path: Path):
         destination_path / "minidev/MINIDEV/dev_databases"
     )
 
-    # Upstream BIRD publishes this file under the "mini_dev_sqlite.json" name.
     ground_truths_by_db = get_ground_truths_by_db(
-        destination_path / "minidev/MINIDEV/mini_dev_sqlite.json", "db_id"
+        ensure_bird_ground_truth_file(destination_path), "db_id"
     )
 
     question_sql_pairs_by_db = defaultdict(list)

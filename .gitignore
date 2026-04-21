@@ -50,10 +50,6 @@ local_cache
 __MACOSX/
 *.pem
 
-# sqlite
-*.sqlite
-*.sqlite3
-
 # ui
 ## dependencies
 node_modules
@@ -65,7 +61,6 @@ wren-ui/coverage
 wren-ui/test-results
 wren-ui/playwright-report
 wren-ui/e2e/e2e.config.json
-wren-ui/db.sqlite3*.bak
 
 ## next.js
 wren-ui/.next

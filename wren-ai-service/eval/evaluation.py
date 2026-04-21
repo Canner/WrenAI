@@ -16,8 +16,6 @@ import src.providers as provider
 from eval import EvalSettings, default_eval_data_db_path
 from eval.metrics.spider.database import is_postgres_target
 from eval.utils import (
-    load_eval_data_db_to_postgres,
-    parse_db_name,
     parse_toml,
     trace_metadata,
 )
@@ -110,17 +108,6 @@ def prepare_spider_benchmark_target(meta: dict, settings: EvalSettings) -> None:
 
     if not is_postgres_target(settings.effective_spider_benchmark_db_target):
         return
-
-    if not settings.eval_data_db_path:
-        raise ValueError(
-            "PostgreSQL-backed Spider benchmark evaluation requires eval_data_db_path metadata"
-        )
-
-    load_eval_data_db_to_postgres(
-        parse_db_name(evaluation_dataset),
-        settings.eval_data_db_path,
-        settings.effective_spider_benchmark_db_target,
-    )
 
 
 class Evaluator:

@@ -29,8 +29,6 @@ from eval.utils import (
     get_documents_given_contexts,
     get_eval_dataset_in_toml_string,
     get_openai_client,
-    prepare_duckdb_init_sql,
-    prepare_duckdb_session_sql,
 )
 
 st.set_page_config(layout="wide")
@@ -115,12 +113,10 @@ def on_click_setup_uploaded_file():
         if data_source == "bigquery":
             st.session_state["connection_info"] = settings.bigquery_info
         elif data_source == "duckdb":
-            prepare_duckdb_session_sql(WREN_ENGINE_ENDPOINT)
-            prepare_duckdb_init_sql(
-                WREN_ENGINE_ENDPOINT,
-                st.session_state["mdl_json"]["catalog"],
-                "etc/spider1.0/database",
+            st.error(
+                "DuckDB-backed benchmark bootstrap has been removed. Please load the benchmark catalog into PostgreSQL and use a PostgreSQL-backed eval configuration."
             )
+            st.stop()
     else:
         st.session_state["data_source"] = None
         st.session_state["mdl_json"] = None

@@ -5,6 +5,4 @@ npm-debug.log
 README.md
 .next
 .git
-*.sqlite
-*.sqlite3
 .env*.local

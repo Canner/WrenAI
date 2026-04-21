@@ -186,7 +186,6 @@ settings:
   # prefer spider_benchmark_db_target with a {db_name} template.
   # eval_data_db_path: etc/spider1.0/database
   # spider_benchmark_db_target: postgresql://postgres:postgres@localhost:9432/{db_name}?schema=public
-  # spider_benchmark_use_postgres: true
   # spider_benchmark_postgres_schema: public
   # postgres_host: localhost
   # postgres_port: 9432

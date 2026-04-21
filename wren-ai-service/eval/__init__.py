@@ -50,7 +50,6 @@ class EvalSettings(Settings):
     allow_sql_functions: bool = True
     eval_data_db_path: str = ""
     spider_benchmark_db_target: str = ""
-    spider_benchmark_use_postgres: bool = False
     spider_benchmark_postgres_schema: str = "public"
 
     # BigQuery
@@ -96,13 +95,7 @@ class EvalSettings(Settings):
     def effective_spider_benchmark_db_target(self) -> str:
         return (
             self.spider_benchmark_db_target
-            or (
-                self.default_spider_postgres_benchmark_db_target
-                if self.spider_benchmark_use_postgres
-                else ""
-            )
-            or resolve_host_eval_data_db_path(self.eval_data_db_path)
-            or str(SPIDER_DESTINATION_PATH / "database")
+            or self.default_spider_postgres_benchmark_db_target
         )
 
     @property

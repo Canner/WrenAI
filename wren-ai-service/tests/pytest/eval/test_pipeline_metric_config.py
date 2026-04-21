@@ -24,7 +24,7 @@ def test_eval_settings_normalizes_eval_data_db_path_for_host_side_metrics(monkey
 
     assert (
         settings.effective_spider_benchmark_db_target
-        == "tools/dev/etc/spider1.0/database"
+        == "postgresql://postgres:postgres@postgres:5432/test?schema=public"
     )
 
 
@@ -38,7 +38,6 @@ def test_resolve_host_eval_data_db_path_is_idempotent_for_tools_dev_paths():
 def test_eval_settings_can_build_default_postgres_benchmark_target(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     settings = EvalSettings()
-    settings.spider_benchmark_use_postgres = True
     settings.postgres_host = "localhost"
     settings.postgres_port = "5432"
     settings.postgres_user = "postgres"
