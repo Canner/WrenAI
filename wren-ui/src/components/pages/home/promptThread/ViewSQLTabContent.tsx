@@ -140,9 +140,7 @@ export default function ViewSQLTabContent(props: AnswerResultProps) {
               </span>
             )}
           </div>
-          <Space
-            separator={<Divider orientation="vertical" className="m-0" />}
-          >
+          <Space separator={<Divider orientation="vertical" className="m-0" />}>
             {showNativeSQL && (
               <div
                 className="d-flex align-center cursor-pointer"
