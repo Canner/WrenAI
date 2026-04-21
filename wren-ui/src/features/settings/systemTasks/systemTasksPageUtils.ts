@@ -1,4 +1,11 @@
-import type { Schedule as DashboardScheduleConfig } from '@/components/pages/home/dashboardGrid/CacheSettingsDrawer';
+export type ScheduleConfig = {
+  frequency: string;
+  day?: string | null;
+  hour?: number | null;
+  minute?: number | null;
+  cron?: string | null;
+  timezone?: string | null;
+};
 
 export type ScheduleJobView = {
   id: string;
@@ -14,7 +21,7 @@ export type ScheduleJobView = {
   lastError?: string | null;
   dashboardId?: number | null;
   cacheEnabled?: boolean;
-  scheduleConfig?: DashboardScheduleConfig | null;
+  scheduleConfig?: ScheduleConfig | null;
 };
 
 export type ScheduleRunView = {

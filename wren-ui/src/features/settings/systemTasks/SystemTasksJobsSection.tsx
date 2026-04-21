@@ -1,4 +1,4 @@
-import { Button, Card, Select, Space, Table, Tag, Typography } from 'antd';
+import { Button, Select, Space, Table, Tag, Typography } from 'antd';
 import {
   formatDateTime,
   getStatusColor,
@@ -32,9 +32,20 @@ export default function SystemTasksJobsSection({
   pendingAction: { jobId: string; action: 'run' | 'disable' | 'update' } | null;
 }) {
   return (
-    <Card
-      title="任务列表"
-      extra={
+    <section>
+      <div
+        style={{
+          alignItems: 'center',
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 12,
+          justifyContent: 'space-between',
+          marginBottom: 12,
+        }}
+      >
+        <Text strong style={{ fontSize: 18 }}>
+          任务列表
+        </Text>
         <Space wrap>
           <Text type="secondary">任务状态</Text>
           <Select
@@ -44,44 +55,64 @@ export default function SystemTasksJobsSection({
             style={{ minWidth: 180 }}
           />
         </Space>
-      }
-    >
-      <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-        {canManageActions
-          ? '当前支持对看板缓存刷新任务执行立即刷新、编辑计划与切换为仅手动刷新。'
-          : '当前账号仅可查看任务状态与最近运行记录。'}
-      </Text>
+      </div>
       <Table
         rowKey="id"
         loading={loading}
         locale={{ emptyText: '暂无定时任务' }}
         pagination={{ hideOnSinglePage: true, pageSize: 6 }}
+        tableLayout="fixed"
         dataSource={filteredJobs}
         columns={[
           {
             title: '任务',
             key: 'target',
+            width: '18%',
             render: (_value, record: ScheduleJobView) => (
-              <Space orientation="vertical" size={0}>
-                <Text strong>{record.targetName}</Text>
-                <Text type="secondary">{record.targetTypeLabel}</Text>
+              <Space orientation="vertical" size={0} style={{ width: '100%' }}>
+                <Text
+                  strong
+                  ellipsis={{ tooltip: record.targetName }}
+                  style={{ maxWidth: '100%' }}
+                >
+                  {record.targetName}
+                </Text>
+                <Text
+                  type="secondary"
+                  ellipsis={{ tooltip: record.targetTypeLabel }}
+                  style={{ maxWidth: '100%' }}
+                >
+                  {record.targetTypeLabel}
+                </Text>
               </Space>
             ),
           },
           {
             title: '计划',
             key: 'cron',
+            width: '14%',
             render: (_value, record: ScheduleJobView) => (
-              <Space orientation="vertical" size={0}>
-                <Text>{record.cronExpr}</Text>
-                <Text type="secondary">{record.timezone}</Text>
+              <Space orientation="vertical" size={0} style={{ width: '100%' }}>
+                <Text
+                  ellipsis={{ tooltip: record.cronExpr }}
+                  style={{ maxWidth: '100%' }}
+                >
+                  {record.cronExpr}
+                </Text>
+                <Text
+                  type="secondary"
+                  ellipsis={{ tooltip: record.timezone }}
+                  style={{ maxWidth: '100%' }}
+                >
+                  {record.timezone}
+                </Text>
               </Space>
             ),
           },
           {
             title: '状态',
             dataIndex: 'status',
-            width: 120,
+            width: 108,
             render: (status: string) => (
               <Tag color={getStatusColor(status)}>{getStatusLabel(status)}</Tag>
             ),
@@ -89,13 +120,13 @@ export default function SystemTasksJobsSection({
           {
             title: '下次执行',
             dataIndex: 'nextRunAt',
-            width: 160,
+            width: 148,
             render: (value: string | null) => formatDateTime(value),
           },
           {
             title: '最近执行',
             key: 'lastRun',
-            width: 200,
+            width: '14%',
             render: (_value, record: ScheduleJobView) => (
               <Space orientation="vertical" size={0}>
                 <Text>{formatDateTime(record.lastRunAt)}</Text>
@@ -110,7 +141,7 @@ export default function SystemTasksJobsSection({
           {
             title: '操作',
             key: 'actions',
-            width: 240,
+            width: 360,
             render: (_value, record: ScheduleJobView) => {
               const isRunningAction =
                 pendingAction?.jobId === record.id &&
@@ -120,7 +151,7 @@ export default function SystemTasksJobsSection({
                 pendingAction.action === 'disable';
 
               return (
-                <Space size={8} wrap>
+                <Space size={8}>
                   {canManageActions ? (
                     <>
                       <Button
@@ -156,6 +187,6 @@ export default function SystemTasksJobsSection({
           },
         ]}
       />
-    </Card>
+    </section>
   );
 }

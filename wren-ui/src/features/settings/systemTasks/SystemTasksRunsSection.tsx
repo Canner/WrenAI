@@ -1,4 +1,4 @@
-import { Button, Card, Select, Space, Table, Tag, Typography } from 'antd';
+import { Button, Select, Space, Table, Tag, Typography } from 'antd';
 import {
   formatDateTime,
   getStatusColor,
@@ -24,9 +24,20 @@ export default function SystemTasksRunsSection({
   runStatusOptions: Array<{ label: string; value: string }>;
 }) {
   return (
-    <Card
-      title="最近运行记录"
-      extra={
+    <section>
+      <div
+        style={{
+          alignItems: 'center',
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 12,
+          justifyContent: 'space-between',
+          marginBottom: 12,
+        }}
+      >
+        <Text strong style={{ fontSize: 18 }}>
+          最近运行记录
+        </Text>
         <Space wrap>
           <Text type="secondary">运行状态</Text>
           <Select
@@ -36,21 +47,19 @@ export default function SystemTasksRunsSection({
             style={{ minWidth: 180 }}
           />
         </Space>
-      }
-    >
-      <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-        方便确认最近是否成功刷新、失败原因、trace 以及对应 runtime scope。
-      </Text>
+      </div>
       <Table
         rowKey="id"
         loading={loading}
-        locale={{ emptyText: '暂无运行记录' }}
+        locale={{ emptyText: '暂无运行记录（通常表示计划尚未到首次执行时间）' }}
         pagination={{ hideOnSinglePage: true, pageSize: 8 }}
+        tableLayout="fixed"
         dataSource={filteredRuns}
         columns={[
           {
             title: '运行',
             key: 'run',
+            width: '34%',
             render: (_value, record: ScheduleRunView) => (
               <Space orientation="vertical" size={0}>
                 <Text strong>{record.targetName}</Text>
@@ -61,7 +70,7 @@ export default function SystemTasksRunsSection({
           {
             title: '状态',
             dataIndex: 'status',
-            width: 110,
+            width: 108,
             render: (status: string) => (
               <Tag color={getStatusColor(status)}>{getStatusLabel(status)}</Tag>
             ),
@@ -69,6 +78,7 @@ export default function SystemTasksRunsSection({
           {
             title: '详情',
             key: 'detail',
+            width: '36%',
             render: (_value, record: ScheduleRunView) => (
               <Space orientation="vertical" size={0}>
                 {record.errorMessage ? (
@@ -89,13 +99,13 @@ export default function SystemTasksRunsSection({
           {
             title: '操作',
             key: 'actions',
-            width: 120,
+            width: 128,
             render: (_value, record: ScheduleRunView) => (
               <Button onClick={() => onOpenRun(record)}>查看详情</Button>
             ),
           },
         ]}
       />
-    </Card>
+    </section>
   );
 }

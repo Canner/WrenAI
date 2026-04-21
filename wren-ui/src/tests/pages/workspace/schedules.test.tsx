@@ -33,6 +33,19 @@ jest.mock('antd', () => {
         ),
       ),
     Space: ({ children }: any) => React.createElement('div', null, children),
+    Tabs: ({ items }: any) =>
+      React.createElement(
+        'div',
+        { 'data-kind': 'tabs' },
+        (items || []).map((item: any) =>
+          React.createElement(
+            'section',
+            { key: item.key, 'data-tab-key': item.key },
+            React.createElement('h3', null, item.label),
+            item.children,
+          ),
+        ),
+      ),
     Table: (props: any) => {
       capturedTableProps.push(props);
       return React.createElement('div', { 'data-kind': 'table' });
@@ -68,20 +81,18 @@ jest.mock('@/hooks/useAuthSession', () => ({
   default: () => mockUseAuthSession(),
 }));
 
-jest.mock('@/components/reference/ConsoleShellLayout', () => ({
+jest.mock('@/components/reference/DolaAppShell', () => ({
   __esModule: true,
-  default: ({ title, description, sections, children }: any) => {
+  default: ({ children, navItems }: any) => {
     const React = jest.requireActual('react');
     return React.createElement(
       'div',
       null,
-      title,
-      description,
       React.createElement(
         'div',
         null,
-        (sections || []).map((section: any) =>
-          React.createElement('span', { key: section.key }, section.label),
+        (navItems || []).map((item: any) =>
+          React.createElement('span', { key: item.key }, item.label),
         ),
       ),
       children,
@@ -89,20 +100,22 @@ jest.mock('@/components/reference/ConsoleShellLayout', () => ({
   },
 }));
 
-jest.mock('@/components/pages/home/dashboardGrid/CacheSettingsDrawer', () => ({
-  __esModule: true,
-  default: () => {
-    const React = jest.requireActual('react');
-    return React.createElement('div', { 'data-kind': 'cache-settings-drawer' });
-  },
-}));
-
-jest.mock('@/components/pages/workspace/ScheduleRunDetailsDrawer', () => ({
+jest.mock('@/features/settings/systemTasks/SystemTaskScheduleDrawer', () => ({
   __esModule: true,
   default: () => {
     const React = jest.requireActual('react');
     return React.createElement('div', {
-      'data-kind': 'schedule-run-details-drawer',
+      'data-kind': 'system-task-schedule-drawer',
+    });
+  },
+}));
+
+jest.mock('@/features/settings/systemTasks/SystemTaskRunDetailsDrawer', () => ({
+  __esModule: true,
+  default: () => {
+    const React = jest.requireActual('react');
+    return React.createElement('div', {
+      'data-kind': 'system-task-run-details-drawer',
     });
   },
 }));
@@ -146,12 +159,12 @@ describe('workspace/schedules page', () => {
   it('renders schedule control plane shell with overview sections', () => {
     const markup = renderPage();
 
-    expect(markup).toContain('系统任务');
+    expect(markup).toContain('定时任务');
     expect(markup).not.toContain('工作区概览');
     expect(markup).not.toContain('当前工作区');
     expect(markup).not.toContain('当前知识库');
     expect(markup).toContain('任务列表');
-    expect(markup).toContain('最近运行记录');
+    expect(markup).toContain('运行记录');
     expect(markup).toContain('任务状态');
     expect(markup).toContain('运行状态');
     expect(markup).not.toContain('按最近一次运行结果聚合展示。');

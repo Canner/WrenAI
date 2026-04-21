@@ -158,7 +158,7 @@ export const buildNovaSettingsNavItems = ({
     },
     {
       key: 'settingsSystemTasks',
-      label: '系统任务',
+      label: '定时任务',
       icon: <ScheduleOutlined />,
       iconKey: 'settingsSystemTasks',
       sectionLabel: '业务与配置',

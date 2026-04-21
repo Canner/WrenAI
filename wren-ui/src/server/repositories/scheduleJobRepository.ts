@@ -23,6 +23,8 @@ export interface ScheduleJob {
   lastRunAt?: Date | null;
   lastError?: string | null;
   createdBy?: string | null;
+  createdAt?: Date | null;
+  updatedAt?: Date | null;
 }
 
 export interface IScheduleJobRepository extends IBasicRepository<ScheduleJob> {}

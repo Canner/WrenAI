@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import { appMessage as message } from '@/utils/antdAppBridge';
 import type { DashboardGridItem } from '@/components/pages/home/dashboardGrid';
@@ -86,6 +86,8 @@ export const useManageDashboardPageActions = ({
   >(null);
   const [dashboardMutationType, setDashboardMutationType] =
     useState<DashboardMutationType>(null);
+  const [cacheSettingsSubmitting, setCacheSettingsSubmitting] = useState(false);
+  const cacheSettingsSubmittingRef = useRef(false);
 
   const ensureCacheSettingsSupported = useCallback(async () => {
     if (dashboardCacheEnabled || resolvedCacheSupport === true) {
@@ -463,10 +465,18 @@ export const useManageDashboardPageActions = ({
 
   const submitCacheSettings = useCallback(
     async (values: any) => {
+      if (cacheSettingsSubmittingRef.current) {
+        return;
+      }
+
       const targetDashboardId = cacheSettingsTargetId ?? activeDashboardId;
       if (targetDashboardId == null) {
         return;
       }
+
+      cacheSettingsSubmittingRef.current = true;
+      setCacheSettingsSubmitting(true);
+
       try {
         await updateDashboardSchedule(
           runtimeScopeNavigation.selector,
@@ -492,6 +502,9 @@ export const useManageDashboardPageActions = ({
         if (errorMessage) {
           message.error(errorMessage);
         }
+      } finally {
+        cacheSettingsSubmittingRef.current = false;
+        setCacheSettingsSubmitting(false);
       }
     },
     [
@@ -546,6 +559,7 @@ export const useManageDashboardPageActions = ({
   );
 
   return {
+    cacheSettingsSubmitting,
     createDashboardLoading,
     dashboardMutationTargetId,
     dashboardMutationType,

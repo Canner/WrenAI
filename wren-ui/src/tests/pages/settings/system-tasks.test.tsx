@@ -26,25 +26,23 @@ jest.mock('@/hooks/useAuthSession', () => ({
   default: () => mockUseAuthSession(),
 }));
 
-jest.mock('@/components/pages/home/dashboardGrid/CacheSettingsDrawer', () => ({
+jest.mock('@/features/settings/systemTasks/SystemTaskScheduleDrawer', () => ({
   __esModule: true,
-  default: () => <div>CacheSettingsDrawer</div>,
+  default: () => <div>SystemTaskScheduleDrawer</div>,
 }));
 
-jest.mock('@/components/pages/workspace/ScheduleRunDetailsDrawer', () => ({
+jest.mock('@/features/settings/systemTasks/SystemTaskRunDetailsDrawer', () => ({
   __esModule: true,
-  default: () => <div>ScheduleRunDetailsDrawer</div>,
+  default: () => <div>SystemTaskRunDetailsDrawer</div>,
 }));
 
-jest.mock('@/components/reference/ConsoleShellLayout', () => ({
+jest.mock('@/components/reference/DolaAppShell', () => ({
   __esModule: true,
-  default: ({ title, description, children, navItems }: any) => {
+  default: ({ children, navItems }: any) => {
     const React = jest.requireActual('react');
     return React.createElement(
       'div',
       null,
-      title,
-      description,
       React.createElement(
         'div',
         null,
@@ -69,6 +67,12 @@ describe('settings/system-tasks page', () => {
       replace: jest.fn(),
       pushWorkspace: jest.fn(),
       hasRuntimeScope: true,
+      selector: {
+        workspaceId: 'workspace-2',
+        knowledgeBaseId: 'kb-2',
+        kbSnapshotId: 'snap-2',
+        deployHash: 'deploy-2',
+      },
     });
     mockUseAuthSession.mockReturnValue({
       authenticated: true,
@@ -87,10 +91,9 @@ describe('settings/system-tasks page', () => {
   it('renders the scheduled tasks operations surface', () => {
     const markup = renderToStaticMarkup(<SettingsSystemTasksPage />);
 
-    expect(markup).toContain('系统任务');
-    expect(markup).toContain('查看当前 Workspace 的调度任务');
+    expect(markup).toContain('定时任务');
     expect(markup).toContain('任务列表');
-    expect(markup).toContain('最近运行');
+    expect(markup).toContain('运行记录');
   });
 
   it('builds the scope-aware request key only when runtime scope exists', () => {
@@ -103,14 +106,22 @@ describe('settings/system-tasks page', () => {
     expect(
       buildSystemTasksOverviewRequestKey({
         hasRuntimeScope: true,
+        selector: {
+          workspaceId: 'workspace-2',
+          knowledgeBaseId: 'kb-2',
+        } as any,
       }),
-    ).toBe('/api/v1/workspace/schedules');
+    ).toBe('/api/v1/workspace/schedules?workspaceId=workspace-2');
     expect(
       buildSystemTasksOverviewRequestKey({
         hasRuntimeScope: true,
         usePlatformRoute: true,
+        selector: {
+          workspaceId: 'workspace-2',
+          knowledgeBaseId: 'kb-2',
+        } as any,
       }),
-    ).toBe('/api/v1/platform/system-tasks');
+    ).toBe('/api/v1/platform/system-tasks?workspaceId=workspace-2');
     expect(
       buildSystemTasksOverviewRequestKey({
         hasRuntimeScope: false,
@@ -123,14 +134,21 @@ describe('settings/system-tasks page', () => {
       buildSystemTaskActionUrl({
         jobId: 'job-1',
         action: 'update',
+        selector: {
+          workspaceId: 'workspace-2',
+        } as any,
       }),
-    ).toBe('/api/v1/workspace/schedules/job-1');
+    ).toBe('/api/v1/workspace/schedules/job-1?workspaceId=workspace-2');
     expect(
       buildSystemTaskActionUrl({
         jobId: 'job-1',
         action: 'run',
         usePlatformRoute: true,
+        selector: {
+          workspaceId: 'workspace-2',
+          knowledgeBaseId: 'kb-2',
+        } as any,
       }),
-    ).toBe('/api/v1/platform/system-tasks/job-1/run');
+    ).toBe('/api/v1/platform/system-tasks/job-1/run?workspaceId=workspace-2');
   });
 });

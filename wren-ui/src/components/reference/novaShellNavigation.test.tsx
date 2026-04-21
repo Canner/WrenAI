@@ -87,7 +87,7 @@ describe('novaShellNavigation', () => {
       },
       {
         key: 'settingsSystemTasks',
-        label: '系统任务',
+        label: '定时任务',
         sectionLabel: '业务与配置',
       },
       {

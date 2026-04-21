@@ -72,7 +72,7 @@ export const resolveNovaPageTitle = ({
     case Path.SettingsDiagnostics:
       return '调用诊断 · Nova';
     case Path.SettingsSystemTasks:
-      return '系统任务 · Nova';
+      return '定时任务 · Nova';
     case Path.SettingsPlatform:
       return '平台设置 · Nova';
     case Path.SettingsPlatformWorkspaces:
@@ -83,7 +83,7 @@ export const resolveNovaPageTitle = ({
     case Path.Workspace:
       return '工作空间 · Nova';
     case Path.WorkspaceSchedules:
-      return '系统任务 · Nova';
+      return '定时任务 · Nova';
     default:
       return NOVA_DEFAULT_TITLE;
   }

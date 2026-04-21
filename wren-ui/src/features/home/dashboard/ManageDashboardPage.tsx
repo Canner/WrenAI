@@ -205,6 +205,7 @@ export default function Dashboard() {
   }, [dashboardItems, selectedDashboardItemId]);
 
   const {
+    cacheSettingsSubmitting,
     createDashboardLoading,
     dashboardMutationTargetId,
     dashboardMutationType,
@@ -335,6 +336,7 @@ export default function Dashboard() {
           <DashboardWorkbenchStage
             cacheSettingsDrawerProps={{
               ...cacheSettingsDrawer.state,
+              loading: cacheSettingsSubmitting,
               onClose: cacheSettingsDrawer.closeDrawer,
             }}
             dashboardGridRef={dashboardGridRef}
