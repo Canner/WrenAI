@@ -1,5 +1,4 @@
-import { message } from 'antd';
-
+import { appMessage as message } from '@/utils/antdAppBridge';
 import EmptyDashboard from '@/components/pages/home/dashboardGrid/EmptyDashboard';
 import DashboardGrid from '@/components/pages/home/dashboardGrid';
 import DashboardHeader from '@/components/pages/home/dashboardGrid/DashboardHeader';

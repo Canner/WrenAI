@@ -1,6 +1,6 @@
 import clsx from 'clsx';
 import dynamic from 'next/dynamic';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Form } from 'antd';
 import { attachLoading } from '@/utils/helper';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
@@ -29,6 +29,7 @@ import {
   Toolbar,
 } from './chartAnswerStyles';
 import ChartAnswerPinModal from './ChartAnswerPinModal';
+import ChartAnswerPinPopover from './ChartAnswerPinPopover';
 import {
   getDynamicProperties,
   getIsChartFinished,
@@ -65,10 +66,8 @@ export default function ChartAnswer(props: AnswerResultProps) {
     null,
   );
   const [hasRequestedPreview, setHasRequestedPreview] = useState(false);
-  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
-  const [pinTargetDashboardId, setPinTargetDashboardId] = useState<
-    number | null
-  >(null);
+  const [isPinPopoverOpen, setIsPinPopoverOpen] = useState(false);
+  const [isCreatePinModalOpen, setIsCreatePinModalOpen] = useState(false);
 
   const [form] = Form.useForm();
   const chartType = Form.useWatch('chartType', form);
@@ -84,7 +83,6 @@ export default function ChartAnswer(props: AnswerResultProps) {
   );
   const [pinSubmitting, setPinSubmitting] = useState(false);
   const [createAndPinSubmitting, setCreateAndPinSubmitting] = useState(false);
-  const pinSelectionInitializedRef = useRef(false);
   const defaultDashboardOption = useMemo(
     () =>
       dashboardOptions.find((dashboard) => dashboard.isDefault) ||
@@ -203,7 +201,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
 
   const preferredRenderer = useMemo(
     () => toPreferredRenderer(chartDetail?.renderHints?.preferredRenderer),
-    [chartDetail?.renderHints],
+    [chartDetail?.renderHints?.preferredRenderer],
   );
 
   const validationErrors = useMemo(
@@ -311,22 +309,6 @@ export default function ChartAnswer(props: AnswerResultProps) {
 
   const onEdit = () => setIsEditMode(!isEditMode);
 
-  useEffect(() => {
-    if (!isPinModalOpen || pinSelectionInitializedRef.current) {
-      return;
-    }
-    if (defaultDashboardOption?.id != null) {
-      pinSelectionInitializedRef.current = true;
-      setPinTargetDashboardId(defaultDashboardOption.id);
-    }
-  }, [defaultDashboardOption?.id, isPinModalOpen]);
-
-  const onPin = () => {
-    pinSelectionInitializedRef.current = defaultDashboardOption?.id != null;
-    setPinTargetDashboardId(defaultDashboardOption?.id ?? null);
-    setIsPinModalOpen(true);
-  };
-
   const submitPinToDashboard = async (
     targetDashboardId: number | null,
     targetDashboardName?: string | null,
@@ -353,9 +335,46 @@ export default function ChartAnswer(props: AnswerResultProps) {
           ? `已固定到看板「${resolveDashboardDisplayName(targetDashboard.name)}」`
           : '已固定到当前工作空间的默认看板。',
     );
-    pinSelectionInitializedRef.current = false;
-    setIsPinModalOpen(false);
-    setPinTargetDashboardId(null);
+    setIsPinPopoverOpen(false);
+    setIsCreatePinModalOpen(false);
+  };
+
+  const shouldUsePinPopover = dashboardsLoading || dashboardOptions.length !== 1;
+
+  const runPinToDashboard = async (
+    targetDashboardId: number | null,
+    targetDashboardName?: string | null,
+  ) => {
+    setPinSubmitting(true);
+    try {
+      await submitPinToDashboard(targetDashboardId, targetDashboardName);
+    } catch (error) {
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '固定到看板失败。',
+      );
+      if (errorMessage) {
+        appMessage.error(errorMessage);
+      }
+    } finally {
+      setPinSubmitting(false);
+    }
+  };
+
+  const onPin = async () => {
+    if (pinSubmitting || createAndPinSubmitting) {
+      return;
+    }
+
+    if (!shouldUsePinPopover) {
+      await runPinToDashboard(
+        defaultDashboardOption?.id ?? null,
+        defaultDashboardOption?.name,
+      );
+      return;
+    }
+
+    setIsPinPopoverOpen(true);
   };
 
   const onResetAdjustment = () => {
@@ -497,6 +516,35 @@ export default function ChartAnswer(props: AnswerResultProps) {
               onEdit={onEdit}
               onReload={onReload}
               onPin={onPin}
+              pinDisabled={pinSubmitting || createAndPinSubmitting}
+              pinPopoverContent={
+                shouldUsePinPopover ? (
+                  <ChartAnswerPinPopover
+                    dashboardsLoading={dashboardsLoading}
+                    dashboardOptions={dashboardOptions}
+                    disabled={pinSubmitting || createAndPinSubmitting}
+                    onCreateAndPin={() => {
+                      setIsPinPopoverOpen(false);
+                      setIsCreatePinModalOpen(true);
+                    }}
+                    onSelectDashboard={async (dashboardId, dashboardName) => {
+                      setIsPinPopoverOpen(false);
+                      await runPinToDashboard(dashboardId, dashboardName);
+                    }}
+                  />
+                ) : undefined
+              }
+              pinPopoverOpen={shouldUsePinPopover ? isPinPopoverOpen : undefined}
+              onPinPopoverOpenChange={
+                shouldUsePinPopover
+                  ? (open) => {
+                      if (pinSubmitting || createAndPinSubmitting) {
+                        return;
+                      }
+                      setIsPinPopoverOpen(open);
+                    }
+                  : undefined
+              }
               preferredRenderer={preferredRenderer}
               cacheKey={`response:${threadResponse.id}:${
                 chartDetail?.canonicalizationVersion || 'legacy'
@@ -509,19 +557,12 @@ export default function ChartAnswer(props: AnswerResultProps) {
         )}
       </div>
       <ChartAnswerPinModal
-        createAndPinSubmitting={createAndPinSubmitting}
-        dashboardsLoading={dashboardsLoading}
-        dashboardOptions={dashboardOptions}
-        open={isPinModalOpen}
-        pinSubmitting={pinSubmitting}
-        pinTargetDashboardId={pinTargetDashboardId}
-        setPinTargetDashboardId={setPinTargetDashboardId}
+        open={isCreatePinModalOpen}
+        submitting={createAndPinSubmitting}
         onCancel={() => {
-          pinSelectionInitializedRef.current = false;
-          setIsPinModalOpen(false);
-          setPinTargetDashboardId(null);
+          setIsCreatePinModalOpen(false);
         }}
-        onCreateAndPin={async (dashboardName) => {
+        onSubmit={async (dashboardName) => {
           const normalizedName = dashboardName.trim();
           if (!normalizedName) {
             appMessage.warning('请输入新看板名称。');
@@ -539,7 +580,6 @@ export default function ChartAnswer(props: AnswerResultProps) {
             setDashboardOptions((previous) =>
               sortDashboardOptions([...previous, dashboard]),
             );
-            setPinTargetDashboardId(dashboard.id);
             await submitPinToDashboard(dashboard.id, dashboard.name);
           } catch (error) {
             const errorMessage = resolveAbortSafeErrorMessage(
@@ -551,23 +591,6 @@ export default function ChartAnswer(props: AnswerResultProps) {
             }
           } finally {
             setCreateAndPinSubmitting(false);
-          }
-        }}
-        onConfirm={async () => {
-          setPinSubmitting(true);
-          try {
-            await submitPinToDashboard(pinTargetDashboardId);
-          } catch (error) {
-            const errorMessage = resolveAbortSafeErrorMessage(
-              error,
-              '固定到看板失败。',
-            );
-            if (errorMessage) {
-              appMessage.error(errorMessage);
-            }
-            return;
-          } finally {
-            setPinSubmitting(false);
           }
         }}
       />

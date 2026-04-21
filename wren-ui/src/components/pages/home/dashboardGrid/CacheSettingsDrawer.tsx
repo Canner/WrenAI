@@ -267,10 +267,10 @@ export default function CacheSettingsDrawer(props: Props) {
     <Drawer
       open={drawerOpen}
       title="缓存设置"
-      width={410}
+      size={410}
       closable
       destroyOnHidden
-      maskClosable={false}
+      mask={{ closable: false }}
       afterOpenChange={afterOpenChange}
       onClose={onClose}
       footer={

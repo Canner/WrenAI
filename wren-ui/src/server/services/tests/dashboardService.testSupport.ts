@@ -54,6 +54,7 @@ export const createDashboardServiceHarness = () => {
   const mockTransaction = { id: 'tx-1' };
   const mockDashboardItemRepository = {
     findOneBy: jest.fn(),
+    findByDashboardIdAndSourceResponseId: jest.fn(),
     findAllBy: jest.fn(),
     createOne: jest.fn(),
     updateOne: jest.fn(),

@@ -18,6 +18,13 @@ import type {
 
 import { DashboardGridPinnedItem } from './DashboardGridPinnedItem';
 import type { DashboardGridPinnedItemHandle } from './dashboardGridTypes';
+import {
+  calculateDashboardGridColumnSize,
+  DASHBOARD_GRID_COLUMN_COUNT,
+  DASHBOARD_GRID_GUTTER,
+  resolveDashboardGridLayouts,
+  resolveDashboardGridWidth,
+} from './dashboardGridLayout';
 
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
@@ -25,10 +32,20 @@ import 'react-resizable/css/styles.css';
 const StyledDashboardGrid = styled.div`
   flex: 1;
   padding: 18px;
+  min-width: 0;
+  min-height: 0;
+
+  .adm-dashboard-grid-viewport {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+  }
 
   .react-grid-layout {
     width: 100%;
     height: 100%;
+    min-width: 0;
   }
 
   .adm-pinned-item {
@@ -106,21 +123,7 @@ const StyledDashboardGrid = styled.div`
   }
 `;
 
-const GUTTER = 8;
-const COLUMN_COUNT = 6;
-
-const calculateColumnSize = (containerWidth: number) =>
-  (containerWidth - GUTTER * (COLUMN_COUNT - 1)) / COLUMN_COUNT;
-
 export type DashboardGridItem = DashboardGridItemData;
-
-const getLayoutToGrid = (item: DashboardGridItem) => ({
-  i: item.id.toString(),
-  x: item.layout.x,
-  y: item.layout.y,
-  w: item.layout.w,
-  h: item.layout.h,
-});
 
 const getLayoutToUpdateItem = (layout: Layout) => ({
   itemId: Number(layout.i),
@@ -208,22 +211,7 @@ const DashboardGrid = forwardRef(
       [items],
     );
 
-    const layouts = useMemo(() => {
-      if (items.length === 1) {
-        const item = items[0];
-        return [
-          {
-            ...getLayoutToGrid(item),
-            x: 0,
-            y: 0,
-            w: COLUMN_COUNT,
-            h: Math.max(item.layout.h, 3),
-          },
-        ];
-      }
-
-      return items.map((item) => getLayoutToGrid(item));
-    }, [items]);
+    const layouts = useMemo(() => resolveDashboardGridLayouts(items), [items]);
 
     const gridItems = items.map((item) => (
       <div
@@ -253,8 +241,10 @@ const DashboardGrid = forwardRef(
       }
 
       const renderGridWidth = () => {
-        const measuredWidth = Math.max(container.clientWidth, 960);
-        container.style.minWidth = `${measuredWidth}px`;
+        const measuredWidth = resolveDashboardGridWidth(container.clientWidth);
+        if (measuredWidth === 0) {
+          return;
+        }
         setGridWidth(measuredWidth);
       };
 
@@ -272,27 +262,29 @@ const DashboardGrid = forwardRef(
     }, []);
 
     return (
-      <StyledDashboardGrid ref={containerRef}>
-        <GridLayout
-          layout={layouts}
-          cols={COLUMN_COUNT}
-          margin={[GUTTER, GUTTER]}
-          containerPadding={[0, 0]}
-          rowHeight={calculateColumnSize(gridWidth)}
-          width={gridWidth}
-          isDraggable={!readOnly}
-          isResizable={!readOnly}
-          onLayoutChange={(nextLayouts: Layout[]) => {
-            if (readOnly) {
-              return;
-            }
-            onUpdateChange(
-              nextLayouts.map((layout) => getLayoutToUpdateItem(layout)),
-            );
-          }}
-        >
-          {gridItems}
-        </GridLayout>
+      <StyledDashboardGrid>
+        <div ref={containerRef} className="adm-dashboard-grid-viewport">
+          <GridLayout
+            layout={layouts}
+            cols={DASHBOARD_GRID_COLUMN_COUNT}
+            margin={[DASHBOARD_GRID_GUTTER, DASHBOARD_GRID_GUTTER]}
+            containerPadding={[0, 0]}
+            rowHeight={calculateDashboardGridColumnSize(gridWidth)}
+            width={gridWidth}
+            isDraggable={!readOnly}
+            isResizable={!readOnly}
+            onLayoutChange={(nextLayouts: Layout[]) => {
+              if (readOnly) {
+                return;
+              }
+              onUpdateChange(
+                nextLayouts.map((layout) => getLayoutToUpdateItem(layout)),
+              );
+            }}
+          >
+            {gridItems}
+          </GridLayout>
+        </div>
       </StyledDashboardGrid>
     );
   },

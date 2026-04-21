@@ -15,9 +15,87 @@ import {
   type DashboardListItem,
 } from '@/utils/dashboardRest';
 import type { KnowledgeConnectionSettings } from '@/utils/settingsRest';
+import type { DashboardGridItemData } from '@/utils/dashboardRest';
 
 const normalizeDashboardError = (error: unknown, fallbackMessage: string) =>
   error instanceof Error ? error : new Error(fallbackMessage);
+
+const resolveDashboardItemDeduplicationKey = (item: DashboardGridItemData) => {
+  const sourceResponseId = item.detail?.sourceResponseId;
+  if (sourceResponseId != null) {
+    return `response:${sourceResponseId}`;
+  }
+
+  return `item:${item.id}`;
+};
+
+export const dedupeDashboardDetailItems = (
+  items: DashboardGridItemData[],
+): DashboardGridItemData[] => {
+  const itemMap = new Map<string, DashboardGridItemData>();
+
+  items.forEach((item) => {
+    const key = resolveDashboardItemDeduplicationKey(item);
+    const previousItem = itemMap.get(key);
+    if (!previousItem || previousItem.id < item.id) {
+      itemMap.set(key, item);
+    }
+  });
+
+  return [...itemMap.values()].sort((left, right) => {
+    if (left.layout.y !== right.layout.y) {
+      return left.layout.y - right.layout.y;
+    }
+    if (left.layout.x !== right.layout.x) {
+      return left.layout.x - right.layout.x;
+    }
+    return left.id - right.id;
+  });
+};
+
+const normalizeLegacyDashboardItemLayouts = (
+  items: DashboardGridItemData[],
+): DashboardGridItemData[] => {
+  if (items.length !== 1) {
+    return items;
+  }
+
+  const [item] = items;
+  if (
+    item.layout.x === 0 &&
+    item.layout.y === 0 &&
+    item.layout.w === 6 &&
+    item.layout.h === 3
+  ) {
+    return [
+      {
+        ...item,
+        layout: {
+          ...item.layout,
+          w: 3,
+          h: 2,
+        },
+      },
+    ];
+  }
+
+  return items;
+};
+
+const normalizeDashboardDetailData = (
+  payload: DashboardDetailData | null,
+): DashboardDetailData | null => {
+  if (!payload) {
+    return null;
+  }
+
+  return {
+    ...payload,
+    items: normalizeLegacyDashboardItemLayouts(
+      dedupeDashboardDetailItems(payload.items || []),
+    ),
+  };
+};
 
 export const isSupportCachedSettings = (
   connection?: KnowledgeConnectionSettings | null,
@@ -161,10 +239,12 @@ export const useDashboardDetailData = ({
       return null;
     }
 
-    return peekDashboardDetailPayload({
-      requestUrl: requestKey,
-      dashboardId: dashboardId ?? undefined,
-    });
+    return normalizeDashboardDetailData(
+      peekDashboardDetailPayload({
+        requestUrl: requestKey,
+        dashboardId: dashboardId ?? undefined,
+      }),
+    );
   }, [dashboardId, requestKey]);
   const useCacheRef = useRef(true);
   const {
@@ -178,12 +258,14 @@ export const useDashboardDetailData = ({
     initialData,
     requestKey,
     request: async () =>
-      loadDashboardDetailPayload({
-        dashboardId: dashboardId as number,
-        selector,
-        requestUrl: requestKey as string,
-        useCache: useCacheRef.current,
-      }),
+      normalizeDashboardDetailData(
+        await loadDashboardDetailPayload({
+          dashboardId: dashboardId as number,
+          selector,
+          requestUrl: requestKey as string,
+          useCache: useCacheRef.current,
+        }),
+      ),
     onError: (error) => {
       onError?.(normalizeDashboardError(error, '加载看板项失败。'));
     },
@@ -218,12 +300,12 @@ export const useDashboardDetailData = ({
           return previousData;
         }
 
-        const nextData = updater(previousData);
+        const nextData = normalizeDashboardDetailData(updater(previousData));
         if (dashboardId != null) {
           primeDashboardDetailPayload({
             selector,
             dashboardId,
-            payload: nextData,
+            payload: nextData as DashboardDetailData,
           });
         }
         return nextData;

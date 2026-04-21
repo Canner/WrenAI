@@ -27,6 +27,14 @@ export type ChartRenderOptions = {
   serverShaped?: boolean;
 };
 
+export const normalizeChartRenderDimension = (
+  value?: number | string,
+): number | string | undefined => (value === '100%' ? 'container' : value);
+
+export const normalizeChartDomDimension = (
+  value?: number | string,
+): number | string | undefined => (value === 'container' ? '100%' : value);
+
 const getCategoryField = (encoding?: EncodingSpec) => {
   const nominalAxis = (['xOffset', 'color', 'x', 'y'] as const).find(
     (axis) => encoding?.[axis]?.type === 'nominal',

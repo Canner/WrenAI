@@ -49,7 +49,12 @@ export interface DashboardItem {
   displayName?: string;
 }
 
-export interface IDashboardItemRepository extends IBasicRepository<DashboardItem> {}
+export interface IDashboardItemRepository extends IBasicRepository<DashboardItem> {
+  findByDashboardIdAndSourceResponseId(
+    dashboardId: number,
+    sourceResponseId: number,
+  ): Promise<DashboardItem | null>;
+}
 
 export class DashboardItemRepository
   extends BaseRepository<DashboardItem>
@@ -59,6 +64,20 @@ export class DashboardItemRepository
 
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'dashboard_item' });
+  }
+
+  public async findByDashboardIdAndSourceResponseId(
+    dashboardId: number,
+    sourceResponseId: number,
+  ): Promise<DashboardItem | null> {
+    const result = await this.knex(this.tableName)
+      .where({ dashboard_id: dashboardId })
+      .whereRaw(`detail->>'sourceResponseId' = ?`, [
+        sourceResponseId.toString(),
+      ])
+      .first();
+
+    return result ? this.transformFromDBData(result) : null;
   }
 
   protected override transformFromDBData = (data: any) => {

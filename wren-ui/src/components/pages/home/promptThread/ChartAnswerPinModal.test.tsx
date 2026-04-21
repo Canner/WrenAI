@@ -8,16 +8,9 @@ jest.mock('antd', () => {
 
   const Input = React.forwardRef(
     (
-      {
-        allowClear: _allowClear,
-        children,
-        ...props
-      }: React.InputHTMLAttributes<HTMLInputElement> & {
-        allowClear?: boolean;
-        children?: React.ReactNode;
-      },
+      props: React.InputHTMLAttributes<HTMLInputElement>,
       ref: React.ForwardedRef<HTMLInputElement>,
-    ) => React.createElement('input', { ...props, ref }, children),
+    ) => React.createElement('input', { ...props, ref }),
   );
 
   return {
@@ -35,48 +28,16 @@ jest.mock('antd', () => {
         { disabled, onClick, type: 'button' },
         children,
       ),
-    Divider: () => React.createElement('hr'),
-    Empty: ({ description }: { description?: React.ReactNode }) =>
-      React.createElement('div', null, description),
-    Input: Object.assign(Input, {
-      Search: Input,
-      Group: ({ children }: { children?: React.ReactNode }) =>
-        React.createElement('div', null, children),
-    }),
+    Input,
     Modal: ({
       children,
-      visible,
+      open,
     }: {
       children?: React.ReactNode;
-      visible?: boolean;
-    }) => (visible ? React.createElement('div', null, children) : null),
-    Radio: Object.assign(
-      ({
-        children,
-        value,
-      }: {
-        children?: React.ReactNode;
-        value?: string | number;
-      }) =>
-        React.createElement('label', null, [
-          React.createElement('input', {
-            key: 'radio',
-            readOnly: true,
-            type: 'radio',
-            value,
-          }),
-          children,
-        ]),
-      {
-        Group: ({ children }: { children?: React.ReactNode }) =>
-          React.createElement('div', null, children),
-      },
-    ),
+      open?: boolean;
+    }) => (open ? React.createElement('div', null, children) : null),
     Space: ({ children }: { children?: React.ReactNode }) =>
       React.createElement('div', null, children),
-    Spin: () => React.createElement('div', null, 'loading'),
-    Tag: ({ children }: { children?: React.ReactNode }) =>
-      React.createElement('span', null, children),
     Typography: {
       Text: ({ children }: { children?: React.ReactNode }) =>
         React.createElement('span', null, children),
@@ -99,24 +60,10 @@ const setStateOverrides = (overrides: Partial<Record<number, any>>) => {
 const renderModal = () =>
   renderToStaticMarkup(
     <ChartAnswerPinModal
-      createAndPinSubmitting={false}
-      dashboardsLoading={false}
-      dashboardOptions={[
-        {
-          id: 1,
-          isDefault: true,
-          name: '默认看板',
-          cacheEnabled: false,
-          scheduleFrequency: null,
-        },
-      ]}
       open
-      pinSubmitting={false}
-      pinTargetDashboardId={1}
-      setPinTargetDashboardId={jest.fn()}
+      submitting={false}
       onCancel={jest.fn()}
-      onConfirm={jest.fn()}
-      onCreateAndPin={jest.fn()}
+      onSubmit={jest.fn()}
     />,
   );
 
@@ -125,22 +72,23 @@ describe('ChartAnswerPinModal', () => {
     jest.restoreAllMocks();
   });
 
-  it('keeps create-and-pin form collapsed by default', () => {
+  it('renders only the create-and-pin input flow', () => {
     const markup = renderModal();
 
-    expect(markup).not.toContain('输入新看板名称，例如：本周经营复盘');
-    expect(markup).toContain('新建看板并固定');
+    expect(markup).toContain('输入新看板名称，例如：本周经营复盘');
+    expect(markup).toContain('新建并固定');
+    expect(markup).not.toContain('固定到看板');
+    expect(markup).not.toContain('搜索看板名称');
   });
 
-  it('renders create-and-pin input group when create form is open', () => {
+  it('reflects the typed dashboard name in the input', () => {
     const useStateSpy = setStateOverrides({
-      3: true,
+      1: '本周经营复盘',
     });
 
     const markup = renderModal();
 
-    expect(markup).toContain('输入新看板名称，例如：本周经营复盘');
-    expect(markup).toContain('收起');
+    expect(markup).toContain('value="本周经营复盘"');
 
     useStateSpy.mockRestore();
   });

@@ -460,6 +460,17 @@ export class DashboardService implements IDashboardService {
   public async createDashboardItem(
     input: CreateDashboardItemInput,
   ): Promise<DashboardItem> {
+    if (input.sourceResponseId != null) {
+      const existingDashboardItem =
+        await this.dashboardItemRepository.findByDashboardIdAndSourceResponseId(
+          input.dashboardId,
+          input.sourceResponseId,
+        );
+      if (existingDashboardItem) {
+        return existingDashboardItem;
+      }
+    }
+
     const layout = await calculateDashboardNewLayout(
       this.dashboardItemRepository,
       input.dashboardId,

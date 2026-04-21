@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
-import { message } from 'antd';
 
+import { appMessage as message } from '@/utils/antdAppBridge';
 import type { DashboardGridItem } from '@/components/pages/home/dashboardGrid';
 import useDrawerAction from '@/hooks/useDrawerAction';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
@@ -12,6 +12,7 @@ import {
   createDashboard,
   deleteDashboard,
   deleteDashboardItem,
+  loadDashboardDetailPayload,
   updateDashboard,
   updateDashboardItemLayouts,
   updateDashboardSchedule,
@@ -77,6 +78,9 @@ export const useManageDashboardPageActions = ({
   visibleDashboardDetailSchedule?: DashboardDetailData['schedule'];
 }) => {
   const [createDashboardLoading, setCreateDashboardLoading] = useState(false);
+  const [cacheSettingsTargetId, setCacheSettingsTargetId] = useState<
+    number | null
+  >(null);
   const [dashboardMutationTargetId, setDashboardMutationTargetId] = useState<
     number | null
   >(null);
@@ -119,7 +123,7 @@ export const useManageDashboardPageActions = ({
     setSettings,
   ]);
 
-  const openCacheSettings = useCallback(async () => {
+  const openCacheSettings = useCallback(async (dashboardId?: number | null) => {
     if (isDashboardReadonly) {
       message.info(HISTORICAL_SNAPSHOT_READONLY_HINT);
       return;
@@ -131,14 +135,48 @@ export const useManageDashboardPageActions = ({
       return;
     }
 
+    const targetDashboardId = dashboardId ?? activeDashboardId;
+    if (targetDashboardId == null) {
+      return;
+    }
+
+    const detailData =
+      targetDashboardId === activeDashboardId
+        ? {
+            cacheEnabled: visibleDashboardDetailCacheEnabled,
+            schedule: visibleDashboardDetailSchedule,
+          }
+        : await loadDashboardDetailPayload({
+            dashboardId: targetDashboardId,
+            selector: runtimeScopeNavigation.selector,
+            useCache: false,
+          }).catch((error) => {
+            const errorMessage = resolveAbortSafeErrorMessage(
+              error,
+              '加载看板计划失败，请稍后重试。',
+            );
+            if (errorMessage) {
+              message.error(errorMessage);
+            }
+            return null;
+          });
+
+    if (!detailData) {
+      return;
+    }
+
+    setCacheSettingsTargetId(targetDashboardId);
     cacheSettingsDrawer.openDrawer({
-      cacheEnabled: visibleDashboardDetailCacheEnabled,
-      schedule: visibleDashboardDetailSchedule,
+      cacheEnabled: detailData.cacheEnabled,
+      schedule: detailData.schedule,
     });
   }, [
+    activeDashboardId,
     cacheSettingsDrawer,
     ensureCacheSettingsSupported,
     isDashboardReadonly,
+    runtimeScopeNavigation.selector,
+    setCacheSettingsTargetId,
     visibleDashboardDetailCacheEnabled,
     visibleDashboardDetailSchedule,
   ]);
@@ -225,21 +263,43 @@ export const useManageDashboardPageActions = ({
     [updateDashboardDetailData],
   );
 
-  const refreshActiveDashboard = useCallback(async () => {
+  const refreshDashboard = useCallback(async (dashboardId?: number | null) => {
     if (isDashboardReadonly) {
       message.info(HISTORICAL_SNAPSHOT_READONLY_HINT);
       return;
     }
-    if (activeDashboardId == null) {
+    const targetDashboardId = dashboardId ?? activeDashboardId;
+    if (targetDashboardId == null) {
       return;
     }
-    await refetchDashboard();
-    await refetchDashboards();
+
+    try {
+      if (targetDashboardId === activeDashboardId) {
+        await refetchDashboard({ useCache: false });
+      } else {
+        await loadDashboardDetailPayload({
+          dashboardId: targetDashboardId,
+          selector: runtimeScopeNavigation.selector,
+          useCache: false,
+        });
+        message.success('看板已刷新。');
+      }
+      await refetchDashboards({ useCache: false });
+    } catch (error) {
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '刷新看板失败，请稍后重试。',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
+    }
   }, [
     activeDashboardId,
     isDashboardReadonly,
     refetchDashboard,
     refetchDashboards,
+    runtimeScopeNavigation.selector,
   ]);
 
   const goToSourceThread = useCallback(
@@ -253,7 +313,7 @@ export const useManageDashboardPageActions = ({
         ...(responseId != null ? { responseId } : {}),
       });
     },
-    [runtimeScopeNavigation],
+    [runtimeScopeNavigation.pushWorkspace],
   );
 
   const submitCreateDashboard = useCallback(async () => {
@@ -397,17 +457,26 @@ export const useManageDashboardPageActions = ({
 
   const submitCacheSettings = useCallback(
     async (values: any) => {
-      if (activeDashboardId == null) {
+      const targetDashboardId = cacheSettingsTargetId ?? activeDashboardId;
+      if (targetDashboardId == null) {
         return;
       }
       try {
         await updateDashboardSchedule(
           runtimeScopeNavigation.selector,
-          activeDashboardId,
+          targetDashboardId,
           values,
         );
         message.success('看板计划已更新。');
-        await refetchDashboard({ useCache: false });
+        if (targetDashboardId === activeDashboardId) {
+          await refetchDashboard({ useCache: false });
+        } else {
+          await loadDashboardDetailPayload({
+            dashboardId: targetDashboardId,
+            selector: runtimeScopeNavigation.selector,
+            useCache: false,
+          });
+        }
         await refetchDashboards({ useCache: false });
       } catch (error) {
         const errorMessage = resolveAbortSafeErrorMessage(
@@ -421,6 +490,7 @@ export const useManageDashboardPageActions = ({
     },
     [
       activeDashboardId,
+      cacheSettingsTargetId,
       refetchDashboard,
       refetchDashboards,
       runtimeScopeNavigation.selector,
@@ -478,7 +548,7 @@ export const useManageDashboardPageActions = ({
     onDelete,
     onUpdateChange,
     openCacheSettings,
-    refreshActiveDashboard,
+    refreshDashboard,
     submitCacheSettings,
     submitCreateDashboard,
     submitDeleteDashboard,

@@ -73,6 +73,14 @@ jest.mock('./ChartAnswerPinModal', () => ({
   },
 }));
 
+jest.mock('./ChartAnswerPinPopover', () => ({
+  __esModule: true,
+  default: () => {
+    const React = jest.requireActual('react');
+    return React.createElement('section', null, 'PinPopover');
+  },
+}));
+
 jest.mock('@/components/chart/properties/BasicProperties', () => () => null);
 jest.mock('@/components/chart/properties/DonutProperties', () => () => null);
 jest.mock('@/components/chart/properties/LineProperties', () => () => null);
@@ -168,12 +176,10 @@ describe('ChartAnswer', () => {
     });
   });
 
-  it('submits createDashboardItem with selected dashboard id when pinning a chart', async () => {
+  it('pins directly when there is only one dashboard', async () => {
     const useStateSpy = setStateOverrides({
-      // 5th state: isPinModalOpen
-      5: true,
-      // 6th state: pinTargetDashboardId
-      6: 11,
+      // 8th state: dashboardOptions
+      8: [{ id: 11, name: '经营总览' }],
     });
 
     renderToStaticMarkup(
@@ -195,7 +201,7 @@ describe('ChartAnswer', () => {
       } as any),
     );
 
-    await capturedPinModalProps.onConfirm();
+    await capturedChartProps.onPin();
 
     expect(mockCreateDashboardItem).toHaveBeenCalledWith(
       { workspaceId: 'ws-1' },
@@ -203,6 +209,51 @@ describe('ChartAnswer', () => {
         itemType: 'LINE',
         responseId: 91,
         dashboardId: 11,
+      },
+    );
+
+    useStateSpy.mockRestore();
+  });
+
+  it('submits createDashboardItem with selected dashboard id from the popover when multiple dashboards exist', async () => {
+    const useStateSpy = setStateOverrides({
+      // 5th state: isPinPopoverOpen
+      5: true,
+      // 8th state: dashboardOptions
+      8: [
+        { id: 11, name: '经营总览' },
+        { id: 12, name: '销售看板' },
+      ],
+    });
+
+    renderToStaticMarkup(
+      React.createElement(ChartAnswer, {
+        threadResponse: {
+          id: 91,
+          chartDetail: {
+            status: 'FINISHED',
+            description: '销售趋势',
+            chartSchema: {
+              mark: 'line',
+              encoding: {
+                x: { field: 'date', type: 'temporal' },
+                y: { field: 'value', type: 'quantitative' },
+              },
+            },
+          },
+        },
+      } as any),
+    );
+
+    const popoverElement = capturedChartProps.pinPopoverContent;
+    await popoverElement.props.onSelectDashboard(12, '销售看板');
+
+    expect(mockCreateDashboardItem).toHaveBeenCalledWith(
+      { workspaceId: 'ws-1' },
+      {
+        itemType: 'LINE',
+        responseId: 91,
+        dashboardId: 12,
       },
     );
 
@@ -237,10 +288,6 @@ describe('ChartAnswer', () => {
 
   it('shows normalized default dashboard name in pin success message', async () => {
     const useStateSpy = setStateOverrides({
-      // 5th state: isPinModalOpen
-      5: true,
-      // 6th state: pinTargetDashboardId
-      6: 11,
       // 8th state: dashboardOptions
       8: [{ id: 11, name: 'Dashboard' }],
     });
@@ -264,7 +311,7 @@ describe('ChartAnswer', () => {
       } as any),
     );
 
-    await capturedPinModalProps.onConfirm();
+    await capturedChartProps.onPin();
 
     expect(mockMessageSuccess).toHaveBeenCalledWith('已固定到看板「默认看板」');
 
@@ -273,8 +320,7 @@ describe('ChartAnswer', () => {
 
   it('creates a dashboard before pinning when using create-and-pin action', async () => {
     const useStateSpy = setStateOverrides({
-      5: true,
-      6: null,
+      6: true,
       8: [{ id: 11, name: '经营总览' }],
     });
     mockCreateDashboardItem.mockResolvedValueOnce({
@@ -301,7 +347,7 @@ describe('ChartAnswer', () => {
       } as any),
     );
 
-    await capturedPinModalProps.onCreateAndPin('本周经营复盘');
+    await capturedPinModalProps.onSubmit('本周经营复盘');
 
     expect(mockCreateDashboard).toHaveBeenCalledWith(
       { workspaceId: 'ws-1' },

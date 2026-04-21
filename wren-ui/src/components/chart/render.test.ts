@@ -1,4 +1,9 @@
-import { prepareChartSpecForRender, resolvePreferredRenderer } from './render';
+import {
+  normalizeChartDomDimension,
+  normalizeChartRenderDimension,
+  prepareChartSpecForRender,
+  resolvePreferredRenderer,
+} from './render';
 
 describe('chart render helpers', () => {
   const values = [
@@ -161,5 +166,12 @@ describe('chart render helpers', () => {
     });
 
     expect(renderer).toBe('canvas');
+  });
+
+  it('normalizes 100% dimensions into container render dimensions', () => {
+    expect(normalizeChartRenderDimension('100%')).toBe('container');
+    expect(normalizeChartRenderDimension(320)).toBe(320);
+    expect(normalizeChartDomDimension('container')).toBe('100%');
+    expect(normalizeChartDomDimension('100%')).toBe('100%');
   });
 });

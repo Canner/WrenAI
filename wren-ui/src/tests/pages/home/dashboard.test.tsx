@@ -288,13 +288,10 @@ describe('home/dashboard page', () => {
     expect(markup).toContain('销售看板');
     expect(markup).toContain('销售趋势');
     expect(markup).toContain('已固定图表');
-    expect(markup).toContain('当前图表');
-    expect(markup).toContain('回到来源线程');
-    expect(markup).toContain('近 30 天销售趋势');
-    expect(markup).toContain('#21');
-    expect(markup).toContain('#91');
+    expect(markup).toContain('BAR · 3×2');
     expect(markup).not.toContain('看板列表');
     expect(markup).not.toContain('图表列表');
+    expect(markup).not.toContain('当前图表');
     expect(markup).not.toContain('当前选中卡片');
     expect(markup).not.toContain('设为默认');
     expect(capturedDashboardGridProps?.readOnly).toBe(false);

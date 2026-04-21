@@ -105,7 +105,10 @@ export const DashboardRailList = styled.div`
   overflow: auto;
 `;
 
-export const DashboardRailItem = styled.button<{ $active?: boolean }>`
+export const DashboardRailItem = styled.div.attrs({
+  role: 'button',
+  tabIndex: 0,
+})<{ $active?: boolean }>`
   width: 100%;
   min-width: 0;
   display: flex;
@@ -120,11 +123,18 @@ export const DashboardRailItem = styled.button<{ $active?: boolean }>`
     props.$active ? 'rgba(141, 101, 225, 0.08)' : 'transparent'};
   text-align: left;
   cursor: pointer;
+  user-select: none;
   transition: all 0.18s ease;
 
   &:hover {
     background: ${(props) =>
       props.$active ? 'rgba(141, 101, 225, 0.1)' : '#f7f7fb'};
+  }
+
+  &:focus-visible {
+    outline: none;
+    border-color: rgba(111, 71, 255, 0.48);
+    box-shadow: 0 0 0 3px rgba(111, 71, 255, 0.14);
   }
 `;
 
@@ -134,6 +144,14 @@ export const DashboardRailItemBody = styled.div`
   display: flex;
   flex-direction: column;
   gap: 3px;
+`;
+
+export const DashboardRailItemRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
 `;
 
 export const DashboardRailTitle = styled.span`
@@ -150,6 +168,20 @@ export const DashboardRailTitle = styled.span`
   .ant-typography {
     min-width: 0;
   }
+`;
+
+export const DashboardRailInlineMeta = styled.span`
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(111, 71, 255, 0.08);
+  color: var(--nova-primary);
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 600;
 `;
 
 export const DashboardRailMeta = styled.span`

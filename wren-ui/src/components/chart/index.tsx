@@ -1,11 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { isEmpty } from 'lodash';
-import { Alert, Button, Tooltip } from 'antd';
+import { Alert, Button, Popover, Tooltip } from 'antd';
+import type { ReactNode } from 'react';
 import { compile, type Config, type TopLevelSpec } from 'vega-lite';
 import type { EmbedOptions, Result } from 'vega-embed';
 import { chartVegaConfig } from './config';
-import { prepareChartSpecForRender, resolvePreferredRenderer } from './render';
+import {
+  normalizeChartDomDimension,
+  normalizeChartRenderDimension,
+  prepareChartSpecForRender,
+  resolvePreferredRenderer,
+} from './render';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import EditOutlined from '@ant-design/icons/EditOutlined';
 import EyeOutlined from '@ant-design/icons/EyeOutlined';
@@ -138,6 +144,10 @@ interface VegaLiteProps {
   onReload?: () => void;
   onEdit?: () => void;
   onPin?: () => void;
+  pinDisabled?: boolean;
+  pinPopoverContent?: ReactNode;
+  pinPopoverOpen?: boolean;
+  onPinPopoverOpenChange?: (open: boolean) => void;
   preferredRenderer?: 'svg' | 'canvas';
   cacheKey?: string;
   serverShaped?: boolean;
@@ -182,6 +192,10 @@ export default function Chart(props: VegaLiteProps) {
     onReload,
     onEdit,
     onPin,
+    pinDisabled,
+    pinPopoverContent,
+    pinPopoverOpen,
+    onPinPopoverOpenChange,
     preferredRenderer,
     cacheKey,
     serverShaped,
@@ -197,6 +211,10 @@ export default function Chart(props: VegaLiteProps) {
   const [isShowTopCategories, setIsShowTopCategories] = useState(false);
   const $view = useRef<Result | null>(null);
   const $container = useRef<HTMLDivElement>(null);
+  const renderWidth = normalizeChartRenderDimension(width);
+  const renderHeight = normalizeChartRenderDimension(height);
+  const domWidth = normalizeChartDomDimension(width);
+  const domHeight = normalizeChartDomDimension(height);
 
   useEffect(() => {
     if (!spec || !values) return;
@@ -205,8 +223,8 @@ export default function Chart(props: VegaLiteProps) {
         spec,
         values,
         options: {
-          width,
-          height,
+          width: renderWidth,
+          height: renderHeight,
           donutInner,
           autoFilter,
           isShowTopCategories,
@@ -263,13 +281,13 @@ export default function Chart(props: VegaLiteProps) {
     forceUpdate,
     hideLegend,
     hideTitle,
-    height,
+    renderHeight,
     isShowTopCategories,
     spec,
     cacheKey,
     serverShaped,
     values,
-    width,
+    renderWidth,
   ]);
 
   // initial vega view
@@ -371,10 +389,23 @@ export default function Chart(props: VegaLiteProps) {
       );
     }
 
-    return <div style={{ width, height }} ref={$container} />;
+    return (
+      <div style={{ width: domWidth, height: domHeight }} ref={$container} />
+    );
   };
 
-  const isAdditionalShow = !!onReload || !!onEdit || !!onPin;
+  const isAdditionalShow =
+    !!onReload || !!onEdit || !!onPin || !!pinPopoverContent;
+  const pinButton = (
+    <button
+      aria-label="Pin chart to dashboard"
+      title="Pin chart to dashboard"
+      disabled={pinDisabled}
+      onClick={pinPopoverContent ? undefined : onPin}
+    >
+      <PushPinOutlined />
+    </button>
+  );
 
   return (
     <div
@@ -383,31 +414,46 @@ export default function Chart(props: VegaLiteProps) {
         { 'adm-chart--no-actions': hideActions },
         className,
       )}
-      style={{ width }}
+      style={{ width: domWidth }}
     >
       {isAdditionalShow && (
         <div className="adm-chart-additional d-flex justify-content-between align-center">
           {!!onReload && (
             <Tooltip title="Regenerate chart">
-              <button onClick={onReload}>
+              <button
+                aria-label="Regenerate chart"
+                title="Regenerate chart"
+                onClick={onReload}
+              >
                 <ReloadOutlined />
               </button>
             </Tooltip>
           )}
           {!!onEdit && (
             <Tooltip title="Edit chart">
-              <button onClick={onEdit}>
+              <button
+                aria-label="Edit chart"
+                title="Edit chart"
+                onClick={onEdit}
+              >
                 <EditOutlined />
               </button>
             </Tooltip>
           )}
-          {!!onPin && (
-            <Tooltip title="Pin chart to dashboard">
-              <button onClick={onPin}>
-                <PushPinOutlined />
-              </button>
-            </Tooltip>
-          )}
+          {(!!onPin || !!pinPopoverContent) &&
+            (pinPopoverContent ? (
+              <Popover
+                trigger="click"
+                placement="bottomRight"
+                content={pinPopoverContent}
+                open={pinPopoverOpen}
+                onOpenChange={onPinPopoverOpenChange}
+              >
+                {pinButton}
+              </Popover>
+            ) : (
+              <Tooltip title="Pin chart to dashboard">{pinButton}</Tooltip>
+            ))}
         </div>
       )}
       {getChartContent()}

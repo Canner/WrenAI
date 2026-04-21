@@ -7,13 +7,12 @@ import {
   ReloadOutlined,
   StarOutlined,
 } from '@ant-design/icons';
+import type { KeyboardEvent } from 'react';
 import {
-  Descriptions,
   Divider,
   Dropdown,
   Empty,
   Tag,
-  Tooltip,
   Typography,
   type MenuProps,
 } from 'antd';
@@ -22,26 +21,20 @@ import type { DashboardGridItem } from '@/components/pages/home/dashboardGrid';
 import { resolveDashboardDisplayName } from '@/utils/dashboardRest';
 
 import {
-  DashboardDetailActions,
-  DashboardDetailCard,
-  DashboardDetailHeader,
-  DashboardDetailHint,
-  DashboardDetailMeta,
-  DashboardDetailName,
   DashboardRail,
   DashboardRailCard,
   DashboardRailCreateButton,
+  DashboardRailInlineMeta,
   DashboardRailItem,
   DashboardRailItemBody,
   DashboardRailItemMenuButton,
+  DashboardRailItemRow,
   DashboardRailList,
-  DashboardRailMeta,
   DashboardRailSection,
   DashboardRailSectionCount,
   DashboardRailSectionHeader,
   DashboardRailSectionTitle,
   DashboardRailTitle,
-  WorkbenchActionButton,
 } from './manageDashboardPageStyles';
 
 export const DashboardWorkbenchRail = (props: {
@@ -62,13 +55,10 @@ export const DashboardWorkbenchRail = (props: {
   }>;
   hasDashboardSummaryItems: boolean;
   isDashboardReadonly: boolean;
-  onCacheSettings: () => void;
+  onCacheSettings: (dashboardId?: number) => void;
   onCreateDashboard: () => void;
   onDeleteDashboard: (dashboardId: number) => void;
-  onDeleteSelectedItem: () => void;
-  onFocusSelectedItem: () => void;
-  onGoToSourceThread: () => void;
-  onRefreshDashboard: () => void;
+  onRefreshDashboard: (dashboardId?: number) => void;
   onRenameDashboard: (dashboardId: number) => void;
   onSelectDashboard: (dashboardId: number) => void;
   onSelectItem: (itemId: number) => void;
@@ -86,9 +76,6 @@ export const DashboardWorkbenchRail = (props: {
     onCacheSettings,
     onCreateDashboard,
     onDeleteDashboard,
-    onDeleteSelectedItem,
-    onFocusSelectedItem,
-    onGoToSourceThread,
     onRefreshDashboard,
     onRenameDashboard,
     onSelectDashboard,
@@ -97,9 +84,19 @@ export const DashboardWorkbenchRail = (props: {
     selectedDashboardItem,
   } = props;
 
+  const handleRailItemKeyDown =
+    (onActivate: () => void) => (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.key !== 'Enter' && event.key !== ' ') {
+        return;
+      }
+
+      event.preventDefault();
+      onActivate();
+    };
+
   return (
     <DashboardRail>
-      <DashboardRailCard bordered={false}>
+      <DashboardRailCard variant="borderless">
         <DashboardRailSection>
           <DashboardRailSectionHeader>
             <DashboardRailSectionTitle>看板</DashboardRailSectionTitle>
@@ -118,25 +115,21 @@ export const DashboardWorkbenchRail = (props: {
                 const isMutating = dashboardMutationTargetId === dashboard.id;
                 const isActiveDashboard = activeDashboardId === dashboard.id;
                 const menuItems: NonNullable<MenuProps['items']> = [
-                  ...(isActiveDashboard
-                    ? [
-                        {
-                          key: 'refresh',
-                          icon: <ReloadOutlined />,
-                          label: '刷新看板',
-                          disabled: isDashboardReadonly || isMutating,
-                          onClick: () => onRefreshDashboard(),
-                        },
-                      ]
-                    : []),
-                  ...(isActiveDashboard && canShowCacheSettings
+                  {
+                    key: 'refresh',
+                    icon: <ReloadOutlined />,
+                    label: '刷新看板',
+                    disabled: isDashboardReadonly || isMutating,
+                    onClick: () => onRefreshDashboard(dashboard.id),
+                  },
+                  ...(canShowCacheSettings
                     ? [
                         {
                           key: 'cache-settings',
                           icon: <ClockCircleOutlined />,
                           label: '缓存与调度',
                           disabled: isDashboardReadonly || isMutating,
-                          onClick: () => onCacheSettings(),
+                          onClick: () => onCacheSettings(dashboard.id),
                         },
                       ]
                     : []),
@@ -171,9 +164,12 @@ export const DashboardWorkbenchRail = (props: {
                 return (
                   <DashboardRailItem
                     key={dashboard.id}
-                    type="button"
-                    $active={activeDashboardId === dashboard.id}
+                    $active={isActiveDashboard}
+                    aria-pressed={isActiveDashboard}
                     onClick={() => onSelectDashboard(dashboard.id)}
+                    onKeyDown={handleRailItemKeyDown(() =>
+                      onSelectDashboard(dashboard.id),
+                    )}
                   >
                     <DashboardRailItemBody>
                       <DashboardRailTitle>
@@ -236,95 +232,33 @@ export const DashboardWorkbenchRail = (props: {
                   filteredDashboardSummaryItems.map((item) => (
                     <DashboardRailItem
                       key={item.id}
-                      type="button"
                       $active={selectedDashboardItem?.id === item.id}
+                      aria-pressed={selectedDashboardItem?.id === item.id}
                       onClick={() => onSelectItem(item.id)}
+                      onKeyDown={handleRailItemKeyDown(() =>
+                        onSelectItem(item.id),
+                      )}
                     >
                       <DashboardRailItemBody>
-                        <DashboardRailTitle>
-                          <Typography.Text ellipsis style={{ marginBottom: 0 }}>
-                            {item.title}
-                          </Typography.Text>
-                        </DashboardRailTitle>
-                        <DashboardRailMeta>{item.meta}</DashboardRailMeta>
+                        <DashboardRailItemRow>
+                          <DashboardRailTitle>
+                            <Typography.Text
+                              ellipsis
+                              style={{ marginBottom: 0 }}
+                            >
+                              {item.title}
+                            </Typography.Text>
+                          </DashboardRailTitle>
+                          <DashboardRailInlineMeta>
+                            {item.meta}
+                          </DashboardRailInlineMeta>
+                        </DashboardRailItemRow>
                       </DashboardRailItemBody>
                     </DashboardRailItem>
                   ))
                 )}
               </DashboardRailList>
             </DashboardRailSection>
-          </>
-        ) : null}
-
-        {selectedDashboardItem ? (
-          <>
-            <Divider style={{ margin: '4px 0' }} />
-            <DashboardDetailCard>
-              <DashboardDetailHeader>
-                <DashboardDetailName>
-                  <DashboardRailSectionTitle>
-                    当前图表
-                  </DashboardRailSectionTitle>
-                  <Typography.Text strong ellipsis>
-                    {selectedDashboardItem.displayName ||
-                      `图表卡片 ${selectedDashboardItem.id}`}
-                  </Typography.Text>
-                </DashboardDetailName>
-                <Tag color="blue">{selectedDashboardItem.type}</Tag>
-              </DashboardDetailHeader>
-              <DashboardDetailMeta>
-                <Tag>
-                  {selectedDashboardItem.layout.w} ×{' '}
-                  {selectedDashboardItem.layout.h}
-                </Tag>
-                {selectedDashboardItem.detail?.sourceThreadId != null ? (
-                  <Tag>线程 #{selectedDashboardItem.detail.sourceThreadId}</Tag>
-                ) : null}
-                {selectedDashboardItem.detail?.sourceResponseId != null ? (
-                  <Tag>
-                    回答 #{selectedDashboardItem.detail.sourceResponseId}
-                  </Tag>
-                ) : null}
-              </DashboardDetailMeta>
-              <DashboardDetailHint>
-                已固定到当前看板，可直接回到来源线程继续追问，或在画布中调整布局。
-              </DashboardDetailHint>
-              <Descriptions
-                column={1}
-                size="small"
-                colon={false}
-                style={{ marginTop: 10 }}
-              >
-                {selectedDashboardItem.detail?.sourceQuestion ? (
-                  <Descriptions.Item label="来源问题">
-                    <Tooltip
-                      title={selectedDashboardItem.detail.sourceQuestion}
-                    >
-                      <Typography.Text ellipsis style={{ maxWidth: 180 }}>
-                        {selectedDashboardItem.detail.sourceQuestion}
-                      </Typography.Text>
-                    </Tooltip>
-                  </Descriptions.Item>
-                ) : null}
-              </Descriptions>
-              <DashboardDetailActions>
-                <WorkbenchActionButton block onClick={onFocusSelectedItem}>
-                  定位到画布
-                </WorkbenchActionButton>
-                <WorkbenchActionButton block onClick={onGoToSourceThread}>
-                  回到来源线程
-                </WorkbenchActionButton>
-                <WorkbenchActionButton
-                  block
-                  danger
-                  disabled={isDashboardReadonly}
-                  style={{ gridColumn: '1 / -1' }}
-                  onClick={onDeleteSelectedItem}
-                >
-                  删除当前卡片
-                </WorkbenchActionButton>
-              </DashboardDetailActions>
-            </DashboardDetailCard>
           </>
         ) : null}
       </DashboardRailCard>

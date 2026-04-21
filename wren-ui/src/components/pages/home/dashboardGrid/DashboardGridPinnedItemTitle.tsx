@@ -1,5 +1,6 @@
-import { Form, message } from 'antd';
+import { Form } from 'antd';
 
+import { appMessage as message } from '@/utils/antdAppBridge';
 import EditableWrapper, { EditableContext } from '@/components/EditableWrapper';
 import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import { updateDashboardItem } from '@/utils/dashboardRest';

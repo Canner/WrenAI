@@ -8,8 +8,9 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { Alert, Button, message } from 'antd';
+import { Alert, Button } from 'antd';
 
+import { appMessage as message } from '@/utils/antdAppBridge';
 import { LoadingWrapper } from '@/components/PageLoading';
 import { DashboardItemDropdown } from '@/components/diagram/CustomDropdown';
 import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
-import { Modal, message } from 'antd';
 
+import { appMessage as message, appModal } from '@/utils/antdAppBridge';
 import { LoadingWrapper } from '@/components/PageLoading';
 import type { DashboardGridHandle } from '@/components/pages/home/dashboardGrid';
 import type { Schedule } from '@/components/pages/home/dashboardGrid/CacheSettingsDrawer';
@@ -213,7 +213,7 @@ export default function Dashboard() {
     onDelete,
     onUpdateChange,
     openCacheSettings,
-    refreshActiveDashboard,
+    refreshDashboard,
     submitCacheSettings,
     submitCreateDashboard,
     submitDeleteDashboard,
@@ -267,7 +267,7 @@ export default function Dashboard() {
       const targetDashboard = visibleDashboards.find(
         (dashboard) => dashboard.id === dashboardId,
       );
-      Modal.confirm({
+      appModal.confirm({
         title: '确认删除这个看板吗？',
         content: `删除后将移除「${resolveDashboardDisplayName(
           targetDashboard?.name,
@@ -313,26 +313,12 @@ export default function Dashboard() {
             filteredDashboardSummaryItems={dashboardSummaryItems}
             hasDashboardSummaryItems={dashboardSummaryItems.length > 0}
             isDashboardReadonly={isDashboardReadonly}
-            onCacheSettings={openCacheSettings}
+            onCacheSettings={(dashboardId) => void openCacheSettings(dashboardId)}
             onCreateDashboard={() => setCreateDashboardOpen(true)}
             onDeleteDashboard={onDeleteDashboard}
-            onDeleteSelectedItem={() =>
-              selectedDashboardItem
-                ? void onDelete(selectedDashboardItem.id)
-                : undefined
+            onRefreshDashboard={(dashboardId) =>
+              void refreshDashboard(dashboardId)
             }
-            onFocusSelectedItem={() => {
-              if (selectedDashboardItem) {
-                dashboardGridRef.current?.focusItem(selectedDashboardItem.id);
-              }
-            }}
-            onGoToSourceThread={() =>
-              void goToSourceThread(
-                selectedDashboardItem?.detail?.sourceThreadId,
-                selectedDashboardItem?.detail?.sourceResponseId,
-              )
-            }
-            onRefreshDashboard={() => void refreshActiveDashboard()}
             onRenameDashboard={onOpenRenameDashboard}
             onSelectDashboard={(dashboardId) => {
               void replaceDashboardRoute(dashboardId);

@@ -339,7 +339,7 @@ export default function AnswerResult(props: Props) {
             <div className="mt-2 d-flex align-center">
               {sql && (
                 <Tooltip
-                  overlayInnerStyle={{ width: 'max-content' }}
+                  styles={{ container: { width: 'max-content' } }}
                   placement="topLeft"
                   title={knowledgeTooltip}
                 >
