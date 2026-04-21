@@ -43,6 +43,7 @@ export type AskingTaskRuntimeScope = Pick<
 
 export interface IAskingTaskRepository extends IBasicRepository<AskingTask> {
   findByQueryId(queryId: string): Promise<AskingTask | null>;
+  findUnfinishedTasks(): Promise<AskingTask[]>;
   findByQueryIdWithRuntimeScope(
     queryId: string,
     scope: AskingTaskRuntimeScope,
@@ -65,6 +66,17 @@ export class AskingTaskRepository
 
   public async findByQueryId(queryId: string): Promise<AskingTask | null> {
     return this.findOneBy({ queryId });
+  }
+
+  public async findUnfinishedTasks(): Promise<AskingTask[]> {
+    const rows = await this.knex(this.tableName)
+      .whereNotNull('query_id')
+      .whereRaw(`COALESCE(detail->>'status', '') NOT IN (?, ?, ?)`, [
+        'FINISHED',
+        'FAILED',
+        'STOPPED',
+      ]);
+    return rows.map((row) => this.transformFromDBData(row));
   }
 
   public async findByQueryIdWithRuntimeScope(

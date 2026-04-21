@@ -257,7 +257,7 @@ describe('QueryService', () => {
     mockWrenEngineAdaptor.dryRun
       .mockRejectedValueOnce(
         new Error(
-          'java.sql.SQLException: Catalog Error: Table with name olist_customers_dataset does not exist!\nDid you mean "sqlite_temp_master"?',
+          'java.sql.SQLException: Catalog Error: Table with name olist_customers_dataset does not exist!',
         ),
       )
       .mockResolvedValueOnce([]);

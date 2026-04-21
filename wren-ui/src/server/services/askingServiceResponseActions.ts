@@ -121,6 +121,14 @@ export const generateThreadResponseChartAction = async (
   }
 
   let previewDataSample: PreviewDataResponse | undefined;
+  let chartDiagnostics:
+    | {
+        previewColumnCount: number;
+        previewRowCount: number;
+        previewColumns: Array<{ name: string; type?: string | null }>;
+        submittedAt: string;
+      }
+    | undefined;
   try {
     const { project, manifest } =
       await service.getExecutionResources(runtimeIdentity);
@@ -133,6 +141,20 @@ export const generateThreadResponseChartAction = async (
         modelingOnly: false,
       },
     )) as PreviewDataResponse;
+    chartDiagnostics = {
+      previewColumnCount: previewDataSample.columns?.length || 0,
+      previewRowCount: previewDataSample.data?.length || 0,
+      previewColumns: (previewDataSample.columns || [])
+        .slice(0, 8)
+        .map((column) => ({
+          name: column.name,
+          type: column.type || null,
+        })),
+      submittedAt: new Date().toISOString(),
+    };
+    logger.info(
+      `Chart request ${threadResponseId} prepared with ${chartDiagnostics.previewColumnCount} columns / ${chartDiagnostics.previewRowCount} rows`,
+    );
   } catch (error) {
     logger.warn(
       `Unable to fetch chart sample data for response ${threadResponseId}: ${
@@ -158,6 +180,7 @@ export const generateThreadResponseChartAction = async (
   const updatedThreadResponse =
     await service.threadResponseRepository.updateOne(threadResponse.id, {
       chartDetail: {
+        diagnostics: chartDiagnostics,
         queryId: response.queryId,
         status: ChartStatus.FETCHING,
       },

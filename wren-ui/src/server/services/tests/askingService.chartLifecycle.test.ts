@@ -60,6 +60,18 @@ describe('AskingService', () => {
       expect(service.chartBackgroundTracker.addTask).toHaveBeenCalledWith(
         result,
       );
+      expect(service.threadResponseRepository.updateOne).toHaveBeenCalledWith(
+        11,
+        expect.objectContaining({
+          chartDetail: expect.objectContaining({
+            diagnostics: expect.objectContaining({
+              previewColumnCount: 1,
+              previewRowCount: 1,
+              previewColumns: [{ name: 'value', type: 'number' }],
+            }),
+          }),
+        }),
+      );
     });
 
     it('applies deterministic chart adjustments locally without calling AI', async () => {
@@ -116,6 +128,12 @@ describe('AskingService', () => {
     it('hydrates the breakdown tracker from repository-filtered unfinished responses', async () => {
       const service = Object.create(AskingService.prototype) as any;
       service.backgroundTrackerWorkspaceId = 'workspace-1';
+      service.askingTaskRepository = {
+        findUnfinishedTasks: jest.fn().mockResolvedValue([]),
+      };
+      service.askingTaskTracker = {
+        rehydrateTrackedTask: jest.fn(),
+      };
       service.threadResponseRepository = {
         findUnfinishedBreakdownResponsesByWorkspaceId: jest
           .fn()
@@ -159,6 +177,9 @@ describe('AskingService', () => {
         service.threadResponseRepository.findUnfinishedChartResponses,
       ).toHaveBeenNthCalledWith(2, { adjustment: true });
       expect(
+        service.askingTaskRepository.findUnfinishedTasks,
+      ).toHaveBeenCalled();
+      expect(
         service.breakdownBackgroundTracker.addTask,
       ).toHaveBeenNthCalledWith(1, {
         id: 11,
@@ -175,6 +196,12 @@ describe('AskingService', () => {
     it('hydrates unfinished breakdown responses across all workspaces when no explicit background workspace is configured', async () => {
       const service = Object.create(AskingService.prototype) as any;
       service.backgroundTrackerWorkspaceId = null;
+      service.askingTaskRepository = {
+        findUnfinishedTasks: jest.fn().mockResolvedValue([]),
+      };
+      service.askingTaskTracker = {
+        rehydrateTrackedTask: jest.fn(),
+      };
       service.threadResponseRepository = {
         findUnfinishedBreakdownResponsesByWorkspaceId: jest.fn(),
         findUnfinishedBreakdownResponses: jest.fn().mockResolvedValue([
@@ -217,6 +244,9 @@ describe('AskingService', () => {
         service.threadResponseRepository.findUnfinishedChartResponses,
       ).toHaveBeenNthCalledWith(2, { adjustment: true });
       expect(
+        service.askingTaskRepository.findUnfinishedTasks,
+      ).toHaveBeenCalled();
+      expect(
         service.breakdownBackgroundTracker.addTask,
       ).toHaveBeenNthCalledWith(1, {
         id: 21,
@@ -233,6 +263,12 @@ describe('AskingService', () => {
     it('rehydrates unfinished chart jobs into the matching chart trackers', async () => {
       const service = Object.create(AskingService.prototype) as any;
       service.backgroundTrackerWorkspaceId = null;
+      service.askingTaskRepository = {
+        findUnfinishedTasks: jest.fn().mockResolvedValue([]),
+      };
+      service.askingTaskTracker = {
+        rehydrateTrackedTask: jest.fn(),
+      };
       service.threadResponseRepository = {
         findUnfinishedBreakdownResponsesByWorkspaceId: jest.fn(),
         findUnfinishedBreakdownResponses: jest.fn().mockResolvedValue([]),
@@ -276,6 +312,66 @@ describe('AskingService', () => {
         id: 32,
         chartDetail: { adjustment: true },
       });
+    });
+
+    it('rehydrates unfinished asking tasks into the asking task tracker', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      service.backgroundTrackerWorkspaceId = null;
+      service.askingTaskRepository = {
+        findUnfinishedTasks: jest.fn().mockResolvedValue([
+          {
+            id: 88,
+            queryId: 'ask-88',
+            question: '各岗位的平均薪资分别是多少？',
+            detail: { status: 'UNDERSTANDING', response: [], error: null },
+            threadResponseId: 53,
+            workspaceId: 'ws-1',
+            knowledgeBaseId: 'kb-1',
+            kbSnapshotId: 'snap-1',
+            deployHash: 'deploy-1',
+            actorUserId: 'user-1',
+          },
+        ]),
+      };
+      service.askingTaskTracker = {
+        rehydrateTrackedTask: jest.fn(),
+      };
+      service.threadResponseRepository = {
+        findUnfinishedBreakdownResponsesByWorkspaceId: jest.fn(),
+        findUnfinishedBreakdownResponses: jest.fn().mockResolvedValue([]),
+        findUnfinishedAnswerResponses: jest.fn().mockResolvedValue([]),
+        findUnfinishedChartResponses: jest.fn().mockResolvedValue([]),
+      };
+      service.knowledgeBaseRepository = {
+        findAll: jest.fn().mockResolvedValue([]),
+      };
+      service.breakdownBackgroundTracker = {
+        addTask: jest.fn(),
+      };
+      service.textBasedAnswerBackgroundTracker = {
+        addTask: jest.fn(),
+      };
+      service.chartBackgroundTracker = {
+        addTask: jest.fn(),
+      };
+      service.chartAdjustmentBackgroundTracker = {
+        addTask: jest.fn(),
+      };
+
+      await service.initialize();
+
+      expect(
+        service.askingTaskRepository.findUnfinishedTasks,
+      ).toHaveBeenCalled();
+      expect(
+        service.askingTaskTracker.rehydrateTrackedTask,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 88,
+          queryId: 'ask-88',
+          threadResponseId: 53,
+        }),
+      );
     });
   });
 

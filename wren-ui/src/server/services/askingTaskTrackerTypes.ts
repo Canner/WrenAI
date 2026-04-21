@@ -1,5 +1,6 @@
 import { PersistedRuntimeIdentity } from '@server/context/runtimeScope';
 import { AskInput, AskResult } from '@server/models/adaptor';
+import { AskingTask } from '@server/repositories';
 
 export interface TrackedTask {
   queryId: string;
@@ -40,4 +41,5 @@ export interface IAskingTaskTracker {
     threadId: number,
     threadResponseId: number,
   ): Promise<void>;
+  rehydrateTrackedTask?(taskRecord: AskingTask): void;
 }

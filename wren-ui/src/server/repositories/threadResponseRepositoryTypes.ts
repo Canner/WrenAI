@@ -27,6 +27,18 @@ export interface ThreadResponseChartDetail {
   queryId?: string;
   status: string;
   error?: object;
+  diagnostics?: {
+    previewColumnCount?: number;
+    previewRowCount?: number;
+    previewColumns?: Array<{
+      name: string;
+      type?: string | null;
+    }>;
+    lastErrorCode?: string | null;
+    lastErrorMessage?: string | null;
+    submittedAt?: string | null;
+    finalizedAt?: string | null;
+  };
   description?: string;
   chartType?: string;
   chartSchema?: Record<string, any>;

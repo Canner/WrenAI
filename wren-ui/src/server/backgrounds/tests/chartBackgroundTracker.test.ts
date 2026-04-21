@@ -68,6 +68,10 @@ describe('ChartBackgroundTracker', () => {
       expect.objectContaining({ projectId: 42 }),
       expect.objectContaining({
         chartDetail: expect.objectContaining({
+          diagnostics: expect.objectContaining({
+            lastErrorCode: null,
+            lastErrorMessage: 'boom',
+          }),
           retryCount: 1,
           nextRetryAt: expect.any(String),
           lastError: 'boom',
@@ -168,6 +172,10 @@ describe('ChartBackgroundTracker', () => {
       chartDetail: {
         queryId: 'chart-8',
         status: ChartStatus.FETCHING,
+        diagnostics: {
+          previewColumnCount: 2,
+          previewRowCount: 30,
+        },
       },
     } as any);
 
@@ -182,6 +190,13 @@ describe('ChartBackgroundTracker', () => {
       expect.objectContaining({ projectId: 42 }),
       expect.objectContaining({
         chartDetail: expect.objectContaining({
+          diagnostics: expect.objectContaining({
+            lastErrorCode: null,
+            lastErrorMessage: null,
+            finalizedAt: expect.any(String),
+            previewColumnCount: 2,
+            previewRowCount: 30,
+          }),
           chartType: 'LINE',
           rawChartSchema: expect.objectContaining({ mark: 'line' }),
           chartSchema: expect.objectContaining({

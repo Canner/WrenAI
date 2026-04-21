@@ -47,6 +47,18 @@ const toErrorMessage = (error: unknown) => {
   return String(error);
 };
 
+const toErrorCode = (error: unknown) => {
+  if (
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    typeof (error as { code?: unknown }).code === 'string'
+  ) {
+    return (error as { code: string }).code;
+  }
+  return null;
+};
+
 const computeBackoffMs = (retryCount: number) => {
   return Math.min(
     BASE_BACKOFF_MS * 2 ** Math.max(retryCount - 1, 0),
@@ -172,6 +184,14 @@ abstract class BaseChartBackgroundTracker {
             } = canonicalizeChartSchema(result?.response?.chartSchema);
             const updatedChartDetail = {
               ...trackedChartDetail,
+              diagnostics: {
+                ...(trackedChartDetail.diagnostics || {}),
+                lastErrorCode: result.error?.code || null,
+                lastErrorMessage: result.error?.message || null,
+                finalizedAt: isFinalized(result.status)
+                  ? new Date().toISOString()
+                  : trackedChartDetail.diagnostics?.finalizedAt || null,
+              },
               queryId: trackedChartDetail.queryId,
               status: result.status,
               error: result.error || undefined,
@@ -217,6 +237,17 @@ abstract class BaseChartBackgroundTracker {
             this.tasks[threadResponse.id] = updatedThreadResponse;
 
             if (isFinalized(result.status)) {
+              if (result.status === ChartStatus.FAILED) {
+                logger.warn(
+                  `Chart job ${threadResponse.id} failed (queryId=${trackedChartDetail.queryId}): code=${
+                    result.error?.code || 'UNKNOWN'
+                  } message=${result.error?.message || 'unknown'} columns=${
+                    trackedChartDetail.diagnostics?.previewColumnCount ?? 'n/a'
+                  } rows=${
+                    trackedChartDetail.diagnostics?.previewRowCount ?? 'n/a'
+                  }`,
+                );
+              }
               const eventProperties = {
                 question: trackedResponse.question,
                 error: result.error,
@@ -276,6 +307,14 @@ abstract class BaseChartBackgroundTracker {
       : new Date(Date.now() + computeBackoffMs(retryCount)).toISOString();
     const failedChartDetail = {
       ...chartDetail,
+      diagnostics: {
+        ...(chartDetail.diagnostics || {}),
+        lastErrorCode: toErrorCode(error),
+        lastErrorMessage: toErrorMessage(error),
+        finalizedAt: shouldFinalize
+          ? new Date().toISOString()
+          : chartDetail.diagnostics?.finalizedAt || null,
+      },
       status: shouldFinalize ? ChartStatus.FAILED : chartDetail.status,
       error: shouldFinalize ? toErrorPayload(error) : chartDetail.error,
       lastError: toErrorMessage(error),
@@ -297,6 +336,13 @@ abstract class BaseChartBackgroundTracker {
       );
 
     if (!updatedThreadResponse || shouldFinalize) {
+      if (shouldFinalize) {
+        logger.error(
+          `Chart job ${threadResponse.id} finalized after retries (queryId=${
+            chartDetail.queryId
+          }): ${toErrorMessage(error)}`,
+        );
+      }
       delete this.tasks[threadResponse.id];
       return;
     }

@@ -2,6 +2,8 @@ import { resolveBreakdownBootstrapWorkspaceId } from './askingServiceRuntimeSupp
 import { logger } from './askingServiceShared';
 
 interface AskingInitializationServiceLike {
+  askingTaskRepository: Pick<any, 'findUnfinishedTasks'>;
+  askingTaskTracker?: Pick<any, 'rehydrateTrackedTask'>;
   threadResponseRepository: Pick<
     any,
     | 'findUnfinishedBreakdownResponsesByWorkspaceId'
@@ -45,6 +47,15 @@ export const initializeAskingService = async (
   );
   for (const threadResponse of unfinishedAnswerResponses) {
     service.textBasedAnswerBackgroundTracker?.addTask(threadResponse);
+  }
+
+  const unfinishedAskingTasks =
+    (await service.askingTaskRepository.findUnfinishedTasks?.()) || [];
+  logger.info(
+    `Initialization: rehydrating unfinished asking tasks (total: ${unfinishedAskingTasks.length}) into tracker`,
+  );
+  for (const task of unfinishedAskingTasks) {
+    service.askingTaskTracker?.rehydrateTrackedTask?.(task);
   }
 
   const unfinishedChartResponses =

@@ -287,7 +287,7 @@ export class QueryService implements IQueryService {
     return (
       /HikariDataSource .* has been closed/i.test(message) ||
       (/Table with name .* does not exist/i.test(message) &&
-        /sqlite_temp_master|Catalog Error/i.test(message)) ||
+        /Catalog Error/i.test(message)) ||
       /source node name not found/i.test(message)
     );
   }

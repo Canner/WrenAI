@@ -228,6 +228,18 @@ export type ThreadResponseChartDetail = {
   chartSchema?: any;
   chartType?: ChartType | null;
   description?: string | null;
+  diagnostics?: {
+    previewColumnCount?: number | null;
+    previewRowCount?: number | null;
+    previewColumns?: Array<{
+      name: string;
+      type?: string | null;
+    }> | null;
+    lastErrorCode?: string | null;
+    lastErrorMessage?: string | null;
+    submittedAt?: string | null;
+    finalizedAt?: string | null;
+  } | null;
   error?: Error | null;
   queryId?: string | null;
   rawChartSchema?: any;

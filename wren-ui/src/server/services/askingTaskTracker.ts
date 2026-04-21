@@ -215,6 +215,45 @@ export class AskingTaskTracker implements IAskingTaskTracker {
     }
   }
 
+  public rehydrateTrackedTask(taskRecord: AskingTask): void {
+    if (!taskRecord.queryId || this.trackedTasks.has(taskRecord.queryId)) {
+      return;
+    }
+
+    const detail = (taskRecord.detail || {
+      type: null,
+      status: AskResultStatus.UNDERSTANDING,
+      response: [],
+      error: null,
+    }) as AskResult;
+
+    const trackedTask: TrackedTask = {
+      queryId: taskRecord.queryId,
+      taskId: taskRecord.id,
+      lastPolled: Date.now(),
+      question: taskRecord.question || '',
+      result: detail,
+      isFinalized: this.isTaskFinalized(detail.status),
+      threadResponseId: taskRecord.threadResponseId || undefined,
+      runtimeIdentity: {
+        projectId: taskRecord.projectId ?? null,
+        workspaceId: taskRecord.workspaceId ?? null,
+        knowledgeBaseId: taskRecord.knowledgeBaseId ?? null,
+        kbSnapshotId: taskRecord.kbSnapshotId ?? null,
+        deployHash: taskRecord.deployHash ?? null,
+        actorUserId: taskRecord.actorUserId ?? null,
+      },
+    };
+
+    if (trackedTask.isFinalized) {
+      return;
+    }
+
+    this.trackedTasks.set(taskRecord.queryId, trackedTask);
+    this.trackedTasksById.set(taskRecord.id, trackedTask);
+    logger.info(`Rehydrated asking task ${taskRecord.queryId}`);
+  }
+
   private startPolling(): void {
     this.pollingIntervalId = setInterval(() => {
       this.pollTasks();
@@ -282,35 +321,35 @@ export class AskingTaskTracker implements IAskingTaskTracker {
               result.type === AskResultType.MISLEADING_QUERY
             ) {
               task.isFinalized = true;
+              await this.updateTaskInDatabase(
+                { queryId },
+                task.rerunFromCancelled
+                  ? {
+                      ...task,
+                      result: {
+                        ...task.result,
+                        status: AskResultStatus.FAILED,
+                        error: {
+                          code:
+                            result.type === AskResultType.GENERAL
+                              ? Errors.GeneralErrorCodes.IDENTIED_AS_GENERAL
+                              : Errors.GeneralErrorCodes
+                                  .IDENTIED_AS_MISLEADING_QUERY,
+                          message:
+                            result.type === AskResultType.GENERAL
+                              ? (Errors.errorMessages[
+                                  Errors.GeneralErrorCodes.IDENTIED_AS_GENERAL
+                                ] ?? 'Unknown error')
+                              : (Errors.errorMessages[
+                                  Errors.GeneralErrorCodes
+                                    .IDENTIED_AS_MISLEADING_QUERY
+                                ] ?? 'Unknown error'),
+                        },
+                      },
+                    }
+                  : task,
+              );
               // if it's rerun from cancelled, we need to update the task result to failed in db
-              if (task.rerunFromCancelled) {
-                const errorCode =
-                  result.type === AskResultType.GENERAL
-                    ? Errors.GeneralErrorCodes.IDENTIED_AS_GENERAL
-                    : Errors.GeneralErrorCodes.IDENTIED_AS_MISLEADING_QUERY;
-                const errorMessage =
-                  Errors.errorMessages[errorCode] ?? 'Unknown error';
-                const shortMessage =
-                  Errors.shortMessages[errorCode] ?? 'Unknown error';
-                const error = {
-                  code: errorCode,
-                  message: errorMessage,
-                  shortMessage,
-                };
-                await this.updateTaskInDatabase(
-                  { queryId },
-                  {
-                    ...task,
-                    // update the status to failed
-                    // and the error message should be "IDENTIED_AS_GENERAL" or "IDENTIED_AS_MISLEADING_QUERY"
-                    result: {
-                      ...task.result,
-                      status: AskResultStatus.FAILED,
-                      error,
-                    },
-                  },
-                );
-              }
               this.runningJobs.delete(queryId);
               return;
             }

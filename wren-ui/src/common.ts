@@ -87,6 +87,12 @@ import { SqlPairService } from './server/services/sqlPairService';
 import { createBackgroundTrackers } from './commonBackgroundTrackers';
 import { getVersionedGlobalSingleton } from './commonComponentSingleton';
 export const serverConfig = getConfig();
+
+const reportInitFailure = (label: string, error: unknown) => {
+  // eslint-disable-next-line no-console
+  console.error(`[startup] ${label} initialization failed`, error);
+};
+
 export const initComponents = () => {
   const telemetry = new PostHogTelemetry();
   const knex = bootstrapKnex({
@@ -403,6 +409,19 @@ export const initComponents = () => {
     scheduleJobRunRepository,
     auditEventRepository,
   });
+  void askingService
+    .initialize()
+    .catch((error) => reportInitFailure('askingService', error));
+  void projectRecommendQuestionBackgroundTracker
+    .initialize()
+    .catch((error) =>
+      reportInitFailure('projectRecommendQuestionBackgroundTracker', error),
+    );
+  void threadRecommendQuestionBackgroundTracker
+    .initialize()
+    .catch((error) =>
+      reportInitFailure('threadRecommendQuestionBackgroundTracker', error),
+    );
   return {
     knex,
     telemetry,
@@ -487,7 +506,7 @@ export const initComponents = () => {
   };
 };
 type Components = ReturnType<typeof initComponents>;
-const COMPONENTS_RUNTIME_VERSION = 3;
+const COMPONENTS_RUNTIME_VERSION = 5;
 export const components: Components = getVersionedGlobalSingleton({
   factory: initComponents,
   singletonKey: '__wrenComponents__',

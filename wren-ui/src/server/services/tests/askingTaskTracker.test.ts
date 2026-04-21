@@ -226,4 +226,45 @@ describe('AskingTaskTracker', () => {
       sql: 'SELECT 1',
     });
   });
+
+  it('persists GENERAL asking results to the database instead of leaving them in understanding state', async () => {
+    const tracker = createTracker();
+    const wrenAIAdaptor = (tracker as any).wrenAIAdaptor;
+    const askingTaskRepository = (tracker as any).askingTaskRepository;
+
+    wrenAIAdaptor.getAskResult.mockResolvedValue({
+      status: AskResultStatus.FINISHED,
+      type: 'GENERAL',
+      response: [],
+      error: null,
+    });
+    askingTaskRepository.findByQueryId.mockResolvedValue({ id: 91 });
+
+    (tracker as any).trackedTasks.set('query-general', {
+      queryId: 'query-general',
+      taskId: 91,
+      lastPolled: Date.now(),
+      question: '这个知识库能回答什么？',
+      result: {
+        status: AskResultStatus.UNDERSTANDING,
+        response: [],
+        error: null,
+      },
+      isFinalized: false,
+    });
+
+    await (tracker as any).pollTasks();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(askingTaskRepository.updateOne).toHaveBeenCalledWith(
+      91,
+      expect.objectContaining({
+        detail: expect.objectContaining({
+          status: AskResultStatus.FINISHED,
+          type: 'GENERAL',
+        }),
+      }),
+    );
+  });
 });
