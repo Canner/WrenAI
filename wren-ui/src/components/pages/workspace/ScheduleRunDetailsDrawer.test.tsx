@@ -4,10 +4,34 @@ import ScheduleRunDetailsDrawer from './ScheduleRunDetailsDrawer';
 
 jest.mock('antd', () => {
   const React = jest.requireActual('react');
+  const Descriptions = ({ items, children }: any) =>
+    React.createElement(
+      'div',
+      { 'data-kind': 'descriptions' },
+      items
+        ? items.map((item: any) =>
+            React.createElement(
+              'div',
+              { key: item.key ?? item.label },
+              item.label ? React.createElement('span', null, item.label) : null,
+              item.children,
+            ),
+          )
+        : children,
+    );
+  (Descriptions as any).Item = ({ label, children }: any) =>
+    React.createElement(
+      'div',
+      { 'data-kind': 'description-item' },
+      label ? React.createElement('span', null, label) : null,
+      children,
+    );
 
   return {
     Alert: ({ message, description }: any) =>
       React.createElement('div', null, message, description),
+    Descriptions,
+    Divider: ({ children }: any) => React.createElement('div', null, children),
     Drawer: ({ children, title }: any) =>
       React.createElement(
         'div',
@@ -15,8 +39,7 @@ jest.mock('antd', () => {
         title ? React.createElement('h3', null, title) : null,
         children,
       ),
-    Row: ({ children }: any) => React.createElement('div', null, children),
-    Col: ({ children }: any) => React.createElement('div', null, children),
+    Space: ({ children }: any) => React.createElement('div', null, children),
     Tag: ({ children }: any) =>
       React.createElement('span', { 'data-kind': 'tag' }, children),
     Typography: {

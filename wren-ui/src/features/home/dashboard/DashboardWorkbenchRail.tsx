@@ -186,6 +186,7 @@ export const DashboardWorkbenchRail = (props: {
                         items: menuItems,
                         onClick: ({ domEvent }) => domEvent.stopPropagation(),
                       }}
+                      placement="bottomRight"
                       trigger={['click']}
                     >
                       <DashboardRailItemMenuButton

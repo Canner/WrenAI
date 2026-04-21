@@ -78,6 +78,111 @@ export default function DetailsDrawer(props: Props) {
       </Tag>
     );
   };
+  const requestSummaryItems = [
+    {
+      key: 'apiType',
+      label: 'API 类型',
+      children: <Tag className="gray-8">{formatApiTypeLabel(apiType)}</Tag>,
+    },
+    {
+      key: 'threadId',
+      label: '线程 ID',
+      children: renderTextValue(threadId),
+    },
+    {
+      key: 'createdAt',
+      label: '创建时间',
+      children: renderTextValue(createdAt ? getAbsoluteTime(createdAt) : null),
+    },
+    {
+      key: 'durationMs',
+      label: '耗时',
+      children: renderTextValue(
+        durationMs === null || durationMs === undefined
+          ? null
+          : `${durationMs} ms`,
+      ),
+    },
+    {
+      key: 'statusCode',
+      label: '状态码',
+      children: statusCode ? getStatusTag(statusCode) : renderTextValue(null),
+    },
+  ];
+  const askDiagnosticsItems = askDiagnostics
+    ? [
+        {
+          key: 'traceId',
+          label: 'Trace ID',
+          children: renderCopyableValue(askDiagnostics.traceId),
+        },
+        {
+          key: 'askPath',
+          label: '问答路径',
+          children: askDiagnostics.askPath ? (
+            <Tag className="gray-8">{askDiagnostics.askPath}</Tag>
+          ) : (
+            <Typography.Text type="secondary">-</Typography.Text>
+          ),
+        },
+      ]
+    : [];
+  const shadowCompareItems = shadowCompare
+    ? [
+        {
+          key: 'primaryAskPath',
+          label: '主链路路径',
+          children: renderTextValue(shadowCompare.primaryAskPath),
+        },
+        {
+          key: 'shadowAskPath',
+          label: '影子链路路径',
+          children: renderTextValue(shadowCompare.shadowAskPath),
+        },
+        {
+          key: 'primaryType',
+          label: '主链路类型',
+          children: renderTextValue(shadowCompare.primaryType),
+        },
+        {
+          key: 'shadowType',
+          label: '影子链路类型',
+          children: renderTextValue(shadowCompare.shadowType),
+        },
+        {
+          key: 'primaryResultCount',
+          label: '主链路结果数',
+          children: renderTextValue(shadowCompare.primaryResultCount),
+        },
+        {
+          key: 'shadowResultCount',
+          label: '影子链路结果数',
+          children: renderTextValue(shadowCompare.shadowResultCount),
+        },
+        {
+          key: 'primaryErrorType',
+          label: '主链路错误类型',
+          children: renderTextValue(shadowCompare.primaryErrorType),
+        },
+        {
+          key: 'shadowErrorType',
+          label: '影子链路错误类型',
+          children: renderTextValue(shadowCompare.shadowErrorType),
+        },
+        {
+          key: 'reason',
+          label: '原因',
+          span: 2,
+          children: renderTextValue(shadowCompare.reason),
+        },
+        {
+          key: 'shadowError',
+          label: '影子链路错误详情',
+          span: 2,
+          children: renderTextValue(shadowCompare.shadowError),
+        },
+      ]
+    : [];
 
   return (
     <Drawer
@@ -94,28 +199,11 @@ export default function DetailsDrawer(props: Props) {
         bordered
         column={2}
         size="small"
-        labelStyle={{ width: 108, color: 'var(--nova-text-secondary)' }}
-      >
-        <Descriptions.Item label="API 类型">
-          <Tag className="gray-8">{formatApiTypeLabel(apiType)}</Tag>
-        </Descriptions.Item>
-        <Descriptions.Item label="线程 ID">
-          {renderTextValue(threadId)}
-        </Descriptions.Item>
-        <Descriptions.Item label="创建时间">
-          {renderTextValue(createdAt ? getAbsoluteTime(createdAt) : null)}
-        </Descriptions.Item>
-        <Descriptions.Item label="耗时">
-          {renderTextValue(
-            durationMs === null || durationMs === undefined
-              ? null
-              : `${durationMs} ms`,
-          )}
-        </Descriptions.Item>
-        <Descriptions.Item label="状态码">
-          {statusCode ? getStatusTag(statusCode) : renderTextValue(null)}
-        </Descriptions.Item>
-      </Descriptions>
+        items={requestSummaryItems}
+        styles={{
+          label: { width: 108, color: 'var(--nova-text-secondary)' },
+        }}
+      />
 
       <Divider titlePlacement="start" plain>
         请求头
@@ -146,19 +234,11 @@ export default function DetailsDrawer(props: Props) {
             bordered
             column={2}
             size="small"
-            labelStyle={{ width: 108, color: 'var(--nova-text-secondary)' }}
-          >
-            <Descriptions.Item label="Trace ID">
-              {renderCopyableValue(askDiagnostics.traceId)}
-            </Descriptions.Item>
-            <Descriptions.Item label="问答路径">
-              {askDiagnostics.askPath ? (
-                <Tag className="gray-8">{askDiagnostics.askPath}</Tag>
-              ) : (
-                <Typography.Text type="secondary">-</Typography.Text>
-              )}
-            </Descriptions.Item>
-          </Descriptions>
+            items={askDiagnosticsItems}
+            styles={{
+              label: { width: 108, color: 'var(--nova-text-secondary)' },
+            }}
+          />
 
           {shadowCompare ? (
             <>
@@ -182,39 +262,11 @@ export default function DetailsDrawer(props: Props) {
                 bordered
                 column={2}
                 size="small"
-                labelStyle={{ width: 132, color: 'var(--nova-text-secondary)' }}
-              >
-                <Descriptions.Item label="主链路路径">
-                  {renderTextValue(shadowCompare.primaryAskPath)}
-                </Descriptions.Item>
-                <Descriptions.Item label="影子链路路径">
-                  {renderTextValue(shadowCompare.shadowAskPath)}
-                </Descriptions.Item>
-                <Descriptions.Item label="主链路类型">
-                  {renderTextValue(shadowCompare.primaryType)}
-                </Descriptions.Item>
-                <Descriptions.Item label="影子链路类型">
-                  {renderTextValue(shadowCompare.shadowType)}
-                </Descriptions.Item>
-                <Descriptions.Item label="主链路结果数">
-                  {renderTextValue(shadowCompare.primaryResultCount)}
-                </Descriptions.Item>
-                <Descriptions.Item label="影子链路结果数">
-                  {renderTextValue(shadowCompare.shadowResultCount)}
-                </Descriptions.Item>
-                <Descriptions.Item label="主链路错误类型">
-                  {renderTextValue(shadowCompare.primaryErrorType)}
-                </Descriptions.Item>
-                <Descriptions.Item label="影子链路错误类型">
-                  {renderTextValue(shadowCompare.shadowErrorType)}
-                </Descriptions.Item>
-                <Descriptions.Item label="原因" span={2}>
-                  {renderTextValue(shadowCompare.reason)}
-                </Descriptions.Item>
-                <Descriptions.Item label="影子链路错误详情" span={2}>
-                  {renderTextValue(shadowCompare.shadowError)}
-                </Descriptions.Item>
-              </Descriptions>
+                items={shadowCompareItems}
+                styles={{
+                  label: { width: 132, color: 'var(--nova-text-secondary)' },
+                }}
+              />
             </>
           ) : null}
         </>
