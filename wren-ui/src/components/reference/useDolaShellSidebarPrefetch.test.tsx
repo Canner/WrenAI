@@ -129,4 +129,105 @@ describe('useDolaShellSidebarPrefetch', () => {
       }),
     );
   });
+
+  it('prefers the full runtime selector when prefetching dashboard data', () => {
+    global.window = {
+      requestIdleCallback: (callback: IdleRequestCallback) => {
+        callback({
+          didTimeout: false,
+          timeRemaining: () => 50,
+        } as IdleDeadline);
+        return 1;
+      },
+      cancelIdleCallback: jest.fn(),
+    } as any;
+    mockResolveBackgroundNavPrefetchKeys.mockReturnValue(['dashboard']);
+
+    const Harness = () => {
+      useDolaShellSidebarPrefetch({
+        navItems: [],
+        uniqueHistory: [],
+        historyItemById: new Map(),
+        scopeKey: 'workspace-1',
+        hrefWorkspace: (path) => path,
+        hrefRuntime: (path) => path,
+        router: {
+          pathname: '/home',
+        } as any,
+        hasRuntimeScope: true,
+        runtimeSelector: {
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snap-1',
+          deployHash: 'deploy-1',
+        },
+        workspaceScopedSelector: { workspaceId: 'workspace-1' },
+      });
+      return null;
+    };
+
+    const useEffectSpy = jest
+      .spyOn(React, 'useEffect')
+      .mockImplementation(((effect: () => void) => effect()) as any);
+
+    renderToStaticMarkup(<Harness />);
+    useEffectSpy.mockRestore();
+
+    expect(mockPrefetchDashboardOverview).toHaveBeenCalledWith({
+      selector: {
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snap-1',
+        deployHash: 'deploy-1',
+      },
+    });
+  });
+
+  it('prefetches knowledge data without warming the diagram endpoint', () => {
+    global.window = {
+      requestIdleCallback: (callback: IdleRequestCallback) => {
+        callback({
+          didTimeout: false,
+          timeRemaining: () => 50,
+        } as IdleDeadline);
+        return 1;
+      },
+      cancelIdleCallback: jest.fn(),
+    } as any;
+    mockResolveBackgroundNavPrefetchKeys.mockReturnValue(['knowledge']);
+
+    const Harness = () => {
+      useDolaShellSidebarPrefetch({
+        navItems: [],
+        uniqueHistory: [],
+        historyItemById: new Map(),
+        scopeKey: 'workspace-1',
+        hrefWorkspace: (path) => path,
+        hrefRuntime: (path) => path,
+        router: {
+          pathname: '/home',
+        } as any,
+        hasRuntimeScope: true,
+        runtimeSelector: {
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snap-1',
+          deployHash: 'deploy-1',
+        },
+        workspaceScopedSelector: { workspaceId: 'workspace-1' },
+      });
+      return null;
+    };
+
+    const useEffectSpy = jest
+      .spyOn(React, 'useEffect')
+      .mockImplementation(((effect: () => void) => effect()) as any);
+
+    renderToStaticMarkup(<Harness />);
+    useEffectSpy.mockRestore();
+
+    expect(mockPrefetchKnowledgeOverview).toHaveBeenCalledWith({
+      knowledgeBasesUrl: '/api/v1/knowledge/bases?workspaceId=workspace-1',
+    });
+  });
 });

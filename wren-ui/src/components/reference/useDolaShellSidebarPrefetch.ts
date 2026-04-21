@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { NextRouter } from 'next/router';
-import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
-import { buildRuntimeScopeUrl } from '@/runtime/client/runtimeScope';
+import {
+  buildRuntimeScopeUrl,
+  hasExecutableRuntimeScopeSelector,
+  type ClientRuntimeScopeSelector,
+} from '@/runtime/client/runtimeScope';
 import {
   prefetchDashboardOverview,
   prefetchKnowledgeOverview,
@@ -85,7 +88,9 @@ export default function useDolaShellSidebarPrefetch({
 
       if (itemKey === 'dashboard') {
         void prefetchDashboardOverview({
-          selector: workspaceScopedSelector,
+          selector: hasExecutableRuntimeScopeSelector(runtimeSelector)
+            ? runtimeSelector
+            : workspaceScopedSelector,
         });
         return;
       }
@@ -96,11 +101,6 @@ export default function useDolaShellSidebarPrefetch({
             '/api/v1/knowledge/bases',
             {},
             workspaceScopedSelector,
-          ),
-          diagramUrl: buildRuntimeScopeUrl(
-            '/api/v1/knowledge/diagram',
-            {},
-            runtimeSelector,
           ),
         });
       }

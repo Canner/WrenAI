@@ -1,10 +1,12 @@
-import { buildRuntimeScopeUrl } from '@/runtime/client/runtimeScope';
-import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
+import {
+  buildRuntimeScopeUrl,
+  hasExecutableRuntimeScopeSelector,
+  type ClientRuntimeScopeSelector,
+} from '@/runtime/client/runtimeScope';
 import {
   loadDashboardDetailPayload,
   loadDashboardListPayload,
 } from '@/utils/dashboardRest';
-import { loadKnowledgeDiagramPayload } from '@/utils/knowledgeDiagramRest';
 
 type WorkspaceFetchErrorPayload = {
   error?: string;
@@ -334,12 +336,10 @@ export const loadKnowledgeConnectors = async <T = unknown>(
 export const prefetchKnowledgeOverview = async ({
   knowledgeBasesUrl,
   connectorsUrl,
-  diagramUrl,
   fetcher = fetch,
 }: {
   knowledgeBasesUrl: string;
   connectorsUrl?: string;
-  diagramUrl?: string;
   fetcher?: typeof fetch;
 }) => {
   try {
@@ -347,13 +347,6 @@ export const prefetchKnowledgeOverview = async ({
       loadKnowledgeBaseList(knowledgeBasesUrl, { fetcher }),
       connectorsUrl
         ? loadKnowledgeConnectors(connectorsUrl, { fetcher })
-        : Promise.resolve(),
-      diagramUrl
-        ? loadKnowledgeDiagramPayload({
-            requestUrl: diagramUrl,
-            fetcher,
-            useCache: true,
-          })
         : Promise.resolve(),
     ]);
   } catch {
@@ -376,6 +369,11 @@ export const prefetchDashboardOverview = async ({
   selector?: ClientRuntimeScopeSelector;
   fetcher?: typeof fetch;
 } = {}) => {
+  if (selector && !hasExecutableRuntimeScopeSelector(selector)) {
+    prefetchedFirstDashboardId = null;
+    return;
+  }
+
   try {
     const dashboards = await loadDashboardListPayload({
       selector,

@@ -75,19 +75,31 @@ describe('runtimePagePrefetch', () => {
     }));
 
     await prefetchDashboardOverview({
-      selector: { workspaceId: 'ws-1' },
+      selector: {
+        workspaceId: 'ws-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snap-1',
+        deployHash: 'deploy-1',
+      },
       fetcher,
     });
 
-    expect(fetcher).toHaveBeenCalledWith('/api/v1/dashboards?workspaceId=ws-1');
     expect(fetcher).toHaveBeenCalledWith(
-      '/api/v1/dashboards/7?workspaceId=ws-1',
+      '/api/v1/dashboards?workspaceId=ws-1&knowledgeBaseId=kb-1&kbSnapshotId=snap-1&deployHash=deploy-1',
+    );
+    expect(fetcher).toHaveBeenCalledWith(
+      '/api/v1/dashboards/7?workspaceId=ws-1&knowledgeBaseId=kb-1&kbSnapshotId=snap-1&deployHash=deploy-1',
     );
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(peekPrefetchedFirstDashboardId()).toBe(7);
     expect(
       peekDashboardDetailPayload({
-        selector: { workspaceId: 'ws-1' },
+        selector: {
+          workspaceId: 'ws-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snap-1',
+          deployHash: 'deploy-1',
+        },
         dashboardId: 7,
       }),
     ).toEqual({
@@ -96,6 +108,18 @@ describe('runtimePagePrefetch', () => {
       cacheEnabled: true,
       items: [],
     });
+  });
+
+  it('skips dashboard prefetch when only a workspace selector is available', async () => {
+    const fetcher = jest.fn();
+
+    await prefetchDashboardOverview({
+      selector: { workspaceId: 'ws-1' },
+      fetcher,
+    });
+
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(peekPrefetchedFirstDashboardId()).toBeNull();
   });
 
   it('prefetches thread detail into the runtime cache through REST', async () => {
@@ -231,7 +255,7 @@ describe('runtimePagePrefetch', () => {
     expect(peekKnowledgeBaseList(url)).toEqual(payload);
   });
 
-  it('prefetches knowledge list, connectors and diagram into caches', async () => {
+  it('prefetches knowledge list and connectors into caches', async () => {
     const fetcher = jest.fn().mockResolvedValue({
       ok: true,
       json: async () => [],
@@ -240,13 +264,11 @@ describe('runtimePagePrefetch', () => {
     await prefetchKnowledgeOverview({
       knowledgeBasesUrl: '/api/v1/knowledge/bases?workspaceId=ws-1',
       connectorsUrl: '/api/v1/connectors?workspaceId=ws-1&knowledgeBaseId=kb-1',
-      diagramUrl:
-        '/api/v1/knowledge/diagram?workspaceId=ws-1&knowledgeBaseId=kb-1&kbSnapshotId=snap-1',
       fetcher,
     });
 
-    expect(fetcher).toHaveBeenCalledTimes(3);
-    expect(fetcher).toHaveBeenCalledWith(
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).not.toHaveBeenCalledWith(
       '/api/v1/knowledge/diagram?workspaceId=ws-1&knowledgeBaseId=kb-1&kbSnapshotId=snap-1',
     );
   });

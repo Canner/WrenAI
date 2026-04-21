@@ -1,6 +1,14 @@
 import { useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { message } from 'antd';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from 'react';
+
+import { appMessage as message } from '@/utils/antdAppBridge';
 import useDeployStatusRest from '@/hooks/useDeployStatusRest';
 import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
@@ -20,6 +28,39 @@ import {
   normalizeRuntimeDiagram,
   readModelingWorkspaceQueryParams,
 } from './modelingWorkspaceUtils';
+
+export const runInitialModelingWorkspaceLoad = async ({
+  diagramRef,
+  refetchDiagram,
+}: {
+  diagramRef: RefObject<DiagramRefHandle | null>;
+  refetchDiagram: () => Promise<unknown>;
+}) => {
+  const nextDiagram = await refetchDiagram();
+  diagramRef.current?.fitView();
+  return nextDiagram;
+};
+
+export const runModelingWorkspaceRefresh = async ({
+  diagramRef,
+  fitView = false,
+  refetchDeployStatus,
+  refetchDiagram,
+}: {
+  diagramRef: RefObject<DiagramRefHandle | null>;
+  fitView?: boolean;
+  refetchDeployStatus: () => Promise<unknown>;
+  refetchDiagram: () => Promise<unknown>;
+}) => {
+  const [nextDiagram] = await Promise.all([
+    refetchDiagram(),
+    refetchDeployStatus(),
+  ]);
+  if (fitView) {
+    diagramRef.current?.fitView();
+  }
+  return nextDiagram;
+};
 
 export default function useModelingWorkspaceState() {
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
@@ -42,6 +83,7 @@ export default function useModelingWorkspaceState() {
     });
 
   const deployStatusQueryResult = useDeployStatusRest();
+  const { refetch: refetchDeployStatus } = deployStatusQueryResult;
   const [diagramPayload, setDiagramPayload] = useState<{
     diagram: RuntimeDiagram;
   } | null>(null);
@@ -75,17 +117,14 @@ export default function useModelingWorkspaceState() {
   }, [diagramRequestUrl]);
 
   const refreshModelingData = useCallback(
-    async ({ fitView = false }: { fitView?: boolean } = {}) => {
-      const [nextDiagram] = await Promise.all([
-        refetchDiagram(),
-        deployStatusQueryResult.refetch(),
-      ]);
-      if (fitView) {
-        diagramRef.current?.fitView();
-      }
-      return nextDiagram;
-    },
-    [deployStatusQueryResult, refetchDiagram],
+    async ({ fitView = false }: { fitView?: boolean } = {}) =>
+      runModelingWorkspaceRefresh({
+        diagramRef,
+        fitView,
+        refetchDeployStatus,
+        refetchDiagram,
+      }),
+    [diagramRef, refetchDeployStatus, refetchDiagram],
   );
 
   useEffect(() => {
@@ -95,7 +134,10 @@ export default function useModelingWorkspaceState() {
       return;
     }
 
-    void refreshModelingData({ fitView: true }).catch((error) => {
+    void runInitialModelingWorkspaceLoad({
+      diagramRef,
+      refetchDiagram,
+    }).catch((error) => {
       const errorMessage = resolveAbortSafeErrorMessage(
         error,
         '加载图谱失败，请稍后重试',
@@ -104,7 +146,7 @@ export default function useModelingWorkspaceState() {
         message.error(errorMessage);
       }
     });
-  }, [refreshModelingData, runtimeScopePage.hasRuntimeScope]);
+  }, [refetchDiagram, runtimeScopePage.hasRuntimeScope]);
 
   const diagramData = useMemo(
     () => normalizeRuntimeDiagram(diagramPayload?.diagram),
