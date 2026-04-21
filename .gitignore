@@ -64,6 +64,8 @@ wren-ui/e2e/e2e.config.json
 
 ## next.js
 wren-ui/.next
+wren-ui/.next-*
+wren-ui/.next-verify
 wren-ui/.next-e2e
 wren-ui/.next-e2e-dev
 wren-ui/out

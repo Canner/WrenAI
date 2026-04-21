@@ -1,4 +1,4 @@
-FROM node:18-bookworm-slim AS base
+FROM node:20-bookworm-slim AS base
 
 # Install required packages
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*

@@ -1,7 +1,12 @@
 {
   "compilerOptions": {
     "target": "es2015",
-    "lib": ["es2017", "dom", "dom.iterable", "esnext"],
+    "lib": [
+      "es2017",
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "skipDefaultLibCheck": true,
@@ -12,7 +17,7 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve",
+    "jsx": "react-jsx",
     "incremental": true,
     "forceConsistentCasingInFileNames": true,
     "allowSyntheticDefaultImports": true,
@@ -23,10 +28,25 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"],
-      "@server/*": ["./src/server/*"]
+      "@/*": [
+        "./src/*"
+      ],
+      "@server/*": [
+        "./src/server/*"
+      ]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "tmp", ".omc", "wren-ui", "output"]
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "tmp",
+    ".omc",
+    "wren-ui",
+    "output"
+  ]
 }

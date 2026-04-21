@@ -21,10 +21,7 @@ export default function useKnowledgeRuntimeDataSync({
   refetchDiagram: () => Promise<unknown>;
 }) {
   const syncKnowledgeRuntimeData = useCallback(
-    buildKnowledgeRuntimeSyncAction({
-      refetchRuntimeSelector,
-      refetchDiagram,
-    }),
+    () => Promise.allSettled([refetchRuntimeSelector(), refetchDiagram()]),
     [refetchDiagram, refetchRuntimeSelector],
   );
 

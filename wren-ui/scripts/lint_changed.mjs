@@ -110,6 +110,10 @@ function parseArgs(argv) {
 function run(command, args, cwd, options = {}) {
   const result = spawnSync(command, args, {
     cwd,
+    env: {
+      ...process.env,
+      ...(options.env || {}),
+    },
     encoding: 'utf8',
     stdio: options.captureOutput ? ['ignore', 'pipe', 'pipe'] : 'inherit',
   });

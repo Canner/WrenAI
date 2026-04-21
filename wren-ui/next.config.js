@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-var-requires */
 const path = require('path');
 const withLess = require('next-with-less');
 const withBundleAnalyzer = require('@next/bundle-analyzer')({

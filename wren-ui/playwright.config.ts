@@ -19,7 +19,7 @@ const skipWebServer = process.env.PW_SKIP_WEBSERVER === '1';
 const uiServerCommand =
   uiServerMode === 'standalone'
     ? `rm -rf ${E2E_DIST_DIR} && NEXT_DIST_DIR=${E2E_DIST_DIR} yarn build && NEXT_DIST_DIR=${E2E_DIST_DIR} node scripts/prepare_playwright_standalone.mjs && NEXT_DIST_DIR=${E2E_DIST_DIR} PORT=${E2E_UI_PORT} HOSTNAME=127.0.0.1 NODE_ENV=test PG_URL=${E2E_PG_URL} WREN_AI_ENDPOINT=${E2E_AI_ENDPOINT} node ${E2E_DIST_DIR}/standalone/server.js`
-    : `rm -rf ${E2E_DIST_DIR} && NEXT_DIST_DIR=${E2E_DIST_DIR} PORT=${E2E_UI_PORT} HOSTNAME=127.0.0.1 NODE_ENV=test PG_URL=${E2E_PG_URL} WREN_AI_ENDPOINT=${E2E_AI_ENDPOINT} TZ=UTC ./node_modules/.bin/next dev --hostname 127.0.0.1 --port ${E2E_UI_PORT}`;
+    : `rm -rf ${E2E_DIST_DIR} && NEXT_DIST_DIR=${E2E_DIST_DIR} PORT=${E2E_UI_PORT} HOSTNAME=127.0.0.1 NODE_ENV=test PG_URL=${E2E_PG_URL} WREN_AI_ENDPOINT=${E2E_AI_ENDPOINT} TZ=UTC ./node_modules/.bin/next dev --webpack --hostname 127.0.0.1 --port ${E2E_UI_PORT}`;
 
 export default defineConfig({
   // Look for test files in the "tests" directory, relative to this configuration file.
