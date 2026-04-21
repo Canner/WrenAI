@@ -50,7 +50,7 @@ export interface IMDLService {
 
 export class MDLService implements IMDLService {
   private projectRepository: IProjectRepository;
-  private knowledgeBaseRepository: IKnowledgeBaseRepository;
+  private knowledgeBaseRepository?: IKnowledgeBaseRepository;
   private deployLogRepository: IDeployLogRepository;
   private modelRepository: IModelRepository;
   private modelColumnRepository: IModelColumnRepository;
@@ -69,7 +69,7 @@ export class MDLService implements IMDLService {
     viewRepository,
   }: {
     projectRepository: IProjectRepository;
-    knowledgeBaseRepository: IKnowledgeBaseRepository;
+    knowledgeBaseRepository?: IKnowledgeBaseRepository;
     deployLogRepository: IDeployLogRepository;
     modelRepository: IModelRepository;
     modelColumnRepository: IModelColumnRepository;
@@ -295,7 +295,7 @@ export class MDLService implements IMDLService {
       }
 
       if (runtimeIdentity.knowledgeBaseId) {
-        const knowledgeBase = await this.knowledgeBaseRepository.findOneBy({
+        const knowledgeBase = await this.knowledgeBaseRepository?.findOneBy({
           id: runtimeIdentity.knowledgeBaseId,
         });
         if (knowledgeBase?.runtimeProjectId) {

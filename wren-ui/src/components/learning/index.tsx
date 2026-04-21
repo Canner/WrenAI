@@ -122,7 +122,7 @@ interface LearningConfig {
 }
 
 const getData = (
-  $guide: RefObject<ComponentRef<typeof LearningGuide>>,
+  $guide: RefObject<ComponentRef<typeof LearningGuide> | null>,
   pathname: string,
   isModelingSurface: boolean,
   saveRecord: (id: LEARNING) => Promise<void>,

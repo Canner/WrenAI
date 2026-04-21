@@ -10,7 +10,10 @@ import {
 } from '@server/repositories';
 import {
   AuthorizationActor,
+  isAuthorizationBindingOnlyEnabled,
+  legacyRolePolicyMap,
   syncWorkspaceScopedRoleBinding,
+  toLegacyWorkspaceRoleKey,
   toLegacyWorkspaceRoleKeys,
 } from '@server/authz';
 
@@ -347,21 +350,47 @@ export class AutomationService implements IAutomationService {
           .filter(Boolean),
       ),
     );
-    const legacyRoleKeys = toLegacyWorkspaceRoleKeys(boundRoleKeys);
+    const structuredLegacyRoleKeys = toLegacyWorkspaceRoleKeys(boundRoleKeys);
+    const declaredLegacyRoleKey = toLegacyWorkspaceRoleKey(
+      serviceAccount.roleKey,
+    );
+    const fallbackLegacyRoleKeys = declaredLegacyRoleKey
+      ? [declaredLegacyRoleKey]
+      : [];
     const hasStructuredBindings = bindings.length > 0 || permissions.length > 0;
     const grantedActions = Array.from(new Set(permissions));
+    const legacyGrantedActions = Array.from(
+      new Set(
+        fallbackLegacyRoleKeys.flatMap(
+          (roleKey) => legacyRolePolicyMap[roleKey] || [],
+        ),
+      ),
+    );
+    const useBindingOnlyFallback = isAuthorizationBindingOnlyEnabled();
+    const workspaceRoleKeys = hasStructuredBindings
+      ? Array.from(
+          new Set([...structuredLegacyRoleKeys, ...fallbackLegacyRoleKeys]),
+        )
+      : fallbackLegacyRoleKeys;
 
     const authorizationActor: AuthorizationActor = {
       principalType: 'service_account',
       principalId: serviceAccount.id,
       workspaceId: serviceAccount.workspaceId,
       workspaceMemberId: null,
-      workspaceRoleKeys: legacyRoleKeys,
+      workspaceRoleKeys,
       permissionScopes: [`workspace:${serviceAccount.workspaceId}`],
       isPlatformAdmin: false,
       platformRoleKeys: [],
-      grantedActions,
-      workspaceRoleSource: hasStructuredBindings ? 'role_binding' : 'legacy',
+      grantedActions: hasStructuredBindings
+        ? grantedActions
+        : useBindingOnlyFallback
+          ? []
+          : legacyGrantedActions,
+      workspaceRoleSource:
+        hasStructuredBindings || useBindingOnlyFallback
+          ? 'role_binding'
+          : 'legacy',
       platformRoleSource: 'legacy',
       sessionId: null,
     };

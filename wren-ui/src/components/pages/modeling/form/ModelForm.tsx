@@ -1,6 +1,6 @@
 import { appMessage as message } from '@/utils/antdAppBridge';
 import { CompactColumn, CompactTable } from '@/types/dataSource';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { Form, FormInstance, Select } from 'antd';
 import { isEmpty } from 'lodash';
 import { hasExecutableRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
@@ -171,7 +171,7 @@ export default function ModelForm(props: Props) {
     }
   }, [defaultValue, form, columns]);
 
-  const tableOptions: JSX.Element[] = useMemo(() => {
+  const tableOptions: ReactElement[] = useMemo(() => {
     const groups = new Map<string, CompactTable[]>();
 
     [...connectionTables]

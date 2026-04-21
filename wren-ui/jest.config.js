@@ -16,14 +16,14 @@ module.exports = {
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@server/(.*)$': '<rootDir>/src/server/$1',
   },
+  testMatch: ['**/*.test.[tj]s?(x)'],
+  setupFilesAfterEnv: ['<rootDir>/src/tests/jest.cleanup.ts'],
   modulePathIgnorePatterns: [
     '<rootDir>/e2e/',
-    '<rootDir>/.next/',
-    '<rootDir>/.next/standalone/',
+    '<rootDir>/\\.next($|-.+)',
   ],
   testPathIgnorePatterns: [
     '<rootDir>/e2e/',
-    '<rootDir>/.next/',
-    '<rootDir>/.next/standalone/',
+    '<rootDir>/\\.next($|-.+)',
   ],
 };

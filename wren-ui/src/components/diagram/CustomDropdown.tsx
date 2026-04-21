@@ -46,7 +46,7 @@ const makeDropdown =
         }}
         onOpenChange={onOpenChange}
       >
-        {children}
+        <span style={{ display: 'inline-flex', minWidth: 0 }}>{children}</span>
       </Dropdown>
     );
   };

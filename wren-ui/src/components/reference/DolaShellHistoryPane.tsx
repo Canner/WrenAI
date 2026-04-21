@@ -18,7 +18,7 @@ type Props = {
   keyword: string;
   onHistoryIntent: () => void;
   onKeywordChange: (keyword: string) => void;
-  historyScrollerRef: RefObject<HTMLDivElement>;
+  historyScrollerRef: RefObject<HTMLDivElement | null>;
   filteredHistory: DolaShellHistoryItem[];
   visibleHistoryItems: DolaShellHistoryItem[];
   shouldVirtualizeHistory: boolean;

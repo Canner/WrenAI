@@ -30,7 +30,9 @@ import type {
   NormalizedDiagram,
 } from './modelingWorkspaceUtils';
 
-const Diagram = dynamic(() => import('@/components/diagram'), { ssr: false });
+const Diagram = dynamic<any>(() => import('@/components/diagram'), {
+  ssr: false,
+});
 
 const ForwardDiagram = forwardRef<DiagramRefHandle, any>(
   function ForwardDiagram(props, ref) {

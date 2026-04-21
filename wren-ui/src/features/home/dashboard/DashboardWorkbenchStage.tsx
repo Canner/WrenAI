@@ -17,8 +17,8 @@ import {
 } from './manageDashboardPageStyles';
 
 export const DashboardWorkbenchStage = (props: {
-  cacheSettingsDrawerProps: DrawerAction<any>;
-  dashboardGridRef: React.RefObject<DashboardGridHandle>;
+  cacheSettingsDrawerProps: DrawerAction<any> & { loading?: boolean };
+  dashboardGridRef: React.RefObject<DashboardGridHandle | null>;
   dashboardItems: DashboardGridItem[];
   isDashboardReadonly: boolean;
   isSupportCached: boolean;

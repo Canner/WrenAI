@@ -24,7 +24,7 @@ type KnowledgeOverviewSectionProps = {
   modelingSummary?: KnowledgeWorkbenchModelingSummary;
   showKnowledgeAssetsLoading: boolean;
   hasMoreAssets: boolean;
-  loadMoreSentinelRef: RefObject<HTMLDivElement>;
+  loadMoreSentinelRef: RefObject<HTMLDivElement | null>;
   isReadonlyKnowledgeBase: boolean;
   isSnapshotReadonlyKnowledgeBase: boolean;
   isKnowledgeMutationDisabled: boolean;

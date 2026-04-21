@@ -1,5 +1,5 @@
+const fs = require('fs');
 const path = require('path');
-const withLess = require('next-with-less');
 const withBundleAnalyzer = require('@next/bundle-analyzer')({
   enabled: process.env.ANALYZE === 'true',
 });
@@ -7,12 +7,29 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
 const distDir = process.env.NEXT_DIST_DIR || './.next';
 const NEXT_EMPTY_MODULE_ALIAS = 'private-next-empty-module';
 const NEXT_INSTRUMENTATION_CLIENT_ALIAS = 'private-next-instrumentation-client';
+const NEXT_EMPTY_MODULE_PATH = path.join(
+  __dirname,
+  'src',
+  'utils',
+  'nextEmptyModule.ts',
+);
+const NEXT_INSTRUMENTATION_CLIENT_CANDIDATES = [
+  path.join(__dirname, 'src', 'instrumentation-client.ts'),
+  path.join(__dirname, 'src', 'instrumentation-client.js'),
+  path.join(__dirname, 'instrumentation-client.ts'),
+  path.join(__dirname, 'instrumentation-client.js'),
+];
+const nextInstrumentationClientPath =
+  NEXT_INSTRUMENTATION_CLIENT_CANDIDATES.find((candidatePath) =>
+    fs.existsSync(candidatePath),
+  ) ?? NEXT_EMPTY_MODULE_PATH;
 
 /** @type {import('next').NextConfig} */
-const nextConfig = withLess({
+const nextConfig = {
   output: 'standalone',
   distDir,
   staticPageGenerationTimeout: 1000,
+  allowedDevOrigins: ['127.0.0.1', '::1'],
   transpilePackages: [
     'antd',
     '@ant-design/colors',
@@ -66,28 +83,11 @@ const nextConfig = withLess({
       ssr: true,
     },
   },
-  devIndicators: false,
-  webpack(config, { dir, isServer }) {
-    if (!isServer) {
-      config.resolve = config.resolve || {};
-      config.resolve.alias = config.resolve.alias || {};
-
-      if (config.resolve.alias[NEXT_EMPTY_MODULE_ALIAS] === undefined) {
-        config.resolve.alias[NEXT_EMPTY_MODULE_ALIAS] = false;
-      }
-
-      if (
-        config.resolve.alias[NEXT_INSTRUMENTATION_CLIENT_ALIAS] === undefined
-      ) {
-        config.resolve.alias[NEXT_INSTRUMENTATION_CLIENT_ALIAS] = [
-          path.join(dir, 'src', 'instrumentation-client'),
-          path.join(dir, 'instrumentation-client'),
-          NEXT_EMPTY_MODULE_ALIAS,
-        ];
-      }
-    }
-
-    return config;
+  turbopack: {
+    resolveAlias: {
+      [NEXT_EMPTY_MODULE_ALIAS]: NEXT_EMPTY_MODULE_PATH,
+      [NEXT_INSTRUMENTATION_CLIENT_ALIAS]: nextInstrumentationClientPath,
+    },
   },
   // routes redirect
   async redirects() {
@@ -99,6 +99,6 @@ const nextConfig = withLess({
       },
     ];
   },
-});
+};
 
 module.exports = withBundleAnalyzer(nextConfig);

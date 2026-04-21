@@ -165,7 +165,7 @@ const DashboardGrid = forwardRef(
       onNavigateToThread,
     } = props;
     const itemRefs = useRef<
-      Record<number, React.RefObject<DashboardGridPinnedItemHandle>>
+      Record<number, React.RefObject<DashboardGridPinnedItemHandle | null>>
     >({});
     const itemNodes = useRef<Record<string, HTMLDivElement | null>>({});
     const containerRef = useRef<HTMLDivElement>(null);

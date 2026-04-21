@@ -38,8 +38,8 @@ type KnowledgeBaseSummary = {
 
 type Props = {
   heroUserName: string | null;
-  composerShellRef: RefObject<HTMLDivElement>;
-  promptRef: RefObject<ComponentRef<typeof Prompt>>;
+  composerShellRef: RefObject<HTMLDivElement | null>;
+  promptRef: RefObject<ComponentRef<typeof Prompt> | null>;
   askPrompt: ReturnType<typeof useAskPrompt>;
   selectedKnowledgeBases: KnowledgeBaseSummary[];
   selectedSkillLabel: string | null;
@@ -51,7 +51,7 @@ type Props = {
   shouldVirtualizeKnowledgeList: boolean;
   knowledgeTopSpacerHeight: number;
   knowledgeBottomSpacerHeight: number;
-  knowledgeListViewportRef: RefObject<HTMLDivElement>;
+  knowledgeListViewportRef: RefObject<HTMLDivElement | null>;
   homePromptPlaceholder: string;
   recommendationCards: HomeRecommendationCard[];
   recommendationSourceHint: string;

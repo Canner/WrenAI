@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactElement,
+} from 'react';
 import {
   Alert,
   Button,
@@ -601,7 +607,7 @@ export default function ManagePlatformUsersPage() {
       key: 'actions',
       width: 320,
       render: (_value, record) => {
-        const actions: JSX.Element[] = [];
+        const actions: ReactElement[] = [];
 
         if (canUpdateUsers) {
           actions.push(
@@ -778,7 +784,7 @@ export default function ManagePlatformUsersPage() {
           className="console-alert"
           type="warning"
           showIcon
-          message="当前未登录"
+          title="当前未登录"
           description="请先登录后再查看平台用户目录。"
         />
       ) : !canAccessPage ? (
@@ -786,12 +792,12 @@ export default function ManagePlatformUsersPage() {
           className="console-alert"
           type="error"
           showIcon
-          message="当前账号没有平台治理权限"
+          title="当前账号没有平台治理权限"
           description="平台用户管理仅对具备平台用户目录权限的角色开放。"
         />
       ) : (
         <Space orientation="vertical" size={16} style={{ width: '100%' }}>
-          {error ? <Alert type="warning" showIcon message={error} /> : null}
+          {error ? <Alert type="warning" showIcon title={error} /> : null}
 
           <Space
             wrap

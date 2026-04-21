@@ -69,191 +69,193 @@ export class AskingService implements IAskingService {
   private skillService?: Pick<ISkillService, 'getSkillDefinitionById'>;
   private backgroundTrackerWorkspaceId?: string | null;
 
-  public initialize!: () => Promise<void>;
-  public createAskingTask!: IAskingService['createAskingTask'];
-  public rerunAskingTask!: IAskingService['rerunAskingTask'];
-  public cancelAskingTask!: IAskingService['cancelAskingTask'];
-  public getAskingTask!: IAskingService['getAskingTask'];
-  public getAskingTaskById!: IAskingService['getAskingTaskById'];
-  public createThread!: IAskingService['createThread'];
-  public updateThreadScoped!: IAskingService['updateThreadScoped'];
-  public deleteThreadScoped!: IAskingService['deleteThreadScoped'];
-  public listThreads!: IAskingService['listThreads'];
-  public assertThreadScope!: IAskingService['assertThreadScope'];
-  public assertAskingTaskScope!: IAskingService['assertAskingTaskScope'];
-  public assertAskingTaskScopeById!: IAskingService['assertAskingTaskScopeById'];
-  public assertResponseScope!: IAskingService['assertResponseScope'];
-  public createThreadResponseScoped!: IAskingService['createThreadResponseScoped'];
-  public updateThreadResponseScoped!: IAskingService['updateThreadResponseScoped'];
-  public getResponsesWithThreadScoped!: IAskingService['getResponsesWithThreadScoped'];
-  public getResponseScoped!: IAskingService['getResponseScoped'];
-  public generateThreadResponseBreakdownScoped!: IAskingService['generateThreadResponseBreakdownScoped'];
-  public generateThreadResponseAnswerScoped!: IAskingService['generateThreadResponseAnswerScoped'];
-  public generateThreadResponseChartScoped!: IAskingService['generateThreadResponseChartScoped'];
-  public adjustThreadResponseChartScoped!: IAskingService['adjustThreadResponseChartScoped'];
-  public adjustThreadResponseWithSQLScoped!: IAskingService['adjustThreadResponseWithSQLScoped'];
-  public adjustThreadResponseAnswerScoped!: IAskingService['adjustThreadResponseAnswerScoped'];
-  public cancelAdjustThreadResponseAnswer!: IAskingService['cancelAdjustThreadResponseAnswer'];
-  public rerunAdjustThreadResponseAnswer!: IAskingService['rerunAdjustThreadResponseAnswer'];
-  public getAdjustmentTask!: IAskingService['getAdjustmentTask'];
-  public getAdjustmentTaskById!: IAskingService['getAdjustmentTaskById'];
-  public changeThreadResponseAnswerDetailStatusScoped!: IAskingService['changeThreadResponseAnswerDetailStatusScoped'];
-  public previewDataScoped!: IAskingService['previewDataScoped'];
-  public previewBreakdownDataScoped!: IAskingService['previewBreakdownDataScoped'];
-  public createInstantRecommendedQuestions!: IAskingService['createInstantRecommendedQuestions'];
-  public getInstantRecommendedQuestions!: IAskingService['getInstantRecommendedQuestions'];
-  public generateThreadRecommendationQuestions!: IAskingService['generateThreadRecommendationQuestions'];
-  public getThreadRecommendationQuestions!: IAskingService['getThreadRecommendationQuestions'];
-  public deleteAllByProjectId!: IAskingService['deleteAllByProjectId'];
+  declare public initialize: () => Promise<void>;
+  declare public createAskingTask: IAskingService['createAskingTask'];
+  declare public rerunAskingTask: IAskingService['rerunAskingTask'];
+  declare public cancelAskingTask: IAskingService['cancelAskingTask'];
+  declare public getAskingTask: IAskingService['getAskingTask'];
+  declare public getAskingTaskById: IAskingService['getAskingTaskById'];
+  declare public createThread: IAskingService['createThread'];
+  declare public updateThreadScoped: IAskingService['updateThreadScoped'];
+  declare public deleteThreadScoped: IAskingService['deleteThreadScoped'];
+  declare public listThreads: IAskingService['listThreads'];
+  declare public assertThreadScope: IAskingService['assertThreadScope'];
+  declare public assertAskingTaskScope: IAskingService['assertAskingTaskScope'];
+  declare public assertAskingTaskScopeById: IAskingService['assertAskingTaskScopeById'];
+  declare public assertResponseScope: IAskingService['assertResponseScope'];
+  declare public createThreadResponseScoped: IAskingService['createThreadResponseScoped'];
+  declare public updateThreadResponseScoped: IAskingService['updateThreadResponseScoped'];
+  declare public getResponsesWithThreadScoped: IAskingService['getResponsesWithThreadScoped'];
+  declare public getResponseScoped: IAskingService['getResponseScoped'];
+  declare public generateThreadResponseBreakdownScoped: IAskingService['generateThreadResponseBreakdownScoped'];
+  declare public generateThreadResponseAnswerScoped: IAskingService['generateThreadResponseAnswerScoped'];
+  declare public generateThreadResponseChartScoped: IAskingService['generateThreadResponseChartScoped'];
+  declare public adjustThreadResponseChartScoped: IAskingService['adjustThreadResponseChartScoped'];
+  declare public adjustThreadResponseWithSQLScoped: IAskingService['adjustThreadResponseWithSQLScoped'];
+  declare public adjustThreadResponseAnswerScoped: IAskingService['adjustThreadResponseAnswerScoped'];
+  declare public cancelAdjustThreadResponseAnswer: IAskingService['cancelAdjustThreadResponseAnswer'];
+  declare public rerunAdjustThreadResponseAnswer: IAskingService['rerunAdjustThreadResponseAnswer'];
+  declare public getAdjustmentTask: IAskingService['getAdjustmentTask'];
+  declare public getAdjustmentTaskById: IAskingService['getAdjustmentTaskById'];
+  declare public changeThreadResponseAnswerDetailStatusScoped: IAskingService['changeThreadResponseAnswerDetailStatusScoped'];
+  declare public previewDataScoped: IAskingService['previewDataScoped'];
+  declare public previewBreakdownDataScoped: IAskingService['previewBreakdownDataScoped'];
+  declare public createInstantRecommendedQuestions: IAskingService['createInstantRecommendedQuestions'];
+  declare public getInstantRecommendedQuestions: IAskingService['getInstantRecommendedQuestions'];
+  declare public generateThreadRecommendationQuestions: IAskingService['generateThreadRecommendationQuestions'];
+  declare public getThreadRecommendationQuestions: IAskingService['getThreadRecommendationQuestions'];
+  declare public deleteAllByProjectId: IAskingService['deleteAllByProjectId'];
 
-  public updateThread!: (
+  declare public updateThread: (
     threadId: number,
     input: Partial<AskingDetailTaskUpdateInput>,
   ) => Promise<any>;
-  public deleteThread!: (threadId: number) => Promise<void>;
-  public createThreadResponse!: (
+  declare public deleteThread: (threadId: number) => Promise<void>;
+  declare public createThreadResponse: (
     input: AskingDetailTaskInput,
     threadId: number,
     runtimeIdentity: PersistedRuntimeIdentity,
   ) => Promise<any>;
-  public updateThreadResponse!: (
+  declare public updateThreadResponse: (
     responseId: number,
     data: { sql: string },
   ) => Promise<any>;
-  public generateThreadResponseBreakdown!: (
+  declare public generateThreadResponseBreakdown: (
     threadResponseId: number,
     configurations: { language: string },
   ) => Promise<any>;
-  public generateThreadResponseAnswer!: (
+  declare public generateThreadResponseAnswer: (
     threadResponseId: number,
     configurations?: { language: string },
   ) => Promise<any>;
-  public generateThreadResponseChart!: (
+  declare public generateThreadResponseChart: (
     threadResponseId: number,
     runtimeIdentity: PersistedRuntimeIdentity,
     configurations: { language: string },
     runtimeScopeId?: string | null,
   ) => Promise<any>;
-  public adjustThreadResponseChart!: (
+  declare public adjustThreadResponseChart: (
     threadResponseId: number,
     runtimeIdentity: PersistedRuntimeIdentity,
     input: any,
     configurations?: { language: string },
     runtimeScopeId?: string | null,
   ) => Promise<any>;
-  public getResponsesWithThread!: (
+  declare public getResponsesWithThread: (
     threadId: number,
     runtimeIdentity?: PersistedRuntimeIdentity,
   ) => Promise<any[]>;
-  public getResponse!: (responseId: number) => Promise<any>;
-  public previewData!: (
+  declare public getResponse: (responseId: number) => Promise<any>;
+  declare public previewData: (
     responseId: number,
     limit?: number,
     fallbackRuntimeIdentity?: PersistedRuntimeIdentity | null,
   ) => Promise<PreviewDataResponse>;
-  public previewBreakdownData!: (
+  declare public previewBreakdownData: (
     responseId: number,
     stepIndex?: number,
     limit?: number,
     fallbackRuntimeIdentity?: PersistedRuntimeIdentity | null,
   ) => Promise<PreviewDataResponse>;
-  public changeThreadResponseAnswerDetailStatus!: (
+  declare public changeThreadResponseAnswerDetailStatus: (
     responseId: number,
     status: ThreadResponseAnswerStatus,
     content?: string,
   ) => Promise<any>;
-  public adjustThreadResponseWithSQL!: (
+  declare public adjustThreadResponseWithSQL: (
     threadResponseId: number,
     input: AdjustmentSqlInput,
     fallbackRuntimeIdentity?: PersistedRuntimeIdentity | null,
   ) => Promise<any>;
-  public adjustThreadResponseAnswer!: (
+  declare public adjustThreadResponseAnswer: (
     threadResponseId: number,
     input: AdjustmentReasoningInput,
     configurations: { language: string },
     runtimeScopeId?: string | null,
   ) => Promise<any>;
 
-  public getDeployId!: (
+  declare public getDeployId: (
     runtimeIdentity: PersistedRuntimeIdentity,
   ) => Promise<any>;
-  public getProjectAndDeployment!: (
+  declare public getProjectAndDeployment: (
     runtimeIdentity: PersistedRuntimeIdentity,
   ) => Promise<any>;
-  public resolveScopedKnowledgeBaseIds!: (
+  declare public resolveScopedKnowledgeBaseIds: (
     inputKnowledgeBaseIds?: string[] | null,
     thread?: any,
     runtimeIdentity?: PersistedRuntimeIdentity | null,
   ) => string[];
-  public resolveRuntimeIdentityFromKnowledgeSelection!: (
+  declare public resolveRuntimeIdentityFromKnowledgeSelection: (
     runtimeIdentity: PersistedRuntimeIdentity,
     knowledgeBaseIds: string[],
   ) => Promise<PersistedRuntimeIdentity>;
-  public resolveScopedSelectedSkillIds!: (
+  declare public resolveScopedSelectedSkillIds: (
     inputSelectedSkillIds?: string[] | null,
     thread?: any,
   ) => string[] | undefined;
-  public resolveRetrievalScopeIds!: (
+  declare public resolveRetrievalScopeIds: (
     knowledgeBaseIds: string[],
     runtimeIdentity: PersistedRuntimeIdentity,
   ) => Promise<string[]>;
-  public resolveAskingRuntimeIdentity!: (
+  declare public resolveAskingRuntimeIdentity: (
     payload: AskingPayload,
     threadRuntimeIdentity?: PersistedRuntimeIdentity | null,
   ) => PersistedRuntimeIdentity;
-  public buildPersistedRuntimeIdentityPatch!: (
+  declare public buildPersistedRuntimeIdentityPatch: (
     runtimeIdentity: PersistedRuntimeIdentity,
   ) => PersistedRuntimeIdentity;
-  public ensureTrackedAskingTaskPersisted!: (
+  declare public ensureTrackedAskingTaskPersisted: (
     queryId: string,
     question: string,
     runtimeIdentity: PersistedRuntimeIdentity,
   ) => Promise<void>;
-  public getThreadById!: (threadId: number) => Promise<any>;
-  public getThreadRuntimeIdentity!: (
+  declare public getThreadById: (threadId: number) => Promise<any>;
+  declare public getThreadRuntimeIdentity: (
     threadId: number,
     fallbackRuntimeIdentity?: PersistedRuntimeIdentity | null,
   ) => Promise<PersistedRuntimeIdentity>;
-  public getThreadResponseRuntimeIdentity!: (
+  declare public getThreadResponseRuntimeIdentity: (
     threadResponse: any,
     fallbackRuntimeIdentity?: PersistedRuntimeIdentity | null,
   ) => Promise<PersistedRuntimeIdentity>;
-  public getExecutionResources!: (
+  declare public getExecutionResources: (
     runtimeIdentity: PersistedRuntimeIdentity,
   ) => Promise<any>;
-  public getAskingHistory!: (
+  declare public getAskingHistory: (
     threadId: number,
     runtimeIdentity: PersistedRuntimeIdentity,
     excludeThreadResponseId?: number,
   ) => Promise<any[]>;
-  public getThreadRecommendationQuestionsConfig!: (project: any) => any;
-  public isLikelyNonChineseQuestions!: (
+  declare public getThreadRecommendationQuestionsConfig: (project: any) => any;
+  declare public isLikelyNonChineseQuestions: (
     questions: any[] | undefined | null,
   ) => boolean;
-  public shouldForceChineseThreadRecommendation!: (
+  declare public shouldForceChineseThreadRecommendation: (
     thread: any,
   ) => Promise<boolean>;
-  public trackInstantRecommendedQuestionTask!: (
+  declare public trackInstantRecommendedQuestionTask: (
     queryId: string,
     runtimeIdentity: PersistedRuntimeIdentity,
   ) => void;
-  public assertInstantRecommendedQuestionTaskScope!: (
+  declare public assertInstantRecommendedQuestionTaskScope: (
     queryId: string,
     runtimeIdentity: PersistedRuntimeIdentity,
   ) => void;
-  public buildManifestBackedProject!: (deployment: any) => any;
-  public mapManifestDataSourceToProjectType!: (dataSource: any) => any;
-  public toAskRuntimeIdentity!: (
+  declare public buildManifestBackedProject: (deployment: any) => any;
+  declare public mapManifestDataSourceToProjectType: (dataSource: any) => any;
+  declare public toAskRuntimeIdentity: (
     runtimeIdentity?: PersistedRuntimeIdentity | null,
   ) => any;
-  public buildAskTaskRuntimeIdentity!: (
+  declare public buildAskTaskRuntimeIdentity: (
     runtimeIdentity: PersistedRuntimeIdentity,
     deployHash?: string | null,
   ) => any;
-  public normalizeRuntimeScope!: (
+  declare public normalizeRuntimeScope: (
     runtimeIdentity?: PersistedRuntimeIdentity | null,
   ) => PersistedRuntimeIdentity | null;
-  public resolveBreakdownBootstrapWorkspaceId!: () => Promise<string | null>;
+  declare public resolveBreakdownBootstrapWorkspaceId: () => Promise<
+    string | null
+  >;
 
   constructor({
     telemetry,
@@ -270,6 +272,7 @@ export class AskingService implements IAskingService {
     knowledgeBaseRepository,
     backgroundTrackerWorkspaceId,
   }: AskingServiceConstructorArgs) {
+    ensureAskingServicePrototypePatched();
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.deployService = deployService;
     this.projectService = projectService;
@@ -322,10 +325,33 @@ export class AskingService implements IAskingService {
     this.skillService = skillService;
     this.backgroundTrackerWorkspaceId = backgroundTrackerWorkspaceId ?? null;
   }
+
+  public stopBackgroundTrackers(): void {
+    this.breakdownBackgroundTracker.stop();
+    this.textBasedAnswerBackgroundTracker.stop();
+    this.chartBackgroundTracker.stop();
+    this.chartAdjustmentBackgroundTracker.stop();
+    this.threadRecommendQuestionBackgroundTracker.stop();
+    this.adjustmentBackgroundTracker.stopPolling();
+  }
 }
 
-applyAskingServiceActionPrototype(AskingService);
-applyAskingServiceHelperPrototype(AskingService);
+function ensureAskingServicePrototypePatched() {
+  const proto = AskingService.prototype as AskingService & {
+    initialize?: unknown;
+    normalizeRuntimeScope?: unknown;
+  };
+
+  if (typeof proto.initialize !== 'function') {
+    applyAskingServiceActionPrototype(AskingService);
+  }
+
+  if (typeof proto.normalizeRuntimeScope !== 'function') {
+    applyAskingServiceHelperPrototype(AskingService);
+  }
+}
+
+ensureAskingServicePrototypePatched();
 
 export {
   constructCteSql,

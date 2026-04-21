@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactElement,
+} from 'react';
 import {
   Alert,
   Button,
@@ -627,7 +633,7 @@ export default function ManagePlatformWorkspacesPage() {
         }
 
         const busy = memberAction?.memberId === record.id;
-        const actionButtons: JSX.Element[] = [];
+        const actionButtons: ReactElement[] = [];
 
         if (record.status === 'pending') {
           actionButtons.push(
@@ -759,7 +765,7 @@ export default function ManagePlatformWorkspacesPage() {
           className="console-alert"
           type="warning"
           showIcon
-          message="当前未登录"
+          title="当前未登录"
           description="请先登录后再查看工作空间治理页。"
         />
       ) : !canAccessPage ? (
@@ -767,12 +773,12 @@ export default function ManagePlatformWorkspacesPage() {
           className="console-alert"
           type="error"
           showIcon
-          message="当前账号没有平台治理权限"
+          title="当前账号没有平台治理权限"
           description="平台工作空间管理仅对具备工作空间治理查看权限的角色开放。"
         />
       ) : (
         <Space orientation="vertical" size={16} style={{ width: '100%' }}>
-          {error ? <Alert type="warning" showIcon message={error} /> : null}
+          {error ? <Alert type="warning" showIcon title={error} /> : null}
 
           <Space style={{ width: '100%', justifyContent: 'space-between' }}>
             <Input.Search

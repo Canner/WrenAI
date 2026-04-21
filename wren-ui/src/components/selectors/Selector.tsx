@@ -3,7 +3,7 @@ import { Select } from 'antd';
 import { compactObject, parseJson } from '@/utils/helper';
 
 export interface Option {
-  label: string | JSX.Element;
+  label: React.ReactNode;
   value?: unknown;
   options?: Option[];
 }

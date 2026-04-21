@@ -44,7 +44,7 @@ export function useHomeLandingControls({
   skillOptions,
   skillKeyword,
 }: {
-  composerShellRef: RefObject<HTMLDivElement>;
+  composerShellRef: RefObject<HTMLDivElement | null>;
   currentKnowledgeBases: KnowledgeBaseSummary[];
   draftSelectedSkillIds: string[];
   knowledgeKeyword: string;

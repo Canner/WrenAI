@@ -24,7 +24,7 @@ import {
   resolveNovaPageTitle,
 } from '@/utils/brandMeta';
 import { antdTheme } from '@/styles/antdTheme';
-import '../styles/index.less';
+import '../styles/index.css';
 import '../styles/runtime-foundation.css';
 import '../styles/runtime-utilities.css';
 

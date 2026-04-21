@@ -34,7 +34,7 @@ type HomeKnowledgePickerDropdownProps = {
   shouldVirtualize: boolean;
   topSpacerHeight: number;
   bottomSpacerHeight: number;
-  viewportRef: RefObject<HTMLDivElement>;
+  viewportRef: RefObject<HTMLDivElement | null>;
   onKeywordChange: (value: string) => void;
   onScroll: (event: UIEvent<HTMLDivElement>) => void;
   onToggleKnowledgeBase: (knowledgeBaseId: string) => void;

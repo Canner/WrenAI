@@ -348,7 +348,7 @@ export default function SettingsDiagnosticsPage() {
             <DatePicker.RangePicker
               allowClear
               value={dateRange as any}
-              ranges={getApiHistoryDateRangePresets(dayjs()) as any}
+              presets={getApiHistoryDateRangePresets(dayjs()) as any}
               onChange={handleDateRangeChange as any}
             />
             <Button

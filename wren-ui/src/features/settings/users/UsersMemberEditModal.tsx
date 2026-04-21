@@ -146,7 +146,7 @@ export default function UsersMemberEditModal({
               ) : null}
             </Space>
           ) : (
-            <Alert type="info" showIcon message="当前账号仅可查看用户详情" />
+            <Alert type="info" showIcon title="当前账号仅可查看用户详情" />
           )}
         </Space>
       ) : null}

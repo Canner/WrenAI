@@ -1,5 +1,12 @@
 import clsx from 'clsx';
-import { ReactNode, useEffect, useRef, memo, useState } from 'react';
+import {
+  ReactNode,
+  type ReactElement,
+  useEffect,
+  useRef,
+  memo,
+  useState,
+} from 'react';
 import { Button } from 'antd';
 import styled from 'styled-components';
 import { PROCESS_STATE } from '@/utils/enum';
@@ -263,7 +270,7 @@ const MisleadingQuery = makeProcessingError({
 
 const getGeneralAnswerStateComponent = (state: PROCESS_STATE) => {
   const stateMap: Partial<
-    Record<PROCESS_STATE, (props: Props) => JSX.Element>
+    Record<PROCESS_STATE, (props: Props) => ReactElement>
   > = {
     [PROCESS_STATE.FINISHED]: GeneralAnswer,
   };
@@ -272,7 +279,7 @@ const getGeneralAnswerStateComponent = (state: PROCESS_STATE) => {
 
 const getMisleadingQueryStateComponent = (state: PROCESS_STATE) => {
   const stateMap: Partial<
-    Record<PROCESS_STATE, (props: Props) => JSX.Element>
+    Record<PROCESS_STATE, (props: Props) => ReactElement>
   > = {
     [PROCESS_STATE.FINISHED]: MisleadingQuery,
   };
@@ -281,7 +288,7 @@ const getMisleadingQueryStateComponent = (state: PROCESS_STATE) => {
 
 const getDefaultStateComponent = (state: PROCESS_STATE) => {
   const stateMap: Partial<
-    Record<PROCESS_STATE, (props: Props) => JSX.Element>
+    Record<PROCESS_STATE, (props: Props) => ReactElement>
   > = {
     [PROCESS_STATE.UNDERSTANDING]: Understanding,
     // Polling AI status for every 1 second might skip the searching state.

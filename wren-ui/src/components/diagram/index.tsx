@@ -43,7 +43,7 @@ const minimapStyle = {
 };
 
 interface Props {
-  forwardRef?: ForwardedRef<unknown>;
+  forwardRef?: ForwardedRef<any>;
   data: DiagramData;
   onMoreClick: (data: ClickPayload) => void;
   onNodeClick: (data: ClickPayload) => void;

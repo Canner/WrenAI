@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { Workspace, WorkspaceMember } from '../repositories';
+import { toLegacyWorkspaceRoleKey } from '@server/authz';
 import {
   acceptWorkspaceInvitation,
   applyUserToWorkspace,
@@ -341,6 +342,10 @@ export class WorkspaceService implements IWorkspaceService {
       return existingMembership;
     }
 
+    if (toLegacyWorkspaceRoleKey(existingMembership.roleKey) === 'owner') {
+      throw new Error('Owner membership cannot be changed here');
+    }
+
     if (input.actor) {
       assertWorkspaceActorAllowed({
         actor: input.actor,
@@ -396,6 +401,10 @@ export class WorkspaceService implements IWorkspaceService {
           targetUserId: existingMembership.userId,
         },
       });
+    }
+
+    if (toLegacyWorkspaceRoleKey(existingMembership.roleKey) === 'owner') {
+      throw new Error('Owner membership cannot be changed here');
     }
 
     await assertOwnerWorkspaceMembershipMutationAllowed(

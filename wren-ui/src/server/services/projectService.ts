@@ -78,6 +78,7 @@ export interface IProjectService {
     projectId: number,
     runtimeScopeId?: string | null,
   ) => Promise<void>;
+  stopBackgroundTrackers: () => void;
 }
 
 export class ProjectService implements IProjectService {
@@ -110,6 +111,11 @@ export class ProjectService implements IProjectService {
         wrenAIAdaptor,
       });
   }
+
+  public stopBackgroundTrackers(): void {
+    this.projectRecommendQuestionBackgroundTracker.stop();
+  }
+
   public async updateProject(
     projectId: number,
     projectData: Partial<Project>,

@@ -94,6 +94,7 @@ const reportInitFailure = (label: string, error: unknown) => {
 };
 
 export const initComponents = () => {
+  const isTestEnvironment = process.env.NODE_ENV === 'test';
   const telemetry = new PostHogTelemetry();
   const knex = bootstrapKnex({
     pgUrl: serverConfig.pgUrl,
@@ -409,19 +410,31 @@ export const initComponents = () => {
     scheduleJobRunRepository,
     auditEventRepository,
   });
-  void askingService
-    .initialize()
-    .catch((error) => reportInitFailure('askingService', error));
-  void projectRecommendQuestionBackgroundTracker
-    .initialize()
-    .catch((error) =>
-      reportInitFailure('projectRecommendQuestionBackgroundTracker', error),
-    );
-  void threadRecommendQuestionBackgroundTracker
-    .initialize()
-    .catch((error) =>
-      reportInitFailure('threadRecommendQuestionBackgroundTracker', error),
-    );
+
+  if (isTestEnvironment) {
+    projectService.stopBackgroundTrackers();
+    askingService.stopBackgroundTrackers();
+    askingTaskTracker.stopPolling();
+    projectRecommendQuestionBackgroundTracker.stop();
+    threadRecommendQuestionBackgroundTracker.stop();
+    dashboardCacheBackgroundTracker.stop();
+    scheduleWorker.stop();
+  } else {
+    void askingService
+      .initialize()
+      .catch((error) => reportInitFailure('askingService', error));
+    void projectRecommendQuestionBackgroundTracker
+      .initialize()
+      .catch((error) =>
+        reportInitFailure('projectRecommendQuestionBackgroundTracker', error),
+      );
+    void threadRecommendQuestionBackgroundTracker
+      .initialize()
+      .catch((error) =>
+        reportInitFailure('threadRecommendQuestionBackgroundTracker', error),
+      );
+  }
+
   return {
     knex,
     telemetry,
@@ -506,7 +519,7 @@ export const initComponents = () => {
   };
 };
 type Components = ReturnType<typeof initComponents>;
-const COMPONENTS_RUNTIME_VERSION = 5;
+const COMPONENTS_RUNTIME_VERSION = 6;
 export const components: Components = getVersionedGlobalSingleton({
   factory: initComponents,
   singletonKey: '__wrenComponents__',
