@@ -1,4 +1,4 @@
-import { Button, Select, Space, Table, Tag, Typography } from 'antd';
+import { Button, Col, Row, Select, Space, Table, Tag, Typography } from 'antd';
 import {
   formatDateTime,
   getStatusColor,
@@ -6,7 +6,7 @@ import {
   type ScheduleRunView,
 } from '@/features/settings/systemTasks/systemTasksPageUtils';
 
-const { Text } = Typography;
+const { Text, Title } = Typography;
 
 export default function SystemTasksRunsSection({
   filteredRuns,
@@ -25,30 +25,31 @@ export default function SystemTasksRunsSection({
 }) {
   return (
     <section>
-      <div
-        style={{
-          alignItems: 'center',
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 12,
-          justifyContent: 'space-between',
-          marginBottom: 12,
-        }}
+      <Row
+        align="middle"
+        gutter={[12, 12]}
+        justify="space-between"
+        style={{ marginBottom: 12 }}
       >
-        <Text strong style={{ fontSize: 18 }}>
-          最近运行记录
-        </Text>
-        <Space wrap>
-          <Text type="secondary">运行状态</Text>
-          <Select
-            value={runStatusFilter}
-            onChange={onChangeRunStatusFilter}
-            options={runStatusOptions}
-            style={{ minWidth: 180 }}
-          />
-        </Space>
-      </div>
+        <Col flex="auto">
+          <Title level={4} style={{ margin: 0 }}>
+            最近运行记录
+          </Title>
+        </Col>
+        <Col>
+          <Space wrap>
+            <Text type="secondary">运行状态</Text>
+            <Select
+              value={runStatusFilter}
+              onChange={onChangeRunStatusFilter}
+              options={runStatusOptions}
+              style={{ minWidth: 180 }}
+            />
+          </Space>
+        </Col>
+      </Row>
       <Table
+        className="console-table"
         rowKey="id"
         loading={loading}
         locale={{ emptyText: '暂无运行记录（通常表示计划尚未到首次执行时间）' }}

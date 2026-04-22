@@ -78,7 +78,7 @@ export default function ManageConnectorsPage() {
           showIcon
           type="info"
           style={{ marginBottom: 16 }}
-          message={runtimeState.connectorActionBlockedReason}
+          title={runtimeState.connectorActionBlockedReason}
           description={
             runtimeState.connectorScopeRestrictionReason
               ? '当前作用域是系统托管样例空间，仅支持浏览示例数据，不支持新增、编辑、删除或测试连接器。'

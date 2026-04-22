@@ -82,7 +82,7 @@ export default function PermissionsAuthorizationExplainSection({
         <Alert
           type="info"
           showIcon
-          message="当前为只读提示"
+          title="当前为只读提示"
           description="你没有 role.read 权限，暂时无法执行权限解释。"
         />
       ) : (
@@ -174,7 +174,7 @@ export default function PermissionsAuthorizationExplainSection({
             <Alert
               type={explainResult.decision?.allowed ? 'success' : 'warning'}
               showIcon
-              message={
+              title={
                 explainResult.decision
                   ? `决策：${explainResult.decision.allowed ? 'ALLOW' : 'DENY'}`
                   : '仅返回主体授权画像（未带 action）'

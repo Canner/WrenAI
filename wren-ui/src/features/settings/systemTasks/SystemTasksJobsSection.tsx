@@ -1,4 +1,4 @@
-import { Button, Select, Space, Table, Tag, Typography } from 'antd';
+import { Button, Col, Row, Select, Space, Table, Tag, Typography } from 'antd';
 import {
   formatDateTime,
   getStatusColor,
@@ -6,7 +6,7 @@ import {
   type ScheduleJobView,
 } from '@/features/settings/systemTasks/systemTasksPageUtils';
 
-const { Text } = Typography;
+const { Text, Title } = Typography;
 
 export default function SystemTasksJobsSection({
   canManageActions,
@@ -33,30 +33,31 @@ export default function SystemTasksJobsSection({
 }) {
   return (
     <section>
-      <div
-        style={{
-          alignItems: 'center',
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 12,
-          justifyContent: 'space-between',
-          marginBottom: 12,
-        }}
+      <Row
+        align="middle"
+        gutter={[12, 12]}
+        justify="space-between"
+        style={{ marginBottom: 12 }}
       >
-        <Text strong style={{ fontSize: 18 }}>
-          任务列表
-        </Text>
-        <Space wrap>
-          <Text type="secondary">任务状态</Text>
-          <Select
-            value={jobStatusFilter}
-            onChange={onChangeJobStatusFilter}
-            options={jobStatusOptions}
-            style={{ minWidth: 180 }}
-          />
-        </Space>
-      </div>
+        <Col flex="auto">
+          <Title level={4} style={{ margin: 0 }}>
+            任务列表
+          </Title>
+        </Col>
+        <Col>
+          <Space wrap>
+            <Text type="secondary">任务状态</Text>
+            <Select
+              value={jobStatusFilter}
+              onChange={onChangeJobStatusFilter}
+              options={jobStatusOptions}
+              style={{ minWidth: 180 }}
+            />
+          </Space>
+        </Col>
+      </Row>
       <Table
+        className="console-table"
         rowKey="id"
         loading={loading}
         locale={{ emptyText: '暂无定时任务' }}

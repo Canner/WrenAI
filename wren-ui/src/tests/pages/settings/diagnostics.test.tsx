@@ -38,19 +38,14 @@ jest.mock('@/hooks/useApiHistoryList', () => ({
   default: (...args: any[]) => mockUseApiHistoryList(...args),
 }));
 
-jest.mock('@/components/pages/apiManagement/DetailsDrawer', () => ({
+jest.mock('@/features/settings/diagnostics/DiagnosticsDetailsDrawer', () => ({
   __esModule: true,
-  default: () => <div>DetailsDrawer</div>,
+  default: () => <div>DiagnosticsDetailsDrawer</div>,
 }));
 
-jest.mock('@/components/pages/apiManagement/AskDiagnosticsSummary', () => ({
+jest.mock('@/features/settings/diagnostics/DiagnosticsSummaryCell', () => ({
   __esModule: true,
-  default: () => <div>AskDiagnosticsSummary</div>,
-}));
-
-jest.mock('@/components/code/SQLCodeBlock', () => ({
-  __esModule: true,
-  default: () => <div>SQLCodeBlock</div>,
+  default: () => <div>DiagnosticsSummaryCell</div>,
 }));
 
 jest.mock('@/components/reference/ConsoleShellLayout', () => ({

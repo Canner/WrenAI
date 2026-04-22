@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert } from 'antd';
+import { Alert, Col, Row } from 'antd';
 import CopyOutlined from '@ant-design/icons/CopyOutlined';
 import DeleteOutlined from '@ant-design/icons/DeleteOutlined';
 import type {
@@ -59,6 +59,15 @@ export default function PermissionsRoleCatalogSection({
   ) => Promise<boolean> | boolean;
   onDeleteCustomRole: (roleId: string) => Promise<boolean> | boolean;
 }) {
+  const CATALOG_LAYOUT_STYLE = { minHeight: 720 } as const;
+  const SIDEBAR_COLUMN_STYLE = {
+    minWidth: 286,
+    display: 'flex',
+  } as const;
+  const EDITOR_COLUMN_STYLE = {
+    minWidth: 0,
+    display: 'flex',
+  } as const;
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
   const [roleKeyword, setRoleKeyword] = useState('');
   const [permissionKeyword, setPermissionKeyword] = useState('');
@@ -377,7 +386,7 @@ export default function PermissionsRoleCatalogSection({
       <Alert
         type="info"
         showIcon
-        message="当前为只读提示"
+        title="当前为只读提示"
         description="你没有 role.read 权限，暂时无法查看角色目录。"
       />
     );
@@ -385,73 +394,70 @@ export default function PermissionsRoleCatalogSection({
 
   return (
     <>
-      <div
-        style={{
-          display: 'flex',
-          gap: 10,
-          minHeight: 720,
-          alignItems: 'stretch',
-        }}
-      >
-        <PermissionsRoleCatalogSidebar
-          canManageRoles={canManageRoles}
-          getRoleMenuItems={getRoleMenuItems}
-          isCreateMode={isCreateMode}
-          roleCatalogLoading={roleCatalogLoading}
-          roleKeyword={roleKeyword}
-          roleActionLoading={roleActionLoading}
-          selectedRoleId={selectedRoleId}
-          visibleRoles={visibleRoles}
-          onCreateRole={() => requestIntent({ type: 'create' })}
-          onRoleKeywordChange={setRoleKeyword}
-          onSelectRole={(roleId) => requestIntent({ type: 'select', roleId })}
-        />
+      <Row gutter={[10, 10]} align="stretch" style={CATALOG_LAYOUT_STYLE}>
+        <Col flex="286px" style={SIDEBAR_COLUMN_STYLE}>
+          <PermissionsRoleCatalogSidebar
+            canManageRoles={canManageRoles}
+            getRoleMenuItems={getRoleMenuItems}
+            isCreateMode={isCreateMode}
+            roleCatalogLoading={roleCatalogLoading}
+            roleKeyword={roleKeyword}
+            roleActionLoading={roleActionLoading}
+            selectedRoleId={selectedRoleId}
+            visibleRoles={visibleRoles}
+            onCreateRole={() => requestIntent({ type: 'create' })}
+            onRoleKeywordChange={setRoleKeyword}
+            onSelectRole={(roleId) => requestIntent({ type: 'select', roleId })}
+          />
+        </Col>
 
-        <PermissionsRoleCatalogEditor
-          activeModuleKey={activeModuleKey}
-          activeModulePermissionNames={activeModulePermissionNames}
-          canManageRoles={canManageRoles}
-          draft={draft}
-          footerStatusText={footerStatusText}
-          isCreateMode={isCreateMode}
-          isDirty={isDirty}
-          isSystemRole={isSystemRole}
-          metadataReadOnly={metadataReadOnly}
-          onlyShowSelected={onlyShowSelected}
-          permissionGroups={permissionGroups}
-          permissionKeyword={permissionKeyword}
-          permissionReadOnly={permissionReadOnly}
-          roleActionLoading={roleActionLoading}
-          roleCatalogLoading={roleCatalogLoading}
-          saveDisabled={saveDisabled}
-          selectedPermissionSet={selectedPermissionSet}
-          selectedRole={selectedRole}
-          tabsItems={tabsItems}
-          onActiveChange={(checked) =>
-            setDraft((current) => ({ ...current, isActive: checked }))
-          }
-          onActiveModuleChange={setActiveModuleKey}
-          onClearFilters={clearPermissionFilters}
-          onDescriptionChange={(value) =>
-            setDraft((current) => ({ ...current, description: value }))
-          }
-          onDisplayNameChange={(value) =>
-            setDraft((current) => ({ ...current, displayName: value }))
-          }
-          onMutateGroupSelection={mutateGroupSelection}
-          onMutateModuleSelection={mutateModuleSelection}
-          onNameChange={(value) =>
-            setDraft((current) => ({ ...current, name: value }))
-          }
-          onOnlyShowSelectedChange={setOnlyShowSelected}
-          onPermissionKeywordChange={setPermissionKeyword}
-          onResetDraft={resetDraft}
-          onSaveRole={() => {
-            void handleSaveRole();
-          }}
-          onTogglePermission={togglePermission}
-        />
-      </div>
+        <Col flex="auto" style={EDITOR_COLUMN_STYLE}>
+          <PermissionsRoleCatalogEditor
+            activeModuleKey={activeModuleKey}
+            activeModulePermissionNames={activeModulePermissionNames}
+            canManageRoles={canManageRoles}
+            draft={draft}
+            footerStatusText={footerStatusText}
+            isCreateMode={isCreateMode}
+            isDirty={isDirty}
+            isSystemRole={isSystemRole}
+            metadataReadOnly={metadataReadOnly}
+            onlyShowSelected={onlyShowSelected}
+            permissionGroups={permissionGroups}
+            permissionKeyword={permissionKeyword}
+            permissionReadOnly={permissionReadOnly}
+            roleActionLoading={roleActionLoading}
+            roleCatalogLoading={roleCatalogLoading}
+            saveDisabled={saveDisabled}
+            selectedPermissionSet={selectedPermissionSet}
+            selectedRole={selectedRole}
+            tabsItems={tabsItems}
+            onActiveChange={(checked) =>
+              setDraft((current) => ({ ...current, isActive: checked }))
+            }
+            onActiveModuleChange={setActiveModuleKey}
+            onClearFilters={clearPermissionFilters}
+            onDescriptionChange={(value) =>
+              setDraft((current) => ({ ...current, description: value }))
+            }
+            onDisplayNameChange={(value) =>
+              setDraft((current) => ({ ...current, displayName: value }))
+            }
+            onMutateGroupSelection={mutateGroupSelection}
+            onMutateModuleSelection={mutateModuleSelection}
+            onNameChange={(value) =>
+              setDraft((current) => ({ ...current, name: value }))
+            }
+            onOnlyShowSelectedChange={setOnlyShowSelected}
+            onPermissionKeywordChange={setPermissionKeyword}
+            onResetDraft={resetDraft}
+            onSaveRole={() => {
+              void handleSaveRole();
+            }}
+            onTogglePermission={togglePermission}
+          />
+        </Col>
+      </Row>
 
       <PermissionsRoleCatalogUnsavedModal
         open={unsavedModalOpen}

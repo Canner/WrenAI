@@ -1,5 +1,15 @@
 import { useMemo } from 'react';
-import { Alert, Button, Card, Col, Row, Space, Tag, Typography } from 'antd';
+import {
+  Alert,
+  Button,
+  Card,
+  Col,
+  Row,
+  Space,
+  Statistic,
+  Tag,
+  Typography,
+} from 'antd';
 import ConsoleShellLayout from '@/components/reference/ConsoleShellLayout';
 import useAuthSession from '@/hooks/useAuthSession';
 import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
@@ -29,12 +39,13 @@ function PlatformSummaryMetric({
   value: string | number;
 }) {
   return (
-    <Space orientation="vertical" size={4}>
-      <Text type="secondary">{label}</Text>
-      <div style={{ fontSize: 28, fontWeight: 600, lineHeight: 1.2 }}>
-        {value}
-      </div>
-    </Space>
+    <Statistic
+      title={<Text type="secondary">{label}</Text>}
+      value={value}
+      styles={{
+        content: { fontSize: 28, fontWeight: 600, lineHeight: 1.2 },
+      }}
+    />
   );
 }
 
@@ -97,7 +108,7 @@ export default function PlatformManagementPage() {
           className="console-alert"
           type="warning"
           showIcon
-          message="当前未登录"
+          title="当前未登录"
           description="请先登录后再查看平台治理。"
         />
       ) : !showPlatformManagement ? (
@@ -105,7 +116,7 @@ export default function PlatformManagementPage() {
           className="console-alert"
           type="error"
           showIcon
-          message="当前账号没有平台治理权限"
+          title="当前账号没有平台治理权限"
           description="平台治理入口仅对具备平台治理角色的账号开放。"
         />
       ) : (

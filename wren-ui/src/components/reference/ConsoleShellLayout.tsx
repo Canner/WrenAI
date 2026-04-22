@@ -1,6 +1,5 @@
 import { ReactNode, useEffect, useMemo, useRef } from 'react';
-import { Skeleton, Typography } from 'antd';
-import styled from 'styled-components';
+import { Card, Layout, Segmented, Skeleton, Space, Typography } from 'antd';
 import useHomeSidebar from '@/hooks/useHomeSidebar';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import { getReferenceDisplayThreadTitle } from '@/utils/referenceDemoKnowledge';
@@ -11,7 +10,7 @@ import DolaAppShell, {
 import { usePersistentShellEmbedded } from './PersistentShellContext';
 import { buildNovaShellNavItems, NovaShellNavKey } from './novaShellNavigation';
 
-const { Paragraph, Title } = Typography;
+const { Paragraph, Text, Title } = Typography;
 
 export interface ConsoleSectionItem {
   key: string;
@@ -68,220 +67,45 @@ export const shouldRefetchConsoleHistory = ({
   return true;
 };
 
-const PageRoot = styled.div<{ $flush?: boolean }>`
-  min-height: ${(props) => (props.$flush ? '100dvh' : 'calc(100vh - 48px)')};
-  height: ${(props) => (props.$flush ? '100dvh' : 'auto')};
-  padding: 0;
-  background: transparent;
-`;
-
-const ShellStack = styled.div<{ $flush?: boolean }>`
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  min-height: ${(props) => (props.$flush ? '100dvh' : '0')};
-  height: ${(props) => (props.$flush ? '100dvh' : 'auto')};
-`;
-
-const SegmentSurface = styled.div`
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 8px;
-  border-radius: 20px;
-  border: 1px solid var(--nova-outline-soft);
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(12px);
-`;
-
-const SegmentButton = styled.button<{ $active?: boolean }>`
-  height: 38px;
-  padding: 0 16px;
-  border-radius: 10px;
-  border: 1px solid transparent;
-  background: ${(props) => (props.$active ? '#fff' : 'transparent')};
-  color: ${(props) =>
-    props.$active ? 'var(--nova-primary)' : 'var(--nova-text-secondary)'};
-  font-weight: ${(props) => (props.$active ? 600 : 500)};
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: ${(props) =>
-    props.$active ? '0 2px 8px rgba(31, 35, 50, 0.06)' : 'none'};
-
-  &:hover {
-    color: var(--nova-primary-strong);
-  }
-`;
-
-const HeaderCard = styled.div`
-  position: relative;
-  border-radius: 16px;
-  border: 1px solid var(--nova-outline-soft);
-  background: #fff;
-  padding: 24px 28px;
-`;
-
-const HeaderRow = styled.div`
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-`;
-
-const HeaderBody = styled.div`
-  min-width: 0;
-  max-width: 880px;
-`;
-
-const Eyebrow = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: 999px;
-  background: rgba(141, 101, 225, 0.08);
-  color: var(--nova-primary);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-`;
-
-const ContentStage = styled.div<{ $borderless?: boolean; $stretch?: boolean }>`
-  border-radius: ${(props) => (props.$borderless ? '0' : '16px')};
-  border: ${(props) =>
-    props.$borderless ? '0' : '1px solid var(--nova-outline-soft)'};
-  background: ${(props) => (props.$borderless ? 'transparent' : '#fff')};
-  padding: ${(props) => (props.$borderless ? '0' : '24px')};
-  width: 100%;
-  flex: ${(props) => (props.$stretch ? '1 1 auto' : '0 0 auto')};
-  height: ${(props) => (props.$stretch ? '100%' : 'auto')};
-  min-height: ${(props) => (props.$stretch ? '0' : 'auto')};
-  display: ${(props) => (props.$stretch ? 'flex' : 'block')};
-  flex-direction: column;
-
-  .console-grid {
-    display: grid;
-    grid-template-columns: repeat(12, minmax(0, 1fr));
-    gap: 16px;
-  }
-
-  .console-panel {
-    border-radius: var(--nova-radius-card);
-    border: 1px solid var(--nova-outline-soft);
-    background: rgba(255, 255, 255, 0.96);
-    box-shadow: var(--nova-shadow-soft);
-    padding: 20px 22px;
-  }
-
-  .console-panel + .console-panel {
-    margin-top: 16px;
-  }
-
-  .console-panel-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 16px;
-    margin-bottom: 16px;
-  }
-
-  .console-panel-title {
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--nova-text-primary);
-  }
-
-  .console-panel-subtitle {
-    margin-top: 6px;
-    font-size: 13px;
-    color: var(--nova-text-secondary);
-  }
-
-  .console-metric-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-    gap: 14px;
-  }
-
-  .console-metric {
-    border-radius: 22px;
-    border: 1px solid var(--nova-outline-soft);
-    background: linear-gradient(
-      180deg,
-      rgba(233, 238, 255, 0.96) 0%,
-      rgba(255, 255, 255, 0.98) 100%
-    );
-    padding: 18px 18px 16px;
-    min-height: 112px;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
-  }
-
-  .console-metric-label {
-    display: block;
-    font-size: 12px;
-    color: var(--nova-text-muted);
-    margin-bottom: 8px;
-  }
-
-  .console-metric-value {
-    display: block;
-    font-size: 24px;
-    line-height: 1.15;
-    font-weight: 700;
-    color: var(--nova-text-primary);
-    margin-bottom: 6px;
-  }
-
-  .console-metric-meta {
-    font-size: 13px;
-    color: var(--nova-text-secondary);
-  }
-
+const consoleLayoutStyles = `
   .console-table.ant-table-wrapper {
     margin-top: 4px;
   }
 
-  .console-table .ant-table {
-    background: transparent;
-  }
-
   .console-table .ant-table-container {
-    border-radius: 18px;
+    border-radius: 16px;
     overflow: hidden;
-    border: 1px solid var(--nova-outline-soft);
+    border: 1px solid #e5e7eb;
   }
 
   .console-table .ant-table-thead > tr > th {
-    background: var(--nova-surface-soft);
-    color: var(--nova-text-secondary);
+    background: #f8fafc;
+    color: #475467;
     font-weight: 600;
-    border-bottom: 1px solid var(--nova-outline-soft);
+    border-bottom: 1px solid #e5e7eb;
   }
 
   .console-table .ant-table-tbody > tr > td {
-    background: rgba(255, 255, 255, 0.88);
-    border-bottom: 1px solid var(--nova-outline-soft);
+    background: #ffffff;
+    border-bottom: 1px solid #eef2f6;
   }
 
   .console-table .ant-table-tbody > tr:hover > td {
     background: #fcfdff;
   }
 
-  .console-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px;
-  }
-
   .console-alert.ant-alert {
-    border-radius: 18px;
-    border: 1px solid rgba(250, 173, 20, 0.24);
-    background: #fffaf0;
+    border-radius: 14px;
   }
 `;
+
+const contentWrapperStyle = (stretchContent?: boolean) => ({
+  display: stretchContent ? 'flex' : 'block',
+  flex: stretchContent ? '1 1 auto' : undefined,
+  minHeight: stretchContent ? 0 : undefined,
+  flexDirection: stretchContent ? ('column' as const) : undefined,
+  width: '100%',
+});
 
 export default function ConsoleShellLayout({
   activeNav = 'knowledge',
@@ -360,68 +184,152 @@ export default function ConsoleShellLayout({
     [activeNav, navItems, runtimeScopeNavigation.pushWorkspace],
   );
 
-  const content = (
-    <PageRoot $flush={flushMainPadding}>
-      <ShellStack $flush={flushMainPadding}>
-        {sections?.length ? (
-          <SegmentSurface>
-            {sections.map((section) => (
-              <SegmentButton
-                key={section.key}
-                type="button"
-                $active={section.key === activeSectionKey}
-                onClick={section.onClick}
-              >
-                {section.label}
-              </SegmentButton>
-            ))}
-          </SegmentSurface>
-        ) : null}
+  const renderedContent = loading ? (
+    <Skeleton active paragraph={{ rows: 8 }} />
+  ) : (
+    children
+  );
 
-        {!hideHeader ? (
-          <HeaderCard>
-            <HeaderRow>
-              <HeaderBody>
-                {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
-                <Title
-                  level={2}
-                  style={{
-                    margin: `${eyebrow ? 16 : 0}px 0 8px`,
-                    fontSize: 30,
-                    lineHeight: 1.2,
-                  }}
-                >
-                  {title}
-                </Title>
-                {description ? (
-                  <Paragraph
+  const contentStage = contentBorderless ? (
+    <div style={contentWrapperStyle(stretchContent)}>{renderedContent}</div>
+  ) : (
+    <Card
+      variant="borderless"
+      style={{
+        ...contentWrapperStyle(stretchContent),
+        border: '1px solid #e5e7eb',
+        borderRadius: 16,
+        boxShadow: '0 1px 2px rgba(16, 24, 40, 0.04)',
+      }}
+      styles={{
+        body: {
+          display: stretchContent ? 'flex' : 'block',
+          flex: stretchContent ? '1 1 auto' : undefined,
+          minHeight: stretchContent ? 0 : undefined,
+          flexDirection: stretchContent ? 'column' : undefined,
+          padding: 24,
+        },
+      }}
+    >
+      {renderedContent}
+    </Card>
+  );
+
+  const selectedSectionKey =
+    activeSectionKey || (sections && sections.length ? sections[0].key : null);
+
+  const pageContent = (
+    <>
+      <style jsx global>
+        {consoleLayoutStyles}
+      </style>
+      <Layout
+        style={{
+          background: 'transparent',
+          minHeight: flushMainPadding ? '100dvh' : 'calc(100vh - 48px)',
+        }}
+      >
+        <Layout.Content style={{ background: 'transparent' }}>
+          <Space
+            orientation="vertical"
+            size={18}
+            style={{
+              width: '100%',
+              display: 'flex',
+              minHeight: flushMainPadding ? '100dvh' : undefined,
+            }}
+          >
+            {sections?.length ? (
+              <Segmented
+                options={sections.map((section) => ({
+                  label: section.label,
+                  value: section.key,
+                }))}
+                value={selectedSectionKey || undefined}
+                onChange={(nextValue) => {
+                  sections
+                    .find((section) => section.key === nextValue)
+                    ?.onClick();
+                }}
+                style={{ alignSelf: 'flex-start' }}
+              />
+            ) : null}
+
+            {!hideHeader ? (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  justifyContent: 'space-between',
+                  gap: 24,
+                  flexWrap: 'wrap',
+                }}
+              >
+                <div style={{ minWidth: 0, maxWidth: 880 }}>
+                  {eyebrow ? (
+                    <Text
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        padding: '4px 10px',
+                        borderRadius: 999,
+                        background: '#f3f4ff',
+                        color: '#6d4aff',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        lineHeight: '20px',
+                      }}
+                    >
+                      {eyebrow}
+                    </Text>
+                  ) : null}
+                  <Title
+                    level={2}
                     style={{
-                      marginBottom: 0,
-                      maxWidth: 760,
-                      fontSize: 15,
-                      color: '#667085',
+                      margin: `${eyebrow ? 16 : 0}px 0 8px`,
+                      fontSize: 30,
+                      lineHeight: 1.2,
                     }}
                   >
-                    {description}
-                  </Paragraph>
+                    {title}
+                  </Title>
+                  {description ? (
+                    <Paragraph
+                      style={{
+                        marginBottom: 0,
+                        maxWidth: 760,
+                        fontSize: 15,
+                        color: '#667085',
+                      }}
+                    >
+                      {description}
+                    </Paragraph>
+                  ) : null}
+                </div>
+                {titleExtra ? (
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      alignItems: 'center',
+                      gap: 10,
+                    }}
+                  >
+                    {titleExtra}
+                  </div>
                 ) : null}
-              </HeaderBody>
-              {titleExtra ? (
-                <div className="console-toolbar">{titleExtra}</div>
-              ) : null}
-            </HeaderRow>
-          </HeaderCard>
-        ) : null}
+              </div>
+            ) : null}
 
-        <ContentStage $borderless={contentBorderless} $stretch={stretchContent}>
-          {loading ? <Skeleton active paragraph={{ rows: 8 }} /> : children}
-        </ContentStage>
-      </ShellStack>
-    </PageRoot>
+            {contentStage}
+          </Space>
+        </Layout.Content>
+      </Layout>
+    </>
   );
 
   if (embedded) {
-    return content;
+    return pageContent;
   }
 
   return (
@@ -438,7 +346,7 @@ export default function ConsoleShellLayout({
       flushMainPadding={flushMainPadding}
       stretchContent={stretchContent}
     >
-      {content}
+      {pageContent}
     </DolaAppShell>
   );
 }

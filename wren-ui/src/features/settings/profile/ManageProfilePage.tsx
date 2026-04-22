@@ -35,6 +35,15 @@ import { resolvePlatformManagementFromAuthSession } from '@/features/settings/se
 
 const { Text, Title } = Typography;
 
+const PASSWORD_RULE_BUTTON_STYLE = {
+  color: 'var(--nova-text-secondary)',
+} as const;
+
+const PASSWORD_FORM_COLUMN_STYLE = {
+  width: '100%',
+  maxWidth: 760,
+} as const;
+
 const SECURITY_TIPS = [
   {
     key: 'password',
@@ -404,7 +413,7 @@ export default function ManageProfilePage() {
           className="console-alert"
           type="warning"
           showIcon
-          message="当前未登录"
+          title="当前未登录"
           description="请先登录后再查看个人设置。"
         />
       ) : (
@@ -414,7 +423,7 @@ export default function ManageProfilePage() {
               className="console-alert"
               type="warning"
               showIcon
-              message="当前处于代理登录（Impersonation）会话"
+              title="当前处于代理登录（Impersonation）会话"
               description={
                 <Space orientation="vertical" size={8}>
                   <Text type="secondary">
@@ -490,24 +499,17 @@ export default function ManageProfilePage() {
               </Col>
 
               <Col xs={24} xl={14}>
-                <div
-                  style={{
-                    border: '1px solid var(--ant-color-border-secondary)',
-                    borderRadius: 16,
-                    padding: 20,
-                    background: 'var(--ant-color-fill-quaternary)',
+                <Descriptions
+                  bordered
+                  size="small"
+                  column={2}
+                  colon={false}
+                  items={profileSummaryItems}
+                  styles={{
+                    label: { color: 'var(--nova-text-secondary)' },
+                    content: { color: 'var(--nova-text-primary)' },
                   }}
-                >
-                  <Descriptions
-                    column={2}
-                    colon={false}
-                    items={profileSummaryItems}
-                    styles={{
-                      label: { color: 'var(--nova-text-secondary)' },
-                      content: { color: 'var(--nova-text-primary)' },
-                    }}
-                  />
-                </div>
+                />
               </Col>
             </Row>
           </Card>
@@ -526,24 +528,20 @@ export default function ManageProfilePage() {
                     aria-label="查看密码规则"
                     icon={<InfoCircleOutlined />}
                     size="small"
-                    type="text"
-                    style={{
-                      width: 28,
-                      height: 28,
-                      padding: 0,
-                      borderRadius: 999,
-                      color: 'var(--nova-text-secondary)',
-                      background: 'var(--ant-color-fill-quaternary)',
-                      border: '1px solid var(--ant-color-border-secondary)',
-                    }}
+                    shape="circle"
+                    style={PASSWORD_RULE_BUTTON_STYLE}
                   />
                 </Popover>
               </Space>
             }
           >
-            <Row gutter={[32, 24]} style={{ alignItems: 'stretch' }}>
-              <Col xs={24} xl={15} style={{ display: 'flex' }}>
-                <div style={{ maxWidth: 760, width: '100%' }}>
+            <Row gutter={[32, 24]} align="stretch">
+              <Col xs={24} xl={15}>
+                <Space
+                  orientation="vertical"
+                  size={0}
+                  style={PASSWORD_FORM_COLUMN_STYLE}
+                >
                   <Form layout="vertical">
                     <Form.Item label="旧密码">
                       <Input.Password
@@ -653,114 +651,76 @@ export default function ManageProfilePage() {
                       </Button>
                     </Space>
                   </Form>
-                </div>
+                </Space>
               </Col>
 
-              <Col xs={24} xl={9} style={{ display: 'flex' }}>
-                <div
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    border: '1px solid var(--ant-color-border-secondary)',
-                    borderRadius: 18,
-                    padding: 18,
-                    background:
-                      'linear-gradient(180deg, rgba(117, 89, 255, 0.03), rgba(255, 255, 255, 0.98))',
-                    display: 'flex',
-                    flexDirection: 'column',
-                  }}
+              <Col xs={24} xl={9}>
+                <Space
+                  orientation="vertical"
+                  size={16}
+                  style={{ width: '100%' }}
                 >
-                  <Space
-                    orientation="vertical"
-                    size={16}
-                    style={{ width: '100%' }}
-                  >
-                    <Space align="start" size={10}>
-                      <div
-                        style={{
-                          width: 36,
-                          height: 36,
-                          borderRadius: 12,
-                          background: 'rgba(87, 97, 255, 0.10)',
-                          color: '#5669FF',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          flexShrink: 0,
-                        }}
-                      >
+                  <Space align="start" size={10}>
+                    <Avatar
+                      size={36}
+                      icon={
                         <SafetyCertificateOutlined style={{ fontSize: 18 }} />
-                      </div>
-                      <Space orientation="vertical" size={2}>
-                        <Text strong style={{ fontSize: 18 }}>
-                          安全建议
-                        </Text>
-                        <Text
-                          type="secondary"
-                          style={{ fontSize: 13, lineHeight: 1.6 }}
-                        >
-                          保持凭据唯一、可恢复且能快速审计，是 Nova
-                          管理后台的默认安全基线。
-                        </Text>
-                      </Space>
+                      }
+                      style={{
+                        background: 'rgba(87, 97, 255, 0.10)',
+                        color: '#5669FF',
+                      }}
+                    />
+                    <Space orientation="vertical" size={2}>
+                      <Text strong style={{ fontSize: 18 }}>
+                        安全建议
+                      </Text>
+                      <Text
+                        type="secondary"
+                        style={{ fontSize: 13, lineHeight: 1.6 }}
+                      >
+                        保持凭据唯一、可恢复且能快速审计，是 Nova
+                        管理后台的默认安全基线。
+                      </Text>
                     </Space>
+                  </Space>
 
-                    <div style={{ width: '100%' }}>
-                      <div
-                        style={{
-                          borderTop:
-                            '1px solid var(--ant-color-border-secondary)',
-                        }}
-                      />
-                      {SECURITY_TIPS.map(
-                        ({ key, title, description, Icon }, index) => (
-                          <div
-                            key={key}
-                            style={{
-                              display: 'flex',
-                              gap: 10,
-                              padding: '12px 0',
-                              borderTop:
-                                index > 0
-                                  ? '1px solid var(--ant-color-border-secondary)'
-                                  : undefined,
-                            }}
-                          >
-                            <div
+                  <Descriptions
+                    column={1}
+                    colon={false}
+                    size="small"
+                    items={SECURITY_TIPS.map(
+                      ({ key, title, description, Icon }) => ({
+                        key,
+                        label: (
+                          <Space size={8} align="center">
+                            <Avatar
+                              size={28}
+                              icon={<Icon style={{ fontSize: 14 }} />}
                               style={{
-                                width: 24,
-                                height: 24,
-                                borderRadius: 8,
                                 background: 'var(--ant-color-bg-container)',
                                 border:
                                   '1px solid var(--ant-color-border-secondary)',
                                 color: '#5669FF',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                flexShrink: 0,
-                                marginTop: 2,
                               }}
-                            >
-                              <Icon style={{ fontSize: 14 }} />
-                            </div>
-                            <Space orientation="vertical" size={2}>
-                              <Text strong style={{ fontSize: 13 }}>
-                                {title}
-                              </Text>
-                              <Text
-                                type="secondary"
-                                style={{ fontSize: 12, lineHeight: 1.6 }}
-                              >
-                                {description}
-                              </Text>
-                            </Space>
-                          </div>
+                            />
+                            <Text strong style={{ fontSize: 13 }}>
+                              {title}
+                            </Text>
+                          </Space>
                         ),
-                      )}
-                    </div>
-                  </Space>
-                </div>
+                        children: (
+                          <Text
+                            type="secondary"
+                            style={{ fontSize: 12, lineHeight: 1.6 }}
+                          >
+                            {description}
+                          </Text>
+                        ),
+                      }),
+                    )}
+                  />
+                </Space>
               </Col>
             </Row>
           </Card>

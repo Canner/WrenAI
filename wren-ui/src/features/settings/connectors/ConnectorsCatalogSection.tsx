@@ -1,11 +1,20 @@
-import { Button, Popconfirm, Space, Table, Tag, Typography } from 'antd';
+import {
+  Button,
+  Col,
+  Popconfirm,
+  Row,
+  Space,
+  Table,
+  Tag,
+  Typography,
+} from 'antd';
 import {
   CONNECTOR_TYPE_OPTIONS,
   DATABASE_PROVIDER_OPTIONS,
   type ConnectorView,
 } from './connectorsPageUtils';
 
-const { Paragraph, Text } = Typography;
+const { Paragraph, Text, Title } = Typography;
 
 const CONNECTOR_TYPE_LABELS = Object.fromEntries(
   CONNECTOR_TYPE_OPTIONS.map((option) => [option.value, option.label]),
@@ -46,44 +55,47 @@ export default function ConnectorsCatalogSection({
 }: ConnectorsCatalogSectionProps) {
   return (
     <>
-      <Space
-        align="start"
-        size={16}
-        style={{
-          width: '100%',
-          justifyContent: 'space-between',
-          marginBottom: 12,
-        }}
-        wrap
+      <Row
+        align="middle"
+        gutter={[16, 12]}
+        justify="space-between"
+        style={{ marginBottom: 12 }}
       >
-        <Space orientation="vertical" size={4} style={{ maxWidth: 640 }}>
-          <Text strong>连接器目录</Text>
-          <Text type="secondary">
-            {connectors.length > 0
-              ? `当前共 ${connectors.length} 个连接器，${configuredSecretCount} 个已配置密钥。`
-              : '统一管理工作区可复用的 API、数据库与工具端点。'}
-          </Text>
-        </Space>
-        <Space wrap>
-          {configuredSecretCount > 0 ? (
+        <Col flex="auto">
+          <Space orientation="vertical" size={4} style={{ maxWidth: 640 }}>
+            <Title level={4} style={{ margin: 0 }}>
+              连接器目录
+            </Title>
+            <Text type="secondary">
+              {connectors.length > 0
+                ? `当前共 ${connectors.length} 个连接器，${configuredSecretCount} 个已配置密钥。`
+                : '统一管理工作区可复用的 API、数据库与工具端点。'}
+            </Text>
+          </Space>
+        </Col>
+        <Col>
+          <Space wrap>
+            {configuredSecretCount > 0 ? (
+              <Button
+                onClick={onOpenSecretOpsModal}
+                disabled={Boolean(rotateConnectorSecretBlockedReason)}
+              >
+                批量轮换密钥
+              </Button>
+            ) : null}
             <Button
-              onClick={onOpenSecretOpsModal}
-              disabled={Boolean(rotateConnectorSecretBlockedReason)}
+              type="primary"
+              onClick={onOpenCreateModal}
+              disabled={Boolean(createConnectorBlockedReason)}
             >
-              批量轮换密钥
+              添加连接器
             </Button>
-          ) : null}
-          <Button
-            type="primary"
-            onClick={onOpenCreateModal}
-            disabled={Boolean(createConnectorBlockedReason)}
-          >
-            添加连接器
-          </Button>
-        </Space>
-      </Space>
+          </Space>
+        </Col>
+      </Row>
 
       <Table
+        className="console-table"
         rowKey="id"
         dataSource={connectors}
         locale={{ emptyText: '暂无数据' }}

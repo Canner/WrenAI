@@ -70,11 +70,12 @@ export default function AutomationServiceAccountsSection({
               type="info"
               showIcon
               style={{ marginBottom: 12 }}
-              message="当前为只读视图"
+              title="当前为只读视图"
               description="你可以查看 service account 与 API Token 状态，但创建、轮换、吊销仍需要具备 service_account / api_token 管理权限。"
             />
           ) : null}
           <Table
+            className="console-table"
             rowKey="id"
             loading={loading || serviceAccountLoading}
             pagination={false}

@@ -81,7 +81,7 @@ export default function UsersMemberRoleModal({
             <Alert
               type="warning"
               showIcon
-              message={roleChangeDisabledReason}
+              title={roleChangeDisabledReason}
               style={{ marginBottom: 12 }}
             />
           ) : null}

@@ -5,9 +5,12 @@ import {
   Button,
   Card,
   Checkbox,
+  Col,
   Dropdown,
   Empty,
+  Form,
   Input,
+  Row,
   Skeleton,
   Space,
   Switch,
@@ -33,6 +36,7 @@ import {
 import PermissionsRoleCatalogUnsavedModal from '@/features/settings/permissions/PermissionsRoleCatalogUnsavedModal';
 import { buildRuntimeScopeUrl } from '@/runtime/client/runtimeScope';
 import {
+  ACTION_TAG_COLORS,
   EMPTY_ROLE_DRAFT,
   EMPTY_ROLE_ID,
   PLATFORM_PERMISSION_MODULES,
@@ -58,6 +62,10 @@ import {
 
 const { Paragraph, Text } = Typography;
 
+const FULL_WIDTH_STYLE = {
+  width: '100%',
+} as const;
+
 type PermissionsPayload = {
   roles: PlatformRoleCatalogItem[];
   permissionCatalog: PlatformPermissionCatalogItem[];
@@ -70,23 +78,37 @@ type PermissionsPayload = {
 
 type PendingAction = { type: 'create' } | { type: 'select'; roleId: string };
 
-const READONLY_FIELD_STYLE = {
-  minWidth: 180,
-  minHeight: 32,
-  display: 'flex',
-  alignItems: 'center',
-  paddingInline: 11,
-  borderRadius: 6,
-  border: '1px solid var(--ant-color-border-secondary)',
-  background: 'var(--ant-color-fill-quaternary)',
-} as const;
-
 const PANEL_BODY_STYLE = {
   padding: '12px 12px 8px',
   display: 'flex',
   flexDirection: 'column',
   minHeight: 0,
   height: '100%',
+} as const;
+
+const PANEL_COLUMN_STYLE = {
+  display: 'flex',
+} as const;
+
+const PANEL_CARD_STYLE = {
+  width: '100%',
+  display: 'flex',
+  flexDirection: 'column',
+} as const;
+
+const LAYOUT_ROW_STYLE = {
+  minHeight: 'calc(100vh - 180px)',
+} as const;
+
+const SIDEBAR_SCROLL_STYLE = {
+  flex: 1,
+  minHeight: 0,
+  overflow: 'auto',
+  paddingRight: 4,
+} as const;
+
+const ROLE_ITEM_BODY_STYLE = {
+  padding: '8px 8px 8px 10px',
 } as const;
 
 const FILTER_BAR_STYLE = {
@@ -114,19 +136,104 @@ const FOOTER_BAR_STYLE = {
   zIndex: 1,
 } as const;
 
-const ACTION_LABEL_STYLE = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  minHeight: 22,
-  paddingInline: 8,
-  borderRadius: 999,
-  color: 'var(--ant-color-primary)',
-  background: 'var(--ant-color-primary-bg)',
-  fontSize: 12,
-  fontWeight: 600,
-  lineHeight: 1,
+const EDITOR_SECTION_STYLE = {
+  width: '100%',
+  borderBottom: '1px solid var(--ant-color-border-secondary)',
+  paddingBottom: 12,
+  marginBottom: 12,
 } as const;
+
+const EDITOR_STICKY_TABS_STYLE = {
+  width: '100%',
+  position: 'sticky',
+  top: 0,
+  zIndex: 2,
+  background: 'var(--ant-color-bg-container)',
+  borderBottom: '1px solid var(--ant-color-border-secondary)',
+  marginBottom: 6,
+} as const;
+
+const EDITOR_SCROLL_BODY_STYLE = {
+  flex: 1,
+  minHeight: 0,
+  overflow: 'auto',
+  paddingRight: 4,
+  paddingBottom: 72,
+} as const;
+
+const getRoleListItemStyle = (selected: boolean) =>
+  ({
+    width: '100%',
+    border: selected
+      ? '1px solid var(--ant-color-primary-border)'
+      : '1px solid var(--ant-color-border-secondary)',
+    borderRadius: 8,
+    cursor: 'pointer',
+    background: selected
+      ? 'var(--ant-color-primary-bg)'
+      : 'var(--ant-color-bg-container)',
+    boxShadow: selected ? '0 0 0 1px rgba(22, 119, 255, 0.12) inset' : 'none',
+    transition: 'all 120ms ease',
+  }) as const;
+
+const getPermissionOptionStyle = (checked: boolean) =>
+  ({
+    minHeight: 88,
+    border: checked
+      ? '1px solid var(--ant-color-primary)'
+      : '1px solid var(--ant-color-border)',
+    borderRadius: 8,
+    padding: 7,
+    background: 'var(--ant-color-bg-container)',
+    cursor: 'pointer',
+    display: 'flex',
+    gap: 8,
+    alignItems: 'flex-start',
+    boxShadow: checked
+      ? '0 0 0 1px rgba(22, 119, 255, 0.08) inset'
+      : '0 0 0 1px rgba(15, 23, 42, 0.04) inset',
+  }) as const;
+
+const PERMISSION_OPTION_CONTENT_STYLE = {
+  width: '100%',
+  alignItems: 'flex-start',
+} as const;
+
+const PERMISSION_OPTION_META_STYLE = {
+  minWidth: 0,
+  flex: 1,
+} as const;
+
+const PERMISSION_NAME_STYLE = {
+  display: 'block',
+  marginTop: 6,
+  fontSize: 12,
+  maxWidth: 180,
+  lineHeight: 1.35,
+} as const;
+
+const PERMISSION_DESCRIPTION_STYLE = {
+  marginTop: 0,
+  marginBottom: 0,
+  fontSize: 12,
+  lineHeight: 1.35,
+} as const;
+
+const ReadonlyField = ({
+  fallback = '--',
+  minWidth,
+  value,
+}: {
+  fallback?: string;
+  minWidth: number;
+  value?: string | null;
+}) => (
+  <Input
+    readOnly
+    value={value?.trim() || fallback}
+    style={{ width: minWidth }}
+  />
+);
 
 export default function ManagePlatformPermissionsPage() {
   const runtimeScopePage = useProtectedRuntimeScopePage();
@@ -601,12 +708,6 @@ export default function ManagePlatformPermissionsPage() {
     return items;
   };
 
-  const renderReadonlyField = (value: string, minWidth = 180) => (
-    <div style={{ ...READONLY_FIELD_STYLE, minWidth }}>
-      <Text>{value || '--'}</Text>
-    </div>
-  );
-
   const moduleOperationItems: MenuProps['items'] = [
     {
       key: 'select',
@@ -652,7 +753,7 @@ export default function ManagePlatformPermissionsPage() {
           className="console-alert"
           type="warning"
           showIcon
-          message="当前未登录"
+          title="当前未登录"
           description="请先登录后再查看平台权限管理。"
         />
       ) : !canAccessPage ? (
@@ -660,311 +761,289 @@ export default function ManagePlatformPermissionsPage() {
           className="console-alert"
           type="error"
           showIcon
-          message="当前账号没有平台治理权限"
+          title="当前账号没有平台治理权限"
           description="平台权限管理仅对具备平台角色目录查看权限的角色开放。"
         />
       ) : (
-        <div
-          style={{
-            display: 'flex',
-            gap: 12,
-            minHeight: 'calc(100vh - 180px)',
-            alignItems: 'stretch',
-          }}
-        >
-          <Card
-            size="small"
-            style={{
-              width: 296,
-              minWidth: 280,
-              flexShrink: 0,
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-            styles={{ body: PANEL_BODY_STYLE }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 8,
-                marginBottom: 8,
-              }}
+        <Row gutter={[12, 12]} align="stretch" style={LAYOUT_ROW_STYLE}>
+          <Col flex="296px" style={{ ...PANEL_COLUMN_STYLE, minWidth: 280 }}>
+            <Card
+              size="small"
+              style={PANEL_CARD_STYLE}
+              styles={{ body: PANEL_BODY_STYLE }}
             >
-              <Space size={8}>
-                <Text strong style={{ fontSize: 15 }}>
-                  角色列表
-                </Text>
-              </Space>
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                disabled={!canCreateRoles}
-                onClick={() => requestAction({ type: 'create' })}
+              <Row
+                align="middle"
+                gutter={[8, 8]}
+                justify="space-between"
+                style={{ marginBottom: 8 }}
               >
-                新建
-              </Button>
-            </div>
+                <Col flex="auto">
+                  <Text strong style={{ fontSize: 15 }}>
+                    角色列表
+                  </Text>
+                </Col>
+                <Col>
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    disabled={!canCreateRoles}
+                    onClick={() => requestAction({ type: 'create' })}
+                  >
+                    新建
+                  </Button>
+                </Col>
+              </Row>
 
-            <Input.Search
-              allowClear
-              value={roleKeyword}
-              placeholder="搜索角色"
-              onChange={(event) => setRoleKeyword(event.target.value)}
-              style={{ marginBottom: 8 }}
-            />
-
-            {error ? (
-              <Alert
-                type="warning"
-                showIcon
-                message={error}
+              <Input.Search
+                allowClear
+                value={roleKeyword}
+                placeholder="搜索角色"
+                onChange={(event) => setRoleKeyword(event.target.value)}
                 style={{ marginBottom: 8 }}
               />
-            ) : null}
 
-            <div style={{ flex: 1, overflow: 'auto', paddingRight: 4 }}>
-              {sidebarLoading ? (
-                <Space
-                  orientation="vertical"
-                  size={8}
-                  style={{ width: '100%' }}
-                >
-                  {Array.from({ length: 3 }).map((_, index) => (
-                    <Card key={index} size="small">
-                      <Skeleton active title={false} paragraph={{ rows: 2 }} />
-                    </Card>
-                  ))}
-                </Space>
-              ) : visibleRoles.length === 0 ? (
+              {error ? (
+                <Alert
+                  type="warning"
+                  showIcon
+                  title={error}
+                  style={{ marginBottom: 8 }}
+                />
+              ) : null}
+
+              <Space
+                orientation="vertical"
+                size={0}
+                style={SIDEBAR_SCROLL_STYLE}
+              >
+                {sidebarLoading ? (
+                  <Space
+                    orientation="vertical"
+                    size={8}
+                    style={FULL_WIDTH_STYLE}
+                  >
+                    {Array.from({ length: 3 }).map((_, index) => (
+                      <Card key={index} size="small">
+                        <Skeleton
+                          active
+                          title={false}
+                          paragraph={{ rows: 2 }}
+                        />
+                      </Card>
+                    ))}
+                  </Space>
+                ) : visibleRoles.length === 0 ? (
+                  <Empty
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    description="暂无匹配角色"
+                  />
+                ) : (
+                  <Space
+                    orientation="vertical"
+                    size={6}
+                    style={FULL_WIDTH_STYLE}
+                  >
+                    {visibleRoles.map((role) => {
+                      const selected =
+                        selectedRoleId === role.id && !isCreateMode;
+                      return (
+                        <Card
+                          key={role.id}
+                          size="small"
+                          role="button"
+                          tabIndex={0}
+                          onClick={() =>
+                            requestAction({ type: 'select', roleId: role.id })
+                          }
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault();
+                              requestAction({
+                                type: 'select',
+                                roleId: role.id,
+                              });
+                            }
+                          }}
+                          style={getRoleListItemStyle(selected)}
+                          styles={{ body: ROLE_ITEM_BODY_STYLE }}
+                        >
+                          <Row
+                            align="top"
+                            gutter={[6, 6]}
+                            justify="space-between"
+                          >
+                            <Col flex="auto" style={{ minWidth: 0 }}>
+                              <Space size={4} wrap>
+                                <Text strong ellipsis style={{ maxWidth: 148 }}>
+                                  {role.displayName || role.name}
+                                </Text>
+                                <Tag
+                                  color={role.isSystem ? 'gold' : 'blue'}
+                                  style={{ marginInlineEnd: 0 }}
+                                >
+                                  {role.isSystem ? '系统' : '自定义'}
+                                </Tag>
+                              </Space>
+                              <Text
+                                type="secondary"
+                                style={{
+                                  display: 'block',
+                                  marginTop: 4,
+                                  fontSize: 12,
+                                }}
+                              >
+                                {role.name}
+                              </Text>
+                              <Space
+                                size={[8, 6]}
+                                wrap
+                                style={{ marginTop: 8 }}
+                              >
+                                <Text type="secondary" style={{ fontSize: 12 }}>
+                                  {role.permissionNames.length} 项权限
+                                </Text>
+                                <Text type="secondary" style={{ fontSize: 12 }}>
+                                  {role.bindingCount} 个绑定
+                                </Text>
+                                <Badge
+                                  status={
+                                    role.isActive === false
+                                      ? 'default'
+                                      : 'success'
+                                  }
+                                  text={
+                                    role.isActive === false ? '停用' : '启用'
+                                  }
+                                />
+                              </Space>
+                            </Col>
+                            <Col>
+                              <Dropdown
+                                trigger={['click']}
+                                menu={{
+                                  items: buildSidebarRoleMenuItems(role),
+                                }}
+                              >
+                                <Button
+                                  type="text"
+                                  icon={<MoreOutlined />}
+                                  onClick={(event) => event.stopPropagation()}
+                                />
+                              </Dropdown>
+                            </Col>
+                          </Row>
+                        </Card>
+                      );
+                    })}
+                  </Space>
+                )}
+              </Space>
+            </Card>
+          </Col>
+
+          <Col flex="auto" style={{ ...PANEL_COLUMN_STYLE, minWidth: 0 }}>
+            <Card
+              size="small"
+              style={PANEL_CARD_STYLE}
+              styles={{ body: PANEL_BODY_STYLE }}
+            >
+              {!selectedRole && !isCreateMode ? (
                 <Empty
                   image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description="暂无匹配角色"
+                  description={
+                    loading ? '正在加载角色目录…' : '请选择左侧角色查看详情'
+                  }
                 />
               ) : (
-                <Space
-                  orientation="vertical"
-                  size={6}
-                  style={{ width: '100%' }}
-                >
-                  {visibleRoles.map((role) => {
-                    const selected =
-                      selectedRoleId === role.id && !isCreateMode;
-                    return (
-                      <div
-                        key={role.id}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() =>
-                          requestAction({ type: 'select', roleId: role.id })
-                        }
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault();
-                            requestAction({ type: 'select', roleId: role.id });
-                          }
-                        }}
-                        style={{
-                          border: selected
-                            ? '1px solid var(--ant-color-primary-border)'
-                            : '1px solid var(--ant-color-border-secondary)',
-                          borderInlineStart: selected
-                            ? '3px solid var(--ant-color-primary)'
-                            : '3px solid transparent',
-                          borderRadius: 8,
-                          padding: '8px 8px 8px 10px',
-                          cursor: 'pointer',
-                          background: selected
-                            ? 'rgba(22, 119, 255, 0.12)'
-                            : 'var(--ant-color-bg-container)',
-                          boxShadow: selected
-                            ? '0 0 0 1px rgba(22, 119, 255, 0.14) inset'
-                            : 'none',
-                          transition: 'all 120ms ease',
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: 'flex',
-                            alignItems: 'flex-start',
-                            justifyContent: 'space-between',
-                            gap: 6,
-                          }}
-                        >
-                          <div style={{ minWidth: 0, flex: 1 }}>
-                            <Space size={4} wrap>
-                              <Text strong ellipsis style={{ maxWidth: 148 }}>
-                                {role.displayName || role.name}
-                              </Text>
-                              <Tag
-                                color={role.isSystem ? 'gold' : 'blue'}
-                                style={{ marginInlineEnd: 0 }}
-                              >
-                                {role.isSystem ? '系统' : '自定义'}
-                              </Tag>
-                            </Space>
-                            <Text
-                              type="secondary"
-                              style={{
-                                display: 'block',
-                                marginTop: 4,
-                                fontSize: 12,
-                              }}
-                            >
-                              {role.name}
-                            </Text>
-                            <div
-                              style={{
-                                marginTop: 8,
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 8,
-                                flexWrap: 'wrap',
-                              }}
-                            >
-                              <Text type="secondary" style={{ fontSize: 12 }}>
-                                {role.permissionNames.length} 项权限
-                              </Text>
-                              <Text type="secondary" style={{ fontSize: 12 }}>
-                                {role.bindingCount} 个绑定
-                              </Text>
-                              <Badge
-                                status={
-                                  role.isActive === false
-                                    ? 'default'
-                                    : 'success'
-                                }
-                                text={role.isActive === false ? '停用' : '启用'}
-                              />
-                            </div>
-                          </div>
-                          <Dropdown
-                            trigger={['click']}
-                            menu={{ items: buildSidebarRoleMenuItems(role) }}
-                          >
-                            <Button
-                              type="text"
-                              icon={<MoreOutlined />}
-                              onClick={(event) => event.stopPropagation()}
-                            />
-                          </Dropdown>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </Space>
-              )}
-            </div>
-          </Card>
-
-          <Card
-            size="small"
-            style={{
-              flex: 1,
-              minWidth: 0,
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-            styles={{ body: PANEL_BODY_STYLE }}
-          >
-            {!selectedRole && !isCreateMode ? (
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={
-                  loading ? '正在加载角色目录…' : '请选择左侧角色查看详情'
-                }
-              />
-            ) : (
-              <>
-                <div
-                  style={{
-                    borderBottom: '1px solid var(--ant-color-border-secondary)',
-                    paddingBottom: 12,
-                    marginBottom: 12,
-                  }}
-                >
+                <>
                   <Space
                     orientation="vertical"
                     size={10}
-                    style={{ width: '100%' }}
+                    style={EDITOR_SECTION_STYLE}
                   >
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: 12,
-                        flexWrap: 'wrap',
-                      }}
+                    <Row
+                      gutter={[12, 12]}
+                      align="middle"
+                      justify="space-between"
                     >
-                      <Space size={12} wrap style={{ flex: 1, minWidth: 0 }}>
-                        <Space size={6} align="center">
-                          <Text type="secondary" style={{ fontSize: 12 }}>
-                            角色标识
-                          </Text>
-                          {selectedRole && isSystemRole ? (
-                            renderReadonlyField(draft.name, 180)
-                          ) : (
-                            <Input
-                              style={{ width: 200 }}
-                              value={draft.name}
-                              disabled={metadataReadOnly && !isCreateMode}
-                              placeholder="例如：platform_operator"
-                              onChange={(event) =>
-                                setDraft((current) => ({
-                                  ...current,
-                                  name: normalizeRoleNameInput(
-                                    event.target.value,
-                                  ),
-                                }))
-                              }
-                            />
-                          )}
-                        </Space>
+                      <Col flex="auto" style={{ minWidth: 0 }}>
+                        <Form layout="vertical">
+                          <Row gutter={[12, 0]}>
+                            <Col xs={24} md={12}>
+                              <Form.Item
+                                label="角色标识"
+                                style={{ marginBottom: 0 }}
+                              >
+                                {selectedRole && isSystemRole ? (
+                                  <ReadonlyField
+                                    value={draft.name}
+                                    minWidth={180}
+                                  />
+                                ) : (
+                                  <Input
+                                    value={draft.name}
+                                    disabled={metadataReadOnly && !isCreateMode}
+                                    placeholder="例如：platform_operator"
+                                    onChange={(event) =>
+                                      setDraft((current) => ({
+                                        ...current,
+                                        name: normalizeRoleNameInput(
+                                          event.target.value,
+                                        ),
+                                      }))
+                                    }
+                                  />
+                                )}
+                              </Form.Item>
+                            </Col>
+                            <Col xs={24} md={12}>
+                              <Form.Item
+                                label="角色名称"
+                                style={{ marginBottom: 0 }}
+                              >
+                                {selectedRole && isSystemRole ? (
+                                  <ReadonlyField
+                                    value={draft.displayName || draft.name}
+                                    minWidth={180}
+                                  />
+                                ) : (
+                                  <Input
+                                    value={draft.displayName}
+                                    disabled={metadataReadOnly && !isCreateMode}
+                                    placeholder="默认使用角色标识"
+                                    onChange={(event) =>
+                                      setDraft((current) => ({
+                                        ...current,
+                                        displayName: event.target.value,
+                                      }))
+                                    }
+                                  />
+                                )}
+                              </Form.Item>
+                            </Col>
+                          </Row>
+                        </Form>
+                      </Col>
 
-                        <Space size={6} align="center">
+                      <Col>
+                        <Space size={8} align="center">
                           <Text type="secondary" style={{ fontSize: 12 }}>
-                            角色名称
+                            启用状态
                           </Text>
-                          {selectedRole && isSystemRole ? (
-                            renderReadonlyField(
-                              draft.displayName || draft.name,
-                              180,
-                            )
-                          ) : (
-                            <Input
-                              style={{ width: 220 }}
-                              value={draft.displayName}
-                              disabled={metadataReadOnly && !isCreateMode}
-                              placeholder="默认使用角色标识"
-                              onChange={(event) =>
-                                setDraft((current) => ({
-                                  ...current,
-                                  displayName: event.target.value,
-                                }))
-                              }
-                            />
-                          )}
+                          <Switch
+                            checked={draft.isActive}
+                            disabled={metadataReadOnly && !isCreateMode}
+                            onChange={(checked) =>
+                              setDraft((current) => ({
+                                ...current,
+                                isActive: checked,
+                              }))
+                            }
+                          />
                         </Space>
-                      </Space>
-
-                      <Space size={8} align="center">
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-                          启用状态
-                        </Text>
-                        <Switch
-                          checked={draft.isActive}
-                          disabled={metadataReadOnly && !isCreateMode}
-                          onChange={(checked) =>
-                            setDraft((current) => ({
-                              ...current,
-                              isActive: checked,
-                            }))
-                          }
-                        />
-                      </Space>
-                    </div>
+                      </Col>
+                    </Row>
 
                     <Text type="secondary" style={{ fontSize: 12 }}>
                       {isSystemRole
@@ -972,334 +1051,331 @@ export default function ManagePlatformPermissionsPage() {
                         : '自定义角色支持创建、编辑、停用和删除。'}
                     </Text>
                   </Space>
-                </div>
 
-                <div
-                  style={{
-                    position: 'sticky',
-                    top: 0,
-                    zIndex: 2,
-                    background: 'var(--ant-color-bg-container)',
-                    borderBottom: '1px solid var(--ant-color-border-secondary)',
-                    marginBottom: 6,
-                  }}
-                >
-                  <Tabs
-                    size="small"
-                    activeKey={activeModuleKey}
-                    onChange={(key) =>
-                      setActiveModuleKey(key as PlatformPermissionModuleKey)
-                    }
-                    style={{ marginBottom: 0, paddingTop: 2 }}
-                    items={moduleTabItems.map((module) => ({
-                      key: module.key,
-                      label: module.label,
-                    }))}
-                  />
-                </div>
-
-                <div style={FILTER_BAR_STYLE}>
-                  <Space size={[8, 8]} wrap>
-                    <Input.Search
-                      allowClear
-                      value={permissionKeyword}
-                      placeholder="搜索权限"
-                      style={{ width: 220 }}
-                      onChange={(event) =>
-                        setPermissionKeyword(event.target.value)
+                  <Space
+                    orientation="vertical"
+                    size={0}
+                    style={EDITOR_STICKY_TABS_STYLE}
+                  >
+                    <Tabs
+                      size="small"
+                      activeKey={activeModuleKey}
+                      onChange={(key) =>
+                        setActiveModuleKey(key as PlatformPermissionModuleKey)
                       }
+                      style={{ marginBottom: 0, paddingTop: 2 }}
+                      items={moduleTabItems.map((module) => ({
+                        key: module.key,
+                        label: module.label,
+                      }))}
                     />
-                    <Space size={6}>
-                      <Switch
-                        size="small"
-                        checked={onlyShowSelected}
-                        onChange={(checked) => setOnlyShowSelected(checked)}
-                      />
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        仅看已选
-                      </Text>
-                    </Space>
                   </Space>
-                  <Space size={[8, 8]} wrap>
-                    <Dropdown
-                      trigger={['click']}
-                      menu={{ items: moduleOperationItems }}
-                    >
-                      <Button
-                        icon={<MoreOutlined />}
-                        disabled={
-                          !canSubmitRole ||
-                          activeModulePermissionNames.length === 0
-                        }
-                      >
-                        模块操作
-                      </Button>
-                    </Dropdown>
-                    <Button
-                      disabled={!permissionKeyword && !onlyShowSelected}
-                      onClick={() => clearPermissionFilters()}
-                    >
-                      清空筛选
-                    </Button>
-                  </Space>
-                </div>
 
-                <div
-                  style={{
-                    flex: 1,
-                    overflow: 'auto',
-                    paddingRight: 4,
-                    paddingBottom: 72,
-                  }}
-                >
-                  {loading && permissionCatalog.length === 0 ? (
-                    <Space
-                      orientation="vertical"
-                      size={10}
-                      style={{ width: '100%' }}
-                    >
-                      {Array.from({ length: 2 }).map((_, index) => (
-                        <Card key={index}>
-                          <Skeleton
-                            active
-                            title={false}
-                            paragraph={{ rows: 3 }}
-                          />
-                        </Card>
-                      ))}
-                    </Space>
-                  ) : permissionGroups.length === 0 ? (
-                    <Empty
-                      image={Empty.PRESENTED_IMAGE_SIMPLE}
-                      description="当前筛选下暂无权限项"
-                    />
-                  ) : (
-                    <Space
-                      orientation="vertical"
-                      size={10}
-                      style={{ width: '100%' }}
-                    >
-                      {permissionGroups.map((group) => {
-                        const selectedCount = group.items.filter((permission) =>
-                          selectedPermissionSet.has(permission.name),
-                        ).length;
-                        const groupPermissionNames = group.items.map(
-                          (permission) => permission.name,
-                        );
-
-                        return (
-                          <Card
-                            key={group.key}
+                  <Row
+                    gutter={[8, 8]}
+                    justify="space-between"
+                    style={FILTER_BAR_STYLE}
+                  >
+                    <Col flex="auto">
+                      <Space size={[8, 8]} wrap>
+                        <Input.Search
+                          allowClear
+                          value={permissionKeyword}
+                          placeholder="搜索权限"
+                          style={{ width: 220 }}
+                          onChange={(event) =>
+                            setPermissionKeyword(event.target.value)
+                          }
+                        />
+                        <Space size={6}>
+                          <Switch
                             size="small"
-                            title={
-                              <Space size={8} wrap>
-                                <Text strong>{group.label}</Text>
-                                <Tag
-                                  color="default"
-                                  style={{ marginInlineEnd: 0 }}
-                                >
-                                  {selectedCount}/{group.items.length}
-                                </Tag>
-                              </Space>
+                            checked={onlyShowSelected}
+                            onChange={(checked) => setOnlyShowSelected(checked)}
+                          />
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            仅看已选
+                          </Text>
+                        </Space>
+                      </Space>
+                    </Col>
+                    <Col>
+                      <Space size={[8, 8]} wrap>
+                        <Dropdown
+                          trigger={['click']}
+                          menu={{ items: moduleOperationItems }}
+                        >
+                          <Button
+                            icon={<MoreOutlined />}
+                            disabled={
+                              !canSubmitRole ||
+                              activeModulePermissionNames.length === 0
                             }
-                            extra={
-                              <Dropdown
-                                trigger={['click']}
-                                menu={{
-                                  items: [
-                                    {
-                                      key: 'select',
-                                      label: '全选',
-                                      disabled: !canSubmitRole,
-                                      onClick: () =>
-                                        mutatePermissionSelection(
-                                          groupPermissionNames,
-                                          'select',
-                                        ),
-                                    },
-                                    {
-                                      key: 'clear',
-                                      label: '清空',
-                                      disabled: !canSubmitRole,
-                                      onClick: () =>
-                                        mutatePermissionSelection(
-                                          groupPermissionNames,
-                                          'clear',
-                                        ),
-                                    },
-                                    {
-                                      key: 'invert',
-                                      label: '反选',
-                                      disabled: !canSubmitRole,
-                                      onClick: () =>
-                                        mutatePermissionSelection(
-                                          groupPermissionNames,
-                                          'invert',
-                                        ),
-                                    },
-                                  ],
-                                }}
-                              >
-                                <Button
-                                  type="text"
-                                  size="small"
-                                  icon={<MoreOutlined />}
-                                >
-                                  更多
-                                </Button>
-                              </Dropdown>
-                            }
-                            styles={{ body: { padding: 8 } }}
-                            style={{
-                              borderRadius: 8,
-                            }}
                           >
-                            <div
+                            模块操作
+                          </Button>
+                        </Dropdown>
+                        <Button
+                          disabled={!permissionKeyword && !onlyShowSelected}
+                          onClick={() => clearPermissionFilters()}
+                        >
+                          清空筛选
+                        </Button>
+                      </Space>
+                    </Col>
+                  </Row>
+
+                  <Space
+                    orientation="vertical"
+                    size={0}
+                    style={EDITOR_SCROLL_BODY_STYLE}
+                  >
+                    {loading && permissionCatalog.length === 0 ? (
+                      <Space
+                        orientation="vertical"
+                        size={10}
+                        style={FULL_WIDTH_STYLE}
+                      >
+                        {Array.from({ length: 2 }).map((_, index) => (
+                          <Card key={index}>
+                            <Skeleton
+                              active
+                              title={false}
+                              paragraph={{ rows: 3 }}
+                            />
+                          </Card>
+                        ))}
+                      </Space>
+                    ) : permissionGroups.length === 0 ? (
+                      <Empty
+                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                        description="当前筛选下暂无权限项"
+                      />
+                    ) : (
+                      <Space
+                        orientation="vertical"
+                        size={10}
+                        style={FULL_WIDTH_STYLE}
+                      >
+                        {permissionGroups.map((group) => {
+                          const selectedCount = group.items.filter(
+                            (permission) =>
+                              selectedPermissionSet.has(permission.name),
+                          ).length;
+                          const groupPermissionNames = group.items.map(
+                            (permission) => permission.name,
+                          );
+
+                          return (
+                            <Card
+                              key={group.key}
+                              size="small"
+                              title={
+                                <Space size={8} wrap>
+                                  <Text strong>{group.label}</Text>
+                                  <Tag
+                                    color="default"
+                                    style={{ marginInlineEnd: 0 }}
+                                  >
+                                    {selectedCount}/{group.items.length}
+                                  </Tag>
+                                </Space>
+                              }
+                              extra={
+                                <Dropdown
+                                  trigger={['click']}
+                                  menu={{
+                                    items: [
+                                      {
+                                        key: 'select',
+                                        label: '全选',
+                                        disabled: !canSubmitRole,
+                                        onClick: () =>
+                                          mutatePermissionSelection(
+                                            groupPermissionNames,
+                                            'select',
+                                          ),
+                                      },
+                                      {
+                                        key: 'clear',
+                                        label: '清空',
+                                        disabled: !canSubmitRole,
+                                        onClick: () =>
+                                          mutatePermissionSelection(
+                                            groupPermissionNames,
+                                            'clear',
+                                          ),
+                                      },
+                                      {
+                                        key: 'invert',
+                                        label: '反选',
+                                        disabled: !canSubmitRole,
+                                        onClick: () =>
+                                          mutatePermissionSelection(
+                                            groupPermissionNames,
+                                            'invert',
+                                          ),
+                                      },
+                                    ],
+                                  }}
+                                >
+                                  <Button
+                                    type="text"
+                                    size="small"
+                                    icon={<MoreOutlined />}
+                                  >
+                                    更多
+                                  </Button>
+                                </Dropdown>
+                              }
+                              styles={{ body: { padding: 8 } }}
                               style={{
-                                display: 'grid',
-                                gridTemplateColumns:
-                                  'repeat(auto-fill, minmax(220px, 1fr))',
-                                gap: 8,
+                                borderRadius: 8,
                               }}
                             >
-                              {group.items.map((permission) => {
-                                const checked = selectedPermissionSet.has(
-                                  permission.name,
-                                );
-                                const action = getActionDescriptor(
-                                  permission.name,
-                                );
-                                const permissionDescription =
-                                  getPermissionDescription(permission);
-                                return (
-                                  <label
-                                    key={permission.name}
-                                    style={{
-                                      minHeight: 88,
-                                      border: checked
-                                        ? '1px solid var(--ant-color-primary)'
-                                        : '1px solid var(--ant-color-border)',
-                                      borderRadius: 8,
-                                      padding: 7,
-                                      background:
-                                        'var(--ant-color-bg-container)',
-                                      cursor: 'pointer',
-                                      display: 'flex',
-                                      gap: 8,
-                                      alignItems: 'flex-start',
-                                      boxShadow: checked
-                                        ? '0 0 0 1px rgba(22, 119, 255, 0.08) inset'
-                                        : '0 0 0 1px rgba(15, 23, 42, 0.04) inset',
-                                    }}
-                                  >
-                                    <Checkbox
-                                      checked={checked}
-                                      disabled={!canSubmitRole}
-                                      onChange={(event) =>
-                                        togglePermission(
-                                          permission.name,
-                                          event.target.checked,
-                                        )
-                                      }
-                                    />
-                                    <div style={{ minWidth: 0, flex: 1 }}>
-                                      <Space size={4} wrap>
-                                        <span style={ACTION_LABEL_STYLE}>
-                                          {action.label}
-                                        </span>
-                                        <Text
-                                          strong
-                                          style={{ maxWidth: 140 }}
-                                          ellipsis
-                                        >
-                                          {getPermissionHeadline(
-                                            permission.name,
-                                          )}
-                                        </Text>
-                                      </Space>
-                                      <div>
-                                        <Text
-                                          type="secondary"
-                                          style={{
-                                            fontSize: 12,
-                                            maxWidth: 180,
-                                          }}
-                                          ellipsis={{
-                                            tooltip: permission.name,
-                                          }}
-                                        >
-                                          {permission.name}
-                                        </Text>
-                                      </div>
-                                      <Paragraph
-                                        type="secondary"
-                                        style={{
-                                          marginTop: 1,
-                                          marginBottom: 0,
-                                          fontSize: 12,
-                                        }}
-                                        ellipsis={{
-                                          rows: 1,
-                                          tooltip: permissionDescription,
-                                        }}
+                              <Row gutter={[8, 8]}>
+                                {group.items.map((permission) => {
+                                  const checked = selectedPermissionSet.has(
+                                    permission.name,
+                                  );
+                                  const action = getActionDescriptor(
+                                    permission.name,
+                                  );
+                                  const permissionDescription =
+                                    getPermissionDescription(permission);
+                                  return (
+                                    <Col
+                                      key={permission.name}
+                                      xs={24}
+                                      md={12}
+                                      xl={8}
+                                    >
+                                      <label
+                                        style={getPermissionOptionStyle(
+                                          checked,
+                                        )}
                                       >
-                                        {permissionDescription}
-                                      </Paragraph>
-                                    </div>
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          </Card>
-                        );
-                      })}
-                    </Space>
-                  )}
-                </div>
+                                        <Space
+                                          align="start"
+                                          size={8}
+                                          style={
+                                            PERMISSION_OPTION_CONTENT_STYLE
+                                          }
+                                        >
+                                          <Checkbox
+                                            checked={checked}
+                                            disabled={!canSubmitRole}
+                                            onChange={(event) =>
+                                              togglePermission(
+                                                permission.name,
+                                                event.target.checked,
+                                              )
+                                            }
+                                          />
+                                          <Space
+                                            orientation="vertical"
+                                            size={2}
+                                            style={PERMISSION_OPTION_META_STYLE}
+                                          >
+                                            <Space size={[4, 4]} wrap>
+                                              <Tag
+                                                color={
+                                                  ACTION_TAG_COLORS[
+                                                    action.key
+                                                  ] || 'blue'
+                                                }
+                                              >
+                                                {action.label}
+                                              </Tag>
+                                              <Text
+                                                strong
+                                                style={{ maxWidth: 140 }}
+                                                ellipsis
+                                              >
+                                                {getPermissionHeadline(
+                                                  permission.name,
+                                                )}
+                                              </Text>
+                                            </Space>
+                                            <Text
+                                              type="secondary"
+                                              style={PERMISSION_NAME_STYLE}
+                                              ellipsis={{
+                                                tooltip: permission.name,
+                                              }}
+                                            >
+                                              {permission.name}
+                                            </Text>
+                                            <Paragraph
+                                              type="secondary"
+                                              style={
+                                                PERMISSION_DESCRIPTION_STYLE
+                                              }
+                                              ellipsis={{
+                                                rows: 1,
+                                                tooltip: permissionDescription,
+                                              }}
+                                            >
+                                              {permissionDescription}
+                                            </Paragraph>
+                                          </Space>
+                                        </Space>
+                                      </label>
+                                    </Col>
+                                  );
+                                })}
+                              </Row>
+                            </Card>
+                          );
+                        })}
+                      </Space>
+                    )}
+                  </Space>
 
-                <div style={FOOTER_BAR_STYLE}>
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      gap: 8,
-                      alignItems: 'center',
-                      flexWrap: 'wrap',
-                    }}
+                  <Space
+                    orientation="vertical"
+                    size={0}
+                    style={FOOTER_BAR_STYLE}
                   >
-                    <Space size={8} wrap>
-                      <Text type={isDirty ? 'warning' : 'secondary'}>
-                        {isDirty
-                          ? `已修改：新增 ${diffSummary.added} 项，移除 ${diffSummary.removed} 项`
-                          : footerStatusText}
-                      </Text>
-                    </Space>
-                    <Space size={8} wrap>
-                      <Button
-                        icon={<ReloadOutlined />}
-                        disabled={!isDirty}
-                        onClick={resetDraft}
-                      >
-                        重置改动
-                      </Button>
-                      <Button
-                        type="primary"
-                        icon={<SaveOutlined />}
-                        disabled={saveDisabled}
-                        loading={roleSaving}
-                        onClick={() => {
-                          void submitRole();
-                        }}
-                      >
-                        {isCreateMode ? '新建角色' : '保存变更'}
-                      </Button>
-                    </Space>
-                  </div>
-                </div>
-              </>
-            )}
-          </Card>
-        </div>
+                    <Row align="middle" gutter={[8, 8]} justify="space-between">
+                      <Col flex="auto">
+                        <Space size={8} wrap>
+                          <Text type={isDirty ? 'warning' : 'secondary'}>
+                            {isDirty
+                              ? `已修改：新增 ${diffSummary.added} 项，移除 ${diffSummary.removed} 项`
+                              : footerStatusText}
+                          </Text>
+                        </Space>
+                      </Col>
+                      <Col>
+                        <Space size={8} wrap>
+                          <Button
+                            icon={<ReloadOutlined />}
+                            disabled={!isDirty}
+                            onClick={resetDraft}
+                          >
+                            重置改动
+                          </Button>
+                          <Button
+                            type="primary"
+                            icon={<SaveOutlined />}
+                            disabled={saveDisabled}
+                            loading={roleSaving}
+                            onClick={() => {
+                              void submitRole();
+                            }}
+                          >
+                            {isCreateMode ? '新建角色' : '保存变更'}
+                          </Button>
+                        </Space>
+                      </Col>
+                    </Row>
+                  </Space>
+                </>
+              )}
+            </Card>
+          </Col>
+        </Row>
       )}
 
       <PermissionsRoleCatalogUnsavedModal

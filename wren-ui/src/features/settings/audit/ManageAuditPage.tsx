@@ -8,6 +8,7 @@ import {
   Row,
   Select,
   Space,
+  Statistic,
   Table,
   Tag,
   Typography,
@@ -39,12 +40,13 @@ function AuditSummaryMetric({
   value: number;
 }) {
   return (
-    <Space orientation="vertical" size={4}>
-      <Text type="secondary">{label}</Text>
-      <div style={{ fontSize: 28, fontWeight: 600, lineHeight: 1.2 }}>
-        {value}
-      </div>
-    </Space>
+    <Statistic
+      title={<Text type="secondary">{label}</Text>}
+      value={value}
+      styles={{
+        content: { fontSize: 28, fontWeight: 600, lineHeight: 1.2 },
+      }}
+    />
   );
 }
 
@@ -170,7 +172,7 @@ export default function SettingsAuditPage() {
           className="console-alert"
           type="warning"
           showIcon
-          message="当前未登录"
+          title="当前未登录"
           description="请先登录后再查看审计日志。"
         />
       ) : (
@@ -232,7 +234,7 @@ export default function SettingsAuditPage() {
               <Alert
                 type="info"
                 showIcon
-                message="当前为只读提示"
+                title="当前为只读提示"
                 description="你没有 audit.read 权限，暂时无法查看审计事件。"
               />
             ) : (
@@ -303,6 +305,7 @@ export default function SettingsAuditPage() {
                   </Col>
                 </Row>
                 <Table
+                  className="console-table"
                   rowKey="id"
                   loading={loading || auditLoading}
                   pagination={false}

@@ -15,9 +15,6 @@ import {
 import CheckCircleOutlined from '@ant-design/icons/CheckCircleOutlined';
 import CloseCircleOutlined from '@ant-design/icons/CloseCircleOutlined';
 import EyeOutlined from '@ant-design/icons/EyeOutlined';
-import SQLCodeBlock from '@/components/code/SQLCodeBlock';
-import DetailsDrawer from '@/components/pages/apiManagement/DetailsDrawer';
-import AskDiagnosticsSummary from '@/components/pages/apiManagement/AskDiagnosticsSummary';
 import { ApiType } from '@/types/apiHistory';
 
 import {
@@ -58,8 +55,31 @@ import {
   resolvePlatformManagementFromAuthSession,
 } from '@/features/settings/settingsPageCapabilities';
 import { buildSettingsConsoleShellProps } from '@/features/settings/settingsShell';
+import DiagnosticsDetailsDrawer from '@/features/settings/diagnostics/DiagnosticsDetailsDrawer';
+import DiagnosticsSummaryCell from '@/features/settings/diagnostics/DiagnosticsSummaryCell';
 
 const PAGE_SIZE = 10;
+
+const renderQueryPreview = (value?: string | null) => {
+  if (!value) {
+    return <Typography.Text type="secondary">-</Typography.Text>;
+  }
+
+  return (
+    <Typography.Paragraph
+      ellipsis={{ rows: 4, tooltip: value }}
+      style={{
+        marginBottom: 0,
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-word',
+        fontFamily:
+          'ui-monospace, SFMono-Regular, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+      }}
+    >
+      {value}
+    </Typography.Paragraph>
+  );
+};
 
 export default function SettingsDiagnosticsPage() {
   const router = useRouter();
@@ -231,17 +251,9 @@ export default function SettingsDiagnosticsPage() {
       key: 'requestPayload',
       render: (payload: Record<string, any>, record: ApiHistoryListItem) => {
         if (record.apiType === ApiType.RUN_SQL && payload.sql) {
-          return (
-            <div style={{ width: '100%' }}>
-              <SQLCodeBlock code={payload.sql} maxHeight="130" />
-            </div>
-          );
+          return renderQueryPreview(payload.sql);
         }
-        return (
-          <Typography.Text type="secondary">
-            {payload?.question || payload?.sql || '-'}
-          </Typography.Text>
-        );
+        return renderQueryPreview(payload?.question || payload?.sql || null);
       },
     },
     {
@@ -275,7 +287,7 @@ export default function SettingsDiagnosticsPage() {
       key: 'diagnostics',
       width: 220,
       render: (responsePayload: Record<string, any>, record) => (
-        <AskDiagnosticsSummary
+        <DiagnosticsSummaryCell
           apiType={record.apiType as ApiType | null | undefined}
           responsePayload={responsePayload}
         />
@@ -376,6 +388,7 @@ export default function SettingsDiagnosticsPage() {
           </Typography.Text>
 
           <Table
+            className="console-table"
             dataSource={items}
             loading={loading || !router.isReady}
             columns={columns}
@@ -398,7 +411,7 @@ export default function SettingsDiagnosticsPage() {
         </Card>
       </Space>
 
-      <DetailsDrawer
+      <DiagnosticsDetailsDrawer
         {...detailsDrawer.state}
         onClose={detailsDrawer.closeDrawer}
       />

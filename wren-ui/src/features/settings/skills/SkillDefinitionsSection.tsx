@@ -69,6 +69,7 @@ export default function SkillDefinitionsSection({
       ) : null}
 
       <Table
+        className="console-table"
         rowKey="id"
         locale={{ emptyText: '暂无技能' }}
         pagination={{ hideOnSinglePage: true, pageSize: 10 }}

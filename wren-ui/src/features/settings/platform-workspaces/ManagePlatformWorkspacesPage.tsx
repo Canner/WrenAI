@@ -8,11 +8,13 @@ import {
 import {
   Alert,
   Button,
+  Col,
   Drawer,
   Form,
   Input,
   Modal,
   Popconfirm,
+  Row,
   Select,
   Space,
   Table,
@@ -780,24 +782,33 @@ export default function ManagePlatformWorkspacesPage() {
         <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           {error ? <Alert type="warning" showIcon title={error} /> : null}
 
-          <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-            <Input.Search
-              allowClear
-              value={keyword}
-              onChange={(event) => setKeyword(event.target.value)}
-              placeholder={
-                activeTab === 'applications'
-                  ? '搜索工作空间 / 申请人'
-                  : '搜索工作空间名称'
-              }
-              style={{ width: 320 }}
-            />
-            {canCreateWorkspace ? (
-              <Button type="primary" onClick={() => setCreateModalOpen(true)}>
-                新建工作空间
-              </Button>
-            ) : null}
-          </Space>
+          <Row
+            align="middle"
+            gutter={[12, 12]}
+            justify="space-between"
+            style={{ width: '100%' }}
+          >
+            <Col flex="auto">
+              <Input.Search
+                allowClear
+                value={keyword}
+                onChange={(event) => setKeyword(event.target.value)}
+                placeholder={
+                  activeTab === 'applications'
+                    ? '搜索工作空间 / 申请人'
+                    : '搜索工作空间名称'
+                }
+                style={{ width: 320, maxWidth: '100%' }}
+              />
+            </Col>
+            <Col>
+              {canCreateWorkspace ? (
+                <Button type="primary" onClick={() => setCreateModalOpen(true)}>
+                  新建工作空间
+                </Button>
+              ) : null}
+            </Col>
+          </Row>
 
           <Tabs
             activeKey={activeTab}
@@ -871,36 +882,37 @@ export default function ManagePlatformWorkspacesPage() {
             <Tag>技能 {detail?.workspace.resourceSummary?.skillCount || 0}</Tag>
           </Space>
 
-          <Space
-            align="end"
-            style={{ width: '100%', justifyContent: 'space-between' }}
-          >
-            <Text strong>成员列表</Text>
-            {detail?.permissions.canManageMembers ? (
-              <Space wrap>
-                <Input
-                  value={inviteEmail}
-                  onChange={(event) => setInviteEmail(event.target.value)}
-                  placeholder="输入用户邮箱邀请成员"
-                  style={{ width: 240 }}
-                />
-                <Select
-                  value={inviteRole}
-                  style={{ width: 120 }}
-                  options={WORKSPACE_MEMBER_ROLE_OPTIONS as any}
-                  onChange={setInviteRole}
-                />
-                <Button
-                  type="primary"
-                  loading={memberAction?.action === 'invite'}
-                  disabled={!inviteEmail.trim()}
-                  onClick={() => void handleInviteMember()}
-                >
-                  邀请成员
-                </Button>
-              </Space>
-            ) : null}
-          </Space>
+          <Row align="bottom" gutter={[12, 12]} justify="space-between">
+            <Col flex="auto">
+              <Text strong>成员列表</Text>
+            </Col>
+            <Col>
+              {detail?.permissions.canManageMembers ? (
+                <Space wrap>
+                  <Input
+                    value={inviteEmail}
+                    onChange={(event) => setInviteEmail(event.target.value)}
+                    placeholder="输入用户邮箱邀请成员"
+                    style={{ width: 240 }}
+                  />
+                  <Select
+                    value={inviteRole}
+                    style={{ width: 120 }}
+                    options={WORKSPACE_MEMBER_ROLE_OPTIONS as any}
+                    onChange={setInviteRole}
+                  />
+                  <Button
+                    type="primary"
+                    loading={memberAction?.action === 'invite'}
+                    disabled={!inviteEmail.trim()}
+                    onClick={() => void handleInviteMember()}
+                  >
+                    邀请成员
+                  </Button>
+                </Space>
+              ) : null}
+            </Col>
+          </Row>
 
           <Table
             className="console-table"

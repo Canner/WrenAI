@@ -78,11 +78,12 @@ export default function IdentityProvidersSection({
               type="info"
               showIcon
               style={{ marginBottom: 12 }}
-              message="当前为只读视图"
+              title="当前为只读视图"
               description="你可以查看身份源与目录组状态，但创建、编辑、删除仍需要具备 identity_provider.manage 或 group.manage 权限。"
             />
           ) : null}
           <Table
+            className="console-table"
             rowKey="id"
             loading={loading || identityLoading}
             pagination={false}

@@ -59,6 +59,7 @@ export default function AutomationApiTokensSection({
             到期、吊销与最近使用风险一并查看。
           </Text>
           <Table
+            className="console-table"
             rowKey="id"
             loading={apiTokenLoading}
             pagination={false}
@@ -153,7 +154,7 @@ export default function AutomationApiTokensSection({
                   style={{ marginTop: 16 }}
                   type="warning"
                   showIcon
-                  message="请立即复制这个 Token"
+                  title="请立即复制这个 Token"
                   description={<Text copyable>{latestPlainTextToken}</Text>}
                 />
               ) : null}

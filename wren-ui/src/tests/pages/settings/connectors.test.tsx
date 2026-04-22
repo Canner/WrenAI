@@ -58,6 +58,21 @@ jest.mock('antd', () => {
     Button: ({ children }: any) =>
       React.createElement('button', null, children),
     Card: ({ children }: any) => React.createElement('section', null, children),
+    Col: ({ children }: any) => React.createElement('div', null, children),
+    Descriptions: ({ children, items }: any) =>
+      React.createElement(
+        'div',
+        null,
+        children,
+        (items || []).map((item: any) =>
+          React.createElement(
+            'div',
+            { key: item.key || item.label },
+            item.label,
+            item.children,
+          ),
+        ),
+      ),
     Form,
     Input: Object.assign((props: any) => React.createElement('input', props), {
       TextArea: (props: any) => React.createElement('textarea', props),
@@ -65,6 +80,7 @@ jest.mock('antd', () => {
     Modal: ({ children }: any) => React.createElement('div', null, children),
     Popconfirm: ({ children }: any) =>
       React.createElement('div', null, children),
+    Row: ({ children }: any) => React.createElement('div', null, children),
     Select: ({ options: _options, ...props }: any) =>
       React.createElement('select', props),
     Space: ({ children }: any) => React.createElement('div', null, children),
@@ -84,6 +100,7 @@ jest.mock('antd', () => {
         React.createElement('p', null, children),
       Text: ({ children, strong }: any) =>
         React.createElement(strong ? 'strong' : 'span', null, children),
+      Title: ({ children }: any) => React.createElement('h4', null, children),
     },
     message: { success: jest.fn(), error: jest.fn(), info: jest.fn() },
   };

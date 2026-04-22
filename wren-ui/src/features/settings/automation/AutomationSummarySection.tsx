@@ -1,6 +1,6 @@
 import ApiOutlined from '@ant-design/icons/ApiOutlined';
 import RobotOutlined from '@ant-design/icons/RobotOutlined';
-import { Alert, Card, Col, Row, Space, Typography } from 'antd';
+import { Alert, Card, Col, Row, Space, Statistic, Typography } from 'antd';
 
 const { Text } = Typography;
 
@@ -14,22 +14,18 @@ function AutomationSummaryMetric({
   icon?: React.ReactNode;
 }) {
   return (
-    <Space orientation="vertical" size={4}>
-      <Text type="secondary">{label}</Text>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          fontSize: 28,
-          fontWeight: 600,
-          lineHeight: 1.2,
-        }}
-      >
-        {icon ? <span style={{ fontSize: 20 }}>{icon}</span> : null}
-        <span>{value}</span>
-      </div>
-    </Space>
+    <Statistic
+      title={<Text type="secondary">{label}</Text>}
+      value={value}
+      prefix={
+        icon ? (
+          <span style={{ display: 'inline-flex', fontSize: 20 }}>{icon}</span>
+        ) : null
+      }
+      styles={{
+        content: { fontSize: 28, fontWeight: 600, lineHeight: 1.2 },
+      }}
+    />
   );
 }
 
@@ -49,7 +45,7 @@ export default function AutomationSummarySection({
       <Alert
         type="info"
         showIcon
-        message="当前运行范围"
+        title="当前运行范围"
         description={
           <Space orientation="vertical" size={6}>
             <Text type="secondary">

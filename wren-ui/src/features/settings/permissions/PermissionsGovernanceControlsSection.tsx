@@ -8,7 +8,6 @@ import {
   Empty,
   Form,
   Input,
-  List,
   Row,
   Col,
   Select,
@@ -38,6 +37,13 @@ import type {
   Member,
   ReviewActionDecision,
 } from './permissionsGovernanceControlTypes';
+
+const STACK_ITEM_STYLE = {
+  padding: '12px 14px',
+  border: '1px solid var(--ant-color-border-secondary)',
+  borderRadius: 8,
+  background: 'var(--ant-color-bg-container)',
+} as const;
 
 export default function PermissionsGovernanceControlsSection({
   canManageControls,
@@ -133,23 +139,61 @@ export default function PermissionsGovernanceControlsSection({
           <Text type="secondary">{formatDateTime(review.createdAt)}</Text>
         </Space>
       ),
-      children: (
-        <List
-          dataSource={(review.items || []).slice(0, 3)}
-          locale={{ emptyText: '该复核暂无成员项' }}
-          renderItem={(item) => {
-            const member = item.userId ? memberMap.get(item.userId) : undefined;
-            const busy =
-              reviewActionLoading?.reviewId === review.id &&
-              reviewActionLoading?.itemId === item.id;
+      children:
+        (review.items || []).slice(0, 3).length === 0 ? (
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description="该复核暂无成员项"
+          />
+        ) : (
+          <Space orientation="vertical" size={8} style={{ width: '100%' }}>
+            {(review.items || []).slice(0, 3).map((item) => {
+              const member = item.userId
+                ? memberMap.get(item.userId)
+                : undefined;
+              const busy =
+                reviewActionLoading?.reviewId === review.id &&
+                reviewActionLoading?.itemId === item.id;
 
-            return (
-              <List.Item
-                actions={
-                  canManageControls && item.status !== 'reviewed'
-                    ? [
+              return (
+                <Row
+                  key={item.id}
+                  gutter={[12, 12]}
+                  align="middle"
+                  justify="space-between"
+                  style={STACK_ITEM_STYLE}
+                >
+                  <Col flex="auto">
+                    <Space orientation="vertical" size={4}>
+                      <Text strong>
+                        {formatUserLabel(
+                          member?.user?.displayName,
+                          member?.user?.email,
+                          item.userId || item.id,
+                        )}
+                      </Text>
+                      <Space size={[8, 8]} wrap>
+                        <Tag color="blue">
+                          {PERMISSION_ROLE_LABELS[item.roleKey || 'member'] ||
+                            item.roleKey ||
+                            'member'}
+                        </Tag>
+                        <Tag
+                          color={getAccessReviewDecisionColor(item.decision)}
+                        >
+                          {item.decision === 'remove'
+                            ? '移除'
+                            : item.decision === 'keep'
+                              ? '保留'
+                              : '待处理'}
+                        </Tag>
+                      </Space>
+                    </Space>
+                  </Col>
+                  {canManageControls && item.status !== 'reviewed' ? (
+                    <Col>
+                      <Space size={8} wrap>
                         <Button
-                          key="keep"
                           type="primary"
                           loading={
                             busy && reviewActionLoading?.decision === 'keep'
@@ -159,9 +203,8 @@ export default function PermissionsGovernanceControlsSection({
                           }
                         >
                           保留
-                        </Button>,
+                        </Button>
                         <Button
-                          key="remove"
                           danger
                           loading={
                             busy && reviewActionLoading?.decision === 'remove'
@@ -171,39 +214,15 @@ export default function PermissionsGovernanceControlsSection({
                           }
                         >
                           移除
-                        </Button>,
-                      ]
-                    : undefined
-                }
-              >
-                <Space orientation="vertical" size={4}>
-                  <Text strong>
-                    {formatUserLabel(
-                      member?.user?.displayName,
-                      member?.user?.email,
-                      item.userId || item.id,
-                    )}
-                  </Text>
-                  <Space size={[8, 8]} wrap>
-                    <Tag color="blue">
-                      {PERMISSION_ROLE_LABELS[item.roleKey || 'member'] ||
-                        item.roleKey ||
-                        'member'}
-                    </Tag>
-                    <Tag color={getAccessReviewDecisionColor(item.decision)}>
-                      {item.decision === 'remove'
-                        ? '移除'
-                        : item.decision === 'keep'
-                          ? '保留'
-                          : '待处理'}
-                    </Tag>
-                  </Space>
-                </Space>
-              </List.Item>
-            );
-          }}
-        />
-      ),
+                        </Button>
+                      </Space>
+                    </Col>
+                  ) : null}
+                </Row>
+              );
+            })}
+          </Space>
+        ),
     }));
 
   return (
@@ -226,12 +245,12 @@ export default function PermissionsGovernanceControlsSection({
           <Alert
             type="info"
             showIcon
-            message="当前为只读视图"
+            title="当前为只读视图"
             description="你可以查看 access review、break-glass 与代理登录状态，但发起复核、紧急授权或代理登录仍需要具备对应治理权限。"
           />
         ) : null}
 
-        <div>
+        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           <Title level={5} style={{ marginBottom: 12 }}>
             访问复核
           </Title>
@@ -268,13 +287,13 @@ export default function PermissionsGovernanceControlsSection({
               description="当前还没有访问复核记录。"
             />
           ) : (
-            <Collapse bordered={false} items={accessReviewItems} />
+            <Collapse ghost items={accessReviewItems} />
           )}
-        </div>
+        </Space>
 
         <Divider style={{ margin: '4px 0' }} />
 
-        <div>
+        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           <Title level={5} style={{ marginBottom: 12 }}>
             Break-glass
           </Title>
@@ -283,7 +302,7 @@ export default function PermissionsGovernanceControlsSection({
               <Alert
                 type="warning"
                 showIcon
-                message="Break-glass 仅用于紧急场景"
+                title="Break-glass 仅用于紧急场景"
                 description="建议优先使用目录组、工作空间成员或代理登录；Break-glass 应设置明确原因与较短时效。"
                 style={{ marginBottom: 12 }}
               />
@@ -349,47 +368,58 @@ export default function PermissionsGovernanceControlsSection({
             </>
           ) : null}
 
-          <List
-            dataSource={breakGlassGrants.slice(0, 3)}
-            locale={{ emptyText: '暂无紧急授权记录' }}
-            renderItem={(grant) => (
-              <List.Item
-                actions={
-                  !grant.revokedAt && grant.status === 'active'
-                    ? [
-                        <Button
-                          key="revoke"
-                          danger
-                          loading={breakGlassLoading}
-                          onClick={() => onRevokeBreakGlassGrant(grant.id)}
-                        >
-                          撤销
-                        </Button>,
-                      ]
-                    : [<Tag key="status">{grant.status}</Tag>]
-                }
-              >
-                <Space orientation="vertical" size={2}>
-                  <Text strong>
-                    {formatUserLabel(
-                      grant.user?.displayName,
-                      grant.user?.email,
-                      grant.userId,
+          {breakGlassGrants.slice(0, 3).length === 0 ? (
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description="暂无紧急授权记录"
+            />
+          ) : (
+            <Space orientation="vertical" size={8} style={{ width: '100%' }}>
+              {breakGlassGrants.slice(0, 3).map((grant) => (
+                <Row
+                  key={grant.id}
+                  gutter={[12, 12]}
+                  align="middle"
+                  justify="space-between"
+                  style={STACK_ITEM_STYLE}
+                >
+                  <Col flex="auto">
+                    <Space orientation="vertical" size={2}>
+                      <Text strong>
+                        {formatUserLabel(
+                          grant.user?.displayName,
+                          grant.user?.email,
+                          grant.userId,
+                        )}
+                      </Text>
+                      <Text type="secondary">
+                        {grant.reason || '—'} · 到期{' '}
+                        {formatDateTime(grant.expiresAt)}
+                      </Text>
+                    </Space>
+                  </Col>
+                  <Col>
+                    {!grant.revokedAt && grant.status === 'active' ? (
+                      <Button
+                        danger
+                        loading={breakGlassLoading}
+                        onClick={() => onRevokeBreakGlassGrant(grant.id)}
+                      >
+                        撤销
+                      </Button>
+                    ) : (
+                      <Tag>{grant.status}</Tag>
                     )}
-                  </Text>
-                  <Text type="secondary">
-                    {grant.reason || '—'} · 到期{' '}
-                    {formatDateTime(grant.expiresAt)}
-                  </Text>
-                </Space>
-              </List.Item>
-            )}
-          />
-        </div>
+                  </Col>
+                </Row>
+              ))}
+            </Space>
+          )}
+        </Space>
 
         <Divider style={{ margin: '4px 0' }} />
 
-        <div>
+        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           <Title level={5} style={{ marginBottom: 12 }}>
             代理登录
           </Title>
@@ -439,14 +469,14 @@ export default function PermissionsGovernanceControlsSection({
           <Alert
             type={impersonationActive ? 'warning' : 'info'}
             showIcon
-            message={impersonationActive ? '代理登录进行中' : '当前无代理会话'}
+            title={impersonationActive ? '代理登录进行中' : '当前无代理会话'}
             description={
               impersonationActive && impersonationReasonLabel
                 ? `代理原因：${impersonationReasonLabel}`
                 : '代理登录状态会在此实时同步。'
             }
           />
-        </div>
+        </Space>
       </Space>
     </Card>
   );

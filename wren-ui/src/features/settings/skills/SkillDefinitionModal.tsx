@@ -47,7 +47,13 @@ export default function SkillDefinitionModal({
       onOk={onSubmit}
       confirmLoading={confirmLoading}
       destroyOnHidden
-      width={760}
+      width={{ xs: 'calc(100vw - 32px)', md: 760 }}
+      styles={{
+        body: {
+          maxHeight: 'calc(100vh - 240px)',
+          overflowY: 'auto',
+        },
+      }}
     >
       <Form layout="vertical" form={form}>
         <Form.Item

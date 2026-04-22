@@ -36,13 +36,15 @@ jest.mock('@/features/settings/systemTasks/SystemTaskRunDetailsDrawer', () => ({
   default: () => <div>SystemTaskRunDetailsDrawer</div>,
 }));
 
-jest.mock('@/components/reference/DolaAppShell', () => ({
+jest.mock('@/components/reference/ConsoleShellLayout', () => ({
   __esModule: true,
-  default: ({ children, navItems }: any) => {
+  default: ({ title, description, children, navItems }: any) => {
     const React = jest.requireActual('react');
     return React.createElement(
       'div',
       null,
+      title,
+      description,
       React.createElement(
         'div',
         null,

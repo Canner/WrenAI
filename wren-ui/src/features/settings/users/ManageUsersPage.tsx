@@ -158,7 +158,7 @@ export default function ManageUsersPage() {
           className="console-alert"
           type="warning"
           showIcon
-          message="当前未登录"
+          title="当前未登录"
           description="请先登录后再查看用户管理。"
         />
       ) : (

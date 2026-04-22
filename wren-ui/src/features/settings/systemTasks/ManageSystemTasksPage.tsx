@@ -1,17 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Skeleton, Space, Tabs } from 'antd';
+import { Alert, Space, Tabs } from 'antd';
 import { appMessage as message } from '@/utils/antdAppBridge';
 import {
   buildRuntimeScopeUrl,
   type ClientRuntimeScopeSelector,
 } from '@/runtime/client/runtimeScope';
-import DolaAppShell from '@/components/reference/DolaAppShell';
-import { buildNovaSettingsNavItems } from '@/components/reference/novaShellNavigation';
-import { usePersistentShellEmbedded } from '@/components/reference/PersistentShellContext';
+import ConsoleShellLayout from '@/components/reference/ConsoleShellLayout';
 import {
   resolvePlatformConsoleCapabilities,
   resolvePlatformManagementFromAuthSession,
 } from '@/features/settings/settingsPageCapabilities';
+import { buildSettingsConsoleShellProps } from '@/features/settings/settingsShell';
 import useAuthSession from '@/hooks/useAuthSession';
 import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
 import useRestRequest from '@/hooks/useRestRequest';
@@ -27,7 +26,6 @@ import SystemTasksJobsSection from '@/features/settings/systemTasks/SystemTasksJ
 import SystemTasksRunsSection from '@/features/settings/systemTasks/SystemTasksRunsSection';
 import SystemTaskScheduleDrawer from '@/features/settings/systemTasks/SystemTaskScheduleDrawer';
 import SystemTaskRunDetailsDrawer from '@/features/settings/systemTasks/SystemTaskRunDetailsDrawer';
-import { Path } from '@/utils/enum';
 
 const toWorkspaceTaskSelector = (
   selector?: ClientRuntimeScopeSelector,
@@ -127,7 +125,6 @@ export const loadSystemTasksOverviewPayload = async ({
 export default function SettingsSystemTasksPage() {
   const runtimeScopePage = useProtectedRuntimeScopePage();
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
-  const embedded = usePersistentShellEmbedded();
   const authSession = useAuthSession();
   const showPlatformManagement = resolvePlatformManagementFromAuthSession(
     authSession.data,
@@ -135,9 +132,9 @@ export default function SettingsSystemTasksPage() {
   const platformCapabilities = resolvePlatformConsoleCapabilities(
     authSession.data,
   );
-  const navItems = useMemo(
+  const shellProps = useMemo(
     () =>
-      buildNovaSettingsNavItems({
+      buildSettingsConsoleShellProps({
         activeKey: 'settingsSystemTasks',
         onNavigate: runtimeScopeNavigation.pushWorkspace,
         showPlatformAdmin: showPlatformManagement,
@@ -450,30 +447,29 @@ export default function SettingsSystemTasksPage() {
     ],
   );
 
-  const pageContent = (
-    <>
+  return (
+    <ConsoleShellLayout
+      title="定时任务"
+      description="查看当前 Workspace 的调度任务、最近运行与手动执行入口。"
+      loading={runtimeScopePage.guarding}
+      {...shellProps}
+    >
       <Space orientation="vertical" size={16} style={{ width: '100%' }}>
-        {runtimeScopePage.guarding ? (
-          <Skeleton active paragraph={{ rows: 8 }} />
-        ) : (
-          <>
-            {error ? (
-              <Alert
-                className="console-alert"
-                type="warning"
-                showIcon
-                title="加载定时任务失败"
-                description={error}
-              />
-            ) : null}
-            <Tabs
-              animated={false}
-              defaultActiveKey="jobs"
-              items={tabItems}
-              style={{ width: '100%' }}
-            />
-          </>
-        )}
+        {error ? (
+          <Alert
+            className="console-alert"
+            type="warning"
+            showIcon
+            title="加载定时任务失败"
+            description={error}
+          />
+        ) : null}
+        <Tabs
+          animated={false}
+          defaultActiveKey="jobs"
+          items={tabItems}
+          style={{ width: '100%' }}
+        />
       </Space>
 
       <SystemTaskScheduleDrawer
@@ -488,26 +484,6 @@ export default function SettingsSystemTasksPage() {
         run={selectedRun}
         onClose={() => setSelectedRun(null)}
       />
-    </>
-  );
-
-  if (embedded) {
-    return pageContent;
-  }
-
-  return (
-    <DolaAppShell
-      navItems={navItems}
-      hideHistorySection
-      sidebarBackAction={{
-        label: '返回主菜单',
-        onClick: () => void runtimeScopeNavigation.pushWorkspace(Path.Home),
-      }}
-      hideSidebarBranding
-      hideSidebarFooterPanel
-      hideSidebarCollapseToggle
-    >
-      {pageContent}
-    </DolaAppShell>
+    </ConsoleShellLayout>
   );
 }

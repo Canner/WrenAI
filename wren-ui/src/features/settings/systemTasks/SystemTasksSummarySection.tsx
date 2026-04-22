@@ -1,4 +1,4 @@
-import { Card, Col, Row, Space, Typography } from 'antd';
+import { Card, Col, Row, Space, Statistic, Typography } from 'antd';
 import {
   getStatusLabel,
   type ScheduleOverviewPayload,
@@ -14,12 +14,13 @@ function SystemTaskSummaryMetric({
   value: string | number;
 }) {
   return (
-    <Space orientation="vertical" size={4}>
-      <Text type="secondary">{label}</Text>
-      <div style={{ fontSize: 28, fontWeight: 600, lineHeight: 1.2 }}>
-        {value}
-      </div>
-    </Space>
+    <Statistic
+      title={<Text type="secondary">{label}</Text>}
+      value={value}
+      styles={{
+        content: { fontSize: 28, fontWeight: 600, lineHeight: 1.2 },
+      }}
+    />
   );
 }
 
@@ -36,6 +37,7 @@ export default function SystemTasksSummarySection({
           {data?.currentKnowledgeBase?.name
             ? ` · 当前知识库 ${data.currentKnowledgeBase.name}`
             : ''}
+          {' · 当前页展示整个工作空间任务'}
         </Text>
         <Row gutter={[16, 16]}>
           <Col xs={24} md={6}>

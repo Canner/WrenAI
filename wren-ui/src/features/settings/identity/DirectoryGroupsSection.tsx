@@ -61,6 +61,7 @@ export default function DirectoryGroupsSection({
             目录组 {directoryGroups.length} 个，可作为 SCIM 之外的最小治理补充。
           </Text>
           <Table
+            className="console-table"
             rowKey="id"
             loading={loading || groupLoading}
             pagination={false}

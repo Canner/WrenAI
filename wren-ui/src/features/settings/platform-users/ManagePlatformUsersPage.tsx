@@ -8,11 +8,13 @@ import {
 import {
   Alert,
   Button,
+  Col,
   Drawer,
   Form,
   Input,
   Modal,
   Popconfirm,
+  Row,
   Select,
   Space,
   Table,
@@ -45,6 +47,16 @@ import {
 } from '@/features/settings/users/usersPageUtils';
 
 const { Text } = Typography;
+
+const DRAWER_HEADER_SUMMARY_STYLE = {
+  width: '100%',
+  minWidth: 0,
+} as const;
+
+const DRAWER_HEADER_ACTION_STYLE = {
+  width: '100%',
+  minWidth: 280,
+} as const;
 
 const PLATFORM_ROLE_LABELS: Record<string, string> = {
   platform_admin: '平台管理员',
@@ -799,23 +811,24 @@ export default function ManagePlatformUsersPage() {
         <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           {error ? <Alert type="warning" showIcon title={error} /> : null}
 
-          <Space
-            wrap
-            style={{ width: '100%', justifyContent: 'space-between' }}
-          >
-            <Input.Search
-              allowClear
-              value={keyword}
-              onChange={(event) => setKeyword(event.target.value)}
-              placeholder="搜索姓名 / 账号 / 默认工作空间"
-              style={{ width: 320 }}
-            />
-            {canCreateUsers ? (
-              <Button type="primary" onClick={() => setCreateModalOpen(true)}>
-                新增用户
-              </Button>
-            ) : null}
-          </Space>
+          <Row align="middle" gutter={[12, 12]} justify="space-between">
+            <Col flex="auto">
+              <Input.Search
+                allowClear
+                value={keyword}
+                onChange={(event) => setKeyword(event.target.value)}
+                placeholder="搜索姓名 / 账号 / 默认工作空间"
+                style={{ width: 320, maxWidth: '100%' }}
+              />
+            </Col>
+            <Col>
+              {canCreateUsers ? (
+                <Button type="primary" onClick={() => setCreateModalOpen(true)}>
+                  新增用户
+                </Button>
+              ) : null}
+            </Col>
+          </Row>
 
           <Table
             className="console-table"
@@ -841,69 +854,87 @@ export default function ManagePlatformUsersPage() {
         }}
       >
         <Space orientation="vertical" size={16} style={{ width: '100%' }}>
-          <Space
-            align="start"
-            style={{ width: '100%', justifyContent: 'space-between' }}
-          >
-            <Space orientation="vertical" size={6}>
-              <Text strong>{detail?.user.displayName || '未命名用户'}</Text>
-              <Text type="secondary">{detail?.user.email || '—'}</Text>
-              <Space wrap>
-                {detail?.user ? platformRoleTag(detail.user) : null}
-                <Tag color={applicationStatusColor(detail?.user.status || '')}>
-                  {STATUS_LABELS[detail?.user.status || ''] ||
-                    detail?.user.status ||
-                    '—'}
-                </Tag>
-                <Tag>已关联 {detail?.user.workspaceCount || 0} 个工作空间</Tag>
+          <Row gutter={[16, 16]} align="top">
+            <Col flex="auto" style={{ minWidth: 0 }}>
+              <Space
+                orientation="vertical"
+                size={6}
+                style={DRAWER_HEADER_SUMMARY_STYLE}
+              >
+                <Text strong>{detail?.user.displayName || '未命名用户'}</Text>
+                <Text type="secondary">{detail?.user.email || '—'}</Text>
+                <Space wrap>
+                  {detail?.user ? platformRoleTag(detail.user) : null}
+                  <Tag
+                    color={applicationStatusColor(detail?.user.status || '')}
+                  >
+                    {STATUS_LABELS[detail?.user.status || ''] ||
+                      detail?.user.status ||
+                      '—'}
+                  </Tag>
+                  <Tag>
+                    已关联 {detail?.user.workspaceCount || 0} 个工作空间
+                  </Tag>
+                </Space>
               </Space>
-            </Space>
-            <Space orientation="vertical" size={6} style={{ minWidth: 280 }}>
-              <Text type="secondary">默认工作空间</Text>
-              <Select
-                value={detail?.user.defaultWorkspaceId || undefined}
-                style={{ width: '100%' }}
-                placeholder="选择默认工作空间"
-                disabled={!canUpdateUsers}
-                options={(detail?.memberships || [])
-                  .filter((membership) => membership.status === 'active')
-                  .map((membership) => ({
-                    label: membership.workspace?.name || membership.workspaceId,
-                    value: membership.workspaceId,
-                  }))}
-                allowClear
-                onChange={(value) =>
-                  void patchUser(
-                    detail?.user.id || '',
-                    { defaultWorkspaceId: value || null },
-                    '默认工作空间已更新',
-                  )
-                }
-              />
-            </Space>
-          </Space>
+            </Col>
+            <Col xs={24} md={10} xl={8}>
+              <Space
+                orientation="vertical"
+                size={6}
+                style={DRAWER_HEADER_ACTION_STYLE}
+              >
+                <Text type="secondary">默认工作空间</Text>
+                <Select
+                  value={detail?.user.defaultWorkspaceId || undefined}
+                  style={{ width: '100%' }}
+                  placeholder="选择默认工作空间"
+                  disabled={!canUpdateUsers}
+                  options={(detail?.memberships || [])
+                    .filter((membership) => membership.status === 'active')
+                    .map((membership) => ({
+                      label:
+                        membership.workspace?.name || membership.workspaceId,
+                      value: membership.workspaceId,
+                    }))}
+                  allowClear
+                  onChange={(value) =>
+                    void patchUser(
+                      detail?.user.id || '',
+                      { defaultWorkspaceId: value || null },
+                      '默认工作空间已更新',
+                    )
+                  }
+                />
+              </Space>
+            </Col>
+          </Row>
 
           <Alert
             type="info"
             showIcon
-            message="这里负责管理该用户所属工作空间"
+            title="这里负责管理该用户所属工作空间"
             description="平台角色请使用列表中的“调整角色”按钮修改；默认工作空间只允许设置为已启用的成员关系。"
           />
 
-          <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-            <Text strong>所属工作空间</Text>
-            {canAssignUserWorkspaces ? (
-              <Button
-                type="primary"
-                onClick={() => {
-                  workspaceForm.setFieldsValue({ roleKey: 'viewer' });
-                  setWorkspaceModalOpen(true);
-                }}
-              >
-                分配工作空间
-              </Button>
-            ) : null}
-          </Space>
+          <Row align="middle" gutter={[12, 12]} justify="space-between">
+            <Col flex="auto">
+              <Text strong>所属工作空间</Text>
+            </Col>
+            <Col>
+              {canAssignUserWorkspaces ? (
+                <Button
+                  type="primary"
+                  onClick={() => {
+                    workspaceForm.setFieldsValue({ roleKey: 'viewer' });
+                    setWorkspaceModalOpen(true);
+                  }}
+                >
+                  分配工作空间
+                </Button>
+              ) : null}
+            </Col>
+          </Row>
 
           <Table
             className="console-table"

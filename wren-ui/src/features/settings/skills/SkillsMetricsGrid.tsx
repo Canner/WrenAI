@@ -1,4 +1,4 @@
-import { Card, Col, Row, Space, Typography } from 'antd';
+import { Card, Col, Row, Space, Statistic, Typography } from 'antd';
 import {
   getReferenceDisplayKnowledgeName,
   getReferenceDisplayWorkspaceName,
@@ -18,10 +18,17 @@ function SkillsMetricCard({
   return (
     <Card>
       <Space orientation="vertical" size={6}>
-        <Text type="secondary">{label}</Text>
-        <div style={{ fontSize: 28, fontWeight: 600, lineHeight: 1.2 }}>
-          {value}
-        </div>
+        <Statistic
+          title={<Text type="secondary">{label}</Text>}
+          value={value}
+          styles={{
+            content: {
+              fontSize: typeof value === 'number' ? 28 : 20,
+              fontWeight: 600,
+              lineHeight: 1.2,
+            },
+          }}
+        />
         <Text type="secondary">{description}</Text>
       </Space>
     </Card>

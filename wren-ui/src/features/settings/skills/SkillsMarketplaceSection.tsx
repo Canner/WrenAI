@@ -29,6 +29,7 @@ export default function SkillsMarketplaceSection({
       ) : null}
 
       <Table
+        className="console-table"
         rowKey="id"
         locale={{ emptyText: '暂无可安装技能' }}
         pagination={{ hideOnSinglePage: true, pageSize: 10 }}

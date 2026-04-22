@@ -251,18 +251,20 @@ export default function SystemTaskScheduleDrawer({
       onClose={onClose}
       afterOpenChange={afterOpenChange}
       footer={
-        <Space style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <Button onClick={onClose} disabled={loading}>
-            取消
-          </Button>
-          <Button
-            type="primary"
-            onClick={() => void handleSubmit()}
-            loading={loading}
-          >
-            保存
-          </Button>
-        </Space>
+        <Row justify="end">
+          <Space>
+            <Button onClick={onClose} disabled={loading}>
+              取消
+            </Button>
+            <Button
+              type="primary"
+              onClick={() => void handleSubmit()}
+              loading={loading}
+            >
+              保存
+            </Button>
+          </Space>
+        </Row>
       }
     >
       <Form form={form} layout="vertical">

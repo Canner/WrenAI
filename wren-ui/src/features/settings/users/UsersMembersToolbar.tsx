@@ -106,7 +106,7 @@ export default function UsersMembersToolbar({
           type="info"
           showIcon
           style={{ marginBottom: 14 }}
-          message="当前为只读视图"
+          title="当前为只读视图"
           description="你可以查看成员信息与角色分布；编辑成员、调整角色与邀请成员仍需要 workspace.member 管理权限。"
         />
       ) : null}

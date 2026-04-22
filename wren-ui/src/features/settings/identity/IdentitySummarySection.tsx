@@ -1,6 +1,6 @@
 import LockOutlined from '@ant-design/icons/LockOutlined';
 import ApartmentOutlined from '@ant-design/icons/ApartmentOutlined';
-import { Card, Col, Row, Space, Typography } from 'antd';
+import { Card, Col, Row, Statistic, Typography } from 'antd';
 
 const { Text } = Typography;
 
@@ -14,22 +14,18 @@ function IdentitySummaryMetric({
   icon?: React.ReactNode;
 }) {
   return (
-    <Space orientation="vertical" size={4}>
-      <Text type="secondary">{label}</Text>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          fontSize: 28,
-          fontWeight: 600,
-          lineHeight: 1.2,
-        }}
-      >
-        {icon ? <span style={{ fontSize: 20 }}>{icon}</span> : null}
-        <span>{value}</span>
-      </div>
-    </Space>
+    <Statistic
+      title={<Text type="secondary">{label}</Text>}
+      value={value}
+      prefix={
+        icon ? (
+          <span style={{ display: 'inline-flex', fontSize: 20 }}>{icon}</span>
+        ) : null
+      }
+      styles={{
+        content: { fontSize: 28, fontWeight: 600, lineHeight: 1.2 },
+      }}
+    />
   );
 }
 

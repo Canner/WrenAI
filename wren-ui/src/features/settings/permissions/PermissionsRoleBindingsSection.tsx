@@ -65,7 +65,7 @@ export default function PermissionsRoleBindingsSection({
         <Alert
           type="info"
           showIcon
-          message="当前为只读提示"
+          title="当前为只读提示"
           description="你没有 role.read 权限，暂时无法查看角色绑定。"
         />
       ) : (
@@ -132,7 +132,7 @@ export default function PermissionsRoleBindingsSection({
             <Alert
               type="info"
               showIcon
-              message="当前为只读视图"
+              title="当前为只读视图"
               description="你可以查看角色绑定，但增删绑定需要 role.manage 权限。"
             />
           )}
