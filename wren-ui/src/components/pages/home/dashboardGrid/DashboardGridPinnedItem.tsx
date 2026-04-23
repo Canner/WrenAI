@@ -203,6 +203,8 @@ export const DashboardGridPinnedItem = forwardRef(
               <Button
                 type="text"
                 size="small"
+                onMouseDown={(event) => event.stopPropagation()}
+                onTouchStart={(event) => event.stopPropagation()}
                 onClick={(event) => {
                   event.stopPropagation();
                   void onNavigateToThread(
