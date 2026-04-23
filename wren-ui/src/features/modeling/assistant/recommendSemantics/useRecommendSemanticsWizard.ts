@@ -40,6 +40,7 @@ export default function useRecommendSemanticsWizard({
   );
   const [saving, setSaving] = useState(false);
   const [requestError, setRequestError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const {
     startPolling,
@@ -66,6 +67,7 @@ export default function useRecommendSemanticsWizard({
 
   const onToggleModel = useCallback((modelName: string, checked: boolean) => {
     setValidationError(null);
+    setSaveError(null);
     setSelectedModels((current) =>
       checked
         ? [...new Set([...current, modelName])]
@@ -80,6 +82,7 @@ export default function useRecommendSemanticsWizard({
     }
 
     setValidationError(null);
+    setSaveError(null);
     setStep('generate');
   }, [selectedModels.length]);
 
@@ -88,12 +91,14 @@ export default function useRecommendSemanticsWizard({
     setSelectedModels([]);
     setTask(null);
     setRequestError(null);
+    setSaveError(null);
     setStep('pick');
   }, [stopPolling]);
 
   const generate = useCallback(async () => {
     try {
       setRequestError(null);
+      setSaveError(null);
       const nextTask = await createSemanticsDescriptionTask(selector, {
         selectedModels,
         userPrompt: prompt,
@@ -121,6 +126,7 @@ export default function useRecommendSemanticsWizard({
 
     try {
       setSaving(true);
+      setSaveError(null);
       const payload = buildSemanticsDescriptionSavePayload({
         generatedModels,
         models: modelList.data,
@@ -135,7 +141,7 @@ export default function useRecommendSemanticsWizard({
     } catch (error) {
       const messageText =
         (error as ErrorLike)?.message || '保存语义描述失败，请稍后重试。';
-      setRequestError(messageText);
+      setSaveError(messageText);
     } finally {
       setSaving(false);
     }
@@ -154,6 +160,7 @@ export default function useRecommendSemanticsWizard({
     setPrompt,
     validationError,
     requestError,
+    saveError,
     modelList,
     polling,
     saving,

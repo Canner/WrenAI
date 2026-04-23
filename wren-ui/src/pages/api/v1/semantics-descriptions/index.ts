@@ -5,6 +5,10 @@ import { sendRestApiError } from '@/server/api/restApi';
 import { toCanonicalPersistedRuntimeIdentityFromScope } from '@server/utils/persistedRuntimeIdentity';
 import { toAskRuntimeIdentity } from '@server/controllers/projectControllerRuntimeSupport';
 import { resolveProjectLanguage } from '@server/utils/runtimeExecutionContext';
+import {
+  assertExecutableRuntimeScope,
+  assertKnowledgeBaseReadAccess,
+} from '@server/controllers/modelControllerScopeSupport';
 
 const parseSelectedModels = (value: unknown): string[] => {
   if (!Array.isArray(value)) {
@@ -34,6 +38,8 @@ export default async function handler(
     if (!ctx.runtimeScope) {
       throw new ApiError('Runtime scope is required', 400);
     }
+    await assertExecutableRuntimeScope(ctx);
+    await assertKnowledgeBaseReadAccess(ctx);
 
     const runtimeIdentity = toCanonicalPersistedRuntimeIdentityFromScope(
       ctx.runtimeScope,

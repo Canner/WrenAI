@@ -2,6 +2,10 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { ApiError } from '@/server/utils/apiUtils';
 import { buildApiContextFromRequest } from '@/server/api/apiContext';
 import { sendRestApiError } from '@/server/api/restApi';
+import {
+  assertExecutableRuntimeScope,
+  assertKnowledgeBaseReadAccess,
+} from '@server/controllers/modelControllerScopeSupport';
 
 const parseTaskId = (value: string | string[] | undefined) => {
   const raw = Array.isArray(value) ? value[0] : value;
@@ -22,6 +26,8 @@ export default async function handler(
     }
 
     const ctx = await buildApiContextFromRequest({ req });
+    await assertExecutableRuntimeScope(ctx);
+    await assertKnowledgeBaseReadAccess(ctx);
     const result = await ctx.wrenAIAdaptor.getRelationshipRecommendationResult(
       parseTaskId(req.query.id),
     );

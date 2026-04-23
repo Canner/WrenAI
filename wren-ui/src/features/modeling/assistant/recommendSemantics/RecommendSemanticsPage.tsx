@@ -172,6 +172,20 @@ export default function RecommendSemanticsPage() {
         />
       ) : null}
 
+      {semanticsWizard.saveError ? (
+        <Alert
+          type="error"
+          showIcon
+          title="Failed to save semantics"
+          description={semanticsWizard.saveError}
+          action={
+            <Button size="small" onClick={() => void semanticsWizard.save()}>
+              Retry save
+            </Button>
+          }
+        />
+      ) : null}
+
       <Card style={{ borderRadius: 16 }}>
         <Title level={5} style={{ marginTop: 0 }}>
           {generatedStateTitle}

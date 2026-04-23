@@ -11,6 +11,8 @@ const mockSendRestApiError = jest.fn(
 const mockToCanonicalPersistedRuntimeIdentityFromScope = jest.fn();
 const mockToAskRuntimeIdentity = jest.fn();
 const mockResolveProjectLanguage = jest.fn();
+const mockAssertExecutableRuntimeScope = jest.fn();
+const mockAssertKnowledgeBaseReadAccess = jest.fn();
 
 class MockApiError extends Error {
   statusCode: number;
@@ -46,6 +48,11 @@ jest.mock('@server/utils/runtimeExecutionContext', () => ({
   resolveProjectLanguage: mockResolveProjectLanguage,
 }));
 
+jest.mock('@server/controllers/modelControllerScopeSupport', () => ({
+  assertExecutableRuntimeScope: mockAssertExecutableRuntimeScope,
+  assertKnowledgeBaseReadAccess: mockAssertKnowledgeBaseReadAccess,
+}));
+
 describe('pages/api/v1/semantics-descriptions routes', () => {
   const createReq = (overrides: Partial<any> = {}) =>
     ({
@@ -75,6 +82,8 @@ describe('pages/api/v1/semantics-descriptions routes', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockAssertExecutableRuntimeScope.mockResolvedValue(undefined);
+    mockAssertKnowledgeBaseReadAccess.mockResolvedValue(undefined);
     mockToCanonicalPersistedRuntimeIdentityFromScope.mockReturnValue({
       workspaceId: 'ws-1',
       knowledgeBaseId: 'kb-1',
