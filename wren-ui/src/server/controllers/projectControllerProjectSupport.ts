@@ -137,7 +137,6 @@ export const deployProjectSupport = async ({
   ctx,
   project,
   buildBridgeRuntimeIdentity,
-  getCurrentRuntimeScopeId,
   resolveActiveRuntimeKnowledgeBase,
 }: {
   ctx: IContext;
@@ -146,7 +145,6 @@ export const deployProjectSupport = async ({
     ctx: IContext,
     bridgeProjectId: number,
   ) => PersistedRuntimeIdentity;
-  getCurrentRuntimeScopeId: (ctx: IContext) => string | null;
   resolveActiveRuntimeKnowledgeBase: (
     ctx: IContext,
   ) => Promise<KnowledgeBase | null>;
@@ -157,13 +155,6 @@ export const deployProjectSupport = async ({
     buildBridgeRuntimeIdentity(ctx, project.id),
     false,
   );
-
-  if (project.sampleDataset === null) {
-    await ctx.projectService.generateProjectRecommendationQuestions(
-      project.id,
-      getCurrentRuntimeScopeId(ctx),
-    );
-  }
 
   if (deployRes.status === 'SUCCESS') {
     const knowledgeBase = await resolveActiveRuntimeKnowledgeBase(ctx);

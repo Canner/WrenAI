@@ -105,7 +105,7 @@ describe('SqlPairService', () => {
   });
 
   it('drops project bridge from persisted sql pair payload when canonical runtime identity exists', async () => {
-    const { service, sqlPairRepository, tx } = createService();
+    const { service, sqlPairRepository, wrenAIAdaptor, tx } = createService();
     sqlPairRepository.createOne.mockResolvedValue({
       id: 8,
       sql: 'SELECT 2',
@@ -136,6 +136,17 @@ describe('SqlPairService', () => {
         deployHash: 'deploy-1',
       }),
       { tx },
+    );
+    expect(wrenAIAdaptor.deploySqlPair).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runtimeIdentity: {
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snapshot-1',
+          deployHash: 'deploy-1',
+          actorUserId: 'user-1',
+        },
+      }),
     );
   });
 

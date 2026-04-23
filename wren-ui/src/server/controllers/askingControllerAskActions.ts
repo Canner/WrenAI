@@ -5,7 +5,6 @@ import {
   resolveRuntimeSampleDataset,
   resolveRuntimeProject as resolveScopedRuntimeProject,
 } from '../utils/runtimeExecutionContext';
-import { ThreadRecommendQuestionResult } from '../services/askingService';
 import {
   AskingTask,
   RecommendedQuestionsTask,
@@ -19,55 +18,12 @@ import {
   ensureResponseScope,
   ensureThreadScope,
   formatAdjustmentTask,
-  getActiveRuntimeProject,
   getCurrentLanguage,
   getCurrentPersistedRuntimeIdentity,
   getCurrentRuntimeScopeId,
   recordKnowledgeBaseReadAudit,
   transformAskingTask,
 } from './askingControllerScopeSupport';
-
-export const generateProjectRecommendationQuestionsAction = async (
-  ctx: IContext,
-): Promise<boolean> => {
-  await assertKnowledgeBaseReadAccess(ctx);
-  const project = await getActiveRuntimeProject(ctx);
-  await ctx.projectService.generateProjectRecommendationQuestions(
-    project.id,
-    getCurrentRuntimeScopeId(ctx),
-  );
-  return true;
-};
-
-export const generateThreadRecommendationQuestionsAction = async (
-  args: { threadId: number },
-  ctx: IContext,
-): Promise<boolean> => {
-  await ensureThreadScope(ctx, args.threadId);
-  await ctx.askingService.generateThreadRecommendationQuestions(
-    args.threadId,
-    getCurrentRuntimeScopeId(ctx),
-  );
-  return true;
-};
-
-export const getThreadRecommendationQuestionsAction = async (
-  args: { threadId: number },
-  ctx: IContext,
-): Promise<ThreadRecommendQuestionResult> => {
-  await ensureThreadScope(ctx, args.threadId);
-  const result = await ctx.askingService.getThreadRecommendationQuestions(
-    args.threadId,
-  );
-  await recordKnowledgeBaseReadAudit(ctx, {
-    resourceType: 'thread',
-    resourceId: args.threadId,
-    payloadJson: {
-      operation: 'get_thread_recommendation_questions',
-    },
-  });
-  return result;
-};
 
 export const getSuggestedQuestionsAction = async (
   ctx: IContext,

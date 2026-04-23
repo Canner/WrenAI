@@ -15,17 +15,23 @@ import {
   buildAuthorizationContextFromRequest,
 } from '@server/authz';
 import { AskRuntimeIdentity } from '@/server/models/adaptor';
+import { normalizeCanonicalPersistedRuntimeIdentity } from '@server/utils/persistedRuntimeIdentity';
 
 export const toAskRuntimeIdentity = (runtimeIdentity: {
   [K in keyof AskRuntimeIdentity]?: AskRuntimeIdentity[K] | null;
-}): AskRuntimeIdentity => ({
-  projectId: runtimeIdentity.projectId ?? undefined,
-  workspaceId: runtimeIdentity.workspaceId ?? null,
-  knowledgeBaseId: runtimeIdentity.knowledgeBaseId ?? null,
-  kbSnapshotId: runtimeIdentity.kbSnapshotId ?? null,
-  deployHash: runtimeIdentity.deployHash ?? null,
-  actorUserId: runtimeIdentity.actorUserId ?? null,
-});
+}): AskRuntimeIdentity => {
+  const normalizedRuntimeIdentity =
+    normalizeCanonicalPersistedRuntimeIdentity(runtimeIdentity);
+
+  return {
+    projectId: normalizedRuntimeIdentity.projectId ?? undefined,
+    workspaceId: normalizedRuntimeIdentity.workspaceId ?? null,
+    knowledgeBaseId: normalizedRuntimeIdentity.knowledgeBaseId ?? null,
+    kbSnapshotId: normalizedRuntimeIdentity.kbSnapshotId ?? null,
+    deployHash: normalizedRuntimeIdentity.deployHash ?? null,
+    actorUserId: normalizedRuntimeIdentity.actorUserId ?? null,
+  };
+};
 
 export const getErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);

@@ -1,6 +1,7 @@
 import { IContext } from '@server/types';
 import { safeFormatSQL } from '@server/utils/sqlFormat';
 import { toPersistedRuntimeIdentity } from '@server/context/runtimeScope';
+import { toPersistedRuntimeIdentityPatch } from '@server/utils/persistedRuntimeIdentity';
 import {
   OUTDATED_RUNTIME_SNAPSHOT_MESSAGE,
   assertLatestExecutableRuntimeScope,
@@ -23,7 +24,9 @@ import {
 } from './askingControllerTypes';
 
 export const getCurrentPersistedRuntimeIdentity = (ctx: IContext) =>
-  toPersistedRuntimeIdentity(ctx.runtimeScope!);
+  toPersistedRuntimeIdentityPatch(
+    toPersistedRuntimeIdentity(ctx.runtimeScope!),
+  );
 
 export const getCurrentRuntimeScopeId = (ctx: IContext) =>
   ctx.runtimeScope?.selector?.runtimeScopeId || null;

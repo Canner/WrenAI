@@ -151,24 +151,6 @@ export const LoginCard = styled.div`
   }
 `;
 
-export const CardHeader = styled.div`
-  margin-bottom: 20px;
-`;
-
-export const CardTitle = styled.div`
-  color: #161d31;
-  font-size: 21px;
-  font-weight: 700;
-  line-height: 1.2;
-`;
-
-export const CardCopy = styled.p`
-  margin: 6px 0 0;
-  color: #697287;
-  font-size: 13px;
-  line-height: 1.6;
-`;
-
 export const StyledForm = styled(Form)`
   .ant-form-item {
     margin-bottom: 12px;

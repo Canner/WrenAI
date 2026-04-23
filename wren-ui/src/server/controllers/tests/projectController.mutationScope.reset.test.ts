@@ -111,11 +111,6 @@ describe('ProjectController', () => {
         deployService: {
           deploy: jest.fn().mockResolvedValue({ status: 'SUCCESS' }),
         },
-        projectService: {
-          generateProjectRecommendationQuestions: jest
-            .fn()
-            .mockResolvedValue(undefined),
-        },
       } as any;
 
       await resolver.deploy(ctx, {

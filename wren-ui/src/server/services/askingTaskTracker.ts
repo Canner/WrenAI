@@ -14,6 +14,7 @@ import {
 import { IWrenAIAdaptor } from '../adaptors';
 import * as Errors from '@server/utils/error';
 import { toPersistedRuntimeIdentityPatch } from '@server/utils/persistedRuntimeIdentity';
+import { toAskRuntimeIdentity } from './askingServiceRuntimeSupport';
 import { registerShutdownCallback } from '@server/utils/shutdown';
 import isEqual from 'lodash/isEqual';
 import type {
@@ -72,8 +73,15 @@ export class AskingTaskTracker implements IAskingTaskTracker {
     input: CreateAskingTaskInput,
   ): Promise<{ queryId: string }> {
     try {
+      const normalizedRuntimeIdentity = input.runtimeIdentity
+        ? toPersistedRuntimeIdentityPatch(input.runtimeIdentity)
+        : undefined;
+
       // Call the AI service to create a task
-      const response = await this.wrenAIAdaptor.ask(input);
+      const response = await this.wrenAIAdaptor.ask({
+        ...input,
+        runtimeIdentity: toAskRuntimeIdentity(normalizedRuntimeIdentity),
+      });
       const queryId = response.queryId;
 
       // validate the input
@@ -93,7 +101,7 @@ export class AskingTaskTracker implements IAskingTaskTracker {
         question: input.query,
         isFinalized: false,
         rerunFromCancelled: input.rerunFromCancelled,
-        runtimeIdentity: input.runtimeIdentity,
+        runtimeIdentity: normalizedRuntimeIdentity,
       } as TrackedTask;
       this.trackedTasks.set(queryId, task);
 
@@ -130,9 +138,7 @@ export class AskingTaskTracker implements IAskingTaskTracker {
         // update the query id in database
         await this.askingTaskRepository.updateOne(input.previousTaskId, {
           queryId,
-          ...(input.runtimeIdentity
-            ? toPersistedRuntimeIdentityPatch(input.runtimeIdentity)
-            : {}),
+          ...(normalizedRuntimeIdentity || {}),
         });
       }
 
@@ -236,14 +242,14 @@ export class AskingTaskTracker implements IAskingTaskTracker {
       result: detail,
       isFinalized: this.isTaskFinalized(detail.status),
       threadResponseId: taskRecord.threadResponseId || undefined,
-      runtimeIdentity: {
+      runtimeIdentity: toPersistedRuntimeIdentityPatch({
         projectId: taskRecord.projectId ?? null,
         workspaceId: taskRecord.workspaceId ?? null,
         knowledgeBaseId: taskRecord.knowledgeBaseId ?? null,
         kbSnapshotId: taskRecord.kbSnapshotId ?? null,
         deployHash: taskRecord.deployHash ?? null,
         actorUserId: taskRecord.actorUserId ?? null,
-      },
+      }),
     };
 
     if (trackedTask.isFinalized) {

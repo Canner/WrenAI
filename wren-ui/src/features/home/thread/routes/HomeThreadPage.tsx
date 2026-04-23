@@ -297,6 +297,7 @@ export default function HomeThread() {
   });
   const onGenerateThreadRecommendedQuestions =
     useThreadRecommendedQuestionsAction({
+      locale: router.locale,
       resolveResponseRuntimeScopeSelector:
         resolveResponseRuntimeScopeSelectorById,
       startThreadResponsePolling,

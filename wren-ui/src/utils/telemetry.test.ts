@@ -1,5 +1,9 @@
 import posthog from 'posthog-js';
-import { resetTelemetryStateForTests, trackUserTelemetry } from './telemetry';
+import {
+  captureUserTelemetryEvent,
+  resetTelemetryStateForTests,
+  trackUserTelemetry,
+} from './telemetry';
 
 jest.mock('posthog-js', () => ({
   __esModule: true,
@@ -102,5 +106,16 @@ describe('trackUserTelemetry', () => {
     expect(posthog.identify).not.toHaveBeenCalled();
     expect(routerEvents.on).not.toHaveBeenCalled();
     expect(routerEvents.off).toHaveBeenCalledTimes(1);
+  });
+
+  it('captures custom client telemetry events when running in the browser', () => {
+    captureUserTelemetryEvent('home_recommendation_item_drafted', {
+      sourceResponseId: 11,
+    });
+
+    expect(posthog.capture).toHaveBeenCalledWith(
+      'home_recommendation_item_drafted',
+      { sourceResponseId: 11 },
+    );
   });
 });

@@ -1,177 +1,9 @@
-import { AskingService, RecommendQuestionResultStatus } from '../askingService';
-import {
-  RecommendationQuestionStatus,
-  WrenAILanguage,
-} from '../../models/adaptor';
+import { AskingService } from '../askingService';
+import { RecommendationQuestionStatus } from '../../models/adaptor';
 import { generateThreadResponseRecommendationsAction } from '../askingServiceRecommendationActions';
+import { TelemetryEvent } from '../../telemetry/telemetry';
 
 describe('AskingService', () => {
-  describe('thread recommended questions', () => {
-    it('uses the thread runtime deployment when generating recommended questions', async () => {
-      const service = Object.create(AskingService.prototype) as any;
-      service.threadRepository = {
-        findOneBy: jest.fn().mockResolvedValue({
-          id: 101,
-          projectId: 42,
-          workspaceId: 'workspace-1',
-          knowledgeBaseId: 'kb-1',
-          kbSnapshotId: 'snapshot-1',
-          deployHash: 'deploy-thread',
-          actorUserId: 'user-1',
-        }),
-        updateOne: jest.fn().mockResolvedValue({
-          id: 101,
-          queryId: 'recommend-1',
-          questionsStatus: RecommendationQuestionStatus.GENERATING,
-          questions: [],
-          questionsError: null,
-        }),
-      };
-      service.threadResponseRepository = {
-        findAllBy: jest.fn().mockResolvedValue([
-          { id: 1, question: 'q1' },
-          { id: 2, question: 'q2' },
-        ]),
-      };
-      service.projectService = {
-        getProjectById: jest.fn().mockResolvedValue({
-          id: 42,
-          language: 'EN',
-        }),
-      };
-      service.deployService = {
-        getDeploymentByRuntimeIdentity: jest
-          .fn()
-          .mockResolvedValue({ manifest: { models: ['thread'] } }),
-      };
-      service.wrenAIAdaptor = {
-        generateRecommendationQuestions: jest
-          .fn()
-          .mockResolvedValue({ queryId: 'recommend-1' }),
-      };
-      service.threadRecommendQuestionBackgroundTracker = {
-        isExist: jest.fn().mockReturnValue(false),
-        addTask: jest.fn(),
-      };
-      service.getProjectAndDeployment =
-        AskingService.prototype['getProjectAndDeployment'].bind(service);
-      service.getThreadRecommendationQuestionsConfig =
-        AskingService.prototype['getThreadRecommendationQuestionsConfig'].bind(
-          service,
-        );
-
-      await service.generateThreadRecommendationQuestions(101, '4');
-
-      expect(
-        service.deployService.getDeploymentByRuntimeIdentity,
-      ).toHaveBeenCalledWith(
-        expect.objectContaining({
-          projectId: null,
-          deployHash: 'deploy-thread',
-        }),
-      );
-      expect(
-        service.wrenAIAdaptor.generateRecommendationQuestions,
-      ).toHaveBeenCalledWith(
-        expect.objectContaining({
-          manifest: { models: ['thread'] },
-          runtimeScopeId: '4',
-          regenerate: true,
-          configuration: {
-            language: WrenAILanguage.ZH_CN,
-          },
-          runtimeIdentity: {
-            workspaceId: 'workspace-1',
-            knowledgeBaseId: 'kb-1',
-            kbSnapshotId: 'snapshot-1',
-            deployHash: 'deploy-thread',
-            actorUserId: 'user-1',
-          },
-          previousQuestions: ['q2', 'q1'],
-        }),
-      );
-    });
-
-    it('regenerates finished thread recommendations when Chinese is preferred but cached questions are non-Chinese', async () => {
-      const service = Object.create(AskingService.prototype) as any;
-      const thread = {
-        id: 101,
-        projectId: null,
-        workspaceId: 'workspace-1',
-        knowledgeBaseId: 'kb-1',
-        kbSnapshotId: 'snapshot-1',
-        deployHash: 'deploy-thread',
-        actorUserId: 'user-1',
-        queryId: 'recommend-1',
-        questionsStatus: RecommendationQuestionStatus.FINISHED,
-        questions: [
-          {
-            category: 'Comparative Questions',
-            question:
-              'How does the scoring distribution differ by home/away games?',
-            sql: 'select 1',
-          },
-        ],
-        questionsError: null,
-      };
-      service.threadRepository = {
-        findOneBy: jest.fn().mockResolvedValue(thread),
-      };
-      service.threadResponseRepository = {
-        findAllBy: jest
-          .fn()
-          .mockResolvedValue([{ id: 12, question: '上一条回答' }]),
-      };
-      service.knowledgeBaseRepository = {
-        findOneBy: jest.fn().mockResolvedValue({
-          id: 'kb-1',
-          language: null,
-        }),
-      };
-      service.getExecutionResources = jest.fn().mockResolvedValue({
-        project: { id: 42, language: 'EN' },
-      });
-      service.generateThreadRecommendationQuestions = jest
-        .fn()
-        .mockResolvedValue(undefined);
-      service.isLikelyNonChineseQuestions =
-        AskingService.prototype['isLikelyNonChineseQuestions'].bind(service);
-      service.shouldForceChineseThreadRecommendation =
-        AskingService.prototype['shouldForceChineseThreadRecommendation'].bind(
-          service,
-        );
-
-      const result = await service.getThreadRecommendationQuestions(101);
-
-      expect(
-        service.generateThreadRecommendationQuestions,
-      ).toHaveBeenCalledWith(101);
-      expect(result).toEqual({
-        status: RecommendQuestionResultStatus.GENERATING,
-        questions: [],
-        error: undefined,
-        resolvedIntent: {
-          kind: 'RECOMMEND_QUESTIONS',
-          mode: 'FOLLOW_UP',
-          target: 'THREAD_SIDECAR',
-          source: 'derived',
-          sourceThreadId: 101,
-          sourceResponseId: 12,
-          confidence: null,
-          artifactPlan: {
-            teaserArtifacts: [],
-            workbenchArtifacts: [],
-            primaryTeaser: null,
-            primaryWorkbenchArtifact: null,
-          },
-          conversationAidPlan: {
-            threadAids: ['suggested_questions'],
-          },
-        },
-      });
-    });
-  });
-
   describe('getResponsesWithThreadScoped', () => {
     it('loads responses by runtime scope after thread scope passes', async () => {
       const service = Object.create(AskingService.prototype) as any;
@@ -529,6 +361,9 @@ describe('AskingService', () => {
           isExist: jest.fn().mockReturnValue(false),
           addTask: jest.fn(),
         },
+        telemetry: {
+          sendEvent: jest.fn(),
+        },
         threadResponseRepository: {
           updateOne: jest
             .fn()
@@ -609,6 +444,110 @@ describe('AskingService', () => {
             sourceResponseId: 55,
           }),
         }),
+      );
+      expect(service.telemetry.sendEvent).toHaveBeenCalledWith(
+        TelemetryEvent.HOME_RECOMMENDATION_TRIGGER_SENT,
+        expect.objectContaining({
+          sourceResponseId: 55,
+          sourceResponseKind: 'ASK',
+          threadId: 10,
+        }),
+      );
+      expect(service.telemetry.sendEvent).toHaveBeenCalledWith(
+        TelemetryEvent.HOME_RECOMMENDATION_RESPONSE_CREATED,
+        expect.objectContaining({
+          responseId: 77,
+          sourceResponseId: 55,
+        }),
+      );
+    });
+
+    it('uses an english follow-up title when the runtime language is english', async () => {
+      const runtimeIdentity = {
+        projectId: null,
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snapshot-1',
+        deployHash: 'deploy-1',
+        actorUserId: 'user-1',
+      };
+
+      const service = {
+        getResponse: jest.fn().mockResolvedValue({
+          id: 55,
+          threadId: 10,
+          question: 'What is the average salary?',
+          sql: 'select avg_salary from payroll',
+          responseKind: 'ASK',
+        }),
+        getThreadResponseRuntimeIdentity: jest
+          .fn()
+          .mockResolvedValue(runtimeIdentity),
+        getExecutionResources: jest.fn().mockResolvedValue({
+          project: { id: 42, language: 'EN' },
+          manifest: { models: ['payroll'] },
+        }),
+        getAskingHistory: jest.fn().mockResolvedValue([]),
+        previewDataScoped: jest.fn().mockResolvedValue({
+          columns: [{ name: 'avg_salary', type: 'DOUBLE' }],
+          data: [[100]],
+        }),
+        threadResponseRecommendQuestionBackgroundTracker: {
+          isExist: jest.fn().mockReturnValue(false),
+          addTask: jest.fn(),
+        },
+        telemetry: {
+          sendEvent: jest.fn(),
+        },
+        threadResponseRepository: {
+          updateOne: jest
+            .fn()
+            .mockImplementation(async (id: number, payload: any) => ({
+              id,
+              threadId: 10,
+              recommendationDetail: payload.recommendationDetail,
+            })),
+        },
+        createThreadResponse: jest.fn().mockResolvedValue({
+          id: 78,
+          threadId: 10,
+          responseKind: 'RECOMMENDATION_FOLLOWUP',
+          recommendationDetail: {
+            status: RecommendationQuestionStatus.GENERATING,
+            items: [],
+            queryId: null,
+            sourceResponseId: 55,
+          },
+        }),
+        wrenAIAdaptor: {
+          generateRecommendationQuestions: jest
+            .fn()
+            .mockResolvedValue({ queryId: 'recommend-78' }),
+        },
+        toAskRuntimeIdentity: jest.fn((identity) => identity),
+        getThreadRecommendationQuestionsConfig: jest.fn().mockReturnValue({
+          maxQuestions: 5,
+          maxCategories: 3,
+          regenerate: true,
+        }),
+      } as any;
+
+      await generateThreadResponseRecommendationsAction(
+        service,
+        55,
+        runtimeIdentity,
+        {
+          language: 'en-US',
+        },
+        'runtime-scope-1',
+      );
+
+      expect(service.createThreadResponse).toHaveBeenCalledWith(
+        expect.objectContaining({
+          question: 'Recommend follow-up questions',
+        }),
+        10,
+        runtimeIdentity,
       );
     });
   });

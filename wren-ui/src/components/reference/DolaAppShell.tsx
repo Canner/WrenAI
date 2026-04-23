@@ -198,11 +198,13 @@ const DolaAppShellSidebar = memo(function DolaAppShellSidebar({
 }, areDolaAppShellSidebarPropsEqual);
 
 const ContentSlot = styled.div<{ $stretch?: boolean }>`
-  display: ${(props) => (props.$stretch ? 'flex' : 'block')};
+  display: flex;
   flex-direction: column;
-  flex: ${(props) => (props.$stretch ? '1 1 auto' : '0 0 auto')};
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
   height: ${(props) => (props.$stretch ? '100%' : 'auto')};
-  min-height: ${(props) => (props.$stretch ? '0' : 'auto')};
+  overflow: ${(props) => (props.$stretch ? 'hidden' : 'visible')};
 `;
 
 function DolaAppShellFrame({
@@ -216,7 +218,11 @@ function DolaAppShellFrame({
   return (
     <Shell>
       <DolaAppShellSidebar {...sidebarProps} />
-      <Main $flush={flushMainPadding} $flushBottom={flushBottomPadding}>
+      <Main
+        $flush={flushMainPadding}
+        $flushBottom={flushBottomPadding}
+        $stretchContent={stretchContent}
+      >
         <MainInner>
           {topbarExtra ? <MainTopbar>{topbarExtra}</MainTopbar> : null}
           <ContentSlot $stretch={stretchContent}>{children}</ContentSlot>

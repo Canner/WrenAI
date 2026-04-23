@@ -5,7 +5,6 @@ import {
   ChartAdjustmentBackgroundTracker,
   ChartBackgroundTracker,
   ThreadResponseRecommendQuestionBackgroundTracker,
-  ThreadRecommendQuestionBackgroundTracker,
 } from '../backgrounds';
 import { TextBasedAnswerBackgroundTracker } from '../backgrounds/textBasedAnswerBackgroundTracker';
 import {
@@ -36,7 +35,6 @@ import {
   InstantRecommendedQuestionsInput,
   RecommendQuestionResultStatus,
   Task,
-  ThreadRecommendQuestionResult,
   ThreadResponseAnswerStatus,
 } from './askingServiceShared';
 import { applyAskingServiceActionPrototype } from './askingServicePrototypeActions';
@@ -57,7 +55,6 @@ export class AskingService implements IAskingService {
   private textBasedAnswerBackgroundTracker: TextBasedAnswerBackgroundTracker;
   private chartBackgroundTracker: ChartBackgroundTracker;
   private chartAdjustmentBackgroundTracker: ChartAdjustmentBackgroundTracker;
-  private threadRecommendQuestionBackgroundTracker: ThreadRecommendQuestionBackgroundTracker;
   private threadResponseRecommendQuestionBackgroundTracker: ThreadResponseRecommendQuestionBackgroundTracker;
   private queryService: IQueryService;
   private telemetry: PostHogTelemetry;
@@ -105,8 +102,6 @@ export class AskingService implements IAskingService {
   declare public generateThreadResponseRecommendationsScoped: IAskingService['generateThreadResponseRecommendationsScoped'];
   declare public createInstantRecommendedQuestions: IAskingService['createInstantRecommendedQuestions'];
   declare public getInstantRecommendedQuestions: IAskingService['getInstantRecommendedQuestions'];
-  declare public generateThreadRecommendationQuestions: IAskingService['generateThreadRecommendationQuestions'];
-  declare public getThreadRecommendationQuestions: IAskingService['getThreadRecommendationQuestions'];
   declare public deleteAllByProjectId: IAskingService['deleteAllByProjectId'];
 
   declare public updateThread: (
@@ -316,12 +311,6 @@ export class AskingService implements IAskingService {
         wrenAIAdaptor,
         threadResponseRepository,
       });
-    this.threadRecommendQuestionBackgroundTracker =
-      new ThreadRecommendQuestionBackgroundTracker({
-        telemetry,
-        wrenAIAdaptor,
-        threadRepository,
-      });
     this.threadResponseRecommendQuestionBackgroundTracker =
       new ThreadResponseRecommendQuestionBackgroundTracker({
         telemetry,
@@ -346,7 +335,6 @@ export class AskingService implements IAskingService {
     this.textBasedAnswerBackgroundTracker.stop();
     this.chartBackgroundTracker.stop();
     this.chartAdjustmentBackgroundTracker.stop();
-    this.threadRecommendQuestionBackgroundTracker.stop();
     this.threadResponseRecommendQuestionBackgroundTracker.stop();
     this.adjustmentBackgroundTracker.stopPolling();
   }
@@ -386,5 +374,4 @@ export type {
   InstantRecommendedQuestionTask,
   InstantRecommendedQuestionsInput,
   Task,
-  ThreadRecommendQuestionResult,
 };

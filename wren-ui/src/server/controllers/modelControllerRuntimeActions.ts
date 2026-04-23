@@ -22,7 +22,6 @@ interface ModelControllerRuntimeDeps {
     runtimeIdentity: any,
     fallbackBridgeProjectId?: number | null,
   ) => number | null;
-  getCurrentRuntimeScopeId: (ctx: IContext) => string | null;
   recordKnowledgeBaseReadAudit: (
     ctx: IContext,
     args: {
@@ -121,7 +120,6 @@ export const deployAction = async ({
     | 'getRuntimeSelection'
     | 'getRuntimeProject'
     | 'resolveBridgeProjectIdFallback'
-    | 'getCurrentRuntimeScopeId'
     | 'recordKnowledgeBaseWriteAudit'
     | 'isInternalAiServiceRequest'
   >;
@@ -176,12 +174,6 @@ export const deployAction = async ({
     latestSnapshotDeployHash = latestSnapshot?.deployHash || null;
   }
 
-  if (project.sampleDataset === null) {
-    await ctx.projectService.generateProjectRecommendationQuestions(
-      resolvedProjectId,
-      deps.getCurrentRuntimeScopeId(ctx),
-    );
-  }
   await deps.recordKnowledgeBaseWriteAudit(ctx, {
     resourceType: 'project',
     resourceId: resolvedProjectId,

@@ -25,7 +25,7 @@ describe('DiagramController', () => {
   it('builds diagrams from runtime-identity scoped repositories instead of runtimeScope.project', async () => {
     const resolver = new DiagramController();
     const runtimeIdentity = {
-      projectId: 42,
+      projectId: null,
       workspaceId: 'workspace-1',
       knowledgeBaseId: 'kb-1',
       kbSnapshotId: 'snapshot-1',

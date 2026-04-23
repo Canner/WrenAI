@@ -4,17 +4,20 @@ import { appMessage as message } from '@/utils/antdAppBridge';
 import type { ThreadResponse } from '@/types/home';
 import { triggerThreadResponseRecommendations as triggerThreadResponseRecommendationsRequest } from '@/utils/threadRest';
 import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
+import { useThreadWorkbenchMessages } from './threadWorkbenchMessages';
 
 const reportThreadError = (_error: unknown, fallbackMessage: string) => {
   message.error(fallbackMessage);
 };
 
 export function useThreadRecommendedQuestionsAction({
+  locale,
   resolveResponseRuntimeScopeSelector,
   startThreadResponsePolling,
   stopThreadResponsePolling,
   upsertThreadResponse,
 }: {
+  locale?: string | null;
   resolveResponseRuntimeScopeSelector: (
     responseId: number,
   ) => ClientRuntimeScopeSelector;
@@ -22,6 +25,8 @@ export function useThreadRecommendedQuestionsAction({
   stopThreadResponsePolling: () => void;
   upsertThreadResponse: (nextResponse: ThreadResponse) => void;
 }) {
+  const messages = useThreadWorkbenchMessages(locale);
+
   return useCallback(
     async ({
       question,
@@ -31,7 +36,7 @@ export function useThreadRecommendedQuestionsAction({
       responseId?: number | null;
     }) => {
       if (!responseId) {
-        message.error('当前回答尚未就绪，请稍后再试');
+        message.error(messages.recommendation.notifications.sourceNotReady);
         return null;
       }
 
@@ -47,11 +52,16 @@ export function useThreadRecommendedQuestionsAction({
         startThreadResponsePolling(nextResponse.id);
         return nextResponse;
       } catch (error) {
-        reportThreadError(error, '生成推荐追问失败，请稍后重试');
+        reportThreadError(
+          error,
+          messages.recommendation.notifications.generateFailed,
+        );
         return null;
       }
     },
     [
+      messages.recommendation.notifications.generateFailed,
+      messages.recommendation.notifications.sourceNotReady,
       resolveResponseRuntimeScopeSelector,
       startThreadResponsePolling,
       stopThreadResponsePolling,

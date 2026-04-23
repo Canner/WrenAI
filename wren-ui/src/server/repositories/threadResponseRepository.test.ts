@@ -122,7 +122,7 @@ describe('ThreadResponseRepository', () => {
     expect(builder.orderBy).toHaveBeenCalledWith('created_at', 'desc');
     expect(builder.limit).toHaveBeenCalledWith(5);
     expect(responses).toEqual([
-      {
+      expect.objectContaining({
         id: 22,
         threadId: 1,
         question: '本月 GMV',
@@ -130,10 +130,14 @@ describe('ThreadResponseRepository', () => {
           status: 'FINISHED',
           content: '128 万',
         },
-        breakdownDetail: null,
-        chartDetail: null,
         adjustment: null,
-      },
+        projectId: null,
+        workspaceId: null,
+        knowledgeBaseId: null,
+        kbSnapshotId: null,
+        deployHash: null,
+        actorUserId: null,
+      }),
     ]);
   });
 
@@ -147,7 +151,7 @@ describe('ThreadResponseRepository', () => {
     expect(builder.limit).not.toHaveBeenCalled();
   });
 
-  it('getResponsesWithThreadByScope requires exact runtime scope matches', async () => {
+  it('getResponsesWithThreadByScope ignores legacy project bridge filters when canonical scope is present', async () => {
     const { knex, builder } = buildKnexRows([]);
     const repository = new ThreadResponseRepository(knex as unknown as any);
 
@@ -163,7 +167,7 @@ describe('ThreadResponseRepository', () => {
       5,
     );
 
-    expect(builder.andWhereRaw).toHaveBeenCalledWith(
+    expect(builder.andWhereRaw).not.toHaveBeenCalledWith(
       'COALESCE(thread_response.project_id, thread.project_id) = ?',
       [42],
     );
@@ -236,6 +240,85 @@ describe('ThreadResponseRepository', () => {
       'COALESCE(thread_response.project_id, thread.project_id) IS NULL',
     );
     expect(builder.where).toHaveBeenCalledWith('thread_response.id', 202);
+  });
+
+  it('findOneByIdWithRuntimeScope hydrates parent runtime fields when response fields are missing', async () => {
+    const { knex } = buildKnexRows([
+      {
+        id: 202,
+        thread_id: 101,
+        project_id: null,
+        workspace_id: null,
+        knowledge_base_id: null,
+        kb_snapshot_id: null,
+        deploy_hash: null,
+        actor_user_id: null,
+        question: 'follow up',
+        thread_project_id: 42,
+        thread_workspace_id: 'workspace-1',
+        thread_knowledge_base_id: 'kb-1',
+        thread_kb_snapshot_id: 'snapshot-1',
+        thread_deploy_hash: 'deploy-1',
+        thread_actor_user_id: 'user-1',
+      },
+    ]);
+    const repository = new ThreadResponseRepository(knex as unknown as any);
+
+    await expect(
+      repository.findOneByIdWithRuntimeScope(202, {
+        projectId: 42,
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snapshot-1',
+        deployHash: 'deploy-1',
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        id: 202,
+        threadId: 101,
+        projectId: null,
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snapshot-1',
+        deployHash: 'deploy-1',
+        actorUserId: 'user-1',
+      }),
+    );
+  });
+
+  it('rehydrates joined runtime scope without carrying a legacy project bridge when canonical fields exist', () => {
+    const repository = buildRepository() as any;
+
+    expect(
+      repository.hydrateJoinedRuntimeScope({
+        id: 31,
+        thread_id: 9,
+        project_id: null,
+        workspace_id: null,
+        knowledge_base_id: null,
+        kb_snapshot_id: null,
+        deploy_hash: null,
+        actor_user_id: null,
+        question: 'show chart',
+        thread_project_id: 42,
+        thread_workspace_id: 'workspace-1',
+        thread_knowledge_base_id: 'kb-1',
+        thread_kb_snapshot_id: 'snapshot-1',
+        thread_deploy_hash: 'deploy-1',
+        thread_actor_user_id: 'user-1',
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        id: 31,
+        threadId: 9,
+        projectId: null,
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snapshot-1',
+        deployHash: 'deploy-1',
+        actorUserId: 'user-1',
+      }),
+    );
   });
 
   it('findUnfinishedBreakdownResponsesByWorkspaceId narrows bootstrap reads to one workspace', async () => {

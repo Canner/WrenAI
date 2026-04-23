@@ -2,6 +2,7 @@ import { IContext } from '@server/types';
 import { UpdateInstructionInput } from '@server/models';
 import { Instruction } from '@server/repositories/instructionRepository';
 import { toPersistedRuntimeIdentity } from '@server/context/runtimeScope';
+import { toPersistedRuntimeIdentityPatch } from '@server/utils/persistedRuntimeIdentity';
 import { getLogger } from '@server/utils';
 import * as Errors from '@server/utils/error';
 import { assertLatestExecutableRuntimeScope } from '@server/utils/runtimeExecutionContext';
@@ -14,6 +15,11 @@ import {
 
 const logger = getLogger('InstructionController');
 logger.level = 'debug';
+
+const getCurrentPersistedRuntimeIdentity = (ctx: IContext) =>
+  toPersistedRuntimeIdentityPatch(
+    toPersistedRuntimeIdentity(ctx.runtimeScope!),
+  );
 
 const requireKnowledgeBaseWriteAccess = async (ctx: IContext) => {
   const { actor, resource } = getKnowledgeBaseAuthorizationTarget(ctx);
@@ -72,7 +78,7 @@ export class InstructionController {
     try {
       const { actor, resource } = await requireKnowledgeBaseReadAccess(ctx);
       const instructions = await ctx.instructionService.listInstructions(
-        toPersistedRuntimeIdentity(ctx.runtimeScope!),
+        getCurrentPersistedRuntimeIdentity(ctx),
       );
       await recordAuditEvent({
         auditEventRepository: ctx.auditEventRepository,
@@ -107,7 +113,7 @@ export class InstructionController {
     await requireKnowledgeBaseWriteAccess(ctx);
     const { instruction, questions, isDefault } = args.data;
     const created = await ctx.instructionService.createInstruction(
-      toPersistedRuntimeIdentity(ctx.runtimeScope!),
+      getCurrentPersistedRuntimeIdentity(ctx),
       {
         instruction,
         questions,
@@ -153,7 +159,7 @@ export class InstructionController {
       throw new Error('Instruction ID is required.');
     }
     const updated = await ctx.instructionService.updateInstruction(
-      toPersistedRuntimeIdentity(ctx.runtimeScope!),
+      getCurrentPersistedRuntimeIdentity(ctx),
       {
         id,
         instruction,
@@ -191,7 +197,7 @@ export class InstructionController {
     const { id } = args.where;
     await ctx.instructionService.deleteInstruction(
       id,
-      toPersistedRuntimeIdentity(ctx.runtimeScope!),
+      getCurrentPersistedRuntimeIdentity(ctx),
     );
     const { actor, resource } = getKnowledgeBaseAuthorizationTarget(ctx);
     await recordAuditEvent({

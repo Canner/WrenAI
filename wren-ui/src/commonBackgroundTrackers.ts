@@ -4,22 +4,16 @@ import type {
   DashboardItemRepository,
   DashboardRepository,
   KBSnapshotRepository,
-  ProjectRepository,
   ScheduleJobRepository,
   ScheduleJobRunRepository,
-  ThreadRepository,
 } from '@server/repositories';
-import type { WrenAIAdaptor } from '@server/adaptors';
 import type { IDeployService } from '@server/services/deployService';
 import type { IProjectService } from '@server/services/projectService';
 
-import { PostHogTelemetry } from './server/telemetry/telemetry';
 import type { QueryService } from './server/services';
 import {
   DashboardCacheBackgroundTracker,
-  ProjectRecommendQuestionBackgroundTracker,
   ScheduleWorker,
-  ThreadRecommendQuestionBackgroundTracker,
 } from './server/backgrounds';
 
 type BackgroundTrackerDependencies = {
@@ -29,14 +23,10 @@ type BackgroundTrackerDependencies = {
   dashboardRepository: DashboardRepository;
   deployService: IDeployService;
   kbSnapshotRepository: KBSnapshotRepository;
-  projectRepository: ProjectRepository;
   projectService: IProjectService;
   queryService: QueryService;
   scheduleJobRepository: ScheduleJobRepository;
   scheduleJobRunRepository: ScheduleJobRunRepository;
-  telemetry: PostHogTelemetry;
-  threadRepository: ThreadRepository;
-  wrenAIAdaptor: WrenAIAdaptor;
 };
 
 export const createBackgroundTrackers = ({
@@ -46,27 +36,11 @@ export const createBackgroundTrackers = ({
   dashboardRepository,
   deployService,
   kbSnapshotRepository,
-  projectRepository,
   projectService,
   queryService,
   scheduleJobRepository,
   scheduleJobRunRepository,
-  telemetry,
-  threadRepository,
-  wrenAIAdaptor,
 }: BackgroundTrackerDependencies) => {
-  const projectRecommendQuestionBackgroundTracker =
-    new ProjectRecommendQuestionBackgroundTracker({
-      telemetry,
-      wrenAIAdaptor,
-      projectRepository,
-    });
-  const threadRecommendQuestionBackgroundTracker =
-    new ThreadRecommendQuestionBackgroundTracker({
-      telemetry,
-      wrenAIAdaptor,
-      threadRepository,
-    });
   const dashboardCacheBackgroundTracker = new DashboardCacheBackgroundTracker({
     dashboardRepository,
     dashboardItemRepository,
@@ -106,8 +80,6 @@ export const createBackgroundTrackers = ({
 
   return {
     dashboardCacheBackgroundTracker,
-    projectRecommendQuestionBackgroundTracker,
     scheduleWorker,
-    threadRecommendQuestionBackgroundTracker,
   };
 };

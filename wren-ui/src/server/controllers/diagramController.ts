@@ -7,6 +7,7 @@ import {
   View,
 } from '@server/repositories';
 import { toPersistedRuntimeIdentity } from '@server/context/runtimeScope';
+import { toPersistedRuntimeIdentityPatch } from '@server/utils/persistedRuntimeIdentity';
 import {
   Diagram,
   DiagramModel,
@@ -28,6 +29,11 @@ import { readModelRecommendationState } from '@server/utils/modelRecommendation'
 
 const logger = getLogger('DiagramController');
 logger.level = 'debug';
+
+const getCurrentPersistedRuntimeIdentity = (ctx: IContext) =>
+  toPersistedRuntimeIdentityPatch(
+    toPersistedRuntimeIdentity(ctx.runtimeScope!),
+  );
 
 const isMissingRuntimeExecutionContextError = (error: unknown) =>
   error instanceof Error &&
@@ -63,7 +69,7 @@ const assertKnowledgeBaseReadAccess = async (ctx: IContext) => {
 };
 
 const getKnowledgeBaseReadAuthorizationTarget = (ctx: IContext) => {
-  const runtimeIdentity = toPersistedRuntimeIdentity(ctx.runtimeScope!);
+  const runtimeIdentity = getCurrentPersistedRuntimeIdentity(ctx);
   const workspaceId =
     ctx.runtimeScope?.workspace?.id || runtimeIdentity.workspaceId || null;
   const knowledgeBase = ctx.runtimeScope?.knowledgeBase;
@@ -106,7 +112,7 @@ export class DiagramController {
 
   public async getDiagram({ ctx }: { ctx: IContext }): Promise<Diagram> {
     await assertKnowledgeBaseReadAccess(ctx);
-    const runtimeIdentity = toPersistedRuntimeIdentity(ctx.runtimeScope!);
+    const runtimeIdentity = getCurrentPersistedRuntimeIdentity(ctx);
     let manifest: Manifest = {
       models: [],
       relationships: [],

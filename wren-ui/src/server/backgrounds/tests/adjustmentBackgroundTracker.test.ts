@@ -72,6 +72,13 @@ describe('AdjustmentBackgroundTaskTracker', () => {
     expect(wrenAIAdaptor.createAskFeedback).toHaveBeenCalledWith(
       expect.objectContaining({
         runtimeScopeId: 'scope-1',
+        runtimeIdentity: {
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snapshot-1',
+          deployHash: 'deploy-1',
+          actorUserId: 'user-1',
+        },
       }),
     );
 
@@ -85,7 +92,7 @@ describe('AdjustmentBackgroundTaskTracker', () => {
         response: [],
         error: undefined,
       },
-      projectId: 42,
+      projectId: null,
       workspaceId: 'workspace-1',
       knowledgeBaseId: 'kb-1',
       kbSnapshotId: 'snapshot-1',
@@ -141,6 +148,13 @@ describe('AdjustmentBackgroundTaskTracker', () => {
     expect(wrenAIAdaptor.createAskFeedback).toHaveBeenCalledWith(
       expect.objectContaining({
         runtimeScopeId: 'scope-1',
+        runtimeIdentity: {
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snapshot-1',
+          deployHash: 'deploy-1',
+          actorUserId: 'user-1',
+        },
       }),
     );
 
@@ -152,7 +166,7 @@ describe('AdjustmentBackgroundTaskTracker', () => {
         response: [],
         error: undefined,
       },
-      projectId: 42,
+      projectId: null,
       workspaceId: 'workspace-1',
       knowledgeBaseId: 'kb-1',
       kbSnapshotId: 'snapshot-1',

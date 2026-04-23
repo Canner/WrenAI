@@ -28,7 +28,6 @@ export const updateCurrentProjectAction = async ({
     | 'resolveActiveRuntimeKnowledgeBase'
     | 'resolveActiveRuntimeProject'
     | 'assertKnowledgeBaseWriteAccess'
-    | 'getCurrentRuntimeScopeId'
     | 'recordKnowledgeBaseWriteAudit'
   >;
 }) => {
@@ -50,15 +49,6 @@ export const updateCurrentProjectAction = async ({
       : Promise.resolve(null),
   ]);
 
-  if (
-    project &&
-    (knowledgeBase?.sampleDataset ?? project.sampleDataset) === null
-  ) {
-    await ctx.projectService.generateProjectRecommendationQuestions(
-      project.id,
-      deps.getCurrentRuntimeScopeId(ctx),
-    );
-  }
   await deps.recordKnowledgeBaseWriteAudit(ctx, {
     resourceType: knowledgeBase ? 'knowledge_base' : 'project',
     resourceId: knowledgeBase?.id || project?.id || null,

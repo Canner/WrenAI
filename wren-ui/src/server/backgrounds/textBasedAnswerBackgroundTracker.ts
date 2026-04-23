@@ -20,6 +20,7 @@ import {
 import { getLogger } from '@server/utils';
 import { PersistedRuntimeIdentity } from '@server/context/runtimeScope';
 import {
+  normalizeCanonicalPersistedRuntimeIdentity,
   resolveRuntimeScopeIdFromPersistedIdentityWithProjectBridgeFallback,
   toPersistedRuntimeIdentityFromSource,
 } from '@server/utils/persistedRuntimeIdentity';
@@ -31,19 +32,29 @@ logger.level = 'debug';
 
 const toAskRuntimeIdentity = (
   runtimeIdentity: PersistedRuntimeIdentity,
-): AskRuntimeIdentity => ({
-  projectId:
-    typeof runtimeIdentity.projectId === 'number'
-      ? runtimeIdentity.projectId
-      : undefined,
-  workspaceId: runtimeIdentity.workspaceId ?? null,
-  knowledgeBaseId: runtimeIdentity.knowledgeBaseId ?? null,
-  kbSnapshotId: runtimeIdentity.kbSnapshotId ?? null,
-  deployHash: runtimeIdentity.deployHash ?? null,
-  actorUserId: runtimeIdentity.actorUserId ?? null,
-});
+): AskRuntimeIdentity => {
+  const normalizedRuntimeIdentity =
+    normalizeCanonicalPersistedRuntimeIdentity(runtimeIdentity);
+
+  return {
+    projectId:
+      typeof normalizedRuntimeIdentity.projectId === 'number'
+        ? normalizedRuntimeIdentity.projectId
+        : undefined,
+    workspaceId: normalizedRuntimeIdentity.workspaceId ?? null,
+    knowledgeBaseId: normalizedRuntimeIdentity.knowledgeBaseId ?? null,
+    kbSnapshotId: normalizedRuntimeIdentity.kbSnapshotId ?? null,
+    deployHash: normalizedRuntimeIdentity.deployHash ?? null,
+    actorUserId: normalizedRuntimeIdentity.actorUserId ?? null,
+  };
+};
 
 const resolveErrorPayload = (error: unknown): Record<string, unknown> => {
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+    };
+  }
   if (error && typeof error === 'object') {
     const extensions = (error as { extensions?: unknown }).extensions;
     if (extensions && typeof extensions === 'object') {
@@ -55,6 +66,9 @@ const resolveErrorPayload = (error: unknown): Record<string, unknown> => {
     message: String(error),
   };
 };
+
+const buildMissingSqlError = (threadResponseId: number) =>
+  new Error(`SQL is missing for response ${threadResponseId}`);
 
 export class TextBasedAnswerBackgroundTracker {
   // tasks is a kv pair of task id and thread response
@@ -156,9 +170,11 @@ export class TextBasedAnswerBackgroundTracker {
             const mdl = runtimeDeployment.manifest;
             const responseSql = threadResponse.sql;
             if (!responseSql) {
-              throw new Error(
-                `SQL is missing for response ${threadResponse.id}`,
+              await this.failTask(
+                threadResponse,
+                buildMissingSqlError(threadResponse.id),
               );
+              return;
             }
             let data: PreviewDataResponse;
             try {
@@ -170,14 +186,8 @@ export class TextBasedAnswerBackgroundTracker {
               })) as PreviewDataResponse;
             } catch (error) {
               logger.error(`Error when query sql data: ${error}`);
-              await this.threadResponseRepository.updateOne(threadResponse.id, {
-                answerDetail: {
-                  ...threadResponse.answerDetail,
-                  status: ThreadResponseAnswerStatus.FAILED,
-                  error: resolveErrorPayload(error),
-                },
-              });
-              throw error;
+              await this.failTask(threadResponse, error);
+              return;
             }
 
             // request AI service
@@ -288,6 +298,22 @@ export class TextBasedAnswerBackgroundTracker {
     return this.tasks;
   }
 
+  private async failTask(
+    threadResponse: ThreadResponse,
+    error: unknown,
+    options: { queryId?: string } = {},
+  ) {
+    await this.threadResponseRepository.updateOne(threadResponse.id, {
+      answerDetail: {
+        ...threadResponse.answerDetail,
+        ...(options.queryId ? { queryId: options.queryId } : {}),
+        status: ThreadResponseAnswerStatus.FAILED,
+        error: resolveErrorPayload(error),
+      },
+    });
+    delete this.tasks[threadResponse.id];
+  }
+
   private async persistStreamingAnswer({
     threadResponse,
     runtimeIdentity: _runtimeIdentity,
@@ -311,15 +337,7 @@ export class TextBasedAnswerBackgroundTracker {
       logger.error(
         `Failed to finalize text answer stream for response ${threadResponse.id}: ${error}`,
       );
-      await this.threadResponseRepository.updateOne(threadResponse.id, {
-        answerDetail: {
-          ...threadResponse.answerDetail,
-          queryId,
-          status: ThreadResponseAnswerStatus.FAILED,
-          error: resolveErrorPayload(error),
-        },
-      });
-      throw error;
+      await this.failTask(threadResponse, error, { queryId });
     }
   }
 
@@ -348,11 +366,18 @@ export class TextBasedAnswerBackgroundTracker {
   private async getResponseRuntimeIdentity(
     threadResponse: ThreadResponse,
   ): Promise<PersistedRuntimeIdentity> {
-    const hasResponseProjectBridge = threadResponse.projectId != null;
-    const hasResponseDeployHash = threadResponse.deployHash != null;
+    const hasResponseScope = Boolean(
+      threadResponse.projectId != null ||
+      threadResponse.workspaceId ||
+      threadResponse.knowledgeBaseId ||
+      threadResponse.kbSnapshotId ||
+      threadResponse.deployHash,
+    );
 
-    if (hasResponseProjectBridge && hasResponseDeployHash) {
-      return toPersistedRuntimeIdentityFromSource(threadResponse);
+    if (hasResponseScope) {
+      return normalizeCanonicalPersistedRuntimeIdentity(
+        toPersistedRuntimeIdentityFromSource(threadResponse),
+      );
     }
 
     const thread = await this.threadRepository.findOneBy({
@@ -364,9 +389,11 @@ export class TextBasedAnswerBackgroundTracker {
       );
     }
 
-    return toPersistedRuntimeIdentityFromSource(
-      threadResponse,
-      toPersistedRuntimeIdentityFromSource(thread),
+    return normalizeCanonicalPersistedRuntimeIdentity(
+      toPersistedRuntimeIdentityFromSource(
+        threadResponse,
+        toPersistedRuntimeIdentityFromSource(thread),
+      ),
     );
   }
 

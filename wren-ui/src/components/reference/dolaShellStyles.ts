@@ -165,13 +165,15 @@ export const Sidebar = styled(Sider)`
 export const Main = styled(Content)<{
   $flush?: boolean;
   $flushBottom?: boolean;
+  $stretchContent?: boolean;
 }>`
   min-width: 0;
   height: 100vh;
   display: flex;
   flex-direction: column;
-  overflow: auto;
-  scrollbar-gutter: stable both-edges;
+  overflow: ${(props) => (props.$stretchContent ? 'hidden' : 'auto')};
+  scrollbar-gutter: ${(props) =>
+    props.$stretchContent ? 'auto' : 'stable both-edges'};
   background: #ffffff;
   padding: ${(props) =>
     props.$flush
@@ -182,6 +184,8 @@ export const Main = styled(Content)<{
 
   @media (max-width: 1120px) {
     height: auto;
+    overflow: auto;
+    scrollbar-gutter: auto;
     padding: ${(props) =>
       props.$flush ? '0' : props.$flushBottom ? '16px 16px 0' : '16px'};
   }

@@ -39,6 +39,7 @@ import {
 } from './chartAnswerUtils';
 import { appMessage, appModal } from '@/utils/antdAppBridge';
 import { resolveThreadResponseRuntimeSelector } from '@/features/home/thread/threadResponseRuntime';
+import { getThreadWorkbenchMessages } from '@/features/home/thread/threadWorkbenchMessages';
 
 const Chart = dynamic(() => import('@/components/chart'), { ssr: false });
 
@@ -62,6 +63,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
     usePromptThreadActionsStore();
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const { mode, shouldAutoPreview, threadResponse } = props;
+  const messages = getThreadWorkbenchMessages();
   const responseRuntimeSelector = resolveThreadResponseRuntimeSelector({
     response: threadResponse,
     fallbackSelector: runtimeScopeNavigation.selector,
@@ -372,10 +374,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
   };
 
   const shouldUsePinPopover = dashboardOptions.length !== 1;
-  const pinActionDisabled =
-    pinSubmitting ||
-    createAndPinSubmitting ||
-    (dashboardsLoading && dashboardOptions.length === 0);
+  const pinActionDisabled = pinSubmitting || createAndPinSubmitting;
 
   const runPinToDashboard = async (
     targetDashboardId: number | null,
@@ -560,7 +559,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
               onEdit={onEdit}
               onReload={onReload}
               onPin={onPin}
-              pinButtonLabel="Pin to dashboard"
+              pinButtonLabel={messages.headerActions.pinDashboard}
               pinDisabled={pinActionDisabled}
               pinPopoverContent={
                 shouldUsePinPopover ? (

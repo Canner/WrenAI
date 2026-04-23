@@ -46,18 +46,18 @@ describe('AskingService', () => {
           query: 'follow up',
           histories: [],
           deployId: 'deploy-1',
+          runtimeScopeId: 'deploy-1',
           configurations: { language: 'en' },
           rerunFromCancelled: undefined,
           previousTaskId: undefined,
           threadResponseId: undefined,
-          runtimeIdentity: {
-            projectId: 42,
+          runtimeIdentity: expect.objectContaining({
             workspaceId: 'workspace-1',
             knowledgeBaseId: 'kb-1',
             kbSnapshotId: 'snapshot-1',
             deployHash: 'deploy-1',
             actorUserId: 'user-1',
-          },
+          }),
           retrievalScopeIds: ['deploy-1'],
         }),
       );

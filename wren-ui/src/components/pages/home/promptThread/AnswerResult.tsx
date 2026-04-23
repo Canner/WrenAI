@@ -15,6 +15,7 @@ import {
   usePromptThreadDataStore,
   usePromptThreadPreparationStore,
 } from './store';
+import { captureUserTelemetryEvent } from '@/utils/telemetry';
 import {
   AskingTaskStatus,
   ChartTaskStatus,
@@ -117,6 +118,7 @@ const ArtifactTeaserMeta = styled.div`
   line-height: 1.45;
   color: #667085;
   min-width: 0;
+  overflow-wrap: anywhere;
 `;
 
 const ArtifactTeaserAction = styled.div`
@@ -188,6 +190,9 @@ const QuestionBubbleRow = styled.div`
   display: flex;
   justify-content: flex-end;
   padding-left: 76px;
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
 `;
 
 const QuestionBubble = styled.div<{ $selected?: boolean }>`
@@ -210,6 +215,7 @@ const QuestionBubbleText = styled.h4`
   font-size: 15px;
   font-weight: 600;
   line-height: 1.55;
+  overflow-wrap: anywhere;
 `;
 
 const AssistantSection = styled.div<{ $selected?: boolean }>`
@@ -218,6 +224,8 @@ const AssistantSection = styled.div<{ $selected?: boolean }>`
   align-items: flex-start;
   gap: 12px;
   padding-left: 2px;
+  min-width: 0;
+  max-width: 100%;
 
   &::before {
     content: '';
@@ -634,9 +642,7 @@ export default function AnswerResult(props: Props) {
             </ArtifactTeaserTitle>
             <Tag color="blue">{messages.preview.teaserTag}</Tag>
           </ArtifactTeaserHeader>
-          <ArtifactTeaserMeta>
-            {messages.preview.teaserDescription}
-          </ArtifactTeaserMeta>
+          <ArtifactTeaserMeta>{question}</ArtifactTeaserMeta>
         </ArtifactTeaserBody>
         <ArtifactTeaserAction>
           <Button
@@ -686,9 +692,7 @@ export default function AnswerResult(props: Props) {
               {chartStatus === ChartTaskStatus.FAILED
                 ? chartError?.message ||
                   messages.chart.descriptions.noChartFallback
-                : chartStatus === ChartTaskStatus.FINISHED
-                  ? messages.chart.descriptions.followUpReady
-                  : messages.chart.descriptions.followUpGenerating}
+                : question}
             </ArtifactTeaserMeta>
           </ArtifactTeaserBody>
           <ArtifactTeaserAction>
@@ -749,7 +753,7 @@ export default function AnswerResult(props: Props) {
           </ArtifactTeaserHeader>
           <ArtifactTeaserMeta>
             {hasChartArtifact
-              ? messages.chart.descriptions.askReady
+              ? chartArtifactResponse?.question || question
               : chartStatus === ChartTaskStatus.FAILED
                 ? chartError?.message || messages.chart.descriptions.askFailed
                 : chartStatus
@@ -853,7 +857,11 @@ export default function AnswerResult(props: Props) {
     conversationAids.length > 0;
 
   const recommendationQuestionProps = useMemo(() => {
-    if (!isRecommendationFollowUp || !recommendationDetail) {
+    if (
+      !isRecommendationFollowUp ||
+      !recommendationDetail ||
+      !props.isLastThreadResponse
+    ) {
       return null;
     }
 
@@ -877,6 +885,7 @@ export default function AnswerResult(props: Props) {
   }, [
     isRecommendationFollowUp,
     recommendationDetail,
+    props.isLastThreadResponse,
     threadResponse.sourceResponseId,
   ]);
 
@@ -932,6 +941,16 @@ export default function AnswerResult(props: Props) {
             onClick={() => {
               if (aid.interactionMode !== 'draft_to_composer') {
                 return;
+              }
+
+              if (aid.kind === 'TRIGGER_RECOMMEND_QUESTIONS') {
+                captureUserTelemetryEvent(
+                  'home_recommendation_trigger_drafted',
+                  {
+                    sourceResponseId: aid.sourceResponseId ?? id,
+                    triggerResponseId: id,
+                  },
+                );
               }
 
               onDraftConversationAid({

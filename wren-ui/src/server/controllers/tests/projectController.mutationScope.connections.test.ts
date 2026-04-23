@@ -286,7 +286,7 @@ describe('ProjectController', () => {
       ).not.toHaveBeenCalled();
     });
 
-    it('dual-writes knowledge base language while preserving project-side recommendation generation', async () => {
+    it('dual-writes knowledge base language without legacy project recommendations', async () => {
       const resolver = new ProjectController();
       const ctx = withAuthorizedContext({
         runtimeScope: {
@@ -303,11 +303,6 @@ describe('ProjectController', () => {
         knowledgeBaseRepository: {
           updateOne: jest.fn().mockResolvedValue(undefined),
         },
-        projectService: {
-          generateProjectRecommendationQuestions: jest
-            .fn()
-            .mockResolvedValue(undefined),
-        },
       });
 
       await expect(
@@ -323,9 +318,6 @@ describe('ProjectController', () => {
           language: 'ZH_CN',
         },
       );
-      expect(
-        ctx.projectService.generateProjectRecommendationQuestions,
-      ).toHaveBeenCalledWith(42, 'kb-1');
       expect(ctx.auditEventRepository.createOne).toHaveBeenCalledWith(
         expect.objectContaining({
           action: 'knowledge_base.update',

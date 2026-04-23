@@ -26,6 +26,11 @@ const HeaderActionShell = styled.div`
     font-weight: 500;
     color: #4b5563;
   }
+
+  .thread-workbench-inline-btn.thread-workbench-primary-action {
+    color: #6f47ff;
+    background: rgba(111, 71, 255, 0.08);
+  }
 `;
 
 export default function ThreadWorkbenchHeaderActions(props: {
@@ -70,7 +75,7 @@ export default function ThreadWorkbenchHeaderActions(props: {
   const pinButton =
     activeArtifact === 'chart' && onPinDashboard ? (
       <Button
-        className="thread-workbench-inline-btn"
+        className="thread-workbench-inline-btn thread-workbench-primary-action"
         size="small"
         type="text"
         onClick={onPinDashboard}

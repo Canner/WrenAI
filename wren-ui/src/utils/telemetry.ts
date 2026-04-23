@@ -36,6 +36,21 @@ export const resetTelemetryStateForTests = () => {
   telemetryInitialized = false;
 };
 
+export const captureUserTelemetryEvent = (
+  event: string,
+  properties?: Record<string, any>,
+) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    posthog.capture(event, properties);
+  } catch {
+    // no-op: telemetry should never block the user flow
+  }
+};
+
 export const trackUserTelemetry = (
   routerEvents: NextRouter['events'],
   config: UserConfig,

@@ -16,6 +16,7 @@ import {
   parseDashboardCronExpression,
   resolveDefaultDashboard,
   sortDashboardsForScope,
+  isUnboundProjectDashboard,
   toDashboardTimezoneSchedule,
   toUtcDashboardSchedule,
   validateDashboardScheduleInput,
@@ -170,15 +171,10 @@ export class DashboardService implements IDashboardService {
     }
 
     if (bridgeProjectId != null) {
-      const projectDashboard = binding
-        ? await findUnboundProjectDashboard(
-            this.dashboardRepository,
-            bridgeProjectId,
-          )
-        : await findProjectDashboardByProjectBridge(
-            this.dashboardRepository,
-            bridgeProjectId,
-          );
+      const projectDashboard = await findUnboundProjectDashboard(
+        this.dashboardRepository,
+        bridgeProjectId,
+      );
       if (projectDashboard) {
         return binding
           ? await this.syncDashboardRuntimeBinding(projectDashboard.id, binding)
@@ -218,9 +214,12 @@ export class DashboardService implements IDashboardService {
         bridgeProjectId,
       );
     } else if (bridgeProjectId != null) {
-      dashboards = await this.dashboardRepository.findAllBy({
+      const projectDashboards = await this.dashboardRepository.findAllBy({
         projectId: bridgeProjectId,
       });
+      dashboards = projectDashboards.filter((dashboard) =>
+        isUnboundProjectDashboard(dashboard, bridgeProjectId),
+      );
     }
 
     if (dashboards.length === 0) {
@@ -353,10 +352,6 @@ export class DashboardService implements IDashboardService {
       return binding
         ? await this.syncDashboardRuntimeBinding(projectDashboard.id, binding)
         : projectDashboard;
-    }
-
-    if (!binding) {
-      return await this.getCurrentDashboard(bridgeProjectId);
     }
 
     return await createScopedDashboard(this.dashboardRepository, {

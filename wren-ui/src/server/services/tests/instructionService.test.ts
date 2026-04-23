@@ -110,7 +110,8 @@ describe('InstructionService', () => {
   });
 
   it('drops project bridge from persisted payload when canonical runtime identity exists', async () => {
-    const { service, instructionRepository, tx } = createService();
+    const { service, instructionRepository, wrenAIAdaptor, tx } =
+      createService();
     instructionRepository.createOne.mockResolvedValue({
       id: 8,
       instruction: 'Use scoped copy',
@@ -143,6 +144,17 @@ describe('InstructionService', () => {
         deployHash: 'deploy-1',
       }),
       { tx },
+    );
+    expect(wrenAIAdaptor.generateInstruction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runtimeIdentity: {
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snapshot-1',
+          deployHash: 'deploy-1',
+          actorUserId: 'user-1',
+        },
+      }),
     );
   });
 });

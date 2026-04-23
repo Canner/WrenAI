@@ -48,9 +48,10 @@ export default function ThreadConversationStage({
   promptProps,
   workbench,
 }: ThreadConversationStageProps) {
+  const hasWorkbench = Boolean(workbench);
   const conversationStage = (
-    <ConversationPane $withWorkbench={Boolean(workbench)}>
-      <ConversationBody>
+    <ConversationPane $withWorkbench={hasWorkbench}>
+      <ConversationBody $withWorkbench={hasWorkbench}>
         {shouldUseReferencePreview ? (
           <ReferenceConversationPreview
             question={primaryQuestion}
@@ -97,7 +98,7 @@ export default function ThreadConversationStage({
   );
 
   return (
-    <ThreadScene $withWorkbench={Boolean(workbench)}>
+    <ThreadScene $withWorkbench={hasWorkbench}>
       {workbench ? (
         <ThreadSplitStage
           lazy

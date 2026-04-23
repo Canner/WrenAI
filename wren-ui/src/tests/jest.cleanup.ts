@@ -1,18 +1,9 @@
 type MaybeComponents = {
-  projectService?: {
-    stopBackgroundTrackers?: () => void;
-  };
   askingService?: {
     stopBackgroundTrackers?: () => void;
   };
   askingTaskTracker?: {
     stopPolling?: () => void;
-  };
-  projectRecommendQuestionBackgroundTracker?: {
-    stop?: () => void;
-  };
-  threadRecommendQuestionBackgroundTracker?: {
-    stop?: () => void;
   };
   dashboardCacheBackgroundTracker?: {
     stop?: () => void;
@@ -41,11 +32,8 @@ afterAll(async () => {
     return;
   }
 
-  components.projectService?.stopBackgroundTrackers?.();
   components.askingService?.stopBackgroundTrackers?.();
   components.askingTaskTracker?.stopPolling?.();
-  components.projectRecommendQuestionBackgroundTracker?.stop?.();
-  components.threadRecommendQuestionBackgroundTracker?.stop?.();
   components.dashboardCacheBackgroundTracker?.stop?.();
   components.scheduleWorker?.stop?.();
   components.telemetry?.stop?.();

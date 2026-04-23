@@ -18,7 +18,7 @@ const buildKnexRows = (rows: any[]) => {
 };
 
 describe('ThreadRepository runtime scope query', () => {
-  it('pins legacy runtimeScopeId queries to the exact project bridge', async () => {
+  it('ignores legacy project bridge filters when canonical runtime scope is present', async () => {
     const { knex, builder } = buildKnexRows([
       {
         id: 101,
@@ -39,7 +39,11 @@ describe('ThreadRepository runtime scope query', () => {
       deployHash: 'deploy-1',
     });
 
-    expect(builder.andWhere).toHaveBeenCalledWith('project_id', 42);
+    expect(builder.andWhere).not.toHaveBeenCalledWith('project_id', 42);
+    expect(builder.andWhere).toHaveBeenCalledWith(
+      'workspace_id',
+      'workspace-1',
+    );
     expect(builder.where).toHaveBeenCalledWith({ id: 101 });
     expect(builder.first).toHaveBeenCalled();
   });

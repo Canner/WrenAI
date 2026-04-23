@@ -21,7 +21,6 @@
     "src/hooks/useKnowledgePageHelpers.ts",
     "src/hooks/useKnowledgeRuleSqlManager.ts",
     "src/hooks/useKnowledgeRuleSqlActions.ts",
-    "src/hooks/useRecommendedQuestionsInstruction.tsx",
     "src/hooks/useKnowledgeRuntimeContext.ts",
     "src/hooks/useRuntimeScopeNavigation.tsx",
     "src/hooks/useRuntimeScopeTransition.tsx",

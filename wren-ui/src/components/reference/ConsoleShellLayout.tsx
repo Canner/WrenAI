@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useMemo, useRef } from 'react';
-import { Card, Layout, Segmented, Skeleton, Space, Typography } from 'antd';
+import { Card, Layout, Segmented, Skeleton, Typography } from 'antd';
 import useHomeSidebar from '@/hooks/useHomeSidebar';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import { getReferenceDisplayThreadTitle } from '@/utils/referenceDemoKnowledge';
@@ -103,6 +103,7 @@ const contentWrapperStyle = (stretchContent?: boolean) => ({
   display: stretchContent ? 'flex' : 'block',
   flex: stretchContent ? '1 1 auto' : undefined,
   minHeight: stretchContent ? 0 : undefined,
+  height: stretchContent ? '100%' : undefined,
   flexDirection: stretchContent ? ('column' as const) : undefined,
   width: '100%',
 });
@@ -227,16 +228,31 @@ export default function ConsoleShellLayout({
         style={{
           background: 'transparent',
           minHeight: flushMainPadding ? '100dvh' : 'calc(100vh - 48px)',
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
-        <Layout.Content style={{ background: 'transparent' }}>
-          <Space
-            orientation="vertical"
-            size={18}
+        <Layout.Content
+          style={{
+            background: 'transparent',
+            display: 'flex',
+            flexDirection: 'column',
+            flex: '1 1 auto',
+            minHeight: 0,
+          }}
+        >
+          <div
             style={{
               width: '100%',
               display: 'flex',
-              minHeight: flushMainPadding ? '100dvh' : undefined,
+              flexDirection: 'column',
+              gap: 18,
+              flex: stretchContent ? '1 1 auto' : undefined,
+              minHeight: flushMainPadding
+                ? '100dvh'
+                : stretchContent
+                  ? 0
+                  : undefined,
             }}
           >
             {sections?.length ? (
@@ -322,7 +338,7 @@ export default function ConsoleShellLayout({
             ) : null}
 
             {contentStage}
-          </Space>
+          </div>
         </Layout.Content>
       </Layout>
     </>

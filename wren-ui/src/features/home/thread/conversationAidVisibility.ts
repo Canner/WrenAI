@@ -52,7 +52,6 @@ export const hasSettledConversationAids = (
 
 export const resolveConversationAidOwnerResponseId = ({
   responses,
-  selectedResponseId,
 }: {
   responses: ThreadResponse[];
   selectedResponseId?: number | null;
@@ -65,21 +64,6 @@ export const resolveConversationAidOwnerResponseId = ({
           hasConversationAidCandidates(response) &&
           hasSettledConversationAids(response),
       ) || null;
-
-  if (selectedResponseId == null) {
-    return latestEligibleResponse?.id ?? null;
-  }
-
-  const selectedResponse =
-    responses.find((response) => response.id === selectedResponseId) || null;
-
-  if (
-    selectedResponse &&
-    hasConversationAidCandidates(selectedResponse) &&
-    hasSettledConversationAids(selectedResponse)
-  ) {
-    return selectedResponse.id;
-  }
 
   return latestEligibleResponse?.id ?? null;
 };

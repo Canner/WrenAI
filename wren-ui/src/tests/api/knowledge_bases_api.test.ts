@@ -141,11 +141,6 @@ describe('pages/api/v1/knowledge/bases routes', () => {
         runtimeProjectId: 701,
         language: 'en',
         sampleDataset: 'ecommerce',
-        recommendationStatus: 'succeeded',
-        recommendationQuestions: [
-          { question: 'Q1', category: 'demo', sql: 'select 1' },
-        ],
-        recommendationError: null,
         archivedAt: null,
       },
       {
@@ -159,10 +154,6 @@ describe('pages/api/v1/knowledge/bases routes', () => {
         primaryConnectorId: null,
         language: 'zh-TW',
         sampleDataset: null,
-        recommendationQueryId: 'query-1',
-        recommendationStatus: 'running',
-        recommendationQuestions: null,
-        recommendationError: { message: 'retrying' },
         archivedAt: null,
       },
       {
@@ -261,9 +252,6 @@ describe('pages/api/v1/knowledge/bases routes', () => {
       expect.objectContaining({
         id: 'kb-newer',
         language: 'zh-TW',
-        recommendationQueryId: 'query-1',
-        recommendationStatus: 'running',
-        recommendationError: { message: 'retrying' },
         snapshotCount: 2,
         assetCount: 3,
         runtimeProjectId: null,
@@ -278,9 +266,6 @@ describe('pages/api/v1/knowledge/bases routes', () => {
       expect.objectContaining({
         id: 'kb-older',
         sampleDataset: 'ecommerce',
-        recommendationQuestions: [
-          { question: 'Q1', category: 'demo', sql: 'select 1' },
-        ],
         assetCount: 1,
         primaryConnectorId: 'connector-older',
         runtimeProjectId: 701,
@@ -320,10 +305,6 @@ describe('pages/api/v1/knowledge/bases routes', () => {
       runtimeProjectId: null,
       language: null,
       sampleDataset: null,
-      recommendationQueryId: null,
-      recommendationStatus: null,
-      recommendationQuestions: null,
-      recommendationError: null,
       createdBy: 'user-1',
       archivedAt: null,
     });
@@ -408,7 +389,6 @@ describe('pages/api/v1/knowledge/bases routes', () => {
       runtimeProjectId: 842,
       language: 'en',
       sampleDataset: 'sales',
-      recommendationStatus: 'idle',
       archivedAt: null,
     });
     mockFindKbSnapshot.mockResolvedValue({
@@ -501,10 +481,6 @@ describe('pages/api/v1/knowledge/bases routes', () => {
       runtimeProjectId: 988,
       language: 'zh-CN',
       sampleDataset: 'orders',
-      recommendationQueryId: null,
-      recommendationStatus: null,
-      recommendationQuestions: null,
-      recommendationError: null,
       archivedAt: null,
     });
     mockFindKbSnapshot.mockResolvedValue({

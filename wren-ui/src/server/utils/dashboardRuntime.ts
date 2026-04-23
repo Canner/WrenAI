@@ -36,6 +36,12 @@ export const resolveDashboardRuntime = async ({
   dashboard: Dashboard;
   kbSnapshotRepository: IKBSnapshotRepository;
 }): Promise<ResolvedDashboardRuntime> => {
+  const hasCanonicalDashboardBinding = Boolean(
+    dashboard.workspaceId ||
+    dashboard.knowledgeBaseId ||
+    dashboard.kbSnapshotId ||
+    dashboard.deployHash,
+  );
   const kbSnapshot = dashboard.kbSnapshotId
     ? await kbSnapshotRepository.findOneBy({ id: dashboard.kbSnapshotId })
     : null;
@@ -45,7 +51,9 @@ export const resolveDashboardRuntime = async ({
     knowledgeBaseId:
       dashboard.knowledgeBaseId ?? kbSnapshot?.knowledgeBaseId ?? null,
     kbSnapshotId: dashboard.kbSnapshotId ?? null,
-    projectBridgeFallbackId: dashboard.projectId ?? null,
+    projectBridgeFallbackId: hasCanonicalDashboardBinding
+      ? null
+      : (dashboard.projectId ?? null),
     deployHash: dashboard.deployHash || kbSnapshot?.deployHash || null,
   };
 };

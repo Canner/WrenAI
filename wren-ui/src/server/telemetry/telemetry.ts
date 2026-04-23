@@ -55,6 +55,9 @@ export enum TelemetryEvent {
   HOME_RERUN_ASKING_TASK = 'home_rerun_asking_task',
   HOME_GENERATE_PROJECT_RECOMMENDATION_QUESTIONS = 'home_generate_project_recommendation_questions',
   HOME_GENERATE_THREAD_RECOMMENDATION_QUESTIONS = 'home_generate_thread_recommendation_questions',
+  HOME_RECOMMENDATION_TRIGGER_SENT = 'home_recommendation_trigger_sent',
+  HOME_RECOMMENDATION_RESPONSE_CREATED = 'home_recommendation_response_created',
+  HOME_RECOMMENDATION_GENERATED = 'home_recommendation_generated',
 
   // adjustment
   HOME_ADJUST_THREAD_RESPONSE = 'home_adjust_thread_response',

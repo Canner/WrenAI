@@ -23,13 +23,11 @@ const mockUseRuntimeScopeNavigation = jest.fn();
 const mockUseProtectedRuntimeScopePage = jest.fn();
 const mockUseThreadDetail = jest.fn();
 const mockUseThreadResponsePolling = jest.fn();
-const mockUseThreadRecommendedQuestionsPolling = jest.fn();
 const mockUseRuntimeSelectorState = jest.fn();
 const mockCreateKnowledgeSqlPair = jest.fn();
 const mockCreateViewFromResponse = jest.fn();
 const mockCreateThreadResponse = jest.fn();
 const mockUpdateThreadResponseSql = jest.fn();
-const mockTriggerThreadRecommendationQuestions = jest.fn();
 const mockTriggerThreadResponseAnswer = jest.fn();
 const mockTriggerThreadResponseChart = jest.fn();
 const mockAdjustThreadResponseChart = jest.fn();
@@ -220,18 +218,10 @@ jest.mock('@/hooks/useThreadResponsePolling', () => ({
   default: (...args: any[]) => mockUseThreadResponsePolling(...args),
 }));
 
-jest.mock('@/hooks/useThreadRecommendedQuestionsPolling', () => ({
-  __esModule: true,
-  default: (...args: any[]) =>
-    mockUseThreadRecommendedQuestionsPolling(...args),
-}));
-
 jest.mock('@/utils/threadRest', () => ({
   createThreadResponse: (...args: any[]) => mockCreateThreadResponse(...args),
   updateThreadResponseSql: (...args: any[]) =>
     mockUpdateThreadResponseSql(...args),
-  triggerThreadRecommendationQuestions: (...args: any[]) =>
-    mockTriggerThreadRecommendationQuestions(...args),
   triggerThreadResponseAnswer: (...args: any[]) =>
     mockTriggerThreadResponseAnswer(...args),
   triggerThreadResponseChart: (...args: any[]) =>
@@ -337,12 +327,6 @@ describe('home/[id] thread shell', () => {
       stopPolling: jest.fn(),
     });
     mockUpdateThreadResponseSql.mockResolvedValue({});
-    mockTriggerThreadRecommendationQuestions.mockResolvedValue({});
-    mockUseThreadRecommendedQuestionsPolling.mockReturnValue({
-      data: null,
-      fetchByThreadId: jest.fn(),
-      stopPolling: jest.fn(),
-    });
     mockTriggerThreadResponseAnswer.mockResolvedValue({});
     mockTriggerThreadResponseChart.mockResolvedValue({});
     mockAdjustThreadResponseChart.mockResolvedValue({});

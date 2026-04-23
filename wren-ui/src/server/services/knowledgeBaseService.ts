@@ -45,10 +45,6 @@ export interface UpdateKnowledgeBaseInput {
   primaryConnectorId?: string | null;
   language?: string | null;
   sampleDataset?: string | null;
-  recommendationQueryId?: string | null;
-  recommendationStatus?: string | null;
-  recommendationQuestions?: KnowledgeBase['recommendationQuestions'];
-  recommendationError?: KnowledgeBase['recommendationError'];
   archivedAt?: Date | null;
   authorization?: ServiceAuthorization | null;
 }
@@ -197,10 +193,6 @@ export class KnowledgeBaseService implements IKnowledgeBaseService {
       runtimeProjectId: null,
       language: null,
       sampleDataset: null,
-      recommendationQueryId: null,
-      recommendationStatus: null,
-      recommendationQuestions: null,
-      recommendationError: null,
     });
 
     await this.bootstrapEmptyRuntimeBestEffort(knowledgeBase);
@@ -290,10 +282,6 @@ export class KnowledgeBaseService implements IKnowledgeBaseService {
         ? undefined
         : input.sampleDataset || null,
     );
-    assignIfPresent('recommendationQueryId', input.recommendationQueryId);
-    assignIfPresent('recommendationStatus', input.recommendationStatus);
-    assignIfPresent('recommendationQuestions', input.recommendationQuestions);
-    assignIfPresent('recommendationError', input.recommendationError);
     assignIfPresent('archivedAt', input.archivedAt);
 
     if (Object.keys(patch).length === 0) {

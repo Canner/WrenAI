@@ -5,15 +5,11 @@ import {
 import {
   normalizeCanonicalPersistedRuntimeIdentity,
   resolveRuntimeScopeIdFromPersistedIdentityWithProjectBridgeFallback,
-  toPersistedRuntimeIdentityFromSource,
 } from '@server/utils/persistedRuntimeIdentity';
-import { resolveRecommendedQuestionsHomeIntent } from '@/features/home/thread/homeIntentContract';
 import {
   InstantRecommendedQuestionsInput,
   isRecommendationQuestionsFinalized,
-  RecommendQuestionResultStatus,
   Task,
-  ThreadRecommendQuestionResult,
 } from './askingServiceShared';
 import { PersistedRuntimeIdentity } from '@server/context/runtimeScope';
 import {
@@ -21,16 +17,20 @@ import {
   type RecommendationPreviewColumn,
 } from './recommendationIntelligence';
 import type { PreviewDataResponse } from './queryService';
+import { TelemetryEvent } from '../telemetry/telemetry';
 
-const DEFAULT_RECOMMENDATION_FOLLOW_UP_QUESTION = '推荐几个问题给我';
 const RECOMMENDATION_SOURCE_ANSWER_MAX_LENGTH = 1_500;
 
+const getRecommendationFollowUpQuestion = (language?: string | null) => {
+  const normalizedLanguage = (language || '').trim().toLowerCase();
+  if (normalizedLanguage.startsWith('en')) {
+    return 'Recommend follow-up questions';
+  }
+
+  return '推荐几个问题给我';
+};
+
 interface AskingRecommendationServiceLike {
-  generateThreadRecommendationQuestions(
-    threadId: number,
-    runtimeScopeId?: string | null,
-  ): Promise<void>;
-  threadRepository: Pick<any, 'findOneBy' | 'updateOne'>;
   createThreadResponse(
     input: {
       question?: string;
@@ -57,7 +57,6 @@ interface AskingRecommendationServiceLike {
     limit?: number,
   ): Promise<PreviewDataResponse>;
   threadResponseRepository: Pick<any, 'findAllBy' | 'updateOne'>;
-  threadRecommendQuestionBackgroundTracker: Pick<any, 'isExist' | 'addTask'>;
   threadResponseRecommendQuestionBackgroundTracker: Pick<
     any,
     'isExist' | 'addTask'
@@ -70,10 +69,9 @@ interface AskingRecommendationServiceLike {
   getExecutionResources(
     runtimeIdentity: PersistedRuntimeIdentity,
   ): Promise<any>;
+  telemetry: Pick<any, 'sendEvent'>;
   toAskRuntimeIdentity(runtimeIdentity?: PersistedRuntimeIdentity | null): any;
   getThreadRecommendationQuestionsConfig(project: any): any;
-  isLikelyNonChineseQuestions(questions: any[] | undefined | null): boolean;
-  shouldForceChineseThreadRecommendation(thread: any): Promise<boolean>;
   trackInstantRecommendedQuestionTask(
     queryId: string,
     runtimeIdentity: PersistedRuntimeIdentity,
@@ -223,110 +221,6 @@ const isGenericRecommendationTrigger = (question?: string | null) =>
     question,
   );
 
-export const getThreadRecommendationQuestionsAction = async (
-  service: AskingRecommendationServiceLike,
-  threadId: number,
-): Promise<ThreadRecommendQuestionResult> => {
-  const thread = await service.threadRepository.findOneBy({ id: threadId });
-  if (!thread) {
-    throw new Error(`Thread ${threadId} not found`);
-  }
-
-  const threadResponses = await service.threadResponseRepository.findAllBy({
-    threadId,
-  });
-  const latestThreadResponse =
-    [...(threadResponses || [])]
-      .sort((left: any, right: any) => (right.id || 0) - (left.id || 0))
-      .at(0) || null;
-  const res: ThreadRecommendQuestionResult = {
-    status: RecommendQuestionResultStatus.NOT_STARTED,
-    questions: [],
-    error: undefined,
-    resolvedIntent: resolveRecommendedQuestionsHomeIntent({
-      source: 'derived',
-      sourceThreadId: thread.id,
-      sourceResponseId: latestThreadResponse?.id ?? null,
-    }),
-  };
-  if (thread.queryId && thread.questionsStatus) {
-    const mappedStatus =
-      thread.questionsStatus as keyof typeof RecommendQuestionResultStatus;
-    res.status = RecommendQuestionResultStatus[mappedStatus] || res.status;
-    res.questions = thread.questions || [];
-    res.error = thread.questionsError || undefined;
-
-    const shouldRegenerateInChinese =
-      res.status === RecommendQuestionResultStatus.FINISHED &&
-      service.isLikelyNonChineseQuestions(res.questions) &&
-      (await service.shouldForceChineseThreadRecommendation(thread));
-
-    if (shouldRegenerateInChinese) {
-      await service.generateThreadRecommendationQuestions(threadId);
-      return {
-        status: RecommendQuestionResultStatus.GENERATING,
-        questions: [],
-        error: undefined,
-        resolvedIntent: res.resolvedIntent,
-      };
-    }
-  }
-  return res;
-};
-
-export const generateThreadRecommendationQuestionsAction = async (
-  service: AskingRecommendationServiceLike,
-  threadId: number,
-  runtimeScopeId?: string | null,
-): Promise<void> => {
-  const thread = await service.threadRepository.findOneBy({ id: threadId });
-  if (!thread) {
-    throw new Error(`Thread ${threadId} not found`);
-  }
-
-  if (service.threadRecommendQuestionBackgroundTracker.isExist(thread)) {
-    return;
-  }
-
-  const runtimeIdentity = toPersistedRuntimeIdentityFromSource(thread);
-  const { project, manifest } =
-    await service.getExecutionResources(runtimeIdentity);
-  const threadResponses = await service.threadResponseRepository.findAllBy({
-    threadId,
-  });
-  const slicedThreadResponses = threadResponses
-    .sort((a: any, b: any) => b.id - a.id)
-    .slice(0, 5);
-  const questions = slicedThreadResponses.map(({ question }: any) => question);
-  const recommendQuestionRuntimeIdentity =
-    normalizeCanonicalPersistedRuntimeIdentity(runtimeIdentity);
-  const recommendQuestionData = {
-    manifest,
-    runtimeScopeId:
-      runtimeScopeId ||
-      resolveRuntimeScopeIdFromPersistedIdentityWithProjectBridgeFallback(
-        recommendQuestionRuntimeIdentity,
-      ) ||
-      undefined,
-    runtimeIdentity: service.toAskRuntimeIdentity(
-      recommendQuestionRuntimeIdentity,
-    ),
-    previousQuestions: questions,
-    ...service.getThreadRecommendationQuestionsConfig(project),
-  };
-
-  const result = await service.wrenAIAdaptor.generateRecommendationQuestions(
-    recommendQuestionData,
-  );
-  const updatedThread = await service.threadRepository.updateOne(threadId, {
-    queryId: result.queryId,
-    questionsStatus: RecommendationQuestionStatus.GENERATING,
-    questions: [],
-    questionsError: undefined,
-  });
-  service.threadRecommendQuestionBackgroundTracker.addTask(updatedThread);
-};
-
 export const createInstantRecommendedQuestionsAction = async (
   service: AskingRecommendationServiceLike,
   input: InstantRecommendedQuestionsInput,
@@ -429,6 +323,22 @@ export const generateThreadResponseRecommendationsAction = async (
   const languageConfig = resolveRecommendationQuestionLanguage(
     configurations.language,
   );
+  const recommendationTriggerQuestion =
+    configurations.question ||
+    getRecommendationFollowUpQuestion(configurations.language);
+  const telemetryProperties = {
+    responseId: recommendationResponse?.id ?? null,
+    runtimeScopeId:
+      runtimeScopeId ||
+      resolveRuntimeScopeIdFromPersistedIdentityWithProjectBridgeFallback(
+        recommendQuestionRuntimeIdentity,
+      ) ||
+      null,
+    sourceResponseId: sourceResponse.id,
+    sourceResponseKind: sourceResponse.responseKind || null,
+    suggestedQuestion: recommendationTriggerQuestion,
+    threadId: sourceResponse.threadId,
+  };
 
   const initialRecommendationDetail = {
     status: RecommendationQuestionStatus.GENERATING,
@@ -449,6 +359,11 @@ export const generateThreadResponseRecommendationsAction = async (
     return recommendationResponse;
   }
 
+  service.telemetry.sendEvent(
+    TelemetryEvent.HOME_RECOMMENDATION_TRIGGER_SENT,
+    telemetryProperties,
+  );
+
   const targetResponse = recommendationResponse
     ? await service.threadResponseRepository.updateOne(
         recommendationResponse.id,
@@ -458,9 +373,7 @@ export const generateThreadResponseRecommendationsAction = async (
       )
     : await service.createThreadResponse(
         {
-          question:
-            configurations.question ||
-            DEFAULT_RECOMMENDATION_FOLLOW_UP_QUESTION,
+          question: recommendationTriggerQuestion,
           responseKind: 'RECOMMENDATION_FOLLOWUP',
           sourceResponseId: sourceResponse.id,
           recommendationDetail: initialRecommendationDetail,
@@ -468,6 +381,16 @@ export const generateThreadResponseRecommendationsAction = async (
         sourceResponse.threadId,
         recommendationRuntimeIdentity,
       );
+
+  if (!recommendationResponse) {
+    service.telemetry.sendEvent(
+      TelemetryEvent.HOME_RECOMMENDATION_RESPONSE_CREATED,
+      {
+        ...telemetryProperties,
+        responseId: targetResponse.id,
+      },
+    );
+  }
 
   const result = await service.wrenAIAdaptor.generateRecommendationQuestions({
     manifest,

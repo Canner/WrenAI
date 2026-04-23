@@ -367,7 +367,3 @@ export type PreviewDataResponse = {
 export type InstantRecommendedQuestionsResponse = {
   instantRecommendedQuestions: RecommendedQuestionsTask;
 };
-
-export type ProjectRecommendationQuestionsResponse = {
-  getProjectRecommendationQuestions: RecommendedQuestionsTask;
-};

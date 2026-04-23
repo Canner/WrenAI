@@ -283,9 +283,6 @@ describe('ProjectController', () => {
         projectRepository: {
           updateOne: jest.fn(),
         },
-        projectService: {
-          generateProjectRecommendationQuestions: jest.fn(),
-        },
       });
 
       await expect(
@@ -295,9 +292,6 @@ describe('ProjectController', () => {
       );
 
       expect(ctx.projectRepository.updateOne).not.toHaveBeenCalled();
-      expect(
-        ctx.projectService.generateProjectRecommendationQuestions,
-      ).not.toHaveBeenCalled();
     });
 
     it('records allowed audit when listing connection tables', async () => {

@@ -15,17 +15,22 @@ import { toPersistedRuntimeIdentityPatch } from '@server/utils/persistedRuntimeI
 
 const toAskRuntimeIdentity = (
   runtimeIdentity: PersistedRuntimeIdentity,
-): AskRuntimeIdentity => ({
-  projectId:
-    typeof runtimeIdentity.projectId === 'number'
-      ? runtimeIdentity.projectId
-      : undefined,
-  workspaceId: runtimeIdentity.workspaceId ?? null,
-  knowledgeBaseId: runtimeIdentity.knowledgeBaseId ?? null,
-  kbSnapshotId: runtimeIdentity.kbSnapshotId ?? null,
-  deployHash: runtimeIdentity.deployHash ?? null,
-  actorUserId: runtimeIdentity.actorUserId ?? null,
-});
+): AskRuntimeIdentity => {
+  const normalizedRuntimeIdentity =
+    toPersistedRuntimeIdentityPatch(runtimeIdentity);
+
+  return {
+    projectId:
+      typeof normalizedRuntimeIdentity.projectId === 'number'
+        ? normalizedRuntimeIdentity.projectId
+        : undefined,
+    workspaceId: normalizedRuntimeIdentity.workspaceId ?? null,
+    knowledgeBaseId: normalizedRuntimeIdentity.knowledgeBaseId ?? null,
+    kbSnapshotId: normalizedRuntimeIdentity.kbSnapshotId ?? null,
+    deployHash: normalizedRuntimeIdentity.deployHash ?? null,
+    actorUserId: normalizedRuntimeIdentity.actorUserId ?? null,
+  };
+};
 export interface IInstructionService {
   listInstructions(
     runtimeIdentity: PersistedRuntimeIdentity,

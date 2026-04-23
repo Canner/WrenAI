@@ -182,6 +182,39 @@ describe('WrenAIAdaptor', () => {
       expect(requestBody?.runtime_identity?.bridgeScopeId).toBeUndefined();
     });
 
+    it('keeps polling for slower semantics preparations before marking deploy as failed', async () => {
+      const originalPollDelay = process.env.WREN_AI_DEPLOY_POLL_BASE_DELAY_MS;
+      process.env.WREN_AI_DEPLOY_POLL_BASE_DELAY_MS = '0';
+      try {
+        mockedAxios.post.mockResolvedValueOnce({ data: { id: 'deploy-3' } });
+        for (let attempt = 0; attempt < 8; attempt += 1) {
+          mockedAxios.get.mockResolvedValueOnce({
+            data: { status: 'indexing' },
+          });
+        }
+        mockedAxios.get.mockResolvedValueOnce({ data: { status: 'finished' } });
+
+        const result = await adaptor.deploy({
+          manifest: sampleManifest,
+          hash: 'deploy-3',
+          runtimeIdentity: {
+            workspaceId: 'workspace-1',
+            knowledgeBaseId: 'kb-1',
+            deployHash: 'deploy-3',
+          },
+        });
+
+        expect(result).toEqual({ status: 'SUCCESS' });
+        expect(mockedAxios.get).toHaveBeenCalledTimes(9);
+      } finally {
+        if (typeof originalPollDelay === 'undefined') {
+          delete process.env.WREN_AI_DEPLOY_POLL_BASE_DELAY_MS;
+        } else {
+          process.env.WREN_AI_DEPLOY_POLL_BASE_DELAY_MS = originalPollDelay;
+        }
+      }
+    });
+
     it('should surface structured semantics errors instead of [object Object]', async () => {
       mockedAxios.post.mockResolvedValueOnce({ data: { id: 'deploy-2' } });
       mockedAxios.get.mockResolvedValueOnce({

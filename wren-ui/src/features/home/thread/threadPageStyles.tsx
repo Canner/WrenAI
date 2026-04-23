@@ -7,18 +7,24 @@ export const ThreadScene = styled.div<{ $withWorkbench?: boolean }>`
   width: 100%;
   max-width: ${(props) => (props.$withWorkbench ? 'none' : '940px')};
   margin: 0 auto;
+  box-sizing: border-box;
   flex: 1;
   min-width: 0;
-  min-height: calc(100vh - 72px);
+  height: ${(props) => (props.$withWorkbench ? 'calc(100vh - 48px)' : 'auto')};
+  min-height: ${(props) => (props.$withWorkbench ? '0' : 'calc(100vh - 72px)')};
   display: flex;
   flex-direction: column;
   padding: 0;
+  overflow: ${(props) => (props.$withWorkbench ? 'hidden' : 'visible')};
 `;
 
 export const ThreadSplitStage = styled(Splitter)`
   flex: 1;
-  min-height: calc(100vh - 90px);
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
   background: transparent;
+  overflow: hidden;
 
   .ant-splitter-panel {
     min-width: 0;
@@ -68,24 +74,30 @@ export const ConversationPane = styled.section<{ $withWorkbench?: boolean }>`
   flex: 1;
   min-width: 0;
   min-height: 0;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   background: transparent;
   height: 100%;
   position: relative;
   padding: 0 ${(props) => (props.$withWorkbench ? '16px' : '24px')} 0 24px;
+  overflow: ${(props) => (props.$withWorkbench ? 'hidden' : 'visible')};
+  box-sizing: border-box;
 
   @media (max-width: 1280px) {
     padding: 0 12px 0 16px;
   }
 `;
 
-export const ConversationBody = styled.div`
+export const ConversationBody = styled.div<{ $withWorkbench?: boolean }>`
   flex: 1;
   width: 100%;
   min-height: 0;
-  overflow: auto;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-y: ${(props) => (props.$withWorkbench ? 'auto' : 'visible')};
   padding: 0 0 24px;
+  scrollbar-gutter: ${(props) => (props.$withWorkbench ? 'stable' : 'auto')};
 `;
 
 export const WorkbenchPane = styled.aside`

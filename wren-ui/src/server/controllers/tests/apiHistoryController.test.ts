@@ -24,7 +24,7 @@ describe('ApiHistoryController', () => {
   });
 
   describe('getApiHistory', () => {
-    it('always scopes history lookup to the active runtime project', async () => {
+    it('always scopes history lookup to the active canonical runtime binding', async () => {
       const resolver = new ApiHistoryController();
       const count = jest.fn().mockResolvedValue(1);
       const findAllWithPagination = jest
@@ -63,7 +63,7 @@ describe('ApiHistoryController', () => {
 
       expect(count).toHaveBeenCalledWith(
         {
-          projectId: 42,
+          projectId: null,
           workspaceId: 'ws_1',
           knowledgeBaseId: 'kb_1',
           kbSnapshotId: 'snapshot_1',
@@ -75,7 +75,7 @@ describe('ApiHistoryController', () => {
       );
       expect(findAllWithPagination).toHaveBeenCalledWith(
         {
-          projectId: 42,
+          projectId: null,
           workspaceId: 'ws_1',
           knowledgeBaseId: 'kb_1',
           kbSnapshotId: 'snapshot_1',
@@ -262,7 +262,7 @@ describe('ApiHistoryController', () => {
 
       expect(getAskShadowCompareStats).toHaveBeenCalledWith(
         {
-          projectId: 42,
+          projectId: null,
           workspaceId: 'ws_1',
           knowledgeBaseId: 'kb_1',
           kbSnapshotId: 'snapshot_1',

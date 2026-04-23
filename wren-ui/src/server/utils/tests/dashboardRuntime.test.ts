@@ -52,6 +52,7 @@ describe('dashboardRuntime', () => {
       deployHash: 'deploy-response',
       actorUserId: 'user-1',
     });
+    expect(result.runtime.projectBridgeFallbackId).toBeNull();
     expect(projectService.getProjectById).toHaveBeenCalledWith(42);
     expect(deployService.getDeploymentByRuntimeIdentity).toHaveBeenCalledWith({
       projectId: null,
@@ -142,6 +143,7 @@ describe('dashboardRuntime', () => {
       deployHash: 'deploy-item',
       actorUserId: 'user-1',
     });
+    expect(result.runtime.projectBridgeFallbackId).toBeNull();
     expect(deployService.getDeploymentByRuntimeIdentity).toHaveBeenCalledWith({
       projectId: null,
       workspaceId: 'workspace-item',

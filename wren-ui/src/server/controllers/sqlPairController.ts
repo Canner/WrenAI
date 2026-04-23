@@ -1,6 +1,7 @@
 import { IContext } from '@server/types/context';
 import { SqlPair } from '@server/repositories';
 import { toPersistedRuntimeIdentity } from '@server/context/runtimeScope';
+import { toPersistedRuntimeIdentityPatch } from '@server/utils/persistedRuntimeIdentity';
 import * as Errors from '@server/utils/error';
 import { TelemetryEvent, TrackTelemetry } from '@server/telemetry/telemetry';
 import { DialectSQL, WrenSQL } from '@server/models/adaptor';
@@ -16,6 +17,11 @@ import {
   buildAuthorizationActorFromRuntimeScope,
   recordAuditEvent,
 } from '@server/authz';
+
+const getCurrentPersistedRuntimeIdentity = (ctx: IContext) =>
+  toPersistedRuntimeIdentityPatch(
+    toPersistedRuntimeIdentity(ctx.runtimeScope!),
+  );
 
 const getKnowledgeBaseAuthorizationTarget = (ctx: IContext) => {
   const workspaceId = ctx.runtimeScope?.workspace?.id || null;
@@ -75,7 +81,7 @@ export class SqlPairController {
   ): Promise<SqlPair[]> {
     const { actor, resource } = await requireKnowledgeBaseReadAccess(ctx);
     const sqlPairs = await ctx.sqlPairService.listSqlPairs(
-      toPersistedRuntimeIdentity(ctx.runtimeScope!),
+      getCurrentPersistedRuntimeIdentity(ctx),
     );
     await recordAuditEvent({
       auditEventRepository: ctx.auditEventRepository,
@@ -104,7 +110,7 @@ export class SqlPairController {
     await requireKnowledgeBaseWriteAccess(ctx);
     await this.validateSql(arg.data.sql, ctx);
     const created = await ctx.sqlPairService.createSqlPair(
-      toPersistedRuntimeIdentity(ctx.runtimeScope!),
+      getCurrentPersistedRuntimeIdentity(ctx),
       arg.data,
     );
     const { actor, resource } = getKnowledgeBaseAuthorizationTarget(ctx);
@@ -145,7 +151,7 @@ export class SqlPairController {
       await this.validateSql(arg.data.sql, ctx);
     }
     const updated = await ctx.sqlPairService.updateSqlPair(
-      toPersistedRuntimeIdentity(ctx.runtimeScope!),
+      getCurrentPersistedRuntimeIdentity(ctx),
       arg.where.id,
       arg.data,
     );
@@ -181,7 +187,7 @@ export class SqlPairController {
     await this.assertExecutableRuntimeScope(ctx);
     await requireKnowledgeBaseWriteAccess(ctx);
     const deleted = await ctx.sqlPairService.deleteSqlPair(
-      toPersistedRuntimeIdentity(ctx.runtimeScope!),
+      getCurrentPersistedRuntimeIdentity(ctx),
       arg.where.id,
     );
     const { actor, resource } = getKnowledgeBaseAuthorizationTarget(ctx);

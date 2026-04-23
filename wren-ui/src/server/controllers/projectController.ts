@@ -16,7 +16,6 @@ import {
 import {
   autoGenerateRelationAction,
   getOnboardingStatusAction,
-  getProjectRecommendationQuestionsAction,
   getSchemaChangeAction,
   getSettingsAction,
   listConnectionTablesAction,
@@ -39,7 +38,6 @@ import {
   buildBridgeRuntimeIdentity as buildBridgeRuntimeIdentitySupport,
   getActiveRuntimeProjectOrThrow as getActiveRuntimeProjectOrThrowSupport,
   getCurrentPersistedRuntimeIdentity as getCurrentPersistedRuntimeIdentitySupport,
-  getCurrentRuntimeScopeId as getCurrentRuntimeScopeIdSupport,
   isManagedFederatedRuntimeProject as isManagedFederatedRuntimeProjectSupport,
   MANAGED_FEDERATED_RUNTIME_READONLY_MESSAGE,
   recordKnowledgeBaseReadAudit as recordKnowledgeBaseReadAuditSupport,
@@ -57,8 +55,6 @@ export { MANAGED_FEDERATED_RUNTIME_READONLY_MESSAGE };
 export class ProjectController {
   constructor() {
     this.getSettings = this.getSettings.bind(this);
-    this.getProjectRecommendationQuestions =
-      this.getProjectRecommendationQuestions.bind(this);
     this.updateCurrentProject = this.updateCurrentProject.bind(this);
     this.resetCurrentProject = this.resetCurrentProject.bind(this);
     this.saveConnection = this.saveConnection.bind(this);
@@ -97,23 +93,6 @@ export class ProjectController {
     });
   }
 
-  public getProjectRecommendationQuestions(
-    _root: any,
-    _arg: any,
-    ctx: IContext,
-  ) {
-    return getProjectRecommendationQuestionsAction({
-      ctx,
-      deps: {
-        resolveActiveRuntimeProject: this.resolveActiveRuntimeProject,
-        resolveActiveRuntimeKnowledgeBase:
-          this.resolveActiveRuntimeKnowledgeBase,
-        assertKnowledgeBaseReadAccess: this.assertKnowledgeBaseReadAccess,
-        recordKnowledgeBaseReadAudit: this.recordKnowledgeBaseReadAudit,
-      },
-    });
-  }
-
   public updateCurrentProject({
     language,
     ctx,
@@ -129,7 +108,6 @@ export class ProjectController {
           this.resolveActiveRuntimeKnowledgeBase,
         resolveActiveRuntimeProject: this.resolveActiveRuntimeProject,
         assertKnowledgeBaseWriteAccess: this.assertKnowledgeBaseWriteAccess,
-        getCurrentRuntimeScopeId: this.getCurrentRuntimeScopeId,
         recordKnowledgeBaseWriteAudit: this.recordKnowledgeBaseWriteAudit,
       },
     });
@@ -336,10 +314,6 @@ export class ProjectController {
     return resolveActiveRuntimeKnowledgeBaseSupport(ctx);
   }
 
-  private getCurrentRuntimeScopeId(ctx: IContext) {
-    return getCurrentRuntimeScopeIdSupport(ctx);
-  }
-
   private getCurrentPersistedRuntimeIdentity(ctx: IContext) {
     return getCurrentPersistedRuntimeIdentitySupport(ctx);
   }
@@ -387,7 +361,6 @@ export class ProjectController {
       ctx,
       project,
       buildBridgeRuntimeIdentity: this.buildBridgeRuntimeIdentity,
-      getCurrentRuntimeScopeId: this.getCurrentRuntimeScopeId,
       resolveActiveRuntimeKnowledgeBase: this.resolveActiveRuntimeKnowledgeBase,
     });
   }

@@ -9,6 +9,7 @@ import { AskRuntimeIdentity } from '@server/models/adaptor';
 import { PersistedRuntimeIdentity } from '@server/context/runtimeScope';
 import { resolveRuntimeProject as resolveScopedRuntimeProject } from '../utils/runtimeExecutionContext';
 import {
+  normalizeCanonicalPersistedRuntimeIdentity,
   toCanonicalPersistedRuntimeIdentityFromScope,
   toProjectBridgeRuntimeIdentity,
 } from '@server/utils/persistedRuntimeIdentity';
@@ -77,24 +78,27 @@ export const toAskRuntimeIdentity = (
     return null;
   }
 
+  const normalizedRuntimeIdentity =
+    normalizeCanonicalPersistedRuntimeIdentity(runtimeIdentity);
+
   return {
-    ...(typeof runtimeIdentity.projectId === 'number'
-      ? { projectId: runtimeIdentity.projectId }
+    ...(typeof normalizedRuntimeIdentity.projectId === 'number'
+      ? { projectId: normalizedRuntimeIdentity.projectId }
       : {}),
-    ...(runtimeIdentity.workspaceId !== undefined
-      ? { workspaceId: runtimeIdentity.workspaceId ?? null }
+    ...(normalizedRuntimeIdentity.workspaceId !== undefined
+      ? { workspaceId: normalizedRuntimeIdentity.workspaceId ?? null }
       : {}),
-    ...(runtimeIdentity.knowledgeBaseId !== undefined
-      ? { knowledgeBaseId: runtimeIdentity.knowledgeBaseId ?? null }
+    ...(normalizedRuntimeIdentity.knowledgeBaseId !== undefined
+      ? { knowledgeBaseId: normalizedRuntimeIdentity.knowledgeBaseId ?? null }
       : {}),
-    ...(runtimeIdentity.kbSnapshotId !== undefined
-      ? { kbSnapshotId: runtimeIdentity.kbSnapshotId ?? null }
+    ...(normalizedRuntimeIdentity.kbSnapshotId !== undefined
+      ? { kbSnapshotId: normalizedRuntimeIdentity.kbSnapshotId ?? null }
       : {}),
-    ...(runtimeIdentity.deployHash !== undefined
-      ? { deployHash: runtimeIdentity.deployHash ?? null }
+    ...(normalizedRuntimeIdentity.deployHash !== undefined
+      ? { deployHash: normalizedRuntimeIdentity.deployHash ?? null }
       : {}),
-    ...(runtimeIdentity.actorUserId !== undefined
-      ? { actorUserId: runtimeIdentity.actorUserId ?? null }
+    ...(normalizedRuntimeIdentity.actorUserId !== undefined
+      ? { actorUserId: normalizedRuntimeIdentity.actorUserId ?? null }
       : {}),
   };
 };

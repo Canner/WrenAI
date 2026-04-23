@@ -124,7 +124,7 @@ describe('AnswerResult answer auto-generation guard', () => {
     ).toBe(11);
   });
 
-  it('prefers a selected historical response when it has settled aids', () => {
+  it('keeps conversation aids on the latest settled response instead of a selected historical response', () => {
     expect(
       resolveConversationAidOwnerResponseId({
         selectedResponseId: 11,
@@ -157,7 +157,7 @@ describe('AnswerResult answer auto-generation guard', () => {
           },
         ] as any,
       }),
-    ).toBe(11);
+    ).toBe(22);
   });
 
   it('treats finished answer responses as settled for conversation aids', () => {

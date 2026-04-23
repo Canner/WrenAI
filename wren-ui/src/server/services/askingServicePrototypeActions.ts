@@ -36,9 +36,7 @@ import {
 import {
   createInstantRecommendedQuestionsAction,
   generateThreadResponseRecommendationsAction,
-  generateThreadRecommendationQuestionsAction,
   getInstantRecommendedQuestionsAction,
-  getThreadRecommendationQuestionsAction,
 } from './askingServiceRecommendationActions';
 import {
   adjustThreadResponseAnswerAction,
@@ -59,19 +57,6 @@ import {
 export const applyAskingServiceActionPrototype = (AskingServiceClass: any) => {
   const proto = AskingServiceClass.prototype;
 
-  proto.getThreadRecommendationQuestions = async function (threadId: number) {
-    return getThreadRecommendationQuestionsAction(this, threadId);
-  };
-  proto.generateThreadRecommendationQuestions = async function (
-    threadId: number,
-    runtimeScopeId?: string | null,
-  ) {
-    return generateThreadRecommendationQuestionsAction(
-      this,
-      threadId,
-      runtimeScopeId,
-    );
-  };
   proto.initialize = async function () {
     return initializeAskingService(this);
   };

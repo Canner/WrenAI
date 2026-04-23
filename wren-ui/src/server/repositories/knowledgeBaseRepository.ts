@@ -20,14 +20,6 @@ export interface KnowledgeBase {
   runtimeProjectId?: number | null;
   language?: string | null;
   sampleDataset?: string | null;
-  recommendationQueryId?: string | null;
-  recommendationStatus?: string | null;
-  recommendationQuestions?: Array<{
-    question: string;
-    category: string;
-    sql: string;
-  }> | null;
-  recommendationError?: Record<string, any> | null;
   createdBy?: string | null;
   archivedAt?: Date | null;
   createdAt?: Date | string | null;
@@ -40,10 +32,7 @@ export class KnowledgeBaseRepository
   extends BaseRepository<KnowledgeBase>
   implements IKnowledgeBaseRepository
 {
-  private readonly jsonColumns = [
-    'recommendationQuestions',
-    'recommendationError',
-  ];
+  private readonly jsonColumns: string[] = [];
 
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'knowledge_base' });

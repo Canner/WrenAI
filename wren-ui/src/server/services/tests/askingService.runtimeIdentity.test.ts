@@ -35,7 +35,7 @@ describe('AskingService', () => {
       });
 
       expect(runtimeIdentity).toEqual({
-        projectId: 42,
+        projectId: null,
         workspaceId: 'workspace-1',
         knowledgeBaseId: 'kb-1',
         kbSnapshotId: 'snapshot-1',
@@ -77,7 +77,7 @@ describe('AskingService', () => {
       });
 
       expect(runtimeIdentity).toEqual({
-        projectId: 42,
+        projectId: null,
         workspaceId: 'workspace-1',
         knowledgeBaseId: 'kb-1',
         kbSnapshotId: 'snapshot-1',
@@ -190,6 +190,66 @@ describe('AskingService', () => {
           },
         },
       });
+    });
+
+    it('reuses the original response runtime identity when creating an adjustment without explicit runtimeIdentity input', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      service.threadResponseRepository = {
+        findOneBy: jest.fn().mockResolvedValue({
+          id: 202,
+          threadId: 101,
+          question: 'follow up',
+          sql: 'select 1',
+        }),
+      };
+      service.getThreadResponseRuntimeIdentity = jest.fn().mockResolvedValue({
+        projectId: null,
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snapshot-1',
+        deployHash: 'deploy-1',
+        actorUserId: 'user-1',
+      });
+      service.buildAskTaskRuntimeIdentity =
+        AskingService.prototype['buildAskTaskRuntimeIdentity'].bind(service);
+      service.adjustmentBackgroundTracker = {
+        createAdjustmentTask: jest.fn().mockResolvedValue({
+          createdThreadResponse: { id: 303 },
+        }),
+      };
+      service.adjustThreadResponseAnswer =
+        AskingService.prototype['adjustThreadResponseAnswer'].bind(service);
+
+      const result = await service.adjustThreadResponseAnswer(
+        202,
+        {
+          tables: ['orders'],
+          sqlGenerationReasoning: 'need more detail',
+        },
+        { language: 'English' },
+      );
+
+      expect(service.getThreadResponseRuntimeIdentity).toHaveBeenCalledWith({
+        id: 202,
+        threadId: 101,
+        question: 'follow up',
+        sql: 'select 1',
+      });
+      expect(
+        service.adjustmentBackgroundTracker.createAdjustmentTask,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          runtimeScopeId: 'deploy-1',
+          runtimeIdentity: {
+            workspaceId: 'workspace-1',
+            knowledgeBaseId: 'kb-1',
+            kbSnapshotId: 'snapshot-1',
+            deployHash: 'deploy-1',
+            actorUserId: 'user-1',
+          },
+        }),
+      );
+      expect(result).toEqual({ id: 303 });
     });
   });
 

@@ -215,7 +215,7 @@ export const resolveAskingRuntimeIdentity = (
   threadRuntimeIdentity?: PersistedRuntimeIdentity | null,
 ): PersistedRuntimeIdentity => {
   if (threadRuntimeIdentity) {
-    return threadRuntimeIdentity;
+    return normalizeCanonicalPersistedRuntimeIdentity(threadRuntimeIdentity);
   }
   if (!payload.runtimeIdentity) {
     throw new Error(
@@ -283,9 +283,11 @@ export const getThreadRuntimeIdentity = async (
       })
     : null;
 
-  return toPersistedRuntimeIdentityFromSource(
-    await getThreadById(service, threadId),
-    runtimeIdentityFallback,
+  return normalizeCanonicalPersistedRuntimeIdentity(
+    toPersistedRuntimeIdentityFromSource(
+      await getThreadById(service, threadId),
+      runtimeIdentityFallback,
+    ),
   );
 };
 
@@ -299,7 +301,9 @@ export const getThreadResponseRuntimeIdentity = async (
     threadResponse.threadId,
     fallbackRuntimeIdentity,
   );
-  return toPersistedRuntimeIdentityFromSource(threadResponse, threadIdentity);
+  return normalizeCanonicalPersistedRuntimeIdentity(
+    toPersistedRuntimeIdentityFromSource(threadResponse, threadIdentity),
+  );
 };
 
 export const getExecutionResources = async (
@@ -343,7 +347,9 @@ export const shouldForceChineseThreadRecommendation = async (
   thread: Thread,
 ): Promise<boolean> => {
   try {
-    const runtimeIdentity = toPersistedRuntimeIdentityFromSource(thread);
+    const runtimeIdentity = normalizeCanonicalPersistedRuntimeIdentity(
+      toPersistedRuntimeIdentityFromSource(thread),
+    );
     const { project } = service.getExecutionResources
       ? await service.getExecutionResources(runtimeIdentity)
       : await getExecutionResources(service, runtimeIdentity);
@@ -421,10 +427,6 @@ export const buildManifestBackedProject = (
     sampleDataset: null as any,
     connectionInfo: {} as any,
     language: undefined,
-    queryId: undefined,
-    questions: [],
-    questionsStatus: undefined,
-    questionsError: undefined,
   };
 };
 
@@ -465,31 +467,38 @@ export const toAskRuntimeIdentity = (
   runtimeIdentity?: PersistedRuntimeIdentity | null,
 ) => {
   if (!runtimeIdentity) return undefined;
+  const normalizedRuntimeIdentity =
+    normalizeCanonicalPersistedRuntimeIdentity(runtimeIdentity);
   return {
-    ...(typeof runtimeIdentity.projectId === 'number'
-      ? { projectId: runtimeIdentity.projectId }
+    ...(typeof normalizedRuntimeIdentity.projectId === 'number'
+      ? { projectId: normalizedRuntimeIdentity.projectId }
       : {}),
-    workspaceId: runtimeIdentity.workspaceId ?? null,
-    knowledgeBaseId: runtimeIdentity.knowledgeBaseId ?? null,
-    kbSnapshotId: runtimeIdentity.kbSnapshotId ?? null,
-    deployHash: runtimeIdentity.deployHash ?? null,
-    actorUserId: runtimeIdentity.actorUserId ?? null,
+    workspaceId: normalizedRuntimeIdentity.workspaceId ?? null,
+    knowledgeBaseId: normalizedRuntimeIdentity.knowledgeBaseId ?? null,
+    kbSnapshotId: normalizedRuntimeIdentity.kbSnapshotId ?? null,
+    deployHash: normalizedRuntimeIdentity.deployHash ?? null,
+    actorUserId: normalizedRuntimeIdentity.actorUserId ?? null,
   };
 };
 
 export const buildAskTaskRuntimeIdentity = (
   runtimeIdentity: PersistedRuntimeIdentity,
   deployHash?: string | null,
-) => ({
-  ...(typeof runtimeIdentity.projectId === 'number'
-    ? { projectId: runtimeIdentity.projectId }
-    : {}),
-  workspaceId: runtimeIdentity.workspaceId ?? null,
-  knowledgeBaseId: runtimeIdentity.knowledgeBaseId ?? null,
-  kbSnapshotId: runtimeIdentity.kbSnapshotId ?? null,
-  deployHash: deployHash ?? runtimeIdentity.deployHash ?? null,
-  actorUserId: runtimeIdentity.actorUserId ?? null,
-});
+) => {
+  const normalizedRuntimeIdentity =
+    normalizeCanonicalPersistedRuntimeIdentity(runtimeIdentity);
+
+  return {
+    ...(typeof normalizedRuntimeIdentity.projectId === 'number'
+      ? { projectId: normalizedRuntimeIdentity.projectId }
+      : {}),
+    workspaceId: normalizedRuntimeIdentity.workspaceId ?? null,
+    knowledgeBaseId: normalizedRuntimeIdentity.knowledgeBaseId ?? null,
+    kbSnapshotId: normalizedRuntimeIdentity.kbSnapshotId ?? null,
+    deployHash: deployHash ?? normalizedRuntimeIdentity.deployHash ?? null,
+    actorUserId: normalizedRuntimeIdentity.actorUserId ?? null,
+  };
+};
 
 export const normalizeRuntimeScope = (
   runtimeIdentity?: PersistedRuntimeIdentity | null,

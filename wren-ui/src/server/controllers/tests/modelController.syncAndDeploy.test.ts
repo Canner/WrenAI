@@ -244,9 +244,6 @@ describe('ModelController scope guards', () => {
       .fn()
       .mockResolvedValue('16');
     ctx.projectService.updateProject = jest.fn().mockResolvedValue(undefined);
-    ctx.projectService.generateProjectRecommendationQuestions = jest
-      .fn()
-      .mockResolvedValue(undefined);
     ctx.deployService.deploy = jest.fn().mockResolvedValue({
       status: 'SUCCESS',
     });

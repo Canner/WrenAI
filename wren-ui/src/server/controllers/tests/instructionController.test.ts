@@ -131,7 +131,7 @@ describe('InstructionController', () => {
     } as any);
 
     expect(listInstructions).toHaveBeenCalledWith({
-      projectId: 42,
+      projectId: null,
       workspaceId: 'workspace-1',
       knowledgeBaseId: 'kb-1',
       kbSnapshotId: 'snapshot-1',

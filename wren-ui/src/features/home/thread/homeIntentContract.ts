@@ -8,6 +8,7 @@ import type {
   ResolvedHomeIntent,
   WorkbenchArtifactKind,
 } from '@/types/homeIntent';
+import { getRecommendationTriggerLabel } from './homeRecommendationMessages';
 
 type HomeIntentResponseLike = {
   id?: number | null;
@@ -144,6 +145,7 @@ const buildAskConversationAids = (
   response?: HomeIntentResponseLike | null,
 ): ConversationAidItem[] => {
   const sourceResponseId = resolveConversationAidSourceResponseId(response);
+  const recommendationTriggerCopy = getRecommendationTriggerLabel();
 
   return [
     buildConversationAid({
@@ -155,8 +157,8 @@ const buildAskConversationAids = (
     }),
     buildConversationAid({
       kind: 'TRIGGER_RECOMMEND_QUESTIONS',
-      label: '推荐几个问题给我',
-      prompt: '推荐几个问题给我',
+      label: recommendationTriggerCopy,
+      prompt: recommendationTriggerCopy,
       sourceResponseId,
       suggestedIntent: 'RECOMMEND_QUESTIONS',
     }),
@@ -217,6 +219,7 @@ const buildChartConversationAids = (
   response?: HomeIntentResponseLike | null,
 ): ConversationAidItem[] => {
   const sourceResponseId = resolveConversationAidSourceResponseId(response);
+  const recommendationTriggerCopy = getRecommendationTriggerLabel();
 
   return [
     ...resolveChartAidPromptSet(response).map((prompt) =>
@@ -230,8 +233,8 @@ const buildChartConversationAids = (
     ),
     buildConversationAid({
       kind: 'TRIGGER_RECOMMEND_QUESTIONS',
-      label: '推荐几个问题给我',
-      prompt: '推荐几个问题给我',
+      label: recommendationTriggerCopy,
+      prompt: recommendationTriggerCopy,
       sourceResponseId,
       suggestedIntent: 'RECOMMEND_QUESTIONS',
     }),

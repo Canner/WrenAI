@@ -157,11 +157,19 @@ export default function ThreadWorkbench(props: {
   }, [artifactItems, onArtifactChange]);
   const handlePinDashboard = useCallback(() => {
     const pinButton =
-      workbenchRef.current?.querySelector<HTMLButtonElement>(
-        'button[aria-label=\"Pin to dashboard\"]',
-      ) || null;
+      Array.from(
+        workbenchRef.current?.querySelectorAll<HTMLButtonElement>('button') ||
+          [],
+      ).find((button) => {
+        const label =
+          button.getAttribute('aria-label') || button.textContent?.trim();
+        return (
+          label === messages.headerActions.pinDashboard ||
+          label === 'Pin to dashboard'
+        );
+      }) || null;
     pinButton?.click();
-  }, []);
+  }, [messages.headerActions.pinDashboard]);
 
   if (!activeKey) {
     return null;

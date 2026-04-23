@@ -5,6 +5,7 @@ import {
   mapValues,
   snakeCase,
 } from 'lodash';
+import { normalizeCanonicalPersistedRuntimeIdentity } from '@server/utils/persistedRuntimeIdentity';
 import type {
   ThreadResponse,
   ThreadResponseRuntimeScope,
@@ -117,7 +118,7 @@ export const hydrateJoinedThreadResponseRuntimeScope = (
     ...threadResponse
   } = transformed;
 
-  return {
+  return normalizeCanonicalPersistedRuntimeIdentity({
     ...threadResponse,
     projectId: threadResponse.projectId ?? threadProjectId ?? null,
     workspaceId: threadResponse.workspaceId ?? threadWorkspaceId ?? null,
@@ -126,5 +127,5 @@ export const hydrateJoinedThreadResponseRuntimeScope = (
     kbSnapshotId: threadResponse.kbSnapshotId ?? threadKbSnapshotId ?? null,
     deployHash: threadResponse.deployHash ?? threadDeployHash ?? null,
     actorUserId: threadResponse.actorUserId ?? threadActorUserId ?? null,
-  };
+  });
 };

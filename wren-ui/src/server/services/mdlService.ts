@@ -409,10 +409,6 @@ export class MDLService implements IMDLService {
       sampleDataset: null as any,
       connectionInfo: {} as any,
       language: undefined,
-      queryId: undefined,
-      questions: [],
-      questionsStatus: undefined,
-      questionsError: undefined,
     };
   }
 

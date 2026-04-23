@@ -86,16 +86,6 @@ export const buildAdjustThreadResponseChartUrl = (
     selector,
   );
 
-export const buildThreadRecommendationQuestionsMutationUrl = (
-  threadId: number,
-  selector: ClientRuntimeScopeSelector,
-) =>
-  buildRuntimeScopeUrl(
-    `/api/v1/thread-recommendation-questions/${threadId}`,
-    {},
-    selector,
-  );
-
 export const createThreadResponse = async (
   selector: ClientRuntimeScopeSelector,
   threadId: number,
@@ -133,23 +123,6 @@ export const updateThreadResponseSql = async (
   return parseThreadRestResponse<ThreadResponse>(
     response,
     '更新 SQL 失败，请稍后重试',
-  );
-};
-
-export const triggerThreadRecommendationQuestions = async (
-  selector: ClientRuntimeScopeSelector,
-  threadId: number,
-) => {
-  const response = await fetch(
-    buildThreadRecommendationQuestionsMutationUrl(threadId, selector),
-    {
-      method: 'POST',
-    },
-  );
-
-  return parseThreadRestResponse<{ success: boolean }>(
-    response,
-    '生成推荐追问失败，请稍后重试',
   );
 };
 

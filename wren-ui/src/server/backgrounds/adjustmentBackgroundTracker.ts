@@ -11,6 +11,7 @@ import { IWrenAIAdaptor } from '../adaptors';
 import { TelemetryEvent, WrenService } from '../telemetry/telemetry';
 import { PostHogTelemetry } from '../telemetry/telemetry';
 import { registerShutdownCallback } from '@server/utils/shutdown';
+import { toPersistedRuntimeIdentityPatch } from '@server/utils/persistedRuntimeIdentity';
 import type {
   CreateAdjustmentTaskInput,
   IAdjustmentBackgroundTaskTracker,
@@ -27,6 +28,33 @@ export type {
 
 const logger = getLogger('AdjustmentTaskTracker');
 logger.level = 'debug';
+
+const toAskRuntimeIdentity = (inputRuntimeIdentity?: {
+  projectId?: number | null;
+  workspaceId?: string | null;
+  knowledgeBaseId?: string | null;
+  kbSnapshotId?: string | null;
+  deployHash?: string | null;
+  actorUserId?: string | null;
+}) => {
+  if (!inputRuntimeIdentity) {
+    return undefined;
+  }
+
+  const normalizedRuntimeIdentity =
+    toPersistedRuntimeIdentityPatch(inputRuntimeIdentity);
+
+  return {
+    ...(typeof normalizedRuntimeIdentity.projectId === 'number'
+      ? { projectId: normalizedRuntimeIdentity.projectId }
+      : {}),
+    workspaceId: normalizedRuntimeIdentity.workspaceId ?? null,
+    knowledgeBaseId: normalizedRuntimeIdentity.knowledgeBaseId ?? null,
+    kbSnapshotId: normalizedRuntimeIdentity.kbSnapshotId ?? null,
+    deployHash: normalizedRuntimeIdentity.deployHash ?? null,
+    actorUserId: normalizedRuntimeIdentity.actorUserId ?? null,
+  };
+};
 
 export class AdjustmentBackgroundTaskTracker implements IAdjustmentBackgroundTaskTracker {
   private wrenAIAdaptor: IWrenAIAdaptor;
@@ -69,8 +97,15 @@ export class AdjustmentBackgroundTaskTracker implements IAdjustmentBackgroundTas
     input: CreateAdjustmentTaskInput,
   ): Promise<{ queryId: string; createdThreadResponse: ThreadResponse }> {
     try {
+      const normalizedRuntimeIdentity = input.runtimeIdentity
+        ? toPersistedRuntimeIdentityPatch(input.runtimeIdentity)
+        : undefined;
+
       // Call the AI service to create a task
-      const response = await this.wrenAIAdaptor.createAskFeedback(input);
+      const response = await this.wrenAIAdaptor.createAskFeedback({
+        ...input,
+        runtimeIdentity: toAskRuntimeIdentity(normalizedRuntimeIdentity),
+      });
       const queryId = response.queryId;
 
       // create a new asking task
@@ -84,13 +119,13 @@ export class AdjustmentBackgroundTaskTracker implements IAdjustmentBackgroundTas
           response: [],
           error: undefined,
         },
-        ...(input.runtimeIdentity || {}),
+        ...(normalizedRuntimeIdentity || {}),
       });
 
       // create a new thread response with adjustment payload
       const createdThreadResponse =
         await this.threadResponseRepository.createOne({
-          ...(input.runtimeIdentity || {}),
+          ...(normalizedRuntimeIdentity || {}),
           question: input.question,
           threadId: input.threadId,
           askingTaskId: createdAskingTask.id,
@@ -120,7 +155,7 @@ export class AdjustmentBackgroundTaskTracker implements IAdjustmentBackgroundTas
         originalThreadResponseId: input.originalThreadResponseId,
         threadResponseId: createdThreadResponse.id,
         question: input.question,
-        runtimeIdentity: input.runtimeIdentity,
+        runtimeIdentity: normalizedRuntimeIdentity,
         adjustmentPayload: {
           originalThreadResponseId: input.originalThreadResponseId,
           retrievedTables: input.tables,
@@ -141,6 +176,9 @@ export class AdjustmentBackgroundTaskTracker implements IAdjustmentBackgroundTas
   public async rerunAdjustmentTask(
     input: RerunAdjustmentTaskInput,
   ): Promise<{ queryId: string }> {
+    const normalizedRuntimeIdentity = input.runtimeIdentity
+      ? toPersistedRuntimeIdentityPatch(input.runtimeIdentity)
+      : undefined;
     const currentThreadResponse = await this.threadResponseRepository.findOneBy(
       {
         id: input.threadResponseId,
@@ -179,12 +217,14 @@ export class AdjustmentBackgroundTaskTracker implements IAdjustmentBackgroundTas
     }
 
     const response = await this.wrenAIAdaptor.createAskFeedback({
+      ...input,
       runtimeScopeId: input.runtimeScopeId || undefined,
       configurations: input.configurations,
       tables: retrievedTables,
       sqlGenerationReasoning,
       sql: originalSql,
       question: originalThreadResponse.question,
+      runtimeIdentity: toAskRuntimeIdentity(normalizedRuntimeIdentity),
     });
     const queryId = response.queryId;
 
@@ -201,7 +241,7 @@ export class AdjustmentBackgroundTaskTracker implements IAdjustmentBackgroundTas
           response: [],
           error: undefined,
         },
-        ...(input.runtimeIdentity || {}),
+        ...(normalizedRuntimeIdentity || {}),
       },
     );
 
@@ -215,7 +255,7 @@ export class AdjustmentBackgroundTaskTracker implements IAdjustmentBackgroundTas
       threadResponseId: currentThreadResponse.id,
       question: originalThreadResponse.question,
       rerun: true,
-      runtimeIdentity: input.runtimeIdentity,
+      runtimeIdentity: normalizedRuntimeIdentity,
       adjustmentPayload: {
         originalThreadResponseId: originalThreadResponse.id,
         retrievedTables,

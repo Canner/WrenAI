@@ -111,7 +111,6 @@ describe('AskingService', () => {
         expect.objectContaining({
           deployId: 'deploy-3',
           runtimeIdentity: expect.objectContaining({
-            projectId: 42,
             workspaceId: 'workspace-1',
             knowledgeBaseId: 'kb-1',
             kbSnapshotId: 'snapshot-1',

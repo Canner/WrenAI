@@ -107,44 +107,6 @@ export const getSettingsAction = async ({
   return result;
 };
 
-export const getProjectRecommendationQuestionsAction = async ({
-  ctx,
-  deps,
-}: {
-  ctx: IContext;
-  deps: Pick<
-    ProjectControllerReadDeps,
-    | 'resolveActiveRuntimeProject'
-    | 'resolveActiveRuntimeKnowledgeBase'
-    | 'assertKnowledgeBaseReadAccess'
-    | 'recordKnowledgeBaseReadAudit'
-  >;
-}) => {
-  await deps.assertKnowledgeBaseReadAccess(ctx);
-  const project = await deps.resolveActiveRuntimeProject(ctx);
-  const knowledgeBase = await deps.resolveActiveRuntimeKnowledgeBase(ctx);
-
-  if (!project) {
-    const result = { status: 'NOT_STARTED', questions: [], error: null };
-    await deps.recordKnowledgeBaseReadAudit(ctx, {
-      resourceType: knowledgeBase ? 'knowledge_base' : 'workspace',
-      resourceId: knowledgeBase?.id || ctx.runtimeScope?.workspace?.id || null,
-      payloadJson: { operation: 'get_project_recommendation_questions' },
-    });
-    return result;
-  }
-
-  const result = await ctx.projectService.getProjectRecommendationQuestions(
-    project.id,
-  );
-  await deps.recordKnowledgeBaseReadAudit(ctx, {
-    resourceType: 'project',
-    resourceId: project.id,
-    payloadJson: { operation: 'get_project_recommendation_questions' },
-  });
-  return result;
-};
-
 export const getOnboardingStatusAction = async ({
   ctx,
   deps,

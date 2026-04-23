@@ -264,9 +264,21 @@ a,
   padding-inline: 10px;
   font-size: 12px;
   font-weight: 500;
+  opacity: 1;
+  color: #6f47ff;
+  border-color: rgba(111, 71, 255, 0.22);
+  background: #ffffff;
+  box-shadow: 0 8px 18px rgba(111, 71, 255, 0.1);
 }
 .adm-chart-additional .adm-chart-additional__pin-button .anticon {
   font-size: 13px;
+}
+.adm-chart-additional .adm-chart-additional__pin-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+  color: #8b93a3;
+  border-color: #e5e7eb;
+  box-shadow: none;
 }
 .adm-chart-additional button:hover {
   opacity: 1;

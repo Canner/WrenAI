@@ -130,6 +130,14 @@ describe('AskingTaskTracker', () => {
       deployHash: 'deploy-1',
       actorUserId: 'user-1',
     });
+
+    expect(wrenAIAdaptor.ask.mock.calls[0][0].runtimeIdentity).toEqual({
+      workspaceId: 'workspace-1',
+      knowledgeBaseId: 'kb-1',
+      kbSnapshotId: 'snapshot-1',
+      deployHash: 'deploy-1',
+      actorUserId: 'user-1',
+    });
   });
 
   it('persists an understanding-state task immediately after creation', async () => {
@@ -168,6 +176,49 @@ describe('AskingTaskTracker', () => {
       deployHash: 'deploy-1',
       actorUserId: 'user-1',
     });
+  });
+
+  it('normalizes canonical runtime identity before sending ask requests and caching tracked tasks', async () => {
+    const tracker = createTracker();
+    const wrenAIAdaptor = (tracker as any).wrenAIAdaptor;
+    const askingTaskRepository = (tracker as any).askingTaskRepository;
+    wrenAIAdaptor.ask.mockResolvedValue({ queryId: 'query-normalized' });
+    askingTaskRepository.findByQueryId.mockResolvedValue(null);
+    askingTaskRepository.createOne.mockResolvedValue({ id: 18 });
+
+    await tracker.createAskingTask({
+      query: '按部门统计在职员工数',
+      deployId: 'deploy-1',
+      runtimeIdentity: {
+        projectId: 321,
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snapshot-1',
+        deployHash: 'deploy-1',
+        actorUserId: 'user-1',
+      },
+    } as any);
+
+    expect(wrenAIAdaptor.ask.mock.calls[0][0].runtimeIdentity).toEqual({
+      workspaceId: 'workspace-1',
+      knowledgeBaseId: 'kb-1',
+      kbSnapshotId: 'snapshot-1',
+      deployHash: 'deploy-1',
+      actorUserId: 'user-1',
+    });
+
+    expect((tracker as any).trackedTasks.get('query-normalized')).toEqual(
+      expect.objectContaining({
+        runtimeIdentity: {
+          projectId: null,
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snapshot-1',
+          deployHash: 'deploy-1',
+          actorUserId: 'user-1',
+        },
+      }),
+    );
   });
 
   it('reuses the same runtime identity payload when polling updates an existing task record', async () => {
@@ -264,6 +315,41 @@ describe('AskingTaskTracker', () => {
           status: AskResultStatus.FINISHED,
           type: 'GENERAL',
         }),
+      }),
+    );
+  });
+
+  it('normalizes canonical runtime identity when rehydrating unfinished tasks', async () => {
+    const tracker = createTracker();
+
+    tracker.rehydrateTrackedTask({
+      id: 71,
+      queryId: 'query-71',
+      question: 'rehydrate me',
+      detail: {
+        status: AskResultStatus.UNDERSTANDING,
+        response: [],
+      } as any,
+      projectId: 42,
+      workspaceId: 'workspace-1',
+      knowledgeBaseId: 'kb-1',
+      kbSnapshotId: 'snapshot-1',
+      deployHash: 'deploy-1',
+      actorUserId: 'user-1',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    expect((tracker as any).trackedTasks.get('query-71')).toEqual(
+      expect.objectContaining({
+        runtimeIdentity: {
+          projectId: null,
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snapshot-1',
+          deployHash: 'deploy-1',
+          actorUserId: 'user-1',
+        },
       }),
     );
   });

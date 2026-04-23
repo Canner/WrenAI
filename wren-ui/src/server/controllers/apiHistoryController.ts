@@ -4,6 +4,7 @@ import {
   AskShadowCompareStats,
 } from '@server/repositories/apiHistoryRepository';
 import { toPersistedRuntimeIdentity } from '@server/context/runtimeScope';
+import { toPersistedRuntimeIdentityPatch } from '@server/utils/persistedRuntimeIdentity';
 import { IContext } from '@server/types';
 import {
   assertAuthorizedWithAudit,
@@ -171,7 +172,9 @@ export class ApiHistoryController {
     await assertKnowledgeBaseReadAccess(ctx);
     const { filter, pagination } = args;
     const { offset, limit } = pagination;
-    const runtimeIdentity = toPersistedRuntimeIdentity(ctx.runtimeScope!);
+    const runtimeIdentity = toPersistedRuntimeIdentityPatch(
+      toPersistedRuntimeIdentity(ctx.runtimeScope!),
+    );
     const filterCriteria = toScopedFilterCriteria(filter, runtimeIdentity);
     const dateFilter = toDateFilter(filter);
 
@@ -224,7 +227,9 @@ export class ApiHistoryController {
   ): Promise<AskShadowCompareStats> {
     await assertKnowledgeBaseReadAccess(ctx);
     const filter = args?.filter;
-    const runtimeIdentity = toPersistedRuntimeIdentity(ctx.runtimeScope!);
+    const runtimeIdentity = toPersistedRuntimeIdentityPatch(
+      toPersistedRuntimeIdentity(ctx.runtimeScope!),
+    );
     const filterCriteria = toScopedFilterCriteria(filter, runtimeIdentity);
     const dateFilter = toDateFilter(filter);
     const apiTypes = this.getAskShadowCompareApiTypes(filter?.apiType);

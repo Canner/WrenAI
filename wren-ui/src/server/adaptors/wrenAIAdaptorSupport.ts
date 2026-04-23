@@ -52,6 +52,24 @@ export interface WrenAITransformedStatusResult {
   error?: WrenAITransformedError | null;
 }
 
+// Sample/federated runtime semantics preparation can exceed the old ~28s
+// budget when indexing larger manifests, so keep polling for ~90s (1..13s).
+const DEFAULT_DEPLOY_POLL_MAX_ATTEMPTS = 13;
+const DEFAULT_DEPLOY_POLL_BASE_DELAY_MS = 1000;
+
+const resolveDeployPollBaseDelayMs = () => {
+  const parsedDelayMs = Number(
+    process.env.WREN_AI_DEPLOY_POLL_BASE_DELAY_MS ??
+      DEFAULT_DEPLOY_POLL_BASE_DELAY_MS,
+  );
+
+  if (!Number.isFinite(parsedDelayMs) || parsedDelayMs < 0) {
+    return DEFAULT_DEPLOY_POLL_BASE_DELAY_MS;
+  }
+
+  return parsedDelayMs;
+};
+
 export const getAIServiceError = (error: any) => {
   const { data } = error.response || {};
   return data?.detail
@@ -170,7 +188,12 @@ export const waitDeployFinished = async ({
   deployId: string;
 }): Promise<boolean> => {
   let deploySuccess = false;
-  for (let waitTime = 1; waitTime <= 7; waitTime++) {
+  const pollBaseDelayMs = resolveDeployPollBaseDelayMs();
+  for (
+    let waitTime = 1;
+    waitTime <= DEFAULT_DEPLOY_POLL_MAX_ATTEMPTS;
+    waitTime++
+  ) {
     const status = await getDeployStatus({ ...deps, deployId });
     deps.logger.debug(`Wren AI: Deploy status: ${status}`);
     if (status === WrenAISystemStatus.FINISHED) {
@@ -184,7 +207,9 @@ export const waitDeployFinished = async ({
       deps.logger.debug(`Wren AI: Unknown Wren AI deploy status: ${status}`);
       return false;
     }
-    await new Promise((resolve) => setTimeout(resolve, waitTime * 1000));
+    await new Promise((resolve) =>
+      setTimeout(resolve, waitTime * pollBaseDelayMs),
+    );
   }
   return deploySuccess;
 };

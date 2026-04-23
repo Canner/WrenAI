@@ -17,7 +17,8 @@ const getPromptInput = (page: Page) =>
     })
     .first();
 
-const getResponseCards = (page: Page) => page.locator('[data-jsid="answerResult"]');
+const getResponseCards = (page: Page) =>
+  page.locator('[data-jsid="answerResult"]');
 
 const waitForGenerateRecommendationRequest = (page: Page) =>
   page.waitForResponse(
@@ -34,12 +35,22 @@ const waitForGenerateRecommendationRequest = (page: Page) =>
     { timeout: 120_000 },
   );
 
-const waitForRecommendationItems = async (page: Page, responseCardIndex: number) => {
+const waitForRecommendationItems = async (
+  page: Page,
+  responseCardIndex: number,
+) => {
   const responseCard = getResponseCards(page).nth(responseCardIndex);
   const getFilteredButtonTexts = async () => {
-    const buttonTexts = (await responseCard.locator('button').allTextContents()).map(
-      (text) => text.trim(),
-    );
+    const buttonTexts = await responseCard
+      .locator('button')
+      .evaluateAll((buttons) =>
+        buttons
+          .map((button) => {
+            const ariaLabel = button.getAttribute('aria-label')?.trim();
+            return ariaLabel || button.textContent?.trim() || '';
+          })
+          .filter(Boolean),
+      );
 
     return buttonTexts.filter(
       (text) =>
@@ -50,9 +61,11 @@ const waitForRecommendationItems = async (page: Page, responseCardIndex: number)
     );
   };
 
-  await expect(responseCard.getByText(RECOMMENDATION_SECTION_NAME)).toBeVisible({
-    timeout: 120_000,
-  });
+  await expect(responseCard.getByText(RECOMMENDATION_SECTION_NAME)).toBeVisible(
+    {
+      timeout: 120_000,
+    },
+  );
 
   await expect
     .poll(async () => (await getFilteredButtonTexts()).length, {
@@ -175,7 +188,9 @@ test.describe('Home recommendation follow-up alignment', () => {
       }
     });
 
-    await recommendationCard.getByRole('button', { name: firstRecommendedQuestion }).click();
+    await recommendationCard
+      .getByRole('button', { name: firstRecommendedQuestion })
+      .click();
     await expect(promptInput).toHaveValue(firstRecommendedQuestion);
     await page.waitForTimeout(500);
     expect(followUpCreateRequests).toHaveLength(0);
@@ -185,7 +200,9 @@ test.describe('Home recommendation follow-up alignment', () => {
 
     await expect(responseCards).toHaveCount(3, { timeout: 120_000 });
     await expect(
-      responseCards.last().getByRole('heading', { name: firstRecommendedQuestion }),
+      responseCards
+        .last()
+        .getByRole('heading', { name: firstRecommendedQuestion }),
     ).toBeVisible({ timeout: 120_000 });
 
     const threadUrl = page.url();
@@ -196,7 +213,9 @@ test.describe('Home recommendation follow-up alignment', () => {
       responseCards.nth(1).getByText(RECOMMENDATION_SECTION_NAME),
     ).toBeVisible({ timeout: 120_000 });
     await expect(
-      responseCards.last().getByRole('heading', { name: firstRecommendedQuestion }),
+      responseCards
+        .last()
+        .getByRole('heading', { name: firstRecommendedQuestion }),
     ).toBeVisible({ timeout: 120_000 });
   });
 });

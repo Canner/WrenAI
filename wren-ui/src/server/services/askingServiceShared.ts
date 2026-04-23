@@ -1,10 +1,8 @@
 import { IWrenAIAdaptor } from '@server/adaptors/wrenAIAdaptor';
 import {
   AskResultStatus,
-  RecommendationQuestion,
   RecommendationQuestionStatus,
   RecommendationQuestionsResult,
-  WrenAIError,
   ChartAdjustmentOption,
 } from '@server/models/adaptor';
 import { TrackedAdjustmentResult } from '../backgrounds';
@@ -34,7 +32,6 @@ import {
 import { registerShutdownCallback } from '@server/utils/shutdown';
 import { toPersistedRuntimeIdentityFromSource } from '@server/utils/persistedRuntimeIdentity';
 import { isNil } from 'lodash';
-import type { ResolvedHomeIntent } from '@/types/homeIntent';
 
 export const logger = getLogger('AskingService');
 logger.level = 'debug';
@@ -78,13 +75,6 @@ export enum RecommendQuestionResultStatus {
   GENERATING = 'GENERATING',
   FINISHED = 'FINISHED',
   FAILED = 'FAILED',
-}
-
-export interface ThreadRecommendQuestionResult {
-  status: RecommendQuestionResultStatus;
-  questions: RecommendationQuestion[];
-  error?: WrenAIError;
-  resolvedIntent?: ResolvedHomeIntent | null;
 }
 
 export interface InstantRecommendedQuestionsInput {
@@ -275,13 +265,6 @@ export interface IAskingService {
     queryId: string,
     runtimeIdentity: PersistedRuntimeIdentity,
   ): Promise<RecommendationQuestionsResult>;
-  generateThreadRecommendationQuestions(
-    threadId: number,
-    runtimeScopeId?: string | null,
-  ): Promise<void>;
-  getThreadRecommendationQuestions(
-    threadId: number,
-  ): Promise<ThreadRecommendQuestionResult>;
   deleteAllByProjectId(projectId: number): Promise<void>;
 }
 

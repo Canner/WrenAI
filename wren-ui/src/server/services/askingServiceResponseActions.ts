@@ -120,6 +120,9 @@ export const generateThreadResponseAnswerAction = async (
   if (!threadResponse) {
     throw new Error(`Thread response ${threadResponseId} not found`);
   }
+  if (!threadResponse.sql?.trim()) {
+    throw new Error(`Thread response ${threadResponseId} has no SQL`);
+  }
 
   const updatedThreadResponse =
     await service.threadResponseRepository.updateOne(threadResponse.id, {
@@ -507,9 +510,12 @@ export const adjustThreadResponseAnswerAction = async (
     throw new Error(`Thread response ${threadResponseId} has no SQL`);
   }
 
-  const adjustmentRuntimeIdentity = input.runtimeIdentity
-    ? service.buildAskTaskRuntimeIdentity(input.runtimeIdentity)
-    : undefined;
+  const resolvedAdjustmentRuntimeIdentity = input.runtimeIdentity
+    ? input.runtimeIdentity
+    : await service.getThreadResponseRuntimeIdentity(originalThreadResponse);
+  const adjustmentRuntimeIdentity = service.buildAskTaskRuntimeIdentity(
+    resolvedAdjustmentRuntimeIdentity,
+  );
   const { createdThreadResponse } =
     await service.adjustmentBackgroundTracker.createAdjustmentTask({
       threadId: originalThreadResponse.threadId,

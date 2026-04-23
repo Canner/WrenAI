@@ -90,15 +90,9 @@ export const syncSystemSampleKnowledgeBase = async (
   snapshot: KBSnapshot,
   deps: WorkspaceBootstrapServiceDependencies,
 ): Promise<void> => {
-  const recommendationQuestions = null;
   const shouldUpdate =
     knowledgeBase.defaultKbSnapshotId !== snapshot.id ||
-    knowledgeBase.primaryConnectorId !== null ||
-    knowledgeBase.recommendationQueryId !== null ||
-    knowledgeBase.recommendationStatus !== null ||
-    JSON.stringify(knowledgeBase.recommendationQuestions || null) !==
-      JSON.stringify(recommendationQuestions) ||
-    knowledgeBase.recommendationError !== null;
+    knowledgeBase.primaryConnectorId !== null;
 
   if (!shouldUpdate) {
     return;
@@ -107,10 +101,6 @@ export const syncSystemSampleKnowledgeBase = async (
   await deps.knowledgeBaseRepository.updateOne(knowledgeBase.id, {
     defaultKbSnapshotId: snapshot.id,
     primaryConnectorId: null,
-    recommendationQueryId: null,
-    recommendationStatus: null,
-    recommendationQuestions,
-    recommendationError: null,
   });
 };
 

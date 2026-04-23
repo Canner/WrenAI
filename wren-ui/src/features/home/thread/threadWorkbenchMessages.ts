@@ -49,7 +49,23 @@ export type ThreadWorkbenchMessages = {
       failedShort: string;
     };
     badge: string;
+    categories: {
+      chartFollowUp: string;
+      chartRefine: string;
+      compare: string;
+      distribution: string;
+      drillDown: string;
+      ranking: string;
+      relatedQuestion: string;
+      trend: string;
+    };
+    notifications: {
+      generateFailed: string;
+      sourceNotReady: string;
+    };
+    sectionIntro: string;
     sectionTitle: string;
+    triggerLabel: string;
   };
   footer: {
     helpfulNegative: string;
@@ -92,7 +108,7 @@ const THREAD_WORKBENCH_MESSAGE_CATALOG: Record<
     close: '关闭结果区',
     headerActions: {
       spreadsheet: 'Spreadsheet',
-      pinDashboard: 'Pin to dashboard',
+      pinDashboard: '固定到看板',
     },
     titleLabel: '结果工作台',
     footer: {
@@ -157,12 +173,28 @@ const THREAD_WORKBENCH_MESSAGE_CATALOG: Record<
     },
     recommendation: {
       badge: '推荐问题',
+      triggerLabel: '推荐几个问题给我',
       sectionTitle: '推荐追问',
+      sectionIntro: '基于刚刚这条结果，你接下来还可以问：',
       alerts: {
         failedShort: '推荐问题生成失败',
       },
       actions: {
         retry: '重新生成',
+      },
+      notifications: {
+        sourceNotReady: '当前回答尚未就绪，请稍后再试',
+        generateFailed: '生成推荐追问失败，请稍后重试',
+      },
+      categories: {
+        drillDown: '深挖',
+        compare: '对比',
+        trend: '趋势',
+        distribution: '分布',
+        ranking: '排行',
+        chartFollowUp: '转成图表',
+        chartRefine: '优化图表',
+        relatedQuestion: '相关问题',
       },
     },
   },
@@ -241,12 +273,29 @@ const THREAD_WORKBENCH_MESSAGE_CATALOG: Record<
     },
     recommendation: {
       badge: 'Recommendations',
+      triggerLabel: 'Recommend follow-up questions',
       sectionTitle: 'Recommended follow-ups',
+      sectionIntro: 'Based on this result, you could ask next:',
       alerts: {
         failedShort: 'Recommendation generation failed',
       },
       actions: {
         retry: 'Retry',
+      },
+      notifications: {
+        sourceNotReady:
+          'The current answer is not ready yet. Please try again.',
+        generateFailed: "Couldn't generate recommendations. Please try again.",
+      },
+      categories: {
+        drillDown: 'Drill down',
+        compare: 'Compare',
+        trend: 'Trend',
+        distribution: 'Distribution',
+        ranking: 'Ranking',
+        chartFollowUp: 'Make chart',
+        chartRefine: 'Refine chart',
+        relatedQuestion: 'Related',
       },
     },
   },

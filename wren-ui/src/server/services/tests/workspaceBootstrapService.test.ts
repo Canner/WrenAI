@@ -12,10 +12,6 @@ const createKnowledgeBase = (overrides: Record<string, any> = {}) => ({
   primaryConnectorId: overrides.primaryConnectorId ?? null,
   language: overrides.language ?? null,
   sampleDataset: overrides.sampleDataset || 'HR',
-  recommendationQueryId: overrides.recommendationQueryId ?? null,
-  recommendationStatus: overrides.recommendationStatus ?? null,
-  recommendationQuestions: overrides.recommendationQuestions ?? null,
-  recommendationError: overrides.recommendationError ?? null,
   createdBy: overrides.createdBy ?? null,
   archivedAt: overrides.archivedAt ?? null,
 });

@@ -11,7 +11,6 @@ import type {
   Task,
   Thread,
   ThreadResponse,
-  ProjectRecommendationQuestionsResponse,
   InstantRecommendedQuestionsResponse,
   PreviewDataResponse,
   SuggestedQuestionsResponse,
@@ -28,8 +27,6 @@ type AdjustThreadResponseAnswerInput = {
 type PreviewDataPayload = PreviewDataResponse['previewData'];
 type SuggestedQuestionsPayload =
   SuggestedQuestionsResponse['suggestedQuestions'];
-type ProjectRecommendationQuestionsPayload =
-  ProjectRecommendationQuestionsResponse['getProjectRecommendationQuestions'];
 type InstantRecommendedQuestionsPayload =
   InstantRecommendedQuestionsResponse['instantRecommendedQuestions'];
 type TimedSuggestedQuestionsEntry = {
@@ -146,15 +143,6 @@ export const clearSuggestedQuestionsCache = () => {
 export const buildSuggestedQuestionsUrl = (
   selector = resolveClientRuntimeScopeSelector(),
 ) => buildRuntimeScopeUrl('/api/v1/suggested-questions', {}, selector);
-
-export const buildProjectRecommendationQuestionsUrl = (
-  selector = resolveClientRuntimeScopeSelector(),
-) =>
-  buildRuntimeScopeUrl(
-    '/api/v1/project-recommendation-questions',
-    {},
-    selector,
-  );
 
 export const buildThreadsUrl = (
   selector = resolveClientRuntimeScopeSelector(),
@@ -281,33 +269,6 @@ export const fetchSuggestedQuestions = async (
   suggestedQuestionsCache.set(requestUrl, entry);
   writeStoredSuggestedQuestions(requestUrl, entry);
   return payload;
-};
-
-export const getProjectRecommendationQuestions = async (
-  selector: ClientRuntimeScopeSelector = resolveClientRuntimeScopeSelector(),
-) => {
-  const response = await fetch(
-    buildProjectRecommendationQuestionsUrl(selector),
-  );
-  return parseRestJsonResponse<ProjectRecommendationQuestionsPayload>(
-    response,
-    '加载项目推荐问题失败，请稍后重试。',
-  );
-};
-
-export const generateProjectRecommendationQuestions = async (
-  selector: ClientRuntimeScopeSelector = resolveClientRuntimeScopeSelector(),
-) => {
-  const response = await fetch(
-    buildProjectRecommendationQuestionsUrl(selector),
-    {
-      method: 'POST',
-    },
-  );
-  return parseRestJsonResponse<{ success: boolean }>(
-    response,
-    '生成项目推荐问题失败，请稍后重试。',
-  );
 };
 
 export const createThread = async (
@@ -511,7 +472,6 @@ export const createDashboardItem = async (
 export type {
   PreviewDataPayload,
   SuggestedQuestionsPayload,
-  ProjectRecommendationQuestionsPayload,
   InstantRecommendedQuestionsPayload,
   AdjustThreadResponseAnswerInput,
 };

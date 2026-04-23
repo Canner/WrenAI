@@ -3,6 +3,7 @@ import { ChartType } from '../../models/adaptor';
 
 describe('AskingController', () => {
   const originalBindingMode = process.env.WREN_AUTHORIZATION_BINDING_MODE;
+  const activeProjectId = 42;
 
   afterEach(() => {
     if (originalBindingMode === undefined) {
@@ -13,7 +14,7 @@ describe('AskingController', () => {
   });
 
   const runtimeIdentity = {
-    projectId: 42,
+    projectId: null,
     workspaceId: 'workspace-1',
     knowledgeBaseId: 'kb-1',
     kbSnapshotId: 'snapshot-1',
@@ -36,7 +37,7 @@ describe('AskingController', () => {
     ({
       runtimeScope: {
         selector: { runtimeScopeId: 'runtime-scope-1' },
-        project: { id: runtimeIdentity.projectId, language: 'EN' },
+        project: { id: activeProjectId, language: 'EN' },
         workspace: { id: runtimeIdentity.workspaceId },
         knowledgeBase: {
           id: runtimeIdentity.knowledgeBaseId,
@@ -52,9 +53,8 @@ describe('AskingController', () => {
       },
       telemetry: { sendEvent: jest.fn() },
       projectService: {
-        generateProjectRecommendationQuestions: jest.fn(),
         getProjectById: jest.fn().mockResolvedValue({
-          id: runtimeIdentity.projectId,
+          id: activeProjectId,
           language: 'EN',
           sampleDataset: null,
         }),
@@ -81,16 +81,8 @@ describe('AskingController', () => {
         createThread: jest.fn().mockResolvedValue({ id: 99 }),
         createThreadResponse: jest.fn().mockResolvedValue({ id: 199 }),
         createThreadResponseScoped: jest.fn().mockResolvedValue({ id: 199 }),
-        generateThreadRecommendationQuestions: jest
-          .fn()
-          .mockResolvedValue(undefined),
-        getThreadRecommendationQuestions: jest.fn().mockResolvedValue({
-          status: 'FINISHED',
-          questions: [],
-          error: null,
-        }),
         getThreadProject: jest.fn().mockResolvedValue({
-          id: runtimeIdentity.projectId,
+          id: activeProjectId,
           language: 'EN',
         }),
         getResponsesWithThreadScoped: jest.fn().mockResolvedValue([]),
@@ -219,17 +211,6 @@ describe('AskingController', () => {
     );
   });
 
-  it('scopes project recommendation generation to the active runtime identity', async () => {
-    const resolver = new AskingController();
-    const ctx = createContext();
-
-    await resolver.generateProjectRecommendationQuestions(null, {}, ctx);
-
-    expect(
-      ctx.projectService.generateProjectRecommendationQuestions,
-    ).toHaveBeenCalledWith(runtimeIdentity.projectId, 'runtime-scope-1');
-  });
-
   it('passes runtimeScopeId when generating thread response charts', async () => {
     const resolver = new AskingController();
     const ctx = createContext();
@@ -313,27 +294,6 @@ describe('AskingController', () => {
     );
   });
 
-  it('falls back to deployment.projectId when runtime scope project is absent', async () => {
-    const resolver = new AskingController();
-    const ctx = createContext({
-      runtimeScope: {
-        project: null,
-        deployment: { projectId: runtimeIdentity.projectId },
-        workspace: { id: runtimeIdentity.workspaceId },
-        knowledgeBase: { id: runtimeIdentity.knowledgeBaseId },
-        kbSnapshot: { id: runtimeIdentity.kbSnapshotId },
-        deployHash: runtimeIdentity.deployHash,
-        userId: runtimeIdentity.actorUserId,
-      },
-    });
-
-    await resolver.generateProjectRecommendationQuestions(null, {}, ctx);
-
-    expect(
-      ctx.projectService.generateProjectRecommendationQuestions,
-    ).toHaveBeenCalledWith(runtimeIdentity.projectId, null);
-  });
-
   it('scopes askingTask cancellation to the active runtime identity', async () => {
     const resolver = new AskingController();
     const ctx = createContext();
@@ -395,7 +355,7 @@ describe('AskingController', () => {
     const ctx = createContext({
       runtimeScope: {
         project: null,
-        deployment: { projectId: runtimeIdentity.projectId },
+        deployment: { projectId: activeProjectId },
         workspace: { id: runtimeIdentity.workspaceId },
         knowledgeBase: { id: runtimeIdentity.knowledgeBaseId },
         kbSnapshot: { id: runtimeIdentity.kbSnapshotId },
@@ -411,7 +371,7 @@ describe('AskingController', () => {
     );
 
     expect(ctx.projectService.getProjectById).toHaveBeenCalledWith(
-      runtimeIdentity.projectId,
+      activeProjectId,
     );
     expect(ctx.askingService.createAskingTask).toHaveBeenCalledWith(
       { question: 'What happened?' },
@@ -426,7 +386,7 @@ describe('AskingController', () => {
     const ctx = createContext({
       runtimeScope: {
         selector: { runtimeScopeId: 'runtime-scope-1' },
-        project: { id: runtimeIdentity.projectId, language: 'EN' },
+        project: { id: activeProjectId, language: 'EN' },
         knowledgeBase: {
           id: runtimeIdentity.knowledgeBaseId,
           language: 'ZH_TW',
@@ -457,7 +417,7 @@ describe('AskingController', () => {
     const ctx = createContext({
       runtimeScope: {
         selector: { runtimeScopeId: 'runtime-scope-old' },
-        project: { id: runtimeIdentity.projectId, language: 'EN' },
+        project: { id: activeProjectId, language: 'EN' },
         workspace: { id: runtimeIdentity.workspaceId },
         knowledgeBase: {
           id: runtimeIdentity.knowledgeBaseId,
@@ -484,7 +444,7 @@ describe('AskingController', () => {
     const ctx = createContext({
       runtimeScope: {
         selector: { runtimeScopeId: 'runtime-scope-1' },
-        project: { id: runtimeIdentity.projectId, language: 'EN' },
+        project: { id: activeProjectId, language: 'EN' },
         knowledgeBase: {
           id: runtimeIdentity.knowledgeBaseId,
           sampleDataset: 'ECOMMERCE',
@@ -578,25 +538,6 @@ describe('AskingController', () => {
       runtimeIdentity,
       'runtime-scope-1',
     );
-  });
-
-  it('passes runtime scope when generating thread recommended questions', async () => {
-    const resolver = new AskingController();
-    const ctx = createContext();
-
-    await resolver.generateThreadRecommendationQuestions(
-      null,
-      { threadId: 12 },
-      ctx,
-    );
-
-    expect(ctx.askingService.assertThreadScope).toHaveBeenCalledWith(
-      12,
-      runtimeIdentity,
-    );
-    expect(
-      ctx.askingService.generateThreadRecommendationQuestions,
-    ).toHaveBeenCalledWith(12, 'runtime-scope-1');
   });
 
   it('scopes instant recommended questions lookup to the active runtime identity', async () => {
@@ -718,21 +659,13 @@ describe('AskingController', () => {
     );
   });
 
-  it('records access audit when reading adjustment task and thread recommendations', async () => {
+  it('records access audit when reading adjustment task', async () => {
     const resolver = new AskingController();
     const ctx = createContext();
 
     await resolver.getAdjustmentTask(null, { taskId: 'task-1' }, ctx);
-    await resolver.getThreadRecommendationQuestions(
-      null,
-      { threadId: 12 },
-      ctx,
-    );
 
     expect(ctx.askingService.getAdjustmentTask).toHaveBeenCalledWith('task-1');
-    expect(
-      ctx.askingService.getThreadRecommendationQuestions,
-    ).toHaveBeenCalledWith(12);
     expect(ctx.auditEventRepository.createOne).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'knowledge_base.read',
@@ -741,17 +674,6 @@ describe('AskingController', () => {
         result: 'allowed',
         payloadJson: {
           operation: 'get_adjustment_task',
-        },
-      }),
-    );
-    expect(ctx.auditEventRepository.createOne).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: 'knowledge_base.read',
-        resourceType: 'thread',
-        resourceId: '12',
-        result: 'allowed',
-        payloadJson: {
-          operation: 'get_thread_recommendation_questions',
         },
       }),
     );

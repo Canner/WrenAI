@@ -8,6 +8,7 @@ import {
   snakeCase,
 } from 'lodash';
 import { AskFeedbackResult, AskResult } from '../models/adaptor';
+import { normalizeCanonicalPersistedRuntimeIdentity } from '@server/utils/persistedRuntimeIdentity';
 
 export type AskingTaskDetail =
   | AskResult
@@ -97,18 +98,23 @@ export class AskingTaskRepository
     filter: Partial<Pick<AskingTask, 'id' | 'queryId'>>,
     scope: AskingTaskRuntimeScope,
   ): Promise<AskingTask | null> {
+    const normalizedScope = this.normalizeRuntimeScope(scope);
     const query = this.knex(this.tableName).where(
       this.transformToDBData(filter),
     );
     this.applyBridgeScopeField(
       query,
-      scope.projectId,
-      this.hasCanonicalRuntimeScope(scope),
+      normalizedScope.projectId,
+      this.hasCanonicalRuntimeScope(normalizedScope),
     );
-    this.applyScopeField(query, 'workspaceId', scope.workspaceId);
-    this.applyScopeField(query, 'knowledgeBaseId', scope.knowledgeBaseId);
-    this.applyScopeField(query, 'kbSnapshotId', scope.kbSnapshotId);
-    this.applyScopeField(query, 'deployHash', scope.deployHash);
+    this.applyScopeField(query, 'workspaceId', normalizedScope.workspaceId);
+    this.applyScopeField(
+      query,
+      'knowledgeBaseId',
+      normalizedScope.knowledgeBaseId,
+    );
+    this.applyScopeField(query, 'kbSnapshotId', normalizedScope.kbSnapshotId);
+    this.applyScopeField(query, 'deployHash', normalizedScope.deployHash);
 
     const result = await query.first();
     return result ? this.transformFromDBData(result) : null;
@@ -151,6 +157,16 @@ export class AskingTaskRepository
       scope.kbSnapshotId ||
       scope.deployHash,
     );
+  }
+
+  private normalizeRuntimeScope(scope: AskingTaskRuntimeScope) {
+    return normalizeCanonicalPersistedRuntimeIdentity({
+      projectId: scope.projectId ?? null,
+      workspaceId: scope.workspaceId ?? null,
+      knowledgeBaseId: scope.knowledgeBaseId ?? null,
+      kbSnapshotId: scope.kbSnapshotId ?? null,
+      deployHash: scope.deployHash ?? null,
+    });
   }
 
   protected override transformFromDBData = (data: any) => {

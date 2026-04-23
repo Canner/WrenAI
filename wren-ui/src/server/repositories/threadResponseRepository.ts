@@ -31,10 +31,10 @@ export {
 import {
   hasCanonicalThreadResponseScope,
   hydrateJoinedThreadResponseRuntimeScope,
-  transformJoinedThreadResponses,
   transformThreadResponseFromDBData,
   transformThreadResponseToDBData,
 } from './threadResponseRepositoryTransforms';
+import { normalizeCanonicalPersistedRuntimeIdentity } from '@server/utils/persistedRuntimeIdentity';
 
 export class ThreadResponseRepository
   extends BaseRepository<ThreadResponse>
@@ -88,7 +88,7 @@ export class ThreadResponseRepository
     );
 
     const result = await query.first();
-    return result ? this.transformFromDBData(result) : null;
+    return result ? this.hydrateJoinedRuntimeScope(result) : null;
   }
 
   public async findUnfinishedBreakdownResponsesByWorkspaceId(
@@ -210,39 +210,48 @@ export class ThreadResponseRepository
   }
 
   private buildRuntimeScopedQuery(scope: ThreadResponseRuntimeScope) {
+    const normalizedScope = this.normalizeRuntimeScope(scope);
     const query = this.knex(this.tableName)
-      .select(`${this.tableName}.*`)
+      .select(
+        `${this.tableName}.*`,
+        'thread.project_id AS thread_project_id',
+        'thread.workspace_id AS thread_workspace_id',
+        'thread.knowledge_base_id AS thread_knowledge_base_id',
+        'thread.kb_snapshot_id AS thread_kb_snapshot_id',
+        'thread.deploy_hash AS thread_deploy_hash',
+        'thread.actor_user_id AS thread_actor_user_id',
+      )
       .leftJoin('thread', 'thread.id', `${this.tableName}.thread_id`);
 
     this.applyCoalescedBridgeScope(
       query,
-      scope.projectId,
-      this.hasCanonicalScope(scope),
+      normalizedScope.projectId,
+      this.hasCanonicalScope(normalizedScope),
     );
 
     this.applyCoalescedScopeField(
       query,
       'workspace_id',
       'workspace_id',
-      scope.workspaceId,
+      normalizedScope.workspaceId,
     );
     this.applyCoalescedScopeField(
       query,
       'knowledge_base_id',
       'knowledge_base_id',
-      scope.knowledgeBaseId,
+      normalizedScope.knowledgeBaseId,
     );
     this.applyCoalescedScopeField(
       query,
       'kb_snapshot_id',
       'kb_snapshot_id',
-      scope.kbSnapshotId,
+      normalizedScope.kbSnapshotId,
     );
     this.applyCoalescedScopeField(
       query,
       'deploy_hash',
       'deploy_hash',
-      scope.deployHash,
+      normalizedScope.deployHash,
     );
 
     return query;
@@ -266,7 +275,7 @@ export class ThreadResponseRepository
   }
 
   private transformJoinedResults(results: any[]): ThreadResponse[] {
-    return transformJoinedThreadResponses(results);
+    return results.map((result) => this.hydrateJoinedRuntimeScope(result));
   }
 
   private applyCoalescedScopeField(
@@ -286,6 +295,18 @@ export class ThreadResponseRepository
 
   private hasCanonicalScope(scope: ThreadResponseRuntimeScope) {
     return hasCanonicalThreadResponseScope(scope);
+  }
+
+  private normalizeRuntimeScope(
+    scope: ThreadResponseRuntimeScope,
+  ): ThreadResponseRuntimeScope {
+    return normalizeCanonicalPersistedRuntimeIdentity({
+      projectId: scope.projectId ?? null,
+      workspaceId: scope.workspaceId ?? null,
+      knowledgeBaseId: scope.knowledgeBaseId ?? null,
+      kbSnapshotId: scope.kbSnapshotId ?? null,
+      deployHash: scope.deployHash ?? null,
+    });
   }
 
   public async updateOne(
@@ -331,6 +352,7 @@ export class ThreadResponseRepository
     }>,
     queryOptions?: IQueryOptions,
   ): Promise<ThreadResponse | null> {
+    const normalizedScope = this.normalizeRuntimeScope(scope);
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
     const scopedIdQuery = executer(this.tableName)
       .select(`${this.tableName}.id`)
@@ -339,32 +361,32 @@ export class ThreadResponseRepository
 
     this.applyCoalescedBridgeScope(
       scopedIdQuery,
-      scope.projectId,
-      this.hasCanonicalScope(scope),
+      normalizedScope.projectId,
+      this.hasCanonicalScope(normalizedScope),
     );
     this.applyCoalescedScopeField(
       scopedIdQuery,
       'workspace_id',
       'workspace_id',
-      scope.workspaceId,
+      normalizedScope.workspaceId,
     );
     this.applyCoalescedScopeField(
       scopedIdQuery,
       'knowledge_base_id',
       'knowledge_base_id',
-      scope.knowledgeBaseId,
+      normalizedScope.knowledgeBaseId,
     );
     this.applyCoalescedScopeField(
       scopedIdQuery,
       'kb_snapshot_id',
       'kb_snapshot_id',
-      scope.kbSnapshotId,
+      normalizedScope.kbSnapshotId,
     );
     this.applyCoalescedScopeField(
       scopedIdQuery,
       'deploy_hash',
       'deploy_hash',
-      scope.deployHash,
+      normalizedScope.deployHash,
     );
 
     const [result] = await executer(this.tableName)
@@ -382,6 +404,7 @@ export class ThreadResponseRepository
     leaseExpiresAt: string,
     queryOptions?: IQueryOptions,
   ): Promise<ThreadResponse | null> {
+    const normalizedScope = this.normalizeRuntimeScope(scope);
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
     const scopedIdQuery = executer(this.tableName)
       .select(`${this.tableName}.id`)
@@ -399,32 +422,32 @@ export class ThreadResponseRepository
 
     this.applyCoalescedBridgeScope(
       scopedIdQuery,
-      scope.projectId,
-      this.hasCanonicalScope(scope),
+      normalizedScope.projectId,
+      this.hasCanonicalScope(normalizedScope),
     );
     this.applyCoalescedScopeField(
       scopedIdQuery,
       'workspace_id',
       'workspace_id',
-      scope.workspaceId,
+      normalizedScope.workspaceId,
     );
     this.applyCoalescedScopeField(
       scopedIdQuery,
       'knowledge_base_id',
       'knowledge_base_id',
-      scope.knowledgeBaseId,
+      normalizedScope.knowledgeBaseId,
     );
     this.applyCoalescedScopeField(
       scopedIdQuery,
       'kb_snapshot_id',
       'kb_snapshot_id',
-      scope.kbSnapshotId,
+      normalizedScope.kbSnapshotId,
     );
     this.applyCoalescedScopeField(
       scopedIdQuery,
       'deploy_hash',
       'deploy_hash',
-      scope.deployHash,
+      normalizedScope.deployHash,
     );
 
     const [result] = await executer(this.tableName)

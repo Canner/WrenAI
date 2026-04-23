@@ -22,6 +22,26 @@ const logger = getLogger('DashboardService');
 const toErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
+const hasCanonicalDashboardBinding = (
+  binding?: DashboardRuntimeBinding,
+): boolean =>
+  Boolean(
+    binding?.workspaceId ||
+    binding?.knowledgeBaseId ||
+    binding?.kbSnapshotId ||
+    binding?.deployHash,
+  );
+
+export const isUnboundProjectDashboard = (
+  dashboard: Dashboard,
+  bridgeProjectId: number,
+) =>
+  dashboard.projectId === bridgeProjectId &&
+  !dashboard.workspaceId &&
+  !dashboard.knowledgeBaseId &&
+  !dashboard.kbSnapshotId &&
+  !dashboard.deployHash;
+
 export const buildDashboardRuntimeBindingPatch = (
   dashboard: Dashboard,
   binding: DashboardRuntimeBinding,
@@ -47,6 +67,8 @@ export const buildDashboardRuntimeBindingPatch = (
   }
 
   const patch: Partial<Dashboard> = {};
+  const shouldClearProjectBridge =
+    hasCanonicalDashboardBinding(binding) && dashboard.projectId != null;
 
   if (
     binding.workspaceId !== undefined &&
@@ -78,6 +100,9 @@ export const buildDashboardRuntimeBindingPatch = (
   ) {
     patch.createdBy = binding.createdBy ?? null;
   }
+  if (shouldClearProjectBridge) {
+    patch.projectId = null;
+  }
 
   return patch;
 };
@@ -90,7 +115,9 @@ export const findProjectDashboardByProjectBridge = async (
     projectId: bridgeProjectId,
   });
   return resolveDefaultDashboard(
-    dashboards.filter((dashboard) => dashboard.projectId === bridgeProjectId),
+    dashboards.filter((dashboard) =>
+      isUnboundProjectDashboard(dashboard, bridgeProjectId),
+    ),
   );
 };
 
@@ -102,7 +129,9 @@ export const findUnboundProjectDashboard = async (
     projectId: bridgeProjectId,
   });
   return resolveDefaultDashboard(
-    dashboards.filter((dashboard) => !dashboard.knowledgeBaseId),
+    dashboards.filter((dashboard) =>
+      isUnboundProjectDashboard(dashboard, bridgeProjectId),
+    ),
   );
 };
 
@@ -141,7 +170,9 @@ export const createScopedDashboard = async (
   const payload = {
     isDefault,
     name,
-    projectId: bridgeProjectId ?? null,
+    projectId: hasCanonicalDashboardBinding(binding)
+      ? null
+      : (bridgeProjectId ?? null),
     workspaceId: binding?.workspaceId ?? null,
     knowledgeBaseId: binding?.knowledgeBaseId ?? null,
     kbSnapshotId: binding?.kbSnapshotId ?? null,

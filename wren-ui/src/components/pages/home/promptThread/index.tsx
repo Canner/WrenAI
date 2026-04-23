@@ -15,11 +15,13 @@ const THREAD_VISIBLE_RESPONSE_BATCH = 24;
 const StyledPromptThread = styled.div`
   width: 100%;
   max-width: 100%;
+  min-width: 0;
   margin-left: auto;
   margin-right: auto;
   display: flex;
   flex-direction: column;
   gap: 0;
+  overflow-x: hidden;
 
   h4.ant-typography {
     margin-top: 10px;
@@ -107,6 +109,32 @@ const AnswerResultTemplate: React.FC<
 
 const AnswerResultIterator = makeIterable(AnswerResultTemplate);
 
+const resolvePromptThreadScrollContainer = (
+  element: HTMLElement | null,
+): HTMLElement | null => {
+  if (!element || typeof window === 'undefined') {
+    return null;
+  }
+
+  let current = element.parentElement;
+  while (current) {
+    const style = window.getComputedStyle(current);
+    const canScrollVertically =
+      /(auto|scroll)/.test(style.overflowY) &&
+      current.scrollHeight > current.clientHeight;
+
+    if (canScrollVertically) {
+      return current;
+    }
+
+    current = current.parentElement;
+  }
+
+  return document.scrollingElement instanceof HTMLElement
+    ? document.scrollingElement
+    : null;
+};
+
 export default function PromptThread() {
   const router = useRouter();
   const divRef = useRef<HTMLDivElement>(null);
@@ -177,7 +205,7 @@ export default function PromptThread() {
 
   const triggerScrollToBottom = (behavior?: ScrollBehavior) => {
     if (responses.length <= 1) return;
-    const contentLayout = divRef.current?.parentElement;
+    const contentLayout = resolvePromptThreadScrollContainer(divRef.current);
     const allElements = (divRef.current?.querySelectorAll(
       '[data-jsid="answerResult"]',
     ) || []) as HTMLElement[];
@@ -194,7 +222,7 @@ export default function PromptThread() {
 
   useEffect(() => {
     // reset to top when thread page changes
-    const contentLayout = divRef.current?.parentElement;
+    const contentLayout = resolvePromptThreadScrollContainer(divRef.current);
     if (contentLayout) contentLayout.scrollTo({ top: 0 });
   }, [router.query]);
 

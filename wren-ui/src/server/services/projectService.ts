@@ -10,22 +10,7 @@ import {
   RecommendConstraint,
 } from './metadataService';
 import { DataSourceName } from '../types';
-import {
-  RecommendationQuestion,
-  RecommendationQuestionStatus,
-  WrenAIError,
-  WrenAILanguage,
-  AskRuntimeIdentity,
-} from '@server/models/adaptor';
 import { encryptConnectionInfo } from '../dataSource';
-import { IWrenAIAdaptor } from '../adaptors';
-import { RecommendQuestionResultStatus } from './askingService';
-import { IMDLService } from './mdlService';
-import { ProjectRecommendQuestionBackgroundTracker } from '../backgrounds';
-import { ITelemetry } from '../telemetry/telemetry';
-import { getConfig } from '../config';
-
-const config = getConfig();
 
 const logger = getLogger('ProjectService');
 logger.level = 'debug';
@@ -45,11 +30,6 @@ export interface ProjectData {
   connectionInfo: WREN_AI_CONNECTION_INFO;
 }
 
-export interface ProjectRecommendationQuestionsResult {
-  status: RecommendQuestionResultStatus;
-  questions: RecommendationQuestion[];
-  error: WrenAIError | null;
-}
 export interface IProjectService {
   createProject: (projectData: ProjectData) => Promise<Project>;
   updateProject: (
@@ -69,51 +49,20 @@ export interface IProjectService {
     persistCredentialDir: string,
   ) => string;
   deleteProject: (projectId: number) => Promise<void>;
-  getProjectRecommendationQuestions: (
-    projectId: number,
-  ) => Promise<ProjectRecommendationQuestionsResult>;
-
-  // recommend questions
-  generateProjectRecommendationQuestions: (
-    projectId: number,
-    runtimeScopeId?: string | null,
-  ) => Promise<void>;
-  stopBackgroundTrackers: () => void;
 }
 
 export class ProjectService implements IProjectService {
   private projectRepository: IProjectRepository;
   private metadataService: IConnectionMetadataService;
-  private mdlService: IMDLService;
-  private wrenAIAdaptor: IWrenAIAdaptor;
-  private projectRecommendQuestionBackgroundTracker: ProjectRecommendQuestionBackgroundTracker;
   constructor({
     projectRepository,
     metadataService,
-    mdlService,
-    wrenAIAdaptor,
-    telemetry,
   }: {
     projectRepository: IProjectRepository;
     metadataService: IConnectionMetadataService;
-    mdlService: IMDLService;
-    wrenAIAdaptor: IWrenAIAdaptor;
-    telemetry: ITelemetry;
   }) {
     this.projectRepository = projectRepository;
     this.metadataService = metadataService;
-    this.mdlService = mdlService;
-    this.wrenAIAdaptor = wrenAIAdaptor;
-    this.projectRecommendQuestionBackgroundTracker =
-      new ProjectRecommendQuestionBackgroundTracker({
-        projectRepository,
-        telemetry,
-        wrenAIAdaptor,
-      });
-  }
-
-  public stopBackgroundTrackers(): void {
-    this.projectRecommendQuestionBackgroundTracker.stop();
   }
 
   public async updateProject(
@@ -125,68 +74,6 @@ export class ProjectService implements IProjectService {
 
   public async getProjectConnectionVersion(project: Project): Promise<string> {
     return await this.metadataService.getVersion(project);
-  }
-
-  public async generateProjectRecommendationQuestions(
-    projectId: number,
-    runtimeScopeId?: string | null,
-  ): Promise<void> {
-    const project = await this.getProjectById(projectId);
-    if (!project) {
-      throw new Error(`Project not found`);
-    }
-    const { manifest } = await this.mdlService.makeCurrentModelMDL(project.id);
-    const recommendQuestionResult =
-      await this.wrenAIAdaptor.generateRecommendationQuestions({
-        manifest,
-        runtimeScopeId: runtimeScopeId || undefined,
-        runtimeIdentity: {
-          projectId: project.id,
-        } as AskRuntimeIdentity,
-        ...this.getProjectRecommendationQuestionsConfig(project),
-      });
-
-    const updatedProject = await this.projectRepository.updateOne(project.id, {
-      queryId: recommendQuestionResult.queryId,
-      questionsStatus: RecommendationQuestionStatus.GENERATING,
-      questions: [],
-      questionsError: undefined,
-    });
-
-    if (
-      !this.projectRecommendQuestionBackgroundTracker.isExist(updatedProject)
-    ) {
-      this.projectRecommendQuestionBackgroundTracker.addTask(updatedProject);
-    } else {
-      logger.debug(
-        `Generate Project Recommendation Questions Task ${updatedProject.id} already exists, skip adding`,
-      );
-    }
-  }
-
-  public async getProjectRecommendationQuestions(projectId: number) {
-    const project = await this.getProjectById(projectId);
-    if (!project) {
-      throw new Error(`Project not found`);
-    }
-    const result: ProjectRecommendationQuestionsResult = {
-      status: RecommendQuestionResultStatus.NOT_STARTED,
-      questions: [],
-      error: null,
-    };
-    if (project.queryId) {
-      if (
-        project.questionsStatus &&
-        project.questionsStatus in RecommendQuestionResultStatus
-      ) {
-        const statusKey =
-          project.questionsStatus as keyof typeof RecommendQuestionResultStatus;
-        result.status = RecommendQuestionResultStatus[statusKey];
-      }
-      result.questions = project.questions || [];
-      result.error = (project.questionsError || null) as WrenAIError | null;
-    }
-    return result;
   }
 
   public async getProjectById(projectId: number): Promise<Project> {
@@ -259,21 +146,5 @@ export class ProjectService implements IProjectService {
       },
       {} as Record<string, unknown>,
     );
-  }
-
-  private getProjectRecommendationQuestionsConfig(project: Project) {
-    const languageKey = project.language;
-    const language =
-      languageKey && languageKey in WrenAILanguage
-        ? WrenAILanguage[languageKey as keyof typeof WrenAILanguage]
-        : WrenAILanguage.EN;
-    return {
-      maxCategories: config.projectRecommendationQuestionMaxCategories,
-      maxQuestions: config.projectRecommendationQuestionsMaxQuestions,
-      regenerate: true,
-      configuration: {
-        language,
-      },
-    };
   }
 }

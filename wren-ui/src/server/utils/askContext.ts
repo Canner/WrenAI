@@ -5,6 +5,7 @@ import {
 } from '@server/models/adaptor';
 import { ISkillService } from '@server/services/skillService';
 import { SkillDefinition } from '@server/repositories';
+import { normalizeCanonicalPersistedRuntimeIdentity } from './persistedRuntimeIdentity';
 
 interface BuildAskRuntimeContextOptions {
   runtimeIdentity?: AskRuntimeIdentity | null;
@@ -24,17 +25,24 @@ type AskRuntimeIdentitySource = {
 export const toAskRuntimeIdentity = (
   runtimeIdentity?: AskRuntimeIdentitySource | null,
 ): AskRuntimeIdentity | undefined => {
-  if (!runtimeIdentity?.workspaceId || !runtimeIdentity?.knowledgeBaseId) {
+  const normalizedRuntimeIdentity = runtimeIdentity
+    ? normalizeCanonicalPersistedRuntimeIdentity(runtimeIdentity)
+    : null;
+
+  if (
+    !normalizedRuntimeIdentity?.workspaceId ||
+    !normalizedRuntimeIdentity?.knowledgeBaseId
+  ) {
     return undefined;
   }
 
   return {
-    projectId: runtimeIdentity.projectId ?? undefined,
-    workspaceId: runtimeIdentity.workspaceId,
-    knowledgeBaseId: runtimeIdentity.knowledgeBaseId,
-    kbSnapshotId: runtimeIdentity.kbSnapshotId || null,
-    deployHash: runtimeIdentity.deployHash || null,
-    actorUserId: runtimeIdentity.actorUserId || null,
+    projectId: normalizedRuntimeIdentity.projectId ?? undefined,
+    workspaceId: normalizedRuntimeIdentity.workspaceId,
+    knowledgeBaseId: normalizedRuntimeIdentity.knowledgeBaseId,
+    kbSnapshotId: normalizedRuntimeIdentity.kbSnapshotId || null,
+    deployHash: normalizedRuntimeIdentity.deployHash || null,
+    actorUserId: normalizedRuntimeIdentity.actorUserId || null,
   };
 };
 

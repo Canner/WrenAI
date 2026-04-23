@@ -26,5 +26,11 @@ describe('threadWorkbenchMessages', () => {
     expect(getThreadWorkbenchMessages('en-US').footer.helpfulPrompt).toBe(
       'Was this result helpful?',
     );
+    expect(
+      getThreadWorkbenchMessages('zh-CN').recommendation.triggerLabel,
+    ).toBe('推荐几个问题给我');
+    expect(
+      getThreadWorkbenchMessages('en-US').recommendation.categories.chartRefine,
+    ).toBe('Refine chart');
   });
 });

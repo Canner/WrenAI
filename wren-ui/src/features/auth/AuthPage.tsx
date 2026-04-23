@@ -10,9 +10,6 @@ import {
   Brand,
   BrandMark,
   BrandTitle,
-  CardCopy,
-  CardHeader,
-  CardTitle,
   Intro,
   IntroBody,
   IntroCopy,
@@ -274,11 +271,6 @@ export default function AuthPage() {
         </Intro>
 
         <LoginCard>
-          <CardHeader>
-            <CardTitle>登录工作空间</CardTitle>
-            <CardCopy>使用你的工作空间账号继续。</CardCopy>
-          </CardHeader>
-
           {error ? (
             <Alert
               type="error"

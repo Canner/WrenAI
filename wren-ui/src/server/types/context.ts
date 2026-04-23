@@ -56,11 +56,7 @@ import {
   IScheduleService,
 } from '@server/services';
 import { ITelemetry } from '@server/telemetry/telemetry';
-import {
-  ProjectRecommendQuestionBackgroundTracker,
-  ThreadRecommendQuestionBackgroundTracker,
-  DashboardCacheBackgroundTracker,
-} from '@server/backgrounds';
+import { DashboardCacheBackgroundTracker } from '@server/backgrounds';
 import { ISqlPairService } from '../services/sqlPairService';
 import { NextApiRequest } from 'next';
 
@@ -126,7 +122,5 @@ export interface IContext {
   workspaceMemberRepository: IWorkspaceMemberRepository;
 
   // background trackers
-  projectRecommendQuestionBackgroundTracker: ProjectRecommendQuestionBackgroundTracker;
-  threadRecommendQuestionBackgroundTracker: ThreadRecommendQuestionBackgroundTracker;
   dashboardCacheBackgroundTracker: DashboardCacheBackgroundTracker;
 }

@@ -201,9 +201,6 @@ export const initComponents = () => {
   const projectService = new ProjectService({
     projectRepository,
     metadataService,
-    mdlService,
-    wrenAIAdaptor,
-    telemetry,
   }) as unknown as IProjectService;
   const modelService = new ModelService({
     projectService,
@@ -390,50 +387,29 @@ export const initComponents = () => {
     knowledgeBaseRepository,
     kbSnapshotRepository,
   });
-  const {
-    projectRecommendQuestionBackgroundTracker,
-    threadRecommendQuestionBackgroundTracker,
-    dashboardCacheBackgroundTracker,
-    scheduleWorker,
-  } = createBackgroundTrackers({
-    telemetry,
-    wrenAIAdaptor,
-    projectRepository,
-    threadRepository,
-    dashboardRepository,
-    dashboardItemRepository,
-    dashboardItemRefreshJobRepository,
-    kbSnapshotRepository,
-    projectService,
-    deployService,
-    queryService,
-    scheduleJobRepository,
-    scheduleJobRunRepository,
-    auditEventRepository,
-  });
+  const { dashboardCacheBackgroundTracker, scheduleWorker } =
+    createBackgroundTrackers({
+      dashboardRepository,
+      dashboardItemRepository,
+      dashboardItemRefreshJobRepository,
+      kbSnapshotRepository,
+      projectService,
+      deployService,
+      queryService,
+      scheduleJobRepository,
+      scheduleJobRunRepository,
+      auditEventRepository,
+    });
 
   if (isTestEnvironment) {
-    projectService.stopBackgroundTrackers();
     askingService.stopBackgroundTrackers();
     askingTaskTracker.stopPolling();
-    projectRecommendQuestionBackgroundTracker.stop();
-    threadRecommendQuestionBackgroundTracker.stop();
     dashboardCacheBackgroundTracker.stop();
     scheduleWorker.stop();
   } else {
     void askingService
       .initialize()
       .catch((error) => reportInitFailure('askingService', error));
-    void projectRecommendQuestionBackgroundTracker
-      .initialize()
-      .catch((error) =>
-        reportInitFailure('projectRecommendQuestionBackgroundTracker', error),
-      );
-    void threadRecommendQuestionBackgroundTracker
-      .initialize()
-      .catch((error) =>
-        reportInitFailure('threadRecommendQuestionBackgroundTracker', error),
-      );
   }
 
   return {
@@ -514,13 +490,11 @@ export const initComponents = () => {
     runtimeScopeResolver,
     askingTaskTracker,
     scheduleWorker,
-    projectRecommendQuestionBackgroundTracker,
-    threadRecommendQuestionBackgroundTracker,
     dashboardCacheBackgroundTracker,
   };
 };
 type Components = ReturnType<typeof initComponents>;
-const COMPONENTS_RUNTIME_VERSION = 6;
+const COMPONENTS_RUNTIME_VERSION = 7;
 export const components: Components = getVersionedGlobalSingleton({
   factory: initComponents,
   singletonKey: '__wrenComponents__',

@@ -7,12 +7,7 @@ import {
   mapValues,
   snakeCase,
 } from 'lodash';
-
-export interface ThreadRecommendationQuestionResult {
-  question: string;
-  category?: string | null;
-  sql: string;
-}
+import { normalizeCanonicalPersistedRuntimeIdentity } from '@server/utils/persistedRuntimeIdentity';
 
 export interface Thread {
   id: number; // ID
@@ -25,12 +20,6 @@ export interface Thread {
   deployHash?: string | null;
   actorUserId?: string | null;
   summary: string; // Thread summary
-
-  // recommend question
-  queryId?: string; // Query ID
-  questions?: ThreadRecommendationQuestionResult[]; // Recommended questions
-  questionsStatus?: string; // Status of the recommended questions
-  questionsError?: object; // Error of the recommended questions
 }
 
 export type ThreadRuntimeScope = {
@@ -53,12 +42,7 @@ export class ThreadRepository
   extends BaseRepository<Thread>
   implements IThreadRepository
 {
-  private readonly jsonbColumns = [
-    'questions',
-    'questionsError',
-    'knowledgeBaseIds',
-    'selectedSkillIds',
-  ];
+  private readonly jsonbColumns = ['knowledgeBaseIds', 'selectedSkillIds'];
 
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'thread' });
@@ -82,23 +66,38 @@ export class ThreadRepository
   }
 
   private buildRuntimeScopedQuery(scope: ThreadRuntimeScope) {
+    const normalizedScope = this.normalizeRuntimeScope(scope);
     const query = this.knex(this.tableName);
-    const isWorkspaceWideQuery = this.isWorkspaceWideScope(scope);
+    const isWorkspaceWideQuery = this.isWorkspaceWideScope(normalizedScope);
 
     this.applyBridgeScopeField(
       query,
-      scope.projectId,
-      this.hasCanonicalScope(scope),
+      normalizedScope.projectId,
+      this.hasCanonicalScope(normalizedScope),
     );
 
-    this.applyScopeField(query, 'workspaceId', scope.workspaceId);
+    this.applyScopeField(query, 'workspaceId', normalizedScope.workspaceId);
     if (!isWorkspaceWideQuery) {
-      this.applyScopeField(query, 'knowledgeBaseId', scope.knowledgeBaseId);
-      this.applyScopeField(query, 'kbSnapshotId', scope.kbSnapshotId);
-      this.applyScopeField(query, 'deployHash', scope.deployHash);
+      this.applyScopeField(
+        query,
+        'knowledgeBaseId',
+        normalizedScope.knowledgeBaseId,
+      );
+      this.applyScopeField(query, 'kbSnapshotId', normalizedScope.kbSnapshotId);
+      this.applyScopeField(query, 'deployHash', normalizedScope.deployHash);
     }
 
     return query;
+  }
+
+  private normalizeRuntimeScope(scope: ThreadRuntimeScope): ThreadRuntimeScope {
+    return normalizeCanonicalPersistedRuntimeIdentity({
+      projectId: scope.projectId ?? null,
+      workspaceId: scope.workspaceId ?? null,
+      knowledgeBaseId: scope.knowledgeBaseId ?? null,
+      kbSnapshotId: scope.kbSnapshotId ?? null,
+      deployHash: scope.deployHash ?? null,
+    });
   }
 
   private applyBridgeScopeField(

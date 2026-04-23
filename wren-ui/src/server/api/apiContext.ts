@@ -119,10 +119,6 @@ export const buildApiContextFromRequest = async ({
     authIdentityRepository: components.authIdentityRepository,
     authSessionRepository: components.authSessionRepository,
     workspaceMemberRepository: components.workspaceMemberRepository,
-    projectRecommendQuestionBackgroundTracker:
-      components.projectRecommendQuestionBackgroundTracker,
-    threadRecommendQuestionBackgroundTracker:
-      components.threadRecommendQuestionBackgroundTracker,
     dashboardCacheBackgroundTracker: components.dashboardCacheBackgroundTracker,
   };
 };

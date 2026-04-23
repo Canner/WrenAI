@@ -57,6 +57,48 @@ describe('DashboardService', () => {
       expect(result.projectId).toBe(7);
     });
 
+    it('should create an unbound project dashboard instead of reusing a knowledge-base bound dashboard for legacy project scope', async () => {
+      mockDashboardRepository.findAllBy.mockResolvedValue([
+        {
+          id: 20,
+          projectId: 7,
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snap-1',
+          deployHash: 'deploy-1',
+          name: 'KB Dashboard',
+        },
+      ]);
+      mockDashboardRepository.createOne.mockResolvedValue({
+        id: 21,
+        projectId: 7,
+        workspaceId: null,
+        knowledgeBaseId: null,
+        kbSnapshotId: null,
+        deployHash: null,
+        createdBy: null,
+        isDefault: true,
+        name: 'Dashboard',
+      });
+
+      const result = await dashboardService.getCurrentDashboardForScope(7);
+
+      expect(mockDashboardRepository.findAllBy).toHaveBeenCalledWith({
+        projectId: 7,
+      });
+      expect(mockDashboardRepository.createOne).toHaveBeenCalledWith({
+        isDefault: true,
+        name: 'Dashboard',
+        projectId: 7,
+        workspaceId: null,
+        knowledgeBaseId: null,
+        kbSnapshotId: null,
+        deployHash: null,
+        createdBy: null,
+      });
+      expect(result?.id).toBe(21);
+      expect(result?.knowledgeBaseId).toBeNull();
+    });
+
     it('should prefer knowledge-base bound dashboard when scope binding exists', async () => {
       mockDashboardRepository.findAllBy.mockResolvedValueOnce([
         {
@@ -109,6 +151,7 @@ describe('DashboardService', () => {
         knowledgeBaseId: 'kb-1',
       });
       expect(mockDashboardRepository.updateOne).toHaveBeenCalledWith(3, {
+        projectId: null,
         kbSnapshotId: 'snap-1',
         deployHash: 'deploy-1',
         createdBy: 'user-1',
@@ -137,6 +180,15 @@ describe('DashboardService', () => {
         createdBy: 'user-1',
         name: 'Dashboard',
       });
+      mockDashboardRepository.updateOne.mockResolvedValueOnce({
+        id: 30,
+        projectId: null,
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snap-1',
+        deployHash: 'deploy-1',
+        createdBy: 'user-1',
+        name: 'Dashboard',
+      });
 
       const result = await dashboardService.getCurrentDashboardForScope(null, {
         knowledgeBaseId: 'kb-1',
@@ -151,8 +203,11 @@ describe('DashboardService', () => {
       expect(mockDashboardRepository.findOneBy).toHaveBeenCalledWith({
         id: 30,
       });
-      expect(mockDashboardRepository.updateOne).not.toHaveBeenCalled();
+      expect(mockDashboardRepository.updateOne).toHaveBeenCalledWith(30, {
+        projectId: null,
+      });
       expect(result?.id).toBe(30);
+      expect(result?.projectId).toBeNull();
     });
 
     it('should create a bound dashboard when no scoped dashboard exists and no legacy project bridge is available', async () => {
@@ -228,6 +283,7 @@ describe('DashboardService', () => {
         projectId: 9,
       });
       expect(mockDashboardRepository.updateOne).toHaveBeenCalledWith(4, {
+        projectId: null,
         knowledgeBaseId: 'kb-9',
         kbSnapshotId: 'snap-9',
         deployHash: 'deploy-9',
@@ -266,7 +322,7 @@ describe('DashboardService', () => {
 
       expect(mockDashboardRepository.createOne).toHaveBeenCalledWith({
         name: 'Dashboard',
-        projectId: 11,
+        projectId: null,
         workspaceId: null,
         knowledgeBaseId: 'kb-11',
         kbSnapshotId: 'snap-11',
@@ -275,6 +331,48 @@ describe('DashboardService', () => {
         isDefault: true,
       });
       expect(result?.id).toBe(6);
+    });
+
+    it('should ignore workspace-bound legacy dashboards when resolving a project-only dashboard', async () => {
+      mockDashboardRepository.findAllBy.mockResolvedValue([
+        {
+          id: 70,
+          projectId: 14,
+          workspaceId: 'ws-1',
+          knowledgeBaseId: null,
+          kbSnapshotId: null,
+          deployHash: null,
+          name: 'Workspace Dashboard',
+        },
+      ]);
+      mockDashboardRepository.createOne.mockResolvedValue({
+        id: 71,
+        projectId: 14,
+        workspaceId: null,
+        knowledgeBaseId: null,
+        kbSnapshotId: null,
+        deployHash: null,
+        createdBy: null,
+        isDefault: true,
+        name: 'Dashboard',
+      });
+
+      const result = await dashboardService.getCurrentDashboardForScope(14);
+
+      expect(mockDashboardRepository.findAllBy).toHaveBeenCalledWith({
+        projectId: 14,
+      });
+      expect(mockDashboardRepository.createOne).toHaveBeenCalledWith({
+        isDefault: true,
+        name: 'Dashboard',
+        projectId: 14,
+        workspaceId: null,
+        knowledgeBaseId: null,
+        kbSnapshotId: null,
+        deployHash: null,
+        createdBy: null,
+      });
+      expect(result?.id).toBe(71);
     });
 
     it('should mark only the first dashboard in a scope as default when creating', async () => {

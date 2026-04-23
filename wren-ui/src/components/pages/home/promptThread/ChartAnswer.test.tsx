@@ -396,12 +396,12 @@ describe('ChartAnswer', () => {
       } as any),
     );
 
-    expect(capturedChartProps?.pinButtonLabel).toBe('Pin to dashboard');
+    expect(capturedChartProps?.pinButtonLabel).toBe('固定到看板');
     expect(capturedChartProps?.hideEditAction).toBe(true);
     expect(capturedChartProps?.hideReloadAction).toBe(true);
   });
 
-  it('disables pinning until the initial dashboard list is loaded', () => {
+  it('keeps the pin action visually available while the dashboard list is loading', () => {
     const useStateSpy = setStateOverrides({
       // 7th state: dashboardsLoading
       7: true,
@@ -428,7 +428,7 @@ describe('ChartAnswer', () => {
       } as any),
     );
 
-    expect(capturedChartProps?.pinDisabled).toBe(true);
+    expect(capturedChartProps?.pinDisabled).toBe(false);
 
     useStateSpy.mockRestore();
   });

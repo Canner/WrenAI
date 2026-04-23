@@ -2,7 +2,6 @@ import { IContext } from '../types';
 import { Thread } from '../repositories/threadRepository';
 import { ThreadResponse } from '../repositories/threadResponseRepository';
 import { ChartAdjustmentOption } from '@server/models/adaptor';
-import { ThreadRecommendQuestionResult } from '../services/askingService';
 import {
   createDetailStepNestedResolver,
   createResultCandidateNestedResolver,
@@ -11,13 +10,10 @@ import {
 import {
   createAskingTaskAction,
   createInstantRecommendedQuestionsAction,
-  generateProjectRecommendationQuestionsAction,
-  generateThreadRecommendationQuestionsAction,
   getAdjustmentTaskAction,
   getAskingTaskAction,
   getInstantRecommendedQuestionsAction,
   getSuggestedQuestionsAction,
-  getThreadRecommendationQuestionsAction,
   rerunAskingTaskAction,
   cancelAskingTaskAction,
 } from './askingControllerAskActions';
@@ -59,25 +55,6 @@ import type {
 } from './askingControllerTypes';
 
 export class AskingController {
-  public generateProjectRecommendationQuestions = async (
-    _root: any,
-    _args: any,
-    ctx: IContext,
-  ): Promise<boolean> => generateProjectRecommendationQuestionsAction(ctx);
-
-  public generateThreadRecommendationQuestions = async (
-    _root: any,
-    args: { threadId: number },
-    ctx: IContext,
-  ): Promise<boolean> => generateThreadRecommendationQuestionsAction(args, ctx);
-
-  public getThreadRecommendationQuestions = async (
-    _root: any,
-    args: { threadId: number },
-    ctx: IContext,
-  ): Promise<ThreadRecommendQuestionResult> =>
-    getThreadRecommendationQuestionsAction(args, ctx);
-
   public getSuggestedQuestions = async (
     _root: any,
     _args: any,

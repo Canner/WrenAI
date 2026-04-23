@@ -28,7 +28,6 @@ describe('buildAskRuntimeContext', () => {
 
     expect(result).toEqual({
       runtimeIdentity: {
-        projectId: 42,
         workspaceId: 'workspace-1',
         knowledgeBaseId: 'kb-1',
         kbSnapshotId: 'snapshot-1',
@@ -43,6 +42,34 @@ describe('buildAskRuntimeContext', () => {
           executionMode: 'inject_only',
         },
       ],
+    });
+  });
+
+  it('drops stale project bridge when canonical runtime scope fields exist', async () => {
+    const result = await buildAskRuntimeContext({
+      runtimeIdentity: {
+        projectId: 42,
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snapshot-1',
+        deployHash: 'deploy-1',
+        actorUserId: 'user-1',
+      },
+      selectedSkillIds: [],
+      skillService: {
+        getSkillDefinitionById: jest.fn(),
+      } as any,
+    });
+
+    expect(result).toEqual({
+      runtimeIdentity: {
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snapshot-1',
+        deployHash: 'deploy-1',
+        actorUserId: 'user-1',
+      },
+      skills: [],
     });
   });
 

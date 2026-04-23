@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ComponentProps } from 'react';
 import { Typography, Collapse } from 'antd';
 import type { CollapseProps } from 'antd';
 import DownOutlined from '@ant-design/icons/DownOutlined';
+import RightOutlined from '@ant-design/icons/RightOutlined';
 import styled from 'styled-components';
 import ErrorBoundary from './ErrorBoundary';
 import PreparationStatus from './PreparationStatus';
@@ -211,12 +212,12 @@ export default function Preparation(props: Props) {
         items={items}
         expandIconPlacement="end"
         expandIcon={({ isActive }) =>
-          !isStopped && (
-            <DownOutlined
-              className="gray-6 text-sm"
-              rotate={isActive ? 180 : 0}
-            />
-          )
+          !isStopped &&
+          (isActive ? (
+            <DownOutlined className="gray-6 text-sm" />
+          ) : (
+            <RightOutlined className="gray-6 text-sm" />
+          ))
         }
         activeKey={isActive && !isStopped ? ['preparation'] : []}
         onChange={(key) => {
