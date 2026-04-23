@@ -19,6 +19,9 @@
   <a aria-label="License" href="https://github.com/Canner/WrenAI/blob/main/LICENSE">
     <img alt="" src="https://img.shields.io/github/license/canner/WrenAI?color=blue&style=for-the-badge">
   </a>
+  <a aria-label="GitHub Stars" href="https://github.com/Canner/WrenAI/stargazers">
+    <img alt="" src="https://img.shields.io/github/stars/canner/WrenAI?style=for-the-badge&logo=github&color=blue&label=Stars">
+  </a>
   <a href="https://docs.getwren.ai">
     <img src="https://img.shields.io/badge/docs-online-brightgreen?style=for-the-badge" alt="Docs">
   </a>
@@ -34,17 +37,21 @@
   <a href="https://trendshift.io/repositories/9263" target="_blank"><img src="https://trendshift.io/api/badge/repositories/9263" alt="Canner%2FWrenAI | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 </p>
 
-> ⚡ GenBI (Generative BI) queries any database in natural language, generates accurate SQL (Text-to-SQL), charts (Text-to-Chart), and AI-powered business intelligence in seconds. ️
+> Ask your database anything in plain English. Wren AI generates accurate SQL, charts, and BI insights — backed by a semantic layer that keeps LLM outputs grounded and trustworthy.
 
 <p align="center">
   <img width="1920" height="1080" alt="1" src="https://github.com/user-attachments/assets/bba9d37a-33e3-49ab-b7cb-32fd6dddc8d1" />
 </p>
- 
+
 ## 😍 Demos
 
 https://github.com/user-attachments/assets/f9c1cb34-5a95-4580-8890-ec9644da4160
 
-[Watch GenBI Demo](https://github.com/user-attachments/assets/90ad1d35-bb1e-490b-9676-b29863ff090b)
+▶️ [Watch the full GenBI walkthrough](https://github.com/user-attachments/assets/90ad1d35-bb1e-490b-9676-b29863ff090b) — end-to-end from question to chart
+
+## 💡 Why a Semantic Layer?
+
+Feeding raw DDL to an LLM gets you SQL that looks right but means the wrong thing — "revenue" joins the wrong tables, "active user" uses the wrong filter. Wren AI's semantic layer (MDL) encodes your business definitions once, then every generated query is grounded in that shared understanding. The LLM doesn't guess what your metrics mean; the semantic layer tells it.
 
 ## 🤖 Features
 
@@ -57,17 +64,47 @@ https://github.com/user-attachments/assets/f9c1cb34-5a95-4580-8890-ec9644da4160
 
 🤩 [Learn more about GenBI](https://getwren.ai/genbi?utm_source=github&utm_medium=content&utm_campaign=readme)
 
+## 🔌 Data Sources
+
+| Cloud Warehouses | Databases | Query Engines |
+|-----------------|-----------|---------------|
+| BigQuery | PostgreSQL | Trino |
+| Snowflake | MySQL | Athena (Trino) |
+| Redshift | Microsoft SQL Server | DuckDB |
+| Databricks | ClickHouse | |
+| | Oracle | |
+
+Don't see yours? [Vote for it](https://github.com/Canner/WrenAI/discussions/327) — community votes drive our connector roadmap.
+
+## 🧠 LLM Models
+
+Wren AI works with any LLM provider you're already using:
+
+| Cloud APIs | Platform Services | Self-hosted |
+|-----------|-------------------|-------------|
+| OpenAI | Azure OpenAI | Ollama |
+| Anthropic | Google AI Studio (Gemini) | |
+| DeepSeek | Vertex AI (Gemini + Anthropic) | |
+| Groq | AWS Bedrock | |
+| | Databricks | |
+
+> [!TIP]
+> For best results, use a frontier model (GPT-4o, Claude Sonnet, Gemini Pro). Wren AI works with smaller and local models too — accuracy scales with model capability. See [configuration examples](https://github.com/Canner/WrenAI/tree/main/wren-ai-service/docs/config_examples) for setup guides.
+
 ## 🚀 Getting Started
 
-Using Wren AI is super simple, you can set it up within 3 minutes, and start to interact with your data!
+Three ways to get started — pick what fits:
+
+| Option | Best for | Link |
+|--------|----------|------|
+| **Self-hosted (Docker)** | Full control, local data | [Installation guide](http://docs.getwren.ai/oss/installation?utm_source=github&utm_medium=content&utm_campaign=readme) |
+| **Wren AI Cloud** | Try it without setup | [getwren.ai](https://getwren.ai/?utm_source=github&utm_medium=content&utm_campaign=readme) |
+
+Compare [OSS vs. Cloud plans](https://docs.getwren.ai/oss/overview/cloud_vs_self_host). Full documentation at [docs.getwren.ai](https://docs.getwren.ai/oss/overview/introduction?utm_source=github&utm_medium=content&utm_campaign=readme).
 
 <p align="center">
   <img width="1920" height="1080" alt="2" src="https://github.com/user-attachments/assets/6555f539-9ef2-485d-9135-0071741fda96" />
 </p>
-
-- Visit our [Install in your local environment](http://docs.getwren.ai/oss/installation?utm_source=github&utm_medium=content&utm_campaign=readme).
-- Visit the [Usage Guides](https://docs.getwren.ai/oss/guide/connect/overview?utm_source=github&utm_medium=content&utm_campaign=readme) to learn more about how to use Wren AI.
-- Or just start with [Wren AI Cloud](https://getwren.ai/?utm_source=github&utm_medium=content&utm_campaign=readme) our Managed Cloud Service. ([OSS vs. Commercial Plans](https://docs.getwren.ai/oss/overview/cloud_vs_self_host)).
 
 ## 🏗️ Architecture
 
@@ -75,66 +112,43 @@ Using Wren AI is super simple, you can set it up within 3 minutes, and start to 
   <img width="1011" height="682" alt="wrenai-architecture" src="https://github.com/user-attachments/assets/e99b999f-9912-4fa7-921a-9c86b6b83354" />
 </p>
 
-👉 [Learn more about our Design](https://getwren.ai/post/how-we-design-our-semantic-engine-for-llms-the-backbone-of-the-semantic-layer-for-llm-architecture?utm_source=github&utm_medium=content&utm_campaign=readme)
+User questions flow from the Next.js UI → Apollo GraphQL → AI Service (RAG + LLM) → Wren Engine (semantic query execution) → your database. The semantic layer (MDL) sits at the center, making sure the LLM's SQL reflects your actual business definitions.
 
+👉 [Deep dive into the design](https://getwren.ai/post/how-we-design-our-semantic-engine-for-llms-the-backbone-of-the-semantic-layer-for-llm-architecture?utm_source=github&utm_medium=content&utm_campaign=readme)
 
+## 🧑‍💻 For Developers
 
-## 🔌 Data Sources
+WrenAI is a full-stack AI system with interesting problems at every layer — semantic modeling, RAG retrieval, LLM-driven SQL generation, and query execution across heterogeneous data sources. Here's what the stack actually looks like under the hood:
 
-If your data source is not listed here, vote for it in our [GitHub discussion thread](https://github.com/Canner/WrenAI/discussions/327). It will be a valuable input for us to decide on the next supported data sources.
-- Athena (Trino)
-- Redshift
-- BigQuery
-- DuckDB
-- Databricks
-- PostgreSQL
-- MySQL
-- Microsoft SQL Server
-- ClickHouse
-- Oracle
-- Trino
-- Snowflake
+| Layer | What it does |
+|-------|-------------|
+| **wren-ui** | Next.js + Apollo GraphQL — semantic modeling UI and the BFF that wires everything together |
+| **wren-ai-service** | Python/FastAPI pipeline — intent classification, vector retrieval from Qdrant, LLM prompting, and SQL correction loops |
+| **[wren-engine](https://github.com/Canner/wren-engine)** | Rust + Apache DataFusion — the query execution core that resolves MDL semantics (metrics, joins, access controls) before SQL reaches the database |
 
-## 🤖 LLM Models
+**[wren-engine](https://github.com/Canner/wren-engine)** is a separate open-source project and the part of the stack closest to the metal. It's where MDL definitions get translated into actual query plans across 15+ data sources. If you work with Rust, DataFusion, or database connectors, it's worth a look — the codebase is approachable and there are real unsolved problems around query planning, semantic resolution, and MCP (Model Context Protocol) agent integration.
 
-Wren AI supports integration with various Large Language Models (LLMs), including but not limited to:
-- OpenAI Models
-- Azure OpenAI Models
-- DeepSeek Models
-- Google AI Studio – Gemini Models
-- Vertex AI Models (Gemini + Anthropic)
-- Bedrock Models
-- Anthropic API Models
-- Groq Models
-- Ollama Models
-- Databricks Models
+Some areas where contributions tend to have the most impact across both repos:
 
-Check [configuration examples here](https://github.com/Canner/WrenAI/tree/main/wren-ai-service/docs/config_examples)!
-
-> [!CAUTION]
-> The performance of Wren AI depends significantly on the capabilities of the LLM you choose. We strongly recommend using the most powerful model available for optimal results. Using less capable models may lead to reduced performance, slower response times, or inaccurate outputs.
-
-## 📚 Documentation
-
-Visit [Wren AI documentation](https://docs.getwren.ai/oss/overview/introduction?utm_source=github&utm_medium=content&utm_campaign=readme) to view the full documentation.
-
-## 📪 Keep Posted?
-
-[Subscribe our blog](https://www.getwren.ai/blog/?utm_source=github&utm_medium=content&utm_campaign=readme) and [Follow our LinkedIn](https://www.linkedin.com/company/wrenai)
+- **Data source connectors** — wren-engine supports 15+ sources; new connectors are always useful
+- **MCP integration** — wren-engine exposes an MCP server; agent-native workflows are still early and evolving
+- **SQL generation quality** — prompt engineering, correction loop heuristics, and eval harnesses in wren-ai-service
+- **Semantic layer tooling** — MDL schema inference, validation, and developer ergonomics in wren-ui
 
 ## 🛠️ Contribution
 
-1.	Star ⭐ the repo to show support (it really helps).
-2.	Open an issue for bugs, ideas, or discussions.
-3.	Read [Contribution Guidelines](https://github.com/Canner/WrenAI/blob/main/CONTRIBUTING.md) for setup & PR guidelines.
+1.	Read [Contribution Guidelines](https://github.com/Canner/WrenAI/blob/main/CONTRIBUTING.md) for setup & PR guidelines.
+2.	Open an issue for bugs, feature requests, or discussion.
+3.	If Wren AI is useful to you, a ⭐ goes a long way — it helps more people find the project.
 
 ## ⭐️ Community
 
-- Join 1.3k+ developers in our [Discord](https://discord.gg/5DvshJqG8Z) for real-time help and roadmap previews.
-- If there are any issues, please visit [GitHub Issues](https://github.com/Canner/WrenAI/issues).
-- Explore our [public roadmap](https://wrenai.notion.site/) to stay updated on upcoming features and improvements!
+- Join 1.7k+ developers in our [Discord](https://discord.gg/5DvshJqG8Z) for real-time help and roadmap previews.
+- Visit [GitHub Issues](https://github.com/Canner/WrenAI/issues) for bugs and feature requests.
+- Explore our [public roadmap](https://wrenai.notion.site/) to see what's coming next.
+- [Subscribe to our blog](https://www.getwren.ai/blog/?utm_source=github&utm_medium=content&utm_campaign=readme) · [Follow us on LinkedIn](https://www.linkedin.com/company/wrenai)
 
-Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren AI community channels. Users are **highly encouraged** to read and adhere to them to avoid repercussions.
+We follow a [Code of Conduct](./CODE_OF_CONDUCT.md) to keep the community welcoming for everyone.
 
 ## 🎉 Our Contributors
 <a href="https://github.com/canner/wrenAI/graphs/contributors">
