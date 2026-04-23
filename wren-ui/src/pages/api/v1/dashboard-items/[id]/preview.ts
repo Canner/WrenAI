@@ -6,7 +6,7 @@ import {
   assertDashboardExecutableRuntimeScope,
   assertDashboardKnowledgeBaseReadAccess,
   buildDashboardPreviewResponse,
-  ensureDashboardForScope,
+  ensureDashboardForWorkspaceScope,
   ensureDashboardItemForScope,
   recordDashboardKnowledgeBaseReadAudit,
 } from '@/server/api/dashboardRestShared';
@@ -33,9 +33,14 @@ export default async function handler(
     const itemId = parseItemId(req.query.id);
     const ctx = await buildApiContextFromRequest({ req });
     await assertDashboardKnowledgeBaseReadAccess(ctx);
-    await assertDashboardExecutableRuntimeScope(ctx);
     const item = await ensureDashboardItemForScope(ctx, itemId);
-    const dashboard = await ensureDashboardForScope(ctx, item.dashboardId);
+    if (!item.detail.runtimeIdentity) {
+      await assertDashboardExecutableRuntimeScope(ctx);
+    }
+    const dashboard = await ensureDashboardForWorkspaceScope(
+      ctx,
+      item.dashboardId,
+    );
     const preview = await buildDashboardPreviewResponse({
       ctx,
       dashboard,

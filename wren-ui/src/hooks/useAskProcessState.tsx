@@ -131,9 +131,24 @@ export class ProcessStateMachine {
   };
 
   static canTransition(from: PROCESS_STATE, to: PROCESS_STATE) {
+    const terminalStates = [
+      PROCESS_STATE.FINISHED,
+      PROCESS_STATE.FAILED,
+      PROCESS_STATE.STOPPED,
+      PROCESS_STATE.NO_RESULT,
+    ];
+    const restartableStates = [
+      PROCESS_STATE.UNDERSTANDING,
+      PROCESS_STATE.SEARCHING,
+      PROCESS_STATE.PLANNING,
+      PROCESS_STATE.GENERATING,
+      PROCESS_STATE.CORRECTING,
+    ];
+
     // Allow transition to FINISHED & FAILED state from any state
     return (
       from === PROCESS_STATE.IDLE ||
+      (terminalStates.includes(from) && restartableStates.includes(to)) ||
       to === PROCESS_STATE.FINISHED ||
       to === PROCESS_STATE.FAILED ||
       to === PROCESS_STATE.STOPPED ||

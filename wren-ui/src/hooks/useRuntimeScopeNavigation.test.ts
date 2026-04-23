@@ -1,4 +1,5 @@
 import {
+  resolveRuntimeRouteSelector,
   resolveScopedNavigationSelector,
   resolveRuntimeNavigationSelector,
   resolveWorkspaceNavigationSelector,
@@ -62,7 +63,6 @@ describe('shouldPreserveKnowledgeRuntimeScope', () => {
   it('preserves the full runtime selector for knowledge-scoped destinations', () => {
     expect(shouldPreserveKnowledgeRuntimeScope(Path.Knowledge)).toBe(true);
     expect(shouldPreserveKnowledgeRuntimeScope(Path.Modeling)).toBe(true);
-    expect(shouldPreserveKnowledgeRuntimeScope(Path.HomeDashboard)).toBe(true);
     expect(
       shouldPreserveKnowledgeRuntimeScope(`${Path.Knowledge}?section=modeling`),
     ).toBe(true);
@@ -70,6 +70,7 @@ describe('shouldPreserveKnowledgeRuntimeScope', () => {
 
   it('keeps workspace-only navigation for non knowledge destinations', () => {
     expect(shouldPreserveKnowledgeRuntimeScope(Path.Home)).toBe(false);
+    expect(shouldPreserveKnowledgeRuntimeScope(Path.HomeDashboard)).toBe(false);
     expect(shouldPreserveKnowledgeRuntimeScope(Path.Settings)).toBe(false);
   });
 });
@@ -96,13 +97,6 @@ describe('resolveScopedNavigationSelector', () => {
         path: Path.Modeling,
       }),
     ).toEqual(fullSelector);
-
-    expect(
-      resolveScopedNavigationSelector({
-        selector: fullSelector,
-        path: Path.HomeDashboard,
-      }),
-    ).toEqual(fullSelector);
   });
 
   it('falls back to workspace-only selector for non knowledge pages', () => {
@@ -110,6 +104,12 @@ describe('resolveScopedNavigationSelector', () => {
       resolveScopedNavigationSelector({
         selector: fullSelector,
         path: Path.Home,
+      }),
+    ).toEqual({ workspaceId: 'ws-1' });
+    expect(
+      resolveScopedNavigationSelector({
+        selector: fullSelector,
+        path: Path.HomeDashboard,
       }),
     ).toEqual({ workspaceId: 'ws-1' });
   });
@@ -145,6 +145,35 @@ describe('resolveRuntimeNavigationSelector', () => {
     ).toEqual({
       workspaceId: 'ws-2',
       runtimeScopeId: 'scope-2',
+    });
+  });
+});
+
+describe('resolveRuntimeRouteSelector', () => {
+  it('keeps the explicit route selector when router query is already hydrated', () => {
+    expect(
+      resolveRuntimeRouteSelector({
+        selectorFromRoute: {
+          workspaceId: 'ws-route',
+          knowledgeBaseId: 'kb-route',
+        },
+        windowSearch: '?workspaceId=ws-window&knowledgeBaseId=kb-window',
+      }),
+    ).toEqual({
+      workspaceId: 'ws-route',
+      knowledgeBaseId: 'kb-route',
+    });
+  });
+
+  it('falls back to window.location search instead of stale storage-backed selector state during router hydration', () => {
+    expect(
+      resolveRuntimeRouteSelector({
+        selectorFromRoute: {},
+        windowSearch: '?workspaceId=ws-window&knowledgeBaseId=kb-window',
+      }),
+    ).toEqual({
+      workspaceId: 'ws-window',
+      knowledgeBaseId: 'kb-window',
     });
   });
 });

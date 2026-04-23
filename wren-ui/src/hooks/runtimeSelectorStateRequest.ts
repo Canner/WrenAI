@@ -7,6 +7,7 @@ import {
   parseRestJsonResponse,
   withTransientRuntimeScopeRetry,
 } from '@/utils/rest';
+import { createAbortError } from '@/utils/abort';
 
 export type RuntimeSelectorState = {
   currentWorkspace?: {
@@ -68,6 +69,39 @@ const runtimeSelectorStateRequestCache = new Map<
   string,
   Promise<RuntimeSelectorState | null>
 >();
+
+const waitForAbortSignal = (signal?: AbortSignal) =>
+  new Promise<never>((_, reject) => {
+    if (!signal) {
+      return;
+    }
+
+    if (signal.aborted) {
+      reject(createAbortError('runtime-selector-request-aborted'));
+      return;
+    }
+
+    const handleAbort = () => {
+      signal.removeEventListener('abort', handleAbort);
+      reject(createAbortError('runtime-selector-request-aborted'));
+    };
+
+    signal.addEventListener('abort', handleAbort, { once: true });
+  });
+
+const bindRuntimeSelectorRequestToSignal = <TPayload>({
+  request,
+  signal,
+}: {
+  request: Promise<TPayload>;
+  signal?: AbortSignal;
+}) => {
+  if (!signal) {
+    return request;
+  }
+
+  return Promise.race([request, waitForAbortSignal(signal)]);
+};
 
 const getRuntimeSelectorStateStorage = () => {
   if (typeof window === 'undefined') {
@@ -267,15 +301,17 @@ export const fetchRuntimeSelectorState = async ({
 
   const pendingRequest = runtimeSelectorStateRequestCache.get(requestUrl);
   if (pendingRequest) {
-    return pendingRequest;
+    return bindRuntimeSelectorRequestToSignal({
+      request: pendingRequest,
+      signal,
+    });
   }
 
   const request = withTransientRuntimeScopeRetry({
-    signal,
     loader: async () => {
       const response = await fetch(
         requestUrl,
-        buildRuntimeSelectorRequestOptions({ signal }),
+        buildRuntimeSelectorRequestOptions({}),
       );
 
       return parseRestJsonResponse<RuntimeSelectorState | null>(
@@ -293,5 +329,8 @@ export const fetchRuntimeSelectorState = async ({
     });
 
   runtimeSelectorStateRequestCache.set(requestUrl, request);
-  return request;
+  return bindRuntimeSelectorRequestToSignal({
+    request,
+    signal,
+  });
 };

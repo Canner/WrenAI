@@ -145,7 +145,11 @@ class NL2SQLToolset:
         query: str,
         retrieval_scope_id: Optional[str],
     ) -> list[Any]:
-        result = await self._pipelines["instructions_retrieval"].run(
+        instructions_pipeline = self._pipelines.get("instructions_retrieval")
+        if instructions_pipeline is None:
+            return []
+
+        result = await instructions_pipeline.run(
             query=query,
             runtime_scope_id=retrieval_scope_id,
             scope="sql",
@@ -386,6 +390,187 @@ class BaseFixedOrderAskRuntime:
     def _build_initial_state(self, ask_request: AskRequestLike) -> AskExecutionState:
         return AskExecutionState(user_query=ask_request.query)
 
+    def _build_thinking_step(
+        self,
+        *,
+        key: str,
+        status: str,
+        message_params: Optional[dict[str, Any]] = None,
+        phase: Optional[str] = None,
+        started_at: Optional[str] = None,
+        finished_at: Optional[str] = None,
+        duration_ms: Optional[int] = None,
+        detail: Optional[str] = None,
+        error_code: Optional[str] = None,
+        tags: Optional[list[str]] = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "key": key,
+            "status": status,
+            "message_key": key,
+        }
+        if message_params:
+            payload["message_params"] = message_params
+        if phase:
+            payload["phase"] = phase
+        if started_at:
+            payload["started_at"] = started_at
+        if finished_at:
+            payload["finished_at"] = finished_at
+        if duration_ms is not None:
+            payload["duration_ms"] = duration_ms
+        if detail:
+            payload["detail"] = detail
+        if error_code:
+            payload["error_code"] = error_code
+        if tags:
+            payload["tags"] = tags
+        return payload
+
+    def _build_text_to_sql_thinking(
+        self,
+        *,
+        state: AskExecutionState,
+        status: str,
+    ) -> dict[str, Any]:
+        retrieval_finished = bool(
+            state.intent_reasoning
+            or state.rephrased_question
+            or status
+            in {"searching", "planning", "generating", "correcting", "finished", "failed"}
+        )
+
+        sql_pairs_status = (
+            "finished"
+            if retrieval_finished
+            else "running" if status == "understanding" else "pending"
+        )
+        sql_instructions_status = (
+            "finished"
+            if retrieval_finished
+            else "running" if status == "understanding" else "pending"
+        )
+
+        intent_status = (
+            "running"
+            if status == "understanding" and not state.intent_reasoning
+            else "finished"
+            if state.intent_reasoning
+            or status
+            in {"searching", "planning", "generating", "correcting", "finished"}
+            else "failed"
+            if status == "failed"
+            else "pending"
+        )
+
+        candidate_models_status = (
+            "running"
+            if status == "searching" and not state.table_names
+            else "finished"
+            if state.table_names
+            or status in {"planning", "generating", "correcting", "finished"}
+            else "failed"
+            if status == "failed"
+            else "pending"
+        )
+
+        sql_reasoned_status = (
+            "running"
+            if status == "planning" and not state.sql_generation_reasoning
+            else "finished"
+            if state.sql_generation_reasoning
+            or status in {"generating", "correcting", "finished"}
+            else "failed"
+            if status == "failed"
+            else "pending"
+        )
+
+        sql_generated_status = (
+            "running"
+            if status in {"generating", "correcting"}
+            else "finished"
+            if state.api_results or status == "finished"
+            else "failed"
+            if status == "failed"
+            else "pending"
+        )
+
+        steps = [
+            self._build_thinking_step(
+                key="ask.sql_pairs_retrieved",
+                status=sql_pairs_status,
+                message_params={"count": len(state.sql_samples)},
+                phase="retrieval",
+            ),
+            self._build_thinking_step(
+                key="ask.sql_instructions_retrieved",
+                status=sql_instructions_status,
+                message_params={"count": len(state.instructions)},
+                phase="retrieval",
+            ),
+            self._build_thinking_step(
+                key="ask.intent_recognized",
+                status=intent_status,
+                phase="intent",
+            ),
+            self._build_thinking_step(
+                key="ask.candidate_models_selected",
+                status=candidate_models_status,
+                message_params={"count": len(state.table_names)},
+                phase="retrieval",
+                tags=state.table_names[:6],
+            ),
+            self._build_thinking_step(
+                key="ask.sql_reasoned",
+                status=sql_reasoned_status,
+                phase="reasoning",
+                detail=state.sql_generation_reasoning,
+            ),
+            self._build_thinking_step(
+                key="ask.sql_generated",
+                status=sql_generated_status,
+                message_params={
+                    "correcting": status == "correcting",
+                    "retries": state.current_sql_correction_retries,
+                },
+                phase="generation",
+            ),
+        ]
+
+        current_step_key = next(
+            (step["key"] for step in steps if step["status"] == "running"),
+            None,
+        ) or next(
+            (step["key"] for step in steps if step["status"] == "failed"),
+            None,
+        )
+
+        return {
+            "current_step_key": current_step_key,
+            "steps": steps,
+        }
+
+    def _build_text_to_sql_result_payload(
+        self,
+        *,
+        state: AskExecutionState,
+        status: str,
+        trace_id: Optional[str],
+        is_followup: bool,
+        **payload,
+    ) -> dict[str, Any]:
+        return {
+            "status": status,
+            "type": "TEXT_TO_SQL",
+            "thinking": self._build_text_to_sql_thinking(
+                state=state,
+                status=status,
+            ),
+            "trace_id": trace_id,
+            "is_followup": is_followup,
+            **payload,
+        }
+
     async def _handle_intent_result(
         self,
         *,
@@ -499,12 +684,14 @@ class BaseFixedOrderAskRuntime:
 
         if not is_stopped():
             set_result(
-                status="understanding",
-                type="TEXT_TO_SQL",
-                rephrased_question=state.rephrased_question,
-                intent_reasoning=state.intent_reasoning,
-                trace_id=trace_id,
-                is_followup=is_followup,
+                **self._build_text_to_sql_result_payload(
+                    state=state,
+                    status="understanding",
+                    rephrased_question=state.rephrased_question,
+                    intent_reasoning=state.intent_reasoning,
+                    trace_id=trace_id,
+                    is_followup=is_followup,
+                )
             )
 
         return None
@@ -533,12 +720,14 @@ class BaseFixedOrderAskRuntime:
 
         if not is_stopped() and not state.api_results:
             set_result(
-                status="searching",
-                type="TEXT_TO_SQL",
-                rephrased_question=state.rephrased_question,
-                intent_reasoning=state.intent_reasoning,
-                trace_id=trace_id,
-                is_followup=is_followup,
+                **self._build_text_to_sql_result_payload(
+                    state=state,
+                    status="searching",
+                    rephrased_question=state.rephrased_question,
+                    intent_reasoning=state.intent_reasoning,
+                    trace_id=trace_id,
+                    is_followup=is_followup,
+                )
             )
 
             retrieval_response = await self._toolset.retrieve_schema(
@@ -558,16 +747,18 @@ class BaseFixedOrderAskRuntime:
                 logger.exception("ask pipeline - NO_RELEVANT_DATA: %s", state.user_query)
                 if not is_stopped():
                     set_result(
-                        status="failed",
-                        type="TEXT_TO_SQL",
-                        error=build_ask_error(
-                            code="NO_RELEVANT_DATA",
-                            message="No relevant data",
-                        ),
-                        rephrased_question=state.rephrased_question,
-                        intent_reasoning=state.intent_reasoning,
-                        trace_id=trace_id,
-                        is_followup=is_followup,
+                        **self._build_text_to_sql_result_payload(
+                            state=state,
+                            status="failed",
+                            error=build_ask_error(
+                                code="NO_RELEVANT_DATA",
+                                message="No relevant data",
+                            ),
+                            rephrased_question=state.rephrased_question,
+                            intent_reasoning=state.intent_reasoning,
+                            trace_id=trace_id,
+                            is_followup=is_followup,
+                        )
                     )
                 return self._attach_result_metadata(
                     self._mixed_answer_composer.compose_text_to_sql_failure(
@@ -586,13 +777,15 @@ class BaseFixedOrderAskRuntime:
 
         if not is_stopped() and not state.api_results and allow_sql_generation_reasoning:
             set_result(
-                status="planning",
-                type="TEXT_TO_SQL",
-                rephrased_question=state.rephrased_question,
-                intent_reasoning=state.intent_reasoning,
-                retrieved_tables=state.table_names,
-                trace_id=trace_id,
-                is_followup=is_followup,
+                **self._build_text_to_sql_result_payload(
+                    state=state,
+                    status="planning",
+                    rephrased_question=state.rephrased_question,
+                    intent_reasoning=state.intent_reasoning,
+                    retrieved_tables=state.table_names,
+                    trace_id=trace_id,
+                    is_followup=is_followup,
+                )
             )
 
             state.sql_generation_reasoning = await self._toolset.reason_sql_generation(
@@ -606,26 +799,30 @@ class BaseFixedOrderAskRuntime:
             )
 
             set_result(
-                status="planning",
-                type="TEXT_TO_SQL",
-                rephrased_question=state.rephrased_question,
-                intent_reasoning=state.intent_reasoning,
-                retrieved_tables=state.table_names,
-                sql_generation_reasoning=state.sql_generation_reasoning,
-                trace_id=trace_id,
-                is_followup=is_followup,
+                **self._build_text_to_sql_result_payload(
+                    state=state,
+                    status="planning",
+                    rephrased_question=state.rephrased_question,
+                    intent_reasoning=state.intent_reasoning,
+                    retrieved_tables=state.table_names,
+                    sql_generation_reasoning=state.sql_generation_reasoning,
+                    trace_id=trace_id,
+                    is_followup=is_followup,
+                )
             )
 
         if not is_stopped() and not state.api_results:
             set_result(
-                status="generating",
-                type="TEXT_TO_SQL",
-                rephrased_question=state.rephrased_question,
-                intent_reasoning=state.intent_reasoning,
-                retrieved_tables=state.table_names,
-                sql_generation_reasoning=state.sql_generation_reasoning,
-                trace_id=trace_id,
-                is_followup=is_followup,
+                **self._build_text_to_sql_result_payload(
+                    state=state,
+                    status="generating",
+                    rephrased_question=state.rephrased_question,
+                    intent_reasoning=state.intent_reasoning,
+                    retrieved_tables=state.table_names,
+                    sql_generation_reasoning=state.sql_generation_reasoning,
+                    trace_id=trace_id,
+                    is_followup=is_followup,
+                )
             )
 
             sql_functions, sql_knowledge = await asyncio.gather(
@@ -680,14 +877,16 @@ class BaseFixedOrderAskRuntime:
                     state.current_sql_correction_retries += 1
 
                     set_result(
-                        status="correcting",
-                        type="TEXT_TO_SQL",
-                        rephrased_question=state.rephrased_question,
-                        intent_reasoning=state.intent_reasoning,
-                        retrieved_tables=state.table_names,
-                        sql_generation_reasoning=state.sql_generation_reasoning,
-                        trace_id=trace_id,
-                        is_followup=is_followup,
+                        **self._build_text_to_sql_result_payload(
+                            state=state,
+                            status="correcting",
+                            rephrased_question=state.rephrased_question,
+                            intent_reasoning=state.intent_reasoning,
+                            retrieved_tables=state.table_names,
+                            sql_generation_reasoning=state.sql_generation_reasoning,
+                            trace_id=trace_id,
+                            is_followup=is_followup,
+                        )
                     )
 
                     sql_diagnosis_reasoning = await self._toolset.diagnose_sql(
@@ -733,15 +932,17 @@ class BaseFixedOrderAskRuntime:
         if state.api_results:
             if not is_stopped():
                 set_result(
-                    status="finished",
-                    type="TEXT_TO_SQL",
-                    response=state.api_results,
-                    rephrased_question=state.rephrased_question,
-                    intent_reasoning=state.intent_reasoning,
-                    retrieved_tables=state.table_names,
-                    sql_generation_reasoning=state.sql_generation_reasoning,
-                    trace_id=trace_id,
-                    is_followup=is_followup,
+                    **self._build_text_to_sql_result_payload(
+                        state=state,
+                        status="finished",
+                        response=state.api_results,
+                        rephrased_question=state.rephrased_question,
+                        intent_reasoning=state.intent_reasoning,
+                        retrieved_tables=state.table_names,
+                        sql_generation_reasoning=state.sql_generation_reasoning,
+                        trace_id=trace_id,
+                        is_followup=is_followup,
+                    )
                 )
             self._mixed_answer_composer.compose_text_to_sql_success(
                 results,
@@ -751,19 +952,21 @@ class BaseFixedOrderAskRuntime:
             logger.exception("ask pipeline - NO_RELEVANT_SQL: %s", state.user_query)
             if not is_stopped():
                 set_result(
-                    status="failed",
-                    type="TEXT_TO_SQL",
-                    error=build_ask_error(
-                        code="NO_RELEVANT_SQL",
-                        message=state.error_message or "No relevant SQL",
-                    ),
-                    rephrased_question=state.rephrased_question,
-                    intent_reasoning=state.intent_reasoning,
-                    retrieved_tables=state.table_names,
-                    sql_generation_reasoning=state.sql_generation_reasoning,
-                    invalid_sql=state.invalid_sql,
-                    trace_id=trace_id,
-                    is_followup=is_followup,
+                    **self._build_text_to_sql_result_payload(
+                        state=state,
+                        status="failed",
+                        error=build_ask_error(
+                            code="NO_RELEVANT_SQL",
+                            message=state.error_message or "No relevant SQL",
+                        ),
+                        rephrased_question=state.rephrased_question,
+                        intent_reasoning=state.intent_reasoning,
+                        retrieved_tables=state.table_names,
+                        sql_generation_reasoning=state.sql_generation_reasoning,
+                        invalid_sql=state.invalid_sql,
+                        trace_id=trace_id,
+                        is_followup=is_followup,
+                    )
                 )
             self._mixed_answer_composer.compose_text_to_sql_failure(
                 results,
@@ -891,14 +1094,16 @@ class LegacyFixedOrderAskRuntime(BaseFixedOrderAskRuntime):
             logger.exception("ask pipeline - OTHERS: %s", e)
 
             set_result(
-                status="failed",
-                type="TEXT_TO_SQL",
-                error=build_ask_error(
-                    code="OTHERS",
-                    message=str(e),
-                ),
-                trace_id=trace_id,
-                is_followup=is_followup,
+                **self._build_text_to_sql_result_payload(
+                    state=state,
+                    status="failed",
+                    error=build_ask_error(
+                        code="OTHERS",
+                        message=str(e),
+                    ),
+                    trace_id=trace_id,
+                    is_followup=is_followup,
+                )
             )
 
             return self._attach_result_metadata(
@@ -996,12 +1201,14 @@ class DeepAgentsFixedOrderAskRuntime(BaseFixedOrderAskRuntime):
 
             if not is_stopped():
                 set_result(
-                    status="searching",
-                    type="TEXT_TO_SQL",
-                    rephrased_question=state.rephrased_question,
-                    intent_reasoning=state.intent_reasoning,
-                    trace_id=trace_id,
-                    is_followup=is_followup,
+                    **self._build_text_to_sql_result_payload(
+                        state=state,
+                        status="searching",
+                        rephrased_question=state.rephrased_question,
+                        intent_reasoning=state.intent_reasoning,
+                        trace_id=trace_id,
+                        is_followup=is_followup,
+                    )
                 )
 
                 state.api_results = await self._toolset.retrieve_historical_question(
@@ -1035,14 +1242,16 @@ class DeepAgentsFixedOrderAskRuntime(BaseFixedOrderAskRuntime):
             logger.exception("ask pipeline - OTHERS: %s", e)
 
             set_result(
-                status="failed",
-                type="TEXT_TO_SQL",
-                error=build_ask_error(
-                    code="OTHERS",
-                    message=str(e),
-                ),
-                trace_id=trace_id,
-                is_followup=is_followup,
+                **self._build_text_to_sql_result_payload(
+                    state=state,
+                    status="failed",
+                    error=build_ask_error(
+                        code="OTHERS",
+                        message=str(e),
+                    ),
+                    trace_id=trace_id,
+                    is_followup=is_followup,
+                )
             )
 
             return self._attach_result_metadata(

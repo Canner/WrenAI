@@ -6,6 +6,7 @@ import {
   DashboardItemType,
   IDashboardItemRepository,
   IDashboardRepository,
+  IKnowledgeBaseRepository,
 } from '@server/repositories';
 import {
   DashboardSchedule,
@@ -21,6 +22,7 @@ export interface CreateDashboardItemInput {
   canonicalizationVersion?: DashboardItemDetail['canonicalizationVersion'];
   chartDataProfile?: DashboardItemDetail['chartDataProfile'];
   validationErrors?: DashboardItemDetail['validationErrors'];
+  sourceRuntimeIdentity?: DashboardItemDetail['runtimeIdentity'];
   sourceResponseId?: number | null;
   sourceThreadId?: number | null;
   sourceQuestion?: string | null;
@@ -36,6 +38,7 @@ export interface UpdateDashboardForScopeInput {
 }
 
 export interface DashboardRuntimeBinding {
+  workspaceId?: string | null;
   knowledgeBaseId?: string | null;
   kbSnapshotId?: string | null;
   deployHash?: string | null;
@@ -106,4 +109,5 @@ export interface IDashboardService {
 export interface DashboardServiceDependencies {
   dashboardItemRepository: IDashboardItemRepository;
   dashboardRepository: IDashboardRepository;
+  knowledgeBaseRepository: Pick<IKnowledgeBaseRepository, 'findAllBy'>;
 }

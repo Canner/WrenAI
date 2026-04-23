@@ -244,6 +244,7 @@ export const loadScheduleOverviewPayload = async ({
   workspace,
   knowledgeBase = null,
   kbSnapshot = null,
+  jobScope = knowledgeBase ? 'knowledge_base' : 'workspace',
 }: {
   workspace: {
     id: string;
@@ -259,10 +260,12 @@ export const loadScheduleOverviewPayload = async ({
     id: string;
     deployHash?: string | null;
   } | null;
+  jobScope?: 'workspace' | 'knowledge_base';
 }): Promise<ScheduleOverviewPayload> => {
-  const filter = knowledgeBase
-    ? { workspaceId: workspace.id, knowledgeBaseId: knowledgeBase.id }
-    : { workspaceId: workspace.id };
+  const filter =
+    jobScope === 'knowledge_base' && knowledgeBase
+      ? { workspaceId: workspace.id, knowledgeBaseId: knowledgeBase.id }
+      : { workspaceId: workspace.id };
   const jobs = await components.scheduleJobRepository.findAllBy(filter as any);
   const jobViews = sortJobs(
     await Promise.all(jobs.map(async (job) => await buildJobView(job))),

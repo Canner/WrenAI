@@ -37,7 +37,7 @@ export default function ChartAnswerPinModal({
       open={open}
       onCancel={onCancel}
       footer={null}
-      destroyOnClose
+      destroyOnHidden
     >
       <Space orientation="vertical" size={14} style={{ width: '100%' }}>
         <Typography.Text type="secondary">

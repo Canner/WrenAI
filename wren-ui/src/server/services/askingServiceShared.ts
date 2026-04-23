@@ -33,6 +33,7 @@ import {
 import { registerShutdownCallback } from '@server/utils/shutdown';
 import { toPersistedRuntimeIdentityFromSource } from '@server/utils/persistedRuntimeIdentity';
 import { isNil } from 'lodash';
+import type { ResolvedHomeIntent } from '@/types/homeIntent';
 
 export const logger = getLogger('AskingService');
 logger.level = 'debug';
@@ -58,7 +59,9 @@ export interface AskingTaskInput {
 
 export interface AskingDetailTaskInput {
   question?: string;
+  responseKind?: string | null;
   sql?: string;
+  sourceResponseId?: number | null;
   trackedAskingResult?: TrackedAskingResult;
   knowledgeBaseIds?: string[];
   selectedSkillIds?: string[];
@@ -79,6 +82,7 @@ export interface ThreadRecommendQuestionResult {
   status: RecommendQuestionResultStatus;
   questions: RecommendationQuestion[];
   error?: WrenAIError;
+  resolvedIntent?: ResolvedHomeIntent | null;
 }
 
 export interface InstantRecommendedQuestionsInput {
@@ -207,6 +211,7 @@ export interface IAskingService {
     runtimeIdentity: PersistedRuntimeIdentity,
     configurations: { language: string },
     runtimeScopeId?: string | null,
+    customInstruction?: string | null,
   ): Promise<ThreadResponse>;
   adjustThreadResponseChartScoped(
     threadResponseId: number,

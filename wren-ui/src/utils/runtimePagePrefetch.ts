@@ -1,6 +1,5 @@
 import {
   buildRuntimeScopeUrl,
-  hasExecutableRuntimeScopeSelector,
   type ClientRuntimeScopeSelector,
 } from '@/runtime/client/runtimeScope';
 import {
@@ -24,8 +23,8 @@ const workspaceOverviewCache = new Map<string, TimedCacheEntry>();
 const workspaceOverviewRequestCache = new Map<string, Promise<unknown>>();
 const knowledgeOverviewCache = new Map<string, TimedCacheEntry>();
 const knowledgeOverviewRequestCache = new Map<string, Promise<unknown>>();
-const threadOverviewCache = new Map<number, TimedCacheEntry>();
-const threadOverviewRequestCache = new Map<number, Promise<unknown>>();
+const threadOverviewCache = new Map<string, TimedCacheEntry>();
+const threadOverviewRequestCache = new Map<string, Promise<unknown>>();
 let prefetchedFirstDashboardId: number | null = null;
 
 const getPrefetchStorage = () => {
@@ -158,9 +157,17 @@ const getFreshCachedValue = <T = unknown>(
   return cachedEntry.value as T;
 };
 
-const getFreshThreadCachedValue = <T = unknown>(threadId: number): T | null => {
-  const cacheKey = `${threadId}`;
-  const inMemoryEntry = threadOverviewCache.get(threadId) || null;
+const getThreadOverviewCacheKey = (
+  threadId: number,
+  selector?: ClientRuntimeScopeSelector,
+) => buildThreadOverviewUrl(threadId, selector);
+
+const getFreshThreadCachedValue = <T = unknown>(
+  threadId: number,
+  selector?: ClientRuntimeScopeSelector,
+): T | null => {
+  const cacheKey = getThreadOverviewCacheKey(threadId, selector);
+  const inMemoryEntry = threadOverviewCache.get(cacheKey) || null;
   const cachedEntry =
     inMemoryEntry || readStoredPrefetchEntry<T>('thread', cacheKey);
   if (!cachedEntry) {
@@ -168,13 +175,13 @@ const getFreshThreadCachedValue = <T = unknown>(threadId: number): T | null => {
   }
 
   if (Date.now() - cachedEntry.updatedAt > PREFETCH_CACHE_TTL_MS) {
-    threadOverviewCache.delete(threadId);
+    threadOverviewCache.delete(cacheKey);
     removeStoredPrefetchEntry('thread', cacheKey);
     return null;
   }
 
   if (!inMemoryEntry) {
-    threadOverviewCache.set(threadId, cachedEntry);
+    threadOverviewCache.set(cacheKey, cachedEntry);
   }
 
   return cachedEntry.value as T;
@@ -183,14 +190,16 @@ const getFreshThreadCachedValue = <T = unknown>(threadId: number): T | null => {
 export const primeThreadOverview = <T = unknown>(
   threadId: number,
   value: T,
+  selector?: ClientRuntimeScopeSelector,
 ) => {
+  const cacheKey = getThreadOverviewCacheKey(threadId, selector);
   const entry = {
     value,
     updatedAt: Date.now(),
   };
 
-  threadOverviewCache.set(threadId, entry);
-  writeStoredPrefetchEntry('thread', `${threadId}`, entry);
+  threadOverviewCache.set(cacheKey, entry);
+  writeStoredPrefetchEntry('thread', cacheKey, entry);
 };
 
 const loadCachedJson = async <T = unknown>(
@@ -307,9 +316,10 @@ export const invalidateKnowledgeBaseList = (url?: string | null) => {
   removeStoredPrefetchEntry('shared', url);
 };
 
-export const peekThreadOverview = <T = unknown>(threadId: number): T | null => {
-  return getFreshThreadCachedValue<T>(threadId);
-};
+export const peekThreadOverview = <T = unknown>(
+  threadId: number,
+  selector?: ClientRuntimeScopeSelector,
+): T | null => getFreshThreadCachedValue<T>(threadId, selector);
 
 export const buildThreadOverviewUrl = (
   threadId: number,
@@ -369,11 +379,6 @@ export const prefetchDashboardOverview = async ({
   selector?: ClientRuntimeScopeSelector;
   fetcher?: typeof fetch;
 } = {}) => {
-  if (selector && !hasExecutableRuntimeScopeSelector(selector)) {
-    prefetchedFirstDashboardId = null;
-    return;
-  }
-
   try {
     const dashboards = await loadDashboardListPayload({
       selector,
@@ -406,12 +411,13 @@ export const prefetchThreadOverview = async (
     fetcher?: typeof fetch;
   } = {},
 ) => {
-  const cachedThreadOverview = getFreshThreadCachedValue(threadId);
+  const cacheKey = getThreadOverviewCacheKey(threadId, selector);
+  const cachedThreadOverview = getFreshThreadCachedValue(threadId, selector);
   if (cachedThreadOverview) {
     return cachedThreadOverview;
   }
 
-  const pendingRequest = threadOverviewRequestCache.get(threadId);
+  const pendingRequest = threadOverviewRequestCache.get(cacheKey);
   if (pendingRequest) {
     await pendingRequest;
     return;
@@ -433,17 +439,17 @@ export const prefetchThreadOverview = async (
         const result = {
           thread: payload,
         };
-        primeThreadOverview(threadId, result);
+        primeThreadOverview(threadId, result, selector);
         return result;
       })
       .finally(() => {
-        threadOverviewRequestCache.delete(threadId);
+        threadOverviewRequestCache.delete(cacheKey);
       });
 
-    threadOverviewRequestCache.set(threadId, request);
+    threadOverviewRequestCache.set(cacheKey, request);
     await request;
   } catch {
-    threadOverviewRequestCache.delete(threadId);
+    threadOverviewRequestCache.delete(cacheKey);
     // ignore background prefetch failures; target page will handle its own error
   }
 };

@@ -315,6 +315,44 @@ async def test_ask_retrieval_scope_ids_expand_only_retrieval_pipelines():
 
 
 @pytest.mark.asyncio
+async def test_ask_result_includes_backend_thinking_steps():
+    service = make_ask_service()
+    service._pipelines["sql_pairs_retrieval"].run.return_value = {
+        "formatted_output": {"documents": [{"question": "历史问题", "sql": "SELECT 1"}]}
+    }
+    service._pipelines["instructions_retrieval"].run.return_value = {
+        "formatted_output": {"documents": [{"instruction": "优先统计已支付订单"}]}
+    }
+    request = AskRequest.model_validate(
+        {
+            "query": "本月 GMV",
+            "mdl_hash": "mdl-thinking-1",
+            "runtimeScopeId": "deploy-1",
+        }
+    )
+    request.query_id = "query-thinking-1"
+
+    await service.ask(request)
+
+    result = service.get_ask_result(AskResultRequest(query_id=request.query_id))
+
+    assert result.status == "finished"
+    assert result.thinking is not None
+    assert [step.key for step in result.thinking.steps] == [
+        "ask.sql_pairs_retrieved",
+        "ask.sql_instructions_retrieved",
+        "ask.intent_recognized",
+        "ask.candidate_models_selected",
+        "ask.sql_reasoned",
+        "ask.sql_generated",
+    ]
+    assert result.thinking.steps[0].message_params == {"count": 1}
+    assert result.thinking.steps[1].message_params == {"count": 1}
+    assert result.thinking.steps[3].message_params == {"count": 1}
+    assert result.thinking.steps[4].detail == "reasoning"
+
+
+@pytest.mark.asyncio
 async def test_prepare_semantics_prefers_runtime_identity_over_explicit_project_id():
     service = make_semantics_service()
     request = SemanticsPreparationRequest.model_validate(

@@ -28,7 +28,7 @@ interface Props {
 }
 
 const StyledSkeleton = styled(Skeleton)`
-  padding: 4px 0;
+  padding: 2px 0;
   .ant-skeleton-paragraph {
     margin-bottom: 0;
     li {
@@ -37,6 +37,58 @@ const StyledSkeleton = styled(Skeleton)`
         margin-top: 12px;
       }
     }
+  }
+`;
+
+const RecommendedQuestionsShell = styled.div`
+  border-radius: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.92) 0%,
+    rgba(249, 250, 251, 0.88) 100%
+  );
+  padding: 12px 14px;
+`;
+
+const RecommendedQuestionsHeader = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: #475467;
+  font-size: 12px;
+  font-weight: 600;
+`;
+
+const RecommendedQuestionsBody = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+`;
+
+const RecommendedQuestionChip = styled.button`
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: #fff;
+  color: #344054;
+  border-radius: 999px;
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.3;
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+
+  &:hover {
+    border-color: rgba(111, 71, 255, 0.22);
+    color: var(--nova-primary-strong);
+    box-shadow: 0 6px 14px rgba(111, 71, 255, 0.06);
+    transform: translateY(-1px);
   }
 `;
 
@@ -82,16 +134,14 @@ const QuestionItem = (props: {
   sql: string;
   onSelect: ({ question, sql }: SelectQuestionProps) => void;
 }) => {
-  const { index, question, sql, onSelect } = props;
+  const { question, sql, onSelect } = props;
   return (
-    <div className={clsx(index > 0 && 'mt-1')}>
-      <span
-        className="cursor-pointer hover:text"
-        onClick={() => onSelect({ question, sql })}
-      >
-        {question}
-      </span>
-    </div>
+    <RecommendedQuestionChip
+      type="button"
+      onClick={() => onSelect({ question, sql })}
+    >
+      {question}
+    </RecommendedQuestionChip>
   );
 };
 const QuestionList = makeIterable(QuestionItem);
@@ -105,12 +155,12 @@ export default function RecommendedQuestions(props: Props) {
   );
 
   return (
-    <div className={clsx('bg-gray-2 rounded p-3', className)}>
-      <div className="mb-2">
-        <BulbOutlined className="mr-1 gray-6" />
-        <b className="text-semi-bold text-sm gray-7">推荐追问</b>
-      </div>
-      <div className="pl-1 gray-8">
+    <RecommendedQuestionsShell className={clsx(className)}>
+      <RecommendedQuestionsHeader>
+        <BulbOutlined />
+        <span>推荐追问</span>
+      </RecommendedQuestionsHeader>
+      <RecommendedQuestionsBody>
         <StyledSkeleton
           active
           loading={loading}
@@ -119,7 +169,7 @@ export default function RecommendedQuestions(props: Props) {
         >
           <QuestionList data={data} onSelect={onSelect} />
         </StyledSkeleton>
-      </div>
-    </div>
+      </RecommendedQuestionsBody>
+    </RecommendedQuestionsShell>
   );
 }

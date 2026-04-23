@@ -144,15 +144,6 @@ export class DashboardCacheBackgroundTracker {
         dashboardId: dashboard.id,
       });
 
-      // Get project and deployment info
-      const { project, manifest: mdl } = await resolveDashboardExecutionContext(
-        {
-          dashboard,
-          kbSnapshotRepository: this.kbSnapshotRepository,
-          projectService: this.projectService,
-          deployService: this.deployService,
-        },
-      );
       const hash = uuidv4();
 
       // Refresh cache for each item
@@ -172,6 +163,14 @@ export class DashboardCacheBackgroundTracker {
               });
 
             try {
+              const { project, manifest: mdl } =
+                await resolveDashboardExecutionContext({
+                  dashboard,
+                  kbSnapshotRepository: this.kbSnapshotRepository,
+                  projectService: this.projectService,
+                  deployService: this.deployService,
+                  responseRuntimeIdentity: item.detail.runtimeIdentity || null,
+                });
               await this.queryService.preview(item.detail.sql, {
                 project,
                 manifest: mdl,

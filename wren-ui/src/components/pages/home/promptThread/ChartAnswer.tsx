@@ -1,6 +1,6 @@
 import clsx from 'clsx';
 import dynamic from 'next/dynamic';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Form } from 'antd';
 import { attachLoading } from '@/utils/helper';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
@@ -13,6 +13,7 @@ import {
 } from '@/components/chart/meta';
 import {
   createDashboard,
+  loadDashboardDetailPayload,
   loadDashboardListPayload,
   resolveDashboardDisplayName,
   type DashboardListItem,
@@ -37,6 +38,7 @@ import {
   toPreferredRenderer,
 } from './chartAnswerUtils';
 import { appMessage, appModal } from '@/utils/antdAppBridge';
+import { resolveThreadResponseRuntimeSelector } from '@/features/home/thread/threadResponseRuntime';
 
 const Chart = dynamic(() => import('@/components/chart'), { ssr: false });
 
@@ -59,7 +61,12 @@ export default function ChartAnswer(props: AnswerResultProps) {
   const { onGenerateChartAnswer, onAdjustChartAnswer } =
     usePromptThreadActionsStore();
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
-  const { shouldAutoPreview, threadResponse } = props;
+  const { mode, shouldAutoPreview, threadResponse } = props;
+  const responseRuntimeSelector = resolveThreadResponseRuntimeSelector({
+    response: threadResponse,
+    fallbackSelector: runtimeScopeNavigation.selector,
+  });
+  const isWorkbenchMode = mode === 'workbench';
   const [regenerating, setRegenerating] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [newValues, setNewValues] = useState<Record<string, unknown> | null>(
@@ -75,7 +82,10 @@ export default function ChartAnswer(props: AnswerResultProps) {
   const { error, status, adjustment } = chartDetail || {};
   const effectiveChartStatus = status || null;
 
-  const previewDataResult = useResponsePreviewData(threadResponse.id);
+  const previewDataResult = useResponsePreviewData(
+    threadResponse.id,
+    responseRuntimeSelector,
+  );
   const { ensureLoaded: ensurePreviewLoaded } = previewDataResult;
   const [dashboardsLoading, setDashboardsLoading] = useState(false);
   const [dashboardOptions, setDashboardOptions] = useState<DashboardOption[]>(
@@ -83,12 +93,33 @@ export default function ChartAnswer(props: AnswerResultProps) {
   );
   const [pinSubmitting, setPinSubmitting] = useState(false);
   const [createAndPinSubmitting, setCreateAndPinSubmitting] = useState(false);
-  const defaultDashboardOption = useMemo(
-    () =>
-      dashboardOptions.find((dashboard) => dashboard.isDefault) ||
-      dashboardOptions[0] ||
-      null,
-    [dashboardOptions],
+
+  const refreshDashboardOptions = useCallback(
+    async (useCache: boolean) => {
+      setDashboardsLoading(true);
+      try {
+        const payload = await loadDashboardListPayload({
+          selector: runtimeScopeNavigation.workspaceSelector,
+          useCache,
+        });
+        const nextOptions = sortDashboardOptions(payload);
+        setDashboardOptions(nextOptions);
+        return nextOptions;
+      } catch (error) {
+        const errorMessage = resolveAbortSafeErrorMessage(
+          error,
+          '加载看板列表失败。',
+        );
+        if (errorMessage) {
+          appMessage.error(errorMessage);
+        }
+        setDashboardOptions([]);
+        return [] as DashboardOption[];
+      } finally {
+        setDashboardsLoading(false);
+      }
+    },
+    [runtimeScopeNavigation.workspaceSelector],
   );
 
   useEffect(() => {
@@ -96,7 +127,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
     setDashboardsLoading(true);
 
     void loadDashboardListPayload({
-      selector: runtimeScopeNavigation.selector,
+      selector: runtimeScopeNavigation.workspaceSelector,
       useCache: true,
     })
       .then((payload) => {
@@ -127,7 +158,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
     return () => {
       cancelled = true;
     };
-  }, [runtimeScopeNavigation.selector]);
+  }, [runtimeScopeNavigation.workspaceSelector]);
 
   const chartSpec = useMemo(() => {
     if (
@@ -139,7 +170,8 @@ export default function ChartAnswer(props: AnswerResultProps) {
     return chartDetail.chartSchema;
   }, [chartDetail, effectiveChartStatus]);
 
-  const shouldRequestPreview = shouldAutoPreview || !!chartSpec;
+  const shouldRequestPreview =
+    shouldAutoPreview || !!chartSpec || isWorkbenchMode;
 
   useEffect(() => {
     setHasRequestedPreview(false);
@@ -181,12 +213,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
   }, [chartSpec]);
 
   const localizedChartDescription = useMemo(() => {
-    const rawDescription = chartDetail?.description || '';
-    if (!rawDescription) return '';
-    if (/[\u4e00-\u9fff]/.test(rawDescription)) {
-      return rawDescription;
-    }
-    return '该图表用于展示当前查询结果，帮助你更直观地比较不同维度之间的数据差异。';
+    return chartDetail?.description?.trim() || '';
   }, [chartDetail?.description]);
 
   const chartDataFields = useMemo(() => {
@@ -320,10 +347,15 @@ export default function ChartAnswer(props: AnswerResultProps) {
       throw new Error('当前图表类型暂不支持固定到看板。');
     }
 
-    const payload = await createDashboardItem(runtimeScopeNavigation.selector, {
+    const payload = await createDashboardItem(responseRuntimeSelector, {
       itemType,
       responseId: threadResponse.id,
       ...(targetDashboardId != null ? { dashboardId: targetDashboardId } : {}),
+    });
+    await loadDashboardDetailPayload({
+      dashboardId: payload.dashboardId,
+      selector: runtimeScopeNavigation.workspaceSelector,
+      useCache: false,
     });
     const targetDashboard = dashboardOptions.find(
       (dashboard) => dashboard.id === payload.dashboardId,
@@ -339,8 +371,11 @@ export default function ChartAnswer(props: AnswerResultProps) {
     setIsCreatePinModalOpen(false);
   };
 
-  const shouldUsePinPopover =
-    dashboardsLoading || dashboardOptions.length !== 1;
+  const shouldUsePinPopover = dashboardOptions.length !== 1;
+  const pinActionDisabled =
+    pinSubmitting ||
+    createAndPinSubmitting ||
+    (dashboardsLoading && dashboardOptions.length === 0);
 
   const runPinToDashboard = async (
     targetDashboardId: number | null,
@@ -363,14 +398,20 @@ export default function ChartAnswer(props: AnswerResultProps) {
   };
 
   const onPin = async () => {
-    if (pinSubmitting || createAndPinSubmitting) {
+    if (pinActionDisabled) {
       return;
     }
 
-    if (!shouldUsePinPopover) {
+    const latestDashboardOptions = await refreshDashboardOptions(false);
+    const latestDefaultDashboardOption =
+      latestDashboardOptions.find((dashboard) => dashboard.isDefault) ||
+      latestDashboardOptions[0] ||
+      null;
+
+    if (latestDashboardOptions.length === 1) {
       await runPinToDashboard(
-        defaultDashboardOption?.id ?? null,
-        defaultDashboardOption?.name,
+        latestDefaultDashboardOption?.id ?? null,
+        latestDefaultDashboardOption?.name,
       );
       return;
     }
@@ -417,7 +458,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
     return (
       <div className="p-6">
         <Alert
-          message={answerShortMessage}
+          title={answerShortMessage}
           description={answerErrorMessage}
           type="error"
           showIcon
@@ -431,7 +472,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
     return (
       <div className="p-6">
         <Alert
-          message="图表数据加载失败"
+          title="图表数据加载失败"
           description={previewErrorMessage}
           type="error"
           showIcon
@@ -457,7 +498,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
             className="mt-4"
             type="warning"
             showIcon
-            message="图表已按兼容模式渲染"
+            title="图表已按兼容模式渲染"
             description={
               <ul className="mb-0 pl-4">
                 {validationErrors.map((error) => (
@@ -511,19 +552,22 @@ export default function ChartAnswer(props: AnswerResultProps) {
               </Form>
             </Toolbar>
             <Chart
-              width={700}
+              width={isWorkbenchMode ? '100%' : 700}
               spec={chartSpec}
               values={dataValues}
+              hideEditAction
+              hideReloadAction
               onEdit={onEdit}
               onReload={onReload}
               onPin={onPin}
-              pinDisabled={pinSubmitting || createAndPinSubmitting}
+              pinButtonLabel="Pin to dashboard"
+              pinDisabled={pinActionDisabled}
               pinPopoverContent={
                 shouldUsePinPopover ? (
                   <ChartAnswerPinPopover
                     dashboardsLoading={dashboardsLoading}
                     dashboardOptions={dashboardOptions}
-                    disabled={pinSubmitting || createAndPinSubmitting}
+                    disabled={pinActionDisabled}
                     onCreateAndPin={() => {
                       setIsPinPopoverOpen(false);
                       setIsCreatePinModalOpen(true);
@@ -541,7 +585,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
               onPinPopoverOpenChange={
                 shouldUsePinPopover
                   ? (open) => {
-                      if (pinSubmitting || createAndPinSubmitting) {
+                      if (pinActionDisabled) {
                         return;
                       }
                       setIsPinPopoverOpen(open);
@@ -575,7 +619,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
           setCreateAndPinSubmitting(true);
           try {
             const dashboard = await createDashboard(
-              runtimeScopeNavigation.selector,
+              runtimeScopeNavigation.workspaceSelector,
               {
                 name: normalizedName,
               },

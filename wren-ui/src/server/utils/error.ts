@@ -34,6 +34,13 @@ export enum GeneralErrorCodes {
   RESOURCE_NOT_FOUND = 'RESOURCE_NOT_FOUND',
   MDL_PARSE_ERROR = 'MDL_PARSE_ERROR',
   NO_CHART = 'NO_CHART',
+  AI_NO_CHART = 'AI_NO_CHART',
+  CHART_SCHEMA_INVALID = 'CHART_SCHEMA_INVALID',
+  EMPTY_RESULT_SET = 'EMPTY_RESULT_SET',
+  INSUFFICIENT_NUMERIC_FIELDS = 'INSUFFICIENT_NUMERIC_FIELDS',
+  INSUFFICIENT_DATA_VARIATION = 'INSUFFICIENT_DATA_VARIATION',
+  UNSUPPORTED_RESULT_SHAPE = 'UNSUPPORTED_RESULT_SHAPE',
+  UPSTREAM_DATA_ERROR = 'UPSTREAM_DATA_ERROR',
 
   // Exception error for AI service (e.g., network connection error)
   AI_SERVICE_UNDEFINED_ERROR = 'OTHERS',
@@ -98,6 +105,20 @@ export const errorMessages: Partial<Record<GeneralErrorCodes, string>> = {
     "Could you please provide more details or specify the information you're seeking?",
   [GeneralErrorCodes.NO_CHART]:
     "The chart couldn't be generated this time. Please try regenerating the chart or rephrasing your question for better results.",
+  [GeneralErrorCodes.AI_NO_CHART]:
+    "The AI couldn't generate a usable chart this time. Please try regenerating the chart or rephrasing your request.",
+  [GeneralErrorCodes.CHART_SCHEMA_INVALID]:
+    'The generated chart result was invalid and could not be rendered.',
+  [GeneralErrorCodes.EMPTY_RESULT_SET]:
+    'The current query returned no rows, so a chart cannot be generated.',
+  [GeneralErrorCodes.INSUFFICIENT_NUMERIC_FIELDS]:
+    'The current result does not contain enough numeric fields to generate a chart.',
+  [GeneralErrorCodes.INSUFFICIENT_DATA_VARIATION]:
+    'The current result does not have enough dimension variation to generate a meaningful chart.',
+  [GeneralErrorCodes.UNSUPPORTED_RESULT_SHAPE]:
+    'The current result shape is better suited to a table view than a chart.',
+  [GeneralErrorCodes.UPSTREAM_DATA_ERROR]:
+    'The data source is temporarily unavailable, so the chart could not be generated.',
 
   // Connector errors
   [GeneralErrorCodes.CONNECTION_ERROR]: 'Can not connect to database',
@@ -163,6 +184,13 @@ export const shortMessages: Partial<Record<GeneralErrorCodes, string>> = {
   [GeneralErrorCodes.NO_RELEVANT_DATA]: 'Try a different query',
   [GeneralErrorCodes.NO_RELEVANT_SQL]: 'Clarification needed',
   [GeneralErrorCodes.NO_CHART]: 'Chart not available',
+  [GeneralErrorCodes.AI_NO_CHART]: 'Chart not available',
+  [GeneralErrorCodes.CHART_SCHEMA_INVALID]: 'Invalid chart result',
+  [GeneralErrorCodes.EMPTY_RESULT_SET]: 'No rows returned',
+  [GeneralErrorCodes.INSUFFICIENT_NUMERIC_FIELDS]: 'Missing numeric fields',
+  [GeneralErrorCodes.INSUFFICIENT_DATA_VARIATION]: 'Insufficient variation',
+  [GeneralErrorCodes.UNSUPPORTED_RESULT_SHAPE]: 'Table view recommended',
+  [GeneralErrorCodes.UPSTREAM_DATA_ERROR]: 'Data source unavailable',
   [GeneralErrorCodes.CONNECTION_ERROR]: 'Failed to connect',
   [GeneralErrorCodes.IBIS_SERVER_ERROR]: 'Data connection error',
   [GeneralErrorCodes.INIT_SQL_ERROR]: 'Invalid initializing SQL',

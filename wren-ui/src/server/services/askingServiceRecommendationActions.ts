@@ -4,6 +4,7 @@ import {
   resolveRuntimeScopeIdFromPersistedIdentityWithProjectBridgeFallback,
   toPersistedRuntimeIdentityFromSource,
 } from '@server/utils/persistedRuntimeIdentity';
+import { resolveRecommendedQuestionsHomeIntent } from '@/features/home/thread/homeIntentContract';
 import {
   InstantRecommendedQuestionsInput,
   isRecommendationQuestionsFinalized,
@@ -52,10 +53,22 @@ export const getThreadRecommendationQuestionsAction = async (
     throw new Error(`Thread ${threadId} not found`);
   }
 
+  const threadResponses = await service.threadResponseRepository.findAllBy({
+    threadId,
+  });
+  const latestThreadResponse =
+    [...(threadResponses || [])]
+      .sort((left: any, right: any) => (right.id || 0) - (left.id || 0))
+      .at(0) || null;
   const res: ThreadRecommendQuestionResult = {
     status: RecommendQuestionResultStatus.NOT_STARTED,
     questions: [],
     error: undefined,
+    resolvedIntent: resolveRecommendedQuestionsHomeIntent({
+      source: 'derived',
+      sourceThreadId: thread.id,
+      sourceResponseId: latestThreadResponse?.id ?? null,
+    }),
   };
   if (thread.queryId && thread.questionsStatus) {
     const mappedStatus =
@@ -75,6 +88,7 @@ export const getThreadRecommendationQuestionsAction = async (
         status: RecommendQuestionResultStatus.GENERATING,
         questions: [],
         error: undefined,
+        resolvedIntent: res.resolvedIntent,
       };
     }
   }

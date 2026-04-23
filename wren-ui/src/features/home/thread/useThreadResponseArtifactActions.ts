@@ -12,11 +12,29 @@ const reportThreadError = (_error: unknown, fallbackMessage: string) => {
 
 export function useThreadResponseArtifactActions({
   runtimeScopeSelector,
+  resolveResponseRuntimeScopeSelector,
 }: {
   runtimeScopeSelector: ClientRuntimeScopeSelector;
+  resolveResponseRuntimeScopeSelector?: (
+    responseId: number,
+  ) => ClientRuntimeScopeSelector;
 }) {
   const [createSqlPairLoading, setCreateSqlPairLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+
+  const resolveSelectorForResponse = useCallback(
+    (responseId?: number | null) => {
+      if (
+        typeof responseId === 'number' &&
+        resolveResponseRuntimeScopeSelector != null
+      ) {
+        return resolveResponseRuntimeScopeSelector(responseId);
+      }
+
+      return runtimeScopeSelector;
+    },
+    [resolveResponseRuntimeScopeSelector, runtimeScopeSelector],
+  );
 
   const handleCreateView = useCallback(
     async (data: {
@@ -26,7 +44,10 @@ export function useThreadResponseArtifactActions({
     }) => {
       setCreating(true);
       try {
-        await createViewFromResponse(runtimeScopeSelector, data);
+        await createViewFromResponse(
+          resolveSelectorForResponse(data.responseId),
+          data,
+        );
         message.success('视图已创建。');
       } catch (error) {
         reportThreadError(error, '创建视图失败，请稍后重试');
@@ -35,14 +56,17 @@ export function useThreadResponseArtifactActions({
         setCreating(false);
       }
     },
-    [runtimeScopeSelector],
+    [resolveSelectorForResponse],
   );
 
   const handleCreateSqlPair = useCallback(
-    async (data: CreateSqlPairInput) => {
+    async (data: CreateSqlPairInput, responseId?: number | null) => {
       setCreateSqlPairLoading(true);
       try {
-        await createKnowledgeSqlPair(runtimeScopeSelector, data);
+        await createKnowledgeSqlPair(
+          resolveSelectorForResponse(responseId),
+          data,
+        );
         message.success('SQL 模板已创建。');
       } catch (error) {
         reportThreadError(error, '保存 SQL 模板失败，请稍后重试');
@@ -51,7 +75,7 @@ export function useThreadResponseArtifactActions({
         setCreateSqlPairLoading(false);
       }
     },
-    [runtimeScopeSelector],
+    [resolveSelectorForResponse],
   );
 
   return {

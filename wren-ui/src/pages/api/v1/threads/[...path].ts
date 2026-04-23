@@ -80,7 +80,9 @@ const parseThreadResponseCollectionPath = (
 
 type CreateThreadResponsePayload = {
   question?: string;
+  responseKind?: string;
   sql?: string;
+  sourceResponseId?: number;
   taskId?: string;
 };
 
@@ -94,7 +96,13 @@ const resolveCreateThreadResponsePayload = (
   const source = payload as Record<string, unknown>;
   return {
     question: typeof source.question === 'string' ? source.question : undefined,
+    responseKind:
+      typeof source.responseKind === 'string' ? source.responseKind : undefined,
     sql: typeof source.sql === 'string' ? source.sql : undefined,
+    sourceResponseId:
+      typeof source.sourceResponseId === 'number'
+        ? source.sourceResponseId
+        : undefined,
     taskId: typeof source.taskId === 'string' ? source.taskId : undefined,
   };
 };
@@ -117,13 +125,17 @@ const buildCreateThreadResponseInput = async ({
 
     return {
       question: askingTask.question,
+      responseKind: payload.responseKind,
       trackedAskingResult: askingTask,
+      sourceResponseId: payload.sourceResponseId,
     };
   }
 
   return {
     question: payload.question,
+    responseKind: payload.responseKind,
     sql: payload.sql,
+    sourceResponseId: payload.sourceResponseId,
   };
 };
 

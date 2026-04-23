@@ -24,6 +24,7 @@ export default function ThreadPageShell({
       title={title}
       hideHeader
       contentBorderless
+      stretchContent
       loading={loading}
       navItems={buildNovaShellNavItems({
         activeKey: 'home',

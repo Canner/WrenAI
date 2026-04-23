@@ -288,7 +288,10 @@ export class QueryService implements IQueryService {
       /HikariDataSource .* has been closed/i.test(message) ||
       (/Table with name .* does not exist/i.test(message) &&
         /Catalog Error/i.test(message)) ||
-      /source node name not found/i.test(message)
+      /source node name not found/i.test(message) ||
+      /(?:read\s+)?ECONNRESET/i.test(message) ||
+      /socket hang up/i.test(message) ||
+      /Connection reset by peer/i.test(message)
     );
   }
 

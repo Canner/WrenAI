@@ -14,6 +14,7 @@ import {
   AskingDetailTaskUpdateInput,
 } from './askingServiceShared';
 import { normalizeRuntimeScope } from './askingServiceRuntimeSupport';
+import { buildThreadResponseIntentState } from './threadResponseIntentState';
 
 interface AskingServiceThreadLike {
   threadRepository: Pick<
@@ -70,11 +71,23 @@ export const createThreadAction = async (
     summary: input.question,
   });
 
+  const threadResponseIntentState = buildThreadResponseIntentState({
+    askingTaskType: input.trackedAskingResult?.type || null,
+    responseKind: input.responseKind || 'ANSWER',
+    sourceResponseId: input.sourceResponseId ?? null,
+    sql: input.sql,
+    threadId: thread.id,
+  });
+
   const threadResponse = await service.threadResponseRepository.createOne({
     ...toPersistedRuntimeIdentityFromSource(thread, persistedRuntimeIdentity),
     threadId: thread.id,
     question: input.question,
+    responseKind: input.responseKind || 'ANSWER',
     sql: input.sql,
+    sourceResponseId: input.sourceResponseId ?? null,
+    resolvedIntent: threadResponseIntentState.resolvedIntent,
+    artifactLineage: threadResponseIntentState.artifactLineage,
     askingTaskId: input.trackedAskingResult?.taskId,
   });
 
@@ -235,11 +248,34 @@ export const createThreadResponseAction = async (
     throw new Error(`Thread ${threadId} not found`);
   }
 
+  let sql = input.sql;
+  if (!sql && input.sourceResponseId) {
+    const sourceResponse = await service.getResponse(input.sourceResponseId);
+    if (!sourceResponse) {
+      throw new Error(
+        `Source thread response ${input.sourceResponseId} not found`,
+      );
+    }
+    sql = sourceResponse.sql;
+  }
+
+  const threadResponseIntentState = buildThreadResponseIntentState({
+    askingTaskType: input.trackedAskingResult?.type || null,
+    responseKind: input.responseKind || 'ANSWER',
+    sourceResponseId: input.sourceResponseId ?? null,
+    sql,
+    threadId: thread.id,
+  });
+
   const threadResponse = await service.threadResponseRepository.createOne({
     ...toPersistedRuntimeIdentityFromSource(thread, runtimeIdentity),
     threadId: thread.id,
     question: input.question,
-    sql: input.sql,
+    responseKind: input.responseKind || 'ANSWER',
+    sql,
+    sourceResponseId: input.sourceResponseId ?? null,
+    resolvedIntent: threadResponseIntentState.resolvedIntent,
+    artifactLineage: threadResponseIntentState.artifactLineage,
     askingTaskId: input.trackedAskingResult?.taskId,
   });
 
@@ -252,7 +288,11 @@ export const createThreadResponseAction = async (
     );
   }
 
-  return threadResponse;
+  return (
+    (await service.threadResponseRepository.findOneBy({
+      id: threadResponse.id,
+    })) || threadResponse
+  );
 };
 
 export const updateThreadResponseAction = async (

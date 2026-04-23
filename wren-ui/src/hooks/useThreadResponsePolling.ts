@@ -6,6 +6,44 @@ import {
 import type { ThreadResponse } from '@/types/home';
 import usePollingRequestLoop from './usePollingRequestLoop';
 
+const NON_RECOVERABLE_THREAD_RESPONSE_ERROR_PATTERNS = [
+  /does not belong to the current runtime scope/i,
+  /\bnot found\b/i,
+  /\binvalid\b/i,
+];
+
+export class ThreadResponseRequestError extends Error {
+  statusCode?: number;
+  code?: string;
+
+  constructor(
+    message: string,
+    options?: {
+      statusCode?: number;
+      code?: string;
+    },
+  ) {
+    super(message);
+    this.name = 'ThreadResponseRequestError';
+    this.statusCode = options?.statusCode;
+    this.code = options?.code;
+  }
+}
+
+export const shouldRetryThreadResponsePollingError = (error: Error) => {
+  const statusCodeCandidate = (error as { statusCode?: unknown }).statusCode;
+  const statusCode =
+    typeof statusCodeCandidate === 'number' ? statusCodeCandidate : null;
+
+  if (statusCode != null && statusCode >= 400 && statusCode < 500) {
+    return false;
+  }
+
+  return !NON_RECOVERABLE_THREAD_RESPONSE_ERROR_PATTERNS.some((pattern) =>
+    pattern.test(error.message),
+  );
+};
+
 export const buildThreadResponseDetailUrl = ({
   responseId,
   runtimeScopeSelector,
@@ -58,12 +96,18 @@ export const loadThreadResponsePayload = async ({
   const payload = await response.json().catch(() => null);
 
   if (!response.ok) {
-    throw new Error(payload?.error || '加载对话结果失败，请稍后重试');
+    throw new ThreadResponseRequestError(
+      payload?.error || '加载对话结果失败，请稍后重试',
+      {
+        statusCode: response.status,
+        code: typeof payload?.code === 'string' ? payload.code : undefined,
+      },
+    );
   }
 
   const normalized = normalizeThreadResponsePayload(payload);
   if (!normalized) {
-    throw new Error('加载对话结果失败，请稍后重试');
+    throw new ThreadResponseRequestError('加载对话结果失败，请稍后重试');
   }
 
   return normalized;
@@ -85,15 +129,19 @@ export default function useThreadResponsePolling({
       pollInterval,
       onCompleted,
       onError,
-      shouldContinueOnError: () => true,
+      shouldContinueOnError: shouldRetryThreadResponsePollingError,
     });
 
   const fetchById = useCallback(
-    (responseId: number) =>
+    (
+      responseId: number,
+      runtimeScopeSelectorOverride?: ClientRuntimeScopeSelector,
+    ) =>
       startPolling(() =>
         loadThreadResponsePayload({
           responseId,
-          runtimeScopeSelector,
+          runtimeScopeSelector:
+            runtimeScopeSelectorOverride || runtimeScopeSelector,
         }),
       ),
     [runtimeScopeSelector, startPolling],

@@ -1,6 +1,5 @@
 import { useRouter } from 'next/router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Divider } from 'antd';
 import styled from 'styled-components';
 import { nextTick } from '@/utils/time';
 import { usePromptThreadDataStore } from './store';
@@ -8,24 +7,20 @@ import AnswerResult from './AnswerResult';
 import { makeIterable, IterableComponent } from '@/utils/iteration';
 import { getIsFinished } from '@/hooks/useAskPrompt';
 import { getAnswerIsFinished } from '@/components/pages/home/promptThread/answerGeneration';
-import type { RecommendedQuestionsTask, ThreadResponse } from '@/types/home';
-
-import { SelectQuestionProps } from '@/components/pages/home/RecommendedQuestions';
+import type { ThreadResponse } from '@/types/home';
+import { getRecommendedQuestionProps } from '@/components/pages/home/RecommendedQuestions';
 import { resolveShouldAutoPreviewThreadResponse } from './autoPreview';
 const THREAD_INITIAL_VISIBLE_RESPONSE_COUNT = 24;
 const THREAD_VISIBLE_RESPONSE_BATCH = 24;
-
-export interface RecommendedQuestionsProps {
-  data: RecommendedQuestionsTask;
-  show: boolean;
-  onSelect: ({ question, sql }: SelectQuestionProps) => void;
-}
 
 const StyledPromptThread = styled.div`
   width: 100%;
   max-width: 100%;
   margin-left: auto;
   margin-right: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
 
   h4.ant-typography {
     margin-top: 10px;
@@ -59,11 +54,31 @@ const ThreadLoadMoreButton = styled.button`
   }
 `;
 
+const ThreadTurnDivider = styled.div`
+  height: 1px;
+  margin: 16px 0 16px 44px;
+  background: linear-gradient(
+    90deg,
+    rgba(15, 23, 42, 0.08) 0%,
+    rgba(15, 23, 42, 0.025) 42%,
+    rgba(15, 23, 42, 0) 100%
+  );
+`;
+
 const AnswerResultTemplate: React.FC<
   IterableComponent<ThreadResponse> & {
     motion: boolean;
     onInitPreviewDone: () => void;
     initialBlockedPreviewResponseId: number | null;
+    recommendedQuestionsOwnerResponseId?: number | null;
+    recommendedQuestionsState?: ReturnType<
+      typeof getRecommendedQuestionProps
+    > extends {
+      show: true;
+      state: infer T;
+    }
+      ? T | null
+      : never;
   }
 > = ({
   data,
@@ -71,6 +86,8 @@ const AnswerResultTemplate: React.FC<
   motion,
   onInitPreviewDone,
   initialBlockedPreviewResponseId,
+  recommendedQuestionsOwnerResponseId,
+  recommendedQuestionsState,
   ...threadResponse
 }) => {
   const { id } = threadResponse;
@@ -87,13 +104,18 @@ const AnswerResultTemplate: React.FC<
       key={`${id}-${index}`}
       data-guideid={isLastThreadResponse ? `last-answer-result` : undefined}
     >
-      {index > 0 && <Divider />}
+      {index > 0 && <ThreadTurnDivider />}
       <AnswerResult
         motion={motion}
         isOpeningQuestion={index === 0}
         isLastThreadResponse={isLastThreadResponse}
         shouldAutoPreview={shouldAutoPreview}
         onInitPreviewDone={onInitPreviewDone}
+        recommendedQuestions={
+          recommendedQuestionsOwnerResponseId === id
+            ? recommendedQuestionsState
+            : null
+        }
         threadResponse={threadResponse}
       />
     </div>
@@ -107,7 +129,12 @@ export default function PromptThread() {
   const divRef = useRef<HTMLDivElement>(null);
   const initialBlockedPreviewResponseIdRef = useRef<number | null>(null);
   const previousResponsesLengthRef = useRef(0);
-  const { data } = usePromptThreadDataStore();
+  const {
+    data,
+    recommendedQuestions,
+    recommendedQuestionsOwnerResponseId,
+    showRecommendedQuestions,
+  } = usePromptThreadDataStore();
   const [visibleResponseCount, setVisibleResponseCount] = useState(
     THREAD_INITIAL_VISIBLE_RESPONSE_COUNT,
   );
@@ -120,6 +147,14 @@ export default function PromptThread() {
   const visibleResponses = useMemo(
     () => responses.slice(hiddenResponseCount),
     [hiddenResponseCount, responses],
+  );
+  const recommendedQuestionProps = useMemo(
+    () =>
+      getRecommendedQuestionProps(
+        recommendedQuestions,
+        showRecommendedQuestions,
+      ),
+    [recommendedQuestions, showRecommendedQuestions],
   );
 
   useEffect(() => {
@@ -217,7 +252,7 @@ export default function PromptThread() {
   }, [responses.length]);
 
   return (
-    <StyledPromptThread className="mt-12" ref={divRef}>
+    <StyledPromptThread className="mt-2" ref={divRef}>
       {hiddenResponseCount > 0 ? (
         <ThreadLoadMoreButton type="button" onClick={handleLoadMoreResponses}>
           加载更早对话（{hiddenResponseCount} 条）
@@ -227,6 +262,12 @@ export default function PromptThread() {
         data={visibleResponses}
         initialBlockedPreviewResponseId={initialBlockedPreviewResponseId}
         onInitPreviewDone={onInitPreviewDone}
+        recommendedQuestionsOwnerResponseId={
+          recommendedQuestionsOwnerResponseId
+        }
+        recommendedQuestionsState={
+          recommendedQuestionProps.show ? recommendedQuestionProps.state : null
+        }
       />
     </StyledPromptThread>
   );

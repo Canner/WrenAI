@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { NextRouter } from 'next/router';
 import {
   buildRuntimeScopeUrl,
-  hasExecutableRuntimeScopeSelector,
   type ClientRuntimeScopeSelector,
 } from '@/runtime/client/runtimeScope';
 import {
@@ -47,7 +46,7 @@ export default function useDolaShellSidebarPrefetch({
   hrefRuntime,
   router,
   hasRuntimeScope,
-  runtimeSelector,
+  runtimeSelector: _runtimeSelector,
   workspaceScopedSelector,
 }: Props) {
   const prefetchedNavKeysRef = useRef<Set<string>>(new Set());
@@ -88,9 +87,7 @@ export default function useDolaShellSidebarPrefetch({
 
       if (itemKey === 'dashboard') {
         void prefetchDashboardOverview({
-          selector: hasExecutableRuntimeScopeSelector(runtimeSelector)
-            ? runtimeSelector
-            : workspaceScopedSelector,
+          selector: workspaceScopedSelector,
         });
         return;
       }
@@ -105,7 +102,7 @@ export default function useDolaShellSidebarPrefetch({
         });
       }
     },
-    [hasRuntimeScope, runtimeSelector, workspaceScopedSelector],
+    [hasRuntimeScope, workspaceScopedSelector],
   );
 
   const prefetchHistoryRoute = useCallback(

@@ -20,8 +20,14 @@ describe('AskingService', () => {
       });
       service.queryService = {
         preview: jest.fn().mockResolvedValue({
-          columns: [{ name: 'value', type: 'number' }],
-          data: [[1]],
+          columns: [
+            { name: 'category', type: 'string' },
+            { name: 'value', type: 'number' },
+          ],
+          data: [
+            ['A', 1],
+            ['B', 2],
+          ],
         }),
       };
       service.threadResponseRepository = {
@@ -50,8 +56,14 @@ describe('AskingService', () => {
       expect(service.wrenAIAdaptor.generateChart).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            columns: [{ name: 'value', type: 'number' }],
-            data: [[1]],
+            columns: [
+              { name: 'category', type: 'string' },
+              { name: 'value', type: 'number' },
+            ],
+            data: [
+              ['A', 1],
+              ['B', 2],
+            ],
           }),
           runtimeScopeId: 'scope-1',
           runtimeIdentity,
@@ -65,9 +77,212 @@ describe('AskingService', () => {
         expect.objectContaining({
           chartDetail: expect.objectContaining({
             diagnostics: expect.objectContaining({
-              previewColumnCount: 1,
-              previewRowCount: 1,
-              previewColumns: [{ name: 'value', type: 'number' }],
+              previewColumnCount: 2,
+              previewRowCount: 2,
+              previewColumns: [
+                { name: 'category', type: 'string' },
+                { name: 'value', type: 'number' },
+              ],
+            }),
+            thinking: expect.objectContaining({
+              currentStepKey: 'chart.chart_type_selected',
+              steps: expect.arrayContaining([
+                expect.objectContaining({
+                  key: 'chart.sql_pairs_retrieved',
+                  status: 'finished',
+                  messageParams: expect.objectContaining({
+                    count: 0,
+                  }),
+                }),
+                expect.objectContaining({
+                  key: 'chart.sql_instructions_retrieved',
+                  status: 'finished',
+                  messageParams: expect.objectContaining({
+                    count: 0,
+                  }),
+                }),
+                expect.objectContaining({
+                  key: 'chart.preview_data_fetched',
+                  status: 'finished',
+                }),
+                expect.objectContaining({
+                  key: 'chart.chart_instructions_retrieved',
+                  status: 'finished',
+                  messageParams: expect.objectContaining({
+                    count: 0,
+                  }),
+                }),
+                expect.objectContaining({
+                  key: 'chart.chart_type_selected',
+                  status: 'running',
+                }),
+              ]),
+            }),
+          }),
+        }),
+      );
+    });
+
+    it('carries source ask retrieval context into chart follow-up thinking', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      service.assertResponseScope = jest.fn().mockResolvedValue(undefined);
+      service.getExecutionResources = jest.fn().mockResolvedValue({
+        project: { id: 42 },
+        manifest: { models: [] },
+      });
+      service.queryService = {
+        preview: jest.fn().mockResolvedValue({
+          columns: [
+            { name: 'category', type: 'string' },
+            { name: 'value', type: 'number' },
+          ],
+          data: [
+            ['A', 1],
+            ['B', 2],
+          ],
+        }),
+      };
+      service.threadResponseRepository = {
+        findOneBy: jest.fn().mockResolvedValue({
+          id: 21,
+          threadId: 9,
+          question: '生成一张图表给我',
+          responseKind: 'CHART_FOLLOWUP',
+          sourceResponseId: 11,
+          sql: 'select 1',
+        }),
+        updateOne: jest.fn().mockResolvedValue({ id: 21 }),
+      };
+      service.getResponse = jest.fn().mockResolvedValue({
+        id: 11,
+        threadId: 9,
+        question: '各岗位平均薪资分别是多少？',
+        sql: 'select 1',
+        askingTaskId: 77,
+      });
+      service.getAskingTaskById = jest.fn().mockResolvedValue({
+        thinking: {
+          steps: [
+            {
+              key: 'ask.sql_pairs_retrieved',
+              messageKey: 'ask.sql_pairs_retrieved',
+              messageParams: { count: 2 },
+              status: 'finished',
+            },
+            {
+              key: 'ask.sql_instructions_retrieved',
+              messageKey: 'ask.sql_instructions_retrieved',
+              messageParams: { count: 1 },
+              status: 'finished',
+            },
+          ],
+        },
+      });
+      service.wrenAIAdaptor = {
+        generateChart: jest.fn().mockResolvedValue({ queryId: 'chart-2' }),
+      };
+      service.chartBackgroundTracker = {
+        addTask: jest.fn(),
+      };
+
+      await service.generateThreadResponseChartScoped(
+        21,
+        runtimeIdentity,
+        { language: 'English' },
+        'scope-1',
+      );
+
+      expect(service.threadResponseRepository.updateOne).toHaveBeenCalledWith(
+        21,
+        expect.objectContaining({
+          chartDetail: expect.objectContaining({
+            thinking: expect.objectContaining({
+              steps: expect.arrayContaining([
+                expect.objectContaining({
+                  key: 'chart.sql_pairs_retrieved',
+                  messageParams: expect.objectContaining({
+                    count: 2,
+                  }),
+                }),
+                expect.objectContaining({
+                  key: 'chart.sql_instructions_retrieved',
+                  messageParams: expect.objectContaining({
+                    count: 1,
+                  }),
+                }),
+              ]),
+            }),
+          }),
+        }),
+      );
+    });
+
+    it('marks chart generation as upstream-data failure when preview fetch fails', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      service.assertResponseScope = jest.fn().mockResolvedValue(undefined);
+      service.getExecutionResources = jest.fn().mockResolvedValue({
+        project: { id: 42 },
+        manifest: { models: [] },
+      });
+      service.queryService = {
+        preview: jest.fn().mockRejectedValue(new Error('socket hang up')),
+      };
+      service.threadResponseRepository = {
+        findOneBy: jest.fn().mockResolvedValue({
+          id: 13,
+          threadId: 9,
+          question: 'chart it',
+          sql: 'select 1',
+        }),
+        updateOne: jest.fn().mockResolvedValue({ id: 13 }),
+      };
+      service.wrenAIAdaptor = {
+        generateChart: jest.fn(),
+      };
+      service.chartBackgroundTracker = {
+        addTask: jest.fn(),
+      };
+
+      await service.generateThreadResponseChartScoped(
+        13,
+        runtimeIdentity,
+        { language: 'English' },
+        'scope-1',
+      );
+
+      expect(service.wrenAIAdaptor.generateChart).not.toHaveBeenCalled();
+      expect(service.chartBackgroundTracker.addTask).not.toHaveBeenCalled();
+      expect(service.threadResponseRepository.updateOne).toHaveBeenCalledWith(
+        13,
+        expect.objectContaining({
+          chartDetail: expect.objectContaining({
+            status: 'FAILED',
+            chartability: null,
+            diagnostics: expect.objectContaining({
+              lastErrorCode: 'UPSTREAM_DATA_ERROR',
+              lastErrorMessage: 'socket hang up',
+            }),
+            error: expect.objectContaining({
+              extensions: expect.objectContaining({
+                code: 'UPSTREAM_DATA_ERROR',
+              }),
+            }),
+            thinking: expect.objectContaining({
+              currentStepKey: 'chart.preview_data_fetched',
+              steps: expect.arrayContaining([
+                expect.objectContaining({
+                  key: 'chart.sql_pairs_retrieved',
+                  status: 'finished',
+                }),
+                expect.objectContaining({
+                  key: 'chart.preview_data_fetched',
+                  status: 'failed',
+                }),
+                expect.objectContaining({
+                  key: 'chart.chart_type_selected',
+                  status: 'skipped',
+                }),
+              ]),
             }),
           }),
         }),

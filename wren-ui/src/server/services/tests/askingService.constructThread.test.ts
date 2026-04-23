@@ -143,18 +143,20 @@ describe('AskingService', () => {
         selectedSkillIds: null,
         summary: 'what happened yesterday',
       });
-      expect(service.threadResponseRepository.createOne).toHaveBeenCalledWith({
-        projectId: null,
-        workspaceId: 'workspace-1',
-        knowledgeBaseId: 'kb-1',
-        kbSnapshotId: 'snapshot-1',
-        deployHash: 'deploy-1',
-        actorUserId: 'user-1',
-        threadId: 101,
-        question: 'what happened yesterday',
-        sql: undefined,
-        askingTaskId: 9,
-      });
+      expect(service.threadResponseRepository.createOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectId: null,
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snapshot-1',
+          deployHash: 'deploy-1',
+          actorUserId: 'user-1',
+          threadId: 101,
+          question: 'what happened yesterday',
+          sql: undefined,
+          askingTaskId: 9,
+        }),
+      );
       expect(service.askingTaskTracker.bindThreadResponse).toHaveBeenCalledWith(
         9,
         'query-9',
@@ -165,7 +167,7 @@ describe('AskingService', () => {
   });
 
   describe('createThreadResponse', () => {
-    it('inherits runtime identity from the parent thread', async () => {
+    it('inherits runtime identity from the parent thread and returns the refreshed response', async () => {
       const service = Object.create(AskingService.prototype) as any;
       service.threadRepository = {
         findOneBy: jest.fn().mockResolvedValue({
@@ -180,12 +182,16 @@ describe('AskingService', () => {
       };
       service.threadResponseRepository = {
         createOne: jest.fn().mockResolvedValue({ id: 202 }),
+        findOneBy: jest.fn().mockResolvedValue({
+          id: 202,
+          sql: 'select * from refreshed_response',
+        }),
       };
       service.askingTaskTracker = {
         bindThreadResponse: jest.fn(),
       };
 
-      await service.createThreadResponse(
+      const result = await service.createThreadResponse(
         {
           question: 'follow up',
           trackedAskingResult: {
@@ -196,17 +202,32 @@ describe('AskingService', () => {
         101,
       );
 
-      expect(service.threadResponseRepository.createOne).toHaveBeenCalledWith({
-        projectId: 42,
-        workspaceId: 'workspace-1',
-        knowledgeBaseId: 'kb-1',
-        kbSnapshotId: 'snapshot-1',
-        deployHash: 'deploy-1',
-        actorUserId: 'user-1',
-        threadId: 101,
-        question: 'follow up',
-        sql: undefined,
-        askingTaskId: 9,
+      expect(service.threadResponseRepository.createOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectId: 42,
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snapshot-1',
+          deployHash: 'deploy-1',
+          actorUserId: 'user-1',
+          threadId: 101,
+          question: 'follow up',
+          sql: undefined,
+          askingTaskId: 9,
+        }),
+      );
+      expect(service.askingTaskTracker.bindThreadResponse).toHaveBeenCalledWith(
+        9,
+        'query-9',
+        101,
+        202,
+      );
+      expect(service.threadResponseRepository.findOneBy).toHaveBeenCalledWith({
+        id: 202,
+      });
+      expect(result).toEqual({
+        id: 202,
+        sql: 'select * from refreshed_response',
       });
     });
   });

@@ -97,6 +97,7 @@ export const transformChartAdjustmentInput = (input: ChartAdjustmentInput) => {
 export const transformChartInput = (input: ChartInput) => ({
   query: input.query,
   sql: input.sql,
+  custom_instruction: input.customInstruction,
   data: input.data,
   runtime_scope_id: input.runtimeScopeId,
   runtime_identity: transformRuntimeIdentity(input.runtimeIdentity),
@@ -107,6 +108,10 @@ export const transformChartResult = (body: any): ChartResult => {
   const { status, error } = transformStatusAndError(body);
   return {
     status: status as ChartStatus,
+    instructionCount:
+      typeof body.instruction_count === 'number'
+        ? body.instruction_count
+        : undefined,
     error: error || undefined,
     response: {
       reasoning: body.response?.reasoning,
@@ -116,13 +121,44 @@ export const transformChartResult = (body: any): ChartResult => {
   };
 };
 
+const transformThinkingTrace = (body: any) => {
+  if (!body || !Array.isArray(body.steps)) {
+    return null;
+  }
+
+  return {
+    currentStepKey:
+      typeof body.current_step_key === 'string' ? body.current_step_key : null,
+    steps: body.steps.map((step: any) => ({
+      durationMs:
+        typeof step.duration_ms === 'number' ? step.duration_ms : null,
+      errorCode: typeof step.error_code === 'string' ? step.error_code : null,
+      finishedAt:
+        typeof step.finished_at === 'string' ? step.finished_at : null,
+      key: step.key,
+      status: step.status,
+      messageKey: step.message_key,
+      messageParams: step.message_params || null,
+      detail: step.detail || null,
+      phase: typeof step.phase === 'string' ? step.phase : null,
+      startedAt: typeof step.started_at === 'string' ? step.started_at : null,
+      tags: Array.isArray(step.tags) ? step.tags.filter(Boolean) : null,
+    })),
+  };
+};
+
 export const transformTextBasedAnswerResult = (
   body: any,
 ): TextBasedAnswerResult => {
   const { status, error } = transformStatusAndError(body);
   return {
     status: status as TextBasedAnswerStatus,
+    instructionCount:
+      typeof body.instruction_count === 'number'
+        ? body.instruction_count
+        : undefined,
     numRowsUsedInLLM: body.num_rows_used_in_llm,
+    content: typeof body.content === 'string' ? body.content : undefined,
     error: error || undefined,
   };
 };
@@ -198,6 +234,7 @@ export const transformAskResult = (body: any): AskResult => {
     shadowCompare: transformAskShadowCompare(body?.shadow_compare),
     invalidSql: body?.invalid_sql,
     traceId: body?.trace_id,
+    thinking: transformThinkingTrace(body?.thinking),
   };
 };
 

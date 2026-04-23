@@ -130,7 +130,7 @@ describe('useDolaShellSidebarPrefetch', () => {
     );
   });
 
-  it('prefers the full runtime selector when prefetching dashboard data', () => {
+  it('prefers the workspace selector when prefetching dashboard data', () => {
     global.window = {
       requestIdleCallback: (callback: IdleRequestCallback) => {
         callback({
@@ -176,9 +176,6 @@ describe('useDolaShellSidebarPrefetch', () => {
     expect(mockPrefetchDashboardOverview).toHaveBeenCalledWith({
       selector: {
         workspaceId: 'workspace-1',
-        knowledgeBaseId: 'kb-1',
-        kbSnapshotId: 'snap-1',
-        deployHash: 'deploy-1',
       },
     });
   });

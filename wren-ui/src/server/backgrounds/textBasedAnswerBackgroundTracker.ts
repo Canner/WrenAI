@@ -25,7 +25,6 @@ import {
 } from '@server/utils/persistedRuntimeIdentity';
 import { resolveProjectLanguage } from '@server/utils/runtimeExecutionContext';
 import { registerShutdownCallback } from '@server/utils/shutdown';
-import { collectTextAnswerStreamContent } from '@server/utils/textAnswerStream';
 
 const logger = getLogger('TextBasedAnswerBackgroundTracker');
 logger.level = 'debug';
@@ -203,11 +202,13 @@ export class TextBasedAnswerBackgroundTracker {
             if (!responseQueryId) {
               throw new Error('Text-based answer query id is missing');
             }
+            const instructionCount = response.instructionCount ?? 0;
 
             // update the status to preprocessing
             await this.threadResponseRepository.updateOne(threadResponse.id, {
               answerDetail: {
                 ...threadResponse.answerDetail,
+                instructionCount,
                 status: ThreadResponseAnswerStatus.PREPROCESSING,
               },
             });
@@ -227,6 +228,7 @@ export class TextBasedAnswerBackgroundTracker {
             // update the status to final
             const updatedAnswerDetail = {
               queryId: responseQueryId,
+              instructionCount: result.instructionCount ?? instructionCount,
               status:
                 result.status === TextBasedAnswerStatus.SUCCEEDED
                   ? ThreadResponseAnswerStatus.STREAMING
@@ -296,8 +298,7 @@ export class TextBasedAnswerBackgroundTracker {
     queryId: string;
   }) {
     try {
-      const stream = await this.wrenAIAdaptor.streamTextBasedAnswer(queryId);
-      const content = await collectTextAnswerStreamContent(stream);
+      const content = await this.waitForFinalAnswerContent(queryId);
       await this.threadResponseRepository.updateOne(threadResponse.id, {
         answerDetail: {
           ...threadResponse.answerDetail,
@@ -320,6 +321,28 @@ export class TextBasedAnswerBackgroundTracker {
       });
       throw error;
     }
+  }
+
+  private async waitForFinalAnswerContent(queryId: string) {
+    for (let attempt = 0; attempt < 240; attempt += 1) {
+      const result = await this.wrenAIAdaptor.getTextBasedAnswerResult(queryId);
+
+      if (result.status === TextBasedAnswerStatus.FAILED) {
+        throw new Error(
+          result.error?.message || 'Text answer generation failed',
+        );
+      }
+
+      if (typeof result.content === 'string') {
+        return result.content;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+
+    throw new Error(
+      `Timed out waiting for finalized text answer content: ${queryId}`,
+    );
   }
 
   private async getResponseRuntimeIdentity(

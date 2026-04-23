@@ -49,6 +49,24 @@ describe('useThreadRecommendedQuestionsPolling helpers', () => {
         },
       ],
       error: null,
+      resolvedIntent: {
+        kind: 'RECOMMEND_QUESTIONS',
+        mode: 'FOLLOW_UP',
+        target: 'THREAD_SIDECAR',
+        source: 'derived',
+        sourceThreadId: 42,
+        sourceResponseId: 9,
+        confidence: null,
+        artifactPlan: {
+          teaserArtifacts: [],
+          workbenchArtifacts: [],
+          primaryTeaser: null,
+          primaryWorkbenchArtifact: null,
+        },
+        conversationAidPlan: {
+          threadAids: ['suggested_questions'],
+        },
+      },
     };
     const fetcher = jest.fn().mockResolvedValue({
       ok: true,

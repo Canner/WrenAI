@@ -98,6 +98,13 @@ describe('workspace schedule action routes', () => {
     lastError: null,
   };
 
+  const workspaceScopedScheduleJob = {
+    ...scheduleJob,
+    knowledgeBaseId: null,
+    kbSnapshotId: null,
+    deployHash: null,
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetSessionTokenFromRequest.mockReturnValue('session-token');
@@ -262,6 +269,60 @@ describe('workspace schedule action routes', () => {
     expect(res.body.dashboard.scheduleCron).toBe('30 9 * * *');
   });
 
+  it('allows updating a workspace-scoped dashboard refresh job even when a knowledge base is active in runtime scope', async () => {
+    const handler = (
+      await import('../../pages/api/v1/workspace/schedules/[id]')
+    ).default;
+    const req = createReq({
+      method: 'PATCH',
+      query: { id: 'job-1' },
+      body: { action: 'disable' },
+    });
+    const res = createRes();
+
+    mockFindScheduleJob.mockResolvedValue(workspaceScopedScheduleJob);
+    mockFindDashboard.mockResolvedValue({
+      id: 11,
+      knowledgeBaseId: null,
+      kbSnapshotId: null,
+      deployHash: null,
+      createdBy: 'user-1',
+      scheduleTimezone: 'UTC',
+    });
+    mockSetDashboardSchedule.mockResolvedValue({
+      id: 11,
+      knowledgeBaseId: null,
+      kbSnapshotId: null,
+      deployHash: null,
+      createdBy: 'user-1',
+      cacheEnabled: true,
+      scheduleFrequency: 'NEVER',
+      scheduleTimezone: 'UTC',
+      scheduleCron: null,
+      nextScheduledAt: null,
+    });
+    mockSyncDashboardRefreshJob.mockResolvedValue({
+      ...workspaceScopedScheduleJob,
+      status: 'inactive',
+      nextRunAt: null,
+    });
+
+    await handler(req, res);
+
+    expect(mockSyncDashboardRefreshJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dashboardId: 11,
+        enabled: false,
+        workspaceId: 'ws-1',
+        knowledgeBaseId: null,
+        kbSnapshotId: null,
+        deployHash: null,
+      }),
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.body.job.knowledgeBaseId).toBeNull();
+  });
+
   it('runs a schedule job immediately and returns the latest run state', async () => {
     const handler = (
       await import('../../pages/api/v1/workspace/schedules/[id]/run')
@@ -341,5 +402,42 @@ describe('workspace schedule action routes', () => {
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.body.error).toBe('refresh failed');
     expect(res.body.lastRun.status).toBe('failed');
+  });
+
+  it('allows running a workspace-scoped dashboard refresh job from a knowledge-base runtime page', async () => {
+    const handler = (
+      await import('../../pages/api/v1/workspace/schedules/[id]/run')
+    ).default;
+    const req = createReq({
+      method: 'POST',
+      query: { id: 'job-1' },
+    });
+    const res = createRes();
+
+    mockFindScheduleJob
+      .mockResolvedValueOnce(workspaceScopedScheduleJob)
+      .mockResolvedValueOnce({
+        ...workspaceScopedScheduleJob,
+        lastRunAt: '2026-04-08T10:01:00.000Z',
+      });
+    mockFindScheduleRuns.mockResolvedValue([
+      {
+        id: 'run-1',
+        scheduleJobId: 'job-1',
+        status: 'succeeded',
+        startedAt: '2026-04-08T10:00:00.000Z',
+        finishedAt: '2026-04-08T10:01:00.000Z',
+        traceId: 'trace-1',
+        detailJson: {
+          refreshedItems: 2,
+        },
+      },
+    ]);
+
+    await handler(req, res);
+
+    expect(mockRunJobNow).toHaveBeenCalledWith(workspaceScopedScheduleJob);
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.body.job.knowledgeBaseId).toBeNull();
   });
 });

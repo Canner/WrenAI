@@ -45,6 +45,7 @@ export default async function handler(
       workspace,
       knowledgeBase: runtimeScope.knowledgeBase || null,
       kbSnapshot: runtimeScope.kbSnapshot || null,
+      jobScope: 'workspace',
     });
 
     return res.status(200).json(payload);

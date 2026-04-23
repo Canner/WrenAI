@@ -137,6 +137,16 @@ describe('ThreadResponseRepository', () => {
     ]);
   });
 
+  it('getResponsesWithThread orders full thread history chronologically when limit is omitted', async () => {
+    const { knex, builder } = buildKnexRows([]);
+    const repository = new ThreadResponseRepository(knex as unknown as any);
+
+    await repository.getResponsesWithThread(1);
+
+    expect(builder.orderBy).toHaveBeenCalledWith('created_at', 'asc');
+    expect(builder.limit).not.toHaveBeenCalled();
+  });
+
   it('getResponsesWithThreadByScope requires exact runtime scope matches', async () => {
     const { knex, builder } = buildKnexRows([]);
     const repository = new ThreadResponseRepository(knex as unknown as any);
@@ -170,6 +180,25 @@ describe('ThreadResponseRepository', () => {
       'desc',
     );
     expect(builder.limit).toHaveBeenCalledWith(5);
+  });
+
+  it('getResponsesWithThreadByScope orders full runtime-scoped history chronologically when limit is omitted', async () => {
+    const { knex, builder } = buildKnexRows([]);
+    const repository = new ThreadResponseRepository(knex as unknown as any);
+
+    await repository.getResponsesWithThreadByScope(101, {
+      projectId: 42,
+      workspaceId: 'workspace-1',
+      knowledgeBaseId: 'kb-1',
+      kbSnapshotId: 'snapshot-1',
+      deployHash: 'deploy-1',
+    });
+
+    expect(builder.orderBy).toHaveBeenCalledWith(
+      'thread_response.created_at',
+      'asc',
+    );
+    expect(builder.limit).not.toHaveBeenCalled();
   });
 
   it('findOneByIdWithRuntimeScope requires null project scope when runtime project is null', async () => {

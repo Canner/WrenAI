@@ -1,3 +1,4 @@
+import { Path } from '@/utils/enum';
 import type {
   ClientRuntimeScopeSelector,
   RuntimeScopeBootstrapCandidate,
@@ -103,6 +104,84 @@ export const mergeRuntimeScopeSelectors = (
     runtimeScopeId:
       preferredSelector.runtimeScopeId || fallbackSelector.runtimeScopeId,
   });
+
+export const resolveHydratedRuntimeScopeSelector = ({
+  selector,
+  selectorState,
+}: {
+  selector: ClientRuntimeScopeSelector;
+  selectorState?: RuntimeSelectorStateBootstrapData | null;
+}): ClientRuntimeScopeSelector => {
+  const normalizedSelector = normalizeSelector(selector);
+  const selectorFromState =
+    buildRuntimeScopeSelectorFromRuntimeSelectorState(selectorState);
+
+  if (!hasExplicitRuntimeScopeSelector(selectorFromState)) {
+    return normalizedSelector;
+  }
+
+  if (
+    normalizedSelector.workspaceId &&
+    selectorFromState.workspaceId &&
+    normalizedSelector.workspaceId !== selectorFromState.workspaceId
+  ) {
+    return normalizedSelector;
+  }
+
+  if (
+    normalizedSelector.knowledgeBaseId &&
+    selectorFromState.knowledgeBaseId &&
+    normalizedSelector.knowledgeBaseId !== selectorFromState.knowledgeBaseId
+  ) {
+    return normalizedSelector;
+  }
+
+  return mergeRuntimeScopeSelectors(normalizedSelector, selectorFromState);
+};
+
+const isWorkspaceOnlyRuntimeScopeSelector = (
+  selector: ClientRuntimeScopeSelector,
+) =>
+  Boolean(selector.workspaceId) &&
+  !selector.knowledgeBaseId &&
+  !selector.kbSnapshotId &&
+  !selector.deployHash &&
+  !selector.runtimeScopeId;
+
+export const shouldSkipRuntimeScopeUrlExpansion = ({
+  pathname,
+  selectorFromUrl,
+  selectorToSync,
+}: {
+  pathname?: string | null;
+  selectorFromUrl: ClientRuntimeScopeSelector;
+  selectorToSync?: ClientRuntimeScopeSelector | null;
+}) => {
+  if (pathname !== Path.Home && pathname !== Path.HomeDashboard) {
+    return false;
+  }
+
+  const normalizedUrlSelector = normalizeSelector(selectorFromUrl);
+  const normalizedSelectorToSync = normalizeSelector(selectorToSync || {});
+
+  if (!isWorkspaceOnlyRuntimeScopeSelector(normalizedUrlSelector)) {
+    return false;
+  }
+
+  if (
+    !normalizedSelectorToSync.workspaceId ||
+    normalizedSelectorToSync.workspaceId !== normalizedUrlSelector.workspaceId
+  ) {
+    return false;
+  }
+
+  return Boolean(
+    normalizedSelectorToSync.knowledgeBaseId ||
+    normalizedSelectorToSync.kbSnapshotId ||
+    normalizedSelectorToSync.deployHash ||
+    normalizedSelectorToSync.runtimeScopeId,
+  );
+};
 
 export const buildRuntimeScopeStateKey = (
   selector: ClientRuntimeScopeSelector,
@@ -248,14 +327,37 @@ export const shouldBlockRuntimeScopeBootstrapRender = ({
 export const shouldDeferRuntimeScopeUrlSync = ({
   selectorFromUrl,
   selectorToSync,
+  isBootstrapLoading = false,
 }: {
   selectorFromUrl: ClientRuntimeScopeSelector;
   selectorToSync?: ClientRuntimeScopeSelector | null;
+  isBootstrapLoading?: boolean;
 }) => {
   const normalizedUrlSelector = normalizeSelector(selectorFromUrl);
   const normalizedSelectorToSync = normalizeSelector(selectorToSync || {});
 
   if (!hasExplicitRuntimeScopeSelector(normalizedUrlSelector)) {
+    return false;
+  }
+
+  const hasConflictingExplicitSelector = (
+    field: keyof ClientRuntimeScopeSelector,
+  ) =>
+    Boolean(normalizedUrlSelector[field]) &&
+    Boolean(normalizedSelectorToSync[field]) &&
+    normalizedUrlSelector[field] !== normalizedSelectorToSync[field];
+
+  if (
+    hasConflictingExplicitSelector('workspaceId') ||
+    hasConflictingExplicitSelector('knowledgeBaseId') ||
+    hasConflictingExplicitSelector('kbSnapshotId') ||
+    hasConflictingExplicitSelector('deployHash') ||
+    hasConflictingExplicitSelector('runtimeScopeId')
+  ) {
+    return true;
+  }
+
+  if (!isBootstrapLoading) {
     return false;
   }
 

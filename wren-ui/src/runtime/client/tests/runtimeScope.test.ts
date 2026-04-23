@@ -16,7 +16,9 @@ import {
   readRuntimeScopeSelectorFromUrl,
   RUNTIME_SCOPE_RECOVERY_EVENT,
   resolveClientRuntimeScopeSelector,
+  resolveHydratedRuntimeScopeSelector,
   resolveRuntimeScopeBootstrapSelector,
+  shouldSkipRuntimeScopeUrlExpansion,
   shouldAcceptRuntimeScopeBootstrapCandidate,
   shouldRecoverRuntimeScopeFromErrorCode,
   shouldHydrateRuntimeScopeSelector,
@@ -491,6 +493,92 @@ describe('client runtime scope helpers', () => {
     });
   });
 
+  it('hydrates a workspace selector with the current runtime selector state', () => {
+    expect(
+      resolveHydratedRuntimeScopeSelector({
+        selector: {
+          workspaceId: 'ws-1',
+        },
+        selectorState: {
+          currentWorkspace: { id: 'ws-1' },
+          currentKnowledgeBase: { id: 'kb-1' },
+          currentKbSnapshot: { id: 'snap-1', deployHash: 'deploy-1' },
+        },
+      }),
+    ).toEqual({
+      workspaceId: 'ws-1',
+      knowledgeBaseId: 'kb-1',
+      kbSnapshotId: 'snap-1',
+      deployHash: 'deploy-1',
+    });
+  });
+
+  it('keeps the current selector when the hydrated runtime state crosses workspaces', () => {
+    expect(
+      resolveHydratedRuntimeScopeSelector({
+        selector: {
+          workspaceId: 'ws-1',
+          knowledgeBaseId: 'kb-1',
+        },
+        selectorState: {
+          currentWorkspace: { id: 'ws-2' },
+          currentKnowledgeBase: { id: 'kb-2' },
+          currentKbSnapshot: { id: 'snap-2', deployHash: 'deploy-2' },
+        },
+      }),
+    ).toEqual({
+      workspaceId: 'ws-1',
+      knowledgeBaseId: 'kb-1',
+    });
+  });
+
+  it('keeps the home url workspace-scoped when bootstrap only adds runtime details', () => {
+    expect(
+      shouldSkipRuntimeScopeUrlExpansion({
+        pathname: '/home',
+        selectorFromUrl: {
+          workspaceId: 'ws-1',
+        },
+        selectorToSync: {
+          workspaceId: 'ws-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snap-1',
+          deployHash: 'deploy-1',
+        },
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldSkipRuntimeScopeUrlExpansion({
+        pathname: '/home/dashboard',
+        selectorFromUrl: {
+          workspaceId: 'ws-1',
+        },
+        selectorToSync: {
+          workspaceId: 'ws-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snap-1',
+          deployHash: 'deploy-1',
+        },
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldSkipRuntimeScopeUrlExpansion({
+        pathname: '/home/42',
+        selectorFromUrl: {
+          workspaceId: 'ws-1',
+        },
+        selectorToSync: {
+          workspaceId: 'ws-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snap-1',
+          deployHash: 'deploy-1',
+        },
+      }),
+    ).toBe(false);
+  });
+
   it('builds bootstrap validation candidates in url -> stored -> default order', () => {
     expect(
       buildRuntimeScopeBootstrapCandidates({
@@ -769,6 +857,7 @@ describe('client runtime scope helpers', () => {
   it('defers url sync while an explicit runtime scope route is still validating', () => {
     expect(
       shouldDeferRuntimeScopeUrlSync({
+        isBootstrapLoading: true,
         selectorFromUrl: {
           workspaceId: 'ws-2',
           knowledgeBaseId: 'kb-2',
@@ -784,6 +873,7 @@ describe('client runtime scope helpers', () => {
 
     expect(
       shouldDeferRuntimeScopeUrlSync({
+        isBootstrapLoading: true,
         selectorFromUrl: {
           workspaceId: 'ws-2',
           knowledgeBaseId: 'kb-2',
@@ -799,6 +889,7 @@ describe('client runtime scope helpers', () => {
 
     expect(
       shouldDeferRuntimeScopeUrlSync({
+        isBootstrapLoading: true,
         selectorFromUrl: {
           workspaceId: 'ws-2',
           knowledgeBaseId: 'kb-2',
@@ -816,9 +907,41 @@ describe('client runtime scope helpers', () => {
 
     expect(
       shouldDeferRuntimeScopeUrlSync({
+        isBootstrapLoading: true,
         selectorFromUrl: {},
         selectorToSync: {
           workspaceId: 'ws-1',
+        },
+      }),
+    ).toBe(false);
+
+    expect(
+      shouldDeferRuntimeScopeUrlSync({
+        isBootstrapLoading: false,
+        selectorFromUrl: {
+          workspaceId: 'ws-2',
+          knowledgeBaseId: 'kb-2',
+        },
+        selectorToSync: {
+          workspaceId: 'ws-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snap-1',
+          deployHash: 'deploy-1',
+        },
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldDeferRuntimeScopeUrlSync({
+        isBootstrapLoading: false,
+        selectorFromUrl: {
+          workspaceId: 'ws-2',
+        },
+        selectorToSync: {
+          workspaceId: 'ws-2',
+          knowledgeBaseId: 'kb-2',
+          kbSnapshotId: 'snap-2',
+          deployHash: 'deploy-2',
         },
       }),
     ).toBe(false);

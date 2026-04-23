@@ -1,4 +1,8 @@
-import { AskResultStatus } from '@server/models/adaptor';
+import { AskResultStatus, ThinkingTrace } from '@server/models/adaptor';
+import type {
+  ResolvedHomeIntent,
+  ResponseArtifactLineage,
+} from '@/types/homeIntent';
 import { IBasicRepository, IQueryOptions } from './baseRepository';
 
 export interface DetailStep {
@@ -19,6 +23,7 @@ export interface ThreadResponseAnswerDetail {
   queryId?: string;
   status: string;
   error?: object;
+  instructionCount?: number;
   numRowsUsedInLLM?: number;
   content?: string;
 }
@@ -27,6 +32,12 @@ export interface ThreadResponseChartDetail {
   queryId?: string;
   status: string;
   error?: object;
+  thinking?: ThinkingTrace | null;
+  chartability?: {
+    chartable: boolean;
+    reasonCode?: string | null;
+    message?: string | null;
+  } | null;
   diagnostics?: {
     previewColumnCount?: number;
     previewRowCount?: number;
@@ -83,6 +94,10 @@ export interface ThreadResponse {
   askingTaskId?: number;
   viewId?: number;
   threadId: number;
+  responseKind?: string | null;
+  sourceResponseId?: number | null;
+  resolvedIntent?: ResolvedHomeIntent | null;
+  artifactLineage?: ResponseArtifactLineage | null;
   projectId?: number | null;
   workspaceId?: string | null;
   knowledgeBaseId?: string | null;
@@ -140,7 +155,11 @@ export interface IThreadResponseRepository extends IBasicRepository<ThreadRespon
     scope: ThreadResponseRuntimeScope,
     data: Partial<{
       status: AskResultStatus;
+      responseKind: string | null;
       sql: string;
+      sourceResponseId: number | null;
+      resolvedIntent: ResolvedHomeIntent | null;
+      artifactLineage: ResponseArtifactLineage | null;
       viewId: number;
       answerDetail: ThreadResponseAnswerDetail;
       breakdownDetail: ThreadResponseBreakdownDetail;

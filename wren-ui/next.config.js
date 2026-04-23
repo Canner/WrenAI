@@ -30,6 +30,7 @@ const nextConfig = {
   distDir,
   staticPageGenerationTimeout: 1000,
   allowedDevOrigins: ['127.0.0.1', '::1'],
+  devIndicators: false,
   transpilePackages: [
     'antd',
     '@ant-design/colors',

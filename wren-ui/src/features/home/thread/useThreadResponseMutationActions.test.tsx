@@ -4,6 +4,7 @@ import { message } from 'antd';
 import { useThreadResponseMutationActions } from './useThreadResponseMutationActions';
 
 const mockAdjustThreadResponseChart = jest.fn();
+const mockCreateThreadResponse = jest.fn();
 const mockTriggerThreadResponseAnswer = jest.fn();
 const mockTriggerThreadResponseChart = jest.fn();
 const mockUpdateThreadResponseSql = jest.fn();
@@ -18,6 +19,7 @@ jest.mock('antd', () => ({
 jest.mock('@/utils/threadRest', () => ({
   adjustThreadResponseChart: (...args: any[]) =>
     mockAdjustThreadResponseChart(...args),
+  createThreadResponse: (...args: any[]) => mockCreateThreadResponse(...args),
   triggerThreadResponseAnswer: (...args: any[]) =>
     mockTriggerThreadResponseAnswer(...args),
   triggerThreadResponseChart: (...args: any[]) =>
@@ -34,7 +36,10 @@ describe('useThreadResponseMutationActions', () => {
     jest.clearAllMocks();
   });
 
-  const renderHarness = () => {
+  const renderHarness = (options?: {
+    currentResponses?: Array<any>;
+    currentThreadId?: number | null;
+  }) => {
     let current: ReturnType<typeof useThreadResponseMutationActions> | null =
       null;
 
@@ -44,9 +49,13 @@ describe('useThreadResponseMutationActions', () => {
     };
     const startThreadResponsePolling = jest.fn();
     const upsertThreadResponse = jest.fn();
+    const onSelectResponse = jest.fn();
 
     const Harness = () => {
       current = useThreadResponseMutationActions({
+        currentResponses: options?.currentResponses || [],
+        currentThreadId: options?.currentThreadId,
+        onSelectResponse,
         runtimeScopeSelector,
         startThreadResponsePolling,
         upsertThreadResponse,
@@ -65,6 +74,7 @@ describe('useThreadResponseMutationActions', () => {
       runtimeScopeSelector,
       startThreadResponsePolling,
       upsertThreadResponse,
+      onSelectResponse,
     };
   };
 
@@ -90,6 +100,37 @@ describe('useThreadResponseMutationActions', () => {
       expect.objectContaining({ id: 9 }),
     );
     expect(startThreadResponsePolling).toHaveBeenCalledWith(9);
+  });
+
+  it('uses the persisted response runtime selector when mutating an existing response', async () => {
+    mockTriggerThreadResponseAnswer.mockResolvedValue({
+      id: 9,
+      question: '继续分析',
+    });
+    const { hook } = renderHarness({
+      currentResponses: [
+        {
+          id: 9,
+          question: '继续分析',
+          workspaceId: 'ws-2',
+          knowledgeBaseId: 'kb-2',
+          kbSnapshotId: 'snap-2',
+          deployHash: 'deploy-2',
+        },
+      ],
+    });
+
+    await hook.onGenerateThreadResponseAnswer(9);
+
+    expect(mockTriggerThreadResponseAnswer).toHaveBeenCalledWith(
+      {
+        workspaceId: 'ws-2',
+        knowledgeBaseId: 'kb-2',
+        kbSnapshotId: 'snap-2',
+        deployHash: 'deploy-2',
+      },
+      9,
+    );
   });
 
   it('adjusts a chart and upserts the response', async () => {
@@ -150,10 +191,70 @@ describe('useThreadResponseMutationActions', () => {
 
   it('shows error feedback when chart generation fails', async () => {
     mockTriggerThreadResponseChart.mockRejectedValue(new Error('boom'));
-    const { hook } = renderHarness();
+    const { hook } = renderHarness({
+      currentResponses: [{ id: 30, question: '图表', sql: 'select 1' }],
+      currentThreadId: 10,
+    });
 
     await hook.onGenerateThreadResponseChart(30);
 
     expect(mockMessageError).toHaveBeenCalledWith('生成图表失败，请稍后重试');
+  });
+
+  it('creates a chart follow-up response when generating from a normal answer', async () => {
+    mockCreateThreadResponse.mockResolvedValue({
+      id: 31,
+      question: '生成图表',
+      responseKind: 'CHART_FOLLOWUP',
+      sourceResponseId: 30,
+      sql: 'select 1',
+    });
+    mockTriggerThreadResponseChart.mockResolvedValue({
+      id: 31,
+      question: '生成图表',
+      responseKind: 'CHART_FOLLOWUP',
+      sourceResponseId: 30,
+      sql: 'select 1',
+      chartDetail: {
+        status: 'GENERATING',
+      },
+    });
+
+    const {
+      hook,
+      onSelectResponse,
+      runtimeScopeSelector,
+      startThreadResponsePolling,
+      upsertThreadResponse,
+    } = renderHarness({
+      currentResponses: [{ id: 30, question: '原始回答', sql: 'select 1' }],
+      currentThreadId: 19,
+    });
+
+    await hook.onGenerateThreadResponseChart(30, {
+      question: '生成一张图表给我',
+      sourceResponseId: 30,
+    });
+
+    expect(mockCreateThreadResponse).toHaveBeenCalledWith(
+      runtimeScopeSelector,
+      19,
+      expect.objectContaining({
+        question: '生成一张图表给我',
+        responseKind: 'CHART_FOLLOWUP',
+        sourceResponseId: 30,
+      }),
+    );
+    expect(onSelectResponse).toHaveBeenCalledWith(
+      31,
+      expect.objectContaining({
+        artifact: 'chart',
+        openWorkbench: false,
+      }),
+    );
+    expect(upsertThreadResponse).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 31 }),
+    );
+    expect(startThreadResponsePolling).toHaveBeenCalledWith(31);
   });
 });

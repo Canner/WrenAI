@@ -224,6 +224,7 @@ export const initComponents = () => {
   const dashboardService = new DashboardService({
     dashboardItemRepository,
     dashboardRepository,
+    knowledgeBaseRepository,
   });
   const sqlPairService = new SqlPairService({
     sqlPairRepository,

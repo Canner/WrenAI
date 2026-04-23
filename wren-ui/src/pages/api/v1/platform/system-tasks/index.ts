@@ -47,6 +47,7 @@ export default async function handler(
       workspace,
       knowledgeBase,
       kbSnapshot: null,
+      jobScope: knowledgeBase ? 'knowledge_base' : 'workspace',
     });
 
     await recordAuditEvent({

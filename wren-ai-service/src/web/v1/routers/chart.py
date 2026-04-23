@@ -51,7 +51,7 @@ async def stop_chart(
 ) -> StopChartResponse:
     stop_chart_request.query_id = query_id
     background_tasks.add_task(
-        service_container.ask_service.stop_ask,
+        service_container.chart_service.stop_chart,
         stop_chart_request,
     )
     return StopChartResponse(query_id=query_id)

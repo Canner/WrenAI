@@ -5,9 +5,9 @@ import {
   ClientRuntimeScopeSelector,
   hasExplicitRuntimeScopeSelector,
   readRuntimeScopeSelectorFromObject,
+  readRuntimeScopeSelectorFromSearch,
   resolveClientRuntimeScopeSelector,
 } from '@/runtime/client/runtimeScope';
-import { Path } from '@/utils/enum';
 import {
   isKnowledgeWorkbenchRoute,
   isLegacyModelingRoute,
@@ -43,8 +43,7 @@ export const shouldPreserveKnowledgeRuntimeScope = (path?: string | null) => {
   const normalizedPath = normalizeNavigationPath(path);
   return (
     isKnowledgeWorkbenchRoute(normalizedPath) ||
-    isLegacyModelingRoute(normalizedPath) ||
-    normalizedPath === Path.HomeDashboard
+    isLegacyModelingRoute(normalizedPath)
   );
 };
 
@@ -76,14 +75,38 @@ export const resolveRuntimeNavigationSelector = ({
     ? selectorFromRoute
     : storedSelector;
 
+export const resolveRuntimeRouteSelector = ({
+  selectorFromRoute,
+  windowSearch,
+}: {
+  selectorFromRoute: ClientRuntimeScopeSelector;
+  windowSearch?: string | null;
+}) => {
+  if (hasExplicitRuntimeScopeSelector(selectorFromRoute)) {
+    return selectorFromRoute;
+  }
+
+  return readRuntimeScopeSelectorFromSearch(windowSearch || '');
+};
+
 export default function useRuntimeScopeNavigation() {
   const router = useRouter();
   const selectorFromRoute = useMemo(
     () =>
-      readRuntimeScopeSelectorFromObject(
-        router.query as Record<string, string | string[] | undefined>,
-      ),
-    [router.query],
+      resolveRuntimeRouteSelector({
+        selectorFromRoute: readRuntimeScopeSelectorFromObject(
+          router.query as Record<string, string | string[] | undefined>,
+        ),
+        windowSearch:
+          typeof window === 'undefined' ? '' : window.location.search,
+      }),
+    [
+      router.query.workspaceId,
+      router.query.knowledgeBaseId,
+      router.query.kbSnapshotId,
+      router.query.deployHash,
+      router.query.runtimeScopeId,
+    ],
   );
   const selector = useMemo(
     () =>

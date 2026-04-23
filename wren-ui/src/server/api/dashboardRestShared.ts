@@ -30,6 +30,37 @@ const getCurrentPersistedRuntimeIdentity = (ctx: IContext) =>
     toPersistedRuntimeIdentity(ctx.runtimeScope!),
   );
 
+const getCurrentPersistedWorkspaceIdentity = (ctx: IContext) => {
+  const runtimeIdentity = getCurrentPersistedRuntimeIdentity(ctx);
+
+  return {
+    projectId: null,
+    workspaceId: runtimeIdentity.workspaceId || ctx.runtimeScope?.workspace?.id,
+    knowledgeBaseId: null,
+    kbSnapshotId: null,
+    deployHash: null,
+    actorUserId: runtimeIdentity.actorUserId || null,
+  };
+};
+
+const shouldUseWorkspaceScopedDashboardRequest = (ctx: IContext) => {
+  const selector = ctx.runtimeScope?.selector;
+  if (!selector) {
+    return false;
+  }
+
+  return !(
+    selector.knowledgeBaseId ||
+    selector.kbSnapshotId ||
+    selector.deployHash
+  );
+};
+
+const getCurrentPersistedDashboardScopeIdentity = (ctx: IContext) =>
+  shouldUseWorkspaceScopedDashboardRequest(ctx)
+    ? getCurrentPersistedWorkspaceIdentity(ctx)
+    : getCurrentPersistedRuntimeIdentity(ctx);
+
 const getKnowledgeBaseReadAuthorizationTarget = (ctx: IContext) => {
   const workspaceId = ctx.runtimeScope?.workspace?.id || null;
   const knowledgeBase = ctx.runtimeScope?.knowledgeBase;
@@ -122,14 +153,50 @@ export const ensureDashboardForScope = async (
   return dashboard;
 };
 
+export const ensureDashboardForWorkspaceScope = async (
+  ctx: IContext,
+  dashboardId: number,
+): Promise<Dashboard> => {
+  const runtimeIdentity = getCurrentPersistedWorkspaceIdentity(ctx);
+  const dashboard = await ctx.dashboardService.getDashboardForScope(
+    dashboardId,
+    resolvePersistedProjectBridgeId(runtimeIdentity),
+    getDashboardRuntimeBinding(runtimeIdentity),
+  );
+
+  if (!dashboard) {
+    throw new ApiError('Dashboard not found.', 404);
+  }
+
+  return dashboard;
+};
+
+const ensureDashboardForRequestedScope = async (
+  ctx: IContext,
+  dashboardId: number,
+): Promise<Dashboard> => {
+  const runtimeIdentity = getCurrentPersistedDashboardScopeIdentity(ctx);
+  const dashboard = await ctx.dashboardService.getDashboardForScope(
+    dashboardId,
+    resolvePersistedProjectBridgeId(runtimeIdentity),
+    getDashboardRuntimeBinding(runtimeIdentity),
+  );
+
+  if (!dashboard) {
+    throw new ApiError('Dashboard not found.', 404);
+  }
+
+  return dashboard;
+};
+
 export const ensureDashboardItemForScope = async (
   ctx: IContext,
   itemId: number,
 ): Promise<DashboardItem> => {
   const item = await ctx.dashboardService.getDashboardItem(itemId);
-  const dashboard = await ensureDashboardForScope(ctx, item.dashboardId);
-
-  if (item.dashboardId !== dashboard.id) {
+  try {
+    await ensureDashboardForWorkspaceScope(ctx, item.dashboardId);
+  } catch (_error) {
     throw new ApiError(`Dashboard item not found. id: ${itemId}`, 404);
   }
 
@@ -156,6 +223,7 @@ export const buildDashboardPreviewResponse = async ({
     projectService: ctx.projectService,
     deployService: ctx.deployService,
     requestRuntimeIdentity: runtimeIdentity,
+    runtimeIdentitySource: item.detail.runtimeIdentity || null,
   });
 
   const rawData = (await ctx.queryService.preview(item.detail.sql, {
@@ -208,8 +276,8 @@ export const updateDashboardScheduleWithSync = async ({
   data: SetDashboardCacheData;
 }) => {
   await assertDashboardExecutableRuntimeScope(ctx);
-  const runtimeIdentity = getCurrentPersistedRuntimeIdentity(ctx);
-  const dashboard = await ensureDashboardForScope(ctx, dashboardId);
+  const runtimeIdentity = getCurrentPersistedDashboardScopeIdentity(ctx);
+  const dashboard = await ensureDashboardForRequestedScope(ctx, dashboardId);
   const actor =
     ctx.authorizationActor ||
     buildAuthorizationActorFromRuntimeScope(ctx.runtimeScope);

@@ -1,5 +1,5 @@
 import { memo, useMemo } from 'react';
-import { Alert, Typography, Button } from 'antd';
+import { Alert, Typography } from 'antd';
 import styled from 'styled-components';
 import { getColumnTypeIcon } from '@/utils/columnType';
 import PreviewDataContent from '@/components/dataPreview/PreviewDataContent';
@@ -54,9 +54,9 @@ const ColumnContext = memo((props: { text: string; copyable: boolean }) => {
         {text}
       </span>
       {copyable && (
-        <Button size="small" className="copy-icon">
+        <span className="copy-icon">
           <Text copyable={{ text, tooltips: false }} className="gray-8" />
-        </Button>
+        </span>
       )}
     </StyledCell>
   );

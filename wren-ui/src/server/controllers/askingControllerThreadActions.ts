@@ -48,8 +48,10 @@ const resolveThreadInput = async (
 const resolveThreadResponseInput = async (
   data: {
     question?: string;
+    responseKind?: string;
     taskId?: string;
     sql?: string;
+    sourceResponseId?: number;
   },
   ctx: IContext,
 ): Promise<AskingDetailTaskInput> => {
@@ -65,7 +67,9 @@ const resolveThreadResponseInput = async (
 
   return {
     question: askingTask.question,
+    responseKind: data.responseKind,
     trackedAskingResult: askingTask,
+    sourceResponseId: data.sourceResponseId,
   };
 };
 
@@ -193,8 +197,10 @@ export const createThreadResponseAction = async (
     threadId: number;
     data: {
       question?: string;
+      responseKind?: string;
       taskId?: string;
       sql?: string;
+      sourceResponseId?: number;
     };
   },
   ctx: IContext,

@@ -39,10 +39,20 @@ describe('useThreadResponseArtifactActions', () => {
       workspaceId: 'ws-1',
       knowledgeBaseId: 'kb-1',
     };
+    const scopedResponseSelector = {
+      workspaceId: 'ws-2',
+      knowledgeBaseId: 'kb-2',
+      kbSnapshotId: 'snap-2',
+      deployHash: 'deploy-2',
+    };
+    const resolveResponseRuntimeScopeSelector = jest.fn((responseId: number) =>
+      responseId === 11 ? scopedResponseSelector : runtimeScopeSelector,
+    );
 
     const Harness = () => {
       current = useThreadResponseArtifactActions({
         runtimeScopeSelector,
+        resolveResponseRuntimeScopeSelector,
       });
       return null;
     };
@@ -55,13 +65,19 @@ describe('useThreadResponseArtifactActions', () => {
 
     return {
       hook: current as ReturnType<typeof useThreadResponseArtifactActions>,
+      resolveResponseRuntimeScopeSelector,
       runtimeScopeSelector,
+      scopedResponseSelector,
     };
   };
 
   it('creates a saved view and shows success feedback', async () => {
     mockCreateViewFromResponse.mockResolvedValue({ success: true });
-    const { hook, runtimeScopeSelector } = renderHarness();
+    const {
+      hook,
+      scopedResponseSelector,
+      resolveResponseRuntimeScopeSelector,
+    } = renderHarness();
 
     await hook.handleCreateView({
       name: '经营概览',
@@ -69,8 +85,9 @@ describe('useThreadResponseArtifactActions', () => {
       responseId: 11,
     });
 
+    expect(resolveResponseRuntimeScopeSelector).toHaveBeenCalledWith(11);
     expect(mockCreateViewFromResponse).toHaveBeenCalledWith(
-      runtimeScopeSelector,
+      scopedResponseSelector,
       expect.objectContaining({
         responseId: 11,
       }),
@@ -97,6 +114,31 @@ describe('useThreadResponseArtifactActions', () => {
     );
     expect(mockMessageError).toHaveBeenCalledWith(
       '保存 SQL 模板失败，请稍后重试',
+    );
+  });
+
+  it('uses the persisted response runtime selector when saving a SQL pair from a response', async () => {
+    mockCreateKnowledgeSqlPair.mockResolvedValue({ success: true });
+    const {
+      hook,
+      scopedResponseSelector,
+      resolveResponseRuntimeScopeSelector,
+    } = renderHarness();
+
+    await hook.handleCreateSqlPair(
+      {
+        sql: 'select 1',
+        question: 'Revenue',
+      } as any,
+      11,
+    );
+
+    expect(resolveResponseRuntimeScopeSelector).toHaveBeenCalledWith(11);
+    expect(mockCreateKnowledgeSqlPair).toHaveBeenCalledWith(
+      scopedResponseSelector,
+      expect.objectContaining({
+        sql: 'select 1',
+      }),
     );
   });
 });

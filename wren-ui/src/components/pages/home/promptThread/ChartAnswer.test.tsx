@@ -6,6 +6,7 @@ const mockCreateDashboardItem = jest.fn();
 const mockUsePromptThreadActionsStore = jest.fn();
 const mockEnsureLoaded = jest.fn();
 const mockLoadDashboardListPayload = jest.fn();
+const mockLoadDashboardDetailPayload = jest.fn();
 const mockCreateDashboard = jest.fn();
 const mockPushWorkspace = jest.fn();
 const mockMessageSuccess = jest.fn();
@@ -117,6 +118,8 @@ jest.mock('@/components/pages/home/promptThread/store', () => ({
 
 jest.mock('@/utils/dashboardRest', () => ({
   createDashboard: (...args: any[]) => mockCreateDashboard(...args),
+  loadDashboardDetailPayload: (...args: any[]) =>
+    mockLoadDashboardDetailPayload(...args),
   loadDashboardListPayload: (...args: any[]) =>
     mockLoadDashboardListPayload(...args),
   resolveDashboardDisplayName: (name?: string | null) =>
@@ -130,7 +133,13 @@ jest.mock('@/utils/homeRest', () => ({
 jest.mock('@/hooks/useRuntimeScopeNavigation', () => ({
   __esModule: true,
   default: () => ({
-    selector: { workspaceId: 'ws-1' },
+    selector: {
+      workspaceId: 'ws-1',
+      knowledgeBaseId: 'kb-1',
+      kbSnapshotId: 'snap-1',
+      deployHash: 'deploy-1',
+    },
+    workspaceSelector: { workspaceId: 'ws-1' },
     pushWorkspace: mockPushWorkspace,
   }),
 }));
@@ -163,6 +172,10 @@ describe('ChartAnswer', () => {
       { id: 11, name: '经营总览' },
       { id: 12, name: '销售看板' },
     ]);
+    mockLoadDashboardDetailPayload.mockResolvedValue({
+      id: 11,
+      items: [],
+    });
     mockCreateDashboard.mockResolvedValue({
       id: 13,
       name: '本周经营复盘',
@@ -181,6 +194,9 @@ describe('ChartAnswer', () => {
       // 8th state: dashboardOptions
       8: [{ id: 11, name: '经营总览' }],
     });
+    mockLoadDashboardListPayload.mockResolvedValueOnce([
+      { id: 11, name: '经营总览' },
+    ]);
 
     renderToStaticMarkup(
       React.createElement(ChartAnswer, {
@@ -204,13 +220,23 @@ describe('ChartAnswer', () => {
     await capturedChartProps.onPin();
 
     expect(mockCreateDashboardItem).toHaveBeenCalledWith(
-      { workspaceId: 'ws-1' },
+      {
+        workspaceId: 'ws-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snap-1',
+        deployHash: 'deploy-1',
+      },
       {
         itemType: 'LINE',
         responseId: 91,
         dashboardId: 11,
       },
     );
+    expect(mockLoadDashboardDetailPayload).toHaveBeenCalledWith({
+      dashboardId: 11,
+      selector: { workspaceId: 'ws-1' },
+      useCache: false,
+    });
 
     useStateSpy.mockRestore();
   });
@@ -224,6 +250,10 @@ describe('ChartAnswer', () => {
         { id: 11, name: '经营总览' },
         { id: 12, name: '销售看板' },
       ],
+    });
+    mockCreateDashboardItem.mockResolvedValueOnce({
+      id: 901,
+      dashboardId: 12,
     });
 
     renderToStaticMarkup(
@@ -249,11 +279,71 @@ describe('ChartAnswer', () => {
     await popoverElement.props.onSelectDashboard(12, '销售看板');
 
     expect(mockCreateDashboardItem).toHaveBeenCalledWith(
-      { workspaceId: 'ws-1' },
+      {
+        workspaceId: 'ws-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snap-1',
+        deployHash: 'deploy-1',
+      },
       {
         itemType: 'LINE',
         responseId: 91,
         dashboardId: 12,
+      },
+    );
+    expect(mockLoadDashboardDetailPayload).toHaveBeenCalledWith({
+      dashboardId: 12,
+      selector: { workspaceId: 'ws-1' },
+      useCache: false,
+    });
+
+    useStateSpy.mockRestore();
+  });
+
+  it('pins with the persisted response runtime selector when the response scope differs from the page scope', async () => {
+    const useStateSpy = setStateOverrides({
+      8: [{ id: 11, name: '经营总览' }],
+    });
+    mockLoadDashboardListPayload.mockResolvedValueOnce([
+      { id: 11, name: '经营总览' },
+    ]);
+
+    renderToStaticMarkup(
+      React.createElement(ChartAnswer, {
+        threadResponse: {
+          id: 96,
+          workspaceId: 'ws-9',
+          knowledgeBaseId: 'kb-9',
+          kbSnapshotId: 'snap-9',
+          deployHash: 'deploy-9',
+          chartDetail: {
+            status: 'FINISHED',
+            description: '销售趋势',
+            chartSchema: {
+              mark: 'line',
+              encoding: {
+                x: { field: 'date', type: 'temporal' },
+                y: { field: 'value', type: 'quantitative' },
+              },
+            },
+          },
+        },
+      } as any),
+    );
+
+    await capturedChartProps.onPin();
+
+    expect(mockCreateDashboardItem).toHaveBeenCalledWith(
+      {
+        workspaceId: 'ws-9',
+        knowledgeBaseId: 'kb-9',
+        kbSnapshotId: 'snap-9',
+        deployHash: 'deploy-9',
+      },
+      {
+        itemType: 'LINE',
+        responseId: 96,
+        dashboardId: 11,
       },
     );
 
@@ -286,11 +376,71 @@ describe('ChartAnswer', () => {
     expect(capturedChartProps?.preferredRenderer).toBe('canvas');
   });
 
+  it('uses the dashboard pin text button while hiding inline chart edit actions', () => {
+    renderToStaticMarkup(
+      React.createElement(ChartAnswer, {
+        threadResponse: {
+          id: 95,
+          chartDetail: {
+            status: 'FINISHED',
+            description: '销售趋势',
+            chartSchema: {
+              mark: 'line',
+              encoding: {
+                x: { field: 'date', type: 'temporal' },
+                y: { field: 'value', type: 'quantitative' },
+              },
+            },
+          },
+        },
+      } as any),
+    );
+
+    expect(capturedChartProps?.pinButtonLabel).toBe('Pin to dashboard');
+    expect(capturedChartProps?.hideEditAction).toBe(true);
+    expect(capturedChartProps?.hideReloadAction).toBe(true);
+  });
+
+  it('disables pinning until the initial dashboard list is loaded', () => {
+    const useStateSpy = setStateOverrides({
+      // 7th state: dashboardsLoading
+      7: true,
+      // 8th state: dashboardOptions
+      8: [],
+    });
+
+    renderToStaticMarkup(
+      React.createElement(ChartAnswer, {
+        threadResponse: {
+          id: 97,
+          chartDetail: {
+            status: 'FINISHED',
+            description: '销售趋势',
+            chartSchema: {
+              mark: 'line',
+              encoding: {
+                x: { field: 'date', type: 'temporal' },
+                y: { field: 'value', type: 'quantitative' },
+              },
+            },
+          },
+        },
+      } as any),
+    );
+
+    expect(capturedChartProps?.pinDisabled).toBe(true);
+
+    useStateSpy.mockRestore();
+  });
+
   it('shows normalized default dashboard name in pin success message', async () => {
     const useStateSpy = setStateOverrides({
       // 8th state: dashboardOptions
       8: [{ id: 11, name: 'Dashboard' }],
     });
+    mockLoadDashboardListPayload.mockResolvedValueOnce([
+      { id: 11, name: 'Dashboard' },
+    ]);
 
     renderToStaticMarkup(
       React.createElement(ChartAnswer, {
@@ -354,13 +504,23 @@ describe('ChartAnswer', () => {
       { name: '本周经营复盘' },
     );
     expect(mockCreateDashboardItem).toHaveBeenCalledWith(
-      { workspaceId: 'ws-1' },
+      {
+        workspaceId: 'ws-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snap-1',
+        deployHash: 'deploy-1',
+      },
       {
         itemType: 'LINE',
         responseId: 94,
         dashboardId: 13,
       },
     );
+    expect(mockLoadDashboardDetailPayload).toHaveBeenCalledWith({
+      dashboardId: 13,
+      selector: { workspaceId: 'ws-1' },
+      useCache: false,
+    });
 
     useStateSpy.mockRestore();
   });

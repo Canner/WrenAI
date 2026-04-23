@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { components } from '@/common';
+import { TextBasedAnswerStatus } from '@/server/models/adaptor';
 import { ThreadResponseAnswerStatus } from '@/server/services/askingService';
 import { TelemetryEvent } from '@/server/telemetry/telemetry';
 import { getLogger } from '@server/utils';
@@ -81,6 +82,23 @@ export const handleThreadResponseStream = async ({
       throw new Error(
         `Thread response ${responseIdValue} does not have queryId`,
       );
+    }
+
+    const currentAnswerResult =
+      await wrenAIAdaptor.getTextBasedAnswerResult(queryId);
+    if (
+      currentAnswerResult.status === TextBasedAnswerStatus.SUCCEEDED &&
+      typeof currentAnswerResult.content === 'string'
+    ) {
+      res.write(
+        `data: ${JSON.stringify({ message: currentAnswerResult.content })}\n\n`,
+      );
+      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+      res.end();
+      telemetry.sendEvent(TelemetryEvent.HOME_ANSWER_QUESTION, {
+        question: response.question,
+      });
+      return;
     }
 
     const stream = await wrenAIAdaptor.streamTextBasedAnswer(queryId);

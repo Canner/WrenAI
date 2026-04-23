@@ -31,6 +31,7 @@ describe('DashboardService', () => {
         isDefault: true,
         name: 'Dashboard',
         projectId: 42,
+        workspaceId: null,
         knowledgeBaseId: null,
         kbSnapshotId: null,
         deployHash: null,
@@ -177,6 +178,7 @@ describe('DashboardService', () => {
         isDefault: true,
         name: 'Dashboard',
         projectId: null,
+        workspaceId: null,
         knowledgeBaseId: 'kb-1',
         kbSnapshotId: 'snap-1',
         deployHash: 'deploy-1',
@@ -265,6 +267,7 @@ describe('DashboardService', () => {
       expect(mockDashboardRepository.createOne).toHaveBeenCalledWith({
         name: 'Dashboard',
         projectId: 11,
+        workspaceId: null,
         knowledgeBaseId: 'kb-11',
         kbSnapshotId: 'snap-11',
         deployHash: 'deploy-11',
@@ -306,6 +309,7 @@ describe('DashboardService', () => {
         isDefault: true,
         name: '经营总览',
         projectId: 15,
+        workspaceId: null,
         knowledgeBaseId: null,
         kbSnapshotId: null,
         deployHash: null,
@@ -315,6 +319,7 @@ describe('DashboardService', () => {
         isDefault: false,
         name: '销售日报',
         projectId: 15,
+        workspaceId: null,
         knowledgeBaseId: null,
         kbSnapshotId: null,
         deployHash: null,
@@ -373,6 +378,116 @@ describe('DashboardService', () => {
         mockTransaction,
       );
       expect(result.isDefault).toBe(true);
+    });
+
+    it('lists workspace-scoped dashboards when only workspace scope is provided', async () => {
+      mockDashboardRepository.findAllBy.mockResolvedValue([
+        {
+          id: 101,
+          projectId: null,
+          workspaceId: 'ws-1',
+          knowledgeBaseId: null,
+          name: '经营总览',
+          isDefault: true,
+        },
+        {
+          id: 102,
+          projectId: null,
+          workspaceId: 'ws-1',
+          knowledgeBaseId: null,
+          name: '销售日报',
+          isDefault: false,
+        },
+        {
+          id: 103,
+          projectId: 27,
+          workspaceId: 'ws-1',
+          knowledgeBaseId: null,
+          name: '旧知识库看板',
+          isDefault: false,
+        },
+        {
+          id: 104,
+          projectId: null,
+          workspaceId: 'ws-2',
+          knowledgeBaseId: null,
+          name: '其他工作空间',
+          isDefault: true,
+        },
+      ]);
+
+      const result = await dashboardService.listDashboardsForScope(null, {
+        workspaceId: 'ws-1',
+      });
+
+      expect(mockDashboardRepository.findAllBy).toHaveBeenCalledWith({
+        workspaceId: 'ws-1',
+      });
+      expect(result.map((dashboard) => dashboard.id)).toEqual([101, 102]);
+    });
+
+    it('creates workspace-scoped dashboards with workspace binding and non-default follow-ups', async () => {
+      mockDashboardRepository.findAllBy
+        .mockResolvedValueOnce([
+          {
+            id: 201,
+            projectId: null,
+            workspaceId: 'ws-1',
+            knowledgeBaseId: null,
+            name: '默认看板',
+            isDefault: true,
+          },
+        ])
+        .mockResolvedValueOnce([]);
+      mockDashboardRepository.createOne
+        .mockResolvedValueOnce({
+          id: 202,
+          projectId: null,
+          workspaceId: 'ws-1',
+          knowledgeBaseId: null,
+          name: '经营总览',
+          isDefault: false,
+        })
+        .mockResolvedValueOnce({
+          id: 203,
+          projectId: null,
+          workspaceId: 'ws-2',
+          knowledgeBaseId: null,
+          name: '首个看板',
+          isDefault: true,
+        });
+
+      await dashboardService.createDashboardForScope(
+        { name: '经营总览' },
+        null,
+        { workspaceId: 'ws-1', createdBy: 'user-1' },
+      );
+      await dashboardService.createDashboardForScope(
+        { name: '首个看板' },
+        null,
+        { workspaceId: 'ws-2', createdBy: 'user-2' },
+      );
+
+      expect(mockDashboardRepository.createOne).toHaveBeenNthCalledWith(1, {
+        isDefault: false,
+        name: '经营总览',
+        projectId: null,
+        workspaceId: 'ws-1',
+        knowledgeBaseId: null,
+        kbSnapshotId: null,
+        deployHash: null,
+        createdBy: 'user-1',
+      });
+      expect(mockDashboardRepository.createOne).toHaveBeenNthCalledWith(2, {
+        isDefault: true,
+        name: '首个看板',
+        projectId: null,
+        workspaceId: 'ws-2',
+        knowledgeBaseId: null,
+        kbSnapshotId: null,
+        deployHash: null,
+        createdBy: 'user-2',
+      });
     });
   });
 });

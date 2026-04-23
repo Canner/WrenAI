@@ -156,6 +156,7 @@ describe('thread recovery helper lanes', () => {
     settleFinishedThreadResponsePolling({
       onThreadResponseSettled,
       pollingResponseFinished: true,
+      pollingResponseId: 11,
       pollingResponseIdRef,
       stopThreadResponsePolling,
       threadResponseRequestInFlightRef,
@@ -165,6 +166,27 @@ describe('thread recovery helper lanes', () => {
     expect(pollingResponseIdRef.current).toBeNull();
     expect(threadResponseRequestInFlightRef.current).toBeNull();
     expect(onThreadResponseSettled).toHaveBeenCalled();
+  });
+
+  it('ignores finished polling payloads from a previous response id', () => {
+    const pollingResponseIdRef = { current: 22 as number | null };
+    const threadResponseRequestInFlightRef = { current: 22 as number | null };
+    const stopThreadResponsePolling = jest.fn();
+    const onThreadResponseSettled = jest.fn();
+
+    settleFinishedThreadResponsePolling({
+      onThreadResponseSettled,
+      pollingResponseFinished: true,
+      pollingResponseId: 11,
+      pollingResponseIdRef,
+      stopThreadResponsePolling,
+      threadResponseRequestInFlightRef,
+    });
+
+    expect(stopThreadResponsePolling).not.toHaveBeenCalled();
+    expect(pollingResponseIdRef.current).toBe(22);
+    expect(threadResponseRequestInFlightRef.current).toBe(22);
+    expect(onThreadResponseSettled).not.toHaveBeenCalled();
   });
 
   it('stops recommendation polling only after recommendation generation finishes', () => {

@@ -11,9 +11,9 @@ import {
 export interface ScheduleJob {
   id: string;
   workspaceId: string;
-  knowledgeBaseId: string;
-  kbSnapshotId: string;
-  deployHash: string;
+  knowledgeBaseId: string | null;
+  kbSnapshotId: string | null;
+  deployHash: string | null;
   targetType: string;
   targetId: string;
   cronExpr: string;

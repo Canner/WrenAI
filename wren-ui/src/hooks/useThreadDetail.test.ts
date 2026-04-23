@@ -75,9 +75,15 @@ describe('useThreadDetail helpers', () => {
     };
     const fetcher = jest.fn();
 
-    primeThreadOverview(42, {
-      thread: cachedThread,
-    });
+    primeThreadOverview(
+      42,
+      {
+        thread: cachedThread,
+      },
+      {
+        workspaceId: 'ws-1',
+      },
+    );
 
     const payload = await loadThreadDetailPayload({
       threadId: 42,
@@ -172,9 +178,15 @@ describe('useThreadDetail helpers', () => {
       json: async () => refreshedThread,
     });
 
-    primeThreadOverview(42, {
-      thread: prefetchedThread,
-    });
+    primeThreadOverview(
+      42,
+      {
+        thread: prefetchedThread,
+      },
+      {
+        workspaceId: 'ws-1',
+      },
+    );
 
     const payload = await loadThreadDetailPayload({
       threadId: 42,
@@ -189,6 +201,58 @@ describe('useThreadDetail helpers', () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(fetcher).toHaveBeenCalledWith(
       '/api/v1/threads/42?workspaceId=ws-1',
+      { cache: 'no-store' },
+    );
+  });
+
+  it('does not reuse prefetched thread detail from another runtime scope', async () => {
+    const fetcher = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: 42,
+        summary: '当前 scope 线程',
+        responses: [{ id: 1 }],
+        knowledgeBaseIds: ['kb-2'],
+        selectedSkillIds: [],
+      }),
+    });
+
+    primeThreadOverview(
+      42,
+      {
+        thread: {
+          id: 42,
+          summary: '旧 scope 线程',
+          responses: [],
+          knowledgeBaseIds: ['kb-1'],
+          selectedSkillIds: [],
+        },
+      },
+      {
+        workspaceId: 'ws-1',
+        knowledgeBaseId: 'kb-1',
+      },
+    );
+
+    const payload = await loadThreadDetailPayload({
+      threadId: 42,
+      runtimeScopeSelector: {
+        workspaceId: 'ws-1',
+        knowledgeBaseId: 'kb-2',
+      },
+      fetcher,
+    });
+
+    expect(payload).toEqual({
+      id: 42,
+      summary: '当前 scope 线程',
+      responses: [{ id: 1 }],
+      knowledgeBaseIds: ['kb-2'],
+      selectedSkillIds: [],
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledWith(
+      '/api/v1/threads/42?workspaceId=ws-1&knowledgeBaseId=kb-2',
       { cache: 'no-store' },
     );
   });

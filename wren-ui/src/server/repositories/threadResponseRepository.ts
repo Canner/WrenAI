@@ -10,6 +10,10 @@ import type {
   ThreadResponseChartDetail,
   ThreadResponseRuntimeScope,
 } from './threadResponseRepositoryTypes';
+import type {
+  ResolvedHomeIntent,
+  ResponseArtifactLineage,
+} from '@/types/homeIntent';
 
 export {
   ThreadResponseAdjustmentType,
@@ -48,6 +52,8 @@ export class ThreadResponseRepository
 
     if (limit) {
       query.orderBy('created_at', 'desc').limit(limit);
+    } else {
+      query.orderBy('created_at', 'asc');
     }
 
     return this.transformJoinedResults(await query);
@@ -65,6 +71,8 @@ export class ThreadResponseRepository
 
     if (limit) {
       query.orderBy(`${this.tableName}.created_at`, 'desc').limit(limit);
+    } else {
+      query.orderBy(`${this.tableName}.created_at`, 'asc');
     }
 
     return this.transformJoinedResults(await query);
@@ -261,7 +269,11 @@ export class ThreadResponseRepository
     id: string | number,
     data: Partial<{
       status: AskResultStatus;
+      responseKind: string | null;
       sql: string;
+      sourceResponseId: number | null;
+      resolvedIntent: ResolvedHomeIntent | null;
+      artifactLineage: ResponseArtifactLineage | null;
       viewId: number;
       answerDetail: ThreadResponseAnswerDetail;
       breakdownDetail: ThreadResponseBreakdownDetail;
@@ -283,7 +295,11 @@ export class ThreadResponseRepository
     scope: ThreadResponseRuntimeScope,
     data: Partial<{
       status: AskResultStatus;
+      responseKind: string | null;
       sql: string;
+      sourceResponseId: number | null;
+      resolvedIntent: ResolvedHomeIntent | null;
+      artifactLineage: ResponseArtifactLineage | null;
       viewId: number;
       answerDetail: ThreadResponseAnswerDetail;
       breakdownDetail: ThreadResponseBreakdownDetail;

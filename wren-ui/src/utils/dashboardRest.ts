@@ -47,11 +47,16 @@ export type DashboardGridItemData = {
 };
 
 export type DashboardListItem = {
+  createdBy?: string | null;
+  deployHash?: string | null;
   id: number;
   isDefault?: boolean | null;
+  kbSnapshotId?: string | null;
+  knowledgeBaseId?: string | null;
   name: string;
   cacheEnabled: boolean;
   nextScheduledAt?: string | null;
+  projectId?: number | null;
   scheduleFrequency?: string | null;
 };
 
@@ -84,6 +89,7 @@ type TimedCacheEntry<TPayload> = {
 
 const DASHBOARD_CACHE_TTL_MS = 30_000;
 const DASHBOARD_STORAGE_PREFIX = 'wren.dashboardRest:';
+let dashboardCacheGeneration = 0;
 const dashboardListCache = new Map<
   string,
   TimedCacheEntry<DashboardListItem[]>
@@ -199,6 +205,7 @@ const getFreshCachedValue = <TPayload>(
 };
 
 export const clearDashboardRestCache = () => {
+  dashboardCacheGeneration += 1;
   dashboardListCache.clear();
   dashboardListRequests.clear();
   dashboardDetailCache.clear();
@@ -364,6 +371,7 @@ export const loadDashboardListPayload = async ({
     return pendingRequest;
   }
 
+  const requestGeneration = dashboardCacheGeneration;
   const request = fetcher(resolvedRequestUrl)
     .then((response) =>
       parseRestJsonResponse<DashboardListItem[]>(
@@ -372,7 +380,9 @@ export const loadDashboardListPayload = async ({
       ),
     )
     .then((payload) => {
-      primeDashboardListPayload({ requestUrl: resolvedRequestUrl, payload });
+      if (requestGeneration === dashboardCacheGeneration) {
+        primeDashboardListPayload({ requestUrl: resolvedRequestUrl, payload });
+      }
       return payload;
     })
     .finally(() => {
@@ -414,6 +424,7 @@ export const loadDashboardDetailPayload = async ({
     return pendingRequest;
   }
 
+  const requestGeneration = dashboardCacheGeneration;
   const request = fetcher(resolvedRequestUrl)
     .then((response) =>
       parseRestJsonResponse<DashboardDetailData>(
@@ -422,11 +433,13 @@ export const loadDashboardDetailPayload = async ({
       ),
     )
     .then((payload) => {
-      primeDashboardDetailPayload({
-        requestUrl: resolvedRequestUrl,
-        dashboardId,
-        payload,
-      });
+      if (requestGeneration === dashboardCacheGeneration) {
+        primeDashboardDetailPayload({
+          requestUrl: resolvedRequestUrl,
+          dashboardId,
+          payload,
+        });
+      }
       return payload;
     })
     .finally(() => {
@@ -447,10 +460,13 @@ export const createDashboard = async (
     body: JSON.stringify(data),
   });
 
-  return parseRestJsonResponse<DashboardListItem>(
+  const payload = await parseRestJsonResponse<DashboardListItem>(
     response,
     '创建看板失败，请稍后重试。',
   );
+
+  clearDashboardRestCache();
+  return payload;
 };
 
 export const updateDashboard = async (

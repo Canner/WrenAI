@@ -1,9 +1,11 @@
 import { EventEmitter } from 'events';
+import { TextBasedAnswerStatus } from '@/server/models/adaptor';
 import { ThreadResponseAnswerStatus } from '@/server/services/askingService';
 
 const mockResolveRequestScope = jest.fn();
 const mockAssertResponseScope = jest.fn();
 const mockGetResponseScoped = jest.fn();
+const mockGetTextBasedAnswerResult = jest.fn();
 const mockStreamTextBasedAnswer = jest.fn();
 const mockSendEvent = jest.fn();
 
@@ -14,7 +16,10 @@ jest.mock('@/common', () => ({
       assertResponseScope: mockAssertResponseScope,
       getResponseScoped: mockGetResponseScoped,
     },
-    wrenAIAdaptor: { streamTextBasedAnswer: mockStreamTextBasedAnswer },
+    wrenAIAdaptor: {
+      getTextBasedAnswerResult: mockGetTextBasedAnswerResult,
+      streamTextBasedAnswer: mockStreamTextBasedAnswer,
+    },
     telemetry: { sendEvent: mockSendEvent },
   },
 }));
@@ -81,6 +86,7 @@ describe.each([
     mockResolveRequestScope.mockReset();
     mockAssertResponseScope.mockReset();
     mockGetResponseScoped.mockReset();
+    mockGetTextBasedAnswerResult.mockReset();
     mockStreamTextBasedAnswer.mockReset();
     mockSendEvent.mockReset();
     consoleErrorSpy = jest
@@ -137,6 +143,9 @@ describe.each([
         status: ThreadResponseAnswerStatus.STREAMING,
         queryId: 'query-1',
       },
+    });
+    mockGetTextBasedAnswerResult.mockResolvedValue({
+      status: TextBasedAnswerStatus.SUCCEEDED,
     });
     mockStreamTextBasedAnswer.mockResolvedValue(stream);
 
@@ -229,6 +238,47 @@ describe.each([
     expect(mockStreamTextBasedAnswer).not.toHaveBeenCalled();
     expect(res.write).toHaveBeenCalledWith(
       `data: ${JSON.stringify({ message: 'final answer' })}\n\n`,
+    );
+    expect(res.write).toHaveBeenCalledWith(
+      `data: ${JSON.stringify({ done: true })}\n\n`,
+    );
+    expect(res.end).toHaveBeenCalled();
+  });
+
+  it('replays finalized upstream content when the persisted response is still marked streaming', async () => {
+    const handler = await loadHandler();
+    const req = createReq(
+      modulePath.includes('[id]') ? { id: '404' } : { responseId: '404' },
+    );
+    const res = createRes();
+
+    mockResolveRequestScope.mockResolvedValue({
+      project: { id: 42 },
+      workspace: { id: 'workspace-1' },
+      knowledgeBase: { id: 'kb-1' },
+      kbSnapshot: { id: 'snapshot-1' },
+      deployHash: 'deploy-1',
+      userId: 'user-1',
+    });
+    mockAssertResponseScope.mockResolvedValue(undefined);
+    mockGetResponseScoped.mockResolvedValue({
+      id: 404,
+      question: 'Late subscriber?',
+      answerDetail: {
+        status: ThreadResponseAnswerStatus.STREAMING,
+        queryId: 'query-finished-upstream',
+      },
+    });
+    mockGetTextBasedAnswerResult.mockResolvedValue({
+      status: TextBasedAnswerStatus.SUCCEEDED,
+      content: 'upstream final answer',
+    });
+
+    await handler(req, res);
+
+    expect(mockStreamTextBasedAnswer).not.toHaveBeenCalled();
+    expect(res.write).toHaveBeenCalledWith(
+      `data: ${JSON.stringify({ message: 'upstream final answer' })}\n\n`,
     );
     expect(res.write).toHaveBeenCalledWith(
       `data: ${JSON.stringify({ done: true })}\n\n`,

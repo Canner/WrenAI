@@ -5,12 +5,16 @@ import type {
   RecommendedQuestionsTask,
   ThreadResponse,
 } from '@/types/home';
+import type { ComposerDraftIntent } from '@/types/homeIntent';
+import type { WorkbenchArtifactKind } from '@/features/home/thread/threadWorkbenchState';
 
 import { SelectQuestionProps } from '@/components/pages/home/RecommendedQuestions';
 
 export type IPromptThreadStore = {
   data: DetailedThread;
-  recommendedQuestions: RecommendedQuestionsTask;
+  recommendedQuestions: RecommendedQuestionsTask | null;
+  recommendedQuestionsOwnerResponseId?: number | null;
+  selectedResponseId?: number | null;
   showRecommendedQuestions: boolean;
   preparation: {
     askingStreamTask?: string;
@@ -29,16 +33,36 @@ export type IPromptThreadStore = {
     question,
     sql,
   }: SelectQuestionProps) => Promise<void>;
+  onDraftConversationAid: (payload: {
+    intentHint: ComposerDraftIntent['intentHint'];
+    prompt: string;
+    sourceAidKind?: ComposerDraftIntent['sourceAidKind'];
+    sourceResponseId?: number | null;
+  }) => void;
   onGenerateThreadRecommendedQuestions: () => Promise<void>;
   onGenerateTextBasedAnswer: (responseId: number) => Promise<void>;
-  onGenerateChartAnswer: (responseId: number) => Promise<void>;
+  onGenerateChartAnswer: (
+    responseId: number,
+    options?: {
+      question?: string;
+      sourceResponseId?: number;
+    },
+  ) => Promise<void>;
   onAdjustChartAnswer: (
     responseId: number,
     data: AdjustThreadResponseChartInput,
   ) => Promise<void>;
+  onSelectResponse: (
+    responseId: number,
+    options?: {
+      artifact?: WorkbenchArtifactKind | null;
+      openWorkbench?: boolean;
+      userInitiated?: boolean;
+    },
+  ) => void;
   onOpenSaveToKnowledgeModal: (
     data: { sql: string; question: string },
-    payload: { isCreateMode: boolean },
+    payload: { isCreateMode: boolean; responseId?: number },
   ) => void;
   onOpenAdjustReasoningStepsModal: (data: {
     responseId: number;
@@ -50,7 +74,11 @@ export type IPromptThreadStore = {
 
 type PromptThreadDataStore = Pick<
   IPromptThreadStore,
-  'data' | 'recommendedQuestions' | 'showRecommendedQuestions'
+  | 'data'
+  | 'recommendedQuestions'
+  | 'recommendedQuestionsOwnerResponseId'
+  | 'selectedResponseId'
+  | 'showRecommendedQuestions'
 >;
 
 type PromptThreadPreparationStore = Pick<IPromptThreadStore, 'preparation'>;

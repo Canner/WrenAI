@@ -1,5 +1,9 @@
 import { isEmpty } from 'lodash';
-import { AskingTaskStatus, AskingTaskType } from '@/types/home';
+import {
+  AskingTaskStatus,
+  AskingTaskType,
+  ThreadResponseKind,
+} from '@/types/home';
 import type { AskingTask, DetailedThread, ThreadResponse } from '@/types/home';
 import { getIsFinished } from '@/hooks/useAskPrompt';
 import { getAnswerIsFinished } from '@/components/pages/home/promptThread/answerGeneration';
@@ -211,7 +215,9 @@ export const buildPendingPromptThreadResponse = ({
       ) - 1,
     threadId: thread.id,
     question,
+    responseKind: ThreadResponseKind.ANSWER,
     sql: null,
+    sourceResponseId: null,
     view: null,
     askingTask: askingTask || {
       candidates: [],

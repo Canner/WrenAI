@@ -70,11 +70,17 @@ export default function useAdjustAnswer(
   threadId?: number,
   updateThreadQuery?: UpdateThreadDetailState,
   runtimeScopeSelector?: ClientRuntimeScopeSelector,
+  resolveResponseRuntimeScopeSelector?: (
+    responseId: number,
+  ) => ClientRuntimeScopeSelector,
 ) {
   const adjustmentPollingTimeoutRef = useRef<ReturnType<
     typeof setTimeout
   > | null>(null);
   const lastAdjustmentTaskIdRef = useRef<string | null>(null);
+  const lastResponseSelectorRef = useRef<ClientRuntimeScopeSelector | null>(
+    null,
+  );
   const [loading, setLoading] = useState(false);
   const {
     data: threadResponse,
@@ -110,17 +116,38 @@ export default function useAdjustAnswer(
     }, ADJUSTMENT_POLL_TIMEOUT_MS);
   }, [clearAdjustmentPollingTimeout, stopThreadResponsePolling]);
 
+  const resolveScopedSelector = useCallback(
+    (responseId?: number | null) => {
+      if (
+        typeof responseId === 'number' &&
+        resolveResponseRuntimeScopeSelector != null
+      ) {
+        return resolveResponseRuntimeScopeSelector(responseId);
+      }
+
+      return resolveRuntimeScopeSelector(runtimeScopeSelector);
+    },
+    [resolveResponseRuntimeScopeSelector, runtimeScopeSelector],
+  );
+
   const fetchThreadResponseWithGuard = useCallback(
-    async (responseId: number) => {
+    async (
+      responseId: number,
+      runtimeScopeSelectorOverride?: ClientRuntimeScopeSelector,
+    ) => {
       clearAdjustmentPollingTimeout();
       stopThreadResponsePolling();
-      const response = await fetchThreadResponse(responseId);
+      const response = await fetchThreadResponse(
+        responseId,
+        runtimeScopeSelectorOverride || resolveScopedSelector(responseId),
+      );
       scheduleAdjustmentPollingStop();
       return response;
     },
     [
       clearAdjustmentPollingTimeout,
       fetchThreadResponse,
+      resolveScopedSelector,
       scheduleAdjustmentPollingStop,
       stopThreadResponsePolling,
     ],
@@ -161,8 +188,10 @@ export default function useAdjustAnswer(
   ) => {
     setLoading(true);
     try {
+      const scopedSelector = resolveScopedSelector(responseId);
+      lastResponseSelectorRef.current = scopedSelector;
       const nextThreadResponse = await adjustThreadResponseAnswer(
-        resolveRuntimeScopeSelector(runtimeScopeSelector),
+        scopedSelector,
         responseId,
         {
           tables: input.tables,
@@ -180,7 +209,7 @@ export default function useAdjustAnswer(
           nextThreadResponse.adjustmentTask.queryId;
       }
 
-      await fetchThreadResponseWithGuard(nextThreadResponse.id);
+      await fetchThreadResponseWithGuard(nextThreadResponse.id, scopedSelector);
       if (threadId) {
         handleUpdateThreadCache(nextThreadResponse, updateThreadQuery);
       }
@@ -194,8 +223,10 @@ export default function useAdjustAnswer(
   const onAdjustSQL = async (responseId: number, sql: string) => {
     setLoading(true);
     try {
+      const scopedSelector = resolveScopedSelector(responseId);
+      lastResponseSelectorRef.current = scopedSelector;
       const nextThreadResponse = await adjustThreadResponseAnswer(
-        resolveRuntimeScopeSelector(runtimeScopeSelector),
+        scopedSelector,
         responseId,
         { sql },
       );
@@ -230,10 +261,10 @@ export default function useAdjustAnswer(
     }
 
     try {
-      await cancelAdjustmentTask(
-        resolveRuntimeScopeSelector(runtimeScopeSelector),
-        taskId,
-      );
+      const scopedSelector =
+        lastResponseSelectorRef.current ||
+        resolveScopedSelector(threadResponse?.id);
+      await cancelAdjustmentTask(scopedSelector, taskId);
       stopThreadResponsePolling();
       clearAdjustmentPollingTimeout();
     } catch (_error) {
@@ -244,11 +275,10 @@ export default function useAdjustAnswer(
   const onReRun = async (currentThreadResponse: ThreadResponse) => {
     const responseId = currentThreadResponse.id;
     try {
-      await rerunAdjustmentTask(
-        resolveRuntimeScopeSelector(runtimeScopeSelector),
-        responseId,
-      );
-      await fetchThreadResponseWithGuard(responseId);
+      const scopedSelector = resolveScopedSelector(responseId);
+      lastResponseSelectorRef.current = scopedSelector;
+      await rerunAdjustmentTask(scopedSelector, responseId);
+      await fetchThreadResponseWithGuard(responseId, scopedSelector);
     } catch (_error) {
       message.error('重试调整失败，请稍后重试');
     }

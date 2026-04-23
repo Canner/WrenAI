@@ -36,7 +36,12 @@ class StopChartResponse(BaseModel):
 
 # GET /v1/charts/{query_id}/result
 class ChartError(BaseModel):
-    code: Literal["NO_CHART", "OTHERS"]
+    code: Literal[
+        "AI_NO_CHART",
+        "CHART_SCHEMA_INVALID",
+        "UPSTREAM_DATA_ERROR",
+        "OTHERS",
+    ]
     message: str
 
 
@@ -54,9 +59,62 @@ class ChartResult(BaseModel):
 
 class ChartResultResponse(BaseModel):
     status: Literal["fetching", "generating", "finished", "failed", "stopped"]
+    instruction_count: int = 0
     response: Optional[ChartResult] = None
     error: Optional[ChartError] = None
     trace_id: Optional[str] = None
+
+
+def _normalize_instruction(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    normalized = value.strip()
+    return normalized or None
+
+
+def _merge_instructions(
+    retrieved_instructions: list[dict] | None,
+    custom_instruction: Optional[str] = None,
+) -> tuple[Optional[str], int]:
+    merged_instructions = [
+        instruction.get("instruction", "").strip()
+        for instruction in (retrieved_instructions or [])
+        if instruction.get("instruction")
+        and instruction.get("instruction", "").strip()
+    ]
+    normalized_custom_instruction = _normalize_instruction(custom_instruction)
+    if normalized_custom_instruction:
+        merged_instructions.append(normalized_custom_instruction)
+
+    if not merged_instructions:
+        return None, 0
+
+    return "\n\n".join(merged_instructions), len(
+        [
+            instruction
+            for instruction in (retrieved_instructions or [])
+            if instruction.get("instruction")
+            and instruction.get("instruction", "").strip()
+        ]
+    )
+
+
+async def _retrieve_chart_instructions(
+    pipelines: Dict[str, BasicPipeline],
+    *,
+    query: str,
+    runtime_scope_id: Optional[str],
+) -> list[dict]:
+    instructions_pipeline = pipelines.get("instructions_retrieval")
+    if instructions_pipeline is None:
+        return []
+
+    result = await instructions_pipeline.run(
+        query=query,
+        runtime_scope_id=runtime_scope_id,
+        scope="chart",
+    )
+    return result["formatted_output"].get("documents", [])
 
 
 class ChartService:
@@ -99,11 +157,21 @@ class ChartService:
         try:
             query_id = chart_request.query_id
             runtime_scope_id = chart_request.resolve_runtime_scope_id()
+            chart_instructions = await _retrieve_chart_instructions(
+                self._pipelines,
+                query=chart_request.query,
+                runtime_scope_id=runtime_scope_id,
+            )
+            merged_custom_instruction, instruction_count = _merge_instructions(
+                chart_instructions,
+                chart_request.custom_instruction,
+            )
             execute_sql_error_message = None
 
             if not chart_request.data:
                 self._chart_results[query_id] = ChartResultResponse(
                     status="fetching",
+                    instruction_count=instruction_count,
                     trace_id=trace_id,
                 )
 
@@ -125,18 +193,20 @@ class ChartService:
             if execute_sql_error_message:
                 self._chart_results[query_id] = ChartResultResponse(
                     status="failed",
+                    instruction_count=instruction_count,
                     error=ChartError(
-                        code="OTHERS",
+                        code="UPSTREAM_DATA_ERROR",
                         message=execute_sql_error_message,
                     ),
                     trace_id=trace_id,
                 )
-                results["metadata"]["error_type"] = "OTHERS"
+                results["metadata"]["error_type"] = "UPSTREAM_DATA_ERROR"
                 results["metadata"]["error_message"] = execute_sql_error_message
                 return results
 
             self._chart_results[query_id] = ChartResultResponse(
                 status="generating",
+                instruction_count=instruction_count,
                 trace_id=trace_id,
             )
 
@@ -146,7 +216,7 @@ class ChartService:
                 data=sql_data,
                 language=chart_request.configurations.language,
                 remove_data_from_chart_schema=chart_request.remove_data_from_chart_schema,
-                custom_instruction=chart_request.custom_instruction,
+                custom_instruction=merged_custom_instruction,
             )
             chart_result = chart_generation_result["post_process"]["results"]
 
@@ -155,16 +225,18 @@ class ChartService:
             ):
                 self._chart_results[query_id] = ChartResultResponse(
                     status="failed",
+                    instruction_count=instruction_count,
                     error=ChartError(
-                        code="NO_CHART", message="chart generation failed"
+                        code="AI_NO_CHART", message="chart generation failed"
                     ),
                     trace_id=trace_id,
                 )
-                results["metadata"]["error_type"] = "NO_CHART"
+                results["metadata"]["error_type"] = "AI_NO_CHART"
                 results["metadata"]["error_message"] = "chart generation failed"
             else:
                 self._chart_results[query_id] = ChartResultResponse(
                     status="finished",
+                    instruction_count=instruction_count,
                     response=ChartResult(**chart_result),
                     trace_id=trace_id,
                 )
@@ -176,6 +248,7 @@ class ChartService:
 
             self._chart_results[chart_request.query_id] = ChartResultResponse(
                 status="failed",
+                instruction_count=0,
                 error=ChartError(
                     code="OTHERS",
                     message=str(e),

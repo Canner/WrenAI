@@ -5,6 +5,11 @@ import {
   type PreviewDataPayload,
 } from '@/utils/homeRest';
 import { isAbortRequestError } from '@/utils/abort';
+import {
+  buildRuntimeScopeStateKey,
+  hasExplicitRuntimeScopeSelector,
+  type ClientRuntimeScopeSelector,
+} from '@/runtime/client/runtimeScope';
 
 type PreviewDataEnvelope = {
   previewData?: PreviewDataPayload;
@@ -53,8 +58,11 @@ const pruneCache = () => {
   }
 };
 
-const getCacheKey = (workspaceId: string | undefined, responseId: number) =>
-  `${workspaceId || 'global'}:${responseId}`;
+const getCacheKey = (
+  runtimeScopeSelector: ClientRuntimeScopeSelector,
+  responseId: number,
+) =>
+  `${hasExplicitRuntimeScopeSelector(runtimeScopeSelector) ? buildRuntimeScopeStateKey(runtimeScopeSelector) : 'global'}:${responseId}`;
 
 const getOrCreateEntry = (cacheKey: string): CacheEntry => {
   pruneCache();
@@ -81,11 +89,11 @@ const emit = (cacheKey: string) => {
 
 export const clearResponsePreviewDataCache = (
   responseId?: number,
-  workspaceId?: string,
+  runtimeScopeSelector?: ClientRuntimeScopeSelector,
 ) => {
   if (typeof responseId === 'number') {
-    if (workspaceId) {
-      cache.delete(getCacheKey(workspaceId, responseId));
+    if (runtimeScopeSelector) {
+      cache.delete(getCacheKey(runtimeScopeSelector, responseId));
       return;
     }
 
@@ -98,12 +106,45 @@ export const clearResponsePreviewDataCache = (
   cache.clear();
 };
 
-export default function useResponsePreviewData(responseId?: number | null) {
+export default function useResponsePreviewData(
+  responseId?: number | null,
+  runtimeScopeSelectorOverride?: ClientRuntimeScopeSelector,
+) {
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
-  const workspaceId = runtimeScopeNavigation.selector.workspaceId;
+  const runtimeScopeSelector = useMemo(
+    () => ({
+      workspaceId:
+        runtimeScopeSelectorOverride?.workspaceId ||
+        runtimeScopeNavigation.selector.workspaceId,
+      knowledgeBaseId:
+        runtimeScopeSelectorOverride?.knowledgeBaseId ||
+        runtimeScopeNavigation.selector.knowledgeBaseId,
+      kbSnapshotId:
+        runtimeScopeSelectorOverride?.kbSnapshotId ||
+        runtimeScopeNavigation.selector.kbSnapshotId,
+      deployHash:
+        runtimeScopeSelectorOverride?.deployHash ||
+        runtimeScopeNavigation.selector.deployHash,
+      runtimeScopeId:
+        runtimeScopeSelectorOverride?.runtimeScopeId ||
+        runtimeScopeNavigation.selector.runtimeScopeId,
+    }),
+    [
+      runtimeScopeNavigation.selector.deployHash,
+      runtimeScopeNavigation.selector.kbSnapshotId,
+      runtimeScopeNavigation.selector.knowledgeBaseId,
+      runtimeScopeNavigation.selector.runtimeScopeId,
+      runtimeScopeNavigation.selector.workspaceId,
+      runtimeScopeSelectorOverride?.deployHash,
+      runtimeScopeSelectorOverride?.kbSnapshotId,
+      runtimeScopeSelectorOverride?.knowledgeBaseId,
+      runtimeScopeSelectorOverride?.runtimeScopeId,
+      runtimeScopeSelectorOverride?.workspaceId,
+    ],
+  );
   const cacheKey =
     typeof responseId === 'number'
-      ? getCacheKey(workspaceId, responseId)
+      ? getCacheKey(runtimeScopeSelector, responseId)
       : null;
   const [, forceUpdate] = useState(0);
 
@@ -144,7 +185,7 @@ export default function useResponsePreviewData(responseId?: number | null) {
       emit(cacheKey);
 
       const request = getThreadResponsePreviewData(
-        runtimeScopeNavigation.selector,
+        runtimeScopeSelector,
         responseId,
       )
         .then((payload) => {
@@ -181,7 +222,7 @@ export default function useResponsePreviewData(responseId?: number | null) {
       target.promise = request;
       return request;
     },
-    [cacheKey, responseId, runtimeScopeNavigation.selector],
+    [cacheKey, responseId, runtimeScopeSelector],
   );
 
   return {

@@ -88,6 +88,28 @@ class AskError(BaseModel):
     message: str
 
 
+ThinkingStepStatus = Literal["pending", "running", "finished", "failed", "skipped"]
+
+
+class ThinkingStep(BaseModel):
+    key: str
+    status: ThinkingStepStatus
+    message_key: str
+    message_params: Optional[dict[str, str | int | bool | None]] = None
+    phase: Optional[str] = None
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+    duration_ms: Optional[int] = None
+    detail: Optional[str] = None
+    error_code: Optional[str] = None
+    tags: Optional[list[str]] = None
+
+
+class ThinkingTrace(BaseModel):
+    current_step_key: Optional[str] = None
+    steps: list[ThinkingStep] = Field(default_factory=list)
+
+
 class AskResultRequest(BaseModel):
     query_id: str
 
@@ -167,6 +189,7 @@ class _AskResultResponse(BaseModel):
     invalid_sql: Optional[str] = None
     error: Optional[AskError] = None
     shadow_compare: Optional[AskShadowCompare] = None
+    thinking: Optional[ThinkingTrace] = None
     trace_id: Optional[str] = None
     is_followup: bool = False
     general_type: Optional[

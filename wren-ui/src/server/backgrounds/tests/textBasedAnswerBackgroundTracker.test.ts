@@ -1,11 +1,8 @@
 import { TextBasedAnswerStatus } from '@server/models/adaptor';
 import { ThreadResponseAnswerStatus } from '@server/services/askingService';
 import { TextBasedAnswerBackgroundTracker } from '../textBasedAnswerBackgroundTracker';
-import { Readable } from 'stream';
 
 describe('TextBasedAnswerBackgroundTracker', () => {
-  const createAnswerStream = (content = 'hello') =>
-    Readable.from([`data: ${JSON.stringify({ message: content })}\n\n`]);
   const waitForMacrotask = () =>
     new Promise<void>((resolve) => setImmediate(resolve));
 
@@ -33,8 +30,8 @@ describe('TextBasedAnswerBackgroundTracker', () => {
       getTextBasedAnswerResult: jest.fn().mockResolvedValue({
         status: TextBasedAnswerStatus.SUCCEEDED,
         numRowsUsedInLLM: 10,
+        content: 'hello',
       }),
-      streamTextBasedAnswer: jest.fn().mockResolvedValue(createAnswerStream()),
     };
     const threadResponseRepository = {
       updateOne: jest.fn().mockResolvedValue({}),
@@ -121,8 +118,8 @@ describe('TextBasedAnswerBackgroundTracker', () => {
       getTextBasedAnswerResult: jest.fn().mockResolvedValue({
         status: TextBasedAnswerStatus.SUCCEEDED,
         numRowsUsedInLLM: 10,
+        content: 'hello',
       }),
-      streamTextBasedAnswer: jest.fn().mockResolvedValue(createAnswerStream()),
     };
     const threadResponseRepository = {
       updateOne: jest.fn().mockResolvedValue({}),
@@ -221,8 +218,8 @@ describe('TextBasedAnswerBackgroundTracker', () => {
       getTextBasedAnswerResult: jest.fn().mockResolvedValue({
         status: TextBasedAnswerStatus.SUCCEEDED,
         numRowsUsedInLLM: 10,
+        content: 'hello',
       }),
-      streamTextBasedAnswer: jest.fn().mockResolvedValue(createAnswerStream()),
     };
     const threadResponseRepository = {
       updateOne: jest.fn().mockResolvedValue({}),
@@ -305,10 +302,11 @@ describe('TextBasedAnswerBackgroundTracker', () => {
 
     const wrenAIAdaptor = {
       createTextBasedAnswer: jest.fn(),
-      getTextBasedAnswerResult: jest.fn(),
-      streamTextBasedAnswer: jest
-        .fn()
-        .mockResolvedValue(createAnswerStream('recovered answer')),
+      getTextBasedAnswerResult: jest.fn().mockResolvedValue({
+        status: TextBasedAnswerStatus.SUCCEEDED,
+        numRowsUsedInLLM: 8,
+        content: 'recovered answer',
+      }),
     };
     const threadResponseRepository = {
       updateOne: jest.fn().mockResolvedValue({}),
@@ -347,7 +345,7 @@ describe('TextBasedAnswerBackgroundTracker', () => {
     await flushBackgroundJobs();
 
     expect(wrenAIAdaptor.createTextBasedAnswer).not.toHaveBeenCalled();
-    expect(wrenAIAdaptor.streamTextBasedAnswer).toHaveBeenCalledWith(
+    expect(wrenAIAdaptor.getTextBasedAnswerResult).toHaveBeenCalledWith(
       'text-stream-1',
     );
     expect(threadResponseRepository.updateOne).toHaveBeenCalledWith(17, {

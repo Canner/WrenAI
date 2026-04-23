@@ -79,12 +79,18 @@ export const shouldRefetchEmptyThreadDetail = (
   payload?: ThreadDetailData | null,
 ) => Boolean(payload && payload.responses.length === 0);
 
-const getCachedThreadDetail = (threadId?: number | null) => {
+const getCachedThreadDetail = (
+  threadId?: number | null,
+  runtimeScopeSelector?: ClientRuntimeScopeSelector,
+) => {
   if (threadId == null) {
     return null;
   }
 
-  return peekThreadOverview<ThreadDetailStateData>(threadId);
+  return peekThreadOverview<ThreadDetailStateData>(
+    threadId,
+    runtimeScopeSelector,
+  );
 };
 
 export const loadThreadDetailPayload = async ({
@@ -100,7 +106,10 @@ export const loadThreadDetailPayload = async ({
   fetcher?: typeof fetch;
   preferPrefetchedData?: boolean;
 }): Promise<ThreadDetailData> => {
-  const cachedThread = getCachedThreadDetail(threadId)?.thread;
+  const cachedThread = getCachedThreadDetail(
+    threadId,
+    runtimeScopeSelector,
+  )?.thread;
   if (preferPrefetchedData && cachedThread) {
     return cachedThread;
   }
@@ -128,9 +137,13 @@ export const loadThreadDetailPayload = async ({
         throw new Error('加载对话失败，已返回首页');
       }
 
-      primeThreadOverview(threadId, {
-        thread: normalized,
-      } satisfies ThreadDetailStateData);
+      primeThreadOverview(
+        threadId,
+        {
+          thread: normalized,
+        } satisfies ThreadDetailStateData,
+        runtimeScopeSelector,
+      );
       return normalized;
     })
     .finally(() => {
@@ -206,8 +219,8 @@ export default function useThreadDetail({
   }, [enabled, runtimeScopeSelector, threadId]);
 
   const prefetchedData = useMemo(
-    () => getCachedThreadDetail(threadId),
-    [threadId],
+    () => getCachedThreadDetail(threadId, runtimeScopeSelector),
+    [runtimeScopeSelector, threadId],
   );
   const shouldRevalidatePrefetchedData = useMemo(
     () => shouldRefetchEmptyThreadDetail(prefetchedData?.thread),
@@ -227,6 +240,7 @@ export default function useThreadDetail({
     request: async () =>
       loadThreadDetailPayloadWithRetry({
         threadId: threadId as number,
+        runtimeScopeSelector,
         requestUrl: requestUrl as string,
         preferPrefetchedData: false,
       }),
@@ -262,17 +276,17 @@ export default function useThreadDetail({
         const baseData =
           previousData?.thread?.id === threadId
             ? previousData
-            : getCachedThreadDetail(threadId);
+            : getCachedThreadDetail(threadId, runtimeScopeSelector);
         if (!baseData || threadId == null) {
           return previousData;
         }
 
         const nextData = updater(baseData);
-        primeThreadOverview(threadId, nextData);
+        primeThreadOverview(threadId, nextData, runtimeScopeSelector);
         return nextData;
       });
     },
-    [threadId],
+    [runtimeScopeSelector, threadId],
   );
 
   return {

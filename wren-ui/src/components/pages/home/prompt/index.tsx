@@ -27,7 +27,9 @@ interface Props {
     payload: CreateThreadInput | CreateThreadResponseInput,
   ) => Promise<void>;
   onStop: () => void;
-  onSubmit: (value: string) => Promise<void>;
+  onSubmit: (
+    value: string,
+  ) => Promise<void | { handledInlineResult?: boolean }>;
   onStopPolling: () => void;
   onStopStreaming: () => void;
   onStopRecommend: () => void;
@@ -173,10 +175,11 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
   const intentSQLAnswer = async () => {
     onCreateResponse &&
       (await onCreateResponse({ question, taskId: askingTask?.queryId }));
-    setShowResult(false);
+    closeResult();
   };
 
   const closeResult = () => {
+    setShowResult(false);
     askProcessState.resetState();
     setQuestion('');
     onStopStreaming && onStopStreaming();
@@ -196,7 +199,10 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
       askProcessState.transitionTo(PROCESS_STATE.UNDERSTANDING);
       setShowResult(true);
     }
-    onSubmit && (await onSubmit(value));
+    const submitResult = onSubmit && (await onSubmit(value));
+    if (submitResult?.handledInlineResult) {
+      closeResult();
+    }
   };
 
   const setDraftQuestion = useCallback((value: string) => {

@@ -33,6 +33,7 @@ type Props = ModalAction<SqlPair> & {
   loading?: boolean;
   payload?: {
     isCreateMode: boolean;
+    responseId?: number;
   };
 };
 

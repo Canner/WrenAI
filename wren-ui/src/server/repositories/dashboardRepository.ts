@@ -5,6 +5,7 @@ import { ScheduleFrequencyEnum } from '@server/models/dashboard';
 export interface Dashboard {
   id: number;
   projectId?: number | null;
+  workspaceId?: string | null;
   knowledgeBaseId?: string | null;
   kbSnapshotId?: string | null;
   deployHash?: string | null;

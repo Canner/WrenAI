@@ -15,6 +15,8 @@ export const THREAD_RESPONSE_JSONB_COLUMNS = [
   'breakdownDetail',
   'chartDetail',
   'adjustment',
+  'resolvedIntent',
+  'artifactLineage',
 ];
 
 export const hasCanonicalThreadResponseScope = (

@@ -7,6 +7,7 @@ import { Path } from '@/utils/enum';
 import { createAskingTask, createThread } from '@/utils/homeRest';
 import { HISTORICAL_SNAPSHOT_READONLY_HINT } from '@/utils/runtimeSnapshot';
 import { resolveCreatedThreadRuntimeSelector } from './homePageRuntime';
+import { primeThreadWorkbenchNavigationHint } from './thread/threadWorkbenchNavigationHint';
 
 const reportHomeError = (_error: unknown, fallbackMessage: string) => {
   message.error(fallbackMessage);
@@ -137,6 +138,11 @@ export default function useHomeThreadCreation({
         throw new Error('创建对话失败');
       }
 
+      primeThreadWorkbenchNavigationHint({
+        threadId,
+        preferredArtifact: 'preview',
+      });
+
       void refetchPersistentShellHistory();
 
       await runtimeScopeNavigation.push(
@@ -170,6 +176,10 @@ export default function useHomeThreadCreation({
       if (!threadId) {
         throw new Error('创建对话失败');
       }
+      primeThreadWorkbenchNavigationHint({
+        threadId,
+        preferredArtifact: 'preview',
+      });
       void refetchPersistentShellHistory();
       await runtimeScopeNavigation.push(
         `${Path.Home}/${threadId}`,

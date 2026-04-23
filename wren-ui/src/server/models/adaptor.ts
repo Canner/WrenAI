@@ -117,6 +117,7 @@ export interface AskInput {
 
 export interface AsyncQueryResponse {
   queryId: string;
+  instructionCount?: number;
 }
 
 export enum AskResultStatus {
@@ -150,6 +151,34 @@ export interface AskResponse<R, S> {
   status: S;
   response: R | null;
   error: WrenAIError | null;
+}
+
+export type ThinkingMessageParam = string | number | boolean | null;
+
+export type ThinkingStepStatus =
+  | 'pending'
+  | 'running'
+  | 'finished'
+  | 'failed'
+  | 'skipped';
+
+export interface ThinkingStep {
+  key: string;
+  status: ThinkingStepStatus;
+  messageKey: string;
+  messageParams?: Record<string, ThinkingMessageParam> | null;
+  phase?: string | null;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  durationMs?: number | null;
+  detail?: string | null;
+  errorCode?: string | null;
+  tags?: string[] | null;
+}
+
+export interface ThinkingTrace {
+  currentStepKey?: string | null;
+  steps: ThinkingStep[];
 }
 
 export interface AskShadowCompare {
@@ -208,6 +237,7 @@ export type AskResult = AskResponse<
   shadowCompare?: AskShadowCompare | null;
   invalidSql?: string;
   traceId?: string;
+  thinking?: ThinkingTrace | null;
 };
 
 export enum RecommendationQuestionStatus {
@@ -266,6 +296,8 @@ export enum TextBasedAnswerStatus {
 export interface TextBasedAnswerResult {
   status: TextBasedAnswerStatus;
   numRowsUsedInLLM?: number;
+  instructionCount?: number;
+  content?: string;
   error?: WrenAIError;
 }
 
@@ -290,6 +322,7 @@ export enum ChartType {
 export interface ChartInput {
   query: string;
   sql: string;
+  customInstruction?: string | null;
   data?: any;
   runtimeScopeId?: string;
   runtimeIdentity?: AskRuntimeIdentity | null;
@@ -323,6 +356,7 @@ export interface ChartResponse {
 
 export interface ChartResult {
   status: ChartStatus;
+  instructionCount?: number;
   response?: ChartResponse;
   error?: WrenAIError;
 }

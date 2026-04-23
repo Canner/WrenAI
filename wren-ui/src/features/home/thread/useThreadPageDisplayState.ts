@@ -5,8 +5,21 @@ import {
   buildPendingPromptThreadResponse,
   hasReferenceRenderableResponse,
 } from './threadPageState';
+import {
+  hydrateThreadResponseHomeIntent,
+  hydrateThreadResponsesHomeIntent,
+} from './homeIntentContract';
 
 const REFERENCE_PRIMARY_QUESTION = '每个供应商单产品的成本趋势';
+
+const sortResponsesChronologically = <T extends { id?: number | null }>(
+  responses?: T[] | null,
+) =>
+  [...(responses || [])].sort(
+    (left, right) =>
+      (left.id ?? Number.MIN_SAFE_INTEGER) -
+      (right.id ?? Number.MIN_SAFE_INTEGER),
+  );
 
 type RuntimeKnowledgeBase = {
   id: string;
@@ -32,33 +45,56 @@ export function useThreadPageDisplayState({
   thread: DetailedThread | null;
   threadId?: number | null;
 }) {
-  const pendingPromptResponse = useMemo(
-    () =>
-      buildPendingPromptThreadResponse({
-        thread,
-        originalQuestion: askPromptOriginalQuestion,
-        askingTask: askPromptAskingTask as any,
-        loading: askPromptLoading,
-      }),
-    [askPromptAskingTask, askPromptLoading, askPromptOriginalQuestion, thread],
-  );
+  const pendingPromptResponse = useMemo(() => {
+    const pendingResponse = buildPendingPromptThreadResponse({
+      thread,
+      originalQuestion: askPromptOriginalQuestion,
+      askingTask: askPromptAskingTask as any,
+      loading: askPromptLoading,
+    });
 
-  const displayThread = useMemo(() => {
+    return pendingResponse
+      ? hydrateThreadResponseHomeIntent(pendingResponse)
+      : null;
+  }, [
+    askPromptAskingTask,
+    askPromptLoading,
+    askPromptOriginalQuestion,
+    thread,
+  ]);
+
+  const hydratedThread = useMemo(() => {
     if (!thread) {
       return null;
     }
 
+    return {
+      ...thread,
+      responses: hydrateThreadResponsesHomeIntent(
+        sortResponsesChronologically(thread.responses),
+      ),
+    };
+  }, [thread]);
+
+  const displayThread = useMemo(() => {
+    if (!hydratedThread) {
+      return null;
+    }
+
     if (!pendingPromptResponse) {
-      return thread;
+      return hydratedThread;
     }
 
     return {
-      ...thread,
-      responses: [...thread.responses, pendingPromptResponse],
+      ...hydratedThread,
+      responses: [...hydratedThread.responses, pendingPromptResponse],
     };
-  }, [pendingPromptResponse, thread]);
+  }, [hydratedThread, pendingPromptResponse]);
 
-  const responses = useMemo(() => thread?.responses || [], [thread]);
+  const responses = useMemo(
+    () => hydratedThread?.responses || [],
+    [hydratedThread],
+  );
 
   const routeKnowledgeBaseIds = useMemo(() => {
     const joinedKnowledgeBaseIds = Array.isArray(rawKnowledgeBaseIds)

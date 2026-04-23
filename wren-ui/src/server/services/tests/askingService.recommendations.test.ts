@@ -115,6 +115,11 @@ describe('AskingService', () => {
       service.threadRepository = {
         findOneBy: jest.fn().mockResolvedValue(thread),
       };
+      service.threadResponseRepository = {
+        findAllBy: jest
+          .fn()
+          .mockResolvedValue([{ id: 12, question: '上一条回答' }]),
+      };
       service.knowledgeBaseRepository = {
         findOneBy: jest.fn().mockResolvedValue({
           id: 'kb-1',
@@ -143,6 +148,24 @@ describe('AskingService', () => {
         status: RecommendQuestionResultStatus.GENERATING,
         questions: [],
         error: undefined,
+        resolvedIntent: {
+          kind: 'RECOMMEND_QUESTIONS',
+          mode: 'FOLLOW_UP',
+          target: 'THREAD_SIDECAR',
+          source: 'derived',
+          sourceThreadId: 101,
+          sourceResponseId: 12,
+          confidence: null,
+          artifactPlan: {
+            teaserArtifacts: [],
+            workbenchArtifacts: [],
+            primaryTeaser: null,
+            primaryWorkbenchArtifact: null,
+          },
+          conversationAidPlan: {
+            threadAids: ['suggested_questions'],
+          },
+        },
       });
     });
   });

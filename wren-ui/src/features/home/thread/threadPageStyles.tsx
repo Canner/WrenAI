@@ -1,23 +1,83 @@
-import { Typography } from 'antd';
+import { Splitter, Typography } from 'antd';
 import styled from 'styled-components';
 
 const { Text } = Typography;
 
-export const ThreadScene = styled.div`
-  width: min(100%, 920px);
+export const ThreadScene = styled.div<{ $withWorkbench?: boolean }>`
+  width: 100%;
+  max-width: ${(props) => (props.$withWorkbench ? 'none' : '940px')};
   margin: 0 auto;
+  flex: 1;
+  min-width: 0;
+  min-height: calc(100vh - 72px);
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - 72px);
-  gap: 16px;
-  padding: 6px 0 24px;
+  padding: 0;
 `;
 
-export const ConversationPane = styled.section`
+export const ThreadSplitStage = styled(Splitter)`
+  flex: 1;
+  min-height: calc(100vh - 90px);
+  background: transparent;
+
+  .ant-splitter-panel {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .ant-splitter-bar {
+    background: transparent;
+  }
+
+  .ant-splitter-bar-dragger {
+    width: 10px !important;
+    min-width: 10px !important;
+    background: transparent !important;
+  }
+
+  .ant-splitter-bar-dragger::before {
+    content: '';
+    display: block;
+    width: 3px;
+    height: 100%;
+    margin: 0 auto;
+    border-radius: 999px;
+    background: linear-gradient(
+      180deg,
+      rgba(148, 163, 184, 0.24) 0%,
+      rgba(148, 163, 184, 0.5) 100%
+    );
+    transition:
+      background 0.18s ease,
+      transform 0.18s ease;
+  }
+
+  .ant-splitter-bar:hover .ant-splitter-bar-dragger::before,
+  .ant-splitter-bar-active .ant-splitter-bar-dragger::before {
+    background: linear-gradient(
+      180deg,
+      rgba(111, 71, 255, 0.24) 0%,
+      rgba(111, 71, 255, 0.5) 100%
+    );
+    transform: scaleX(1.05);
+  }
+`;
+
+export const ConversationPane = styled.section<{ $withWorkbench?: boolean }>`
+  flex: 1;
+  min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
   background: transparent;
+  height: 100%;
+  position: relative;
+  padding: 0 ${(props) => (props.$withWorkbench ? '16px' : '24px')} 0 24px;
+
+  @media (max-width: 1280px) {
+    padding: 0 12px 0 16px;
+  }
 `;
 
 export const ConversationBody = styled.div`
@@ -25,7 +85,15 @@ export const ConversationBody = styled.div`
   width: 100%;
   min-height: 0;
   overflow: auto;
-  padding: 0 0 20px;
+  padding: 0 0 24px;
+`;
+
+export const WorkbenchPane = styled.aside`
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  padding-left: 0;
 `;
 
 export const ComposerSelectedScopeRow = styled.div`
@@ -51,16 +119,25 @@ export const ComposerSelectedKnowledgeChip = styled.div`
 `;
 
 export const ComposerDock = styled.div`
-  padding: 0;
-  background: transparent;
+  position: sticky;
+  bottom: 0;
+  z-index: 8;
+  padding: 12px 0 20px;
+  margin-top: auto;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.94) 28%,
+    rgba(255, 255, 255, 0.98) 100%
+  );
 `;
 
 export const ComposerFrame = styled.div`
   border-radius: 18px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(15, 23, 42, 0.06);
   background: rgba(255, 255, 255, 0.98);
-  box-shadow: none;
-  padding: 12px 14px 10px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+  padding: 12px 14px 12px;
 `;
 
 export const ComposerAssistRow = styled.div`

@@ -214,21 +214,6 @@ export class ScheduleService implements IScheduleService {
         'Dashboard refresh schedule requires workspace runtime binding',
       );
     }
-    if (requireAll && !input.knowledgeBaseId) {
-      throw new Error(
-        'Dashboard refresh schedule requires knowledge base runtime binding',
-      );
-    }
-    if (requireAll && !input.kbSnapshotId) {
-      throw new Error(
-        'Dashboard refresh schedule requires snapshot runtime binding',
-      );
-    }
-    if (requireAll && !input.deployHash) {
-      throw new Error(
-        'Dashboard refresh schedule requires deploy hash runtime binding',
-      );
-    }
 
     const patch: Partial<ScheduleRuntimeBinding> = {};
     assignIfPresent(patch, 'workspaceId', input.workspaceId);

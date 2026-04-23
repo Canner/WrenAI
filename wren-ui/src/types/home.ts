@@ -1,11 +1,40 @@
 import type { SqlPair } from './knowledge';
 import type { ViewInfo } from './modeling';
+import type { ResolvedHomeIntent, ResponseArtifactLineage } from './homeIntent';
 
 export type Error = {
   code?: string | null;
   message?: string | null;
   shortMessage?: string | null;
   stacktrace?: Array<string | null> | null;
+};
+
+export type ThinkingMessageParam = string | number | boolean | null;
+
+export type ThinkingStepStatus =
+  | 'pending'
+  | 'running'
+  | 'finished'
+  | 'failed'
+  | 'skipped';
+
+export type ThinkingStep = {
+  detail?: string | null;
+  durationMs?: number | null;
+  errorCode?: string | null;
+  finishedAt?: string | null;
+  key: string;
+  messageKey: string;
+  messageParams?: Record<string, ThinkingMessageParam> | null;
+  phase?: string | null;
+  startedAt?: string | null;
+  status: ThinkingStepStatus;
+  tags?: string[] | null;
+};
+
+export type ThinkingTrace = {
+  currentStepKey?: string | null;
+  steps: ThinkingStep[];
 };
 
 export enum AskingTaskStatus {
@@ -41,6 +70,11 @@ export enum ChartTaskStatus {
   FINISHED = 'FINISHED',
   GENERATING = 'GENERATING',
   STOPPED = 'STOPPED',
+}
+
+export enum ThreadResponseKind {
+  ANSWER = 'ANSWER',
+  CHART_FOLLOWUP = 'CHART_FOLLOWUP',
 }
 
 export enum ChartType {
@@ -111,6 +145,7 @@ export type AskingTask = {
   retrievedTables?: string[] | null;
   sqlGenerationReasoning?: string | null;
   status: AskingTaskStatus;
+  thinking?: ThinkingTrace | null;
   traceId?: string | null;
   type?: AskingTaskType | null;
 };
@@ -141,6 +176,7 @@ export enum RecommendedQuestionsTaskStatus {
 export type RecommendedQuestionsTask = {
   error?: Error | null;
   questions: ResultQuestion[];
+  resolvedIntent?: ResolvedHomeIntent | null;
   status: RecommendedQuestionsTaskStatus;
 };
 
@@ -158,7 +194,9 @@ export type CreateThreadInput = {
 
 export type CreateThreadResponseInput = {
   question?: string | null;
+  responseKind?: ThreadResponseKind | null;
   sql?: string | null;
+  sourceResponseId?: number | null;
   taskId?: string | null;
 };
 
@@ -198,6 +236,7 @@ export enum ThreadResponseAdjustmentType {
 export type ThreadResponseAnswerDetail = {
   content?: string | null;
   error?: Error | null;
+  instructionCount?: number | null;
   numRowsUsedInLLM?: number | null;
   queryId?: string | null;
   status?: ThreadResponseAnswerStatus | null;
@@ -224,6 +263,11 @@ export type ThreadResponseBreakdownDetail = {
 export type ThreadResponseChartDetail = {
   adjustment?: boolean | null;
   canonicalizationVersion?: string | null;
+  chartability?: {
+    chartable: boolean;
+    reasonCode?: string | null;
+    message?: string | null;
+  } | null;
   chartDataProfile?: any;
   chartSchema?: any;
   chartType?: ChartType | null;
@@ -245,6 +289,7 @@ export type ThreadResponseChartDetail = {
   rawChartSchema?: any;
   renderHints?: any;
   status: ChartTaskStatus;
+  thinking?: ThinkingTrace | null;
   validationErrors?: string[] | null;
 };
 
@@ -252,14 +297,22 @@ export type ThreadResponse = {
   adjustment?: ThreadResponseAdjustment | null;
   adjustmentTask?: AdjustmentTask | null;
   answerDetail?: ThreadResponseAnswerDetail | null;
+  artifactLineage?: ResponseArtifactLineage | null;
   askingTask?: AskingTask | null;
   breakdownDetail?: ThreadResponseBreakdownDetail | null;
   chartDetail?: ThreadResponseChartDetail | null;
   id: number;
+  deployHash?: string | null;
+  kbSnapshotId?: string | null;
+  knowledgeBaseId?: string | null;
   question: string;
+  resolvedIntent?: ResolvedHomeIntent | null;
+  responseKind?: ThreadResponseKind | null;
   sql?: string | null;
+  sourceResponseId?: number | null;
   threadId: number;
   view?: ViewInfo | null;
+  workspaceId?: string | null;
 };
 
 export type DetailedThread = {

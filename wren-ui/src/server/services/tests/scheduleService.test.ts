@@ -135,7 +135,39 @@ describe('ScheduleService', () => {
     );
   });
 
-  it('rejects enabled schedules without full runtime binding', async () => {
+  it('creates workspace-scoped dashboard refresh jobs when enabled without knowledge base binding', async () => {
+    const nextRunAt = new Date('2026-04-03T12:00:00.000Z');
+    scheduleJobRepository.findAllBy.mockResolvedValue([]);
+    scheduleJobRepository.createOne.mockResolvedValue({
+      id: 'job-workspace',
+      targetId: '10',
+    });
+
+    await scheduleService.syncDashboardRefreshJob({
+      dashboardId: 10,
+      enabled: true,
+      cronExpr: '0 12 * * *',
+      timezone: 'UTC',
+      nextRunAt,
+      workspaceId: 'ws-4',
+    });
+
+    expect(scheduleJobRepository.createOne).toHaveBeenCalledWith({
+      id: 'job-new',
+      workspaceId: 'ws-4',
+      targetType: DASHBOARD_REFRESH_TARGET_TYPE,
+      targetId: '10',
+      cronExpr: '0 12 * * *',
+      timezone: 'UTC',
+      status: 'active',
+      nextRunAt,
+      lastError: null,
+      createdBy: null,
+      lastRunAt: null,
+    });
+  });
+
+  it('rejects enabled schedules without workspace runtime binding', async () => {
     scheduleJobRepository.findAllBy.mockResolvedValue([]);
 
     await expect(
@@ -143,12 +175,9 @@ describe('ScheduleService', () => {
         dashboardId: 10,
         enabled: true,
         cronExpr: '0 12 * * *',
-        workspaceId: 'ws-4',
-        knowledgeBaseId: 'kb-4',
-        kbSnapshotId: null,
-        deployHash: 'deploy-4',
+        workspaceId: null,
       }),
-    ).rejects.toThrow('snapshot runtime binding');
+    ).rejects.toThrow('workspace runtime binding');
   });
 
   it('deactivates duplicate dashboard refresh jobs when syncing an existing schedule', async () => {

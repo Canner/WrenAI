@@ -20,6 +20,7 @@ import {
   toUtcDashboardSchedule,
   validateDashboardScheduleInput,
 } from './dashboardServiceSupport';
+import { normalizeCanonicalPersistedRuntimeIdentity } from '@server/utils/persistedRuntimeIdentity';
 import {
   CreateDashboardItemInput,
   DashboardRuntimeBinding,
@@ -46,16 +47,59 @@ logger.level = 'debug';
 const toErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
+const toDashboardItemRuntimeIdentity = (
+  runtimeIdentity?: CreateDashboardItemInput['sourceRuntimeIdentity'],
+) => {
+  if (!runtimeIdentity) {
+    return undefined;
+  }
+
+  const normalizedRuntimeIdentity = normalizeCanonicalPersistedRuntimeIdentity({
+    projectId: runtimeIdentity.projectId ?? null,
+    workspaceId: runtimeIdentity.workspaceId ?? null,
+    knowledgeBaseId: runtimeIdentity.knowledgeBaseId ?? null,
+    kbSnapshotId: runtimeIdentity.kbSnapshotId ?? null,
+    deployHash: runtimeIdentity.deployHash ?? null,
+  });
+
+  return {
+    projectId: normalizedRuntimeIdentity.projectId ?? null,
+    workspaceId: normalizedRuntimeIdentity.workspaceId ?? null,
+    knowledgeBaseId: normalizedRuntimeIdentity.knowledgeBaseId ?? null,
+    kbSnapshotId: normalizedRuntimeIdentity.kbSnapshotId ?? null,
+    deployHash: normalizedRuntimeIdentity.deployHash ?? null,
+  };
+};
+
 export class DashboardService implements IDashboardService {
   private dashboardItemRepository: DashboardServiceDependencies['dashboardItemRepository'];
   private dashboardRepository: DashboardServiceDependencies['dashboardRepository'];
+  private knowledgeBaseRepository: DashboardServiceDependencies['knowledgeBaseRepository'];
 
   constructor({
     dashboardItemRepository,
     dashboardRepository,
+    knowledgeBaseRepository,
   }: DashboardServiceDependencies) {
     this.dashboardItemRepository = dashboardItemRepository;
     this.dashboardRepository = dashboardRepository;
+    this.knowledgeBaseRepository = knowledgeBaseRepository;
+  }
+
+  private async listWorkspaceDashboards(
+    workspaceId: string,
+    _bridgeProjectId: number | null,
+  ): Promise<Dashboard[]> {
+    const dashboards = await this.dashboardRepository.findAllBy({
+      workspaceId,
+    });
+
+    return dashboards.filter(
+      (dashboard) =>
+        dashboard.workspaceId === workspaceId &&
+        dashboard.projectId == null &&
+        !dashboard.knowledgeBaseId,
+    );
   }
 
   public async setDashboardSchedule(
@@ -153,6 +197,7 @@ export class DashboardService implements IDashboardService {
     bridgeProjectId: number | null,
     binding?: DashboardRuntimeBinding,
   ): Promise<Dashboard[]> {
+    const workspaceId = binding?.workspaceId || null;
     const scopedKnowledgeBaseId = binding?.knowledgeBaseId || null;
     let dashboards: Dashboard[] = [];
 
@@ -167,6 +212,11 @@ export class DashboardService implements IDashboardService {
         );
         dashboards = fallbackDashboard ? [fallbackDashboard] : [];
       }
+    } else if (workspaceId) {
+      dashboards = await this.listWorkspaceDashboards(
+        workspaceId,
+        bridgeProjectId,
+      );
     } else if (bridgeProjectId != null) {
       dashboards = await this.dashboardRepository.findAllBy({
         projectId: bridgeProjectId,
@@ -174,6 +224,9 @@ export class DashboardService implements IDashboardService {
     }
 
     if (dashboards.length === 0) {
+      if (workspaceId && !scopedKnowledgeBaseId && bridgeProjectId == null) {
+        return [];
+      }
       return [await this.initDashboard(bridgeProjectId, binding)];
     }
 
@@ -206,17 +259,29 @@ export class DashboardService implements IDashboardService {
     bridgeProjectId: number | null,
     binding?: DashboardRuntimeBinding,
   ): Promise<Dashboard> {
+    const scopedWorkspaceId = binding?.workspaceId || null;
     const scopedKnowledgeBaseId = binding?.knowledgeBaseId || null;
     const existingDashboards =
       scopedKnowledgeBaseId != null
         ? await this.dashboardRepository.findAllBy({
             knowledgeBaseId: scopedKnowledgeBaseId,
           })
-        : bridgeProjectId != null
-          ? await this.dashboardRepository.findAllBy({
-              projectId: bridgeProjectId,
-            })
-          : [];
+        : scopedWorkspaceId != null && bridgeProjectId == null
+          ? (
+              await this.dashboardRepository.findAllBy({
+                workspaceId: scopedWorkspaceId,
+              })
+            ).filter(
+              (dashboard) =>
+                dashboard.workspaceId === scopedWorkspaceId &&
+                dashboard.projectId == null &&
+                !dashboard.knowledgeBaseId,
+            )
+          : bridgeProjectId != null
+            ? await this.dashboardRepository.findAllBy({
+                projectId: bridgeProjectId,
+              })
+            : [];
 
     return await createScopedDashboard(this.dashboardRepository, {
       bridgeProjectId,
@@ -243,6 +308,7 @@ export class DashboardService implements IDashboardService {
     bridgeProjectId: number | null,
     binding?: DashboardRuntimeBinding,
   ): Promise<Dashboard | null> {
+    const workspaceId = binding?.workspaceId || null;
     const scopedKnowledgeBaseId = binding?.knowledgeBaseId || null;
     const scopedDashboards = scopedKnowledgeBaseId
       ? await this.dashboardRepository.findAllBy({
@@ -259,6 +325,14 @@ export class DashboardService implements IDashboardService {
         scopedDashboard.id,
         binding || {},
       );
+    }
+
+    if (workspaceId && !scopedKnowledgeBaseId) {
+      const workspaceDashboards = await this.listWorkspaceDashboards(
+        workspaceId,
+        bridgeProjectId,
+      );
+      return resolveDefaultDashboard(workspaceDashboards);
     }
 
     if (bridgeProjectId == null) {
@@ -485,6 +559,9 @@ export class DashboardService implements IDashboardService {
         canonicalizationVersion: input.canonicalizationVersion ?? null,
         chartDataProfile: input.chartDataProfile || undefined,
         validationErrors: input.validationErrors || [],
+        runtimeIdentity: toDashboardItemRuntimeIdentity(
+          input.sourceRuntimeIdentity,
+        ),
         sourceResponseId: input.sourceResponseId ?? null,
         sourceThreadId: input.sourceThreadId ?? null,
         sourceQuestion: input.sourceQuestion ?? null,

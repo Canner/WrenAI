@@ -15,6 +15,7 @@ import { IWrenAIAdaptor } from '../adaptors';
 import * as Errors from '@server/utils/error';
 import { toPersistedRuntimeIdentityPatch } from '@server/utils/persistedRuntimeIdentity';
 import { registerShutdownCallback } from '@server/utils/shutdown';
+import isEqual from 'lodash/isEqual';
 import type {
   CreateAskingTaskInput,
   IAskingTaskTracker,
@@ -523,11 +524,6 @@ export class AskingTaskTracker implements IAskingTaskTracker {
     previousResult: AskResult,
     newResult: AskResult,
   ): boolean {
-    // check status change
-    if (previousResult?.status !== newResult.status) {
-      return true;
-    }
-
-    return false;
+    return !isEqual(previousResult, newResult);
   }
 }

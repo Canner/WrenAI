@@ -35,6 +35,13 @@ export interface DashboardItemDetail {
   canonicalizationVersion?: string | null;
   chartDataProfile?: Record<string, any>;
   validationErrors?: string[];
+  runtimeIdentity?: {
+    projectId?: number | null;
+    workspaceId?: string | null;
+    knowledgeBaseId?: string | null;
+    kbSnapshotId?: string | null;
+    deployHash?: string | null;
+  } | null;
   sourceResponseId?: number | null;
   sourceThreadId?: number | null;
   sourceQuestion?: string | null;

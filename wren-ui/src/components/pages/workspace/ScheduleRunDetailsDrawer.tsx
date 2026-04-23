@@ -251,7 +251,7 @@ export default function ScheduleRunDetailsDrawer(props: Props) {
         <Alert
           type="info"
           showIcon
-          message="暂无运行详情"
+          title="暂无运行详情"
           description="请选择一条运行记录查看执行上下文。"
         />
       ) : (
@@ -261,7 +261,7 @@ export default function ScheduleRunDetailsDrawer(props: Props) {
               type="error"
               showIcon
               style={sectionStyle}
-              message="最近一次执行失败"
+              title="最近一次执行失败"
               description={defaultValue.errorMessage}
             />
           ) : null}

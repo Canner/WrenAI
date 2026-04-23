@@ -18,6 +18,12 @@ describe('DashboardController scope guards', () => {
   const createContext = () =>
     ({
       runtimeScope: {
+        selector: {
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snapshot-1',
+          deployHash: 'deploy-1',
+        },
         project: { id: 1 },
         workspace: { id: 'workspace-1' },
         knowledgeBase: { id: 'kb-1', defaultKbSnapshotId: 'snapshot-1' },
@@ -110,6 +116,31 @@ describe('DashboardController scope guards', () => {
     expect(result).toEqual([{ id: 1, projectId: null }]);
   });
 
+  it('lists dashboards with workspace binding when the request selector is workspace-only', async () => {
+    const resolver = new DashboardController();
+    const ctx = createContext();
+    ctx.runtimeScope.selector = {
+      workspaceId: 'workspace-1',
+    };
+    ctx.dashboardService.listDashboardsForScope.mockResolvedValue([
+      { id: 11, projectId: null },
+    ]);
+
+    const result = await resolver.getDashboards(null, null, ctx);
+
+    expect(ctx.dashboardService.listDashboardsForScope).toHaveBeenCalledWith(
+      null,
+      expect.objectContaining({
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: null,
+        kbSnapshotId: null,
+        deployHash: null,
+        createdBy: 'user-1',
+      }),
+    );
+    expect(result).toEqual([{ id: 11, projectId: null }]);
+  });
+
   it('rejects dashboard reads without knowledge base read permission', async () => {
     process.env.WREN_AUTHORIZATION_BINDING_MODE = 'binding_only';
     const resolver = new DashboardController();
@@ -133,14 +164,11 @@ describe('DashboardController scope guards', () => {
   it('rejects updateDashboardItem for items outside the active dashboard', async () => {
     const resolver = new DashboardController();
     const ctx = createContext();
-    ctx.dashboardService.getCurrentDashboardForScope.mockResolvedValue({
-      id: 1,
-      projectId: 1,
-    });
     ctx.dashboardService.getDashboardItem.mockResolvedValue({
       id: 9,
       dashboardId: 2,
     });
+    ctx.dashboardService.getDashboardForScope.mockResolvedValue(null);
 
     await expect(
       resolver.updateDashboardItem(
@@ -156,13 +184,13 @@ describe('DashboardController scope guards', () => {
   it('rejects updateDashboardItemLayouts when any item is outside the active dashboard', async () => {
     const resolver = new DashboardController();
     const ctx = createContext();
-    ctx.dashboardService.getCurrentDashboardForScope.mockResolvedValue({
-      id: 1,
-      projectId: 1,
-    });
     ctx.dashboardService.getDashboardItem.mockImplementation(
       async (id: number) =>
         id === 1 ? { id, dashboardId: 1 } : { id, dashboardId: 2 },
+    );
+    ctx.dashboardService.getDashboardForScope.mockImplementation(
+      async (dashboardId: number) =>
+        dashboardId === 1 ? { id: 1, projectId: 1 } : null,
     );
 
     await expect(
@@ -188,16 +216,12 @@ describe('DashboardController scope guards', () => {
   it('rejects previewItemSQL for items outside the active dashboard', async () => {
     const resolver = new DashboardController();
     const ctx = createContext();
-    ctx.dashboardService.getCurrentDashboardForScope.mockResolvedValue({
-      id: 1,
-      projectId: 1,
-      cacheEnabled: true,
-    });
     ctx.dashboardService.getDashboardItem.mockResolvedValue({
       id: 5,
       dashboardId: 7,
       detail: { sql: 'select 1' },
     });
+    ctx.dashboardService.getDashboardForScope.mockResolvedValue(null);
 
     await expect(
       resolver.previewItemSQL(
@@ -215,6 +239,22 @@ describe('DashboardController scope guards', () => {
     const ctx = createContext();
     ctx.runtimeScope.kbSnapshot = { id: 'snapshot-old' };
     ctx.runtimeScope.deployHash = 'deploy-old';
+    ctx.runtimeScope.selector = {
+      workspaceId: 'workspace-1',
+      knowledgeBaseId: 'kb-1',
+      kbSnapshotId: 'snapshot-old',
+      deployHash: 'deploy-old',
+    };
+    ctx.dashboardService.getDashboardItem.mockResolvedValue({
+      id: 5,
+      dashboardId: 1,
+      detail: { sql: 'select 1' },
+    });
+    ctx.dashboardService.getDashboardForScope.mockResolvedValue({
+      id: 1,
+      projectId: 1,
+      cacheEnabled: true,
+    });
 
     await expect(
       resolver.previewItemSQL(
@@ -232,12 +272,102 @@ describe('DashboardController scope guards', () => {
     const ctx = createContext();
     ctx.runtimeScope.kbSnapshot = { id: 'snapshot-old' };
     ctx.runtimeScope.deployHash = 'deploy-old';
+    ctx.runtimeScope.selector = {
+      workspaceId: 'workspace-1',
+      knowledgeBaseId: 'kb-1',
+      kbSnapshotId: 'snapshot-old',
+      deployHash: 'deploy-old',
+    };
 
     await expect(
       resolver.createDashboard(null, { data: { name: '经营总览' } }, ctx),
     ).rejects.toThrow('This snapshot is outdated and cannot be executed');
 
     expect(ctx.dashboardService.createDashboardForScope).not.toHaveBeenCalled();
+  });
+
+  it('creates workspace dashboards without requiring executable snapshot binding', async () => {
+    const resolver = new DashboardController();
+    const ctx = createContext();
+    ctx.runtimeScope.selector = {
+      workspaceId: 'workspace-1',
+    };
+    ctx.runtimeScope.project = null;
+    ctx.runtimeScope.knowledgeBase = null;
+    ctx.runtimeScope.kbSnapshot = null;
+    ctx.runtimeScope.deployHash = null;
+    ctx.dashboardService.createDashboardForScope.mockResolvedValue({
+      id: 99,
+      name: '经营总览',
+      projectId: null,
+      knowledgeBaseId: null,
+      kbSnapshotId: null,
+      deployHash: null,
+    });
+
+    const result = await resolver.createDashboard(
+      null,
+      { data: { name: '经营总览' } },
+      ctx,
+    );
+
+    expect(ctx.dashboardService.createDashboardForScope).toHaveBeenCalledWith(
+      { name: '经营总览' },
+      null,
+      expect.objectContaining({
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: null,
+        kbSnapshotId: null,
+        deployHash: null,
+        createdBy: 'user-1',
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        id: 99,
+        name: '经营总览',
+      }),
+    );
+  });
+
+  it('loads dashboard detail with workspace binding when the request selector is workspace-only', async () => {
+    const resolver = new DashboardController();
+    const ctx = createContext();
+    ctx.runtimeScope.selector = {
+      workspaceId: 'workspace-1',
+    };
+    ctx.dashboardService.getDashboardForScope.mockResolvedValue({
+      id: 41,
+      projectId: null,
+      name: '经营总览',
+      nextScheduledAt: null,
+    });
+    ctx.dashboardService.getDashboardItems.mockResolvedValue([]);
+    ctx.dashboardService.parseCronExpression.mockReturnValue(null);
+
+    const result = await resolver.getDashboard(
+      null,
+      { where: { id: 41 } },
+      ctx,
+    );
+
+    expect(ctx.dashboardService.getDashboardForScope).toHaveBeenCalledWith(
+      41,
+      null,
+      expect.objectContaining({
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: null,
+        kbSnapshotId: null,
+        deployHash: null,
+        createdBy: 'user-1',
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        id: 41,
+        name: '经营总览',
+      }),
+    );
   });
 
   it('rejects setDashboardSchedule on outdated snapshots', async () => {
@@ -269,7 +399,7 @@ describe('DashboardController scope guards', () => {
     expect(ctx.dashboardService.setDashboardSchedule).not.toHaveBeenCalled();
   });
 
-  it('syncs dashboard refresh schedule jobs with runtime identity after updating dashboard schedule', async () => {
+  it('syncs workspace-scoped schedule jobs for unbound dashboards after updating dashboard schedule', async () => {
     const resolver = new DashboardController();
     const ctx = createContext();
     const nextScheduledAt = new Date('2026-04-03T09:00:00.000Z');
@@ -311,9 +441,9 @@ describe('DashboardController scope guards', () => {
       timezone: 'Asia/Shanghai',
       nextRunAt: nextScheduledAt,
       workspaceId: 'workspace-1',
-      knowledgeBaseId: 'kb-1',
-      kbSnapshotId: 'snapshot-1',
-      deployHash: 'deploy-1',
+      knowledgeBaseId: null,
+      kbSnapshotId: null,
+      deployHash: null,
       createdBy: 'user-1',
     });
   });
@@ -388,7 +518,10 @@ describe('DashboardController scope guards', () => {
       threadId: 34,
       question: '各供应商单产品成本趋势',
       projectId: null,
-      deployHash: null,
+      workspaceId: 'workspace-1',
+      knowledgeBaseId: 'kb-1',
+      kbSnapshotId: 'snapshot-1',
+      deployHash: 'deploy-bound',
       sql: 'select 1',
       chartDetail: {
         chartSchema: { mark: 'bar' },
@@ -426,9 +559,10 @@ describe('DashboardController scope guards', () => {
       7,
       null,
       expect.objectContaining({
-        knowledgeBaseId: 'kb-1',
-        kbSnapshotId: 'snapshot-1',
-        deployHash: 'deploy-1',
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: null,
+        kbSnapshotId: null,
+        deployHash: null,
         createdBy: 'user-1',
       }),
     );
@@ -459,6 +593,12 @@ describe('DashboardController scope guards', () => {
       canonicalizationVersion: 'chart-canonical-v1',
       chartDataProfile: undefined,
       validationErrors: ['fallback warning'],
+      sourceRuntimeIdentity: {
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snapshot-1',
+        deployHash: 'deploy-bound',
+      },
       sourceResponseId: 12,
       sourceThreadId: 34,
       sourceQuestion: '各供应商单产品成本趋势',
@@ -506,7 +646,7 @@ describe('DashboardController scope guards', () => {
   it('uses dashboard runtime binding instead of current project when previewing dashboard SQL', async () => {
     const resolver = new DashboardController();
     const ctx = createContext();
-    ctx.dashboardService.getCurrentDashboardForScope.mockResolvedValue({
+    ctx.dashboardService.getDashboardForScope.mockResolvedValue({
       id: 4,
       projectId: 999,
       kbSnapshotId: 'snapshot-2',
@@ -568,5 +708,69 @@ describe('DashboardController scope guards', () => {
       }),
     );
     expect(result.data).toEqual([{ revenue: 123 }]);
+  });
+
+  it('prefers item runtime identity when previewing workspace dashboard SQL', async () => {
+    const resolver = new DashboardController();
+    const ctx = createContext();
+    ctx.runtimeScope.project = null;
+    ctx.runtimeScope.knowledgeBase = null;
+    ctx.runtimeScope.kbSnapshot = null;
+    ctx.runtimeScope.deployHash = null;
+    ctx.runtimeScope.selector = {
+      workspaceId: 'workspace-1',
+    };
+    ctx.dashboardService.getDashboardItem.mockResolvedValue({
+      id: 18,
+      dashboardId: 4,
+      detail: {
+        sql: 'select gm from revenue',
+        runtimeIdentity: {
+          projectId: null,
+          workspaceId: 'workspace-2',
+          knowledgeBaseId: 'kb-2',
+          kbSnapshotId: 'snapshot-2',
+          deployHash: 'deploy-2',
+        },
+      },
+    });
+    ctx.dashboardService.getDashboardForScope.mockResolvedValue({
+      id: 4,
+      projectId: null,
+      cacheEnabled: true,
+    });
+    ctx.deployService.getDeploymentByRuntimeIdentity.mockResolvedValue({
+      projectId: 77,
+      manifest: 'manifest-77',
+    });
+    ctx.projectService.getProjectById.mockResolvedValue({
+      id: 77,
+      type: 'view',
+    });
+    ctx.queryService.preview.mockResolvedValue({
+      columns: [{ name: 'gm' }],
+      data: [[321]],
+      cacheHit: false,
+      cacheCreatedAt: null,
+      cacheOverrodeAt: null,
+      override: false,
+    });
+
+    const result = await resolver.previewItemSQL(
+      null,
+      { data: { itemId: 18, limit: 10, refresh: false } },
+      ctx,
+    );
+
+    expect(
+      ctx.deployService.getDeploymentByRuntimeIdentity,
+    ).toHaveBeenCalledWith({
+      projectId: null,
+      workspaceId: 'workspace-2',
+      knowledgeBaseId: 'kb-2',
+      kbSnapshotId: 'snapshot-2',
+      deployHash: 'deploy-2',
+    });
+    expect(result.data).toEqual([{ gm: 321 }]);
   });
 });

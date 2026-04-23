@@ -13,6 +13,8 @@ import {
 import { registerShutdownCallback } from '@server/utils/shutdown';
 import { toPersistedRuntimeIdentityFromSource } from '@server/utils/persistedRuntimeIdentity';
 import { canonicalizeChartSchema } from '@/utils/chartSpecRuntime';
+import * as Errors from '@server/utils/error';
+import { deriveChartThinkingTrace } from '@server/services/chartThinking';
 
 const logger = getLogger('ChartBackgroundTracker');
 logger.level = 'debug';
@@ -57,6 +59,28 @@ const toErrorCode = (error: unknown) => {
     return (error as { code: string }).code;
   }
   return null;
+};
+
+const normalizeChartErrorCode = ({
+  rawCode,
+  hasInvalidSchema,
+}: {
+  rawCode?: string | null;
+  hasInvalidSchema?: boolean;
+}) => {
+  if (hasInvalidSchema) {
+    return Errors.GeneralErrorCodes.CHART_SCHEMA_INVALID;
+  }
+  if (
+    rawCode === 'AI_NO_CHART' ||
+    rawCode === Errors.GeneralErrorCodes.NO_CHART
+  ) {
+    return Errors.GeneralErrorCodes.AI_NO_CHART;
+  }
+  if (rawCode === 'UPSTREAM_DATA_ERROR') {
+    return Errors.GeneralErrorCodes.UPSTREAM_DATA_ERROR;
+  }
+  return rawCode || null;
 };
 
 const computeBackoffMs = (retryCount: number) => {
@@ -155,14 +179,28 @@ abstract class BaseChartBackgroundTracker {
               return;
             }
 
+            const previousChartInstructionCount = (() => {
+              const count = trackedChartDetail.thinking?.steps.find(
+                (step) => step.key === 'chart.chart_instructions_retrieved',
+              )?.messageParams?.count;
+              return typeof count === 'number' ? count : 0;
+            })();
+
             const result = await this.fetchResult(trackedChartDetail.queryId);
             const shouldCanonicalize =
               !!result?.response?.chartSchema &&
               (!trackedChartDetail.rawChartSchema ||
                 !trackedChartDetail.canonicalizationVersion);
             const statusChanged = trackedChartDetail.status !== result.status;
+            const instructionCountChanged =
+              typeof result.instructionCount === 'number' &&
+              result.instructionCount !== previousChartInstructionCount;
 
-            if (!statusChanged && !shouldCanonicalize) {
+            if (
+              !statusChanged &&
+              !shouldCanonicalize &&
+              !instructionCountChanged
+            ) {
               this.tasks[threadResponse.id] = {
                 ...trackedResponse,
                 chartDetail: {
@@ -182,20 +220,51 @@ abstract class BaseChartBackgroundTracker {
               renderHints,
               validationErrors,
             } = canonicalizeChartSchema(result?.response?.chartSchema);
+            const hasInvalidSchema =
+              result.status === ChartStatus.FINISHED &&
+              !!result?.response?.chartSchema &&
+              !canonicalChartSchema;
+            const normalizedErrorCode = normalizeChartErrorCode({
+              rawCode: result.error?.code || null,
+              hasInvalidSchema,
+            });
+            const normalizedStatus = hasInvalidSchema
+              ? ChartStatus.FAILED
+              : result.status;
+            const normalizedError = hasInvalidSchema
+              ? Errors.create(Errors.GeneralErrorCodes.CHART_SCHEMA_INVALID)
+              : result.error
+                ? Errors.create(
+                    (normalizedErrorCode ||
+                      Errors.GeneralErrorCodes
+                        .AI_SERVICE_UNDEFINED_ERROR) as Errors.GeneralErrorCodes,
+                    {
+                      customMessage: result.error.message,
+                    },
+                  )
+                : undefined;
             const updatedChartDetail = {
               ...trackedChartDetail,
               diagnostics: {
                 ...(trackedChartDetail.diagnostics || {}),
-                lastErrorCode: result.error?.code || null,
-                lastErrorMessage: result.error?.message || null,
-                finalizedAt: isFinalized(result.status)
+                lastErrorCode: normalizedErrorCode || null,
+                lastErrorMessage:
+                  normalizedError?.message ||
+                  result.error?.message ||
+                  (hasInvalidSchema
+                    ? Errors.errorMessages[
+                        Errors.GeneralErrorCodes.CHART_SCHEMA_INVALID
+                      ]
+                    : null),
+                finalizedAt: isFinalized(normalizedStatus)
                   ? new Date().toISOString()
                   : trackedChartDetail.diagnostics?.finalizedAt || null,
               },
               queryId: trackedChartDetail.queryId,
-              status: result.status,
-              error: result.error || undefined,
-              lastError: result.error?.message || null,
+              status: normalizedStatus,
+              error: normalizedError || undefined,
+              lastError:
+                normalizedError?.message || result.error?.message || null,
               lastPolledAt: new Date().toISOString(),
               nextRetryAt: null,
               retryCount: 0,
@@ -217,6 +286,14 @@ abstract class BaseChartBackgroundTracker {
               pollingLeaseOwner: null,
               pollingLeaseExpiresAt: null,
             };
+            const persistedChartDetail = {
+              ...updatedChartDetail,
+              thinking: deriveChartThinkingTrace(updatedChartDetail, {
+                chartInstructionsCount:
+                  result.instructionCount ?? previousChartInstructionCount,
+                previousThinking: trackedChartDetail.thinking,
+              }),
+            };
             logger.debug(
               `Job ${threadResponse.id} chart status changed, updating`,
             );
@@ -225,7 +302,7 @@ abstract class BaseChartBackgroundTracker {
                 trackedResponse.id,
                 toPersistedRuntimeIdentityFromSource(trackedResponse),
                 {
-                  chartDetail: updatedChartDetail,
+                  chartDetail: persistedChartDetail,
                 },
               );
             if (!updatedThreadResponse) {
@@ -236,12 +313,16 @@ abstract class BaseChartBackgroundTracker {
             }
             this.tasks[threadResponse.id] = updatedThreadResponse;
 
-            if (isFinalized(result.status)) {
-              if (result.status === ChartStatus.FAILED) {
+            if (isFinalized(normalizedStatus)) {
+              if (normalizedStatus === ChartStatus.FAILED) {
                 logger.warn(
                   `Chart job ${threadResponse.id} failed (queryId=${trackedChartDetail.queryId}): code=${
-                    result.error?.code || 'UNKNOWN'
-                  } message=${result.error?.message || 'unknown'} columns=${
+                    normalizedErrorCode || 'UNKNOWN'
+                  } message=${
+                    normalizedError?.message ||
+                    result.error?.message ||
+                    'unknown'
+                  } columns=${
                     trackedChartDetail.diagnostics?.previewColumnCount ?? 'n/a'
                   } rows=${
                     trackedChartDetail.diagnostics?.previewRowCount ?? 'n/a'
@@ -250,9 +331,9 @@ abstract class BaseChartBackgroundTracker {
               }
               const eventProperties = {
                 question: trackedResponse.question,
-                error: result.error,
+                error: normalizedError || result.error,
               };
-              if (result.status === ChartStatus.FINISHED) {
+              if (normalizedStatus === ChartStatus.FINISHED) {
                 this.telemetry.sendEvent(
                   this.getTelemetryEvent(),
                   eventProperties,
@@ -325,13 +406,19 @@ abstract class BaseChartBackgroundTracker {
       pollingLeaseOwner: null,
       pollingLeaseExpiresAt: null,
     };
+    const persistedFailedChartDetail = {
+      ...failedChartDetail,
+      thinking: deriveChartThinkingTrace(failedChartDetail, {
+        previousThinking: chartDetail.thinking,
+      }),
+    };
 
     const updatedThreadResponse =
       await this.threadResponseRepository.updateOneByIdWithRuntimeScope(
         threadResponse.id,
         toPersistedRuntimeIdentityFromSource(threadResponse),
         {
-          chartDetail: failedChartDetail,
+          chartDetail: persistedFailedChartDetail,
         },
       );
 

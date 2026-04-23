@@ -27,6 +27,16 @@ export const buildDashboardRuntimeBindingPatch = (
   binding: DashboardRuntimeBinding,
 ): Partial<Dashboard> => {
   if (
+    dashboard.workspaceId &&
+    binding.workspaceId &&
+    dashboard.workspaceId !== binding.workspaceId
+  ) {
+    throw new Error(
+      `Dashboard ${dashboard.id} is already bound to another workspace`,
+    );
+  }
+
+  if (
     dashboard.knowledgeBaseId &&
     binding.knowledgeBaseId &&
     dashboard.knowledgeBaseId !== binding.knowledgeBaseId
@@ -38,6 +48,12 @@ export const buildDashboardRuntimeBindingPatch = (
 
   const patch: Partial<Dashboard> = {};
 
+  if (
+    binding.workspaceId !== undefined &&
+    binding.workspaceId !== dashboard.workspaceId
+  ) {
+    patch.workspaceId = binding.workspaceId ?? null;
+  }
   if (
     binding.knowledgeBaseId !== undefined &&
     binding.knowledgeBaseId !== dashboard.knowledgeBaseId
@@ -126,6 +142,7 @@ export const createScopedDashboard = async (
     isDefault,
     name,
     projectId: bridgeProjectId ?? null,
+    workspaceId: binding?.workspaceId ?? null,
     knowledgeBaseId: binding?.knowledgeBaseId ?? null,
     kbSnapshotId: binding?.kbSnapshotId ?? null,
     deployHash: binding?.deployHash ?? null,

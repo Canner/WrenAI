@@ -282,6 +282,37 @@ describe('QueryService', () => {
     expect(mockWrenEngineAdaptor.dryRun).toHaveBeenCalledTimes(2);
   });
 
+  it('re-prepares duckdb runtime once when preview hits a socket reset error', async () => {
+    mockWrenEngineAdaptor.previewData
+      .mockRejectedValueOnce(new Error('read ECONNRESET'))
+      .mockResolvedValueOnce({
+        data: [[1]],
+        columns: [{ name: 'id', type: 'INTEGER' }],
+      });
+
+    await expect(
+      queryService.preview('SELECT * FROM test', {
+        project: {
+          type: DataSourceName.DUCKDB,
+          connectionInfo: {
+            initSql: 'CREATE TABLE test AS SELECT 1 AS id;',
+            extensions: [],
+            configurations: {},
+          },
+        },
+        manifest: {},
+        dryRun: false,
+      }),
+    ).resolves.toEqual({
+      data: [[1]],
+      columns: [{ name: 'id', type: 'INTEGER' }],
+    });
+
+    expect(mockWrenEngineAdaptor.prepareDuckDB).toHaveBeenCalledTimes(2);
+    expect(mockWrenEngineAdaptor.patchConfig).toHaveBeenCalledTimes(2);
+    expect(mockWrenEngineAdaptor.previewData).toHaveBeenCalledTimes(2);
+  });
+
   it('re-prepares duckdb runtime once when preview hits a closed pool error', async () => {
     mockWrenEngineAdaptor.previewData
       .mockRejectedValueOnce(

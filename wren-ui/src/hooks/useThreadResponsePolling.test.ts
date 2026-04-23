@@ -1,7 +1,9 @@
 import {
   buildThreadResponseDetailUrl,
+  ThreadResponseRequestError,
   loadThreadResponsePayload,
   normalizeThreadResponsePayload,
+  shouldRetryThreadResponsePollingError,
 } from './useThreadResponsePolling';
 
 describe('useThreadResponsePolling helpers', () => {
@@ -65,5 +67,65 @@ describe('useThreadResponsePolling helpers', () => {
       '/api/v1/thread-responses/84?workspaceId=ws-1',
       { cache: 'no-store' },
     );
+  });
+
+  it('stops retrying when the response belongs to another runtime scope', () => {
+    expect(
+      shouldRetryThreadResponsePollingError(
+        new ThreadResponseRequestError(
+          'Thread response 70 does not belong to the current runtime scope',
+          {
+            statusCode: 500,
+          },
+        ),
+      ),
+    ).toBe(false);
+  });
+
+  it('stops retrying on client-side terminal response errors', () => {
+    expect(
+      shouldRetryThreadResponsePollingError(
+        new ThreadResponseRequestError('Thread response 70 not found', {
+          statusCode: 404,
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it('keeps retrying transient polling failures', () => {
+    expect(
+      shouldRetryThreadResponsePollingError(
+        new ThreadResponseRequestError('upstream temporarily unavailable', {
+          statusCode: 503,
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it('preserves response metadata on request failures', async () => {
+    const fetcher = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: async () => ({
+        error:
+          'Thread response 70 does not belong to the current runtime scope',
+        code: 'RUNTIME_SCOPE_MISMATCH',
+      }),
+    } as Response);
+
+    await expect(
+      loadThreadResponsePayload({
+        responseId: 70,
+        runtimeScopeSelector: {
+          workspaceId: 'ws-1',
+        },
+        fetcher,
+      }),
+    ).rejects.toMatchObject({
+      message:
+        'Thread response 70 does not belong to the current runtime scope',
+      statusCode: 409,
+      code: 'RUNTIME_SCOPE_MISMATCH',
+    });
   });
 });

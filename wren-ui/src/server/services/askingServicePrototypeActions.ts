@@ -235,6 +235,7 @@ export const applyAskingServiceActionPrototype = (AskingServiceClass: any) => {
     runtimeIdentity: PersistedRuntimeIdentity,
     configurations: { language: string },
     runtimeScopeId?: string | null,
+    customInstruction?: string | null,
   ) {
     return generateThreadResponseChartAction(
       this,
@@ -242,6 +243,7 @@ export const applyAskingServiceActionPrototype = (AskingServiceClass: any) => {
       runtimeIdentity,
       configurations,
       runtimeScopeId,
+      customInstruction,
     );
   };
   proto.generateThreadResponseChartScoped = async function (
@@ -249,6 +251,7 @@ export const applyAskingServiceActionPrototype = (AskingServiceClass: any) => {
     runtimeIdentity: PersistedRuntimeIdentity,
     configurations: { language: string },
     runtimeScopeId?: string | null,
+    customInstruction?: string | null,
   ) {
     await this.assertResponseScope(threadResponseId, runtimeIdentity);
     return this.generateThreadResponseChart(
@@ -256,6 +259,7 @@ export const applyAskingServiceActionPrototype = (AskingServiceClass: any) => {
       runtimeIdentity,
       configurations,
       runtimeScopeId,
+      customInstruction,
     );
   };
   proto.adjustThreadResponseChart = async function (

@@ -12,8 +12,8 @@ jest.mock('antd', () => {
   const React = jest.requireActual('react');
 
   return {
-    Alert: ({ message, description }: any) =>
-      React.createElement('div', null, message, description),
+    Alert: ({ message, title, description }: any) =>
+      React.createElement('div', null, title || message, description),
     Button: ({ children }: any) =>
       React.createElement('button', null, children),
     Card: ({ children, title, extra }: any) =>
@@ -33,6 +33,8 @@ jest.mock('antd', () => {
         ),
       ),
     Space: ({ children }: any) => React.createElement('div', null, children),
+    Statistic: ({ title, value, prefix }: any) =>
+      React.createElement('div', null, title, prefix, value),
     Tabs: ({ items }: any) =>
       React.createElement(
         'div',
@@ -58,6 +60,7 @@ jest.mock('antd', () => {
           null,
           children,
         ),
+      Title: ({ children }: any) => React.createElement('h4', null, children),
     },
     message: {
       success: jest.fn(),
@@ -81,13 +84,15 @@ jest.mock('@/hooks/useAuthSession', () => ({
   default: () => mockUseAuthSession(),
 }));
 
-jest.mock('@/components/reference/DolaAppShell', () => ({
+jest.mock('@/components/reference/ConsoleShellLayout', () => ({
   __esModule: true,
-  default: ({ children, navItems }: any) => {
+  default: ({ title, description, children, navItems }: any) => {
     const React = jest.requireActual('react');
     return React.createElement(
       'div',
       null,
+      title,
+      description,
       React.createElement(
         'div',
         null,

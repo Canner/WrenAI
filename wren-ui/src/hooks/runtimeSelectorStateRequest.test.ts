@@ -104,6 +104,51 @@ describe('runtimeSelectorStateRequest cache helpers', () => {
     expect(global.fetch).toHaveBeenCalledTimes(2);
   });
 
+  it('keeps a shared runtime selector request alive when one consumer aborts', async () => {
+    const payload = {
+      currentWorkspace: {
+        id: 'workspace-1',
+        slug: 'workspace-1',
+        name: 'Workspace 1',
+      },
+      workspaces: [],
+      currentKnowledgeBase: null,
+      currentKbSnapshot: null,
+      knowledgeBases: [],
+      kbSnapshots: [],
+    };
+    let resolveFetch: undefined | ((value: Response) => void);
+    (global.fetch as jest.Mock).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        }),
+    );
+
+    const requestUrl = '/api/v1/runtime/scope/current?workspaceId=workspace-1';
+    const firstController = new AbortController();
+    const secondController = new AbortController();
+
+    const firstRequest = fetchRuntimeSelectorState({
+      requestUrl,
+      signal: firstController.signal,
+    });
+    const secondRequest = fetchRuntimeSelectorState({
+      requestUrl,
+      signal: secondController.signal,
+    });
+
+    firstController.abort();
+    await expect(firstRequest).rejects.toThrow(/aborted/i);
+
+    expect(resolveFetch).toBeDefined();
+    resolveFetch!(new Response(JSON.stringify(payload), { status: 200 }));
+
+    await expect(secondRequest).resolves.toEqual(payload);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(peekRuntimeSelectorStatePayload({ requestUrl })).toEqual(payload);
+  });
+
   it('can prime runtime selector payloads before the hook requests them', () => {
     const requestUrl = '/api/v1/runtime/scope/current?workspaceId=workspace-1';
     const payload = {

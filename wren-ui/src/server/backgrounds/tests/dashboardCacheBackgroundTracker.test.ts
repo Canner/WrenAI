@@ -133,6 +133,63 @@ describe('DashboardCacheBackgroundTracker', () => {
     });
   });
 
+  it('uses item runtime identity when refreshing workspace dashboards', async () => {
+    dashboardRepository.findOneBy.mockResolvedValue({
+      id: 2,
+      projectId: null,
+      knowledgeBaseId: null,
+      kbSnapshotId: null,
+      deployHash: null,
+      cacheEnabled: true,
+      scheduleCron: '0 * * * *',
+      nextScheduledAt: new Date('2026-04-02T00:00:00Z'),
+    });
+    dashboardItemRepository.findAllBy.mockResolvedValue([
+      {
+        id: 10,
+        dashboardId: 2,
+        detail: {
+          sql: 'SELECT gross_margin FROM metrics',
+          runtimeIdentity: {
+            workspaceId: 'workspace-2',
+            knowledgeBaseId: 'kb-2',
+            kbSnapshotId: 'snapshot-2',
+            deployHash: 'deploy-2',
+            projectId: null,
+          },
+        },
+      },
+    ]);
+    deployService.getDeploymentByRuntimeIdentity.mockResolvedValue({
+      projectId: 88,
+      manifest: 'item-mdl',
+    });
+    projectService.getProjectById.mockResolvedValue({
+      id: 88,
+      type: 'view',
+    });
+
+    const refreshedItems = await tracker.refreshDashboardById(2);
+
+    expect(refreshedItems).toBe(1);
+    expect(deployService.getDeploymentByRuntimeIdentity).toHaveBeenCalledWith({
+      projectId: null,
+      workspaceId: 'workspace-2',
+      knowledgeBaseId: 'kb-2',
+      kbSnapshotId: 'snapshot-2',
+      deployHash: 'deploy-2',
+    });
+    expect(queryService.preview).toHaveBeenCalledWith(
+      'SELECT gross_margin FROM metrics',
+      {
+        project: { id: 88, type: 'view' },
+        manifest: 'item-mdl',
+        cacheEnabled: true,
+        refresh: true,
+      },
+    );
+  });
+
   it('only refreshes dashboards whose schedule is due', async () => {
     dashboardRepository.findAllBy.mockResolvedValue([
       {

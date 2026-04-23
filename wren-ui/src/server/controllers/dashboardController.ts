@@ -30,12 +30,16 @@ import { shapeChartPreviewData } from '@/utils/chartSpecRuntime';
 import {
   assertDashboardExecutableRuntimeScope,
   assertDashboardKnowledgeBaseReadAccess,
-  ensureCurrentDashboardForScope,
+  ensureCurrentDashboardForRequestedScope,
+  ensureDashboardForWorkspaceScope,
   ensureDashboardItemInScope,
+  getCurrentPersistedDashboardScopeIdentity,
   getCurrentPersistedRuntimeIdentity,
+  getCurrentPersistedWorkspaceIdentity,
   getDashboardControllerErrorMessage,
   recordDashboardKnowledgeBaseReadAudit,
   resolveDashboardScheduleRuntimeBinding,
+  shouldUseWorkspaceScopedDashboardCreate,
   toDashboardPreviewItemResponse,
   toDashboardResponseRuntimeIdentitySource,
 } from './dashboardControllerSupport';
@@ -66,7 +70,7 @@ export class DashboardController {
     ctx: IContext,
   ): Promise<Dashboard[]> {
     await assertDashboardKnowledgeBaseReadAccess(ctx);
-    const runtimeIdentity = getCurrentPersistedRuntimeIdentity(ctx);
+    const runtimeIdentity = getCurrentPersistedDashboardScopeIdentity(ctx);
     const dashboards = await ctx.dashboardService.listDashboardsForScope(
       resolvePersistedProjectBridgeId(runtimeIdentity),
       getDashboardRuntimeBinding(runtimeIdentity),
@@ -91,7 +95,7 @@ export class DashboardController {
     }
   > {
     await assertDashboardKnowledgeBaseReadAccess(ctx);
-    const dashboard = await ensureCurrentDashboardForScope(
+    const dashboard = await ensureCurrentDashboardForRequestedScope(
       ctx,
       args?.where?.id,
     );
@@ -121,7 +125,7 @@ export class DashboardController {
     ctx: IContext,
   ): Promise<DashboardItem[]> {
     await assertDashboardKnowledgeBaseReadAccess(ctx);
-    const dashboard = await ensureCurrentDashboardForScope(
+    const dashboard = await ensureCurrentDashboardForRequestedScope(
       ctx,
       args?.where?.id,
     );
@@ -141,8 +145,14 @@ export class DashboardController {
     args: { data: { name: string } },
     ctx: IContext,
   ): Promise<Dashboard> {
-    await assertDashboardExecutableRuntimeScope(ctx);
-    const runtimeIdentity = getCurrentPersistedRuntimeIdentity(ctx);
+    await assertDashboardKnowledgeBaseReadAccess(ctx);
+    const createInWorkspaceScope = shouldUseWorkspaceScopedDashboardCreate(ctx);
+    if (!createInWorkspaceScope) {
+      await assertDashboardExecutableRuntimeScope(ctx);
+    }
+    const runtimeIdentity = createInWorkspaceScope
+      ? getCurrentPersistedWorkspaceIdentity(ctx)
+      : getCurrentPersistedRuntimeIdentity(ctx);
     const name = args.data?.name?.trim();
     if (!name) {
       throw new Error('Dashboard name is required.');
@@ -164,7 +174,7 @@ export class DashboardController {
     ctx: IContext,
   ): Promise<Dashboard> {
     await assertDashboardExecutableRuntimeScope(ctx);
-    const runtimeIdentity = getCurrentPersistedRuntimeIdentity(ctx);
+    const runtimeIdentity = getCurrentPersistedDashboardScopeIdentity(ctx);
     const normalizedName =
       args.data?.name === undefined ? undefined : String(args.data.name).trim();
     if (normalizedName !== undefined && !normalizedName) {
@@ -188,7 +198,7 @@ export class DashboardController {
     ctx: IContext,
   ): Promise<Dashboard> {
     await assertDashboardExecutableRuntimeScope(ctx);
-    const runtimeIdentity = getCurrentPersistedRuntimeIdentity(ctx);
+    const runtimeIdentity = getCurrentPersistedDashboardScopeIdentity(ctx);
 
     return await ctx.dashboardService.deleteDashboardForScope(
       args.where.id,
@@ -210,7 +220,10 @@ export class DashboardController {
   ): Promise<DashboardItem> {
     const { responseId, itemType, dashboardId } = args.data;
     await assertDashboardExecutableRuntimeScope(ctx);
-    const dashboard = await ensureCurrentDashboardForScope(ctx, dashboardId);
+    const dashboard =
+      dashboardId != null
+        ? await ensureDashboardForWorkspaceScope(ctx, dashboardId)
+        : await ensureCurrentDashboardForRequestedScope(ctx, dashboardId);
     const runtimeIdentity = getCurrentPersistedRuntimeIdentity(ctx);
     await ctx.askingService.assertResponseScope(responseId, runtimeIdentity);
     const response = await ctx.askingService.getResponseScoped(
@@ -235,6 +248,15 @@ export class DashboardController {
         `SQL not found in thread response. responseId: ${responseId}`,
       );
     }
+    const sourceRuntimeIdentity = {
+      ...(response.projectId != null ? { projectId: response.projectId } : {}),
+      ...(response.workspaceId ? { workspaceId: response.workspaceId } : {}),
+      ...(response.knowledgeBaseId
+        ? { knowledgeBaseId: response.knowledgeBaseId }
+        : {}),
+      ...(response.kbSnapshotId ? { kbSnapshotId: response.kbSnapshotId } : {}),
+      ...(response.deployHash ? { deployHash: response.deployHash } : {}),
+    };
 
     const { project, manifest } = await resolveDashboardExecutionContext({
       dashboard,
@@ -242,8 +264,10 @@ export class DashboardController {
       projectService: ctx.projectService,
       deployService: ctx.deployService,
       requestRuntimeIdentity: runtimeIdentity,
-      responseRuntimeIdentity:
-        toDashboardResponseRuntimeIdentitySource(response),
+      runtimeIdentitySource:
+        Object.keys(sourceRuntimeIdentity).length > 0
+          ? sourceRuntimeIdentity
+          : toDashboardResponseRuntimeIdentitySource(response),
     });
     await ctx.queryService.preview(responseSql, {
       project,
@@ -262,6 +286,10 @@ export class DashboardController {
       canonicalizationVersion: response.chartDetail?.canonicalizationVersion,
       chartDataProfile: response.chartDetail?.chartDataProfile,
       validationErrors: response.chartDetail?.validationErrors,
+      sourceRuntimeIdentity:
+        Object.keys(sourceRuntimeIdentity).length > 0
+          ? sourceRuntimeIdentity
+          : undefined,
       sourceResponseId: response.id,
       sourceThreadId: response.threadId,
       sourceQuestion: response.question,
@@ -315,9 +343,10 @@ export class DashboardController {
     const { itemId, limit, refresh } = args.data;
     try {
       await assertDashboardKnowledgeBaseReadAccess(ctx);
-      await assertDashboardExecutableRuntimeScope(ctx);
-      const item = await ensureDashboardItemInScope(ctx, itemId);
-      const dashboard = await ensureCurrentDashboardForScope(ctx);
+      const { item, dashboard } = await ensureDashboardItemInScope(ctx, itemId);
+      if (!item.detail.runtimeIdentity) {
+        await assertDashboardExecutableRuntimeScope(ctx);
+      }
       const { cacheEnabled } = dashboard;
       const runtimeIdentity = getCurrentPersistedRuntimeIdentity(ctx);
       const { project, manifest } = await resolveDashboardExecutionContext({
@@ -326,6 +355,7 @@ export class DashboardController {
         projectService: ctx.projectService,
         deployService: ctx.deployService,
         requestRuntimeIdentity: runtimeIdentity,
+        responseRuntimeIdentity: item.detail.runtimeIdentity || null,
       });
       const rawData = (await ctx.queryService.preview(item.detail.sql, {
         project,
@@ -369,8 +399,8 @@ export class DashboardController {
   ): Promise<Dashboard> {
     try {
       await assertDashboardExecutableRuntimeScope(ctx);
-      const runtimeIdentity = getCurrentPersistedRuntimeIdentity(ctx);
-      const dashboard = await ensureCurrentDashboardForScope(ctx);
+      const runtimeIdentity = getCurrentPersistedDashboardScopeIdentity(ctx);
+      const dashboard = await ensureCurrentDashboardForRequestedScope(ctx);
       const actor =
         ctx.authorizationActor ||
         buildAuthorizationActorFromRuntimeScope(ctx.runtimeScope);

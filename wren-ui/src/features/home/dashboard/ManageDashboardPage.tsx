@@ -10,7 +10,10 @@ import useDrawerAction from '@/hooks/useDrawerAction';
 import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import useRuntimeSelectorState from '@/hooks/useRuntimeSelectorState';
-import { hasExecutableRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
+import {
+  hasExecutableRuntimeScopeSelector,
+  resolveHydratedRuntimeScopeSelector,
+} from '@/runtime/client/runtimeScope';
 import { Path } from '@/utils/enum';
 import { isHistoricalSnapshotReadonly } from '@/utils/runtimeSnapshot';
 import { resolveDashboardDisplayName } from '@/utils/dashboardRest';
@@ -29,6 +32,7 @@ import {
   useDashboardListData,
 } from './useManageDashboardData';
 import { useManageDashboardPageActions } from './useManageDashboardPageActions';
+import { resolveDashboardBoundSelector } from './dashboardRuntimeSelectors';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -48,17 +52,15 @@ export default function Dashboard() {
   const [renameDashboardName, setRenameDashboardName] = useState('');
   const [settings, setSettings] = useState<SettingsData | null>(null);
   const runtimeSelectorState = useRuntimeSelectorState().runtimeSelectorState;
-
-  const isDashboardReadonly = isHistoricalSnapshotReadonly({
-    selectorHasRuntime: Boolean(
-      runtimeScopeNavigation.selector.deployHash ||
-      runtimeScopeNavigation.selector.kbSnapshotId ||
-      runtimeScopeNavigation.selector.runtimeScopeId,
-    ),
-    currentKbSnapshotId: runtimeSelectorState?.currentKbSnapshot?.id,
-    defaultKbSnapshotId:
-      runtimeSelectorState?.currentKnowledgeBase?.defaultKbSnapshotId,
-  });
+  const currentDashboardRuntimeSelector = useMemo(
+    () =>
+      resolveHydratedRuntimeScopeSelector({
+        selector: runtimeScopeNavigation.selector,
+        selectorState: runtimeSelectorState,
+      }),
+    [runtimeScopeNavigation.selector, runtimeSelectorState],
+  );
+  const dashboardPageSelector = runtimeScopeNavigation.workspaceSelector;
 
   const resolvedCacheSupport = useMemo(() => {
     const connection = resolveSettingsConnection(settings);
@@ -71,7 +73,7 @@ export default function Dashboard() {
     refetch: refetchDashboards,
   } = useDashboardListData({
     enabled: runtimeScopePage.hasRuntimeScope,
-    selector: runtimeScopeNavigation.selector,
+    selector: dashboardPageSelector,
     onError: () => {
       message.error('加载看板列表失败。');
       runtimeScopeNavigation.pushWorkspace(Path.Home);
@@ -114,9 +116,10 @@ export default function Dashboard() {
 
   const replaceDashboardRoute = useCallback(
     async (dashboardId: number) => {
-      const normalizedUrl = runtimeScopeNavigation.hrefWorkspace(
+      const normalizedUrl = runtimeScopeNavigation.href(
         Path.HomeDashboard,
         { dashboardId },
+        dashboardPageSelector,
       );
 
       if (!normalizedUrl || normalizedUrl === router.asPath) {
@@ -128,15 +131,14 @@ export default function Dashboard() {
         shallow: true,
       });
     },
-    [router, runtimeScopeNavigation.hrefWorkspace],
+    [dashboardPageSelector, router, runtimeScopeNavigation.href],
   );
 
   useEffect(() => {
     if (
       !router.isReady ||
       !runtimeScopePage.hasRuntimeScope ||
-      activeDashboardId == null ||
-      requestedDashboardId === activeDashboardId
+      activeDashboardId == null
     ) {
       return;
     }
@@ -144,7 +146,6 @@ export default function Dashboard() {
     void replaceDashboardRoute(activeDashboardId);
   }, [
     activeDashboardId,
-    requestedDashboardId,
     router.isReady,
     replaceDashboardRoute,
     runtimeScopePage.hasRuntimeScope,
@@ -162,13 +163,58 @@ export default function Dashboard() {
   } = useDashboardDetailData({
     enabled: runtimeScopePage.hasRuntimeScope,
     dashboardId: activeDashboardId,
-    selector: runtimeScopeNavigation.selector,
+    selector: dashboardPageSelector,
     onError: () => {
       message.error('加载看板项失败。');
       runtimeScopeNavigation.pushWorkspace(Path.Home);
     },
   });
 
+  const activeDashboardRuntimeSelector = useMemo(
+    () =>
+      resolveDashboardBoundSelector({
+        workspaceSelector: dashboardPageSelector,
+        dashboard: visibleDashboardDetail || activeDashboard,
+        fallbackSelector: currentDashboardRuntimeSelector,
+      }),
+    [
+      activeDashboard,
+      currentDashboardRuntimeSelector,
+      dashboardPageSelector,
+      visibleDashboardDetail,
+    ],
+  );
+  const resolveDashboardSelector = useCallback(
+    (dashboardId?: number | null) =>
+      resolveDashboardBoundSelector({
+        workspaceSelector: dashboardPageSelector,
+        dashboard:
+          dashboardId != null && dashboardId === activeDashboardId
+            ? visibleDashboardDetail || activeDashboard
+            : visibleDashboards.find(
+                (dashboard) => dashboard.id === dashboardId,
+              ) || null,
+        fallbackSelector: currentDashboardRuntimeSelector,
+      }),
+    [
+      activeDashboard,
+      activeDashboardId,
+      currentDashboardRuntimeSelector,
+      dashboardPageSelector,
+      visibleDashboardDetail,
+      visibleDashboards,
+    ],
+  );
+  const isDashboardReadonly = isHistoricalSnapshotReadonly({
+    selectorHasRuntime: Boolean(
+      activeDashboardRuntimeSelector.deployHash ||
+      activeDashboardRuntimeSelector.kbSnapshotId ||
+      activeDashboardRuntimeSelector.runtimeScopeId,
+    ),
+    currentKbSnapshotId: runtimeSelectorState?.currentKbSnapshot?.id,
+    defaultKbSnapshotId:
+      runtimeSelectorState?.currentKnowledgeBase?.defaultKbSnapshotId,
+  });
   const loading =
     (dashboardsLoading && visibleDashboards.length === 0) ||
     (dashboardLoading && activeDashboardId != null && !visibleDashboardDetail);
@@ -180,7 +226,7 @@ export default function Dashboard() {
     visibleDashboardDetail?.cacheEnabled || activeDashboard?.cacheEnabled,
   );
   const hasExecutableDashboardRuntime = hasExecutableRuntimeScopeSelector(
-    runtimeScopeNavigation.selector,
+    activeDashboardRuntimeSelector,
   );
   const isSupportCached =
     dashboardCacheEnabled || resolvedCacheSupport === true;
@@ -225,6 +271,8 @@ export default function Dashboard() {
     cacheSettingsDrawer,
     createDashboardName,
     dashboardCacheEnabled,
+    dashboardCreateSelector: dashboardPageSelector,
+    resolveDashboardSelector,
     hasExecutableDashboardRuntime,
     isDashboardReadonly,
     refetchDashboard,
@@ -354,7 +402,7 @@ export default function Dashboard() {
             onSubmitCacheSettings={submitCacheSettings}
             onUpdateChange={onUpdateChange as (layouts: any[]) => Promise<void>}
             readOnlySchedule={visibleDashboardDetail?.schedule as Schedule}
-            runtimeScopeSelector={runtimeScopeNavigation.selector}
+            runtimeScopeSelector={activeDashboardRuntimeSelector}
           />
         </DashboardWorkbench>
       </LoadingWrapper>

@@ -3,6 +3,10 @@ import { useCallback, useRef, useState } from 'react';
 import { appMessage as message } from '@/utils/antdAppBridge';
 import type { DashboardGridItem } from '@/components/pages/home/dashboardGrid';
 import useDrawerAction from '@/hooks/useDrawerAction';
+import {
+  hasExplicitRuntimeScopeSelector,
+  type ClientRuntimeScopeSelector,
+} from '@/runtime/client/runtimeScope';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import type {
   DashboardDetailData,
@@ -22,6 +26,14 @@ import {
   resolveSettingsConnection,
   type SettingsData,
 } from '@/utils/settingsRest';
+import {
+  buildHomeSidebarThreadsRequestKey,
+  getCachedHomeSidebarThreads,
+  resolveHomeSidebarHeaderSelector,
+  resolveHomeSidebarScopeKey,
+  resolveHomeSidebarThreadSelector,
+} from '@/hooks/homeSidebarHelpers';
+import { loadHomeSidebarThreadsPayload } from '@/hooks/homeSidebarRequests';
 import { HISTORICAL_SNAPSHOT_READONLY_HINT } from '@/utils/runtimeSnapshot';
 import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { Path } from '@/utils/enum';
@@ -35,6 +47,8 @@ export const useManageDashboardPageActions = ({
   cacheSettingsDrawer,
   createDashboardName,
   dashboardCacheEnabled,
+  dashboardCreateSelector,
+  resolveDashboardSelector,
   hasExecutableDashboardRuntime,
   isDashboardReadonly,
   refetchDashboard,
@@ -56,6 +70,10 @@ export const useManageDashboardPageActions = ({
   cacheSettingsDrawer: ReturnType<typeof useDrawerAction>;
   createDashboardName: string;
   dashboardCacheEnabled: boolean;
+  dashboardCreateSelector: ClientRuntimeScopeSelector;
+  resolveDashboardSelector: (
+    dashboardId?: number | null,
+  ) => ClientRuntimeScopeSelector;
   hasExecutableDashboardRuntime: boolean;
   isDashboardReadonly: boolean;
   refetchDashboard: (options?: {
@@ -88,42 +106,100 @@ export const useManageDashboardPageActions = ({
     useState<DashboardMutationType>(null);
   const [cacheSettingsSubmitting, setCacheSettingsSubmitting] = useState(false);
   const cacheSettingsSubmittingRef = useRef(false);
+  const workspaceScopeKey = resolveHomeSidebarScopeKey({
+    workspaceId: runtimeScopeNavigation.workspaceSelector.workspaceId,
+    runtimeScopeId: runtimeScopeNavigation.workspaceSelector.runtimeScopeId,
+  });
+  const workspaceThreadHeaderSelector = resolveHomeSidebarHeaderSelector({
+    workspaceId: runtimeScopeNavigation.workspaceSelector.workspaceId,
+    runtimeScopeId: runtimeScopeNavigation.workspaceSelector.runtimeScopeId,
+  });
 
-  const ensureCacheSettingsSupported = useCallback(async () => {
-    if (dashboardCacheEnabled || resolvedCacheSupport === true) {
-      return true;
-    }
-
-    if (
-      resolvedCacheSupport === false ||
-      !runtimeScopePageHasRuntimeScope ||
-      !hasExecutableDashboardRuntime
-    ) {
-      return false;
-    }
-
-    try {
-      const result = await fetchSettings(runtimeScopeNavigation.selector);
-      setSettings(result);
-      return isSupportCachedSettings(resolveSettingsConnection(result));
-    } catch (error) {
-      const errorMessage = resolveAbortSafeErrorMessage(
-        error,
-        '加载系统设置失败，请稍后重试。',
+  const resolveSourceThreadSelector = useCallback(
+    async (threadId: number): Promise<ClientRuntimeScopeSelector> => {
+      const cachedThreads = getCachedHomeSidebarThreads(workspaceScopeKey);
+      const cachedThread = cachedThreads.find(
+        (thread) => Number(thread.id) === threadId,
       );
-      if (errorMessage) {
-        message.error(errorMessage);
+      if (
+        cachedThread?.selector &&
+        hasExplicitRuntimeScopeSelector(cachedThread.selector)
+      ) {
+        return cachedThread.selector;
       }
-      return false;
-    }
-  }, [
-    dashboardCacheEnabled,
-    hasExecutableDashboardRuntime,
-    resolvedCacheSupport,
-    runtimeScopeNavigation.selector,
-    runtimeScopePageHasRuntimeScope,
-    setSettings,
-  ]);
+
+      try {
+        const threads = await loadHomeSidebarThreadsPayload({
+          requestUrl: buildHomeSidebarThreadsRequestKey(
+            workspaceThreadHeaderSelector,
+          ),
+          cacheMode: 'no-store',
+        });
+        const matchedThread = threads.find(
+          (thread) => Number(thread.id) === threadId,
+        );
+        if (matchedThread) {
+          const selector = resolveHomeSidebarThreadSelector(matchedThread);
+          if (hasExplicitRuntimeScopeSelector(selector)) {
+            return selector;
+          }
+        }
+      } catch (_error) {
+        // fallback to workspace navigation selector below
+      }
+
+      return workspaceThreadHeaderSelector;
+    },
+    [workspaceScopeKey, workspaceThreadHeaderSelector],
+  );
+
+  const ensureCacheSettingsSupported = useCallback(
+    async ({
+      cacheEnabled,
+      selector,
+    }: {
+      cacheEnabled?: boolean;
+      selector: ClientRuntimeScopeSelector;
+    }) => {
+      if (
+        cacheEnabled ||
+        dashboardCacheEnabled ||
+        resolvedCacheSupport === true
+      ) {
+        return true;
+      }
+
+      if (
+        resolvedCacheSupport === false ||
+        !runtimeScopePageHasRuntimeScope ||
+        !hasExecutableDashboardRuntime
+      ) {
+        return false;
+      }
+
+      try {
+        const result = await fetchSettings(selector);
+        setSettings(result);
+        return isSupportCachedSettings(resolveSettingsConnection(result));
+      } catch (error) {
+        const errorMessage = resolveAbortSafeErrorMessage(
+          error,
+          '加载系统设置失败，请稍后重试。',
+        );
+        if (errorMessage) {
+          message.error(errorMessage);
+        }
+        return false;
+      }
+    },
+    [
+      dashboardCacheEnabled,
+      hasExecutableDashboardRuntime,
+      resolvedCacheSupport,
+      runtimeScopePageHasRuntimeScope,
+      setSettings,
+    ],
+  );
 
   const openCacheSettings = useCallback(
     async (dashboardId?: number | null) => {
@@ -132,14 +208,21 @@ export const useManageDashboardPageActions = ({
         return;
       }
 
-      const supported = await ensureCacheSettingsSupported();
-      if (!supported) {
-        message.info('当前连接暂不支持缓存与调度');
+      const targetDashboardId = dashboardId ?? activeDashboardId;
+      if (targetDashboardId == null) {
         return;
       }
 
-      const targetDashboardId = dashboardId ?? activeDashboardId;
-      if (targetDashboardId == null) {
+      const targetSelector = resolveDashboardSelector(targetDashboardId);
+      const supported = await ensureCacheSettingsSupported({
+        cacheEnabled:
+          targetDashboardId === activeDashboardId
+            ? (visibleDashboardDetailCacheEnabled ?? dashboardCacheEnabled)
+            : false,
+        selector: targetSelector,
+      });
+      if (!supported) {
+        message.info('当前连接暂不支持缓存与调度');
         return;
       }
 
@@ -151,7 +234,7 @@ export const useManageDashboardPageActions = ({
             }
           : await loadDashboardDetailPayload({
               dashboardId: targetDashboardId,
-              selector: runtimeScopeNavigation.selector,
+              selector: targetSelector,
               useCache: false,
             }).catch((error) => {
               const errorMessage = resolveAbortSafeErrorMessage(
@@ -177,9 +260,10 @@ export const useManageDashboardPageActions = ({
     [
       activeDashboardId,
       cacheSettingsDrawer,
+      dashboardCacheEnabled,
       ensureCacheSettingsSupported,
       isDashboardReadonly,
-      runtimeScopeNavigation.selector,
+      resolveDashboardSelector,
       setCacheSettingsTargetId,
       visibleDashboardDetailCacheEnabled,
       visibleDashboardDetailSchedule,
@@ -194,7 +278,7 @@ export const useManageDashboardPageActions = ({
 
       try {
         const items = await updateDashboardItemLayouts(
-          runtimeScopeNavigation.selector,
+          resolveDashboardSelector(activeDashboardId),
           layouts,
         );
         updateDashboardDetailData((previousData) => ({
@@ -212,8 +296,9 @@ export const useManageDashboardPageActions = ({
       }
     },
     [
+      activeDashboardId,
       isDashboardReadonly,
-      runtimeScopeNavigation.selector,
+      resolveDashboardSelector,
       updateDashboardDetailData,
     ],
   );
@@ -226,7 +311,10 @@ export const useManageDashboardPageActions = ({
       }
 
       try {
-        await deleteDashboardItem(runtimeScopeNavigation.selector, id);
+        await deleteDashboardItem(
+          resolveDashboardSelector(activeDashboardId),
+          id,
+        );
         message.success('看板项已删除。');
         if (selectedDashboardItemId === id) {
           setSelectedDashboardItemId(null);
@@ -247,9 +335,10 @@ export const useManageDashboardPageActions = ({
       }
     },
     [
+      activeDashboardId,
       isDashboardReadonly,
       refetchDashboards,
-      runtimeScopeNavigation.selector,
+      resolveDashboardSelector,
       selectedDashboardItemId,
       setSelectedDashboardItemId,
       updateDashboardDetailData,
@@ -283,9 +372,10 @@ export const useManageDashboardPageActions = ({
         if (targetDashboardId === activeDashboardId) {
           await refetchDashboard({ useCache: false });
         } else {
+          const targetSelector = resolveDashboardSelector(targetDashboardId);
           await loadDashboardDetailPayload({
             dashboardId: targetDashboardId,
-            selector: runtimeScopeNavigation.selector,
+            selector: targetSelector,
             useCache: false,
           });
           message.success('看板已刷新。');
@@ -306,7 +396,7 @@ export const useManageDashboardPageActions = ({
       isDashboardReadonly,
       refetchDashboard,
       refetchDashboards,
-      runtimeScopeNavigation.selector,
+      resolveDashboardSelector,
     ],
   );
 
@@ -317,11 +407,16 @@ export const useManageDashboardPageActions = ({
         return;
       }
 
-      await runtimeScopeNavigation.pushWorkspace(`${Path.Home}/${threadId}`, {
-        ...(responseId != null ? { responseId } : {}),
-      });
+      const selector = await resolveSourceThreadSelector(threadId);
+      await runtimeScopeNavigation.push(
+        `${Path.Home}/${threadId}`,
+        {
+          ...(responseId != null ? { responseId } : {}),
+        },
+        selector,
+      );
     },
-    [runtimeScopeNavigation.pushWorkspace],
+    [resolveSourceThreadSelector, runtimeScopeNavigation.push],
   );
 
   const submitCreateDashboard = useCallback(async () => {
@@ -338,7 +433,7 @@ export const useManageDashboardPageActions = ({
 
     try {
       setCreateDashboardLoading(true);
-      const dashboard = await createDashboard(runtimeScopeNavigation.selector, {
+      const dashboard = await createDashboard(dashboardCreateSelector, {
         name: normalizedName,
       });
       message.success('已创建看板。');
@@ -361,10 +456,10 @@ export const useManageDashboardPageActions = ({
     }
   }, [
     createDashboardName,
+    dashboardCreateSelector,
     isDashboardReadonly,
     refetchDashboards,
     replaceDashboardRoute,
-    runtimeScopeNavigation.selector,
     setCreateDashboardName,
     setCreateDashboardOpen,
   ]);
@@ -385,9 +480,13 @@ export const useManageDashboardPageActions = ({
       try {
         setDashboardMutationTargetId(dashboardId);
         setDashboardMutationType('rename');
-        await updateDashboard(runtimeScopeNavigation.selector, dashboardId, {
-          name: normalizedName,
-        });
+        await updateDashboard(
+          resolveDashboardSelector(dashboardId),
+          dashboardId,
+          {
+            name: normalizedName,
+          },
+        );
         message.success('看板已重命名。');
         await refetchDashboards({ useCache: false });
         if (activeDashboardId === dashboardId) {
@@ -413,7 +512,7 @@ export const useManageDashboardPageActions = ({
       isDashboardReadonly,
       refetchDashboard,
       refetchDashboards,
-      runtimeScopeNavigation.selector,
+      resolveDashboardSelector,
     ],
   );
 
@@ -428,7 +527,7 @@ export const useManageDashboardPageActions = ({
         setDashboardMutationTargetId(dashboardId);
         setDashboardMutationType('delete');
         const fallbackDashboard = await deleteDashboard(
-          runtimeScopeNavigation.selector,
+          resolveDashboardSelector(dashboardId),
           dashboardId,
         );
         message.success('看板已删除。');
@@ -459,7 +558,7 @@ export const useManageDashboardPageActions = ({
       isDashboardReadonly,
       refetchDashboards,
       replaceDashboardRoute,
-      runtimeScopeNavigation.selector,
+      resolveDashboardSelector,
     ],
   );
 
@@ -479,7 +578,7 @@ export const useManageDashboardPageActions = ({
 
       try {
         await updateDashboardSchedule(
-          runtimeScopeNavigation.selector,
+          resolveDashboardSelector(targetDashboardId),
           targetDashboardId,
           values,
         );
@@ -489,7 +588,7 @@ export const useManageDashboardPageActions = ({
         } else {
           await loadDashboardDetailPayload({
             dashboardId: targetDashboardId,
-            selector: runtimeScopeNavigation.selector,
+            selector: resolveDashboardSelector(targetDashboardId),
             useCache: false,
           });
         }
@@ -512,7 +611,7 @@ export const useManageDashboardPageActions = ({
       cacheSettingsTargetId,
       refetchDashboard,
       refetchDashboards,
-      runtimeScopeNavigation.selector,
+      resolveDashboardSelector,
     ],
   );
 
@@ -526,9 +625,13 @@ export const useManageDashboardPageActions = ({
       try {
         setDashboardMutationTargetId(dashboardId);
         setDashboardMutationType('default');
-        await updateDashboard(runtimeScopeNavigation.selector, dashboardId, {
-          isDefault: true,
-        });
+        await updateDashboard(
+          resolveDashboardSelector(dashboardId),
+          dashboardId,
+          {
+            isDefault: true,
+          },
+        );
         message.success('已设为默认看板。');
         await refetchDashboards({ useCache: false });
         if (activeDashboardId === dashboardId) {
@@ -554,7 +657,7 @@ export const useManageDashboardPageActions = ({
       isDashboardReadonly,
       refetchDashboard,
       refetchDashboards,
-      runtimeScopeNavigation.selector,
+      resolveDashboardSelector,
     ],
   );
 

@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { FlexLoading } from '@/components/PageLoading';
 import {
   buildRuntimeScopeBootstrapCandidates,
-  buildRuntimeScopeHeaders,
   buildRuntimeScopeSelectorFromRuntimeSelectorState,
   buildRuntimeScopeStateKey,
   buildRuntimeScopeUrl,
@@ -14,6 +13,7 @@ import {
   readRuntimeScopeSelectorFromSearch,
   RUNTIME_SCOPE_RECOVERY_EVENT,
   resolveRuntimeScopeBootstrapSelector,
+  shouldSkipRuntimeScopeUrlExpansion,
   shouldAcceptRuntimeScopeBootstrapCandidate,
   shouldBlockRuntimeScopeBootstrapRender,
   shouldDeferRuntimeScopeUrlSync,
@@ -22,17 +22,15 @@ import {
 import useAuthSession from '@/hooks/useAuthSession';
 import {
   buildRuntimeSelectorStateUrl,
+  fetchRuntimeSelectorState,
   peekRuntimeSelectorStatePayload,
-  primeRuntimeSelectorStatePayload,
-  type RuntimeSelectorState,
 } from '@/hooks/runtimeSelectorStateRequest';
+import { isAbortRequestError } from '@/utils/abort';
 import { Path } from '@/utils/enum';
 
 interface Props {
   children: React.ReactNode;
 }
-
-const RUNTIME_SCOPE_BOOTSTRAP_HEADER = 'x-wren-runtime-bootstrap';
 
 export default function RuntimeScopeBootstrap({ children }: Props) {
   const router = useRouter();
@@ -75,10 +73,6 @@ export default function RuntimeScopeBootstrap({ children }: Props) {
     router.query.runtimeScopeId,
     router.query.workspaceId,
   ]);
-  const selectorFromStored = useMemo(
-    () => (mounted ? readPersistedRuntimeScopeSelector() : {}),
-    [mounted, recoveryNonce],
-  );
   const selectorFromServerDefault = useMemo(() => {
     const runtimeSelector = authSession.data?.runtimeSelector;
     if (runtimeSelector?.workspaceId) {
@@ -95,37 +89,27 @@ export default function RuntimeScopeBootstrap({ children }: Props) {
     return { workspaceId: defaultWorkspaceId };
   }, [authSession.data]);
 
-  const bootstrapCandidates = useMemo(
-    () =>
-      buildRuntimeScopeBootstrapCandidates({
-        urlSelector: selectorFromUrl,
-        storedSelector: selectorFromStored,
-        serverDefaultSelector: selectorFromServerDefault,
-      }),
-    [selectorFromServerDefault, selectorFromStored, selectorFromUrl],
-  );
-  const urlSelectorKey = useMemo(
-    () =>
-      hasExplicitRuntimeScopeSelector(selectorFromUrl)
-        ? buildRuntimeScopeStateKey(selectorFromUrl)
-        : null,
-    [selectorFromUrl],
-  );
-  const storedSelectorKey = useMemo(
-    () =>
-      hasExplicitRuntimeScopeSelector(selectorFromStored)
-        ? buildRuntimeScopeStateKey(selectorFromStored)
-        : null,
-    [selectorFromStored],
-  );
-
   const nextUrl = useMemo(() => {
-    if (!router.isReady || !selectorToSync) {
+    if (
+      !router.isReady ||
+      !selectorToSync ||
+      shouldSkipRuntimeScopeUrlExpansion({
+        pathname: router.pathname,
+        selectorFromUrl,
+        selectorToSync,
+      })
+    ) {
       return null;
     }
 
     return buildRuntimeScopeUrl(router.asPath, {}, selectorToSync);
-  }, [router.asPath, router.isReady, selectorToSync]);
+  }, [
+    router.asPath,
+    router.isReady,
+    router.pathname,
+    selectorFromUrl,
+    selectorToSync,
+  ]);
 
   useEffect(() => {
     setSyncFailed(false);
@@ -175,33 +159,70 @@ export default function RuntimeScopeBootstrap({ children }: Props) {
       return;
     }
 
-    if (
-      urlSelectorKey &&
-      lastValidatedSelectorKeyRef.current &&
-      urlSelectorKey === lastValidatedSelectorKeyRef.current
-    ) {
-      setSelectorToSync(selectorFromUrl);
-      setBootstrapLoading(false);
-      return;
-    }
-
-    if (
-      !urlSelectorKey &&
-      storedSelectorKey &&
-      lastValidatedSelectorKeyRef.current &&
-      storedSelectorKey === lastValidatedSelectorKeyRef.current
-    ) {
-      setSelectorToSync(selectorFromStored);
-      setBootstrapLoading(false);
-      return;
-    }
-
     let cancelled = false;
+    const abortController = new AbortController();
     setBootstrapLoading(true);
     setSelectorToSync(null);
 
     const bootstrapRuntimeScope = async () => {
-      for (const candidate of bootstrapCandidates) {
+      const latestSelectorFromUrl = (() => {
+        const routerSelector = readRuntimeScopeSelectorFromObject(
+          router.query as Record<string, string | string[] | undefined>,
+        );
+
+        if (hasExplicitRuntimeScopeSelector(routerSelector)) {
+          return routerSelector;
+        }
+
+        if (typeof window !== 'undefined') {
+          return readRuntimeScopeSelectorFromSearch(window.location.search);
+        }
+
+        return routerSelector;
+      })();
+      const latestSelectorFromStored = readPersistedRuntimeScopeSelector();
+      const latestBootstrapCandidates = buildRuntimeScopeBootstrapCandidates({
+        urlSelector: latestSelectorFromUrl,
+        storedSelector: latestSelectorFromStored,
+        serverDefaultSelector: selectorFromServerDefault,
+      });
+      const latestUrlSelectorKey = hasExplicitRuntimeScopeSelector(
+        latestSelectorFromUrl,
+      )
+        ? buildRuntimeScopeStateKey(latestSelectorFromUrl)
+        : null;
+      const latestStoredSelectorKey = hasExplicitRuntimeScopeSelector(
+        latestSelectorFromStored,
+      )
+        ? buildRuntimeScopeStateKey(latestSelectorFromStored)
+        : null;
+
+      if (
+        latestUrlSelectorKey &&
+        lastValidatedSelectorKeyRef.current &&
+        latestUrlSelectorKey === lastValidatedSelectorKeyRef.current
+      ) {
+        setSelectorToSync(latestSelectorFromUrl);
+        setBootstrapLoading(false);
+        return;
+      }
+
+      if (
+        !latestUrlSelectorKey &&
+        latestStoredSelectorKey &&
+        lastValidatedSelectorKeyRef.current &&
+        latestStoredSelectorKey === lastValidatedSelectorKeyRef.current
+      ) {
+        setSelectorToSync(latestSelectorFromStored);
+        setBootstrapLoading(false);
+        return;
+      }
+
+      for (const candidate of latestBootstrapCandidates) {
+        if (cancelled || abortController.signal.aborted) {
+          return;
+        }
+
         const requestUrl = buildRuntimeSelectorStateUrl(candidate.selector);
 
         if (hasExplicitRuntimeScopeSelector(candidate.selector)) {
@@ -221,31 +242,10 @@ export default function RuntimeScopeBootstrap({ children }: Props) {
           });
           const runtimeSelectorState =
             cachedRuntimeSelectorState ||
-            ((await fetch(requestUrl, {
-              headers: {
-                ...buildRuntimeScopeHeaders(candidate.selector),
-                [RUNTIME_SCOPE_BOOTSTRAP_HEADER]: '1',
-              },
-              cache: 'no-store',
-            }).then(async (response) => {
-              if (!response.ok) {
-                throw new Error(
-                  `Runtime bootstrap failed (${response.status})`,
-                );
-              }
-
-              return (await response
-                .json()
-                .catch(() => null)) as RuntimeSelectorState | null;
-            })) as RuntimeSelectorState | null);
-
-          if (!cachedRuntimeSelectorState) {
-            primeRuntimeSelectorStatePayload({
+            (await fetchRuntimeSelectorState({
               requestUrl,
-              payload: runtimeSelectorState,
-            });
-          }
-
+              signal: abortController.signal,
+            }));
           if (cancelled) {
             return;
           }
@@ -286,6 +286,14 @@ export default function RuntimeScopeBootstrap({ children }: Props) {
           setBootstrapLoading(false);
           return;
         } catch (_error) {
+          if (
+            cancelled ||
+            abortController.signal.aborted ||
+            isAbortRequestError(_error)
+          ) {
+            return;
+          }
+
           if (candidate.source === 'stored') {
             writePersistedRuntimeScopeSelector({});
           }
@@ -307,16 +315,18 @@ export default function RuntimeScopeBootstrap({ children }: Props) {
 
     return () => {
       cancelled = true;
+      abortController.abort();
     };
   }, [
-    bootstrapCandidates,
     mounted,
     router.isReady,
-    selectorFromStored,
-    selectorFromUrl,
-    storedSelectorKey,
     shouldBypassBootstrap,
-    urlSelectorKey,
+    selectorFromServerDefault,
+    router.query.deployHash,
+    router.query.kbSnapshotId,
+    router.query.knowledgeBaseId,
+    router.query.runtimeScopeId,
+    router.query.workspaceId,
     recoveryNonce,
   ]);
 
@@ -326,6 +336,7 @@ export default function RuntimeScopeBootstrap({ children }: Props) {
       !selectorToSync ||
       syncFailed ||
       shouldDeferRuntimeScopeUrlSync({
+        isBootstrapLoading: bootstrapLoading,
         selectorFromUrl,
         selectorToSync,
       })
@@ -354,6 +365,7 @@ export default function RuntimeScopeBootstrap({ children }: Props) {
     router,
     router.asPath,
     router.isReady,
+    bootstrapLoading,
     selectorToSync,
     selectorFromUrl,
     syncFailed,

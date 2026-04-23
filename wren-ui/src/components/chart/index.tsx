@@ -143,8 +143,11 @@ interface VegaLiteProps {
   isPinned?: boolean;
   onReload?: () => void;
   onEdit?: () => void;
+  hideReloadAction?: boolean;
+  hideEditAction?: boolean;
   onPin?: () => void;
   pinDisabled?: boolean;
+  pinButtonLabel?: string;
   pinPopoverContent?: ReactNode;
   pinPopoverOpen?: boolean;
   onPinPopoverOpenChange?: (open: boolean) => void;
@@ -191,8 +194,11 @@ export default function Chart(props: VegaLiteProps) {
     isPinned,
     onReload,
     onEdit,
+    hideReloadAction,
+    hideEditAction,
     onPin,
     pinDisabled,
+    pinButtonLabel,
     pinPopoverContent,
     pinPopoverOpen,
     onPinPopoverOpenChange,
@@ -355,7 +361,7 @@ export default function Chart(props: VegaLiteProps) {
           <Alert
             showIcon
             type="error"
-            message={parsedError.shortMessage}
+            title={parsedError.shortMessage}
             description={
               <ErrorCollapse message={parsedError.message} defaultActive />
             }
@@ -368,7 +374,7 @@ export default function Chart(props: VegaLiteProps) {
       return (
         <Alert
           className="mt-12 mb-4 mx-4"
-          message={
+          title={
             <div className="d-flex align-center justify-space-between">
               <div>
                 There are too many categories to display effectively. Click
@@ -394,16 +400,24 @@ export default function Chart(props: VegaLiteProps) {
     );
   };
 
+  const shouldShowReloadAction = Boolean(onReload) && !hideReloadAction;
+  const shouldShowEditAction = Boolean(onEdit) && !hideEditAction;
+  const shouldShowPinAction = !!onPin || !!pinPopoverContent;
   const isAdditionalShow =
-    !!onReload || !!onEdit || !!onPin || !!pinPopoverContent;
+    shouldShowReloadAction || shouldShowEditAction || shouldShowPinAction;
+  const resolvedPinButtonTitle = pinButtonLabel || 'Pin chart to dashboard';
   const pinButton = (
     <button
-      aria-label="Pin chart to dashboard"
-      title="Pin chart to dashboard"
+      className={clsx({
+        'adm-chart-additional__pin-button': Boolean(pinButtonLabel),
+      })}
+      aria-label={resolvedPinButtonTitle}
+      title={resolvedPinButtonTitle}
       disabled={pinDisabled}
       onClick={pinPopoverContent ? undefined : onPin}
     >
       <PushPinOutlined />
+      {pinButtonLabel ? <span>{pinButtonLabel}</span> : null}
     </button>
   );
 
@@ -418,7 +432,7 @@ export default function Chart(props: VegaLiteProps) {
     >
       {isAdditionalShow && (
         <div className="adm-chart-additional d-flex justify-content-between align-center">
-          {!!onReload && (
+          {shouldShowReloadAction && (
             <Tooltip title="Regenerate chart">
               <button
                 aria-label="Regenerate chart"
@@ -429,7 +443,7 @@ export default function Chart(props: VegaLiteProps) {
               </button>
             </Tooltip>
           )}
-          {!!onEdit && (
+          {shouldShowEditAction && (
             <Tooltip title="Edit chart">
               <button
                 aria-label="Edit chart"
@@ -440,7 +454,7 @@ export default function Chart(props: VegaLiteProps) {
               </button>
             </Tooltip>
           )}
-          {(!!onPin || !!pinPopoverContent) &&
+          {shouldShowPinAction &&
             (pinPopoverContent ? (
               <Popover
                 trigger="click"
@@ -452,7 +466,7 @@ export default function Chart(props: VegaLiteProps) {
                 {pinButton}
               </Popover>
             ) : (
-              <Tooltip title="Pin chart to dashboard">{pinButton}</Tooltip>
+              <Tooltip title={resolvedPinButtonTitle}>{pinButton}</Tooltip>
             ))}
         </div>
       )}

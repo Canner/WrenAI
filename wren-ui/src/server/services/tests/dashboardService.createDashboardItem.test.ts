@@ -49,4 +49,52 @@ describe('DashboardService', () => {
       }),
     );
   });
+
+  it('persists the source runtime identity on newly pinned dashboard items', async () => {
+    mockDashboardItemRepository.findByDashboardIdAndSourceResponseId.mockResolvedValue(
+      null,
+    );
+    mockDashboardItemRepository.findAllBy.mockResolvedValue([]);
+    mockDashboardItemRepository.createOne.mockResolvedValue({
+      id: 91,
+      dashboardId: 7,
+      type: 'BAR',
+      detail: {
+        sql: 'select 1',
+      },
+      layout: { x: 0, y: 0, w: 3, h: 2 },
+    });
+
+    await dashboardService.createDashboardItem({
+      dashboardId: 7,
+      type: 'BAR' as any,
+      sql: 'select 1',
+      chartSchema: { mark: 'bar' },
+      sourceRuntimeIdentity: {
+        projectId: 999,
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snapshot-1',
+        deployHash: 'deploy-1',
+      },
+      sourceResponseId: 62,
+      sourceThreadId: 50,
+      sourceQuestion: '统计 990001 平台下各渠道的折扣比例，并生成柱状图',
+    });
+
+    expect(mockDashboardItemRepository.createOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dashboardId: 7,
+        detail: expect.objectContaining({
+          runtimeIdentity: {
+            projectId: null,
+            workspaceId: 'workspace-1',
+            knowledgeBaseId: 'kb-1',
+            kbSnapshotId: 'snapshot-1',
+            deployHash: 'deploy-1',
+          },
+        }),
+      }),
+    );
+  });
 });

@@ -240,7 +240,7 @@ export const DashboardGridPinnedItem = forwardRef(
                 style={{ marginBottom: 12 }}
                 type="warning"
                 showIcon
-                message="图表已按兼容模式渲染"
+                title="图表已按兼容模式渲染"
                 description={validationErrors[0]}
               />
             ) : null}
@@ -249,7 +249,7 @@ export const DashboardGridPinnedItem = forwardRef(
                 <Alert
                   showIcon
                   type="info"
-                  message="历史快照下不支持执行看板查询。"
+                  title="历史快照下不支持执行看板查询。"
                 />
               ) : (
                 <Chart

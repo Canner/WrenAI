@@ -25,6 +25,7 @@ export default function useThreadResponsePollingSettleEffect({
     settleFinishedThreadResponsePolling({
       onThreadResponseSettled,
       pollingResponseFinished: getThreadResponseIsFinished(pollingResponse),
+      pollingResponseId: pollingResponse?.id ?? null,
       pollingResponseIdRef,
       stopThreadResponsePolling,
       threadResponseRequestInFlightRef,

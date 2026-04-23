@@ -37,17 +37,24 @@ export function startThreadResponsePollingIfNeeded({
 export function settleFinishedThreadResponsePolling({
   onThreadResponseSettled,
   pollingResponseFinished,
+  pollingResponseId,
   pollingResponseIdRef,
   stopThreadResponsePolling,
   threadResponseRequestInFlightRef,
 }: {
   onThreadResponseSettled?: () => void;
   pollingResponseFinished: boolean;
+  pollingResponseId?: number | null;
   pollingResponseIdRef: MutableRefObject<number | null>;
   stopThreadResponsePolling: () => void;
   threadResponseRequestInFlightRef: MutableRefObject<number | null>;
 }) {
-  if (pollingResponseIdRef.current === null || !pollingResponseFinished) {
+  if (
+    pollingResponseIdRef.current === null ||
+    !pollingResponseFinished ||
+    (pollingResponseId != null &&
+      pollingResponseId !== pollingResponseIdRef.current)
+  ) {
     return;
   }
 

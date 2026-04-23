@@ -49,7 +49,7 @@ describe('pages/api/v1/workspace/schedules', () => {
     jest.clearAllMocks();
   });
 
-  it('returns workspace schedule overview scoped to the active knowledge base', async () => {
+  it('returns workspace schedule overview even when the active runtime scope is pinned to a knowledge base', async () => {
     const handler = (await import('../../pages/api/v1/workspace/schedules'))
       .default;
     const req = createReq();
@@ -71,7 +71,7 @@ describe('pages/api/v1/workspace/schedules', () => {
       {
         id: 'job-1',
         workspaceId: 'ws-1',
-        knowledgeBaseId: 'kb-1',
+        knowledgeBaseId: null,
         targetType: 'dashboard_refresh',
         targetId: '11',
         cronExpr: '0 * * * *',
@@ -133,10 +133,7 @@ describe('pages/api/v1/workspace/schedules', () => {
 
     await handler(req, res);
 
-    expect(mockListScheduleJobs).toHaveBeenCalledWith({
-      workspaceId: 'ws-1',
-      knowledgeBaseId: 'kb-1',
-    });
+    expect(mockListScheduleJobs).toHaveBeenCalledWith({ workspaceId: 'ws-1' });
     expect(mockListScheduleRunsByJobIds).toHaveBeenCalledWith([
       'job-1',
       'job-2',

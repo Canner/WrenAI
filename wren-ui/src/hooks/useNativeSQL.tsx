@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DataSourceName } from '@/types/dataSource';
 import { hasExecutableRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
+import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 
 import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
 import { fetchSettings, resolveSettingsConnection } from '@/utils/settingsRest';
@@ -16,8 +17,41 @@ export interface NativeSQLResult {
 }
 
 // we assume that not having a sample dataset means supporting native SQL
-function useNativeSQLInfo() {
+function useNativeSQLInfo(
+  runtimeScopeSelectorOverride?: ClientRuntimeScopeSelector,
+) {
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
+  const runtimeScopeSelector = useMemo(
+    () => ({
+      workspaceId:
+        runtimeScopeSelectorOverride?.workspaceId ||
+        runtimeScopeNavigation.selector.workspaceId,
+      knowledgeBaseId:
+        runtimeScopeSelectorOverride?.knowledgeBaseId ||
+        runtimeScopeNavigation.selector.knowledgeBaseId,
+      kbSnapshotId:
+        runtimeScopeSelectorOverride?.kbSnapshotId ||
+        runtimeScopeNavigation.selector.kbSnapshotId,
+      deployHash:
+        runtimeScopeSelectorOverride?.deployHash ||
+        runtimeScopeNavigation.selector.deployHash,
+      runtimeScopeId:
+        runtimeScopeSelectorOverride?.runtimeScopeId ||
+        runtimeScopeNavigation.selector.runtimeScopeId,
+    }),
+    [
+      runtimeScopeNavigation.selector.deployHash,
+      runtimeScopeNavigation.selector.kbSnapshotId,
+      runtimeScopeNavigation.selector.knowledgeBaseId,
+      runtimeScopeNavigation.selector.runtimeScopeId,
+      runtimeScopeNavigation.selector.workspaceId,
+      runtimeScopeSelectorOverride?.deployHash,
+      runtimeScopeSelectorOverride?.kbSnapshotId,
+      runtimeScopeSelectorOverride?.knowledgeBaseId,
+      runtimeScopeSelectorOverride?.runtimeScopeId,
+      runtimeScopeSelectorOverride?.workspaceId,
+    ],
+  );
   const [connectionType, setConnectionType] = useState<DataSourceName>();
   const [sampleDataset, setSampleDataset] = useState<string | null | undefined>(
     undefined,
@@ -26,7 +60,7 @@ function useNativeSQLInfo() {
   useEffect(() => {
     let cancelled = false;
 
-    if (!hasExecutableRuntimeScopeSelector(runtimeScopeNavigation.selector)) {
+    if (!hasExecutableRuntimeScopeSelector(runtimeScopeSelector)) {
       setConnectionType(undefined);
       setSampleDataset(undefined);
       return () => {
@@ -34,7 +68,7 @@ function useNativeSQLInfo() {
       };
     }
 
-    void fetchSettings(runtimeScopeNavigation.selector)
+    void fetchSettings(runtimeScopeSelector)
       .then((settings) => {
         if (cancelled) {
           return;
@@ -56,7 +90,7 @@ function useNativeSQLInfo() {
     return () => {
       cancelled = true;
     };
-  }, [runtimeScopeNavigation.selector]);
+  }, [runtimeScopeSelector]);
 
   return {
     hasNativeSQL: !Boolean(sampleDataset),
@@ -64,12 +98,44 @@ function useNativeSQLInfo() {
   };
 }
 
-export default function useNativeSQL() {
-  const nativeSQLInfo = useNativeSQLInfo();
+export default function useNativeSQL(
+  runtimeScopeSelectorOverride?: ClientRuntimeScopeSelector,
+) {
+  const nativeSQLInfo = useNativeSQLInfo(runtimeScopeSelectorOverride);
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
-  const hasExecutableRuntime = hasExecutableRuntimeScopeSelector(
-    runtimeScopeNavigation.selector,
+  const runtimeScopeSelector = useMemo(
+    () => ({
+      workspaceId:
+        runtimeScopeSelectorOverride?.workspaceId ||
+        runtimeScopeNavigation.selector.workspaceId,
+      knowledgeBaseId:
+        runtimeScopeSelectorOverride?.knowledgeBaseId ||
+        runtimeScopeNavigation.selector.knowledgeBaseId,
+      kbSnapshotId:
+        runtimeScopeSelectorOverride?.kbSnapshotId ||
+        runtimeScopeNavigation.selector.kbSnapshotId,
+      deployHash:
+        runtimeScopeSelectorOverride?.deployHash ||
+        runtimeScopeNavigation.selector.deployHash,
+      runtimeScopeId:
+        runtimeScopeSelectorOverride?.runtimeScopeId ||
+        runtimeScopeNavigation.selector.runtimeScopeId,
+    }),
+    [
+      runtimeScopeNavigation.selector.deployHash,
+      runtimeScopeNavigation.selector.kbSnapshotId,
+      runtimeScopeNavigation.selector.knowledgeBaseId,
+      runtimeScopeNavigation.selector.runtimeScopeId,
+      runtimeScopeNavigation.selector.workspaceId,
+      runtimeScopeSelectorOverride?.deployHash,
+      runtimeScopeSelectorOverride?.kbSnapshotId,
+      runtimeScopeSelectorOverride?.knowledgeBaseId,
+      runtimeScopeSelectorOverride?.runtimeScopeId,
+      runtimeScopeSelectorOverride?.workspaceId,
+    ],
   );
+  const hasExecutableRuntime =
+    hasExecutableRuntimeScopeSelector(runtimeScopeSelector);
 
   const [nativeSQLMode, setNativeSQLMode] = useState<boolean>(false);
   const [data, setData] = useState('');
@@ -98,7 +164,7 @@ export default function useNativeSQL() {
       setLoading(true);
       try {
         const nativeSql = await getThreadResponseNativeSql(
-          runtimeScopeNavigation.selector,
+          runtimeScopeSelector,
           responseId,
         );
         setData(nativeSql);
@@ -111,7 +177,7 @@ export default function useNativeSQL() {
         setLoading(false);
       }
     },
-    [hasExecutableRuntime, runtimeScopeNavigation.selector],
+    [hasExecutableRuntime, runtimeScopeSelector],
   );
 
   return {

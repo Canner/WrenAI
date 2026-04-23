@@ -63,12 +63,43 @@ const normalizeDashboardLookupRuntimeIdentity = (
 ): PersistedRuntimeIdentity =>
   normalizeCanonicalPersistedRuntimeIdentity(runtimeIdentity);
 
+const RUNTIME_IDENTITY_SOURCE_KEYS: Array<keyof PersistedRuntimeIdentity> = [
+  'projectId',
+  'workspaceId',
+  'knowledgeBaseId',
+  'kbSnapshotId',
+  'deployHash',
+  'actorUserId',
+];
+
+const hasOwnRuntimeIdentityField = (
+  source: Partial<PersistedRuntimeIdentity> | null | undefined,
+  key: keyof PersistedRuntimeIdentity,
+) => Boolean(source && Object.prototype.hasOwnProperty.call(source, key));
+
+const hasRuntimeIdentitySource = (
+  source: Partial<PersistedRuntimeIdentity> | null | undefined,
+) =>
+  RUNTIME_IDENTITY_SOURCE_KEYS.some((key) =>
+    hasOwnRuntimeIdentityField(source, key),
+  );
+
+const pickRuntimeIdentityField = <T extends keyof PersistedRuntimeIdentity>(
+  source: Partial<PersistedRuntimeIdentity> | null | undefined,
+  key: T,
+  fallback: PersistedRuntimeIdentity[T],
+) =>
+  hasOwnRuntimeIdentityField(source, key)
+    ? ((source?.[key] ?? null) as PersistedRuntimeIdentity[T])
+    : fallback;
+
 export const resolveDashboardExecutionContext = async ({
   dashboard,
   kbSnapshotRepository,
   projectService,
   deployService,
   requestRuntimeIdentity,
+  runtimeIdentitySource,
   responseRuntimeIdentity,
 }: {
   dashboard: Dashboard;
@@ -76,28 +107,58 @@ export const resolveDashboardExecutionContext = async ({
   projectService: Pick<IProjectService, 'getProjectById'>;
   deployService: Pick<IDeployService, 'getDeploymentByRuntimeIdentity'>;
   requestRuntimeIdentity?: PersistedRuntimeIdentity | null;
+  runtimeIdentitySource?: Partial<PersistedRuntimeIdentity> | null;
   responseRuntimeIdentity?: Partial<PersistedRuntimeIdentity> | null;
 }): Promise<DashboardExecutionContext> => {
   const runtime = await resolveDashboardRuntime({
     dashboard,
     kbSnapshotRepository,
   });
+  const resolvedRuntimeIdentitySource =
+    runtimeIdentitySource || responseRuntimeIdentity || null;
+  const runtimeIdentityFallback = hasRuntimeIdentitySource(
+    resolvedRuntimeIdentitySource,
+  )
+    ? null
+    : requestRuntimeIdentity;
 
   let runtimeIdentity: PersistedRuntimeIdentity;
   try {
     runtimeIdentity = normalizeDashboardLookupRuntimeIdentity(
       toPersistedRuntimeIdentityFromSource(
         {
-          projectId:
-            responseRuntimeIdentity?.projectId ??
-            runtime.projectBridgeFallbackId ??
-            null,
-          knowledgeBaseId: runtime.knowledgeBaseId,
-          kbSnapshotId: runtime.kbSnapshotId,
-          deployHash:
-            responseRuntimeIdentity?.deployHash ?? runtime.deployHash ?? null,
+          projectId: pickRuntimeIdentityField(
+            resolvedRuntimeIdentitySource,
+            'projectId',
+            runtime.projectBridgeFallbackId ?? null,
+          ),
+          workspaceId: pickRuntimeIdentityField(
+            resolvedRuntimeIdentitySource,
+            'workspaceId',
+            requestRuntimeIdentity?.workspaceId ?? null,
+          ),
+          knowledgeBaseId: pickRuntimeIdentityField(
+            resolvedRuntimeIdentitySource,
+            'knowledgeBaseId',
+            runtime.knowledgeBaseId,
+          ),
+          kbSnapshotId: pickRuntimeIdentityField(
+            resolvedRuntimeIdentitySource,
+            'kbSnapshotId',
+            runtime.kbSnapshotId,
+          ),
+          deployHash: pickRuntimeIdentityField(
+            resolvedRuntimeIdentitySource,
+            'deployHash',
+            runtime.deployHash ?? null,
+          ),
+          actorUserId: pickRuntimeIdentityField(
+            resolvedRuntimeIdentitySource,
+            'actorUserId',
+            requestRuntimeIdentity?.actorUserId ?? null,
+          ),
         },
-        requestRuntimeIdentity,
+        runtimeIdentityFallback,
       ),
     );
   } catch (error) {
@@ -164,6 +225,18 @@ export const resolveDashboardScheduleBinding = async ({
     dashboard,
     kbSnapshotRepository,
   });
+  const hasDashboardRuntimeBinding = Boolean(
+    runtime.knowledgeBaseId || runtime.kbSnapshotId || runtime.deployHash,
+  );
+  if (!hasDashboardRuntimeBinding) {
+    return {
+      workspaceId: runtimeIdentity.workspaceId || null,
+      knowledgeBaseId: null,
+      kbSnapshotId: null,
+      deployHash: null,
+      createdBy: dashboard.createdBy || runtimeIdentity.actorUserId || null,
+    };
+  }
   const knowledgeBaseId =
     runtime.knowledgeBaseId || runtimeIdentity.knowledgeBaseId || null;
   let workspaceId = runtimeIdentity.workspaceId || null;

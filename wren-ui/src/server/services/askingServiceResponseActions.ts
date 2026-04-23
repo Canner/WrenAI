@@ -10,6 +10,7 @@ import {
   AskResultStatus,
   ChartAdjustmentOption,
   ChartStatus,
+  type ThinkingTrace,
 } from '@server/models/adaptor';
 import {
   AdjustmentReasoningInput,
@@ -24,7 +25,20 @@ import {
   shapeChartPreviewData,
 } from '@/utils/chartSpecRuntime';
 import { isEqual } from 'lodash';
+import * as Errors from '@server/utils/error';
 import { logger } from './askingServiceShared';
+import { evaluateChartability } from './chartability';
+import { deriveChartThinkingTrace } from './chartThinking';
+
+const toErrorMessage = (error: unknown) => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (error && typeof error === 'object' && 'message' in error) {
+    return String((error as { message?: unknown }).message);
+  }
+  return String(error);
+};
 
 interface AskingServiceResponseLike {
   wrenAIAdaptor: any;
@@ -36,6 +50,9 @@ interface AskingServiceResponseLike {
   telemetry: any;
   adjustmentBackgroundTracker: any;
   getResponse(responseId: number): Promise<ThreadResponse | null>;
+  getAskingTaskById?(taskId: number): Promise<{
+    thinking?: ThinkingTrace | null;
+  } | null>;
   getThreadResponseRuntimeIdentity(
     threadResponse: ThreadResponse,
     fallbackRuntimeIdentity?: PersistedRuntimeIdentity | null,
@@ -49,6 +66,17 @@ interface AskingServiceResponseLike {
     deployHash?: string | null,
   ): any;
 }
+
+const getThinkingCount = (
+  thinking: ThinkingTrace | null | undefined,
+  keys: string[],
+) => {
+  const step = thinking?.steps?.find((candidate) =>
+    keys.includes(candidate.key),
+  );
+  const count = step?.messageParams?.count;
+  return typeof count === 'number' ? count : 0;
+};
 
 export const generateThreadResponseBreakdownAction = async (
   service: AskingServiceResponseLike,
@@ -109,6 +137,7 @@ export const generateThreadResponseChartAction = async (
   runtimeIdentity: PersistedRuntimeIdentity,
   configurations: { language: string },
   runtimeScopeId?: string | null,
+  customInstruction?: string | null,
 ): Promise<ThreadResponse> => {
   const threadResponse = await service.threadResponseRepository.findOneBy({
     id: threadResponseId,
@@ -120,6 +149,31 @@ export const generateThreadResponseChartAction = async (
     throw new Error(`Thread response ${threadResponseId} has no SQL`);
   }
 
+  const sourceResponse =
+    threadResponse.responseKind === 'CHART_FOLLOWUP' &&
+    threadResponse.sourceResponseId
+      ? await service.getResponse(threadResponse.sourceResponseId)
+      : null;
+  const sourceQuestion = sourceResponse?.question?.trim() || '';
+  const followUpQuestion = threadResponse.question.trim();
+  const effectiveChartQuery =
+    sourceQuestion && sourceQuestion !== followUpQuestion
+      ? `${sourceQuestion}\n${followUpQuestion}`
+      : sourceQuestion || followUpQuestion;
+  const sourceAskingTask =
+    sourceResponse?.askingTaskId && service.getAskingTaskById
+      ? await service.getAskingTaskById(sourceResponse.askingTaskId)
+      : null;
+  const sourceThinking = sourceAskingTask?.thinking || null;
+  const sqlPairsCount = getThinkingCount(sourceThinking, [
+    'ask.sql_pairs_retrieved',
+    'chart.sql_pairs_retrieved',
+  ]);
+  const sqlInstructionsCount = getThinkingCount(sourceThinking, [
+    'ask.sql_instructions_retrieved',
+    'chart.sql_instructions_retrieved',
+  ]);
+
   let previewDataSample: PreviewDataResponse | undefined;
   let chartDiagnostics:
     | {
@@ -127,8 +181,12 @@ export const generateThreadResponseChartAction = async (
         previewRowCount: number;
         previewColumns: Array<{ name: string; type?: string | null }>;
         submittedAt: string;
+        lastErrorCode?: string | null;
+        lastErrorMessage?: string | null;
+        finalizedAt?: string | null;
       }
     | undefined;
+  let chartInstructionsCount = 0;
   try {
     const { project, manifest } =
       await service.getExecutionResources(runtimeIdentity);
@@ -156,16 +214,67 @@ export const generateThreadResponseChartAction = async (
       `Chart request ${threadResponseId} prepared with ${chartDiagnostics.previewColumnCount} columns / ${chartDiagnostics.previewRowCount} rows`,
     );
   } catch (error) {
+    const now = new Date().toISOString();
+    const previewErrorMessage = toErrorMessage(error);
     logger.warn(
-      `Unable to fetch chart sample data for response ${threadResponseId}: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
+      `Unable to fetch chart sample data for response ${threadResponseId}: ${previewErrorMessage}`,
     );
+
+    const chartDetail = {
+      diagnostics: {
+        previewColumnCount: 0,
+        previewRowCount: 0,
+        previewColumns: [],
+        submittedAt: now,
+        finalizedAt: now,
+        lastErrorCode: Errors.GeneralErrorCodes.UPSTREAM_DATA_ERROR,
+        lastErrorMessage: previewErrorMessage,
+      },
+      chartability: null,
+      error: Errors.create(Errors.GeneralErrorCodes.UPSTREAM_DATA_ERROR, {
+        customMessage: previewErrorMessage,
+        originalError: error instanceof Error ? error : undefined,
+      }),
+      status: ChartStatus.FAILED,
+    };
+
+    return service.threadResponseRepository.updateOne(threadResponse.id, {
+      chartDetail: {
+        ...chartDetail,
+        thinking: deriveChartThinkingTrace(chartDetail, {
+          sqlPairsCount,
+          sqlInstructionsCount,
+          chartInstructionsCount,
+        }),
+      },
+    });
+  }
+
+  const chartability = evaluateChartability(previewDataSample);
+  if (!chartability.chartable) {
+    const chartDetail = {
+      diagnostics: chartDiagnostics,
+      chartability,
+      error: Errors.create(chartability.reasonCode as Errors.GeneralErrorCodes),
+      status: ChartStatus.FAILED,
+    };
+
+    return service.threadResponseRepository.updateOne(threadResponse.id, {
+      chartDetail: {
+        ...chartDetail,
+        thinking: deriveChartThinkingTrace(chartDetail, {
+          sqlPairsCount,
+          sqlInstructionsCount,
+          chartInstructionsCount,
+        }),
+      },
+    });
   }
 
   const response = await service.wrenAIAdaptor.generateChart({
-    query: threadResponse.question,
+    query: effectiveChartQuery,
     sql: threadResponse.sql,
+    customInstruction,
     data: previewDataSample,
     runtimeScopeId:
       runtimeScopeId ||
@@ -176,13 +285,23 @@ export const generateThreadResponseChartAction = async (
     runtimeIdentity: service.toAskRuntimeIdentity(runtimeIdentity),
     configurations,
   });
+  chartInstructionsCount = response.instructionCount ?? 0;
 
+  const chartDetail = {
+    diagnostics: chartDiagnostics,
+    chartability,
+    queryId: response.queryId,
+    status: ChartStatus.FETCHING,
+  };
   const updatedThreadResponse =
     await service.threadResponseRepository.updateOne(threadResponse.id, {
       chartDetail: {
-        diagnostics: chartDiagnostics,
-        queryId: response.queryId,
-        status: ChartStatus.FETCHING,
+        ...chartDetail,
+        thinking: deriveChartThinkingTrace(chartDetail, {
+          sqlPairsCount,
+          sqlInstructionsCount,
+          chartInstructionsCount,
+        }),
       },
     });
   service.chartBackgroundTracker.addTask(updatedThreadResponse);

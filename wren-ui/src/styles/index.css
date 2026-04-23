@@ -243,16 +243,30 @@ a,
   right: 36px;
 }
 .adm-chart-additional button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   background: white;
   border: 1px solid #d9d9d9;
-  border-radius: 4px;
-  padding: 0 2px;
+  border-radius: 8px;
+  padding: 0 8px;
   cursor: pointer;
   width: 28px;
   height: 28px;
   opacity: 0.4;
   color: #65676c;
   transition: all 0.4s ease-in;
+}
+.adm-chart-additional .adm-chart-additional__pin-button {
+  width: auto;
+  min-width: 28px;
+  padding-inline: 10px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.adm-chart-additional .adm-chart-additional__pin-button .anticon {
+  font-size: 13px;
 }
 .adm-chart-additional button:hover {
   opacity: 1;

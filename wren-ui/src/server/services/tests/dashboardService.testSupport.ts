@@ -66,19 +66,26 @@ export const createDashboardServiceHarness = () => {
     rollback: jest.fn().mockResolvedValue(undefined),
     findOneBy: jest.fn(),
     findAllBy: jest.fn(),
+    findAll: jest.fn(),
     createOne: jest.fn(),
     updateOne: jest.fn(),
+    deleteOne: jest.fn(),
+  };
+  const mockKnowledgeBaseRepository = {
+    findAllBy: jest.fn(),
   };
 
   const dashboardService = new TestDashboardService({
     dashboardItemRepository: mockDashboardItemRepository as any,
     dashboardRepository: mockDashboardRepository as any,
+    knowledgeBaseRepository: mockKnowledgeBaseRepository as any,
   });
 
   return {
     dashboardService,
     mockDashboardItemRepository,
     mockDashboardRepository,
+    mockKnowledgeBaseRepository,
     mockTransaction,
   };
 };

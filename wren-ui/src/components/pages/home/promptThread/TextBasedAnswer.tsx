@@ -2,29 +2,26 @@ import { useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Skeleton, Typography } from 'antd';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import LoadingOutlined from '@ant-design/icons/LoadingOutlined';
-import CaretDownOutlined from '@ant-design/icons/CaretDownOutlined';
-import EditOutlined from '@ant-design/icons/EditOutlined';
 import styled from 'styled-components';
 import { BinocularsIcon } from '@/utils/icons';
 import { nextTick } from '@/utils/time';
-import { MORE_ACTION } from '@/utils/enum';
 import { usePromptThreadActionsStore } from './store';
-import useDropdown from '@/hooks/useDropdown';
 import useTextBasedAnswerStreamTask from '@/hooks/useTextBasedAnswerStreamTask';
 import { Props as AnswerResultProps } from '@/components/pages/home/promptThread/AnswerResult';
 import MarkdownBlock from '@/components/editor/MarkdownBlock';
 import PreviewData from '@/components/dataPreview/PreviewData';
-import { AdjustAnswerDropdown } from '@/components/diagram/CustomDropdown';
 import { ThreadResponseAnswerStatus } from '@/types/home';
 
 import useResponsePreviewData from '@/hooks/useResponsePreviewData';
 import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { getAnswerIsFinished } from './answerGeneration';
+import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
+import { resolveThreadResponseRuntimeSelector } from '@/features/home/thread/threadResponseRuntime';
 
 const { Text } = Typography;
 
 const StyledSkeleton = styled(Skeleton)`
-  padding: 16px;
+  padding: 0;
   .ant-skeleton-paragraph {
     margin-bottom: 0;
   }
@@ -32,10 +29,20 @@ const StyledSkeleton = styled(Skeleton)`
 
 const ResultActionButton = styled(Button)`
   && {
-    height: 34px;
+    height: 32px;
     border-radius: 10px;
-    padding-inline: 12px;
+    padding-inline: 10px;
     font-weight: 500;
+  }
+`;
+
+const AnswerMarkdownBody = styled.div`
+  color: #2b3443;
+  line-height: 1.8;
+  font-size: 14px;
+
+  > :last-child {
+    margin-bottom: 0;
   }
 `;
 
@@ -44,26 +51,27 @@ const getIsLoadingFinished = (status?: ThreadResponseAnswerStatus | null) =>
   status === ThreadResponseAnswerStatus.STREAMING;
 
 export default function TextBasedAnswer(props: AnswerResultProps) {
-  const {
-    onGenerateTextBasedAnswer,
-    onOpenAdjustReasoningStepsModal,
-    onOpenAdjustSQLModal,
-  } = usePromptThreadActionsStore();
+  const { onGenerateTextBasedAnswer } = usePromptThreadActionsStore();
   const {
     isLastThreadResponse,
+    mode,
     onInitPreviewDone,
     shouldAutoPreview,
     threadResponse,
   } = props;
   const { id } = threadResponse;
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
+  const responseRuntimeSelector = resolveThreadResponseRuntimeSelector({
+    response: threadResponse,
+    fallbackSelector: runtimeScopeNavigation.selector,
+  });
   const { content, error, numRowsUsedInLLM, status } =
     threadResponse?.answerDetail || {};
 
   const [textAnswer, setTextAnswer] = useState<string>('');
-  const adjustResultsDropdown = useDropdown();
 
   const [fetchAnswerStreamingTask, answerStreamTaskResult] =
-    useTextBasedAnswerStreamTask();
+    useTextBasedAnswerStreamTask(responseRuntimeSelector);
 
   const answerStreamTask = answerStreamTaskResult.data;
 
@@ -71,29 +79,6 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
     () => status === ThreadResponseAnswerStatus.STREAMING,
     [status],
   );
-
-  // Adapt askingTask and adjustment reasoning data to dropdown
-  const adjustAnswerDropdownData = useMemo(() => {
-    const { payload } = threadResponse.adjustment || {};
-    return {
-      responseId: threadResponse.id,
-      sql: threadResponse.sql || '',
-      retrievedTables:
-        threadResponse.askingTask?.retrievedTables ||
-        payload?.retrievedTables ||
-        [],
-      sqlGenerationReasoning:
-        threadResponse.askingTask?.sqlGenerationReasoning ||
-        payload?.sqlGenerationReasoning ||
-        '',
-    };
-  }, [
-    threadResponse.id,
-    threadResponse.sql,
-    threadResponse.adjustment?.payload,
-    threadResponse.askingTask?.retrievedTables,
-    threadResponse.askingTask?.sqlGenerationReasoning,
-  ]);
 
   useEffect(() => {
     if (isStreaming) {
@@ -128,8 +113,9 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
   );
 
   const allowPreviewData = useMemo(() => Boolean(rowsUsed > 0), [rowsUsed]);
+  const allowInlinePreview = mode === 'workbench';
 
-  const previewDataResult = useResponsePreviewData(id);
+  const previewDataResult = useResponsePreviewData(id, responseRuntimeSelector);
   const { ensureLoaded: ensurePreviewLoaded } = previewDataResult;
   const [isPreviewExpanded, setIsPreviewExpanded] = useState(false);
   const hasPreviewData = !!previewDataResult.data?.previewData;
@@ -156,7 +142,7 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
 
   useEffect(() => {
     if (isLastThreadResponse) {
-      if (allowPreviewData) {
+      if (allowPreviewData && allowInlinePreview) {
         if (shouldAutoPreview) {
           autoTriggerPreviewDataButton();
         }
@@ -164,7 +150,12 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
 
       onInitPreviewDone();
     }
-  }, [isLastThreadResponse, allowPreviewData, shouldAutoPreview]);
+  }, [
+    allowInlinePreview,
+    isLastThreadResponse,
+    allowPreviewData,
+    shouldAutoPreview,
+  ]);
 
   const loading = !getIsLoadingFinished(status);
 
@@ -172,48 +163,6 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
     setTextAnswer('');
     onGenerateTextBasedAnswer(id);
   };
-
-  const onMoreClick = async (
-    payload: MORE_ACTION | { type: MORE_ACTION; data: any },
-  ) => {
-    const type =
-      typeof payload === 'object' && payload !== null ? payload.type : payload;
-    const data =
-      typeof payload === 'object' && payload !== null && payload.data
-        ? payload.data
-        : adjustAnswerDropdownData;
-    if (type === MORE_ACTION.ADJUST_STEPS) {
-      onOpenAdjustReasoningStepsModal({
-        responseId: data.responseId,
-        retrievedTables: data.retrievedTables,
-        sqlGenerationReasoning: data.sqlGenerationReasoning,
-      });
-    } else if (type === MORE_ACTION.ADJUST_SQL) {
-      onOpenAdjustSQLModal({ responseId: id, sql: data.sql });
-    }
-  };
-
-  const adjustAnswerDropdown = (
-    <AdjustAnswerDropdown
-      onMoreClick={onMoreClick}
-      data={adjustAnswerDropdownData}
-      onOpenChange={adjustResultsDropdown.onOpenChange}
-    >
-      <Button
-        className="px-0"
-        type="link"
-        size="small"
-        icon={<EditOutlined />}
-        onClick={(event) => event.stopPropagation()}
-      >
-        调整回答
-        <CaretDownOutlined
-          className="ml-1"
-          rotate={adjustResultsDropdown.open ? 180 : 0}
-        />
-      </Button>
-    </AdjustAnswerDropdown>
-  );
 
   const answerErrorMessage = resolveAbortSafeErrorMessage(
     error?.message,
@@ -228,10 +177,9 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
   if (error && answerErrorMessage) {
     return (
       <>
-        <div className="py-4 px-6">
-          <div className="text-right">{adjustAnswerDropdown}</div>
+        <div className="pt-0 pb-2">
           <Alert
-            className="mt-4 mb-2"
+            className="mt-2 mb-2"
             message={answerShortMessage}
             description={answerErrorMessage}
             type="error"
@@ -249,9 +197,10 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
       paragraph={{ rows: 4 }}
       title={false}
     >
-      <div className="text-md gray-10 py-4 px-6">
-        <div className="text-right mb-4">{adjustAnswerDropdown}</div>
-        <MarkdownBlock content={textAnswer} />
+      <div className="text-md gray-10 pt-0 pb-2">
+        <AnswerMarkdownBody>
+          <MarkdownBlock content={textAnswer} />
+        </AnswerMarkdownBody>
         {isStreaming && <LoadingOutlined className="geekblue-6" spin />}
         {status === ThreadResponseAnswerStatus.INTERRUPTED && (
           <div className="mt-2 text-right">
@@ -266,7 +215,7 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
             </ResultActionButton>
           </div>
         )}
-        {allowPreviewData ? (
+        {allowPreviewData && allowInlinePreview ? (
           <div className="mt-6">
             <ResultActionButton
               size="small"
@@ -304,7 +253,7 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
               </div>
             )}
           </div>
-        ) : (
+        ) : allowInlinePreview ? (
           <>
             {!isStreaming && (
               <Alert
@@ -318,7 +267,7 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
               />
             )}
           </>
-        )}
+        ) : null}
       </div>
     </StyledSkeleton>
   );

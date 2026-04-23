@@ -77,18 +77,13 @@ describe('runtimePagePrefetch', () => {
     await prefetchDashboardOverview({
       selector: {
         workspaceId: 'ws-1',
-        knowledgeBaseId: 'kb-1',
-        kbSnapshotId: 'snap-1',
-        deployHash: 'deploy-1',
       },
       fetcher,
     });
 
+    expect(fetcher).toHaveBeenCalledWith('/api/v1/dashboards?workspaceId=ws-1');
     expect(fetcher).toHaveBeenCalledWith(
-      '/api/v1/dashboards?workspaceId=ws-1&knowledgeBaseId=kb-1&kbSnapshotId=snap-1&deployHash=deploy-1',
-    );
-    expect(fetcher).toHaveBeenCalledWith(
-      '/api/v1/dashboards/7?workspaceId=ws-1&knowledgeBaseId=kb-1&kbSnapshotId=snap-1&deployHash=deploy-1',
+      '/api/v1/dashboards/7?workspaceId=ws-1',
     );
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(peekPrefetchedFirstDashboardId()).toBe(7);
@@ -96,9 +91,6 @@ describe('runtimePagePrefetch', () => {
       peekDashboardDetailPayload({
         selector: {
           workspaceId: 'ws-1',
-          knowledgeBaseId: 'kb-1',
-          kbSnapshotId: 'snap-1',
-          deployHash: 'deploy-1',
         },
         dashboardId: 7,
       }),
@@ -108,18 +100,6 @@ describe('runtimePagePrefetch', () => {
       cacheEnabled: true,
       items: [],
     });
-  });
-
-  it('skips dashboard prefetch when only a workspace selector is available', async () => {
-    const fetcher = jest.fn();
-
-    await prefetchDashboardOverview({
-      selector: { workspaceId: 'ws-1' },
-      fetcher,
-    });
-
-    expect(fetcher).not.toHaveBeenCalled();
-    expect(peekPrefetchedFirstDashboardId()).toBeNull();
   });
 
   it('prefetches thread detail into the runtime cache through REST', async () => {
@@ -140,11 +120,20 @@ describe('runtimePagePrefetch', () => {
         workspaceId: 'ws-1',
       }),
     );
-    expect(peekThreadOverview(19)).toEqual({
+    expect(
+      peekThreadOverview(19, {
+        workspaceId: 'ws-1',
+      }),
+    ).toEqual({
       thread: {
         id: 19,
       },
     });
+    expect(
+      peekThreadOverview(19, {
+        workspaceId: 'ws-2',
+      }),
+    ).toBeNull();
   });
 
   it('deduplicates repeated thread detail prefetches', async () => {
@@ -158,8 +147,14 @@ describe('runtimePagePrefetch', () => {
         }),
     );
 
-    const firstPrefetch = prefetchThreadOverview(19, { fetcher });
-    const secondPrefetch = prefetchThreadOverview(19, { fetcher });
+    const firstPrefetch = prefetchThreadOverview(19, {
+      selector: { workspaceId: 'ws-1' },
+      fetcher,
+    });
+    const secondPrefetch = prefetchThreadOverview(19, {
+      selector: { workspaceId: 'ws-1' },
+      fetcher,
+    });
     resolveFetch?.({
       ok: true,
       json: async () => ({
@@ -170,14 +165,73 @@ describe('runtimePagePrefetch', () => {
     await Promise.all([firstPrefetch, secondPrefetch]);
 
     expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(peekThreadOverview(19)).toEqual({
+    expect(
+      peekThreadOverview(19, {
+        workspaceId: 'ws-1',
+      }),
+    ).toEqual({
       thread: {
         id: 19,
       },
     });
 
-    await prefetchThreadOverview(19, { fetcher });
+    await prefetchThreadOverview(19, {
+      selector: { workspaceId: 'ws-1' },
+      fetcher,
+    });
     expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('stores thread detail prefetches separately for different runtime scopes', async () => {
+    const fetcher = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: 19,
+          summary: 'scope-a',
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: 19,
+          summary: 'scope-b',
+        }),
+      } as Response);
+
+    await prefetchThreadOverview(19, {
+      selector: { workspaceId: 'ws-1', knowledgeBaseId: 'kb-a' },
+      fetcher,
+    });
+    await prefetchThreadOverview(19, {
+      selector: { workspaceId: 'ws-1', knowledgeBaseId: 'kb-b' },
+      fetcher,
+    });
+
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(
+      peekThreadOverview(19, {
+        workspaceId: 'ws-1',
+        knowledgeBaseId: 'kb-a',
+      }),
+    ).toEqual({
+      thread: {
+        id: 19,
+        summary: 'scope-a',
+      },
+    });
+    expect(
+      peekThreadOverview(19, {
+        workspaceId: 'ws-1',
+        knowledgeBaseId: 'kb-b',
+      }),
+    ).toEqual({
+      thread: {
+        id: 19,
+        summary: 'scope-b',
+      },
+    });
   });
 
   it('deduplicates in-flight knowledge overview fetches and reuses cached payloads', async () => {

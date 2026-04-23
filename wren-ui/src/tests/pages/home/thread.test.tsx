@@ -53,9 +53,14 @@ jest.mock('antd', () => {
     info: jest.fn(),
   };
   (globalThis as any).__homeThreadMessage = message;
+  const Splitter = ({ children }: any) =>
+    React.createElement('div', null, children);
+  Splitter.Panel = ({ children }: any) =>
+    React.createElement('div', null, children);
   return {
     Empty: ({ children }: any) =>
       React.createElement('div', null, children || 'Empty'),
+    Splitter,
     Tabs: ({ items }: any) =>
       React.createElement(
         'div',

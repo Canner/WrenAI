@@ -167,6 +167,9 @@ const selector = {
   kbSnapshotId: 'snap-1',
   deployHash: 'deploy-1',
 };
+const workspaceSelector = {
+  workspaceId: 'ws-1',
+};
 
 const renderPage = () =>
   renderToStaticMarkup(React.createElement(DashboardPage));
@@ -188,6 +191,11 @@ describe('home/dashboard page', () => {
       push: jest.fn(),
       pushWorkspace: jest.fn(),
       replace: jest.fn(),
+      href: jest.fn((path: string, params?: Record<string, unknown>) =>
+        path === '/home/dashboard'
+          ? `/home/dashboard?dashboardId=${params?.dashboardId}&workspaceId=ws-1`
+          : path,
+      ),
       hrefWorkspace: jest.fn(
         (path: string, params?: Record<string, unknown>) =>
           path === '/home/dashboard'
@@ -195,6 +203,7 @@ describe('home/dashboard page', () => {
             : path,
       ),
       selector,
+      workspaceSelector,
       hasRuntimeScope: true,
     });
     mockUseProtectedRuntimeScopePage.mockReturnValue({
@@ -218,7 +227,7 @@ describe('home/dashboard page', () => {
     });
 
     primeDashboardListPayload({
-      selector,
+      selector: workspaceSelector,
       payload: [
         {
           id: 11,
@@ -239,13 +248,16 @@ describe('home/dashboard page', () => {
       ],
     });
     primeDashboardDetailPayload({
-      selector,
+      selector: workspaceSelector,
       dashboardId: 11,
       payload: {
         id: 11,
         isDefault: true,
         name: '经营总览',
         description: null,
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snap-1',
+        deployHash: 'deploy-1',
         cacheEnabled: true,
         nextScheduledAt: null,
         schedule: {

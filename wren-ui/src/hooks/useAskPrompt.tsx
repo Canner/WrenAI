@@ -374,10 +374,15 @@ export default function useAskPrompt(
           return;
         }
 
-        const nextTask = await fetchAskingTaskWithGuard(askingTaskId);
-        if (nextTask?.type === AskingTaskType.GENERAL) {
-          fetchAskingStreamTask(askingTaskId);
-        }
+        void fetchAskingTaskWithGuard(askingTaskId)
+          .then((nextTask) => {
+            if (nextTask?.type === AskingTaskType.GENERAL) {
+              fetchAskingStreamTask(askingTaskId);
+            }
+          })
+          .catch(() => {
+            message.error('提交问题失败，请稍后重试');
+          });
       } catch (_error) {
         message.error('提交问题失败，请稍后重试');
       } finally {

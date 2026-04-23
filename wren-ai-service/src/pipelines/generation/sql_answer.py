@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import sys
+from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from hamilton import base
@@ -15,6 +16,13 @@ from src.utils import trace_cost
 from src.web.v1.services import Configuration
 
 logger = logging.getLogger("wren-ai-service")
+
+
+@dataclass
+class SQLAnswerStreamState:
+    chunks: list[str] = field(default_factory=list)
+    done: bool = False
+    condition: asyncio.Condition = field(default_factory=asyncio.Condition)
 
 sql_to_answer_system_prompt = """
 ### TASK
@@ -95,7 +103,7 @@ class SQLAnswer(BasicPipeline):
         llm_provider: LLMProvider,
         **kwargs,
     ):
-        self._user_queues = {}
+        self._stream_states: dict[str, SQLAnswerStreamState] = {}
         self._components = {
             "prompt_builder": PromptBuilder(
                 template=sql_to_answer_user_prompt_template
@@ -111,40 +119,69 @@ class SQLAnswer(BasicPipeline):
             AsyncDriver({}, sys.modules[__name__], result_builder=base.DictResult())
         )
 
+    def _ensure_stream_state(self, query_id: str) -> SQLAnswerStreamState:
+        if query_id not in self._stream_states:
+            self._stream_states[query_id] = SQLAnswerStreamState()
+        return self._stream_states[query_id]
+
+    async def _append_chunk(self, query_id: str, content: Optional[str]):
+        if not content:
+            return
+
+        stream_state = self._ensure_stream_state(query_id)
+        async with stream_state.condition:
+            stream_state.chunks.append(content)
+            stream_state.condition.notify_all()
+
+    async def _mark_done(self, query_id: str):
+        stream_state = self._ensure_stream_state(query_id)
+        async with stream_state.condition:
+            stream_state.done = True
+            stream_state.condition.notify_all()
+
+        asyncio.create_task(self._cleanup_stream_state(query_id))
+
+    async def _cleanup_stream_state(self, query_id: str, delay_seconds: int = 300):
+        await asyncio.sleep(delay_seconds)
+        self._stream_states.pop(query_id, None)
+
     def _streaming_callback(self, chunk, query_id):
-        if query_id not in self._user_queues:
-            self._user_queues[
-                query_id
-            ] = asyncio.Queue()  # Create a new queue for the user if it doesn't exist
-        # Put the chunk content into the user's queue
-        asyncio.create_task(self._user_queues[query_id].put(chunk.content))
+        self._ensure_stream_state(query_id)
+        asyncio.create_task(self._append_chunk(query_id, chunk.content))
         if chunk.meta.get("finish_reason"):
-            asyncio.create_task(self._user_queues[query_id].put("<DONE>"))
+            asyncio.create_task(self._mark_done(query_id))
 
     async def get_streaming_results(self, query_id):
-        async def _get_streaming_results(query_id):
-            return await self._user_queues[query_id].get()
+        stream_state = self._ensure_stream_state(query_id)
+        chunk_index = 0
 
-        if query_id not in self._user_queues:
-            self._user_queues[
-                query_id
-            ] = asyncio.Queue()  # Ensure the user's queue exists
         while True:
             try:
-                # Wait for an item from the user's queue
-                self._streaming_results = await asyncio.wait_for(
-                    _get_streaming_results(query_id), timeout=120
-                )
-                if (
-                    self._streaming_results == "<DONE>"
-                ):  # Check for end-of-stream signal
-                    del self._user_queues[query_id]
+                async with stream_state.condition:
+                    while (
+                        chunk_index >= len(stream_state.chunks) and not stream_state.done
+                    ):
+                        await asyncio.wait_for(stream_state.condition.wait(), timeout=120)
+
+                    pending_chunks = stream_state.chunks[chunk_index:]
+                    chunk_index = len(stream_state.chunks)
+                    is_done = stream_state.done
+
+                for pending_chunk in pending_chunks:
+                    if pending_chunk:
+                        yield pending_chunk
+
+                if is_done:
                     break
-                if self._streaming_results:  # Check if there are results to yield
-                    yield self._streaming_results
-                    self._streaming_results = ""  # Clear after yielding
             except TimeoutError:
                 break
+
+    def get_buffered_content(self, query_id: str) -> Optional[str]:
+        stream_state = self._stream_states.get(query_id)
+        if stream_state is None:
+            return None
+
+        return "".join(stream_state.chunks)
 
     @observe(name="SQL Answer Generation")
     async def run(

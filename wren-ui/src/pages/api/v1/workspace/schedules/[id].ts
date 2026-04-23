@@ -30,13 +30,6 @@ const ensureScopedScheduleJob = async (req: NextApiRequest, id: string) => {
     throw new Error('Schedule job not found');
   }
 
-  if (
-    runtimeScope.knowledgeBase &&
-    scheduleJob.knowledgeBaseId !== runtimeScope.knowledgeBase.id
-  ) {
-    throw new Error('Schedule job not found');
-  }
-
   return {
     runtimeScope,
     scheduleJob,

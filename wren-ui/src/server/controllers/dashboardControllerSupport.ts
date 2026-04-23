@@ -29,6 +29,58 @@ export const getCurrentPersistedRuntimeIdentity = (ctx: IContext) =>
     toPersistedRuntimeIdentity(ctx.runtimeScope!),
   );
 
+export const getCurrentPersistedWorkspaceIdentity = (ctx: IContext) => {
+  const runtimeIdentity = getCurrentPersistedRuntimeIdentity(ctx);
+
+  return {
+    projectId: null,
+    workspaceId: runtimeIdentity.workspaceId || ctx.runtimeScope?.workspace?.id,
+    knowledgeBaseId: null,
+    kbSnapshotId: null,
+    deployHash: null,
+    actorUserId: runtimeIdentity.actorUserId || null,
+  };
+};
+
+export const shouldUseWorkspaceScopedDashboardCreate = (ctx: IContext) => {
+  const selector = ctx.runtimeScope?.selector;
+  if (!selector) {
+    return false;
+  }
+
+  return !(
+    selector.knowledgeBaseId ||
+    selector.kbSnapshotId ||
+    selector.deployHash
+  );
+};
+
+export const getCurrentPersistedDashboardScopeIdentity = (ctx: IContext) =>
+  shouldUseWorkspaceScopedDashboardCreate(ctx)
+    ? getCurrentPersistedWorkspaceIdentity(ctx)
+    : getCurrentPersistedRuntimeIdentity(ctx);
+
+export const getDashboardWorkspaceBinding = (ctx: IContext) =>
+  getDashboardRuntimeBinding(getCurrentPersistedWorkspaceIdentity(ctx));
+
+export const ensureDashboardForWorkspaceScope = async (
+  ctx: IContext,
+  dashboardId: number,
+): Promise<Dashboard> => {
+  const runtimeIdentity = getCurrentPersistedWorkspaceIdentity(ctx);
+  const dashboard = await ctx.dashboardService.getDashboardForScope(
+    dashboardId,
+    resolvePersistedProjectBridgeId(runtimeIdentity),
+    getDashboardRuntimeBinding(runtimeIdentity),
+  );
+
+  if (!dashboard) {
+    throw new Error('Dashboard not found.');
+  }
+
+  return dashboard;
+};
+
 export const ensureCurrentDashboardForScope = async (
   ctx: IContext,
   dashboardId?: number | null,
@@ -56,17 +108,52 @@ export const ensureCurrentDashboardForScope = async (
   return dashboard;
 };
 
+export const ensureCurrentDashboardForRequestedScope = async (
+  ctx: IContext,
+  dashboardId?: number | null,
+): Promise<Dashboard> => {
+  const runtimeIdentity = getCurrentPersistedDashboardScopeIdentity(ctx);
+  const resolvedProjectBridgeId =
+    resolvePersistedProjectBridgeId(runtimeIdentity);
+  const binding = getDashboardRuntimeBinding(runtimeIdentity);
+  const dashboard =
+    dashboardId != null
+      ? await ctx.dashboardService.getDashboardForScope(
+          dashboardId,
+          resolvedProjectBridgeId,
+          binding,
+        )
+      : await ctx.dashboardService.getCurrentDashboardForScope(
+          resolvedProjectBridgeId,
+          binding,
+        );
+
+  if (!dashboard) {
+    throw new Error('Dashboard not found.');
+  }
+
+  return dashboard;
+};
+
 export const ensureDashboardItemInScope = async (
   ctx: IContext,
   itemId: number,
-): Promise<DashboardItem> => {
+): Promise<{ dashboard: Dashboard; item: DashboardItem }> => {
   const item = await ctx.dashboardService.getDashboardItem(itemId);
-  const dashboard = await ensureCurrentDashboardForScope(ctx);
-  if (!item || item.dashboardId !== dashboard.id) {
+  if (!item) {
     throw new Error(`Dashboard item not found. id: ${itemId}`);
   }
 
-  return item;
+  try {
+    const dashboard = await ensureDashboardForWorkspaceScope(
+      ctx,
+      item.dashboardId,
+    );
+
+    return { dashboard, item };
+  } catch (_error) {
+    throw new Error(`Dashboard item not found. id: ${itemId}`);
+  }
 };
 
 export const assertDashboardExecutableRuntimeScope = async (ctx: IContext) => {
