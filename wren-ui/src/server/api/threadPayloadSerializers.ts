@@ -168,6 +168,24 @@ const toFormattedSql = (response: RepositoryThreadResponse) => {
   return response.sql ? safeFormatSQL(response.sql) : null;
 };
 
+const toRecommendationDetail = (
+  recommendationDetail: RepositoryThreadResponse['recommendationDetail'],
+) => {
+  if (!recommendationDetail) {
+    return null;
+  }
+
+  return {
+    ...recommendationDetail,
+    items: (recommendationDetail.items || []).map((item) => ({
+      ...item,
+      interactionMode: item.interactionMode || 'draft_to_composer',
+      suggestedIntent: item.suggestedIntent || 'ASK',
+      sql: item.sql ? safeFormatSQL(item.sql) : null,
+    })),
+  };
+};
+
 const buildThinkingStep = ({
   key,
   status,
@@ -621,6 +639,9 @@ export const serializeThreadResponsePayload = async ({
     services,
   });
   const answerDetail = toFormattedAnswerDetail(response.answerDetail);
+  const recommendationDetail = toRecommendationDetail(
+    response.recommendationDetail,
+  );
   const chartDetail = response.chartDetail
     ? {
         ...response.chartDetail,
@@ -630,6 +651,7 @@ export const serializeThreadResponsePayload = async ({
   const shouldRefreshResolvedIntent =
     Boolean(askingTaskShape?.type) &&
     response.responseKind !== 'CHART_FOLLOWUP' &&
+    response.responseKind !== 'RECOMMENDATION_FOLLOWUP' &&
     response.resolvedIntent?.source !== 'classifier';
   const derivedResolvedIntent = resolveResponseHomeIntent({
     id: response.id,
@@ -645,6 +667,7 @@ export const serializeThreadResponsePayload = async ({
     answerDetail: response.answerDetail ?? null,
     breakdownDetail: response.breakdownDetail ?? null,
     chartDetail,
+    recommendationDetail,
     resolvedIntent: null,
   });
   const baseResolvedIntent = resolveResponseHomeIntent({
@@ -661,6 +684,7 @@ export const serializeThreadResponsePayload = async ({
     answerDetail: response.answerDetail ?? null,
     breakdownDetail: response.breakdownDetail ?? null,
     chartDetail,
+    recommendationDetail,
     resolvedIntent: shouldRefreshResolvedIntent
       ? null
       : (response.resolvedIntent ?? null),
@@ -720,6 +744,7 @@ export const serializeThreadResponsePayload = async ({
     breakdownDetail: response.breakdownDetail ?? null,
     answerDetail,
     chartDetail,
+    recommendationDetail,
     adjustment: response.adjustment ?? null,
     adjustmentTask: toAdjustmentTaskShape(adjustmentTask),
   };

@@ -15,6 +15,11 @@ logger = logging.getLogger("wren-ai-service")
 
 
 class QuestionRecommendation:
+    class PreviewColumn(BaseModel):
+        name: str
+        type: Optional[str] = None
+        role: Optional[Literal["dimension", "measure"]] = None
+
     class Error(BaseModel):
         code: Literal["OTHERS", "MDL_PARSE_ERROR", "RESOURCE_NOT_FOUND"]
         message: str
@@ -69,9 +74,24 @@ class QuestionRecommendation:
         runtime_scope_id: Optional[str] = None,
         allow_data_preview: bool = True,
     ):
+        candidate_question = (
+            candidate.get("question")
+            or candidate.get("prompt")
+            or candidate.get("label")
+        )
+        if not candidate_question:
+            return {"error": "missing_question"}
+
+        normalized_candidate = {
+            **candidate,
+            "question": candidate_question,
+            "label": candidate.get("label") or candidate_question,
+            "prompt": candidate.get("prompt") or candidate_question,
+        }
+
         async def _document_retrieval() -> tuple[list[str], bool, bool, bool]:
             retrieval_result = await self._pipelines["db_schema_retrieval"].run(
-                query=candidate["question"],
+                query=normalized_candidate["question"],
                 runtime_scope_id=runtime_scope_id,
             )
             _retrieval_result = retrieval_result.get("construct_retrieval_results", {})
@@ -84,7 +104,7 @@ class QuestionRecommendation:
 
         async def _sql_pairs_retrieval() -> list[dict]:
             sql_pairs_result = await self._pipelines["sql_pairs_retrieval"].run(
-                query=candidate["question"],
+                query=normalized_candidate["question"],
                 runtime_scope_id=runtime_scope_id,
             )
             sql_samples = sql_pairs_result["formatted_output"].get("documents", [])
@@ -92,7 +112,7 @@ class QuestionRecommendation:
 
         async def _instructions_retrieval() -> list[dict]:
             result = await self._pipelines["instructions_retrieval"].run(
-                query=candidate["question"],
+                query=normalized_candidate["question"],
                 runtime_scope_id=runtime_scope_id,
                 scope="sql",
             )
@@ -122,7 +142,7 @@ class QuestionRecommendation:
                 sql_knowledge = None
 
             generated_sql = await self._pipelines["sql_generation"].run(
-                query=candidate["question"],
+                query=normalized_candidate["question"],
                 contexts=table_ddls,
                 runtime_scope_id=runtime_scope_id,
                 sql_samples=sql_samples,
@@ -147,19 +167,21 @@ class QuestionRecommendation:
             questions = current.response["questions"]
 
             if (
-                candidate["category"] not in questions
+                normalized_candidate["category"] not in questions
                 and len(questions) >= max_categories
             ):
                 # Skip to update the question dictionary if it is already full
                 return post_process
 
-            currnet_category = questions.setdefault(candidate["category"], [])
+            currnet_category = questions.setdefault(
+                normalized_candidate["category"], []
+            )
 
             if len(currnet_category) >= max_questions:
                 # Skip to update the questions for the category if it is already full
                 return post_process
 
-            currnet_category.append({**candidate, "sql": valid_sql})
+            currnet_category.append({**normalized_candidate, "sql": valid_sql})
             return post_process
 
         except Exception as e:
@@ -169,6 +191,20 @@ class QuestionRecommendation:
         event_id: str
         mdl: str
         previous_questions: list[str] = []
+        user_question: Optional[str] = None
+        source_question: Optional[str] = None
+        source_answer: Optional[str] = None
+        source_sql: Optional[str] = None
+        source_chart_type: Optional[str] = None
+        source_chart_title: Optional[str] = None
+        source_chart_encodings: list[str] = []
+        source_dimension_columns: list[str] = []
+        source_intent_lineage: list[str] = []
+        source_measure_columns: list[str] = []
+        source_preview_column_count: Optional[int] = None
+        source_preview_columns: list[dict] = []
+        source_preview_row_count: Optional[int] = None
+        source_response_kind: Optional[str] = None
         max_questions: int = 5
         max_categories: int = 3
         regenerate: bool = False
@@ -213,6 +249,20 @@ class QuestionRecommendation:
             request = {
                 "contexts": table_ddls,
                 "previous_questions": input.previous_questions,
+                "user_question": input.user_question,
+                "source_question": input.source_question,
+                "source_answer": input.source_answer,
+                "source_sql": input.source_sql,
+                "source_chart_type": input.source_chart_type,
+                "source_chart_title": input.source_chart_title,
+                "source_chart_encodings": input.source_chart_encodings,
+                "source_dimension_columns": input.source_dimension_columns,
+                "source_intent_lineage": input.source_intent_lineage,
+                "source_measure_columns": input.source_measure_columns,
+                "source_preview_column_count": input.source_preview_column_count,
+                "source_preview_columns": input.source_preview_columns,
+                "source_preview_row_count": input.source_preview_row_count,
+                "source_response_kind": input.source_response_kind,
                 "language": input.configurations.language,
                 "max_questions": input.max_questions,
                 "max_categories": input.max_categories,

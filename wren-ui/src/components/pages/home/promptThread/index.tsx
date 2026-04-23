@@ -8,7 +8,6 @@ import { makeIterable, IterableComponent } from '@/utils/iteration';
 import { getIsFinished } from '@/hooks/useAskPrompt';
 import { getAnswerIsFinished } from '@/components/pages/home/promptThread/answerGeneration';
 import type { ThreadResponse } from '@/types/home';
-import { getRecommendedQuestionProps } from '@/components/pages/home/RecommendedQuestions';
 import { resolveShouldAutoPreviewThreadResponse } from './autoPreview';
 const THREAD_INITIAL_VISIBLE_RESPONSE_COUNT = 24;
 const THREAD_VISIBLE_RESPONSE_BATCH = 24;
@@ -70,15 +69,6 @@ const AnswerResultTemplate: React.FC<
     motion: boolean;
     onInitPreviewDone: () => void;
     initialBlockedPreviewResponseId: number | null;
-    recommendedQuestionsOwnerResponseId?: number | null;
-    recommendedQuestionsState?: ReturnType<
-      typeof getRecommendedQuestionProps
-    > extends {
-      show: true;
-      state: infer T;
-    }
-      ? T | null
-      : never;
   }
 > = ({
   data,
@@ -86,8 +76,6 @@ const AnswerResultTemplate: React.FC<
   motion,
   onInitPreviewDone,
   initialBlockedPreviewResponseId,
-  recommendedQuestionsOwnerResponseId,
-  recommendedQuestionsState,
   ...threadResponse
 }) => {
   const { id } = threadResponse;
@@ -111,11 +99,6 @@ const AnswerResultTemplate: React.FC<
         isLastThreadResponse={isLastThreadResponse}
         shouldAutoPreview={shouldAutoPreview}
         onInitPreviewDone={onInitPreviewDone}
-        recommendedQuestions={
-          recommendedQuestionsOwnerResponseId === id
-            ? recommendedQuestionsState
-            : null
-        }
         threadResponse={threadResponse}
       />
     </div>
@@ -129,12 +112,7 @@ export default function PromptThread() {
   const divRef = useRef<HTMLDivElement>(null);
   const initialBlockedPreviewResponseIdRef = useRef<number | null>(null);
   const previousResponsesLengthRef = useRef(0);
-  const {
-    data,
-    recommendedQuestions,
-    recommendedQuestionsOwnerResponseId,
-    showRecommendedQuestions,
-  } = usePromptThreadDataStore();
+  const { data } = usePromptThreadDataStore();
   const [visibleResponseCount, setVisibleResponseCount] = useState(
     THREAD_INITIAL_VISIBLE_RESPONSE_COUNT,
   );
@@ -148,15 +126,6 @@ export default function PromptThread() {
     () => responses.slice(hiddenResponseCount),
     [hiddenResponseCount, responses],
   );
-  const recommendedQuestionProps = useMemo(
-    () =>
-      getRecommendedQuestionProps(
-        recommendedQuestions,
-        showRecommendedQuestions,
-      ),
-    [recommendedQuestions, showRecommendedQuestions],
-  );
-
   useEffect(() => {
     initialBlockedPreviewResponseIdRef.current = null;
     previousResponsesLengthRef.current = 0;
@@ -262,12 +231,6 @@ export default function PromptThread() {
         data={visibleResponses}
         initialBlockedPreviewResponseId={initialBlockedPreviewResponseId}
         onInitPreviewDone={onInitPreviewDone}
-        recommendedQuestionsOwnerResponseId={
-          recommendedQuestionsOwnerResponseId
-        }
-        recommendedQuestionsState={
-          recommendedQuestionProps.show ? recommendedQuestionProps.state : null
-        }
       />
     </StyledPromptThread>
   );

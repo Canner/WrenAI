@@ -35,6 +35,7 @@ import {
 } from './askingServiceThreadActions';
 import {
   createInstantRecommendedQuestionsAction,
+  generateThreadResponseRecommendationsAction,
   generateThreadRecommendationQuestionsAction,
   getInstantRecommendedQuestionsAction,
   getThreadRecommendationQuestionsAction,
@@ -260,6 +261,34 @@ export const applyAskingServiceActionPrototype = (AskingServiceClass: any) => {
       configurations,
       runtimeScopeId,
       customInstruction,
+    );
+  };
+  proto.generateThreadResponseRecommendations = async function (
+    threadResponseId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+    configurations: { language: string; question?: string | null },
+    runtimeScopeId?: string | null,
+  ) {
+    return generateThreadResponseRecommendationsAction(
+      this,
+      threadResponseId,
+      runtimeIdentity,
+      configurations,
+      runtimeScopeId,
+    );
+  };
+  proto.generateThreadResponseRecommendationsScoped = async function (
+    threadResponseId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+    configurations: { language: string; question?: string | null },
+    runtimeScopeId?: string | null,
+  ) {
+    await this.assertResponseScope(threadResponseId, runtimeIdentity);
+    return this.generateThreadResponseRecommendations(
+      threadResponseId,
+      runtimeIdentity,
+      configurations,
+      runtimeScopeId,
     );
   };
   proto.adjustThreadResponseChart = async function (

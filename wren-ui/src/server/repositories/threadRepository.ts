@@ -10,7 +10,7 @@ import {
 
 export interface ThreadRecommendationQuestionResult {
   question: string;
-  category: string;
+  category?: string | null;
   sql: string;
 }
 

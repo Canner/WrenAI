@@ -14,6 +14,7 @@ export const THREAD_RESPONSE_JSONB_COLUMNS = [
   'answerDetail',
   'breakdownDetail',
   'chartDetail',
+  'recommendationDetail',
   'adjustment',
   'resolvedIntent',
   'artifactLineage',
@@ -48,6 +49,10 @@ export const transformJoinedThreadResponses = (
         res.chartDetail && typeof res.chartDetail === 'string'
           ? JSON.parse(res.chartDetail)
           : res.chartDetail || null,
+      recommendationDetail:
+        res.recommendationDetail && typeof res.recommendationDetail === 'string'
+          ? JSON.parse(res.recommendationDetail)
+          : res.recommendationDetail || null,
       adjustment:
         res.adjustment && typeof res.adjustment === 'string'
           ? JSON.parse(res.adjustment)

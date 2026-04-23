@@ -27,7 +27,6 @@ export function useThreadCreateResponseAction({
   pollingAskingTaskIdRef,
   pollingResponseIdRef,
   runtimeScopeSelector,
-  setShowRecommendedQuestions,
   stopThreadResponsePolling,
   threadResponseRequestInFlightRef,
   upsertThreadResponse,
@@ -37,7 +36,6 @@ export function useThreadCreateResponseAction({
   pollingAskingTaskIdRef: React.MutableRefObject<string | null>;
   pollingResponseIdRef: React.MutableRefObject<number | null>;
   runtimeScopeSelector: ClientRuntimeScopeSelector;
-  setShowRecommendedQuestions: React.Dispatch<React.SetStateAction<boolean>>;
   stopThreadResponsePolling: () => void;
   threadResponseRequestInFlightRef: React.MutableRefObject<number | null>;
   upsertThreadResponse: (nextResponse: ThreadResponse) => void;
@@ -50,7 +48,7 @@ export function useThreadCreateResponseAction({
 
         if (!currentThreadId) {
           message.error('当前对话尚未就绪，请稍后再试');
-          return;
+          return null;
         }
         const nextResponse = await createThreadResponseRequest(
           runtimeScopeSelector,
@@ -63,7 +61,6 @@ export function useThreadCreateResponseAction({
           fallbackAskingTask: askPrompt.data?.askingTask as any,
         });
         upsertThreadResponse(hydratedResponse);
-        setShowRecommendedQuestions(false);
 
         const nextTaskId = resolveCreatedThreadResponsePollingTaskId({
           response: hydratedResponse,
@@ -80,8 +77,11 @@ export function useThreadCreateResponseAction({
             reportThreadError(error, '加载问答任务失败，请稍后重试');
           });
         }
+
+        return hydratedResponse;
       } catch (error) {
         reportThreadError(error, '创建回答失败，请稍后重试');
+        return null;
       }
     },
     [
@@ -90,7 +90,6 @@ export function useThreadCreateResponseAction({
       pollingAskingTaskIdRef,
       pollingResponseIdRef,
       runtimeScopeSelector,
-      setShowRecommendedQuestions,
       stopThreadResponsePolling,
       threadResponseRequestInFlightRef,
       upsertThreadResponse,

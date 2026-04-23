@@ -2,7 +2,6 @@ import { createContext, useContext } from 'react';
 import type {
   AdjustThreadResponseChartInput,
   DetailedThread,
-  RecommendedQuestionsTask,
   ThreadResponse,
 } from '@/types/home';
 import type { ComposerDraftIntent } from '@/types/homeIntent';
@@ -12,10 +11,7 @@ import { SelectQuestionProps } from '@/components/pages/home/RecommendedQuestion
 
 export type IPromptThreadStore = {
   data: DetailedThread;
-  recommendedQuestions: RecommendedQuestionsTask | null;
-  recommendedQuestionsOwnerResponseId?: number | null;
   selectedResponseId?: number | null;
-  showRecommendedQuestions: boolean;
   preparation: {
     askingStreamTask?: string;
     onStopAskingTask?: (queryId?: string) => Promise<void>;
@@ -39,7 +35,10 @@ export type IPromptThreadStore = {
     sourceAidKind?: ComposerDraftIntent['sourceAidKind'];
     sourceResponseId?: number | null;
   }) => void;
-  onGenerateThreadRecommendedQuestions: () => Promise<void>;
+  onGenerateThreadRecommendedQuestions: (options: {
+    question?: string | null;
+    responseId?: number | null;
+  }) => Promise<ThreadResponse | null>;
   onGenerateTextBasedAnswer: (responseId: number) => Promise<void>;
   onGenerateChartAnswer: (
     responseId: number,
@@ -74,18 +73,14 @@ export type IPromptThreadStore = {
 
 type PromptThreadDataStore = Pick<
   IPromptThreadStore,
-  | 'data'
-  | 'recommendedQuestions'
-  | 'recommendedQuestionsOwnerResponseId'
-  | 'selectedResponseId'
-  | 'showRecommendedQuestions'
+  'data' | 'selectedResponseId'
 >;
 
 type PromptThreadPreparationStore = Pick<IPromptThreadStore, 'preparation'>;
 
 type PromptThreadActionsStore = Omit<
   IPromptThreadStore,
-  'data' | 'recommendedQuestions' | 'showRecommendedQuestions' | 'preparation'
+  'data' | 'preparation'
 >;
 
 const PromptThreadDataContext = createContext<PromptThreadDataStore | null>(

@@ -10,11 +10,13 @@ interface AskingInitializationServiceLike {
     | 'findUnfinishedBreakdownResponses'
     | 'findUnfinishedAnswerResponses'
     | 'findUnfinishedChartResponses'
+    | 'findUnfinishedRecommendationResponses'
   >;
   breakdownBackgroundTracker: Pick<any, 'addTask'>;
   textBasedAnswerBackgroundTracker?: Pick<any, 'addTask'>;
   chartBackgroundTracker: Pick<any, 'addTask'>;
   chartAdjustmentBackgroundTracker: Pick<any, 'addTask'>;
+  threadResponseRecommendQuestionBackgroundTracker?: Pick<any, 'addTask'>;
   resolveBreakdownBootstrapWorkspaceId(): Promise<string | null>;
 }
 
@@ -78,6 +80,18 @@ export const initializeAskingService = async (
   );
   for (const threadResponse of unfinishedChartAdjustmentResponses) {
     service.chartAdjustmentBackgroundTracker.addTask(threadResponse);
+  }
+
+  const unfinishedRecommendationResponses =
+    (await service.threadResponseRepository.findUnfinishedRecommendationResponses?.()) ||
+    [];
+  logger.info(
+    `Initialization: adding unfinished recommendation thread responses for all workspaces (total: ${unfinishedRecommendationResponses.length}) to background tracker`,
+  );
+  for (const threadResponse of unfinishedRecommendationResponses) {
+    service.threadResponseRecommendQuestionBackgroundTracker?.addTask(
+      threadResponse,
+    );
   }
 };
 

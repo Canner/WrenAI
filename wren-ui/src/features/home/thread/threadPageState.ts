@@ -15,13 +15,26 @@ export type ThreadResponseData = ThreadData['responses'][number];
 export const getThreadResponseIsFinished = (
   threadResponse?: ThreadResponseData | null,
 ) => {
-  const { answerDetail, breakdownDetail, chartDetail } = threadResponse || {};
+  const { answerDetail, breakdownDetail, chartDetail, recommendationDetail } =
+    threadResponse || {};
   const hasSqlResult =
     typeof threadResponse?.sql === 'string' && threadResponse.sql.trim() !== '';
   const hasAnswerTask = Boolean(answerDetail?.queryId || answerDetail?.status);
   const hasChartTask = Boolean(chartDetail?.queryId || chartDetail?.status);
+  const hasRecommendationTask = Boolean(
+    recommendationDetail?.queryId || recommendationDetail?.status,
+  );
+  const isRecommendationFollowUp =
+    threadResponse?.responseKind === ThreadResponseKind.RECOMMENDATION_FOLLOWUP;
 
   const isBreakdownOnly = answerDetail === null && !isEmpty(breakdownDetail);
+
+  if (isRecommendationFollowUp) {
+    return (
+      recommendationDetail?.status === 'FINISHED' ||
+      recommendationDetail?.status === 'FAILED'
+    );
+  }
 
   if (hasSqlResult && !hasAnswerTask && !hasChartTask) {
     return true;
@@ -36,6 +49,13 @@ export const getThreadResponseIsFinished = (
 
   if (hasChartTask) {
     isChartFinished = getIsChartFinished(chartDetail?.status);
+  }
+
+  if (hasRecommendationTask) {
+    return (
+      recommendationDetail?.status === 'FINISHED' ||
+      recommendationDetail?.status === 'FAILED'
+    );
   }
 
   return isAnswerFinished !== false && isChartFinished !== false;

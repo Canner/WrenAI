@@ -29,6 +29,15 @@ type HomeIntentResponseLike = {
     chartSchema?: unknown;
     chartType?: string | null;
   } | null;
+  recommendationDetail?: {
+    status?: string | null;
+    items?: Array<{
+      label?: string | null;
+      prompt?: string | null;
+      suggestedIntent?: 'ASK' | 'CHART' | 'RECOMMEND_QUESTIONS' | null;
+    }> | null;
+    sourceResponseId?: number | null;
+  } | null;
   resolvedIntent?: ResolvedHomeIntent | null;
   artifactLineage?: ResponseArtifactLineage | null;
 };
@@ -97,7 +106,7 @@ const resolveMode = (
   response: HomeIntentResponseLike,
   kind: HomeIntentKind,
 ): HomeIntentMode => {
-  if (kind === 'CHART') {
+  if (kind === 'CHART' || kind === 'RECOMMEND_QUESTIONS') {
     return response.sourceResponseId != null ? 'FOLLOW_UP' : 'EXPLICIT_ACTION';
   }
 
@@ -284,10 +293,21 @@ export const resolveResponseArtifactPlan = (
   const teaserArtifacts: ResponseArtifactPlan['teaserArtifacts'] = [];
   const workbenchArtifacts: WorkbenchArtifactKind[] = [];
   const isChartFollowUp = response.responseKind === 'CHART_FOLLOWUP';
+  const isRecommendationFollowUp =
+    response.responseKind === 'RECOMMENDATION_FOLLOWUP';
   const hasSql = hasNonEmptySql(response.sql);
   const hasChart = hasRenderableChart(response.chartDetail);
   const inheritsSourceArtifacts =
     isChartFollowUp && response.sourceResponseId != null;
+
+  if (isRecommendationFollowUp) {
+    return {
+      teaserArtifacts,
+      workbenchArtifacts,
+      primaryTeaser: null,
+      primaryWorkbenchArtifact: null,
+    };
+  }
 
   if (isChartFollowUp) {
     pushUnique(teaserArtifacts, 'chart_teaser');
@@ -338,6 +358,16 @@ export const resolveResponseArtifactLineage = (
     };
   }
 
+  if (
+    response.responseKind === 'RECOMMENDATION_FOLLOWUP' &&
+    response.sourceResponseId != null
+  ) {
+    return {
+      sourceResponseId: response.sourceResponseId,
+      inheritedWorkbenchArtifacts: null,
+    };
+  }
+
   if (response.sourceResponseId != null) {
     return {
       sourceResponseId: response.sourceResponseId,
@@ -362,14 +392,16 @@ export const resolveResponseHomeIntent = (
   const kind =
     response.responseKind === 'CHART_FOLLOWUP'
       ? 'CHART'
-      : resolveKindFromAskingTaskType(response.askingTask?.type) ||
-        (response.askingTask ||
-        response.answerDetail ||
-        response.breakdownDetail ||
-        response.chartDetail ||
-        hasNonEmptySql(response.sql)
-          ? 'ASK'
-          : 'GENERAL_HELP');
+      : response.responseKind === 'RECOMMENDATION_FOLLOWUP'
+        ? 'RECOMMEND_QUESTIONS'
+        : resolveKindFromAskingTaskType(response.askingTask?.type) ||
+          (response.askingTask ||
+          response.answerDetail ||
+          response.breakdownDetail ||
+          response.chartDetail ||
+          hasNonEmptySql(response.sql)
+            ? 'ASK'
+            : 'GENERAL_HELP');
 
   return {
     kind,
@@ -393,14 +425,16 @@ export const resolveRecommendedQuestionsHomeIntent = ({
   source,
   sourceResponseId,
   sourceThreadId,
+  target = 'THREAD_SIDECAR',
 }: {
   source?: ResolvedHomeIntent['source'];
   sourceResponseId?: number | null;
   sourceThreadId?: number | null;
+  target?: ResolvedHomeIntent['target'];
 }): ResolvedHomeIntent => ({
   kind: 'RECOMMEND_QUESTIONS',
   mode: sourceResponseId != null ? 'FOLLOW_UP' : 'EXPLICIT_ACTION',
-  target: 'THREAD_SIDECAR',
+  target,
   source: source || 'derived',
   sourceThreadId: sourceThreadId ?? null,
   sourceResponseId: sourceResponseId ?? null,

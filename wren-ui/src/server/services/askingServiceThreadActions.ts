@@ -84,6 +84,7 @@ export const createThreadAction = async (
     threadId: thread.id,
     question: input.question,
     responseKind: input.responseKind || 'ANSWER',
+    recommendationDetail: input.recommendationDetail,
     sql: input.sql,
     sourceResponseId: input.sourceResponseId ?? null,
     resolvedIntent: threadResponseIntentState.resolvedIntent,
@@ -249,7 +250,11 @@ export const createThreadResponseAction = async (
   }
 
   let sql = input.sql;
-  if (!sql && input.sourceResponseId) {
+  if (
+    !sql &&
+    input.sourceResponseId &&
+    input.responseKind !== 'RECOMMENDATION_FOLLOWUP'
+  ) {
     const sourceResponse = await service.getResponse(input.sourceResponseId);
     if (!sourceResponse) {
       throw new Error(
@@ -272,6 +277,7 @@ export const createThreadResponseAction = async (
     threadId: thread.id,
     question: input.question,
     responseKind: input.responseKind || 'ANSWER',
+    recommendationDetail: input.recommendationDetail,
     sql,
     sourceResponseId: input.sourceResponseId ?? null,
     resolvedIntent: threadResponseIntentState.resolvedIntent,

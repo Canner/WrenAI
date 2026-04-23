@@ -12,10 +12,21 @@ import {
 export interface SelectQuestionProps {
   question: string;
   sql: string;
+  category?: string | null;
+  interactionMode?: 'draft_to_composer' | 'execute_intent' | null;
+  sourceResponseId?: number | null;
+  suggestedIntent?: 'ASK' | 'CHART' | 'RECOMMEND_QUESTIONS' | null;
 }
 
 interface Props {
-  items: { question: string; sql: string }[];
+  items: Array<{
+    category?: string | null;
+    interactionMode?: 'draft_to_composer' | 'execute_intent' | null;
+    question: string;
+    sourceResponseId?: number | null;
+    sql: string;
+    suggestedIntent?: 'ASK' | 'CHART' | 'RECOMMEND_QUESTIONS' | null;
+  }>;
   loading?: boolean;
   error?: {
     shortMessage?: string | null;
@@ -24,6 +35,7 @@ interface Props {
     stacktrace?: (string | null)[] | null;
   } | null;
   className?: string;
+  title?: string;
   onSelect: ({ question, sql }: SelectQuestionProps) => void;
 }
 
@@ -97,7 +109,14 @@ export type RecommendedQuestionRenderState =
   | {
       show: true;
       state: {
-        items: { question: string; sql: string }[];
+        items: Array<{
+          category?: string | null;
+          interactionMode?: 'draft_to_composer' | 'execute_intent' | null;
+          question: string;
+          sourceResponseId?: number | null;
+          sql: string;
+          suggestedIntent?: 'ASK' | 'CHART' | 'RECOMMEND_QUESTIONS' | null;
+        }>;
         loading: boolean;
         error?: RecommendedQuestionsTask['error'];
       };
@@ -109,8 +128,12 @@ export const getRecommendedQuestionProps = (
 ): RecommendedQuestionRenderState => {
   if (!data || !show) return { show: false };
   const questions = (data?.questions || []).slice(0, 3).map((item) => ({
+    category: item.category,
+    interactionMode: 'draft_to_composer' as const,
     question: item.question,
+    sourceResponseId: null,
     sql: item.sql,
+    suggestedIntent: 'ASK' as const,
   }));
   const loading = data?.status === RecommendedQuestionsTaskStatus.GENERATING;
 
@@ -129,16 +152,37 @@ export const getRecommendedQuestionProps = (
 };
 
 const QuestionItem = (props: {
+  category?: string | null;
   index: number;
+  interactionMode?: 'draft_to_composer' | 'execute_intent' | null;
   question: string;
+  sourceResponseId?: number | null;
   sql: string;
+  suggestedIntent?: 'ASK' | 'CHART' | 'RECOMMEND_QUESTIONS' | null;
   onSelect: ({ question, sql }: SelectQuestionProps) => void;
 }) => {
-  const { question, sql, onSelect } = props;
+  const {
+    category,
+    interactionMode,
+    question,
+    sourceResponseId,
+    sql,
+    suggestedIntent,
+    onSelect,
+  } = props;
   return (
     <RecommendedQuestionChip
       type="button"
-      onClick={() => onSelect({ question, sql })}
+      onClick={() =>
+        onSelect({
+          category,
+          interactionMode,
+          question,
+          sourceResponseId,
+          sql,
+          suggestedIntent,
+        })
+      }
     >
       {question}
     </RecommendedQuestionChip>
@@ -147,18 +191,15 @@ const QuestionItem = (props: {
 const QuestionList = makeIterable(QuestionItem);
 
 export default function RecommendedQuestions(props: Props) {
-  const { items, loading, className, onSelect } = props;
+  const { items, loading, className, onSelect, title = '推荐追问' } = props;
 
-  const data = useMemo(
-    () => items.map(({ question, sql }) => ({ question, sql })),
-    [items],
-  );
+  const data = useMemo(() => items.map((item) => ({ ...item })), [items]);
 
   return (
     <RecommendedQuestionsShell className={clsx(className)}>
       <RecommendedQuestionsHeader>
         <BulbOutlined />
-        <span>推荐追问</span>
+        <span>{title}</span>
       </RecommendedQuestionsHeader>
       <RecommendedQuestionsBody>
         <StyledSkeleton

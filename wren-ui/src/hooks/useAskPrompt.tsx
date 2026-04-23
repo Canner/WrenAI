@@ -371,7 +371,7 @@ export default function useAskPrompt(
         const askingTaskId = task.id;
         if (!askingTaskId) {
           message.error('提交问题失败，请稍后重试');
-          return;
+          return null;
         }
 
         void fetchAskingTaskWithGuard(askingTaskId)
@@ -383,8 +383,14 @@ export default function useAskPrompt(
           .catch(() => {
             message.error('提交问题失败，请稍后重试');
           });
+
+        return {
+          question: normalizedQuestion,
+          taskId: askingTaskId,
+        };
       } catch (_error) {
         message.error('提交问题失败，请稍后重试');
+        return null;
       } finally {
         submitInFlightRef.current = false;
         setSubmitting(false);

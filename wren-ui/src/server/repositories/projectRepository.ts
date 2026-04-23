@@ -160,7 +160,7 @@ export type WREN_AI_CONNECTION_INFO =
 
 export interface RecommendationQuestionResult {
   question: string;
-  category: string; // category for the question
+  category?: string | null; // category for the question
   sql: string; // validated sql for this question, can be used in generateAskDetail
 }
 

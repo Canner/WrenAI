@@ -1,5 +1,5 @@
 import { ViewInfo } from '@/types/modeling';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isEmpty } from 'lodash';
 import { Alert, Button, Tag, Tooltip } from 'antd';
 import styled from 'styled-components';
@@ -40,6 +40,7 @@ import {
   resolvePrimaryWorkbenchArtifact,
   resolveResponseTeasers,
 } from '@/features/home/thread/threadWorkbenchState';
+import { resolveConversationAidOwnerResponseId } from '@/features/home/thread/conversationAidVisibility';
 import { useThreadWorkbenchMessages } from '@/features/home/thread/threadWorkbenchMessages';
 
 const adjustmentType = {
@@ -350,16 +351,6 @@ export interface Props {
   isOpeningQuestion: boolean;
   shouldAutoPreview: boolean;
   onInitPreviewDone: () => void;
-  recommendedQuestions?: {
-    items: { question: string; sql: string }[];
-    loading: boolean;
-    error?: {
-      shortMessage?: string | null;
-      code?: string | null;
-      message?: string | null;
-      stacktrace?: (string | null)[] | null;
-    } | null;
-  } | null;
   mode?: 'timeline' | 'workbench';
 }
 
@@ -399,7 +390,7 @@ const AdjustmentInformation = (props: {
 };
 
 export default function AnswerResult(props: Props) {
-  const { threadResponse, isOpeningQuestion, recommendedQuestions } = props;
+  const { threadResponse, isOpeningQuestion } = props;
   const messages = useThreadWorkbenchMessages();
   const [helpfulFeedback, setHelpfulFeedback] = useState<
     'positive' | 'negative' | null
@@ -410,6 +401,7 @@ export default function AnswerResult(props: Props) {
     onSelectRecommendedQuestion,
     onGenerateTextBasedAnswer,
     onGenerateChartAnswer,
+    onGenerateThreadRecommendedQuestions,
     onOpenSaveAsViewModal,
     onOpenSaveToKnowledgeModal,
     onSelectResponse,
@@ -425,6 +417,7 @@ export default function AnswerResult(props: Props) {
     id,
     question,
     responseKind,
+    recommendationDetail,
     sql,
     view,
     adjustment,
@@ -435,6 +428,8 @@ export default function AnswerResult(props: Props) {
   const normalizedResponseKind = responseKind || ThreadResponseKind.ANSWER;
   const isChartFollowUp =
     normalizedResponseKind === ThreadResponseKind.CHART_FOLLOWUP;
+  const isRecommendationFollowUp =
+    normalizedResponseKind === ThreadResponseKind.RECOMMENDATION_FOLLOWUP;
 
   const isAnswerPrepared = !!answerDetail?.queryId || !!answerDetail?.status;
   const isBreakdownOnly = useMemo(() => {
@@ -444,6 +439,7 @@ export default function AnswerResult(props: Props) {
   const shouldInitializeAnswer = useMemo(
     () =>
       !isChartFollowUp &&
+      !isRecommendationFollowUp &&
       shouldAutoGenerateAnswer({
         isBreakdownOnly,
         askingTask,
@@ -453,6 +449,7 @@ export default function AnswerResult(props: Props) {
       }),
     [
       isChartFollowUp,
+      isRecommendationFollowUp,
       isBreakdownOnly,
       askingTask,
       adjustmentTask,
@@ -507,6 +504,7 @@ export default function AnswerResult(props: Props) {
 
   const showAnswerBody =
     !isChartFollowUp &&
+    !isRecommendationFollowUp &&
     (askingTask?.status === AskingTaskStatus.FINISHED ||
       isAnswerPrepared ||
       isBreakdownOnly);
@@ -530,6 +528,10 @@ export default function AnswerResult(props: Props) {
     primaryArtifact || resolveFallbackWorkbenchArtifact(threadResponse);
 
   const selectCurrentResponse = () => {
+    if (isRecommendationFollowUp || !fallbackArtifact) {
+      return;
+    }
+
     onSelectResponse(id, {
       artifact: fallbackArtifact,
       openWorkbench: Boolean(fallbackArtifact),
@@ -543,7 +545,9 @@ export default function AnswerResult(props: Props) {
 
   const renderResultFooter = () => {
     const shouldShowArtifactActions =
-      !isChartFollowUp && (sqlText || normalizedView);
+      !isChartFollowUp &&
+      !isRecommendationFollowUp &&
+      (sqlText || normalizedView);
 
     return (
       <ResponseCardFooter>
@@ -820,30 +824,99 @@ export default function AnswerResult(props: Props) {
   const previewTeaser = renderPreviewTeaser();
   const chartTeaser = renderChartTeaser();
   const conversationAids = useMemo(() => {
-    const aids =
-      threadResponse.resolvedIntent?.conversationAidPlan?.responseAids || [];
-    if (!recommendedQuestions) {
-      return aids;
-    }
-
-    return aids.filter((aid) => aid.kind !== 'TRIGGER_RECOMMEND_QUESTIONS');
-  }, [
-    recommendedQuestions,
-    threadResponse.resolvedIntent?.conversationAidPlan?.responseAids,
-  ]);
-  const isResponseSettledForConversationAids = isChartFollowUp
-    ? chartStatus === ChartTaskStatus.FINISHED ||
-      chartStatus === ChartTaskStatus.FAILED
-    : Boolean(
-        askingTask?.status === AskingTaskStatus.FINISHED ||
-        isAnswerPrepared ||
-        isBreakdownOnly ||
-        sqlText,
-      );
+    return (
+      threadResponse.resolvedIntent?.conversationAidPlan?.responseAids || []
+    );
+  }, [threadResponse.resolvedIntent?.conversationAidPlan?.responseAids]);
+  const conversationAidOwnerResponseId = useMemo(
+    () =>
+      resolveConversationAidOwnerResponseId({
+        responses: data?.responses || [],
+        selectedResponseId,
+      }),
+    [data?.responses, selectedResponseId],
+  );
+  const isResponseSettledForConversationAids = isRecommendationFollowUp
+    ? false
+    : isChartFollowUp
+      ? chartStatus === ChartTaskStatus.FINISHED ||
+        chartStatus === ChartTaskStatus.FAILED
+      : Boolean(
+          askingTask?.status === AskingTaskStatus.FINISHED ||
+          isAnswerPrepared ||
+          isBreakdownOnly ||
+          sqlText,
+        );
   const shouldRenderConversationAids =
-    isSelected &&
+    conversationAidOwnerResponseId === id &&
     isResponseSettledForConversationAids &&
     conversationAids.length > 0;
+
+  const recommendationQuestionProps = useMemo(() => {
+    if (!isRecommendationFollowUp || !recommendationDetail) {
+      return null;
+    }
+
+    return {
+      items: (recommendationDetail.items || []).slice(0, 6).map((item) => ({
+        category: item.category || null,
+        interactionMode: item.interactionMode || 'draft_to_composer',
+        question: item.prompt || item.label,
+        sourceResponseId:
+          recommendationDetail.sourceResponseId ??
+          threadResponse.sourceResponseId ??
+          null,
+        sql: item.sql || '',
+        suggestedIntent: item.suggestedIntent || 'ASK',
+      })),
+      loading:
+        recommendationDetail.status === 'GENERATING' ||
+        recommendationDetail.status === 'NOT_STARTED',
+      error: recommendationDetail.error,
+    };
+  }, [
+    isRecommendationFollowUp,
+    recommendationDetail,
+    threadResponse.sourceResponseId,
+  ]);
+
+  const handleSelectRecommendedQuestion = useCallback(
+    async ({
+      interactionMode,
+      question: nextQuestion,
+      sourceResponseId,
+      suggestedIntent,
+      sql: _sql,
+    }: Parameters<typeof onSelectRecommendedQuestion>[0]) => {
+      if (interactionMode === 'execute_intent') {
+        if (suggestedIntent === 'CHART' && sourceResponseId) {
+          await onGenerateChartAnswer(sourceResponseId, {
+            question: nextQuestion,
+            sourceResponseId,
+          });
+          return;
+        }
+      }
+
+      onDraftConversationAid({
+        intentHint: suggestedIntent || 'ASK',
+        prompt: nextQuestion,
+        sourceAidKind: null,
+        sourceResponseId:
+          sourceResponseId ??
+          recommendationDetail?.sourceResponseId ??
+          threadResponse.sourceResponseId ??
+          null,
+      });
+    },
+    [
+      onDraftConversationAid,
+      onGenerateChartAnswer,
+      onSelectRecommendedQuestion,
+      recommendationDetail?.sourceResponseId,
+      threadResponse.sourceResponseId,
+    ],
+  );
 
   const renderConversationAids = () => {
     if (!shouldRenderConversationAids) {
@@ -880,6 +953,62 @@ export default function AnswerResult(props: Props) {
     );
   };
 
+  const renderRecommendationFollowUpBody = () => {
+    if (!isRecommendationFollowUp || !recommendationQuestionProps) {
+      return null;
+    }
+
+    const recommendationError = recommendationQuestionProps.error;
+    const showRetry =
+      recommendationDetail?.status === 'FAILED' &&
+      Boolean(
+        recommendationDetail?.sourceResponseId ||
+        threadResponse.sourceResponseId,
+      );
+
+    return (
+      <>
+        {recommendationDetail?.status === 'FAILED' && recommendationError ? (
+          <Alert
+            className="mt-1"
+            type="error"
+            showIcon
+            title={
+              recommendationError.shortMessage ||
+              messages.recommendation.alerts.failedShort
+            }
+            description={recommendationError.message}
+            action={
+              showRetry ? (
+                <Button
+                  size="small"
+                  type="link"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void onGenerateThreadRecommendedQuestions({
+                      question,
+                      responseId: id,
+                    });
+                  }}
+                >
+                  {messages.recommendation.actions.retry}
+                </Button>
+              ) : undefined
+            }
+          />
+        ) : null}
+
+        <RecommendedQuestionsSlot onClick={(event) => event.stopPropagation()}>
+          <RecommendedQuestions
+            {...recommendationQuestionProps}
+            onSelect={handleSelectRecommendedQuestion}
+            title={messages.recommendation.sectionTitle}
+          />
+        </RecommendedQuestionsSlot>
+      </>
+    );
+  };
+
   return (
     <div data-jsid="answerResult">
       <ResponseCard $selected={isSelected} onClick={selectCurrentResponse}>
@@ -897,7 +1026,11 @@ export default function AnswerResult(props: Props) {
               <AssistantIdentityRow>
                 <AssistantIdentityName>Nova</AssistantIdentityName>
                 <AssistantIdentityMeta>
-                  {isChartFollowUp ? '图表追问' : '自动分析'}
+                  {isRecommendationFollowUp
+                    ? messages.recommendation.badge
+                    : isChartFollowUp
+                      ? messages.chart.badge
+                      : messages.answer.badge}
                 </AssistantIdentityMeta>
               </AssistantIdentityRow>
 
@@ -912,12 +1045,14 @@ export default function AnswerResult(props: Props) {
                 </ChartFollowUpLeadLine>
               ) : null}
 
-              <Preparation
-                className="mb-0"
-                {...preparation}
-                data={threadResponse}
-                minimized={shouldMinimizePreparation}
-              />
+              {!isRecommendationFollowUp ? (
+                <Preparation
+                  className="mb-0"
+                  {...preparation}
+                  data={threadResponse}
+                  minimized={shouldMinimizePreparation}
+                />
+              ) : null}
               {previewTeaser}
               {showAnswerBody ? <TextBasedAnswer {...props} /> : null}
 
@@ -939,20 +1074,11 @@ export default function AnswerResult(props: Props) {
                 <ArtifactTeaserGrid>{chartTeaser}</ArtifactTeaserGrid>
               ) : null}
 
+              {renderRecommendationFollowUpBody()}
+
               {renderConversationAids()}
 
-              {renderResultFooter()}
-
-              {recommendedQuestions && isSelected ? (
-                <RecommendedQuestionsSlot
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <RecommendedQuestions
-                    {...recommendedQuestions}
-                    onSelect={onSelectRecommendedQuestion}
-                  />
-                </RecommendedQuestionsSlot>
-              ) : null}
+              {!isRecommendationFollowUp ? renderResultFooter() : null}
             </AssistantMain>
           </AssistantSection>
         </ResponseBodyStack>

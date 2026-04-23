@@ -72,7 +72,11 @@ const parseThreadResponseActionPath = (
   value: string | string[] | undefined,
 ): {
   responseId: number;
-  action: 'generate-answer' | 'generate-chart' | 'adjust-chart';
+  action:
+    | 'generate-answer'
+    | 'generate-chart'
+    | 'adjust-chart'
+    | 'generate-recommendations';
 } => {
   if (!Array.isArray(value) || value.length !== 2) {
     throw new ApiError('Route not found', 404);
@@ -87,7 +91,8 @@ const parseThreadResponseActionPath = (
   if (
     action !== 'generate-answer' &&
     action !== 'generate-chart' &&
-    action !== 'adjust-chart'
+    action !== 'adjust-chart' &&
+    action !== 'generate-recommendations'
   ) {
     throw new ApiError('Route not found', 404);
   }
@@ -103,6 +108,20 @@ const resolveChartAdjustmentPayload = (
   }
 
   return payload as ChartAdjustmentOption;
+};
+
+const resolveRecommendationPayload = (payload: unknown) => {
+  if (!payload || typeof payload !== 'object') {
+    return { question: undefined };
+  }
+
+  return {
+    question:
+      typeof (payload as { question?: unknown }).question === 'string'
+        ? ((payload as { question?: string }).question || '').trim() ||
+          undefined
+        : undefined,
+  };
 };
 
 export default async function handler(
@@ -142,20 +161,30 @@ export default async function handler(
             runtimeIdentity,
             { language },
           )
-        : action === 'generate-chart'
-          ? await askingService.generateThreadResponseChartScoped(
+        : action === 'generate-recommendations'
+          ? await askingService.generateThreadResponseRecommendationsScoped(
               responseId,
               runtimeIdentity,
-              { language },
+              {
+                language,
+                question: resolveRecommendationPayload(req.body).question,
+              },
               runtimeScope?.selector?.runtimeScopeId || null,
             )
-          : await askingService.adjustThreadResponseChartScoped(
-              responseId,
-              runtimeIdentity,
-              resolveChartAdjustmentPayload(req.body),
-              { language },
-              runtimeScope?.selector?.runtimeScopeId || null,
-            );
+          : action === 'generate-chart'
+            ? await askingService.generateThreadResponseChartScoped(
+                responseId,
+                runtimeIdentity,
+                { language },
+                runtimeScope?.selector?.runtimeScopeId || null,
+              )
+            : await askingService.adjustThreadResponseChartScoped(
+                responseId,
+                runtimeIdentity,
+                resolveChartAdjustmentPayload(req.body),
+                { language },
+                runtimeScope?.selector?.runtimeScopeId || null,
+              );
 
     const responsePayload = await serializeThreadResponsePayload({
       response,

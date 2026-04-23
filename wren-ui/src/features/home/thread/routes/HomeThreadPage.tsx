@@ -10,11 +10,10 @@ import {
   useState,
 } from 'react';
 import type { ThreadResponse } from '@/types/home';
-import { RecommendedQuestionsTaskStatus } from '@/types/home';
 
 import { Path } from '@/utils/enum';
 import Prompt from '@/components/pages/home/prompt';
-import useAskPrompt, { getIsFinished } from '@/hooks/useAskPrompt';
+import useAskPrompt from '@/hooks/useAskPrompt';
 import useAdjustAnswer from '@/hooks/useAdjustAnswer';
 import useModalAction from '@/hooks/useModalAction';
 import {
@@ -33,7 +32,6 @@ import {
 } from '@/utils/runtimeSnapshot';
 import useThreadDetail from '@/hooks/useThreadDetail';
 import useThreadResponsePolling from '@/hooks/useThreadResponsePolling';
-import useThreadRecommendedQuestionsPolling from '@/hooks/useThreadRecommendedQuestionsPolling';
 import ThreadConversationStage from '@/features/home/thread/components/ThreadConversationStage';
 import ThreadPageOverlays from '@/features/home/thread/components/ThreadPageOverlays';
 import ThreadWorkbench from '@/features/home/thread/components/ThreadWorkbench';
@@ -63,6 +61,7 @@ import {
   type PersistedThreadWorkbenchState,
 } from '@/features/home/thread/threadWorkbenchReplayState';
 import { resolveThreadResponseRuntimeSelector } from '@/features/home/thread/threadResponseRuntime';
+import type { SelectQuestionProps } from '@/components/pages/home/RecommendedQuestions';
 
 export {
   buildPendingPromptThreadResponse,
@@ -76,8 +75,6 @@ export {
 } from '@/features/home/thread/threadPageState';
 
 const THREAD_RESPONSE_POLL_INTERVAL_MS = 1500;
-const THREAD_RECOMMEND_POLL_INTERVAL_MS = 1500;
-
 const reportThreadError = (_error: unknown, fallbackMessage: string) => {
   message.error(fallbackMessage);
 };
@@ -130,16 +127,6 @@ export default function HomeThread() {
     });
   }, [runtimeSelectorState, selectorHasRuntime]);
 
-  const [showRecommendedQuestions, setShowRecommendedQuestions] =
-    useState<boolean>(false);
-  const [
-    recommendedQuestionsOwnerThreadId,
-    setRecommendedQuestionsOwnerThreadId,
-  ] = useState<number | null>(null);
-  const [
-    recommendedQuestionsOwnerResponseId,
-    setRecommendedQuestionsOwnerResponseId,
-  ] = useState<number | null>(null);
   const [composerDraftIntent, setComposerDraftIntent] =
     useState<ComposerDraftIntent | null>(null);
   const [selectedResponseId, setSelectedResponseId] = useState<number | null>(
@@ -149,6 +136,11 @@ export default function HomeThread() {
     useState<WorkbenchArtifactKind | null>(null);
   const [isWorkbenchOpen, setIsWorkbenchOpen] = useState(false);
   const autoCreateResponseTaskIdRef = useRef<string | null>(null);
+  const pendingThreadResponseSeedRef = useRef<{
+    question: string;
+    sourceResponseId: number | null;
+    taskId: string;
+  } | null>(null);
   const workbenchReadyStateRef = useRef<{
     responseId: number | null;
     artifact: WorkbenchArtifactKind | null;
@@ -163,7 +155,6 @@ export default function HomeThread() {
   const restoredWorkbenchStateRef =
     useRef<PersistedThreadWorkbenchState | null>(null);
   const isRestoringWorkbenchStateRef = useRef(false);
-  const hydratedRecommendationRequestKeyRef = useRef<string | null>(null);
   const latestResponseAutoSelectionRef = useRef<{
     threadId: number | null;
     latestResponseId: number | null;
@@ -229,19 +220,6 @@ export default function HomeThread() {
     },
   });
 
-  const {
-    data: recommendedQuestions,
-    loading: recommendedQuestionsLoading,
-    fetchByThreadId: fetchThreadRecommendationQuestions,
-    stopPolling: stopThreadRecommendationQuestionsHookPolling,
-  } = useThreadRecommendedQuestionsPolling({
-    runtimeScopeSelector: runtimeScopeNavigation.selector,
-    pollInterval: THREAD_RECOMMEND_POLL_INTERVAL_MS,
-    onError: (error) => {
-      reportThreadError(error, '加载推荐追问失败，请稍后重试');
-    },
-  });
-
   const thread = useMemo(() => data?.thread || null, [data]);
   const runtimeKnowledgeBases = runtimeSelectorState?.knowledgeBases || [];
   const shouldForceReferencePreview = useMemo(() => {
@@ -293,11 +271,8 @@ export default function HomeThread() {
   const {
     pollingAskingTaskIdRef,
     pollingResponseIdRef,
-    scheduleThreadRecommendPollingStop,
     startThreadResponsePolling,
-    stopThreadRecommendPolling,
     stopThreadResponsePolling,
-    threadRecommendRequestInFlightRef,
     threadResponseRequestInFlightRef,
   } = useThreadRecoveryOrchestration({
     askPrompt,
@@ -305,9 +280,8 @@ export default function HomeThread() {
     hasExecutableRuntime,
     pollingResponse,
     promptRef: $prompt,
-    recommendedQuestionsStatus: recommendedQuestions?.status,
     responses,
-    stopThreadRecommendationQuestionsHookPolling,
+    stopThreadRecommendationQuestionsHookPolling: () => {},
     stopThreadResponseHookPolling,
     threadId,
   });
@@ -317,68 +291,40 @@ export default function HomeThread() {
     pollingAskingTaskIdRef,
     pollingResponseIdRef,
     runtimeScopeSelector: runtimeScopeNavigation.selector,
-    setShowRecommendedQuestions,
     stopThreadResponsePolling,
     threadResponseRequestInFlightRef,
     upsertThreadResponse,
   });
   const onGenerateThreadRecommendedQuestions =
     useThreadRecommendedQuestionsAction({
-      currentThreadId: thread?.id ?? threadId,
-      fetchThreadRecommendationQuestions,
-      runtimeScopeSelector: runtimeScopeNavigation.selector,
-      scheduleThreadRecommendPollingStop,
-      setShowRecommendedQuestions,
-      stopThreadRecommendPolling,
-      threadRecommendRequestInFlightRef,
+      resolveResponseRuntimeScopeSelector:
+        resolveResponseRuntimeScopeSelectorById,
+      startThreadResponsePolling,
+      stopThreadResponsePolling,
+      upsertThreadResponse,
     });
   const latestResponseForRecommendations =
     responses[responses.length - 1] || null;
   const handleGenerateThreadRecommendedQuestions = useCallback(
     async (options?: {
       sourceResponseId?: number | null;
-      sourceThreadId?: number | null;
+      question?: string | null;
     }) => {
-      const currentRecommendationThreadId =
-        options?.sourceThreadId ?? thread?.id ?? threadId ?? null;
-      const nextOwnerResponseId =
+      const targetResponseId =
         options?.sourceResponseId ??
         latestResponseForRecommendations?.id ??
         null;
 
-      hydratedRecommendationRequestKeyRef.current =
-        currentRecommendationThreadId != null && nextOwnerResponseId != null
-          ? `${currentRecommendationThreadId}:${nextOwnerResponseId}`
-          : null;
-      if (currentRecommendationThreadId != null) {
-        setRecommendedQuestionsOwnerThreadId(currentRecommendationThreadId);
-      }
-      setRecommendedQuestionsOwnerResponseId(nextOwnerResponseId);
-      await onGenerateThreadRecommendedQuestions();
+      return onGenerateThreadRecommendedQuestions({
+        question: options?.question,
+        responseId: targetResponseId,
+      });
     },
     [
       latestResponseForRecommendations?.id,
       onGenerateThreadRecommendedQuestions,
-      thread?.id,
-      threadId,
     ],
   );
-  const recommendationThreadId = displayThread?.id ?? thread?.id ?? threadId;
-  const shouldShowRecommendationLoadingState = useMemo(() => {
-    if (
-      !showRecommendedQuestions ||
-      recommendedQuestionsOwnerResponseId == null
-    ) {
-      return false;
-    }
-
-    return recommendedQuestionsLoading && !recommendedQuestions;
-  }, [
-    recommendedQuestions,
-    recommendedQuestionsLoading,
-    recommendedQuestionsOwnerResponseId,
-    showRecommendedQuestions,
-  ]);
   const {
     createSqlPairLoading,
     creating,
@@ -431,15 +377,12 @@ export default function HomeThread() {
   });
 
   useEffect(() => {
-    setShowRecommendedQuestions(false);
-    setRecommendedQuestionsOwnerThreadId(null);
-    setRecommendedQuestionsOwnerResponseId(null);
     setComposerDraftIntent(null);
     setSelectedResponseId(null);
     setActiveWorkbenchArtifact(null);
     setIsWorkbenchOpen(false);
     autoCreateResponseTaskIdRef.current = null;
-    hydratedRecommendationRequestKeyRef.current = null;
+    pendingThreadResponseSeedRef.current = null;
     restoredWorkbenchStateRef.current =
       readPersistedThreadWorkbenchState(threadId);
     isRestoringWorkbenchStateRef.current = Boolean(
@@ -462,7 +405,12 @@ export default function HomeThread() {
   useEffect(() => {
     const displayResponses = displayThread?.responses || [];
     const latestResponseId =
-      displayResponses[displayResponses.length - 1]?.id ?? null;
+      [...displayResponses]
+        .reverse()
+        .find((response) => response.responseKind !== 'RECOMMENDATION_FOLLOWUP')
+        ?.id ??
+      displayResponses[displayResponses.length - 1]?.id ??
+      null;
     const previous = latestResponseAutoSelectionRef.current;
     const threadChanged = previous.threadId !== (threadId ?? null);
 
@@ -494,7 +442,7 @@ export default function HomeThread() {
   useEffect(() => {
     const askingTask = askPrompt.data?.askingTask;
     const taskId = askingTask?.queryId || null;
-    if (!thread?.id || !taskId || !getIsFinished(askingTask?.status)) {
+    if (!thread?.id || !taskId) {
       if (
         autoCreateResponseTaskIdRef.current &&
         autoCreateResponseTaskIdRef.current !== taskId
@@ -512,6 +460,9 @@ export default function HomeThread() {
       if (autoCreateResponseTaskIdRef.current === taskId) {
         autoCreateResponseTaskIdRef.current = null;
       }
+      if (pendingThreadResponseSeedRef.current?.taskId === taskId) {
+        pendingThreadResponseSeedRef.current = null;
+      }
       return;
     }
 
@@ -519,10 +470,24 @@ export default function HomeThread() {
       return;
     }
 
+    const pendingSeed =
+      pendingThreadResponseSeedRef.current?.taskId === taskId
+        ? pendingThreadResponseSeedRef.current
+        : null;
+
     autoCreateResponseTaskIdRef.current = taskId;
     void onCreateResponse({
-      question: askPrompt.data?.originalQuestion || '',
+      question: pendingSeed?.question || askPrompt.data?.originalQuestion || '',
       taskId,
+      sourceResponseId: pendingSeed?.sourceResponseId ?? undefined,
+    }).then((createdResponse) => {
+      if (createdResponse) {
+        return;
+      }
+
+      if (autoCreateResponseTaskIdRef.current === taskId) {
+        autoCreateResponseTaskIdRef.current = null;
+      }
     });
   }, [
     askPrompt.data?.askingTask,
@@ -530,66 +495,6 @@ export default function HomeThread() {
     onCreateResponse,
     responses,
     thread?.id,
-  ]);
-
-  useEffect(() => {
-    if (
-      !showRecommendedQuestions ||
-      !recommendationThreadId ||
-      recommendedQuestionsOwnerResponseId == null
-    ) {
-      return;
-    }
-
-    const hasMatchingRecommendedQuestions =
-      recommendedQuestions?.resolvedIntent?.kind === 'RECOMMEND_QUESTIONS' &&
-      recommendedQuestions.resolvedIntent.sourceThreadId ===
-        recommendedQuestionsOwnerThreadId &&
-      recommendedQuestions.resolvedIntent.sourceResponseId ===
-        recommendedQuestionsOwnerResponseId;
-
-    if (hasMatchingRecommendedQuestions) {
-      return;
-    }
-
-    const requestKey = `${recommendationThreadId}:${recommendedQuestionsOwnerResponseId}`;
-    if (hydratedRecommendationRequestKeyRef.current === requestKey) {
-      return;
-    }
-
-    hydratedRecommendationRequestKeyRef.current = requestKey;
-    void fetchThreadRecommendationQuestions(recommendationThreadId).finally(
-      () => {
-        scheduleThreadRecommendPollingStop();
-      },
-    );
-  }, [
-    fetchThreadRecommendationQuestions,
-    recommendationThreadId,
-    recommendedQuestions,
-    recommendedQuestionsOwnerThreadId,
-    recommendedQuestionsOwnerResponseId,
-    scheduleThreadRecommendPollingStop,
-    showRecommendedQuestions,
-  ]);
-
-  useEffect(() => {
-    const intent = recommendedQuestions?.resolvedIntent;
-    if (intent?.kind !== 'RECOMMEND_QUESTIONS') {
-      return;
-    }
-
-    if (intent.sourceThreadId != null) {
-      setRecommendedQuestionsOwnerThreadId(intent.sourceThreadId);
-    }
-
-    if (intent.sourceResponseId != null) {
-      setRecommendedQuestionsOwnerResponseId(intent.sourceResponseId);
-    }
-  }, [
-    recommendedQuestions?.resolvedIntent?.kind,
-    recommendedQuestions?.resolvedIntent?.sourceResponseId,
-    recommendedQuestions?.resolvedIntent?.sourceThreadId,
   ]);
 
   useEffect(() => {
@@ -622,7 +527,11 @@ export default function HomeThread() {
     setSelectedResponseId((current) => {
       if (
         current != null &&
-        displayResponses.some((response) => response.id === current)
+        displayResponses.some(
+          (response) =>
+            response.id === current &&
+            response.responseKind !== 'RECOMMENDATION_FOLLOWUP',
+        )
       ) {
         return current;
       }
@@ -631,7 +540,15 @@ export default function HomeThread() {
         return restoredWorkbenchState.selectedResponseId;
       }
 
-      return displayResponses[displayResponses.length - 1]?.id ?? null;
+      return (
+        [...displayResponses]
+          .reverse()
+          .find(
+            (response) => response.responseKind !== 'RECOMMENDATION_FOLLOWUP',
+          )?.id ??
+        displayResponses[displayResponses.length - 1]?.id ??
+        null
+      );
     });
   }, [displayThread, displayThread?.responses, threadId]);
 
@@ -642,7 +559,16 @@ export default function HomeThread() {
     }
 
     return (
-      displayResponses.find((response) => response.id === selectedResponseId) ||
+      displayResponses.find(
+        (response) =>
+          response.id === selectedResponseId &&
+          response.responseKind !== 'RECOMMENDATION_FOLLOWUP',
+      ) ||
+      [...displayResponses]
+        .reverse()
+        .find(
+          (response) => response.responseKind !== 'RECOMMENDATION_FOLLOWUP',
+        ) ||
       displayResponses[displayResponses.length - 1] ||
       null
     );
@@ -853,6 +779,13 @@ export default function HomeThread() {
         displayThread?.responses.find(
           (response) => response.id === responseId,
         ) || null;
+      if (
+        matchedResponse?.responseKind === 'RECOMMENDATION_FOLLOWUP' &&
+        !options?.artifact
+      ) {
+        return;
+      }
+
       const requestedArtifact = options?.artifact ?? null;
       const nextArtifact =
         requestedArtifact &&
@@ -916,8 +849,8 @@ export default function HomeThread() {
 
       if (composerIntent.resolvedIntent.kind === 'RECOMMEND_QUESTIONS') {
         await handleGenerateThreadRecommendedQuestions({
+          question: value.trim(),
           sourceResponseId: composerIntent.sourceResponseId,
-          sourceThreadId: composerIntent.resolvedIntent.sourceThreadId,
         });
         return {
           handledInlineResult: true,
@@ -938,7 +871,27 @@ export default function HomeThread() {
         };
       }
 
-      await askPrompt.onSubmit(value);
+      const askTask = await askPrompt.onSubmit(value);
+      if (askTask?.taskId) {
+        pendingThreadResponseSeedRef.current = {
+          question: askTask.question,
+          sourceResponseId: composerIntent.sourceResponseId ?? null,
+          taskId: askTask.taskId,
+        };
+        autoCreateResponseTaskIdRef.current = askTask.taskId;
+        const createdResponse = await onCreateResponse({
+          question: askTask.question,
+          taskId: askTask.taskId,
+          sourceResponseId: composerIntent.sourceResponseId ?? undefined,
+        });
+
+        if (createdResponse) {
+          pendingThreadResponseSeedRef.current = null;
+        } else if (autoCreateResponseTaskIdRef.current === askTask.taskId) {
+          autoCreateResponseTaskIdRef.current = null;
+        }
+      }
+
       return undefined;
     },
     [
@@ -975,34 +928,11 @@ export default function HomeThread() {
       return null;
     }
 
-    const effectiveRecommendedQuestions =
-      (recommendedQuestionsOwnerThreadId === recommendationThreadId
-        ? (recommendedQuestions as IPromptThreadStore['recommendedQuestions'])
-        : null) ||
-      (shouldShowRecommendationLoadingState
-        ? {
-            status: RecommendedQuestionsTaskStatus.GENERATING,
-            questions: [],
-          }
-        : null);
-
     return {
       data: displayThread as IPromptThreadStore['data'],
-      recommendedQuestions: effectiveRecommendedQuestions,
-      recommendedQuestionsOwnerResponseId,
       selectedResponseId,
-      showRecommendedQuestions,
     };
-  }, [
-    displayThread,
-    recommendedQuestions,
-    recommendedQuestionsLoading,
-    recommendedQuestionsOwnerResponseId,
-    recommendedQuestionsOwnerThreadId,
-    selectedResponseId,
-    showRecommendedQuestions,
-    shouldShowRecommendationLoadingState,
-  ]);
+  }, [displayThread, selectedResponseId]);
 
   const providerPreparationValue = useMemo(
     () => ({
@@ -1027,10 +957,38 @@ export default function HomeThread() {
     ],
   );
 
+  const handleSelectRecommendedQuestion = useCallback(
+    async ({
+      interactionMode,
+      question,
+      sourceResponseId,
+      suggestedIntent,
+    }: SelectQuestionProps) => {
+      if (
+        interactionMode === 'execute_intent' &&
+        suggestedIntent === 'CHART' &&
+        sourceResponseId
+      ) {
+        await onGenerateThreadResponseChart(sourceResponseId, {
+          question,
+          sourceResponseId,
+        });
+        return;
+      }
+
+      handleDraftConversationAid({
+        intentHint: suggestedIntent || 'ASK',
+        prompt: question,
+        sourceResponseId: sourceResponseId ?? null,
+      });
+    },
+    [handleDraftConversationAid, onGenerateThreadResponseChart],
+  );
+
   const providerActionsValue = useMemo(
     () => ({
       onOpenSaveAsViewModal: saveAsViewModal.openModal,
-      onSelectRecommendedQuestion: onCreateResponse,
+      onSelectRecommendedQuestion: handleSelectRecommendedQuestion,
       onDraftConversationAid: handleDraftConversationAid,
       onGenerateThreadRecommendedQuestions:
         handleGenerateThreadRecommendedQuestions,
@@ -1044,7 +1002,7 @@ export default function HomeThread() {
     }),
     [
       onAdjustThreadResponseChart,
-      onCreateResponse,
+      handleSelectRecommendedQuestion,
       handleDraftConversationAid,
       handleGenerateThreadRecommendedQuestions,
       onGenerateThreadResponseAnswer,

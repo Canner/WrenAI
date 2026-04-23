@@ -3,6 +3,7 @@ import {
   RecommendationQuestionStatus,
   WrenAILanguage,
 } from '../../models/adaptor';
+import { generateThreadResponseRecommendationsAction } from '../askingServiceRecommendationActions';
 
 describe('AskingService', () => {
   describe('thread recommended questions', () => {
@@ -75,6 +76,7 @@ describe('AskingService', () => {
         expect.objectContaining({
           manifest: { models: ['thread'] },
           runtimeScopeId: '4',
+          regenerate: true,
           configuration: {
             language: WrenAILanguage.ZH_CN,
           },
@@ -262,6 +264,7 @@ describe('AskingService', () => {
       ).toHaveBeenCalledWith(
         expect.objectContaining({
           runtimeScopeId: '4',
+          regenerate: true,
           runtimeIdentity: {
             workspaceId: 'workspace-1',
             knowledgeBaseId: 'kb-1',
@@ -334,6 +337,7 @@ describe('AskingService', () => {
       ).toHaveBeenCalledWith(
         expect.objectContaining({
           runtimeScopeId: '4',
+          regenerate: true,
           runtimeIdentity: {
             workspaceId: 'workspace-1',
             knowledgeBaseId: 'kb-1',
@@ -455,6 +459,156 @@ describe('AskingService', () => {
 
       expect(service.instantRecommendedQuestionTasks.has('instant-1')).toBe(
         false,
+      );
+    });
+  });
+
+  describe('response-scoped recommendation follow-up', () => {
+    it('passes source response artifacts and preview metadata into recommendation generation', async () => {
+      const runtimeIdentity = {
+        projectId: null,
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snapshot-1',
+        deployHash: 'deploy-1',
+        actorUserId: 'user-1',
+      };
+      const triggerResponse = {
+        id: 55,
+        threadId: 10,
+        question: '平均薪资是多少？',
+        sql: 'select dept_name, avg_salary from payroll',
+        responseKind: 'ASK',
+        askingTask: {
+          rephrasedQuestion: '各部门的平均薪资是多少？',
+        },
+        answerDetail: {
+          content: '工程部门平均薪资最高，人力资源部门较低。',
+        },
+        chartDetail: {
+          status: 'FINISHED',
+          chartType: 'bar',
+          chartSchema: {
+            title: '部门平均薪资',
+            encoding: {
+              x: { field: 'dept_name' },
+              y: { field: 'avg_salary' },
+            },
+          },
+        },
+      };
+
+      const service = {
+        getResponse: jest.fn().mockResolvedValue(triggerResponse),
+        getThreadResponseRuntimeIdentity: jest
+          .fn()
+          .mockResolvedValue(runtimeIdentity),
+        getExecutionResources: jest.fn().mockResolvedValue({
+          project: { id: 42, language: 'EN' },
+          manifest: { models: ['payroll'] },
+        }),
+        getAskingHistory: jest.fn().mockResolvedValue([
+          {
+            id: 21,
+            question: '上一轮问题',
+            sql: 'select 1',
+            responseKind: 'ASK',
+          },
+        ]),
+        previewDataScoped: jest.fn().mockResolvedValue({
+          columns: [
+            { name: 'dept_name', type: 'VARCHAR' },
+            { name: 'avg_salary', type: 'DOUBLE' },
+          ],
+          data: [
+            ['Engineering', 100],
+            ['HR', 80],
+          ],
+        }),
+        threadResponseRecommendQuestionBackgroundTracker: {
+          isExist: jest.fn().mockReturnValue(false),
+          addTask: jest.fn(),
+        },
+        threadResponseRepository: {
+          updateOne: jest
+            .fn()
+            .mockImplementation(async (id: number, payload: any) => ({
+              id,
+              threadId: 10,
+              recommendationDetail: payload.recommendationDetail,
+            })),
+        },
+        createThreadResponse: jest.fn().mockResolvedValue({
+          id: 77,
+          threadId: 10,
+          responseKind: 'RECOMMENDATION_FOLLOWUP',
+          recommendationDetail: {
+            status: RecommendationQuestionStatus.GENERATING,
+            items: [],
+            error: undefined,
+            queryId: null,
+            sourceResponseId: 55,
+          },
+        }),
+        wrenAIAdaptor: {
+          generateRecommendationQuestions: jest
+            .fn()
+            .mockResolvedValue({ queryId: 'recommend-77' }),
+        },
+        toAskRuntimeIdentity: jest.fn((identity) => identity),
+        getThreadRecommendationQuestionsConfig: jest.fn().mockReturnValue({
+          maxQuestions: 5,
+          maxCategories: 3,
+          regenerate: true,
+        }),
+      } as any;
+
+      await generateThreadResponseRecommendationsAction(
+        service,
+        55,
+        runtimeIdentity,
+        {
+          language: 'zh-CN',
+          question: '推荐几个问题给我',
+        },
+        'runtime-scope-1',
+      );
+
+      expect(service.previewDataScoped).toHaveBeenCalledWith(
+        55,
+        runtimeIdentity,
+        20,
+      );
+      expect(
+        service.wrenAIAdaptor.generateRecommendationQuestions,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          manifest: { models: ['payroll'] },
+          runtimeScopeId: 'runtime-scope-1',
+          sourceQuestion: '各部门的平均薪资是多少？',
+          sourceAnswer: expect.stringContaining('工程部门平均薪资最高'),
+          sourceSql: 'select dept_name, avg_salary from payroll',
+          sourceChartType: 'bar',
+          sourceChartTitle: '部门平均薪资',
+          sourceChartEncodings: ['x: dept_name', 'y: avg_salary'],
+          sourceDimensionColumns: ['dept_name'],
+          sourceMeasureColumns: ['avg_salary'],
+          sourcePreviewColumnCount: 2,
+          sourcePreviewRowCount: 2,
+          sourceIntentLineage: ['ASK', 'CHART'],
+          sourceResponseKind: 'ASK',
+        }),
+      );
+      expect(
+        service.threadResponseRecommendQuestionBackgroundTracker.addTask,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 77,
+          recommendationDetail: expect.objectContaining({
+            queryId: 'recommend-77',
+            sourceResponseId: 55,
+          }),
+        }),
       );
     });
   });

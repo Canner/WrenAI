@@ -4,12 +4,16 @@ import type { WorkbenchArtifactKind } from './threadWorkbenchState';
 export type ThreadWorkbenchLocale = 'zh-CN' | 'en-US';
 
 export type ThreadWorkbenchMessages = {
+  answer: {
+    badge: string;
+  };
   close: string;
   headerActions: {
     pinDashboard: string;
     spreadsheet: string;
   };
   chart: {
+    badge: string;
     alerts: {
       failedShort: string;
     };
@@ -36,6 +40,16 @@ export type ThreadWorkbenchMessages = {
     };
     syntheticQuestion: string;
     teaserTitle: string;
+  };
+  recommendation: {
+    actions: {
+      retry: string;
+    };
+    alerts: {
+      failedShort: string;
+    };
+    badge: string;
+    sectionTitle: string;
   };
   footer: {
     helpfulNegative: string;
@@ -72,6 +86,9 @@ const THREAD_WORKBENCH_MESSAGE_CATALOG: Record<
   ThreadWorkbenchMessages
 > = {
   'zh-CN': {
+    answer: {
+      badge: '自动分析',
+    },
     close: '关闭结果区',
     headerActions: {
       spreadsheet: 'Spreadsheet',
@@ -110,6 +127,7 @@ const THREAD_WORKBENCH_MESSAGE_CATALOG: Record<
       view: '查看 SQL',
     },
     chart: {
+      badge: '图表追问',
       teaserTitle: '图表',
       statuses: {
         generated: '已生成',
@@ -137,8 +155,21 @@ const THREAD_WORKBENCH_MESSAGE_CATALOG: Record<
       },
       syntheticQuestion: '生成图表',
     },
+    recommendation: {
+      badge: '推荐问题',
+      sectionTitle: '推荐追问',
+      alerts: {
+        failedShort: '推荐问题生成失败',
+      },
+      actions: {
+        retry: '重新生成',
+      },
+    },
   },
   'en-US': {
+    answer: {
+      badge: 'Auto analysis',
+    },
     close: 'Close workbench',
     headerActions: {
       spreadsheet: 'Spreadsheet',
@@ -178,6 +209,7 @@ const THREAD_WORKBENCH_MESSAGE_CATALOG: Record<
       view: 'View SQL',
     },
     chart: {
+      badge: 'Chart follow-up',
       teaserTitle: 'Chart',
       statuses: {
         generated: 'Generated',
@@ -206,6 +238,16 @@ const THREAD_WORKBENCH_MESSAGE_CATALOG: Record<
         failedShort: 'Chart generation failed',
       },
       syntheticQuestion: 'Generate chart',
+    },
+    recommendation: {
+      badge: 'Recommendations',
+      sectionTitle: 'Recommended follow-ups',
+      alerts: {
+        failedShort: 'Recommendation generation failed',
+      },
+      actions: {
+        retry: 'Retry',
+      },
     },
   },
 };

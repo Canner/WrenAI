@@ -19,6 +19,20 @@ router = APIRouter()
 class PostRequest(BaseRequest):
     mdl: str
     previous_questions: list[str] = []
+    user_question: Optional[str] = None
+    source_question: Optional[str] = None
+    source_answer: Optional[str] = None
+    source_sql: Optional[str] = None
+    source_chart_type: Optional[str] = None
+    source_chart_title: Optional[str] = None
+    source_chart_encodings: list[str] = []
+    source_dimension_columns: list[str] = []
+    source_intent_lineage: list[str] = []
+    source_measure_columns: list[str] = []
+    source_preview_column_count: Optional[int] = None
+    source_preview_columns: list[QuestionRecommendation.PreviewColumn] = []
+    source_preview_row_count: Optional[int] = None
+    source_response_kind: Optional[str] = None
     max_questions: int = 5
     max_categories: int = 3
     regenerate: bool = False

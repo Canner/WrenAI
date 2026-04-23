@@ -15,6 +15,7 @@ import {
   IThreadResponseRepository,
   ThreadResponse,
 } from '../repositories/threadResponseRepository';
+import type { ThreadResponseRecommendationDetail } from '../repositories/threadResponseRepositoryTypes';
 import { IAskingTaskTracker, TrackedAskingResult } from './askingTaskTracker';
 import { IQueryService, PreviewDataResponse } from './queryService';
 import {
@@ -59,6 +60,7 @@ export interface AskingTaskInput {
 
 export interface AskingDetailTaskInput {
   question?: string;
+  recommendationDetail?: ThreadResponseRecommendationDetail;
   responseKind?: string | null;
   sql?: string;
   sourceResponseId?: number | null;
@@ -182,6 +184,12 @@ export interface IAskingService {
     input: AskingDetailTaskInput,
     threadId: number,
     runtimeIdentity: PersistedRuntimeIdentity,
+  ): Promise<ThreadResponse>;
+  generateThreadResponseRecommendationsScoped(
+    sourceResponseId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+    configurations: { language: string; question?: string | null },
+    runtimeScopeId?: string | null,
   ): Promise<ThreadResponse>;
   updateThreadResponseScoped(
     responseId: number,

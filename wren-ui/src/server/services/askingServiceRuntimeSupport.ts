@@ -320,6 +320,7 @@ export const getExecutionResources = async (
 export const getThreadRecommendationQuestionsConfig = (project: Project) => ({
   maxCategories: config.threadRecommendationQuestionMaxCategories,
   maxQuestions: config.threadRecommendationQuestionsMaxQuestions,
+  regenerate: true,
   configuration: {
     language: resolveProjectLanguage(project),
   },

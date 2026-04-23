@@ -67,6 +67,32 @@ export interface ThreadResponseChartDetail {
   pollingLeaseExpiresAt?: string | null;
 }
 
+export interface ThreadResponseRecommendationItem {
+  category?:
+    | 'drill_down'
+    | 'compare'
+    | 'trend'
+    | 'distribution'
+    | 'ranking'
+    | 'chart_followup'
+    | 'chart_refine'
+    | 'related_question'
+    | null;
+  interactionMode?: 'draft_to_composer' | 'execute_intent' | null;
+  label: string;
+  prompt: string;
+  sql?: string | null;
+  suggestedIntent?: 'ASK' | 'CHART' | 'RECOMMEND_QUESTIONS' | null;
+}
+
+export interface ThreadResponseRecommendationDetail {
+  queryId?: string;
+  status: string;
+  error?: object;
+  items: ThreadResponseRecommendationItem[];
+  sourceResponseId?: number | null;
+}
+
 export enum ThreadResponseAdjustmentType {
   REASONING = 'REASONING',
   APPLY_SQL = 'APPLY_SQL',
@@ -109,6 +135,7 @@ export interface ThreadResponse {
   answerDetail?: ThreadResponseAnswerDetail;
   breakdownDetail?: ThreadResponseBreakdownDetail;
   chartDetail?: ThreadResponseChartDetail;
+  recommendationDetail?: ThreadResponseRecommendationDetail;
   adjustment?: ThreadResponseAdjustment;
 }
 
@@ -143,6 +170,7 @@ export interface IThreadResponseRepository extends IBasicRepository<ThreadRespon
   findUnfinishedChartResponses(options?: {
     adjustment?: boolean;
   }): Promise<ThreadResponse[]>;
+  findUnfinishedRecommendationResponses(): Promise<ThreadResponse[]>;
   claimChartPollingLease?: (
     id: number,
     scope: ThreadResponseRuntimeScope,
@@ -164,6 +192,7 @@ export interface IThreadResponseRepository extends IBasicRepository<ThreadRespon
       answerDetail: ThreadResponseAnswerDetail;
       breakdownDetail: ThreadResponseBreakdownDetail;
       chartDetail: ThreadResponseChartDetail;
+      recommendationDetail: ThreadResponseRecommendationDetail;
       adjustment: ThreadResponseAdjustment;
     }>,
     queryOptions?: IQueryOptions,

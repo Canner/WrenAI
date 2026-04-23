@@ -42,7 +42,8 @@ export const buildThreadResponseIntentState = ({
   };
 
   const normalizedResolvedIntent: ResolvedHomeIntent =
-    responseKind === 'CHART_FOLLOWUP'
+    responseKind === 'CHART_FOLLOWUP' ||
+    responseKind === 'RECOMMENDATION_FOLLOWUP'
       ? {
           ...resolvedIntent,
           source: 'explicit',

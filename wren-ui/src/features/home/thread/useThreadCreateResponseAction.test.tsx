@@ -66,7 +66,6 @@ describe('useThreadCreateResponseAction', () => {
         workspaceId: 'ws-1',
         knowledgeBaseId: 'kb-1',
       },
-      setShowRecommendedQuestions: jest.fn(),
       stopThreadResponsePolling: jest.fn(),
       threadResponseRequestInFlightRef: { current: 100 as number | null },
       upsertThreadResponse: jest.fn(),
@@ -116,8 +115,9 @@ describe('useThreadCreateResponseAction', () => {
     });
     const { hook, props } = renderHarness();
 
-    await hook({
+    const result = await hook({
       question: '继续分析',
+      sourceResponseId: 55,
       taskId: 'query-2',
     } as any);
 
@@ -126,6 +126,7 @@ describe('useThreadCreateResponseAction', () => {
       42,
       expect.objectContaining({
         question: '继续分析',
+        sourceResponseId: 55,
         taskId: 'query-2',
       }),
     );
@@ -137,10 +138,17 @@ describe('useThreadCreateResponseAction', () => {
         }),
       }),
     );
-    expect(props.setShowRecommendedQuestions).toHaveBeenCalledWith(false);
     expect(props.pollingAskingTaskIdRef.current).toBe('query-2');
     expect(props.pollingResponseIdRef.current).toBeNull();
     expect(props.threadResponseRequestInFlightRef.current).toBeNull();
     expect(props.askPrompt.onFetching).toHaveBeenCalledWith('query-2');
+    expect(result).toEqual(
+      expect.objectContaining({
+        id: 7,
+        askingTask: expect.objectContaining({
+          queryId: 'query-2',
+        }),
+      }),
+    );
   });
 });

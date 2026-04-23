@@ -147,7 +147,6 @@ export default forwardRef<PromptInputHandle, Props>(
     useEffect(() => {
       if (!isProcessing) {
         $promptInput.current?.focus();
-        setInputValue('');
       }
     }, [isProcessing]);
 

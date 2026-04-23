@@ -253,6 +253,26 @@ export type RecommendationQuestionsInput = {
   runtimeIdentity?: AskRuntimeIdentity;
   // Optional list of previous questions
   previousQuestions?: string[];
+  // Optional user-authored recommendation request
+  userQuestion?: string;
+  // Optional source response context
+  sourceQuestion?: string;
+  sourceAnswer?: string;
+  sourceSql?: string;
+  sourceChartType?: string | null;
+  sourceChartTitle?: string | null;
+  sourceChartEncodings?: string[];
+  sourceDimensionColumns?: string[];
+  sourceIntentLineage?: string[];
+  sourceMeasureColumns?: string[];
+  sourcePreviewColumnCount?: number;
+  sourcePreviewColumns?: Array<{
+    name: string;
+    role?: 'dimension' | 'measure' | null;
+    type?: string | null;
+  }>;
+  sourcePreviewRowCount?: number;
+  sourceResponseKind?: string | null;
   // Optional max number of questions to generate (default: 5)
   maxQuestions?: number;
   // Optional max number of categories (default: 3)
@@ -264,8 +284,14 @@ export type RecommendationQuestionsInput = {
 
 export type RecommendationQuestion = {
   question: string;
-  category: string; // category for the question
+  category?: string | null;
+  interactionMode?: 'draft_to_composer' | 'execute_intent' | null;
+  interaction_mode?: 'draft_to_composer' | 'execute_intent' | null;
+  label?: string | null;
+  prompt?: string | null;
   sql: string; // validated sql for this question, can be used in generateAskDetail
+  suggestedIntent?: 'ASK' | 'CHART' | 'RECOMMEND_QUESTIONS' | null;
+  suggested_intent?: 'ASK' | 'CHART' | 'RECOMMEND_QUESTIONS' | null;
 };
 
 export type RecommendationQuestionsResult = AskResponse<

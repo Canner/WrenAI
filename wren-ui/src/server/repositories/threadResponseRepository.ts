@@ -166,6 +166,29 @@ export class ThreadResponseRepository
     return results.map((result) => this.hydrateJoinedRuntimeScope(result));
   }
 
+  public async findUnfinishedRecommendationResponses(): Promise<
+    ThreadResponse[]
+  > {
+    const results = await this.knex(this.tableName)
+      .select(
+        `${this.tableName}.*`,
+        'thread.project_id AS thread_project_id',
+        'thread.workspace_id AS thread_workspace_id',
+        'thread.knowledge_base_id AS thread_knowledge_base_id',
+        'thread.kb_snapshot_id AS thread_kb_snapshot_id',
+        'thread.deploy_hash AS thread_deploy_hash',
+        'thread.actor_user_id AS thread_actor_user_id',
+      )
+      .leftJoin('thread', 'thread.id', `${this.tableName}.thread_id`)
+      .whereNotNull('recommendation_detail')
+      .whereRaw(
+        `COALESCE(recommendation_detail->>'status', '') NOT IN (?, ?, ?)`,
+        ['FAILED', 'FINISHED', 'NOT_STARTED'],
+      );
+
+    return results.map((result) => this.hydrateJoinedRuntimeScope(result));
+  }
+
   private buildUnfinishedBreakdownResponsesQuery() {
     return this.knex(this.tableName)
       .select(

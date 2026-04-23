@@ -66,6 +66,16 @@ export const buildGenerateThreadResponseChartUrl = (
     selector,
   );
 
+export const buildGenerateThreadResponseRecommendationsUrl = (
+  responseId: number,
+  selector: ClientRuntimeScopeSelector,
+) =>
+  buildRuntimeScopeUrl(
+    `/api/v1/thread-responses/${responseId}/generate-recommendations`,
+    {},
+    selector,
+  );
+
 export const buildAdjustThreadResponseChartUrl = (
   responseId: number,
   selector: ClientRuntimeScopeSelector,
@@ -138,6 +148,26 @@ export const triggerThreadRecommendationQuestions = async (
   );
 
   return parseThreadRestResponse<{ success: boolean }>(
+    response,
+    '生成推荐追问失败，请稍后重试',
+  );
+};
+
+export const triggerThreadResponseRecommendations = async (
+  selector: ClientRuntimeScopeSelector,
+  responseId: number,
+  data?: { question?: string | null },
+) => {
+  const response = await fetch(
+    buildGenerateThreadResponseRecommendationsUrl(responseId, selector),
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data || {}),
+    },
+  );
+
+  return parseThreadRestResponse<ThreadResponse>(
     response,
     '生成推荐追问失败，请稍后重试',
   );

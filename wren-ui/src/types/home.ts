@@ -75,6 +75,7 @@ export enum ChartTaskStatus {
 export enum ThreadResponseKind {
   ANSWER = 'ANSWER',
   CHART_FOLLOWUP = 'CHART_FOLLOWUP',
+  RECOMMENDATION_FOLLOWUP = 'RECOMMENDATION_FOLLOWUP',
 }
 
 export enum ChartType {
@@ -120,6 +121,33 @@ export type SuggestedQuestion = {
 
 export type SuggestedQuestionResponse = {
   questions: Array<SuggestedQuestion | null>;
+};
+
+export type ThreadResponseRecommendationCategory =
+  | 'drill_down'
+  | 'compare'
+  | 'trend'
+  | 'distribution'
+  | 'ranking'
+  | 'chart_followup'
+  | 'chart_refine'
+  | 'related_question';
+
+export type ThreadResponseRecommendationItem = {
+  category?: ThreadResponseRecommendationCategory | null;
+  interactionMode?: 'draft_to_composer' | 'execute_intent' | null;
+  label: string;
+  prompt: string;
+  sql?: string | null;
+  suggestedIntent?: 'ASK' | 'CHART' | 'RECOMMEND_QUESTIONS' | null;
+};
+
+export type ThreadResponseRecommendationDetail = {
+  error?: Error | null;
+  items: ThreadResponseRecommendationItem[];
+  queryId?: string | null;
+  sourceResponseId?: number | null;
+  status: RecommendedQuestionsTaskStatus;
 };
 
 export enum ResultCandidateType {
@@ -306,6 +334,7 @@ export type ThreadResponse = {
   kbSnapshotId?: string | null;
   knowledgeBaseId?: string | null;
   question: string;
+  recommendationDetail?: ThreadResponseRecommendationDetail | null;
   resolvedIntent?: ResolvedHomeIntent | null;
   responseKind?: ThreadResponseKind | null;
   sql?: string | null;

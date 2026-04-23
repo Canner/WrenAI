@@ -18,6 +18,7 @@ import useAskProcessState, {
 import type {
   CreateThreadInput,
   CreateThreadResponseInput,
+  ThreadResponse,
 } from '@/types/home';
 import { AskPromptData } from '@/hooks/useAskPrompt';
 import type { PromptInputHandle } from '@/components/pages/home/prompt/Input';
@@ -25,7 +26,7 @@ import type { PromptInputHandle } from '@/components/pages/home/prompt/Input';
 interface Props {
   onCreateResponse: (
     payload: CreateThreadInput | CreateThreadResponseInput,
-  ) => Promise<void>;
+  ) => Promise<void | ThreadResponse | null>;
   onStop: () => void;
   onSubmit: (
     value: string,
@@ -202,6 +203,11 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
     const submitResult = onSubmit && (await onSubmit(value));
     if (submitResult?.handledInlineResult) {
       closeResult();
+      return;
+    }
+
+    if (!showInlineResult) {
+      setQuestion('');
     }
   };
 

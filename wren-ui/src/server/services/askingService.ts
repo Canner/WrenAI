@@ -4,6 +4,7 @@ import {
   AdjustmentBackgroundTaskTracker,
   ChartAdjustmentBackgroundTracker,
   ChartBackgroundTracker,
+  ThreadResponseRecommendQuestionBackgroundTracker,
   ThreadRecommendQuestionBackgroundTracker,
 } from '../backgrounds';
 import { TextBasedAnswerBackgroundTracker } from '../backgrounds/textBasedAnswerBackgroundTracker';
@@ -57,6 +58,7 @@ export class AskingService implements IAskingService {
   private chartBackgroundTracker: ChartBackgroundTracker;
   private chartAdjustmentBackgroundTracker: ChartAdjustmentBackgroundTracker;
   private threadRecommendQuestionBackgroundTracker: ThreadRecommendQuestionBackgroundTracker;
+  private threadResponseRecommendQuestionBackgroundTracker: ThreadResponseRecommendQuestionBackgroundTracker;
   private queryService: IQueryService;
   private telemetry: PostHogTelemetry;
   private askingTaskTracker: IAskingTaskTracker;
@@ -100,6 +102,7 @@ export class AskingService implements IAskingService {
   declare public changeThreadResponseAnswerDetailStatusScoped: IAskingService['changeThreadResponseAnswerDetailStatusScoped'];
   declare public previewDataScoped: IAskingService['previewDataScoped'];
   declare public previewBreakdownDataScoped: IAskingService['previewBreakdownDataScoped'];
+  declare public generateThreadResponseRecommendationsScoped: IAskingService['generateThreadResponseRecommendationsScoped'];
   declare public createInstantRecommendedQuestions: IAskingService['createInstantRecommendedQuestions'];
   declare public getInstantRecommendedQuestions: IAskingService['getInstantRecommendedQuestions'];
   declare public generateThreadRecommendationQuestions: IAskingService['generateThreadRecommendationQuestions'];
@@ -132,6 +135,12 @@ export class AskingService implements IAskingService {
     threadResponseId: number,
     runtimeIdentity: PersistedRuntimeIdentity,
     configurations: { language: string },
+    runtimeScopeId?: string | null,
+  ) => Promise<any>;
+  declare public generateThreadResponseRecommendations: (
+    threadResponseId: number,
+    runtimeIdentity: PersistedRuntimeIdentity,
+    configurations: { language: string; question?: string | null },
     runtimeScopeId?: string | null,
   ) => Promise<any>;
   declare public adjustThreadResponseChart: (
@@ -313,6 +322,12 @@ export class AskingService implements IAskingService {
         wrenAIAdaptor,
         threadRepository,
       });
+    this.threadResponseRecommendQuestionBackgroundTracker =
+      new ThreadResponseRecommendQuestionBackgroundTracker({
+        telemetry,
+        wrenAIAdaptor,
+        threadResponseRepository,
+      });
     this.adjustmentBackgroundTracker = new AdjustmentBackgroundTaskTracker({
       telemetry,
       wrenAIAdaptor,
@@ -332,6 +347,7 @@ export class AskingService implements IAskingService {
     this.chartBackgroundTracker.stop();
     this.chartAdjustmentBackgroundTracker.stop();
     this.threadRecommendQuestionBackgroundTracker.stop();
+    this.threadResponseRecommendQuestionBackgroundTracker.stop();
     this.adjustmentBackgroundTracker.stopPolling();
   }
 }

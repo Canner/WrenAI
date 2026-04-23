@@ -60,8 +60,14 @@ export interface DetailedThread {
 export interface RecommendedQuestionsTask {
   questions: {
     question: string;
-    category: string;
+    category?: string | null;
+    interactionMode?: 'draft_to_composer' | 'execute_intent' | null;
+    interaction_mode?: 'draft_to_composer' | 'execute_intent' | null;
+    label?: string | null;
+    prompt?: string | null;
     sql: string;
+    suggestedIntent?: 'ASK' | 'CHART' | 'RECOMMEND_QUESTIONS' | null;
+    suggested_intent?: 'ASK' | 'CHART' | 'RECOMMEND_QUESTIONS' | null;
   }[];
   status: RecommendationQuestionStatus;
   error: WrenAIError | null;

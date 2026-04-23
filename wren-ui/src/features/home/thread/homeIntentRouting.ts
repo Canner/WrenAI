@@ -183,7 +183,7 @@ const buildRecommendComposerIntent = ({
     resolvedIntent: {
       kind: 'RECOMMEND_QUESTIONS',
       mode: resolvedSourceResponseId != null ? 'FOLLOW_UP' : 'EXPLICIT_ACTION',
-      target: 'THREAD_SIDECAR',
+      target: 'THREAD_RESPONSE',
       source: 'derived',
       sourceThreadId: fallbackThreadId,
       sourceResponseId: resolvedSourceResponseId,
