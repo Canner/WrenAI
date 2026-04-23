@@ -346,6 +346,16 @@ class IntentClassification(BasicPipeline):
         table_column_retrieval_size: Optional[int] = 100,
         **kwargs,
     ):
+        # User config must fully override defaults (e.g. response_format for non-OpenAI providers)
+        user_kwargs = llm_provider.get_model_kwargs() or {}
+        model_kwargs = dict(INTENT_CLASSIFICAION_MODEL_KWARGS)
+        if "response_format" in user_kwargs:
+            model_kwargs.pop("response_format", None)
+        model_kwargs.update(user_kwargs)
+
+        if model_kwargs.get("response_format") is None:
+            logger.info("Structured output disabled for intent classification")
+
         self._components = {
             "embedder": embedder_provider.get_text_embedder(),
             "table_retriever": document_store_provider.get_retriever(
@@ -358,7 +368,7 @@ class IntentClassification(BasicPipeline):
             ),
             "generator": llm_provider.get_generator(
                 system_prompt=intent_classification_system_prompt,
-                generation_kwargs=INTENT_CLASSIFICAION_MODEL_KWARGS,
+                generation_kwargs=model_kwargs,
             ),
             "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
