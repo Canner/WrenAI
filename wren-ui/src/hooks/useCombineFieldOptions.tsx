@@ -36,6 +36,7 @@ type RelationDefaultValue = {
     fieldName: string;
   };
   type?: string;
+  properties?: Record<string, any>;
 };
 
 export const convertFormValuesToIdentifier = (
@@ -67,6 +68,9 @@ export const convertFormValuesToIdentifier = (
       fieldId: toField.id,
       fieldName: toField.referenceName,
     },
+    properties: relationFormValues.description
+      ? { description: relationFormValues.description }
+      : {},
   } as RelationsDataType;
 };
 
@@ -103,6 +107,10 @@ export const convertDefaultValueToIdentifier = (
       field: convertObjectToIdentifier(toField.field, fieldKeys),
     },
     type: defaultValue.type,
+    description:
+      typeof defaultValue.properties?.description === 'string'
+        ? defaultValue.properties.description
+        : undefined,
   };
 };
 

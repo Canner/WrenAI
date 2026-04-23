@@ -19,6 +19,7 @@ import type {
   UpdateViewMetadataInput,
 } from '@/types/modeling';
 import type { CreateCalculatedFieldInput } from '@/types/calculatedField';
+import ModelingAssistantLauncher from './components/ModelingAssistantLauncher';
 import {
   DiagramPanel,
   DiagramWrapper,
@@ -111,6 +112,9 @@ export default function ModelingWorkspaceContent({
 }: ModelingWorkspaceContentProps) {
   return (
     <>
+      <div style={{ marginBottom: 18 }}>
+        {!isModelingReadonly ? <ModelingAssistantLauncher /> : null}
+      </div>
       <ModelingStage $embedded={embedded}>
         <ModelingSidebarPanel $embedded={embedded}>
           {diagramData ? (

@@ -7,7 +7,11 @@ import {
 } from '@server/authz';
 import { AskRuntimeIdentity } from '@server/models/adaptor';
 import { PersistedRuntimeIdentity } from '@server/context/runtimeScope';
-import { resolveRuntimeProject as resolveScopedRuntimeProject } from '../utils/runtimeExecutionContext';
+import {
+  assertLatestExecutableRuntimeScope,
+  resolveRuntimeProject as resolveScopedRuntimeProject,
+} from '../utils/runtimeExecutionContext';
+import * as Errors from '../utils/error';
 import {
   normalizeCanonicalPersistedRuntimeIdentity,
   toCanonicalPersistedRuntimeIdentityFromScope,
@@ -23,6 +27,25 @@ export const MANAGED_FEDERATED_RUNTIME_READONLY_MESSAGE =
 
 export const getCurrentRuntimeScopeId = (ctx: IContext) =>
   ctx.runtimeScope?.selector?.runtimeScopeId || null;
+
+export const assertExecutableRuntimeScope = async (ctx: IContext) => {
+  if (!ctx.runtimeScope) {
+    throw new Error('Runtime scope is required for this operation');
+  }
+
+  try {
+    await assertLatestExecutableRuntimeScope({
+      runtimeScope: ctx.runtimeScope,
+      knowledgeBaseRepository: ctx.knowledgeBaseRepository,
+      kbSnapshotRepository: ctx.kbSnapshotRepository,
+    });
+  } catch (error) {
+    throw Errors.create(Errors.GeneralErrorCodes.OUTDATED_RUNTIME_SNAPSHOT, {
+      customMessage:
+        error instanceof Error ? error.message : 'Snapshot outdated',
+    });
+  }
+};
 
 export const resolveActiveRuntimeProject = async (
   ctx: IContext,

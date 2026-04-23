@@ -95,6 +95,59 @@ export interface DeleteSqlPairsInput {
   runtimeIdentity?: AskRuntimeIdentity | null;
 }
 
+export interface RelationshipRecommendationInput {
+  manifest: Manifest;
+  runtimeScopeId?: string;
+  runtimeIdentity?: AskRuntimeIdentity | null;
+  configurations?: ProjectConfigurations;
+}
+
+export interface RelationshipRecommendationRow {
+  name: string;
+  fromModel: string;
+  fromColumn: string;
+  type: 'MANY_TO_ONE' | 'ONE_TO_MANY' | 'ONE_TO_ONE';
+  toModel: string;
+  toColumn: string;
+  reason: string;
+}
+
+export interface RelationshipRecommendationResult {
+  status: 'GENERATING' | 'FINISHED' | 'FAILED';
+  error?: WrenAIError | null;
+  response?: {
+    relationships: RelationshipRecommendationRow[];
+  } | null;
+  traceId?: string | null;
+}
+
+export interface SemanticsDescriptionInput {
+  manifest: Manifest;
+  selectedModels: string[];
+  userPrompt: string;
+  runtimeScopeId?: string;
+  runtimeIdentity?: AskRuntimeIdentity | null;
+  configurations?: ProjectConfigurations;
+}
+
+export interface SemanticsDescriptionColumn {
+  name: string;
+  description: string;
+}
+
+export interface SemanticsDescriptionModel {
+  name: string;
+  description: string;
+  columns: SemanticsDescriptionColumn[];
+}
+
+export interface SemanticsDescriptionResult {
+  status: 'GENERATING' | 'FINISHED' | 'FAILED';
+  error?: WrenAIError | null;
+  response?: SemanticsDescriptionModel[] | null;
+  traceId?: string | null;
+}
+
 export type SkillExecutionMode = 'inject_only';
 
 export interface AskSkillCandidate {

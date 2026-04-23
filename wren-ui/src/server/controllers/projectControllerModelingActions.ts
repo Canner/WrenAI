@@ -188,6 +188,7 @@ export const saveRelationsAction = async ({
   deps: Pick<
     ProjectControllerMutationDeps,
     | 'getActiveRuntimeProjectOrThrow'
+    | 'assertExecutableRuntimeScope'
     | 'assertKnowledgeBaseWriteAccess'
     | 'ensureModelsBelongToActiveRuntime'
     | 'getCurrentPersistedRuntimeIdentity'
@@ -198,6 +199,7 @@ export const saveRelationsAction = async ({
   const eventName = TelemetryEvent.CONNECTION_SAVE_RELATION;
   try {
     const project = await deps.getActiveRuntimeProjectOrThrow(ctx);
+    await deps.assertExecutableRuntimeScope(ctx);
     await deps.assertKnowledgeBaseWriteAccess(ctx);
     await deps.ensureModelsBelongToActiveRuntime(
       ctx,

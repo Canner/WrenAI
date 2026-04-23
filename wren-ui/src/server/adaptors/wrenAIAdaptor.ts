@@ -11,8 +11,12 @@ import {
   ChartResult,
   DeleteSemanticsInput,
   DeployData,
+  RelationshipRecommendationInput,
+  RelationshipRecommendationResult,
   RecommendationQuestionsInput,
   RecommendationQuestionsResult,
+  SemanticsDescriptionInput,
+  SemanticsDescriptionResult,
   TextBasedAnswerInput,
   TextBasedAnswerResult,
   WrenAIDeployResponse,
@@ -44,6 +48,7 @@ import {
   transformChartResult,
   transformHistoryInput,
   transformRecommendationQuestionsResult,
+  transformStatusAndError,
   transformRuntimeIdentity,
   transformSkills,
   transformTextBasedAnswerResult,
@@ -297,6 +302,96 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     } catch (err: any) {
       logger.debug(
         `Got error when getting recommendation questions result: ${getAIServiceError(err)}`,
+      );
+      throw err;
+    }
+  }
+
+  public async generateRelationshipRecommendation(
+    input: RelationshipRecommendationInput,
+  ): Promise<AsyncQueryResponse> {
+    try {
+      const res = await axios.post(
+        `${this.wrenAIBaseEndpoint}/v1/relationship-recommendations`,
+        {
+          mdl: JSON.stringify(input.manifest),
+          runtime_scope_id: input.runtimeScopeId,
+          runtime_identity: transformRuntimeIdentity(input.runtimeIdentity),
+          configurations: input.configurations,
+        },
+      );
+      return { queryId: res.data.id };
+    } catch (err: any) {
+      logger.debug(
+        `Got error when generating relationship recommendations: ${getAIServiceError(err)}`,
+      );
+      throw err;
+    }
+  }
+
+  public async getRelationshipRecommendationResult(
+    queryId: string,
+  ): Promise<RelationshipRecommendationResult> {
+    try {
+      const res = await axios.get(
+        `${this.wrenAIBaseEndpoint}/v1/relationship-recommendations/${queryId}`,
+      );
+      const { status, error } = transformStatusAndError(res.data);
+      return {
+        status: status as RelationshipRecommendationResult['status'],
+        error: error || null,
+        response: res.data.response || null,
+        traceId: res.data.trace_id || null,
+      };
+    } catch (err: any) {
+      logger.debug(
+        `Got error when getting relationship recommendation result: ${getAIServiceError(err)}`,
+      );
+      throw err;
+    }
+  }
+
+  public async generateSemanticsDescription(
+    input: SemanticsDescriptionInput,
+  ): Promise<AsyncQueryResponse> {
+    try {
+      const res = await axios.post(
+        `${this.wrenAIBaseEndpoint}/v1/semantics-descriptions`,
+        {
+          selected_models: input.selectedModels,
+          user_prompt: input.userPrompt,
+          mdl: JSON.stringify(input.manifest),
+          runtime_scope_id: input.runtimeScopeId,
+          runtime_identity: transformRuntimeIdentity(input.runtimeIdentity),
+          configurations: input.configurations,
+        },
+      );
+      return { queryId: res.data.id };
+    } catch (err: any) {
+      logger.debug(
+        `Got error when generating semantics descriptions: ${getAIServiceError(err)}`,
+      );
+      throw err;
+    }
+  }
+
+  public async getSemanticsDescriptionResult(
+    queryId: string,
+  ): Promise<SemanticsDescriptionResult> {
+    try {
+      const res = await axios.get(
+        `${this.wrenAIBaseEndpoint}/v1/semantics-descriptions/${queryId}`,
+      );
+      const { status, error } = transformStatusAndError(res.data);
+      return {
+        status: status as SemanticsDescriptionResult['status'],
+        error: error || null,
+        response: res.data.response || null,
+        traceId: res.data.trace_id || null,
+      };
+    } catch (err: any) {
+      logger.debug(
+        `Got error when getting semantics description result: ${getAIServiceError(err)}`,
       );
       throw err;
     }

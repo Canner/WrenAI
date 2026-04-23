@@ -35,6 +35,10 @@ export const isKnowledgeWorkbenchRoute = (pathname: string) =>
 export const isLegacyModelingRoute = (pathname: string) =>
   pathname.startsWith(Path.Modeling);
 
+export const isModelingAssistantRoute = (pathname: string) =>
+  pathname.startsWith(Path.RecommendRelationships) ||
+  pathname.startsWith(Path.RecommendSemantics);
+
 const MODELING_DEEP_LINK_KEYS = [
   'modelId',
   'viewId',

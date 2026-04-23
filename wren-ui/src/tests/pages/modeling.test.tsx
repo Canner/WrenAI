@@ -52,6 +52,24 @@ jest.mock('next/navigation', () => ({
 }));
 
 jest.mock('antd', () => ({
+  Typography: {
+    Paragraph: ({ children }: any) => {
+      const React = jest.requireActual('react');
+      return React.createElement('p', null, children);
+    },
+    Text: ({ children }: any) => {
+      const React = jest.requireActual('react');
+      return React.createElement('span', null, children);
+    },
+  },
+  Button: ({ children }: any) => {
+    const React = jest.requireActual('react');
+    return React.createElement('button', null, children);
+  },
+  Tag: ({ children }: any) => {
+    const React = jest.requireActual('react');
+    return React.createElement('span', null, children);
+  },
   message: {
     info: jest.fn(),
     success: jest.fn(),
@@ -254,6 +272,7 @@ describe('modeling workspace', () => {
     expect(markup).not.toContain(
       '当前正在查看历史快照，仅支持浏览，不支持编辑或执行。',
     );
+    expect(markup).toContain('Modeling AI Assistant');
     expect(markup).toContain('SidebarWritable');
     expect(markup).toContain('DiagramWritable');
 
@@ -308,6 +327,7 @@ describe('modeling workspace', () => {
     expect(markup).toContain(
       '当前正在查看历史快照，仅支持浏览，不支持编辑或执行。',
     );
+    expect(markup).not.toContain('Modeling AI Assistant');
     expect(markup).toContain('SidebarReadonly');
     expect(markup).toContain('DiagramReadonly');
 

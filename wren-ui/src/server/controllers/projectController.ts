@@ -32,6 +32,7 @@ import {
   updateCurrentProjectAction,
 } from './projectControllerMutationActions';
 import {
+  assertExecutableRuntimeScope as assertExecutableRuntimeScopeSupport,
   assertKnowledgeBaseReadAccess as assertKnowledgeBaseReadAccessSupport,
   assertKnowledgeBaseWriteAccess as assertKnowledgeBaseWriteAccessSupport,
   buildConnectionSettingsProperties as buildConnectionSettingsPropertiesSupport,
@@ -223,6 +224,7 @@ export class ProjectController {
       ctx,
       deps: {
         getActiveRuntimeProjectOrThrow: this.getActiveRuntimeProjectOrThrow,
+        assertExecutableRuntimeScope: this.assertExecutableRuntimeScope,
         assertKnowledgeBaseWriteAccess: this.assertKnowledgeBaseWriteAccess,
         ensureModelsBelongToActiveRuntime:
           this.ensureModelsBelongToActiveRuntime,
@@ -324,6 +326,10 @@ export class ProjectController {
 
   private assertKnowledgeBaseWriteAccess(ctx: IContext) {
     return assertKnowledgeBaseWriteAccessSupport(ctx);
+  }
+
+  private assertExecutableRuntimeScope(ctx: IContext) {
+    return assertExecutableRuntimeScopeSupport(ctx);
   }
 
   private assertKnowledgeBaseReadAccess(ctx: IContext) {

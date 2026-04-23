@@ -9,6 +9,7 @@ import { Connector, KnowledgeBase, Project } from '../repositories';
 export interface ProjectControllerMutationDeps {
   getCurrentPersistedRuntimeIdentity: (ctx: IContext) => any;
   toAskRuntimeIdentity: (runtimeIdentity: any) => any;
+  assertExecutableRuntimeScope: (ctx: IContext) => Promise<void>;
   assertKnowledgeBaseWriteAccess: (ctx: IContext) => Promise<void>;
   resolveActiveRuntimeKnowledgeBase: (
     ctx: IContext,

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { isEmpty } from 'lodash';
-import { Modal, Form, Select } from 'antd';
+import { Form, Input, Modal, Select } from 'antd';
 import { ModalAction } from '@/hooks/useModalAction';
 import { ERROR_TEXTS } from '@/utils/error';
 import CombineFieldSelector from '@/components/selectors/CombineFieldSelector';
@@ -27,11 +27,12 @@ export interface RelationFormValues {
   fromField: { model: string; field: string };
   toField: { model: string; field: string };
   type?: string;
+  description?: string;
 }
 
 export type RelationFieldValue = Pick<
   RelationsDataType,
-  'type' | 'fromField' | 'toField'
+  'type' | 'fromField' | 'toField' | 'properties'
 >;
 
 type Props = ModalAction<RelationFieldValue, RelationFormValues> & {
@@ -39,6 +40,7 @@ type Props = ModalAction<RelationFieldValue, RelationFormValues> & {
   loading?: boolean;
   relations: SelectedRecommendRelations;
   isRecommendMode?: boolean;
+  showDescriptionField?: boolean;
 };
 
 export default function RelationModal(props: Props) {
@@ -52,6 +54,7 @@ export default function RelationModal(props: Props) {
     visible,
     formMode,
     isRecommendMode,
+    showDescriptionField = false,
   } = props;
   const [form] = Form.useForm();
 
@@ -102,11 +105,15 @@ export default function RelationModal(props: Props) {
 
   return (
     <Modal
-      title={`${isEmpty(defaultValue) ? '新增' : '编辑'}关系`}
+      title={
+        isRecommendMode
+          ? `${isEmpty(defaultValue) ? 'Add' : 'Update'} relationship`
+          : `${isEmpty(defaultValue) ? '新增' : '编辑'}关系`
+      }
       width={750}
       open={visible}
-      okText="保存"
-      cancelText="取消"
+      okText={isRecommendMode ? 'Submit' : '保存'}
+      cancelText={isRecommendMode ? 'Cancel' : '取消'}
       onOk={submit}
       onCancel={onClose}
       confirmLoading={loading}
@@ -117,7 +124,7 @@ export default function RelationModal(props: Props) {
     >
       <Form form={form} preserve={false} layout="vertical">
         <Form.Item
-          label="来源字段"
+          label={isRecommendMode ? 'From' : '来源字段'}
           name={FormFieldKey.FROM_FIELD}
           required
           rules={[
@@ -133,14 +140,14 @@ export default function RelationModal(props: Props) {
           <CombineFieldSelector
             modelValue={modelValue}
             modelDisabled={true}
-            fieldDisabled={isUpdateMode}
+            fieldDisabled={isUpdateMode && !isRecommendMode}
             onModelChange={fromCombineField.onModelChange}
             modelOptions={fromCombineField.modelOptions}
             fieldOptions={fromCombineField.fieldOptions}
           />
         </Form.Item>
         <Form.Item
-          label="目标字段"
+          label={isRecommendMode ? 'To' : '目标字段'}
           name={FormFieldKey.TO_FIELD}
           required
           rules={[
@@ -157,12 +164,12 @@ export default function RelationModal(props: Props) {
             onModelChange={toCombineField.onModelChange}
             modelOptions={toCombineField.modelOptions}
             fieldOptions={toCombineField.fieldOptions}
-            modelDisabled={isUpdateMode}
-            fieldDisabled={isUpdateMode}
+            modelDisabled={isUpdateMode && !isRecommendMode}
+            fieldDisabled={isUpdateMode && !isRecommendMode}
           />
         </Form.Item>
         <Form.Item
-          label="关系类型"
+          label={isRecommendMode ? 'Type' : '关系类型'}
           name={FormFieldKey.TYPE}
           required
           rules={[
@@ -175,9 +182,16 @@ export default function RelationModal(props: Props) {
           <Select
             data-testid="relationship-form__type-select"
             options={relationTypeOptions}
-            placeholder="请选择关系类型"
+            placeholder={
+              isRecommendMode ? 'Select relationship type' : '请选择关系类型'
+            }
           />
         </Form.Item>
+        {showDescriptionField ? (
+          <Form.Item label="Description" name="description">
+            <Input.TextArea rows={4} />
+          </Form.Item>
+        ) : null}
       </Form>
     </Modal>
   );

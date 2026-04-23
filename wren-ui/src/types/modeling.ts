@@ -179,6 +179,7 @@ export type RelationInput = {
   toColumnId: number;
   toModelId: number;
   type: RelationType;
+  description?: string;
 };
 
 export type UpdateCalculatedFieldInput = {

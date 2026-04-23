@@ -19,8 +19,12 @@ import {
   InstructionResult,
   QuestionInput,
   QuestionsResult,
+  RelationshipRecommendationInput,
+  RelationshipRecommendationResult,
   RecommendationQuestionsInput,
   RecommendationQuestionsResult,
+  SemanticsDescriptionInput,
+  SemanticsDescriptionResult,
   SqlPairResult,
   TextBasedAnswerInput,
   TextBasedAnswerResult,
@@ -42,6 +46,18 @@ export interface IWrenAIAdaptor {
   getRecommendationQuestionsResult(
     queryId: string,
   ): Promise<RecommendationQuestionsResult>;
+  generateRelationshipRecommendation(
+    input: RelationshipRecommendationInput,
+  ): Promise<AsyncQueryResponse>;
+  getRelationshipRecommendationResult(
+    queryId: string,
+  ): Promise<RelationshipRecommendationResult>;
+  generateSemanticsDescription(
+    input: SemanticsDescriptionInput,
+  ): Promise<AsyncQueryResponse>;
+  getSemanticsDescriptionResult(
+    queryId: string,
+  ): Promise<SemanticsDescriptionResult>;
   createTextBasedAnswer(
     input: TextBasedAnswerInput,
   ): Promise<AsyncQueryResponse>;

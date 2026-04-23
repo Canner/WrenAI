@@ -11,6 +11,7 @@ import {
 import {
   isKnowledgeWorkbenchRoute,
   isLegacyModelingRoute,
+  isModelingAssistantRoute,
 } from '@/utils/knowledgeWorkbench';
 
 type RouteParams = Record<string, string | number | boolean | null | undefined>;
@@ -43,7 +44,8 @@ export const shouldPreserveKnowledgeRuntimeScope = (path?: string | null) => {
   const normalizedPath = normalizeNavigationPath(path);
   return (
     isKnowledgeWorkbenchRoute(normalizedPath) ||
-    isLegacyModelingRoute(normalizedPath)
+    isLegacyModelingRoute(normalizedPath) ||
+    isModelingAssistantRoute(normalizedPath)
   );
 };
 
