@@ -41,6 +41,7 @@ import type {
   SelectedAssetTableValue,
   SourceOption,
 } from '@/features/knowledgePage/types';
+import type { ModelingAssistantIntent } from '@/features/knowledgePage/knowledgeWorkbenchControllerStageViewTypes';
 import AssetWizardAssetStep from './AssetWizardAssetStep';
 import AssetWizardConnectorDrawer from './AssetWizardConnectorDrawer';
 import AssetWizardSourceStep from './AssetWizardSourceStep';
@@ -82,7 +83,9 @@ type AssetWizardModalProps = {
   closeAssetModal: () => void;
   loadConnectors?: () => Promise<unknown> | unknown;
   onFinalizePersistedRuntimeScope?: () => Promise<unknown> | unknown;
-  onNavigateModeling: () => Promise<unknown> | unknown;
+  onNavigateModeling: (
+    intent?: ModelingAssistantIntent,
+  ) => Promise<unknown> | unknown;
   onRefreshAssets?: () => Promise<unknown> | unknown;
 };
 
@@ -606,10 +609,12 @@ function AssetWizardModal({
                   icon={<ArrowRightOutlined />}
                   onClick={async () => {
                     closeAssetModal();
-                    await onNavigateModeling();
+                    await onNavigateModeling(
+                      isBatchSelection ? 'relationships' : undefined,
+                    );
                   }}
                 >
-                  去建模
+                  {isBatchSelection ? '去生成表关系' : '去建模'}
                 </PurpleButton>
               </Space>
             </WizardFooter>

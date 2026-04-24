@@ -183,6 +183,7 @@ test.describe('modeling assistant routes', () => {
     await expect(page.getByText('Modeling AI Assistant')).toBeVisible();
 
     await page.getByRole('button', { name: /Modeling AI Assistant/i }).click();
+    await expect(page.getByText('1 Done').first()).toBeVisible();
     await page
       .getByRole('button', { name: /Recommend relationships/i })
       .click();
@@ -237,5 +238,66 @@ test.describe('modeling assistant routes', () => {
         }),
       ],
     });
+  });
+
+  test('supports openAssistant deep-link into assistant routes', async ({
+    page,
+  }) => {
+    const selector = await helper.ensureRuntimeScopeFixtureForUser({
+      email: OWNER_EMAIL,
+      workspaceSlug: `modeling-assistant-open-hook-${Date.now()}`,
+      workspaceName: '建模助手 Hook 工作空间',
+      knowledgeBaseSlug: `modeling-assistant-open-hook-kb-${Date.now()}`,
+      knowledgeBaseName: '建模助手 Hook 知识库',
+      setDefaultWorkspace: true,
+    });
+    const seeded = await helper.seedKnowledgeWorkbenchFixture(selector);
+    const runtimeSelector = {
+      workspaceId: selector.workspaceId,
+      knowledgeBaseId: selector.knowledgeBaseId,
+      kbSnapshotId: seeded.kbSnapshotId,
+      deployHash: seeded.deployHash,
+      openAssistant: 'relationships',
+    };
+
+    await page.route(
+      '**/api/v1/relationship-recommendations**',
+      async (route) => {
+        if (route.request().method() === 'POST') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ id: 'rel-task-open' }),
+          });
+          return;
+        }
+        await route.fallback();
+      },
+    );
+
+    await page.route(
+      '**/api/v1/relationship-recommendations/rel-task-open**',
+      async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            id: 'rel-task-open',
+            status: 'FINISHED',
+            response: { relationships: [] },
+            error: null,
+          }),
+        });
+      },
+    );
+
+    await helper.gotoRuntimeScopedPath({
+      page,
+      pathname: '/modeling',
+      selector: runtimeSelector,
+    });
+
+    await helper.expectPathname({ page, pathname: '/recommend-relationships' });
+    await expect(page.getByText('Generate relationships')).toBeVisible();
   });
 });

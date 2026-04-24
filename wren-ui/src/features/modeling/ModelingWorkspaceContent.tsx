@@ -20,6 +20,7 @@ import type {
 } from '@/types/modeling';
 import type { CreateCalculatedFieldInput } from '@/types/calculatedField';
 import ModelingAssistantLauncher from './components/ModelingAssistantLauncher';
+import { buildModelingAssistantTaskSummaries } from './components/modelingAssistantStatus';
 import {
   DiagramPanel,
   DiagramWrapper,
@@ -110,10 +111,18 @@ export default function ModelingWorkspaceContent({
   onCalculatedFieldSubmit,
   onRelationshipSubmit,
 }: ModelingWorkspaceContentProps) {
+  const launcherSummaries = diagramData
+    ? buildModelingAssistantTaskSummaries({
+        models: diagramData.models,
+        views: diagramData.views,
+      })
+    : [];
   return (
     <>
       <div style={{ marginBottom: 18 }}>
-        {!isModelingReadonly ? <ModelingAssistantLauncher /> : null}
+        {!isModelingReadonly ? (
+          <ModelingAssistantLauncher summaries={launcherSummaries} />
+        ) : null}
       </div>
       <ModelingStage $embedded={embedded}>
         <ModelingSidebarPanel $embedded={embedded}>

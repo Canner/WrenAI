@@ -39,6 +39,20 @@ export default function useModelingWorkspaceNavigationEffects({
   const clearParams = buildKnowledgeWorkbenchParams('modeling');
 
   useEffect(() => {
+    if (
+      queryParams.openAssistant === 'relationships' ||
+      queryParams.openAssistant === 'semantics'
+    ) {
+      runtimeScopeNavigation.replaceWorkspace(
+        queryParams.openAssistant === 'relationships'
+          ? Path.RecommendRelationships
+          : Path.RecommendSemantics,
+      );
+      return;
+    }
+  }, [queryParams.openAssistant, runtimeScopeNavigation]);
+
+  useEffect(() => {
     if (!diagramData) return;
     if (queryParams.modelId && queryParams.openMetadata) {
       const searchedModel = diagramData.models.find(

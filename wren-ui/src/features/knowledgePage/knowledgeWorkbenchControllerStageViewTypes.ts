@@ -1,5 +1,7 @@
 import type { AssetView } from './types';
 
+export type ModelingAssistantIntent = 'relationships' | 'semantics';
+
 export type ViewStateInput = {
   activeDetailAsset: AssetView | null;
   activeWorkbenchSection: any;
@@ -15,11 +17,13 @@ export type ViewStateInput = {
   finalizePersistedRuntimeScope?: () => Promise<unknown> | unknown;
   handleChangeWorkbenchSection: any;
   handleCloseAssetDetail: () => void;
-  handleNavigateModeling: () => void;
+  handleNavigateModeling: (intent?: ModelingAssistantIntent) => void;
   handleOpenAssetWizard: () => void;
   loadConnectors?: () => Promise<unknown> | unknown;
   moveAssetWizardToConfig: () => void;
-  navigateModelingWithPersistedRuntimeScope?: () => Promise<unknown> | unknown;
+  navigateModelingWithPersistedRuntimeScope?: (
+    intent?: ModelingAssistantIntent,
+  ) => Promise<unknown> | unknown;
   openAssetDetail: any;
   persistedAssetDraftPreviews?: AssetView[];
   recommendationRuntimeSelector?: any;

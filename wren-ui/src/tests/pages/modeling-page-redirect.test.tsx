@@ -33,6 +33,7 @@ describe('/modeling compatibility page', () => {
       query: {
         viewId: '42',
         openMetadata: '1',
+        openAssistant: 'relationships',
       },
     });
     mockUseRuntimeScopeNavigation.mockReturnValue({
@@ -50,6 +51,7 @@ describe('/modeling compatibility page', () => {
     expect(replace).toHaveBeenCalledWith(Path.Knowledge, {
       section: 'modeling',
       viewId: '42',
+      openAssistant: 'relationships',
       openMetadata: '1',
     });
 

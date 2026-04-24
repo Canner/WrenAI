@@ -25,12 +25,14 @@ describe('knowledgeWorkbench helpers', () => {
       buildKnowledgeModelingRouteParams({
         section: 'overview',
         viewId: '9',
+        openAssistant: 'relationships',
         openMetadata: '1',
         ignored: 'x',
       }),
     ).toEqual({
       section: 'modeling',
       viewId: '9',
+      openAssistant: 'relationships',
       openMetadata: '1',
     });
   });

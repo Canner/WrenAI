@@ -4,6 +4,7 @@ import { BulbOutlined, DownOutlined, RightOutlined } from '@ant-design/icons';
 import styled from 'styled-components';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import { Path } from '@/utils/enum';
+import type { ModelingAssistantTaskSummary } from './modelingAssistantStatus';
 
 const { Paragraph, Text } = Typography;
 
@@ -36,6 +37,12 @@ const LauncherActions = styled.div`
   gap: 10px;
 `;
 
+const LauncherStatusText = styled.div<{ $tone: 'todo' | 'done' }>`
+  font-size: 12px;
+  font-weight: 700;
+  color: ${(props) => (props.$tone === 'done' ? '#15803d' : '#6d4aff')};
+`;
+
 const LauncherActionButton = styled(Button)`
   &.ant-btn {
     height: auto;
@@ -66,11 +73,13 @@ const ActionMeta = styled.div`
 
 const items = [
   {
+    summaryKey: 'semantics',
     key: Path.RecommendSemantics,
     title: 'Recommend semantics',
     description: 'Generate model and column descriptions with AI guidance.',
   },
   {
+    summaryKey: 'relationships',
     key: Path.RecommendRelationships,
     title: 'Recommend relationships',
     description:
@@ -80,11 +89,19 @@ const items = [
 
 export default function ModelingAssistantLauncher({
   disabled = false,
+  summaries = [],
 }: {
   disabled?: boolean;
+  summaries?: ModelingAssistantTaskSummary[];
 }) {
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const [expanded, setExpanded] = useState(false);
+  const hasTodo = summaries.some((summary) => summary.state === 'todo');
+  const summaryByKey = useMemo(
+    () =>
+      Object.fromEntries(summaries.map((summary) => [summary.key, summary])),
+    [summaries],
+  );
 
   const actionButtons = useMemo(
     () =>
@@ -100,11 +117,30 @@ export default function ModelingAssistantLauncher({
               <Text strong>{item.title}</Text>
               <Text type="secondary">{item.description}</Text>
             </ActionMeta>
-            <Tag color="processing">AI</Tag>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <LauncherStatusText
+                $tone={summaryByKey[item.summaryKey]?.state || 'todo'}
+              >
+                {summaryByKey[item.summaryKey]?.countLabel || '1'}{' '}
+                {summaryByKey[item.summaryKey]?.state === 'done'
+                  ? 'Done'
+                  : 'Todo'}
+              </LauncherStatusText>
+              <Tag
+                color={
+                  summaryByKey[item.summaryKey]?.state === 'done'
+                    ? 'success'
+                    : 'processing'
+                }
+                style={{ marginInlineEnd: 0 }}
+              >
+                AI
+              </Tag>
+            </div>
           </ActionRow>
         </LauncherActionButton>
       )),
-    [runtimeScopeNavigation],
+    [disabled, runtimeScopeNavigation, summaryByKey],
   );
 
   return (
@@ -131,6 +167,12 @@ export default function ModelingAssistantLauncher({
             <BulbOutlined />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <Tag
+              color={hasTodo ? 'gold' : 'success'}
+              style={{ width: 'fit-content' }}
+            >
+              {hasTodo ? 'Setup Required' : 'Up to date'}
+            </Tag>
             <Text strong style={{ fontSize: 16 }}>
               Modeling AI Assistant
             </Text>

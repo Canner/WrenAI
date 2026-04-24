@@ -14,6 +14,7 @@ import useKnowledgeConnectorTables from '@/hooks/useKnowledgeConnectorTables';
 import useKnowledgeAssetWizard from '@/hooks/useKnowledgeAssetWizard';
 import useKnowledgeDerivedCollections from '@/hooks/useKnowledgeDerivedCollections';
 import useRuntimeSelectorState from '@/hooks/useRuntimeSelectorState';
+import type { ModelingAssistantIntent } from './knowledgeWorkbenchControllerStageViewTypes';
 import type { AssetView, ConnectorView } from './types';
 
 export function useKnowledgeAssetWorkbench({
@@ -223,21 +224,27 @@ export function useKnowledgeAssetWorkbench({
     resetDetailViewState,
   });
 
-  const navigateModelingWithPersistedRuntimeScope = useCallback(() => {
-    const selectorOverride =
-      persistedRuntimeSelector || activeKnowledgeRuntimeSelector || undefined;
-    const nextUrl = buildRuntimeScopeUrl(
-      router.pathname,
-      { section: 'modeling' },
-      selectorOverride,
-    );
-    return router.push(nextUrl, undefined, { scroll: false });
-  }, [
-    activeKnowledgeRuntimeSelector,
-    buildRuntimeScopeUrl,
-    persistedRuntimeSelector,
-    router,
-  ]);
+  const navigateModelingWithPersistedRuntimeScope = useCallback(
+    (intent?: ModelingAssistantIntent) => {
+      const selectorOverride =
+        persistedRuntimeSelector || activeKnowledgeRuntimeSelector || undefined;
+      const nextUrl = buildRuntimeScopeUrl(
+        router.pathname,
+        {
+          section: 'modeling',
+          ...(intent ? { openAssistant: intent } : {}),
+        },
+        selectorOverride,
+      );
+      return router.push(nextUrl, undefined, { scroll: false });
+    },
+    [
+      activeKnowledgeRuntimeSelector,
+      buildRuntimeScopeUrl,
+      persistedRuntimeSelector,
+      router,
+    ],
+  );
 
   return {
     activeDetailAsset,

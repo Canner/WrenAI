@@ -43,6 +43,7 @@ const MODELING_DEEP_LINK_KEYS = [
   'modelId',
   'viewId',
   'relationId',
+  'openAssistant',
   'openMetadata',
   'openModelDrawer',
   'openRelationModal',

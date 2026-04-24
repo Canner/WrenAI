@@ -27,9 +27,26 @@ describe('modelingWorkspaceUtils', () => {
     expect(readModelingWorkspaceQueryParams(searchParams)).toEqual({
       modelId: '1',
       viewId: null,
+      openAssistant: null,
       openMetadata: '1',
       openModelDrawer: null,
       relationId: '2',
+      openRelationModal: null,
+    });
+  });
+
+  it('reads assistant deep-link query params', () => {
+    const searchParams = new URLSearchParams({
+      openAssistant: 'relationships',
+    });
+
+    expect(readModelingWorkspaceQueryParams(searchParams)).toEqual({
+      modelId: null,
+      viewId: null,
+      openAssistant: 'relationships',
+      openMetadata: null,
+      openModelDrawer: null,
+      relationId: null,
       openRelationModal: null,
     });
   });

@@ -58,6 +58,7 @@ export const readModelingWorkspaceQueryParams = (
 ) => ({
   modelId: searchParams?.get('modelId') || null,
   viewId: searchParams?.get('viewId') || null,
+  openAssistant: searchParams?.get('openAssistant') || null,
   openMetadata: searchParams?.get('openMetadata') || null,
   openModelDrawer: searchParams?.get('openModelDrawer') || null,
   relationId: searchParams?.get('relationId') || null,
