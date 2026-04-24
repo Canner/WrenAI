@@ -96,6 +96,8 @@ func convertConnectionToDataSource(conn DbtConnection, dbtHomePath, profileName,
 		return convertToMSSQLDataSource(conn)
 	case "mysql":
 		return convertToMysqlDataSource(conn)
+	case "doris":
+		return convertToDorisDataSource(conn)
 	case "bigquery":
 		// Pass the dbtHomePath to the BigQuery converter
 		return convertToBigQueryDataSource(conn, dbtHomePath)
@@ -211,6 +213,25 @@ func convertToMysqlDataSource(conn DbtConnection) (*WrenMysqlDataSource, error) 
 		User:     conn.User,
 		Password: conn.Password,
 		SslMode:  sslMode,
+	}
+
+	return ds, nil
+}
+
+func convertToDorisDataSource(conn DbtConnection) (*WrenDorisDataSource, error) {
+	pterm.Info.Printf("Converting Doris data source: %s:%d/%s\n", conn.Host, conn.Port, conn.Database)
+
+	port := strconv.Itoa(conn.Port)
+	if conn.Port == 0 {
+		port = "9030"
+	}
+
+	ds := &WrenDorisDataSource{
+		Host:     conn.Host,
+		Port:     port,
+		Database: conn.Database,
+		User:     conn.User,
+		Password: conn.Password,
 	}
 
 	return ds, nil
@@ -542,6 +563,86 @@ func (ds *WrenMysqlDataSource) MapType(sourceType string) string {
 	case booleanSQL, "BOOL":
 		return booleanSQL
 	case jsonSQL:
+		return jsonSQL
+	default:
+		// Return the original type if no mapping is found
+		return strings.ToLower(sourceType)
+	}
+}
+
+type WrenDorisDataSource struct {
+	Database string `json:"database"`
+	Host     string `json:"host"`
+	Password string `json:"password"`
+	Port     string `json:"port"`
+	User     string `json:"user"`
+}
+
+// GetType implements DataSource interface
+func (ds *WrenDorisDataSource) GetType() string {
+	return "doris"
+}
+
+// Validate implements DataSource interface
+func (ds *WrenDorisDataSource) Validate() error {
+	if ds.Host == "" {
+		return fmt.Errorf("host cannot be empty")
+	}
+	if ds.Database == "" {
+		return fmt.Errorf("database cannot be empty")
+	}
+	if ds.User == "" {
+		return fmt.Errorf("user cannot be empty")
+	}
+	if ds.Port == "" {
+		return fmt.Errorf("port must be specified")
+	}
+	port, err := strconv.Atoi(ds.Port)
+	if err != nil {
+		return fmt.Errorf("port must be a valid number")
+	}
+	if port <= 0 || port > 65535 {
+		return fmt.Errorf("port must be between 1 and 65535")
+	}
+	return nil
+}
+
+func (ds *WrenDorisDataSource) MapType(sourceType string) string {
+	sourceType = strings.ToUpper(sourceType)
+	switch sourceType {
+	case "CHAR":
+		return "char"
+	case "VARCHAR":
+		return varcharType
+	case "TEXT", "STRING":
+		return "text"
+	case "TINYINT":
+		return "TINYINT"
+	case "SMALLINT":
+		return "SMALLINT"
+	case "INT", integerSQL:
+		return "INTEGER"
+	case "BIGINT", "LARGEINT":
+		return "BIGINT"
+	case "FLOAT":
+		return "FLOAT"
+	case "DOUBLE":
+		return "DOUBLE"
+	case decimalSQL, "NUMERIC":
+		return decimalSQL
+	case dateSQL, "DATEV2":
+		return dateSQL
+	case datetimeSQL, "DATETIMEV2":
+		return datetimeSQL
+	case booleanSQL, "BOOL":
+		return booleanSQL
+	case jsonSQL, "JSONB":
+		return jsonSQL
+	case "HLL", "BITMAP", "QUANTILE_STATE", "AGG_STATE":
+		// Doris-specific aggregate types, map to varchar
+		return varcharType
+	case "ARRAY", "MAP", "STRUCT", "VARIANT":
+		// Doris complex types
 		return jsonSQL
 	default:
 		// Return the original type if no mapping is found
