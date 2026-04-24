@@ -99,7 +99,14 @@ describe('useKnowledgeAssetWorkbench', () => {
     });
   });
 
-  const renderHookHarness = () => {
+  const renderHookHarness = ({
+    buildRuntimeScopeUrl = (path: string) => path,
+  }: {
+    buildRuntimeScopeUrl?: (
+      path: string,
+      query?: Record<string, string | number | boolean | null | undefined>,
+    ) => string;
+  } = {}) => {
     let current!: ReturnType<typeof useKnowledgeAssetWorkbench>;
 
     const Harness = () => {
@@ -116,7 +123,7 @@ describe('useKnowledgeAssetWorkbench', () => {
           important: true,
         },
         assets: [],
-        buildRuntimeScopeUrl: (path: string) => path,
+        buildRuntimeScopeUrl,
         connectors: [],
         demoDatabaseOptions: [],
         demoTableOptions: [],
@@ -195,5 +202,33 @@ describe('useKnowledgeAssetWorkbench', () => {
       scroll: false,
       shallow: true,
     });
+  });
+
+  it('supports modeling assistant handoff when navigating to modeling', async () => {
+    const buildRuntimeScopeUrl = (
+      path: string,
+      query?: Record<string, string | number | boolean | null | undefined>,
+    ) => {
+      const search = new URLSearchParams(
+        Object.entries(query || {})
+          .filter(
+            (entry): entry is [string, string | number | boolean] =>
+              entry[1] !== null && entry[1] !== undefined,
+          )
+          .map(([key, value]) => [key, String(value)]),
+      );
+      return `${path}?${search.toString()}`;
+    };
+    const hookValue = renderHookHarness({ buildRuntimeScopeUrl });
+
+    await hookValue.navigateModelingWithPersistedRuntimeScope?.(
+      'relationships',
+    );
+
+    expect(mockRouterPush).toHaveBeenCalledWith(
+      '/knowledge?section=modeling&openAssistant=relationships',
+      undefined,
+      { scroll: false },
+    );
   });
 });
