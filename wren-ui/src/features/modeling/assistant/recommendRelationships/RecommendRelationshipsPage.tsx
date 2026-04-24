@@ -26,6 +26,17 @@ import useModelingAssistantReadonly from '../useModelingAssistantReadonly';
 import useRecommendRelationshipsTask from './useRecommendRelationshipsTask';
 import { Path } from '@/utils/enum';
 import { getJoinTypeText } from '@/utils/data';
+import {
+  AssistantColumn,
+  AssistantDocLink,
+  AssistantFooterBar,
+  AssistantIntroCard,
+  AssistantMutedText,
+  AssistantPill,
+  AssistantPillRow,
+  AssistantSectionCard,
+  AssistantSectionHeader,
+} from '../modelingAssistantVisuals';
 
 const { Paragraph, Text } = Typography;
 
@@ -149,6 +160,7 @@ export default function RecommendRelationshipsPage() {
               {relationshipsTask.recommendNameMapping[modelName] || modelName}
             </Text>
             <Table
+              className="console-table"
               rowKey={(relation) => buildRelationKey(relation)}
               columns={columns({
                 modelName,
@@ -268,32 +280,54 @@ export default function RecommendRelationshipsPage() {
     }
 
     return (
-      <div
-        style={{
-          width: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 16,
-        }}
-      >
+      <AssistantColumn>
+        <AssistantIntroCard>
+          <AssistantSectionHeader>
+            <div>
+              <Text strong>Recommendation status</Text>
+              <AssistantMutedText>
+                Review the proposed relationships, adjust any edge cases, and
+                only then save them back to your semantic layer.
+              </AssistantMutedText>
+            </div>
+            <AssistantDocLink
+              href="https://docs.getwren.ai/cp/guide/modeling-ai-assistant"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Learn more
+            </AssistantDocLink>
+          </AssistantSectionHeader>
+          <AssistantPillRow>
+            <AssistantPill $tone="accent">
+              {Object.values(relationshipsTask.editedRelations).flat().length}{' '}
+              recommendation
+              {Object.values(relationshipsTask.editedRelations).flat()
+                .length === 1
+                ? ''
+                : 's'}
+            </AssistantPill>
+            <AssistantPill $tone="success">Ready to save</AssistantPill>
+          </AssistantPillRow>
+        </AssistantIntroCard>
         {tableBlocks}
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'flex-end',
-            gap: 12,
-          }}
-        >
-          <Button
-            type="primary"
-            onClick={() => void relationshipsTask.save()}
-            loading={relationshipsTask.saving}
-            disabled={!relationshipsTask.hasResult}
-          >
-            Save
-          </Button>
-        </div>
-      </div>
+        <AssistantSectionCard>
+          <AssistantFooterBar>
+            <AssistantMutedText>
+              Suggestions can be edited or deleted before save. The current list
+              only applies after you confirm Save.
+            </AssistantMutedText>
+            <Button
+              type="primary"
+              onClick={() => void relationshipsTask.save()}
+              loading={relationshipsTask.saving}
+              disabled={!relationshipsTask.hasResult}
+            >
+              Save
+            </Button>
+          </AssistantFooterBar>
+        </AssistantSectionCard>
+      </AssistantColumn>
     );
   };
 

@@ -7,7 +7,6 @@ import {
   Input,
   Space,
   Spin,
-  Tag,
   Typography,
 } from 'antd';
 import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
@@ -19,6 +18,18 @@ import useModelingAssistantReadonly from '../useModelingAssistantReadonly';
 import useRecommendSemanticsWizard from './useRecommendSemanticsWizard';
 import GeneratedSemanticsReview from './GeneratedSemanticsReview';
 import { Path } from '@/utils/enum';
+import {
+  AssistantColumn,
+  AssistantDocLink,
+  AssistantFooterBar,
+  AssistantIntroCard,
+  AssistantMutedText,
+  AssistantPill,
+  AssistantPillRow,
+  AssistantPromptChip,
+  AssistantSectionCard,
+  AssistantSectionHeader,
+} from '../modelingAssistantVisuals';
 
 const { Paragraph, Text, Title } = Typography;
 
@@ -73,14 +84,34 @@ export default function RecommendSemanticsPage() {
     }
 
     return (
-      <div
-        style={{
-          width: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 16,
-        }}
-      >
+      <AssistantColumn>
+        <AssistantIntroCard>
+          <AssistantSectionHeader>
+            <div>
+              <Text strong>Assistant setup</Text>
+              <AssistantMutedText>
+                Choose the models you want to enrich, then generate concise
+                business-friendly descriptions before saving.
+              </AssistantMutedText>
+            </div>
+            <AssistantDocLink
+              href="https://docs.getwren.ai/cp/guide/modeling-ai-assistant"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Learn more
+            </AssistantDocLink>
+          </AssistantSectionHeader>
+          <AssistantPillRow>
+            <AssistantPill $tone="accent">Step 1 of 2</AssistantPill>
+            <AssistantPill
+              $tone={selectedModelCount > 0 ? 'success' : 'warning'}
+            >
+              {selectedModelCount} model{selectedModelCount === 1 ? '' : 's'}{' '}
+              selected
+            </AssistantPill>
+          </AssistantPillRow>
+        </AssistantIntroCard>
         <Card style={{ borderRadius: 16 }}>
           <Title level={4} style={{ marginTop: 0 }}>
             Pick models
@@ -127,19 +158,41 @@ export default function RecommendSemanticsPage() {
             Next
           </Button>
         </div>
-      </div>
+      </AssistantColumn>
     );
   };
 
   const renderGenerateStep = () => (
-    <div
-      style={{
-        width: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 16,
-      }}
-    >
+    <AssistantColumn>
+      <AssistantIntroCard>
+        <AssistantSectionHeader>
+          <div>
+            <Text strong>Generation workflow</Text>
+            <AssistantMutedText>
+              Refine the prompt if needed, generate semantics, then save the
+              reviewed descriptions back to modeling.
+            </AssistantMutedText>
+          </div>
+          <AssistantDocLink
+            href="https://docs.getwren.ai/cp/guide/modeling-ai-assistant"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Learn more
+          </AssistantDocLink>
+        </AssistantSectionHeader>
+        <AssistantPillRow>
+          <AssistantPill $tone="accent">Step 2 of 2</AssistantPill>
+          <AssistantPill
+            $tone={semanticsWizard.completed ? 'success' : 'warning'}
+          >
+            {semanticsWizard.completed ? 'Generated' : 'Awaiting generation'}
+          </AssistantPill>
+          <AssistantPill $tone="default">
+            {selectedModelCount} model{selectedModelCount === 1 ? '' : 's'}
+          </AssistantPill>
+        </AssistantPillRow>
+      </AssistantIntroCard>
       <Card style={{ borderRadius: 16 }}>
         <Title level={4} style={{ marginTop: 0 }}>
           Generate semantics
@@ -186,7 +239,7 @@ export default function RecommendSemanticsPage() {
         />
       ) : null}
 
-      <Card style={{ borderRadius: 16 }}>
+      <AssistantSectionCard>
         <Title level={5} style={{ marginTop: 0 }}>
           {generatedStateTitle}
         </Title>
@@ -195,13 +248,13 @@ export default function RecommendSemanticsPage() {
         ) : (
           <Space wrap>
             {semanticsWizard.examplePrompts.map((item) => (
-              <Tag key={item} color="default">
+              <AssistantPromptChip key={item} type="button">
                 {item}
-              </Tag>
+              </AssistantPromptChip>
             ))}
           </Space>
         )}
-      </Card>
+      </AssistantSectionCard>
 
       {semanticsWizard.polling &&
       semanticsWizard.task?.status === 'GENERATING' ? (
@@ -213,28 +266,28 @@ export default function RecommendSemanticsPage() {
         </div>
       ) : null}
 
-      <div
-        style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}
-      >
-        <Button onClick={semanticsWizard.onBack}>Back</Button>
-        <Space>
-          <Button
-            onClick={() => void semanticsWizard.save()}
-            loading={semanticsWizard.saving}
-            disabled={!semanticsWizard.completed}
-          >
-            Save
-          </Button>
-          <Button
-            type="primary"
-            onClick={() => void semanticsWizard.generate()}
-            loading={semanticsWizard.polling}
-          >
-            {semanticsWizard.completed ? 'Regenerate' : 'Generate'}
-          </Button>
-        </Space>
-      </div>
-    </div>
+      <AssistantSectionCard>
+        <AssistantFooterBar>
+          <Button onClick={semanticsWizard.onBack}>Back</Button>
+          <Space>
+            <Button
+              onClick={() => void semanticsWizard.save()}
+              loading={semanticsWizard.saving}
+              disabled={!semanticsWizard.completed}
+            >
+              Save
+            </Button>
+            <Button
+              type="primary"
+              onClick={() => void semanticsWizard.generate()}
+              loading={semanticsWizard.polling}
+            >
+              {semanticsWizard.completed ? 'Regenerate' : 'Generate'}
+            </Button>
+          </Space>
+        </AssistantFooterBar>
+      </AssistantSectionCard>
+    </AssistantColumn>
   );
 
   return (
