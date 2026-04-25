@@ -66,6 +66,9 @@ models:
     alias: default
     api_base: https://api.openai.com/v1  # change this according to your embedding model
     timeout: 120
+    # batch_size controls how many documents are sent per embedding API call (default: 32).
+    # Lower this value if your embedding provider enforces a maximum batch size.
+    # batch_size: 32
 
 ---
 type: engine
