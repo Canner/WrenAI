@@ -172,12 +172,14 @@ class LitellmEmbedderProvider(EmbedderProvider):
         ] = None,  # e.g. EMBEDDER_OPENAI_API_KEY, EMBEDDER_ANTHROPIC_API_KEY, etc.
         api_base: Optional[str] = None,
         timeout: float = 120.0,
+        batch_size: int = 32,  # number of documents sent per embedding API call
         **kwargs,
     ):
         self._api_key = os.getenv(api_key_name) if api_key_name else None
         self._api_base = remove_trailing_slash(api_base) if api_base else None
         self._embedding_model = model
         self._timeout = timeout
+        self._batch_size = batch_size
         if "provider" in kwargs:
             del kwargs["provider"]
         self._kwargs = kwargs
@@ -197,5 +199,6 @@ class LitellmEmbedderProvider(EmbedderProvider):
             api_base_url=self._api_base,
             model=self._embedding_model,
             timeout=self._timeout,
+            batch_size=self._batch_size,
             **self._kwargs,
         )
