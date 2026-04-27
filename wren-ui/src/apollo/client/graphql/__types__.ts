@@ -1128,6 +1128,7 @@ export enum ProjectLanguage {
   ES = 'ES',
   FA_IR = 'FA_IR',
   FR = 'FR',
+  ID = 'ID',
   IT = 'IT',
   JA = 'JA',
   KO = 'KO',
