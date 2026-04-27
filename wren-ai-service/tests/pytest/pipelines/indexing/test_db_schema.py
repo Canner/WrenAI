@@ -8,17 +8,15 @@ from pytest_mock import MockFixture
 from src.pipelines.indexing.db_schema import DBSchema, DDLChunker
 
 
-@pytest.mark.asyncio
-async def test_empty_mdl():
+def test_empty_mdl():
     chunker = DDLChunker()
     mdl = {"models": [], "views": [], "relationships": [], "metrics": []}
 
-    document = await chunker.run(mdl, column_batch_size=1)
+    document = chunker.run(mdl, column_batch_size=1)
     assert document == {"documents": []}
 
 
-@pytest.mark.asyncio
-async def test_single_model():
+def test_single_model():
     chunker = DDLChunker()
     mdl = {
         "models": [
@@ -35,7 +33,7 @@ async def test_single_model():
         "metrics": [],
     }
 
-    actual = await chunker.run(mdl, column_batch_size=1)
+    actual = chunker.run(mdl, column_batch_size=1)
     assert len(actual["documents"]) == 1
 
     document: Document = actual["documents"][0]
@@ -49,8 +47,7 @@ async def test_single_model():
     )
 
 
-@pytest.mark.asyncio
-async def test_multiple_models():
+def test_multiple_models():
     chunker = DDLChunker()
     mdl = {
         "models": [
@@ -74,7 +71,7 @@ async def test_multiple_models():
         "metrics": [],
     }
 
-    actual = await chunker.run(mdl, column_batch_size=1)
+    actual = chunker.run(mdl, column_batch_size=1)
     assert len(actual["documents"]) == 2
 
     document_1: Document = actual["documents"][0]
@@ -98,8 +95,7 @@ async def test_multiple_models():
     )
 
 
-@pytest.mark.asyncio
-async def test_column_is_primary_key():
+def test_column_is_primary_key():
     chunker = DDLChunker()
     mdl = {
         "models": [
@@ -119,7 +115,7 @@ async def test_column_is_primary_key():
         "metrics": [],
     }
 
-    actual = await chunker.run(mdl, column_batch_size=1)
+    actual = chunker.run(mdl, column_batch_size=1)
     assert len(actual["documents"]) == 2
 
     document_0: Document = actual["documents"][0]
@@ -140,8 +136,7 @@ async def test_column_is_primary_key():
     )
 
 
-@pytest.mark.asyncio
-async def test_column_with_properties():
+def test_column_with_properties():
     chunker = DDLChunker()
     mdl = {
         "models": [
@@ -164,7 +159,7 @@ async def test_column_with_properties():
         "metrics": [],
     }
 
-    actual = await chunker.run(mdl, column_batch_size=1)
+    actual = chunker.run(mdl, column_batch_size=1)
     assert len(actual["documents"]) == 2
 
     document_0: Document = actual["documents"][0]
@@ -195,8 +190,7 @@ async def test_column_with_properties():
     )
 
 
-@pytest.mark.asyncio
-async def test_column_with_nested_columns():
+def test_column_with_nested_columns():
     chunker = DDLChunker()
     mdl = {
         "models": [
@@ -221,7 +215,7 @@ async def test_column_with_nested_columns():
         "metrics": [],
     }
 
-    actual = await chunker.run(mdl, column_batch_size=1)
+    actual = chunker.run(mdl, column_batch_size=1)
     assert len(actual["documents"]) == 2
 
     document_0: Document = actual["documents"][0]
@@ -242,8 +236,7 @@ async def test_column_with_nested_columns():
     )
 
 
-@pytest.mark.asyncio
-async def test_column_with_calculated_property():
+def test_column_with_calculated_property():
     chunker = DDLChunker()
     mdl = {
         "models": [
@@ -264,7 +257,7 @@ async def test_column_with_calculated_property():
         "metrics": [],
     }
 
-    actual = await chunker.run(mdl, column_batch_size=1)
+    actual = chunker.run(mdl, column_batch_size=1)
     assert len(actual["documents"]) == 2
 
     document_0: Document = actual["documents"][0]
@@ -285,8 +278,7 @@ async def test_column_with_calculated_property():
     )
 
 
-@pytest.mark.asyncio
-async def test_column_with_relationship():
+def test_column_with_relationship():
     chunker = DDLChunker()
     mdl = {
         "models": [
@@ -328,7 +320,7 @@ async def test_column_with_relationship():
         "metrics": [],
     }
 
-    actual = await chunker.run(mdl, column_batch_size=1)
+    actual = chunker.run(mdl, column_batch_size=1)
     assert len(actual["documents"]) == 6
 
     document_0: Document = actual["documents"][0]
@@ -381,8 +373,7 @@ async def test_column_with_relationship():
     )
 
 
-@pytest.mark.asyncio
-async def test_column_batch_size():
+def test_column_batch_size():
     chunker = DDLChunker()
     mdl = {
         "models": [
@@ -399,7 +390,7 @@ async def test_column_batch_size():
         "relationships": [],
         "metrics": [],
     }
-    actual = await chunker.run(mdl, column_batch_size=2)
+    actual = chunker.run(mdl, column_batch_size=2)
     assert len(actual["documents"]) == 3
 
     document_0: Document = actual["documents"][0]
@@ -444,8 +435,7 @@ async def test_column_batch_size():
     )
 
 
-@pytest.mark.asyncio
-async def test_view():
+def test_view():
     chunker = DDLChunker()
     mdl = {
         "models": [],
@@ -453,7 +443,7 @@ async def test_view():
         "relationships": [],
         "metrics": [],
     }
-    actual = await chunker.run(mdl, column_batch_size=1)
+    actual = chunker.run(mdl, column_batch_size=1)
     assert len(actual["documents"]) == 1
 
     document_0: Document = actual["documents"][0]
@@ -468,8 +458,7 @@ async def test_view():
     )
 
 
-@pytest.mark.asyncio
-async def test_view_with_properties():
+def test_view_with_properties():
     chunker = DDLChunker()
     mdl = {
         "models": [],
@@ -483,7 +472,7 @@ async def test_view_with_properties():
         "relationships": [],
         "metrics": [],
     }
-    actual = await chunker.run(mdl, column_batch_size=1)
+    actual = chunker.run(mdl, column_batch_size=1)
     assert len(actual["documents"]) == 1
 
     document_0: Document = actual["documents"][0]
@@ -498,8 +487,7 @@ async def test_view_with_properties():
     )
 
 
-@pytest.mark.asyncio
-async def test_metric():
+def test_metric():
     chunker = DDLChunker()
     mdl = {
         "models": [],
@@ -518,7 +506,7 @@ async def test_metric():
             }
         ],
     }
-    actual = await chunker.run(mdl, column_batch_size=1)
+    actual = chunker.run(mdl, column_batch_size=1)
     assert len(actual["documents"]) == 1
 
     document_0: Document = actual["documents"][0]
