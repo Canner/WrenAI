@@ -37,6 +37,14 @@ export interface MYSQL_CONNECTION_INFO {
   ssl: boolean;
 }
 
+export interface DORIS_CONNECTION_INFO {
+  host: string;
+  port: number;
+  user: string;
+  password: string;
+  database: string;
+}
+
 export interface ORACLE_CONNECTION_INFO {
   user: string;
   password: string;
@@ -149,6 +157,7 @@ export type WREN_AI_CONNECTION_INFO =
   | BIG_QUERY_CONNECTION_INFO
   | POSTGRES_CONNECTION_INFO
   | MYSQL_CONNECTION_INFO
+  | DORIS_CONNECTION_INFO
   | ORACLE_CONNECTION_INFO
   | DUCKDB_CONNECTION_INFO
   | MS_SQL_CONNECTION_INFO

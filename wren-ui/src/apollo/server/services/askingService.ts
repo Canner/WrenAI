@@ -933,6 +933,9 @@ export class AskingService implements IAskingService {
     }
     const project = await this.projectService.getCurrentProject();
     const deployment = await this.deployService.getLastDeployment(project.id);
+    if (!deployment) {
+      throw new Error('No deployment found. Please deploy the model first.');
+    }
     const mdl = deployment.manifest;
     const eventName = TelemetryEvent.HOME_PREVIEW_ANSWER;
     try {
@@ -973,6 +976,9 @@ export class AskingService implements IAskingService {
     }
     const project = await this.projectService.getCurrentProject();
     const deployment = await this.deployService.getLastDeployment(project.id);
+    if (!deployment) {
+      throw new Error('No deployment found. Please deploy the model first.');
+    }
     const mdl = deployment.manifest;
     const steps = response?.breakdownDetail?.steps;
     const sql = safeFormatSQL(constructCteSql(steps, stepIndex));
@@ -1000,7 +1006,11 @@ export class AskingService implements IAskingService {
     input: InstantRecommendedQuestionsInput,
   ): Promise<Task> {
     const project = await this.projectService.getCurrentProject();
-    const { manifest } = await this.deployService.getLastDeployment(project.id);
+    const lastDeploy = await this.deployService.getLastDeployment(project.id);
+    if (!lastDeploy) {
+      throw new Error('No deployment found. Please deploy the model first.');
+    }
+    const { manifest } = lastDeploy;
 
     const response = await this.wrenAIAdaptor.generateRecommendationQuestions({
       manifest,
@@ -1056,6 +1066,9 @@ export class AskingService implements IAskingService {
   private async getDeployId() {
     const { id } = await this.projectService.getCurrentProject();
     const lastDeploy = await this.deployService.getLastDeployment(id);
+    if (!lastDeploy) {
+      throw new Error('No deployment found. Please deploy the model first.');
+    }
     return lastDeploy.hash;
   }
 

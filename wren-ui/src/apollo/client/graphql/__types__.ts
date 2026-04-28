@@ -331,6 +331,7 @@ export enum DataSourceName {
   BIG_QUERY = 'BIG_QUERY',
   CLICK_HOUSE = 'CLICK_HOUSE',
   DATABRICKS = 'DATABRICKS',
+  DORIS = 'DORIS',
   DUCKDB = 'DUCKDB',
   MSSQL = 'MSSQL',
   MYSQL = 'MYSQL',

@@ -11,6 +11,7 @@ import SnowflakeProperties from '@/components/pages/setup/dataSources/SnowflakeP
 import AthenaProperties from '@/components/pages/setup/dataSources/AthenaProperties';
 import RedshiftProperties from '@/components/pages/setup/dataSources/RedshiftProperties';
 import DatabricksProperties from '@/components/pages/setup/dataSources/DatabricksProperties';
+import DorisProperties from '@/components/pages/setup/dataSources/DorisProperties';
 
 export const getDataSourceImage = (dataSource: DATA_SOURCES | string) => {
   switch (dataSource) {
@@ -38,6 +39,8 @@ export const getDataSourceImage = (dataSource: DATA_SOURCES | string) => {
       return '/images/dataSource/redshift.svg';
     case DATA_SOURCES.DATABRICKS:
       return '/images/dataSource/databricks.svg';
+    case DATA_SOURCES.DORIS:
+      return '/images/dataSource/doris.svg';
     default:
       return null;
   }
@@ -69,6 +72,8 @@ export const getDataSourceName = (dataSource: DATA_SOURCES | string) => {
       return 'Redshift';
     case DATA_SOURCES.DATABRICKS:
       return 'Databricks';
+    case DATA_SOURCES.DORIS:
+      return 'Doris';
     default:
       return '';
   }
@@ -100,6 +105,8 @@ export const getDataSourceProperties = (dataSource: DATA_SOURCES | string) => {
       return RedshiftProperties;
     case DATA_SOURCES.DATABRICKS:
       return DatabricksProperties;
+    case DATA_SOURCES.DORIS:
+      return DorisProperties;
     default:
       return null;
   }

@@ -102,6 +102,9 @@ export class SqlPairResolver {
     const lastDeployment = await ctx.deployService.getLastDeployment(
       project.id,
     );
+    if (!lastDeployment) {
+      throw new Error('No deployment found. Please deploy the model first.');
+    }
     const manifest = lastDeployment.manifest;
 
     const wrenSQL = await ctx.sqlPairService.modelSubstitute(
@@ -114,11 +117,17 @@ export class SqlPairResolver {
     return safeFormatSQL(wrenSQL, { language: 'postgresql' }) as WrenSQL;
   }
 
-  private async validateSql(sql: string, ctx: IContext) {
+  private async validateSql(sql: string | undefined, ctx: IContext) {
+    if (sql == null) {
+      return;
+    }
     const project = await ctx.projectService.getCurrentProject();
     const lastDeployment = await ctx.deployService.getLastDeployment(
       project.id,
     );
+    if (!lastDeployment) {
+      throw new Error('No deployment found. Please deploy the model first.');
+    }
     const manifest = lastDeployment.manifest;
     try {
       await ctx.queryService.preview(sql, {

@@ -812,7 +812,11 @@ export class ModelResolver {
 
     // create view
     const project = await ctx.projectService.getCurrentProject();
-    const { manifest } = await ctx.deployService.getLastDeployment(project.id);
+    const lastDeploy = await ctx.deployService.getLastDeployment(project.id);
+    if (!lastDeploy) {
+      throw new Error('No deployment found. Please deploy the model first.');
+    }
+    const { manifest } = lastDeploy;
 
     // get sql statement of a response
     const response = await ctx.askingService.getResponse(responseId);
@@ -941,7 +945,11 @@ export class ModelResolver {
     const project = projectId
       ? await ctx.projectService.getProjectById(parseInt(projectId))
       : await ctx.projectService.getCurrentProject();
-    const { manifest } = await ctx.deployService.getLastDeployment(project.id);
+    const lastDeploy = await ctx.deployService.getLastDeployment(project.id);
+    if (!lastDeploy) {
+      throw new Error('No deployment found. Please deploy the model first.');
+    }
+    const { manifest } = lastDeploy;
     return await ctx.queryService.preview(sql, {
       project,
       limit: limit,
