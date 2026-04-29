@@ -166,7 +166,9 @@ export default function ManageQuestionSQLPairs() {
           rowKey="id"
           pagination={{
             hideOnSinglePage: true,
-            pageSize: 10,
+            defaultPageSize: 10,
+            showSizeChanger: true,
+            pageSizeOptions: ['10', '20', '50', '100'],
             size: 'small',
           }}
           scroll={{ x: 1080 }}
