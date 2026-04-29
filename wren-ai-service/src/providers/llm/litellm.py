@@ -101,8 +101,16 @@ class LitellmLLMProvider(LLMProvider):
 
             generation_kwargs = {
                 **combined_generation_kwargs,
-                **(generation_kwargs or {}),
+                **(generation_kwargs or {}),                
             }
+            # Strip response_format with type=json_schema — only supported by OpenAI
+            # native models. Custom api_base models (e.g. Ollama, LiteLLM proxy with
+            # non-OpenAI backends) return empty responses when this is forwarded.
+            # System prompts already include explicit JSON format instructions.
+            if self._api_base and isinstance(
+                generation_kwargs.get("response_format"), dict
+            ) and generation_kwargs["response_format"].get("type") == "json_schema":
+                generation_kwargs.pop("response_format")
 
             allowed_openai_params = generation_kwargs.get(
                 "allowed_openai_params", []
