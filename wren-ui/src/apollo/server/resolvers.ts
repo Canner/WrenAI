@@ -196,6 +196,9 @@ const resolvers = {
 
   // Add ApiHistoryResponse nested resolvers
   ApiHistoryResponse: apiHistoryResolver.getApiHistoryNestedResolver(),
+
+  // Add Instruction nested resolvers
+  Instruction: instructionResolver.getInstructionNestedResolver(),
 };
 
 export default resolvers;
