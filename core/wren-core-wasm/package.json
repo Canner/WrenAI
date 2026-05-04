@@ -35,7 +35,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Canner/WrenAI.git",
+    "url": "git+https://github.com/Canner/WrenAI.git",
     "directory": "core/wren-core-wasm"
   },
   "homepage": "https://github.com/Canner/WrenAI/tree/main/core/wren-core-wasm#readme",
