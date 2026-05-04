@@ -5,7 +5,7 @@ edition = "2021"
 authors = ["Canner <dev@cannerdata.com>"]
 license = "Apache-2.0"
 description = "Wren Engine compiled to WebAssembly — browser-native semantic layer + query execution"
-repository = "https://github.com/Canner/wren-engine"
+repository = "https://github.com/Canner/WrenAI"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

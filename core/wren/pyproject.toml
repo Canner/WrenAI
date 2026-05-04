@@ -75,8 +75,8 @@ wren = "wren.cli:app"
 
 [project.urls]
 Homepage = "https://getwren.ai"
-Repository = "https://github.com/Canner/wren-engine"
-Issues = "https://github.com/Canner/wren-engine/issues"
+Repository = "https://github.com/Canner/WrenAI"
+Issues = "https://github.com/Canner/WrenAI/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/wren"]

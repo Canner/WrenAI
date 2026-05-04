@@ -21,8 +21,8 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://www.getwren.ai/"
-Repository = "https://github.com/Canner/wren-engine"
-Issues = "https://github.com/Canner/wren-engine/issues"
+Repository = "https://github.com/Canner/WrenAI"
+Issues = "https://github.com/Canner/WrenAI/issues"
 
 [tool.poetry]
 name = "wren-core-py"
