@@ -1,0 +1,110 @@
+{
+  "catalog": "wrenai",
+  "schema": "spider",
+  "models": [
+    {
+      "name": "book",
+      "properties": {},
+      "refSql": "select * from \"wrenai\".spider.\"book_2-book\"",
+      "columns": [
+        {
+          "name": "Book_ID",
+          "type": "INTEGER",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "Book_ID",
+          "properties": {}
+        },
+        {
+          "name": "Title",
+          "type": "VARCHAR",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "Title",
+          "properties": {}
+        },
+        {
+          "name": "Issues",
+          "type": "REAL",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "Issues",
+          "properties": {}
+        },
+        {
+          "name": "Writer",
+          "type": "VARCHAR",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "Writer",
+          "properties": {}
+        }
+      ],
+      "primaryKey": ""
+    },
+    {
+      "name": "publication",
+      "properties": {},
+      "refSql": "select * from \"wrenai\".spider.\"book_2-publication\"",
+      "columns": [
+        {
+          "name": "Publication_ID",
+          "type": "INTEGER",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "Publication_ID",
+          "properties": {}
+        },
+        {
+          "name": "Book_ID",
+          "type": "INTEGER",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "Book_ID",
+          "properties": {}
+        },
+        {
+          "name": "Publisher",
+          "type": "VARCHAR",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "Publisher",
+          "properties": {}
+        },
+        {
+          "name": "Publication_Date",
+          "type": "VARCHAR",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "Publication_Date",
+          "properties": {}
+        },
+        {
+          "name": "Price",
+          "type": "REAL",
+          "notNull": false,
+          "isCalculated": false,
+          "expression": "Price",
+          "properties": {}
+        }
+      ],
+      "primaryKey": ""
+    }
+  ],
+  "relationships": [],
+  "metrics": [],
+  "cumulativeMetrics": [],
+  "enumDefinitions": [],
+  "views": [
+    {
+      "name": "book",
+      "statement": "SELECT * FROM book",
+      "properties": {
+        "question": "How many books are there?",
+        "summary": "Retrieve the number of books",
+        "viewId": "fake-id-1"
+      }
+    }
+  ],
+  "macros": []
+}

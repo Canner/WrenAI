@@ -1,0 +1,178 @@
+# you should rename this file to config.yaml and put it in ~/.wrenai
+# please pay attention to the comments starting with # and adjust the config accordingly, 3 steps basically:
+# 1. you need to use your own llm and embedding models
+# 2. fill in embedding model dimension in the document_store section
+# 3. you need to use the correct pipe definitions based on https://raw.githubusercontent.com/canner/WrenAI/<WRENAI_VERSION_NUMBER>/docker/config.example.yaml
+# 4. you need to fill in correct llm and embedding models in the pipe definitions
+
+type: llm
+provider: litellm_llm
+models:
+  # put GEMINI_API_KEY=<your_api_key> in ~/.wrenai/.env
+  - model: gemini/gemini-2.0-flash # gemini/<gemini_model_name>
+    alias: default
+    timeout: 120
+    kwargs:
+      n: 1
+      temperature: 0
+  - model: gemini/gemini-2.0-flash # gemini/<gemini_model_name>
+    alias: gemini-llm-for-chart
+    timeout: 120
+    kwargs:
+      n: 1
+      temperature: 0
+      response_format:
+        type: json_object
+
+---
+type: embedder
+provider: litellm_embedder
+models:
+  # put GEMINI_API_KEY=<your_api_key> in ~/.wrenai/.env
+  - model: gemini/text-embedding-004 # gemini/<gemini_model_name>
+    alias: default
+    timeout: 120
+
+---
+type: engine
+provider: wren_ui
+endpoint: http://wren-ui:3000
+
+---
+type: engine
+provider: wren_ibis
+endpoint: http://ibis-server:8000
+
+---
+type: document_store
+provider: qdrant
+location: http://qdrant:6333
+embedding_model_dim: 768 # put your embedding model dimension here
+timeout: 120
+recreate_index: true
+
+---
+# please change the llm and embedder names to the ones you want to use
+# the format of llm and embedder should be <provider>.<model_name> such as litellm_llm.gpt-4o-2024-08-06 or <provider>.<alias> such as litellm_llm.gemini-llm-for-chart
+# the pipes may be not the latest version, please refer to the latest version: https://raw.githubusercontent.com/canner/WrenAI/<WRENAI_VERSION_NUMBER>/docker/config.example.yaml
+type: pipeline
+pipes:
+  - name: db_schema_indexing
+    embedder: litellm_embedder.default
+    document_store: qdrant
+  - name: historical_question_indexing
+    embedder: litellm_embedder.default
+    document_store: qdrant
+  - name: table_description_indexing
+    embedder: litellm_embedder.default
+    document_store: qdrant
+  - name: db_schema_retrieval
+    llm: litellm_llm.default
+    embedder: litellm_embedder.default
+    document_store: qdrant
+  - name: historical_question_retrieval
+    embedder: litellm_embedder.default
+    document_store: qdrant
+  - name: sql_generation
+    llm: litellm_llm.default
+    engine: wren_ui
+    document_store: qdrant
+  - name: sql_correction
+    llm: litellm_llm.default
+    engine: wren_ui
+    document_store: qdrant
+  - name: followup_sql_generation
+    llm: litellm_llm.default
+    engine: wren_ui
+    document_store: qdrant
+  - name: sql_answer
+    llm: litellm_llm.default
+  - name: semantics_description
+    llm: litellm_llm.default
+  - name: relationship_recommendation
+    llm: litellm_llm.default
+    engine: wren_ui
+  - name: question_recommendation
+    llm: litellm_llm.default
+  - name: question_recommendation_db_schema_retrieval
+    llm: litellm_llm.default
+    embedder: litellm_embedder.default
+    document_store: qdrant
+  - name: question_recommendation_sql_generation
+    llm: litellm_llm.default
+    engine: wren_ui
+    document_store: qdrant
+  - name: chart_generation
+    llm: litellm_llm.gemini-llm-for-chart
+  - name: chart_adjustment
+    llm: litellm_llm.gemini-llm-for-chart
+  - name: intent_classification
+    llm: litellm_llm.default
+    embedder: litellm_embedder.default
+    document_store: qdrant
+  - name: misleading_assistance
+    llm: litellm_llm.default
+  - name: data_assistance
+    llm: litellm_llm.default
+  - name: sql_pairs_indexing
+    document_store: qdrant
+    embedder: litellm_embedder.default
+  - name: sql_pairs_retrieval
+    document_store: qdrant
+    embedder: litellm_embedder.default
+    llm: litellm_llm.default
+  - name: preprocess_sql_data
+    llm: litellm_llm.default
+  - name: sql_executor
+    engine: wren_ui
+  - name: user_guide_assistance
+    llm: litellm_llm.default
+  - name: sql_question_generation
+    llm: litellm_llm.default
+  - name: sql_generation_reasoning
+    llm: litellm_llm.default
+  - name: followup_sql_generation_reasoning
+    llm: litellm_llm.default
+  - name: sql_regeneration
+    llm: litellm_llm.default
+    engine: wren_ui
+  - name: instructions_indexing
+    embedder: litellm_embedder.default
+    document_store: qdrant
+  - name: instructions_retrieval
+    embedder: litellm_embedder.default
+    document_store: qdrant
+  - name: sql_functions_retrieval
+    engine: wren_ibis
+    document_store: qdrant
+  - name: project_meta_indexing
+    document_store: qdrant
+  - name: sql_tables_extraction
+    llm: litellm_llm.default
+  - name: sql_diagnosis
+    llm: litellm_llm.default
+  - name: sql_knowledge_retrieval
+    engine: wren_ibis
+    document_store: qdrant
+---
+settings:
+  engine_timeout: 30
+  column_indexing_batch_size: 50
+  table_retrieval_size: 10
+  table_column_retrieval_size: 100
+  allow_intent_classification: true
+  allow_sql_generation_reasoning: true
+  allow_sql_functions_retrieval: true
+  enable_column_pruning: false
+  max_sql_correction_retries: 3
+  query_cache_maxsize: 1000
+  query_cache_ttl: 3600
+  langfuse_host: https://cloud.langfuse.com
+  langfuse_enable: true
+  logging_level: DEBUG
+  development: true
+  historical_question_retrieval_similarity_threshold: 0.9
+  sql_pairs_similarity_threshold: 0.7
+  sql_pairs_retrieval_max_size: 10
+  instructions_similarity_threshold: 0.7
+  instructions_top_k: 10

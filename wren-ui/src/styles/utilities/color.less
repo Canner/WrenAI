@@ -1,0 +1,26 @@
+.make-color-classes(@i: length(@preset-colors)) when (@i > 0) {
+  .make-color-classes(@i - 1);
+  @color: extract(@preset-colors, @i);
+  each(range(1, 10), {
+    @colorVar: ~'var(--@{color}-@{index})';
+    .bg-@{color}-@{index} {
+      background-color: @colorVar !important;
+    }
+    .@{color}-@{index} {
+      color: @colorVar !important;
+    }
+    .border-@{color}-@{index} {
+      border-color: @colorVar !important;
+    }
+  });
+}
+
+.make-color-classes();
+
+*[class*='hover\:'] {
+  transition: color 0.3s ease;
+}
+
+.hover\:text:hover {
+  color: var(--geekblue-6) !important;
+}

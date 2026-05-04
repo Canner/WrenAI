@@ -1,0 +1,22 @@
+[
+    {
+        "user_class_name": "IndexingUser",
+        "fixed_count": 0
+    },
+    {
+        "user_class_name": "AskUser",
+        "fixed_count": 0
+    },
+    {
+        "user_class_name": "AskDetailsUser",
+        "fixed_count": 0
+    },
+    {
+        "user_class_name": "DummyUser",
+        "fixed_count": 0
+    },
+    {
+        "user_class_name": "DummyAskUser",
+        "fixed_count": 100
+    }
+]

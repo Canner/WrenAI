@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wren-engine-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wren-engine
+  template:
+    metadata:
+      labels:
+        app: wren-engine
+    spec:
+      volumes:
+        - name: wren-data
+          persistentVolumeClaim:
+            claimName: wren-data-pvc
+      initContainers:
+        - name: bootstrap
+          image: ghcr.io/canner/wren-bootstrap:0.1.4
+          env:
+            - name: DATA_PATH
+              valueFrom:
+                configMapKeyRef:
+                  name: wren-config
+                  key: WREN_ENGINE_DATA_PATH
+            - name: PG_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: wrenai-postgresql
+                  key: postgres-password
+            - name: PG_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: wrenai-secrets
+                  key: PG_USERNAME
+          volumeMounts:
+            - name: wren-data
+              mountPath: /app/data
+          command: ["/bin/sh", "/app/init.sh"]
+      containers:
+        - name: wren-engine
+          image: ghcr.io/canner/wren-engine:0.4.4
+          ports:
+            - containerPort: 8080
+            - containerPort: 7432
+          volumeMounts:
+            - name: wren-data
+              mountPath: /usr/src/app/etc

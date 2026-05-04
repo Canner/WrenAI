@@ -1,0 +1,25 @@
+# golangci-lint configuration for WrenAI wren-launcher
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - misspell
+    - unconvert
+    - gosec
+    - dupl
+    - goconst
+    - gocyclo
+    - bodyclose
+    - whitespace
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

@@ -1,0 +1,46 @@
+.make-display-classes() {
+  @preset-display: {
+    block: block;
+    inline: inline;
+    inline-block: inline-block;
+    flex: flex;
+    inline-flex: inline-flex;
+    grid: grid;
+    none: none;
+  };
+  each(@preset-display, {
+    .d-@{key} {
+      display: @value !important;
+    }
+  });
+}
+
+.make-display-classes();
+
+.cursor-pointer {
+  cursor: pointer !important;
+}
+
+.cursor-wait {
+  cursor: wait !important;
+}
+
+.cursor-not-allowed {
+  cursor: not-allowed !important;
+}
+
+.select-none {
+  user-select: none !important;
+}
+
+.overflow-hidden {
+  overflow: hidden !important;
+}
+
+.scrollable-y {
+  overflow: hidden auto !important;
+}
+
+.scrollable-x {
+  overflow: auto hidden !important;
+}

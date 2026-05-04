@@ -1,0 +1,85 @@
+// Using in appendData, only for variables defination
+@import '~antd/lib/style/themes/default.less';
+
+@prefix: adm;
+
+// -------- Colors
+// >> Secondary
+@citrus-base: #f58433;
+@citrus-1: #fff9f0;
+@citrus-2: #ffedd9;
+@citrus-3: #ffd9b0;
+@citrus-4: #ffc187;
+@citrus-5: #ffa75e;
+@citrus-6: @citrus-base;
+@citrus-7: #cf6421;
+@citrus-8: #a84713;
+@citrus-9: #822f08;
+@citrus-10: #5c1d05;
+
+// >> Neutral
+@gray-1: #fff;
+@gray-2: #fafafa;
+@gray-3: #f5f5f5;
+@gray-4: #f0f0f0;
+@gray-5: #d9d9d9;
+@gray-6: #bfbfbf;
+@gray-7: #8c8c8c;
+@gray-8: #65676c;
+@gray-9: #434343;
+@gray-10: #262626;
+@gray-11: #1f1f1f;
+@gray-12: #141414;
+@gray-13: #000;
+
+@preset-colors: pink, magenta, red, volcano, orange, yellow, gold, cyan, lime,
+  green, blue, geekblue, purple, citrus, gray;
+
+@black: @gray-13;
+@white: @gray-1;
+
+@primary-color: @geekblue-6;
+
+@text-color: @gray-10;
+@heading-color: @gray-9;
+@success-color: @green-6;
+@warning-color: @gold-6;
+@error-color: @red-5;
+@disabled-color: rgba(0, 0, 0, 0.25);
+
+// Functions
+.make-color-variables(@i: length(@preset-colors)) when (@i > 0) {
+  .make-color-variables(@i - 1);
+  @color: extract(@preset-colors, @i);
+  each(range(1, 10, 1), {
+    @colorVar: '@{color}-@{index}';
+    --@{color}-@{index}: @@colorVar;
+  });
+}
+
+// Header
+@layout-header-height: 20px;
+
+// Components
+@layout-body-background: #fff;
+@layout-header-background: #fff;
+
+@card-background: #fff;
+@breadcrumb-last-item-color: @text-color;
+@table-padding-vertical: 12px;
+@table-header-cell-split-color: transparent;
+@border-radius-base: 4px;
+
+// Typography
+@typography-title-font-weight: 700;
+@heading-1-size: ceil(@font-size-base * 2.85);
+// @heading-2-size: ceil(@font-size-base * 2.14);
+// @heading-3-size: ceil(@font-size-base * 1.71);
+// @heading-4-size: ceil(@font-size-base * 1.42);
+// @heading-5-size: ceil(@font-size-base * 1.14);
+
+// Avatar
+@avatar-size-xs: 16px;
+@avatar-font-size-xs: 12px;
+
+@tooltip-bg: @gray-10;

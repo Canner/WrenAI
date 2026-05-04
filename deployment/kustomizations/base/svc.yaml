@@ -1,0 +1,66 @@
+# Dependancy https://external-dns.io
+# You may want to add a DNS record for wren-ui.myhost.net host for your k8s Service instead of Ingress. 
+# Note: without authentication, enyone can acess your app, see your data and modify your settings!
+# If this is the case, make sure to comment the ingress-wren_example.yaml manifest in the `kustomization.yaml` file to exclude it
+# And uncomment external-dns in the Service manifest here below:
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: wren-ui-svc
+  #annotations:
+    ### Dependancy external-dns
+    #external-dns.alpha.kubernetes.io/filter: 'include'
+    #external-dns.alpha.kubernetes.io/cloudflare-proxied: 'false'
+    #external-dns.alpha.kubernetes.io/target: wren-ui.myhost.net
+spec:
+  selector:
+    app: wren-ui
+  ports:
+    - protocol: TCP
+      port: 3000
+      targetPort: 3000
+      name: http-ui
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wren-engine-svc
+spec:
+  selector:
+    app: wren-engine
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+      name: wren-engine
+    - protocol: TCP
+      port: 7432
+      targetPort: 7432
+      name: wren-engine-sql
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wren-ai-service-svc
+spec:
+  selector:
+    app: wren-ai-service
+  ports:
+    - protocol: TCP
+      port: 5555
+      targetPort: 5555
+      name: wren-ai-service
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wren-ibis-server-svc
+spec:
+  selector:
+    app: wren-ibis
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000
+      name: wren-ibis

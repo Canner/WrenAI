@@ -1,0 +1,24 @@
+
+.make-grid-classes(@i: 6) when (@i >= 1) {
+  .make-grid-classes(@i - 1);
+  .grid-columns-@{i} {
+    grid-template-columns: repeat(@i, 1fr) !important;
+  }
+
+  // grid gap
+  @base-gap: 4px;
+  @gap: @i * @base-gap;
+
+  .g-@{i} {
+    column-gap: @gap !important;
+    row-gap: @gap !important;
+  }
+  .gx-@{i} {
+    column-gap: @gap !important;
+  }
+  .gy-@{i} {
+    row-gap: @gap !important;
+  }
+}
+
+.make-grid-classes();

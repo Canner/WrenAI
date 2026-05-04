@@ -1,5 +1,0 @@
-.venv
-target
-!target/wheels
-tests
-rustfmt.toml

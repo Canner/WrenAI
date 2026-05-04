@@ -1,7 +1,0 @@
-sqllogictest
-wren-example
-target
-README.md
-rustfmt.toml
-taplo.toml
-.gitignore

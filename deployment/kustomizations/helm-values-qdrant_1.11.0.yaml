@@ -1,0 +1,234 @@
+replicaCount: 1
+
+image:
+  repository: docker.io/qdrant/qdrant
+  pullPolicy: IfNotPresent
+  tag: "v1.11.0"
+  useUnprivilegedImage: false
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+args: ["./config/initialize.sh"]
+env: {}
+  # - name: QDRANT_ALLOW_RECOVERY_MODE
+  #   value: true
+
+# checks - Readiness and liveness checks can only be enabled for either http (REST) or grpc (multiple checks not supported)
+# grpc checks are only available from k8s 1.24+ so as of per default we check http
+service:
+  type: ClusterIP
+  additionalLabels: {}
+  annotations: {}
+  loadBalancerIP: ""
+  ports:
+    - name: http
+      port: 6333
+      targetPort: 6333
+      protocol: TCP
+      checksEnabled: true
+    - name: grpc
+      port: 6334
+      targetPort: 6334
+      protocol: TCP
+      checksEnabled: false
+    - name: p2p
+      port: 6335
+      targetPort: 6335
+      protocol: TCP
+      checksEnabled: false
+
+ingress:
+  enabled: false
+  ingressClassName: "nginx"
+  additionalLabels: {}
+  annotations:
+    # Dependancy: https://kubernetes-sigs.github.io/external-dns
+    #external-dns.alpha.kubernetes.io/filter: 'include'
+    #external-dns.alpha.kubernetes.io/cloudflare-proxied: 'true'
+    external-dns.alpha.kubernetes.io/target: ingress1.myhost.net
+  hosts:
+    - host: qdrant-ai.myhost.net
+      paths:
+        - path: /
+          pathType: Prefix
+          servicePort: 6333
+  tls:
+    - hosts:
+       - qdrant-ai.myhost.net
+      secretName: qdrant-ai.myhost.net-tls
+
+livenessProbe:
+  enabled: false
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 1
+  failureThreshold: 6
+  successThreshold: 1
+
+readinessProbe:
+  enabled: true
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 1
+  failureThreshold: 6
+  successThreshold: 1
+
+startupProbe:
+  enabled: false
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 1
+  failureThreshold: 30
+  successThreshold: 1
+
+additionalLabels: {}
+podAnnotations: {}
+podLabels: {}
+
+resources: {}
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+containerSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 2000
+  allowPrivilegeEscalation: false
+  privileged: false
+  readOnlyRootFilesystem: true
+
+podSecurityContext:
+  fsGroup: 3000
+  fsGroupChangePolicy: Always
+
+lifecycle:
+  preStop:
+    exec:
+      # Sleeping before shutdown allows Qdrant to process requests that were
+      # in-flight before the node is removed from load-balancing.
+      # If using an external load balancer, you may need to increase this
+      # duration to be greater than the LB's health check interval.
+      command: ["sleep", "3"]
+
+# If true ensures that the pre-existing files on the storage and snapshot volume are owned by the container's
+# user and fsGroup
+updateVolumeFsOwnership: true
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+topologySpreadConstraints: []
+
+persistence:
+  accessModes: ["ReadWriteOnce"]
+  size: 20Gi
+  annotations: {}
+#  storageClassName: vsphere-retain
+
+# If you use snapshots or the snapshot shard transfer mechanism, we recommend
+# creating a separate volume of the same size as your main volume so that your
+# cluster won't crash if the snapshot is too big.
+snapshotPersistence:
+  enabled: false
+  accessModes: ["ReadWriteOnce"]
+  size: 20Gi
+  annotations: {}
+  # You can change the storageClassName to ensure snapshots are saved to cold storage.
+  # storageClassName: local-path
+
+snapshotRestoration:
+  enabled: false
+  # Set pvcName if you want to restore from a separately-created PVC. Only supported for single-node clusters unless the PVC is ReadWriteMany.
+  # If you set snapshotPersistence.enabled and want to restore a snapshot from there, you can leave this blank to skip mounting an external volume.
+  pvcName: snapshots-pvc
+  # Must not conflict with /qdrant/snapshots or /qdrant/storage
+  mountPath: /qdrant/snapshot-restoration
+  snapshots:
+  #  - /qdrant/snapshot-restoration/test_collection/test_collection-2022-10-24-13-56-50.snapshot:test_collection
+
+# modification example for configuration to overwrite defaults
+config:
+  cluster:
+    enabled: true
+    p2p:
+      port: 6335
+    consensus:
+      tick_period_ms: 100
+
+sidecarContainers: []
+# sidecarContainers:
+#   - name: my-sidecar
+#     image: qdrant/my-sidecar-image
+#     imagePullPolicy: Always
+#     ports:
+#     - name: my-port
+#       containerPort: 5000
+#       protocol: TCP
+#     resources:
+#       requests:
+#         memory: 10Mi
+#         cpu: 10m
+#       limits:
+#         memory: 100Mi
+#         cpu: 100m
+
+metrics:
+  serviceMonitor:
+    enabled: false
+    additionalLabels: {}
+    scrapeInterval: 30s
+    scrapeTimeout: 10s
+    targetPort: http
+    targetPath: "/metrics"
+    ## MetricRelabelConfigs to apply to samples after scraping, but before ingestion.
+    ## ref: https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/api.md#relabelconfig
+    ##
+    metricRelabelings: []
+    ## RelabelConfigs to apply to samples before scraping
+    ## ref: https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/api.md#relabelconfig
+    ##
+    relabelings: []
+
+serviceAccount:
+  annotations: {}
+
+priorityClassName: ""
+
+# We disourage changing this setting. Using the "OrderedReady" policy in a
+# multi-node cluster will cause a deadlock where nodes refuse to become
+# "Ready" until all nodes are running.
+podManagementPolicy: Parallel
+
+podDisruptionBudget:
+  enabled: false
+  maxUnavailable: 1
+  # do not enable if you are using not in 1.27
+  unhealthyPodEvictionPolicy: ""
+  # minAvailable: 1
+
+# api key for authentication at qdrant
+# false: no api key will be configured
+# true: an api key will be auto-generated
+# string: the given string will be set as an apikey
+apiKey: false
+# read-only api key for authentication at qdrant
+# false: no read-only api key will be configured
+# true: an read-only api key will be auto-generated
+# string: the given string will be set as a read-only apikey
+readOnlyApiKey: false
+
+additionalVolumes: []
+# - name: volumeName
+#   emptyDir: {}
+
+additionalVolumeMounts: []
+# - name: volumeName
+#   mountPath: "/mount/path"

@@ -1,0 +1,47 @@
+# Dependancy https://external-dns.io
+# To add a DNS record for wren-ui.myhost.net host
+# Note: without authentication, enyone can acess your app, see your data and modify your settings!
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wren-ui-ingress
+  annotations:
+    ### Dependancy external-dns
+    #external-dns.alpha.kubernetes.io/filter: 'include'
+    #external-dns.alpha.kubernetes.io/cloudflare-proxied: 'false'
+    ##external-dns.alpha.kubernetes.io/cloudflare-proxied: 'true'
+    external-dns.alpha.kubernetes.io/target: ingress1.myhost.net
+    #external-dns.alpha.kubernetes.io/target: ingress2.myhost.net
+    
+    ### Dependancy nginx-ingress-controller
+    nginx.ingress.kubernetes.io/disable-lua: 'true'
+    nginx.ingress.kubernetes.io/enable-lua: 'false'
+    nginx.ingress.kubernetes.io/enable-vts-status: 'false'
+    nginx.ingress.kubernetes.io/enable-modsecurity: 'false'
+    #nginx.ingress.kubernetes.io/modsecurity-snippet: |
+    #  SecRuleEngine Off
+    nginx.ingress.kubernetes.io/enable-owasp-modsecurity-crs: 'false'
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: '360'
+    nginx.ingress.kubernetes.io/proxy-read-timeout: '360'
+    nginx.ingress.kubernetes.io/proxy-send-timeout: '360'
+
+spec:
+  #instead you may use other ingressClassName such as AWS alb. If other than nginx ingress is used, don't forget to comment unsupported annotations above
+  #"nginx" or "alb"
+  ingressClassName: nginx
+  rules:
+    - host: wren-ui.myhost.net
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: wren-ui-svc
+                port:
+                  number: 3000
+### Comment TLS section if you are not going to use https
+  tls:
+    - hosts:
+      - wren-ui.myhost.net
+      secretName: wren-ui.myhost.net-tls

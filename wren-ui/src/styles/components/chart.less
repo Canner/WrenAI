@@ -1,0 +1,110 @@
+.@{prefix}-chart {
+  position: relative;
+  margin: 0 auto;
+  padding: 16px 0;
+
+  &-additional {
+    position: absolute;
+    z-index: 1;
+    top: 16px;
+    right: 36px;
+
+    button {
+      background: white;
+      border: 1px solid @gray-5;
+      border-radius: 4px;
+      padding: 0 2px;
+      cursor: pointer;
+      width: 28px;
+      height: 28px;
+      opacity: 0.4;
+      color: @gray-8;
+      transition: all 0.4s ease-in;
+
+      &:hover {
+        opacity: 1;
+      }
+
+      +button {
+        margin-left: 8px;
+      }
+    }
+  }
+
+  &--no-actions {
+    padding: 0;
+    .vega-embed .chart-wrapper {
+      padding-top: 0 !important;
+    }
+    .vega-embed summary {
+      display: none;
+    }
+  }
+
+  .vega-embed {
+    &:hover {
+      summary {
+        opacity: 0.4 !important;
+      }
+    }
+
+    summary {
+      border-radius: 4px;
+      border: 1px solid @gray-5;
+      box-shadow: none;
+      transition: all 0.4s ease-in;
+      color: @gray-8;
+      opacity: 0.4 !important;
+
+      &:hover {
+        opacity: 1 !important;
+      }
+    }
+
+    .chart-wrapper {
+      padding-top: 40px;
+    }
+
+    &.has-actions {
+      padding-right: 0;
+    }
+
+    .vega-actions {
+      border: 1px solid @gray-5;
+      box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.1);
+
+      a {
+        font-size: 12px;
+        padding: 6px 16px;
+      }
+    }
+  }
+
+  &__fullscreen {
+    position: absolute;
+    top: 32px;
+    right: 0px;
+  }
+
+  .ant-btn-icon-only {
+    width: auto;
+    height: auto;
+    padding: 6px;
+  }
+}
+
+#vg-tooltip-element.vg-tooltip.custom-theme {
+  display: none;
+  background-color: @gray-10;
+  color: @gray-1;
+  border-color: @gray-9;
+  animation: fade-in 0.2s ease-out;
+
+  table tr td.key {
+    color: @gray-6;
+  }
+}
+
+#vg-tooltip-element.visible {
+  display: block !important;
+}

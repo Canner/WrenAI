@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wren-ai-service-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wren-ai-service
+  template:
+    metadata:
+      labels:
+        app: wren-ai-service
+    spec:
+      containers:
+        - name: wren-ai-service
+          image: ghcr.io/canner/wren-ai-service:latest
+          volumeMounts:
+            - name: config-volume
+              mountPath: /app/data
+          env:
+            - name: WREN_AI_SERVICE_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: wren-config
+                  key: WREN_AI_SERVICE_PORT
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wrenai-secrets
+                  key: OPENAI_API_KEY
+            - name: QDRANT_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: wren-config
+                  key: QDRANT_HOST
+            - name: LOGGING_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: wren-config
+                  key: LOGGING_LEVEL
+            - name: WREN_UI_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: wren-config
+                  key: WREN_UI_ENDPOINT
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: LANGFUSE_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wrenai-secrets
+                  key: LANGFUSE_PUBLIC_KEY
+            - name: LANGFUSE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wrenai-secrets
+                  key: LANGFUSE_SECRET_KEY
+            - name: CONFIG_PATH
+              value: /app/data/config.yaml
+          ports:
+            - containerPort: 5555
+      volumes:
+        - name: config-volume
+          configMap:
+            name: wren-ai-service-config
+            items:
+              - key: config.yaml
+                path: config.yaml

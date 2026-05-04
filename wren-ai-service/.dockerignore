@@ -1,0 +1,5 @@
+*
+!src
+!entrypoint.sh
+!pyproject.toml
+src/eval

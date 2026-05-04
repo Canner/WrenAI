@@ -1,0 +1,16 @@
+- op: replace
+  path: /spec/ipFamilies
+  value:
+    - IPv6
+    - IPv4
+
+- op: replace
+  path: /spec/type
+  value:
+    LoadBalancer
+
+- op: replace
+  path: /spec/ipFamilyPolicy
+  value:
+#    SingleStack
+    PreferDualStack

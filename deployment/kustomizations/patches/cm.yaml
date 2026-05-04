@@ -1,0 +1,35 @@
+- op: replace
+  path: /data
+  value:
+    # Wren Engine Service Port
+    WREN_ENGINE_PORT: "8080"
+    # Wren AI Service Port
+    WREN_AI_SERVICE_PORT: "5555"
+
+    #Release version used by wren ui https://github.com/Canner/WrenAI/blob/main/docker/docker-compose.yaml#L85-L88
+    WREN_PRODUCT_VERSION: "0.12.0"
+    #fix:
+    WREN_ENGINE_VERSION: "0.12.3"
+    WREN_AI_SERVICE_VERSION: "0.12.1"
+    #fix:
+    WREN_UI_VERSION: "0.17.6"
+
+    # OpenAI
+    GENERATION_MODEL: "gpt-4o-mini"
+
+    # Telemetry
+    POSTHOG_HOST: "https://app.posthog.com"
+    TELEMETRY_ENABLED: "false"
+
+    # service endpoints of AI service & engine service
+    WREN_ENGINE_ENDPOINT: "http://wren-engine-svc:8080"
+    #fix:
+    WREN_AI_ENDPOINT: "http://wren-ai-service:5555"
+
+    # "pg" for postgres as application database.
+    #fix
+    DB_TYPE: pg
+
+    DATA_PATH: "/app/data"
+
+    ### if DB_TYPE = "postgres" you must provide PG_URL string in the *Secret* manifest file (deployment/kustomizations/examples/secret-wren_example.yaml) to connect to postgres

@@ -1,0 +1,65 @@
+##### Dependancies used in this kustomization:
+# nginx.ingress
+# external-dns
+# cert-manager
+# kubectl kustomize
+
+#test output like this:
+#kubectl kustomize deployment/kustomizations --enable-helm > deployment/kustomizations/wrenai.kustimized.yaml
+#kubectl create namespace wren
+#kubectl apply -f deployment/kustomizations/wrenai.kustimized.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Namespace for all resources here and in the Helm charts
+namespace: wren
+helmCharts:
+
+### Uncomment if you are planing to use postgresql
+  - name: postgresql
+    repo: https://repo.vmware.com/bitnami-files
+    version: 15.5.5
+    releaseName: wren-postgresql
+    valuesFile: helm-values_postgresql_15.yaml
+    includeCRDs: true
+    # the Same Namespace
+    namespace: wren
+
+  - name: qdrant
+    repo: https://qdrant.github.io/qdrant-helm
+    version: 1.11.0
+    releaseName: wren-qdrant
+    valuesFile: helm-values-qdrant_1.11.0.yaml
+    includeCRDs: true
+    # The Same Namespace
+    namespace: wren
+
+
+images:
+  # for the latest versions, please check here: https://github.com/Canner/WrenAI/blob/main/docker/.env.example#L23
+  - name: ghcr.io/canner/wren-bootstrap
+    newTag: 0.1.5 # WREN_BOOTSTRAP_VERSION
+  - name: ghcr.io/canner/wren-engine
+    newTag: 0.14.8 # WREN_ENGINE_VERSION
+  - name: ghcr.io/canner/wren-ui
+    newTag: 0.24.1 # WREN_UI_VERSION
+  - name: ghcr.io/canner/wren-ai-service
+    newTag: 0.19.7 # WREN_AI_SERVICE_VERSION
+  - name: ghcr.io/canner/wren-engine-ibis
+    newTag: 0.14.8 # IBIS_SERVER_VERSION
+
+resources:
+  - base/cm.yaml
+  - base/deploy-wren-ui.yaml
+  - base/deploy-wren-engine.yaml
+  - base/deploy-wren-ibis-server.yaml
+  - base/deploy-wren-ai-service.yaml
+  - base/pvc.yaml
+  - base/svc.yaml
+### Modify these examples first and uncomment them:
+  # - examples/ingress-wren_example.yaml
+  # - examples/certificate-wren_example.yaml
+### Usually you do not need to generate a certificate for Qdrant
+#  - examples/certificate-qdrant_example.yaml
+### Best practice is to create and deploy Secrets manually, not as part of kustomization or GitOps!
+#  - examples/secret-wren_example.yaml

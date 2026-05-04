@@ -1,0 +1,95 @@
+version: "3"
+
+volumes:
+  data:
+
+networks:
+  wren:
+    driver: bridge
+
+services:
+  bootstrap:
+    image: ghcr.io/canner/wren-bootstrap:${WREN_BOOTSTRAP_VERSION}
+    pull_policy: always
+    platform: ${PLATFORM}
+    environment:
+      DATA_PATH: /app/data
+    volumes:
+      - data:/app/data
+    command: /bin/sh /app/init.sh
+
+  wren-engine:
+    image: ghcr.io/canner/wren-engine:${WREN_ENGINE_VERSION}
+    pull_policy: always
+    platform: ${PLATFORM}
+    expose:
+      - ${WREN_ENGINE_SQL_PORT}
+    ports:
+      - ${WREN_ENGINE_PORT}:${WREN_ENGINE_PORT}
+    volumes:
+      - data:/usr/src/app/etc
+    networks:
+      - wren
+    depends_on:
+      - bootstrap
+
+  wren-ai-service:
+    image: ghcr.io/canner/wren-ai-service:${WREN_AI_SERVICE_VERSION}
+    pull_policy: always
+    platform: ${PLATFORM}
+    ports:
+      - ${AI_SERVICE_FORWARD_PORT}:${WREN_AI_SERVICE_PORT}
+    environment:
+      WREN_UI_ENDPOINT: http://host.docker.internal:${WREN_UI_PORT}
+      # sometimes the console won't show print messages,
+      # using PYTHONUNBUFFERED: 1 can fix this
+      PYTHONUNBUFFERED: 1
+      CONFIG_PATH: /app/config.yaml
+    env_file:
+      - ${PROJECT_DIR}/.env
+    volumes:
+      - ${PROJECT_DIR}/config.yaml:/app/config.yaml:ro
+      - ${PROJECT_DIR}/data:/app/data:ro
+    networks:
+      - wren
+    depends_on:
+      - qdrant
+
+  ibis-server:
+    image: ghcr.io/canner/wren-engine-ibis:${IBIS_SERVER_VERSION}
+    pull_policy: always
+    platform: ${PLATFORM}
+    expose:
+      - 8000
+    ports:
+      - ${IBIS_SERVER_PORT}:8000
+    environment:
+      WREN_ENGINE_ENDPOINT: http://wren-engine:${WREN_ENGINE_PORT}
+      LOG_LEVEL: DEBUG
+    networks:
+      - wren
+
+  qdrant:
+    image: qdrant/qdrant:v1.15.0
+    pull_policy: always
+    ports:
+      - 6333:6333
+      - 6334:6334
+    networks:
+      - wren
+
+  # If you want to use postgres for testing purpose, uncomment the following block
+  # postgres:
+  #   image: postgres:14-alpine
+  #   platform: ${PLATFORM}
+  #   ports:
+  #     - 9432:5432
+  #   volumes:
+  #     - data:/var/lib/postgresql/data
+  #   environment:
+  #     - POSTGRES_PASSWORD=secret
+  #     - POSTGRES_USER=test
+  #     - POSTGRES_DB=test
+  #     - PGDATA=/var/lib/postgresql/data/pgdata
+  #   networks:
+  #     - wren

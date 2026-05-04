@@ -1,0 +1,17 @@
+:root {
+  .make-color-variables();
+  --disabled: @disabled-color;
+}
+
+body {
+  min-width: 360px;
+}
+
+@media (prefers-color-scheme: dark) {
+  html body {
+    background: #fff;
+  }
+  h1.next-error-h1 {
+    border-right: 1px solid rgba(0, 0, 0, 0.3);
+  }
+}

@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wren-ibis-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wren-ibis
+  template:
+    metadata:
+      labels:
+        app: wren-ibis
+    spec:
+      containers:
+        - name: wren-ibis
+          image: ghcr.io/canner/wren-engine-ibis:0.5.0
+          env:
+            - name: WREN_ENGINE_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: wren-config
+                  key: WREN_ENGINE_ENDPOINT
+            - name: LOGGING_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: wren-config
+                  key: LOGGING_LEVEL
+          ports:
+            - containerPort: 8000
