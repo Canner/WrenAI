@@ -48,12 +48,22 @@ jobs:
           RC_VERSION_INPUT: ${{ inputs.rc_version }}
           COMPONENT: ${{ inputs.component }}
         run: |
-          # Read current version from manifest
+          # Read current version from manifest. The manifest is keyed by package
+          # path (e.g. "core/wren-core-py"), so resolve the path from
+          # release-please-config.json by matching the component name.
           BASE_VERSION=$(python3 -c "
-          import json
+          import json, sys
+          with open('release-please-config.json') as f:
+              config = json.load(f)
+          path = next(
+              (p for p, pkg in config['packages'].items() if pkg.get('component') == '${COMPONENT}'),
+              None,
+          )
+          if path is None:
+              sys.exit(\"component '${COMPONENT}' not found in release-please-config.json\")
           with open('.release-please-manifest.json') as f:
               manifest = json.load(f)
-          print(manifest['${COMPONENT}'])
+          print(manifest[path])
           ")
 
           if [ -n "$RC_VERSION_INPUT" ]; then
