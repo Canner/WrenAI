@@ -1,102 +1,73 @@
-# wren-ai-service
-wren-ai-service/.env.*
-wren-ai-service/config.yaml*
-!wren-ai-service/.env.*.example
-!wren-ai-service/src/eval/wren-engine/.env
-wren-ai-service/src/eval/wren-engine/**/config.properties
-wren-ai-service/src/eval/wren-engine/etc/mdl/*
-wren-ai-service/src/eval/wren-engine/etc/duckdb
-wren-ai-service/src/eval/wren-engine/etc/archived
-wren-ai-service/src/eval/data
-wren-ai-service/**/outputs/
-wren-ai-service/**/spider/
-wren-ai-service/tests/data/usecases/
-!wren-ai-service/**/metrics/spider/
-!wren-ai-service/tests/data
-!wren-ai-service/src/eval/data/book_2*.json
-!wren-ai-service/src/eval/data/baseball_1*.json
-!wren-ai-service/src/eval/data/college_3*.json
-!wren-ai-service/src/eval/data/college_3_optimal_ddl.json
-wren-ai-service/*.csv
-wren-ai-service/*.json
-wren-ai-service/assertion.log
-wren-ai-service/redis.*
-wren-ai-service/demo/spider
-wren-ai-service/demo/poetry.lock
-wren-ai-service/demo/custom_dataset
-wren-ai-service/demo/.env
-wren-ai-service/tools/dev/etc/**
-.deepeval-cache.json
-.deepeval_telemtry.txt
-docker/config.yaml
-docker/docker-compose-local.yaml
-docker/data
-
-# python
-.python-version
-
-# cache
-__pycache__
-local_cache
-.ruff_cache
-.pytest_cache
-
-# ide
-.idea
+# ---- IDE & editors ----
+.idea/
 .vscode/
+*.iml
+*.ipr
+*.iws
+*.swp
+*~
+.run/
 
-# os
+# ---- OS ----
 .DS_Store
 __MACOSX/
+
+# ---- Environment files (templates kept) ----
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.*.example
+
+# ---- Secrets / credentials ----
 *.pem
 
-# sqlite
-*.sqlite
-*.sqlite3
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+.eggs/
+build/
+dist/
+.python-version
+.tox/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.hypothesis/
+venv/
+.venv/
 
-# ui
-## dependencies
-node_modules
+# ---- Rust ----
+target/
+**/*.rs.bk
+*.pdb
+
+# ---- WebAssembly (wasm-pack) ----
+pkg/
+
+# ---- Node / TypeScript (skills, sdks, wasm consumers) ----
+node_modules/
 .pnp
 .pnp.js
-
-## testing
-wren-ui/coverage
-wren-ui/test-results
-wren-ui/playwright-report
-wren-ui/e2e/e2e.config.json
-
-## next.js
-wren-ui/.next
-wren-ui/out
-
-wren-ui/.yarn/install-state.gz
-
-## production
-wren-ui/build
-
-## debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-
-## local env files
-.env*.local
-.env*
-.env.ai
-
-## vercel
-.vercel
-
-## typescript
 *.tsbuildinfo
-next-env.d.ts
 
-# wren-launcher
-wren-launcher/dist
-wren-launcher/main
+# ---- SQLite (memory layer caches) ----
+*.sqlite
+*.sqlite3
 
-## temporary files
+# ---- Local caches & temporary files ----
+local_cache/
+.tmp/
 .tmp
 
-!wren-ai-service/tools/.env.example
+# ---- Claude Code worktrees (local dev only) ----
+**/.claude/worktrees/
