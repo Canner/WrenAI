@@ -48,23 +48,37 @@ jobs:
           RC_VERSION_INPUT: ${{ inputs.rc_version }}
           COMPONENT: ${{ inputs.component }}
         run: |
-          # Read current version from manifest. The manifest is keyed by package
-          # path (e.g. "core/wren-core-py"), so resolve the path from
-          # release-please-config.json by matching the component name.
-          BASE_VERSION=$(python3 -c "
-          import json, sys
+          # The base version for an RC is the *next* release version, which
+          # release-please stores in the manifest on its per-component release
+          # branch (e.g. release-please--branches--main--components--wren).
+          # main's manifest only holds the *last released* version.
+          RELEASE_BRANCH="release-please--branches--main--components--${COMPONENT}"
+          if git ls-remote --exit-code --heads origin "$RELEASE_BRANCH" >/dev/null 2>&1; then
+            git fetch --depth=1 origin "$RELEASE_BRANCH"
+            MANIFEST_JSON=$(git show "FETCH_HEAD:.release-please-manifest.json")
+            MANIFEST_SOURCE="release-please branch '$RELEASE_BRANCH'"
+          else
+            echo "::error::No release-please branch '$RELEASE_BRANCH'. RC releases require a pending release-please PR (i.e. conventional commits since the last release for '$COMPONENT')."
+            exit 1
+          fi
+
+          # Manifest is keyed by package path (e.g. "core/wren-core-py"), so
+          # resolve the path from release-please-config.json by component name.
+          BASE_VERSION=$(MANIFEST_JSON="$MANIFEST_JSON" python3 -c "
+          import json, os, sys
           with open('release-please-config.json') as f:
               config = json.load(f)
+          component = os.environ['COMPONENT']
           path = next(
-              (p for p, pkg in config['packages'].items() if pkg.get('component') == '${COMPONENT}'),
+              (p for p, pkg in config['packages'].items() if pkg.get('component') == component),
               None,
           )
           if path is None:
-              sys.exit(\"component '${COMPONENT}' not found in release-please-config.json\")
-          with open('.release-please-manifest.json') as f:
-              manifest = json.load(f)
+              sys.exit(f\"component '{component}' not found in release-please-config.json\")
+          manifest = json.loads(os.environ['MANIFEST_JSON'])
           print(manifest[path])
           ")
+          echo "::notice::Base version for $COMPONENT: $BASE_VERSION (from $MANIFEST_SOURCE)"
 
           if [ -n "$RC_VERSION_INPUT" ]; then
             # Validate: must start with BASE_VERSION-rc. and end with a positive integer
