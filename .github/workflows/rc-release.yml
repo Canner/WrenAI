@@ -76,6 +76,8 @@ jobs:
           if path is None:
               sys.exit(f\"component '{component}' not found in release-please-config.json\")
           manifest = json.loads(os.environ['MANIFEST_JSON'])
+          if path not in manifest:
+              sys.exit(f\"path '{path}' for component '{component}' not in manifest\")
           print(manifest[path])
           ")
           echo "::notice::Base version for $COMPONENT: $BASE_VERSION (from $MANIFEST_SOURCE)"
