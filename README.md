@@ -5,7 +5,7 @@
       <source media="(prefers-color-scheme: light)" srcset="./misc/wrenai_logo.png">
       <img src="./misc/wrenai_logo_white.png" width="300px">
     </picture>
-    <h1 align="center">WrenAI — Open Context Engine for AI Agents</h1>
+    <h1 align="center">WrenAI — Open Context Layer for AI Agents</h1>
   </a>
 </p>
 
@@ -40,7 +40,7 @@
 > 📣 **2026-05-07** — Wren Engine has merged into this repo under [`core/`](./core). The previous `Canner/wren-engine` repo is archived. The previous WrenAI GenBI app is preserved on the [`legacy/v1`](https://github.com/Canner/WrenAI/tree/legacy/v1) branch (tag `v1-final`). [Read the announcement →](https://github.com/Canner/WrenAI/discussions/2205)
 ---
 
-WrenAI is an open-source semantic engine for MCP clients and AI agents. It translates SQL queries through a semantic layer ([MDL](./core/wren-mdl/) — Modeling Definition Language) and executes them against 20+ data sources (PostgreSQL, BigQuery, Snowflake, Spark, etc.). The Rust engine is powered by [Apache DataFusion](https://datafusion.apache.org/). Use it as a Python SDK, a CLI, a WASM module in the browser, or as building blocks for AI-agent skills.
+WrenAI is an open-source context layer for MCP clients and AI agents. It translates SQL queries through a semantic layer ([MDL](./core/wren-mdl/) — Modeling Definition Language) and executes them against 20+ data sources (PostgreSQL, BigQuery, Snowflake, Spark, etc.). The Rust engine is powered by [Apache DataFusion](https://datafusion.apache.org/). Use it as a Python SDK, a CLI, a WASM module in the browser, or as building blocks for AI-agent skills.
 
 ## Quick start
 
@@ -92,7 +92,7 @@ See the connector API docs in the project documentation for the latest connectio
 
 | Path | What's there |
 |---|---|
-| [`core/`](./core) | Rust engine + Python/WASM bindings + CLI. The semantic SQL machinery. |
+| [`core/`](./core) | Rust engine + Python/WASM bindings + CLI. The context layer's core machinery. |
 | &nbsp;&nbsp;[`core/wren-core/`](./core/wren-core) | Rust semantic engine (Cargo workspace). |
 | &nbsp;&nbsp;[`core/wren-core-base/`](./core/wren-core-base) | Manifest types (`Model`, `Column`, `Cube`, `Relationship`, `View`). |
 | &nbsp;&nbsp;[`core/wren-core-py/`](./core/wren-core-py) | PyO3 bindings (PyPI: `wren-core`). |
